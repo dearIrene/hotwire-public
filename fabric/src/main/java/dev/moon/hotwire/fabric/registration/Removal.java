@@ -1,0 +1,131 @@
+package dev.moon.hotwire.fabric.registration;
+
+import dev.moon.hotwire.redefine.FieldSlots;
+import java.util.ArrayList;
+import java.util.Collection;
+import java.util.Collections;
+import java.util.List;
+import java.util.Map;
+import org.jspecify.annotations.Nullable;
+import org.slf4j.LoggerFactory;
+
+sealed interface Removal {
+    void restore();
+
+    String describe();
+
+    record InList(List<Object> list, int index, Object element) implements Removal {
+        @Override
+        public void restore() {
+            if (!containsSame(this.list, this.element)) {
+                this.list.add(Math.min(this.index, this.list.size()), this.element);
+            }
+        }
+
+        @Override
+        public String describe() {
+            return "a list of " + this.list.size() + " (" + describeKind(this.element) + ")";
+        }
+    }
+
+    record InCollection(Collection<Object> collection, Object element) implements Removal {
+        @Override
+        public void restore() {
+            if (!containsSame(this.collection, this.element)) {
+                this.collection.add(this.element);
+            }
+        }
+
+        @Override
+        public String describe() {
+            return "a set of " + this.collection.size() + " (" + describeKind(this.element) + ")";
+        }
+    }
+
+    final class InArray implements Removal {
+        private final Object[] array;
+        private final int index;
+        private final Object element;
+        private final Object standIn;
+
+        InArray(Object[] array, int index, Object element, Object standIn) {
+            this.array = array;
+            this.index = index;
+            this.element = element;
+            this.standIn = standIn;
+        }
+
+        @Override
+        @SuppressWarnings("ReferenceEquality")
+        public void restore() {
+            if (this.index < this.array.length && this.array[this.index] == this.standIn) {
+                this.array[this.index] = this.element;
+            }
+        }
+
+        @Override
+        public String describe() {
+            return "an array of " + this.array.length + " (" + describeKind(this.element) + ")";
+        }
+    }
+
+    record InFixedList(FieldSlots.Slot field, @Nullable Object holder, int index, Object element,
+            StaticRecomputer.Writer writer) implements Removal {
+        @Override
+        public void restore() {
+            if (!(read(this.field, this.holder) instanceof List<?> now) || containsSame(now, this.element)) {
+                return;
+            }
+            List<Object> back = new ArrayList<>(now);
+            back.add(Math.min(this.index, back.size()), this.element);
+            try {
+                this.writer.write(this.field, this.holder, Collections.unmodifiableList(back));
+            } catch (IllegalAccessException e) {
+                LoggerFactory.getLogger(Removal.class).warn("[Hotwire] {} could not be given its element back",
+                        this.field, e);
+            }
+        }
+
+        @Override
+        public String describe() {
+            return "a fixed list of " + this.field.getDeclaringClass().getSimpleName() + "." + this.field.getName()
+                    + " (" + describeKind(this.element) + ")";
+        }
+    }
+
+    record InMap(Map<Object, Object> map, Object key, Object value) implements Removal {
+        @Override
+        public void restore() {
+            this.map.putIfAbsent(this.key, this.value);
+        }
+
+        @Override
+        public String describe() {
+            return "a map of " + this.map.size() + " (" + describeKind(this.key) + " to " + describeKind(this.value)
+                    + ")";
+        }
+    }
+
+    private static String describeKind(@Nullable Object value) {
+        return value == null ? "null" : CollectionReferences.isPlain(value) ? String.valueOf(value)
+                : value.getClass().getSimpleName();
+    }
+
+    @SuppressWarnings("ReferenceEquality")
+    private static boolean containsSame(Collection<?> items, Object element) {
+        for (Object item : items) {
+            if (item == element) {
+                return true;
+            }
+        }
+        return false;
+    }
+
+    private static @Nullable Object read(FieldSlots.Slot field, @Nullable Object holder) {
+        try {
+            return field.get(holder);
+        } catch (ReflectiveOperationException | RuntimeException | LinkageError e) {
+            return null;
+        }
+    }
+}

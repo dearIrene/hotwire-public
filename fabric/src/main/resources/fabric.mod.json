@@ -1,0 +1,27 @@
+{
+  "schemaVersion": 1,
+  "id": "hotwire",
+  "version": "${version}",
+  "name": "Hotwire",
+  "description": "Adds, removes and updates Fabric mods while the game runs.",
+  "authors": ["Moonshee"],
+  "license": "PolyForm-Strict-1.0.0",
+  "icon": "assets/hotwire/icon.png",
+  "environment": "client",
+  "entrypoints": {
+    "client": ["dev.moon.hotwire.fabric.HotwireClient"]
+  },
+  "mixins": ["hotwire.mixins.json"],
+  "depends": {
+    "fabricloader": ">=0.19.3",
+    "minecraft": "${minecraft}",
+    "java": ">=${java}"
+  },
+  "custom": {
+    "hotwire:build": {
+      "commit": "${commit}",
+      "dirty": ${dirty},
+      "committed": "${committed}"
+    }
+  }
+}

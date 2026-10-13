@@ -1,0 +1,11 @@
+.gradle/
+build/
+run/
+.idea/
+*.iml
+fabric/versions/*/build/
+fabric/versions/*/run/
+fabric/run/
+
+# Mod jars are test inputs, never part of the repo
+/*.jar

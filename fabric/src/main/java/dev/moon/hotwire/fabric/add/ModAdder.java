@@ -1,0 +1,529 @@
+package dev.moon.hotwire.fabric.add;
+
+import dev.moon.hotwire.fabric.CrashGuard;
+import dev.moon.hotwire.fabric.ResourceReload;
+import dev.moon.hotwire.fabric.registration.GameHold;
+import dev.moon.hotwire.fabric.registration.GameRegistrations;
+import dev.moon.hotwire.fabric.registration.ModLifecycle;
+import dev.moon.hotwire.jar.AccessWidenerText;
+import dev.moon.hotwire.jar.ContentScan;
+import dev.moon.hotwire.jar.ModJar;
+import dev.moon.hotwire.jar.ModJarException;
+import dev.moon.hotwire.jar.ModJarReader;
+import dev.moon.hotwire.jar.ModManifest;
+import dev.moon.hotwire.jar.WidenerUses;
+import dev.moon.hotwire.mixin_copy.MixinCopy;
+import dev.moon.hotwire.plan.ModGraph;
+import dev.moon.hotwire.plan.SwitchPlan;
+import dev.moon.hotwire.plan.SwitchPlanner;
+import dev.moon.hotwire.redefine.AccessBridge;
+import dev.moon.hotwire.redefine.Linker;
+import dev.moon.hotwire.redefine.RebuildException;
+import dev.moon.hotwire.redefine.Relocations;
+import dev.moon.hotwire.redefine.ShutOverrides;
+import dev.moon.hotwire.switching.ModMixins;
+import dev.moon.hotwire.switching.ModSwitcher;
+import dev.moon.hotwire.switching.PlayerMessages;
+import dev.moon.hotwire.switching.SwitchApplier;
+import dev.moon.hotwire.ui.AddPreview;
+import java.io.IOException;
+import java.io.InputStream;
+import java.nio.file.Files;
+import java.nio.file.Path;
+import java.time.Duration;
+import java.util.ArrayList;
+import java.util.Arrays;
+import java.util.Collection;
+import java.util.HashSet;
+import java.util.LinkedHashMap;
+import java.util.List;
+import java.util.Map;
+import java.util.Objects;
+import java.util.Optional;
+import java.util.Set;
+import java.util.concurrent.CompletableFuture;
+import java.util.concurrent.CopyOnWriteArrayList;
+import java.util.concurrent.CountDownLatch;
+import java.util.concurrent.ExecutionException;
+import java.util.concurrent.TimeUnit;
+import java.util.concurrent.TimeoutException;
+import java.util.function.Function;
+import java.util.function.IntSupplier;
+import java.util.zip.ZipEntry;
+import java.util.zip.ZipFile;
+import net.fabricmc.loader.impl.launch.FabricLauncherBase;
+import net.minecraft.client.Minecraft;
+import org.jspecify.annotations.Nullable;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
+
+public final class ModAdder {
+    public sealed interface Result {
+        record Added(List<String> ids, String name, ModSwitcher.Result switched) implements Result {
+        }
+
+        record Refused(String reason) implements Result {
+        }
+
+        record Failed(String reason, Throwable cause, boolean leftBehind) implements Result {
+            public Failed(String reason, Throwable cause) {
+                this(reason, cause, false);
+            }
+        }
+    }
+
+    interface Engine extends WidenerUses.GameAccess {
+        boolean isInstalled(String id);
+
+        ModGraph makeGraphWith(List<ModJar> jars);
+
+        SwitchPlanner makePlannerFor(ModGraph graph);
+
+        SwitchApplier getApplier();
+
+        ModSwitcher getSwitcher();
+
+        ModSwitcher.Result takeOut(List<String> ids);
+
+        boolean isLoaded(String internalName);
+
+        @Nullable Class<?> findLoaded(String internalName);
+
+        void forgetClassReads();
+
+        @Nullable Path findJarOf(ModJar part);
+
+        ModManifest.Environment getSide();
+
+        Path getAddedJarsFolder();
+
+        MixinCopy.Decorations getDecorationsFor(List<ModJar> jars);
+
+        boolean isInWorld();
+    }
+
+    private record Part(Path path, ModJar jar) {
+    }
+
+    private static final Logger LOGGER = LoggerFactory.getLogger(ModAdder.class);
+
+    private static final Duration ENTRYPOINT_WAIT = Duration.ofSeconds(90);
+
+    private final Engine engine;
+
+    public ModAdder(Engine engine) {
+        this.engine = engine;
+    }
+
+    AddPreview preview(Path jarPath) {
+        ModJar jar;
+        try {
+            jar = ModJarReader.read(jarPath);
+        } catch (ModJarException e) {
+            LOGGER.warn("[Hotwire] reading {} for the dry run failed", jarPath, e);
+            return makeRefusal(jarPath.getFileName().toString(), "", jarPath.getFileName() + " cannot be added: reading"
+                    + " it failed: " + e.getMessage());
+        }
+        ModManifest manifest = jar.manifest();
+        String version = manifest.version();
+        if (this.engine.isInstalled(manifest.id())) {
+            return makeRefusal(manifest.name(), version, manifest.name() + " is already installed.");
+        }
+        List<ModJar> parts = new ArrayList<>();
+        this.collectNestedToAdd(jar, parts);
+        parts.add(jar);
+        for (ModJar part : parts) {
+            Optional<String> missing = findMissingRefusal(part);
+            if (missing.isPresent()) {
+                return makeRefusal(manifest.name(), version, missing.get());
+            }
+            Optional<String> widener = this.findWidenerRefusal(part,
+                    part.manifest().id().equals(manifest.id()) ? jarPath : this.engine.findJarOf(part));
+            if (widener.isPresent()) {
+                return AddPreview.ofLater(manifest.name(), version,
+                        List.of(widener.get(), "It goes into your mods folder when you close the game."));
+            }
+        }
+        SwitchPlanner planner = this.engine.makePlannerFor(this.engine.makeGraphWith(parts));
+        Optional<String> missing = this.findDependencyRefusal(planner, parts, id -> id);
+        if (missing.isPresent()) {
+            return makeRefusal(manifest.name(), version, missing.get());
+        }
+        Set<String> content = this.readContent(jarPath);
+        List<String> lines = new ArrayList<>();
+        if (!manifest.authors().isEmpty()) {
+            lines.add("By " + String.join(", ", manifest.authors()));
+        }
+        List<String> nested = parts.stream().filter(part -> !part.manifest().id().equals(manifest.id()))
+                .map(part -> part.manifest().name()).toList();
+        if (!nested.isEmpty()) {
+            lines.add("Also adds " + String.join(", ", nested) + " from inside it");
+        }
+        int patched = parts.stream().mapToInt(part -> part.patches().patches().size()).sum();
+        lines.add(patched == 0 ? "Patches no game classes" : "Patches " + patched + " game classes");
+        int widened = parts.stream().mapToInt(part -> part.accessWidener().map(text -> text.getClauses().size())
+                .orElse(0)).sum();
+        if (widened > 0) {
+            int onLoaded = parts.stream().mapToInt(part -> part.accessWidener()
+                    .map(text -> text.getClausesOnLoadedClasses(this.engine::isLoaded).size()).orElse(0)).sum();
+            lines.add(onLoaded == 0 ? "Opens " + widened + " members of game classes as they load"
+                    : "Opens " + widened + " members of game classes, " + onLoaded + " on classes already loaded,"
+                            + " which the mod's code reaches through Hotwire");
+        }
+        if (!content.isEmpty() && this.engine.isInWorld()) {
+            Optional<String> cannot = WorldReopen.findRefusal();
+            if (cannot.isPresent()) {
+                return makeRefusal(manifest.name(), version, manifest.name() + " makes " + String.join(", ", content)
+                        + ", which a world only takes when it opens. " + cannot.get());
+            }
+            lines.add("Makes " + String.join(", ", content) + ", which a world only takes when it opens: the world"
+                    + " is saved, closed and opened again around the add");
+            return AddPreview.reopen(manifest.name(), version, lines);
+        }
+        return AddPreview.ofReady(manifest.name(), version, lines, List.of());
+    }
+
+    private Set<String> readContent(Path jarPath) {
+        try {
+            return ContentScan.findKinds(ContentScan.readClasses(jarPath), this.engine::findSuperOf);
+        } catch (IOException e) {
+            LOGGER.warn("[Hotwire] the classes of {} could not be read for the content they make", jarPath, e);
+            return Set.of();
+        }
+    }
+
+    private static Optional<String> findMissingRefusal(ModJar part) {
+        List<String> missing = part.patches().missing();
+        return missing.isEmpty() ? Optional.empty() : Optional.of(part.manifest().name() + " lists "
+                + String.join(", ", missing) + ", which its jar does not have, so the loader would fail on it.");
+    }
+
+    private Optional<String> findDependencyRefusal(SwitchPlanner planner, List<ModJar> jars,
+            Function<String, String> nameOf) {
+        List<String> ids = jars.stream().map(jar -> jar.manifest().id()).toList();
+        Set<String> off = new HashSet<>(this.engine.getSwitcher().getOff());
+        off.addAll(ids);
+        SwitchPlan plan = planner.planOn(ids, off);
+        if (plan.refusals().isEmpty()) {
+            return Optional.empty();
+        }
+        return Optional.of(PlayerMessages.describe(new ModSwitcher.Result.Refused(plan), nameOf));
+    }
+
+    private Optional<String> findWidenerRefusal(ModJar part, @Nullable Path path) {
+        if (part.accessWidener().isEmpty()) {
+            return Optional.empty();
+        }
+        AccessWidenerText widener = part.accessWidener().get();
+        String name = part.manifest().name();
+        try {
+            LoaderClassTweaker.check(widener, name);
+        } catch (IllegalArgumentException e) {
+            return Optional.of(Objects.requireNonNull(e.getMessage()));
+        }
+        List<AccessWidenerText.Clause> loaded = widener.getClausesOnLoadedClasses(this.engine::isLoaded);
+        if (loaded.isEmpty()) {
+            return Optional.empty();
+        }
+        List<AccessWidenerText.Clause> unbridgeable = WidenerUses.findUnbridgeable(loaded, this.engine)
+                .stream().filter(clause -> path == null || !WidenerUses.JUDGED_BY_USE.contains(clause.kind())).toList();
+        if (!unbridgeable.isEmpty()) {
+            return Optional.of(AccessWidenerText.describeRefusal(name, unbridgeable.get(0)));
+        }
+        JarUseReader.JarClasses jar = JarUseReader.readJar(path);
+        for (WidenerUses.Use use : JarUseReader.findUsesOf(jar, loaded, this.engine)) {
+            if (!use.isFixable() && !JarUseReader.isMovable(use, jar, this.engine, false)) {
+                return Optional.of(name + " cannot be added: " + use.describe() + ", and the game has loaded that"
+                        + " class already, so its access cannot change.");
+            }
+        }
+        return Optional.empty();
+    }
+
+    private void openLoaded(ModJar part, @Nullable Path path) {
+        part.accessWidener().ifPresent(widener -> {
+            List<AccessWidenerText.Clause> loaded = widener.getClausesOnLoadedClasses(this.engine::isLoaded);
+
+            JarUseReader.JarClasses jar = JarUseReader.readJar(path);
+
+            Map<String, String> moves = new LinkedHashMap<>();
+            for (WidenerUses.Use use : JarUseReader.findUsesOf(jar, loaded, this.engine)) {
+                if (!moves.containsKey(use.inClass()) && JarUseReader.isMovable(use, jar, this.engine, true)) {
+                    String target = Relocations.findTarget(use.inClass(), use.owner());
+                    moves.put(use.inClass(), target);
+                    Relocations.register(use.inClass(), target);
+                    LOGGER.info("[Hotwire] {} moves to {}, beside {}", use.inClass(), target, use.owner());
+                }
+                if (use.kind() == WidenerUses.Kind.OVERRIDE) {
+                    ShutOverrides.register(part.manifest().id(), use.owner(), use.name() + use.desc(), use.inClass());
+                }
+                if (use.kind() == WidenerUses.Kind.PARENT_CONSTRUCTOR) {
+                    Linker.adopt(use.inClass());
+                    LOGGER.info("[Hotwire] {} is made by adoption: {}'s constructor stays closed", use.inClass(),
+                            use.owner());
+                }
+            }
+            if (!moves.isEmpty()) {
+                Map<String, byte[]> generated = new LinkedHashMap<>();
+                moves.forEach((moved, target) -> generated.put(target, Relocations.remap(
+                        Objects.requireNonNull(Objects.requireNonNull(jar).classes().get(moved)))));
+                this.engine.getApplier().getRebuilder().getHooks().onGenerated(generated);
+            }
+            WidenerUses.Openings openings = WidenerUses.findOpenings(loaded, this.engine);
+            if (!openings.isEmpty()) {
+                Linker.open(openings);
+                for (String opened : openings.classes()) {
+                    Class<?> type = this.engine.findLoaded(opened);
+                    if (type != null) {
+                        AccessBridge.open(type);
+                    }
+                }
+                LOGGER.info("[Hotwire] {} opens {} loaded classes and {} members for its own code through the bridge",
+                        part.manifest().id(), openings.classes().size(), openings.members().size());
+            }
+        });
+    }
+
+    public static boolean isWorldBuilt(Result result) {
+        return result instanceof Result.Failed failed && !failed.leftBehind()
+                && failed.cause() instanceof RebuildException refused && refused.reopenFixes();
+    }
+
+    public static boolean isRestartOnly(Result result) {
+        return result instanceof Result.Failed failed && !failed.leftBehind()
+                && failed.cause() instanceof RebuildException refused && refused.isRestartOnly();
+    }
+
+    private static AddPreview makeRefusal(String name, String version, String reason) {
+        return AddPreview.ofRefusal(name + (version.isEmpty() ? "" : " " + version), reason);
+    }
+
+    private boolean isPresent(ModJar nested) {
+        if (this.engine.isInstalled(nested.manifest().id())) {
+            return true;
+        }
+        for (String owned : nested.patches().owns()) {
+            if (this.engine.isLoaded(owned)) {
+                return true;
+            }
+        }
+        return false;
+    }
+
+    private void collectNestedToAdd(ModJar jar, List<ModJar> into) {
+        for (ModJar nested : jar.nested()) {
+            String id = nested.manifest().id();
+            if (!this.isPresent(nested) && into.stream().noneMatch(part -> part.manifest().id().equals(id))) {
+                this.collectNestedToAdd(nested, into);
+                into.add(nested);
+            }
+        }
+    }
+
+    public Result add(Path jarPath, Function<String, String> nameOf) {
+        Map<String, Part> parts = new LinkedHashMap<>();
+        try {
+            this.collect(jarPath, parts);
+        } catch (ModJarException e) {
+            LOGGER.warn("[Hotwire] reading {} for the add failed", jarPath, e);
+            return new Result.Refused(jarPath.getFileName() + " cannot be added: reading it failed: " + e.getMessage());
+        } catch (IOException e) {
+            return new Result.Refused(jarPath.getFileName() + " cannot be added: a jar inside it could not be written"
+                    + " out: " + e.getMessage());
+        }
+        Part asked = parts.values().stream().reduce((first, second) -> second).orElseThrow();
+        String name = asked.jar().manifest().name();
+        if (this.engine.isInstalled(asked.jar().manifest().id())) {
+            return new Result.Refused(name + " is already installed.");
+        }
+        Set<String> content = this.engine.isInWorld() ? this.readContent(jarPath) : Set.of();
+        if (!content.isEmpty()) {
+            return new Result.Refused(name + " makes " + String.join(", ", content) + ", which a world only takes"
+                    + " when it opens: add it with Save and add, which saves the world, adds it and opens the world"
+                    + " again.");
+        }
+        for (Part part : parts.values()) {
+            Optional<String> missing = findMissingRefusal(part.jar());
+            if (missing.isPresent()) {
+                return new Result.Refused(missing.get());
+            }
+            Optional<String> widener = this.findWidenerRefusal(part.jar(), part.path());
+            if (widener.isPresent()) {
+                return new Result.Refused(widener.get());
+            }
+        }
+        List<ModJar> jars = parts.values().stream().map(Part::jar).toList();
+        ModGraph graph = this.engine.makeGraphWith(jars);
+        SwitchPlanner planner = this.engine.makePlannerFor(graph);
+        Optional<String> missing = this.findDependencyRefusal(planner, jars, nameOf);
+        if (missing.isPresent()) {
+            return new Result.Refused(missing.get());
+        }
+        AddUndo undo = new AddUndo();
+        for (Part part : parts.values()) {
+            String id = part.jar().manifest().id();
+
+            FailedAddJars.remove(part.path());
+            FabricLauncherBase.getLauncher().addToClassPath(part.path());
+            undo.addPermanent(part.path().getFileName() + " stays on the class path");
+            undo.addUndo(() -> {
+                FailedAddJars.add(part.path());
+                this.engine.getApplier().getRebuilder().copy().forgetReads();
+            });
+            try {
+                LoaderModList.register(part.path());
+                undo.addUndo(() -> LoaderModList.unregister(id));
+            } catch (IllegalStateException e) {
+                LOGGER.error("[Hotwire] {} could not join the loader's mod list", id, e);
+                return new Result.Failed(part.jar().manifest().name() + " could not join the mod list: "
+                        + e.getMessage() + undo.run(), e);
+            }
+            part.jar().accessWidener().ifPresent(text -> {
+                LoaderClassTweaker.apply(text, part.jar().manifest().name(), this.engine::isLoaded);
+                undo.addPermanent("its access widener stays applied");
+            });
+            this.openLoaded(part.jar(), part.path());
+            GameRegistrations.learnJar(part.path(), id);
+            this.engine.getApplier().learn(id, ModMixins.of(part.jar(), this.engine.getSide()));
+            undo.addUndo(() -> this.engine.getApplier().forget(id));
+        }
+        List<String> ids = List.copyOf(parts.keySet());
+
+        this.engine.forgetClassReads();
+        this.engine.getApplier().getRebuilder().copy().learn(this.engine.getDecorationsFor(jars));
+        undo.addUndo(this.engine.getSwitcher().learn(graph, planner, ids));
+
+        parts.values().forEach(part -> LivePlugins.run(part.jar().manifest(), part.path()));
+
+        GameHold hold = GameHold.begin(Minecraft.getInstance());
+        ResourceReload.awaitAssets(ids);
+        try {
+            List<String> grew = new CopyOnWriteArrayList<>();
+
+            CountDownLatch backedOut = new CountDownLatch(1);
+            ModSwitcher.Result switched;
+            try {
+                CrashGuard.onSwitched(ids);
+                this.engine.getApplier().getCatchUps().hold(true);
+                try {
+                    switched = this.engine.getSwitcher().turnOn(ids);
+                } finally {
+                    this.engine.getApplier().getCatchUps().hold(false);
+                }
+                if (PlayerMessages.isBad(switched)) {
+                    return new Result.Failed(PlayerMessages.describe(switched, nameOf) + undo.run(),
+                            switched instanceof ModSwitcher.Result.Failed failed ? failed.cause()
+                                    : new IllegalStateException("refused"));
+                }
+
+                IntSupplier setUp = () -> {
+                    int notSetUp = this.engine.getApplier().getCatchUps().run();
+                    if (notSetUp == 0) {
+                        reloadForAssets(parts.values());
+                    }
+                    return notSetUp;
+                };
+                CompletableFuture<Void> started = AddStart.queue(ids, grew, backedOut, this.engine.getSide(), setUp);
+                hold.releaseGame();
+                started.get(ENTRYPOINT_WAIT.toMillis(), TimeUnit.MILLISECONDS);
+
+                for (String id : ids) {
+                    List<String> ran = new ArrayList<>(ModLifecycle.runSetup(id, GameRegistrations.getJournal(),
+                            Minecraft.getInstance()));
+                    ran.addAll(ModLifecycle.start(id, GameRegistrations.getJournal(), Minecraft.getInstance()));
+                    if (!ran.isEmpty()) {
+                        LOGGER.info("[Hotwire] {} started with the running server: {}", id, ran);
+                    }
+                }
+            } catch (ExecutionException | TimeoutException | RuntimeException e) {
+                Throwable cause = e instanceof ExecutionException && e.getCause() != null ? e.getCause() : e;
+                if (!(e instanceof ExecutionException)) {
+                    hold.pauseGame(Minecraft.getInstance());
+                }
+                return this.backOut(ids, name, cause, grew, undo, e);
+            } catch (InterruptedException e) {
+                Thread.currentThread().interrupt();
+                this.engine.getSwitcher().turnOff(ids);
+                return new Result.Failed(name + " was interrupted while starting" + undo.run(), e);
+            } finally {
+                this.engine.getApplier().getCatchUps().clear();
+                backedOut.countDown();
+                hold.release();
+            }
+            parts.values().forEach(part -> FailedAddJars.remove(part.path()));
+            return new Result.Added(ids, name, switched);
+        } finally {
+            ResourceReload.endAssetWait();
+        }
+    }
+
+    private static void reloadForAssets(Collection<Part> parts) {
+        List<String> with = parts.stream().filter(part -> shipsAssets(part.path()))
+                .map(part -> part.jar().manifest().id()).toList();
+        if (with.isEmpty()) {
+            return;
+        }
+        ResourceReload.reloadBeforeFrame(with + " bring assets");
+    }
+
+    private static boolean shipsAssets(Path jar) {
+        try (ZipFile zip = new ZipFile(jar.toFile())) {
+            return zip.stream().anyMatch(entry -> entry.getName().startsWith("assets/"));
+        } catch (IOException e) {
+            LOGGER.warn("[Hotwire] {} could not be read for assets; resources reload to be safe", jar, e);
+            return true;
+        }
+    }
+
+    private Result backOut(List<String> ids, String name, Throwable cause, List<String> grew, AddUndo undo,
+            Exception failure) {
+        LOGGER.error("[Hotwire] {} failed while starting; it goes back out", ids, failure);
+        ModSwitcher.Result back = this.engine.takeOut(ids);
+        String failed = name + " failed while starting (" + cause + ").";
+        if (PlayerMessages.isBad(back)) {
+            LOGGER.error("[Hotwire] {} could not be taken back out: {}", ids, PlayerMessages.describe(back, id -> id));
+            return new Result.Failed(failed + " It could not be taken back out, so it stays until the game restarts:"
+                    + " restart before playing on.", failure, true);
+        }
+        ids.forEach(GameRegistrations.getJournal()::forget);
+        String stays = grew.isEmpty() ? "" : " Its entries in " + String.join(", ", grew)
+                + " stay registered until the game restarts.";
+
+        String said = failed + " It was taken back out: its patches and everything it registered are gone." + stays
+                + undo.run();
+        return new Result.Failed(said, RebuildException.ofRestartOnly(said, failure));
+    }
+
+    private void collect(Path path, Map<String, Part> into) throws ModJarException, IOException {
+        ModJar jar = ModJarReader.read(path);
+        for (String nestedPath : jar.manifest().nestedJars()) {
+            Path written = this.engine.getAddedJarsFolder().resolve(Path.of(nestedPath).getFileName().toString());
+            try (ZipFile zip = new ZipFile(path.toFile())) {
+                ZipEntry entry = zip.getEntry(nestedPath);
+                if (entry == null) {
+                    continue;
+                }
+                Files.createDirectories(written.getParent());
+                byte[] bytes;
+                try (InputStream in = zip.getInputStream(entry)) {
+                    bytes = in.readAllBytes();
+                }
+
+                if (!Files.exists(written) || !Arrays.equals(Files.readAllBytes(written), bytes)) {
+                    Files.write(written, bytes);
+                }
+            }
+            ModJar nested;
+            try {
+                nested = ModJarReader.read(written);
+            } catch (ModJarException notAMod) {
+                continue;
+            }
+            String id = nested.manifest().id();
+            if (!this.isPresent(nested) && !into.containsKey(id)) {
+                this.collect(written, into);
+            }
+        }
+        into.put(jar.manifest().id(), new Part(path, jar));
+    }
+}

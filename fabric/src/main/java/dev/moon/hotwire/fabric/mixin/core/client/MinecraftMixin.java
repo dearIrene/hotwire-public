@@ -1,0 +1,49 @@
+package dev.moon.hotwire.fabric.mixin.core.client;
+
+import com.llamalad7.mixinextras.injector.wrapoperation.Operation;
+import com.llamalad7.mixinextras.injector.wrapoperation.WrapOperation;
+import dev.moon.hotwire.fabric.CrashGuard;
+import dev.moon.hotwire.fabric.FrameRecovery;
+//? if >=1.21.2 {
+import dev.moon.hotwire.fabric.ResourceReload;
+//?}
+import dev.moon.hotwire.fabric.add.TickEnd;
+import dev.moon.hotwire.fabric.registration.GameHold;
+import dev.moon.hotwire.switching.CrashPolicy;
+import net.minecraft.client.Minecraft;
+import org.spongepowered.asm.mixin.Mixin;
+import org.spongepowered.asm.mixin.injection.At;
+import org.spongepowered.asm.mixin.injection.Inject;
+import org.spongepowered.asm.mixin.injection.callback.CallbackInfo;
+
+@Mixin(Minecraft.class)
+public abstract class MinecraftMixin {
+    @WrapOperation(method = "run", at = @At(value = "INVOKE", target = "Lnet/minecraft/client/Minecraft;runTick(Z)V"))
+    @SuppressWarnings("checkstyle:IllegalCatch")
+    private void hotwire$catchFrameThrow(Minecraft game, boolean advance, Operation<Void> original) {
+        GameHold.runAtFrameEdge();
+        try {
+            original.call(game, advance);
+        } catch (RuntimeException | Error e) {
+            if (!CrashGuard.handle(e, CrashPolicy.Site.FRAME)) {
+                throw e;
+            }
+            FrameRecovery.end(game);
+        }
+    }
+
+    //? if >=1.21.2 {
+    @Inject(method = "triggerResourcePackRecovery", at = @At("HEAD"), cancellable = true)
+    private void hotwire$skipRecoveryForAddedAssets(Exception cause, CallbackInfo ci) {
+        if (ResourceReload.isAwaitingAssets()) {
+            ResourceReload.noteRecoverySkipped(cause);
+            ci.cancel();
+        }
+    }
+    //?}
+
+    @Inject(method = "tick", at = @At("TAIL"))
+    private void hotwire$runTickEnd(CallbackInfo ci) {
+        TickEnd.runDue();
+    }
+}

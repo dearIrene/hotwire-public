@@ -1,0 +1,185 @@
+package dev.moon.hotwire.redefine;
+
+import java.util.ArrayList;
+import java.util.Collections;
+import java.util.HashMap;
+import java.util.HashSet;
+import java.util.IdentityHashMap;
+import java.util.List;
+import java.util.Map;
+import java.util.Set;
+import java.util.function.Function;
+import org.jspecify.annotations.Nullable;
+import org.objectweb.asm.ClassReader;
+import org.objectweb.asm.ClassVisitor;
+import org.objectweb.asm.FieldVisitor;
+import org.objectweb.asm.MethodVisitor;
+import org.objectweb.asm.Opcodes;
+import org.objectweb.asm.tree.AbstractInsnNode;
+import org.objectweb.asm.tree.ClassNode;
+import org.objectweb.asm.tree.FieldInsnNode;
+import org.objectweb.asm.tree.FieldNode;
+import org.objectweb.asm.tree.IincInsnNode;
+import org.objectweb.asm.tree.IntInsnNode;
+import org.objectweb.asm.tree.InvokeDynamicInsnNode;
+import org.objectweb.asm.tree.LdcInsnNode;
+import org.objectweb.asm.tree.MethodInsnNode;
+import org.objectweb.asm.tree.MethodNode;
+import org.objectweb.asm.tree.MultiANewArrayInsnNode;
+import org.objectweb.asm.tree.TypeInsnNode;
+import org.objectweb.asm.tree.VarInsnNode;
+
+final class BatchShapes {
+    private static final String MADE = OffWindowObjects.class.getName().replace('.', '/');
+
+    private BatchShapes() {
+    }
+
+    private static String describeOperand(AbstractInsnNode insn) {
+        return switch (insn) {
+            case MethodInsnNode call -> call.owner + "." + call.name + call.desc;
+            case FieldInsnNode field -> field.owner + "." + field.name + field.desc;
+            case TypeInsnNode type -> type.desc;
+            case LdcInsnNode ldc -> String.valueOf(ldc.cst);
+            case IntInsnNode number -> String.valueOf(number.operand);
+            case VarInsnNode local -> String.valueOf(local.var);
+            case IincInsnNode increment -> increment.var + "+" + increment.incr;
+            case InvokeDynamicInsnNode dynamic -> dynamic.name + dynamic.desc + dynamic.bsm;
+            case MultiANewArrayInsnNode array -> array.desc + array.dims;
+            default -> "";
+        };
+    }
+
+    static List<String> findConstructors(byte[] bytes, byte @Nullable [] original) {
+        ClassNode node = new ClassNode();
+        new ClassReader(bytes).accept(node, ClassReader.SKIP_DEBUG | ClassReader.SKIP_FRAMES);
+        Set<String> own = new HashSet<>();
+        if (original != null) {
+            Set<String> had = ConstructedFields.readFields(original).keys();
+            for (FieldNode field : node.fields) {
+                if ((field.access & Opcodes.ACC_STATIC) == 0 && !had.contains(field.name + field.desc)) {
+                    own.add(field.name + field.desc);
+                }
+            }
+        }
+        List<String> out = new ArrayList<>();
+        for (MethodNode method : node.methods) {
+            if (method.name.equals("<init>")) {
+                Set<AbstractInsnNode> ownSetup = findOwnSetup(node.name, method, own);
+                StringBuilder text = new StringBuilder(method.desc);
+                for (AbstractInsnNode insn : method.instructions) {
+                    if (insn.getOpcode() >= 0 && !ownSetup.contains(insn)) {
+                        text.append(' ').append(insn.getOpcode()).append(describeOperand(insn));
+                    }
+                }
+                out.add(text.toString());
+            }
+        }
+        return out;
+    }
+
+    private static Set<AbstractInsnNode> findOwnSetup(String owner, MethodNode method, Set<String> own) {
+        Set<AbstractInsnNode> setup = Collections.newSetFromMap(new IdentityHashMap<>());
+        for (AbstractInsnNode insn : method.instructions) {
+            if (insn instanceof MethodInsnNode call && call.owner.equals(MADE) && call.name.equals("onMade")
+                    && call.getPrevious() != null && call.getPrevious().getPrevious() != null) {
+                setup.add(call);
+                setup.add(call.getPrevious());
+                setup.add(call.getPrevious().getPrevious());
+            }
+        }
+        if (own.isEmpty()) {
+            return setup;
+        }
+        for (AbstractInsnNode insn : method.instructions) {
+            if (insn instanceof FieldInsnNode store && store.getOpcode() == Opcodes.PUTFIELD
+                    && store.owner.equals(owner) && own.contains(store.name + store.desc)) {
+                AbstractInsnNode start = FieldInitializers.findOwnSetupStart(store, own);
+                for (AbstractInsnNode at = start; at != null; at = at.getNext()) {
+                    setup.add(at);
+                    if (at.equals(store)) {
+                        break;
+                    }
+                }
+            }
+        }
+        return setup;
+    }
+
+    static Set<String> findMethodsGained(Map<String, byte[]> current, Map<String, byte[]> mixed) {
+        Set<String> gained = new HashSet<>();
+        mixed.forEach((name, bytes) -> {
+            byte[] running = current.get(name);
+            if (running == null) {
+                return;
+            }
+            Set<String> had = new HashSet<>();
+            new ClassReader(running).accept(new ClassVisitor(Opcodes.ASM9) {
+                @Override
+                public @Nullable MethodVisitor visitMethod(int access, String method, String descriptor,
+                        @Nullable String signature, String @Nullable [] exceptions) {
+                    had.add(method + descriptor);
+                    return null;
+                }
+            }, ClassReader.SKIP_CODE);
+            new ClassReader(bytes).accept(new ClassVisitor(Opcodes.ASM9) {
+                @Override
+                public @Nullable MethodVisitor visitMethod(int access, String method, String descriptor,
+                        @Nullable String signature, String @Nullable [] exceptions) {
+                    if (!had.contains(method + descriptor) && !method.equals("<init>") && !method.equals("<clinit>")) {
+                        gained.add(method + descriptor);
+                    }
+                    return null;
+                }
+            }, ClassReader.SKIP_CODE);
+        });
+        return gained;
+    }
+
+    static Map<String, Set<String>> findFieldsGained(Map<String, byte[]> current, Map<String, byte[]> mixed) {
+        Map<String, Set<String>> gained = new HashMap<>();
+        mixed.forEach((name, bytes) -> {
+            byte[] running = current.get(name);
+            if (running == null) {
+                return;
+            }
+            Set<String> had = new HashSet<>();
+            new ClassReader(running).accept(new ClassVisitor(Opcodes.ASM9) {
+                @Override
+                public @Nullable FieldVisitor visitField(int access, String field, String descriptor,
+                        @Nullable String signature, @Nullable Object value) {
+                    had.add(field + descriptor);
+                    return null;
+                }
+            }, ClassReader.SKIP_CODE);
+            Set<String> added = new HashSet<>();
+            new ClassReader(bytes).accept(new ClassVisitor(Opcodes.ASM9) {
+                @Override
+                public @Nullable FieldVisitor visitField(int access, String field, String descriptor,
+                        @Nullable String signature, @Nullable Object value) {
+                    if (!had.contains(field + descriptor)) {
+                        added.add(field + descriptor);
+                    }
+                    return null;
+                }
+            }, ClassReader.SKIP_CODE);
+            if (!added.isEmpty()) {
+                gained.put(name, added);
+            }
+        });
+        return gained;
+    }
+
+    static Set<String> findDucksGained(Map<String, byte[]> current, Map<String, byte[]> mixed,
+            Function<String, byte @Nullable []> classBytes) {
+        Set<String> ducks = new HashSet<>();
+        mixed.forEach((name, bytes) -> {
+            byte[] running = current.get(name);
+            if (running != null) {
+                ducks.addAll(DuckParents.close(List.of(new ClassReader(bytes).getInterfaces()),
+                        Set.of(new ClassReader(running).getInterfaces()), classBytes));
+            }
+        });
+        return ducks;
+    }
+}
