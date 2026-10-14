@@ -10,13 +10,17 @@ public final class ReopenPanel extends Panel {
     static final int WIDTH = 440;
     static final int LINE = 12;
 
-    public record Offer(boolean off, List<String> ids, @Nullable Path jar, String heading, String why) {
+    public record Offer(boolean off, List<String> ids, @Nullable Path jar, String heading, String why, boolean leaves) {
         public Offer {
             ids = List.copyOf(ids);
         }
 
+        public Offer(boolean off, List<String> ids, @Nullable Path jar, String heading, String why) {
+            this(off, ids, jar, heading, why, false);
+        }
+
         public Offer(boolean off, List<String> ids, String heading, String why) {
-            this(off, ids, null, heading, why);
+            this(off, ids, null, heading, why, false);
         }
     }
 
@@ -32,8 +36,8 @@ public final class ReopenPanel extends Panel {
     public void open(Offer offer) {
         this.offer = offer;
         this.lines = List.of();
-        this.setPrimary(offer.jar() != null ? "Save and add" : offer.ids().isEmpty() ? "Save and reopen"
-                : "Save and switch", () -> this.onConfirm.accept(offer));
+        this.setPrimary(offer.leaves() ? "Leave and switch" : offer.jar() != null ? "Save and add"
+                : offer.ids().isEmpty() ? "Save and reopen" : "Save and switch", () -> this.onConfirm.accept(offer));
         this.setPrimaryWidth(120);
         this.show();
     }
@@ -56,7 +60,8 @@ public final class ReopenPanel extends Panel {
         }
         canvas.drawText(canvas.clip(shown.heading(), w - 28), x + 14, y + 16, Colors.fade(Palette.TEXT, alpha));
         List<String> body = new ArrayList<>(MessageLine.wrap(canvas, shown.why(), w - 28, Integer.MAX_VALUE));
-        body.addAll(MessageLine.wrap(canvas, "The world is saved and closed" + (shown.jar() != null
+        body.addAll(MessageLine.wrap(canvas, shown.leaves() ? "The world is left, as Disconnect would, and the"
+                + " switch is made at the title screen." : "The world is saved and closed" + (shown.jar() != null
                 ? ", the mod is added, and the world opens again" : shown.ids().isEmpty() ? " and opens again"
                 : ", the switch is made, and the world opens again") + ", as Save and Quit and opening it would.",
                 w - 28, Integer.MAX_VALUE));

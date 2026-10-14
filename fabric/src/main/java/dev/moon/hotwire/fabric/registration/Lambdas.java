@@ -6,6 +6,7 @@ import dev.moon.hotwire.redefine.FieldSlots;
 import dev.moon.hotwire.redefine.Linker;
 import java.lang.instrument.Instrumentation;
 import java.lang.reflect.Method;
+import java.util.Optional;
 import org.jspecify.annotations.Nullable;
 
 final class Lambdas {
@@ -13,11 +14,22 @@ final class Lambdas {
     private boolean asked;
     private @Nullable ConstantPools pools;
 
+    private final ClassValue<Optional<String>> told = new ClassValue<>() {
+        @Override
+        protected Optional<String> computeValue(Class<?> type) {
+            return Optional.ofNullable(Lambdas.this.tell(type));
+        }
+    };
+
     Lambdas(Instrumentation instrumentation) {
         this.instrumentation = instrumentation;
     }
 
     @Nullable String findModOf(Class<?> type) {
+        return this.told.get(type).orElse(null);
+    }
+
+    private @Nullable String tell(Class<?> type) {
         Method spun = type.isHidden() ? Linker.findSpunBody(type) : null;
         if (spun != null) {
             return CrashGuard.findMergedMod(spun);

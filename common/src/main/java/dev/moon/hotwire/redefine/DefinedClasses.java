@@ -1,10 +1,10 @@
 package dev.moon.hotwire.redefine;
 
 import java.io.IOException;
-import java.nio.ByteBuffer;
-import java.nio.channels.FileChannel;
+import java.io.RandomAccessFile;
+import java.nio.file.DirectoryStream;
 import java.nio.file.Files;
-import java.nio.file.StandardOpenOption;
+import java.nio.file.Path;
 import java.util.Map;
 import java.util.concurrent.ConcurrentHashMap;
 import org.jspecify.annotations.Nullable;
@@ -16,9 +16,10 @@ final class DefinedClasses {
 
     private static final int LENGTH_BITS = 24;
     private static final long LENGTH_MASK = (1L << LENGTH_BITS) - 1;
+    private static final String PREFIX = "hotwire-classes";
 
     private final Map<String, Long> places = new ConcurrentHashMap<>();
-    private @Nullable FileChannel file;
+    private @Nullable RandomAccessFile file;
     private boolean closed;
 
     private boolean writing;
@@ -30,17 +31,18 @@ final class DefinedClasses {
         }
         this.writing = true;
         try {
-            FileChannel into = this.file;
+            RandomAccessFile into = this.file;
             if (into == null) {
-                into = FileChannel.open(Files.createTempFile("hotwire-classes", ".bin"), StandardOpenOption.READ,
-                        StandardOpenOption.WRITE, StandardOpenOption.DELETE_ON_CLOSE);
+                Path folder = Path.of(System.getProperty("java.io.tmpdir"));
+                deleteLeftBehind(folder);
+                Path path = Files.createTempFile(folder, PREFIX, ".bin");
+                path.toFile().deleteOnExit();
+                into = new RandomAccessFile(path.toFile(), "rw");
                 this.file = into;
             }
             long at = this.end;
-            ByteBuffer buffer = ByteBuffer.wrap(bytes);
-            while (buffer.hasRemaining()) {
-                into.write(buffer, at + buffer.position());
-            }
+            into.seek(at);
+            into.write(bytes);
             this.end = at + bytes.length;
             this.places.put(name, at << LENGTH_BITS | bytes.length);
         } catch (IOException | RuntimeException e) {
@@ -52,24 +54,28 @@ final class DefinedClasses {
         }
     }
 
-    byte @Nullable [] find(String name) {
-        Long place = this.places.get(name);
-        FileChannel from;
-        synchronized (this) {
-            from = this.file;
+    private static void deleteLeftBehind(Path folder) {
+        try (DirectoryStream<Path> files = Files.newDirectoryStream(folder, PREFIX + "*.bin")) {
+            for (Path file : files) {
+                try {
+                    Files.deleteIfExists(file);
+                } catch (IOException e) {
+                }
+            }
+        } catch (IOException e) {
         }
+    }
+
+    synchronized byte @Nullable [] find(String name) {
+        Long place = this.places.get(name);
+        RandomAccessFile from = this.file;
         if (place == null || from == null) {
             return null;
         }
         byte[] bytes = new byte[(int) (place & LENGTH_MASK)];
-        ByteBuffer buffer = ByteBuffer.wrap(bytes);
-        long at = place >>> LENGTH_BITS;
         try {
-            while (buffer.hasRemaining()) {
-                if (from.read(buffer, at + buffer.position()) < 0) {
-                    return null;
-                }
-            }
+            from.seek(place >>> LENGTH_BITS);
+            from.readFully(bytes);
             return bytes;
         } catch (IOException e) {
             LOGGER.warn("[Hotwire] the bytes {} was defined with could not be read back", name, e);

@@ -158,6 +158,10 @@ public final class FieldReferences {
         GameHold hold = GameHold.begin(Minecraft.getInstance());
         try {
             planned.forEach(this::putIn);
+            if (this.elements.look.isReadyFor(mods)) {
+                this.elements.takeOut(List.copyOf(mods), List.of(), Set.of());
+                return;
+            }
             Object game = Minecraft.getInstance();
 
             List<Object> near = new ArrayList<>(List.of(game));

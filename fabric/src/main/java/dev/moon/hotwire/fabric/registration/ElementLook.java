@@ -47,6 +47,10 @@ public final class ElementLook {
     @Nullable List<Runnable> open(List<String> walked) {
         List<Runnable> ahead = !isOnlyLooking && this.mods.containsAll(walked)
                 && System.nanoTime() - this.at < STANDS_NANOS ? this.noted : null;
+        if (!isOnlyLooking && ahead == null && this.noted != null) {
+            LOGGER.info("[Hotwire] a walk for {} looks for itself: the last look was for {}, {} ms ago", walked,
+                    this.mods, (System.nanoTime() - this.at) / 1_000_000);
+        }
         this.noted = isOnlyLooking ? new ArrayList<>() : null;
         this.mods = isOnlyLooking ? List.copyOf(walked) : List.of();
         this.at = System.nanoTime();
@@ -54,6 +58,11 @@ public final class ElementLook {
             lookedFor = List.of();
         }
         return ahead;
+    }
+
+    boolean isReadyFor(Collection<String> walked) {
+        return !isOnlyLooking && this.noted != null && this.mods.containsAll(walked)
+                && System.nanoTime() - this.at < STANDS_NANOS;
     }
 
     boolean hasNoted(Runnable work) {

@@ -52,7 +52,7 @@ final class CollectionReferences {
 
     private boolean inSmall;
 
-    private final ElementLook look = new ElementLook();
+    final ElementLook look = new ElementLook();
 
     private static volatile Function<Class<?>, @Nullable String> lambdaOwner = type -> null;
 
@@ -71,7 +71,7 @@ final class CollectionReferences {
                 this.walk(mods, holders, statics);
             } else {
                 this.begin(mods);
-                ahead.forEach(Runnable::run);
+                ElementTakes.runAll(ahead);
             }
         } catch (RuntimeException | LinkageError e) {
             this.look.drop();
@@ -201,6 +201,12 @@ final class CollectionReferences {
         }
     }
 
+    private void takeOrNote(Runnable take) {
+        if (!this.look.hasNoted(take)) {
+            take.run();
+        }
+    }
+
     private List<Removal> getRemovalsOf(String mod) {
         return this.mine.computeIfAbsent(mod, any -> new ArrayList<>());
     }
@@ -290,12 +296,12 @@ final class CollectionReferences {
     @SuppressWarnings("unchecked")
     private void collectOnce(Object value) {
         boolean outer = this.inSmall;
-        this.inSmall = switch (value) {
-            case Collection<?> all -> all.size() <= WRAPPERS_IN;
-            case Map<?, ?> map -> map.size() <= WRAPPERS_IN;
-            default -> false;
-        };
         try {
+            this.inSmall = switch (value) {
+                case Collection<?> all -> all.size() <= WRAPPERS_IN;
+                case Map<?, ?> map -> map.size() <= WRAPPERS_IN;
+                default -> false;
+            };
             switch (value) {
                 case List<?> list when list.size() <= LARGEST -> {
                     List<Object> items = (List<Object>) list;
@@ -303,11 +309,8 @@ final class CollectionReferences {
                         Object item = items.get(index);
                         String mod = item == null ? null : this.findOwnerOf(item);
                         if (mod != null) {
-                            if (this.look.hasNoted(() -> this.collectOnce(value))) {
-                                return;
-                            }
-                            items.remove(index);
-                            this.getRemovalsOf(mod).add(new Removal.InList(items, index, item));
+                            Runnable take = () -> ElementTakes.takeFromList(items, item, this.getRemovalsOf(mod));
+                            this.takeOrNote(take);
                         } else if (item != null) {
                             this.followLambda(item);
                         }
@@ -317,11 +320,9 @@ final class CollectionReferences {
                     Collection<Object> items = (Collection<Object>) collection;
                     for (Object item : new ArrayList<>(items)) {
                         String mod = item == null ? null : this.findOwnerOf(item);
-                        if (mod != null && this.look.hasNoted(() -> this.collectOnce(value))) {
-                            return;
-                        }
-                        if (mod != null && items.remove(item)) {
-                            this.getRemovalsOf(mod).add(new Removal.InCollection(items, item));
+                        if (mod != null) {
+                            this.takeOrNote(() -> ElementTakes.takeFromCollection(items, item,
+                                    this.getRemovalsOf(mod)));
                         }
                     }
                 }
@@ -338,10 +339,11 @@ final class CollectionReferences {
                                 .orElse(null);
                         Object standIn = whole != null ? (StandIns.fits(slot) ? StandIns.of(slot) : null)
                                 : parts != null ? withStandIns(parts, Objects.requireNonNull(item)) : null;
-                        if (item != null && standIn != null && !this.look.hasNoted(() -> this.collectOnce(value))) {
-                            array[index] = standIn;
-                            this.getRemovalsOf(whole != null ? whole : Objects.requireNonNull(parts))
-                                    .add(new Removal.InArray(array, index, item, standIn));
+                        if (item != null && standIn != null) {
+                            String owner = whole != null ? whole : Objects.requireNonNull(parts);
+                            int at = index;
+                            this.takeOrNote(() -> ElementTakes.replaceInArray(array, at, item, standIn,
+                                    this.getRemovalsOf(owner)));
                         }
                     }
                 }
@@ -358,12 +360,9 @@ final class CollectionReferences {
                             mod = Wrappers.findNamed(key, element, this.mods);
                         }
                         if (mod != null) {
-                            if (this.look.hasNoted(() -> this.collectOnce(value))) {
-                                return;
-                            }
-                            if (entries.remove(key, element)) {
-                                this.getRemovalsOf(mod).add(new Removal.InMap(entries, key, element));
-                            }
+                            String owner = mod;
+                            this.takeOrNote(() -> ElementTakes.takeFromMap(entries, key, element,
+                                    this.getRemovalsOf(owner)));
                         } else if (element instanceof Collection<?> nested) {
                             this.collect(nested);
                         }

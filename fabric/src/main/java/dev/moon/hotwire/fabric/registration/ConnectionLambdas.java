@@ -4,14 +4,19 @@ import dev.moon.hotwire.redefine.FieldSlots;
 import dev.moon.hotwire.redefine.Linker;
 import io.netty.channel.Channel;
 import io.netty.channel.ChannelHandler;
+import io.netty.channel.embedded.EmbeddedChannel;
+import java.io.OutputStream;
+import java.io.Writer;
 import java.lang.instrument.Instrumentation;
 import java.lang.reflect.Method;
+import java.nio.channels.WritableByteChannel;
 import java.util.ArrayDeque;
 import java.util.Collection;
 import java.util.Collections;
 import java.util.Deque;
 import java.util.HashSet;
 import java.util.IdentityHashMap;
+import java.util.List;
 import java.util.Map;
 import java.util.Set;
 import net.minecraft.core.HolderLookup;
@@ -26,6 +31,8 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 public final class ConnectionLambdas {
+    private static final int WRITER_STEPS = 200;
+
     private static final int MOST = 30_000;
 
     private static final Logger LOGGER = LoggerFactory.getLogger(ConnectionLambdas.class);
@@ -45,8 +52,15 @@ public final class ConnectionLambdas {
         Deque<Object> next = new ArrayDeque<>();
         for (Channel channel : NetworkHandlers.findChannels()) {
             for (Map.Entry<String, ChannelHandler> handler : channel.pipeline()) {
+                String owner = GameRegistrations.findModOf(handler.getValue().getClass());
                 if (handler.getValue() instanceof Connection connection) {
                     seen.add(connection);
+                } else if (owner != null && GameRegistrations.isSwitchable(owner)
+                        && (channel instanceof EmbeddedChannel || isWriting(handler.getValue()))) {
+                    if (mods.add(owner)) {
+                        LOGGER.info("[Hotwire] a connection's packets run through {}'s handler {}", owner,
+                                handler.getKey());
+                    }
                 } else {
                     next.add(handler.getValue());
                 }
@@ -112,6 +126,31 @@ public final class ConnectionLambdas {
         } catch (LinkageError e) {
             return true;
         }
+    }
+
+    private static boolean isWriting(Object handler) {
+        Set<Object> seen = Collections.newSetFromMap(new IdentityHashMap<>());
+        Deque<Object> next = new ArrayDeque<>(List.of(handler));
+        for (int steps = 0; !next.isEmpty() && steps < WRITER_STEPS; steps++) {
+            Object one = next.poll();
+            if (one instanceof OutputStream || one instanceof Writer || one instanceof WritableByteChannel) {
+                return true;
+            }
+            String name = one.getClass().getName();
+            if (!seen.add(one) || name.startsWith("java.") || name.startsWith("net.minecraft.")) {
+                continue;
+            }
+            for (FieldSlots.Slot field : Fields.getReferenceFields(one.getClass(), false)) {
+                try {
+                    Object value = field.get(one);
+                    if (value != null) {
+                        next.add(value);
+                    }
+                } catch (ReflectiveOperationException | RuntimeException | LinkageError e) {
+                }
+            }
+        }
+        return false;
     }
 
     private static void offer(@Nullable Object value, Deque<Object> next) {

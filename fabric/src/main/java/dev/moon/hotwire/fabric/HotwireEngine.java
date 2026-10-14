@@ -264,8 +264,10 @@ public final class HotwireEngine implements ModScreen.Game, AutoCloseable {
             }
             ModScreen current = this.screen;
             if (!ids.isEmpty() && result.result() instanceof ModSwitcher.Result.Failed failed
-                    && failed.cause().reopenFixes() && WorldReopen.findRefusal().isEmpty() && current != null) {
-                current.offerReopen(new ReopenPanel.Offer(off, ids, "This world's objects stand in the way", said));
+                    && failed.cause().reopenFixes() && current != null
+                    && (WorldReopen.isLeftOnly() || WorldReopen.findRefusal().isEmpty())) {
+                current.offerReopen(new ReopenPanel.Offer(off, ids, null, "This world's objects stand in the way",
+                        said, WorldReopen.isLeftOnly()));
             } else {
                 this.showMessage(said, PlayerMessages.isBad(result.result()) || !result.faults().isEmpty());
             }

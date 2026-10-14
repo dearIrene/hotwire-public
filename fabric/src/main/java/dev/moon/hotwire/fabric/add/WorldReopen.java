@@ -60,6 +60,11 @@ public final class WorldReopen {
         return Optional.empty();
     }
 
+    public static boolean isLeftOnly() {
+        Minecraft client = Minecraft.getInstance();
+        return client.level != null && client.getSingleplayerServer() == null;
+    }
+
     public static ModAdder.Result add(Supplier<ModAdder.Result> add) {
         Optional<String> cannot = findRefusal();
         if (cannot.isPresent()) {
@@ -87,6 +92,10 @@ public final class WorldReopen {
 
     public static <T> T runAround(Supplier<T> add) throws InterruptedException {
         Minecraft client = Minecraft.getInstance();
+        if (isLeftOnly()) {
+            leave(client);
+            return add.get();
+        }
         IntegratedServer server = client.getSingleplayerServer();
         if (server == null) {
             throw new IllegalStateException("no single-player world is open");
@@ -195,7 +204,7 @@ public final class WorldReopen {
     }
 
     private static void awaitClosed(@Nullable Channel channel) throws InterruptedException {
-        if (channel == null) {
+        if (channel == null || channel.eventLoop().inEventLoop()) {
             return;
         }
         try {
