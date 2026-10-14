@@ -5,6 +5,7 @@ import dev.moon.hotwire.jar.ModJar;
 import dev.moon.hotwire.jar.ModManifest;
 import dev.moon.hotwire.mixin_copy.MixinCopy;
 import dev.moon.hotwire.switching.ModMixins;
+import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.HashSet;
 import java.util.List;
@@ -14,6 +15,7 @@ import java.util.TreeSet;
 import net.fabricmc.loader.api.FabricLoader;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
+import org.spongepowered.asm.mixin.extensibility.IMixinConfig;
 
 public final class MixinConfigs {
     private static final Logger LOGGER = LoggerFactory.getLogger(MixinConfigs.class);
@@ -48,6 +50,43 @@ public final class MixinConfigs {
         }
         into.putIfAbsent(jar.manifest().id(), ModMixins.of(jar, side));
         jar.nested().forEach(nested -> add(nested, side, loaded, into));
+    }
+
+    public static Map<String, ModMixins> withCodeAdded(Map<String, ModMixins> mixins, List<Object> live) {
+        Map<String, ModMixins> all = new HashMap<>(mixins);
+        Set<String> listed = new HashSet<>();
+        mixins.values().forEach(mod -> listed.addAll(mod.configs()));
+        for (Object one : live) {
+            if (!(one instanceof IMixinConfig config) || listed.contains(config.getName())) {
+                continue;
+            }
+            String prefix = config.getMixinPackage().replace('.', '/');
+            for (Map.Entry<String, ModMixins> mod : mixins.entrySet()) {
+                if (!prefix.isEmpty() && hasClassUnder(mod.getValue(), prefix)) {
+                    ModMixins before = all.getOrDefault(mod.getKey(), mod.getValue());
+                    List<String> configs = new ArrayList<>(before.configs());
+                    configs.add(config.getName());
+                    Map<String, Set<String>> targets = new HashMap<>(before.targetsOf());
+                    Set<String> patched = new HashSet<>();
+                    config.getTargets().forEach(target -> patched.add(target.replace('.', '/')));
+                    targets.put(config.getName(), patched);
+                    all.put(mod.getKey(), new ModMixins(configs, targets, before.owns()));
+                    LOGGER.info("[Hotwire] {} is {}'s: it holds the mixins of {}", config.getName(), mod.getKey(),
+                            config.getMixinPackage());
+                    break;
+                }
+            }
+        }
+        return all;
+    }
+
+    private static boolean hasClassUnder(ModMixins mod, String prefix) {
+        for (String name : mod.owns()) {
+            if (name.startsWith(prefix)) {
+                return true;
+            }
+        }
+        return false;
     }
 
     public static List<String> findUnowned(List<String> applied, Map<String, ModMixins> mixins) {

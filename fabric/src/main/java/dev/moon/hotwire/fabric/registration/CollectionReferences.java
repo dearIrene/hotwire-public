@@ -163,10 +163,6 @@ final class CollectionReferences {
         return this.inSmall ? this.wrappers.find(item, this.mods) : null;
     }
 
-    static boolean isThereFor(String mod, Object value) {
-        return isOwnedBy(mod, value) || (isLambda(value) && forwardsTo(mod, value));
-    }
-
     private static boolean isFixedSize(List<?> list) {
         try {
             list.remove(FIXED_PROBE);
@@ -273,6 +269,9 @@ final class CollectionReferences {
                 }
                 return;
             } catch (ConcurrentModificationException | IndexOutOfBoundsException | NoSuchElementException e) {
+                if (this.look.hasNoted(read)) {
+                    return;
+                }
                 if (attempt == CHANGED_READS) {
                     LOGGER.warn("[Hotwire] {} changed under the takeout {} times; what it holds of {} stays",
                             value.getClass().getName(), CHANGED_READS, this.mods);
@@ -348,7 +347,7 @@ final class CollectionReferences {
                 }
                 case Map<?, ?> map when map.size() <= LARGEST -> {
                     Map<Object, Object> entries = (Map<Object, Object>) map;
-                    for (Map.Entry<Object, Object> entry : new ArrayList<>(entries.entrySet())) {
+                    for (Map.Entry<Object, Object> entry : Wrappers.copyEntries(entries)) {
                         Object key = entry.getKey();
                         Object element = entry.getValue();
                         String mod = key == null ? null : this.findOwnerAmong(key);
@@ -387,7 +386,7 @@ final class CollectionReferences {
             if (!this.hasNamespacedKey(entries)) {
                 return;
             }
-            for (Map.Entry<Object, Object> entry : new ArrayList<>(entries.entrySet())) {
+            for (Map.Entry<Object, Object> entry : Wrappers.copyEntries(entries)) {
                 String mod = findNamespaceOf(entry.getKey());
                 if (mod != null && this.modSet.contains(mod)
                         && !this.look.hasNoted(() -> this.removeFromNamespaced(map))
@@ -432,7 +431,7 @@ final class CollectionReferences {
         }
     }
 
-    private static boolean isLambda(Object item) {
+    static boolean isLambda(Object item) {
         Class<?> type = item.getClass();
         return type.isHidden() && type.getName().contains("$$Lambda");
     }

@@ -2,9 +2,9 @@ package dev.moon.hotwire.fabric.registration;
 
 import dev.moon.hotwire.redefine.FieldSlots;
 import java.lang.reflect.Method;
+import java.util.AbstractMap;
 import java.util.ArrayList;
 import java.util.Collection;
-import java.util.HashMap;
 import java.util.IdentityHashMap;
 import java.util.List;
 import java.util.Map;
@@ -17,7 +17,7 @@ final class Wrappers {
 
     private static final int NONE_OPEN = Integer.MAX_VALUE;
 
-    private final Map<String, IdentityHashMap<Object, Integer>> barren = new HashMap<>();
+    private final IdentityHashMap<Object, Integer> barren = new IdentityHashMap<>();
 
     private final List<Object> open = new ArrayList<>();
 
@@ -28,6 +28,10 @@ final class Wrappers {
 
     private boolean reached;
 
+    private List<String> mods = List.of();
+    private @Nullable String reachedMod;
+    private boolean isOfTwo;
+
     private final IdentityHashMap<Class<?>, Boolean> askedOf = new IdentityHashMap<>();
 
     @Nullable String find(Object item, List<String> mods) {
@@ -35,32 +39,33 @@ final class Wrappers {
                 && !Fields.getReferenceFields(type, false).isEmpty())) {
             return null;
         }
-        for (String mod : mods) {
-            this.open.clear();
+        this.open.clear();
 
-            if (!this.closed.isEmpty()) {
-                this.closed.clear();
-            }
-            this.asked++;
-            IdentityHashMap<Object, Integer> known = this.barren.computeIfAbsent(mod, any -> new IdentityHashMap<>());
-            this.reach(item, mod, known);
-            if (this.reached) {
-                return mod;
-            }
+        if (!this.closed.isEmpty()) {
+            this.closed.clear();
         }
-        return null;
+        this.asked++;
+
+        this.mods = mods;
+        this.reachedMod = null;
+        this.isOfTwo = false;
+        this.reach(item, this.barren);
+        return this.reached ? this.reachedMod : null;
     }
 
     @SuppressWarnings("ReferenceEquality")
-    private int reach(@Nullable Object value, String mod, IdentityHashMap<Object, Integer> known) {
+    private int reach(@Nullable Object value, IdentityHashMap<Object, Integer> known) {
         int further = DEPTH - this.open.size();
         if (value == null || value instanceof Class<?> || CollectionReferences.isPlain(value)
                 || known.getOrDefault(value, -1) >= further) {
             this.reached = false;
             return NONE_OPEN;
         }
-        this.reached = CollectionReferences.isThereFor(mod, value);
-        if (this.reached) {
+        String owner = findThereFor(value, this.mods);
+        this.reached = owner != null && (this.reachedMod == null || owner.equals(this.reachedMod));
+        this.isOfTwo |= owner != null && !this.reached;
+        if (owner != null) {
+            this.reachedMod = this.reached ? owner : this.reachedMod;
             return NONE_OPEN;
         }
         for (int at = 0; at < this.open.size(); at++) {
@@ -84,16 +89,16 @@ final class Wrappers {
         int place = this.open.size();
         this.open.add(value);
         int rests = switch (value) {
-            case Collection<?> all -> this.reachThroughAll(all, mod, known);
-            case Map<?, ?> map -> this.reachThroughAll(map.values(), mod, known);
-            case Object[] array -> this.reachThroughAll(List.of(array), mod, known);
-            default -> this.reachThroughAField(value, mod, known);
+            case Collection<?> all -> this.reachThroughAll(all, known);
+            case Map<?, ?> map -> this.reachThroughAll(map.values(), known);
+            case Object[] array -> this.reachThroughAll(List.of(array), known);
+            default -> this.reachThroughAField(value, known);
         };
         this.open.remove(place);
         if (this.reached) {
             return NONE_OPEN;
         }
-        if (rests >= place) {
+        if (rests >= place && !this.isOfTwo) {
             known.merge(value, further, Math::max);
             return NONE_OPEN;
         }
@@ -101,14 +106,14 @@ final class Wrappers {
         return rests;
     }
 
-    private int reachThroughAll(Collection<?> all, String mod, IdentityHashMap<Object, Integer> known) {
+    private int reachThroughAll(Collection<?> all, IdentityHashMap<Object, Integer> known) {
         try {
             this.reached = false;
             if (all.isEmpty() || all.size() > ELEMENTS) {
                 return NONE_OPEN;
             }
             for (Object one : all) {
-                int rests = this.reach(one, mod, known);
+                int rests = this.reach(one, known);
                 if (!this.reached) {
                     return rests;
                 }
@@ -120,11 +125,11 @@ final class Wrappers {
         }
     }
 
-    private int reachThroughAField(Object value, String mod, IdentityHashMap<Object, Integer> known) {
+    private int reachThroughAField(Object value, IdentityHashMap<Object, Integer> known) {
         int rests = NONE_OPEN;
         for (FieldSlots.Slot field : Fields.getReferenceFields(value.getClass(), false)) {
             try {
-                rests = Math.min(rests, this.reach(field.get(value), mod, known));
+                rests = Math.min(rests, this.reach(field.get(value), known));
                 if (this.reached) {
                     return NONE_OPEN;
                 }
@@ -185,6 +190,29 @@ final class Wrappers {
             return false;
         }
         return mods > 0;
+    }
+
+    static List<Map.Entry<Object, Object>> copyEntries(Map<Object, Object> map) {
+        List<Map.Entry<Object, Object>> pairs = new ArrayList<>(map.size());
+        for (Map.Entry<Object, Object> entry : map.entrySet()) {
+            pairs.add(new AbstractMap.SimpleImmutableEntry<>(entry.getKey(), entry.getValue()));
+        }
+        return pairs;
+    }
+
+    static @Nullable String findThereFor(Object value, List<String> mods) {
+        Class<?> type = value instanceof Class<?> named ? named : value.getClass();
+        String owner = GameRegistrations.findModOf(type);
+        if (owner != null && mods.contains(owner)) {
+            return owner;
+        }
+        for (String mod : type.isHidden() ? mods : List.<String>of()) {
+            if (CollectionReferences.isOwnedBy(mod, value)
+                    || (CollectionReferences.isLambda(value) && CollectionReferences.forwardsTo(mod, value))) {
+                return mod;
+            }
+        }
+        return null;
     }
 
     String describe() {

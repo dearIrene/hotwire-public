@@ -127,7 +127,8 @@ final class EngineStart {
         LocalRefs.prepare();
         Set<String> loadedIds = new HashSet<>();
         FabricLoader.getInstance().getAllMods().forEach(mod -> loadedIds.add(mod.getMetadata().getId()));
-        Map<String, ModMixins> mixins = MixinConfigs.of(installed.getGraphJars(), loadedIds);
+        Map<String, ModMixins> mixins = MixinConfigs.withCodeAdded(
+                MixinConfigs.of(installed.getGraphJars(), loadedIds), mixin.getConfigObjects());
         GameClasses classes = new GameClasses(knot, HotwireEngine.class.getClassLoader());
         SwitchApplier applier = new SwitchApplier(
                 new ClassRebuilder(instrumentation, GameMixinCopy.create(knot, mixin, MixinConfigs.readDecorations(

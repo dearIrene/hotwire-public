@@ -11,7 +11,7 @@ import org.slf4j.LoggerFactory;
 public final class ElementLook {
     private static final Logger LOGGER = LoggerFactory.getLogger(ElementLook.class);
 
-    private static final long STANDS_NANOS = 30_000_000_000L;
+    private static final long STANDS_NANOS = 120_000_000_000L;
 
     private static final long FRESH_NANOS = 15_000_000_000L;
 
@@ -45,7 +45,7 @@ public final class ElementLook {
     }
 
     @Nullable List<Runnable> open(List<String> walked) {
-        List<Runnable> ahead = !isOnlyLooking && walked.equals(this.mods)
+        List<Runnable> ahead = !isOnlyLooking && this.mods.containsAll(walked)
                 && System.nanoTime() - this.at < STANDS_NANOS ? this.noted : null;
         this.noted = isOnlyLooking ? new ArrayList<>() : null;
         this.mods = isOnlyLooking ? List.copyOf(walked) : List.of();
