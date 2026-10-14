@@ -157,7 +157,7 @@ final class Wrappers {
 
     private static boolean isOfAnotherMod(Class<?> type) {
         String mod = GameRegistrations.findModOf(type);
-        return mod == null ? GameRegistrations.isNestedLibrary(type)
+        return mod == null ? GameRegistrations.findShippedBy(type) != null
                 : GameRegistrations.isSwitchable(mod) || GameRegistrations.isLibrary(mod);
     }
 
@@ -221,8 +221,9 @@ final class Wrappers {
     }
 
     private static boolean isOfAMod(Object value) {
-        String name = value.getClass().getName();
-        return !name.startsWith("java.") && !name.startsWith("javax.") && !name.startsWith("jdk.")
-                && !name.startsWith("net.minecraft.") && !name.startsWith("com.mojang.");
+        Class<?> type = value.getClass();
+        String mod = GameRegistrations.findModOf(type);
+        return mod == null ? GameRegistrations.findShippedBy(type) != null
+                : !mod.equals("minecraft") && !mod.equals("java");
     }
 }

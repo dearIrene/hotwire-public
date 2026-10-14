@@ -26,11 +26,14 @@ public final class GameTasks {
     private static final Map<String, List<Removal>> REMOVED = new HashMap<>();
     private static final Set<String> MODS_OFF = new HashSet<>();
 
+    private static volatile boolean isAnyOff;
+
     private GameTasks() {
     }
 
     public static synchronized void takeOut(Collection<String> mods) {
         MODS_OFF.addAll(mods);
+        isAnyOff = true;
         drain(mods);
     }
 
@@ -38,12 +41,33 @@ public final class GameTasks {
         drain(mods.stream().filter(MODS_OFF::contains).toList());
     }
 
+    public static boolean isSetAside(BlockableEventLoop<?> loop, Runnable queued) {
+        if (!isAnyOff) {
+            return false;
+        }
+        Runnable task = unwrap(queued);
+        String mod = GameRegistrations.findModOf(task.getClass());
+        if (mod == null) {
+            return false;
+        }
+        synchronized (GameTasks.class) {
+            if (!MODS_OFF.contains(mod)) {
+                return false;
+            }
+            REMOVED.computeIfAbsent(mod, any -> new ArrayList<>()).add(new Removal(loop, task));
+        }
+        return true;
+    }
+
+    private static Runnable unwrap(Runnable queued) {
+        return queued instanceof TickTask tick ? ((TickTaskAccessor) tick).hotwire$getRunnable() : queued;
+    }
+
     private static void drain(Collection<String> mods) {
         for (BlockableEventLoop<?> loop : findLoops()) {
             Queue<Runnable> pending = ((BlockableEventLoopAccessor) loop).hotwire$getPending();
             for (Runnable queued : List.copyOf(pending)) {
-                Runnable task = queued instanceof TickTask tick ? ((TickTaskAccessor) tick).hotwire$getRunnable()
-                        : queued;
+                Runnable task = unwrap(queued);
                 String mod = GameRegistrations.findModOf(task.getClass());
                 if (mod != null && mods.contains(mod) && pending.remove(queued)) {
                     REMOVED.computeIfAbsent(mod, any -> new ArrayList<>()).add(new Removal(loop, task));
@@ -60,6 +84,7 @@ public final class GameTasks {
 
     public static synchronized void putBack(Collection<String> mods) {
         MODS_OFF.removeAll(mods);
+        isAnyOff = !MODS_OFF.isEmpty();
         for (String mod : mods) {
             List<Removal> removed = REMOVED.remove(mod);
             if (removed != null) {
