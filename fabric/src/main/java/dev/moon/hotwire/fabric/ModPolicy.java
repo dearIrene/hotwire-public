@@ -3,6 +3,7 @@ package dev.moon.hotwire.fabric;
 import dev.moon.hotwire.jar.ModManifest;
 import dev.moon.hotwire.plan.ModGraph;
 import dev.moon.hotwire.plan.SwitchPlanner;
+import java.util.ArrayList;
 import java.util.HashSet;
 import java.util.List;
 import java.util.Optional;
@@ -80,13 +81,16 @@ public final class ModPolicy {
     public static SwitchPlanner makePlannerFor(ModGraph graph) {
         Set<String> guarded = new HashSet<>();
         graph.getIds().stream().filter(ModPolicy::isGuarded).forEach(guarded::add);
-        return new SwitchPlanner(graph, new SwitchPlanner.Settings(nestedJars, findBuiltIn(), guarded,
+        return new SwitchPlanner(graph, new SwitchPlanner.Settings(nestedJars, findBuiltIn(graph.getIds()), guarded,
                 ModPolicy::satisfies));
     }
 
-    static Set<String> findBuiltIn() {
+    static Set<String> findBuiltIn(Set<String> known) {
         Set<String> builtIn = new HashSet<>(BUILT_IN);
         for (ModContainer mod : FabricLoader.getInstance().getAllMods()) {
+            List<String> ids = new ArrayList<>(mod.getMetadata().getProvides());
+            ids.add(mod.getMetadata().getId());
+            ids.stream().filter(id -> !known.contains(id)).forEach(builtIn::add);
             ModContainer parent = mod.getContainingMod().orElse(null);
             while (parent != null) {
                 if (BUILT_IN.contains(parent.getMetadata().getId())) {
