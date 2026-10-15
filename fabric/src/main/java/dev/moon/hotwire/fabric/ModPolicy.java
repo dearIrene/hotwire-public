@@ -13,10 +13,11 @@ import net.fabricmc.loader.api.FabricLoader;
 import net.fabricmc.loader.api.ModContainer;
 import net.fabricmc.loader.api.Version;
 import net.fabricmc.loader.api.VersionParsingException;
+import net.fabricmc.loader.api.metadata.ModDependency;
 import net.fabricmc.loader.api.metadata.version.VersionPredicate;
 
 public final class ModPolicy {
-    static final Set<String> BUILT_IN = Set.of("minecraft", "java", "fabricloader");
+    static final Set<String> BUILT_IN = Set.of("minecraft", "java", "fabricloader", "mixinextras");
 
     private static final String MODULE_MARK = "fabric-api:module-lifecycle";
 
@@ -81,8 +82,25 @@ public final class ModPolicy {
     public static SwitchPlanner makePlannerFor(ModGraph graph) {
         Set<String> guarded = new HashSet<>();
         graph.getIds().stream().filter(ModPolicy::isGuarded).forEach(guarded::add);
+        guarded.addAll(findNeededByUnread(graph.getIds()));
         return new SwitchPlanner(graph, new SwitchPlanner.Settings(nestedJars, findBuiltIn(graph.getIds()), guarded,
                 ModPolicy::satisfies));
+    }
+
+    static Set<String> findNeededByUnread(Set<String> known) {
+        Set<String> needed = new HashSet<>();
+        for (ModContainer mod : FabricLoader.getInstance().getAllMods()) {
+            String id = mod.getMetadata().getId();
+            if (known.contains(id) || BUILT_IN.contains(id) || mod.getContainingMod().isPresent()) {
+                continue;
+            }
+            for (ModDependency dependency : mod.getMetadata().getDependencies()) {
+                if (dependency.getKind() == ModDependency.Kind.DEPENDS && known.contains(dependency.getModId())) {
+                    needed.add(dependency.getModId());
+                }
+            }
+        }
+        return needed;
     }
 
     static Set<String> findBuiltIn(Set<String> known) {

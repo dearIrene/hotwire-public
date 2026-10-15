@@ -40,6 +40,7 @@ import net.minecraft.client.renderer.texture.AbstractTexture;
 import net.minecraft.client.resources.language.ClientLanguage;
 import net.minecraft.client.resources.language.LanguageManager;
 import net.minecraft.client.resources.model.ModelManager;
+import net.minecraft.client.resources.sounds.SoundInstance;
 import net.minecraft.client.sounds.WeighedSoundEvents;
 import net.minecraft.server.packs.resources.MultiPackResourceManager;
 import net.minecraft.server.packs.resources.PreparableReloadListener;
@@ -73,7 +74,7 @@ public final class ResourceReload {
     private static final List<Class<?>> RENDERERS = List.of(EntityRenderer.class, BlockEntityRenderer.class,
             EntityModel.class);
 
-    private static final List<Class<?>> SHORT_LIVED = List.of(Screen.class, Particle.class);
+    private static final List<Class<?>> SHORT_LIVED = List.of(Screen.class, Particle.class, SoundInstance.class);
     private static final List<Class<?>> RESOURCES = List.of(FontSet.class, FontTexture.class, AbstractTexture.class,
             ModelManager.class);
     private static final List<Class<?>> LANGUAGE = List.of(LanguageManager.class, ClientLanguage.class);
@@ -99,8 +100,9 @@ public final class ResourceReload {
         boolean reload = reloadAsked || renderers || hasAny(types, RELOADED);
         boolean screens = hasAny(types, List.of(Screen.class));
         boolean particles = hasAny(types, List.of(Particle.class));
+        boolean sounds = hasAny(types, List.of(SoundInstance.class));
         boolean language = hasAny(findLoaded(rebuilt), LANGUAGE);
-        if (!renderers && !screens && !particles && !language && !reload) {
+        if (!renderers && !screens && !particles && !sounds && !language && !reload) {
             return;
         }
         Minecraft game = Minecraft.getInstance();
@@ -114,6 +116,9 @@ public final class ResourceReload {
                 }
                 if (particles) {
                     game.particleEngine.setLevel(game.level);
+                }
+                if (sounds) {
+                    game.getSoundManager().stop();
                 }
                 if (language) {
                     game.getLanguageManager().onResourceManagerReload(game.getResourceManager());
@@ -131,6 +136,9 @@ public final class ResourceReload {
             }
             if (particles) {
                 made.add("particles");
+            }
+            if (sounds) {
+                made.add("sounds");
             }
             if (language) {
                 made.add("language tables");
