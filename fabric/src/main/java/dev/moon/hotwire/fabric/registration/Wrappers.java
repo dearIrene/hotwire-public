@@ -82,6 +82,10 @@ final class Wrappers {
         if (!container && !isOfAMod(value)) {
             return NONE_OPEN;
         }
+
+        if (container && GameRegistrations.isSwitchable(GameRegistrations.findModOf(value.getClass()))) {
+            return NONE_OPEN;
+        }
         if (further <= 0) {
             return NONE_OPEN;
         }
@@ -127,7 +131,11 @@ final class Wrappers {
 
     private int reachThroughAField(Object value, IdentityHashMap<Object, Integer> known) {
         int rests = NONE_OPEN;
+        boolean isOfTheMods = this.isOfTheMods(value.getClass());
         for (FieldSlots.Slot field : Fields.getReferenceFields(value.getClass(), false)) {
+            if (!isOfTheMods && this.isOfTheMods(field.getType())) {
+                continue;
+            }
             try {
                 rests = Math.min(rests, this.reach(field.get(value), known));
                 if (this.reached) {
@@ -138,6 +146,11 @@ final class Wrappers {
         }
         this.reached = false;
         return rests;
+    }
+
+    private boolean isOfTheMods(Class<?> type) {
+        String mod = GameRegistrations.findModOf(type);
+        return mod != null && this.mods.contains(mod);
     }
 
     static @Nullable String findNamed(@Nullable Object key, @Nullable Object value, List<String> mods) {

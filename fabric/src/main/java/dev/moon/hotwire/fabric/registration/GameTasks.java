@@ -26,6 +26,8 @@ public final class GameTasks {
     private static final Map<String, List<Removal>> REMOVED = new HashMap<>();
     private static final Set<String> MODS_OFF = new HashSet<>();
 
+    private static final Set<Class<?>> SAID = new HashSet<>();
+
     private static volatile boolean isAnyOff;
 
     private GameTasks() {
@@ -55,6 +57,9 @@ public final class GameTasks {
                 return false;
             }
             REMOVED.computeIfAbsent(mod, any -> new ArrayList<>()).add(new Removal(loop, task));
+            if (SAID.add(task.getClass())) {
+                LOGGER.info("[Hotwire] {}'s task {} waits for its on", mod, task.getClass().getName());
+            }
         }
         return true;
     }
