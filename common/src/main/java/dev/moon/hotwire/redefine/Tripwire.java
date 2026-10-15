@@ -70,6 +70,8 @@ public final class Tripwire {
 
     private static final ThreadLocal<Set<String>> EXPECTED = ThreadLocal.withInitial(Set::of);
 
+    private static final ThreadLocal<Boolean> IN_HIT = ThreadLocal.withInitial(() -> false);
+
     private static final String SELF = Tripwire.class.getName().replace('.', '/');
 
     private static final Set<Class<?>> LINKERS = Set.of(Tripwire.class, Linker.class, DuckCalls.class,
@@ -107,10 +109,18 @@ public final class Tripwire {
     }
 
     public static void hit(String mod) {
-        if (EXPECTED.get().contains(mod)) {
+        if (EXPECTED.get().contains(mod) || IN_HIT.get()) {
             return;
         }
+        IN_HIT.set(true);
+        try {
+            hitOnce(mod);
+        } finally {
+            IN_HIT.set(false);
+        }
+    }
 
+    private static void hitOnce(String mod) {
         CountDownLatch gate = GATES.get(mod);
         if (gate != null) {
             if (paused && onGameThread.getAsBoolean()) {

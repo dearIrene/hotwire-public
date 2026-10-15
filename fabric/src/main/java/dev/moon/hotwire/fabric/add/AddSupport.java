@@ -28,6 +28,7 @@ import java.util.List;
 import java.util.Objects;
 import java.util.OptionalInt;
 import java.util.function.Function;
+import net.fabricmc.loader.api.FabricLoader;
 import net.minecraft.client.Minecraft;
 import org.jspecify.annotations.Nullable;
 import org.objectweb.asm.ClassReader;
@@ -127,7 +128,7 @@ public final class AddSupport implements ModAdder.Engine {
 
     @Override
     public boolean isInstalled(String id) {
-        return this.installed.isInstalled(id);
+        return this.installed.isInstalled(id) || FabricLoader.getInstance().isModLoaded(id);
     }
 
     @Override

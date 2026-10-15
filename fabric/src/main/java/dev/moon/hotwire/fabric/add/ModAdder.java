@@ -1,6 +1,7 @@
 package dev.moon.hotwire.fabric.add;
 
 import dev.moon.hotwire.fabric.CrashGuard;
+import dev.moon.hotwire.fabric.ModPolicy;
 import dev.moon.hotwire.fabric.ResourceReload;
 import dev.moon.hotwire.fabric.registration.GameHold;
 import dev.moon.hotwire.fabric.registration.GameRegistrations;
@@ -126,8 +127,9 @@ public final class ModAdder {
         }
         ModManifest manifest = jar.manifest();
         String version = manifest.version();
-        if (this.engine.isInstalled(manifest.id())) {
-            return makeRefusal(manifest.name(), version, manifest.name() + " is already installed.");
+        if (ModPolicy.isHotwire(manifest.id()) || this.engine.isInstalled(manifest.id())) {
+            return makeRefusal(manifest.name(), version, ModPolicy.isHotwire(manifest.id())
+                    ? ModPolicy.describeSelfChange() : manifest.name() + " is already installed.");
         }
         List<ModJar> parts = new ArrayList<>();
         this.collectNestedToAdd(jar, parts);
@@ -333,8 +335,10 @@ public final class ModAdder {
         }
         Part asked = parts.values().stream().reduce((first, second) -> second).orElseThrow();
         String name = asked.jar().manifest().name();
-        if (this.engine.isInstalled(asked.jar().manifest().id())) {
-            return new Result.Refused(name + " is already installed.");
+        String askedId = asked.jar().manifest().id();
+        if (ModPolicy.isHotwire(askedId) || this.engine.isInstalled(askedId)) {
+            return new Result.Refused(ModPolicy.isHotwire(askedId) ? ModPolicy.describeSelfChange()
+                    : name + " is already installed.");
         }
         Set<String> content = this.engine.isInWorld() ? this.readContent(jarPath) : Set.of();
         if (!content.isEmpty()) {

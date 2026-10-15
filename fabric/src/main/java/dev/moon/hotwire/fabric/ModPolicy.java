@@ -52,6 +52,15 @@ public final class ModPolicy {
         return false;
     }
 
+    public static boolean isHotwire(String id) {
+        return id.equals(HotwireClient.ID) || id.startsWith(HotwireClient.ID + "-");
+    }
+
+    public static String describeSelfChange() {
+        return "Hotwire can't add, update or turn off itself while it runs: put the new jar in your mods folder and"
+                + " restart the game.";
+    }
+
     public static boolean isSwitchable(String id) {
         return !isGuarded(id) && !BUILT_IN.contains(id) && !NEVER_TOUCHED.contains(id);
     }

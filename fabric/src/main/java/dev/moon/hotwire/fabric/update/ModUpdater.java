@@ -1,5 +1,6 @@
 package dev.moon.hotwire.fabric.update;
 
+import dev.moon.hotwire.fabric.ModPolicy;
 import dev.moon.hotwire.fabric.ResourceReload;
 import dev.moon.hotwire.fabric.add.LoaderModList;
 import dev.moon.hotwire.jar.ModJar;
@@ -105,6 +106,9 @@ public final class ModUpdater {
         if (manifest == null) {
             return new UpdatePreview.Unreadable(fileName);
         }
+        if (ModPolicy.isHotwire(manifest.id())) {
+            return new UpdatePreview.Refused(manifest.name(), ModPolicy.describeSelfChange());
+        }
         Path running = this.engine.findRunningJarOf(manifest.id());
         if (running == null) {
             return new UpdatePreview.Unreadable(fileName);
@@ -132,6 +136,9 @@ public final class ModUpdater {
         ModManifest manifest = this.findManifestOf(jar);
         if (manifest == null) {
             return new Result.Refused(jar.getFileName() + " is not a mod jar.");
+        }
+        if (ModPolicy.isHotwire(manifest.id())) {
+            return new Result.Refused(ModPolicy.describeSelfChange());
         }
         Path running = this.engine.findRunningJarOf(manifest.id());
         if (running == null) {

@@ -90,6 +90,8 @@ final class UpdatePanel extends Panel {
                     List.of(same.name() + " " + same.version() + " is already the version running."), Palette.TEXT);
             case UpdatePreview.Unreadable unreadable -> new Body("Can't update ", unreadable.fileName(),
                     List.of("That jar could not be read."), Palette.TEXT);
+            case UpdatePreview.Refused refused -> new Body("Can't update ", refused.name(), List.of(refused.reason()),
+                    Palette.TEXT);
         };
     }
 

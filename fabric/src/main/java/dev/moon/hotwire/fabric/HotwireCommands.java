@@ -91,6 +91,7 @@ final class HotwireCommands {
                         + " is the version installed.", true);
                 case UpdatePreview.Unreadable unreadable -> ModViews.showChat(unreadable.fileName()
                         + " is not a mod Hotwire can read.", true);
+                case UpdatePreview.Refused refused -> ModViews.showChat(refused.reason(), true);
             }
         }));
         return 1;

@@ -21,4 +21,7 @@ public sealed interface UpdatePreview {
 
     record Unreadable(String fileName) implements UpdatePreview {
     }
+
+    record Refused(String name, String reason) implements UpdatePreview {
+    }
 }
