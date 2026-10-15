@@ -110,7 +110,7 @@ final class CommandRegistration implements Registration {
         return server == null ? null : server.getCommands().getDispatcher();
     }
 
-    private static void resendCommands(boolean client) {
+    static void resendCommands(boolean client) {
         Minecraft mc = Minecraft.getInstance();
         if (client) {
             ClientPacketListener connection = mc.getConnection();

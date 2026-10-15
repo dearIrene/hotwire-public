@@ -63,6 +63,8 @@ public final class PlayerMessages {
                     + nameOf.apply(breaks.other()) + " is on, because it says it breaks it.";
             case Refusal.MissingDependency missing -> nameOf.apply(missing.mod()) + " needs "
                     + missing.dependency() + ", which is not installed.";
+            case Refusal.OldDependency old -> nameOf.apply(old.mod()) + " needs " + nameOf.apply(old.dependency())
+                    + " " + old.wanted() + ", and the game has " + old.present() + ".";
         };
     }
 

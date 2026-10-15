@@ -64,5 +64,8 @@ public record SwitchPlan(Direction direction, List<String> order, Map<String, Re
 
         record MissingDependency(String mod, String dependency) implements Refusal {
         }
+
+        record OldDependency(String mod, String dependency, String wanted, String present) implements Refusal {
+        }
     }
 }

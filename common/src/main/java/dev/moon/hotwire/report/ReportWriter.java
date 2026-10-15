@@ -142,6 +142,8 @@ public final class ReportWriter {
                     + this.report.nameOf(breaks.other());
             case Refusal.MissingDependency missing -> this.report.nameOf(missing.mod()) + " needs "
                     + missing.dependency() + ", which is not installed";
+            case Refusal.OldDependency old -> this.report.nameOf(old.mod()) + " needs "
+                    + this.report.nameOf(old.dependency()) + " " + old.wanted() + ", and the game has " + old.present();
         };
     }
 

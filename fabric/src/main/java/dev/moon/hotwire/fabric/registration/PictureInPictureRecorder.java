@@ -3,6 +3,9 @@ package dev.moon.hotwire.fabric.registration;
 //? if >=1.21.6 {
 import java.util.Map;
 //?}
+//? if >=26.2 {
+import net.minecraft.client.Minecraft;
+//?}
 //? if >=26.1 {
 import dev.moon.hotwire.fabric.add.OpenRegistries;
 import dev.moon.hotwire.fabric.mixin.core.fabric.client.rendering.PictureInPictureRendererRegistryImplAccessor;
@@ -33,9 +36,16 @@ public final class PictureInPictureRecorder {
     }
 
     public static boolean registerLate(PictureInPictureRendererRegistry.Factory factory) {
-        PictureInPictureRendererRegistry.Context made = context;
-        if (!PictureInPictureRendererRegistryImplAccessor.hotwire$isFrozen() || !OpenRegistries.isOpen()
-                || made == null) {
+        PictureInPictureRendererRegistry.Context seen = context;
+        //? if >=26.2 {
+        PictureInPictureRendererRegistry.Context made = seen != null ? seen : Minecraft::getInstance;
+        //?} else {
+        /*PictureInPictureRendererRegistry.Context made = seen;
+        if (made == null) {
+            return false;
+        }
+        *///?}
+        if (!PictureInPictureRendererRegistryImplAccessor.hotwire$isFrozen() || !OpenRegistries.isOpen()) {
             return false;
         }
         PictureInPictureRenderer<?> renderer = factory.createRenderer(made);

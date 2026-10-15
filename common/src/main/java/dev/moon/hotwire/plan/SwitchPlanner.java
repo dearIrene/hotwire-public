@@ -121,6 +121,7 @@ public final class SwitchPlanner {
                         refusals.add(new Refusal.MissingDependency(mod, dependency));
                     }
                 }
+                refusals.addAll(this.findOldDependencies(mod));
                 for (String child : this.graph.getChildrenOf(mod)) {
                     if (off.contains(child) && !coming.containsKey(child)) {
                         coming.put(child, this.returnsWith(child, mod) ? new Reason.NestedIn(mod)
@@ -183,6 +184,22 @@ public final class SwitchPlanner {
             case AUTO -> parent.map(container::equals).orElse(false);
             case ALL -> parent.map(container::equals).orElse(true);
         };
+    }
+
+    private List<Refusal> findOldDependencies(String mod) {
+        List<Refusal> out = new ArrayList<>();
+        ModManifest manifest = this.graph.find(mod).orElse(null);
+        if (manifest == null) {
+            return out;
+        }
+        manifest.getRelation(Relation.DEPENDS).forEach((otherId, ranges) -> {
+            String other = this.graph.resolve(otherId);
+            String present = this.graph.find(other).map(ModManifest::version).orElse(null);
+            if (present != null && !ranges.isEmpty() && !this.settings.versions().matches(present, ranges)) {
+                out.add(new Refusal.OldDependency(mod, other, String.join(" or ", ranges), present));
+            }
+        });
+        return out;
     }
 
     private List<Refusal> findBreaks(Set<String> coming, Set<String> off) {

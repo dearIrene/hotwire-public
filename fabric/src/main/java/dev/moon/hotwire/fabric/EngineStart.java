@@ -23,6 +23,7 @@ import dev.moon.hotwire.fabric.registration.MixinPlugins;
 import dev.moon.hotwire.fabric.registration.ModLifecycle;
 import dev.moon.hotwire.fabric.registration.ModLocks;
 import dev.moon.hotwire.fabric.registration.NetworkHandlers;
+import dev.moon.hotwire.fabric.registration.OffModCommands;
 import dev.moon.hotwire.fabric.registration.RegistryEntries;
 import dev.moon.hotwire.fabric.report.GameReports;
 import dev.moon.hotwire.fabric.screen.ModIcons;
@@ -146,6 +147,7 @@ final class EngineStart {
         InitHookReplay.answerWith(GameClasses::findLongLived, GameClasses::getStartupMethods);
         applier.runOnGameThreadWith(GameHold::onGameAndWait);
         CrashGuard.setMixinOwners(applier.getCarriedMixins()::findModShipping);
+        OffModCommands.readUsesFrom(installed::getGraph);
         Linker.setMixinOwners(applier.getCarriedMixins()::findModShipping);
         TransformerChain chain = TransformerChain.bind(ForeignPatches.makeOwnerFinder(installed.getGraphJars()));
         BiFunction<Set<String>, Set<String>, Set<String>> foreign = findForeignPatches(instrumentation, installed,

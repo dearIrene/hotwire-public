@@ -244,6 +244,10 @@ public final class ModScreen {
     }
 
     void onJarToAdd(Path jar) {
+        if (this.game.canUpdate(jar)) {
+            this.onJarToUpdate(jar);
+            return;
+        }
         this.addPanel.read(jar, this.game.dryRunAdd(jar));
     }
 
@@ -265,11 +269,7 @@ public final class ModScreen {
         }
         for (Path file : files) {
             if (file.toString().toLowerCase(Locale.ROOT).endsWith(".jar")) {
-                if (this.game.canUpdate(file)) {
-                    this.onJarToUpdate(file);
-                } else {
-                    this.onJarToAdd(file);
-                }
+                this.onJarToAdd(file);
                 return;
             }
         }

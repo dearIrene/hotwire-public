@@ -365,6 +365,9 @@ final class CollectionReferences {
                                     this.getRemovalsOf(owner)));
                         } else if (element instanceof Collection<?> nested) {
                             this.collect(nested);
+                        } else if (element != null && this.seen.add(element)
+                                && GameRegistrations.isSwitchable(GameRegistrations.findModOf(element.getClass()))) {
+                            this.lookInto(element);
                         }
                     }
                 }

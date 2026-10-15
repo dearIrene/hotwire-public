@@ -13,6 +13,7 @@ import dev.moon.hotwire.fabric.registration.GeneratedWrappers;
 import dev.moon.hotwire.fabric.registration.LogAppenders;
 import dev.moon.hotwire.fabric.registration.MixinPlugins;
 import dev.moon.hotwire.fabric.registration.NetworkHandlers;
+import dev.moon.hotwire.fabric.registration.OffModCommands;
 import dev.moon.hotwire.fabric.registration.OneConfigHuds;
 import dev.moon.hotwire.fabric.registration.WorldWrappers;
 import dev.moon.hotwire.fabric.report.GameReports;
@@ -150,6 +151,7 @@ public final class SwitchRunner {
         NetworkHandlers.takeOut(ids);
         EntityRendererProviders.takeOut(ids);
         GameTasks.takeOut(ids);
+        OffModCommands.takeOut(id -> ids.contains(id) || !this.switcher.isOn(id));
         this.logging.takeOut(ids);
         SwitchTimes.mark("removals");
 
@@ -166,7 +168,7 @@ public final class SwitchRunner {
             this.fieldReferences.takeOut(ids, id -> !ids.contains(id) && this.switcher.isOn(id));
             SwitchTimes.mark("field references");
         } catch (RuntimeException | LinkageError e) {
-            LOGGER.error("[Hotwire] what {} left in others could not all be taken out", ids, e);
+            LOGGER.error("[Hotwire] what {} left in others could not all be removedNames out", ids, e);
         }
         if (EntityRendererProviders.takeChanged()) {
             ResourceReload.reloadForRenderers(false);
@@ -274,6 +276,7 @@ public final class SwitchRunner {
                 NetworkHandlers.putBack(order);
                 EntityRendererProviders.putBack(order);
                 GameTasks.putBack(order);
+                OffModCommands.putBack(id -> order.contains(id) || this.switcher.isOn(id));
                 this.logging.putBack(order);
                 WorldWrappers.putBack(order);
                 this.wrappers.putBack(order);

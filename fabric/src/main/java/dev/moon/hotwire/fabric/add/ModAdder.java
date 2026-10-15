@@ -35,7 +35,6 @@ import java.time.Duration;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.Collection;
-import java.util.HashSet;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
@@ -135,7 +134,7 @@ public final class ModAdder {
         this.collectNestedToAdd(jar, parts);
         parts.add(jar);
         for (ModJar part : parts) {
-            Optional<String> missing = findMissingRefusal(part);
+            Optional<String> missing = AddDependencies.findMissingRefusal(part);
             if (missing.isPresent()) {
                 return makeRefusal(manifest.name(), version, missing.get());
             }
@@ -147,9 +146,12 @@ public final class ModAdder {
             }
         }
         SwitchPlanner planner = this.engine.makePlannerFor(this.engine.makeGraphWith(parts));
-        Optional<String> missing = this.findDependencyRefusal(planner, parts, id -> id);
+        SwitchPlan plan = AddDependencies.planOn(planner, parts, this.engine.getSwitcher().getOff());
+        Optional<String> missing = AddDependencies.describe(plan, id -> id);
         if (missing.isPresent()) {
-            return makeRefusal(manifest.name(), version, missing.get());
+            return AddDependencies.isCarriedNewer(jar, plan) ? AddPreview.ofLater(manifest.name(), version, List.of(
+                    missing.get(), "It goes in when you close the game; the game then starts with the version it"
+                    + " carries.")) : makeRefusal(manifest.name(), version, missing.get());
         }
         Set<String> content = this.readContent(jarPath);
         List<String> lines = new ArrayList<>();
@@ -192,24 +194,6 @@ public final class ModAdder {
             LOGGER.warn("[Hotwire] the classes of {} could not be read for the content they make", jarPath, e);
             return Set.of();
         }
-    }
-
-    private static Optional<String> findMissingRefusal(ModJar part) {
-        List<String> missing = part.patches().missing();
-        return missing.isEmpty() ? Optional.empty() : Optional.of(part.manifest().name() + " lists "
-                + String.join(", ", missing) + ", which its jar does not have, so the loader would fail on it.");
-    }
-
-    private Optional<String> findDependencyRefusal(SwitchPlanner planner, List<ModJar> jars,
-            Function<String, String> nameOf) {
-        List<String> ids = jars.stream().map(jar -> jar.manifest().id()).toList();
-        Set<String> off = new HashSet<>(this.engine.getSwitcher().getOff());
-        off.addAll(ids);
-        SwitchPlan plan = planner.planOn(ids, off);
-        if (plan.refusals().isEmpty()) {
-            return Optional.empty();
-        }
-        return Optional.of(PlayerMessages.describe(new ModSwitcher.Result.Refused(plan), nameOf));
     }
 
     private Optional<String> findWidenerRefusal(ModJar part, @Nullable Path path) {
@@ -347,7 +331,7 @@ public final class ModAdder {
                     + " again.");
         }
         for (Part part : parts.values()) {
-            Optional<String> missing = findMissingRefusal(part.jar());
+            Optional<String> missing = AddDependencies.findMissingRefusal(part.jar());
             if (missing.isPresent()) {
                 return new Result.Refused(missing.get());
             }
@@ -359,7 +343,8 @@ public final class ModAdder {
         List<ModJar> jars = parts.values().stream().map(Part::jar).toList();
         ModGraph graph = this.engine.makeGraphWith(jars);
         SwitchPlanner planner = this.engine.makePlannerFor(graph);
-        Optional<String> missing = this.findDependencyRefusal(planner, jars, nameOf);
+        Optional<String> missing = AddDependencies.describe(AddDependencies.planOn(planner, jars,
+                this.engine.getSwitcher().getOff()), nameOf);
         if (missing.isPresent()) {
             return new Result.Refused(missing.get());
         }

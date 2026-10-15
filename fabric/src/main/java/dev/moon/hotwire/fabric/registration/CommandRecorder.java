@@ -48,7 +48,7 @@ public final class CommandRecorder {
         return caller != null || libraries.isEmpty() ? caller : libraries.getFirst();
     }
 
-    static Set<String> findModsRun(CommandNode<?> node) {
+    public static Set<String> findModsRun(CommandNode<?> node) {
         Set<String> mods = new LinkedHashSet<>();
         collect(node, DEPTH, mods, Collections.newSetFromMap(new IdentityHashMap<>()));
         return mods;

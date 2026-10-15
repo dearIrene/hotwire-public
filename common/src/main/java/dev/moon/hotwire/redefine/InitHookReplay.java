@@ -245,8 +245,13 @@ public final class InitHookReplay {
         int slot = (handler.access & Opcodes.ACC_STATIC) != 0 ? 0 : 1;
 
         int momentSlot = 1;
+
+        Map<Integer, FieldInsnNode> storedArguments = moment != null && moment.name.equals("<init>")
+                ? StoredArguments.findStoredArguments(node, moment, finals) : Map.of();
         for (int index = 0; index < arguments.length; index++) {
             boolean read = reads(handler, slot);
+            FieldInsnNode capturedField = index > callback && captured != null
+                    ? storedArguments.get(captured[index - callback - 1]) : null;
             FieldInsnNode stored = read && index < callback && moment != null && moment.name.equals("<init>")
                     ? StoredArguments.findStoredField(node, moment, momentSlot, arguments[index], finals) : null;
             if (index == callback) {
@@ -262,6 +267,10 @@ public final class InitHookReplay {
             } else if (stored != null) {
                 loads.add(new VarInsnNode(Opcodes.ALOAD, 0));
                 loads.add(new FieldInsnNode(Opcodes.GETFIELD, stored.owner, stored.name, stored.desc));
+            } else if (capturedField != null) {
+                loads.add(new VarInsnNode(Opcodes.ALOAD, 0));
+                loads.add(new FieldInsnNode(Opcodes.GETFIELD, capturedField.owner, capturedField.name,
+                        capturedField.desc));
             } else if (index > callback && captured != null) {
                 int local = captured[index - callback - 1];
                 recomputed.add(local);
