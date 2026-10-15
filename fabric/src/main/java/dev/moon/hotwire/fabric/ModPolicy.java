@@ -17,6 +17,8 @@ import net.fabricmc.loader.api.metadata.version.VersionPredicate;
 public final class ModPolicy {
     static final Set<String> BUILT_IN = Set.of("minecraft", "java", "fabricloader");
 
+    private static final String MODULE_MARK = "fabric-api:module-lifecycle";
+
     static final Set<String> NEVER_TOUCHED = Set.of("ixeris", "ferritecore");
 
     static final Set<String> ALWAYS_ON = Set.of("sodium", "lithium", "phosphor");
@@ -36,6 +38,9 @@ public final class ModPolicy {
             return true;
         }
         Optional<ModContainer> container = FabricLoader.getInstance().getModContainer(id);
+        if (container.isPresent() && container.get().getMetadata().containsCustomValue(MODULE_MARK)) {
+            return true;
+        }
         while (container.isPresent()) {
             if (container.get().getMetadata().getId().equals("fabric-api")) {
                 return true;

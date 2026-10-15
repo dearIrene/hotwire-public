@@ -45,6 +45,13 @@ final class RecorderSupport {
         return sequence != null && !GameRegistrations.getJournal().isLive(sequence);
     }
 
+    static void recordAs(String mod, Object key, Registration registration) {
+        long sequence = GameRegistrations.getJournal().record(mod, null, registration);
+        synchronized (SEQUENCES) {
+            SEQUENCES.put(key, sequence);
+        }
+    }
+
     static boolean record(Object key, Registration registration) {
         CallerOwner.Owner owner = findOwner();
         if (owner == null) {

@@ -2,23 +2,33 @@ package dev.moon.hotwire.fabric.registration;
 
 import com.mojang.brigadier.CommandDispatcher;
 import com.mojang.brigadier.tree.CommandNode;
+import com.mojang.brigadier.tree.RootCommandNode;
 import dev.moon.hotwire.fabric.mixin.core.brigadier.tree.CommandNodeAccessor;
 import dev.moon.hotwire.registration.Registration;
-import java.util.Map;
+import java.lang.ref.WeakReference;
 import net.fabricmc.fabric.impl.command.client.ClientCommandInternals;
 import net.minecraft.client.Minecraft;
 import net.minecraft.client.multiplayer.ClientPacketListener;
 import net.minecraft.client.server.IntegratedServer;
 import org.jspecify.annotations.Nullable;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
-final class CommandRegistration<S> implements Registration {
-    private final CommandDispatcher<S> dispatcher;
-    private final CommandNode<S> node;
+final class CommandRegistration implements Registration {
+    private static final Logger LOGGER = LoggerFactory.getLogger(CommandRegistration.class);
+
+    private final WeakReference<RootCommandNode<?>> addedTo;
+    private final String name;
+    private final String mod;
     private final boolean client;
 
-    CommandRegistration(CommandDispatcher<S> dispatcher, CommandNode<S> node, boolean client) {
-        this.dispatcher = dispatcher;
-        this.node = node;
+    private @Nullable CommandDispatcher<?> outOf;
+    private @Nullable CommandNode<?> removed;
+
+    CommandRegistration(RootCommandNode<?> addedTo, String name, String mod, boolean client) {
+        this.addedTo = new WeakReference<>(addedTo);
+        this.name = name;
+        this.mod = mod;
         this.client = client;
     }
 
@@ -29,41 +39,67 @@ final class CommandRegistration<S> implements Registration {
 
     @Override
     public String describe() {
-        return "/" + this.node.getName();
+        return "/" + this.name;
     }
 
     @Override
-    @SuppressWarnings("ReferenceEquality")
     public boolean isInGame() {
-        return this.dispatcher == findActiveDispatcher(this.client)
-                && this.dispatcher.getRoot().getChild(this.node.getName()) == this.node;
+        RootCommandNode<?> root = this.addedTo.get();
+        CommandDispatcher<?> dispatcher = findActiveDispatcher(this.client);
+        return (root != null && root.getChild(this.name) != null)
+                || (dispatcher != null && this.findIn(dispatcher) != null);
     }
 
     @Override
-    @SuppressWarnings("ReferenceEquality")
     public void remove() {
-        CommandNodeAccessor root = (CommandNodeAccessor) this.dispatcher.getRoot();
-        Map<String, Object> children = root.hotwire$getChildren();
-        if (children.get(this.node.getName()) != this.node) {
+        CommandDispatcher<?> dispatcher = findActiveDispatcher(this.client);
+        CommandNode<?> node = dispatcher == null ? null : this.findIn(dispatcher);
+        if (dispatcher == null || node == null) {
+            CommandNode<?> there = dispatcher == null ? null : dispatcher.getRoot().getChild(this.name);
+            if (there != null) {
+                LOGGER.info("[Hotwire] /{} of {} is left in: the command of that name in use runs {}", this.name,
+                        this.mod, CommandRecorder.findModsRun(there));
+            }
             return;
         }
-        children.remove(this.node.getName());
-        root.hotwire$getLiterals().remove(this.node.getName());
-        this.resendCommands();
+        CommandNodeAccessor root = (CommandNodeAccessor) dispatcher.getRoot();
+        root.hotwire$getChildren().remove(this.name);
+        root.hotwire$getLiterals().remove(this.name);
+        this.outOf = dispatcher;
+        this.removed = node;
+        resendCommands(this.client);
     }
 
     @Override
     @SuppressWarnings("ReferenceEquality")
     public void restore() {
-        CommandNode<S> current = this.dispatcher.getRoot().getChild(this.node.getName());
-        if (current == this.node) {
+        CommandNode<?> node = this.removed;
+        CommandDispatcher<?> dispatcher = this.outOf;
+        this.removed = null;
+        this.outOf = null;
+
+        if (node == null || dispatcher == null || dispatcher != findActiveDispatcher(this.client)) {
+            return;
+        }
+        CommandNode<?> current = dispatcher.getRoot().getChild(this.name);
+        if (current == node || (current != null && this.findIn(dispatcher) != null)) {
             return;
         }
         if (current != null) {
-            throw new IllegalStateException("Another command took /" + this.node.getName() + " while it was off.");
+            throw new IllegalStateException("Another command took /" + this.name + " while it was off.");
         }
-        this.dispatcher.getRoot().addChild(this.node);
-        this.resendCommands();
+        addChild(dispatcher, node);
+        resendCommands(this.client);
+    }
+
+    private @Nullable CommandNode<?> findIn(CommandDispatcher<?> dispatcher) {
+        CommandNode<?> node = dispatcher.getRoot().getChild(this.name);
+        return node != null && CommandRecorder.findModsRun(node).contains(this.mod) ? node : null;
+    }
+
+    @SuppressWarnings("unchecked")
+    private static <S> void addChild(CommandDispatcher<S> dispatcher, CommandNode<?> node) {
+        dispatcher.getRoot().addChild((CommandNode<S>) node);
     }
 
     static @Nullable CommandDispatcher<?> findActiveDispatcher(boolean client) {
@@ -74,13 +110,9 @@ final class CommandRegistration<S> implements Registration {
         return server == null ? null : server.getCommands().getDispatcher();
     }
 
-    @SuppressWarnings("ReferenceEquality")
-    private void resendCommands() {
-        if (this.dispatcher != findActiveDispatcher(this.client)) {
-            return;
-        }
+    private static void resendCommands(boolean client) {
         Minecraft mc = Minecraft.getInstance();
-        if (this.client) {
+        if (client) {
             ClientPacketListener connection = mc.getConnection();
             if (connection != null) {
                 mc.execute(((ClientPacketListenerExtension) connection)::hotwire$resendCommands);

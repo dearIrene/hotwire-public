@@ -25,6 +25,10 @@ public final class CallerOwner {
     public record Frame(Class<?> type, String method) {
     }
 
+    public boolean isLibrary(String mod) {
+        return this.libraries.contains(mod);
+    }
+
     @Nullable Owner find(List<Class<?>> stack) {
         return this.findFrames(stack.stream().map(type -> new Frame(type, "")).toList());
     }

@@ -34,8 +34,8 @@
   ],
   "client": [
     "core.client.multiplayer.ClientPacketListenerMixin",
-    "core.brigadier.CommandDispatcherMixin",
     "core.brigadier.tree.CommandNodeAccessor",
+    "core.brigadier.tree.CommandNodeMixin",
     "core.client.renderer.entity.EntityRenderersAccessor",
     "core.client.gui.render.GuiRendererAccessor",
     "core.client.gui.render.GuiRendererAccessor$Owner",
