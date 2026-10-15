@@ -33,6 +33,8 @@ public final class OffWindowObjects {
         final ReferenceQueue<Object> gone = new ReferenceQueue<>();
         private volatile boolean untracked;
 
+        private volatile boolean isMadeElsewhere;
+
         void purge() {
             for (Reference<?> cleared = this.gone.poll(); cleared != null; cleared = this.gone.poll()) {
                 this.live.remove(cleared);
@@ -62,6 +64,7 @@ public final class OffWindowObjects {
                 of.prune();
                 if (of.live.size() >= CAP) {
                     of.untracked = true;
+                    of.isMadeElsewhere = true;
                     return;
                 }
             }
@@ -70,7 +73,14 @@ public final class OffWindowObjects {
         of.live.add(reference);
         if (reloading.getAsBoolean()) {
             of.reloaded.add(reference);
+        } else {
+            of.isMadeElsewhere = true;
         }
+    }
+
+    public static boolean isMadeElsewhere(String className) {
+        ClassRecord of = MADE.get(className);
+        return of != null && of.isMadeElsewhere;
     }
 
     public static long countAliveFromReload(String className) {

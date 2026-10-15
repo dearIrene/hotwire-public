@@ -69,14 +69,22 @@ import net.fabricmc.loader.api.ModContainer;
 import net.fabricmc.loader.impl.metadata.LoaderModMetadata;
 import net.minecraft.client.Minecraft;
 import net.minecraft.client.gui.screens.LoadingOverlay;
+import net.minecraft.server.packs.resources.SimpleReloadInstance;
 import org.jspecify.annotations.Nullable;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 final class EngineStart {
     private static final Logger LOGGER = LoggerFactory.getLogger(EngineStart.class);
+    private static final StackWalker STACK = StackWalker.getInstance();
+
+    private static final String RELOAD_TASKS = SimpleReloadInstance.class.getName();
 
     private EngineStart() {
+    }
+
+    private static boolean isReloadMaking() {
+        return STACK.walk(frames -> frames.anyMatch(frame -> frame.getClassName().startsWith(RELOAD_TASKS)));
     }
 
     static InstalledMods readInstalledMods(FabricLoader loader) throws IOException {
@@ -143,7 +151,7 @@ final class EngineStart {
         applier.holdRedefinitionWith(() -> GameHold.begin(Minecraft.getInstance())::release);
         applier.rebuildObjectsWith(ResourceReload::isRebuiltWhilePaused, new PausedRebuilds());
         InitHookReplay.skipRebuiltWith(ResourceReload::isRebuiltWhilePaused);
-        OffWindowObjects.setReloading(() -> ModViews.openOverlay() instanceof LoadingOverlay);
+        OffWindowObjects.setReloading(() -> ModViews.openOverlay() instanceof LoadingOverlay && isReloadMaking());
         InitHookReplay.answerWith(GameClasses::findLongLived, GameClasses::getStartupMethods);
         applier.runOnGameThreadWith(GameHold::onGameAndWait);
         CrashGuard.setMixinOwners(applier.getCarriedMixins()::findModShipping);

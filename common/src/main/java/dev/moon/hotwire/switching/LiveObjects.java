@@ -118,7 +118,9 @@ final class LiveObjects {
             byte[] mixed = prepared.mixed().getOrDefault(name, split.target());
             byte[] original = originalOf.apply(name);
             byte[] launched = launchOf.apply(name);
+
             boolean madeWithout = OffWindowObjects.countAliveFromReload(name) > 0 || (launched != null
+                    && !OffWindowObjects.isMadeElsewhere(name)
                     && !ConstructedFields.findSetOutsideConstructors(mixed, launched).isEmpty());
             if (original != null && !game.isWorldObject(type) && madeWithout
                     && !ConstructedFields.findSetOutsideConstructors(mixed, original).isEmpty()) {
