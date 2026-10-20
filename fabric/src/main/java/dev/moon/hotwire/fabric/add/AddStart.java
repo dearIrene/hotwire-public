@@ -46,8 +46,10 @@ final class AddStart {
                 registries.close();
 
                 int notSetUp = catchUp.getAsInt();
+
                 if (notSetUp > 0) {
-                    failed = new IllegalStateException(notSetUp + " objects could not be given the mods' setup");
+                    failed = new IllegalStateException(notSetUp + " objects could not be given the mods' setup"
+                            + (Minecraft.getInstance().level == null ? ". Open a world and add it there." : ""));
                 }
             } catch (RuntimeException | LinkageError e) {
                 failed = e;

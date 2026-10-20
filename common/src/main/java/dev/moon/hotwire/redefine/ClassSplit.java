@@ -185,7 +185,8 @@ public final class ClassSplit {
                 } else if (BodyMarks.injectCallback(shape)) {
                     body.instructions.add(new InsnNode(Opcodes.RETURN));
                     BodyMarks.prependSkipNotice(body, running.name);
-                } else if (HandlerFallbacks.passThrough(body, shape)) {
+                } else if (HandlerFallbacks.passThrough(body, shape)
+                        || HandlerFallbacks.passThroughWrapped(body, shape)) {
                     BodyMarks.prependSkipNotice(body, running.name);
                 } else {
                     shape.accept(new CodeOnly(body));
