@@ -12,6 +12,7 @@ import org.jspecify.annotations.Nullable;
 public record CrashSection(List<Detail> details) {
     public static final String TITLE = "Hotwire";
     private static final String OWN_PACKAGE = "dev.moon.hotwire.";
+    private static final String OUT_OF_MEMORY = OutOfMemoryError.class.getName();
     private static final Pattern OWN_MIXIN = Pattern.compile("from mod (hotwire[\\w-]*)");
 
     public record Detail(String name, String value) {
@@ -74,6 +75,12 @@ public record CrashSection(List<Detail> details) {
             if (mod != null && switched.contains(mod)) {
                 mods.add(nameOf.apply(mod));
             }
+        }
+
+        if (own.isEmpty() && mixin == null && messages.stream().anyMatch(one -> one.startsWith(OUT_OF_MEMORY))) {
+            return new Detail("This crash", "Hotwire involved? UNKNOWN. The game ran out of memory, and the trace"
+                    + " shows only where, not what filled it. To tell: play the same way without switching; still"
+                    + " runs out, not Hotwire's; does not, send the newest zip under hotwire/reports.");
         }
         if (touched.isEmpty() && mods.isEmpty() && own.isEmpty() && mixin == null) {
             return new Detail("This crash", "Hotwire involved? NO. No class Hotwire redefined, no mod it switched"

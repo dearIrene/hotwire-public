@@ -34,9 +34,7 @@ public abstract class CrashReportMixin {
             for (StackTraceElement frame : at.getStackTrace()) {
                 frames.add(frame.getClassName());
             }
-            if (at.getMessage() != null) {
-                messages.add(at.getMessage());
-            }
+            messages.add(at.toString());
         }
         CrashSection.Detail trace = GameReports.describeTrace(frames, messages);
         this.getSystemReport().setDetail(CrashSection.TITLE + ": " + trace.name(), trace.value());

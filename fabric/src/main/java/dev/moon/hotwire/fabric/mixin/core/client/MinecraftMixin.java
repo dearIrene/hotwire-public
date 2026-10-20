@@ -4,6 +4,7 @@ import com.llamalad7.mixinextras.injector.wrapoperation.Operation;
 import com.llamalad7.mixinextras.injector.wrapoperation.WrapOperation;
 import dev.moon.hotwire.fabric.CrashGuard;
 import dev.moon.hotwire.fabric.FrameRecovery;
+import dev.moon.hotwire.fabric.RenderPassEnd;
 //? if >=1.21.2 {
 import dev.moon.hotwire.fabric.ResourceReload;
 //?}
@@ -25,6 +26,7 @@ public abstract class MinecraftMixin {
         try {
             original.call(game, advance);
         } catch (RuntimeException | Error e) {
+            RenderPassEnd.run();
             if (!CrashGuard.handle(e, CrashPolicy.Site.FRAME)) {
                 throw e;
             }

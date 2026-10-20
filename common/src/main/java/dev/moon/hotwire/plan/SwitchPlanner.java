@@ -121,7 +121,6 @@ public final class SwitchPlanner {
                         refusals.add(new Refusal.MissingDependency(mod, dependency));
                     }
                 }
-                refusals.addAll(this.findOldDependencies(mod));
                 for (String child : this.graph.getChildrenOf(mod)) {
                     if (off.contains(child) && !coming.containsKey(child)) {
                         coming.put(child, this.returnsWith(child, mod) ? new Reason.NestedIn(mod)
@@ -186,7 +185,7 @@ public final class SwitchPlanner {
         };
     }
 
-    private List<Refusal> findOldDependencies(String mod) {
+    public List<Refusal> findOldDependencies(String mod) {
         List<Refusal> out = new ArrayList<>();
         ModManifest manifest = this.graph.find(mod).orElse(null);
         if (manifest == null) {

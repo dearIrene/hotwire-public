@@ -6,6 +6,7 @@ import dev.moon.hotwire.plan.SwitchPlan;
 import dev.moon.hotwire.plan.SwitchPlanner;
 import dev.moon.hotwire.switching.ModSwitcher;
 import dev.moon.hotwire.switching.PlayerMessages;
+import java.util.ArrayList;
 import java.util.Collection;
 import java.util.HashSet;
 import java.util.List;
@@ -27,7 +28,10 @@ final class AddDependencies {
         List<String> ids = jars.stream().map(jar -> jar.manifest().id()).toList();
         Set<String> offAfter = new HashSet<>(off);
         offAfter.addAll(ids);
-        return planner.planOn(ids, offAfter);
+        SwitchPlan plan = planner.planOn(ids, offAfter);
+        List<SwitchPlan.Refusal> refusals = new ArrayList<>(plan.refusals());
+        ids.forEach(id -> refusals.addAll(planner.findOldDependencies(id)));
+        return new SwitchPlan(plan.direction(), plan.order(), plan.why(), plan.enabledNested(), refusals);
     }
 
     static Optional<String> describe(SwitchPlan plan, Function<String, String> nameOf) {

@@ -18,6 +18,8 @@ import org.slf4j.LoggerFactory;
 public final class OffModCommands {
     private static final Logger LOGGER = LoggerFactory.getLogger(OffModCommands.class);
 
+    private static final int DEPTH = 8;
+
     private record Removal(CommandDispatcher<?> dispatcher, CommandNode<?> parent, CommandNode<?> node,
             Set<String> mods, boolean client) {
     }
@@ -36,30 +38,33 @@ public final class OffModCommands {
             }
             List<String> removedNames = new ArrayList<>();
             for (CommandNode<?> command : List.copyOf(dispatcher.getRoot().getChildren())) {
-                Set<String> mods = findMods(command);
-                if (mods.isEmpty()) {
-                    continue;
-                }
-                if (mods.stream().allMatch(off)) {
-                    take(dispatcher, dispatcher.getRoot(), command, mods, client, removedNames);
-                    continue;
-                }
-                if (mods.stream().anyMatch(off)) {
-                    LOGGER.info("[Hotwire] /{} runs {}, of which {} stay on, so it stays", command.getName(), mods,
-                            mods.stream().filter(off.negate()).toList());
-                }
-                for (CommandNode<?> part : List.copyOf(command.getChildren())) {
-                    Set<String> partMods = findMods(part);
-                    if (!partMods.isEmpty() && partMods.stream().allMatch(off)) {
-                        take(dispatcher, command, part, partMods, client, removedNames);
-                    }
-                }
+                takeOut(dispatcher, dispatcher.getRoot(), command, off, client, removedNames, DEPTH);
             }
             if (!removedNames.isEmpty()) {
                 LOGGER.info("[Hotwire] the {} commands {} run only off mods' code and go out",
                         client ? "client" : "server", removedNames);
                 CommandRegistration.resendCommands(client);
             }
+        }
+    }
+
+    @SuppressWarnings("ReferenceEquality")
+    private static void takeOut(CommandDispatcher<?> dispatcher, CommandNode<?> parent, CommandNode<?> node,
+            Predicate<String> off, boolean client, Collection<String> removedNames, int depth) {
+        Set<String> mods = findMods(node);
+        if (depth == 0 || mods.isEmpty()) {
+            return;
+        }
+        if (mods.stream().allMatch(off)) {
+            take(dispatcher, parent, node, mods, client, removedNames);
+            return;
+        }
+        if (parent == dispatcher.getRoot() && mods.stream().anyMatch(off)) {
+            LOGGER.info("[Hotwire] /{} runs {}, of which {} stay on, so it stays", node.getName(), mods,
+                    mods.stream().filter(off.negate()).toList());
+        }
+        for (CommandNode<?> part : List.copyOf(node.getChildren())) {
+            takeOut(dispatcher, node, part, off, client, removedNames, depth - 1);
         }
     }
 

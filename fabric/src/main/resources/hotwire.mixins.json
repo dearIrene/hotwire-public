@@ -33,6 +33,8 @@
     "core.server.TickTaskAccessor"
   ],
   "client": [
+    "core.blaze3d.systems.CommandEncoderAccessor",
+    "core.blaze3d.opengl.GlCommandEncoderAccessor",
     "core.client.multiplayer.ClientPacketListenerMixin",
     "core.brigadier.tree.CommandNodeAccessor",
     "core.brigadier.tree.CommandNodeMixin",
