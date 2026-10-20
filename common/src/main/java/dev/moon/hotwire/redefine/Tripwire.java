@@ -412,6 +412,10 @@ public final class Tripwire {
         return new Hits(calls == null ? 0 : calls.get(), first == null ? List.of() : first, countWaiting(mod));
     }
 
+    public static boolean isWatched(String mod) {
+        return CALLS.containsKey(mod);
+    }
+
     public static void onLoading(String mod, String className) {
         if (!CALLS.containsKey(mod)) {
             return;

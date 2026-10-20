@@ -2,6 +2,7 @@ package dev.moon.hotwire.fabric.registration;
 
 import com.google.common.collect.MapMaker;
 import dev.moon.hotwire.redefine.FieldSlots;
+import dev.moon.hotwire.redefine.Tripwire;
 import java.lang.instrument.Instrumentation;
 import java.lang.reflect.InaccessibleObjectException;
 import java.lang.reflect.Method;
@@ -74,7 +75,8 @@ public final class Fields {
             try {
                 ClassLoader game = Fields.class.getClassLoader();
                 for (Class<?> type : instrumentation.getAllLoadedClasses()) {
-                    if (Objects.equals(type.getClassLoader(), game) && !type.isHidden() && !type.isArray()) {
+                    if (Objects.equals(type.getClassLoader(), game) && !type.isHidden() && !type.isArray()
+                            && !isOfOffMod(type)) {
                         getReferenceFields(type, true);
                     }
                 }
@@ -85,6 +87,11 @@ public final class Fields {
         preloader.setDaemon(true);
         preloader.setPriority(Thread.MIN_PRIORITY);
         preloader.start();
+    }
+
+    private static boolean isOfOffMod(Class<?> type) {
+        String mod = GameRegistrations.findModOf(type);
+        return mod != null && Tripwire.isWatched(mod);
     }
 
     public static List<FieldSlots.Slot> getDeclared(Class<?> type) {
