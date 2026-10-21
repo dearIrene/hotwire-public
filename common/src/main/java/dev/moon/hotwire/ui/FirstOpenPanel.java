@@ -11,10 +11,10 @@ final class FirstOpenPanel extends Panel {
 
     private static final List<PendingPanel.Line> LINES = List.of(
             new PendingPanel.Line("Hotwire changes mods while the game runs.", Palette.TEXT),
-            new PendingPanel.Line("Mods were not made for that.", Palette.TEXT),
-            new PendingPanel.Line("If anything goes wrong while Hotwire is installed,", Palette.BAD),
-            new PendingPanel.Line("report it to Hotwire, never to the mod's author.", Palette.BAD),
-            new PendingPanel.Line("Making Hotwire work with other mods is Hotwire's job alone.", Palette.DIM));
+            new PendingPanel.Line("Mods weren't built for that, so Hotwire does the work.", Palette.TEXT),
+            new PendingPanel.Line("If a mod misbehaves after Hotwire switched, added", Palette.BAD),
+            new PendingPanel.Line("or updated it, report it to Hotwire, not its author.", Palette.BAD),
+            new PendingPanel.Line("A crash report says whether Hotwire was involved.", Palette.DIM));
 
     private final Runnable onAccept;
     private float waited;

@@ -35,8 +35,10 @@ import java.util.HashSet;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.Optional;
 import java.util.Set;
 import java.util.TreeMap;
+import java.util.TreeSet;
 import java.util.zip.ZipEntry;
 import java.util.zip.ZipFile;
 import net.fabricmc.loader.api.Version;
@@ -121,6 +123,10 @@ public final class ModUpdater {
         if (kind == JarIntake.Kind.REFUSED) {
             return new UpdatePreview.Unreadable(fileName);
         }
+        Optional<String> rejected = this.findRejection(manifest);
+        if (rejected.isPresent()) {
+            return new UpdatePreview.Refused(manifest.name(), rejected.get());
+        }
         UpdatePlan plan;
         try {
             plan = this.plan(manifest.id(), running, jar);
@@ -144,6 +150,10 @@ public final class ModUpdater {
         if (running == null) {
             return new Result.Refused(manifest.name() + " is not installed.");
         }
+        Optional<String> rejected = this.findRejection(manifest);
+        if (rejected.isPresent()) {
+            return new Result.Refused(rejected.get());
+        }
         UpdatePlan plan;
         try {
             plan = this.plan(manifest.id(), running, jar);
@@ -159,6 +169,33 @@ public final class ModUpdater {
             case IN_PLACE -> this.updateInPlace(manifest, running, jar, plan);
             case NEXT_START -> this.queue(manifest, running, jar, plan);
         };
+    }
+
+    private Optional<String> findRejection(ModManifest incoming) {
+        ModGraph graph = this.engine.getGraph();
+        for (String id : new TreeSet<>(graph.getIds())) {
+            ModManifest other = graph.find(id).orElse(null);
+            if (other == null || id.equals(incoming.id())) {
+                continue;
+            }
+            for (Map.Entry<String, List<String>> wants : other.getRelation(ModManifest.Relation.DEPENDS).entrySet()) {
+                if (graph.resolve(wants.getKey()).equals(incoming.id()) && !wants.getValue().isEmpty()
+                        && !this.engine.satisfies(incoming.version(), wants.getValue())) {
+                    return Optional.of(other.name() + " needs " + incoming.name() + " "
+                            + String.join(" or ", wants.getValue()) + ", and this is " + incoming.version()
+                            + ". Update " + other.name() + " first, or keep " + incoming.name() + " as it is.");
+                }
+            }
+            for (Map.Entry<String, List<String>> breaks : other.getRelation(ModManifest.Relation.BREAKS).entrySet()) {
+                if (graph.resolve(breaks.getKey()).equals(incoming.id())
+                        && this.engine.satisfies(incoming.version(), breaks.getValue())) {
+                    return Optional.of(other.name() + " does not work with " + incoming.name() + " "
+                            + incoming.version() + ". Update " + other.name() + " first, or keep "
+                            + incoming.name() + " as it is.");
+                }
+            }
+        }
+        return Optional.empty();
     }
 
     UpdatePlan plan(String id, Path running, Path incoming) throws ModJarException {

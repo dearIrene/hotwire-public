@@ -72,7 +72,9 @@ public final class ConfigTrim {
                 retained.add(mixin.substring(prefix.length()));
             }
         }
-        if (!prefix.isEmpty()) {
+        boolean pluginStays = isName(root.get("plugin")) && retainsPlugin.test(root.get("plugin").getAsString());
+
+        if (!prefix.isEmpty() && !pluginStays) {
             applied.stream().filter(mixin -> mixin.startsWith(prefix) && !listedElsewhere.test(mixin))
                     .map(mixin -> mixin.substring(prefix.length())).forEach(retained::add);
         }
@@ -81,7 +83,7 @@ public final class ConfigTrim {
         root.remove("client");
         root.remove("server");
         root.add("mixins", list);
-        if (!isName(root.get("plugin")) || !retainsPlugin.test(root.get("plugin").getAsString())) {
+        if (!pluginStays) {
             root.remove("plugin");
         }
 

@@ -8,6 +8,9 @@ final class Button extends Element {
     private static final int SECONDARY_FACE = 0xFF1B2030;
     private static final int INACTIVE_FACE = 0xF00F1118;
     private static final int PRIMARY_LINE = 0xFF2E5C8A;
+    private static final int BADGE_FACE = 0xFFE5484D;
+    private static final int BADGE_RADIUS = 5;
+    private static final float BADGE_TEXT = 0.75f;
 
     private final EasedValue hover = EasedValue.ofSpeed(16);
     private final boolean primary;
@@ -16,6 +19,8 @@ final class Button extends Element {
     private String shortLabel;
     private boolean useShort;
     private boolean active = true;
+
+    private int badge;
 
     public Button(String label, boolean primary, Runnable action) {
         this(label, label, primary, action);
@@ -43,6 +48,10 @@ final class Button extends Element {
 
     void useShortForm(boolean use) {
         this.useShort = use;
+    }
+
+    void setBadge(int badge) {
+        this.badge = badge;
     }
 
     void setActive(boolean active) {
@@ -86,6 +95,20 @@ final class Button extends Element {
         }
         canvas.drawText(shown, x + (w - canvas.measureText(shown)) / 2, y + (h - 8) / 2,
                 Colors.fade(this.labelColor(hot), alpha));
+        if (this.badge > 0) {
+            this.paintBadge(canvas, x + w - BADGE_RADIUS - 1, y + BADGE_RADIUS + 1, alpha);
+        }
+    }
+
+    private void paintBadge(Canvas canvas, int cx, int cy, float alpha) {
+        for (int dy = -BADGE_RADIUS; dy <= BADGE_RADIUS; dy++) {
+            int half = (int) Math.round(Math.sqrt(BADGE_RADIUS * BADGE_RADIUS - dy * dy));
+            canvas.fill(cx - half, cy + dy, cx + half + 1, cy + dy + 1, Colors.fade(BADGE_FACE, alpha));
+        }
+        String count = this.badge > 9 ? "9+" : String.valueOf(this.badge);
+        canvas.pushScale(BADGE_TEXT, cx + 0.5f, cy + 0.5f);
+        canvas.drawText(count, cx + 1 - canvas.measureText(count) / 2, cy - 3, Colors.fade(Palette.TEXT, alpha));
+        canvas.popScale();
     }
 
     private int labelColor(float hot) {

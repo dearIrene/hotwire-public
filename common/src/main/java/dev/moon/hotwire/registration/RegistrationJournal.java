@@ -1,6 +1,5 @@
 package dev.moon.hotwire.registration;
 
-import dev.moon.hotwire.redefine.Tripwire;
 import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.HashSet;
@@ -9,7 +8,6 @@ import java.util.List;
 import java.util.Map;
 import java.util.Set;
 import java.util.TreeMap;
-import java.util.function.Consumer;
 import java.util.function.Predicate;
 import org.jspecify.annotations.Nullable;
 import org.slf4j.Logger;
@@ -28,13 +26,6 @@ public final class RegistrationJournal {
     private int recordsSincePrune;
     private final Set<Entry> removed = new HashSet<>();
     private long nextSequence;
-
-    private volatile Consumer<Runnable> later = Runnable::run;
-
-    public void takeOutLateWith(Consumer<Runnable> run) {
-        this.later = run;
-    }
-
     public synchronized long record(String owner, @Nullable String via, Registration registration) {
         if (++this.recordsSincePrune >= PRUNE_EVERY) {
             this.recordsSincePrune = 0;
@@ -43,26 +34,7 @@ public final class RegistrationJournal {
         long sequence = this.nextSequence++;
         Entry entry = new Entry(sequence, owner, via, registration);
         this.entries.add(entry);
-
-        if (!this.restoring && Tripwire.isWatched(owner)) {
-            this.later.accept(() -> this.takeOutLate(entry));
-        }
         return sequence;
-    }
-
-    private synchronized void takeOutLate(Entry entry) {
-        if (this.removed.contains(entry) || !Tripwire.isWatched(entry.owner())) {
-            return;
-        }
-        try {
-            entry.registration().remove();
-            this.removed.add(entry);
-            LOGGER.info("[Hotwire] {} {} was made for {} while it was off, and is taken out",
-                    entry.registration().getKind(), entry.registration().describe(), entry.owner());
-        } catch (RuntimeException e) {
-            LOGGER.warn("[Hotwire] {} {}, made for {} while it was off, could not be taken out",
-                    entry.registration().getKind(), entry.registration().describe(), entry.owner(), e);
-        }
     }
 
     public synchronized List<Entry> getEntries(String mod) {

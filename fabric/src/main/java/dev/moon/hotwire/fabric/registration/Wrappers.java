@@ -168,7 +168,7 @@ final class Wrappers {
         return null;
     }
 
-    private static boolean isOfAnotherMod(Class<?> type) {
+    static boolean isOfAnotherMod(Class<?> type) {
         String mod = GameRegistrations.findModOf(type);
         return mod == null ? GameRegistrations.findShippedBy(type) != null
                 : GameRegistrations.isSwitchable(mod) || GameRegistrations.isLibrary(mod);

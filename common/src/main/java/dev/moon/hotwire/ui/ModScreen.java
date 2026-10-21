@@ -394,6 +394,7 @@ public final class ModScreen {
         this.update.setActive(idle && this.game.canUpdate());
         this.advanced.setActive(idle);
         this.pending.setActive(idle && this.pendingCount > 0);
+        this.pending.setBadge(this.pendingCount);
     }
 
     private void switchPicked(boolean on) {

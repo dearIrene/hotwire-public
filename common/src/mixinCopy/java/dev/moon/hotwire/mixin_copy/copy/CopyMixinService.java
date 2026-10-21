@@ -3,11 +3,17 @@ package dev.moon.hotwire.mixin_copy.copy;
 import java.io.ByteArrayInputStream;
 import java.io.IOException;
 import java.io.InputStream;
+import java.net.MalformedURLException;
+import java.net.URI;
 import java.net.URL;
+import java.security.CodeSource;
+import java.security.ProtectionDomain;
+import java.security.cert.Certificate;
 import java.util.Collection;
 import java.util.Enumeration;
 import java.util.List;
 import java.util.Map;
+import java.util.concurrent.ConcurrentHashMap;
 import java.util.function.BiConsumer;
 import java.util.function.Function;
 import org.jspecify.annotations.Nullable;
@@ -59,6 +65,25 @@ public final class CopyMixinService extends MixinServiceAbstract
         return false;
     }
 
+    private static final Map<String, ProtectionDomain> DOMAINS = new ConcurrentHashMap<>();
+
+    static @Nullable ProtectionDomain findDomainOf(String name) {
+        URL file = live.getResource(name.replace('.', '/') + ".class");
+        if (file == null) {
+            return null;
+        }
+        String at = file.toString();
+        String jar = at.startsWith("jar:") && at.contains("!/") ? at.substring("jar:".length(), at.indexOf("!/"))
+                : at.substring(0, at.length() - (name.replace('.', '/') + ".class").length());
+        return DOMAINS.computeIfAbsent(jar, key -> {
+            try {
+                return new ProtectionDomain(new CodeSource(URI.create(key).toURL(), (Certificate[]) null), null);
+            } catch (MalformedURLException | IllegalArgumentException e) {
+                return new ProtectionDomain(null, null);
+            }
+        });
+    }
+
     static final ClassLoader MODS = new ClassLoader(CopyMixinService.class.getClassLoader()) {
         @Override
         protected Class<?> loadClass(String name, boolean resolve) throws ClassNotFoundException {
@@ -76,7 +101,7 @@ public final class CopyMixinService extends MixinServiceAbstract
                 if (!isCopyOwn(name)) {
                     byte[] bytes = findBytesOf(name.replace('.', '/'));
                     if (bytes != null) {
-                        return this.defineClass(name, bytes, 0, bytes.length);
+                        return this.defineClass(name, bytes, 0, bytes.length, findDomainOf(name));
                     }
                 }
 
@@ -87,7 +112,7 @@ public final class CopyMixinService extends MixinServiceAbstract
                     if (bytes == null) {
                         throw absent;
                     }
-                    return this.defineClass(name, bytes, 0, bytes.length);
+                    return this.defineClass(name, bytes, 0, bytes.length, findDomainOf(name));
                 }
             }
         }
