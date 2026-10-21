@@ -1,5 +1,6 @@
 package dev.moon.hotwire.registration;
 
+import dev.moon.hotwire.redefine.Tripwire;
 import java.lang.management.ManagementFactory;
 import java.lang.management.ThreadInfo;
 import java.lang.management.ThreadMXBean;
@@ -9,6 +10,7 @@ import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;
+import java.util.Set;
 import java.util.concurrent.ForkJoinPool;
 import java.util.concurrent.ForkJoinWorkerThread;
 import java.util.function.Function;
@@ -145,7 +147,18 @@ public final class ModThreadFinder {
     }
 
     private @Nullable String findOthersFrame(String mod, StackTraceElement[] stack) {
+        Set<String> libraries = Tripwire.getLibrariesOf(mod);
+        ClassLoader modLoader = this.findLoaderOf(mod, stack);
+
+        boolean reached = false;
         for (StackTraceElement frame : stack) {
+            if (!reached) {
+                String of = this.modByClassName.get(frame.getClassName());
+                if (!mod.equals(of)) {
+                    continue;
+                }
+                reached = true;
+            }
             if (frame.getMethodName().equals("<clinit>")) {
                 return "a class initializer, " + frame;
             }
@@ -154,12 +167,16 @@ public final class ModThreadFinder {
                 continue;
             }
             Class<?> type = this.findClassOf(host);
+            if (type == null && modLoader != null) {
+                type = findIn(host, modLoader);
+            }
             if (type == null) {
                 return "a class not found, " + frame;
             }
             ClassLoader loader = type.getClassLoader();
-            if (loader != null && !loader.equals(ClassLoader.getPlatformClassLoader())
-                    && !mod.equals(this.modOf.apply(type))) {
+            String of = this.modOf.apply(type);
+            if (loader != null && !loader.equals(ClassLoader.getPlatformClassLoader()) && !mod.equals(of)
+                    && (of == null || !libraries.contains(of))) {
                 return frame.toString();
             }
         }
@@ -179,6 +196,24 @@ public final class ModThreadFinder {
     @SuppressWarnings("ReferenceEquality")
     private static boolean isCommonPool(ForkJoinWorkerThread worker) {
         return worker.getPool() == ForkJoinPool.commonPool();
+    }
+
+    private @Nullable ClassLoader findLoaderOf(String mod, StackTraceElement[] stack) {
+        for (StackTraceElement frame : stack) {
+            Class<?> type = this.findClassOf(getHostOf(frame.getClassName()));
+            if (type != null && mod.equals(this.modOf.apply(type))) {
+                return type.getClassLoader();
+            }
+        }
+        return null;
+    }
+
+    private static @Nullable Class<?> findIn(String name, ClassLoader loader) {
+        try {
+            return Class.forName(name, false, loader);
+        } catch (ClassNotFoundException | LinkageError e) {
+            return null;
+        }
     }
 
     private @Nullable Class<?> findClassOf(String name) {

@@ -18,10 +18,7 @@ final class OffCodeNotice {
     }
 
     static void install(HotwireEngine engine, InstalledMods installed) {
-        Tripwire.setOwners(type -> {
-            String mod = GameRegistrations.findModOf(type);
-            return mod != null ? mod : GameRegistrations.findShippedBy(type);
-        });
+        Tripwire.setOwners(GameRegistrations::findModOrShipper);
         Tripwire.setGameThreads(() -> {
             Minecraft client = Minecraft.getInstance();
             MinecraftServer server = client.getSingleplayerServer();

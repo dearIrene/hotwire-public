@@ -252,6 +252,11 @@ public final class Tripwire {
         GOING_OFF.removeAll(mods);
     }
 
+    public static Set<String> getLibrariesOf(String mod) {
+        Set<String> known = LIBRARIES.get(mod);
+        return known != null ? known : Set.copyOf(librariesOf.apply(mod));
+    }
+
     public static void hold(Collection<String> mods) {
         mods.forEach(mod -> {
             LIBRARIES.put(mod, Set.copyOf(librariesOf.apply(mod)));

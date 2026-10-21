@@ -56,6 +56,11 @@ public final class GameRegistrations {
         return Objects.requireNonNull(modOfClass).find(type);
     }
 
+    public static @Nullable String findModOrShipper(Class<?> type) {
+        String mod = findModOf(type);
+        return mod != null ? mod : findShippedBy(type);
+    }
+
     static boolean isNestedLibrary(Class<?> type) {
         String name = type.getName();
         return Objects.equals(type.getClassLoader(), GameRegistrations.class.getClassLoader())

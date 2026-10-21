@@ -168,7 +168,7 @@ final class EngineStart {
         });
 
         OffChecker offChecker = new OffChecker(GameRegistrations.getJournal(), () -> {
-            ModThreadFinder threads = ModThreadFinder.ofLiveThreads(GameRegistrations::findModOf,
+            ModThreadFinder threads = ModThreadFinder.ofLiveThreads(GameRegistrations::findModOrShipper,
                     classes::findLoadedNamed, Tripwire::isLinking);
             SwitchTimes.mark("off check: threads");
             return id -> {
