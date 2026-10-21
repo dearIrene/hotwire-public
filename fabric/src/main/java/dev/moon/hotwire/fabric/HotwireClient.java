@@ -1,5 +1,6 @@
 package dev.moon.hotwire.fabric;
 
+import dev.moon.hotwire.fabric.registration.GameRegistrations;
 import dev.moon.hotwire.redefine.FieldHolders;
 import dev.moon.hotwire.redefine.InitHookReplay;
 import java.io.IOException;
@@ -34,6 +35,7 @@ public final class HotwireClient implements ClientModInitializer {
         ClientLifecycleEvents.CLIENT_STARTED.register(client -> client.execute(HotwireClient::getEngine));
 
         InitHookReplay.catchUpLaterWhile(() -> Minecraft.getInstance().level == null);
+        GameRegistrations.getJournal().takeOutLateWith(task -> Minecraft.getInstance().execute(task));
         ClientPlayConnectionEvents.JOIN.register((handler, sender, client) -> client.execute(
                 FieldHolders::retryCatchUps));
         ClientLifecycleEvents.CLIENT_STOPPING.register(client -> {

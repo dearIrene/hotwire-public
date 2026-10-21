@@ -4,6 +4,7 @@ import com.mojang.brigadier.CommandDispatcher;
 import com.mojang.brigadier.tree.ArgumentCommandNode;
 import com.mojang.brigadier.tree.CommandNode;
 import com.mojang.brigadier.tree.RootCommandNode;
+import dev.moon.hotwire.redefine.Tripwire;
 import dev.moon.hotwire.registration.CallerOwner;
 import java.util.ArrayList;
 import java.util.Collections;
@@ -12,6 +13,8 @@ import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Set;
 import net.fabricmc.fabric.impl.command.client.ClientCommandInternals;
+import net.minecraft.client.Minecraft;
+import net.minecraft.client.multiplayer.ClientPacketListener;
 import org.jspecify.annotations.Nullable;
 
 public final class CommandRecorder {
@@ -22,16 +25,23 @@ public final class CommandRecorder {
 
     @SuppressWarnings("ReferenceEquality")
     public static void onAdded(RootCommandNode<?> root, CommandNode<?> node) {
-        if (root.getChild(node.getName()) != node || !RecorderSupport.isFirst(node)) {
+        if (root.getChild(node.getName()) != node || !RecorderSupport.isFirst(node) || isSuggestionTree(root)) {
             return;
         }
         CallerOwner.Owner caller = RecorderSupport.findOwner();
         String owner = findOwner(findModsRun(node), caller == null ? null : caller.mod());
-        if (owner != null) {
+
+        if (owner != null && !Tripwire.isWatched(owner)) {
             CommandDispatcher<?> client = ClientCommandInternals.getActiveDispatcher();
             RecorderSupport.recordAs(owner, node, new CommandRegistration(root, node.getName(), owner,
                     client != null && client.getRoot() == root));
         }
+    }
+
+    @SuppressWarnings("ReferenceEquality")
+    private static boolean isSuggestionTree(RootCommandNode<?> root) {
+        ClientPacketListener connection = Minecraft.getInstance().getConnection();
+        return connection != null && connection.getCommands().getRoot() == root;
     }
 
     private static @Nullable String findOwner(Set<String> runs, @Nullable String caller) {

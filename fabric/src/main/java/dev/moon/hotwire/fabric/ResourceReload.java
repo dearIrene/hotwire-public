@@ -45,8 +45,12 @@ import net.minecraft.client.sounds.WeighedSoundEvents;
 import net.minecraft.server.packs.resources.MultiPackResourceManager;
 import net.minecraft.server.packs.resources.PreparableReloadListener;
 import net.minecraft.server.packs.resources.ReloadInstance;
+import net.minecraft.server.packs.resources.ReloadableResourceManager;
 import net.minecraft.server.packs.resources.SimpleReloadInstance;
 import net.minecraft.util.Unit;
+import org.apache.logging.log4j.Level;
+import org.apache.logging.log4j.LogManager;
+import org.apache.logging.log4j.core.config.Configurator;
 import org.jspecify.annotations.Nullable;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -189,6 +193,21 @@ public final class ResourceReload {
         comingOn = List.copyOf(mods);
     }
 
+    private static void startUnprofiled(Runnable start) {
+        String manager = ReloadableResourceManager.class.getName();
+        Level was = LogManager.getLogger(manager).getLevel();
+        if (!was.isLessSpecificThan(Level.DEBUG)) {
+            start.run();
+            return;
+        }
+        Configurator.setLevel(manager, Level.INFO);
+        try {
+            start.run();
+        } finally {
+            Configurator.setLevel(manager, was);
+        }
+    }
+
     @SuppressWarnings("FutureReturnValueIgnored")
     private static void reloadWhilePaused(Minecraft game, boolean renderersOnly) {
         long began = System.nanoTime();
@@ -202,9 +221,10 @@ public final class ResourceReload {
         if (last != null && last.isDone()) {
             ModViews.closeOverlay();
         }
-        boolean isWhole = !renderersOnly || !ReloadListeners.runWithoutHeavy(game, game::reloadResourcePacks);
+        boolean isWhole = !renderersOnly || !ReloadListeners.runWithoutHeavy(game,
+                () -> startUnprofiled(game::reloadResourcePacks));
         if (isWhole) {
-            game.reloadResourcePacks();
+            startUnprofiled(game::reloadResourcePacks);
         }
         ReloadInstance reload = ModViews.openOverlay() instanceof LoadingOverlay loading ? reloadOf(loading) : null;
         if (reload == null) {
