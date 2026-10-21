@@ -26,8 +26,12 @@ import org.objectweb.asm.ClassReader;
 import org.objectweb.asm.ClassVisitor;
 import org.objectweb.asm.FieldVisitor;
 import org.objectweb.asm.Opcodes;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
 public final class FieldHolders {
+    private static final Logger LOGGER = LoggerFactory.getLogger(FieldHolders.class);
+
     record Holder(Class<?> type, MethodHandles.Lookup lookup, WeakIdentityMap instances,
             AtomicReference<@Nullable Holder> previous, @Nullable BiConsumer<Object, Object> initInstance,
             Map<Object, Boolean> awaiting, Set<String> restarted) {
@@ -160,6 +164,41 @@ public final class FieldHolders {
         return ADDED_BY_NAME.getOrDefault(internal, Set.of());
     }
 
+    private static final Map<Class<?>, Map<Object, Boolean>> RETRYING = new ConcurrentHashMap<>();
+    private static final Set<Class<?>> SAID_FAILED = ConcurrentHashMap.newKeySet();
+
+    static boolean tryCatchUp(Class<?> target, Consumer<Object> catchUp, Object instance) {
+        try {
+            catchUp.accept(instance);
+            return true;
+        } catch (RuntimeException | LinkageError e) {
+            RETRYING.computeIfAbsent(target, any -> new MapMaker().weakKeys().makeMap()).put(instance, Boolean.TRUE);
+            if (SAID_FAILED.add(target)) {
+                LOGGER.info("[Hotwire] the hooks {} missed could not run on an object made before them yet ({}); it"
+                        + " is tried again when a world opens", target.getName(), e.toString());
+            }
+            return false;
+        }
+    }
+
+    public static int retryCatchUps() {
+        int left = 0;
+        for (Map.Entry<Class<?>, Map<Object, Boolean>> waiting : RETRYING.entrySet()) {
+            Consumer<Object> catchUp = CATCH_UP.get(waiting.getKey());
+            for (Object instance : List.copyOf(waiting.getValue().keySet())) {
+                waiting.getValue().remove(instance);
+                if (catchUp != null && !tryCatchUp(waiting.getKey(), catchUp, instance)) {
+                    left++;
+                }
+            }
+        }
+        if (left == 0 && !RETRYING.isEmpty()) {
+            RETRYING.clear();
+            LOGGER.info("[Hotwire] the hooks that could not run before a world opened ran on their objects");
+        }
+        return left;
+    }
+
     static void catchUpWith(Class<?> target, Consumer<Object> catchUp) {
         CATCH_UP.put(target, catchUp);
 
@@ -167,7 +206,7 @@ public final class FieldHolders {
         if (holder != null) {
             for (Object instance : List.copyOf(holder.awaiting().keySet())) {
                 holder.awaiting().remove(instance);
-                catchUp.accept(instance);
+                tryCatchUp(target, catchUp, instance);
             }
         }
     }
@@ -299,8 +338,8 @@ public final class FieldHolders {
         }
         Class<?> target = TARGET_OF.get(holder.type());
         Consumer<Object> catchUp = made || target == null ? null : CATCH_UP.get(target);
-        if (catchUp != null) {
-            catchUp.accept(instance);
+        if (catchUp != null && target != null) {
+            tryCatchUp(target, catchUp, instance);
         } else if (!made) {
             holder.awaiting().put(instance, Boolean.TRUE);
         }

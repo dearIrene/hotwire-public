@@ -15,6 +15,7 @@ import java.util.Objects;
 import java.util.Set;
 import java.util.TreeSet;
 import java.util.concurrent.ConcurrentHashMap;
+import java.util.function.BooleanSupplier;
 import java.util.function.Consumer;
 import java.util.function.Function;
 import java.util.function.Predicate;
@@ -43,6 +44,7 @@ import org.slf4j.LoggerFactory;
 
 public final class InitHookReplay {
     private static final Logger LOGGER = LoggerFactory.getLogger(InitHookReplay.class);
+    private static volatile BooleanSupplier isLaterAllowed = () -> false;
     static final String ON_OBJECTS = "hotwire$passedHooks";
     static final String ON_CLASS = "hotwire$passedStaticHooks";
     private static final String CALLBACK = "org/spongepowered/asm/mixin/injection/callback/CallbackInfo";
@@ -403,6 +405,10 @@ public final class InitHookReplay {
         return failed;
     }
 
+    public static void catchUpLaterWhile(BooleanSupplier noWorld) {
+        isLaterAllowed = noWorld;
+    }
+
     public static ConstructedFields.Unmade findUnset(Map<Class<?>, Due> hooked, Predicate<Class<?>> worldObject,
             boolean inWorld) {
         return findUnset(hooked, worldObject, inWorld, type -> true);
@@ -481,9 +487,15 @@ public final class InitHookReplay {
                     keys.forEach(key -> RUN.add(name + " " + key));
                     return 0;
                 }
+
+                boolean later = isLaterAllowed.getAsBoolean();
                 for (Object object : objects) {
                     FieldHolders.markMade(type, object);
-                    each.accept(object);
+                    if (later) {
+                        FieldHolders.tryCatchUp(type, each, object);
+                    } else {
+                        each.accept(object);
+                    }
                 }
             } else {
                 MethodHandleProxies.asInterfaceInstance(Runnable.class, side.findStatic(side.lookupClass(), ON_CLASS,

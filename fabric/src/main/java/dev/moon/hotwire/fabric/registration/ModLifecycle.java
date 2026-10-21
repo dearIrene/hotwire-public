@@ -208,8 +208,11 @@ public final class ModLifecycle {
 
     public static List<String> runSetup(String id, RegistrationJournal journal, Minecraft client) {
         List<String> ran = new ArrayList<>();
-        onThread(work -> GameHold.onGameBeforeNextFrame(work, client),
-                () -> callArchitectury(id, journal, "SETUP", ran), "client");
+        onThread(work -> GameHold.onGameBeforeNextFrame(work, client), () -> {
+            callEach(id, journal, ClientLifecycleEvents.CLIENT_STARTED, ran, listener ->
+                    ((ClientLifecycleEvents.ClientStarted) listener).onClientStarted(client));
+            callArchitectury(id, journal, "SETUP", ran);
+        }, "client");
         return ran;
     }
 

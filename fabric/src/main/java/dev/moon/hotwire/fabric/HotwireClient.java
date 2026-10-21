@@ -1,10 +1,13 @@
 package dev.moon.hotwire.fabric;
 
+import dev.moon.hotwire.redefine.FieldHolders;
+import dev.moon.hotwire.redefine.InitHookReplay;
 import java.io.IOException;
 import java.io.UncheckedIOException;
 import net.fabricmc.api.ClientModInitializer;
 import net.fabricmc.fabric.api.client.command.v2.ClientCommandRegistrationCallback;
 import net.fabricmc.fabric.api.client.event.lifecycle.v1.ClientLifecycleEvents;
+import net.fabricmc.fabric.api.client.networking.v1.ClientPlayConnectionEvents;
 import net.fabricmc.loader.api.FabricLoader;
 import net.minecraft.client.Minecraft;
 import org.jspecify.annotations.Nullable;
@@ -29,6 +32,10 @@ public final class HotwireClient implements ClientModInitializer {
         OpenKey.register(HotwireClient::openSoon);
 
         ClientLifecycleEvents.CLIENT_STARTED.register(client -> client.execute(HotwireClient::getEngine));
+
+        InitHookReplay.catchUpLaterWhile(() -> Minecraft.getInstance().level == null);
+        ClientPlayConnectionEvents.JOIN.register((handler, sender, client) -> client.execute(
+                FieldHolders::retryCatchUps));
         ClientLifecycleEvents.CLIENT_STOPPING.register(client -> {
             HotwireEngine started = engine;
             if (started != null) {
