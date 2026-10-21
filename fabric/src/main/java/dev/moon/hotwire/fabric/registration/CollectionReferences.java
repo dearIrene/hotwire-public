@@ -1,6 +1,7 @@
 package dev.moon.hotwire.fabric.registration;
 
 import dev.moon.hotwire.redefine.FieldSlots;
+import dev.moon.hotwire.redefine.Tripwire;
 import java.lang.reflect.Constructor;
 import java.lang.reflect.Method;
 import java.util.ArrayList;
@@ -137,6 +138,11 @@ final class CollectionReferences {
         }
     }
 
+    private static boolean isOfOffMod(Object value) {
+        String mod = GameRegistrations.findModOf(value.getClass());
+        return mod != null && Tripwire.isWatched(mod);
+    }
+
     private @Nullable String findOwnerAmong(Object value) {
         Class<?> type = value instanceof Class<?> named ? named : value.getClass();
         String mod = GameRegistrations.findModOf(type);
@@ -257,7 +263,7 @@ final class CollectionReferences {
     }
 
     private void collect(Object value) {
-        if (this.findOwnerAmong(value) != null) {
+        if (this.findOwnerAmong(value) != null || isOfOffMod(value)) {
             return;
         }
         this.readChanging(value, () -> this.collectOnce(value));
