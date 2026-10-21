@@ -21,13 +21,18 @@ import dev.moon.hotwire.ui.AddPreview;
 import dev.moon.hotwire.update.UpdateFolders;
 import dev.moon.hotwire.update.UpdateQueue;
 import java.io.IOException;
+import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.nio.file.StandardCopyOption;
+import java.util.Collections;
 import java.util.List;
 import java.util.Objects;
+import java.util.Optional;
 import java.util.OptionalInt;
 import java.util.function.Function;
+import java.util.zip.ZipEntry;
+import java.util.zip.ZipFile;
 import net.fabricmc.loader.api.FabricLoader;
 import net.minecraft.client.Minecraft;
 import org.jspecify.annotations.Nullable;
@@ -36,8 +41,11 @@ import org.objectweb.asm.Opcodes;
 import org.objectweb.asm.tree.ClassNode;
 import org.objectweb.asm.tree.FieldNode;
 import org.objectweb.asm.tree.MethodNode;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
 public final class AddSupport implements ModAdder.Engine {
+    private static final Logger LOGGER = LoggerFactory.getLogger(AddSupport.class);
     private final InstalledMods installed;
     private final SwitchApplier applier;
     private final ModSwitcher switcher;
@@ -235,5 +243,28 @@ public final class AddSupport implements ModAdder.Engine {
     public @Nullable String findSuperOf(String owner) {
         byte[] bytes = this.classes.findOriginalBytes(owner);
         return bytes == null ? null : new ClassReader(bytes).getSuperName();
+    }
+
+    static Optional<String> findAgentRefusal(String name, @Nullable Path jar) {
+        if (jar == null) {
+            return Optional.empty();
+        }
+        try (ZipFile zip = new ZipFile(jar.toFile())) {
+            for (ZipEntry entry : Collections.list(zip.entries())) {
+                if (entry.getName().endsWith(".class") && isInstrumenting(zip.getInputStream(entry).readAllBytes())) {
+                    return Optional.of(name + " changes the game's classes in the JVM itself, which nothing takes back"
+                            + " out while the game runs.");
+                }
+            }
+        } catch (IOException e) {
+            LOGGER.warn("[Hotwire] {} could not be read for JVM agents", jar.getFileName(), e);
+        }
+        return Optional.empty();
+    }
+
+    private static boolean isInstrumenting(byte[] bytes) {
+        String pool = new String(bytes, StandardCharsets.ISO_8859_1);
+        return pool.contains("com/sun/tools/attach/VirtualMachine")
+                || pool.contains("net/bytebuddy/agent/ByteBuddyAgent");
     }
 }

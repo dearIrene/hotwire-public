@@ -197,6 +197,10 @@ public final class ModAdder {
     }
 
     private Optional<String> findWidenerRefusal(ModJar part, @Nullable Path path) {
+        Optional<String> agent = AddSupport.findAgentRefusal(part.manifest().name(), path);
+        if (agent.isPresent()) {
+            return agent;
+        }
         if (part.accessWidener().isEmpty()) {
             return Optional.empty();
         }
