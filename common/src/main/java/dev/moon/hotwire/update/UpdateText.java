@@ -81,6 +81,8 @@ public final class UpdateText {
             case UpdateBlocker.AddedThisSession added -> "The mod was added while the game ran.";
             case UpdateBlocker.UpdatedEarlierThisSession updated -> "The mod was updated once already while the game"
                     + " ran.";
+            case UpdateBlocker.NeverSwitched never -> "The game needs it running, so it updates when you close the"
+                    + " game.";
         };
     }
 

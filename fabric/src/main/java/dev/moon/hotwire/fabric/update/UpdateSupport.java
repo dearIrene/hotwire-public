@@ -19,14 +19,23 @@ import dev.moon.hotwire.update.UpdateContext;
 import dev.moon.hotwire.update.UpdateFolders;
 import dev.moon.hotwire.update.UpdateQueue;
 import dev.moon.hotwire.update.UpdateText;
+import java.io.IOException;
+import java.io.UncheckedIOException;
+import java.nio.file.Files;
 import java.nio.file.Path;
+import java.util.HashMap;
 import java.util.HashSet;
 import java.util.List;
+import java.util.Map;
 import java.util.Set;
+import java.util.stream.Stream;
 import net.fabricmc.loader.api.FabricLoader;
 import org.jspecify.annotations.Nullable;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
 public final class UpdateSupport implements ModUpdater.Engine {
+    private static final Logger LOGGER = LoggerFactory.getLogger(UpdateSupport.class);
     private final InstalledMods installed;
     private final SwitchApplier applier;
     private final ModSwitcher switcher;
@@ -96,7 +105,27 @@ public final class UpdateSupport implements ModUpdater.Engine {
 
     @Override
     public @Nullable Path findRunningJarOf(String id) {
-        return ModPolicy.isSwitchable(id) ? this.installed.findJarOf(id) : null;
+        return this.installed.findJarOf(id);
+    }
+
+    @Override
+    public Map<String, byte[]> readRunningOf(String id) {
+        Map<String, byte[]> entries = new HashMap<>();
+        FabricLoader.getInstance().getModContainer(id).ifPresent(container -> {
+            for (Path root : container.getRootPaths()) {
+                try (Stream<Path> files = Files.walk(root)) {
+                    for (Path file : files.filter(Files::isRegularFile).toList()) {
+                        String name = root.relativize(file).toString().replace('\\', '/');
+                        entries.put(name, Files.readAllBytes(file));
+                    }
+                } catch (IOException | UncheckedIOException e) {
+                    LOGGER.warn("[Hotwire] {}'s running classes could not be read", id, e);
+                    entries.clear();
+                    return;
+                }
+            }
+        });
+        return entries;
     }
 
     @Override
@@ -111,6 +140,9 @@ public final class UpdateSupport implements ModUpdater.Engine {
 
     @Override
     public UpdateContext.ModState getStateOf(String id) {
+        if (!ModPolicy.isSwitchable(id)) {
+            return UpdateContext.ModState.NEVER_SWITCHED;
+        }
         if (!this.switcher.isOn(id)) {
             return UpdateContext.ModState.OFF;
         }

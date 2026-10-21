@@ -10,6 +10,7 @@ import dev.moon.hotwire.jar.ModManifest;
 import dev.moon.hotwire.jar.ModManifestParser;
 import dev.moon.hotwire.plan.ModGraph;
 import dev.moon.hotwire.redefine.RebuildException;
+import dev.moon.hotwire.switching.ModMixins;
 import dev.moon.hotwire.switching.SwitchApplier;
 import dev.moon.hotwire.switching.SwitchApplier.ApplyResult;
 import dev.moon.hotwire.ui.Canvas;
@@ -30,6 +31,7 @@ import java.io.InputStream;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.nio.file.StandardCopyOption;
+import java.util.ArrayList;
 import java.util.Comparator;
 import java.util.HashSet;
 import java.util.LinkedHashMap;
@@ -87,6 +89,8 @@ public final class ModUpdater {
         UpdateQueue getQueue();
 
         void onUpdated(String id, Path jar, ModJar read);
+
+        Map<String, byte[]> readRunningOf(String id);
     }
 
     private static final Logger LOGGER = LoggerFactory.getLogger(ModUpdater.class);
@@ -127,15 +131,21 @@ public final class ModUpdater {
         if (rejected.isPresent()) {
             return new UpdatePreview.Refused(manifest.name(), rejected.get());
         }
-        UpdatePlan plan;
+        Whole whole;
         try {
-            plan = this.plan(manifest.id(), running, jar);
+            whole = this.planWhole(manifest.id(), running, jar);
         } catch (ModJarException e) {
             LOGGER.warn("[Hotwire] {} cannot be compared with the running {}", jar, running, e);
             return new UpdatePreview.Unreadable(fileName);
         }
+        List<String> lines = new ArrayList<>();
+        for (CarriedLibrary carried : whole.bundled()) {
+            lines.add("Also updates " + carried.manifest().name() + " to " + carried.manifest().version()
+                    + ", which it carries.");
+        }
+        lines.addAll(UpdateText.describeLines(whole.plan()));
         return UpdatePreview.Ready.of(manifest.name(), this.engine.findIcon(jar), installed,
-                manifest.version(), fileName, getMethodOf(plan.tier()), UpdateText.describeLines(plan));
+                manifest.version(), fileName, getMethodOf(whole.plan().tier()), lines);
     }
 
     public Result update(Path jar, UpdateMethod method) {
@@ -154,19 +164,20 @@ public final class ModUpdater {
         if (rejected.isPresent()) {
             return new Result.Refused(rejected.get());
         }
-        UpdatePlan plan;
+        Whole whole;
         try {
-            plan = this.plan(manifest.id(), running, jar);
+            whole = this.planWhole(manifest.id(), running, jar);
         } catch (ModJarException e) {
             return new Result.Refused(jar.getFileName() + " cannot be compared with the running jar: "
                     + e.getMessage());
         }
+        UpdatePlan plan = whole.plan();
         if (getMethodOf(plan.tier()) != method) {
             return new Result.Refused("The update of " + manifest.name() + " was planned " + getMethodOf(plan.tier())
                     + " and asked " + method + ".");
         }
         return switch (method) {
-            case IN_PLACE -> this.updateInPlace(manifest, running, jar, plan);
+            case IN_PLACE -> this.updateInPlace(manifest, running, jar, whole);
             case NEXT_START -> this.queue(manifest, running, jar, plan);
         };
     }
@@ -198,8 +209,87 @@ public final class ModUpdater {
         return Optional.empty();
     }
 
+    private record Whole(UpdatePlan plan, List<CarriedLibrary> bundled, boolean adoptsConfigs) {
+    }
+
+    private record CarriedLibrary(ModManifest manifest, Path incoming, ModJar read, UpdatePlan plan) {
+    }
+
+    private Whole planWhole(String id, Path running, Path incoming) throws ModJarException {
+        UpdatePlan plan = this.plan(id, running, incoming);
+        Set<String> paths = UpdatePlanner.findNestedPaths(plan);
+        List<CarriedLibrary> bundled = paths.isEmpty() ? List.of() : this.planBundled(incoming, plan);
+        UpdatePlan relieved = bundled == null ? plan : UpdatePlanner.withBundledUpdated(plan, paths);
+        boolean configs = UpdatePlanner.hasConfigChanged(relieved);
+        UpdatePlan adopted = configs ? UpdatePlanner.withConfigsAdopted(relieved) : relieved;
+        if (adopted.tier() == UpdateTier.IN_PLACE && bundled != null) {
+            return new Whole(adopted, bundled, configs);
+        }
+        return new Whole(plan, List.of(), false);
+    }
+
+    private @Nullable List<CarriedLibrary> planBundled(Path incoming, UpdatePlan outer) throws ModJarException {
+        List<CarriedLibrary> out = new ArrayList<>();
+        for (String path : UpdatePlanner.findNestedPaths(outer)) {
+            Path written = this.writeNested(incoming, path);
+            if (written == null) {
+                continue;
+            }
+            ModJar read = ModJarReader.read(written);
+            ModManifest manifest = read.manifest();
+            String runs = this.engine.findVersionOf(manifest.id());
+            if (runs == null || this.findRejection(manifest).isPresent()) {
+                return null;
+            }
+            if (this.getVersionOrder().compare(manifest.version(), runs) <= 0) {
+                continue;
+            }
+            Map<String, byte[]> runningEntries = this.engine.readRunningOf(manifest.id());
+            if (runningEntries.isEmpty()) {
+                return null;
+            }
+            UpdatePlan plan = this.planFrom(manifest.id(),
+                    UpdateDiffer.compare(runningEntries, UpdateDiffer.readEntries(written)));
+            Set<String> deeper = UpdatePlanner.findNestedPaths(plan);
+            if (!deeper.isEmpty()) {
+                List<CarriedLibrary> inner = this.planBundled(written, plan);
+                if (inner == null) {
+                    return null;
+                }
+                out.addAll(inner);
+                plan = UpdatePlanner.withBundledUpdated(plan, deeper);
+            }
+            if (plan.tier() != UpdateTier.IN_PLACE) {
+                return null;
+            }
+            out.add(new CarriedLibrary(manifest, written, read, plan));
+        }
+        return out;
+    }
+
+    private @Nullable Path writeNested(Path jar, String path) throws ModJarException {
+        try (ZipFile zip = new ZipFile(jar.toFile())) {
+            ZipEntry entry = zip.getEntry(path);
+            if (entry == null) {
+                return null;
+            }
+            Path written = this.engine.getStagingFolder().resolve("carried").resolve(Path.of(path).getFileName());
+            Files.createDirectories(written.getParent());
+            try (InputStream in = zip.getInputStream(entry)) {
+                Files.copy(in, written, StandardCopyOption.REPLACE_EXISTING);
+            }
+            return written;
+        } catch (IOException e) {
+            throw new ModJarException(ModJarException.Reason.UNREADABLE, String.valueOf(jar.getFileName()),
+                    path + ": " + e.getMessage(), e);
+        }
+    }
+
     UpdatePlan plan(String id, Path running, Path incoming) throws ModJarException {
-        JarDiff diff = UpdateDiffer.compare(running, incoming);
+        return this.planFrom(id, UpdateDiffer.compare(running, incoming));
+    }
+
+    private UpdatePlan planFrom(String id, JarDiff diff) {
         Set<String> names = new HashSet<>();
         diff.classes().forEach(diffed -> names.add(diffed.name()));
         Set<String> loaded = new HashSet<>();
@@ -221,26 +311,54 @@ public final class ModUpdater {
         return UpdatePlanner.plan(diff, context);
     }
 
-    private Result updateInPlace(ModManifest manifest, Path running, Path incoming, UpdatePlan plan) {
-        Map<String, byte[]> entries;
+    private Result updateInPlace(ModManifest manifest, Path running, Path incoming, Whole whole) {
+        UpdatePlan plan = whole.plan();
         ModJar read;
+        Map<String, byte[]> changed = new LinkedHashMap<>();
+        List<String> ids = new ArrayList<>(List.of(manifest.id()));
+        Map<String, byte[]> entries;
         try {
-            entries = UpdateDiffer.readEntries(incoming);
             read = ModJarReader.read(incoming);
+            entries = UpdateDiffer.readEntries(incoming);
+            collectChanged(entries, plan, changed);
+            for (CarriedLibrary carried : whole.bundled()) {
+                collectChanged(UpdateDiffer.readEntries(carried.incoming()), carried.plan(), changed);
+                ids.add(carried.manifest().id());
+            }
         } catch (ModJarException e) {
             return new Result.Refused(incoming.getFileName() + " cannot be read: " + e.getMessage());
         }
-        Map<String, byte[]> changed = new LinkedHashMap<>();
-        for (ClassAction action : plan.actions()) {
-            byte[] bytes = entries.get(action.className() + ".class");
-            if (bytes != null && action.kind() != ClassAction.Kind.DEFINE) {
-                changed.put(action.className(), bytes);
-            }
-        }
         try {
             this.engine.getApplier().getRebuilder().launchChanged();
-            SwitchApplier.ApplyResult applied = this.engine.getApplier()
-                    .replace(manifest.id(), changed, this.engine.on());
+            Set<String> targets = Set.of();
+            if (whole.adoptsConfigs()) {
+                for (ClassAction action : plan.actions()) {
+                    byte[] bytes = entries.get(action.className() + ".class");
+                    if (bytes != null && action.kind() == ClassAction.Kind.DEFINE) {
+                        changed.put(action.className(), bytes);
+                    }
+                }
+                ModMixins mixins = ModMixins.of(read, ModPolicy.getSide());
+                Map<String, byte[]> configs = new LinkedHashMap<>();
+                mixins.configs().forEach(config -> {
+                    byte[] bytes = entries.get(config);
+                    if (bytes != null) {
+                        configs.put(config, bytes);
+                    }
+                });
+                targets = this.engine.getApplier().adoptUpdate(manifest.id(), mixins, configs);
+            }
+
+            SwitchApplier.ApplyResult applied = this.engine.getApplier().replace(ids, changed, this.engine.on(),
+                    targets);
+            for (CarriedLibrary carried : whole.bundled()) {
+                runAfterReplace(carried.manifest().id(), "the loader's mod list", () -> {
+                    FabricLauncherBase.getLauncher().addToClassPath(carried.incoming());
+                    LoaderModList.replace(carried.manifest().id(), carried.incoming());
+                });
+                LOGGER.info("[Hotwire] {} is {} now, carried by {}", carried.manifest().id(),
+                        carried.manifest().version(), manifest.id());
+            }
 
             runAfterReplace(manifest.id(), "the loader's mod list", () -> {
                 FabricLauncherBase.getLauncher().addToClassPath(incoming);
@@ -258,6 +376,15 @@ public final class ModUpdater {
             return new Result.Failed(manifest.name() + " could not be updated in place: " + e.getMessage(), e);
         } finally {
             ResourceReload.forgetPausedReload();
+        }
+    }
+
+    private static void collectChanged(Map<String, byte[]> entries, UpdatePlan plan, Map<String, byte[]> into) {
+        for (ClassAction action : plan.actions()) {
+            byte[] bytes = entries.get(action.className() + ".class");
+            if (bytes != null && action.kind() != ClassAction.Kind.DEFINE) {
+                into.put(action.className(), bytes);
+            }
         }
     }
 

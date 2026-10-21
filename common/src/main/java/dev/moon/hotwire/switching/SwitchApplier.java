@@ -8,6 +8,7 @@ import dev.moon.hotwire.redefine.RebuildException;
 import dev.moon.hotwire.redefine.StopPoint;
 import java.lang.instrument.ClassFileTransformer;
 import java.util.ArrayList;
+import java.util.Collection;
 import java.util.HashMap;
 import java.util.HashSet;
 import java.util.LinkedHashMap;
@@ -35,6 +36,9 @@ public final class SwitchApplier {
         byte @Nullable [] findOriginalBytes(String internalName);
 
         byte @Nullable [] findConfigBytes(String config);
+
+        default void useConfigs(Map<String, byte[]> configs) {
+        }
 
         String getSide();
 
@@ -81,7 +85,8 @@ public final class SwitchApplier {
     private final Map<String, String> ownerOfConfig = new ConcurrentHashMap<>();
 
     private final Set<String> bridged = ConcurrentHashMap.newKeySet();
-    private final Set<String> onAtLaunch;
+
+    private final Set<String> onAtLaunch = ConcurrentHashMap.newKeySet();
     private final MixinChoice choice = new MixinChoice(this::findOriginal);
     private final LaunchDecisions decisions;
     private final List<String> unowned;
@@ -165,7 +170,7 @@ public final class SwitchApplier {
         this.carriedMixins = new CarriedMixins(this.mods, game);
         this.mods.forEach((id, mixins) -> mixins.configs()
                 .forEach(config -> this.ownerOfConfig.putIfAbsent(config, id)));
-        this.onAtLaunch = Set.copyOf(onAtLaunch);
+        this.onAtLaunch.addAll(onAtLaunch);
         this.decisions = new LaunchDecisions(game, this.ownerOfConfig, this.onAtLaunch, this.choice);
         this.unowned = List.copyOf(unowned);
         this.onConfigs = this.getConfigsOf(onAtLaunch);
@@ -207,6 +212,21 @@ public final class SwitchApplier {
         this.patched = null;
         this.mods.put(id, mixins);
         mixins.configs().forEach(config -> this.ownerOfConfig.putIfAbsent(config, id));
+    }
+
+    public synchronized Set<String> adoptUpdate(String id, ModMixins mixins, Map<String, byte[]> configs) {
+        Set<String> targets = new TreeSet<>(mixins.targets());
+        ModMixins old = this.mods.get(id);
+        if (old != null) {
+            targets.addAll(old.targets());
+        }
+        this.game.useConfigs(configs);
+        this.learn(id, mixins);
+        this.onAtLaunch.remove(id);
+        this.onConfigs = this.getConfigsOf(this.onMods);
+        this.watched = this.findDifferingFromLaunch(this.onMods);
+        this.lateMixins = ConfigReads.findLateMixins(this.onConfigs, this.ownerOfConfig, this.onAtLaunch, this.game);
+        return targets;
     }
 
     public synchronized void forget(String id) {
@@ -360,17 +380,35 @@ public final class SwitchApplier {
 
     public synchronized ApplyResult replace(String id, Map<String, byte[]> classes, Set<String> on)
             throws RebuildException {
+        return this.replace(List.of(id), classes, on);
+    }
+
+    public synchronized ApplyResult replace(Collection<String> ids, Map<String, byte[]> classes, Set<String> on)
+            throws RebuildException {
+        return this.replace(ids, classes, on, Set.of());
+    }
+
+    public synchronized ApplyResult replace(Collection<String> ids, Map<String, byte[]> classes, Set<String> on,
+            Set<String> targets) throws RebuildException {
         this.decisions.forget();
         Map<Class<?>, byte[]> originals = new LinkedHashMap<>();
         Map<Class<?>, byte[]> before = new LinkedHashMap<>();
         List<String> rebuilt = new ArrayList<>();
         List<String> notLoaded = new ArrayList<>();
         Map<String, byte[]> toRebuild = new LinkedHashMap<>(classes);
-        for (String target : MixinLists.findTargetsOfChanged(this.mods.get(id), classes,
-                name -> this.findOriginal(name) != null)) {
+        for (String target : targets) {
             byte[] original = this.findOriginal(target);
             if (original != null) {
                 toRebuild.putIfAbsent(target, original);
+            }
+        }
+        for (String id : ids) {
+            for (String target : MixinLists.findTargetsOfChanged(this.mods.get(id), classes,
+                    name -> this.findOriginal(name) != null)) {
+                byte[] original = this.findOriginal(target);
+                if (original != null) {
+                    toRebuild.putIfAbsent(target, original);
+                }
             }
         }
         for (Map.Entry<String, byte[]> entry : toRebuild.entrySet()) {

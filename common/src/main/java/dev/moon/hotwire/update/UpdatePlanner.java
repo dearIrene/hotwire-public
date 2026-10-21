@@ -13,6 +13,7 @@ import java.util.Map;
 import java.util.Set;
 import java.util.TreeMap;
 import java.util.TreeSet;
+import java.util.function.Predicate;
 
 public final class UpdatePlanner {
     private UpdatePlanner() {
@@ -28,6 +29,7 @@ public final class UpdatePlanner {
             case OFF -> blockers.add(new UpdateBlocker.ModIsOff());
             case ADDED_THIS_SESSION -> blockers.add(new UpdateBlocker.AddedThisSession());
             case UPDATED_THIS_SESSION -> blockers.add(new UpdateBlocker.UpdatedEarlierThisSession());
+            case NEVER_SWITCHED -> blockers.add(new UpdateBlocker.NeverSwitched());
         }
         if (game.versionOrder().compare(now.version(), was.version()) < 0) {
             blockers.add(new UpdateBlocker.Downgrade(was.version(), now.version()));
@@ -72,6 +74,48 @@ public final class UpdatePlanner {
                 ? List.of()
                 : List.of(new UpdateNotice.ResourcesChanged(resources));
         return new UpdatePlan(was.id(), was.version(), now.version(), findTier(blockers), actions, notices, blockers);
+    }
+
+    public static UpdatePlan withBundledUpdated(UpdatePlan plan, Set<String> paths) {
+        return withRelieved(plan, blocker -> blocker instanceof UpdateBlocker.NestedJarChanged nested
+                && paths.contains(nested.path()));
+    }
+
+    public static Set<String> findNestedPaths(UpdatePlan plan) {
+        Set<String> paths = new TreeSet<>();
+        for (UpdateBlocker blocker : plan.blockers()) {
+            if (blocker instanceof UpdateBlocker.NestedJarChanged nested) {
+                paths.add(nested.path());
+            }
+        }
+        return paths;
+    }
+
+    public static boolean hasConfigChanged(UpdatePlan plan) {
+        return plan.blockers().stream().anyMatch(UpdateBlocker.MixinConfigChanged.class::isInstance);
+    }
+
+    public static UpdatePlan withConfigsAdopted(UpdatePlan plan) {
+        return withRelieved(plan, UpdateBlocker.MixinConfigChanged.class::isInstance);
+    }
+
+    private static UpdatePlan withRelieved(UpdatePlan plan, Predicate<UpdateBlocker> relieved) {
+        List<UpdateBlocker> left = new ArrayList<>();
+        for (UpdateBlocker blocker : plan.blockers()) {
+            if (!relieved.test(blocker)) {
+                left.add(blocker);
+            }
+        }
+        boolean restarts = false;
+        for (UpdateBlocker blocker : left) {
+            restarts |= !(blocker instanceof UpdateBlocker.BoundByDependents)
+                    && blocker.getTier() == UpdateTier.RESTART_MOD;
+        }
+        if (!restarts) {
+            left.removeIf(UpdateBlocker.BoundByDependents.class::isInstance);
+        }
+        return new UpdatePlan(plan.modId(), plan.runningVersion(), plan.incomingVersion(), findTier(left),
+                plan.actions(), plan.notices(), left);
     }
 
     private static ClassAction.Kind chooseAction(ClassDiff diffed, boolean loaded) {

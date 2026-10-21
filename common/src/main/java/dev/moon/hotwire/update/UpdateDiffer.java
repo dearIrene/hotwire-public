@@ -43,7 +43,8 @@ public final class UpdateDiffer {
         return compare(readEntries(running), readEntries(incoming));
     }
 
-    static JarDiff compare(Map<String, byte[]> running, Map<String, byte[]> incoming) throws ModJarException {
+    public static JarDiff compare(Map<String, byte[]> running, Map<String, byte[]> incoming)
+            throws ModJarException {
         ModManifest was = readManifest(running, "the running jar");
         ModManifest now = readManifest(incoming, "the new jar");
         Set<String> paths = new TreeSet<>(running.keySet());

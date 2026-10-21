@@ -18,6 +18,8 @@ public record UpdateContext(ModState state, Set<String> loadedClasses, Map<Strin
         ON,
         OFF,
         ADDED_THIS_SESSION,
-        UPDATED_THIS_SESSION
+        UPDATED_THIS_SESSION,
+
+        NEVER_SWITCHED
     }
 }

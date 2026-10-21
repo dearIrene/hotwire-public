@@ -72,6 +72,7 @@ public record UpdatePlan(String modId, String runningVersion, String incomingVer
                 case ModIsOff o -> UpdateTier.NEXT_START;
                 case AddedThisSession t -> UpdateTier.NEXT_START;
                 case UpdatedEarlierThisSession w -> UpdateTier.NEXT_START;
+                case NeverSwitched n -> UpdateTier.NEXT_START;
             };
         }
 
@@ -121,6 +122,9 @@ public record UpdatePlan(String modId, String runningVersion, String incomingVer
         }
 
         record UpdatedEarlierThisSession() implements UpdateBlocker {
+        }
+
+        record NeverSwitched() implements UpdateBlocker {
         }
     }
 }

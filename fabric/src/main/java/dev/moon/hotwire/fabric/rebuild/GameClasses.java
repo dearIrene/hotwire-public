@@ -36,6 +36,7 @@ import net.minecraft.world.level.lighting.LevelLightEngine;
 import org.jspecify.annotations.Nullable;
 
 public final class GameClasses implements SwitchApplier.Game {
+    private final Map<String, byte[]> updatedConfigs = new ConcurrentHashMap<>();
     private final KnotInternals knot;
     private final ClassLoader game;
     private final Map<String, SoftReference<byte[]>> originals = new ConcurrentHashMap<>();
@@ -104,7 +105,16 @@ public final class GameClasses implements SwitchApplier.Game {
     }
 
     @Override
+    public void useConfigs(Map<String, byte[]> configs) {
+        this.updatedConfigs.putAll(configs);
+    }
+
+    @Override
     public byte @Nullable [] findConfigBytes(String config) {
+        byte[] updated = this.updatedConfigs.get(config);
+        if (updated != null) {
+            return updated;
+        }
         try (InputStream in = this.game.getResourceAsStream(config)) {
             return in == null ? null : in.readAllBytes();
         } catch (IOException e) {
