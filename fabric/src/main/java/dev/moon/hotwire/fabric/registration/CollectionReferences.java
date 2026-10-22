@@ -381,7 +381,8 @@ final class CollectionReferences {
                         if (mod == null && element != null) {
                             mod = this.findOwnerOf(element);
                         }
-                        if (mod == null && this.inSmall) {
+
+                        if (mod == null) {
                             mod = Wrappers.findNamed(key, element, this.mods);
                         }
                         if (mod != null) {

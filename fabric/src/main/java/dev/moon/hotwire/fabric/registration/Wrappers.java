@@ -7,13 +7,18 @@ import java.util.ArrayList;
 import java.util.Collection;
 import java.util.IdentityHashMap;
 import java.util.List;
+import java.util.Locale;
 import java.util.Map;
 import java.util.Set;
 import java.util.function.Function;
+import java.util.regex.Pattern;
 import org.jspecify.annotations.Nullable;
 
 final class Wrappers {
     private static final int DEPTH = 9;
+
+    private static final Pattern NOT_WORD = Pattern.compile("[^a-z0-9]+");
+    private static final int NAMED_WORD_LENGTH = 5;
 
     private static final int ELEMENTS = 64;
 
@@ -188,8 +193,12 @@ final class Wrappers {
         if (!isOfAnotherMod(value.getClass())) {
             return null;
         }
+
+        String words = "_" + NOT_WORD.matcher(name.toLowerCase(Locale.ROOT)).replaceAll("_") + "_";
         for (String mod : mods) {
-            if (name.equals(mod) || name.startsWith(mod + ".")) {
+            String id = NOT_WORD.matcher(mod.toLowerCase(Locale.ROOT)).replaceAll("_");
+            if (name.equals(mod) || name.startsWith(mod + ".")
+                    || (id.length() >= NAMED_WORD_LENGTH && words.contains("_" + id + "_"))) {
                 return mod;
             }
         }
