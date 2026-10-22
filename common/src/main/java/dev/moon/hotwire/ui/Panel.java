@@ -85,6 +85,12 @@ class Panel extends Element {
         this.primaryActive = active;
     }
 
+    void setCancelLabel(String label) {
+        if (this.cancel != null) {
+            this.cancel.label(label);
+        }
+    }
+
     void setPrimaryLabel(String label) {
         if (this.primary != null) {
             this.primary.label(label);

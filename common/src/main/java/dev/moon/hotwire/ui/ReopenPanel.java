@@ -36,8 +36,11 @@ public final class ReopenPanel extends Panel {
     public void open(Offer offer) {
         this.offer = offer;
         this.lines = List.of();
+
+        boolean reopenOnly = !offer.leaves() && offer.jar() == null && offer.ids().isEmpty();
         this.setPrimary(offer.leaves() ? "Leave and switch" : offer.jar() != null ? "Save and add"
-                : offer.ids().isEmpty() ? "Save and reopen" : "Save and switch", () -> this.onConfirm.accept(offer));
+                : reopenOnly ? "Rejoin now" : "Save and switch", () -> this.onConfirm.accept(offer));
+        this.setCancelLabel(reopenOnly ? "Later" : "Cancel");
         this.setPrimaryWidth(120);
         this.show();
     }

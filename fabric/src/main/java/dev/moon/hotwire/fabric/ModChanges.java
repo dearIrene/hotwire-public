@@ -38,6 +38,11 @@ public final class ModChanges {
         return ready == null ? this.refusal : ready.adds().queue(jar);
     }
 
+    public boolean setsUpOnJoin(Path jar) {
+        HotwireEngine.JvmParts ready = this.parts;
+        return ready != null && ready.adds().setsUpOnJoin(jar);
+    }
+
     public String copyIntoMods(Path jar) {
         HotwireEngine.JvmParts ready = this.parts;
         return ready == null ? "" : ready.adds().copyIntoMods(jar);

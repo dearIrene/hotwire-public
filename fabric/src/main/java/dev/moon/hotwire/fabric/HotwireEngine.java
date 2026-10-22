@@ -502,6 +502,16 @@ public final class HotwireEngine implements ModScreen.Game, AutoCloseable {
                         + " folder when you close the game.");
                 current.offerAdd(jar, this.changes.dryRunAdd(jar).thenApply(preview -> AddPreview.ofLater(
                         preview.name(), preview.version(), why)));
+            } else if (result instanceof ModAdder.Result.Added added && current != null
+                    && Minecraft.getInstance().level != null && this.changes.setsUpOnJoin(jar)) {
+                boolean own = Minecraft.getInstance().getSingleplayerServer() != null;
+                this.showMessage(added.name() + " is in." + this.changes.copyIntoMods(jar) + (own ? ""
+                        : " It finishes setting up as you join a world: rejoin the server to have all of it."), false);
+                if (own) {
+                    current.offerReopen(new ReopenPanel.Offer(false, List.of(), null, added.name()
+                            + " finishes setting up as you join a world", "It is in, and the part of it that starts as"
+                            + " a world is joined waits for the next join. Rejoin now, or later yourself."));
+                }
             } else {
                 this.showMessage(switch (result) {
                     case ModAdder.Result.Added added -> added.name() + " is in." + this.changes.copyIntoMods(jar);

@@ -121,6 +121,10 @@ public final class AddSupport implements ModAdder.Engine {
         }
     }
 
+    public boolean setsUpOnJoin(Path jar) {
+        return JoinHooks.isIn(jar);
+    }
+
     public List<PendingChange> getCopied() {
         return List.copyOf(this.copied.values());
     }
