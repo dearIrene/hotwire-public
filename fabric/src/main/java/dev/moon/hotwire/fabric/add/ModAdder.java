@@ -83,6 +83,9 @@ public final class ModAdder {
 
         ModSwitcher getSwitcher();
 
+        default void showAddStep(int at) {
+        }
+
         ModSwitcher.Result takeOut(List<String> ids);
 
         boolean isLoaded(String internalName);
@@ -345,6 +348,7 @@ public final class ModAdder {
             }
         }
         List<ModJar> jars = parts.values().stream().map(Part::jar).toList();
+        this.engine.showAddStep(1);
         ModGraph graph = this.engine.makeGraphWith(jars);
         SwitchPlanner planner = this.engine.makePlannerFor(graph);
         Optional<String> missing = AddDependencies.describe(AddDependencies.planOn(planner, jars,
@@ -399,6 +403,7 @@ public final class ModAdder {
                 CrashGuard.onSwitched(ids);
                 this.engine.getApplier().getCatchUps().hold(true);
                 try {
+                    this.engine.showAddStep(2);
                     switched = this.engine.getSwitcher().turnOn(ids);
                 } finally {
                     this.engine.getApplier().getCatchUps().hold(false);
@@ -412,10 +417,12 @@ public final class ModAdder {
                 IntSupplier setUp = () -> {
                     int notSetUp = this.engine.getApplier().getCatchUps().run();
                     if (notSetUp == 0) {
+                        this.engine.showAddStep(4);
                         reloadForAssets(parts.values());
                     }
                     return notSetUp;
                 };
+                this.engine.showAddStep(3);
                 CompletableFuture<Void> started = AddStart.queue(ids, grew, backedOut, this.engine.getSide(), setUp);
                 hold.releaseGame();
                 started.get(ENTRYPOINT_WAIT.toMillis(), TimeUnit.MILLISECONDS);

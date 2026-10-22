@@ -36,21 +36,47 @@ public final class Progress {
     }
 
     public void begin(String subject, boolean off, int mods) {
+        if (this.isAdding()) {
+            return;
+        }
         this.now = new Snapshot(this.now.run() + 1, subject, off ? OFF_STEPS : ON_STEPS, 0, "", 0, 0, true, off, false,
                 mods, 0);
     }
 
-    void beginAdding(String subject) {
+    public void beginAdding(String subject) {
         this.now = new Snapshot(this.now.run() + 1, subject, ADD_STEPS, 0, "", 0, 0, true, false, true, 1, 0);
     }
 
+    public void stepAdding(int at) {
+        Snapshot was = this.now;
+        if (was.adding() && was.running()) {
+            this.now = new Snapshot(was.run(), was.subject(), was.labels(), at, "", 0, 0, true, false, true, 1, 0);
+        }
+    }
+
+    public void endAdding() {
+        Snapshot was = this.now;
+        this.now = new Snapshot(was.run(), was.subject(), was.labels(), was.labels().size(), "", 0, 0, false, false,
+                false, was.mods(), was.modsDone());
+    }
+
+    private boolean isAdding() {
+        return this.now.adding() && this.now.running();
+    }
+
     public void step(int at, String subject) {
+        if (this.isAdding()) {
+            return;
+        }
         Snapshot was = this.now;
         this.now = new Snapshot(was.run(), subject, was.labels(), at, "", 0, 0, true, was.goingOff(), was.adding(),
                 was.mods(), was.modsDone());
     }
 
     void setPhase(String words) {
+        if (this.isAdding()) {
+            return;
+        }
         Snapshot was = this.now;
         List<String> labels = new ArrayList<>(was.labels());
         labels.add(Math.min(was.at() + 1, labels.size()), words);
@@ -90,6 +116,9 @@ public final class Progress {
     }
 
     public void end() {
+        if (this.isAdding()) {
+            return;
+        }
         Snapshot was = this.now;
         this.now = new Snapshot(was.run(), was.subject(), was.labels(), was.labels().size(), "", 0, 0, false,
                 was.goingOff(), was.adding(), was.mods(), was.modsDone());

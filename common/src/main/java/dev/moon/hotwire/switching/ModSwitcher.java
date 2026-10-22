@@ -234,6 +234,10 @@ public final class ModSwitcher {
         }
     }
 
+    public Progress getProgress() {
+        return this.progress;
+    }
+
     public void readAheadWith(Consumer<List<String>> read) {
         this.readAhead = read;
     }

@@ -89,6 +89,11 @@ public final class AddSupport implements ModAdder.Engine {
         }
     }
 
+    @Override
+    public void showAddStep(int at) {
+        this.switcher.getProgress().stepAdding(at);
+    }
+
     public String copyIntoMods(Path jar) {
         Path mods = this.folders.mods().toAbsolutePath().normalize();
         if (jar.toAbsolutePath().normalize().startsWith(mods)) {

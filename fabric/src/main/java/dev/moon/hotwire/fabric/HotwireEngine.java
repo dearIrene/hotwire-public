@@ -484,9 +484,14 @@ public final class HotwireEngine implements ModScreen.Game, AutoCloseable {
             this.showMessage(this.changes.queueAdd(jar), false);
             return;
         }
-        this.tasks.submit("add", () -> mode == AddMode.SAVE_AND_REOPEN ? this.changes.addWithReopen(jar)
-                : this.changes.addNow(jar),
-                result -> {
+        this.progress.beginAdding(String.valueOf(jar.getFileName()).replaceFirst("(?i)\\.jar$", ""));
+        this.tasks.submit("add", () -> {
+            try {
+                return mode == AddMode.SAVE_AND_REOPEN ? this.changes.addWithReopen(jar) : this.changes.addNow(jar);
+            } finally {
+                this.progress.endAdding();
+            }
+        }, result -> {
             ModScreen current = this.screen;
             if (mode == AddMode.NOW && ModAdder.isWorldBuilt(result) && WorldReopen.findRefusal().isEmpty()
                     && current != null) {
