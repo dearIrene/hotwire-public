@@ -262,12 +262,21 @@ public final class ModScreen {
         this.updatePanel.read(jar, this.game.dryRunUpdate(jar));
     }
 
+    public void onJarPicked(Path jar, boolean update) {
+        if (update) {
+            this.onJarToUpdate(jar);
+        } else {
+            this.onJarToAdd(jar);
+        }
+    }
+
     void onNothingPicked() {
         this.showMessage("Nothing was picked.", false);
     }
 
     public void onFilesDropped(List<Path> files) {
-        if (!this.isIdle()) {
+        if (this.game.getProgress().isBusy()) {
+            this.showMessage("Wait for this to finish, then drop the jar again.", false);
             return;
         }
         for (Path file : files) {

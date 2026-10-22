@@ -462,7 +462,7 @@ public final class HotwireEngine implements ModScreen.Game, AutoCloseable {
         ModFileChooser.choose(jar -> {
             ModScreen current = this.screen;
             if (current != null) {
-                current.onFilesDropped(List.of(jar));
+                current.onJarPicked(jar, false);
             }
         });
     }
@@ -525,7 +525,13 @@ public final class HotwireEngine implements ModScreen.Game, AutoCloseable {
 
     @Override
     public void updateMod() {
-        this.showMessage("Drop the newer .jar file onto this screen to update the mod.", false);
+        this.showMessage("Pick the newer .jar file, or drop it onto this screen.", false);
+        ModFileChooser.choose(jar -> {
+            ModScreen current = this.screen;
+            if (current != null) {
+                current.onJarPicked(jar, true);
+            }
+        });
     }
 
     @Override
