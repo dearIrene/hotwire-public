@@ -19,6 +19,8 @@ import java.util.TreeSet;
 import java.util.function.Predicate;
 
 public final class ModGraph {
+    private static final int GAME_TRIES = 16;
+
     private final Map<String, ModManifest> mods = new TreeMap<>();
     private final Map<String, SortedSet<String>> getContainers = new TreeMap<>();
     private final Set<String> installed = new TreeSet<>();
@@ -57,11 +59,14 @@ public final class ModGraph {
     private void addCalls() {
         Map<String, String> ownerOf = new HashMap<>();
         Set<String> shared = new TreeSet<>();
+        Map<String, Integer> tries = new HashMap<>();
         this.patches.forEach((mod, patched) -> patched.owns().forEach(type -> {
             int slash = type.lastIndexOf('/');
             String in = slash < 0 ? "" : type.substring(0, slash);
             String before = ownerOf.putIfAbsent(in, mod);
-            if (before == null ? this.gameHas.test(type) : !before.equals(mod)) {
+
+            if ((before != null && !before.equals(mod)) || (!shared.contains(in)
+                    && tries.merge(in, 1, Integer::sum) <= GAME_TRIES && this.gameHas.test(type))) {
                 shared.add(in);
             }
         }));

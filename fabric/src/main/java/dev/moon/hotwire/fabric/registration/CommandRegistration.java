@@ -6,6 +6,7 @@ import com.mojang.brigadier.tree.RootCommandNode;
 import dev.moon.hotwire.fabric.mixin.core.brigadier.tree.CommandNodeAccessor;
 import dev.moon.hotwire.registration.Registration;
 import java.lang.ref.WeakReference;
+import java.util.concurrent.atomic.AtomicBoolean;
 import net.fabricmc.fabric.impl.command.client.ClientCommandInternals;
 import net.minecraft.client.Minecraft;
 import net.minecraft.client.multiplayer.ClientPacketListener;
@@ -16,6 +17,8 @@ import org.slf4j.LoggerFactory;
 
 final class CommandRegistration implements Registration {
     private static final Logger LOGGER = LoggerFactory.getLogger(CommandRegistration.class);
+    private static final AtomicBoolean CLIENT_RESEND_DUE = new AtomicBoolean();
+    private static final AtomicBoolean SERVER_RESEND_DUE = new AtomicBoolean();
 
     private final WeakReference<RootCommandNode<?>> addedTo;
     private final String name;
@@ -112,16 +115,23 @@ final class CommandRegistration implements Registration {
 
     static void resendCommands(boolean client) {
         Minecraft mc = Minecraft.getInstance();
+        AtomicBoolean due = client ? CLIENT_RESEND_DUE : SERVER_RESEND_DUE;
         if (client) {
             ClientPacketListener connection = mc.getConnection();
-            if (connection != null) {
-                mc.execute(((ClientPacketListenerExtension) connection)::hotwire$resendCommands);
+            if (connection != null && due.compareAndSet(false, true)) {
+                mc.execute(() -> {
+                    due.set(false);
+                    ((ClientPacketListenerExtension) connection).hotwire$resendCommands();
+                });
             }
             return;
         }
         IntegratedServer server = mc.getSingleplayerServer();
-        if (server != null) {
-            server.execute(() -> server.getPlayerList().getPlayers().forEach(server.getCommands()::sendCommands));
+        if (server != null && due.compareAndSet(false, true)) {
+            server.execute(() -> {
+                due.set(false);
+                server.getPlayerList().getPlayers().forEach(server.getCommands()::sendCommands);
+            });
         }
     }
 }
