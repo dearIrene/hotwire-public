@@ -14,6 +14,7 @@ import dev.moon.hotwire.fabric.report.GameReports;
 import dev.moon.hotwire.fabric.report.LoggedFaults;
 import dev.moon.hotwire.fabric.report.ReportZips;
 import dev.moon.hotwire.fabric.screen.HotwireScreen;
+import dev.moon.hotwire.fabric.screen.ModFileChooser;
 import dev.moon.hotwire.fabric.screen.ModIcons;
 import dev.moon.hotwire.fabric.update.ModUpdater;
 import dev.moon.hotwire.fabric.update.SwapAtClose;
@@ -457,7 +458,13 @@ public final class HotwireEngine implements ModScreen.Game, AutoCloseable {
 
     @Override
     public void addMod() {
-        this.showMessage("Drop the mod's .jar file onto this screen to add it.", false);
+        this.showMessage("Pick the mod's .jar file, or drop it onto this screen.", false);
+        ModFileChooser.choose(jar -> {
+            ModScreen current = this.screen;
+            if (current != null) {
+                current.onFilesDropped(List.of(jar));
+            }
+        });
     }
 
     @Override
