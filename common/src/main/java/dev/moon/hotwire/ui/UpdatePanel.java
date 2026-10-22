@@ -8,6 +8,7 @@ import java.util.function.BiConsumer;
 import org.jspecify.annotations.Nullable;
 
 final class UpdatePanel extends Panel {
+    private static final int MOST_LINES = 12;
     static final int CARD_FILL = 0x14FFFFFF;
     static final int ICON_PLACEHOLDER = 0x22FFFFFF;
     private static final int WIDTH = 420;
@@ -116,6 +117,11 @@ final class UpdatePanel extends Panel {
         List<String> lines = new ArrayList<>();
         for (String line : body.lines()) {
             lines.addAll(MessageLine.wrap(canvas, line, w - 28, Integer.MAX_VALUE));
+        }
+
+        if (lines.size() > MOST_LINES) {
+            lines = new ArrayList<>(lines.subList(0, MOST_LINES - 1));
+            lines.add("More is in the game's log.");
         }
         this.lineCount = Math.max(1, lines.size());
         for (int i = 0; i < lines.size(); i++) {

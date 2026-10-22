@@ -148,6 +148,8 @@ public final class ModUpdater {
                     + ", which it carries.");
         }
         lines.addAll(UpdateText.describeLines(whole.plan()));
+        LOGGER.info("[Hotwire] the update of {} to {}, in full: {}", manifest.name(), manifest.version(),
+                UpdateText.describeDetails(whole.plan()));
         return UpdatePreview.Ready.of(manifest.name(), this.engine.findIcon(jar), installed,
                 manifest.version(), fileName, getMethodOf(whole.plan().tier()), lines);
     }

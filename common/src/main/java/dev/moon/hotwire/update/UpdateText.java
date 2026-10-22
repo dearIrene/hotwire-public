@@ -6,6 +6,7 @@ import dev.moon.hotwire.update.UpdatePlan.UpdateNotice;
 import dev.moon.hotwire.update.UpdatePlan.UpdateTier;
 import java.util.ArrayList;
 import java.util.EnumMap;
+import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.TreeSet;
@@ -16,12 +17,48 @@ public final class UpdateText {
 
     public static List<String> describeLines(UpdatePlan plan) {
         List<String> out = new ArrayList<>();
-        out.add(switch (plan.tier()) {
+        out.add(describeTier(plan.tier()));
+        int changed = (int) plan.actions().stream().filter(action -> action.kind() == ClassAction.Kind.REDEFINE
+                || action.kind() == ClassAction.Kind.SPLIT).count();
+        if (plan.tier() == UpdateTier.IN_PLACE && changed > 0) {
+            out.add("It changes " + (changed == 1 ? "1 class" : changed + " classes") + " while the game runs.");
+        }
+        Map<Class<?>, List<UpdateBlocker>> byKind = new LinkedHashMap<>();
+        plan.blockers().forEach(blocker -> byKind.computeIfAbsent(blocker.getClass(), any -> new ArrayList<>())
+                .add(blocker));
+        byKind.values().forEach(same -> out.add(summarize(same)));
+        for (UpdateNotice notice : plan.notices()) {
+            out.add(describe(notice, plan.tier()));
+        }
+        return out;
+    }
+
+    private static String summarize(List<UpdateBlocker> same) {
+        int count = same.size();
+        return switch (same.getFirst()) {
+            case UpdateBlocker.ShapeNotCarried shape -> (count == 1 ? "1 of its classes changes" : count
+                    + " of its classes change") + " in a way a running game cannot take.";
+            case UpdateBlocker.PatchedByRunningMod patched -> "Mods that stay on patch " + (count == 1
+                    ? "1 of its classes" : count + " of its classes") + ".";
+            case UpdateBlocker.NestedJarChanged nested -> (count == 1 ? "A library it carries" : count
+                    + " libraries it carries") + " changed.";
+            case UpdateBlocker.EntrypointAdded entrypoint -> "It starts up in new ways.";
+            default -> describe(same.getFirst());
+        };
+    }
+
+    private static String describeTier(UpdateTier tier) {
+        return switch (tier) {
             case IN_PLACE -> "Changes the running mod in place, with no restart.";
             case RESTART_MOD -> "Restarting only this mod is not built yet, so the new version loads next time you"
                     + " start the game.";
             case NEXT_START -> "The new version loads next time you start the game.";
-        });
+        };
+    }
+
+    public static List<String> describeDetails(UpdatePlan plan) {
+        List<String> out = new ArrayList<>();
+        out.add(describeTier(plan.tier()));
         Map<ClassAction.Kind, TreeSet<String>> byKind = new EnumMap<>(ClassAction.Kind.class);
         for (ClassAction action : plan.actions()) {
             byKind.computeIfAbsent(action.kind(), kind -> new TreeSet<>()).add(getSimpleName(action.className()));
