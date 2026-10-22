@@ -36,16 +36,9 @@ final class Wrappers {
 
     private final IdentityHashMap<Class<?>, Boolean> askedOf = new IdentityHashMap<>();
 
-    private @Nullable TypeReach types;
-
-    void useReach(TypeReach reach) {
-        this.types = reach;
-    }
-
     @Nullable String find(Object item, List<String> mods) {
         if (!this.askedOf.computeIfAbsent(item.getClass(), type -> isOfAnotherMod(type)
-                && !Fields.getReferenceFields(type, false).isEmpty())
-                || (this.types != null && !this.types.canInstanceHold(item.getClass()))) {
+                && !Fields.getReferenceFields(type, false).isEmpty())) {
             return null;
         }
         this.open.clear();
@@ -151,14 +144,8 @@ final class Wrappers {
     private int reachThroughAField(Object value, IdentityHashMap<Object, Integer> known) {
         int rests = NONE_OPEN;
         boolean isOfTheMods = this.isOfTheMods(value.getClass());
-        TypeReach reach = this.types;
-        if (reach != null && !reach.canInstanceHold(value.getClass())) {
-            this.reached = false;
-            return rests;
-        }
         for (FieldSlots.Slot field : Fields.getReferenceFields(value.getClass(), false)) {
-            if ((!isOfTheMods && this.isOfTheMods(field.getType()) && this.isAddedByTheirMixin(field))
-                    || (reach != null && !reach.canHold(Fields.findGenericType(field)))) {
+            if (!isOfTheMods && this.isOfTheMods(field.getType()) && this.isAddedByTheirMixin(field)) {
                 continue;
             }
             try {

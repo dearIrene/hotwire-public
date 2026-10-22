@@ -55,8 +55,6 @@ final class CollectionReferences {
 
     private boolean inSmall;
 
-    private TypeReach reach = new TypeReach(Set.of(), List.of());
-
     final ElementLook look = new ElementLook();
 
     private static volatile Function<Class<?>, @Nullable String> lambdaOwner = type -> null;
@@ -70,17 +68,12 @@ final class CollectionReferences {
     }
 
     synchronized void takeOut(List<String> mods, Collection<Object> holders, Collection<Class<?>> statics) {
-        this.takeOut(mods, holders, statics, List.of());
-    }
-
-    synchronized void takeOut(List<String> mods, Collection<Object> holders, Collection<Class<?>> statics,
-            Collection<Class<?>> loaded) {
         List<Runnable> ahead = this.look.open(mods);
         try {
             if (ahead == null) {
-                this.walk(mods, holders, statics, loaded);
+                this.walk(mods, holders, statics);
             } else {
-                this.begin(mods, loaded);
+                this.begin(mods);
                 ElementTakes.runAll(ahead);
             }
         } catch (RuntimeException | LinkageError e) {
@@ -103,21 +96,18 @@ final class CollectionReferences {
         }
     }
 
-    private void begin(List<String> mods, Collection<Class<?>> loaded) {
+    private void begin(List<String> mods) {
         this.seen = Collections.newSetFromMap(new IdentityHashMap<>());
         this.mods = List.copyOf(mods);
         this.modSet = Set.copyOf(mods);
-        this.reach = new TypeReach(this.modSet, loaded);
-        this.wrappers.useReach(this.reach);
         Map<String, List<Removal>> mine = new LinkedHashMap<>();
         mods.forEach(mod -> mine.put(mod, new ArrayList<>()));
         this.mine = mine;
     }
 
-    private void walk(List<String> mods, Collection<Object> holders, Collection<Class<?>> statics,
-            Collection<Class<?>> loaded) {
+    private void walk(List<String> mods, Collection<Object> holders, Collection<Class<?>> statics) {
         long began = System.nanoTime();
-        this.begin(mods, loaded);
+        this.begin(mods);
 
         PriorityQueue<Map.Entry<Long, String>> slowest = new PriorityQueue<>(Map.Entry.comparingByKey());
         for (Class<?> owner : statics) {
@@ -128,9 +118,6 @@ final class CollectionReferences {
                 if (value != null && this.seen.add(value)) {
                     if (game && value instanceof Map<?, ?> map && map.size() <= LARGEST) {
                         this.readChanging(map, () -> this.removeFromNamespaced(map));
-                    }
-                    if (this.isClosedTo(field, value)) {
-                        continue;
                     }
                     this.collect(value);
                     if (value instanceof List<?> list && list.size() <= LARGEST && isFixedSize(list)
@@ -263,33 +250,12 @@ final class CollectionReferences {
         }
     }
 
-    private boolean isClosedTo(FieldSlots.Slot field, Object value) {
-        if (this.findOwnerAmong(value) != null || isOfOffMod(value)
-                || this.reach.canHold(Fields.findGenericType(field))) {
-            return false;
-        }
-        try {
-            int size = switch (value) {
-                case Collection<?> all -> all.size();
-                case Map<?, ?> map -> map.size();
-                case Object[] array -> array.length;
-                default -> Integer.MAX_VALUE;
-            };
-            return size > WRAPPERS_IN;
-        } catch (RuntimeException | LinkageError e) {
-            return false;
-        }
-    }
-
     private void lookInto(Object holder) {
         if (holder instanceof Registry<?>) {
             return;
         }
         for (FieldSlots.Slot field : Fields.getReferenceFields(holder.getClass(), false)) {
             Object value = read(field, holder);
-            if (value == null || this.isClosedTo(field, value)) {
-                continue;
-            }
             if ((value instanceof Collection<?> || value instanceof Map<?, ?> || value instanceof Object[])
                     && this.seen.add(value)) {
                 this.collect(value);
@@ -301,8 +267,7 @@ final class CollectionReferences {
             } else if (value != null && Wrappers.isLookedInto(value) && this.seen.add(value)) {
                 for (FieldSlots.Slot inner : Fields.getReferenceFields(value.getClass(), false)) {
                     Object innerValue = read(inner, value);
-                    if (innerValue != null && !this.isClosedTo(inner, innerValue)
-                            && (innerValue instanceof Collection<?> || innerValue instanceof Map<?, ?>
+                    if ((innerValue instanceof Collection<?> || innerValue instanceof Map<?, ?>
                             || innerValue instanceof Object[]) && this.seen.add(innerValue)) {
                         this.collect(innerValue);
                     }
@@ -421,8 +386,7 @@ final class CollectionReferences {
                         } else if (element instanceof Collection<?> nested) {
                             this.collect(nested);
                         } else if (element != null && this.seen.add(element)
-                                && Wrappers.isOfAnotherMod(element.getClass())
-                                && this.reach.canInstanceHold(element.getClass())) {
+                                && Wrappers.isOfAnotherMod(element.getClass())) {
                             this.lookInto(element);
                         }
                     }

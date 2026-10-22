@@ -4,12 +4,9 @@ import com.google.common.collect.MapMaker;
 import dev.moon.hotwire.redefine.FieldSlots;
 import dev.moon.hotwire.redefine.Tripwire;
 import java.lang.instrument.Instrumentation;
-import java.lang.reflect.Field;
 import java.lang.reflect.InaccessibleObjectException;
-import java.lang.reflect.MalformedParameterizedTypeException;
 import java.lang.reflect.Method;
 import java.lang.reflect.RecordComponent;
-import java.lang.reflect.Type;
 import java.util.ArrayList;
 import java.util.Collection;
 import java.util.Collections;
@@ -145,18 +142,6 @@ public final class Fields {
             }
         }
         return found;
-    }
-
-    static Type findGenericType(FieldSlots.Slot slot) {
-        Field reflected = slot.findReflected();
-        if (reflected == null) {
-            return slot.getType();
-        }
-        try {
-            return reflected.getGenericType();
-        } catch (TypeNotPresentException | MalformedParameterizedTypeException | LinkageError e) {
-            return slot.getType();
-        }
     }
 
     static List<FieldSlots.Slot> getReferenceFields(Class<?> owner, boolean statics) {

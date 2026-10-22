@@ -70,10 +70,6 @@ public final class FieldSlots {
             return this.type;
         }
 
-        public @Nullable Field findReflected() {
-            return this.field;
-        }
-
         public int getModifiers() {
             return this.modifiers;
         }
