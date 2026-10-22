@@ -71,6 +71,7 @@ public final class FieldReferences {
             Function<String, Set<String>> handedTo, Function<String, List<String>> generatedBy) {
         this.instrumentation = instrumentation;
         this.originalBytes = originalBytes;
+        Wrappers.readOriginalsWith(originalBytes);
         this.mixinTargets = mixinTargets;
         this.handedTo = handedTo;
         this.lambdas = new Lambdas(instrumentation);

@@ -33,6 +33,7 @@ import java.nio.file.Path;
 import java.nio.file.StandardCopyOption;
 import java.util.ArrayList;
 import java.util.Comparator;
+import java.util.HashMap;
 import java.util.HashSet;
 import java.util.LinkedHashMap;
 import java.util.List;
@@ -138,6 +139,9 @@ public final class ModUpdater {
             LOGGER.warn("[Hotwire] {} cannot be compared with the running {}", jar, running, e);
             return new UpdatePreview.Unreadable(fileName);
         }
+        if (whole.refusal() != null) {
+            return new UpdatePreview.Refused(manifest.name(), whole.refusal());
+        }
         List<String> lines = new ArrayList<>();
         for (CarriedLibrary carried : whole.bundled()) {
             lines.add("Also updates " + carried.manifest().name() + " to " + carried.manifest().version()
@@ -171,6 +175,9 @@ public final class ModUpdater {
             return new Result.Refused(jar.getFileName() + " cannot be compared with the running jar: "
                     + e.getMessage());
         }
+        if (whole.refusal() != null) {
+            return new Result.Refused(whole.refusal());
+        }
         UpdatePlan plan = whole.plan();
         if (getMethodOf(plan.tier()) != method) {
             return new Result.Refused("The update of " + manifest.name() + " was planned " + getMethodOf(plan.tier())
@@ -184,8 +191,10 @@ public final class ModUpdater {
 
     private Optional<String> findRejection(ModManifest incoming) {
         ModGraph graph = this.engine.getGraph();
-        for (String id : new TreeSet<>(graph.getIds())) {
-            ModManifest other = graph.find(id).orElse(null);
+        Set<String> ids = new TreeSet<>(graph.getIds());
+        ids.addAll(this.after.keySet());
+        for (String id : ids) {
+            ModManifest other = this.after.containsKey(id) ? this.after.get(id) : graph.find(id).orElse(null);
             if (other == null || id.equals(incoming.id())) {
                 continue;
             }
@@ -209,13 +218,65 @@ public final class ModUpdater {
         return Optional.empty();
     }
 
-    private record Whole(UpdatePlan plan, List<CarriedLibrary> bundled, boolean adoptsConfigs) {
+    private record Whole(UpdatePlan plan, List<CarriedLibrary> bundled, boolean adoptsConfigs,
+            @Nullable String refusal) {
+        Whole(UpdatePlan plan, List<CarriedLibrary> bundled, boolean adoptsConfigs) {
+            this(plan, bundled, adoptsConfigs, null);
+        }
     }
+
+    private Map<String, ModManifest> after = Map.of();
+    private Map<String, String> queued = Map.of();
 
     private record CarriedLibrary(ModManifest manifest, Path incoming, ModJar read, UpdatePlan plan) {
     }
 
-    private Whole planWhole(String id, Path running, Path incoming) throws ModJarException {
+    private synchronized Whole planWhole(String id, Path running, Path incoming) throws ModJarException {
+        this.after = this.readComing(ModJarReader.read(incoming), new HashMap<>());
+        Map<String, String> waiting = new HashMap<>();
+        this.engine.getQueue().getEntries().forEach(entry -> waiting.put(entry.modId(), entry.toVersion()));
+        this.queued = waiting;
+        try {
+            Whole whole = this.planWithCarried(id, running, incoming);
+            Map<String, List<String>> unmet = UpdatePlanner.findUnmet(whole.plan());
+            if (unmet.isEmpty()) {
+                return whole;
+            }
+
+            Map.Entry<String, List<String>> first = unmet.entrySet().iterator().next();
+            String have = this.findVersionAfter(first.getKey());
+            ModManifest coming = this.after.get(id);
+            String name = coming == null ? id : coming.name() + " " + coming.version();
+            return new Whole(whole.plan(), List.of(), false, name + " needs " + first.getKey() + " "
+                    + String.join(" or ", first.getValue()) + (have == null ? ", which the game does not have"
+                    : ", and the game has " + have) + ". Update or add " + first.getKey() + " first, then this.");
+        } finally {
+            this.after = Map.of();
+            this.queued = Map.of();
+        }
+    }
+
+    private Map<String, ModManifest> readComing(ModJar jar, Map<String, ModManifest> into) {
+        ModManifest manifest = jar.manifest();
+        String runs = this.engine.findVersionOf(manifest.id());
+        if (runs == null || this.getVersionOrder().compare(manifest.version(), runs) > 0) {
+            into.putIfAbsent(manifest.id(), manifest);
+        }
+        jar.nested().forEach(nested -> this.readComing(nested, into));
+        return into;
+    }
+
+    private @Nullable String findVersionAfter(String id) {
+        String resolved = this.engine.getGraph().resolve(id);
+        ModManifest coming = this.after.get(resolved);
+        if (coming != null) {
+            return coming.version();
+        }
+        String waiting = this.queued.get(resolved);
+        return waiting != null ? waiting : this.engine.findVersionOf(id);
+    }
+
+    private Whole planWithCarried(String id, Path running, Path incoming) throws ModJarException {
         UpdatePlan plan = this.plan(id, running, incoming);
         Set<String> paths = UpdatePlanner.findNestedPaths(plan);
         List<CarriedLibrary> bundled = paths.isEmpty() ? List.of() : this.planBundled(incoming, plan);
@@ -225,6 +286,8 @@ public final class ModUpdater {
         if (adopted.tier() == UpdateTier.IN_PLACE && bundled != null) {
             return new Whole(adopted, bundled, configs);
         }
+        LOGGER.info("[Hotwire] {}'s update waits for the next start: {}", id, bundled == null
+                ? "a library it carries cannot update with it" : adopted.blockers());
         return new Whole(plan, List.of(), false);
     }
 
@@ -239,6 +302,8 @@ public final class ModUpdater {
             ModManifest manifest = read.manifest();
             String runs = this.engine.findVersionOf(manifest.id());
             if (runs == null || this.findRejection(manifest).isPresent()) {
+                LOGGER.info("[Hotwire] the carried {} {} cannot update with it: {}", manifest.id(), manifest.version(),
+                        runs == null ? "the game does not have it" : this.findRejection(manifest).orElseThrow());
                 return null;
             }
             if (this.getVersionOrder().compare(manifest.version(), runs) <= 0) {
@@ -246,6 +311,8 @@ public final class ModUpdater {
             }
             Map<String, byte[]> runningEntries = this.engine.readRunningOf(manifest.id());
             if (runningEntries.isEmpty()) {
+                LOGGER.info("[Hotwire] the carried {} cannot update with it: the running copy cannot be read",
+                        manifest.id());
                 return null;
             }
             UpdatePlan plan = this.planFrom(manifest.id(),
@@ -260,6 +327,8 @@ public final class ModUpdater {
                 plan = UpdatePlanner.withBundledUpdated(plan, deeper);
             }
             if (plan.tier() != UpdateTier.IN_PLACE) {
+                LOGGER.info("[Hotwire] the carried {} {} -> {} cannot update with it: {}", manifest.id(), runs,
+                        manifest.version(), plan.blockers());
                 return null;
             }
             out.add(new CarriedLibrary(manifest, written, read, plan));
@@ -300,7 +369,7 @@ public final class ModUpdater {
         }
         Map<String, List<String>> unmet = new TreeMap<>();
         diff.incoming().getRelation(ModManifest.Relation.DEPENDS).forEach((mod, ranges) -> {
-            String have = this.engine.findVersionOf(mod);
+            String have = this.findVersionAfter(mod);
             if (have == null || !this.engine.satisfies(have, ranges)) {
                 unmet.put(mod, ranges);
             }

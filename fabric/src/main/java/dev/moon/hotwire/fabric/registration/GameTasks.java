@@ -2,6 +2,7 @@ package dev.moon.hotwire.fabric.registration;
 
 import dev.moon.hotwire.fabric.mixin.core.server.TickTaskAccessor;
 import dev.moon.hotwire.fabric.mixin.core.util.thread.BlockableEventLoopAccessor;
+import dev.moon.hotwire.redefine.FieldSlots;
 import java.util.ArrayList;
 import java.util.Collection;
 import java.util.HashMap;
@@ -14,6 +15,7 @@ import net.minecraft.client.Minecraft;
 import net.minecraft.client.server.IntegratedServer;
 import net.minecraft.server.TickTask;
 import net.minecraft.util.thread.BlockableEventLoop;
+import org.jspecify.annotations.Nullable;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -48,7 +50,7 @@ public final class GameTasks {
             return false;
         }
         Runnable task = unwrap(queued);
-        String mod = GameRegistrations.findModOf(task.getClass());
+        String mod = findOwnerOf(task, WRAPPED_DEPTH);
         if (mod == null) {
             return false;
         }
@@ -64,6 +66,28 @@ public final class GameTasks {
         return true;
     }
 
+    private static final int WRAPPED_DEPTH = 2;
+
+    private static @Nullable String findOwnerOf(Object task, int depth) {
+        String mod = GameRegistrations.findModOf(task.getClass());
+        if (depth == 0 || (mod != null && !GameRegistrations.isLibrary(mod))) {
+            return mod;
+        }
+        for (FieldSlots.Slot field : Fields.getReferenceFields(task.getClass(), false)) {
+            Object captured;
+            try {
+                captured = field.get(task);
+            } catch (IllegalAccessException | RuntimeException e) {
+                continue;
+            }
+            String inner = captured == null ? null : findOwnerOf(captured, depth - 1);
+            if (inner != null && MODS_OFF.contains(inner)) {
+                return inner;
+            }
+        }
+        return mod;
+    }
+
     private static Runnable unwrap(Runnable queued) {
         return queued instanceof TickTask tick ? ((TickTaskAccessor) tick).hotwire$getRunnable() : queued;
     }
@@ -73,7 +97,7 @@ public final class GameTasks {
             Queue<Runnable> pending = ((BlockableEventLoopAccessor) loop).hotwire$getPending();
             for (Runnable queued : List.copyOf(pending)) {
                 Runnable task = unwrap(queued);
-                String mod = GameRegistrations.findModOf(task.getClass());
+                String mod = findOwnerOf(task, WRAPPED_DEPTH);
                 if (mod != null && mods.contains(mod) && pending.remove(queued)) {
                     REMOVED.computeIfAbsent(mod, any -> new ArrayList<>()).add(new Removal(loop, task));
                 }

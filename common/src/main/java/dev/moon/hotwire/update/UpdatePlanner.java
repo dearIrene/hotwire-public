@@ -91,6 +91,16 @@ public final class UpdatePlanner {
         return paths;
     }
 
+    public static Map<String, List<String>> findUnmet(UpdatePlan plan) {
+        Map<String, List<String>> unmet = new TreeMap<>();
+        for (UpdateBlocker blocker : plan.blockers()) {
+            if (blocker instanceof UpdateBlocker.DependencyUnmet missing) {
+                unmet.put(missing.mod(), missing.ranges());
+            }
+        }
+        return unmet;
+    }
+
     public static boolean hasConfigChanged(UpdatePlan plan) {
         return plan.blockers().stream().anyMatch(UpdateBlocker.MixinConfigChanged.class::isInstance);
     }

@@ -5,10 +5,17 @@ import java.lang.reflect.Method;
 import java.util.AbstractMap;
 import java.util.ArrayList;
 import java.util.Collection;
+import java.util.HashSet;
 import java.util.IdentityHashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.Set;
+import java.util.function.Function;
 import org.jspecify.annotations.Nullable;
+import org.objectweb.asm.ClassReader;
+import org.objectweb.asm.ClassVisitor;
+import org.objectweb.asm.FieldVisitor;
+import org.objectweb.asm.Opcodes;
 
 final class Wrappers {
     private static final int DEPTH = 9;
@@ -133,7 +140,7 @@ final class Wrappers {
         int rests = NONE_OPEN;
         boolean isOfTheMods = this.isOfTheMods(value.getClass());
         for (FieldSlots.Slot field : Fields.getReferenceFields(value.getClass(), false)) {
-            if (!isOfTheMods && this.isOfTheMods(field.getType())) {
+            if (!isOfTheMods && this.isOfTheMods(field.getType()) && !isDeclaredBeforeMixins(field)) {
                 continue;
             }
             try {
@@ -146,6 +153,37 @@ final class Wrappers {
         }
         this.reached = false;
         return rests;
+    }
+
+    private static volatile Function<String, byte @Nullable []> originalBytes = name -> null;
+
+    private static final ClassValue<@Nullable Set<String>> DECLARED = new ClassValue<>() {
+        @Override
+        protected @Nullable Set<String> computeValue(Class<?> type) {
+            byte[] bytes = originalBytes.apply(type.getName().replace('.', '/'));
+            if (bytes == null) {
+                return null;
+            }
+            Set<String> names = new HashSet<>();
+            new ClassReader(bytes).accept(new ClassVisitor(Opcodes.ASM9) {
+                @Override
+                public @Nullable FieldVisitor visitField(int access, String name, String descriptor,
+                        @Nullable String signature, @Nullable Object value) {
+                    names.add(name);
+                    return null;
+                }
+            }, ClassReader.SKIP_CODE | ClassReader.SKIP_DEBUG | ClassReader.SKIP_FRAMES);
+            return Set.copyOf(names);
+        }
+    };
+
+    static void readOriginalsWith(Function<String, byte @Nullable []> bytes) {
+        originalBytes = bytes;
+    }
+
+    private static boolean isDeclaredBeforeMixins(FieldSlots.Slot field) {
+        Set<String> declared = DECLARED.get(field.getDeclaringClass());
+        return declared != null && declared.contains(field.getName());
     }
 
     private boolean isOfTheMods(Class<?> type) {
