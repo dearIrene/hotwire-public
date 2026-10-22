@@ -84,7 +84,7 @@ public final class FieldReferences {
         LoadedClasses scan = this.findLoaded(mods);
         SwitchTimes.mark("field references: classes");
         Map<String, List<Replacement>> planned = new HashMap<>();
-        GameHold.onGameAndWait(() -> planned.putAll(this.plan(mods, on, scan.byName(), scan.used())));
+        GameHold.onGameAndWait(() -> planned.putAll(this.plan(mods, on, scan)));
         SwitchTimes.mark("field references: planned");
         this.removeElements(mods, on, scan, planned);
         SwitchTimes.mark("field references: elements");
@@ -176,6 +176,9 @@ public final class FieldReferences {
             List<Object> patched = holders.stream()
                     .filter(one -> SuperclassNames.containsAny(one.getClass(), targets)).toList();
             patched.forEach(one -> holders.addAll(findGameObjectsBelow(one, 1)));
+
+            patched.forEach(one -> holders.addAll(Fields.findInCollectionsOf(one,
+                    type -> type.getName().startsWith("net.minecraft."))));
             Set<Class<?>> statics = new LinkedHashSet<>();
 
             List<String> staying = classesOf.keySet().stream().filter(other -> !mods.contains(other)
@@ -354,8 +357,9 @@ public final class FieldReferences {
         this.refreshFinalReaders();
     }
 
-    private Map<String, List<Replacement>> plan(Collection<String> mods, Predicate<String> on,
-            Map<String, Class<?>> loaded, Map<String, Set<String>> named) {
+    private Map<String, List<Replacement>> plan(Collection<String> mods, Predicate<String> on, LoadedClasses scan) {
+        Map<String, Class<?>> loaded = scan.byName();
+        Map<String, Set<String>> named = scan.used();
         Predicate<Class<?>> others = getOthers(mods, on);
         Map<String, List<Replacement>> planned = new HashMap<>();
 
@@ -385,11 +389,20 @@ public final class FieldReferences {
             for (String name : owners) {
                 Class<?> owner = loaded.get(name);
                 if (owner != null && others.test(owner)) {
-                    this.giveBack(owner, null, mod, mine, retained);
+                    this.giveBack(owner, null, mod, mine, retained, false);
                 }
             }
 
-            this.giveBack(game.getClass(), game, mod, mine, retained);
+            scan.classesOf().forEach((other, classes) -> {
+                if (!mods.contains(other) && on.test(other) && this.handedTo.apply(other).contains(mod)) {
+                    List<Class<?>> set = classes.stream().filter(this::isInitialized).filter(others).toList();
+                    set.forEach(owner -> this.giveBack(owner, null, mod, mine, retained, true));
+                    LOGGER.info("[Hotwire] the statics of {} classes of {} were looked into for {}'s callbacks",
+                            set.size(), other, mod);
+                }
+            });
+
+            this.giveBack(game.getClass(), game, mod, mine, retained, true);
             List<Object> holders = new ArrayList<>(near);
 
             BuiltInRegistries.CREATIVE_MODE_TAB.forEach(holders::add);
@@ -399,7 +412,7 @@ public final class FieldReferences {
             Set<Object> done = Collections.newSetFromMap(new IdentityHashMap<>());
             for (Object object : holders) {
                 if (others.test(object.getClass()) && done.add(object)) {
-                    this.giveBack(object.getClass(), object, mod, mine, retained);
+                    this.giveBack(object.getClass(), object, mod, mine, retained, true);
                 }
             }
             checkSameAsGiven(retained, mine);
@@ -436,7 +449,7 @@ public final class FieldReferences {
     }
 
     private void giveBack(Class<?> owner, @Nullable Object holder, String mod, List<Replacement> mine,
-            List<RemainingReference> retained) {
+            List<RemainingReference> retained, boolean looksInto) {
         List<FieldSlots.Slot> fields = Fields.getReferenceFields(owner, holder == null);
         for (FieldSlots.Slot field : fields) {
             if (field.getType().isPrimitive()) {
@@ -452,7 +465,7 @@ public final class FieldReferences {
                     continue;
                 }
                 if (value == null || (!mod.equals(GameRegistrations.findModOf(value.getClass()))
-                        && !(holder != null && CallbackCheck.callsInto(value, mod, this.lambdas::findModOf)))) {
+                        && !(looksInto && CallbackCheck.callsInto(value, mod, this.lambdas::findModOf)))) {
                     continue;
                 }
                 Class<?> declaring = field.getDeclaringClass();
@@ -462,7 +475,9 @@ public final class FieldReferences {
                 if (original != null && !ClassFileSummary.isDeclaredBy(original, field.getName(), descriptor)) {
                     continue;
                 }
-                if (original != null
+
+                boolean handed = holder == null && looksInto;
+                if (original != null && !handed
                         && ClassFileSummary.isSetAgainLater(original, field.getName(), descriptor, holder == null)) {
                     LOGGER.info("[Hotwire] {}.{} keeps {}'s object: its class sets it again over its life",
                             declaring.getName(), field.getName(), mod);

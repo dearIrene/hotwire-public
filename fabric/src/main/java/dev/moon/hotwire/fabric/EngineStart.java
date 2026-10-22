@@ -186,7 +186,7 @@ final class EngineStart {
         FieldReferences fieldReferences = new FieldReferences(instrumentation, applier.getRebuilder(),
                 classes::findOriginalBytes,
                 mod -> installed.getGraphJars().stream().filter(jar -> jar.manifest().id().equals(mod)).findFirst()
-                        .map(jar -> jar.patches().patches()).orElse(Set.of()), EngineStart::findHandedTo,
+                        .map(jar -> jar.patches().patches()).orElse(Set.of()), mod -> findHandedTo(mod, installed),
                 mixin::getGeneratedBy);
         InitHookReplay.writeStaticsWith(fieldReferences::writeStatic);
         FinalWrites.writeWith(fieldReferences::writeFinal);
@@ -236,7 +236,7 @@ final class EngineStart {
         return origin.get();
     }
 
-    private static Set<String> findHandedTo(String mod) {
+    private static Set<String> findHandedTo(String mod, InstalledMods installed) {
         Set<String> named = new HashSet<>();
         FabricLoader loader = FabricLoader.getInstance();
         loader.getModContainer(mod).ifPresent(container -> {
@@ -245,7 +245,7 @@ final class EngineStart {
                 metadata.getEntrypointKeys().forEach(key -> named.add(getNamespace(key)));
             }
         });
-        named.removeIf(id -> id.equals(mod) || !loader.isModLoaded(id));
+        named.removeIf(id -> id.equals(mod) || !installed.isInstalled(id));
         return named;
     }
 

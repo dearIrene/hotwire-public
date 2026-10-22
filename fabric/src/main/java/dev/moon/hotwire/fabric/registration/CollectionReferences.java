@@ -395,9 +395,8 @@ final class CollectionReferences {
                 return;
             }
             for (Map.Entry<Object, Object> entry : Wrappers.copyEntries(entries)) {
-                String mod = findNamespaceOf(entry.getKey());
-                if (mod != null && this.modSet.contains(mod)
-                        && !this.look.hasNoted(() -> this.removeFromNamespaced(map))
+                String mod = this.findModNamespaceOf(entry.getKey(), entry.getValue());
+                if (mod != null && !this.look.hasNoted(() -> this.removeFromNamespaced(map))
                         && entries.remove(entry.getKey(), entry.getValue())) {
                     this.getRemovalsOf(mod).add(new Removal.InMap(entries, entry.getKey(), entry.getValue()));
                 }
@@ -410,8 +409,7 @@ final class CollectionReferences {
     private boolean hasNamespacedKey(Map<Object, Object> entries) {
         try {
             for (Map.Entry<Object, Object> entry : entries.entrySet()) {
-                String mod = findNamespaceOf(entry.getKey());
-                if (mod != null && this.modSet.contains(mod)) {
+                if (this.findModNamespaceOf(entry.getKey(), entry.getValue()) != null) {
                     return true;
                 }
             }
@@ -423,6 +421,26 @@ final class CollectionReferences {
 
     private static @Nullable String findNamespaceOf(@Nullable Object key) {
         return key instanceof Identifier id ? id.getNamespace() : null;
+    }
+
+    private @Nullable String findModNamespaceOf(@Nullable Object key, @Nullable Object value) {
+        String named = findNamespaceOf(key);
+        if (named == null || this.modSet.contains(named)) {
+            return named;
+        }
+        if (value == null || value instanceof Identifier) {
+            return null;
+        }
+        for (FieldSlots.Slot field : Fields.getReferenceFields(value.getClass(), false)) {
+            try {
+                String inner = findNamespaceOf(field.get(value));
+                if (inner != null && this.modSet.contains(inner)) {
+                    return inner;
+                }
+            } catch (IllegalAccessException e) {
+            }
+        }
+        return null;
     }
 
     private void followLambda(Object item) {

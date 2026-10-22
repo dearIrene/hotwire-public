@@ -28,7 +28,9 @@ final class CallbackCheck {
                 if (!seen.add(one)) {
                     continue;
                 }
-                if (depth > 0 && (mod.equals(GameRegistrations.findModOf(type)) || mod.equals(lambdaMod.apply(type)))) {
+
+                Class<?> made = type.isHidden() ? type.getNestHost() : type;
+                if (depth > 0 && (mod.equals(GameRegistrations.findModOf(made)) || mod.equals(lambdaMod.apply(type)))) {
                     return true;
                 }
                 if (isGame(type) || type.isArray() || one instanceof Collection<?> || one instanceof Map<?, ?>

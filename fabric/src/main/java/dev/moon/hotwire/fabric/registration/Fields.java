@@ -8,6 +8,7 @@ import java.lang.reflect.InaccessibleObjectException;
 import java.lang.reflect.Method;
 import java.lang.reflect.RecordComponent;
 import java.util.ArrayList;
+import java.util.Collection;
 import java.util.Collections;
 import java.util.IdentityHashMap;
 import java.util.List;
@@ -124,6 +125,21 @@ public final class Fields {
             }
             found.addAll(next);
             step = next;
+        }
+        return found;
+    }
+
+    public static List<Object> findInCollectionsOf(Object holder, Predicate<Class<?>> followed) {
+        List<Object> found = new ArrayList<>();
+        for (FieldSlots.Slot field : getReferenceFields(holder.getClass(), false)) {
+            try {
+                Object value = field.get(holder);
+                Collection<?> items = value instanceof Map<?, ?> map ? map.values()
+                        : value instanceof Collection<?> collection ? collection : List.of();
+                items.stream().limit(1000).filter(item -> item != null && followed.test(item.getClass()))
+                        .forEach(found::add);
+            } catch (IllegalAccessException | InaccessibleObjectException | SecurityException e) {
+            }
         }
         return found;
     }
