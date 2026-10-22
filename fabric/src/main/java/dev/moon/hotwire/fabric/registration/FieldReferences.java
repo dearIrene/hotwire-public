@@ -204,7 +204,7 @@ public final class FieldReferences {
                 }
             }
             this.elements.takeOut(List.copyOf(mods), holders.stream().filter(one -> others.test(one.getClass()))
-                    .toList(), statics);
+                    .toList(), statics, loaded.values());
         } finally {
             hold.release();
         }

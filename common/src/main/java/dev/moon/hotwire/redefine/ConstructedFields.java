@@ -10,6 +10,7 @@ import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
+import java.util.StringJoiner;
 import java.util.TreeMap;
 import java.util.TreeSet;
 import java.util.WeakHashMap;
@@ -27,8 +28,11 @@ import org.objectweb.asm.tree.IntInsnNode;
 import org.objectweb.asm.tree.LdcInsnNode;
 import org.objectweb.asm.tree.MethodInsnNode;
 import org.objectweb.asm.tree.MethodNode;
+import org.objectweb.asm.tree.VarInsnNode;
 
 public final class ConstructedFields {
+    private static final int HANDLER_ARGUMENT_STEPS = 4;
+
     record ClassFields(List<FieldInfo> fields, Set<String> set, Map<String, String> arraySizes, Set<String> read,
             Set<String> maybeUnset, Set<String> storedAfter) {
         Set<String> keys() {
@@ -214,10 +218,78 @@ public final class ConstructedFields {
             if (next instanceof FieldInsnNode store && store.getOpcode() == Opcodes.PUTFIELD
                     && store.owner.equals(node.name)) {
                 Object size = findConstant(insn.getPrevious());
-                sizes.put(store.name, size == null ? "?" : String.valueOf(size));
+                sizes.put(store.name, size != null ? String.valueOf(size) : findHandledSizes(node, insn.getPrevious()));
             }
         }
         return Collections.unmodifiableMap(sizes);
+    }
+
+    private static String findHandledSizes(ClassNode node, @Nullable AbstractInsnNode insn) {
+        Set<Integer> sizes = insn instanceof MethodInsnNode call ? findReturned(node, call) : null;
+        if (sizes == null) {
+            return "?";
+        }
+        StringJoiner joined = new StringJoiner("|");
+        for (int size : sizes) {
+            joined.add(String.valueOf(size));
+        }
+        return joined.toString();
+    }
+
+    private static @Nullable Set<Integer> findReturned(ClassNode node, MethodInsnNode call) {
+        if (!call.owner.equals(node.name) || !call.desc.startsWith("(I") || !call.desc.endsWith(")I")) {
+            return null;
+        }
+        Integer argument = null;
+        AbstractInsnNode back = call.getPrevious();
+        for (int step = 0; step < HANDLER_ARGUMENT_STEPS && back != null && argument == null; step++) {
+            argument = findConstant(back) instanceof Integer constant ? constant : null;
+            back = back.getPrevious();
+        }
+        MethodNode handler = null;
+        for (MethodNode method : node.methods) {
+            if (method.name.equals(call.name) && method.desc.equals(call.desc)) {
+                handler = method;
+            }
+        }
+        if (handler == null || argument == null) {
+            return null;
+        }
+        int slot = (handler.access & Opcodes.ACC_STATIC) != 0 ? 0 : 1;
+        Set<Integer> sizes = new TreeSet<>();
+        for (AbstractInsnNode at : handler.instructions) {
+            if (at.getOpcode() != Opcodes.IRETURN) {
+                continue;
+            }
+            AbstractInsnNode value = at.getPrevious();
+            if (findConstant(value) instanceof Integer constant) {
+                sizes.add(constant);
+            } else if (value instanceof VarInsnNode load && load.getOpcode() == Opcodes.ILOAD && load.var == slot) {
+                sizes.add(argument);
+            } else {
+                return null;
+            }
+        }
+        return sizes.isEmpty() ? null : sizes;
+    }
+
+    static boolean fitsSizes(String running, String target) {
+        if (running.equals(target)) {
+            return true;
+        }
+        if (running.contains("?") || target.contains("?")) {
+            return false;
+        }
+        int smallest = Integer.MAX_VALUE;
+        for (String one : List.of(running.split("[|]"))) {
+            smallest = Math.min(smallest, Integer.parseInt(one));
+        }
+        for (String one : List.of(target.split("[|]"))) {
+            if (Integer.parseInt(one) > smallest) {
+                return false;
+            }
+        }
+        return true;
     }
 
     private static @Nullable Object findConstant(@Nullable AbstractInsnNode insn) {
@@ -383,7 +455,7 @@ public final class ConstructedFields {
         before.forEach((field, size) -> {
             String now = after.get(field);
 
-            if (now != null && !now.equals(size) && !now.equals("0") && !size.equals("0")) {
+            if (now != null && !fitsSizes(size, now) && !now.equals("0") && !size.equals("0")) {
                 resized.add(field + " " + size + " -> " + now);
             }
         });

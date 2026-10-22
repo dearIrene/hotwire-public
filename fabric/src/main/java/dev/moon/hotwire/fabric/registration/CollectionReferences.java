@@ -16,6 +16,7 @@ import java.util.List;
 import java.util.Map;
 import java.util.NoSuchElementException;
 import java.util.Objects;
+import java.util.PriorityQueue;
 import java.util.Set;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.function.Function;
@@ -39,6 +40,7 @@ final class CollectionReferences {
     private static final int WRAPPERS_IN = 512;
 
     private static final long SLOW_MILLIS = 100;
+    private static final int SLOWEST_NAMED = 8;
 
     private final Map<String, List<Removal>> removals = new HashMap<>();
     private final StaticRecomputer.Writer writer;
@@ -53,6 +55,8 @@ final class CollectionReferences {
 
     private boolean inSmall;
 
+    private TypeReach reach = new TypeReach(Set.of(), List.of());
+
     final ElementLook look = new ElementLook();
 
     private static volatile Function<Class<?>, @Nullable String> lambdaOwner = type -> null;
@@ -66,12 +70,17 @@ final class CollectionReferences {
     }
 
     synchronized void takeOut(List<String> mods, Collection<Object> holders, Collection<Class<?>> statics) {
+        this.takeOut(mods, holders, statics, List.of());
+    }
+
+    synchronized void takeOut(List<String> mods, Collection<Object> holders, Collection<Class<?>> statics,
+            Collection<Class<?>> loaded) {
         List<Runnable> ahead = this.look.open(mods);
         try {
             if (ahead == null) {
-                this.walk(mods, holders, statics);
+                this.walk(mods, holders, statics, loaded);
             } else {
-                this.begin(mods);
+                this.begin(mods, loaded);
                 ElementTakes.runAll(ahead);
             }
         } catch (RuntimeException | LinkageError e) {
@@ -94,25 +103,34 @@ final class CollectionReferences {
         }
     }
 
-    private void begin(List<String> mods) {
+    private void begin(List<String> mods, Collection<Class<?>> loaded) {
         this.seen = Collections.newSetFromMap(new IdentityHashMap<>());
         this.mods = List.copyOf(mods);
         this.modSet = Set.copyOf(mods);
+        this.reach = new TypeReach(this.modSet, loaded);
+        this.wrappers.useReach(this.reach);
         Map<String, List<Removal>> mine = new LinkedHashMap<>();
         mods.forEach(mod -> mine.put(mod, new ArrayList<>()));
         this.mine = mine;
     }
 
-    private void walk(List<String> mods, Collection<Object> holders, Collection<Class<?>> statics) {
+    private void walk(List<String> mods, Collection<Object> holders, Collection<Class<?>> statics,
+            Collection<Class<?>> loaded) {
         long began = System.nanoTime();
-        this.begin(mods);
+        this.begin(mods, loaded);
+
+        PriorityQueue<Map.Entry<Long, String>> slowest = new PriorityQueue<>(Map.Entry.comparingByKey());
         for (Class<?> owner : statics) {
+            long ownerBegan = System.nanoTime();
             boolean game = owner.getName().startsWith("net.minecraft.") || owner.getName().startsWith("com.mojang.");
             for (FieldSlots.Slot field : Fields.getReferenceFields(owner, true)) {
                 Object value = read(field, null);
                 if (value != null && this.seen.add(value)) {
                     if (game && value instanceof Map<?, ?> map && map.size() <= LARGEST) {
                         this.readChanging(map, () -> this.removeFromNamespaced(map));
+                    }
+                    if (this.isClosedTo(field, value)) {
+                        continue;
                     }
                     this.collect(value);
                     if (value instanceof List<?> list && list.size() <= LARGEST && isFixedSize(list)
@@ -125,16 +143,25 @@ final class CollectionReferences {
                     }
                 }
             }
+            slowest.add(Map.entry(System.nanoTime() - ownerBegan, owner.getName()));
+            if (slowest.size() > SLOWEST_NAMED) {
+                slowest.poll();
+            }
         }
+        long holdersBegan = System.nanoTime();
         for (Object holder : holders) {
             if (this.findOwnerAmong(holder) == null) {
                 this.lookInto(holder);
             }
         }
+        slowest.add(Map.entry(System.nanoTime() - holdersBegan, holders.size() + " game objects"));
         long millis = (System.nanoTime() - began) / 1_000_000;
         if (millis >= SLOW_MILLIS) {
-            LOGGER.info("[Hotwire] {} classes' statics looked through for {} in {} ms; {}", statics.size(), mods,
-                    millis, this.wrappers.describe());
+            List<String> named = new ArrayList<>();
+            slowest.stream().sorted(Map.Entry.<Long, String>comparingByKey().reversed())
+                    .forEach(one -> named.add(one.getValue() + " " + one.getKey() / 1_000_000 + " ms"));
+            LOGGER.info("[Hotwire] {} classes' statics looked through for {} in {} ms; {}; slowest {}", statics.size(),
+                    mods, millis, this.wrappers.describe(), named);
         }
     }
 
@@ -236,12 +263,33 @@ final class CollectionReferences {
         }
     }
 
+    private boolean isClosedTo(FieldSlots.Slot field, Object value) {
+        if (this.findOwnerAmong(value) != null || isOfOffMod(value)
+                || this.reach.canHold(Fields.findGenericType(field))) {
+            return false;
+        }
+        try {
+            int size = switch (value) {
+                case Collection<?> all -> all.size();
+                case Map<?, ?> map -> map.size();
+                case Object[] array -> array.length;
+                default -> Integer.MAX_VALUE;
+            };
+            return size > WRAPPERS_IN;
+        } catch (RuntimeException | LinkageError e) {
+            return false;
+        }
+    }
+
     private void lookInto(Object holder) {
         if (holder instanceof Registry<?>) {
             return;
         }
         for (FieldSlots.Slot field : Fields.getReferenceFields(holder.getClass(), false)) {
             Object value = read(field, holder);
+            if (value == null || this.isClosedTo(field, value)) {
+                continue;
+            }
             if ((value instanceof Collection<?> || value instanceof Map<?, ?> || value instanceof Object[])
                     && this.seen.add(value)) {
                 this.collect(value);
@@ -253,7 +301,8 @@ final class CollectionReferences {
             } else if (value != null && Wrappers.isLookedInto(value) && this.seen.add(value)) {
                 for (FieldSlots.Slot inner : Fields.getReferenceFields(value.getClass(), false)) {
                     Object innerValue = read(inner, value);
-                    if ((innerValue instanceof Collection<?> || innerValue instanceof Map<?, ?>
+                    if (innerValue != null && !this.isClosedTo(inner, innerValue)
+                            && (innerValue instanceof Collection<?> || innerValue instanceof Map<?, ?>
                             || innerValue instanceof Object[]) && this.seen.add(innerValue)) {
                         this.collect(innerValue);
                     }
@@ -372,7 +421,8 @@ final class CollectionReferences {
                         } else if (element instanceof Collection<?> nested) {
                             this.collect(nested);
                         } else if (element != null && this.seen.add(element)
-                                && Wrappers.isOfAnotherMod(element.getClass())) {
+                                && Wrappers.isOfAnotherMod(element.getClass())
+                                && this.reach.canInstanceHold(element.getClass())) {
                             this.lookInto(element);
                         }
                     }
