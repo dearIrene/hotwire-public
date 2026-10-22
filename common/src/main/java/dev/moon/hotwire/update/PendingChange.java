@@ -11,4 +11,7 @@ public sealed interface PendingChange {
 
     record Revertable(String modId, String name, String oldVersion) implements PendingChange {
     }
+
+    record Copied(String modId, String name, String jar) implements PendingChange {
+    }
 }

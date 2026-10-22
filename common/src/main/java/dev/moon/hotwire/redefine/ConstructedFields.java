@@ -331,14 +331,6 @@ public final class ConstructedFields {
     public static Unmade findUnmade(Map<Class<?>, byte[]> targets, Map<String, byte[]> current,
             Predicate<Class<?>> liveObjects, Predicate<Class<?>> worldObject,
             Function<String, byte @Nullable []> originalOf, ToLongFunction<String> madeWhileOut,
-            Function<String, Set<String>> replayed) {
-        return findUnmade(targets, current, liveObjects, worldObject, originalOf, madeWhileOut, replayed,
-                type -> true);
-    }
-
-    public static Unmade findUnmade(Map<Class<?>, byte[]> targets, Map<String, byte[]> current,
-            Predicate<Class<?>> liveObjects, Predicate<Class<?>> worldObject,
-            Function<String, byte @Nullable []> originalOf, ToLongFunction<String> madeWhileOut,
             Function<String, Set<String>> replayed, Predicate<Class<?>> alive) {
         return findUnmade(targets, current, liveObjects, worldObject, originalOf, madeWhileOut, replayed, alive,
                 name -> null);

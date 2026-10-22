@@ -109,22 +109,6 @@ public final class OpenedMembers {
         return null;
     }
 
-    public static CallSite openCast(MethodHandles.Lookup caller, String name, MethodType type, String owner)
-            throws ReflectiveOperationException {
-        Class<?> target = Class.forName(owner.replace('/', '.'), false, caller.lookupClass().getClassLoader());
-        MethodHandle cast = MethodHandles.lookup().findVirtual(Class.class, "cast",
-                MethodType.methodType(Object.class, Object.class)).bindTo(target);
-        return new ConstantCallSite(cast.asType(type));
-    }
-
-    public static CallSite openInstance(MethodHandles.Lookup caller, String name, MethodType type, String owner)
-            throws ReflectiveOperationException {
-        Class<?> target = Class.forName(owner.replace('/', '.'), false, caller.lookupClass().getClassLoader());
-        MethodHandle test = MethodHandles.lookup().findVirtual(Class.class, "isInstance",
-                MethodType.methodType(boolean.class, Object.class)).bindTo(target);
-        return new ConstantCallSite(test.asType(type));
-    }
-
     private static Class<?> typeOf(String fieldDescriptor, ClassLoader loader) throws ClassNotFoundException {
         return MethodType.fromMethodDescriptorString("()" + fieldDescriptor, loader).returnType();
     }

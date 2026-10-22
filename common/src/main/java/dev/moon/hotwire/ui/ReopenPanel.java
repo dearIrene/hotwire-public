@@ -42,10 +42,6 @@ public final class ReopenPanel extends Panel {
         this.show();
     }
 
-    @Nullable Offer offer() {
-        return this.offer;
-    }
-
     @Override
     public void step(float dt) {
         this.size(WIDTH, 46 + LINE * Math.max(2, this.lines.size()) + 52);

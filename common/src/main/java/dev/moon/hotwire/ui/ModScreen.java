@@ -86,6 +86,9 @@ public final class ModScreen {
         default void cancelPending(String id) throws IOException {
         }
 
+        default void removeCopy(String id) throws IOException {
+        }
+
         default void revertAtNextStart(String id) throws IOException {
         }
 
@@ -306,6 +309,11 @@ public final class ModScreen {
                     this.game.cancelPending(update.modId());
                     this.showMessage("Cancelled: " + update.name() + " stays " + update.fromVersion() + ", and "
                             + update.newJar() + " was removed from staging.", false);
+                }
+                case PendingChange.Copied copied -> {
+                    this.game.removeCopy(copied.modId());
+                    this.showMessage(copied.name() + " runs until you close the game, and the next start is without it:"
+                            + " " + copied.jar() + " was taken out of your mods folder.", false);
                 }
                 case PendingChange.Revertable back -> {
                     this.game.revertAtNextStart(back.modId());

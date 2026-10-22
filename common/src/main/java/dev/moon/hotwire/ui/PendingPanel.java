@@ -57,6 +57,7 @@ final class PendingPanel extends Panel {
         for (PendingChange change : this.changes) {
             String label = switch (change) {
                 case PendingChange.Update update -> "Cancel";
+                case PendingChange.Copied copied -> "Undo";
                 case PendingChange.Revertable back -> "Revert to " + back.oldVersion();
             };
             this.buttons.add(this.add(new Button(label, false, () -> this.onAct.accept(change))));
@@ -79,6 +80,11 @@ final class PendingPanel extends Panel {
                 if (!update.reason().isEmpty()) {
                     lines.add(new Line("The last close failed: " + update.reason(), Palette.BAD));
                 }
+            }
+            case PendingChange.Copied copied -> {
+                lines.add(new Line("Added live this session, and " + copied.jar() + " was copied into your mods folder,"
+                        + " so it starts with the game too.", Palette.DIM));
+                lines.add(new Line("Undo takes that copy out: the mod runs until you close the game.", Palette.DIM));
             }
             case PendingChange.Revertable back -> {
                 lines.add(new Line(back.oldVersion() + " is kept in hotwire/replaced from an earlier update.",

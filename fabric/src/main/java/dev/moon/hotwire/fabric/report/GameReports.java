@@ -68,7 +68,6 @@ public final class GameReports {
 
     private final AtomicInteger depth = new AtomicInteger();
     private final List<Report.Failure> outerFaults = new CopyOnWriteArrayList<>();
-    private volatile @Nullable Path lastFile;
 
     private final ExecutorService writer = Executors.newSingleThreadExecutor(
             Thread.ofPlatform().name("hotwire-reports").daemon().factory());
@@ -267,10 +266,6 @@ public final class GameReports {
         return crash;
     }
 
-    synchronized Path writeBundle(String why, String mods) throws IOException {
-        return this.writeBundle(why, mods, List.of());
-    }
-
     synchronized Path writeBundle(String why, String mods, List<Path> extra) throws IOException {
         this.onWritten();
         Path game = FabricLoader.getInstance().getGameDir();
@@ -289,7 +284,6 @@ public final class GameReports {
                 .forEach(file -> texts.put("jvm-crashes/" + file.getFileName(), read(file)));
         Path zip = ReportBundle.write(this.folder, Instant.now(), texts, Set.of(Minecraft.getInstance().getUser()
                 .getName()));
-        this.lastFile = zip;
         return zip;
     }
 
@@ -328,15 +322,11 @@ public final class GameReports {
         return log.length() <= retain ? log : log.substring(log.length() - retain);
     }
 
-    @Nullable Path findLastFile() {
-        return this.lastFile;
-    }
-
     private void write(Report report) {
         Instant written = Instant.now();
         this.writer.execute(() -> {
             try {
-                this.lastFile = ReportWriter.write(report, written, this.folder);
+                ReportWriter.write(report, written, this.folder);
             } catch (IOException e) {
                 LOGGER.warn("[Hotwire] could not write the report to {}", this.folder, e);
             }
@@ -356,9 +346,5 @@ public final class GameReports {
     private static String getVersion(FabricLoader loader, String id) {
         return loader.getModContainer(id).map(ModContainer::getMetadata).map(m -> m.getVersion().getFriendlyString())
                 .orElse("unknown");
-    }
-
-    List<String> getAddedIds() {
-        return new ArrayList<>(this.added);
     }
 }

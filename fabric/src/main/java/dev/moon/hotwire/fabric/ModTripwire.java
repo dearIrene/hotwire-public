@@ -349,12 +349,6 @@ public final class ModTripwire {
         }
     }
 
-    synchronized Set<String> getArmedMods() {
-        Set<String> mods = new HashSet<>();
-        this.armed.values().forEach(armed -> mods.add(armed.getMod()));
-        return mods;
-    }
-
     private Map<String, List<String>> findLoadedSinceArm(Collection<String> ids) {
         Map<String, List<String>> loaded = new TreeMap<>();
         this.findOwned(ids).forEach((type, mod) -> {

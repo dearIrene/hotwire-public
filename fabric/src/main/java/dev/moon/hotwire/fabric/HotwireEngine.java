@@ -562,12 +562,24 @@ public final class HotwireEngine implements ModScreen.Game, AutoCloseable {
                 out.add(change);
             }
         }
+        JvmParts parts = this.findParts();
+        if (parts != null) {
+            out.addAll(parts.adds().getCopied());
+        }
         return out;
     }
 
     @Override
     public void cancelPending(String id) throws IOException {
         this.pending.cancel(id);
+    }
+
+    @Override
+    public void removeCopy(String id) throws IOException {
+        JvmParts parts = this.findParts();
+        if (parts != null) {
+            parts.adds().removeCopy(id);
+        }
     }
 
     @Override

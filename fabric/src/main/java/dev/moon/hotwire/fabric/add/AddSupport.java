@@ -18,6 +18,7 @@ import dev.moon.hotwire.switching.ModSwitcher;
 import dev.moon.hotwire.switching.SwitchApplier;
 import dev.moon.hotwire.ui.AddMode;
 import dev.moon.hotwire.ui.AddPreview;
+import dev.moon.hotwire.update.PendingChange;
 import dev.moon.hotwire.update.UpdateFolders;
 import dev.moon.hotwire.update.UpdateQueue;
 import java.io.IOException;
@@ -27,9 +28,11 @@ import java.nio.file.Path;
 import java.nio.file.StandardCopyOption;
 import java.util.Collections;
 import java.util.List;
+import java.util.Map;
 import java.util.Objects;
 import java.util.Optional;
 import java.util.OptionalInt;
+import java.util.concurrent.ConcurrentHashMap;
 import java.util.function.Function;
 import java.util.zip.ZipEntry;
 import java.util.zip.ZipFile;
@@ -57,6 +60,7 @@ public final class AddSupport implements ModAdder.Engine {
     private final ModAdder adder;
     private final ModIcons icons;
     private final Function<List<String>, ModSwitcher.Result> takeOut;
+    private final Map<String, PendingChange.Copied> copied = new ConcurrentHashMap<>();
 
     public AddSupport(InstalledMods installed, SwitchApplier applier, ModSwitcher switcher, GameClasses classes,
             GameReports reports, Path gameDir, UpdateFolders folders, UpdateQueue queue, ModIcons icons,
@@ -105,11 +109,26 @@ public final class AddSupport implements ModAdder.Engine {
                 return " A file named " + jar.getFileName() + " is in your mods folder already, so its jar was not"
                         + " copied there: copy it there yourself to have the mod at the next start.";
             }
+            ModManifest manifest = ModJarReader.read(jar).manifest();
             Files.copy(jar, target);
-            return " Its jar is in your mods folder now.";
-        } catch (IOException e) {
+            this.copied.put(manifest.id(), new PendingChange.Copied(manifest.id(), manifest.name(),
+                    String.valueOf(target.getFileName())));
+            return " Its jar was copied into your mods folder, so it starts with the game too; undo that from Pending"
+                    + " tasks.";
+        } catch (IOException | ModJarException e) {
             return " Its jar could not be copied into your mods folder (" + e.getMessage() + "): copy it there to have"
                     + " the mod at the next start.";
+        }
+    }
+
+    public List<PendingChange> getCopied() {
+        return List.copyOf(this.copied.values());
+    }
+
+    public void removeCopy(String id) throws IOException {
+        PendingChange.Copied copy = this.copied.remove(id);
+        if (copy != null) {
+            Files.deleteIfExists(this.folders.mods().resolve(copy.jar()));
         }
     }
 

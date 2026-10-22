@@ -122,15 +122,6 @@ public final class TransformerChain {
         }
     }
 
-    boolean wraps(Collection<String> mods) {
-        for (String owner : this.owners) {
-            if (mods.contains(owner)) {
-                return true;
-            }
-        }
-        return false;
-    }
-
     Map<String, byte[]> getLoadedWhileOff() {
         return Map.copyOf(this.loadedWhileOff);
     }
