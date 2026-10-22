@@ -71,8 +71,8 @@ public final class FieldReferences {
             Function<String, Set<String>> handedTo, Function<String, List<String>> generatedBy) {
         this.instrumentation = instrumentation;
         this.originalBytes = originalBytes;
-        Wrappers.readOriginalsWith(originalBytes);
         this.mixinTargets = mixinTargets;
+        Wrappers.readTargetsWith(mixinTargets);
         this.handedTo = handedTo;
         this.lambdas = new Lambdas(instrumentation);
         this.recomputer = new StaticRecomputer(rebuilder, this.lambdas::findModOf, generatedBy);

@@ -16,6 +16,7 @@ import java.util.Set;
 import java.util.SortedSet;
 import java.util.TreeMap;
 import java.util.TreeSet;
+import java.util.function.Predicate;
 
 public final class ModGraph {
     private final Map<String, ModManifest> mods = new TreeMap<>();
@@ -28,7 +29,14 @@ public final class ModGraph {
 
     private final Map<String, SortedSet<String>> calls = new TreeMap<>();
 
+    private final Predicate<String> gameHas;
+
     public ModGraph(Collection<ModJar> jars) {
+        this(jars, type -> false);
+    }
+
+    public ModGraph(Collection<ModJar> jars, Predicate<String> gameHas) {
+        this.gameHas = gameHas;
         for (ModJar jar : jars) {
             this.add(jar, Optional.empty());
             this.installed.add(jar.manifest().id());
@@ -53,7 +61,7 @@ public final class ModGraph {
             int slash = type.lastIndexOf('/');
             String in = slash < 0 ? "" : type.substring(0, slash);
             String before = ownerOf.putIfAbsent(in, mod);
-            if (before != null && !before.equals(mod)) {
+            if (before == null ? this.gameHas.test(type) : !before.equals(mod)) {
                 shared.add(in);
             }
         }));

@@ -5,17 +5,12 @@ import java.lang.reflect.Method;
 import java.util.AbstractMap;
 import java.util.ArrayList;
 import java.util.Collection;
-import java.util.HashSet;
 import java.util.IdentityHashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
 import java.util.function.Function;
 import org.jspecify.annotations.Nullable;
-import org.objectweb.asm.ClassReader;
-import org.objectweb.asm.ClassVisitor;
-import org.objectweb.asm.FieldVisitor;
-import org.objectweb.asm.Opcodes;
 
 final class Wrappers {
     private static final int DEPTH = 9;
@@ -63,6 +58,16 @@ final class Wrappers {
     @SuppressWarnings("ReferenceEquality")
     private int reach(@Nullable Object value, IdentityHashMap<Object, Integer> known) {
         int further = DEPTH - this.open.size();
+
+        if (value instanceof Enum<?> constant) {
+            String owner = findThereFor(constant.getDeclaringClass(), this.mods);
+            if (owner != null) {
+                this.reached = this.reachedMod == null || owner.equals(this.reachedMod);
+                this.isOfTwo |= !this.reached;
+                this.reachedMod = this.reached ? owner : this.reachedMod;
+                return NONE_OPEN;
+            }
+        }
         if (value == null || value instanceof Class<?> || CollectionReferences.isPlain(value)
                 || known.getOrDefault(value, -1) >= further) {
             this.reached = false;
@@ -140,7 +145,7 @@ final class Wrappers {
         int rests = NONE_OPEN;
         boolean isOfTheMods = this.isOfTheMods(value.getClass());
         for (FieldSlots.Slot field : Fields.getReferenceFields(value.getClass(), false)) {
-            if (!isOfTheMods && this.isOfTheMods(field.getType()) && !isDeclaredBeforeMixins(field)) {
+            if (!isOfTheMods && this.isOfTheMods(field.getType()) && this.isAddedByTheirMixin(field)) {
                 continue;
             }
             try {
@@ -155,35 +160,20 @@ final class Wrappers {
         return rests;
     }
 
-    private static volatile Function<String, byte @Nullable []> originalBytes = name -> null;
+    private static volatile Function<String, Set<String>> targetsOf = mod -> Set.of();
 
-    private static final ClassValue<@Nullable Set<String>> DECLARED = new ClassValue<>() {
-        @Override
-        protected @Nullable Set<String> computeValue(Class<?> type) {
-            byte[] bytes = originalBytes.apply(type.getName().replace('.', '/'));
-            if (bytes == null) {
-                return null;
-            }
-            Set<String> names = new HashSet<>();
-            new ClassReader(bytes).accept(new ClassVisitor(Opcodes.ASM9) {
-                @Override
-                public @Nullable FieldVisitor visitField(int access, String name, String descriptor,
-                        @Nullable String signature, @Nullable Object value) {
-                    names.add(name);
-                    return null;
-                }
-            }, ClassReader.SKIP_CODE | ClassReader.SKIP_DEBUG | ClassReader.SKIP_FRAMES);
-            return Set.copyOf(names);
-        }
-    };
-
-    static void readOriginalsWith(Function<String, byte @Nullable []> bytes) {
-        originalBytes = bytes;
+    static void readTargetsWith(Function<String, Set<String>> targets) {
+        targetsOf = targets;
     }
 
-    private static boolean isDeclaredBeforeMixins(FieldSlots.Slot field) {
-        Set<String> declared = DECLARED.get(field.getDeclaringClass());
-        return declared != null && declared.contains(field.getName());
+    private boolean isAddedByTheirMixin(FieldSlots.Slot field) {
+        String owner = field.getDeclaringClass().getName().replace('.', '/');
+        for (String mod : this.mods) {
+            if (targetsOf.apply(mod).contains(owner)) {
+                return true;
+            }
+        }
+        return false;
     }
 
     private boolean isOfTheMods(Class<?> type) {

@@ -45,7 +45,7 @@ public final class InstalledMods {
                 }
             }
         }
-        this.graph = new ModGraph(this.jars);
+        this.graph = new ModGraph(this.jars, InstalledMods::isOfGame);
         this.graph.getIds().forEach(id -> {
             List<String> called = this.graph.getCalls(id).stream().filter(ModPolicy::isSwitchable)
                     .filter(this.graph::isInstalledOnItsOwn).toList();
@@ -54,6 +54,10 @@ public final class InstalledMods {
                         id, called);
             }
         });
+    }
+
+    private static boolean isOfGame(String type) {
+        return ClassLoader.getSystemResource(type + ".class") != null;
     }
 
     public synchronized ModGraph getGraph() {
@@ -95,7 +99,7 @@ public final class InstalledMods {
         more.forEach(jar -> addNestedIds(jar, inside));
         List<ModJar> all = new ArrayList<>(this.jars);
         more.stream().filter(jar -> !inside.contains(jar.manifest().id())).forEach(all::add);
-        return new ModGraph(all);
+        return new ModGraph(all, InstalledMods::isOfGame);
     }
 
     private static void addNestedIds(ModJar jar, Set<String> ids) {
@@ -112,7 +116,7 @@ public final class InstalledMods {
                 this.nestedAdded.add(nested);
             }
         }
-        this.graph = new ModGraph(this.jars);
+        this.graph = new ModGraph(this.jars, InstalledMods::isOfGame);
         this.topLevel.add(read.manifest().id());
         this.jarOf.put(read.manifest().id(), jar);
         this.addedThisSession.addAll(ids);
@@ -121,7 +125,7 @@ public final class InstalledMods {
     public synchronized void onUpdated(String id, Path jar, ModJar read) {
         this.jars.removeIf(old -> old.manifest().id().equals(id));
         this.jars.add(read);
-        this.graph = new ModGraph(this.jars);
+        this.graph = new ModGraph(this.jars, InstalledMods::isOfGame);
         this.jarOf.put(id, jar);
         this.updatedThisSession.add(id);
     }
