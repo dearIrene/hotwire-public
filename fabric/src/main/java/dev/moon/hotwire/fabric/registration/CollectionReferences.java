@@ -164,7 +164,12 @@ final class CollectionReferences {
             return mod;
         }
         String lambda = type.isHidden() ? lambdaOwner.apply(type) : null;
-        return lambda != null && this.modSet.contains(lambda) ? lambda : null;
+        if (lambda != null && this.modSet.contains(lambda)) {
+            return lambda;
+        }
+
+        String named = ReflectedOwners.findOwnerOf(type);
+        return named != null && this.modSet.contains(named) ? named : null;
     }
 
     private @Nullable String findOwnerOf(Object item) {

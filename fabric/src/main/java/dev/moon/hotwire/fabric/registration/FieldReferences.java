@@ -5,6 +5,8 @@ import dev.moon.hotwire.redefine.ClassRebuilder;
 import dev.moon.hotwire.redefine.FieldSlots;
 import dev.moon.hotwire.redefine.InitialValues;
 import dev.moon.hotwire.switching.SwitchTimes;
+import io.netty.channel.Channel;
+import io.netty.channel.ChannelHandler;
 import java.lang.instrument.Instrumentation;
 import java.lang.reflect.Field;
 import java.lang.reflect.Method;
@@ -78,6 +80,7 @@ public final class FieldReferences {
         this.recomputer = new StaticRecomputer(rebuilder, this.lambdas::findModOf, generatedBy);
         this.elements = new CollectionReferences(this::write);
         CollectionReferences.setLambdaOwners(this.lambdas::findModOf);
+        ReflectedOwners.readBytesWith(originalBytes);
     }
 
     public void takeOut(Collection<String> mods, Predicate<String> on) {
@@ -156,6 +159,9 @@ public final class FieldReferences {
         Map<String, Set<String>> used = scan.used();
         Map<String, List<Class<?>>> classesOf = scan.classesOf();
         Predicate<Class<?>> others = getOthers(mods, on);
+        Map<String, String> modOfName = new HashMap<>();
+        mods.forEach(mod -> classesOf.getOrDefault(mod, List.of()).forEach(type -> modOfName.put(type.getName(), mod)));
+        ReflectedOwners.useNames(modOfName);
         GameHold hold = GameHold.begin(Minecraft.getInstance());
         try {
             planned.forEach(this::putIn);
@@ -370,6 +376,7 @@ public final class FieldReferences {
                 || type.getName().startsWith("com.mojang."));
         List<Object> graph = new ArrayList<>(deep);
         graph.add(game);
+        List<Object> connected = findConnectionObjects();
         List<PlacedWrappers.Wrapper> placed = PlacedWrappers.find(graph);
         for (String mod : mods) {
             List<Replacement> mine = new ArrayList<>();
@@ -404,6 +411,7 @@ public final class FieldReferences {
 
             this.giveBack(game.getClass(), game, mod, mine, retained, true);
             List<Object> holders = new ArrayList<>(near);
+            holders.addAll(connected);
 
             BuiltInRegistries.CREATIVE_MODE_TAB.forEach(holders::add);
             Set<String> uses = named.getOrDefault(mod, Set.of());
@@ -442,6 +450,19 @@ public final class FieldReferences {
                     .map(one -> one.field().getDeclaringClass().getSimpleName() + "." + one.field().getName())
                     .toList());
         }
+    }
+
+    private static List<Object> findConnectionObjects() {
+        List<Object> found = new ArrayList<>();
+        for (Channel channel : NetworkHandlers.findChannels()) {
+            for (Map.Entry<String, ChannelHandler> handler : channel.pipeline()) {
+                if (handler.getValue().getClass().getName().startsWith("net.minecraft.")) {
+                    found.add(handler.getValue());
+                    found.addAll(findGameObjectsBelow(handler.getValue(), 2));
+                }
+            }
+        }
+        return found;
     }
 
     private static List<Object> findGameObjectsBelow(Object holder, int steps) {

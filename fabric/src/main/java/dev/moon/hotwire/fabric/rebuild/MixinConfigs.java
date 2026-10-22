@@ -37,19 +37,24 @@ public final class MixinConfigs {
     public static Map<String, ModMixins> of(List<ModJar> jars, Set<String> loaded) {
         ModManifest.Environment side = ModPolicy.getSide();
         Map<String, ModMixins> mixins = new HashMap<>();
-        jars.forEach(jar -> add(jar, side, loaded, mixins));
+        Map<String, ModMixins> otherVersions = new HashMap<>();
+        jars.forEach(jar -> add(jar, side, loaded, mixins, otherVersions));
+        otherVersions.forEach(mixins::putIfAbsent);
         return mixins;
     }
 
     private static void add(ModJar jar, ModManifest.Environment side, Set<String> loaded,
-            Map<String, ModMixins> into) {
-        if (!loaded.contains(jar.manifest().id())) {
-            LOGGER.info("[Hotwire] {} is in {} but the game did not load it; its mixins are left out",
-                    jar.manifest().id(), jar.name());
+            Map<String, ModMixins> into, Map<String, ModMixins> otherVersions) {
+        String id = jar.manifest().id();
+        if (!loaded.contains(id)) {
+            LOGGER.info("[Hotwire] {} is in {} but the game did not load it; its mixins are left out", id, jar.name());
             return;
         }
-        into.putIfAbsent(jar.manifest().id(), ModMixins.of(jar, side));
-        jar.nested().forEach(nested -> add(nested, side, loaded, into));
+        String running = FabricLoader.getInstance().getModContainer(id)
+                .map(mod -> mod.getMetadata().getVersion().getFriendlyString()).orElse(null);
+        (running == null || running.equals(jar.manifest().version()) ? into : otherVersions)
+                .putIfAbsent(id, ModMixins.of(jar, side));
+        jar.nested().forEach(nested -> add(nested, side, loaded, into, otherVersions));
     }
 
     public static Map<String, ModMixins> withCodeAdded(Map<String, ModMixins> mixins, List<Object> live) {
