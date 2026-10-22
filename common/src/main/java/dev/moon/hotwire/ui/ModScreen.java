@@ -165,7 +165,7 @@ public final class ModScreen {
         this.addPanel = new AddPanel(this::confirmAdd, game::addMod, this::closePanels);
         this.updatePanel = new UpdatePanel(this::confirmUpdate, game::updateMod, this::closePanels);
         this.advancedPanel = new AdvancedPanel(this::chooseAdvanced, this::closePanels);
-        this.pendingPanel = new PendingPanel(this::actOnPending, this::closePending);
+        this.pendingPanel = new PendingPanel(this::actOnPending, this::closePending, game::findIcon);
         this.reopenPanel = new ReopenPanel(offer -> {
             this.closePanels();
             Path jar = offer.jar();

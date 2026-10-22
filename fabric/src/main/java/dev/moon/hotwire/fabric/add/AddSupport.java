@@ -89,17 +89,22 @@ public final class AddSupport implements ModAdder.Engine {
         }
     }
 
-    public String queueToStay(Path jar) {
-        if (jar.toAbsolutePath().normalize().startsWith(this.folders.mods().toAbsolutePath().normalize())) {
+    public String copyIntoMods(Path jar) {
+        Path mods = this.folders.mods().toAbsolutePath().normalize();
+        if (jar.toAbsolutePath().normalize().startsWith(mods)) {
             return "";
         }
         try {
-            this.queueJar(jar);
-            return " Its jar goes into your mods folder when you close the game; cancel that any time from Pending"
-                    + " tasks.";
-        } catch (ModJarException | IOException e) {
-            return " Its jar could not be queued for your mods folder (" + e.getMessage() + "): copy it there to"
-                    + " have the mod at the next start.";
+            Path target = mods.resolve(String.valueOf(jar.getFileName()));
+            if (Files.exists(target) && !Files.isSameFile(target, jar)) {
+                return " A file named " + jar.getFileName() + " is in your mods folder already, so its jar was not"
+                        + " copied there: copy it there yourself to have the mod at the next start.";
+            }
+            Files.copy(jar, target);
+            return " Its jar is in your mods folder now.";
+        } catch (IOException e) {
+            return " Its jar could not be copied into your mods folder (" + e.getMessage() + "): copy it there to have"
+                    + " the mod at the next start.";
         }
     }
 

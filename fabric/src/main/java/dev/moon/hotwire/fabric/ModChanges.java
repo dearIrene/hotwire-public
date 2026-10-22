@@ -38,9 +38,9 @@ public final class ModChanges {
         return ready == null ? this.refusal : ready.adds().queue(jar);
     }
 
-    public String queueToStay(Path jar) {
+    public String copyIntoMods(Path jar) {
         HotwireEngine.JvmParts ready = this.parts;
-        return ready == null ? "" : ready.adds().queueToStay(jar);
+        return ready == null ? "" : ready.adds().copyIntoMods(jar);
     }
 
     public ModUpdater.Result updateNow(Path jar) {

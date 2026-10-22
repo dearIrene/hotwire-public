@@ -8,27 +8,40 @@ import java.util.ArrayList;
 import java.util.List;
 import java.util.Locale;
 import java.util.function.Consumer;
+import java.util.function.Function;
+import org.jspecify.annotations.Nullable;
 
 final class PendingPanel extends Panel {
     static final int WIDTH = 420;
     static final int LINE = 12;
     static final int ROW_GAP = 10;
     static final int REVERT_W = 120;
+    static final int ICON = 16;
+
+    static final int LINES_MOST = 4;
+
+    static final int TEXT_X = 14 + ICON + 8;
 
     private static final DateTimeFormatter QUEUED_AT = DateTimeFormatter.ofPattern("d MMM HH:mm", Locale.ROOT);
 
     private final Consumer<PendingChange> onAct;
+    private final Function<String, Canvas.@Nullable Image> icons;
     private final ZoneId zone;
+
+    private List<Integer> heights = List.of();
     private final List<Button> buttons = new ArrayList<>();
     private List<PendingChange> changes = List.of();
 
-    public PendingPanel(Consumer<PendingChange> onAct, Runnable onDone) {
-        this(onAct, onDone, ZoneId.systemDefault());
+    public PendingPanel(Consumer<PendingChange> onAct, Runnable onDone,
+            Function<String, Canvas.@Nullable Image> icons) {
+        this(onAct, onDone, icons, ZoneId.systemDefault());
     }
 
-    PendingPanel(Consumer<PendingChange> onAct, Runnable onDone, ZoneId zone) {
+    PendingPanel(Consumer<PendingChange> onAct, Runnable onDone, Function<String, Canvas.@Nullable Image> icons,
+            ZoneId zone) {
         super("Done", onDone);
         this.onAct = onAct;
+        this.icons = icons;
         this.zone = zone;
     }
 
@@ -83,14 +96,15 @@ final class PendingPanel extends Panel {
         return " Queued " + QUEUED_AT.format(Instant.ofEpochMilli(update.queuedAtMillis()).atZone(this.zone)) + ".";
     }
 
-    private int getRowHeight(PendingChange change) {
-        return LINE + LINE * this.getLinesOf(change).size() + ROW_GAP;
+    private int getRowHeight(int at, PendingChange change) {
+        return at < this.heights.size() ? this.heights.get(at)
+                : Math.max(BUTTON_H, LINE + LINE * this.getLinesOf(change).size()) + ROW_GAP;
     }
 
     private int getContentHeight() {
         int height = 0;
-        for (PendingChange change : this.changes) {
-            height += this.getRowHeight(change);
+        for (int at = 0; at < this.changes.size(); at++) {
+            height += this.getRowHeight(at, this.changes.get(at));
         }
         return this.changes.isEmpty() ? LINE + ROW_GAP : height;
     }
@@ -110,7 +124,7 @@ final class PendingPanel extends Panel {
             button.setBounds(x + w - 14 - bw, rowY - 2, bw, BUTTON_H);
             button.setAlpha(s > 0.5f ? 1 : 0);
             button.setActive(this.open() && s > 0.9f);
-            rowY += this.getRowHeight(change);
+            rowY += this.getRowHeight(at, change);
         }
     }
 
@@ -122,23 +136,34 @@ final class PendingPanel extends Panel {
             canvas.drawText("Nothing is waiting for the next start.", x + 14, rowY, Colors.fade(Palette.DIM, alpha));
             return;
         }
+        List<Integer> drawn = new ArrayList<>();
         for (PendingChange change : this.changes) {
             int bw = change instanceof PendingChange.Revertable ? REVERT_W : BUTTON_W;
-            int room = w - 28 - bw - 8;
+            int room = w - TEXT_X - 14 - bw - 8;
+            Canvas.Image icon = this.icons.apply(change.modId());
+            if (icon == null || !canvas.drawImage(icon, x + 14, rowY - 2, ICON, ICON, alpha)) {
+                canvas.fill(x + 14, rowY - 2, x + 14 + ICON, rowY - 2 + ICON, Colors.fade(Palette.DIM & 0x40FFFFFF,
+                        alpha));
+            }
             String name = canvas.clip(change.name(), room);
-            canvas.drawText(name, x + 14, rowY, Colors.fade(Palette.TEXT, alpha));
+            canvas.drawText(name, x + TEXT_X, rowY, Colors.fade(Palette.TEXT, alpha));
             if (change instanceof PendingChange.Update update && !update.fromVersion().isEmpty()) {
                 int nameW = canvas.measureText(name) + 8;
                 canvas.drawText(canvas.clip(update.fromVersion() + " to " + update.toVersion(), room - nameW),
-                        x + 14 + nameW, rowY, Colors.fade(Palette.DIM, alpha));
+                        x + TEXT_X + nameW, rowY, Colors.fade(Palette.DIM, alpha));
             }
             int lineY = rowY + LINE;
             for (Line line : this.getLinesOf(change)) {
-                canvas.drawText(canvas.clip(line.text(), w - 28), x + 14, lineY, Colors.fade(line.color(), alpha));
-                lineY += LINE;
+                for (String part : MessageLine.wrap(canvas, line.text(), room, LINES_MOST)) {
+                    canvas.drawText(part, x + TEXT_X, lineY, Colors.fade(line.color(), alpha));
+                    lineY += LINE;
+                }
             }
-            rowY += this.getRowHeight(change);
+            int height = Math.max(BUTTON_H, lineY - rowY) + ROW_GAP;
+            drawn.add(height);
+            rowY += height;
         }
+        this.heights = drawn;
     }
 
     record Line(String text, int color) {

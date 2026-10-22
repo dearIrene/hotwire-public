@@ -499,7 +499,7 @@ public final class HotwireEngine implements ModScreen.Game, AutoCloseable {
                         preview.name(), preview.version(), why)));
             } else {
                 this.showMessage(switch (result) {
-                    case ModAdder.Result.Added added -> added.name() + " is in." + this.changes.queueToStay(jar);
+                    case ModAdder.Result.Added added -> added.name() + " is in." + this.changes.copyIntoMods(jar);
                     case ModAdder.Result.Refused refused -> refused.reason();
                     case ModAdder.Result.Failed failed -> failed.reason();
                 }, !(result instanceof ModAdder.Result.Added));
