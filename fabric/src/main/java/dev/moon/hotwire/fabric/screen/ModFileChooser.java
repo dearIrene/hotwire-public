@@ -22,7 +22,7 @@ public final class ModFileChooser {
     private ModFileChooser() {
     }
 
-    public static void choose(Consumer<Path> picked) {
+    public static void choose(Consumer<Path> picked, Runnable unavailable) {
         String start = findStartFolder();
         //? if >=26.3 {
         ByteBuffer name = MemoryUtil.memUTF8("Mod jars");
@@ -31,6 +31,9 @@ public final class ModFileChooser {
         filters.get(0).name(name).pattern(pattern);
         SDL_DialogFileCallback[] callback = new SDL_DialogFileCallback[1];
         callback[0] = SDL_DialogFileCallback.create((userdata, files, filter) -> {
+            if (files == 0) {
+                Minecraft.getInstance().execute(unavailable);
+            }
             String path = files == 0 ? null : MemoryUtil.memUTF8Safe(MemoryUtil.memGetAddress(files));
             filters.free();
             MemoryUtil.memFree(name);
@@ -43,11 +46,16 @@ public final class ModFileChooser {
         //?} else {
         /*// tinyfd waits for the player: it asks on a thread of its own, and the game draws on.
         Thread asking = new Thread(() -> {
+            long began = System.nanoTime();
+            long noWindowNanos = 1_500_000_000L;
             String path;
             try (MemoryStack stack = MemoryStack.stackPush()) {
                 PointerBuffer patterns = stack.mallocPointer(1);
                 patterns.put(stack.UTF8("*.jar")).flip();
                 path = TinyFileDialogs.tinyfd_openFileDialog("Add a mod", start, patterns, "Mod jars", false);
+            }
+            if (path == null && System.nanoTime() - began < noWindowNanos) {
+                Minecraft.getInstance().execute(unavailable);
             }
             deliver(path, picked);
         }, "hotwire-file-chooser");

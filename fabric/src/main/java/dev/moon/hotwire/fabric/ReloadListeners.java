@@ -6,21 +6,22 @@ import java.util.ArrayList;
 import java.util.List;
 import net.minecraft.client.Minecraft;
 import net.minecraft.client.gui.font.FontManager;
-import net.minecraft.client.renderer.LevelRenderer;
+//? if <26.1 {
+/*import net.minecraft.client.renderer.LevelRenderer;
+*///?}
 import net.minecraft.client.renderer.texture.TextureManager;
 import net.minecraft.client.resources.language.LanguageManager;
-import net.minecraft.client.resources.model.ModelManager;
-//? if >=26.1 {
-import net.minecraft.client.resources.model.sprite.AtlasManager;
-//?}
+//? if <26.1 {
+/*import net.minecraft.client.resources.model.ModelManager;
+*///?}
 import net.minecraft.client.sounds.SoundManager;
 import net.minecraft.server.packs.resources.PreparableReloadListener;
 import org.jspecify.annotations.Nullable;
 
 final class ReloadListeners {
     //? if >=26.1 {
-    private static final List<Class<?>> BESIDE_RENDERERS = List.of(ModelManager.class, SoundManager.class,
-            FontManager.class, LanguageManager.class, TextureManager.class, LevelRenderer.class, AtlasManager.class);
+    private static final List<Class<?>> BESIDE_RENDERERS = List.of(SoundManager.class, FontManager.class,
+            LanguageManager.class, TextureManager.class);
     //?} else {
     /*private static final List<Class<?>> BESIDE_RENDERERS = List.of(ModelManager.class, SoundManager.class,
             FontManager.class, LanguageManager.class, TextureManager.class, LevelRenderer.class);

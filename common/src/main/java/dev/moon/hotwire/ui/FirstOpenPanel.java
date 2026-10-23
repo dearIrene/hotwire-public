@@ -19,6 +19,8 @@ final class FirstOpenPanel extends Panel {
     private final Runnable onAccept;
     private float waited;
 
+    private long inSince;
+
     @SuppressWarnings("this-escape")
     public FirstOpenPanel(Runnable onAccept) {
         super(null);
@@ -29,6 +31,7 @@ final class FirstOpenPanel extends Panel {
 
     void present() {
         this.waited = 0;
+        this.inSince = 0;
         this.show();
     }
 
@@ -47,7 +50,11 @@ final class FirstOpenPanel extends Panel {
     @Override
     public void step(float dt) {
         if (this.open() && this.getShown() > 0.9f) {
-            this.waited = Math.min(WAIT, this.waited + dt);
+            long now = System.nanoTime();
+            if (this.inSince == 0) {
+                this.inSince = now;
+            }
+            this.waited = Math.min(WAIT, Math.max(this.waited + dt, (now - this.inSince) / 1e9f));
         }
         this.size(WIDTH, 58 + LINES.size() * LINE + 44);
         this.setPrimaryLabel(this.getLabel());

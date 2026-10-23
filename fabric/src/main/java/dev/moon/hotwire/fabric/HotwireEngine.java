@@ -461,13 +461,17 @@ public final class HotwireEngine implements ModScreen.Game, AutoCloseable {
 
     @Override
     public void addMod() {
-        this.showMessage("Pick the mod's .jar file, or drop it onto this screen.", false);
+        this.pickJar("Pick the mod's .jar file, or drop it onto this screen.", false);
+    }
+
+    private void pickJar(String ask, boolean update) {
+        this.showMessage(ask, false);
         ModFileChooser.choose(jar -> {
             ModScreen current = this.screen;
             if (current != null) {
-                current.onJarPicked(jar, false);
+                current.onJarPicked(jar, update);
             }
-        });
+        }, this::tellNoPicker);
     }
 
     @Override
@@ -528,13 +532,11 @@ public final class HotwireEngine implements ModScreen.Game, AutoCloseable {
 
     @Override
     public void updateMod() {
-        this.showMessage("Pick the newer .jar file, or drop it onto this screen.", false);
-        ModFileChooser.choose(jar -> {
-            ModScreen current = this.screen;
-            if (current != null) {
-                current.onJarPicked(jar, true);
-            }
-        });
+        this.pickJar("Pick the newer .jar file, or drop it onto this screen.", true);
+    }
+
+    private void tellNoPicker() {
+        this.showMessage("No file picker opened on this system. Drop the .jar file onto this screen instead.", true);
     }
 
     @Override

@@ -77,7 +77,7 @@ class Panel extends Element {
             this.change = null;
         }
         if (action != null) {
-            this.change = this.add(new Button("Change", false, action));
+            this.change = this.add(new Button("Pick another", false, action));
         }
     }
 
