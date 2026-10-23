@@ -53,10 +53,6 @@ final class Dropdown extends Element {
         return this.menu.open();
     }
 
-    float getOpenness() {
-        return this.openness.getValue();
-    }
-
     @Override
     protected void layOut() {
         this.placeMenu();

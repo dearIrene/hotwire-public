@@ -137,10 +137,6 @@ public final class ModList extends Element {
         return this.animation.getScrollTarget();
     }
 
-    float getScrollShown() {
-        return this.animation.getScroll();
-    }
-
     void scrollTo(float target) {
         this.animation.scrollTo(target);
     }
@@ -152,10 +148,6 @@ public final class ModList extends Element {
 
     @Nullable ModListRow findRowFor(String id) {
         return this.rows.get(id);
-    }
-
-    boolean isPainting() {
-        return this.painting != 0;
     }
 
     public void setWish(String id, boolean on) {

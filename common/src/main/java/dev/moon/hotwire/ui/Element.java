@@ -12,7 +12,6 @@ public class Element {
     private int width;
     private int height;
     private boolean visible = true;
-    private boolean clips;
     private float alpha = 1;
     private boolean hovered;
     private boolean focused;
@@ -79,10 +78,6 @@ public class Element {
         this.alpha = alpha;
     }
 
-    void setClips(boolean clips) {
-        this.clips = clips;
-    }
-
     public boolean isHovered() {
         return this.hovered;
     }
@@ -128,14 +123,8 @@ public class Element {
             return;
         }
         this.paint(canvas, shown);
-        if (this.clips) {
-            canvas.pushClip(this.x, this.y, this.x + this.width, this.y + this.height);
-        }
         for (Element child : this.children) {
             child.draw(canvas, shown);
-        }
-        if (this.clips) {
-            canvas.popClip();
         }
         this.paintOver(canvas, shown);
     }

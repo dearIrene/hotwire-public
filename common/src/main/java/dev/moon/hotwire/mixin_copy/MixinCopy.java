@@ -95,12 +95,6 @@ public final class MixinCopy implements AutoCloseable {
         this.decorations = new Decorations(modIds, levels, this.decorations.orders());
     }
 
-    public boolean canReuse() {
-        synchronized (BOOTING) {
-            return this.reusable != null;
-        }
-    }
-
     public record MixResult(Map<String, byte[]> classes, Map<String, String> argsShapes,
             Map<String, byte[]> generated) {
         public MixResult {

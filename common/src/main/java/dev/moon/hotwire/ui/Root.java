@@ -50,10 +50,6 @@ public final class Root {
         return isAnyOpen(this.menus);
     }
 
-    void closeMenus() {
-        this.menus.getChildren().stream().filter(Element::open).forEach(Element::dismiss);
-    }
-
     void hover(double x, double y) {
         List<Element> path = new ArrayList<>();
         if (this.isModalOpen()) {

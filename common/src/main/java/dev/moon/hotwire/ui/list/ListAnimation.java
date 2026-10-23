@@ -87,10 +87,6 @@ public final class ListAnimation {
         this.window = rows;
     }
 
-    float getWindowSize() {
-        return this.window;
-    }
-
     float getScroll() {
         return this.scrollShown;
     }

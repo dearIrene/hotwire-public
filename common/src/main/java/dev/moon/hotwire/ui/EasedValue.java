@@ -5,12 +5,10 @@ public final class EasedValue {
 
     private final boolean timed;
     private final float rate;
-    private float delay;
     private float value;
     private float target;
     private float from;
     private float elapsed;
-    private float waited;
     private boolean seen;
 
     private EasedValue(boolean timed, float rate) {
@@ -34,11 +32,6 @@ public final class EasedValue {
         return from + (to - from) * factor;
     }
 
-    EasedValue withDelay(float seconds) {
-        this.delay = seconds;
-        return this;
-    }
-
     public void to(float target) {
         if (!this.seen) {
             this.snap(target);
@@ -50,7 +43,6 @@ public final class EasedValue {
         this.target = target;
         this.from = this.value;
         this.elapsed = 0;
-        this.waited = 0;
     }
 
     void snap(float value) {
@@ -59,19 +51,11 @@ public final class EasedValue {
         this.target = value;
         this.from = value;
         this.elapsed = 0;
-        this.waited = this.delay;
     }
 
     public void step(float dt) {
         if (this.isAtRest()) {
             return;
-        }
-        if (this.waited < this.delay) {
-            this.waited += dt;
-            if (this.waited < this.delay) {
-                return;
-            }
-            dt = this.waited - this.delay;
         }
         if (this.timed) {
             this.elapsed += dt;

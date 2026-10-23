@@ -50,14 +50,6 @@ final class TextField extends Element {
         this.anchor = this.cursor;
     }
 
-    int getCursor() {
-        return this.cursor;
-    }
-
-    String getSelected() {
-        return this.text.substring(Math.min(this.cursor, this.anchor), Math.max(this.cursor, this.anchor));
-    }
-
     @Override
     public void step(float dt) {
         this.clock += dt;

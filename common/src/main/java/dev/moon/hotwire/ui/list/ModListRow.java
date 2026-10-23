@@ -97,18 +97,6 @@ final class ModListRow {
         return this.pick;
     }
 
-    float getOnness() {
-        return this.onness;
-    }
-
-    float getJustChanged() {
-        return this.justChanged;
-    }
-
-    float getChildness() {
-        return this.childness;
-    }
-
     @Nullable Boolean getWish() {
         return this.wish;
     }

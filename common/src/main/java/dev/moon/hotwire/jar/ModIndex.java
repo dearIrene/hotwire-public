@@ -11,7 +11,6 @@ import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.CompletionException;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.Executor;
-import java.util.concurrent.atomic.AtomicInteger;
 import java.util.stream.Stream;
 
 public final class ModIndex {
@@ -19,7 +18,6 @@ public final class ModIndex {
 
     private final Executor readers;
     private final Map<Path, CacheEntry> cache = new ConcurrentHashMap<>();
-    private final AtomicInteger reads = new AtomicInteger();
 
     public ModIndex(Executor readers) {
         this.readers = readers;
@@ -50,10 +48,6 @@ public final class ModIndex {
 
         record Refused(ModJarException reason) implements Result {
         }
-    }
-
-    int countReads() {
-        return this.reads.get();
     }
 
     public Snapshot scan(Path folder) throws IOException {
@@ -92,7 +86,6 @@ public final class ModIndex {
             return CompletableFuture.completedFuture(cached.result());
         }
         return CompletableFuture.supplyAsync(() -> {
-            this.reads.incrementAndGet();
             Result result;
             try {
                 result = new Result.Read(ModJarReader.read(file));

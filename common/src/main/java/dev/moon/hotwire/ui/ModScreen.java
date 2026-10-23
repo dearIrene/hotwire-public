@@ -270,10 +270,6 @@ public final class ModScreen {
         }
     }
 
-    void onNothingPicked() {
-        this.showMessage("Nothing was picked.", false);
-    }
-
     public void onFilesDropped(List<Path> files) {
         if (this.game.getProgress().isBusy()) {
             this.showMessage("Wait for this to finish, then drop the jar again.", false);
