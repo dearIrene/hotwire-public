@@ -16,6 +16,7 @@ import java.io.UncheckedIOException;
 import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
 import java.nio.file.Path;
+import java.nio.file.StandardOpenOption;
 import java.time.Instant;
 import java.time.LocalTime;
 import java.time.ZoneId;
@@ -38,6 +39,7 @@ import java.util.concurrent.Executors;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.TimeoutException;
 import java.util.concurrent.atomic.AtomicInteger;
+import java.util.function.Consumer;
 import java.util.function.Function;
 import java.util.stream.Stream;
 import net.fabricmc.loader.api.FabricLoader;
@@ -82,6 +84,35 @@ public final class GameReports {
                 System.getProperty("os.name", "") + " " + System.getProperty("os.version", ""),
                 "launcher agent", Map.of());
         current = this;
+    }
+
+    private static volatile Consumer<Path> crashSaved = file -> { };
+
+    public static void listenForCrashes(Consumer<Path> listener) {
+        crashSaved = listener;
+    }
+
+    public static void tellCrashSaved(Path file) {
+        crashSaved.accept(file);
+    }
+
+    void markReported(Path crash) {
+        Path list = FabricLoader.getInstance().getGameDir().resolve("hotwire").resolve("reported-crashes.txt");
+        try {
+            Files.createDirectories(list.getParent());
+            Files.writeString(list, crash.getFileName() + System.lineSeparator(), StandardOpenOption.CREATE,
+                    StandardOpenOption.APPEND);
+        } catch (IOException e) {
+            LOGGER.warn("[Hotwire] could not keep the name of the reported crash", e);
+        }
+    }
+
+    private static Set<String> readReported(Path game) {
+        try {
+            return Set.copyOf(Files.readAllLines(game.resolve("hotwire").resolve("reported-crashes.txt")));
+        } catch (IOException e) {
+            return Set.of();
+        }
     }
 
     public static CrashSection getCrashSection() {
@@ -250,7 +281,9 @@ public final class GameReports {
         try {
             if (Files.isRegularFile(marker)) {
                 Instant last = Instant.parse(Files.readString(marker).strip());
-                crash = listWrittenAfter(game.resolve("crash-reports"), ".txt", last).stream().filter(file -> {
+                Set<String> reported = readReported(game);
+                crash = listWrittenAfter(game.resolve("crash-reports"), ".txt", last).stream()
+                        .filter(file -> !reported.contains(String.valueOf(file.getFileName()))).filter(file -> {
                     try {
                         return Files.getLastModifiedTime(file).toInstant().isBefore(this.began);
                     } catch (IOException e) {

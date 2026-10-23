@@ -34,6 +34,12 @@ public final class ReportZips {
                 + crash.getFileName() + ").", List.of(crash)));
     }
 
+    public String writeForCrash(Path crash) {
+        String where = this.write("The game crashed (" + crash.getFileName() + ").", List.of());
+        this.reports.markReported(crash);
+        return where;
+    }
+
     private String write(String why, List<Path> extra) {
         StringBuilder mods = new StringBuilder();
         for (ModStatus mod : this.mods.get()) {

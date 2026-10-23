@@ -454,6 +454,9 @@ public final class HotwireEngine implements ModScreen.Game, AutoCloseable {
         this.tasks.submit("report of the last session's crash", this.zips::findLastSessionCrash,
                 where -> where.ifPresent(words -> ModViews.showToast("Hotwire wrote a report about the last crash",
                         words)));
+        GameReports.listenForCrashes(crash -> this.tasks.submit("report of " + crash.getFileName(),
+                () -> this.zips.writeForCrash(crash), words -> ModViews.showToast("Hotwire wrote a report about the"
+                        + " crash", words)));
     }
 
     @Override
