@@ -26,6 +26,7 @@ import java.util.zip.ZipFile;
 import org.jspecify.annotations.Nullable;
 import org.objectweb.asm.ClassReader;
 import org.objectweb.asm.ClassWriter;
+import org.objectweb.asm.Opcodes;
 import org.objectweb.asm.tree.ClassNode;
 import org.objectweb.asm.tree.FieldNode;
 import org.objectweb.asm.tree.MethodNode;
@@ -141,6 +142,10 @@ public final class UpdateDiffer {
         now.forEach(m -> after.put(m.name + m.desc, m.access & FLAGS));
         compareMembers(before, after, shape, ShapeChange.METHOD_ADDED, ShapeChange.METHOD_REMOVED,
                 ShapeChange.METHOD_MODIFIERS);
+        if (now.stream().anyMatch(m -> !before.containsKey(m.name + m.desc)
+                && (m.access & (Opcodes.ACC_ABSTRACT | Opcodes.ACC_NATIVE)) != 0)) {
+            shape.add(ShapeChange.BODILESS_METHOD_ADDED);
+        }
     }
 
     private static void compareMembers(Map<String, Integer> before, Map<String, Integer> after,

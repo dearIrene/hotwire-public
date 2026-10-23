@@ -47,6 +47,8 @@ public record JarDiff(ModManifest running, ModManifest incoming, List<ClassDiff>
         FIELD_ORDER(true),
         FIELD_MODIFIERS(false),
         METHOD_ADDED(true),
+
+        BODILESS_METHOD_ADDED(false),
         METHOD_REMOVED(true),
         METHOD_MODIFIERS(false),
         NEST(false),
