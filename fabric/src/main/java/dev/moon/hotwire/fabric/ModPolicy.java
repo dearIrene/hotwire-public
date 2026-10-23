@@ -32,7 +32,7 @@ public final class ModPolicy {
 
     static boolean isGuarded(String id) {
         return id.equals(HotwireClient.ID) || id.startsWith(HotwireClient.ID + "-") || isFabricApi(id)
-                || ALWAYS_ON.contains(id);
+                || ALWAYS_ON.contains(id) || NEVER_TOUCHED.contains(id);
     }
 
     public static boolean isFabricApi(String id) {
@@ -62,7 +62,7 @@ public final class ModPolicy {
     }
 
     public static boolean isSwitchable(String id) {
-        return !isGuarded(id) && !BUILT_IN.contains(id) && !NEVER_TOUCHED.contains(id);
+        return !isGuarded(id) && !BUILT_IN.contains(id);
     }
 
     public static boolean satisfies(String version, List<String> ranges) {
