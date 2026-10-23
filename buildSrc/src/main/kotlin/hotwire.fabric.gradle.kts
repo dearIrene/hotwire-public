@@ -16,8 +16,10 @@ val commit = git("rev-parse", "--short=10", "HEAD").ifEmpty { "unknown" }
 val dirty = git("status", "--porcelain", "--", rootProject.projectDir.path).isNotEmpty()
 val committed = git("show", "-s", "--format=%cI", "HEAD")
 
-version = if (hasProperty("release")) "${property("mod_version")}+mc$minecraft"
-else "${property("mod_version")}+mc$minecraft.$commit" + if (dirty) "-dirty" else ""
+val build = git("rev-list", "--count", "--since=${property("version_since")}", "HEAD").ifEmpty { "0" }
+val stageVersion = "${property("mod_version")}.$build"
+version = if (hasProperty("release")) "$stageVersion+mc$minecraft"
+else "$stageVersion+mc$minecraft.$commit" + if (dirty) "-dirty" else ""
 base.archivesName = "hotwire"
 
 tasks.withType<JavaCompile>().configureEach {
