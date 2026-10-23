@@ -4,6 +4,7 @@ import dev.moon.hotwire.ui.list.ModStatus;
 import java.io.IOException;
 import java.nio.file.Path;
 import java.util.List;
+import java.util.Locale;
 import java.util.Optional;
 import java.util.function.Predicate;
 import java.util.function.Supplier;
@@ -42,11 +43,28 @@ public final class ReportZips {
         }
         try {
             Path zip = this.reports.writeBundle(why, mods.toString(), extra);
+            reveal(zip);
             return "The report is at " + FabricLoader.getInstance().getGameDir().relativize(zip)
                     + "; send that one file.";
         } catch (IOException e) {
             LOGGER.warn("[Hotwire] the report could not be written", e);
             return "The report could not be written: " + e.getMessage();
+        }
+    }
+
+    private static void reveal(Path zip) {
+        if (System.getProperty("hotwire.oneclient") != null) {
+            return;
+        }
+        String os = System.getProperty("os.name", "").toLowerCase(Locale.ROOT);
+        String file = zip.toAbsolutePath().toString();
+        List<String> command = os.contains("win") ? List.of("explorer.exe", "/select," + file)
+                : os.contains("mac") ? List.of("open", "-R", file)
+                : List.of("xdg-open", String.valueOf(zip.toAbsolutePath().getParent()));
+        try {
+            new ProcessBuilder(command).start();
+        } catch (IOException e) {
+            LOGGER.info("[Hotwire] the reports folder could not be opened: {}", e.toString());
         }
     }
 }
