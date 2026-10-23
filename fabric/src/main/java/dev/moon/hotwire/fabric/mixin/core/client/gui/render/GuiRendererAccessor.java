@@ -20,14 +20,12 @@ public interface GuiRendererAccessor {
     }
 }
 //?} else {
-/*import org.spongepowered.asm.mixin.Mixin;
-import org.spongepowered.asm.mixin.Pseudo;
+/*import net.minecraft.client.Minecraft;
+import org.spongepowered.asm.mixin.Mixin;
 
-@Pseudo
-@Mixin(targets = "hotwire.Absent", remap = false)
+@Mixin(Minecraft.class)
 public interface GuiRendererAccessor {
-    @Pseudo
-    @Mixin(targets = "hotwire.Absent", remap = false)
+    @Mixin(Minecraft.class)
     interface Owner {
     }
 }

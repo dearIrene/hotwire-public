@@ -8,18 +8,25 @@ import java.lang.reflect.Field;
 import java.lang.reflect.Modifier;
 import java.util.HashSet;
 import java.util.LinkedHashMap;
+import java.util.LinkedHashSet;
 import java.util.Map;
 import java.util.Set;
 import java.util.function.Supplier;
 import java.util.regex.Pattern;
 import org.jspecify.annotations.Nullable;
+import org.objectweb.asm.ClassReader;
+import org.objectweb.asm.ClassVisitor;
+import org.objectweb.asm.FieldVisitor;
 import org.objectweb.asm.Opcodes;
 import org.objectweb.asm.Type;
 import org.objectweb.asm.tree.AbstractInsnNode;
 import org.objectweb.asm.tree.ClassNode;
 import org.objectweb.asm.tree.FieldInsnNode;
+import org.objectweb.asm.tree.FieldNode;
 import org.objectweb.asm.tree.InsnList;
 import org.objectweb.asm.tree.InsnNode;
+import org.objectweb.asm.tree.JumpInsnNode;
+import org.objectweb.asm.tree.LabelNode;
 import org.objectweb.asm.tree.MethodInsnNode;
 import org.objectweb.asm.tree.MethodNode;
 import org.slf4j.Logger;
@@ -72,6 +79,71 @@ final class ChangedStatics {
             MethodNode method = new MethodNode(Opcodes.ACC_PRIVATE | Opcodes.ACC_STATIC | Opcodes.ACC_SYNTHETIC,
                     PREFIX + put.name, "()" + put.desc, null, null);
             method.instructions.add(slice);
+            now.methods.add(method);
+            recomputed.put(put.name, put.desc);
+        });
+        return recomputed;
+    }
+
+    static boolean hasAddedObjectStatics(byte[] mixed, byte[] first) {
+        Set<String> had = readObjectStatics(first);
+        return !had.containsAll(readObjectStatics(mixed));
+    }
+
+    private static Set<String> readObjectStatics(byte[] bytes) {
+        Set<String> found = new HashSet<>();
+        new ClassReader(bytes).accept(new ClassVisitor(Opcodes.ASM9) {
+            @Override
+            public @Nullable FieldVisitor visitField(int access, String name, String descriptor,
+                    @Nullable String signature, @Nullable Object value) {
+                if ((access & Opcodes.ACC_STATIC) != 0 && (descriptor.startsWith("L") || descriptor.startsWith("["))) {
+                    found.add(name + descriptor);
+                }
+                return null;
+            }
+        }, ClassReader.SKIP_CODE | ClassReader.SKIP_DEBUG | ClassReader.SKIP_FRAMES);
+        return found;
+    }
+
+    static Map<String, String> addMadeFresh(ClassNode now, ClassNode first) {
+        Set<String> had = new HashSet<>();
+        for (FieldNode field : first.fields) {
+            had.add(field.name + field.desc);
+        }
+        Set<String> made = new HashSet<>();
+        for (MethodNode method : now.methods) {
+            made.add(method.name);
+        }
+        Set<String> fresh = new LinkedHashSet<>();
+        for (FieldNode field : now.fields) {
+            if ((field.access & Opcodes.ACC_STATIC) != 0 && (field.desc.startsWith("L") || field.desc.startsWith("["))
+                    && !had.contains(field.name + field.desc) && !made.contains(PREFIX + field.name)) {
+                fresh.add(field.name + field.desc);
+            }
+        }
+        Map<String, String> recomputed = new LinkedHashMap<>();
+        if (fresh.isEmpty()) {
+            return recomputed;
+        }
+        FieldInitializers.findStaticSlices(now.name, now, fresh).forEach((field, slice) -> {
+            AbstractInsnNode store = slice.getLast();
+            if (!(store instanceof FieldInsnNode put) || put.getOpcode() != Opcodes.PUTSTATIC) {
+                return;
+            }
+            slice.set(store, new InsnNode(Opcodes.ARETURN));
+
+            InsnList body = new InsnList();
+            LabelNode empty = new LabelNode();
+            body.add(new FieldInsnNode(Opcodes.GETSTATIC, now.name, put.name, put.desc));
+            body.add(new InsnNode(Opcodes.DUP));
+            body.add(new JumpInsnNode(Opcodes.IFNULL, empty));
+            body.add(new InsnNode(Opcodes.ARETURN));
+            body.add(empty);
+            body.add(new InsnNode(Opcodes.POP));
+            body.add(slice);
+            MethodNode method = new MethodNode(Opcodes.ACC_PRIVATE | Opcodes.ACC_STATIC | Opcodes.ACC_SYNTHETIC,
+                    PREFIX + put.name, "()" + put.desc, null, null);
+            method.instructions.add(body);
             now.methods.add(method);
             recomputed.put(put.name, put.desc);
         });

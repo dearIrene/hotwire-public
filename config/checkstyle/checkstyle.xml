@@ -14,6 +14,7 @@
         <module name="NoFinalizer"/>
         <module name="AvoidStarImport"/>
         <module name="UnusedImports"/>
+        <module name="UnnecessaryFullyQualifiedType"/>
         <module name="IllegalImport"/>
         <module name="RegexpSinglelineJava">
             <property name="format" value="System\.(out|err)\.|\.printStackTrace\(\)"/>

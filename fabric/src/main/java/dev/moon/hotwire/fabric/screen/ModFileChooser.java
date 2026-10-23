@@ -46,16 +46,15 @@ public final class ModFileChooser {
         //?} else {
         /*// tinyfd waits for the player: it asks on a thread of its own, and the game draws on.
         Thread asking = new Thread(() -> {
-            long began = System.nanoTime();
-            long noWindowNanos = 1_500_000_000L;
+            if (!hasWindow()) {
+                Minecraft.getInstance().execute(unavailable);
+                return;
+            }
             String path;
             try (MemoryStack stack = MemoryStack.stackPush()) {
                 PointerBuffer patterns = stack.mallocPointer(1);
                 patterns.put(stack.UTF8("*.jar")).flip();
                 path = TinyFileDialogs.tinyfd_openFileDialog("Add a mod", start, patterns, "Mod jars", false);
-            }
-            if (path == null && System.nanoTime() - began < noWindowNanos) {
-                Minecraft.getInstance().execute(unavailable);
             }
             deliver(path, picked);
         }, "hotwire-file-chooser");
@@ -63,6 +62,32 @@ public final class ModFileChooser {
         asking.start();
         *///?}
     }
+
+    //? if >=26.1 && <26.3 {
+    /*// Whether tinyfd has a window to show: a message box titled "tinyfd_query" opens nothing and answers 0 when no
+    private static volatile @Nullable Boolean window;
+
+    private static boolean hasWindow() {
+        Boolean known = window;
+        if (known == null) {
+            known = TinyFileDialogs.tinyfd_messageBox("tinyfd_query", "", "ok", "info", 1) != 0;
+            window = known;
+        }
+        return known;
+    }
+    *///?} else if <26.1 {
+    /*// Whether tinyfd has a window to show: a message box titled "tinyfd_query" opens nothing and answers 0 when no
+    private static volatile @Nullable Boolean window;
+
+    private static boolean hasWindow() {
+        Boolean known = window;
+        if (known == null) {
+            known = TinyFileDialogs.tinyfd_messageBox("tinyfd_query", "", "ok", "info", true);
+            window = known;
+        }
+        return known;
+    }
+    *///?}
 
     private static void deliver(@Nullable String path, Consumer<Path> picked) {
         if (path != null && !path.isBlank()) {

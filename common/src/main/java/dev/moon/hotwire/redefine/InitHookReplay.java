@@ -121,7 +121,7 @@ public final class InitHookReplay {
         Set<String> once = startup.apply(name);
         Set<String> fresh = findKeys(mixed, name, once);
         if (fresh.isEmpty()) {
-            return new Addition(mixed, null);
+            return addStaticsOnly(mixed, first);
         }
         fresh.removeAll(findKeys(running, name, once));
         if (first != null && !fresh.isEmpty()) {
@@ -132,7 +132,7 @@ public final class InitHookReplay {
         }
         fresh.removeIf(key -> RUN.contains(name + " " + key));
         if (fresh.isEmpty()) {
-            return new Addition(mixed, null);
+            return addStaticsOnly(mixed, first);
         }
         ClassNode now = new ClassNode();
         new ClassReader(mixed).accept(now, 0);
@@ -169,7 +169,11 @@ public final class InitHookReplay {
         });
         Set<String> values = new LinkedHashSet<>(fresh);
         values.removeIf(InitHookReplay::isHandler);
-        Map<String, String> recomputed = values.isEmpty() ? Map.of() : ChangedStatics.add(now, values);
+        Map<String, String> recomputed = new LinkedHashMap<>(values.isEmpty() ? Map.of()
+                : ChangedStatics.add(now, values));
+        if (first != null) {
+            recomputed.putAll(ChangedStatics.addMadeFresh(now, RetainedInitializers.read(first)));
+        }
         if (objectKeys.isEmpty() && classKeys.isEmpty() && recomputed.isEmpty() && missed.isEmpty()) {
             return new Addition(mixed, null);
         }
@@ -184,6 +188,22 @@ public final class InitHookReplay {
         ClassWriter writer = new ClassWriter(ClassWriter.COMPUTE_MAXS);
         now.accept(writer);
         return new Addition(writer.toByteArray(), new Due(objectKeys, classKeys, recomputed, missed, unset, caughtUp));
+    }
+
+    private static Addition addStaticsOnly(byte[] mixed, byte @Nullable [] first) {
+        if (first == null || !ChangedStatics.hasAddedObjectStatics(mixed, first)) {
+            return new Addition(mixed, null);
+        }
+        ClassNode now = new ClassNode();
+        new ClassReader(mixed).accept(now, 0);
+        Map<String, String> recomputed = ChangedStatics.addMadeFresh(now, RetainedInitializers.read(first));
+        if (recomputed.isEmpty()) {
+            return new Addition(mixed, null);
+        }
+        ClassWriter writer = new ClassWriter(ClassWriter.COMPUTE_MAXS);
+        now.accept(writer);
+        return new Addition(writer.toByteArray(), new Due(Set.of(), Set.of(), recomputed, List.of(), Set.of(),
+                Set.of()));
     }
 
     private static Set<String> findKeys(byte[] bytes, String owner, Set<String> once) {

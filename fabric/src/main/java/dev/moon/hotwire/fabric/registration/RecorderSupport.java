@@ -74,7 +74,7 @@ final class RecorderSupport {
         }
         List<String> frames = STACK.walk(stack -> stack.skip(3).limit(8)
                 .map(frame -> frame.getDeclaringClass().getName() + "#" + frame.getMethodName()).toList());
-        LOGGER.info("[Hotwire] {} has no owning mod on the stack and is not recorded; made from {}", what,
+        LOGGER.debug("[Hotwire] {} has no owning mod on the stack and is not recorded; made from {}", what,
                 String.join(" < ", frames));
     }
 

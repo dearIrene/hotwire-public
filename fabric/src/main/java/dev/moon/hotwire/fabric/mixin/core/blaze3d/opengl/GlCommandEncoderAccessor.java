@@ -14,11 +14,10 @@ public interface GlCommandEncoderAccessor {
     void hotwire$finishRenderPass();
 }
 *///?} else {
+import net.minecraft.client.Minecraft;
 import org.spongepowered.asm.mixin.Mixin;
-import org.spongepowered.asm.mixin.Pseudo;
 
-@Pseudo
-@Mixin(targets = "hotwire.Absent", remap = false)
+@Mixin(Minecraft.class)
 public interface GlCommandEncoderAccessor {
 }
 //?}

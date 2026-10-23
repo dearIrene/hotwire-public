@@ -10,6 +10,7 @@ import dev.moon.hotwire.fabric.rebuild.GameClasses;
 import dev.moon.hotwire.fabric.registration.Fields;
 import dev.moon.hotwire.fabric.registration.GameRegistrations;
 import dev.moon.hotwire.fabric.registration.ModLifecycle;
+import dev.moon.hotwire.fabric.registration.QuietThreads;
 import dev.moon.hotwire.fabric.report.GameReports;
 import dev.moon.hotwire.fabric.report.LoggedFaults;
 import dev.moon.hotwire.fabric.report.ReportZips;
@@ -124,6 +125,7 @@ public final class HotwireEngine implements ModScreen.Game, AutoCloseable {
             engine = new HotwireEngine(installed, progress, reports, folders, queue, settings, icons,
                     new Bound.Ready(parts));
             new SwapAtClose(queue, folders, EngineStart.findHotwireJar()).arm();
+            QuietThreads.install();
             parts.runner().getSwitcher().preloadAhead(150);
             LoadedClassBytes loadedBytes = parts.adds().getApplier().getRebuilder().getLoadedBytes();
             Fields.readWith(name -> parts.classes().findLoaded(name.replace('.', '/')) != null, type -> {

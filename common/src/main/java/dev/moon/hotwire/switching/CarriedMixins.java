@@ -44,7 +44,7 @@ public final class CarriedMixins {
                 return;
             }
             if (offMixins.contains(mixin)) {
-                LOGGER.info("[Hotwire] {} drops {}, whose mod is off", type, mixin);
+                LOGGER.debug("[Hotwire] {} drops {}, whose mod is off", type, mixin);
             } else if (askedAgain.test(mixin)) {
                 LOGGER.info("[Hotwire] {} drops {}, which its own plugin declined with the mods on now", type, mixin);
             } else if (this.game.findLoaded(mixin.replace('.', '/')) != null) {
