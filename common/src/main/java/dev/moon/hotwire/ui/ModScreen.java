@@ -557,6 +557,11 @@ public final class ModScreen {
 
         @Override
         public boolean pick(String id) {
+            if (ModScreen.this.model.isFull()) {
+                ModScreen.this.showMessage("You can pick up to " + ModListModel.MOST_CHOSEN + " mods at a time."
+                        + " Switch these first, then pick more.", true);
+                return false;
+            }
             boolean took = ModScreen.this.model.pick(id);
             if (took) {
                 ModScreen.this.refilter();
@@ -580,6 +585,12 @@ public final class ModScreen {
         @Override
         public void pickRange(int from, int to) {
             for (int at = from; at <= to && at < ModScreen.this.shown.size(); at++) {
+                if (ModScreen.this.model.isFull()) {
+                    ModScreen.this.showMessage("You can pick up to " + ModListModel.MOST_CHOSEN + " mods at a time,"
+                            + " so picking stopped there. Switch these first, then pick more.",
+                            true);
+                    break;
+                }
                 ModScreen.this.model.pick(ModScreen.this.shown.get(at).id());
             }
             ModScreen.this.refilter();

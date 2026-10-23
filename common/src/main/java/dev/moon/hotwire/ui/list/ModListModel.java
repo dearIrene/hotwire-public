@@ -14,6 +14,8 @@ import java.util.Set;
 import org.jspecify.annotations.Nullable;
 
 public final class ModListModel {
+    public static final int MOST_CHOSEN = 5;
+
     public enum Show {
         ALL("All mods"),
         ON("Only on"),
@@ -56,6 +58,10 @@ public final class ModListModel {
 
     public Set<String> getPicked() {
         return Collections.unmodifiableSet(this.picked);
+    }
+
+    public boolean isFull() {
+        return this.chosen.size() >= MOST_CHOSEN;
     }
 
     public Set<String> getPickedForYou() {
@@ -137,7 +143,7 @@ public final class ModListModel {
     }
 
     public boolean pick(String id) {
-        if (this.catalog.isProtected(id) || this.catalog.isLocked(id)) {
+        if (this.catalog.isProtected(id) || this.catalog.isLocked(id) || this.isFull()) {
             return false;
         }
         String owner = this.findBroughtInBy(id);
