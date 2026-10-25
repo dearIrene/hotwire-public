@@ -95,13 +95,7 @@ public final class ModelReloadCheck {
             return;
         }
         if (value instanceof Map<?, ?> map) {
-            Collection<?> values;
-            try {
-                values = map.values();
-            } catch (RuntimeException refused) {
-                return;
-            }
-            look(values, mods, found, seen, owners, depth, most);
+            look(Wrappers.readValues(map), mods, found, seen, owners, depth, most);
             return;
         }
         if (value instanceof Collection<?> || value instanceof Object[]) {

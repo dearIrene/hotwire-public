@@ -134,7 +134,7 @@ public final class Fields {
         for (FieldSlots.Slot field : getReferenceFields(holder.getClass(), false)) {
             try {
                 Object value = field.get(holder);
-                Collection<?> items = value instanceof Map<?, ?> map ? map.values()
+                Collection<?> items = value instanceof Map<?, ?> map ? Wrappers.readValues(map)
                         : value instanceof Collection<?> collection ? collection : List.of();
                 items.stream().limit(1000).filter(item -> item != null && followed.test(item.getClass()))
                         .forEach(found::add);

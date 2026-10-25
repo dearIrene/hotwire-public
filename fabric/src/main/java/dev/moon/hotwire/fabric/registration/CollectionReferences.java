@@ -428,7 +428,7 @@ final class CollectionReferences {
 
     private boolean hasNamespacedKey(Map<Object, Object> entries) {
         try {
-            for (Map.Entry<Object, Object> entry : entries.entrySet()) {
+            for (Map.Entry<Object, Object> entry : Wrappers.copyEntries(entries)) {
                 if (this.findModNamespaceOf(entry.getKey(), entry.getValue()) != null) {
                     return true;
                 }

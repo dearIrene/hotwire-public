@@ -111,7 +111,7 @@ final class Wrappers {
         this.open.add(value);
         int rests = switch (value) {
             case Collection<?> all -> this.reachThroughAll(all, known);
-            case Map<?, ?> map -> this.reachThroughAll(map.values(), known);
+            case Map<?, ?> map -> this.reachThroughAll(readValues(map), known);
             case Object[] array -> this.reachThroughAll(List.of(array), known);
             default -> this.reachThroughAField(value, known);
         };
@@ -243,11 +243,34 @@ final class Wrappers {
     }
 
     static List<Map.Entry<Object, Object>> copyEntries(Map<Object, Object> map) {
+        boolean makesValues = makesValues(map);
         List<Map.Entry<Object, Object>> pairs = new ArrayList<>(map.size());
         for (Map.Entry<Object, Object> entry : map.entrySet()) {
-            pairs.add(new AbstractMap.SimpleImmutableEntry<>(entry.getKey(), entry.getValue()));
+            Object value = null;
+            if (!makesValues) {
+                try {
+                    value = entry.getValue();
+                } catch (RuntimeException e) {
+                }
+            }
+            pairs.add(new AbstractMap.SimpleEntry<>(entry.getKey(), value));
         }
         return pairs;
+    }
+
+    static boolean makesValues(Map<?, ?> map) {
+        return GameRegistrations.findModOf(map.getClass()) != null;
+    }
+
+    static Collection<?> readValues(Map<?, ?> map) {
+        if (makesValues(map)) {
+            return List.of();
+        }
+        try {
+            return new ArrayList<>(map.values());
+        } catch (RuntimeException refused) {
+            return List.of();
+        }
     }
 
     static @Nullable String findThereFor(Object value, List<String> mods) {

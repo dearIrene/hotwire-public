@@ -234,7 +234,7 @@ public final class ClassRebuilder {
                 }
                 long replayedBy = System.nanoTime();
                 InitHookReplay.Addition hooks = InitHookReplay.add(name, added.getBytes(), running,
-                        this.launch.get(name), this.mixedNow.get(name));
+                        this.launch.get(name), this.mixedNow.get(name), originals.get(entry.getValue()));
                 if (hooks.findDue() != null) {
                     hooked.put(name, hooks.findDue());
                 }
