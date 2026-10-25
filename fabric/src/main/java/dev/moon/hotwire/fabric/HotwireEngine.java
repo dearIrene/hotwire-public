@@ -511,8 +511,8 @@ public final class HotwireEngine implements ModScreen.Game, AutoCloseable {
                 current.offerReopen(new ReopenPanel.Offer(false, List.of(), jar, String.valueOf(jar.getFileName()),
                         "It can't be added while your world is open."));
             } else if (ModAdder.isRestartOnly(result) && current != null) {
-                List<String> why = List.of(((ModAdder.Result.Failed) result).reason(), "It goes into your mods"
-                        + " folder when you close the game.");
+                LOGGER.info("[Hotwire] {}", ((ModAdder.Result.Failed) result).reason());
+                List<String> why = List.of("Part of it can only start together with the game.");
                 current.offerAdd(jar, this.changes.dryRunAdd(jar).thenApply(preview -> AddPreview.ofLater(
                         preview.name(), preview.version(), why)));
             } else if (result instanceof ModAdder.Result.Added added && current != null

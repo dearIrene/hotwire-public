@@ -472,7 +472,8 @@ public final class ModUpdater {
             this.queueSwap(manifest, running, incoming, plan);
             return new Result.Queued(manifest.id(), manifest.name(), plan);
         } catch (IOException e) {
-            return new Result.Failed(manifest.name() + " could not be queued for the next start: " + e.getMessage(), e);
+            return new Result.Failed(manifest.name() + " could not be queued for the next launch: " + e.getMessage(),
+                    e);
         }
     }
 
@@ -483,7 +484,7 @@ public final class ModUpdater {
                     + " any time from Pending tasks.";
         } catch (IOException e) {
             return " The new jar could not be queued for your mods folder (" + e.getMessage() + "): put it there"
-                    + " to have this version at the next start.";
+                    + " to have this version at the next launch.";
         }
     }
 

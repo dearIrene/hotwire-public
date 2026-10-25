@@ -131,7 +131,7 @@ final class PendingPanel extends Panel {
         canvas.drawText("Pending tasks", x + 14, y + 16, Colors.fade(Palette.TEXT, alpha));
         int rowY = y + 46;
         if (this.changes.isEmpty()) {
-            canvas.drawText("Nothing is waiting for the next start.", x + 14, rowY, Colors.fade(Palette.DIM, alpha));
+            canvas.drawText("Nothing is waiting for the next launch.", x + 14, rowY, Colors.fade(Palette.DIM, alpha));
             return;
         }
         List<Integer> drawn = new ArrayList<>();

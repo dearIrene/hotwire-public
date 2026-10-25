@@ -5,7 +5,7 @@ import org.jspecify.annotations.Nullable;
 public enum AddMode {
     NOW("Adding ", "Confirm"),
     SAVE_AND_REOPEN("Adding ", "Save and add"),
-    NEXT_START("At next start ", "Add at next start"),
+    NEXT_START("Waits for next launch: ", "Add at next launch"),
     REFUSED("Can't add ", null);
 
     private final String lead;

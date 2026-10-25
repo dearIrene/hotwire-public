@@ -144,17 +144,21 @@ public final class ModAdder {
             Optional<String> widener = this.findWidenerRefusal(part,
                     part.manifest().id().equals(manifest.id()) ? jarPath : this.engine.findJarOf(part));
             if (widener.isPresent()) {
-                return AddPreview.ofLater(manifest.name(), version,
-                        List.of(widener.get(), "It goes into your mods folder when you close the game."));
+                LOGGER.info("[Hotwire] {}", widener.get());
+                return AddPreview.ofLater(manifest.name(), version, List.of("It changes parts of the game that are"
+                        + " already running, so it can only go in when the game starts."));
             }
         }
         SwitchPlanner planner = this.engine.makePlannerFor(this.engine.makeGraphWith(parts));
         SwitchPlan plan = AddDependencies.planOn(planner, parts, this.engine.getSwitcher().getOff());
         Optional<String> missing = AddDependencies.describe(plan, id -> id);
         if (missing.isPresent()) {
-            return AddDependencies.isCarriedNewer(jar, plan) ? AddPreview.ofLater(manifest.name(), version, List.of(
-                    missing.get(), "It goes in when you close the game; the game then starts with the version it"
-                    + " carries.")) : makeRefusal(manifest.name(), version, missing.get());
+            if (AddDependencies.isCarriedNewer(jar, plan)) {
+                LOGGER.info("[Hotwire] {}", missing.get());
+                return AddPreview.ofLater(manifest.name(), version, List.of("It brings a newer version of a library"
+                        + " the game already started with, so it can only go in when the game starts."));
+            }
+            return makeRefusal(manifest.name(), version, missing.get());
         }
         Set<String> content = this.readContent(jarPath);
         List<String> lines = new ArrayList<>();

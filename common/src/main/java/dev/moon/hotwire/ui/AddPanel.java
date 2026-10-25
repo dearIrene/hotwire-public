@@ -96,6 +96,17 @@ final class AddPanel extends Panel {
             out.add(new MessageLine.Line("Just a moment.", Palette.DIM));
             return out;
         }
+
+        if (preview.mode() == AddMode.NEXT_START) {
+            for (String line : preview.lines()) {
+                MessageLine.addWrapped(canvas, out, line, Palette.DIM, wrapAt);
+            }
+            out.add(new MessageLine.Line("", Palette.DIM));
+            MessageLine.addWrapped(canvas, out, "Hotwire puts it in your mods/ folder when you close the game, so"
+                    + " it's there the next time you play.", Palette.TEXT, wrapAt);
+            MessageLine.addWrapped(canvas, out, "You can undo it any time from Pending tasks.", Palette.ON, wrapAt);
+            return out;
+        }
         boolean declined = preview.mode().isDeclinedNow();
         int color = declined ? Palette.TEXT : Palette.DIM;
         for (String line : preview.lines()) {

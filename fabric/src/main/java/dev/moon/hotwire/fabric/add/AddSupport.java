@@ -107,7 +107,7 @@ public final class AddSupport implements ModAdder.Engine {
             Path target = mods.resolve(String.valueOf(jar.getFileName()));
             if (Files.exists(target) && !Files.isSameFile(target, jar)) {
                 return " A file named " + jar.getFileName() + " is in your mods folder already, so its jar was not"
-                        + " copied there: copy it there yourself to have the mod at the next start.";
+                        + " copied there: copy it there yourself to have the mod at the next launch.";
             }
             ModManifest manifest = ModJarReader.read(jar).manifest();
             Files.copy(jar, target);
@@ -117,7 +117,7 @@ public final class AddSupport implements ModAdder.Engine {
                     + " tasks.";
         } catch (IOException | ModJarException e) {
             return " Its jar could not be copied into your mods folder (" + e.getMessage() + "): copy it there to have"
-                    + " the mod at the next start.";
+                    + " the mod at the next launch.";
         }
     }
 

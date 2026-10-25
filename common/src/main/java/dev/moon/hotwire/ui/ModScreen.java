@@ -321,7 +321,8 @@ public final class ModScreen {
                 }
                 case PendingChange.Copied copied -> {
                     this.game.removeCopy(copied.modId());
-                    this.showMessage(copied.name() + " runs until you close the game, and the next start is without it:"
+                    this.showMessage(copied.name() + " runs until you close the game, and the next launch is"
+                            + " without it:"
                             + " " + copied.jar() + " was taken out of your mods folder.", false);
                 }
                 case PendingChange.Revertable back -> {
