@@ -125,8 +125,8 @@ final class UpdatePanel extends Panel {
         }
         this.lineCount = Math.max(1, lines.size());
         for (int i = 0; i < lines.size(); i++) {
-            canvas.drawText(canvas.clip(lines.get(i), w - 28), x + 14, linesY + 12 * i,
-                    Colors.fade(body.color(), alpha));
+            MessageLine.drawWords(canvas, canvas.clip(lines.get(i), w - 28), x + 14, linesY + 12 * i, body.color(),
+                    alpha);
         }
     }
 

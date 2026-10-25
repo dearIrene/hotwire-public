@@ -64,6 +64,10 @@ public final class PendingChanges {
                 old.toAbsolutePath().toString(), UpdateQueue.hashSha256(old), "", nowMillis));
     }
 
+    public void ignoreEarlier() throws IOException {
+        this.queue.replaceReplaced(List.of());
+    }
+
     public void cleanAtStart() throws IOException {
         Set<Path> wanted = new HashSet<>();
         for (UpdateQueue.Entry entry : this.queue.getEntries()) {

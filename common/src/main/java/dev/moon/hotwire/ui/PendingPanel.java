@@ -25,6 +25,7 @@ final class PendingPanel extends Panel {
     private static final DateTimeFormatter QUEUED_AT = DateTimeFormatter.ofPattern("d MMM HH:mm", Locale.ROOT);
 
     private final Consumer<PendingChange> onAct;
+    private final Runnable onIgnoreAll;
     private final Function<String, Canvas.@Nullable Image> icons;
     private final ZoneId zone;
 
@@ -32,15 +33,16 @@ final class PendingPanel extends Panel {
     private final List<Button> buttons = new ArrayList<>();
     private List<PendingChange> changes = List.of();
 
-    public PendingPanel(Consumer<PendingChange> onAct, Runnable onDone,
+    public PendingPanel(Consumer<PendingChange> onAct, Runnable onIgnoreAll, Runnable onDone,
             Function<String, Canvas.@Nullable Image> icons) {
-        this(onAct, onDone, icons, ZoneId.systemDefault());
+        this(onAct, onIgnoreAll, onDone, icons, ZoneId.systemDefault());
     }
 
-    PendingPanel(Consumer<PendingChange> onAct, Runnable onDone, Function<String, Canvas.@Nullable Image> icons,
-            ZoneId zone) {
+    PendingPanel(Consumer<PendingChange> onAct, Runnable onIgnoreAll, Runnable onDone,
+            Function<String, Canvas.@Nullable Image> icons, ZoneId zone) {
         super("Done", onDone);
         this.onAct = onAct;
+        this.onIgnoreAll = onIgnoreAll;
         this.icons = icons;
         this.zone = zone;
     }
@@ -62,35 +64,25 @@ final class PendingPanel extends Panel {
             };
             this.buttons.add(this.add(new Button(label, false, () -> this.onAct.accept(change))));
         }
+        boolean earlier = this.changes.stream().anyMatch(PendingChange.Revertable.class::isInstance);
+        this.change("Ignore all", earlier ? this.onIgnoreAll : null);
     }
 
-    List<Line> getLinesOf(PendingChange change) {
-        List<Line> lines = new ArrayList<>();
+    List<MessageLine.Line> getLinesOf(PendingChange change) {
+        List<MessageLine.Line> lines = new ArrayList<>();
         switch (change) {
             case PendingChange.Update update -> {
-                if (update.oldJar().isEmpty()) {
-                    lines.add(new Line("When you close the game, " + update.newJar() + " goes into mods."
-                            + this.describeQueuedAt(update), Palette.DIM));
-                } else {
-                    lines.add(new Line("When you close the game, " + update.newJar() + " goes into mods",
-                            Palette.DIM));
-                    lines.add(new Line("and " + update.oldJar() + " into hotwire/replaced."
-                            + this.describeQueuedAt(update), Palette.DIM));
-                }
+                lines.add(new MessageLine.Line("At close, " + update.newJar() + " goes into mods/"
+                        + (update.oldJar().isEmpty() ? "." : " and " + update.oldJar() + " into hotwire/replaced/.")
+                        + this.describeQueuedAt(update), Palette.DIM));
                 if (!update.reason().isEmpty()) {
-                    lines.add(new Line("The last close failed: " + update.reason(), Palette.BAD));
+                    lines.add(new MessageLine.Line("The last close failed: " + update.reason(), Palette.BAD));
                 }
             }
-            case PendingChange.Copied copied -> {
-                lines.add(new Line("Added live this session, and " + copied.jar() + " was copied into your mods folder,"
-                        + " so it starts with the game too.", Palette.DIM));
-                lines.add(new Line("Undo takes that copy out: the mod runs until you close the game.", Palette.DIM));
-            }
-            case PendingChange.Revertable back -> {
-                lines.add(new Line(back.oldVersion() + " is kept in hotwire/replaced from an earlier update.",
-                        Palette.DIM));
-                lines.add(new Line("Revert queues a task that puts it back when you close the game.", Palette.DIM));
-            }
+            case PendingChange.Copied copied -> lines.add(new MessageLine.Line("Added live, and " + copied.jar()
+                    + " was copied into mods/ so it starts with the game. Undo removes that copy.", Palette.DIM));
+            case PendingChange.Revertable back -> lines.add(new MessageLine.Line(back.oldVersion()
+                    + " is kept in hotwire/replaced/. Revert puts it back when you close the game.", Palette.DIM));
         }
         return lines;
     }
@@ -159,9 +151,9 @@ final class PendingPanel extends Panel {
                         x + TEXT_X + nameW, rowY, Colors.fade(Palette.DIM, alpha));
             }
             int lineY = rowY + LINE;
-            for (Line line : this.getLinesOf(change)) {
+            for (MessageLine.Line line : this.getLinesOf(change)) {
                 for (String part : MessageLine.wrap(canvas, line.text(), room, LINES_MOST)) {
-                    canvas.drawText(part, x + TEXT_X, lineY, Colors.fade(line.color(), alpha));
+                    MessageLine.drawWords(canvas, part, x + TEXT_X, lineY, line.color(), alpha);
                     lineY += LINE;
                 }
             }
@@ -170,8 +162,5 @@ final class PendingPanel extends Panel {
             rowY += height;
         }
         this.heights = drawn;
-    }
-
-    record Line(String text, int color) {
     }
 }

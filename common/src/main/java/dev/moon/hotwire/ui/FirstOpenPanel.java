@@ -9,12 +9,12 @@ final class FirstOpenPanel extends Panel {
     static final int LINE = 14;
     static final float TITLE_SCALE = 1.5f;
 
-    private static final List<PendingPanel.Line> LINES = List.of(
-            new PendingPanel.Line("Hotwire changes mods while the game runs.", Palette.TEXT),
-            new PendingPanel.Line("Mods weren't built for that, so Hotwire does the work.", Palette.TEXT),
-            new PendingPanel.Line("If a mod misbehaves after Hotwire switched, added", Palette.BAD),
-            new PendingPanel.Line("or updated it, report it to Hotwire, not its author.", Palette.BAD),
-            new PendingPanel.Line("A crash report says whether Hotwire was involved.", Palette.DIM));
+    private static final List<MessageLine.Line> LINES = List.of(
+            new MessageLine.Line("Hotwire changes mods while the game runs.", Palette.TEXT),
+            new MessageLine.Line("Mods weren't built for that, so Hotwire does the work.", Palette.TEXT),
+            new MessageLine.Line("If a mod misbehaves after Hotwire switched, added", Palette.BAD),
+            new MessageLine.Line("or updated it, report it to Hotwire, not its author.", Palette.BAD),
+            new MessageLine.Line("A crash report says whether Hotwire was involved.", Palette.DIM));
 
     private final Runnable onAccept;
     private float waited;
@@ -68,7 +68,7 @@ final class FirstOpenPanel extends Panel {
         canvas.drawText("Before you use Hotwire", x + 14, y + 14, Colors.fade(Palette.TEXT, alpha));
         canvas.popScale();
         int lineY = y + 52;
-        for (PendingPanel.Line line : LINES) {
+        for (MessageLine.Line line : LINES) {
             canvas.drawText(canvas.clip(line.text(), w - 28), x + 14, lineY, Colors.fade(line.color(), alpha));
             lineY += LINE;
         }

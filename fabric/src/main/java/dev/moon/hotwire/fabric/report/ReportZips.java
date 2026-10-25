@@ -64,7 +64,8 @@ public final class ReportZips {
         }
         String os = System.getProperty("os.name", "").toLowerCase(Locale.ROOT);
         String file = zip.toAbsolutePath().toString();
-        List<String> command = os.contains("win") ? List.of("explorer.exe", "/select," + file)
+
+        List<String> command = os.contains("win") ? List.of("explorer.exe", "/select,", file)
                 : os.contains("mac") ? List.of("open", "-R", file)
                 : List.of("xdg-open", String.valueOf(zip.toAbsolutePath().getParent()));
         try {

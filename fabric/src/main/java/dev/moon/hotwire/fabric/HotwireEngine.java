@@ -269,8 +269,11 @@ public final class HotwireEngine implements ModScreen.Game, AutoCloseable {
             if (!ids.isEmpty() && result.result() instanceof ModSwitcher.Result.Failed failed
                     && failed.cause().reopenFixes() && current != null
                     && (WorldReopen.isLeftOnly() || WorldReopen.findRefusal().isEmpty())) {
-                current.offerReopen(new ReopenPanel.Offer(off, ids, null, "This world's objects stand in the way",
-                        said, WorldReopen.isLeftOnly()));
+                LOGGER.info("[Hotwire] {}", said);
+                current.offerReopen(new ReopenPanel.Offer(off, ids, null, PlayerMessages.joinNames(ids,
+                        this.installed::nameOf), (off ? "These can't turn off" : "These can't turn on") + " while"
+                        + (WorldReopen.isLeftOnly() ? " you're on this server." : " your world is open."),
+                        WorldReopen.isLeftOnly()));
             } else {
                 this.showMessage(said, PlayerMessages.isBad(result.result()) || !result.faults().isEmpty());
             }
@@ -504,8 +507,9 @@ public final class HotwireEngine implements ModScreen.Game, AutoCloseable {
             ModScreen current = this.screen;
             if (mode == AddMode.NOW && ModAdder.isWorldBuilt(result) && WorldReopen.findRefusal().isEmpty()
                     && current != null) {
-                current.offerReopen(new ReopenPanel.Offer(false, List.of(), jar, "This world's objects stand in the"
-                        + " way", ((ModAdder.Result.Failed) result).reason()));
+                LOGGER.info("[Hotwire] {}", ((ModAdder.Result.Failed) result).reason());
+                current.offerReopen(new ReopenPanel.Offer(false, List.of(), jar, String.valueOf(jar.getFileName()),
+                        "It can't be added while your world is open."));
             } else if (ModAdder.isRestartOnly(result) && current != null) {
                 List<String> why = List.of(((ModAdder.Result.Failed) result).reason(), "It goes into your mods"
                         + " folder when you close the game.");
@@ -517,9 +521,8 @@ public final class HotwireEngine implements ModScreen.Game, AutoCloseable {
                 this.showMessage(added.name() + " is in." + this.changes.copyIntoMods(jar) + (own ? ""
                         : " It finishes setting up as you join a world: rejoin the server to have all of it."), false);
                 if (own) {
-                    current.offerReopen(new ReopenPanel.Offer(false, List.of(), null, added.name()
-                            + " finishes setting up as you join a world", "It is in, and the part of it that starts as"
-                            + " a world is joined waits for the next join. Rejoin now, or later yourself."));
+                    current.offerReopen(new ReopenPanel.Offer(false, List.of(), null, added.name(), "It's in. Part of"
+                            + " it only starts when you join a world, so it finishes at your next join."));
                 }
             } else {
                 this.showMessage(switch (result) {
@@ -575,6 +578,11 @@ public final class HotwireEngine implements ModScreen.Game, AutoCloseable {
     public void onDone() {
         this.screen = null;
         ModViews.show(null);
+    }
+
+    @Override
+    public void ignoreEarlierVersions() throws IOException {
+        this.pending.ignoreEarlier();
     }
 
     @Override

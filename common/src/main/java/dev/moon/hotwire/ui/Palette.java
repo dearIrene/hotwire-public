@@ -11,6 +11,8 @@ public final class Palette {
     public static final int TEXT = 0xFFEDEFF5;
     public static final int DIM = 0xFF98A1B3;
     public static final int FAINT = 0xFF5B6373;
+
+    public static final int PATH = 0xFFE8C170;
     static final int BAD = 0xFFFF7B72;
     static final int TRACK = 0xFF232834;
     static final int SCRIM = 0xC0080A0E;

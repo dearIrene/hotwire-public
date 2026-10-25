@@ -18,11 +18,8 @@ final class AddPanel extends Panel {
     private @Nullable Path jar;
     private CompletableFuture<AddPreview> reading = new CompletableFuture<>();
     private @Nullable AddPreview preview;
-    private List<Line> lines = List.of();
+    private List<MessageLine.Line> lines = List.of();
     private int widest;
-
-    private record Line(String text, int color) {
-    }
 
     public AddPanel(BiConsumer<Path, AddMode> onConfirm, Runnable onChange, Runnable onCancel) {
         super(onCancel);
@@ -91,25 +88,25 @@ final class AddPanel extends Panel {
                 + list + ".";
     }
 
-    private List<Line> layOutBody(Canvas canvas) {
+    private List<MessageLine.Line> layOutBody(Canvas canvas) {
         AddPreview preview = this.preview;
         int wrapAt = Math.min(MEASURE, this.getWidth() - 48 - 28);
-        List<Line> out = new ArrayList<>();
+        List<MessageLine.Line> out = new ArrayList<>();
         if (preview == null) {
-            out.add(new Line("Just a moment.", Palette.DIM));
+            out.add(new MessageLine.Line("Just a moment.", Palette.DIM));
             return out;
         }
         boolean declined = preview.mode().isDeclinedNow();
         int color = declined ? Palette.TEXT : Palette.DIM;
         for (String line : preview.lines()) {
-            MessageLine.wrap(canvas, line, wrapAt, Integer.MAX_VALUE).forEach(text -> out.add(new Line(text, color)));
+            MessageLine.addWrapped(canvas, out, line, color, wrapAt);
         }
         if (declined) {
             return out.size() > MOST_REASONS ? new ArrayList<>(out.subList(0, MOST_REASONS)) : out;
         }
         if (!preview.lateReach().isEmpty()) {
             MessageLine.wrap(canvas, describeHeadsUp(preview.lateReach()), wrapAt, Integer.MAX_VALUE)
-                    .forEach(text -> out.add(new Line(text, HEED)));
+                    .forEach(text -> out.add(new MessageLine.Line(text, HEED)));
         }
         return out;
     }
@@ -118,7 +115,7 @@ final class AddPanel extends Panel {
     protected void drawContent(Canvas canvas, float alpha, int x, int y, int w, int h) {
         this.lines = this.layOutBody(canvas);
         int widest = 0;
-        for (Line line : this.lines) {
+        for (MessageLine.Line line : this.lines) {
             widest = Math.max(widest, canvas.measureText(line.text()));
         }
         this.widest = widest;
@@ -134,9 +131,9 @@ final class AddPanel extends Panel {
         }
         this.drawHeading(canvas, preview, x + 14, y + 16, versionX - 28 - (x + 14), alpha);
         for (int i = 0; i < this.lines.size(); i++) {
-            Line line = this.lines.get(i);
-            canvas.drawText(canvas.clip(line.text(), w - 28), x + 14, y + 46 + 12 * i,
-                    Colors.fade(line.color(), alpha));
+            MessageLine.Line line = this.lines.get(i);
+            MessageLine.drawWords(canvas, canvas.clip(line.text(), w - 28), x + 14, y + 46 + 12 * i, line.color(),
+                    alpha);
         }
     }
 

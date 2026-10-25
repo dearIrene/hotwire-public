@@ -26,6 +26,41 @@ final class MessageLine extends Element {
         return end > 20 ? flat.substring(0, end + 1) : flat;
     }
 
+    record Line(String text, int color) {
+    }
+
+    static void addWrapped(Canvas canvas, List<Line> lines, String text, int color, int width) {
+        for (String part : wrap(canvas, text, width, Integer.MAX_VALUE)) {
+            lines.add(new Line(part, color));
+        }
+    }
+
+    static boolean isPath(String word) {
+        String bare = word.replaceAll("[.,:;)]+$", "");
+        return bare.endsWith(".jar") || bare.endsWith(".zip") || (bare.contains("/") && bare.length() > 1);
+    }
+
+    static void drawWords(Canvas canvas, String line, int x, int y, int color, float alpha) {
+        int at = x;
+        StringBuilder run = new StringBuilder();
+        boolean runIsPath = false;
+        for (String word : line.split(" ", -1)) {
+            boolean path = isPath(word);
+            if (!run.isEmpty() && path != runIsPath) {
+                String text = run.append(' ').toString();
+                canvas.drawText(text, at, y, Colors.fade(runIsPath ? Palette.PATH : color, alpha));
+                at += canvas.measureText(text);
+                run.setLength(0);
+            }
+            if (!run.isEmpty()) {
+                run.append(' ');
+            }
+            run.append(word);
+            runIsPath = path;
+        }
+        canvas.drawText(run.toString(), at, y, Colors.fade(runIsPath ? Palette.PATH : color, alpha));
+    }
+
     static List<String> wrap(Canvas canvas, String text, int width, int most) {
         List<String> lines = new ArrayList<>();
         String line = "";
@@ -53,11 +88,11 @@ final class MessageLine extends Element {
             return;
         }
         List<String> lines = wrap(canvas, this.text, Math.max(120, this.getWidth() - 260), 2);
-        int color = Colors.fade(this.failure ? Palette.BAD : Palette.DIM, alpha);
+        int color = this.failure ? Palette.BAD : Palette.DIM;
         int n = lines.size();
         for (int i = 0; i < n; i++) {
-            canvas.drawText(canvas.clip(lines.get(i), Math.max(120, this.getWidth() - 260)), 24,
-                    this.getHeight() - 40 - n * 11 + i * 11, color);
+            drawWords(canvas, canvas.clip(lines.get(i), Math.max(120, this.getWidth() - 260)), 24,
+                    this.getHeight() - 40 - n * 11 + i * 11, color, alpha);
         }
     }
 }

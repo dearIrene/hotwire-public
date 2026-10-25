@@ -44,9 +44,8 @@ final class OffCodeNotice {
         boolean fromWorld = engine.findJvmParts().map(parts -> parts.classes().isReachedFromWorld(mod, first))
                 .orElse(false);
         if (current != null && fromWorld && WorldReopen.findRefusal().isEmpty()) {
-            current.offerReopen(new ReopenPanel.Offer(true, List.of(), installed.nameOf(mod)
-                    + " is off, yet this world's objects still call it", "They were made while it was on;"
-                    + " made again, they are made without it."));
+            current.offerReopen(new ReopenPanel.Offer(true, List.of(), installed.nameOf(mod), "It's off, but your"
+                    + " world still holds things it made while it was on. Reopened, the world makes them without it."));
             return;
         }
         engine.showMessage(installed.nameOf(mod) + " is off, yet its code just ran" + (first.size() > 1

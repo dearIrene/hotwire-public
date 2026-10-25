@@ -89,6 +89,9 @@ public final class ModScreen {
         default void removeCopy(String id) throws IOException {
         }
 
+        default void ignoreEarlierVersions() throws IOException {
+        }
+
         default void revertAtNextStart(String id) throws IOException {
         }
 
@@ -168,7 +171,8 @@ public final class ModScreen {
         this.addPanel = new AddPanel(this::confirmAdd, game::addMod, this::closePanels);
         this.updatePanel = new UpdatePanel(this::confirmUpdate, game::updateMod, this::closePanels);
         this.advancedPanel = new AdvancedPanel(this::chooseAdvanced, this::closePanels);
-        this.pendingPanel = new PendingPanel(this::actOnPending, this::closePending, game::findIcon);
+        this.pendingPanel = new PendingPanel(this::actOnPending, this::ignoreEarlier, this::closePending,
+                game::findIcon);
         this.reopenPanel = new ReopenPanel(offer -> {
             this.closePanels();
             Path jar = offer.jar();
@@ -326,6 +330,18 @@ public final class ModScreen {
                             + " Cancel it any time from Pending tasks.", false);
                 }
             }
+        } catch (IOException e) {
+            this.showMessage("That could not be done: " + e.getMessage(), true);
+        }
+        List<PendingChange> now = this.game.getPendingChanges();
+        this.pendingCount = now.size();
+        this.pendingPanel.setChanges(now);
+    }
+
+    private void ignoreEarlier() {
+        try {
+            this.game.ignoreEarlierVersions();
+            this.showMessage("The old versions are off the list. Their jars stay in hotwire/replaced/.", false);
         } catch (IOException e) {
             this.showMessage("That could not be done: " + e.getMessage(), true);
         }

@@ -72,12 +72,16 @@ class Panel extends Element {
     }
 
     public void change(@Nullable Runnable action) {
+        this.change("Pick another", action);
+    }
+
+    void change(String label, @Nullable Runnable action) {
         if (this.change != null) {
             this.remove(this.change);
             this.change = null;
         }
         if (action != null) {
-            this.change = this.add(new Button("Pick another", false, action));
+            this.change = this.add(new Button(label, false, action));
         }
     }
 

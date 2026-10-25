@@ -68,7 +68,7 @@ public final class PlayerMessages {
         };
     }
 
-    static String joinNames(List<String> ids, Function<String, String> nameOf) {
+    public static String joinNames(List<String> ids, Function<String, String> nameOf) {
         if (ids.isEmpty()) {
             return "nothing";
         }
