@@ -13,6 +13,7 @@ import dev.moon.hotwire.fabric.registration.GeneratedWrappers;
 import dev.moon.hotwire.fabric.registration.LogAppenders;
 import dev.moon.hotwire.fabric.registration.MixinPlugins;
 import dev.moon.hotwire.fabric.registration.ModSounds;
+import dev.moon.hotwire.fabric.registration.ModelLayerNames;
 import dev.moon.hotwire.fabric.registration.NetworkHandlers;
 import dev.moon.hotwire.fabric.registration.OffModCommands;
 import dev.moon.hotwire.fabric.registration.OneConfigHuds;
@@ -149,6 +150,7 @@ public final class SwitchRunner {
         CrashGuard.onSwitched(ids);
         LogAppenders.takeOut(ids);
         ModSounds.takeOut(ids);
+        ModelLayerNames.takeOut(ids);
         OneConfigHuds.takeOut(ids);
         NetworkHandlers.takeOut(ids);
         EntityRendererProviders.takeOut(ids);
@@ -277,6 +279,7 @@ public final class SwitchRunner {
                 OneConfigHuds.putBack(order);
                 NetworkHandlers.putBack(order);
                 EntityRendererProviders.putBack(order);
+                ModelLayerNames.putBack(order);
                 GameTasks.putBack(order);
                 OffModCommands.putBack(id -> order.contains(id) || this.switcher.isOn(id));
                 this.logging.putBack(order);
