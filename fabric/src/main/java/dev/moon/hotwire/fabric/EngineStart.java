@@ -87,8 +87,8 @@ final class EngineStart {
     }
 
     static InstalledMods readInstalledMods(FabricLoader loader) throws IOException {
-        Path gameDir = loader.getGameDir();
-        ModIndex.Snapshot snapshot = new ModIndex(ForkJoinPool.commonPool()).scan(gameDir.resolve("mods"));
+        Path mods = ModsFolder.find(loader);
+        ModIndex.Snapshot snapshot = new ModIndex(ForkJoinPool.commonPool()).scan(mods);
         List<ModJar> jars = new ArrayList<>();
         Map<String, Path> jarOf = new HashMap<>();
         Set<String> topLevel = new HashSet<>();
@@ -99,7 +99,7 @@ final class EngineStart {
         }
         for (ModContainer container : loader.getAllMods()) {
             String id = container.getMetadata().getId();
-            Path jar = InstalledMods.findLoadedFrom(container);
+            Path jar = InstalledMods.findLoadedFrom(container, mods);
             if (jar == null || jarOf.containsKey(id) || jarOf.containsValue(jar) || !ModPolicy.isSwitchable(id)) {
                 continue;
             }

@@ -110,7 +110,7 @@ public final class HotwireEngine implements ModScreen.Game, AutoCloseable {
         Progress progress = new Progress();
         LoggedFaults.install();
         GameReports reports = new GameReports(installed::nameOf);
-        UpdateFolders folders = UpdateFolders.of(gameDir);
+        UpdateFolders folders = UpdateFolders.ofMods(ModsFolder.find(loader));
         UpdateQueue queue = new UpdateQueue(folders.queueFile());
         HotwireSettings settings = new HotwireSettings(loader.getConfigDir().resolve("hotwire/settings.json"));
         ModPolicy.setNestedJars(settings.getNestedJars());

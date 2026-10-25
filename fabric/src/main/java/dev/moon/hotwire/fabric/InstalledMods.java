@@ -1,5 +1,6 @@
 package dev.moon.hotwire.fabric;
 
+import dev.moon.hotwire.jar.JarPaths;
 import dev.moon.hotwire.jar.ModJar;
 import dev.moon.hotwire.jar.ModManifest;
 import dev.moon.hotwire.plan.ModGraph;
@@ -138,13 +139,14 @@ public final class InstalledMods {
         return this.updatedThisSession.contains(id);
     }
 
-    static @Nullable Path findLoadedFrom(ModContainer container) {
+    static @Nullable Path findLoadedFrom(ModContainer container, Path mods) {
         if (container.getOrigin().getKind() != ModOrigin.Kind.PATH || container.getOrigin().getPaths().size() != 1) {
             return null;
         }
         Path path = container.getOrigin().getPaths().getFirst().toAbsolutePath().normalize();
-        boolean inMods = path.getParent() != null && path.getParent().getFileName() != null
-                && path.getParent().getFileName().toString().equals("mods");
+        Path parent = path.getParent();
+        boolean inMods = parent != null && JarPaths.findKeysOf(parent).stream()
+                .anyMatch(JarPaths.findKeysOf(mods)::contains);
         return !inMods && path.toString().endsWith(".jar") && Files.isRegularFile(path) ? path : null;
     }
 }
