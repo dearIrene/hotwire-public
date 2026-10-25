@@ -4,8 +4,10 @@ import com.mojang.brigadier.CommandDispatcher;
 import com.mojang.brigadier.tree.ArgumentCommandNode;
 import com.mojang.brigadier.tree.CommandNode;
 import com.mojang.brigadier.tree.RootCommandNode;
+import dev.moon.hotwire.redefine.FieldSlots;
 import dev.moon.hotwire.redefine.Tripwire;
 import dev.moon.hotwire.registration.CallerOwner;
+import java.lang.reflect.Member;
 import java.util.ArrayList;
 import java.util.Collections;
 import java.util.IdentityHashMap;
@@ -76,9 +78,8 @@ public final class CommandRecorder {
             code.add(argument.getType());
         }
         for (Object one : code) {
-            String mod = one == null ? null : GameRegistrations.findModOf(one.getClass());
-            if (mod != null) {
-                mods.add(mod);
+            if (one != null) {
+                addModsOf(one, mods);
             }
         }
         CommandNode<?> redirect = node.getRedirect();
@@ -87,6 +88,37 @@ public final class CommandRecorder {
         }
         for (CommandNode<?> child : node.getChildren()) {
             collect(child, depth - 1, mods, seen);
+        }
+    }
+
+    private static void addModsOf(Object code, Set<String> mods) {
+        String mod = GameRegistrations.findModOf(code.getClass());
+        if (mod != null) {
+            mods.add(mod);
+        }
+        if (!CollectionReferences.isLambda(code)) {
+            return;
+        }
+        for (FieldSlots.Slot field : Fields.getReferenceFields(code.getClass(), false)) {
+            Object captured;
+            try {
+                captured = field.get(code);
+            } catch (IllegalAccessException | RuntimeException e) {
+                continue;
+            }
+            if (captured == null) {
+                continue;
+            }
+            Class<?> type;
+            if (captured instanceof Member member) {
+                type = member.getDeclaringClass();
+            } else {
+                type = captured instanceof Class<?> named ? named : captured.getClass();
+            }
+            String capturedMod = GameRegistrations.findModOf(type);
+            if (capturedMod != null) {
+                mods.add(capturedMod);
+            }
         }
     }
 }

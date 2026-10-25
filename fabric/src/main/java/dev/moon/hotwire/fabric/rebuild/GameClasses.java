@@ -196,13 +196,23 @@ public final class GameClasses implements SwitchApplier.Game {
             //? if >=26.1 {
             case "net/minecraft/client/Minecraft" -> Set.of("onResourceLoadFinished", "onGameLoadFinished",
                     "buildInitialScreens");
-            case "net/minecraft/client/multiplayer/ClientPacketListener" -> Set.of("handleLogin");
             //?} else {
             /*case "net/minecraft/class_310" -> Set.of("method_53465", "method_51736", "method_53527");
-            case "net/minecraft/class_634" -> Set.of("method_11120");
             *///?}
             default -> Set.of();
         };
+    }
+
+    public static Set<String> getJoinMethods(String internalName) {
+        if (Minecraft.getInstance().getConnection() == null) {
+            return Set.of();
+        }
+        //? if >=26.1 {
+        return internalName.equals("net/minecraft/client/multiplayer/ClientPacketListener") ? Set.of("handleLogin")
+                : Set.of();
+        //?} else {
+        /*return internalName.equals("net/minecraft/class_634") ? Set.of("method_11120") : Set.of();
+        *///?}
     }
 
     @Override

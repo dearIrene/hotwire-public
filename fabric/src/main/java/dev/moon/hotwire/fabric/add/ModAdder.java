@@ -94,8 +94,6 @@ public final class ModAdder {
 
         void forgetClassReads();
 
-        @Nullable Path findJarOf(ModJar part);
-
         ModManifest.Environment getSide();
 
         Path getAddedJarsFolder();
@@ -133,16 +131,22 @@ public final class ModAdder {
             return makeRefusal(manifest.name(), version, ModPolicy.isHotwire(manifest.id())
                     ? ModPolicy.describeSelfChange() : manifest.name() + " is already installed.");
         }
-        List<ModJar> parts = new ArrayList<>();
-        this.collectNestedToAdd(jar, parts);
-        parts.add(jar);
-        for (ModJar part : parts) {
-            Optional<String> missing = AddDependencies.findMissingRefusal(part);
+
+        Map<String, Part> found = new LinkedHashMap<>();
+        try {
+            this.collect(jarPath, found);
+        } catch (ModJarException | IOException e) {
+            LOGGER.warn("[Hotwire] reading the jars inside {} for the dry run failed", jarPath, e);
+            return makeRefusal(manifest.name(), version, manifest.name() + " cannot be added: a jar inside it could"
+                    + " not be read: " + e.getMessage());
+        }
+        List<ModJar> parts = found.values().stream().map(Part::jar).toList();
+        for (Part part : found.values()) {
+            Optional<String> missing = AddDependencies.findMissingRefusal(part.jar());
             if (missing.isPresent()) {
                 return makeRefusal(manifest.name(), version, missing.get());
             }
-            Optional<String> widener = this.findWidenerRefusal(part,
-                    part.manifest().id().equals(manifest.id()) ? jarPath : this.engine.findJarOf(part));
+            Optional<String> widener = this.findWidenerRefusal(part.jar(), part.path());
             if (widener.isPresent()) {
                 LOGGER.info("[Hotwire] {}", widener.get());
                 return AddPreview.ofLater(manifest.name(), version, List.of("It changes parts of the game that are"
@@ -245,10 +249,11 @@ public final class ModAdder {
 
             Map<String, String> moves = new LinkedHashMap<>();
             for (WidenerUses.Use use : JarUseReader.findUsesOf(jar, loaded, this.engine)) {
-                if (!moves.containsKey(use.inClass()) && JarUseReader.isMovable(use, jar, this.engine, true)) {
+                if (jar != null && !moves.containsKey(use.inClass())
+                        && JarUseReader.isMovable(use, jar, this.engine, true)) {
                     String target = Relocations.findTarget(use.inClass(), use.owner());
                     moves.put(use.inClass(), target);
-                    Relocations.register(use.inClass(), target);
+                    Relocations.register(use.inClass(), target, jar.classes());
                     LOGGER.info("[Hotwire] {} moves to {}, beside {}", use.inClass(), target, use.owner());
                 }
                 if (use.kind() == WidenerUses.Kind.OVERRIDE) {
@@ -305,16 +310,6 @@ public final class ModAdder {
             }
         }
         return false;
-    }
-
-    private void collectNestedToAdd(ModJar jar, List<ModJar> into) {
-        for (ModJar nested : jar.nested()) {
-            String id = nested.manifest().id();
-            if (!this.isPresent(nested) && into.stream().noneMatch(part -> part.manifest().id().equals(id))) {
-                this.collectNestedToAdd(nested, into);
-                into.add(nested);
-            }
-        }
     }
 
     public Result add(Path jarPath, Function<String, String> nameOf) {

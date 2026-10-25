@@ -1,5 +1,6 @@
 package dev.moon.hotwire.fabric;
 
+import dev.moon.hotwire.api.v1.SwitchResult;
 import dev.moon.hotwire.concurrent.Tasks;
 import dev.moon.hotwire.config.HotwireSettings;
 import dev.moon.hotwire.config.ProfileStore;
@@ -244,19 +245,21 @@ public final class HotwireEngine implements ModScreen.Game, AutoCloseable {
         this.run(work, false, List.of());
     }
 
+    public CompletableFuture<SwitchResult> switchFor(boolean off, List<String> ids) {
+        return this.run(runner -> off ? runner.turnOff(ids) : runner.turnOn(ids), off, ids);
+    }
+
     @SuppressWarnings("FutureReturnValueIgnored")
-    private void run(Function<SwitchRunner, SwitchRunner.CheckedResult> work, boolean off, List<String> ids) {
+    private CompletableFuture<SwitchResult> run(Function<SwitchRunner, SwitchRunner.CheckedResult> work, boolean off,
+            List<String> ids) {
         JvmParts parts = this.findParts();
         if (parts == null) {
-            this.showMessage(this.getSwitchRefusal(), true);
-            this.refreshScreen();
-            return;
+            return this.refuse(this.getSwitchRefusal());
         }
         if (this.isWorldLocked()) {
-            this.showMessage("In-world switching is off in Advanced: leave the world, then switch.", true);
-            this.refreshScreen();
-            return;
+            return this.refuse("In-world switching is off in Advanced: leave the world, then switch.");
         }
+        CompletableFuture<SwitchResult> ended = new CompletableFuture<>();
         this.tasks.submit("switch", () -> work.apply(parts.runner()), result -> {
             String said = PlayerMessages.describe(result.result(), this.installed::nameOf)
                     + PlayerMessages.describe(result.check())
@@ -278,7 +281,28 @@ public final class HotwireEngine implements ModScreen.Game, AutoCloseable {
                 this.showMessage(said, PlayerMessages.isBad(result.result()) || !result.faults().isEmpty());
             }
             this.refreshScreen();
+            ended.complete(toSwitchResult(result.result(), said));
+        }).whenComplete((done, error) -> {
+            if (error != null) {
+                ended.complete(new SwitchResult(SwitchResult.Kind.FAILED, List.of(), "The switch failed: " + error));
+            }
         });
+        return ended;
+    }
+
+    private CompletableFuture<SwitchResult> refuse(String said) {
+        this.showMessage(said, true);
+        this.refreshScreen();
+        return CompletableFuture.completedFuture(new SwitchResult(SwitchResult.Kind.REFUSED, List.of(), said));
+    }
+
+    private static SwitchResult toSwitchResult(ModSwitcher.Result result, String said) {
+        return switch (result) {
+            case ModSwitcher.Result.Done done -> new SwitchResult(SwitchResult.Kind.DONE, done.plan().order(), said);
+            case ModSwitcher.Result.Refused refused -> new SwitchResult(SwitchResult.Kind.REFUSED, List.of(), said);
+            case ModSwitcher.Result.Failed failed -> new SwitchResult(failed.cause().reopenFixes()
+                    ? SwitchResult.Kind.NEEDS_REOPEN : SwitchResult.Kind.FAILED, List.of(), said);
+        };
     }
 
     public ModChanges getChanges() {
@@ -417,13 +441,15 @@ public final class HotwireEngine implements ModScreen.Game, AutoCloseable {
     }
 
     @Override
+    @SuppressWarnings("FutureReturnValueIgnored")
     public void turnOff(List<String> ids) {
-        this.run(runner -> runner.turnOff(ids), true, ids);
+        this.switchFor(true, ids);
     }
 
     @Override
+    @SuppressWarnings("FutureReturnValueIgnored")
     public void turnOn(List<String> ids) {
-        this.run(runner -> runner.turnOn(ids), false, ids);
+        this.switchFor(false, ids);
     }
 
     @Override

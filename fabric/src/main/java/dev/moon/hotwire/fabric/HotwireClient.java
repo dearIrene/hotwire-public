@@ -62,6 +62,10 @@ public final class HotwireClient implements ClientModInitializer {
         }
     }
 
+    public static synchronized @Nullable HotwireEngine findEngine() {
+        return engine;
+    }
+
     public static synchronized HotwireEngine getEngine() {
         HotwireEngine started = engine;
         if (started == null) {

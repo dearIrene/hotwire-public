@@ -54,6 +54,8 @@ public final class InitHookReplay {
     private static volatile Supplier<List<Object>> longLived = List::of;
     private static volatile Function<String, Set<String>> startup = name -> Set.of();
 
+    private static volatile Function<String, Set<String>> joining = name -> Set.of();
+
     private static volatile Predicate<Class<?>> rebuilt = type -> false;
     private static volatile StaticWriter statics = (field, value) -> {
         throw new IllegalAccessException("no writer of statics is set");
@@ -99,9 +101,11 @@ public final class InitHookReplay {
     private InitHookReplay() {
     }
 
-    public static void answerWith(Supplier<List<Object>> objects, Function<String, Set<String>> methods) {
+    public static void answerWith(Supplier<List<Object>> objects, Function<String, Set<String>> methods,
+            Function<String, Set<String>> joins) {
         longLived = objects;
         startup = methods;
+        joining = joins;
     }
 
     public static void skipRebuiltWith(Predicate<Class<?>> builtAgain) {
@@ -119,8 +123,9 @@ public final class InitHookReplay {
     static Addition add(String name, byte[] mixed, byte[] running, byte @Nullable [] first,
             byte @Nullable [] previous, byte @Nullable [] original) {
         Set<String> once = startup.apply(name);
+        Set<String> joins = joining.apply(name);
         Set<String> fresh = findKeys(mixed, name, once);
-        if (fresh.isEmpty()) {
+        if (fresh.isEmpty() && joins.isEmpty()) {
             return addStaticsOnly(mixed, original, running);
         }
         fresh.removeAll(findKeys(running, name, once));
@@ -131,6 +136,12 @@ public final class InitHookReplay {
             fresh.removeAll(findKeys(previous, name, once));
         }
         fresh.removeIf(key -> RUN.contains(name + " " + key));
+
+        if (!joins.isEmpty()) {
+            Set<String> again = findKeysIn(mixed, name, joins);
+            again.removeAll(findKeysIn(running, name, joins));
+            fresh.addAll(again);
+        }
         if (fresh.isEmpty()) {
             return addStaticsOnly(mixed, original, running);
         }
@@ -145,7 +156,9 @@ public final class InitHookReplay {
         List<String> missed = new ArrayList<>();
         Set<String> unset = new TreeSet<>();
         Set<String> caughtUp = new TreeSet<>();
-        findCalls(now, once).forEach((key, site) -> {
+        Set<String> read = new LinkedHashSet<>(once);
+        read.addAll(joins);
+        findCalls(now, read).forEach((key, site) -> {
             MethodNode handler = ArgumentInitializers.findMethod(now, site.call().name, site.call().desc);
             if (!fresh.contains(key) || handler == null) {
                 return;
@@ -209,12 +222,21 @@ public final class InitHookReplay {
     }
 
     private static Set<String> findKeys(byte[] bytes, String owner, Set<String> once) {
+        return findKeys(bytes, owner, method -> method.equals("<init>") || method.equals("<clinit>")
+                || once.contains(method));
+    }
+
+    private static Set<String> findKeysIn(byte[] bytes, String owner, Set<String> methods) {
+        return findKeys(bytes, owner, methods::contains);
+    }
+
+    private static Set<String> findKeys(byte[] bytes, String owner, Predicate<String> read) {
         Set<String> keys = new LinkedHashSet<>();
         new ClassReader(bytes).accept(new ClassVisitor(Opcodes.ASM9) {
             @Override
             public @Nullable MethodVisitor visitMethod(int access, String method, String descriptor,
                     @Nullable String signature, String @Nullable [] exceptions) {
-                if (!method.equals("<init>") && !method.equals("<clinit>") && !once.contains(method)) {
+                if (!read.test(method)) {
                     return null;
                 }
                 return new MethodVisitor(Opcodes.ASM9) {

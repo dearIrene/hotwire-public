@@ -1,0 +1,32 @@
+public abstract interface dev.moon.hotwire.api.v1.HotwireApi
+  public abstract int dev.moon.hotwire.api.v1.HotwireApi.getRevision()
+  public abstract java.util.List<dev.moon.hotwire.api.v1.ModState> dev.moon.hotwire.api.v1.HotwireApi.getMods()
+  public abstract java.util.Optional<dev.moon.hotwire.api.v1.ModState> dev.moon.hotwire.api.v1.HotwireApi.findMod(java.lang.String)
+  public abstract java.util.concurrent.CompletableFuture<dev.moon.hotwire.api.v1.SwitchResult> dev.moon.hotwire.api.v1.HotwireApi.turnOff(java.util.Collection<java.lang.String>)
+  public abstract java.util.concurrent.CompletableFuture<dev.moon.hotwire.api.v1.SwitchResult> dev.moon.hotwire.api.v1.HotwireApi.turnOn(java.util.Collection<java.lang.String>)
+  public static dev.moon.hotwire.api.v1.HotwireApi dev.moon.hotwire.api.v1.HotwireApi.getInstance()
+public final dev.moon.hotwire.api.v1.ModState
+  public boolean dev.moon.hotwire.api.v1.ModState.on()
+  public boolean dev.moon.hotwire.api.v1.ModState.switchable()
+  public dev.moon.hotwire.api.v1.ModState(java.lang.String,java.lang.String,java.lang.String,boolean,boolean)
+  public final boolean dev.moon.hotwire.api.v1.ModState.equals(java.lang.Object)
+  public final int dev.moon.hotwire.api.v1.ModState.hashCode()
+  public final java.lang.String dev.moon.hotwire.api.v1.ModState.toString()
+  public java.lang.String dev.moon.hotwire.api.v1.ModState.id()
+  public java.lang.String dev.moon.hotwire.api.v1.ModState.name()
+  public java.lang.String dev.moon.hotwire.api.v1.ModState.version()
+public final dev.moon.hotwire.api.v1.SwitchResult
+  public dev.moon.hotwire.api.v1.SwitchResult$Kind dev.moon.hotwire.api.v1.SwitchResult.kind()
+  public dev.moon.hotwire.api.v1.SwitchResult(dev.moon.hotwire.api.v1.SwitchResult$Kind,java.util.List<java.lang.String>,java.lang.String)
+  public final boolean dev.moon.hotwire.api.v1.SwitchResult.equals(java.lang.Object)
+  public final int dev.moon.hotwire.api.v1.SwitchResult.hashCode()
+  public final java.lang.String dev.moon.hotwire.api.v1.SwitchResult.toString()
+  public java.lang.String dev.moon.hotwire.api.v1.SwitchResult.message()
+  public java.util.List<java.lang.String> dev.moon.hotwire.api.v1.SwitchResult.switched()
+public static final dev.moon.hotwire.api.v1.SwitchResult$Kind
+  public static dev.moon.hotwire.api.v1.SwitchResult$Kind dev.moon.hotwire.api.v1.SwitchResult$Kind.valueOf(java.lang.String)
+  public static dev.moon.hotwire.api.v1.SwitchResult$Kind[] dev.moon.hotwire.api.v1.SwitchResult$Kind.values()
+  public static final dev.moon.hotwire.api.v1.SwitchResult$Kind dev.moon.hotwire.api.v1.SwitchResult$Kind.DONE
+  public static final dev.moon.hotwire.api.v1.SwitchResult$Kind dev.moon.hotwire.api.v1.SwitchResult$Kind.FAILED
+  public static final dev.moon.hotwire.api.v1.SwitchResult$Kind dev.moon.hotwire.api.v1.SwitchResult$Kind.NEEDS_REOPEN
+  public static final dev.moon.hotwire.api.v1.SwitchResult$Kind dev.moon.hotwire.api.v1.SwitchResult$Kind.REFUSED

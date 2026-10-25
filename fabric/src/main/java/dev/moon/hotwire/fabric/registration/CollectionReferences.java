@@ -402,6 +402,8 @@ final class CollectionReferences {
                                     this.getRemovalsOf(owner)));
                         } else if (element instanceof Collection<?> nested) {
                             this.collect(nested);
+                        } else if (element instanceof Map<?, ?> && this.seen.add(element)) {
+                            this.collect(element);
                         } else if (element != null && this.seen.add(element)
                                 && Wrappers.isOfAnotherMod(element.getClass())) {
                             this.lookInto(element);

@@ -151,7 +151,8 @@ final class EngineStart {
         applier.rebuildObjectsWith(ResourceReload::isRebuiltWhilePaused, new PausedRebuilds());
         InitHookReplay.skipRebuiltWith(ResourceReload::isRebuiltWhilePaused);
         OffWindowObjects.setReloading(() -> ModViews.findLoadingOverlay() != null && isReloadMaking());
-        InitHookReplay.answerWith(GameClasses::findLongLived, GameClasses::getStartupMethods);
+        InitHookReplay.answerWith(GameClasses::findLongLived, GameClasses::getStartupMethods,
+                GameClasses::getJoinMethods);
         applier.runOnGameThreadWith(GameHold::onGameAndWait);
         CrashGuard.setMixinOwners(applier.getCarriedMixins()::findModShipping);
         OffModCommands.readUsesFrom(installed::getGraph);

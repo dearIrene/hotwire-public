@@ -173,16 +173,6 @@ public final class AddSupport implements ModAdder.Engine {
     }
 
     @Override
-    public @Nullable Path findJarOf(ModJar part) {
-        Path known = this.installed.findJarOf(part.manifest().id());
-        if (known != null) {
-            return known;
-        }
-        Path added = this.addedJarsFolder.resolve(part.name());
-        return Files.exists(added) ? added : null;
-    }
-
-    @Override
     public ModGraph makeGraphWith(List<ModJar> added) {
         return this.installed.makeGraphWith(added);
     }
