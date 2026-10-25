@@ -173,6 +173,11 @@ public final class GameClasses implements SwitchApplier.Game {
         List<Object> found = new ArrayList<>(List.of(client));
         found.addAll(Fields.findBelow(client, LONG_LIVED_DEPTH, type -> (type.getName().startsWith("net.minecraft.")
                 || type.getName().startsWith("com.mojang.")) && !isWorldRoot(type)));
+
+        ClientPacketListener connection = client.getConnection();
+        if (connection != null) {
+            found.add(connection);
+        }
         return found;
     }
 
@@ -191,8 +196,10 @@ public final class GameClasses implements SwitchApplier.Game {
             //? if >=26.1 {
             case "net/minecraft/client/Minecraft" -> Set.of("onResourceLoadFinished", "onGameLoadFinished",
                     "buildInitialScreens");
+            case "net/minecraft/client/multiplayer/ClientPacketListener" -> Set.of("handleLogin");
             //?} else {
             /*case "net/minecraft/class_310" -> Set.of("method_53465", "method_51736", "method_53527");
+            case "net/minecraft/class_634" -> Set.of("method_11120");
             *///?}
             default -> Set.of();
         };
