@@ -121,7 +121,7 @@ public final class InitHookReplay {
         Set<String> once = startup.apply(name);
         Set<String> fresh = findKeys(mixed, name, once);
         if (fresh.isEmpty()) {
-            return addStaticsOnly(mixed, original);
+            return addStaticsOnly(mixed, original, running);
         }
         fresh.removeAll(findKeys(running, name, once));
         if (first != null && !fresh.isEmpty()) {
@@ -132,7 +132,7 @@ public final class InitHookReplay {
         }
         fresh.removeIf(key -> RUN.contains(name + " " + key));
         if (fresh.isEmpty()) {
-            return addStaticsOnly(mixed, original);
+            return addStaticsOnly(mixed, original, running);
         }
         ClassNode now = new ClassNode();
         new ClassReader(mixed).accept(now, 0);
@@ -172,7 +172,8 @@ public final class InitHookReplay {
         Map<String, String> recomputed = new LinkedHashMap<>(values.isEmpty() ? Map.of()
                 : ChangedStatics.add(now, values));
         if (original != null) {
-            recomputed.putAll(ChangedStatics.addMadeFresh(now, RetainedInitializers.read(original)));
+            recomputed.putAll(ChangedStatics.addMadeFresh(now, RetainedInitializers.read(original),
+                    RetainedInitializers.read(running)));
         }
         if (objectKeys.isEmpty() && classKeys.isEmpty() && recomputed.isEmpty() && missed.isEmpty()) {
             return new Addition(mixed, null);
@@ -190,13 +191,14 @@ public final class InitHookReplay {
         return new Addition(writer.toByteArray(), new Due(objectKeys, classKeys, recomputed, missed, unset, caughtUp));
     }
 
-    private static Addition addStaticsOnly(byte[] mixed, byte @Nullable [] original) {
-        if (original == null || !ChangedStatics.hasAddedObjectStatics(mixed, original)) {
+    private static Addition addStaticsOnly(byte[] mixed, byte @Nullable [] original, byte[] running) {
+        if (original == null || !ChangedStatics.hasAddedObjectStatics(mixed, original, running)) {
             return new Addition(mixed, null);
         }
         ClassNode now = new ClassNode();
         new ClassReader(mixed).accept(now, 0);
-        Map<String, String> recomputed = ChangedStatics.addMadeFresh(now, RetainedInitializers.read(original));
+        Map<String, String> recomputed = ChangedStatics.addMadeFresh(now, RetainedInitializers.read(original),
+                RetainedInitializers.read(running));
         if (recomputed.isEmpty()) {
             return new Addition(mixed, null);
         }

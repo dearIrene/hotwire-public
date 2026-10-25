@@ -87,9 +87,11 @@ final class ChangedStatics {
         return recomputed;
     }
 
-    static boolean hasAddedObjectStatics(byte[] mixed, byte[] first) {
-        Set<String> had = readObjectStatics(first);
-        return !had.containsAll(readObjectStatics(mixed));
+    static boolean hasAddedObjectStatics(byte[] mixed, byte[] first, byte[] running) {
+        Set<String> added = readObjectStatics(mixed);
+        added.removeAll(readObjectStatics(first));
+        added.retainAll(readObjectStatics(running));
+        return !added.isEmpty();
     }
 
     private static Set<String> readObjectStatics(byte[] bytes) {
@@ -107,10 +109,14 @@ final class ChangedStatics {
         return found;
     }
 
-    static Map<String, String> addMadeFresh(ClassNode now, ClassNode first) {
+    static Map<String, String> addMadeFresh(ClassNode now, ClassNode first, ClassNode running) {
         Set<String> had = new HashSet<>();
         for (FieldNode field : first.fields) {
             had.add(field.name + field.desc);
+        }
+        Set<String> runs = new HashSet<>();
+        for (FieldNode field : running.fields) {
+            runs.add(field.name + field.desc);
         }
         Set<String> made = new HashSet<>();
         for (MethodNode method : now.methods) {
@@ -119,7 +125,8 @@ final class ChangedStatics {
         Set<String> fresh = new LinkedHashSet<>();
         for (FieldNode field : now.fields) {
             if ((field.access & Opcodes.ACC_STATIC) != 0 && (field.desc.startsWith("L") || field.desc.startsWith("["))
-                    && !had.contains(field.name + field.desc) && !made.contains(PREFIX + field.name)
+                    && !had.contains(field.name + field.desc) && runs.contains(field.name + field.desc)
+                    && !made.contains(PREFIX + field.name)
                     && !made.contains(FRESH_PREFIX + field.name)) {
                 fresh.add(field.name + field.desc);
             }
