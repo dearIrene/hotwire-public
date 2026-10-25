@@ -3,6 +3,7 @@ package dev.moon.hotwire.fabric.rebuild;
 import dev.moon.hotwire.concurrent.Parallel;
 import dev.moon.hotwire.fabric.ModPolicy;
 import dev.moon.hotwire.fabric.registration.ModOfClass;
+import dev.moon.hotwire.jar.JarPaths;
 import dev.moon.hotwire.jar.ModJar;
 import java.lang.instrument.Instrumentation;
 import java.net.URISyntaxException;
@@ -68,11 +69,11 @@ public final class ForeignPatches {
                 for (Path root : mod.getRootPaths()) {
                     Path jar = ModOfClass.findJarOf(root);
                     if (jar != null) {
-                        this.familyJars.add(jar);
+                        this.familyJars.addAll(JarPaths.findKeysOf(jar));
                     }
                 }
                 if (mod.getOrigin().getKind() == ModOrigin.Kind.PATH) {
-                    mod.getOrigin().getPaths().forEach(path -> this.familyJars.add(path.toAbsolutePath().normalize()));
+                    mod.getOrigin().getPaths().forEach(path -> this.familyJars.addAll(JarPaths.findKeysOf(path)));
                 }
             }
         }

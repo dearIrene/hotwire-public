@@ -1,10 +1,12 @@
 package dev.moon.hotwire.redefine;
 
+import java.lang.invoke.MethodHandle;
 import java.lang.invoke.MethodHandleProxies;
 import java.lang.invoke.MethodHandles;
 import java.lang.invoke.MethodType;
 import java.lang.reflect.Array;
 import java.lang.reflect.Field;
+import java.lang.reflect.Method;
 import java.lang.reflect.Modifier;
 import java.util.HashSet;
 import java.util.LinkedHashMap;
@@ -25,8 +27,6 @@ import org.objectweb.asm.tree.FieldInsnNode;
 import org.objectweb.asm.tree.FieldNode;
 import org.objectweb.asm.tree.InsnList;
 import org.objectweb.asm.tree.InsnNode;
-import org.objectweb.asm.tree.JumpInsnNode;
-import org.objectweb.asm.tree.LabelNode;
 import org.objectweb.asm.tree.MethodInsnNode;
 import org.objectweb.asm.tree.MethodNode;
 import org.slf4j.Logger;
@@ -35,6 +35,8 @@ import org.slf4j.LoggerFactory;
 final class ChangedStatics {
     private static final Logger LOGGER = LoggerFactory.getLogger(ChangedStatics.class);
     private static final String PREFIX = "hotwire$passedStatic$";
+
+    private static final String FRESH_PREFIX = "hotwire$freshStatic$";
 
     private static final Pattern MERGED = Pattern.compile("^[A-Za-z]+\\$(?!lambda\\$)[a-z]{3}[0-9a-f]{3}\\$");
 
@@ -117,7 +119,8 @@ final class ChangedStatics {
         Set<String> fresh = new LinkedHashSet<>();
         for (FieldNode field : now.fields) {
             if ((field.access & Opcodes.ACC_STATIC) != 0 && (field.desc.startsWith("L") || field.desc.startsWith("["))
-                    && !had.contains(field.name + field.desc) && !made.contains(PREFIX + field.name)) {
+                    && !had.contains(field.name + field.desc) && !made.contains(PREFIX + field.name)
+                    && !made.contains(FRESH_PREFIX + field.name)) {
                 fresh.add(field.name + field.desc);
             }
         }
@@ -131,19 +134,9 @@ final class ChangedStatics {
                 return;
             }
             slice.set(store, new InsnNode(Opcodes.ARETURN));
-
-            InsnList body = new InsnList();
-            LabelNode empty = new LabelNode();
-            body.add(new FieldInsnNode(Opcodes.GETSTATIC, now.name, put.name, put.desc));
-            body.add(new InsnNode(Opcodes.DUP));
-            body.add(new JumpInsnNode(Opcodes.IFNULL, empty));
-            body.add(new InsnNode(Opcodes.ARETURN));
-            body.add(empty);
-            body.add(new InsnNode(Opcodes.POP));
-            body.add(slice);
             MethodNode method = new MethodNode(Opcodes.ACC_PRIVATE | Opcodes.ACC_STATIC | Opcodes.ACC_SYNTHETIC,
-                    PREFIX + put.name, "()" + put.desc, null, null);
-            method.instructions.add(body);
+                    FRESH_PREFIX + put.name, "()" + put.desc, null, null);
+            method.instructions.add(slice);
             now.methods.add(method);
             recomputed.put(put.name, put.desc);
         });
@@ -173,12 +166,16 @@ final class ChangedStatics {
         for (Map.Entry<String, String> entry : statics.entrySet()) {
             try {
                 Field field = type.getDeclaredField(entry.getKey());
-                Class<?> valueType = field.getType();
-                Supplier<?> make = MethodHandleProxies.asInterfaceInstance(Supplier.class, side.findStatic(
-                        side.lookupClass(), PREFIX + entry.getKey(), MethodType.methodType(valueType)));
-                Object made = make.get();
                 field.setAccessible(true);
                 Object old = field.get(null);
+                boolean changed = hasMethodOf(side, PREFIX + entry.getKey(), field.getType());
+
+                if (!changed && old != null) {
+                    continue;
+                }
+                MethodHandle making = side.findStatic(side.lookupClass(), (changed ? PREFIX : FRESH_PREFIX)
+                        + entry.getKey(), MethodType.methodType(field.getType()));
+                Object made = MethodHandleProxies.asInterfaceInstance(Supplier.class, making).get();
                 copyElements(old, made);
                 writer.write(field, made);
                 LOGGER.info("[Hotwire] {}.{} was made again by the setup the mods give it now{}", type.getName(),
@@ -190,6 +187,16 @@ final class ChangedStatics {
             }
         }
         return failed;
+    }
+
+    private static boolean hasMethodOf(MethodHandles.Lookup side, String name, Class<?> valueType) {
+        for (Method method : side.lookupClass().getDeclaredMethods()) {
+            if (method.getName().equals(name) && method.getReturnType() == valueType
+                    && method.getParameterCount() == 0) {
+                return true;
+            }
+        }
+        return false;
     }
 
     private static void copyElements(@Nullable Object old, @Nullable Object made) {

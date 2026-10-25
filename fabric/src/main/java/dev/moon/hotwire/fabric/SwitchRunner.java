@@ -151,7 +151,9 @@ public final class SwitchRunner {
         CrashGuard.onSwitched(ids);
         LogAppenders.takeOut(ids);
         ModSounds.takeOut(ids);
+        SwitchTimes.mark("first removals");
         ReloadedLists.takeOut(ids);
+        SwitchTimes.mark("checked lists");
         WindowCursor.chooseAgainFor(this.switcher.findPatchedBy(ids));
         OneConfigHuds.takeOut(ids);
         NetworkHandlers.takeOut(ids);
@@ -176,6 +178,7 @@ public final class SwitchRunner {
         } catch (RuntimeException | LinkageError e) {
             LOGGER.error("[Hotwire] what {} left in others could not all be removedNames out", ids, e);
         }
+        ModViews.clearParticlesOf(ids);
         if (EntityRendererProviders.takeChanged()) {
             ResourceReload.reloadForRenderers(false);
         }
@@ -281,7 +284,7 @@ public final class SwitchRunner {
                 OneConfigHuds.putBack(order);
                 NetworkHandlers.putBack(order);
                 EntityRendererProviders.putBack(order);
-                ReloadedLists.putBack(order);
+                ReloadedLists.putBack(id -> !order.contains(id) && !this.switcher.isOn(id));
                 WindowCursor.chooseAgainFor(this.switcher.findPatchedBy(order));
                 GameTasks.putBack(order);
                 OffModCommands.putBack(id -> order.contains(id) || this.switcher.isOn(id));

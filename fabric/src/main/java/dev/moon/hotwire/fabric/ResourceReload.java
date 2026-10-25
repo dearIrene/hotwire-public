@@ -8,6 +8,7 @@ import dev.moon.hotwire.fabric.registration.Fields;
 import dev.moon.hotwire.fabric.registration.GameHold;
 import dev.moon.hotwire.fabric.registration.GameRegistrations;
 import dev.moon.hotwire.fabric.registration.ModelReloadCheck;
+import dev.moon.hotwire.fabric.registration.ReloadedLists;
 import dev.moon.hotwire.redefine.FieldSlots;
 import dev.moon.hotwire.redefine.Tripwire;
 import java.time.Duration;
@@ -193,7 +194,7 @@ public final class ResourceReload {
         comingOn = List.copyOf(mods);
     }
 
-    private static void startUnprofiled(Runnable start) {
+    static void startUnprofiled(Runnable start) {
         String manager = ReloadableResourceManager.class.getName();
         Level was = LogManager.getLogger(manager).getLevel();
         if (!was.isLessSpecificThan(Level.DEBUG)) {
@@ -217,7 +218,8 @@ public final class ResourceReload {
         packsAtPause = getAvailablePacks();
         noteOwnersAtPause();
 
-        ReloadInstance last = ModViews.openOverlay() instanceof LoadingOverlay shown ? reloadOf(shown) : null;
+        LoadingOverlay shown = ModViews.findLoadingOverlay();
+        ReloadInstance last = shown == null ? null : findReloadOf(shown);
         if (last != null && last.isDone()) {
             ModViews.closeOverlay();
         }
@@ -226,28 +228,58 @@ public final class ResourceReload {
         if (isWhole) {
             startUnprofiled(game::reloadResourcePacks);
         }
-        ReloadInstance reload = ModViews.openOverlay() instanceof LoadingOverlay loading ? reloadOf(loading) : null;
+        LoadingOverlay loading = ModViews.findLoadingOverlay();
+        ReloadInstance reload = loading == null ? null : findReloadOf(loading);
         if (reload == null) {
             LOGGER.warn("[Hotwire] the resource reload has no loading overlay to wait on; it runs with the game");
             return;
         }
+        awaitWhilePaused(game, reload);
+        if (reload.isDone() && ReloadFailures.findFailure(reload) != null) {
+            reload = runAgainWhilePaused(game, reload);
+            isWhole = true;
+        }
+        reloadedWhilePaused |= isWhole;
+        reloadedRenderers |= !isWhole;
+        if (reload == null) {
+            return;
+        }
+        if (!reload.isDone()) {
+            LOGGER.warn("[Hotwire] the resource reload held the game for {} s; it ends with the game drawing",
+                    PAUSED_WAIT.toSeconds());
+            return;
+        }
+        Throwable failure = ReloadFailures.findFailure(reload);
+        if (failure != null) {
+            LOGGER.error("[Hotwire] the resource reload run again under the hold failed as well; the game answers it"
+                    + " as it answers any", failure);
+            return;
+        }
+        LOGGER.info("[Hotwire] the resources were reloaded with the game held in {} ms{}",
+                (System.nanoTime() - began) / 1_000_000, isWhole ? "" : ", for the renderers alone");
+    }
 
-        long deadline = began + PAUSED_WAIT.toNanos();
+    private static void awaitWhilePaused(Minecraft game, ReloadInstance reload) {
+        long deadline = System.nanoTime() + PAUSED_WAIT.toNanos();
         game.managedBlock(() -> {
             //? if <1.21.5 {
             /*RenderSystem.replayQueue();
             *///?}
             return reload.isDone() || System.nanoTime() > deadline;
         });
-        reloadedWhilePaused |= isWhole;
-        reloadedRenderers |= !isWhole;
-        if (!reload.isDone()) {
-            LOGGER.warn("[Hotwire] the resource reload held the game for {} s; it ends with the game drawing",
-                    PAUSED_WAIT.toSeconds());
-            return;
+    }
+
+    private static @Nullable ReloadInstance runAgainWhilePaused(Minecraft game, ReloadInstance failed) {
+        Set<String> off = LoaderModList.getHidden();
+        LOGGER.warn("[Hotwire] the resource reload under the hold failed; it runs again in whole",
+                ReloadFailures.findFailure(failed));
+        ReloadedLists.takeOutUnmade(off);
+        LoadingOverlay overlay = ModViews.findLoadingOverlay();
+        ReloadInstance again = overlay == null ? null : ReloadFailures.runAgain(game, overlay, off);
+        if (again != null) {
+            awaitWhilePaused(game, again);
         }
-        LOGGER.info("[Hotwire] the resources were reloaded with the game held in {} ms{}",
-                (System.nanoTime() - began) / 1_000_000, isWhole ? "" : ", for the renderers alone");
+        return again;
     }
 
     private static void noteOwnersAtPause() {
@@ -312,15 +344,16 @@ public final class ResourceReload {
                 }
             }
         }
-        ReloadInstance ongoing = ModViews.openOverlay() instanceof LoadingOverlay loading ? reloadOf(loading) : null;
+        LoadingOverlay loading = ModViews.findLoadingOverlay();
+        ReloadInstance ongoing = loading == null ? null : findReloadOf(loading);
         if (ongoing == null || ongoing.isDone()) {
-            LOGGER.info("[Hotwire] no reload under way: futures {}, overlay {}", seen, ModViews.openOverlay());
+            LOGGER.info("[Hotwire] no reload under way: futures {}, overlay {}", seen, loading);
             return null;
         }
         return ongoing::isDone;
     }
 
-    private static @Nullable ReloadInstance reloadOf(LoadingOverlay overlay) {
+    static @Nullable ReloadInstance findReloadOf(LoadingOverlay overlay) {
         for (FieldSlots.Slot field : Fields.getDeclared(LoadingOverlay.class)) {
             if (ReloadInstance.class.isAssignableFrom(field.getType())) {
                 try {
@@ -397,6 +430,29 @@ public final class ResourceReload {
         //?} else {
         /*game.execute(() -> game.gui.getChat().rescaleChat());
         *///?}
+    }
+
+    private static void reportFailed(String why, Set<String> chosen) {
+        if (ModViews.findLoadingOverlay() != null) {
+            LOGGER.warn("[Hotwire] the resource reload ({}) did not finish in {} s; F3+T makes another", why,
+                    WAIT.toSeconds());
+            logReloadThreads();
+            return;
+        }
+        Set<String> now = getChosenPacks();
+        Set<String> off = LoaderModList.getHidden();
+        List<String> dropped = chosen.stream().filter(id -> !now.contains(id) && !off.contains(id)).sorted()
+                .toList();
+        LOGGER.error("[Hotwire] the resource reload ({}) failed, and the game {}", why, dropped.isEmpty()
+                ? "kept the packs the player chose" : "dropped the packs the player chose: " + dropped);
+    }
+
+    private static Set<String> getChosenPacks() {
+        try {
+            return Set.copyOf(Minecraft.getInstance().getResourcePackRepository().getSelectedIds());
+        } catch (RuntimeException e) {
+            return Set.of();
+        }
     }
 
     private static Set<String> getAvailablePacks() {
@@ -494,31 +550,41 @@ public final class ResourceReload {
             return;
         }
         LOGGER.info("[Hotwire] {}; the game reloads its resources", why);
+        Minecraft game = Minecraft.getInstance();
+        Set<String> chosen = getChosenPacks();
         try {
-            Minecraft game = Minecraft.getInstance();
-            CompletableFuture.completedFuture(game).thenComposeAsync(on -> {
+            CompletableFuture<Void> begun = new CompletableFuture<>();
+            CompletableFuture<Void> reload = CompletableFuture.completedFuture(game).thenComposeAsync(on -> {
                 List<CompletableFuture<Void>> started = new ArrayList<>();
                 Tripwire.expect(closing, () -> started.add(on.reloadResourcePacks()));
+                begun.complete(null);
                 return started.getFirst();
-            }, game).get(WAIT.toMillis(), TimeUnit.MILLISECONDS);
+            }, game);
+            begun.get(WAIT.toMillis(), TimeUnit.MILLISECONDS);
 
             long deadline = System.nanoTime() + WAIT.toNanos();
-            while (ModViews.openOverlay() != null && System.nanoTime() < deadline) {
+            while (ModViews.findLoadingOverlay() != null && System.nanoTime() < deadline) {
                 Thread.sleep(50);
+            }
+            if (!reload.isDone()) {
+                reportFailed(why, chosen);
+                return;
             }
             layOutChat();
         } catch (InterruptedException e) {
             Thread.currentThread().interrupt();
         } catch (ExecutionException | TimeoutException e) {
-            LOGGER.warn("[Hotwire] the resource reload ({}) did not finish in {} s; F3+T makes another", why,
-                    WAIT.toSeconds(), e);
-
-            Thread.getAllStackTraces().forEach((thread, stack) -> {
-                if (thread.getName().equals("Render thread") || thread.getName().startsWith("Worker-")) {
-                    LOGGER.warn("[Hotwire] {} at {}", thread.getName(), Arrays.stream(stack).limit(12)
-                            .map(String::valueOf).collect(Collectors.joining(" < ")));
-                }
-            });
+            LOGGER.warn("[Hotwire] the resource reload ({}) did not begin in {} s", why, WAIT.toSeconds(), e);
+            logReloadThreads();
         }
+    }
+
+    private static void logReloadThreads() {
+        Thread.getAllStackTraces().forEach((thread, stack) -> {
+            if (thread.getName().equals("Render thread") || thread.getName().startsWith("Worker-")) {
+                LOGGER.warn("[Hotwire] {} at {}", thread.getName(), Arrays.stream(stack).limit(12)
+                        .map(String::valueOf).collect(Collectors.joining(" < ")));
+            }
+        });
     }
 }

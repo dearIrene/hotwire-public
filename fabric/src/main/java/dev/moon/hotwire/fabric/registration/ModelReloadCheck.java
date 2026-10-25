@@ -98,6 +98,10 @@ public final class ModelReloadCheck {
             look(Wrappers.readValues(map), mods, found, seen, owners, depth, most);
             return;
         }
+
+        if (value instanceof Collection<?> && owner != null) {
+            return;
+        }
         if (value instanceof Collection<?> || value instanceof Object[]) {
             Iterable<?> items = value instanceof Object[] array ? Arrays.asList(array) : (Collection<?>) value;
             int limit = value instanceof Object[] ? ARRAY_LOOKED_AT : LOOKED_AT;

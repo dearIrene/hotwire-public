@@ -4,6 +4,7 @@ import com.llamalad7.mixinextras.injector.wrapoperation.Operation;
 import com.llamalad7.mixinextras.injector.wrapoperation.WrapOperation;
 import dev.moon.hotwire.fabric.CrashGuard;
 import dev.moon.hotwire.fabric.FrameRecovery;
+import dev.moon.hotwire.fabric.ReloadFailures;
 import dev.moon.hotwire.fabric.RenderPassEnd;
 //? if >=1.21.2 {
 import dev.moon.hotwire.fabric.ResourceReload;
@@ -43,6 +44,13 @@ public abstract class MinecraftMixin {
         }
     }
     //?}
+
+    @Inject(method = "rollbackResourcePacks", at = @At("HEAD"), cancellable = true)
+    private void hotwire$runFailedReloadAgain(CallbackInfo ci) {
+        if (ReloadFailures.runAgainOnFailure()) {
+            ci.cancel();
+        }
+    }
 
     @Inject(method = "tick", at = @At("TAIL"))
     private void hotwire$runTickEnd(CallbackInfo ci) {

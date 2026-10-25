@@ -59,7 +59,8 @@
     "core.fabric.client.rendering.SpecialGuiElementRegistryImplAccessor",
     "core.fabric.client.rendering.SpecialGuiElementRegistryImplMixin",
     "core.client.gui.components.toasts.ToastInstanceAccessor",
-    "core.client.gui.components.toasts.ToastManagerAccessor"
+    "core.client.gui.components.toasts.ToastManagerAccessor",
+    "core.client.gui.screens.LoadingOverlayMixin"
   ],
   "injectors": {
     "defaultRequire": 1

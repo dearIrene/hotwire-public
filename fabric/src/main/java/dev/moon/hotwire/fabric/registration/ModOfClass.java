@@ -1,5 +1,6 @@
 package dev.moon.hotwire.fabric.registration;
 
+import dev.moon.hotwire.jar.JarPaths;
 import java.net.URI;
 import java.net.URISyntaxException;
 import java.net.URL;
@@ -46,7 +47,9 @@ public final class ModOfClass {
         for (ModContainer mod : loader.getAllMods()) {
             if (mod.getOrigin().getKind() == ModOrigin.Kind.PATH) {
                 for (Path path : mod.getOrigin().getPaths()) {
-                    this.byJar.putIfAbsent(path.toAbsolutePath().normalize(), mod.getMetadata().getId());
+                    for (Path key : JarPaths.findKeysOf(path)) {
+                        this.byJar.putIfAbsent(key, mod.getMetadata().getId());
+                    }
                 }
             }
             ModContainer top = mod;
@@ -59,15 +62,15 @@ public final class ModOfClass {
             }
             for (Path root : top.equals(mod) ? List.<Path>of() : mod.getRootPaths()) {
                 Path jar = findJarOf(root);
-                if (jar != null) {
-                    this.shipperOf.put(jar, top.getMetadata().getId());
+                for (Path key : jar == null ? List.<Path>of() : JarPaths.findKeysOf(jar)) {
+                    this.shipperOf.put(key, top.getMetadata().getId());
                 }
             }
 
             for (Path root : nestedOwned.test(mod.getMetadata().getId()) ? mod.getRootPaths() : List.<Path>of()) {
                 Path jar = findJarOf(root);
-                if (jar != null) {
-                    this.byJar.putIfAbsent(jar, mod.getMetadata().getId());
+                for (Path key : jar == null ? List.<Path>of() : JarPaths.findKeysOf(jar)) {
+                    this.byJar.putIfAbsent(key, mod.getMetadata().getId());
                 }
             }
         }
@@ -88,7 +91,9 @@ public final class ModOfClass {
     }
 
     synchronized void learn(Path jar, String modId) {
-        this.byJar.put(jar.toAbsolutePath().normalize(), modId);
+        for (Path key : JarPaths.findKeysOf(jar)) {
+            this.byJar.put(key, modId);
+        }
         this.learned.incrementAndGet();
     }
 

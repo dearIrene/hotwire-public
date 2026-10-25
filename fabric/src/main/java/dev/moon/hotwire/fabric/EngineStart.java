@@ -68,7 +68,6 @@ import net.fabricmc.loader.api.FabricLoader;
 import net.fabricmc.loader.api.ModContainer;
 import net.fabricmc.loader.impl.metadata.LoaderModMetadata;
 import net.minecraft.client.Minecraft;
-import net.minecraft.client.gui.screens.LoadingOverlay;
 import net.minecraft.server.packs.resources.SimpleReloadInstance;
 import org.jspecify.annotations.Nullable;
 import org.slf4j.Logger;
@@ -151,7 +150,7 @@ final class EngineStart {
         applier.holdRedefinitionWith(() -> GameHold.begin(Minecraft.getInstance())::release);
         applier.rebuildObjectsWith(ResourceReload::isRebuiltWhilePaused, new PausedRebuilds());
         InitHookReplay.skipRebuiltWith(ResourceReload::isRebuiltWhilePaused);
-        OffWindowObjects.setReloading(() -> ModViews.openOverlay() instanceof LoadingOverlay && isReloadMaking());
+        OffWindowObjects.setReloading(() -> ModViews.findLoadingOverlay() != null && isReloadMaking());
         InitHookReplay.answerWith(GameClasses::findLongLived, GameClasses::getStartupMethods);
         applier.runOnGameThreadWith(GameHold::onGameAndWait);
         CrashGuard.setMixinOwners(applier.getCarriedMixins()::findModShipping);
