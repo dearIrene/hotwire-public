@@ -276,9 +276,31 @@ public final class HotwireEngine implements ModScreen.Game, AutoCloseable {
                         WorldReopen.isLeftOnly()));
             } else {
                 this.showMessage(said, PlayerMessages.isBad(result.result()) || !result.faults().isEmpty());
+                this.offerReopenAfterOn(off, ids, result.result(), current);
             }
             this.refreshScreen();
         });
+    }
+
+    private void offerReopenAfterOn(boolean off, List<String> ids, ModSwitcher.Result result,
+            @Nullable ModScreen current) {
+        if (off || PlayerMessages.isBad(result) || current == null || Minecraft.getInstance().level == null) {
+            return;
+        }
+        List<String> onJoin = ids.stream().filter(id -> {
+            Path jar = this.installed.findJarOf(id);
+            return jar != null && this.changes.setsUpOnJoin(jar);
+        }).toList();
+        if (onJoin.isEmpty()) {
+            return;
+        }
+        String names = PlayerMessages.joinNames(onJoin, this.installed::nameOf);
+        if (Minecraft.getInstance().getSingleplayerServer() != null) {
+            current.offerReopen(new ReopenPanel.Offer(false, List.of(), null, names, "It's on. Part of it only"
+                    + " starts when you join a world, so it finishes at your next join."));
+        } else {
+            this.showMessage(names + " is on, and finishes setting up when you rejoin the server.", false);
+        }
     }
 
     public ModChanges getChanges() {

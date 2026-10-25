@@ -30,6 +30,7 @@ public final class HotwireClient implements ClientModInitializer {
                 HotwireClient::openSoon));
 
         OpenKey.register(HotwireClient::openSoon);
+        OffTooltips.register();
 
         ClientLifecycleEvents.CLIENT_STARTED.register(client -> client.execute(HotwireClient::getEngine));
 

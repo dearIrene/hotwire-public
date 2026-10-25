@@ -43,6 +43,8 @@ final class CollectionReferences {
     private static final int SLOWEST_NAMED = 8;
 
     private final Map<String, List<Removal>> removals = new HashMap<>();
+
+    private Set<Object> registered = Set.of();
     private final StaticRecomputer.Writer writer;
 
     private Set<Object> seen = Set.of();
@@ -89,6 +91,7 @@ final class CollectionReferences {
             });
 
             this.seen = Set.of();
+            this.registered = Set.of();
             this.mods = List.of();
             this.modSet = Set.of();
             this.mine = Map.of();
@@ -98,6 +101,7 @@ final class CollectionReferences {
 
     private void begin(List<String> mods) {
         this.seen = Collections.newSetFromMap(new IdentityHashMap<>());
+        this.registered = RegisteredContent.find();
         this.mods = List.copyOf(mods);
         this.modSet = Set.copyOf(mods);
         Map<String, List<Removal>> mine = new LinkedHashMap<>();
@@ -173,6 +177,9 @@ final class CollectionReferences {
     }
 
     private @Nullable String findOwnerOf(Object item) {
+        if (this.registered.contains(item)) {
+            return null;
+        }
         String owner = this.findOwnerAmong(item);
         if (owner != null) {
             return owner;
@@ -385,6 +392,10 @@ final class CollectionReferences {
                         if (mod == null) {
                             mod = Wrappers.findNamed(key, element, this.mods);
                         }
+
+                        if (this.registered.contains(key) || this.registered.contains(element)) {
+                            mod = null;
+                        }
                         if (mod != null) {
                             String owner = mod;
                             this.takeOrNote(() -> ElementTakes.takeFromMap(entries, key, element,
@@ -415,7 +426,8 @@ final class CollectionReferences {
                 return;
             }
             for (Map.Entry<Object, Object> entry : Wrappers.copyEntries(entries)) {
-                String mod = this.findModNamespaceOf(entry.getKey(), entry.getValue());
+                String mod = this.registered.contains(entry.getKey()) || this.registered.contains(entry.getValue())
+                        ? null : this.findModNamespaceOf(entry.getKey(), entry.getValue());
                 if (mod != null && !this.look.hasNoted(() -> this.removeFromNamespaced(map))
                         && entries.remove(entry.getKey(), entry.getValue())) {
                     this.getRemovalsOf(mod).add(new Removal.InMap(entries, entry.getKey(), entry.getValue()));
