@@ -18,15 +18,18 @@ import net.minecraft.client.input.MouseButtonEvent;
 
 public final class HotwireScreen extends Screen {
     private final ModScreen screen;
+    private final ScreenOpenTimer timer;
 
-    public HotwireScreen(ModScreen screen) {
+    public HotwireScreen(ModScreen screen, ScreenOpenTimer timer) {
         super(Component.literal("Hotwire"));
         this.screen = screen;
+        this.timer = timer;
     }
 
     @Override
     protected void init() {
         this.screen.resize(this.width, this.height);
+        this.timer.onSized();
     }
 
     @Override
@@ -43,13 +46,17 @@ public final class HotwireScreen extends Screen {
     @Override
     public void extractRenderState(GuiGraphicsExtractor graphics, int mouseX, int mouseY, float partialTick) {
         super.extractRenderState(graphics, mouseX, mouseY, partialTick);
+        this.timer.onFrameBegun();
         this.screen.drawFrame(new GuiCanvas(graphics, this.font), System.nanoTime(), mouseX, mouseY);
+        this.timer.onFrameDrawn();
     }
     //?} else {
     /*@Override
     public void render(GuiGraphics graphics, int mouseX, int mouseY, float partialTick) {
         super.render(graphics, mouseX, mouseY, partialTick);
+        this.timer.onFrameBegun();
         this.screen.drawFrame(new GuiCanvas(graphics, this.font), System.nanoTime(), mouseX, mouseY);
+        this.timer.onFrameDrawn();
     }
     *///?}
 

@@ -18,6 +18,7 @@ import dev.moon.hotwire.fabric.report.ReportZips;
 import dev.moon.hotwire.fabric.screen.HotwireScreen;
 import dev.moon.hotwire.fabric.screen.ModFileChooser;
 import dev.moon.hotwire.fabric.screen.ModIcons;
+import dev.moon.hotwire.fabric.screen.ScreenOpenTimer;
 import dev.moon.hotwire.fabric.update.ModUpdater;
 import dev.moon.hotwire.fabric.update.SwapAtClose;
 import dev.moon.hotwire.fabric.update.UpdateSupport;
@@ -173,9 +174,11 @@ public final class HotwireEngine implements ModScreen.Game, AutoCloseable {
         for (String remaining : SwapAtClose.getUnfinished(this.updateQueue)) {
             this.showMessage(remaining, true);
         }
+        ScreenOpenTimer timer = new ScreenOpenTimer();
         ModScreen opened = new ModScreen(this, this.profiles);
+        timer.onBuilt();
         this.screen = opened;
-        ModViews.show(new HotwireScreen(opened));
+        ModViews.show(new HotwireScreen(opened, timer));
         JvmParts parts = this.findParts();
         if (parts != null) {
             Fields.preloadStatics(parts.instrumentation());

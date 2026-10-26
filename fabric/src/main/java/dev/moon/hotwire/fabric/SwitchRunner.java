@@ -336,6 +336,10 @@ public final class SwitchRunner {
         this.reports.reportSwitch(result, this.switcher.getOff(), check, off ? byKind : Map.of(),
                 off ? Map.of() : byKind, faults);
         SwitchTimes.mark("report");
+
+        if (result instanceof ModSwitcher.Result.Done done) {
+            result = new ModSwitcher.Result.Done(done.plan(), done.applied(), SwitchTimes.getMillisSinceBegin());
+        }
         return new CheckedResult(result, check, faults);
     }
 }

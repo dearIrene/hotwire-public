@@ -338,6 +338,7 @@ public final class ModSwitcher {
         preloader.start();
     }
 
+    @SuppressWarnings("ThreadPriorityCheck")
     private void preload(int classes) {
         long began = System.nanoTime();
         int mixed = 0;
@@ -345,6 +346,12 @@ public final class ModSwitcher {
                 .map(id -> Map.entry(id, this.applier.findClassesPatchedBy(Set.of(id)).size()))
                 .filter(entry -> entry.getValue() > 0).sorted(Map.Entry.comparingByValue()).map(Map.Entry::getKey)
                 .toList();
+
+        if (!smallest.isEmpty() && !this.switched && !this.aheadAsked) {
+            Thread.currentThread().setPriority(Thread.NORM_PRIORITY);
+            this.readAhead.accept(List.of(smallest.getFirst()));
+            Thread.currentThread().setPriority(Thread.MIN_PRIORITY);
+        }
         for (String id : smallest) {
             if (mixed >= classes || this.switched || this.aheadAsked) {
                 break;
@@ -365,10 +372,6 @@ public final class ModSwitcher {
         }
         LOGGER.info("[Hotwire] the Mixin copy is warm: {} classes mixed for nothing in {} ms", mixed,
                 (System.nanoTime() - began) / 1_000_000);
-
-        if (!smallest.isEmpty() && !this.switched && !this.aheadAsked) {
-            this.readAhead.accept(List.of(smallest.getFirst()));
-        }
     }
 
     static boolean isSameSwitch(SwitchPlan one, SwitchPlan other) {

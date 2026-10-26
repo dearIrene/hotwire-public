@@ -41,6 +41,10 @@ public final class SwitchTimes {
         heard.accept(part);
     }
 
+    public static synchronized long getMillisSinceBegin() {
+        return depth == 0 || !Thread.currentThread().equals(owner) ? 0 : (System.nanoTime() - began) / 1_000_000;
+    }
+
     public static void tellWords(String words) {
         heard.accept(SAID + words);
     }
