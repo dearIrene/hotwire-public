@@ -14,6 +14,8 @@ final class UpdatePanel extends Panel {
     private static final int WIDTH = 420;
     private static final int CARD_H = 36;
 
+    private static final int WHEN_H = 16;
+
     private final BiConsumer<Path, UpdateMethod> onUpdate;
     private final Runnable onChange;
     private @Nullable Path jar;
@@ -49,7 +51,7 @@ final class UpdatePanel extends Panel {
             this.onPreviewReady(this.awaitPreview());
         }
         boolean cards = this.preview instanceof UpdatePreview.Ready;
-        this.size(WIDTH, 34 + (cards ? 96 : 0) + 12 * this.lineCount + 44);
+        this.size(WIDTH, 34 + (cards ? 96 + WHEN_H : 0) + 12 * this.lineCount + 44);
         super.step(dt);
     }
 
@@ -67,7 +69,8 @@ final class UpdatePanel extends Panel {
         this.changeActive(true);
         Path picked = this.jar;
         if (preview instanceof UpdatePreview.Ready ready && picked != null) {
-            this.setPrimary(Lang.get("hotwire.update.button"), () -> this.onUpdate.accept(picked, ready.method()));
+            this.setPrimary(Lang.get(ready.method() == UpdateMethod.IN_PLACE ? "hotwire.update.button.now"
+                    : "hotwire.update.button.restart"), () -> this.onUpdate.accept(picked, ready.method()));
         }
     }
 
@@ -117,6 +120,11 @@ final class UpdatePanel extends Panel {
             this.drawCard(canvas, ready, ready.name(), ready.fileName(), ready.newVersion(), Palette.ON,
                     x + 14, y + 34 + CARD_H + 14, w - 28, alpha);
             linesY = y + 34 + 96;
+
+            boolean now = ready.method() == UpdateMethod.IN_PLACE;
+            canvas.drawText(canvas.clip(Lang.get(now ? "hotwire.update.when.now" : "hotwire.update.when.restart"),
+                    w - 28), x + 14, linesY, Colors.fade(now ? Palette.ON : Palette.BAD, alpha));
+            linesY += WHEN_H;
         }
         List<String> lines = new ArrayList<>();
         for (String line : body.lines()) {

@@ -88,8 +88,8 @@ final class UpdatesPanel extends Panel {
             button.setBounds(x + w - 14 - BUTTON_W, rowY - 2, BUTTON_W, BUTTON_H);
 
             button.setVisible(inView);
-            button.setAlpha(s > 0.5f && inView ? 1 : 0);
-            button.setActive(this.open() && s > 0.9f && inView);
+            button.setAlpha(inView ? this.getBoxShown() : 0);
+            button.setActive(this.open() && s > 0.9f && inView, inView);
             rowY += this.getRowHeight(at);
         }
     }

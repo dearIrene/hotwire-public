@@ -93,7 +93,7 @@ public final class ModUpdater {
 
         Set<String> on();
 
-        Canvas.@Nullable Image findIcon(Path jar);
+        Canvas.@Nullable Image findIcon(String id, Path jar);
 
         boolean satisfies(String version, List<String> ranges);
 
@@ -201,7 +201,7 @@ public final class ModUpdater {
         lines.addAll(UpdateText.describeLines(whole.plan()));
         LOGGER.info("[Hotwire] the update of {} to {}, in full: {}", manifest.name(), manifest.version(),
                 UpdateText.describeDetails(whole.plan()));
-        return UpdatePreview.Ready.of(manifest.name(), this.engine.findIcon(jar), installed,
+        return UpdatePreview.Ready.of(manifest.name(), this.engine.findIcon(manifest.id(), jar), installed,
                 manifest.version(), fileName, getMethodOf(whole.plan().tier()), lines);
     }
 

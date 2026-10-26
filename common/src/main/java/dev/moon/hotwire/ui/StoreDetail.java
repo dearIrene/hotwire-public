@@ -2,9 +2,8 @@ package dev.moon.hotwire.ui;
 
 import dev.moon.hotwire.modrinth.ModrinthClient;
 import dev.moon.hotwire.modrinth.StoreModel;
-import java.util.ArrayList;
 import java.util.List;
-import java.util.regex.Pattern;
+import java.util.function.Consumer;
 import org.jspecify.annotations.Nullable;
 
 public final class StoreDetail extends Panel {
@@ -15,30 +14,40 @@ public final class StoreDetail extends Panel {
     static final int WIDTH = 520;
     static final int LINE = 12;
     static final int ROW = 18;
+    private static final int ICON = 28;
     private static final int MOST_VERSIONS = 8;
-    private static final Pattern IMAGE = Pattern.compile("!\\[[^\\]]*]\\([^)]*\\)");
-    private static final Pattern LINK = Pattern.compile("\\[([^\\]]*)]\\([^)]*\\)");
-    private static final Pattern TAG = Pattern.compile("<[^>]+>");
-    private static final Pattern MARKS = Pattern.compile("^[#>*\\-+\\s]+|[*_`~]+");
-    private static final Pattern BLANKS = Pattern.compile("\\n{3,}");
+    private static final int LEAST_HEIGHT = 180;
+    private static final int MOST_HEIGHT = 440;
+
+    private static final int HEAD = 50;
 
     private final StoreModel model;
+    private final StoreIcons icons;
     private final Adds adds;
+    private final Consumer<String> openLink;
     private final EasedValue scroll = EasedValue.ofSpeed(12);
     private ModrinthClient.@Nullable Hit hit;
     private ModrinthClient.@Nullable Project project;
     private List<ModrinthClient.Version> versions = List.of();
     private @Nullable String failure;
-    private List<String> bodyLines = List.of();
+    private List<MarkdownLines.Line> bodyLines = List.of();
+
+    private String bodyRead = "";
     private int bodyWidth;
     private float scrollTarget;
     private int contentHeight;
     private int rowsTop;
 
-    public StoreDetail(StoreModel model, Adds adds, Runnable onClose) {
+    private int linkY = Integer.MIN_VALUE;
+    private int linkWidth;
+
+    public StoreDetail(StoreModel model, StoreIcons icons, Adds adds, Consumer<String> openLink, Runnable onClose) {
         super(Lang.get("hotwire.button.close"), onClose);
         this.model = model;
+        this.icons = icons;
         this.adds = adds;
+        this.openLink = openLink;
+        this.setLineY(HEAD - 10);
     }
 
     public void open(ModrinthClient.Hit hit) {
@@ -47,6 +56,8 @@ public final class StoreDetail extends Panel {
         this.versions = List.of();
         this.failure = null;
         this.bodyLines = List.of();
+        this.bodyRead = "";
+        this.contentHeight = 0;
         this.scrollTarget = 0;
         this.scroll.snap(0);
         this.setPrimaryWidth(110);
@@ -81,9 +92,9 @@ public final class StoreDetail extends Panel {
 
     @Override
     public void step(float dt) {
-        int height = Math.min(this.getHeight() - 48, 440);
-        this.size(WIDTH, height);
-        int room = this.getBoxHeight() - 46 - 40;
+        int most = Math.min(this.getHeight() - 48, MOST_HEIGHT);
+        this.size(WIDTH, Math.min(most, Math.max(LEAST_HEIGHT, HEAD + this.contentHeight + 46)));
+        int room = this.getBoxHeight() - HEAD - 40;
         this.scrollTarget = Math.max(0, Math.min(this.scrollTarget, Math.max(0, this.contentHeight - room)));
         this.scroll.to(this.scrollTarget);
         this.scroll.step(dt);
@@ -99,25 +110,29 @@ public final class StoreDetail extends Panel {
         ModrinthClient.Project page = this.project;
         int left = x + 14;
         int textW = w - 28;
-        canvas.drawText(canvas.clip(shown.title(), textW - 120), left, y + 16, Colors.fade(Palette.TEXT, alpha));
-        String counts = StoreGrid.describeDownloads(page == null ? shown.downloads() : page.downloads()) + " "
-                + Lang.get("hotwire.store.downloads");
-        canvas.drawText(counts, x + w - 14 - canvas.measureText(counts), y + 16, Colors.fade(Palette.FAINT, alpha));
-        int top = y + 46;
+        this.drawHeader(canvas, alpha, shown, page, left, y + 10, x + w - 14);
+        int top = y + HEAD;
         int bottom = y + h - 40;
         canvas.pushClip(x, top, x + w, bottom);
-        int lineY = top - Math.round(this.scroll.getValue());
+        int lineY = top + 4 - Math.round(this.scroll.getValue());
         int startY = lineY;
-        String by = shown.author() + (page == null || page.license().isEmpty() ? ""
-                : "  " + Lang.get("hotwire.store.license", page.license()));
-        canvas.drawText(canvas.clip(by, textW), left, lineY, Colors.fade(Palette.DIM, alpha));
-        lineY += LINE + 4;
+        this.linkY = Integer.MIN_VALUE;
         if (page != null && !page.sourceUrl().isEmpty()) {
-            canvas.drawText(canvas.clip(page.sourceUrl(), textW), left, lineY, Colors.fade(Palette.PATH, alpha));
-            lineY += LINE + 4;
+            String link = canvas.clip(page.sourceUrl(), textW);
+            this.linkWidth = canvas.measureText(link);
+            this.linkY = lineY;
+            boolean over = this.isHovered() && this.isOnLink(this.getPointerX(), this.getPointerY(), left)
+                    && lineY >= top && lineY + LINE <= bottom;
+            canvas.drawText(link, left, lineY, Colors.fade(over ? Palette.TEXT : Palette.PATH, alpha));
+            if (over) {
+                canvas.fill(left, lineY + 9, left + this.linkWidth, lineY + 10, Colors.fade(Palette.PATH, alpha));
+            }
+            lineY += LINE + 6;
         }
-        for (String line : this.findBodyLines(canvas, page == null ? shown.description() : page.body(), textW)) {
-            canvas.drawText(line, left, lineY, Colors.fade(Palette.TEXT, alpha));
+        for (MarkdownLines.Line line : this.findBodyLines(canvas, page == null ? shown.description() : page.body(),
+                textW)) {
+            lineY += line.above();
+            canvas.drawText(line.text(), left + line.indent(), lineY, Colors.fade(line.color(), alpha));
             lineY += LINE;
         }
         lineY += 6;
@@ -154,29 +169,36 @@ public final class StoreDetail extends Panel {
         canvas.popClip();
     }
 
-    private List<String> findBodyLines(Canvas canvas, String body, int width) {
-        if (this.bodyWidth == width && !this.bodyLines.isEmpty()) {
-            return this.bodyLines;
+    private void drawHeader(Canvas canvas, float alpha, ModrinthClient.Hit shown,
+            ModrinthClient.@Nullable Project page, int left, int top, int right) {
+        Canvas.Image icon = shown.iconUrl().isEmpty() ? null : this.icons.find(shown.iconUrl());
+        if (icon == null || !canvas.drawImage(icon, left, top, ICON, ICON, alpha)) {
+            canvas.fill(left, top, left + ICON, top + ICON, Colors.fade(Palette.TRACK, alpha));
         }
-        List<String> out = new ArrayList<>();
-        String plain = BLANKS.matcher(TAG.matcher(LINK.matcher(IMAGE.matcher(body).replaceAll(""))
-                .replaceAll("$1")).replaceAll("")).replaceAll("\n\n");
-        for (String paragraph : plain.lines().toList()) {
-            String line = MARKS.matcher(paragraph).replaceAll("").strip();
-            if (line.isEmpty()) {
-                if (!out.isEmpty() && !out.getLast().isEmpty()) {
-                    out.add("");
-                }
-                continue;
-            }
-            out.addAll(MessageLine.wrap(canvas, line, width, Integer.MAX_VALUE));
+        String counts = StoreGrid.describeDownloads(page == null ? shown.downloads() : page.downloads()) + " "
+                + Lang.get("hotwire.store.downloads");
+        int countsW = canvas.measureText(counts);
+        canvas.drawText(counts, right - countsW, top + 3, Colors.fade(Palette.FAINT, alpha));
+        int textX = left + ICON + 10;
+        canvas.drawText(canvas.clip(shown.title(), right - textX - countsW - 12), textX, top + 3,
+                Colors.fade(Palette.TEXT, alpha));
+        String by = shown.author() + (page == null || page.license().isEmpty() ? ""
+                : "  " + Lang.get("hotwire.store.license", page.license()));
+        canvas.drawText(canvas.clip(by, right - textX), textX, top + 16, Colors.fade(Palette.DIM, alpha));
+    }
+
+    private boolean isOnLink(double px, double py, int left) {
+        return this.linkY != Integer.MIN_VALUE && px >= left && px < left + this.linkWidth && py >= this.linkY - 2
+                && py < this.linkY + LINE - 2;
+    }
+
+    private List<MarkdownLines.Line> findBodyLines(Canvas canvas, String body, int width) {
+        if (this.bodyWidth != width || !this.bodyRead.equals(body)) {
+            this.bodyLines = MarkdownLines.of(canvas, body, width);
+            this.bodyRead = body;
+            this.bodyWidth = width;
         }
-        while (!out.isEmpty() && out.getLast().isEmpty()) {
-            out.removeLast();
-        }
-        this.bodyLines = out;
-        this.bodyWidth = width;
-        return out;
+        return this.bodyLines;
     }
 
     @Override
@@ -188,15 +210,21 @@ public final class StoreDetail extends Panel {
     @Override
     protected boolean onClick(double px, double py, int button) {
         ModrinthClient.Hit shown = this.hit;
+        ModrinthClient.Project page = this.project;
         int left = this.getBoxX() + 14;
         int right = this.getBoxX() + this.getBoxWidth() - 14;
-        if (button == 0 && shown != null && px >= left && px < right) {
-            int index = (int) Math.floor((py - this.rowsTop) / ROW);
-            int top = this.getBoxY() + 46;
-            int bottom = this.getBoxY() + this.getBoxHeight() - 40;
-            if (index >= 0 && index < this.versions.size() && py >= top && py < bottom) {
-                this.adds.add(shown.projectId(), this.versions.get(index).id(), shown.title());
-            }
+        int top = this.getBoxY() + HEAD;
+        int bottom = this.getBoxY() + this.getBoxHeight() - 40;
+        if (button != 0 || shown == null || px < left || px >= right || py < top || py >= bottom) {
+            return true;
+        }
+        if (page != null && this.isOnLink(px, py, left)) {
+            this.openLink.accept(page.sourceUrl());
+            return true;
+        }
+        int index = (int) Math.floor((py - this.rowsTop) / ROW);
+        if (index >= 0 && index < this.versions.size()) {
+            this.adds.add(shown.projectId(), this.versions.get(index).id(), shown.title());
         }
         return true;
     }

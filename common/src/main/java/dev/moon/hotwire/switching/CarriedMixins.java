@@ -37,6 +37,11 @@ public final class CarriedMixins {
 
     List<String> findLost(Map<String, Set<String>> carriedNow, Map<String, Set<String>> carried,
             Map<String, byte[]> mixed, Set<String> on, Predicate<String> askedAgain) {
+        return this.findLost(carriedNow, carried, mixed, on, askedAgain, Set.of());
+    }
+
+    List<String> findLost(Map<String, Set<String>> carriedNow, Map<String, Set<String>> carried,
+            Map<String, byte[]> mixed, Set<String> on, Predicate<String> askedAgain, Set<String> replacing) {
         Set<String> offMixins = this.getMixinsOf(id -> !on.contains(id));
         List<String> found = new ArrayList<>();
         new TreeMap<>(carriedNow).forEach((type, mixins) -> new TreeSet<>(mixins).forEach(mixin -> {
@@ -48,6 +53,8 @@ public final class CarriedMixins {
                 LOGGER.debug("[Hotwire] {} drops {}, whose mod is off", type, mixin);
             } else if (askedAgain.test(mixin)) {
                 LOGGER.info("[Hotwire] {} drops {}, which its own plugin declined with the mods on now", type, mixin);
+            } else if (!replacing.isEmpty() && this.findModMaking(mixin, on::contains) == null) {
+                LOGGER.info("[Hotwire] {} drops {}, which no mod staying on makes: the update's own", type, mixin);
             } else if (this.game.findLoaded(mixin.replace('.', '/')) != null) {
                 LOGGER.info("[Hotwire] {} drops {}, a loaded class and so not a mixin", type, mixin);
             } else if (isGaining(type, carriedNow, carried) && this.isSelfContained(mixin)) {

@@ -6,6 +6,7 @@ import dev.moon.hotwire.fabric.registration.Fields;
 import dev.moon.hotwire.fabric.registration.GameHold;
 import dev.moon.hotwire.fabric.registration.GameRegistrations;
 import dev.moon.hotwire.fabric.screen.HotwireScreen;
+import dev.moon.hotwire.fabric.screen.StoreGameScreen;
 import dev.moon.hotwire.redefine.FieldSlots;
 import java.util.ArrayList;
 import java.util.Collection;
@@ -140,6 +141,9 @@ public final class ModViews {
         }
         if (screen instanceof HotwireScreen) {
             HotwireClient.getEngine().open();
+            return;
+        }
+        if (screen instanceof StoreGameScreen) {
             return;
         }
         show(minecraft.level == null ? new TitleScreen() : null);

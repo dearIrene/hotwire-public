@@ -52,7 +52,7 @@ final class AdvancedPanel extends Panel {
             for (Button button : buttons) {
                 button.setBounds(bx, rowY - 2, CHOICE_W, 20);
                 button.setAlpha(s);
-                button.setActive(this.open() && s > 0.9f);
+                button.setActive(this.open() && s > 0.9f, true);
                 bx += CHOICE_W + 4;
             }
         }

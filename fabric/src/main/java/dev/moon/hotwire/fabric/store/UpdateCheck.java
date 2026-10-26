@@ -4,6 +4,7 @@ import dev.moon.hotwire.fabric.InstalledMods;
 import dev.moon.hotwire.fabric.update.ModUpdater;
 import dev.moon.hotwire.jar.ModManifest;
 import dev.moon.hotwire.modrinth.ModrinthClient;
+import dev.moon.hotwire.ui.Lang;
 import dev.moon.hotwire.update.UpdateOffer;
 import java.io.IOException;
 import java.nio.file.Files;
@@ -122,7 +123,7 @@ public final class UpdateCheck {
         out.add(offer);
     }
 
-    public List<Path> fetchById(String id, List<UpdateOffer> offers) throws IOException {
+    public List<Path> fetchById(String id, List<UpdateOffer> offers, Consumer<String> saying) throws IOException {
         boolean ofTheGame = id.equals("fabricloader") || id.equals("minecraft") || id.equals("java");
         boolean partOfFabricApi = id.startsWith("fabric-") && !id.equals("fabric-api");
         if (ofTheGame || partOfFabricApi) {
@@ -130,7 +131,7 @@ public final class UpdateCheck {
         }
         for (UpdateOffer offer : offers) {
             if (offer.id().equals(id)) {
-                return this.fetchWithNeeds(offer);
+                return this.fetchWithNeeds(offer, saying);
             }
         }
         List<ModrinthClient.Version> versions;
@@ -145,10 +146,12 @@ public final class UpdateCheck {
         }
         List<Path> jars = new ArrayList<>();
         Set<String> seen = new HashSet<>();
-        for (String needed : versions.getFirst().requiredProjects()) {
-            this.fetchNeeded(needed, seen, jars);
+        ModrinthClient.Version newest = versions.getFirst();
+        for (String needed : newest.requiredProjects()) {
+            this.fetchNeeded(needed, newest.name().isBlank() ? id : newest.name(), seen, jars, saying);
         }
-        jars.add(this.write(versions.getFirst()));
+        saying.accept(Lang.get("hotwire.updates.getting_for_update", newest.name().isBlank() ? id : newest.name()));
+        jars.add(this.write(newest));
         return jars;
     }
 
@@ -160,19 +163,24 @@ public final class UpdateCheck {
         }
     }
 
-    public List<Path> fetchWithNeeds(UpdateOffer offer) throws IOException {
+    public List<Path> fetchWithNeeds(UpdateOffer offer, Consumer<String> saying) throws IOException {
         List<Path> jars = new ArrayList<>();
         Set<String> seen = new HashSet<>();
         for (String needed : offer.requiredProjects()) {
-            this.fetchNeeded(needed, seen, jars);
+            this.fetchNeeded(needed, offer.name(), seen, jars, saying);
         }
+        saying.accept(Lang.get("hotwire.updates.getting", offer.name(), offer.newVersion()));
         jars.add(this.fetch(offer));
         return jars;
     }
 
-    private void fetchNeeded(String projectId, Set<String> seen, List<Path> into) throws IOException {
-        if (!seen.add(projectId) || this.installedProjects.contains(projectId)
-                || this.installed.isInstalled(projectId) || FabricLoader.getInstance().isModLoaded(projectId)) {
+    private void fetchNeeded(String projectId, String neededBy, Set<String> seen, List<Path> into,
+            Consumer<String> saying) throws IOException {
+        if (!seen.add(projectId) || this.isInstalled(projectId)) {
+            return;
+        }
+        ModrinthClient.Project project = this.client.findProject(projectId);
+        if (this.isInstalled(project)) {
             return;
         }
         List<ModrinthClient.Version> versions = this.client.findVersions(projectId);
@@ -181,9 +189,23 @@ public final class UpdateCheck {
         }
         ModrinthClient.Version newest = versions.getFirst();
         for (String deeper : newest.requiredProjects()) {
-            this.fetchNeeded(deeper, seen, into);
+            this.fetchNeeded(deeper, project.title(), seen, into, saying);
         }
+        saying.accept(Lang.get("hotwire.updates.getting_needed", project.title(), neededBy));
         into.add(this.write(newest));
+    }
+
+    private boolean isInstalled(String projectId) {
+        return this.installedProjects.contains(projectId) || this.installed.isInstalled(projectId)
+                || FabricLoader.getInstance().isModLoaded(projectId);
+    }
+
+    private boolean isInstalled(ModrinthClient.Project project) {
+        if (this.installed.isInstalled(project.slug()) || FabricLoader.getInstance().isModLoaded(project.slug())) {
+            return true;
+        }
+        return FabricLoader.getInstance().getAllMods().stream()
+                .anyMatch(mod -> mod.getMetadata().getName().equalsIgnoreCase(project.title()));
     }
 
     public Path fetch(UpdateOffer offer) throws IOException {

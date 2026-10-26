@@ -11,7 +11,8 @@ import java.util.Map;
 import java.util.Optional;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.ConcurrentHashMap;
-import net.minecraft.client.Minecraft;
+import java.util.concurrent.ExecutorService;
+import java.util.concurrent.Executors;
 import org.jspecify.annotations.Nullable;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -20,8 +21,13 @@ public final class StoreIconLoader implements StoreIcons {
     private static final Logger LOGGER = LoggerFactory.getLogger(StoreIconLoader.class);
     private static final int MOST_LIVE = 160;
 
+    private static final int FETCHERS = 6;
+
     private final StoreModel model;
     private final StoreCache cache;
+    @SuppressWarnings("ThreadPriorityCheck")
+    private final ExecutorService fetchers = Executors.newFixedThreadPool(FETCHERS, Thread.ofPlatform()
+            .name("hotwire-store-icons-", 0).daemon().priority(Thread.MIN_PRIORITY).factory());
     private final Map<String, CompletableFuture<Optional<ModIcons.Icon>>> icons = new ConcurrentHashMap<>();
 
     private final LinkedHashMap<String, Boolean> seen = new LinkedHashMap<>(MOST_LIVE, 0.75f, true);
@@ -50,7 +56,7 @@ public final class StoreIconLoader implements StoreIcons {
 
     private CompletableFuture<Optional<ModIcons.Icon>> load(String url) {
         CompletableFuture<Optional<ModIcons.Icon>> future = new CompletableFuture<>();
-        this.model.run(() -> {
+        this.fetchers.execute(() -> {
             try {
                 Optional<byte[]> bytes = this.cache.findIcon(url);
                 if (bytes.isEmpty()) {
@@ -65,14 +71,5 @@ public final class StoreIconLoader implements StoreIcons {
             }
         });
         return future;
-    }
-
-    @Override
-    public void releaseAll() {
-        Minecraft.getInstance().execute(() -> {
-            this.icons.values().forEach(future -> future.getNow(Optional.empty()).ifPresent(ModIcons.Icon::release));
-            this.icons.clear();
-            this.seen.clear();
-        });
     }
 }

@@ -16,6 +16,8 @@ final class Button extends Element {
     private boolean useShort;
     private boolean active = true;
 
+    private boolean looksActive = true;
+
     private int badge;
 
     public Button(String label, boolean primary, Runnable action) {
@@ -63,7 +65,12 @@ final class Button extends Element {
     }
 
     void setActive(boolean active) {
+        this.setActive(active, active);
+    }
+
+    void setActive(boolean active, boolean looksActive) {
         this.active = active;
+        this.looksActive = looksActive;
     }
 
     boolean isActive() {
@@ -84,8 +91,8 @@ final class Button extends Element {
         int w = this.getWidth();
         int h = this.getHeight();
         float hot = this.hover.getValue();
-        boolean lit = this.primary && this.active;
-        int edge = this.active ? Palette.PANEL_EDGE : INACTIVE_EDGE;
+        boolean lit = this.primary && this.looksActive;
+        int edge = this.looksActive ? Palette.PANEL_EDGE : INACTIVE_EDGE;
         if (lit) {
             edge = Colors.mix(Palette.ACCENT, Palette.TEXT, 0.35f + hot * 0.25f);
         }
@@ -118,7 +125,7 @@ final class Button extends Element {
     }
 
     private int getInk(float hot) {
-        if (!this.active) {
+        if (!this.looksActive) {
             return Palette.FAINT;
         }
         return this.primary ? Palette.ON_ACCENT : Colors.mix(Palette.DIM, Palette.TEXT, hot);

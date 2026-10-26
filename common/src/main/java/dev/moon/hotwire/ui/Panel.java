@@ -24,6 +24,8 @@ class Panel extends Element {
 
     private int primaryNeeds;
 
+    private int lineY = 34;
+
     @SuppressWarnings("this-escape")
 
     public Panel(@Nullable Runnable onCancel) {
@@ -111,6 +113,10 @@ class Panel extends Element {
         }
     }
 
+    void setLineY(int lineY) {
+        this.lineY = lineY;
+    }
+
     void setPrimaryWidth(int width) {
         this.primaryWidth = width;
     }
@@ -170,17 +176,17 @@ class Panel extends Element {
         if (this.cancel != null) {
             this.cancel.setBounds(cancelX, y, BUTTON_W, BUTTON_H);
             this.cancel.setAlpha(s);
-            this.cancel.setActive(ready);
+            this.cancel.setActive(ready, true);
         }
         if (this.change != null) {
             this.change.setBounds(cancelX - 6 - BUTTON_W, y, BUTTON_W, BUTTON_H);
             this.change.setAlpha(s);
-            this.change.setActive(ready && this.changeActive);
+            this.change.setActive(ready && this.changeActive, this.changeActive);
         }
         if (this.primary != null) {
             this.primary.setBounds(x + 14, y, Math.max(this.primaryWidth, this.primaryNeeds), BUTTON_H);
             this.primary.setAlpha(s);
-            this.primary.setActive(ready && this.primaryActive);
+            this.primary.setActive(ready && this.primaryActive, this.primaryActive);
         }
     }
 
@@ -201,7 +207,7 @@ class Panel extends Element {
         canvas.fill(x - 1, y - 1, x + w + 1, y + h + 1, Colors.fade(Palette.PANEL_EDGE, s));
         canvas.fill(x, y, x + w, y + h, Colors.fade(Palette.PANEL, s));
         canvas.fill(x, y, x + w, y + 2, Colors.fade(this.refused ? Palette.BAD : Palette.ACCENT, s));
-        canvas.fill(x + 14, y + 34, x + w - 14, y + 36, Colors.fade(Palette.TRACK, s));
+        canvas.fill(x + 14, y + this.lineY, x + w - 14, y + this.lineY + 2, Colors.fade(Palette.TRACK, s));
         this.drawContent(canvas, s, x, y, w, h);
     }
 

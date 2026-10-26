@@ -19,7 +19,6 @@ public final class UpdateText {
 
     public static List<String> describeLines(UpdatePlan plan) {
         List<String> out = new ArrayList<>();
-        out.add(Lang.get(findTierKey(plan.tier())));
         int changed = (int) plan.actions().stream().filter(action -> action.kind() == ClassAction.Kind.REDEFINE
                 || action.kind() == ClassAction.Kind.SPLIT).count();
         if (plan.tier() == UpdateTier.IN_PLACE && changed > 0) {

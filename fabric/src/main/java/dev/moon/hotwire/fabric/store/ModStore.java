@@ -21,7 +21,7 @@ import net.minecraft.client.Minecraft;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
-public final class ModStore implements AutoCloseable {
+public final class ModStore {
     private static final Logger LOGGER = LoggerFactory.getLogger(ModStore.class);
     private static final String LOADER = "fabric";
 
@@ -140,12 +140,6 @@ public final class ModStore implements AutoCloseable {
         Path jar = this.downloads.resolve(version.fileName().replaceAll("[^A-Za-z0-9._+ -]", "_"));
         Files.write(jar, bytes);
         return jar;
-    }
-
-    @Override
-    public void close() {
-        this.icons.releaseAll();
-        this.model.close();
     }
 
     private static String findVersionOf(String id) {

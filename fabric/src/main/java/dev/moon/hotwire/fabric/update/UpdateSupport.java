@@ -200,8 +200,9 @@ public final class UpdateSupport implements ModUpdater.Engine {
     }
 
     @Override
-    public Canvas.@Nullable Image findIcon(Path jar) {
-        return this.icons.ofJar(jar);
+    public Canvas.@Nullable Image findIcon(String id, Path jar) {
+        Canvas.Image shown = this.icons.of(id);
+        return shown != null ? shown : this.icons.ofJar(jar);
     }
 
     @Override

@@ -122,8 +122,8 @@ final class PendingPanel extends Panel {
             Button button = this.buttons.get(at);
             int bw = change instanceof PendingChange.Revertable ? REVERT_W : BUTTON_W;
             button.setBounds(x + w - 14 - bw, rowY - 2, bw, BUTTON_H);
-            button.setAlpha(s > 0.5f ? 1 : 0);
-            button.setActive(this.open() && s > 0.9f);
+            button.setAlpha(this.getBoxShown());
+            button.setActive(this.open() && s > 0.9f, true);
             rowY += this.getRowHeight(at, change);
         }
     }

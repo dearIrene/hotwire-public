@@ -21,7 +21,7 @@ import java.util.Set;
 import java.util.concurrent.CompletableFuture;
 import org.jspecify.annotations.Nullable;
 
-public final class ModScreen {
+public final class ModScreen implements JarHost {
     public interface Game {
         List<ModStatus> getMods();
 
@@ -282,6 +282,7 @@ public final class ModScreen {
         this.message.show(text, bad);
     }
 
+    @Override
     public void showMessage(String text, boolean bad, String hint) {
         this.message.show(text, bad, hint);
     }
@@ -301,6 +302,7 @@ public final class ModScreen {
         this.addPanel.read(jar, this.game.dryRunAdd(jar));
     }
 
+    @Override
     public void offerAdd(Path jar, CompletableFuture<AddPreview> preview) {
         this.addPanel.read(jar, preview);
     }
@@ -327,6 +329,7 @@ public final class ModScreen {
         return false;
     }
 
+    @Override
     public void onJarPicked(Path jar, boolean update) {
         if (update) {
             this.onJarToUpdate(jar);
@@ -432,6 +435,7 @@ public final class ModScreen {
     private void closePanels() {
         this.addPanel.dismiss();
         this.updatePanel.dismiss();
+        this.updatesPanel.dismiss();
         this.advancedPanel.dismiss();
         this.pendingPanel.dismiss();
         this.reportPanel.dismiss();

@@ -463,7 +463,7 @@ public final class SwitchApplier {
         Set<String> keeping = new HashSet<>(on);
         keeping.removeAll(replacing);
         List<String> lost = this.carriedMixins.findLost(carriedNow, mixed.carried(), mixed.mixed(), keeping,
-                decided::isAskedAgain);
+                decided::isAskedAgain, replacing);
         if (!lost.isEmpty()) {
             throw RebuildException.ofLosing("the " + what + " would drop patches of mods that stay on: " + lost,
                     new IllegalStateException(String.join(", ", lost)), this.findOwnersOf(lost, on));

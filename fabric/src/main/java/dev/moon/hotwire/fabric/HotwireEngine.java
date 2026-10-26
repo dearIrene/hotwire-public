@@ -22,6 +22,7 @@ import dev.moon.hotwire.fabric.screen.ModFileChooser;
 import dev.moon.hotwire.fabric.screen.ModIcons;
 import dev.moon.hotwire.fabric.screen.ScreenOpenTimer;
 import dev.moon.hotwire.fabric.screen.StoreGameScreen;
+import dev.moon.hotwire.fabric.screen.WebLinks;
 import dev.moon.hotwire.fabric.store.ModStore;
 import dev.moon.hotwire.fabric.store.UpdateCheck;
 import dev.moon.hotwire.fabric.update.ModUpdater;
@@ -41,6 +42,7 @@ import dev.moon.hotwire.ui.AddPreview;
 import dev.moon.hotwire.ui.AdvancedOption;
 import dev.moon.hotwire.ui.Canvas;
 import dev.moon.hotwire.ui.ChooserScreen;
+import dev.moon.hotwire.ui.JarHost;
 import dev.moon.hotwire.ui.Lang;
 import dev.moon.hotwire.ui.ModScreen;
 import dev.moon.hotwire.ui.Progress;
@@ -66,8 +68,11 @@ import java.nio.file.Path;
 import java.util.ArrayDeque;
 import java.util.ArrayList;
 import java.util.Deque;
+import java.util.HashMap;
 import java.util.HashSet;
 import java.util.List;
+import java.util.Map;
+import java.util.Objects;
 import java.util.Optional;
 import java.util.Set;
 import java.util.concurrent.CompletableFuture;
@@ -119,7 +124,9 @@ public final class HotwireEngine implements ModScreen.Game, AutoCloseable {
 
     private @Nullable Screen under;
 
-    private @Nullable ModStore chooserStore;
+    private @Nullable ModStore store;
+    private @Nullable StoreScreen storeScreen;
+    private final Map<Path, String> storeProjects = new HashMap<>();
 
     private final UpdateCheck updateCheck;
     private List<UpdateOffer> updateOffers = List.of();
@@ -284,7 +291,8 @@ public final class HotwireEngine implements ModScreen.Game, AutoCloseable {
             String failure = null;
             for (UpdateOffer offer : this.updateCheck.orderByNeeds(offers, this.updateOffers)) {
                 try {
-                    List<Path> fetched = this.updateCheck.fetchWithNeeds(offer);
+                    List<Path> fetched = this.updateCheck.fetchWithNeeds(offer, said -> Minecraft.getInstance()
+                            .execute(() -> this.showMessage(said, false)));
                     for (int i = 0; i < fetched.size(); i++) {
                         jars.add(new StoreJar(fetched.get(i), i == fetched.size() - 1));
                     }
@@ -303,6 +311,22 @@ public final class HotwireEngine implements ModScreen.Game, AutoCloseable {
                 this.offerNextStoreJar();
             });
         });
+    }
+
+    private void dropOffer(ModUpdater.Result result) {
+        String id = switch (result) {
+            case ModUpdater.Result.Updated updated -> updated.id();
+            case ModUpdater.Result.Queued queued -> queued.id();
+            default -> null;
+        };
+        if (id == null) {
+            return;
+        }
+        this.updateOffers = this.updateOffers.stream().filter(offer -> !offer.id().equals(id)).toList();
+        ModScreen current = this.screen;
+        if (current != null) {
+            current.setUpdates(this.updateOffers, true);
+        }
     }
 
     private List<String> findSwitchableOn() {
@@ -369,8 +393,11 @@ public final class HotwireEngine implements ModScreen.Game, AutoCloseable {
 
     void showMessage(String text, boolean bad, String hint) {
         GameLog.LOGGER.info("[Hotwire] told the player: {}", text);
+        StoreScreen shownStore = this.findShownStore();
         ModScreen current = this.screen;
-        if (current != null && ModViews.isHotwireShown()) {
+        if (shownStore != null) {
+            shownStore.showMessage(text, bad, hint);
+        } else if (current != null && ModViews.isHotwireShown()) {
             current.showMessage(text, bad, hint);
         } else {
             ModViews.showChat(text, bad, hint);
@@ -795,11 +822,38 @@ public final class HotwireEngine implements ModScreen.Game, AutoCloseable {
     private void pickJar(String ask, boolean update) {
         this.showMessage(ask, false);
         ModFileChooser.choose(jar -> {
-            ModScreen current = this.screen;
-            if (current != null) {
-                current.onJarPicked(jar, update);
+            JarHost host = this.findHost();
+            if (host != null) {
+                host.onJarPicked(jar, update);
             }
         }, this::tellNoPicker);
+    }
+
+    private @Nullable StoreScreen findShownStore() {
+        StoreScreen shown = this.storeScreen;
+        return shown != null && ModViews.openScreen() instanceof StoreGameScreen ? shown : null;
+    }
+
+    private @Nullable JarHost findHost() {
+        StoreScreen shownStore = this.findShownStore();
+        return shownStore != null ? shownStore : this.screen;
+    }
+
+    private ModScreen findReopenHost() {
+        ModScreen current = this.screen;
+        if (current == null || this.findShownStore() != null) {
+            ModViews.show(this.makeScreen(this.under));
+            current = Objects.requireNonNull(this.screen);
+        }
+        return current;
+    }
+
+    private void markStoreInstalled(Path jar) {
+        String project = this.storeProjects.remove(jar);
+        ModStore made = this.store;
+        if (project != null && made != null) {
+            made.getModel().markInstalled(project);
+        }
     }
 
     @Override
@@ -820,7 +874,7 @@ public final class HotwireEngine implements ModScreen.Game, AutoCloseable {
     @SuppressWarnings("FutureReturnValueIgnored")
     private void offerNextStoreJar() {
         StoreJar next = this.storeJars.poll();
-        ModScreen current = this.screen;
+        JarHost current = this.findHost();
         if (next == null || current == null) {
             return;
         }
@@ -841,7 +895,7 @@ public final class HotwireEngine implements ModScreen.Game, AutoCloseable {
                         case UpdatePreview.Unreadable unreadable -> Lang.get("hotwire.update.unreadable");
                     };
                     if (skip == null) {
-                        ModScreen shown = this.screen;
+                        JarHost shown = this.findHost();
                         if (shown != null) {
                             shown.onJarPicked(next.jar(), true);
                         }
@@ -878,7 +932,8 @@ public final class HotwireEngine implements ModScreen.Game, AutoCloseable {
             carried.forEach(library -> front.add(new StoreJar(library, false)));
             for (String id : needs) {
                 try {
-                    List<Path> jars = this.updateCheck.fetchById(id, offers);
+                    List<Path> jars = this.updateCheck.fetchById(id, offers, said -> Minecraft.getInstance()
+                            .execute(() -> this.showMessage(said, false)));
                     for (int i = 0; i < jars.size(); i++) {
                         boolean update = i == jars.size() - 1 && this.installed.isInstalled(id);
                         front.add(new StoreJar(jars.get(i), update));
@@ -922,12 +977,15 @@ public final class HotwireEngine implements ModScreen.Game, AutoCloseable {
             }
         }, result -> {
             then.accept(result);
-            ModScreen current = this.screen;
+            if (result instanceof ModAdder.Result.Added) {
+                this.markStoreInstalled(jar);
+            }
+            JarHost current = this.findHost();
             if (mode == AddMode.NOW && ModAdder.isWorldBuilt(result) && WorldReopen.findRefusal().isEmpty()
                     && current != null) {
                 LOGGER.info("[Hotwire] {}", ((ModAdder.Result.Failed) result).reason());
-                current.offerReopen(new ReopenPanel.Offer(false, List.of(), jar, String.valueOf(jar.getFileName()),
-                        Lang.get("hotwire.add.world_open")));
+                this.findReopenHost().offerReopen(new ReopenPanel.Offer(false, List.of(), jar,
+                        String.valueOf(jar.getFileName()), Lang.get("hotwire.add.world_open")));
             } else if (ModAdder.isRestartOnly(result) && current != null) {
                 LOGGER.info("[Hotwire] {}", ((ModAdder.Result.Failed) result).reason());
                 List<String> why = List.of(Lang.get("hotwire.add.start_only"));
@@ -939,7 +997,7 @@ public final class HotwireEngine implements ModScreen.Game, AutoCloseable {
                 this.showMessage(added.name() + " is in." + this.changes.copyIntoMods(jar) + (own ? ""
                         : " It finishes setting up as you join a world: rejoin the server to have all of it."), false);
                 if (own) {
-                    current.offerReopen(new ReopenPanel.Offer(false, List.of(), null, added.name(),
+                    this.findReopenHost().offerReopen(new ReopenPanel.Offer(false, List.of(), null, added.name(),
                             Lang.get("hotwire.add.finishes_at_join")));
                 }
             } else {
@@ -988,6 +1046,10 @@ public final class HotwireEngine implements ModScreen.Game, AutoCloseable {
         this.tasks.submit("update", () -> parts.updates().update(jar, method), result -> {
             this.showMessage(UpdateSupport.describe(result), !(result instanceof ModUpdater.Result.Updated
                     || result instanceof ModUpdater.Result.Queued));
+            this.dropOffer(result);
+            if (result instanceof ModUpdater.Result.Updated || result instanceof ModUpdater.Result.Queued) {
+                this.markStoreInstalled(jar);
+            }
             this.refreshScreen();
             this.offerNextStoreJar();
         });
@@ -1002,6 +1064,7 @@ public final class HotwireEngine implements ModScreen.Game, AutoCloseable {
         this.screen = null;
         this.under = null;
         this.storeJars.clear();
+        this.storeProjects.clear();
         this.needsMet.clear();
         ModViews.show(back);
     }
@@ -1056,10 +1119,7 @@ public final class HotwireEngine implements ModScreen.Game, AutoCloseable {
                 || current instanceof StoreGameScreen ? this.under : current;
         this.under = back;
 
-        ModStore store = new ModStore(this.installed);
-        store.getModel().open();
-        store.checkInstalled();
-        this.chooserStore = store;
+        ModStore store = this.findStore();
         ModViews.show(new ChooserGameScreen(new ChooserScreen(new ChooserScreen.Choice() {
             @Override
             public void openStore() {
@@ -1068,13 +1128,11 @@ public final class HotwireEngine implements ModScreen.Game, AutoCloseable {
 
             @Override
             public void openHotwire() {
-                store.close();
                 ModViews.show(HotwireEngine.this.makeScreen(back));
             }
 
             @Override
             public void close() {
-                store.close();
                 HotwireEngine.this.under = null;
                 ModViews.show(back);
             }
@@ -1099,12 +1157,23 @@ public final class HotwireEngine implements ModScreen.Game, AutoCloseable {
         return false;
     }
 
-    public @Nullable ModStore getChooserStore() {
-        return this.chooserStore;
+    private ModStore findStore() {
+        ModStore made = this.store;
+        if (made == null) {
+            made = new ModStore(this.installed);
+            made.checkInstalled();
+            this.store = made;
+        }
+        made.getModel().open();
+        return made;
+    }
+
+    public @Nullable ModStore getStore() {
+        return this.store;
     }
 
     public void openStoreNow(String words) {
-        ModStore store = this.chooserStore;
+        ModStore store = this.store;
         if (store == null) {
             return;
         }
@@ -1124,17 +1193,20 @@ public final class HotwireEngine implements ModScreen.Game, AutoCloseable {
             if (jars.size() > 1) {
                 this.showMessage(Lang.get("hotwire.store.getting_with", title, jars.size() - 1), false);
             }
-            ModViews.show(this.makeScreen(back));
+            if (this.findShownStore() == null) {
+                ModViews.show(this.makeScreen(back));
+            }
             this.storeJars.clear();
             for (int i = 0; i < jars.size(); i++) {
                 this.storeJars.add(new StoreJar(jars.get(i), update && i == jars.size() - 1));
             }
+            this.storeProjects.put(jars.getLast(), projectId);
             this.offerNextStoreJar();
         }, failure -> this.showMessage(failure, true));
     }
 
     public void addFromStoreNow(String projectId, String versionId) {
-        ModStore store = this.chooserStore;
+        ModStore store = this.store;
         if (store != null) {
             this.addFromStore(store, this.under, projectId, versionId, projectId);
         }
@@ -1148,14 +1220,21 @@ public final class HotwireEngine implements ModScreen.Game, AutoCloseable {
             }
 
             @Override
+            public void openLink(String link) {
+                WebLinks.open(link);
+            }
+
+            @Override
             public void onBack() {
                 HotwireEngine.this.under = null;
                 ModViews.show(back);
             }
-        }, store.getIcons(), store.getLoader(), store.getGameVersion());
+        }, this, store.getIcons(), store.getLoader(), store.getGameVersion());
+        this.storeScreen = screen;
         ModViews.show(new StoreGameScreen(screen, () -> {
-            store.close();
-            this.chooserStore = null;
+            if (this.storeScreen == screen) {
+                this.storeScreen = null;
+            }
         }));
     }
 }
