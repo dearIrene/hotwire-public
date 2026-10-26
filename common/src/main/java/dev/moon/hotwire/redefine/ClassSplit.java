@@ -246,18 +246,18 @@ public final class ClassSplit {
         ReflectionBridge.rewrite(out);
         ReflectionBridge.rewrite(side);
 
-        ClassWriter target = new ClassWriter(new ClassReader(runningBytes), ClassWriter.COMPUTE_MAXS);
-        out.accept(target);
-        return new Result(LambdaSites.rewrite(target.toByteArray()),
-                LambdaSites.rewrite(DuckBridge.write(side, ClassWriter.COMPUTE_MAXS)), List.copyOf(moved),
-                List.copyOf(stubbed), Set.copyOf(ducks),
+        byte[] target = OldClasses.write(out, mixed.version, new ClassReader(runningBytes), ClassWriter.COMPUTE_MAXS,
+                classBytes);
+        return new Result(LambdaSites.rewrite(target),
+                LambdaSites.rewrite(OldClasses.write(side, side.version, null, ClassWriter.COMPUTE_MAXS, classBytes)),
+                List.copyOf(moved), List.copyOf(stubbed), Set.copyOf(ducks),
                 holderFields.isEmpty() ? null : split.buildFieldHolder(mixed.version, holderFields, mixed, allDucks,
-                        allMoved),
+                        allMoved, classBytes),
                 Set.copyOf(movedInstance), rehashes);
     }
 
     private byte[] buildFieldHolder(int version, List<FieldNode> fields, ClassNode mixed, Set<String> ducks,
-            Set<String> moved) throws SplitException {
+            Set<String> moved, Function<String, byte @Nullable []> classBytes) throws SplitException {
         String target = this.target;
         String name = target + "$hotwire$fields";
         ClassNode holder = new ClassNode();
@@ -288,7 +288,7 @@ public final class ClassSplit {
         DuckBridge.rewrite(holder, ducks, moved);
         ReflectionBridge.rewrite(holder);
         DuckBridge.eraseFields(holder, ducks);
-        return DuckBridge.write(holder, ClassWriter.COMPUTE_MAXS);
+        return OldClasses.write(holder, holder.version, null, ClassWriter.COMPUTE_MAXS, classBytes);
     }
 
     private static Set<String> findStillFinal(ClassNode running) {

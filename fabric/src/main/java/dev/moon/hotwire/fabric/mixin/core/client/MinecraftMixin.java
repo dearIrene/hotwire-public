@@ -11,8 +11,11 @@ import dev.moon.hotwire.fabric.ResourceReload;
 //?}
 import dev.moon.hotwire.fabric.add.TickEnd;
 import dev.moon.hotwire.fabric.registration.GameHold;
+import dev.moon.hotwire.redefine.StartArguments;
 import dev.moon.hotwire.switching.CrashPolicy;
 import net.minecraft.client.Minecraft;
+import net.minecraft.client.main.GameConfig;
+import org.objectweb.asm.Type;
 import org.spongepowered.asm.mixin.Mixin;
 import org.spongepowered.asm.mixin.injection.At;
 import org.spongepowered.asm.mixin.injection.Inject;
@@ -20,6 +23,12 @@ import org.spongepowered.asm.mixin.injection.callback.CallbackInfo;
 
 @Mixin(Minecraft.class)
 public abstract class MinecraftMixin {
+    @Inject(method = "<init>", at = @At("RETURN"))
+    private void hotwire$saveConfig(GameConfig config, CallbackInfo ci) {
+        StartArguments.save(Type.getInternalName(Minecraft.class) + ".<init>"
+                + Type.getMethodDescriptor(Type.VOID_TYPE, Type.getType(GameConfig.class)), config);
+    }
+
     @WrapOperation(method = "run", at = @At(value = "INVOKE", target = "Lnet/minecraft/client/Minecraft;runTick(Z)V"))
     @SuppressWarnings("checkstyle:IllegalCatch")
     private void hotwire$catchFrameThrow(Minecraft game, boolean advance, Operation<Void> original) {

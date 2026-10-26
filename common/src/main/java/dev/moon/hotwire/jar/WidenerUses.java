@@ -12,6 +12,7 @@ import org.jspecify.annotations.Nullable;
 import org.objectweb.asm.ClassReader;
 import org.objectweb.asm.Handle;
 import org.objectweb.asm.Opcodes;
+import org.objectweb.asm.Type;
 import org.objectweb.asm.tree.AbstractInsnNode;
 import org.objectweb.asm.tree.ClassNode;
 import org.objectweb.asm.tree.FieldInsnNode;
@@ -375,12 +376,18 @@ public final class WidenerUses {
                             array.desc), "", ""));
                 }
                 case InvokeDynamicInsnNode site -> {
-                    for (Object argument : site.bsmArgs) {
-                        if (argument instanceof Handle handle
-                                && isUncarried(handle, node, openings, namedElsewhere)) {
-                            uses.add(new Use(node.name, method.name, Kind.HANDLE, findNamed(handle, openings),
-                                    handle.getName(), handle.getDesc()));
+                    boolean reference = isOpenedReference(site, node.name, openings);
+                    for (int at = 0; at < site.bsmArgs.length; at++) {
+                        if (!(site.bsmArgs[at] instanceof Handle handle)
+                                || !isUncarried(handle, node, openings, namedElsewhere)) {
+                            continue;
                         }
+
+                        Kind kind = !reference || at != 1 ? Kind.HANDLE
+                                : handle.getTag() == Opcodes.H_NEWINVOKESPECIAL ? Kind.NEW : Kind.CALL;
+                        uses.add(new Use(node.name, method.name, kind, findNamed(handle, openings),
+                                handle.getTag() == Opcodes.H_NEWINVOKESPECIAL ? "<init>" : handle.getName(),
+                                handle.getDesc()));
                     }
                 }
                 case LdcInsnNode ldc when ldc.cst instanceof Handle handle
@@ -392,6 +399,19 @@ public final class WidenerUses {
                 }
             }
         }
+    }
+
+    public static boolean isOpenedReference(InvokeDynamicInsnNode site, String inClass, Openings openings) {
+        if (!site.bsm.getOwner().equals("java/lang/invoke/LambdaMetafactory") || site.bsmArgs.length < 3
+                || !(site.bsmArgs[1] instanceof Handle handle) || handle.getOwner().equals(inClass)) {
+            return false;
+        }
+        int tag = handle.getTag();
+        boolean method = tag == Opcodes.H_INVOKESTATIC || tag == Opcodes.H_INVOKEVIRTUAL
+                || tag == Opcodes.H_INVOKEINTERFACE || tag == Opcodes.H_NEWINVOKESPECIAL;
+        boolean opened = openings.classes.contains(handle.getOwner()) || openings.mentions(handle.getDesc())
+                || openings.opens(handle.getOwner(), handle.getName(), handle.getDesc());
+        return method && opened && !openings.mentions(Type.getReturnType(site.desc).getDescriptor());
     }
 
     private static boolean isUncarried(Handle handle, ClassNode node, Openings openings,

@@ -212,11 +212,7 @@ public final class AddedOverrides {
         }
         ClassNode node = new ClassNode();
         new ClassReader(mixed).accept(node, 0);
-        if (node.version < Opcodes.V1_7) {
-            LOGGER.info("[Hotwire] {} is a class of before Java 7, which cannot ask for the overrides of {}: code"
-                    + " loaded before their mods calls its own until a restart", name, methods);
-            return mixed;
-        }
+
         for (MethodNode method : node.methods.toArray(MethodNode[]::new)) {
             if (methods.contains(method.name + method.desc) && (method.access & (NEVER_OVERRIDES | Opcodes.ACC_NATIVE
                     | Opcodes.ACC_FINAL)) == 0) {

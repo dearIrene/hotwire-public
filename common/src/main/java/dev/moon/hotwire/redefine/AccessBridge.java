@@ -147,6 +147,7 @@ public final class AccessBridge {
         if (openings.classes().contains(node.name) || !DuckBridge.raiseForInvokeDynamic(node)) {
             return classBytes;
         }
+        addReferenceBodies(node, openings);
 
         Set<String> declared = new HashSet<>();
         node.methods.forEach(method -> declared.add(method.name + method.desc));
@@ -157,6 +158,56 @@ public final class AccessBridge {
         ClassWriter writer = new ClassWriter(0);
         node.accept(writer);
         return eraseCallSites(writer.toByteArray(), openings);
+    }
+
+    private static void addReferenceBodies(ClassNode node, WidenerUses.Openings openings) {
+        int made = 0;
+        for (MethodNode method : List.copyOf(node.methods)) {
+            for (AbstractInsnNode insn : method.instructions) {
+                if (insn instanceof InvokeDynamicInsnNode site
+                        && WidenerUses.isOpenedReference(site, node.name, openings)) {
+                    MethodNode body = buildReferenceBody((Handle) site.bsmArgs[1],
+                            "lambda$hotwire$reference$" + made++);
+                    node.methods.add(body);
+                    site.bsmArgs[1] = new Handle(Opcodes.H_INVOKESTATIC, node.name, body.name, body.desc,
+                            (node.access & Opcodes.ACC_INTERFACE) != 0);
+                }
+            }
+        }
+    }
+
+    private static MethodNode buildReferenceBody(Handle target, String name) {
+        int tag = target.getTag();
+        boolean made = tag == Opcodes.H_NEWINVOKESPECIAL;
+        List<Type> parameters = new ArrayList<>();
+        if (tag == Opcodes.H_INVOKEVIRTUAL || tag == Opcodes.H_INVOKEINTERFACE) {
+            parameters.add(Type.getObjectType(target.getOwner()));
+        }
+        parameters.addAll(List.of(Type.getArgumentTypes(target.getDesc())));
+        Type result = made ? Type.getObjectType(target.getOwner()) : Type.getReturnType(target.getDesc());
+        MethodNode body = new MethodNode(Opcodes.ACC_PRIVATE | Opcodes.ACC_STATIC | Opcodes.ACC_SYNTHETIC, name,
+                Type.getMethodDescriptor(result, parameters.toArray(Type[]::new)), null, null);
+        if (made) {
+            body.instructions.add(new TypeInsnNode(Opcodes.NEW, target.getOwner()));
+            body.instructions.add(new InsnNode(Opcodes.DUP));
+        }
+        int slot = 0;
+        for (Type argument : parameters) {
+            body.instructions.add(new VarInsnNode(argument.getOpcode(Opcodes.ILOAD), slot));
+            slot += argument.getSize();
+        }
+        int opcode = switch (tag) {
+            case Opcodes.H_INVOKESTATIC -> Opcodes.INVOKESTATIC;
+            case Opcodes.H_INVOKEINTERFACE -> Opcodes.INVOKEINTERFACE;
+            case Opcodes.H_NEWINVOKESPECIAL -> Opcodes.INVOKESPECIAL;
+            default -> Opcodes.INVOKEVIRTUAL;
+        };
+        body.instructions.add(new MethodInsnNode(opcode, target.getOwner(), made ? "<init>" : target.getName(),
+                target.getDesc(), target.isInterface()));
+        body.instructions.add(new InsnNode(result.getOpcode(Opcodes.IRETURN)));
+        body.maxLocals = slot;
+        body.maxStack = Math.max(slot + 2, result.getSize());
+        return body;
     }
 
     static void rewriteMembers(ClassNode node, String host, WidenerUses.Openings openings) {

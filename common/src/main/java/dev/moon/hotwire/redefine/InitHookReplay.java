@@ -50,6 +50,7 @@ public final class InitHookReplay {
     private static final Logger LOGGER = LoggerFactory.getLogger(InitHookReplay.class);
     private static volatile BooleanSupplier isLaterAllowed = () -> false;
     static final String ON_OBJECTS = "hotwire$passedHooks";
+    private static final String START_ARGUMENTS = StartArguments.class.getName().replace('.', '/');
     static final String ON_CLASS = "hotwire$passedStaticHooks";
     private static final String CALLBACK = "org/spongepowered/asm/mixin/injection/callback/CallbackInfo";
 
@@ -349,6 +350,13 @@ public final class InitHookReplay {
                 int local = captured[index - callback - 1];
                 recomputed.add(local);
                 loads.add(new VarInsnNode(arguments[index].getOpcode(Opcodes.ILOAD), local));
+            } else if (index < callback && moment != null && arguments[index].getSort() >= Type.ARRAY
+                    && StartArguments.has(node.name + "." + moment.name + moment.desc, index)) {
+                loads.add(new LdcInsnNode(node.name + "." + moment.name + moment.desc));
+                loads.add(new LdcInsnNode(index));
+                loads.add(new MethodInsnNode(Opcodes.INVOKESTATIC, START_ARGUMENTS, "get",
+                        "(Ljava/lang/String;I)Ljava/lang/Object;", false));
+                loads.add(new TypeInsnNode(Opcodes.CHECKCAST, arguments[index].getInternalName()));
             } else {
                 why.append("argument ").append(index).append(" (").append(arguments[index].getClassName())
                         .append(") is read and no final field of the ")
