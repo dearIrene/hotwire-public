@@ -1,7 +1,22 @@
 Required Notice: Copyright (c) 2026 Moonshee
 
-Additional permission: in addition to the license below, the licensor permits anyone to include unmodified copies
-of the released Hotwire jar in modpacks, and to distribute those modpacks.
+## Extra terms
+
+These terms add to the PolyForm Strict License 1.0.0 below. Where the two differ, these win.
+
+**Modpacks.** You may put Hotwire in a modpack and share that modpack, as long as you use the official jar,
+unmodified.
+
+**Mods.** Your mod may compile against and call Hotwire's API (`dev.moon.hotwire.api`), as long as it doesn't bundle
+Hotwire or copy its code.
+
+**Clients.** Minecraft clients may not use Hotwire in any way. They may not ship it, bundle it, add it to their client
+or launcher, copy it, rewrite it, or study, decompile or reverse engineer it to make their own. A client is any
+company, project or product that gives players its own modified Minecraft client or client launcher with its own
+features, such as Lunar Client, Badlion Client, Feather Client, LabyMod and Dawn Client. This also covers the people
+who make, run or work on one. Launchers that only install the mods and modpacks a player picks, such as Prism,
+MultiMC, the Modrinth App and CurseForge, are not clients. A client may only use Hotwire with the licensor's written
+permission, on the licensor's terms.
 
 # PolyForm Strict License 1.0.0
 
