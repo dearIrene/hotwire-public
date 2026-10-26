@@ -23,6 +23,22 @@ public final class Progress {
         public boolean hasCount() {
             return this.countTotal > 0;
         }
+
+        public double getFraction() {
+            int steps = Math.max(1, this.labels.size());
+            double at = Math.max(0, Math.min(steps, this.at));
+            double within = this.hasCount() && this.at < steps ? Math.min(1, this.countDone / (double) this.countTotal)
+                    : 0;
+            return Math.min(1, (at + within) / steps);
+        }
+
+        public String describe() {
+            if (!this.words.isBlank()) {
+                return this.words;
+            }
+            String current = this.current();
+            return current.isBlank() ? "Preparing" : current;
+        }
     }
 
     private volatile Snapshot now = new Snapshot(0, "", List.of(), 0, "", 0, 0, false, false, false, 0, 0);

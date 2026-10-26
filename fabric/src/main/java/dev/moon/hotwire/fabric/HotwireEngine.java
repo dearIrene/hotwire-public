@@ -1,6 +1,6 @@
 package dev.moon.hotwire.fabric;
 
-import dev.moon.hotwire.api.v1.SwitchResult;
+import dev.moon.hotwire.api.SwitchResult;
 import dev.moon.hotwire.concurrent.Tasks;
 import dev.moon.hotwire.config.HotwireSettings;
 import dev.moon.hotwire.config.ProfileStore;
@@ -23,6 +23,7 @@ import dev.moon.hotwire.fabric.update.SwapAtClose;
 import dev.moon.hotwire.fabric.update.UpdateSupport;
 import dev.moon.hotwire.jar.ModManifest;
 import dev.moon.hotwire.jvm.JvmAccessException;
+import dev.moon.hotwire.plan.ModGraph;
 import dev.moon.hotwire.redefine.LoadedClassBytes;
 import dev.moon.hotwire.redefine.Tripwire;
 import dev.moon.hotwire.switching.ModSwitcher;
@@ -207,7 +208,7 @@ public final class HotwireEngine implements ModScreen.Game, AutoCloseable {
         return this.bound instanceof Bound.Ready ready ? ready.parts() : null;
     }
 
-    private String getSwitchRefusal() {
+    String getSwitchRefusal() {
         return this.bound instanceof Bound.Refused refused ? refused.why() : "";
     }
 
@@ -220,7 +221,7 @@ public final class HotwireEngine implements ModScreen.Game, AutoCloseable {
         return parts == null || parts.runner().getSwitcher().isOn(id);
     }
 
-    private boolean isWorldLocked() {
+    boolean isWorldLocked() {
         return this.settings.getInWorld() == HotwireSettings.InWorld.OFF && Minecraft.getInstance().level != null;
     }
 
@@ -259,7 +260,7 @@ public final class HotwireEngine implements ModScreen.Game, AutoCloseable {
         if (this.isWorldLocked()) {
             return this.refuse("In-world switching is off in Advanced: leave the world, then switch.");
         }
-        CompletableFuture<SwitchResult> ended = new CompletableFuture<>();
+        CompletableFuture<SwitchResult> ended = HotwireApiImpl.beginSwitch();
         this.tasks.submit("switch", () -> work.apply(parts.runner()), result -> {
             String said = PlayerMessages.describe(result.result(), this.installed::nameOf)
                     + PlayerMessages.describe(result.check())
@@ -281,12 +282,8 @@ public final class HotwireEngine implements ModScreen.Game, AutoCloseable {
                 this.showMessage(said, PlayerMessages.isBad(result.result()) || !result.faults().isEmpty());
             }
             this.refreshScreen();
-            ended.complete(toSwitchResult(result.result(), said));
-        }).whenComplete((done, error) -> {
-            if (error != null) {
-                ended.complete(new SwitchResult(SwitchResult.Kind.FAILED, List.of(), "The switch failed: " + error));
-            }
-        });
+            HotwireApiImpl.endSwitch(ended, HotwireApiImpl.toResult(result.result(), said), this::isOn);
+        }).whenComplete((done, error) -> HotwireApiImpl.endIfFailed(ended, error, this::isOn));
         return ended;
     }
 
@@ -294,15 +291,6 @@ public final class HotwireEngine implements ModScreen.Game, AutoCloseable {
         this.showMessage(said, true);
         this.refreshScreen();
         return CompletableFuture.completedFuture(new SwitchResult(SwitchResult.Kind.REFUSED, List.of(), said));
-    }
-
-    private static SwitchResult toSwitchResult(ModSwitcher.Result result, String said) {
-        return switch (result) {
-            case ModSwitcher.Result.Done done -> new SwitchResult(SwitchResult.Kind.DONE, done.plan().order(), said);
-            case ModSwitcher.Result.Refused refused -> new SwitchResult(SwitchResult.Kind.REFUSED, List.of(), said);
-            case ModSwitcher.Result.Failed failed -> new SwitchResult(failed.cause().reopenFixes()
-                    ? SwitchResult.Kind.NEEDS_REOPEN : SwitchResult.Kind.FAILED, List.of(), said);
-        };
     }
 
     public ModChanges getChanges() {
@@ -329,6 +317,7 @@ public final class HotwireEngine implements ModScreen.Game, AutoCloseable {
     @Override
     @SuppressWarnings("FutureReturnValueIgnored")
     public void switchWithReopen(boolean off, List<String> ids) {
+        CompletableFuture<SwitchResult> ended = HotwireApiImpl.beginSwitch();
         this.tasks.submit("save and switch", () -> {
             try {
                 return Optional.ofNullable(this.runSwitchWithReopen(off, ids));
@@ -337,12 +326,13 @@ public final class HotwireEngine implements ModScreen.Game, AutoCloseable {
                 throw new IllegalStateException("the switch was interrupted while the world closed or opened", e);
             }
         }, result -> {
-            result.ifPresentOrElse(done -> this.showMessage(PlayerMessages.describe(done.result(),
-                    this.installed::nameOf)
-                    + PlayerMessages.describe(done.check()), PlayerMessages.isBad(done.result())),
-                    () -> this.showMessage("The world is open again.", false));
+            String said = result.map(done -> PlayerMessages.describe(done.result(), this.installed::nameOf)
+                    + PlayerMessages.describe(done.check())).orElse("The world is open again.");
+            this.showMessage(said, result.map(done -> PlayerMessages.isBad(done.result())).orElse(false));
             this.refreshScreen();
-        });
+            HotwireApiImpl.endSwitch(ended, result.map(done -> HotwireApiImpl.toResult(done.result(), said))
+                    .orElse(new SwitchResult(SwitchResult.Kind.DONE, List.of(), said)), this::isOn);
+        }).whenComplete((done, error) -> HotwireApiImpl.endIfFailed(ended, error, this::isOn));
     }
 
     public SwitchRunner.@Nullable CheckedResult runSwitchWithReopen(boolean off, List<String> ids)
@@ -358,6 +348,10 @@ public final class HotwireEngine implements ModScreen.Game, AutoCloseable {
 
     public List<String> getDryRunCandidates() {
         return this.installed.getTopLevel().stream().filter(ModPolicy::isSwitchable).toList();
+    }
+
+    ModGraph getGraph() {
+        return this.installed.getGraph();
     }
 
     public String nameOfMod(String id) {

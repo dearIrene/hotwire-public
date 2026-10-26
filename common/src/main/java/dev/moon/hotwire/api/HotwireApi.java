@@ -1,9 +1,10 @@
-package dev.moon.hotwire.api.v1;
+package dev.moon.hotwire.api;
 
 import java.util.Collection;
 import java.util.List;
 import java.util.Optional;
 import java.util.concurrent.CompletableFuture;
+import java.util.function.Consumer;
 
 public interface HotwireApi {
     static HotwireApi getInstance() {
@@ -12,11 +13,23 @@ public interface HotwireApi {
 
     int getRevision();
 
+    boolean isReady();
+
+    boolean isSwitching();
+
+    SwitchProgress getProgress();
+
     List<ModState> getMods();
 
     Optional<ModState> findMod(String id);
 
+    SwitchPreview previewOff(Collection<String> ids);
+
+    SwitchPreview previewOn(Collection<String> ids);
+
     CompletableFuture<SwitchResult> turnOff(Collection<String> ids);
 
     CompletableFuture<SwitchResult> turnOn(Collection<String> ids);
+
+    void addListener(Consumer<SwitchResult> listener);
 }

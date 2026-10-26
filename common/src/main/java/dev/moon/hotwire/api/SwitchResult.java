@@ -1,4 +1,4 @@
-package dev.moon.hotwire.api.v1;
+package dev.moon.hotwire.api;
 
 import java.util.List;
 

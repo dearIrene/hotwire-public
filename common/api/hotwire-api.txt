@@ -1,0 +1,58 @@
+public abstract interface dev.moon.hotwire.api.HotwireApi
+  public abstract boolean dev.moon.hotwire.api.HotwireApi.isReady()
+  public abstract boolean dev.moon.hotwire.api.HotwireApi.isSwitching()
+  public abstract dev.moon.hotwire.api.SwitchPreview dev.moon.hotwire.api.HotwireApi.previewOff(java.util.Collection<java.lang.String>)
+  public abstract dev.moon.hotwire.api.SwitchPreview dev.moon.hotwire.api.HotwireApi.previewOn(java.util.Collection<java.lang.String>)
+  public abstract dev.moon.hotwire.api.SwitchProgress dev.moon.hotwire.api.HotwireApi.getProgress()
+  public abstract int dev.moon.hotwire.api.HotwireApi.getRevision()
+  public abstract java.util.List<dev.moon.hotwire.api.ModState> dev.moon.hotwire.api.HotwireApi.getMods()
+  public abstract java.util.Optional<dev.moon.hotwire.api.ModState> dev.moon.hotwire.api.HotwireApi.findMod(java.lang.String)
+  public abstract java.util.concurrent.CompletableFuture<dev.moon.hotwire.api.SwitchResult> dev.moon.hotwire.api.HotwireApi.turnOff(java.util.Collection<java.lang.String>)
+  public abstract java.util.concurrent.CompletableFuture<dev.moon.hotwire.api.SwitchResult> dev.moon.hotwire.api.HotwireApi.turnOn(java.util.Collection<java.lang.String>)
+  public abstract void dev.moon.hotwire.api.HotwireApi.addListener(java.util.function.Consumer<dev.moon.hotwire.api.SwitchResult>)
+  public static dev.moon.hotwire.api.HotwireApi dev.moon.hotwire.api.HotwireApi.getInstance()
+public final dev.moon.hotwire.api.ModState
+  public boolean dev.moon.hotwire.api.ModState.on()
+  public boolean dev.moon.hotwire.api.ModState.switchable()
+  public dev.moon.hotwire.api.ModState(java.lang.String,java.lang.String,java.lang.String,boolean,boolean,java.lang.String)
+  public final boolean dev.moon.hotwire.api.ModState.equals(java.lang.Object)
+  public final int dev.moon.hotwire.api.ModState.hashCode()
+  public final java.lang.String dev.moon.hotwire.api.ModState.toString()
+  public java.lang.String dev.moon.hotwire.api.ModState.blocked()
+  public java.lang.String dev.moon.hotwire.api.ModState.id()
+  public java.lang.String dev.moon.hotwire.api.ModState.name()
+  public java.lang.String dev.moon.hotwire.api.ModState.version()
+public final dev.moon.hotwire.api.SwitchPreview
+  public boolean dev.moon.hotwire.api.SwitchPreview.possible()
+  public dev.moon.hotwire.api.SwitchPreview(boolean,java.util.List<java.lang.String>,java.lang.String)
+  public final boolean dev.moon.hotwire.api.SwitchPreview.equals(java.lang.Object)
+  public final int dev.moon.hotwire.api.SwitchPreview.hashCode()
+  public final java.lang.String dev.moon.hotwire.api.SwitchPreview.toString()
+  public java.lang.String dev.moon.hotwire.api.SwitchPreview.message()
+  public java.util.List<java.lang.String> dev.moon.hotwire.api.SwitchPreview.switched()
+public final dev.moon.hotwire.api.SwitchProgress
+  public boolean dev.moon.hotwire.api.SwitchProgress.running()
+  public dev.moon.hotwire.api.SwitchProgress(boolean,double,java.lang.String,int,int,java.lang.String)
+  public double dev.moon.hotwire.api.SwitchProgress.fraction()
+  public final boolean dev.moon.hotwire.api.SwitchProgress.equals(java.lang.Object)
+  public final int dev.moon.hotwire.api.SwitchProgress.hashCode()
+  public final java.lang.String dev.moon.hotwire.api.SwitchProgress.toString()
+  public int dev.moon.hotwire.api.SwitchProgress.done()
+  public int dev.moon.hotwire.api.SwitchProgress.total()
+  public java.lang.String dev.moon.hotwire.api.SwitchProgress.step()
+  public java.lang.String dev.moon.hotwire.api.SwitchProgress.subject()
+public final dev.moon.hotwire.api.SwitchResult
+  public dev.moon.hotwire.api.SwitchResult$Kind dev.moon.hotwire.api.SwitchResult.kind()
+  public dev.moon.hotwire.api.SwitchResult(dev.moon.hotwire.api.SwitchResult$Kind,java.util.List<java.lang.String>,java.lang.String)
+  public final boolean dev.moon.hotwire.api.SwitchResult.equals(java.lang.Object)
+  public final int dev.moon.hotwire.api.SwitchResult.hashCode()
+  public final java.lang.String dev.moon.hotwire.api.SwitchResult.toString()
+  public java.lang.String dev.moon.hotwire.api.SwitchResult.message()
+  public java.util.List<java.lang.String> dev.moon.hotwire.api.SwitchResult.switched()
+public static final dev.moon.hotwire.api.SwitchResult$Kind
+  public static dev.moon.hotwire.api.SwitchResult$Kind dev.moon.hotwire.api.SwitchResult$Kind.valueOf(java.lang.String)
+  public static dev.moon.hotwire.api.SwitchResult$Kind[] dev.moon.hotwire.api.SwitchResult$Kind.values()
+  public static final dev.moon.hotwire.api.SwitchResult$Kind dev.moon.hotwire.api.SwitchResult$Kind.DONE
+  public static final dev.moon.hotwire.api.SwitchResult$Kind dev.moon.hotwire.api.SwitchResult$Kind.FAILED
+  public static final dev.moon.hotwire.api.SwitchResult$Kind dev.moon.hotwire.api.SwitchResult$Kind.NEEDS_REOPEN
+  public static final dev.moon.hotwire.api.SwitchResult$Kind dev.moon.hotwire.api.SwitchResult$Kind.REFUSED

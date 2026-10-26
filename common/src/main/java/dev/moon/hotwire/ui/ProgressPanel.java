@@ -133,22 +133,14 @@ final class ProgressPanel extends Panel {
             this.stepsTick.to(total);
             this.stepsTick.step(delta);
             return new Heading(tailing ? 1 : 0.9f * at / total, "Switching",
-                    tailing ? phase : describeLive(now), tailing ? "" : now.subject(),
+                    tailing ? phase : now.describe(), tailing ? "" : now.subject(),
                     tailing ? "" : this.stepTick.getRounded() + " of " + this.stepsTick.getRounded());
         }
         int steps = Math.max(1, now.labels().size());
         int done = Math.max(0, Math.min(steps, now.at()));
         String subject = now.subject();
         return new Heading(done / (float) steps, subject.isBlank() ? "Working" : now.adding() ? "Adding"
-                : "Switching", describeLive(now), subject, "");
-    }
-
-    private static String describeLive(Progress.Snapshot now) {
-        String current = now.current();
-        if (!now.words().isBlank()) {
-            return now.words();
-        }
-        return current.isBlank() ? "Preparing" : current;
+                : "Switching", now.describe(), subject, "");
     }
 
     private static String getTail(Progress.Snapshot now) {
