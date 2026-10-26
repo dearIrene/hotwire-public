@@ -35,6 +35,11 @@ public final class ReportBundle {
             "(?i)\\b[0-9a-f]{8}-?[0-9a-f]{4}-?[0-9a-f]{4}-?[0-9a-f]{4}-?[0-9a-f]{12}\\b");
     private static final Pattern IP_WITH_PORT = Pattern.compile("\\b\\d{1,3}(\\.\\d{1,3}){3}:\\d{1,5}\\b");
 
+    private static final Pattern HOME = Pattern.compile("(?i)([a-z]:[\\\\/]+users[\\\\/]+|/home/|/Users/)"
+            + "(?:[^\\\\/\\r\\n\"':]+?(?=[\\\\/])|[^\\\\/\\s\"':]+)");
+    private static final Pattern USER_VARIABLE = Pattern.compile(
+            "(?im)^(\\s*(?:USERNAME|USER|LOGNAME|HOME|USERPROFILE)\\s*=\\s*).+$");
+
     private static final Pattern CHAT = Pattern.compile("\\[CHAT\\](?! \\[Hotwire\\])");
 
     private ReportBundle() {
@@ -68,6 +73,8 @@ public final class ReportBundle {
         out = KEY_VALUE.matcher(out).replaceAll("$1$2[removed]");
         out = UUID.matcher(out).replaceAll("[id]");
         out = IP_WITH_PORT.matcher(out).replaceAll("[address]");
+        out = HOME.matcher(out).replaceAll("$1[user]");
+        out = USER_VARIABLE.matcher(out).replaceAll("$1[removed]");
         for (String word : personal) {
             if (word.length() >= 3) {
                 out = Pattern.compile("(?i)\\b" + Pattern.quote(word) + "\\b").matcher(out)

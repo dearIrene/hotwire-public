@@ -8,6 +8,7 @@ import java.lang.invoke.MethodHandleInfo;
 import java.lang.invoke.MethodHandles;
 import java.lang.invoke.MethodType;
 import java.lang.reflect.Field;
+import java.lang.reflect.Member;
 import java.lang.reflect.Method;
 import java.util.ArrayDeque;
 import java.util.Collections;
@@ -406,8 +407,9 @@ public final class Linker {
             try {
                 handle = findMember(host, name, type, owner, kind);
             } catch (IllegalAccessException notProtected) {
-                handle = findMember(MethodHandles.privateLookupIn(owner, MethodHandles.lookup()), name, type, owner,
-                        kind);
+                Class<?> declarer = findDeclarer(owner, name, type, kind);
+                handle = findMember(MethodHandles.privateLookupIn(declarer, MethodHandles.lookup()), name, type,
+                        declarer, kind);
             }
         } catch (NoSuchMethodException added) {
             if (kind != VIRTUAL) {
@@ -417,6 +419,18 @@ public final class Linker {
                     type.dropParameterTypes(0, 1).toMethodDescriptorString(), 0);
         }
         return new ConstantCallSite(MethodHandles.explicitCastArguments(handle, type));
+    }
+
+    private static Class<?> findDeclarer(Class<?> owner, String name, MethodType type, int kind) {
+        for (Class<?> at = owner; at != null; at = at.getSuperclass()) {
+            try {
+                Member member = kind == VIRTUAL ? at.getDeclaredMethod(name,
+                        type.dropParameterTypes(0, 1).parameterArray()) : at.getDeclaredField(name);
+                return member.getDeclaringClass();
+            } catch (NoSuchMethodException | NoSuchFieldException | LinkageError e) {
+            }
+        }
+        return owner;
     }
 
     private static MethodHandle findMember(MethodHandles.Lookup lookup, String name, MethodType type, Class<?> owner,
