@@ -4,7 +4,11 @@ import java.util.ArrayList;
 import java.util.List;
 
 final class MessageLine extends Element {
+    private static final float RISE = 5;
+
+    private final EasedValue in = EasedValue.ofSpeed(14);
     private String text = "";
+    private String hint = "";
     private boolean failure;
 
     @Override
@@ -13,8 +17,24 @@ final class MessageLine extends Element {
     }
 
     void show(String message, boolean failure) {
-        this.text = getFirstSentence(message.replaceAll("\\s+", " ").strip());
+        this.show(message, failure, "");
+    }
+
+    void show(String message, boolean failure, String hint) {
+        String now = getFirstSentence(message.replaceAll("\\s+", " ").strip());
+        if (!now.equals(this.text) || !hint.equals(this.hint)) {
+            this.in.snap(0);
+        }
+        this.text = now;
+        this.hint = hint;
         this.failure = failure;
+    }
+
+    @Override
+    public void step(float dt) {
+        this.in.to(this.text.isEmpty() ? 0 : 1);
+        this.in.step(dt);
+        super.step(dt);
     }
 
     String getText() {
@@ -87,12 +107,21 @@ final class MessageLine extends Element {
         if (this.text.isEmpty()) {
             return;
         }
-        List<String> lines = wrap(canvas, this.text, Math.max(120, this.getWidth() - 260), 2);
-        int color = this.failure ? Palette.BAD : Palette.DIM;
+        int room = Math.max(120, this.getWidth() - 48);
+        boolean hinted = !this.hint.isEmpty();
+        List<String> lines = new ArrayList<>(wrap(canvas, this.text, room, hinted ? 1 : 2));
+        List<Integer> colors = new ArrayList<>();
+        lines.forEach(line -> colors.add(this.failure ? Palette.BAD : Palette.ON));
+        if (hinted) {
+            lines.add(this.hint);
+            colors.add(Palette.OFF_TINT);
+        }
+        float in = this.in.getValue();
+        int rise = Math.round((1 - in) * RISE);
         int n = lines.size();
         for (int i = 0; i < n; i++) {
-            drawWords(canvas, canvas.clip(lines.get(i), Math.max(120, this.getWidth() - 260)), 24,
-                    this.getHeight() - 40 - n * 11 + i * 11, color, alpha);
+            drawWords(canvas, canvas.clip(lines.get(i), room), 24, this.getHeight() - 38 - n * 11 + i * 11 + rise,
+                    colors.get(i), alpha * in);
         }
     }
 }

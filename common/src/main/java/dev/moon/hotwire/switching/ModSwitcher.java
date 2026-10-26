@@ -1,12 +1,15 @@
 package dev.moon.hotwire.switching;
 
+import dev.moon.hotwire.jar.ModManifest;
 import dev.moon.hotwire.plan.ModGraph;
 import dev.moon.hotwire.plan.SwitchPlan;
 import dev.moon.hotwire.plan.SwitchPlanner;
 import dev.moon.hotwire.redefine.RebuildException;
 import dev.moon.hotwire.registration.RegistrationJournal;
+import dev.moon.hotwire.report.GameLog;
 import dev.moon.hotwire.ui.Lang;
 import dev.moon.hotwire.ui.Progress;
+import java.util.ArrayList;
 import java.util.Collection;
 import java.util.Collections;
 import java.util.HashMap;
@@ -45,6 +48,8 @@ public final class ModSwitcher {
     }
 
     private ModGraph graph;
+
+    private final Map<String, Set<String>> takenAlong = new ConcurrentHashMap<>();
     private SwitchPlanner planner;
     private final SwitchApplier applier;
     private final Progress progress;
@@ -69,6 +74,8 @@ public final class ModSwitcher {
     private volatile boolean aheadAsked;
 
     private volatile Consumer<List<String>> readAhead = order -> { };
+
+    private volatile Runnable lookPreparing = () -> { };
     @SuppressWarnings("ThreadPriorityCheck")
     private final ExecutorService aheadThread = Executors.newSingleThreadExecutor(
             Thread.ofPlatform().name("hotwire-ahead").daemon().priority(Thread.MIN_PRIORITY).factory());
@@ -151,7 +158,24 @@ public final class ModSwitcher {
     }
 
     public Result turnOff(Collection<String> asked, Consumer<List<String>> out) {
-        return this.run(this.planner.planOff(asked, this.getOff()), out);
+        Set<String> along = this.withTakenAlong(asked, id -> true);
+        Result result = this.run(this.planner.planOff(along, this.getOff()), out);
+        if (result instanceof Result.Failed failed && !failed.cause().getLosing().isEmpty()) {
+            Set<String> losing = failed.cause().getLosing();
+            asked.forEach(id -> this.takenAlong.computeIfAbsent(id, key -> ConcurrentHashMap.newKeySet())
+                    .addAll(losing));
+            along.addAll(losing);
+            GameLog.LOGGER.info("[Hotwire] the off of {} would leave {} without their patches; they go with it", asked,
+                    losing);
+            return this.run(this.planner.planOff(along, this.getOff()), out);
+        }
+        return result;
+    }
+
+    private Set<String> withTakenAlong(Collection<String> asked, Predicate<String> test) {
+        Set<String> out = new LinkedHashSet<>(asked);
+        asked.forEach(id -> this.takenAlong.getOrDefault(id, Set.of()).stream().filter(test).forEach(out::add));
+        return out;
     }
 
     public Result turnOn(Collection<String> asked) {
@@ -171,7 +195,7 @@ public final class ModSwitcher {
     }
 
     public SwitchPlan planOn(Collection<String> asked) {
-        return this.planner.planOn(this.withOffTogether(asked), this.getOff());
+        return this.planner.planOn(this.withOffTogether(this.withTakenAlong(asked, this.off::contains)), this.getOff());
     }
 
     private synchronized Set<String> withOffTogether(Collection<String> asked) {
@@ -243,6 +267,10 @@ public final class ModSwitcher {
         this.readAhead = read;
     }
 
+    public void prepareLookWith(Runnable prepare) {
+        this.lookPreparing = prepare;
+    }
+
     private void runRegistrations(Consumer<List<String>> theirs, List<String> order, boolean goingOff) {
         if (!goingOff) {
             this.withGamePaused(() -> order.forEach(this.registrations::restore));
@@ -254,6 +282,10 @@ public final class ModSwitcher {
             LOGGER.error("[Hotwire] what {} {} could not all be {}", order, goingOff ? "left in others" : "left behind",
                     goingOff ? "taken out" : "put back", e);
         }
+    }
+
+    public boolean isBusy() {
+        return this.busy.get() > 0;
     }
 
     public void setBusy(boolean busy) {
@@ -301,9 +333,33 @@ public final class ModSwitcher {
     }
 
     public void showBegun(SwitchPlan plan) {
-        this.progress.begin(plan.order().isEmpty() ? "" : plan.order().getFirst(),
-                plan.direction() == SwitchPlan.Direction.OFF, plan.order().size());
+        this.progress.begin(plan.direction() == SwitchPlan.Direction.OFF, this.makeQueue(plan));
         this.progress.count(Lang.get("hotwire.progress.looking"), 0, 0);
+    }
+
+    private List<Progress.Entry> makeQueue(SwitchPlan plan) {
+        List<Progress.Entry> queue = new ArrayList<>();
+        for (String id : plan.order()) {
+            SwitchPlan.Reason why = plan.why().get(id);
+            queue.add(new Progress.Entry(this.nameOf(id), why == null ? "" : switch (why) {
+                case SwitchPlan.Reason.Asked asked -> Lang.get("hotwire.progress.why.asked");
+                case SwitchPlan.Reason.DependsOn depends -> Lang.get("hotwire.progress.why.depends",
+                        this.nameOf(depends.mod()));
+                case SwitchPlan.Reason.PatchesClassOf patches -> Lang.get("hotwire.progress.why.patches",
+                        this.nameOf(patches.mod()));
+                case SwitchPlan.Reason.NestedIn nested -> Lang.get("hotwire.progress.why.nested",
+                        this.nameOf(nested.container()));
+                case SwitchPlan.Reason.Ships ships -> Lang.get("hotwire.progress.why.ships",
+                        this.nameOf(ships.nested()));
+                case SwitchPlan.Reason.NeededBy needed -> Lang.get("hotwire.progress.why.needed_by",
+                        this.nameOf(needed.mod()));
+            }));
+        }
+        return queue;
+    }
+
+    private String nameOf(String id) {
+        return this.graph.find(id).map(ModManifest::name).orElse(id);
     }
 
     public void hideProgress() {
@@ -349,7 +405,7 @@ public final class ModSwitcher {
 
         if (!smallest.isEmpty() && !this.switched && !this.aheadAsked) {
             Thread.currentThread().setPriority(Thread.NORM_PRIORITY);
-            this.readAhead.accept(List.of(smallest.getFirst()));
+            this.lookPreparing.run();
             Thread.currentThread().setPriority(Thread.MIN_PRIORITY);
         }
         for (String id : smallest) {
@@ -416,10 +472,10 @@ public final class ModSwitcher {
         boolean goingOff = plan.direction() == SwitchPlan.Direction.OFF;
         long start = System.nanoTime();
         if (!this.progress.isBusy()) {
-            this.progress.begin(plan.order().isEmpty() ? "" : plan.order().getFirst(), goingOff, plan.order().size());
+            this.progress.begin(goingOff, this.makeQueue(plan));
         }
         try {
-            this.progress.step(1, plan.order().isEmpty() ? "" : plan.order().getFirst());
+            this.progress.step(1, plan.order().isEmpty() ? "" : this.nameOf(plan.order().getFirst()));
             Set<String> onAfter = this.onAfter(plan, goingOff);
             if (touchesWorldBound(this.worldBound, plan.order()) && this.applier.isInWorld()) {
                 throw RebuildException.ofWorldBuilt(plan.order() + " changed how this world's objects are built when"
@@ -475,9 +531,9 @@ public final class ModSwitcher {
             return new Result.Done(plan, applied, (System.nanoTime() - start) / 1_000_000);
         } catch (RebuildException e) {
             if (e.reopenFixes() || e.isRestartOnly()) {
-                LOGGER.info("[Hotwire] Switching {} {} needs {}, and nothing changed: {}", goingOff ? "off" : "on",
-                        plan.order(), e.reopenFixes() ? "the world saved and opened again" : "a restart",
-                        e.getMessage());
+                GameLog.LOGGER.info("[Hotwire] Switching {} {} needs {}, and nothing changed: {}",
+                        goingOff ? "off" : "on", plan.order(),
+                        e.reopenFixes() ? "the world saved and opened again" : "a restart", e.getMessage());
             } else {
                 LOGGER.warn("[Hotwire] Switching {} {} failed and nothing changed", goingOff ? "off" : "on",
                         plan.order(), e);

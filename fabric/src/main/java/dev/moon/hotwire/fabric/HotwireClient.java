@@ -1,7 +1,12 @@
 package dev.moon.hotwire.fabric;
 
+//? if >=26.1 {
+import com.mojang.blaze3d.platform.InputConstants;
+//?}
+import dev.moon.hotwire.fabric.report.HotwireLog;
 import dev.moon.hotwire.redefine.FieldHolders;
 import dev.moon.hotwire.redefine.InitHookReplay;
+import dev.moon.hotwire.report.GameLog;
 import dev.moon.hotwire.ui.Lang;
 import java.io.IOException;
 import java.io.UncheckedIOException;
@@ -11,6 +16,12 @@ import net.fabricmc.fabric.api.client.event.lifecycle.v1.ClientLifecycleEvents;
 import net.fabricmc.fabric.api.client.networking.v1.ClientPlayConnectionEvents;
 import net.fabricmc.loader.api.FabricLoader;
 import net.minecraft.client.Minecraft;
+//? if >=1.21.9 && <26.1 {
+/*import org.lwjgl.glfw.GLFW;
+*///?}
+//? if <1.21.9 {
+/*import net.minecraft.client.gui.screens.Screen;
+*///?}
 import net.minecraft.locale.Language;
 import org.jspecify.annotations.Nullable;
 import org.slf4j.Logger;
@@ -24,8 +35,9 @@ public final class HotwireClient implements ClientModInitializer {
 
     @Override
     public void onInitializeClient() {
-        LOGGER.info("[Hotwire] {} loaded; H or /hotwire opens it, and its Report button writes what went wrong to"
-                + " hotwire/reports", FabricLoader.getInstance().getModContainer(ID)
+        HotwireLog.install(FabricLoader.getInstance().getGameDir().resolve("hotwire").resolve("logs"));
+        GameLog.LOGGER.info("[Hotwire] {} loaded; H or /hotwire opens it, and its Report button writes what went wrong"
+                + " to hotwire/reports", FabricLoader.getInstance().getModContainer(ID)
                 .map(mod -> mod.getMetadata().getVersion().getFriendlyString()).orElse("unknown"));
 
         Lang.useTranslator((key, values) -> {
@@ -36,7 +48,7 @@ public final class HotwireClient implements ClientModInitializer {
         ClientCommandRegistrationCallback.EVENT.register((dispatcher, context) -> HotwireCommands.register(dispatcher,
                 HotwireClient::openSoon));
 
-        OpenKey.register(HotwireClient::openSoon);
+        OpenKey.register(HotwireClient::openSoonFromKey);
         OffTooltips.register();
 
         ClientLifecycleEvents.CLIENT_STARTED.register(client -> client.execute(HotwireClient::getEngine));
@@ -67,6 +79,29 @@ public final class HotwireClient implements ClientModInitializer {
         } catch (UncheckedIOException e) {
             LOGGER.error("[Hotwire] The mods folder could not be read", e);
         }
+    }
+
+    private static void openSoonFromKey() {
+        Minecraft client = Minecraft.getInstance();
+        //? if >=26.3 {
+        boolean shift = InputConstants.isKeyDown(InputConstants.KEY_LSHIFT)
+                || InputConstants.isKeyDown(InputConstants.KEY_RSHIFT);
+        //?} elif >=26.1 {
+        /*boolean shift = InputConstants.isKeyDown(client.getWindow(), InputConstants.KEY_LSHIFT)
+                || InputConstants.isKeyDown(client.getWindow(), InputConstants.KEY_RSHIFT);
+        *///?} elif >=1.21.9 {
+        /*long window = client.getWindow().handle();
+        boolean shift = GLFW.glfwGetKey(window, GLFW.GLFW_KEY_LEFT_SHIFT) == GLFW.GLFW_PRESS
+                || GLFW.glfwGetKey(window, GLFW.GLFW_KEY_RIGHT_SHIFT) == GLFW.GLFW_PRESS;
+        *///?} else {
+        /*boolean shift = Screen.hasShiftDown();
+        *///?}
+        Runnable opening = shift ? HotwireClient::open : () -> getEngine().openChooser();
+        //? if >=1.21.2 {
+        client.schedule(opening);
+        //?} else {
+        /*client.tell(opening);
+        *///?}
     }
 
     public static synchronized @Nullable HotwireEngine findEngine() {

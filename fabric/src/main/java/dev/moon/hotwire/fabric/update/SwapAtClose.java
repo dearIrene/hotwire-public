@@ -1,6 +1,7 @@
 package dev.moon.hotwire.fabric.update;
 
 import com.google.gson.JsonParseException;
+import dev.moon.hotwire.report.GameLog;
 import dev.moon.hotwire.update.JarSwapper;
 import dev.moon.hotwire.update.UpdateFolders;
 import dev.moon.hotwire.update.UpdateQueue;
@@ -56,7 +57,8 @@ public final class SwapAtClose {
                     .redirectErrorStream(true)
                     .redirectOutput(this.swapperCopy.resolveSibling("swapper.log").toFile())
                     .start();
-            LOGGER.info("[Hotwire] the swapper will put {} updates in place once the game closes", entries.size());
+            GameLog.LOGGER.info("[Hotwire] the swapper will put {} updates in place once the game closes",
+                    entries.size());
         } catch (IOException e) {
             LOGGER.error("[Hotwire] the swapper could not start; {} queued updates wait for the next close",
                     entries.size(), e);

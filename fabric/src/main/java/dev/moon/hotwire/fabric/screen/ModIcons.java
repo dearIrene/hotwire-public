@@ -5,8 +5,10 @@ import dev.moon.hotwire.fabric.InstalledMods;
 import dev.moon.hotwire.jar.ModJarException;
 import dev.moon.hotwire.jar.ModJarReader;
 import dev.moon.hotwire.jar.ModManifest;
+import dev.moon.hotwire.modrinth.WebpLossless;
 import dev.moon.hotwire.ui.Canvas;
 import dev.moon.hotwire.ui.IconPixels;
+import dev.moon.hotwire.ui.OtherImages;
 import dev.moon.hotwire.ui.SvgIcon;
 import java.io.ByteArrayInputStream;
 import java.io.IOException;
@@ -40,7 +42,7 @@ public final class ModIcons implements AutoCloseable {
     private record Source(String id, @Nullable Path jar, String path) {
     }
 
-    static final class Icon implements Canvas.Image {
+    public static final class Icon implements Canvas.Image {
         private final String name;
         private final IconPixels pixels;
         private final Map<Integer, Identifier> textures = new HashMap<>();
@@ -83,7 +85,7 @@ public final class ModIcons implements AutoCloseable {
             return id;
         }
 
-        void release() {
+        public void release() {
             this.textures.values().forEach(Minecraft.getInstance().getTextureManager()::release);
             this.textures.clear();
         }
@@ -150,6 +152,25 @@ public final class ModIcons implements AutoCloseable {
                             failure.toString());
                     return Optional.empty();
                 }));
+    }
+
+    public static Optional<Icon> decodeFor(String name, String path, byte[] bytes) {
+        try {
+            IconPixels pixels;
+            if (path.toLowerCase(Locale.ROOT).endsWith(".svg")) {
+                pixels = SvgIcon.render(bytes);
+            } else if (WebpLossless.isWebp(bytes)) {
+                pixels = WebpLossless.decode(bytes);
+            } else if (OtherImages.isKnown(bytes)) {
+                pixels = OtherImages.decode(bytes);
+            } else {
+                pixels = decodePng(bytes);
+            }
+            return Optional.ofNullable(pixels).map(retained -> new Icon(name, retained));
+        } catch (IOException | RuntimeException e) {
+            LOGGER.info("[Hotwire] the icon {} could not be read: {}", path, e.toString());
+            return Optional.empty();
+        }
     }
 
     private static Optional<Icon> decode(Source source) {

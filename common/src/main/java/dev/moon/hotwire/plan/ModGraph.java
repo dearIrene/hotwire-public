@@ -78,10 +78,23 @@ public final class ModGraph {
                 if (manifest != null && owner != null && !owner.equals(mod) && !this.names(manifest, owner)
                         && !this.getContainers(mod).contains(owner) && !this.getContainers(owner).contains(mod)) {
                     this.calls.computeIfAbsent(mod, key -> new TreeSet<>()).add(owner);
-                    this.dependents.computeIfAbsent(owner, key -> new TreeSet<>()).add(mod);
+
+                    if (!this.hasCompatibilityFor(patched, owner)) {
+                        this.dependents.computeIfAbsent(owner, key -> new TreeSet<>()).add(mod);
+                    }
                 }
             }
         });
+    }
+
+    private boolean hasCompatibilityFor(ModPatches patched, String other) {
+        ModManifest manifest = this.mods.get(other);
+        return patched.asks().contains(other)
+                || (manifest != null && manifest.provides().stream().anyMatch(patched.asks()::contains));
+    }
+
+    public boolean needsByCode(String mod, String other) {
+        return this.getCalls(mod).contains(other) && this.dependents.getOrDefault(other, new TreeSet<>()).contains(mod);
     }
 
     private boolean names(ModManifest manifest, String other) {

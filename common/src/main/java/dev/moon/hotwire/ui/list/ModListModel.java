@@ -210,6 +210,7 @@ public final class ModListModel {
         }
         List<String> out = new ArrayList<>();
         byRank.forEach(out::addAll);
+        out.sort(Comparator.comparing(id -> !this.catalog.isFavorite(id)));
         return out;
     }
 

@@ -27,6 +27,12 @@ public final class FieldSlots {
     private FieldSlots() {
     }
 
+    private static volatile Predicate<Class<?>> setUp = type -> true;
+
+    public static void readStaticsWhen(Predicate<Class<?>> isSetUp) {
+        setUp = isSetUp;
+    }
+
     public static final class Slot {
         private volatile @Nullable Field field;
         private final Class<?> owner;
@@ -83,6 +89,9 @@ public final class FieldSlots {
         }
 
         public @Nullable Object get(@Nullable Object holder) throws IllegalAccessException {
+            if (holder == null && this.isStatic() && !setUp.test(this.owner)) {
+                return null;
+            }
             if (this.field != null) {
                 return this.field.get(holder);
             }

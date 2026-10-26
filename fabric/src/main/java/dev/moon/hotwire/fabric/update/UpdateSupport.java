@@ -2,6 +2,7 @@ package dev.moon.hotwire.fabric.update;
 
 import dev.moon.hotwire.fabric.InstalledMods;
 import dev.moon.hotwire.fabric.ModPolicy;
+import dev.moon.hotwire.fabric.add.ModAdder;
 import dev.moon.hotwire.fabric.rebuild.GameClasses;
 import dev.moon.hotwire.fabric.report.GameReports;
 import dev.moon.hotwire.fabric.screen.ModIcons;
@@ -17,6 +18,7 @@ import dev.moon.hotwire.ui.UpdateMethod;
 import dev.moon.hotwire.ui.UpdatePreview;
 import dev.moon.hotwire.update.UpdateContext;
 import dev.moon.hotwire.update.UpdateFolders;
+import dev.moon.hotwire.update.UpdatePlan;
 import dev.moon.hotwire.update.UpdateQueue;
 import dev.moon.hotwire.update.UpdateText;
 import java.io.IOException;
@@ -27,6 +29,7 @@ import java.util.HashMap;
 import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
+import java.util.Optional;
 import java.util.Set;
 import java.util.stream.Stream;
 import net.fabricmc.loader.api.FabricLoader;
@@ -46,6 +49,26 @@ public final class UpdateSupport implements ModUpdater.Engine {
     private final ModUpdater updater;
     private final ModIcons icons;
 
+    private @Nullable ModAdder adder;
+
+    public void setAdder(ModAdder adder) {
+        this.adder = adder;
+    }
+
+    @Override
+    public Optional<String> findWidenerRefusal(ModJar read, Path jar) {
+        ModAdder adds = this.adder;
+        return adds == null ? Optional.of("the access widener changed") : adds.findWidenerRefusalOfUpdate(read, jar);
+    }
+
+    @Override
+    public void openWidener(ModJar read) {
+        ModAdder adds = this.adder;
+        if (adds != null) {
+            adds.openWidenerOfUpdate(read);
+        }
+    }
+
     public UpdateSupport(InstalledMods installed, SwitchApplier applier, ModSwitcher switcher, GameClasses classes,
             UpdateFolders folders, UpdateQueue queue, GameReports reports, ModIcons icons) {
         this.installed = installed;
@@ -60,7 +83,16 @@ public final class UpdateSupport implements ModUpdater.Engine {
     }
 
     public boolean canUpdate(Path jar) {
-        return this.updater.canUpdate(jar);
+        Path inner = this.updater.unwrap(jar);
+        return inner != null && this.updater.canUpdate(inner);
+    }
+
+    public @Nullable UpdatePlan findPlan(Path jar) {
+        return this.updater.findPlan(jar);
+    }
+
+    public List<Path> findCarriedToAdd(Path jar) {
+        return this.updater.findCarriedToAdd(jar);
     }
 
     public UpdatePreview preview(Path jar) {
@@ -73,6 +105,11 @@ public final class UpdateSupport implements ModUpdater.Engine {
         ModUpdater.Result result;
         try {
             result = this.updater.update(jar, method);
+            if (result instanceof ModUpdater.Result.Failed failed && method == UpdateMethod.IN_PLACE) {
+                LOGGER.info("[Hotwire] in place failed, queued for the next start instead: {}", failed.reason());
+                ModUpdater.Result queued = this.updater.update(jar, UpdateMethod.NEXT_START);
+                result = queued instanceof ModUpdater.Result.Queued ? queued : result;
+            }
         } finally {
             this.reports.onEnded();
         }

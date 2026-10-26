@@ -43,7 +43,8 @@ public final class CarriedMixins {
             if (carried.getOrDefault(type, Set.of()).contains(mixin) || isStillImplemented(mixed.get(type), mixin)) {
                 return;
             }
-            if (offMixins.contains(mixin)) {
+            @Nullable String maker = offMixins.contains(mixin) ? null : this.findModMaking(mixin, id -> true);
+            if (offMixins.contains(mixin) || (maker != null && !on.contains(maker))) {
                 LOGGER.debug("[Hotwire] {} drops {}, whose mod is off", type, mixin);
             } else if (askedAgain.test(mixin)) {
                 LOGGER.info("[Hotwire] {} drops {}, which its own plugin declined with the mods on now", type, mixin);
@@ -137,6 +138,38 @@ public final class CarriedMixins {
         new TreeMap<>(carried).forEach((type, mixins) -> new TreeSet<>(mixins).stream().filter(offMixins::contains)
                 .forEach(mixin -> found.add(type + " <- " + mixin)));
         return found;
+    }
+
+    @Nullable String findModMaking(String mixin, Predicate<String> among) {
+        String internal = mixin.replace('.', '/');
+        String shipping = this.findModShipping(internal);
+        if (shipping != null) {
+            return among.test(shipping) ? shipping : null;
+        }
+        String[] parts = internal.split("/", -1);
+        int best = 2;
+        @Nullable String nearest = null;
+        for (Map.Entry<String, ModMixins> mod : this.mods.entrySet()) {
+            if (!among.test(mod.getKey())) {
+                continue;
+            }
+            for (String own : mod.getValue().owns()) {
+                int shared = countShared(parts, own.split("/", -1));
+                if (shared > best) {
+                    best = shared;
+                    nearest = mod.getKey();
+                }
+            }
+        }
+        return nearest;
+    }
+
+    private static int countShared(String[] one, String[] other) {
+        int shared = 0;
+        while (shared < one.length - 1 && shared < other.length - 1 && one[shared].equals(other[shared])) {
+            shared++;
+        }
+        return shared;
     }
 
     public @Nullable String findModShipping(String internalName) {

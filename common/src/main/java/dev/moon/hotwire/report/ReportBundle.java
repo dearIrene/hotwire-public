@@ -6,7 +6,7 @@ import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.time.Instant;
-import java.time.ZoneOffset;
+import java.time.ZoneId;
 import java.time.format.DateTimeFormatter;
 import java.util.ArrayList;
 import java.util.Comparator;
@@ -22,8 +22,8 @@ import java.util.zip.ZipOutputStream;
 
 public final class ReportBundle {
     static final int MAX_ZIPS = 10;
-    private static final DateTimeFormatter FILE_TIME = DateTimeFormatter.ofPattern("yyyyMMdd-HHmmss", Locale.ROOT)
-            .withZone(ZoneOffset.UTC);
+    private static final DateTimeFormatter FILE_TIME = DateTimeFormatter.ofPattern("yyyy-MM-dd_HH-mm-ss",
+            Locale.ROOT).withZone(ZoneId.systemDefault());
 
     private static final Pattern SECRET_FLAG = Pattern.compile(
             "(?i)(--(?:accessToken|session|xuid|clientId|uuid|username|userProperties))(\\s+|=)\\S+");
@@ -41,14 +41,15 @@ public final class ReportBundle {
             "(?im)^(\\s*(?:USERNAME|USER|LOGNAME|HOME|USERPROFILE)\\s*=\\s*).+$");
 
     private static final Pattern CHAT = Pattern.compile("\\[CHAT\\](?! \\[Hotwire\\])");
+    private static final Pattern ZIP = Pattern.compile("hotwire-(report|crash)-[0-9_-]+\\.zip");
 
     private ReportBundle() {
     }
 
-    public static Path write(Path folder, Instant at, Map<String, String> texts, Set<String> personal)
+    public static Path write(Path folder, Instant at, String kind, Map<String, String> texts, Set<String> personal)
             throws IOException {
         Files.createDirectories(folder);
-        Path zip = folder.resolve("hotwire-report-" + FILE_TIME.format(at) + ".zip");
+        Path zip = folder.resolve("hotwire-" + kind + "-" + FILE_TIME.format(at) + ".zip");
         try (OutputStream file = Files.newOutputStream(zip); ZipOutputStream out = new ZipOutputStream(file)) {
             for (Map.Entry<String, String> text : texts.entrySet()) {
                 out.putNextEntry(new ZipEntry(text.getKey()));
@@ -87,8 +88,9 @@ public final class ReportBundle {
     private static void prune(Path folder) throws IOException {
         List<Path> zips;
         try (Stream<Path> files = Files.list(folder)) {
-            zips = files.filter(file -> file.getFileName().toString().startsWith("hotwire-report-"))
-                    .sorted(Comparator.comparing(Path::getFileName).reversed()).toList();
+            zips = files.filter(file -> ZIP.matcher(file.getFileName().toString()).matches())
+                    .sorted(Comparator.comparing((Path file) -> file.getFileName().toString().replaceAll("\\D", ""))
+                            .reversed()).toList();
         }
         for (Path old : zips.subList(Math.min(MAX_ZIPS, zips.size()), zips.size())) {
             Files.deleteIfExists(old);

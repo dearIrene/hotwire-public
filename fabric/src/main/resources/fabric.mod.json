@@ -9,7 +9,8 @@
   "icon": "assets/hotwire/icon.png",
   "environment": "client",
   "entrypoints": {
-    "client": ["dev.moon.hotwire.fabric.HotwireClient"]
+    "client": ["dev.moon.hotwire.fabric.HotwireClient"],
+    "modmenu": ["dev.moon.hotwire.fabric.ModMenuEntry"]
   },
   "mixins": ["hotwire.mixins.json"],
   "depends": {

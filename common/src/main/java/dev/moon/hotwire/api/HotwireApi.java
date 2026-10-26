@@ -1,5 +1,6 @@
 package dev.moon.hotwire.api;
 
+import java.nio.file.Path;
 import java.util.Collection;
 import java.util.List;
 import java.util.Optional;
@@ -32,4 +33,6 @@ public interface HotwireApi {
     CompletableFuture<SwitchResult> turnOn(Collection<String> ids);
 
     void addListener(Consumer<SwitchResult> listener);
+
+    CompletableFuture<Path> writeReport(String why);
 }

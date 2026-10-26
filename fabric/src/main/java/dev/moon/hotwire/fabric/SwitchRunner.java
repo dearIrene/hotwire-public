@@ -24,6 +24,7 @@ import dev.moon.hotwire.fabric.report.SwitchFaults;
 import dev.moon.hotwire.plan.SwitchPlan;
 import dev.moon.hotwire.redefine.RebuildException;
 import dev.moon.hotwire.redefine.Tripwire;
+import dev.moon.hotwire.report.GameLog;
 import dev.moon.hotwire.report.Report;
 import dev.moon.hotwire.switching.ModSwitcher;
 import dev.moon.hotwire.switching.OffChecker;
@@ -31,8 +32,11 @@ import dev.moon.hotwire.switching.SwitchTimes;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.concurrent.ExecutorService;
+import java.util.concurrent.Executors;
 import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.concurrent.atomic.AtomicReference;
+import java.util.function.Consumer;
 import net.minecraft.client.Minecraft;
 import org.jspecify.annotations.Nullable;
 import org.slf4j.Logger;
@@ -53,6 +57,12 @@ public final class SwitchRunner {
     private final GeneratedWrappers wrappers;
     private final MixinPlugins plugins;
     private final @Nullable TransformerChain chain;
+
+    private volatile Consumer<ModSwitcher.Result> afterOff = result -> { };
+    private volatile Consumer<List<String>> beforeOn = order -> { };
+    @SuppressWarnings("ThreadPriorityCheck")
+    private final ExecutorService looking = Executors.newSingleThreadExecutor(
+            Thread.ofPlatform().name("hotwire-look").daemon().priority(Thread.MIN_PRIORITY).factory());
 
     public SwitchRunner(ModSwitcher switcher, OffChecker offChecker, GameReports reports, ModTripwire tripwire,
             FieldReferences fieldReferences, AsyncLogging logging, GeneratedWrappers wrappers, MixinPlugins plugins,
@@ -83,12 +93,49 @@ public final class SwitchRunner {
         return this.switcher;
     }
 
+    public void lookAheadForAll(List<String> mods) {
+        this.looking.execute(() -> {
+            if (!isLookingAhead() || this.switcher.isBusy() || mods.isEmpty()) {
+                return;
+            }
+            long start = System.nanoTime();
+            ElementLook.findAhead(this.fieldReferences, mods, this.switcher::isOn, true);
+            GameLog.LOGGER.info("[Hotwire] the look ahead for every mod that could go off ({}) took {} ms",
+                    mods.size(), (System.nanoTime() - start) / 1_000_000);
+        });
+    }
+
+    void prepareLookFor(List<String> mods) {
+        if (!isLookingAhead() || mods.isEmpty()) {
+            return;
+        }
+        long start = System.nanoTime();
+        ElementLook.prepareAhead(this.fieldReferences, mods, this.switcher::isOn);
+        LOGGER.info("[Hotwire] the look's warm-up for {} mods took {} ms", mods.size(),
+                (System.nanoTime() - start) / 1_000_000);
+    }
+
+    private static boolean isLookingAhead() {
+        return Boolean.parseBoolean(System.getProperty("hotwire.lookAhead", "true"));
+    }
+
+    public void setAfterOff(Consumer<ModSwitcher.Result> afterOff) {
+        this.afterOff = afterOff;
+    }
+
+    public void setBeforeOn(Consumer<List<String>> beforeOn) {
+        this.beforeOn = beforeOn;
+    }
+
     CheckedResult turnOff(List<String> ids) {
+        GameLog.LOGGER.info("[Hotwire] turning off {}", ids);
         SwitchTimes.begin();
         this.switcher.setBusy(true);
         this.reports.onBegun(Report.Operation.OFF, String.join(", ", ids));
         try {
-            return this.runTimedOff(ids);
+            CheckedResult result = this.runTimedOff(ids);
+            this.afterOff.accept(result.result());
+            return result;
         } finally {
             ResourceReload.forgetPausedReload();
             this.reports.onEnded();
@@ -185,6 +232,7 @@ public final class SwitchRunner {
     }
 
     CheckedResult turnOn(List<String> ids) {
+        GameLog.LOGGER.info("[Hotwire] turning on {}", ids);
         SwitchTimes.begin();
         this.switcher.setBusy(true);
         this.reports.onBegun(Report.Operation.ON, String.join(", ", ids));
@@ -204,6 +252,8 @@ public final class SwitchRunner {
             SwitchPlan coming = this.switcher.planOn(ids);
             AtomicBoolean putBack = new AtomicBoolean();
             if (!coming.isRefused()) {
+                this.beforeOn.accept(coming.order());
+
                 coming.order().forEach(LoaderModList::show);
                 this.plugins.putBack(coming.order());
                 GameHold.runAtNextHold(() -> {

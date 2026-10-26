@@ -1,8 +1,20 @@
 package dev.moon.hotwire.ui;
 
+import java.util.ArrayList;
+import java.util.List;
+
 final class ProgressPanel extends Panel {
     private static final float HOLD = 0.4f;
     private static final int OFF_GAP = 3;
+    private static final int SIDE_W = 176;
+    private static final int CARD = 18;
+    private static final int CARD_GROWS = 12;
+    private static final int CARD_GAP = 3;
+    private static final int CARDS_SHOWN = 6;
+    private static final int MORE_LINE = 11;
+    private static final String TICK = "\u2713";
+
+    private static final int CLOSED_LINES = 26;
 
     private final Progress progress;
     private final EasedValue bar = EasedValue.ofSpeed(8);
@@ -23,6 +35,9 @@ final class ProgressPanel extends Panel {
     private String line = "";
     private int lineTotal;
     private float lineShown;
+    private final List<EasedValue> focus = new ArrayList<>();
+    private final EasedValue scroll = EasedValue.ofSpeed(8);
+    private int queueRun = -1;
 
     public ProgressPanel(Progress progress) {
         super(null);
@@ -60,7 +75,13 @@ final class ProgressPanel extends Panel {
         this.bar.to(this.heading.target());
         this.bar.step(delta);
         this.remember(this.heading.note(), now);
-        this.size(Math.max(408, this.widestSeen + 48), 91);
+        boolean listed = now.queue().size() > 1;
+        if (listed) {
+            this.easeQueue(now, delta);
+        }
+        int closed = this.progress.isWorldClosed() ? CLOSED_LINES : 0;
+        this.size(Math.max(408, this.widestSeen + 48) + (listed ? SIDE_W + 14 : 0),
+                Math.max(91 + closed, listed ? this.getQueueHeight(now) + 24 : 0));
         String subject = this.heading.subject();
         if (subject.isBlank()) {
             this.offX = 0;
@@ -104,15 +125,103 @@ final class ProgressPanel extends Panel {
         Progress.Snapshot now = this.progress.snapshot();
         Heading heading = this.heading;
         this.widestSeen = this.measureWidest(canvas, heading, this.tail);
+        boolean listed = now.queue().size() > 1;
+        int main = listed ? w - SIDE_W - 14 : w;
         this.drawTheName(canvas, heading, now, x, y, alpha);
         String percent = Math.round(this.bar.getValue() * 100) + "%";
         String right = heading.rightCell().isBlank() ? percent : heading.rightCell() + "   " + percent;
-        canvas.drawText(right, x + w - 14 - canvas.measureText(right), y + 16, Colors.fade(Palette.DIM, alpha));
-        int filled = (int) ((w - 28) * Math.max(0, Math.min(1, this.bar.getValue())));
+        canvas.drawText(right, x + main - 14 - canvas.measureText(right), y + 16, Colors.fade(Palette.DIM, alpha));
+        int filled = (int) ((main - 28) * Math.max(0, Math.min(1, this.bar.getValue())));
         if (filled > 0) {
             canvas.fill(x + 14, y + 34, x + 14 + filled, y + 38, Colors.fade(Palette.ACCENT, alpha));
         }
-        this.drawTheTrail(canvas, x + 17, (y + 44 + y + h - 12) / 2, w - 34, alpha);
+        this.drawTheTrail(canvas, x + 17, y + 44 + (91 - 44 - 12) / 2, main - 34, alpha);
+        if (this.progress.isWorldClosed()) {
+            canvas.drawText(Lang.get("hotwire.progress.world_closed"), x + 17, y + 84,
+                    Colors.fade(Palette.TEXT, alpha));
+            canvas.drawText(Lang.get("hotwire.progress.world_opens"), x + 17, y + 96,
+                    Colors.fade(Palette.ACCENT, alpha));
+        }
+        if (listed) {
+            canvas.fill(x + main, y + 12, x + main + 1, y + h - 12, Colors.fade(Palette.HAIRLINE, alpha));
+            this.drawQueue(canvas, now, x + main + 8, y + 12, SIDE_W - 2, alpha);
+        }
+    }
+
+    private int getCurrent(Progress.Snapshot now) {
+        int count = now.queue().size();
+        if (!now.running()) {
+            return count;
+        }
+        return Math.min(count - 1, (int) (now.getFraction() * count));
+    }
+
+    private void easeQueue(Progress.Snapshot now, float delta) {
+        int count = now.queue().size();
+        if (now.run() != this.queueRun || this.focus.size() != count) {
+            this.queueRun = now.run();
+            this.focus.clear();
+            for (int i = 0; i < count; i++) {
+                this.focus.add(EasedValue.ofSpeed(9));
+            }
+            this.scroll.snap(0);
+        }
+        int current = this.getCurrent(now);
+        for (int i = 0; i < count; i++) {
+            EasedValue one = this.focus.get(i);
+            one.to(i == current ? 1 : 0);
+            one.step(delta);
+        }
+        this.scroll.to(Math.max(0, Math.min(count - CARDS_SHOWN, current - 2)));
+        this.scroll.step(delta);
+    }
+
+    private int getQueueHeight(Progress.Snapshot now) {
+        int count = now.queue().size();
+        int first = Math.round(this.scroll.getValue());
+        int last = Math.min(count, first + CARDS_SHOWN);
+        int height = 0;
+        for (int i = first; i < last; i++) {
+            height += CARD + Math.round(CARD_GROWS * this.focus.get(i).getValue()) + CARD_GAP;
+        }
+        return height - CARD_GAP + (first > 0 ? MORE_LINE : 0) + (last < count ? MORE_LINE : 0);
+    }
+
+    private void drawQueue(Canvas canvas, Progress.Snapshot now, int x, int y, int w, float alpha) {
+        List<Progress.Entry> queue = now.queue();
+        int current = this.getCurrent(now);
+        int first = Math.round(this.scroll.getValue());
+        int last = Math.min(queue.size(), first + CARDS_SHOWN);
+        int at = y;
+        if (first > 0) {
+            canvas.drawText(Lang.get("hotwire.progress.more", first), x + 6, at, Colors.fade(Palette.FAINT, alpha));
+            at += MORE_LINE;
+        }
+        for (int i = first; i < last; i++) {
+            float grown = this.focus.get(i).getValue();
+            int h = CARD + Math.round(CARD_GROWS * grown);
+            boolean done = i < current;
+            int edge = Colors.mix(Palette.PANEL_EDGE, Palette.ACCENT, grown);
+            canvas.fill(x, at, x + w, at + h, Colors.fade(edge, alpha));
+            canvas.fill(x + 1, at + 1, x + w - 1, at + h - 1, Colors.fade(Palette.PANEL, alpha));
+            Progress.Entry entry = queue.get(i);
+            int ink = done ? Palette.FAINT : Colors.mix(Palette.DIM, Palette.TEXT, grown);
+            int textX = x + 8;
+            if (done) {
+                canvas.drawText(TICK, textX, at + 5, Colors.fade(Palette.ON, alpha));
+                textX += canvas.measureText(TICK) + 5;
+            }
+            canvas.drawText(canvas.clip(entry.name(), x + w - 8 - textX), textX, at + 5, Colors.fade(ink, alpha));
+            if (grown > 0.3f && !entry.why().isEmpty()) {
+                canvas.drawText(canvas.clip(entry.why(), w - 16), x + 8, at + 17,
+                        Colors.fade(Palette.DIM, alpha * Math.min(1, (grown - 0.3f) * 2)));
+            }
+            at += h + CARD_GAP;
+        }
+        if (last < queue.size()) {
+            canvas.drawText(Lang.get("hotwire.progress.more", queue.size() - last), x + 6, at,
+                    Colors.fade(Palette.FAINT, alpha));
+        }
     }
 
     private int measureWidest(Canvas canvas, Heading heading, String tail) {

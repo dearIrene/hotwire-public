@@ -33,8 +33,7 @@ public final class FinalWrites {
         writer = by;
     }
 
-    @SuppressWarnings("UnusedMethod")
-    private static void write(Field field, @Nullable Object holder, @Nullable Object value)
+    static void write(Field field, @Nullable Object holder, @Nullable Object value)
             throws IllegalAccessException {
         writer.write(field, holder, value);
     }

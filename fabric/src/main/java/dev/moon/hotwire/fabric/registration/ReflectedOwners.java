@@ -3,6 +3,7 @@ package dev.moon.hotwire.fabric.registration;
 import java.util.HashSet;
 import java.util.Map;
 import java.util.Set;
+import java.util.concurrent.ConcurrentHashMap;
 import java.util.function.Function;
 import java.util.regex.Pattern;
 import org.jspecify.annotations.Nullable;
@@ -18,6 +19,8 @@ final class ReflectedOwners {
     private static volatile Function<String, byte @Nullable []> bytesOf = name -> null;
 
     private static volatile Map<String, String> modOfName = Map.of();
+
+    private static volatile Map<Class<?>, String> answers = new ConcurrentHashMap<>();
 
     private static final ClassValue<Set<String>> NAMED = new ClassValue<>() {
         @Override
@@ -43,11 +46,20 @@ final class ReflectedOwners {
 
     static void useNames(Map<String, String> names) {
         modOfName = Map.copyOf(names);
+        answers = new ConcurrentHashMap<>();
     }
 
     static @Nullable String findOwnerOf(Class<?> type) {
         if (modOfName.isEmpty() || type.isArray() || type.isPrimitive()) {
             return null;
+        }
+        String answer = answers.computeIfAbsent(type, ReflectedOwners::findAfresh);
+        return answer.isEmpty() ? null : answer;
+    }
+
+    private static String findAfresh(Class<?> type) {
+        if (!Wrappers.isOfAnotherMod(type)) {
+            return "";
         }
         for (String name : NAMED.get(type)) {
             String mod = modOfName.get(name);
@@ -55,7 +67,7 @@ final class ReflectedOwners {
                 return mod;
             }
         }
-        return null;
+        return "";
     }
 
     private static void readNames(String binaryName, Set<String> into) {

@@ -183,7 +183,7 @@ final class GeneratedNames {
         }
     }
 
-    private static String mask(String name) {
+    static String mask(String name) {
         return NUMBERS.matcher(name).replaceAll("\\$#");
     }
 

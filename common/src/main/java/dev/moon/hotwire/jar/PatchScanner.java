@@ -20,21 +20,29 @@ import java.util.Map;
 import java.util.Set;
 import java.util.TreeSet;
 import java.util.function.UnaryOperator;
+import java.util.regex.Pattern;
 import java.util.zip.ZipEntry;
 import java.util.zip.ZipFile;
 import org.jspecify.annotations.Nullable;
 import org.objectweb.asm.AnnotationVisitor;
 import org.objectweb.asm.ClassReader;
 import org.objectweb.asm.ClassVisitor;
+import org.objectweb.asm.MethodVisitor;
 import org.objectweb.asm.Opcodes;
 import org.objectweb.asm.Type;
 
 final class PatchScanner {
     private static final String MIXIN = "Lorg/spongepowered/asm/mixin/Mixin;";
     private static final String PSEUDO = "Lorg/spongepowered/asm/mixin/Pseudo;";
+
+    private static final Set<String> OPENERS = Set.of("Lorg/spongepowered/asm/mixin/gen/Accessor;",
+            "Lorg/spongepowered/asm/mixin/gen/Invoker;");
     private static final List<String> MIXIN_ARRAYS = List.of("mixins", "client", "server");
     private static final int METHOD_ENTRY = 10;
     private static final int INTERFACE_METHOD_ENTRY = 11;
+    private static final int STRING_ENTRY = 8;
+
+    private static final Pattern MOD_ID = Pattern.compile("[a-z][a-z0-9_-]{1,63}");
 
     private static final List<String> RUNS_ALWAYS = List.of("main", "client", "server", "preLaunch");
 
@@ -59,6 +67,7 @@ final class PatchScanner {
         List<String> missing = new ArrayList<>();
         Map<String, Set<String>> byConfig = new LinkedHashMap<>();
         Set<String> named = new HashSet<>();
+        Set<String> asks = new TreeSet<>();
         for (MixinConfigRef ref : manifest.mixinConfigs()) {
             byte[] config = reader.read(ref.config());
             if (config == null) {
@@ -82,6 +91,7 @@ final class PatchScanner {
                 configTargets.addAll(read.targets());
                 (read.hook() ? hooked : tied).addAll(read.targets());
                 collectNamedIfInTheGame(read, bytes, named);
+                collectModIds(bytes, asks);
             }
             String pluginPackage = readPluginPackage(config);
             if (pluginPackage != null) {
@@ -94,6 +104,7 @@ final class PatchScanner {
                         Mixin added = read(bytes, name, refmap);
                         configTargets.addAll(added.targets());
                         collectNamedIfInTheGame(added, bytes, named);
+                        collectModIds(bytes, asks);
                     }
                 }
             }
@@ -121,6 +132,7 @@ final class PatchScanner {
             }
             Set<String> refs = new HashSet<>();
             collectNamedClasses(bytes, refs);
+            collectModIds(bytes, asks);
             for (String ref : refs) {
                 if (owns.contains(ref)) {
                     if (!read.contains(ref)) {
@@ -142,7 +154,26 @@ final class PatchScanner {
                 calls.add(in);
             }
         });
-        return new ModPatches(owns, patches, hooked, missing, byConfig, calls);
+        return new ModPatches(owns, patches, hooked, missing, byConfig, calls, asks);
+    }
+
+    private static void collectModIds(byte[] bytes, Set<String> into) {
+        ClassReader reader;
+        try {
+            reader = new ClassReader(bytes);
+        } catch (RuntimeException e) {
+            return;
+        }
+        char[] buffer = new char[reader.getMaxStringLength()];
+        for (int item = 1; item < reader.getItemCount(); item++) {
+            int offset = reader.getItem(item);
+            if (offset != 0 && bytes[offset - 1] == STRING_ENTRY) {
+                String text = reader.readUTF8(offset, buffer);
+                if (text != null && MOD_ID.matcher(text).matches()) {
+                    into.add(text);
+                }
+            }
+        }
     }
 
     private static void collectNamedIfInTheGame(Mixin mixin, byte[] bytes, Set<String> into) {
@@ -293,6 +324,7 @@ final class PatchScanner {
     private static Mixin read(byte[] bytes, String mixin, Refmap refmap) {
         Set<String> targets = new TreeSet<>();
         boolean[] pseudo = {false};
+        boolean[] opens = {false};
         ClassReader reader = new ClassReader(bytes);
         reader.accept(new ClassVisitor(Opcodes.ASM9) {
             @Override
@@ -303,9 +335,20 @@ final class PatchScanner {
                 return MIXIN.equals(descriptor) ? new Targets(targets, written -> refmap.getTarget(mixin, written))
                         : null;
             }
+
+            @Override
+            public MethodVisitor visitMethod(int access, String name, String descriptor, @Nullable String signature,
+                    String @Nullable [] exceptions) {
+                return new MethodVisitor(Opcodes.ASM9) {
+                    @Override
+                    public @Nullable AnnotationVisitor visitAnnotation(String annotation, boolean visible) {
+                        opens[0] |= OPENERS.contains(annotation);
+                        return null;
+                    }
+                };
+            }
         }, ClassReader.SKIP_CODE | ClassReader.SKIP_DEBUG | ClassReader.SKIP_FRAMES);
-        boolean plain = (reader.getAccess() & Opcodes.ACC_INTERFACE) == 0 && reader.getInterfaces().length == 0;
-        return new Mixin(targets, pseudo[0] && plain);
+        return new Mixin(targets, pseudo[0] && reader.getInterfaces().length == 0 && !opens[0]);
     }
 
     private static final class Targets extends AnnotationVisitor {

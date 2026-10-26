@@ -328,7 +328,8 @@ public final class SwitchApplier {
         }
         LOGGER.info("[Hotwire] {} loaded while the switch ran and are rebuilt after it", originals.keySet().stream()
                 .map(Class::getName).toList());
-        this.applyWhilePaused(this.prepare(originals, originals, Map.of(), this.onConfigs, onAfter, "rebuild"),
+        this.applyWhilePaused(this.prepare(originals, originals, Map.of(), this.onConfigs, onAfter, Set.of(),
+                "rebuild"),
                 () -> { });
     }
 
@@ -364,7 +365,7 @@ public final class SwitchApplier {
         this.lastDryRun = new LastDryRun(Set.copyOf(switched), Set.copyOf(onAfter), Set.copyOf(rebuilt));
         List<String> configs = this.getConfigsOf(onAfter);
         ClassRebuilder.PreparedRebuild prepared = originals.isEmpty() ? null
-                : this.prepare(originals, originals, Map.of(), configs, onAfter, "rebuild");
+                : this.prepare(originals, originals, Map.of(), configs, onAfter, Set.of(), "rebuild");
         if (!targets.containsAll(AddedOverrides.findOwnersOf(targets))) {
             this.lastDryRun = null;
             return this.dryRun(switched, onAfter, forClick);
@@ -423,7 +424,8 @@ public final class SwitchApplier {
             rebuilt.add(entry.getKey());
         }
         if (!originals.isEmpty()) {
-            this.applyWhilePaused(this.prepare(originals, before, classes, this.onConfigs, on, "update"), () -> { });
+            this.applyWhilePaused(this.prepare(originals, before, classes, this.onConfigs, on, Set.copyOf(ids),
+                    "update"), () -> { });
         }
         this.replaced.putAll(classes);
         this.rebuilder.copy().replace(classes);
@@ -431,7 +433,7 @@ public final class SwitchApplier {
     }
 
     private ClassRebuilder.PreparedRebuild prepare(Map<Class<?>, byte[]> originals, Map<Class<?>, byte[]> before,
-            Map<String, byte[]> classes, List<String> configs, Set<String> on, String what)
+            Map<String, byte[]> classes, List<String> configs, Set<String> on, Set<String> replacing, String what)
             throws RebuildException {
         StopPoint.check();
         Map<String, byte[]> current = this.rebuilder.getLoadedBytes().readCurrent(originals.keySet());
@@ -458,16 +460,36 @@ public final class SwitchApplier {
                 patching, on::contains);
         SwitchTimes.mark("mix");
 
-        List<String> lost = this.carriedMixins.findLost(carriedNow, mixed.carried(), mixed.mixed(), on,
+        Set<String> keeping = new HashSet<>(on);
+        keeping.removeAll(replacing);
+        List<String> lost = this.carriedMixins.findLost(carriedNow, mixed.carried(), mixed.mixed(), keeping,
                 decided::isAskedAgain);
         if (!lost.isEmpty()) {
-            throw new RebuildException("the " + what + " would drop patches of mods that stay on: " + lost,
-                    new IllegalStateException(String.join(", ", lost)));
+            throw RebuildException.ofLosing("the " + what + " would drop patches of mods that stay on: " + lost,
+                    new IllegalStateException(String.join(", ", lost)), this.findOwnersOf(lost, on));
         }
         ClassRebuilder.PreparedRebuild prepared = LiveObjects.check(mixed, current, this.rebuiltWhilePaused, this.game,
-                this::findOriginal, this.rebuilder, what);
+                this::findOriginal, this.rebuilder, what, mixin -> {
+                    String maker = this.carriedMixins.findModMaking(mixin, id -> true);
+                    return maker != null && !on.contains(maker);
+                }, type -> {
+                    String shipping = this.carriedMixins.findModShipping(type);
+                    return shipping != null && !on.contains(shipping);
+                });
         SwitchTimes.mark("live objects");
         return prepared;
+    }
+
+    private Set<String> findOwnersOf(List<String> lost, Set<String> on) {
+        Set<String> owners = new TreeSet<>();
+        for (String entry : lost) {
+            String mixin = entry.substring(entry.indexOf(" <- ") + " <- ".length());
+            @Nullable String maker = this.carriedMixins.findModMaking(mixin, on::contains);
+            if (maker != null) {
+                owners.add(maker);
+            }
+        }
+        return owners;
     }
 
     public Map<String, Set<String>> getPatchersOf(Set<String> classes, Set<String> on, String except) {

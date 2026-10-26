@@ -9,6 +9,7 @@ import dev.moon.hotwire.report.CrashSection;
 import dev.moon.hotwire.report.Report;
 import dev.moon.hotwire.report.ReportBundle;
 import dev.moon.hotwire.report.ReportWriter;
+import dev.moon.hotwire.report.TidyLog;
 import dev.moon.hotwire.switching.ModSwitcher;
 import dev.moon.hotwire.switching.SwitchApplier;
 import java.io.IOException;
@@ -20,6 +21,7 @@ import java.nio.file.StandardOpenOption;
 import java.time.Instant;
 import java.time.LocalTime;
 import java.time.ZoneId;
+import java.time.format.DateTimeFormatter;
 import java.util.ArrayList;
 import java.util.Collection;
 import java.util.HashMap;
@@ -52,6 +54,9 @@ import org.spongepowered.asm.launch.MixinBootstrap;
 
 public final class GameReports {
     private static final Logger LOGGER = LoggerFactory.getLogger(GameReports.class);
+
+    private static final DateTimeFormatter WHEN = DateTimeFormatter.ofPattern("yyyy-MM-dd HH:mm:ss")
+            .withZone(ZoneId.systemDefault());
     private static volatile @Nullable GameReports current;
 
     private final Path folder;
@@ -282,14 +287,17 @@ public final class GameReports {
             if (Files.isRegularFile(marker)) {
                 Instant last = Instant.parse(Files.readString(marker).strip());
                 Set<String> reported = readReported(game);
-                crash = listWrittenAfter(game.resolve("crash-reports"), ".txt", last).stream()
-                        .filter(file -> !reported.contains(String.valueOf(file.getFileName()))).filter(file -> {
-                    try {
-                        return Files.getLastModifiedTime(file).toInstant().isBefore(this.began);
-                    } catch (IOException e) {
-                        return false;
-                    }
-                }).reduce((first, second) -> second);
+                List<Path> found = new ArrayList<>(listWrittenAfter(game.resolve("crash-reports"), ".txt", last));
+                found.addAll(listWrittenAfter(game, ".log", last).stream()
+                        .filter(file -> file.getFileName().toString().startsWith("hs_err")).toList());
+                crash = found.stream().filter(file -> !reported.contains(String.valueOf(file.getFileName())))
+                        .filter(file -> {
+                            try {
+                                return Files.getLastModifiedTime(file).toInstant().isBefore(this.began);
+                            } catch (IOException e) {
+                                return false;
+                            }
+                        }).filter(GameReports::namesHotwire).reduce((first, second) -> second);
             }
             Files.createDirectories(marker.getParent());
             Files.writeString(marker, this.began.toString());
@@ -299,24 +307,41 @@ public final class GameReports {
         return crash;
     }
 
-    synchronized Path writeBundle(String why, String mods, List<Path> extra) throws IOException {
+    private static boolean namesHotwire(Path file) {
+        String text = read(file);
+        if (file.getFileName().toString().startsWith("hs_err")) {
+            int process = text.indexOf("P R O C E S S");
+            String thread = process < 0 ? text : text.substring(0, process);
+            return thread.contains("dev.moon.hotwire") || thread.contains("dev/moon/hotwire");
+        }
+        int at = text.indexOf("Hotwire involved? ");
+        return at < 0 || !CrashSection.isCleared(text.substring(at));
+    }
+
+    synchronized Path writeBundle(String why, boolean crash, List<TidyLog.Mod> mods, List<Path> extra)
+            throws IOException {
         this.onWritten();
         Path game = FabricLoader.getInstance().getGameDir();
         Map<String, String> texts = new LinkedHashMap<>();
-        texts.put("reason.txt", why + System.lineSeparator());
-        texts.put("mods.txt", mods);
-        this.listSince(this.folder, ".txt").forEach(file -> texts.put("reports/" + file.getFileName(), read(file)));
         Path log = game.resolve("logs").resolve("latest.log");
-        if (Files.isRegularFile(log)) {
-            texts.put("latest.log", getTail(read(log)));
+        Instant now = Instant.now();
+        texts.put("latest.log", TidyLog.write(why, WHEN.format(now), MachineFacts.read(), mods,
+                Files.isRegularFile(log) ? getTail(read(log)) : "(the game wrote no log)\n"));
+
+        Path logs = game.resolve("hotwire").resolve("logs");
+        for (String name : extra.isEmpty() ? List.of(HotwireLog.FILE) : List.of(HotwireLog.FILE, HotwireLog.LAST)) {
+            if (Files.isRegularFile(logs.resolve(name))) {
+                texts.put("hotwire-" + name, getTail(read(logs.resolve(name))));
+            }
         }
+        this.listSince(this.folder, ".txt").forEach(file -> texts.put("reports/" + file.getFileName(), read(file)));
         this.listSince(game.resolve("crash-reports"), ".txt")
                 .forEach(file -> texts.put("crash-reports/" + file.getFileName(), read(file)));
         extra.forEach(file -> texts.put("crash-reports/" + file.getFileName(), read(file)));
         this.listSince(game, ".log").stream().filter(file -> file.getFileName().toString().startsWith("hs_err"))
                 .forEach(file -> texts.put("jvm-crashes/" + file.getFileName(), read(file)));
-        Path zip = ReportBundle.write(this.folder, Instant.now(), texts, Set.of(Minecraft.getInstance().getUser()
-                .getName()));
+        Path zip = ReportBundle.write(this.folder, now, crash ? "crash" : "report", texts,
+                Set.of(Minecraft.getInstance().getUser().getName()));
         return zip;
     }
 

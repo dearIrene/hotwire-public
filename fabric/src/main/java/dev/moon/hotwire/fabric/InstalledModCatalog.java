@@ -1,5 +1,6 @@
 package dev.moon.hotwire.fabric;
 
+import dev.moon.hotwire.config.HotwireSettings;
 import dev.moon.hotwire.jar.ModManifest;
 import dev.moon.hotwire.ui.list.ModCatalog;
 import java.util.Set;
@@ -10,11 +11,24 @@ final class InstalledModCatalog implements ModCatalog {
     private final InstalledMods installed;
     private final Predicate<String> on;
     private final BooleanSupplier worldLocked;
+    private final HotwireSettings settings;
 
-    InstalledModCatalog(InstalledMods installed, Predicate<String> on, BooleanSupplier worldLocked) {
+    InstalledModCatalog(InstalledMods installed, Predicate<String> on, BooleanSupplier worldLocked,
+            HotwireSettings settings) {
         this.installed = installed;
         this.on = on;
         this.worldLocked = worldLocked;
+        this.settings = settings;
+    }
+
+    @Override
+    public boolean isFavorite(String id) {
+        return this.settings.isFavorite(id);
+    }
+
+    @Override
+    public void setFavorite(String id, boolean favorite) {
+        this.settings.setFavorite(id, favorite);
     }
 
     @Override

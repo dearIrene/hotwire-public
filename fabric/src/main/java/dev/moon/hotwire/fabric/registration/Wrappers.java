@@ -1,24 +1,21 @@
 package dev.moon.hotwire.fabric.registration;
 
 import dev.moon.hotwire.redefine.FieldSlots;
+import dev.moon.hotwire.registration.ModNames;
 import java.lang.reflect.Method;
 import java.util.AbstractMap;
 import java.util.ArrayList;
 import java.util.Collection;
+import java.util.HashSet;
 import java.util.IdentityHashMap;
 import java.util.List;
-import java.util.Locale;
 import java.util.Map;
 import java.util.Set;
 import java.util.function.Function;
-import java.util.regex.Pattern;
 import org.jspecify.annotations.Nullable;
 
 final class Wrappers {
     private static final int DEPTH = 9;
-
-    private static final Pattern NOT_WORD = Pattern.compile("[^a-z0-9]+");
-    private static final int NAMED_WORD_LENGTH = 5;
 
     private static final int ELEMENTS = 64;
 
@@ -38,6 +35,9 @@ final class Wrappers {
     private List<String> mods = List.of();
     private @Nullable String reachedMod;
     private boolean isOfTwo;
+
+    private Set<String> targets = Set.of();
+    private List<String> targetsFor = List.of();
 
     private final IdentityHashMap<Class<?>, Boolean> askedOf = new IdentityHashMap<>();
 
@@ -171,14 +171,15 @@ final class Wrappers {
         targetsOf = targets;
     }
 
+    @SuppressWarnings("ReferenceEquality")
     private boolean isAddedByTheirMixin(FieldSlots.Slot field) {
-        String owner = field.getDeclaringClass().getName().replace('.', '/');
-        for (String mod : this.mods) {
-            if (targetsOf.apply(mod).contains(owner)) {
-                return true;
-            }
+        if (this.targetsFor != this.mods) {
+            Set<String> all = new HashSet<>();
+            this.mods.forEach(mod -> all.addAll(targetsOf.apply(mod)));
+            this.targets = all;
+            this.targetsFor = this.mods;
         }
-        return false;
+        return this.targets.contains(field.getDeclaringClass().getName().replace('.', '/'));
     }
 
     private boolean isOfTheMods(Class<?> type) {
@@ -186,23 +187,11 @@ final class Wrappers {
         return mod != null && this.mods.contains(mod);
     }
 
-    static @Nullable String findNamed(@Nullable Object key, @Nullable Object value, List<String> mods) {
+    static @Nullable String findNamed(@Nullable Object key, @Nullable Object value, ModNames names) {
         if (!(key instanceof String name) || value == null || CollectionReferences.isPlain(value)) {
             return null;
         }
-        if (!isOfAnotherMod(value.getClass())) {
-            return null;
-        }
-
-        String words = "_" + NOT_WORD.matcher(name.toLowerCase(Locale.ROOT)).replaceAll("_") + "_";
-        for (String mod : mods) {
-            String id = NOT_WORD.matcher(mod.toLowerCase(Locale.ROOT)).replaceAll("_");
-            if (name.equals(mod) || name.startsWith(mod + ".")
-                    || (id.length() >= NAMED_WORD_LENGTH && words.contains("_" + id + "_"))) {
-                return mod;
-            }
-        }
-        return null;
+        return isOfAnotherMod(value.getClass()) ? names.find(name) : null;
     }
 
     static boolean isOfAnotherMod(Class<?> type) {
@@ -214,6 +203,33 @@ final class Wrappers {
     static boolean isLookedInto(Object value) {
         String name = value.getClass().getName();
         return !name.startsWith("java.") && !name.startsWith("javax.") && !name.startsWith("jdk.");
+    }
+
+    static @Nullable String findWhollyOwner(Object item) {
+        List<Method> accessors = Fields.getRecordParts(item.getClass());
+        String owner = null;
+        try {
+            for (Method accessor : accessors) {
+                if (accessor.getReturnType().isPrimitive()) {
+                    continue;
+                }
+                Object part = accessor.invoke(item);
+                if (part == null || CollectionReferences.isPlain(part)) {
+                    continue;
+                }
+                String of = CollectionReferences.findOwnerOfValue(part);
+                if (of == null) {
+                    of = CollectionReferences.findForwardedTo(part);
+                }
+                if (of == null || (owner != null && !owner.equals(of))) {
+                    return null;
+                }
+                owner = of;
+            }
+        } catch (ReflectiveOperationException | RuntimeException | LinkageError e) {
+            return null;
+        }
+        return owner;
     }
 
     static boolean isWhollyOf(String mod, Object item) {

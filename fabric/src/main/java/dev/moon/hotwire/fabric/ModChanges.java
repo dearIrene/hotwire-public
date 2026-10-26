@@ -6,11 +6,17 @@ import dev.moon.hotwire.fabric.add.WorldReopen;
 import dev.moon.hotwire.fabric.update.ModUpdater;
 import dev.moon.hotwire.ui.AddPreview;
 import dev.moon.hotwire.ui.UpdatePreview;
+import dev.moon.hotwire.update.UpdatePlan;
 import java.nio.file.Path;
+import java.util.List;
 import java.util.concurrent.CompletableFuture;
 import org.jspecify.annotations.Nullable;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
 public final class ModChanges {
+    private static final Logger LOGGER = LoggerFactory.getLogger(ModChanges.class);
+
     private final HotwireEngine.@Nullable JvmParts parts;
     private final String refusal;
     private final InstalledMods installed;
@@ -53,6 +59,16 @@ public final class ModChanges {
         return ready == null ? new ModUpdater.Result.Refused(this.refusal) : ready.updates().updateNow(jar);
     }
 
+    public @Nullable UpdatePlan planUpdate(Path jar) {
+        HotwireEngine.JvmParts ready = this.parts;
+        return ready == null ? null : ready.updates().findPlan(jar);
+    }
+
+    public List<Path> findCarriedToAdd(Path jar) {
+        HotwireEngine.JvmParts ready = this.parts;
+        return ready == null ? List.of() : ready.updates().findCarriedToAdd(jar);
+    }
+
     public UpdatePreview previewUpdate(Path jar) {
         HotwireEngine.JvmParts ready = this.parts;
         return ready == null ? new UpdatePreview.Unreadable(String.valueOf(jar.getFileName()))
@@ -65,7 +81,12 @@ public final class ModChanges {
             return CompletableFuture.completedFuture(AddPreview.ofRefusal(String.valueOf(jar.getFileName()),
                     this.refusal));
         }
-        return this.tasks.submit("dry-run add", () -> ready.adds().preview(jar));
+        long asked = System.nanoTime();
+        return this.tasks.submit("dry-run add", () -> {
+            LOGGER.info("[Hotwire] the dry run of {} waited {} ms for the worker", jar.getFileName(),
+                    (System.nanoTime() - asked) / 1_000_000);
+            return ready.adds().preview(jar);
+        });
     }
 
     CompletableFuture<UpdatePreview> dryRunUpdate(Path jar) {

@@ -8,6 +8,7 @@ import dev.moon.hotwire.ui.list.ModListModel.Show;
 import dev.moon.hotwire.ui.list.ModListModel.Unpick;
 import dev.moon.hotwire.ui.list.ModStatus;
 import dev.moon.hotwire.update.PendingChange;
+import dev.moon.hotwire.update.UpdateOffer;
 import java.io.IOException;
 import java.nio.file.Path;
 import java.util.ArrayList;
@@ -41,7 +42,10 @@ public final class ModScreen {
 
         void applyProfile(String name, ProfileStore.ProfilePlan plan);
 
-        void report();
+        String report();
+
+        default void showReportFile() {
+        }
 
         void addMod();
 
@@ -52,6 +56,13 @@ public final class ModScreen {
         boolean canUpdate();
 
         void onDone();
+
+        default void updateFromStore(UpdateOffer offer) {
+        }
+
+        default void updateAllFromStore(List<UpdateOffer> offers) {
+            offers.forEach(this::updateFromStore);
+        }
 
         default CompletableFuture<AddPreview> dryRunAdd(Path jar) {
             return CompletableFuture.completedFuture(AddPreview.ofRefusal(String.valueOf(jar.getFileName()),
@@ -115,14 +126,17 @@ public final class ModScreen {
     private final MessageLine message = new MessageLine();
     private final TextField search;
     private final ProfileMenu profiles;
-    private final Dropdown showMenu;
-    private final Button turnOff;
-    private final Button turnOn;
-    private final Button report;
+    private final ChoiceBar show;
+    private final ChoiceBar layoutBar;
+    private final Button libraries;
+
+    private final Button toggle;
     private final Button add;
-    private final Button update;
-    private final Button advanced;
+    private final Button report;
     private final Button pending;
+    private final Button updates;
+    private final UpdatesPanel updatesPanel;
+    private final Button advanced;
     private final Button done;
     private final ProgressPanel progress;
     private final AddPanel addPanel;
@@ -130,6 +144,7 @@ public final class ModScreen {
     private final AdvancedPanel advancedPanel;
     private final PendingPanel pendingPanel;
     private final ReopenPanel reopenPanel;
+    private final ReportPanel reportPanel;
     private final FirstOpenPanel firstOpen;
     private int pendingCount;
     private final List<ModStatus> shown = new ArrayList<>();
@@ -137,11 +152,12 @@ public final class ModScreen {
 
     static final int COMPACT_BELOW = 330;
 
+    private static final List<Show> SHOWS = List.of(Show.ALL, Show.ON, Show.OFF, Show.SELECTED);
+
     private int width;
     private int height;
     private final BottomBar bar;
-    private String offLabel = Lang.get("hotwire.screen.turn_off");
-    private String onLabel = Lang.get("hotwire.screen.turn_on");
+    private String toggleLabel = "";
 
     private static final long AHEAD_DWELL_NANOS = 250_000_000L;
     private @Nullable String pointed;
@@ -155,25 +171,30 @@ public final class ModScreen {
         this.list = new ModList(new ListSource(), game.getBadges(), this.model, game.getCatalog(), game::findIcon,
                 new Gestures());
         this.search = new TextField(Lang.get("hotwire.screen.search"), this::onSearched, () -> { }, game::onDone);
-        this.showMenu = new Dropdown(this.root.getMenus(), Show.ALL.getLabel(), this::showPicked, index -> { });
-        this.profiles = new ProfileMenu(profiles, new Setups(), this.root, this.search, this.showMenu);
-        this.turnOff = new Button(Lang.get("hotwire.screen.turn_off"), Lang.get("hotwire.screen.off"), false,
-                () -> this.switchPicked(false));
-        this.turnOn = new Button(Lang.get("hotwire.screen.turn_on"), Lang.get("hotwire.screen.on"), true,
-                () -> this.switchPicked(true));
-        this.report = new Button(Lang.get("hotwire.screen.report"), Lang.get("hotwire.screen.report_short"), false,
-                game::report);
+        this.show = new ChoiceBar(getShowChoices(0), 0, this::showPicked);
+        this.layoutBar = new ChoiceBar(List.of(ChoiceBar.Choice.ofGlyph(ChoiceBar.Glyph.ROWS),
+                ChoiceBar.Choice.ofGlyph(ChoiceBar.Glyph.GRID)), 0, index -> this.list.setGrid(index == 1));
+        this.libraries = new Button(Lang.get("hotwire.screen.show_libraries"), false, this::toggleLibraries);
+        this.profiles = new ProfileMenu(profiles, new Setups(), this.root, this.search, this.show);
+        this.toggle = new Button(Lang.get("hotwire.screen.turn_off"), Lang.get("hotwire.screen.off"), false,
+                this::switchPicked);
         this.add = new Button(Lang.get("hotwire.screen.add"), Lang.get("hotwire.screen.add_short"), false,
                 game::addMod);
-        this.update = new Button(Lang.get("hotwire.screen.update"), Lang.get("hotwire.screen.update_short"), false,
-                game::updateMod);
-        this.advanced = new Button(Lang.get("hotwire.screen.advanced"), Lang.get("hotwire.screen.advanced_short"),
-                false, this::openAdvanced);
-        this.pending = new Button(Lang.get("hotwire.screen.pending"), Lang.get("hotwire.screen.pending_short"),
-                false, this::openPending);
+        this.report = new Button(Lang.get("hotwire.screen.report"), false, this::openReport);
+        this.pending = new Button(Lang.get("hotwire.screen.pending"), Lang.get("hotwire.screen.pending_short"), false,
+                this::openPending);
+        this.advanced = new Button(Lang.get("hotwire.screen.advanced"), false, this::openAdvanced);
+        this.updates = new Button(Lang.get("hotwire.screen.updates"), false, this::openUpdates);
         this.done = new Button(Lang.get("hotwire.button.done"), false, game::onDone);
-        this.bar = new BottomBar(List.of(this.turnOff, this.turnOn, this.report, this.add, this.update, this.advanced,
-                this.pending), this.done);
+        this.bar = new BottomBar(List.of(this.toggle, this.add, this.updates, this.report, this.pending,
+                this.advanced), this.done);
+        this.updatesPanel = new UpdatesPanel(offer -> {
+            this.closePanels();
+            game.updateFromStore(offer);
+        }, offers -> {
+            this.closePanels();
+            game.updateAllFromStore(offers);
+        }, this::closePanels, game::findIcon);
         this.progress = new ProgressPanel(game.getProgress());
         this.addPanel = new AddPanel(this::confirmAdd, game::addMod, this::closePanels);
         this.updatePanel = new UpdatePanel(this::confirmUpdate, game::updateMod, this::closePanels);
@@ -190,14 +211,16 @@ public final class ModScreen {
             }
         }, this::closePanels);
         this.firstOpen = new FirstOpenPanel(game::acceptFirstOpen);
+        this.reportPanel = new ReportPanel(game::showReportFile, this::closePanels);
         Element base = this.root.getBase();
         for (Element part : List.of(this.header, this.note, this.list, this.message, this.search,
-                this.profiles.naming, this.turnOff, this.turnOn, this.report, this.add, this.update, this.advanced,
-                this.pending, this.done, this.profiles.menu, this.showMenu)) {
+                this.profiles.naming, this.toggle, this.add, this.updates, this.report, this.pending, this.advanced,
+                this.done,
+                this.profiles.menu, this.show, this.layoutBar, this.libraries)) {
             base.add(part);
         }
-        for (Panel panel : List.of(this.advancedPanel, this.pendingPanel, this.addPanel, this.updatePanel,
-                this.progress, this.reopenPanel, this.firstOpen)) {
+        for (Panel panel : List.of(this.advancedPanel, this.pendingPanel, this.updatesPanel, this.addPanel,
+                this.updatePanel, this.progress, this.reopenPanel, this.firstOpen, this.reportPanel)) {
             this.root.getModal().add(panel);
         }
         if (!game.isFirstOpenAccepted()) {
@@ -206,6 +229,10 @@ public final class ModScreen {
         this.root.focus(this.search);
         this.pendingCount = game.getPendingChanges().size();
         this.refilter();
+    }
+
+    public void showCrashReport(String where) {
+        this.reportPanel.open(Lang.get("hotwire.report.crash_title"), where, true);
     }
 
     public Root getRoot() {
@@ -217,8 +244,8 @@ public final class ModScreen {
         this.height = height;
         this.root.resize(width, height);
         for (Element whole : List.of(this.header, this.note, this.list, this.message, this.progress,
-                this.addPanel, this.updatePanel, this.advancedPanel, this.pendingPanel, this.reopenPanel,
-                this.firstOpen)) {
+                this.addPanel, this.updatePanel, this.advancedPanel, this.pendingPanel, this.updatesPanel,
+                this.reopenPanel, this.firstOpen, this.reportPanel)) {
             whole.setBounds(0, 0, width, height);
         }
         int sw = Math.max(150, Math.min(260, width / 3));
@@ -227,11 +254,16 @@ public final class ModScreen {
         boolean compact = height < COMPACT_BELOW;
         int menus = compact ? 46 : 62;
         this.list.reach(compact ? 74 : 96, compact ? 56 : 64);
-        this.note.setY(menus - 2);
-        int wide = Math.max(160, Math.min(240, width / 4));
+        this.note.setY(menus - 13);
+        int wide = Math.max(150, Math.min(220, width / 4));
         this.profiles.menu.setBounds(24, menus, wide, Dropdown.HEIGHT);
         this.profiles.naming.setBounds(24, menus, wide, 22);
-        this.showMenu.setBounds(24 + wide + 8, menus, 130, Dropdown.HEIGHT);
+        int showW = Math.max(170, Math.min(230, width / 3));
+        this.show.setBounds(24 + wide + 8, menus + 1, showW, ChoiceBar.HEIGHT);
+        int layoutW = ChoiceBar.HEIGHT * 2 + 6;
+        this.layoutBar.setBounds(width - 24 - layoutW, menus + 1, layoutW, ChoiceBar.HEIGHT);
+        int librariesW = 84;
+        this.libraries.setBounds(width - 24 - layoutW - 6 - librariesW, menus + 1, librariesW, ChoiceBar.HEIGHT);
         this.bar.markStale();
         this.bar.lay(null, width, height);
     }
@@ -248,6 +280,10 @@ public final class ModScreen {
 
     public void showMessage(String text, boolean bad) {
         this.message.show(text, bad);
+    }
+
+    public void showMessage(String text, boolean bad, String hint) {
+        this.message.show(text, bad, hint);
     }
 
     public void onSwitched() {
@@ -271,6 +307,24 @@ public final class ModScreen {
 
     void onJarToUpdate(Path jar) {
         this.updatePanel.read(jar, this.game.dryRunUpdate(jar));
+    }
+
+    public boolean hasPanelOpen() {
+        for (Element element : this.root.getModal().getChildren()) {
+            if (element instanceof Panel panel && panel.open()) {
+                return true;
+            }
+        }
+        return false;
+    }
+
+    public boolean pressOpenPanel() {
+        for (Element element : this.root.getModal().getChildren()) {
+            if (element instanceof Panel panel && panel.pressPrimary()) {
+                return true;
+            }
+        }
+        return false;
     }
 
     public void onJarPicked(Path jar, boolean update) {
@@ -312,6 +366,15 @@ public final class ModScreen {
     private void chooseAdvanced(String option, int choice) {
         this.game.chooseAdvanced(option, choice);
         this.advancedPanel.setOptions(this.game.getAdvancedOptions());
+    }
+
+    public void setUpdates(List<UpdateOffer> offers, boolean checked) {
+        this.updatesPanel.setOffers(offers, checked);
+        this.updates.setBadge(offers.size());
+    }
+
+    public void openUpdates() {
+        this.updatesPanel.present();
     }
 
     private void openPending() {
@@ -371,6 +434,7 @@ public final class ModScreen {
         this.updatePanel.dismiss();
         this.advancedPanel.dismiss();
         this.pendingPanel.dismiss();
+        this.reportPanel.dismiss();
         this.reopenPanel.dismiss();
         this.showMessage("", false);
     }
@@ -415,26 +479,40 @@ public final class ModScreen {
         boolean idle = this.isIdle();
         int off = this.getPickedThatAre(true).size();
         int on = this.getPickedThatAre(false).size();
-        String offLabel = off > 0 ? Lang.get("hotwire.screen.turn_off_count", off)
-                : Lang.get("hotwire.screen.turn_off");
-        String onLabel = on > 0 ? Lang.get("hotwire.screen.turn_on_count", on) : Lang.get("hotwire.screen.turn_on");
-        if (!offLabel.equals(this.offLabel) || !onLabel.equals(this.onLabel)) {
-            this.offLabel = offLabel;
-            this.onLabel = onLabel;
-            this.turnOff.label(offLabel, off > 0 ? Lang.get("hotwire.screen.off_count", off)
-                    : Lang.get("hotwire.screen.off"));
-            this.turnOn.label(onLabel, on > 0 ? Lang.get("hotwire.screen.on_count", on)
-                    : Lang.get("hotwire.screen.on"));
+        String label;
+        String shortLabel;
+        if (off > 0 && on > 0) {
+            label = Lang.get("hotwire.screen.switch_count", off + on);
+            shortLabel = label;
+        } else if (on > 0) {
+            label = Lang.get("hotwire.screen.turn_on_count", on);
+            shortLabel = Lang.get("hotwire.screen.on_count", on);
+        } else {
+            label = off > 0 ? Lang.get("hotwire.screen.turn_off_count", off) : Lang.get("hotwire.screen.turn_off");
+            shortLabel = off > 0 ? Lang.get("hotwire.screen.off_count", off) : Lang.get("hotwire.screen.off");
+        }
+        if (!label.equals(this.toggleLabel)) {
+            this.toggleLabel = label;
+            this.toggle.label(label, shortLabel);
+            this.toggle.setPrimary(on > 0 && off == 0);
             this.bar.markStale();
         }
-        this.turnOff.setActive(idle && off > 0);
-        this.turnOn.setActive(idle && on > 0);
-        this.report.setActive(idle);
-        this.add.setActive(idle && this.game.canAdd());
-        this.update.setActive(idle && this.game.canUpdate());
-        this.advanced.setActive(idle);
-        this.pending.setActive(idle && this.pendingCount > 0);
         this.pending.setBadge(this.pendingCount);
+        this.toggle.setActive(idle && off + on > 0);
+        this.add.setActive(idle && this.game.canAdd());
+        this.report.setActive(idle);
+        this.pending.setActive(idle);
+        this.updates.setActive(idle && this.game.canUpdate());
+        this.advanced.setActive(idle);
+    }
+
+    private void openReport() {
+        this.reportPanel.open(Lang.get("hotwire.report.title"), this.game.report());
+    }
+
+    private void switchPicked() {
+        this.switchPicked(false);
+        this.switchPicked(true);
     }
 
     private void switchPicked(boolean on) {
@@ -486,32 +564,29 @@ public final class ModScreen {
     }
 
     private void refreshShowMenu() {
-        List<Dropdown.Item> show = new ArrayList<>();
-        for (Show choice : Show.values()) {
-            show.add(new Dropdown.Item(choice.getLabel(), this.findShowNote(choice), false, false));
-        }
-        show.add(Dropdown.Item.of(Lang.get(this.model.isShowingLibraries() ? "hotwire.screen.hide_libraries"
-                : "hotwire.screen.show_libraries")));
-        this.showMenu.setItems(show);
-        this.showMenu.setHeader(this.model.getShowing().getLabel());
+        this.show.setChoices(getShowChoices(this.model.getPicked().size()));
+        this.show.setChosen(SHOWS.indexOf(this.model.getShowing()));
+        this.libraries.label(Lang.get(this.model.isShowingLibraries() ? "hotwire.screen.hide_libraries"
+                : "hotwire.screen.show_libraries"));
     }
 
-    private @Nullable String findShowNote(Show choice) {
-        if (choice != Show.SELECTED) {
-            return null;
+    private static List<ChoiceBar.Choice> getShowChoices(int picked) {
+        List<ChoiceBar.Choice> choices = new ArrayList<>();
+        for (Show choice : SHOWS) {
+            choices.add(new ChoiceBar.Choice(choice.getLabel(), choice == Show.SELECTED && picked > 0
+                    ? String.valueOf(picked) : null, ChoiceBar.Glyph.NONE));
         }
-        int count = this.model.getPicked().size();
-        return count == 0 ? Lang.get("hotwire.screen.none_picked") : String.valueOf(count);
+        return choices;
     }
 
     private void showPicked(int index) {
-        Show[] choices = Show.values();
-        if (index < choices.length) {
-            this.model.setShowing(choices[index]);
-            this.list.scrollToTop();
-        } else {
-            this.model.setShowingLibraries(!this.model.isShowingLibraries());
-        }
+        this.model.setShowing(SHOWS.get(index));
+        this.list.scrollToTop();
+        this.refilter();
+    }
+
+    private void toggleLibraries() {
+        this.model.setShowingLibraries(!this.model.isShowingLibraries());
         this.refilter();
     }
 
@@ -581,6 +656,13 @@ public final class ModScreen {
             } else {
                 ModScreen.this.game.turnOn(List.of(mod.id()));
             }
+        }
+
+        @Override
+        public void toggleFavorite(String id) {
+            ModCatalog catalog = ModScreen.this.game.getCatalog();
+            catalog.setFavorite(id, !catalog.isFavorite(id));
+            ModScreen.this.refilter();
         }
 
         @Override

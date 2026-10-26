@@ -17,6 +17,7 @@ import java.util.Optional;
 import java.util.ServiceConfigurationError;
 import java.util.Set;
 import java.util.concurrent.ConcurrentHashMap;
+import java.util.concurrent.ConcurrentLinkedDeque;
 import java.util.function.BiConsumer;
 import java.util.function.BooleanSupplier;
 import java.util.function.Function;
@@ -43,6 +44,16 @@ public final class MixinCopy implements AutoCloseable {
     private static final String BOOTSTRAP = "mixin.bootstrapService";
     private static final String COPY = MixinCopy.class.getPackageName() + ".copy.";
     private static final Object BOOTING = new Object();
+
+    private static final ConcurrentLinkedDeque<Span> SPANS = new ConcurrentLinkedDeque<>();
+    private static final int SPAN_COUNT = 8;
+    private static volatile @Nullable Span mixing;
+
+    private record Span(String thread, long from, long to) {
+        boolean holds(String name, long millis) {
+            return this.thread.equals(name) && millis >= this.from && millis <= this.to;
+        }
+    }
     private static @Nullable Path copyJar;
 
     private final List<URL> mixinJars;
@@ -56,6 +67,7 @@ public final class MixinCopy implements AutoCloseable {
 
     private volatile @Nullable String compatibility;
     private final Function<String, byte @Nullable []> more;
+    private volatile ExtensionFolder folding = ExtensionFolder.NONE;
     private final Map<String, Optional<byte[]>> read = new ConcurrentHashMap<>();
 
     private @Nullable Copy reusable;
@@ -64,8 +76,8 @@ public final class MixinCopy implements AutoCloseable {
             Function<String, byte @Nullable []> more, String side, Decorations decorations) {
         this.side = side;
         this.decorations = decorations;
-        this.more = name -> this.read.computeIfAbsent(name, key -> Optional.ofNullable(more.apply(key)))
-                .orElse(null);
+        this.more = name -> this.read.computeIfAbsent(name, key -> Optional.ofNullable(this.folding.isFolded(key)
+                ? null : more.apply(key)).map(this.folding::fold)).orElse(null);
         this.mixinJars = mixinJars.stream().map(MixinCopy::toUrl).toList();
         this.live = live;
         this.sharedPackages = List.copyOf(sharedPackages);
@@ -85,6 +97,10 @@ public final class MixinCopy implements AutoCloseable {
         synchronized (BOOTING) {
             this.discard();
         }
+    }
+
+    public void foldInto(ExtensionFolder folding) {
+        this.folding = folding;
     }
 
     public void learn(Decorations more) {
@@ -129,6 +145,7 @@ public final class MixinCopy implements AutoCloseable {
             String bootstrap = System.getProperty(BOOTSTRAP);
             System.setProperty(SERVICE, COPY + "CopyMixinService");
             System.setProperty(BOOTSTRAP, COPY + "CopyMixinBootstrap");
+            mixing = new Span(Thread.currentThread().getName(), System.currentTimeMillis(), Long.MAX_VALUE);
             try {
                 long start = System.nanoTime();
                 Copy copy = this.resetReusable();
@@ -154,10 +171,31 @@ public final class MixinCopy implements AutoCloseable {
                         stages[2] / 1_000_000, stages[3] / 1_000_000);
                 return new MixResult(mixed, argsShapes, generated);
             } finally {
+                Span ended = mixing;
+                if (ended != null) {
+                    SPANS.addLast(new Span(ended.thread(), ended.from(), System.currentTimeMillis()));
+                }
+                while (SPANS.size() > SPAN_COUNT) {
+                    SPANS.pollFirst();
+                }
+                mixing = null;
                 restore(SERVICE, service);
                 restore(BOOTSTRAP, bootstrap);
             }
         }
+    }
+
+    public static boolean isMixingAt(String thread, long millis) {
+        Span now = mixing;
+        if (now != null && now.holds(thread, millis)) {
+            return true;
+        }
+        for (Span one : SPANS) {
+            if (one.holds(thread, millis)) {
+                return true;
+            }
+        }
+        return false;
     }
 
     @Override
@@ -187,7 +225,9 @@ public final class MixinCopy implements AutoCloseable {
             Map<String, byte[]> resources, List<String> configs, BooleanSupplier stop) throws MixinCopyException {
         Decorations decorated = this.decorations;
         try {
-            return copy.mixer().apply(new Object[] {List.copyOf(targets), Map.copyOf(classes), Map.copyOf(resources),
+            Map<String, byte[]> folded = new HashMap<>();
+            classes.forEach((name, bytes) -> folded.put(name, decorated == null ? bytes : this.folding.fold(bytes)));
+            return copy.mixer().apply(new Object[] {List.copyOf(targets), Map.copyOf(folded), Map.copyOf(resources),
                     List.copyOf(configs), this.sessionId, this.live, this.sharedPackages, this.more,
                     (BiConsumer<String, String>) MixinCopy::log, this.side, decorated.modIds(),
                     decorated.levels(), this.obfuscationContext, this.compatibility, stop, decorated.orders()});

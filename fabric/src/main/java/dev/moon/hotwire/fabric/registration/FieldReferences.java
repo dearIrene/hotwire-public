@@ -89,7 +89,7 @@ public final class FieldReferences {
         Map<String, List<Replacement>> planned = new HashMap<>();
         GameHold.onGameAndWait(() -> planned.putAll(this.plan(mods, on, scan)));
         SwitchTimes.mark("field references: planned");
-        this.removeElements(mods, on, scan, planned);
+        this.removeElements(mods, on, scan, planned, false);
         SwitchTimes.mark("field references: elements");
         mods.forEach(mod -> this.recomputeStatics(mod, scan.byName(), getOthers(mods, on)));
         SwitchTimes.mark("field references: statics");
@@ -131,7 +131,11 @@ public final class FieldReferences {
     }
 
     public void takeOutElementsAgain(Collection<String> mods, Predicate<String> on) {
-        this.removeElements(mods, on, this.findLoaded(mods), Map.of());
+        this.removeElements(mods, on, this.findLoaded(mods), Map.of(), false);
+    }
+
+    public void lookForEvery(Collection<String> mods, Predicate<String> on) {
+        this.removeElements(mods, on, this.findLoaded(mods), Map.of(), true);
     }
 
     private LoadedClasses findLoaded(Collection<String> mods) {
@@ -154,11 +158,11 @@ public final class FieldReferences {
     }
 
     private void removeElements(Collection<String> mods, Predicate<String> on, LoadedClasses scan,
-            Map<String, List<Replacement>> planned) {
+            Map<String, List<Replacement>> planned, boolean every) {
         Map<String, Class<?>> loaded = scan.byName();
         Map<String, Set<String>> used = scan.used();
         Map<String, List<Class<?>>> classesOf = scan.classesOf();
-        Predicate<Class<?>> others = getOthers(mods, on);
+        Predicate<Class<?>> others = getOthers(every ? Set.of() : mods, on);
         Map<String, String> modOfName = new HashMap<>();
         mods.forEach(mod -> classesOf.getOrDefault(mod, List.of()).forEach(type -> modOfName.put(type.getName(), mod)));
         ReflectedOwners.useNames(modOfName);
@@ -187,11 +191,13 @@ public final class FieldReferences {
                     type -> type.getName().startsWith("net.minecraft."))));
             Set<Class<?>> statics = new LinkedHashSet<>();
 
-            List<String> staying = classesOf.keySet().stream().filter(other -> !mods.contains(other)
+            List<String> staying = classesOf.keySet().stream().filter(other -> (every || !mods.contains(other))
                     && (GameRegistrations.isLibrary(other)
                             || (on.test(other) && GameRegistrations.isSwitchable(other)))).toList();
 
             Map<String, List<Class<?>>> initialized = new HashMap<>();
+
+            Set<String> listed = new HashSet<>();
             Function<String, List<Class<?>>> initializedOf = group -> initialized.computeIfAbsent(group,
                     key -> classesOf.getOrDefault(key, List.of()).stream().filter(this::isInitialized).toList());
             for (String mod : mods) {
@@ -203,10 +209,14 @@ public final class FieldReferences {
                 List<String> talksTo = List.copyOf(talked);
                 staying.forEach(talked::add);
                 for (String other : talked) {
-                    statics.addAll(initializedOf.apply(other));
+                    if (listed.add(other)) {
+                        statics.addAll(initializedOf.apply(other));
+                    }
                 }
                 for (String other : talksTo) {
-                    statics.addAll(initializedOf.apply(LoadedClasses.NESTED + other));
+                    if (listed.add(LoadedClasses.NESTED + other)) {
+                        statics.addAll(initializedOf.apply(LoadedClasses.NESTED + other));
+                    }
                 }
             }
             this.elements.takeOut(List.copyOf(mods), holders.stream().filter(one -> others.test(one.getClass()))

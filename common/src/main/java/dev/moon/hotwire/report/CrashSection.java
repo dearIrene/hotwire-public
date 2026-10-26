@@ -40,6 +40,10 @@ public record CrashSection(List<Detail> details) {
                 new Detail("Last operation", last == null ? "none" : describeLastOperation(last))));
     }
 
+    public static boolean isCleared(String verdict) {
+        return verdict.startsWith("Hotwire involved? NO");
+    }
+
     public static Detail describeTrace(Collection<String> frames, Function<String, @Nullable String> rebuiltBy,
             Set<String> switched, Function<String, @Nullable String> modOf, Function<String, String> nameOf) {
         return describeTrace(frames, List.of(), rebuiltBy, switched, modOf, nameOf);

@@ -19,10 +19,15 @@ public final class UpdatePlanner {
     private UpdatePlanner() {
     }
 
+    static boolean isRelaxed() {
+        return Boolean.parseBoolean(System.getProperty("hotwire.relaxedUpdates"));
+    }
+
     public static UpdatePlan plan(JarDiff diff, UpdateContext game) {
         ModManifest was = diff.running();
         ModManifest now = diff.incoming();
         List<UpdateBlocker> blockers = new ArrayList<>();
+        List<UpdateNotice> notices = new ArrayList<>();
         switch (game.state()) {
             case ON -> {
             }
@@ -70,9 +75,35 @@ public final class UpdatePlanner {
                 resources.add(path);
             }
         }
-        List<UpdateNotice> notices = resources.isEmpty()
-                ? List.of()
-                : List.of(new UpdateNotice.ResourcesChanged(resources));
+        if (!resources.isEmpty()) {
+            notices.add(new UpdateNotice.ResourcesChanged(resources));
+        }
+        if (isRelaxed()) {
+            List<UpdateBlocker> still = new ArrayList<>();
+            for (UpdateBlocker blocker : blockers) {
+                UpdateNotice note = switch (blocker) {
+                    case UpdateBlocker.PatchedByRunningMod patched -> new UpdateNotice.PatchedClass(
+                            patched.className(), patched.mods());
+                    case UpdateBlocker.ModIsOff off -> new UpdateNotice.UpdatedWhileOff();
+                    case UpdateBlocker.AddedThisSession added -> new UpdateNotice.ChangedBefore(false);
+                    case UpdateBlocker.UpdatedEarlierThisSession updated -> new UpdateNotice.ChangedBefore(true);
+                    case UpdateBlocker.EntrypointAdded entrypoint -> new UpdateNotice.EntrypointRuns(
+                            entrypoint.key(), entrypoint.value());
+                    case UpdateBlocker.AccessWidenerChanged widener -> new UpdateNotice.WidenerOpens();
+                    default -> null;
+                };
+                if (note == null) {
+                    still.add(blocker);
+                } else {
+                    notices.add(note);
+                }
+            }
+
+            if (findTier(still) != UpdateTier.RESTART_MOD) {
+                still.removeIf(blocker -> blocker instanceof UpdateBlocker.BoundByDependents);
+            }
+            return new UpdatePlan(was.id(), was.version(), now.version(), findTier(still), actions, notices, still);
+        }
         return new UpdatePlan(was.id(), was.version(), now.version(), findTier(blockers), actions, notices, blockers);
     }
 

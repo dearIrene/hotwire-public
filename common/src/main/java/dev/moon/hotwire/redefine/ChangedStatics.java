@@ -8,9 +8,11 @@ import java.lang.reflect.Array;
 import java.lang.reflect.Field;
 import java.lang.reflect.Method;
 import java.lang.reflect.Modifier;
+import java.util.ArrayList;
 import java.util.HashSet;
 import java.util.LinkedHashMap;
 import java.util.LinkedHashSet;
+import java.util.List;
 import java.util.Map;
 import java.util.Set;
 import java.util.function.Supplier;
@@ -184,6 +186,11 @@ final class ChangedStatics {
                         + entry.getKey(), MethodType.methodType(field.getType()));
                 Object made = MethodHandleProxies.asInterfaceInstance(Supplier.class, making).get();
                 copyElements(old, made);
+                if (takeStateOf(old, made)) {
+                    LOGGER.info("[Hotwire] {}.{} took in place what the setup the mods give it now made, so what"
+                            + " holds it sees it too", type.getName(), entry.getKey());
+                    continue;
+                }
                 writer.write(field, made);
                 LOGGER.info("[Hotwire] {}.{} was made again by the setup the mods give it now{}", type.getName(),
                         entry.getKey(), Modifier.isFinal(field.getModifiers()) ? " (a final)" : "");
@@ -204,6 +211,32 @@ final class ChangedStatics {
             }
         }
         return false;
+    }
+
+    @SuppressWarnings("ReferenceEquality")
+    private static boolean takeStateOf(@Nullable Object old, @Nullable Object made) throws IllegalAccessException {
+        if (old == null || made == null || old == made || old.getClass() != made.getClass()
+                || old.getClass().isArray() || old.getClass().isHidden()) {
+            return false;
+        }
+        List<Field> fields = new ArrayList<>();
+        for (Class<?> at = old.getClass(); at != Object.class; at = at.getSuperclass()) {
+            if (at.getName().startsWith("java.") || at.getName().startsWith("jdk.")) {
+                return false;
+            }
+            for (Field field : at.getDeclaredFields()) {
+                if (!Modifier.isStatic(field.getModifiers())) {
+                    if (!field.trySetAccessible()) {
+                        return false;
+                    }
+                    fields.add(field);
+                }
+            }
+        }
+        for (Field field : fields) {
+            FinalWrites.write(field, old, field.get(made));
+        }
+        return true;
     }
 
     private static void copyElements(@Nullable Object old, @Nullable Object made) {

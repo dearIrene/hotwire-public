@@ -141,6 +141,14 @@ public final class UpdateText {
                         : "hotwire.update.resources_one_later", new Object[0]) : say.apply(now
                         ? "hotwire.update.resources_now" : "hotwire.update.resources_later", new Object[] {count});
             }
+            case UpdateNotice.PatchedClass patched -> say.apply("hotwire.update.note.patched", new Object[] {
+                getSimpleName(patched.className()), String.join(", ", new TreeSet<>(patched.mods()))});
+            case UpdateNotice.UpdatedWhileOff off -> say.apply("hotwire.update.note.off", new Object[0]);
+            case UpdateNotice.ChangedBefore changed -> say.apply(changed.updated() ? "hotwire.update.note.updated"
+                    : "hotwire.update.note.added", new Object[0]);
+            case UpdateNotice.EntrypointRuns entrypoint -> say.apply("hotwire.update.note.entrypoint",
+                    new Object[] {entrypoint.key()});
+            case UpdateNotice.WidenerOpens widener -> say.apply("hotwire.update.note.widener", new Object[0]);
         };
     }
 

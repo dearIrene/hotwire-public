@@ -40,6 +40,8 @@ public record JarDiff(ModManifest running, ModManifest incoming, List<ClassDiff>
     enum ShapeChange {
         CLASS_NAME(false),
         CLASS_MODIFIERS(false),
+
+        CLASS_FINALITY(true),
         SUPERCLASS(false),
         INTERFACES(false),
         FIELD_ADDED(true),

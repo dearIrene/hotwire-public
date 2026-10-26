@@ -1,19 +1,15 @@
 package dev.moon.hotwire.ui;
 
 final class Button extends Element {
-    static final String ELLIPSIS = "\u2026";
+    static final String ELLIPSIS = "…";
 
     static final int PADDING = 4;
-    private static final int PRIMARY_FACE = 0xFF1C2B44;
-    private static final int SECONDARY_FACE = 0xFF1B2030;
-    private static final int INACTIVE_FACE = 0xF00F1118;
-    private static final int PRIMARY_LINE = 0xFF2E5C8A;
-    private static final int BADGE_FACE = 0xFFE5484D;
-    private static final int BADGE_RADIUS = 5;
-    private static final float BADGE_TEXT = 0.75f;
+    private static final int FACE_HOT = 0x24B48CFF;
+    private static final int INACTIVE_EDGE = 0xFF1B1528;
+    private static final int BADGE_SIDE = 9;
 
     private final EasedValue hover = EasedValue.ofSpeed(16);
-    private final boolean primary;
+    private boolean primary;
     private final Runnable action;
     private String label;
     private String shortLabel;
@@ -33,6 +29,18 @@ final class Button extends Element {
         this.action = action;
     }
 
+    void setPrimary(boolean primary) {
+        this.primary = primary;
+    }
+
+    public boolean press() {
+        if (!this.active) {
+            return false;
+        }
+        this.action.run();
+        return true;
+    }
+
     public void label(String label) {
         this.label(label, label);
     }
@@ -43,7 +51,7 @@ final class Button extends Element {
     }
 
     int measure(Canvas canvas, boolean shortForm) {
-        return canvas.measureText(shortForm ? this.shortLabel : this.label) + PADDING * 2;
+        return canvas.measureText(shortForm ? this.shortLabel : this.label) + PADDING * 2 + 2;
     }
 
     void useShortForm(boolean use) {
@@ -76,46 +84,44 @@ final class Button extends Element {
         int w = this.getWidth();
         int h = this.getHeight();
         float hot = this.hover.getValue();
-        canvas.fill(x, y, x + w, y + h, Colors.fade(Palette.PANEL_EDGE, alpha));
-        int face = this.active ? Colors.mix(Palette.PANEL, this.primary ? PRIMARY_FACE : SECONDARY_FACE, hot)
-                : INACTIVE_FACE;
-        canvas.fill(x + 1, y + 1, x + w - 1, y + h - 1, Colors.fade(face, alpha));
-        if (this.primary && this.active) {
-            canvas.fill(x + 1, y + h - 3, x + w - 1, y + h - 1,
-                    Colors.fade(Colors.mix(PRIMARY_LINE, Palette.ACCENT, hot), alpha));
-        } else if (hot > 0.01f) {
-            canvas.fill(x + 1, y + h - 2, x + w - 1, y + h - 1,
-                    Colors.fade(Colors.mix(Palette.PANEL_EDGE, Palette.ACCENT, hot), alpha));
+        boolean lit = this.primary && this.active;
+        int edge = this.active ? Palette.PANEL_EDGE : INACTIVE_EDGE;
+        if (lit) {
+            edge = Colors.mix(Palette.ACCENT, Palette.TEXT, 0.35f + hot * 0.25f);
         }
-
+        canvas.fill(x, y, x + w, y + h, Colors.fade(edge, alpha));
+        int face = lit ? Colors.mix(Palette.ACCENT, Palette.TEXT, hot * 0.15f)
+                : Colors.mix(Palette.PANEL, FACE_HOT, hot);
+        canvas.fill(x + 1, y + 1, x + w - 1, y + h - 1, Colors.fade(face, alpha));
+        if (lit) {
+            canvas.fill(x + 1, y + 1, x + w - 1, y + h / 2, Colors.fade(Colors.mix(face, Palette.TEXT, 0.08f), alpha));
+        }
         String shown = this.useShort ? this.shortLabel : this.label;
         int room = w - 2;
         if (canvas.measureText(shown) > room) {
             shown = canvas.clip(shown, room - canvas.measureText(ELLIPSIS)).trim() + ELLIPSIS;
         }
         canvas.drawText(shown, x + (w - canvas.measureText(shown)) / 2, y + (h - 8) / 2,
-                Colors.fade(this.labelColor(hot), alpha));
+                Colors.fade(this.getInk(hot), alpha));
         if (this.badge > 0) {
-            this.paintBadge(canvas, x + w - BADGE_RADIUS - 1, y + BADGE_RADIUS + 1, alpha);
+            this.paintBadge(canvas, x + w - BADGE_SIDE + 3, y - 3, alpha);
         }
     }
 
-    private void paintBadge(Canvas canvas, int cx, int cy, float alpha) {
-        for (int dy = -BADGE_RADIUS; dy <= BADGE_RADIUS; dy++) {
-            int half = (int) Math.round(Math.sqrt(BADGE_RADIUS * BADGE_RADIUS - dy * dy));
-            canvas.fill(cx - half, cy + dy, cx + half + 1, cy + dy + 1, Colors.fade(BADGE_FACE, alpha));
-        }
+    private void paintBadge(Canvas canvas, int x, int y, float alpha) {
+        canvas.fill(x, y, x + BADGE_SIDE, y + BADGE_SIDE, Colors.fade(Palette.ACCENT, alpha));
         String count = this.badge > 9 ? "9+" : String.valueOf(this.badge);
-        canvas.pushScale(BADGE_TEXT, cx + 0.5f, cy + 0.5f);
-        canvas.drawText(count, cx + 1 - canvas.measureText(count) / 2, cy - 3, Colors.fade(Palette.TEXT, alpha));
+        canvas.pushScale(0.75f, x + BADGE_SIDE / 2f, y + BADGE_SIDE / 2f);
+        canvas.drawText(count, x + (BADGE_SIDE - canvas.measureText(count) + 1) / 2, y + 1,
+                Colors.fade(Palette.ON_ACCENT, alpha));
         canvas.popScale();
     }
 
-    private int labelColor(float hot) {
+    private int getInk(float hot) {
         if (!this.active) {
             return Palette.FAINT;
         }
-        return this.primary ? Palette.TEXT : Colors.mix(Palette.DIM, Palette.TEXT, hot);
+        return this.primary ? Palette.ON_ACCENT : Colors.mix(Palette.DIM, Palette.TEXT, hot);
     }
 
     @Override

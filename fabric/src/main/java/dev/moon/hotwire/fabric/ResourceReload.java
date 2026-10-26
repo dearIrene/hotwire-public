@@ -11,6 +11,7 @@ import dev.moon.hotwire.fabric.registration.ModelReloadCheck;
 import dev.moon.hotwire.fabric.registration.ReloadedLists;
 import dev.moon.hotwire.redefine.FieldSlots;
 import dev.moon.hotwire.redefine.Tripwire;
+import dev.moon.hotwire.report.GameLog;
 import dev.moon.hotwire.ui.Lang;
 import java.time.Duration;
 import java.util.ArrayList;
@@ -256,7 +257,7 @@ public final class ResourceReload {
                     + " as it answers any", failure);
             return;
         }
-        LOGGER.info("[Hotwire] the resources were reloaded with the game held in {} ms{}",
+        GameLog.LOGGER.info("[Hotwire] the resources were reloaded with the game held in {} ms{}",
                 (System.nanoTime() - began) / 1_000_000, isWhole ? "" : ", for the renderers alone");
     }
 

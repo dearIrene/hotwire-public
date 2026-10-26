@@ -1,14 +1,12 @@
 package dev.moon.hotwire.switching;
 
+import dev.moon.hotwire.report.GameLog;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.function.Consumer;
 import org.jspecify.annotations.Nullable;
-import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
 
 public final class SwitchTimes {
-    private static final Logger LOGGER = LoggerFactory.getLogger(SwitchTimes.class);
     private static final List<String> PARTS = new ArrayList<>();
     private static volatile Consumer<String> heard = part -> { };
 
@@ -63,6 +61,6 @@ public final class SwitchTimes {
         if (--depth > 0) {
             return;
         }
-        LOGGER.info("[Hotwire] {} took {} ms: {}", what, (last - began) / 1_000_000, String.join(", ", PARTS));
+        GameLog.LOGGER.info("[Hotwire] {} took {} ms: {}", what, (last - began) / 1_000_000, String.join(", ", PARTS));
     }
 }

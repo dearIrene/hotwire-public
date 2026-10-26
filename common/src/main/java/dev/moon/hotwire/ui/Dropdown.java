@@ -7,11 +7,10 @@ import org.jspecify.annotations.Nullable;
 final class Dropdown extends Element {
     static final int HEIGHT = 22;
     static final int ITEM = 22;
-    private static final int FACE = 0xFF1B1F2A;
-    private static final int FACE_HOT = 0xFF232838;
-    private static final int EDGE = 0xFF2E3444;
-    private static final int MENU = 0xFF161A24;
-    private static final int ROW_HOT = 0x2256A8FF;
+    private static final int FACE_HOT = 0x24B48CFF;
+    private static final int EDGE = Palette.PANEL_EDGE;
+    private static final int MENU = 0xFF120D1B;
+    private static final int ROW_HOT = 0x24B48CFF;
     private static final float STAGGER = 0.18f;
 
     record Item(String label, @Nullable String note, boolean heading, boolean removable) {
@@ -21,6 +20,7 @@ final class Dropdown extends Element {
     }
 
     private final EasedValue openness = EasedValue.ofSpeed(18);
+    private final EasedValue hover = EasedValue.ofSpeed(16);
     private final Menu menu = new Menu();
     private final IntConsumer onPick;
     private final IntConsumer onRemove;
@@ -59,7 +59,7 @@ final class Dropdown extends Element {
     }
 
     private void placeMenu() {
-        int top = this.getY() + HEIGHT + 2;
+        int top = this.getY() + this.getHeight() + 2;
         this.menu.setBounds(this.getX(), top, this.getWidth(), this.items.size() * ITEM);
         for (Element row : this.menu.getChildren()) {
             row.setBounds(this.getX(), top + ((Row) row).index * ITEM, this.getWidth(), ITEM);
@@ -78,19 +78,27 @@ final class Dropdown extends Element {
     }
 
     @Override
+    public void step(float dt) {
+        this.hover.to(this.isHovered() || this.menu.open() ? 1 : 0);
+        this.hover.step(dt);
+        super.step(dt);
+    }
+
+    @Override
     protected void paint(Canvas canvas, float alpha) {
         int x = this.getX();
         int y = this.getY();
         int w = this.getWidth();
-        boolean open = this.menu.open();
-        canvas.fill(x, y, x + w, y + HEIGHT, Colors.fade(this.isHovered() || open ? FACE_HOT : FACE, alpha));
-        canvas.fill(x, y, x + w, y + 1, Colors.fade(EDGE, alpha));
-        canvas.fill(x, y + HEIGHT - 1, x + w, y + HEIGHT, Colors.fade(EDGE, alpha));
-        canvas.drawText(canvas.clip(this.header, w - 26), x + 8, y + 7,
-                Colors.fade(open ? Palette.TEXT : Palette.DIM, alpha));
+        int h = this.getHeight();
+        float hot = this.hover.getValue();
+        int edge = Colors.mix(EDGE, Palette.ACCENT, this.openness.getValue() * 0.6f);
+        canvas.fill(x, y, x + w, y + h, Colors.fade(edge, alpha));
+        canvas.fill(x + 1, y + 1, x + w - 1, y + h - 1, Colors.fade(Colors.mix(Palette.PANEL, FACE_HOT, hot), alpha));
+        canvas.drawText(canvas.clip(this.header, w - 26), x + 8, y + (h - 8) / 2,
+                Colors.fade(Colors.mix(Palette.DIM, Palette.TEXT, hot), alpha));
         float shown = this.openness.getValue();
         int cx = x + w - 14;
-        int cy = y + HEIGHT / 2;
+        int cy = y + h / 2;
         int lift = Math.round(shown * 2) - 1;
         int dim = Colors.fade(Palette.DIM, alpha);
         for (int i = 0; i < 3; i++) {
@@ -129,10 +137,12 @@ final class Dropdown extends Element {
 
         @Override
         protected void paint(Canvas canvas, float alpha) {
+            int left = this.getX();
+            int right = left + this.getWidth();
+            int unrolled = Dropdown.this.getUnrolled();
             int top = this.getY();
-            canvas.fill(this.getX(), top, this.getX() + this.getWidth(), top + Dropdown.this.getUnrolled(),
-                    Colors.fade(MENU, alpha));
-            canvas.fill(this.getX(), top, this.getX() + this.getWidth(), top + 1, Colors.fade(Palette.ACCENT, alpha));
+            canvas.fill(left, top, right, top + unrolled, Colors.fade(EDGE, alpha));
+            canvas.fill(left + 1, top + 1, right - 1, top + unrolled - 1, Colors.fade(MENU, alpha));
         }
     }
 

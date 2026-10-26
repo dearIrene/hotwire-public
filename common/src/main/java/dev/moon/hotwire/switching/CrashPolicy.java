@@ -8,7 +8,7 @@ import java.util.function.Predicate;
 import org.jspecify.annotations.Nullable;
 
 public final class CrashPolicy {
-    public enum Site { FRAME, PACKET, ENTITY, BLOCK_ENTITY, PLAYER }
+    public enum Site { FRAME, PACKET, ENTITY, BLOCK_ENTITY, PLAYER, SERVER_TICK, SERVER_STATUS }
 
     public record Caught(String mod, Site site, Throwable thrown) {
     }

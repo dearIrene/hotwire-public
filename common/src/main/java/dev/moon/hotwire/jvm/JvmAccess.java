@@ -134,7 +134,7 @@ public final class JvmAccess {
         }
     }
 
-    private static MethodHandles.Lookup findTrustedLookup() throws JvmAccessException {
+    public static MethodHandles.Lookup findTrustedLookup() throws JvmAccessException {
         try {
             Class<?> unsafeClass = Class.forName("sun.misc.Unsafe");
             Field instance = unsafeClass.getDeclaredField("theUnsafe");

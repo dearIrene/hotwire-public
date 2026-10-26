@@ -3,6 +3,7 @@ package dev.moon.hotwire.switching;
 import dev.moon.hotwire.redefine.ClassRebuilder;
 import dev.moon.hotwire.redefine.ClassSplit;
 import dev.moon.hotwire.redefine.ConstructedFields;
+import dev.moon.hotwire.redefine.HandlerSetups;
 import dev.moon.hotwire.redefine.HeapCensus;
 import dev.moon.hotwire.redefine.InitHookReplay;
 import dev.moon.hotwire.redefine.OffWindowObjects;
@@ -47,7 +48,8 @@ final class LiveObjects {
 
     static ClassRebuilder.PreparedRebuild check(ClassRebuilder.PreparedRebuild prepared, Map<String, byte[]> current,
             Predicate<Class<?>> recomputed, SwitchApplier.Game game, Function<String, byte @Nullable []> originalOf,
-            ClassRebuilder rebuilder, String what) throws RebuildException {
+            ClassRebuilder rebuilder, String what, Predicate<String> offMixin, Predicate<String> offClass)
+            throws RebuildException {
         StopPoint.check();
 
         Predicate<Class<?>> alive = makeAliveCheck(rebuilder::getLoadedClasses);
@@ -59,6 +61,7 @@ final class LiveObjects {
                     + " made: " + entries + ". Those are made once, when the game starts, so it takes a restart",
                     new IllegalStateException(String.join(", ", entries)));
         }
+        checkHandlerSetups(prepared, current, game, originalOf, what, offMixin, offClass, alive);
         ConstructedFields.Unmade unset = InitHookReplay.findUnset(hooked, game::isWorldObject, game.isInWorld(),
                 alive);
         if (!unset.lines().isEmpty()) {
@@ -88,6 +91,31 @@ final class LiveObjects {
         }
 
         return out.withPausedCheck(() -> new ConstructedFields.Unmade(unmade.get().lines(), game.isInWorld()));
+    }
+
+    private static void checkHandlerSetups(ClassRebuilder.PreparedRebuild prepared, Map<String, byte[]> current,
+            SwitchApplier.Game game, Function<String, byte @Nullable []> originalOf, String what,
+            Predicate<String> offMixin, Predicate<String> offClass, Predicate<Class<?>> alive) throws RebuildException {
+        if (!game.isInWorld()) {
+            return;
+        }
+        List<String> kept = new ArrayList<>();
+        for (Class<?> type : prepared.splits().keySet()) {
+            String name = type.getName().replace('.', '/');
+            byte[] running = current.get(name);
+            if (running == null) {
+                continue;
+            }
+            List<String> fills = HandlerSetups.find(running, originalOf.apply(name), offMixin, offClass);
+            if (!fills.isEmpty() && (game.isWorldObject(type) || alive.test(type))) {
+                kept.add(type.getSimpleName() + " " + fills);
+            }
+        }
+        if (!kept.isEmpty()) {
+            throw RebuildException.ofWorldBuilt("the " + what + " would leave the mod's objects in the game's own"
+                    + " fields of objects this world built: " + kept + ". The world is saved and opened again, which"
+                    + " builds them anew", new IllegalStateException(String.join(", ", kept)));
+        }
     }
 
     static List<String> findRegistryEntries(Map<Class<?>, InitHookReplay.Due> hooked,

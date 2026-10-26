@@ -1,12 +1,15 @@
 package dev.moon.hotwire.redefine;
 
+import com.google.common.collect.MapMaker;
 import java.lang.invoke.MethodHandle;
 import java.lang.invoke.MethodHandleProxies;
 import java.lang.invoke.MethodHandles;
 import java.lang.invoke.MethodType;
 import java.lang.reflect.Field;
 import java.util.ArrayList;
+import java.util.Collections;
 import java.util.Comparator;
+import java.util.IdentityHashMap;
 import java.util.LinkedHashMap;
 import java.util.LinkedHashSet;
 import java.util.List;
@@ -15,6 +18,7 @@ import java.util.Objects;
 import java.util.Set;
 import java.util.TreeSet;
 import java.util.concurrent.ConcurrentHashMap;
+import java.util.function.BiConsumer;
 import java.util.function.BooleanSupplier;
 import java.util.function.Consumer;
 import java.util.function.Function;
@@ -50,6 +54,8 @@ public final class InitHookReplay {
     private static final String CALLBACK = "org/spongepowered/asm/mixin/injection/callback/CallbackInfo";
 
     private static final Set<String> RUN = ConcurrentHashMap.newKeySet();
+
+    private static final Map<Class<?>, Map<Object, Boolean>> RAN_ON = new ConcurrentHashMap<>();
 
     private static volatile Supplier<List<Object>> longLived = List::of;
     private static volatile Function<String, Set<String>> startup = name -> Set.of();
@@ -158,7 +164,7 @@ public final class InitHookReplay {
         Set<String> caughtUp = new TreeSet<>();
         Set<String> read = new LinkedHashSet<>(once);
         read.addAll(joins);
-        findCalls(now, read).forEach((key, site) -> {
+        visitInOrder(findCalls(now, read), now, (key, site) -> {
             MethodNode handler = ArgumentInitializers.findMethod(now, site.call().name, site.call().desc);
             if (!fresh.contains(key) || handler == null) {
                 return;
@@ -252,6 +258,28 @@ public final class InitHookReplay {
             }
         }, ClassReader.SKIP_DEBUG | ClassReader.SKIP_FRAMES);
         return keys;
+    }
+
+    private static void visitInOrder(Map<String, Site> calls, ClassNode node, BiConsumer<String, Site> each) {
+        List<Map.Entry<String, Site>> ordered = new ArrayList<>(calls.entrySet());
+        ordered.sort(Comparator.comparingInt((Map.Entry<String, Site> entry) ->
+                entry.getValue().moment().equals("<init>") ? 0 : 1).thenComparingInt(entry -> indexOf(node,
+                entry.getValue().call())));
+        ordered.forEach(entry -> each.accept(entry.getKey(), entry.getValue()));
+    }
+
+    @SuppressWarnings("ReferenceEquality")
+    private static int indexOf(ClassNode node, MethodInsnNode call) {
+        for (MethodNode method : node.methods) {
+            int at = 0;
+            for (AbstractInsnNode insn : method.instructions) {
+                if (insn == call) {
+                    return at;
+                }
+                at++;
+            }
+        }
+        return Integer.MAX_VALUE;
     }
 
     private static Map<String, Site> findCalls(ClassNode node, Set<String> once) {
@@ -436,8 +464,10 @@ public final class InitHookReplay {
             if (constants != null) {
                 ofType.addAll(List.of(constants));
             }
+            Set<Object> seen = Collections.newSetFromMap(new IdentityHashMap<>());
+            seen.addAll(ofType);
             for (Object one : made) {
-                if (type.isInstance(one) && !ofType.contains(one)) {
+                if (type.isInstance(one) && seen.add(one)) {
                     ofType.add(one);
                 }
             }
@@ -522,9 +552,16 @@ public final class InitHookReplay {
         }
         try {
             if (onObjects) {
-                Consumer<Object> each = asConsumer(side.findStatic(side.lookupClass(), ON_OBJECTS,
+                Consumer<Object> hooks = asConsumer(side.findStatic(side.lookupClass(), ON_OBJECTS,
                         MethodType.methodType(void.class, type)).asType(MethodType.methodType(void.class,
                                 Object.class)));
+
+                Map<Object, Boolean> ranOn = RAN_ON.computeIfAbsent(type, any -> new MapMaker().weakKeys().makeMap());
+                Consumer<Object> each = object -> {
+                    if (ranOn.put(object, Boolean.TRUE) == null) {
+                        hooks.accept(object);
+                    }
+                };
 
                 FieldHolders.catchUpWith(type, each);
                 if (objects.isEmpty()) {

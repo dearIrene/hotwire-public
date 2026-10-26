@@ -49,15 +49,33 @@ public record UpdatePlan(String modId, String runningVersion, String incomingVer
         }
     }
 
-    sealed interface UpdateNotice {
+    public sealed interface UpdateNotice {
         record ResourcesChanged(List<String> paths) implements UpdateNotice {
             public ResourcesChanged {
                 paths = List.copyOf(paths);
             }
         }
+
+        record PatchedClass(String className, Set<String> mods) implements UpdateNotice {
+            public PatchedClass {
+                mods = Set.copyOf(mods);
+            }
+        }
+
+        record UpdatedWhileOff() implements UpdateNotice {
+        }
+
+        record ChangedBefore(boolean updated) implements UpdateNotice {
+        }
+
+        record EntrypointRuns(String key, String value) implements UpdateNotice {
+        }
+
+        record WidenerOpens() implements UpdateNotice {
+        }
     }
 
-    sealed interface UpdateBlocker {
+    public sealed interface UpdateBlocker {
         default UpdateTier getTier() {
             return switch (this) {
                 case ShapeNotCarried s -> UpdateTier.RESTART_MOD;

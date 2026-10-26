@@ -8,36 +8,39 @@ import dev.moon.hotwire.ui.Palette;
 import org.jspecify.annotations.Nullable;
 
 final class ModListRow {
-    static final int CHIP_LIBRARY = 0xFFB98CE8;
-    static final int CHIP_CLIENT = 0xFF7FA6E8;
-    static final int CHIP_SERVER = 0xFFE0A45C;
+    static final int ICON = 32;
+    static final int SWITCH_W = 24;
+    static final int SWITCH_H = 12;
 
-    private static final int ICON = 32;
-    private static final int CHIP_GAP = 16;
-    private static final int ROW_BASE = 0x0AFFFFFF;
+    static final int SWITCH_ZONE = 92;
 
-    private static final int[] TILES = {0xFF2B3A55, 0xFF2E4A3F, 0xFF4A3A2B, 0xFF4A2F3F, 0xFF3A2F4F, 0xFF2B4549,
-        0xFF45452B, 0xFF3F3346};
-    private static final int ICON_OFF = 0xA00B0E14;
-    private static final int ICON_DISSOLVE = 0xFF141720;
+    static final int STAR_ZONE = 24;
+    private static final float STAR_SCALE = 2f;
+    private static final String STARRED = "\u2605";
+    private static final String UNSTARRED = "\u2606";
+    static final int CARD_SWITCH_ZONE_H = 24;
+
+    private static final int[] TILES = {0xFF2B2447, 0xFF2E3A4F, 0xFF4A2F3F, 0xFF3A2F4F, 0xFF2B4549, 0xFF45352B,
+        0xFF3F3346, 0xFF2F4A3F};
+    private static final int ICON_OFF = 0xA00B0912;
+    private static final int ICON_DISSOLVE = 0xFF140F1E;
     private static final int LOCK_SHEET = 0xC8060810;
-    private static final int BOX_LOCKED = 0x11FFFFFF;
-    private static final int RING_REST = 0x22FFFFFF;
-    private static final int RING_NEEDED = 0x557C8BA8;
-    private static final int INNER_REST = 0xFF1A1E28;
-    private static final int TICK = 0xFF0B0E14;
-    private static final int PILL_LOCKED = 0x12FFFFFF;
-    private static final int TRACK_HOT = 0x2EFFFFFF;
-    private static final int TRACK_REST = 0x18FFFFFF;
+    private static final int PICKED_TINT = 0x16FF7CC3;
+    private static final int HOVER_TINT = 0x0EFFFFFF;
+    private static final int OFF_FADE = 0x40FF5A6E;
+    private static final int FLASH_ON = 0x48B48CFF;
+    private static final int FLASH_OFF = 0x48FF5A6E;
+    private static final int BOX_INNER = 0xFF0E0B17;
+    private static final int SWITCH_LOCKED = 0xFF2A2140;
     private static final float TICK_FROM = 0.35f;
+
+    enum Chip { LIBRARY, CLIENT, SERVER, BOTH }
 
     private final ModList list;
     private final String id;
     private ModStatus mod;
     private String subtitle = "";
-    private String chip = "";
-    private int chipColour;
-    private boolean chipGradient;
+    private Chip chip = Chip.BOTH;
     private boolean child;
     private int dependants;
     private final EasedValue dependantTick = EasedValue.ofSpeed(9);
@@ -60,7 +63,6 @@ final class ModListRow {
     private String nameFit = "";
     private String subFit = "";
     private int subWidth;
-    private int chipWidth;
 
     ModListRow(ModList list, ModStatus mod) {
         this.list = list;
@@ -78,6 +80,10 @@ final class ModListRow {
 
     float getY() {
         return this.y;
+    }
+
+    float getSide() {
+        return this.side;
     }
 
     float getAlpha() {
@@ -100,6 +106,13 @@ final class ModListRow {
         return this.wish;
     }
 
+    float getIndent() {
+        if (!this.childSeen) {
+            return this.pickWait <= 0 && this.child ? 1 : 0;
+        }
+        return this.childness;
+    }
+
     void restate(ModStatus now, ModList.Badges badges) {
         this.mod = now;
         this.measuredRoom = -1;
@@ -112,20 +125,14 @@ final class ModListRow {
             this.subtitle = now.version() + "  ·  " + authors;
         }
         if (now.library() || badges.isDeclaredLibrary(now.id())) {
-            this.setChip(Lang.get("hotwire.row.library"), CHIP_LIBRARY, false);
+            this.chip = Chip.LIBRARY;
             return;
         }
-        switch (badges.getEnvironmentOf(now.id())) {
-            case "client" -> this.setChip(Lang.get("hotwire.row.client"), CHIP_CLIENT, false);
-            case "server" -> this.setChip(Lang.get("hotwire.row.server"), CHIP_SERVER, false);
-            default -> this.setChip(Lang.get("hotwire.row.both"), 0, true);
-        }
-    }
-
-    private void setChip(String text, int colour, boolean gradient) {
-        this.chip = text;
-        this.chipColour = colour;
-        this.chipGradient = gradient;
+        this.chip = switch (badges.getEnvironmentOf(now.id())) {
+            case "client" -> Chip.CLIENT;
+            case "server" -> Chip.SERVER;
+            default -> Chip.BOTH;
+        };
     }
 
     void regroup(boolean child, int dependants) {
@@ -185,88 +192,162 @@ final class ModListRow {
         this.hover = EasedValue.lerp(this.hover, over ? 1 : 0, EasedValue.computeFactor(20, dt));
     }
 
-    void paint(Canvas canvas, int y, float alpha) {
+    void paint(Canvas canvas, int x, int y, int w, int h, boolean card, float alpha) {
         ModCatalog catalog = this.list.getCatalog();
-        ModListModel model = this.list.getModel();
         boolean worldLocked = catalog.isLocked(this.id);
         boolean locked = catalog.isProtected(this.id) || worldLocked;
-        boolean auto = model.getPickedForYou().contains(this.id);
-        int accent = auto ? Palette.ACCENT_SOFT : Palette.ACCENT;
+        boolean auto = this.list.getModel().getPickedForYou().contains(this.id);
         float appear = this.alpha * alpha;
-        float indent = this.childness;
-        if (!this.childSeen) {
-            indent = this.pickWait <= 0 && this.child ? 1 : 0;
+        float onness = Math.max(0, Math.min(1, this.onness));
+        this.paintGround(canvas, x, y, w, h, card, onness, appear);
+        int accent = auto ? Palette.ACCENT_SOFT : Palette.ACCENT;
+        String owner = this.list.getModel().findBroughtInBy(this.id);
+        boolean needed = auto && owner != null && this.list.getModel().getChosen().contains(owner);
+        if (card) {
+            drawCheckbox(canvas, x + w - 22, y + 6, this.pick, needed, locked, accent, appear);
+            this.paintIcon(canvas, appear, this.mod.on(), x + 8, y + 8);
+            this.paintCardText(canvas, x, y, w, appear);
+            this.paintStar(canvas, catalog, x + w - 22 - STAR_ZONE, y + 10, appear);
+        } else {
+            drawCheckbox(canvas, x + 11, y + h / 2 - 8, this.pick, needed, locked, accent, appear);
+            this.paintIcon(canvas, appear, this.mod.on(), x + 38, y + h / 2 - ICON / 2);
+            this.paintRowText(canvas, x, y, w, appear, auto);
+            this.paintStar(canvas, catalog, x + w - SWITCH_ZONE - STAR_ZONE, y + h / 2 - 4, appear);
         }
-        int travel = Math.round(this.side * ModList.SIDE);
-        int left = 30 + Math.round(18 * indent) + travel;
-        int right = this.list.getWidth() - 30 + travel;
-        if (indent > 0.01f) {
-            int spine = 38;
-            int ink = Colors.fade(ModList.SPINE, appear * indent);
-            canvas.fill(spine, y - ModList.GAP, spine + 1, y + ModList.ROW / 2, ink);
-            canvas.fill(spine, y + ModList.ROW / 2, Math.max(spine + 1, left - 4), y + ModList.ROW / 2 + 1, ink);
-        }
-        int base = Colors.mix(ROW_BASE, auto ? 0x2A7C8BA8 : 0x3348A0FF, this.pick);
-        base = Colors.mix(base, this.mod.on() ? 0x445AD98A : 0x4456A8FF, this.justChanged * 0.8f);
-        canvas.fill(left, y, right, y + ModList.ROW, Colors.fade(Colors.mix(base, 0x1AFFFFFF, this.hover * 0.6f),
-                appear));
-        if (this.pick > 0.01f) {
-            int high = (int) (ModList.ROW * this.pick);
-            canvas.fill(left, y + (ModList.ROW - high) / 2, left + 3, y + (ModList.ROW + high) / 2,
-                    Colors.fade(accent, appear));
-        }
-        String owner = model.findBroughtInBy(this.id);
-        boolean needed = auto && owner != null && model.getChosen().contains(owner);
-        drawCheckbox(canvas, left + 11, y + ModList.ROW / 2 - 8, this.pick, needed, locked, accent, appear);
-        this.paintText(canvas, left, right, y, appear, auto);
-        int pillX = this.list.getWidth() - 128;
-        boolean overPill = this.list.isPointerIn(pillX, y + 11, pillX + 80, y + 31);
-        String lockedWord = null;
+        int switchX = x + w - 8 - SWITCH_W;
+        int switchY = card ? y + h - 8 - SWITCH_H : y + h / 2 - SWITCH_H / 2;
+        String word = Lang.get(onness > 0.5f ? "hotwire.screen.on" : "hotwire.screen.off");
         if (locked) {
-            lockedWord = Lang.get(worldLocked ? "hotwire.row.locked" : "hotwire.row.always_on");
+            word = Lang.get(worldLocked ? "hotwire.row.locked" : "hotwire.row.always_on");
         }
-        drawPill(canvas, pillX, y + ModList.ROW / 2 - 10, Math.max(0, Math.min(1, this.onness)), overPill,
-                lockedWord, appear);
-        if (worldLocked) {
-            canvas.fill(left, y, right, y + ModList.ROW, Colors.fade(LOCK_SHEET, appear));
-            String worldLockedText = Lang.get("hotwire.row.world_locked");
-            canvas.drawText(worldLockedText, (left + right - canvas.measureText(worldLockedText)) / 2,
-                    y + ModList.ROW / 2 - 4, Colors.fade(Palette.TEXT, appear));
+        boolean hot = this.list.isPointerIn(x + w - SWITCH_ZONE, y, x + w, y + h);
+        drawSwitch(canvas, switchX, switchY, onness, hot, locked, appear);
+        if (!card || !locked) {
+            int ink = locked ? Palette.FAINT : Colors.mix(Palette.OFF_TINT, Palette.ON, onness);
+            canvas.drawText(word, switchX - 8 - canvas.measureText(word), switchY + 2,
+                    Colors.fade(ink, appear * (locked || hot ? 1 : 0.6f)));
+        }
+        if (worldLocked && !card) {
+            canvas.fill(x, y, x + w, y + h, Colors.fade(LOCK_SHEET, appear));
+            String text = Lang.get("hotwire.row.world_locked");
+            canvas.drawText(text, x + (w - canvas.measureText(text)) / 2, y + h / 2 - 4,
+                    Colors.fade(Palette.TEXT, appear));
         }
     }
 
-    private void paintText(Canvas canvas, int left, int right, int y, float appear, boolean auto) {
+    private void paintGround(Canvas canvas, int x, int y, int w, int h, boolean card, float onness, float appear) {
+        if (card) {
+            canvas.fill(x, y, x + w, y + h, Colors.fade(Colors.mix(Palette.HAIRLINE, Palette.ACCENT, this.pick),
+                    appear));
+            canvas.fill(x + 1, y + 1, x + w - 1, y + h - 1, Colors.fade(Palette.PANEL, appear));
+        } else {
+            canvas.fill(x, y + h, x + w, y + h + ModList.GAP, Colors.fade(Palette.HAIRLINE, appear));
+        }
+        if (this.pick > 0.01f) {
+            canvas.fill(x, y, x + w, y + h, Colors.fade(PICKED_TINT, appear * this.pick));
+            if (!card) {
+                int high = Math.round(h * this.pick);
+                canvas.fill(x, y + (h - high) / 2, x + 3, y + (h + high) / 2, Colors.fade(Palette.ACCENT, appear));
+            }
+        }
+        if (this.hover > 0.01f) {
+            canvas.fill(x, y, x + w, y + h, Colors.fade(HOVER_TINT, appear * this.hover));
+        }
+        float off = 1 - onness;
+        if (off > 0.01f) {
+            int from = card ? x : x + w * 2 / 5;
+            canvas.fillAcross(from, y, x + w, y + h, Colors.fade(OFF_FADE, 0), Colors.fade(OFF_FADE, appear * off));
+        }
+        if (this.justChanged > 0.01f) {
+            canvas.fill(x, y, x + w, y + h, Colors.fade(onness > 0.5f ? FLASH_ON : FLASH_OFF,
+                    appear * this.justChanged * 0.8f));
+        }
+    }
+
+    private void paintStar(Canvas canvas, ModCatalog catalog, int x, int y, float appear) {
+        boolean starred = catalog.isFavorite(this.id);
+        if (!starred && this.hover < 0.01f) {
+            return;
+        }
+        String glyph = starred ? STARRED : UNSTARRED;
+        float centerX = x + STAR_ZONE / 2f;
+        float centerY = y + 4;
+        canvas.pushScale(STAR_SCALE, centerX, centerY);
+        canvas.drawText(glyph, Math.round(centerX - canvas.measureText(glyph) / 2f), y, Colors.fade(starred
+                ? Palette.ACCENT : Palette.DIM, starred ? appear : appear * this.hover));
+        canvas.popScale();
+    }
+
+    private void paintRowText(Canvas canvas, int x, int y, int w, float appear, boolean auto) {
         boolean on = this.mod.on();
-        int iconX = left + 38;
-        this.paintIcon(canvas, appear, on, iconX, y + ModList.ROW / 2 - ICON / 2);
-        int textX = iconX + ICON + 12;
-        int room = right - textX - 110;
+        int textX = x + 38 + ICON + 12;
+        int room = x + w - SWITCH_ZONE - STAR_ZONE - 8 - textX;
+        this.measure(canvas, room);
+        canvas.drawText(this.nameFit, textX, y + 8, Colors.fade(on ? Palette.TEXT : Palette.DIM, appear));
+        canvas.drawText(this.subFit, textX, y + 25, Colors.fade(Palette.FAINT, appear));
+        int after = textX + this.subWidth + (this.subWidth > 0 ? 12 : 0);
+        after = this.paintMeta(canvas, after, y + 25, textX + room, appear);
+        if (auto && this.pick > 0.5f) {
+            String neededText = Lang.get("hotwire.row.needed");
+            int neededW = canvas.measureText(neededText);
+            if (after + neededW < textX + room) {
+                canvas.drawText(neededText, textX + room - neededW, y + 25,
+                        Colors.fade(Palette.ACCENT_SOFT, appear * Math.min(1, (this.pick - 0.5f) * 4)));
+            }
+        }
+    }
+
+    private void paintCardText(Canvas canvas, int x, int y, int w, float appear) {
+        boolean on = this.mod.on();
+        int textX = x + 8 + ICON + 8;
+        int room = x + w - 24 - textX;
+        this.measure(canvas, room);
+        canvas.drawText(this.nameFit, textX, y + 10, Colors.fade(on ? Palette.TEXT : Palette.DIM, appear));
+        canvas.drawText(canvas.clip(this.mod.version(), room), textX, y + 23, Colors.fade(Palette.FAINT, appear));
+        this.paintMeta(canvas, textX, y + 36, x + w - SWITCH_ZONE, appear);
+    }
+
+    private int paintMeta(Canvas canvas, int x, int y, int right, float appear) {
+        int at = x;
+        String chip = Lang.get(switch (this.chip) {
+            case LIBRARY -> "hotwire.row.library";
+            case CLIENT -> "hotwire.row.client";
+            case SERVER -> "hotwire.row.server";
+            case BOTH -> "hotwire.row.both";
+        });
+        int chipW = canvas.measureText(chip);
+        if (at + chipW <= right) {
+            canvas.drawText(chip, at, y, Colors.fade(this.chip == Chip.LIBRARY ? Palette.ACCENT_SOFT : Palette.DIM,
+                    appear * 0.9f));
+            at += chipW + 12;
+        }
+        if (this.mod.keptOff()) {
+            String kept = Lang.get("hotwire.row.kept_off");
+            int keptW = canvas.measureText(kept);
+            if (at + keptW <= right) {
+                canvas.drawText(kept, at, y, Colors.fade(Palette.OFF_TINT, appear * 0.9f));
+                at += keptW + 12;
+            }
+        }
+        int count = this.dependantTick.getRounded();
+        if (count > 0) {
+            String text = count == 1 ? Lang.get("hotwire.row.needed_by_one") : Lang.get("hotwire.row.needed_by",
+                    count);
+            int textW = canvas.measureText(text);
+            if (at + textW <= right) {
+                canvas.drawText(text, at, y, Colors.fade(Palette.DIM, appear * 0.9f));
+                at += textW + 12;
+            }
+        }
+        return at;
+    }
+
+    private void measure(Canvas canvas, int room) {
         if (this.measuredRoom != room) {
             this.measuredRoom = room;
             this.nameFit = canvas.clip(this.mod.name(), room);
             this.subFit = canvas.clip(this.subtitle, room);
             this.subWidth = canvas.measureText(this.subFit);
-            this.chipWidth = canvas.measureText(this.chip);
-        }
-        canvas.drawText(this.nameFit, textX, y + 8, Colors.fade(on ? Palette.TEXT : Palette.DIM, appear));
-        canvas.drawText(this.subFit, textX, y + 25, Colors.fade(Palette.FAINT, appear));
-        int after = textX + this.subWidth + (this.subWidth > 0 ? CHIP_GAP : 0);
-        if (!this.chip.isEmpty() && after + this.chipWidth + CHIP_GAP < textX + room) {
-            drawChip(canvas, after + Math.round((1 - appear) * 8), y + 20, this.chip, this.chipColour,
-                    this.chipGradient, appear);
-            after += this.chipWidth + 10 + CHIP_GAP;
-        }
-        int count = this.dependantTick.getRounded();
-        if (count > 0) {
-            String text = Lang.get("hotwire.row.dependants", count);
-            if (after + canvas.measureText(text) < textX + room) {
-                canvas.drawText(text, after, y + 25, Colors.fade(Palette.ACCENT_SOFT, appear * 0.85f));
-            }
-        }
-        if (auto && this.pick > 0.5f) {
-            String neededText = Lang.get("hotwire.row.needed");
-            canvas.drawText(neededText, right - 130 - canvas.measureText(neededText), y + 17,
-                    Colors.fade(Palette.ACCENT_SOFT, appear * Math.min(1, (this.pick - 0.5f) * 4)));
         }
     }
 
@@ -296,67 +377,41 @@ final class ModListRow {
     static void drawCheckbox(Canvas canvas, int x, int y, float pick, boolean needed, boolean locked, int accent,
             float alpha) {
         if (locked && !needed) {
-            canvas.fill(x + 1, y + 1, x + 15, y + 15, Colors.fade(BOX_LOCKED, alpha));
+            canvas.fill(x, y, x + 16, y + 16, Colors.fade(Palette.HAIRLINE, alpha));
+            canvas.fill(x + 1, y + 1, x + 15, y + 15, Colors.fade(BOX_INNER, alpha * 0.6f));
             return;
         }
-        canvas.fill(x, y, x + 16, y + 16,
-                Colors.fade(Colors.mix(RING_REST, needed ? RING_NEEDED : accent, pick), alpha));
-        canvas.fill(x + 1, y + 1, x + 15, y + 15,
-                Colors.fade(Colors.mix(INNER_REST, needed ? Palette.ACCENT_SOFT : accent, pick), alpha));
-        if (pick > TICK_FROM) {
-            int tick = Colors.fade(TICK, alpha * (pick - TICK_FROM) / (1 - TICK_FROM));
-            canvas.fill(x + 4, y + 8, x + 7, y + 11, tick);
-            canvas.fill(x + 7, y + 5, x + 12, y + 9, tick);
-        }
-    }
-
-    static void drawPill(Canvas canvas, int x0, int y0, float onness, boolean hot, @Nullable String lockedText,
-            float alpha) {
-        int x1 = x0 + 80;
-        int y1 = y0 + 20;
-        if (lockedText != null) {
-            canvas.fill(x0, y0, x1, y1, Colors.fade(PILL_LOCKED, alpha));
-            canvas.drawText(lockedText, x0 + 10, y0 + 6, Colors.fade(Palette.FAINT, alpha));
+        canvas.fill(x, y, x + 16, y + 16, Colors.fade(Colors.mix(Palette.PANEL_EDGE, accent, pick), alpha));
+        canvas.fill(x + 1, y + 1, x + 15, y + 15, Colors.fade(Colors.mix(BOX_INNER, accent, pick), alpha));
+        if (pick <= TICK_FROM) {
             return;
         }
-        canvas.fill(x0, y0, x1, y1, Colors.fade(hot ? TRACK_HOT : TRACK_REST, alpha));
-        canvas.drawText("ON", x0 + 8, y0 + 6, Colors.fade(Palette.TEXT, alpha));
-        canvas.drawText("OFF", x1 - 22 + Math.max(0, (20 - canvas.measureText("OFF")) / 2), y0 + 6,
-                Colors.fade(Palette.DIM, alpha));
-        int knob = Math.round((x0 + 2) + onness * ((x1 - 22) - (x0 + 2)));
-        canvas.fill(knob, y0 + 2, knob + 20, y1 - 2, Colors.fade(Colors.mix(Palette.OFF, Palette.ON, onness), alpha));
+        int ink = Colors.fade(Palette.ON_ACCENT, alpha * (pick - TICK_FROM) / (1 - TICK_FROM));
+        if (needed) {
+            canvas.fill(x + 5, y + 5, x + 11, y + 11, ink);
+            return;
+        }
+        canvas.fill(x + 4, y + 8, x + 7, y + 11, ink);
+        canvas.fill(x + 7, y + 5, x + 12, y + 9, ink);
     }
 
-    static void drawChip(Canvas canvas, int x, int y, String text, int colour, boolean bothSides, float alpha) {
-        int w = canvas.measureText(text) + 10;
-        int h = 13;
-        if (bothSides) {
-            drawGradient(canvas, x + 1, x + w - 1, y + 1, y + h - 1, alpha * 0.34f);
-        } else {
-            canvas.fill(x + 1, y + 1, x + w - 1, y + h - 1, Colors.fade(colour, alpha * 0.16f));
+    static void drawSwitch(Canvas canvas, int x, int y, float onness, boolean hot, boolean locked, float alpha) {
+        if (locked) {
+            canvas.fill(x, y, x + SWITCH_W, y + SWITCH_H, Colors.fade(SWITCH_LOCKED, alpha));
+            canvas.fill(x + 1, y + 1, x + SWITCH_W - 1, y + SWITCH_H - 1, Colors.fade(Palette.PANEL, alpha));
+            int cx = x + SWITCH_W / 2;
+            int ink = Colors.fade(Palette.FAINT, alpha);
+            canvas.fill(cx - 3, y + 5, cx + 3, y + 10, ink);
+            canvas.fill(cx - 2, y + 3, cx - 1, y + 5, ink);
+            canvas.fill(cx + 1, y + 3, cx + 2, y + 5, ink);
+            canvas.fill(cx - 2, y + 2, cx + 2, y + 3, ink);
+            return;
         }
-        int left = Colors.fade(bothSides ? CHIP_CLIENT : colour, alpha * 0.22f);
-        int right = Colors.fade(bothSides ? CHIP_SERVER : colour, alpha * 0.22f);
-        int mid = x + w / 2;
-        canvas.fill(x + 2, y, mid, y + 1, left);
-        canvas.fill(mid, y, x + w - 2, y + 1, right);
-        canvas.fill(x + 2, y + h - 1, mid, y + h, left);
-        canvas.fill(mid, y + h - 1, x + w - 2, y + h, right);
-        canvas.drawText(text, x + 5, y + 2, Colors.fade(bothSides ? Palette.TEXT : colour, alpha * 0.95f));
-    }
-
-    private static void drawGradient(Canvas canvas, int x0, int x1, int y0, int y1, float alpha) {
-        int span = Math.max(1, x1 - x0);
-        int runFrom = x0;
-        int runColour = Colors.fade(Colors.blend(CHIP_CLIENT, CHIP_SERVER, 0), alpha);
-        for (int cx = x0 + 1; cx <= x1; cx++) {
-            int here = cx == x1 ? runColour + 1
-                    : Colors.fade(Colors.blend(CHIP_CLIENT, CHIP_SERVER, (cx - x0) / (float) span), alpha);
-            if (here != runColour) {
-                canvas.fill(runFrom, y0, cx, y1, runColour);
-                runFrom = cx;
-                runColour = here;
-            }
-        }
+        int colour = Colors.mix(Palette.OFF_TINT, Palette.ON, onness);
+        canvas.fill(x, y, x + SWITCH_W, y + SWITCH_H, Colors.fade(colour, alpha * (hot ? 1 : 0.8f)));
+        canvas.fill(x + 1, y + 1, x + SWITCH_W - 1, y + SWITCH_H - 1, Colors.fade(Palette.PANEL, alpha));
+        int knobW = 9;
+        int knob = Math.round(x + 2 + onness * (SWITCH_W - 4 - knobW));
+        canvas.fill(knob, y + 2, knob + knobW, y + SWITCH_H - 2, Colors.fade(colour, alpha));
     }
 }

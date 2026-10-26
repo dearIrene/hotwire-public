@@ -96,7 +96,7 @@ public final class GameClasses implements SwitchApplier.Game {
         SoftReference<byte[]> retained = this.originals.get(internalName);
         byte[] bytes = retained == null ? null : retained.get();
         if (bytes == null) {
-            bytes = this.knot.findPreMixinBytes(internalName);
+            bytes = this.knot.findPreMixinBytes(internalName, this.findLoaded(internalName));
             if (bytes != null) {
                 this.originals.put(internalName, new SoftReference<>(bytes));
             }

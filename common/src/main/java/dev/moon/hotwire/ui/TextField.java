@@ -14,13 +14,13 @@ final class TextField extends Element {
     static final int KEY_A = 65;
     static final int SHIFT = 1;
     static final int CONTROL = 2;
-    private static final int EDGE = 0xFFA0A0A0;
-    private static final int EDGE_FOCUSED = 0xFFFFFFFF;
-    private static final int FILL = 0xFF000000;
-    private static final int INK = 0xFFE0E0E0;
-    private static final int CURSOR = 0xFFD0D0D0;
-    private static final int HINT = 0xFF808080;
-    private static final int SELECTION = 0x800000FF;
+    private static final int EDGE = Palette.PANEL_EDGE;
+    private static final int EDGE_FOCUSED = Palette.ACCENT;
+    private static final int FILL = 0xFF0E0B17;
+    private static final int INK = Palette.TEXT;
+    private static final int CURSOR = Palette.ACCENT;
+    private static final int HINT = Palette.FAINT;
+    private static final int SELECTION = 0x80B48CFF;
     private static final float BLINK = 0.3f;
 
     private final String hint;

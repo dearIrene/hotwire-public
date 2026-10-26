@@ -23,6 +23,7 @@ import net.minecraft.client.gui.screens.Screen;
 import net.minecraft.client.gui.screens.TitleScreen;
 import net.minecraft.client.particle.Particle;
 import net.minecraft.network.chat.Component;
+import net.minecraft.network.chat.MutableComponent;
 import org.jspecify.annotations.Nullable;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -186,14 +187,21 @@ public final class ModViews {
     }
 
     static void showChat(String line, boolean bad) {
+        showChat(line, bad, "");
+    }
+
+    static void showChat(String line, boolean bad, String hint) {
         Minecraft minecraft = Minecraft.getInstance();
         minecraft.execute(() -> {
             if (minecraft.player == null) {
                 showToast("Hotwire", line);
                 return;
             }
-            Component text = Component.literal("[Hotwire] " + line)
+            MutableComponent text = Component.literal("[Hotwire] " + line)
                     .withStyle(bad ? ChatFormatting.RED : ChatFormatting.GRAY);
+            if (!hint.isEmpty()) {
+                text = text.append(Component.literal(" " + hint).withStyle(ChatFormatting.RED));
+            }
             //? if >=26.1 {
             minecraft.player.sendSystemMessage(text);
             //?} else {

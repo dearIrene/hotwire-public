@@ -2,7 +2,7 @@ package dev.moon.hotwire.ui;
 
 final class Header extends Element {
     static final String AUTHOR = "Moonshee";
-    private static final int HEART = 0xFFE0506A;
+    static final int LEFT = 24;
     private static final float OPEN = 0.26f;
 
     private final EasedValue in = EasedValue.ofDuration(OPEN);
@@ -39,23 +39,27 @@ final class Header extends Element {
     protected void paint(Canvas canvas, float alpha) {
         float shown = this.in.getValue();
         float a = alpha * shown;
-        int slide = (int) ((1 - shown) * -10);
-        int x = 24 + slide;
-        canvas.drawText("Hotwire", x, 14, Colors.fade(Palette.TEXT, a));
+        int x = LEFT + (int) ((1 - shown) * -10);
+        canvas.drawText("Hotwire", x, 14, Colors.fade(Palette.ACCENT, a));
         int creditX = x + canvas.measureText("Hotwire") + 8;
         String credit = Lang.get("hotwire.header.credit", AUTHOR);
         if (creditX + canvas.measureText(credit + " ❤") + 8 < searchX(this.getWidth())) {
             canvas.drawText(credit, creditX, 14, Colors.fade(Palette.DIM, a));
-            canvas.drawText("❤", creditX + canvas.measureText(credit + " "), 14, Colors.fade(HEART, a));
+            canvas.drawText("❤", creditX + canvas.measureText(credit + " "), 14, Colors.fade(Palette.ACCENT, a));
         }
         int total = this.totalShown.getRounded();
-        canvas.drawText(Lang.get("hotwire.header.mods_on", this.countShown.getRounded(), total), x, 27,
-                Colors.fade(Palette.DIM, a));
-        int barW = Math.max(140, Math.min(240, this.getWidth() / 4));
-        canvas.fill(24, 38, 24 + barW, 41, Colors.fade(Palette.TRACK, a));
+        String counts = Lang.get("hotwire.header.mods_on", this.countShown.getRounded(), total);
+        canvas.drawText(counts, x, 27, Colors.fade(Palette.DIM, a));
+        int barX = x + canvas.measureText(counts) + 10;
+        int barW = Math.max(60, Math.min(140, this.getWidth() / 6));
+        canvas.fill(barX, 30, barX + barW, 33, Colors.fade(Palette.TRACK, a));
         int filled = this.total == 0 ? 0 : (int) (barW * this.countShown.getValue() / this.total * shown);
         if (filled > 0) {
-            canvas.fill(24, 38, 24 + filled, 41, Colors.fade(Palette.ON, a));
+            canvas.fillAcross(barX, 30, barX + filled, 33, Colors.fade(Palette.ON, a), Colors.fade(Palette.ACCENT, a));
+        }
+        int off = total - this.countShown.getRounded();
+        if (off > 0) {
+            canvas.drawText(Lang.get("hotwire.header.off", off), barX + barW + 10, 27, Colors.fade(Palette.BAD, a));
         }
     }
 }

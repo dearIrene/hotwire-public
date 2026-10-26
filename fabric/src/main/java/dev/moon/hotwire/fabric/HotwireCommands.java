@@ -37,7 +37,10 @@ final class HotwireCommands {
                         .executes(context -> runAdd(getJar(context), true))))
                 .then(makeLiteral("update").then(makeArgument("jar", StringArgumentType.greedyString())
                         .executes(context -> runUpdate(getJar(context)))))
-                .then(makeLiteral("report").executes(context -> runCommand(() -> HotwireClient.getEngine().report()))));
+                .then(makeLiteral("report").executes(context -> runCommand(() -> {
+                    HotwireEngine engine = HotwireClient.getEngine();
+                    engine.showMessage(engine.report() + " " + Lang.get("hotwire.report.send"), false);
+                }))));
     }
 
     private static int runCommand(Runnable action) {

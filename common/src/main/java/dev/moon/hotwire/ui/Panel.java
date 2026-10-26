@@ -5,6 +5,8 @@ import org.jspecify.annotations.Nullable;
 class Panel extends Element {
     static final int BUTTON_W = 92;
     static final int BUTTON_H = 20;
+    private static final int RISE = 8;
+    private static final float BOX_LAG = 0.18f;
 
     private final EasedValue shown = EasedValue.ofSpeed(14);
     private final EasedValue boxW = EasedValue.ofSpeed(10);
@@ -57,8 +59,16 @@ class Panel extends Element {
         return this.shown.getValue();
     }
 
+    float getBoxShown() {
+        return Math.max(0, Math.min(1, (this.shown.getValue() - BOX_LAG) / (1 - BOX_LAG)));
+    }
+
     void setRefused(boolean refused) {
         this.refused = refused;
+    }
+
+    public boolean pressPrimary() {
+        return this.open() && this.primary != null && this.primary.press();
     }
 
     void setPrimary(@Nullable String label, Runnable action) {
@@ -126,7 +136,7 @@ class Panel extends Element {
     }
 
     int getBoxY() {
-        return Math.round((this.getHeight() - this.boxH.getValue()) / 2);
+        return Math.round((this.getHeight() - this.boxH.getValue()) / 2 + (1 - this.getBoxShown()) * RISE);
     }
 
     int getBoxWidth() {
@@ -154,22 +164,22 @@ class Panel extends Element {
         int x = this.getBoxX();
         int w = this.getBoxWidth();
         int y = this.getBoxY() + this.getBoxHeight() - 32;
-        float s = this.shown.getValue();
+        float s = this.getBoxShown();
         boolean ready = this.wanted && s > 0.9f;
         int cancelX = x + w - 14 - BUTTON_W;
         if (this.cancel != null) {
             this.cancel.setBounds(cancelX, y, BUTTON_W, BUTTON_H);
-            this.cancel.setAlpha(s > 0.5f ? 1 : 0);
+            this.cancel.setAlpha(s);
             this.cancel.setActive(ready);
         }
         if (this.change != null) {
             this.change.setBounds(cancelX - 6 - BUTTON_W, y, BUTTON_W, BUTTON_H);
-            this.change.setAlpha(s > 0.5f ? 1 : 0);
+            this.change.setAlpha(s);
             this.change.setActive(ready && this.changeActive);
         }
         if (this.primary != null) {
             this.primary.setBounds(x + 14, y, Math.max(this.primaryWidth, this.primaryNeeds), BUTTON_H);
-            this.primary.setAlpha(s > 0.5f ? 1 : 0);
+            this.primary.setAlpha(s);
             this.primary.setActive(ready && this.primaryActive);
         }
     }
@@ -179,15 +189,19 @@ class Panel extends Element {
         if (this.primary != null) {
             this.primaryNeeds = this.primary.measure(canvas, false);
         }
-        float s = alpha * this.shown.getValue();
-        canvas.fill(0, 0, this.getWidth(), this.getHeight(), Colors.fade(Palette.SCRIM, s));
+        canvas.fill(0, 0, this.getWidth(), this.getHeight(), Colors.fade(Palette.SCRIM, alpha * this.shown.getValue()));
+        float s = alpha * this.getBoxShown();
+        if (s <= 0.005f) {
+            return;
+        }
         int x = this.getBoxX();
         int y = this.getBoxY();
         int w = this.getBoxWidth();
         int h = this.getBoxHeight();
+        canvas.fill(x - 1, y - 1, x + w + 1, y + h + 1, Colors.fade(Palette.PANEL_EDGE, s));
         canvas.fill(x, y, x + w, y + h, Colors.fade(Palette.PANEL, s));
         canvas.fill(x, y, x + w, y + 2, Colors.fade(this.refused ? Palette.BAD : Palette.ACCENT, s));
-        canvas.fill(x + 14, y + 34, x + w - 14, y + 38, Colors.fade(Palette.TRACK, s));
+        canvas.fill(x + 14, y + 34, x + w - 14, y + 36, Colors.fade(Palette.TRACK, s));
         this.drawContent(canvas, s, x, y, w, h);
     }
 

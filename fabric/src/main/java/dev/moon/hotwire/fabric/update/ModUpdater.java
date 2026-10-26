@@ -10,6 +10,7 @@ import dev.moon.hotwire.jar.ModManifest;
 import dev.moon.hotwire.jar.ModManifestParser;
 import dev.moon.hotwire.plan.ModGraph;
 import dev.moon.hotwire.redefine.RebuildException;
+import dev.moon.hotwire.report.GameLog;
 import dev.moon.hotwire.switching.ModMixins;
 import dev.moon.hotwire.switching.SwitchApplier;
 import dev.moon.hotwire.switching.SwitchApplier.ApplyResult;
@@ -23,6 +24,7 @@ import dev.moon.hotwire.update.UpdateContext;
 import dev.moon.hotwire.update.UpdateDiffer;
 import dev.moon.hotwire.update.UpdatePlan;
 import dev.moon.hotwire.update.UpdatePlan.ClassAction;
+import dev.moon.hotwire.update.UpdatePlan.UpdateNotice;
 import dev.moon.hotwire.update.UpdatePlan.UpdateTier;
 import dev.moon.hotwire.update.UpdatePlanner;
 import dev.moon.hotwire.update.UpdateQueue;
@@ -43,11 +45,22 @@ import java.util.Optional;
 import java.util.Set;
 import java.util.TreeMap;
 import java.util.TreeSet;
+import java.util.concurrent.CompletableFuture;
+import java.util.concurrent.ExecutionException;
+import java.util.concurrent.TimeUnit;
+import java.util.concurrent.TimeoutException;
+import java.util.function.Consumer;
+import java.util.regex.Pattern;
 import java.util.zip.ZipEntry;
 import java.util.zip.ZipFile;
+import net.fabricmc.api.ClientModInitializer;
+import net.fabricmc.api.ModInitializer;
+import net.fabricmc.loader.api.FabricLoader;
 import net.fabricmc.loader.api.Version;
 import net.fabricmc.loader.api.VersionParsingException;
+import net.fabricmc.loader.api.entrypoint.EntrypointContainer;
 import net.fabricmc.loader.impl.launch.FabricLauncherBase;
+import net.minecraft.client.Minecraft;
 import org.jspecify.annotations.Nullable;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -93,6 +106,13 @@ public final class ModUpdater {
         void onUpdated(String id, Path jar, ModJar read);
 
         Map<String, byte[]> readRunningOf(String id);
+
+        default Optional<String> findWidenerRefusal(ModJar read, Path jar) {
+            return Optional.of("the access widener changed");
+        }
+
+        default void openWidener(ModJar read) {
+        }
     }
 
     private static final Logger LOGGER = LoggerFactory.getLogger(ModUpdater.class);
@@ -103,14 +123,45 @@ public final class ModUpdater {
         this.engine = engine;
     }
 
+    public static final String ESSENTIAL_CONTAINER = "essential-container";
+    public static final String ESSENTIAL = "essential";
+    private static final Pattern ESSENTIAL_INNER = Pattern.compile("essential-[0-9a-f]{16,}\\.jar");
+
+    public @Nullable Path unwrap(Path jar) {
+        ModManifest manifest = this.findManifestOf(jar);
+        if (manifest == null || !manifest.id().equals(ESSENTIAL_CONTAINER)) {
+            return jar;
+        }
+        try (ZipFile zip = new ZipFile(jar.toFile())) {
+            ZipEntry inner = zip.stream().filter(entry -> ESSENTIAL_INNER.matcher(entry.getName()).matches())
+                    .findFirst().orElse(null);
+            if (inner == null) {
+                return null;
+            }
+            Path written = this.engine.getStagingFolder().resolve("essential").resolve(inner.getName());
+            Files.createDirectories(written.getParent());
+            try (InputStream in = zip.getInputStream(inner)) {
+                Files.copy(in, written, StandardCopyOption.REPLACE_EXISTING);
+            }
+            return written;
+        } catch (IOException e) {
+            LOGGER.info("[Hotwire] Essential's container could not be unwrapped: {}", e.toString());
+            return null;
+        }
+    }
+
     boolean canUpdate(Path jar) {
         ModManifest manifest = this.findManifestOf(jar);
         return manifest != null && this.engine.findRunningJarOf(manifest.id()) != null;
     }
 
-    UpdatePreview preview(Path jar) {
+    UpdatePreview preview(Path picked) {
+        Path jar = this.unwrap(picked);
+        String fileName = String.valueOf(picked.getFileName());
+        if (jar == null) {
+            return new UpdatePreview.Refused("Essential", Lang.get("hotwire.update.essential_empty"));
+        }
         ModManifest manifest = this.findManifestOf(jar);
-        String fileName = String.valueOf(jar.getFileName());
         if (manifest == null) {
             return new UpdatePreview.Unreadable(fileName);
         }
@@ -154,7 +205,38 @@ public final class ModUpdater {
                 manifest.version(), fileName, getMethodOf(whole.plan().tier()), lines);
     }
 
-    public Result update(Path jar, UpdateMethod method) {
+    public @Nullable UpdatePlan findPlan(Path picked) {
+        Path jar = this.unwrap(picked);
+        ModManifest manifest = jar == null ? null : this.findManifestOf(jar);
+        if (jar == null || manifest == null || ModPolicy.isHotwire(manifest.id())) {
+            return null;
+        }
+        Path running = this.engine.findRunningJarOf(manifest.id());
+        if (running == null) {
+            return null;
+        }
+        Optional<String> rejected = this.findRejection(manifest);
+        if (rejected.isPresent()) {
+            LOGGER.info("[Hotwire] sweep: {} rejected: {}", manifest.id(), rejected.get());
+            return null;
+        }
+        try {
+            Whole whole = this.planWhole(manifest.id(), running, jar);
+            if (whole.refusal() != null) {
+                LOGGER.info("[Hotwire] sweep: {} refused: {}", manifest.id(), whole.refusal());
+            }
+            return whole.plan();
+        } catch (ModJarException e) {
+            LOGGER.info("[Hotwire] sweep: {} unreadable: {}", manifest.id(), e.getMessage());
+            return null;
+        }
+    }
+
+    public Result update(Path picked, UpdateMethod method) {
+        Path jar = this.unwrap(picked);
+        if (jar == null) {
+            return new Result.Refused(Lang.get("hotwire.update.essential_empty"));
+        }
         ModManifest manifest = this.findManifestOf(jar);
         if (manifest == null) {
             return new Result.Refused(jar.getFileName() + " is not a mod jar.");
@@ -288,7 +370,7 @@ public final class ModUpdater {
         if (adopted.tier() == UpdateTier.IN_PLACE && bundled != null) {
             return new Whole(adopted, bundled, configs);
         }
-        LOGGER.info("[Hotwire] {}'s update waits for the next start: {}", id, bundled == null
+        GameLog.LOGGER.info("[Hotwire] {}'s update waits for the next start: {}", id, bundled == null
                 ? "a library it carries cannot update with it" : adopted.blockers());
         return new Whole(plan, List.of(), false);
     }
@@ -334,6 +416,31 @@ public final class ModUpdater {
                 return null;
             }
             out.add(new CarriedLibrary(manifest, written, read, plan));
+        }
+        return out;
+    }
+
+    public List<Path> findCarriedToAdd(Path picked) {
+        List<Path> out = new ArrayList<>();
+        Path jar = this.unwrap(picked);
+        ModManifest manifest = jar == null ? null : this.findManifestOf(jar);
+        Path running = manifest == null ? null : this.engine.findRunningJarOf(manifest.id());
+        if (jar == null || manifest == null || running == null) {
+            return out;
+        }
+        try {
+            for (String path : UpdatePlanner.findNestedPaths(this.plan(manifest.id(), running, jar))) {
+                Path written = this.writeNested(jar, path);
+                if (written == null) {
+                    continue;
+                }
+                ModManifest nested = ModJarReader.read(written).manifest();
+                if (this.engine.findVersionOf(nested.id()) == null) {
+                    out.add(written);
+                }
+            }
+        } catch (ModJarException e) {
+            LOGGER.info("[Hotwire] {}'s carried libraries could not be read: {}", picked.getFileName(), e.getMessage());
         }
         return out;
     }
@@ -399,8 +506,18 @@ public final class ModUpdater {
         } catch (ModJarException e) {
             return new Result.Refused(incoming.getFileName() + " cannot be read: " + e.getMessage());
         }
+        boolean widens = plan.notices().stream().anyMatch(UpdateNotice.WidenerOpens.class::isInstance);
+        if (widens) {
+            Optional<String> refusal = this.engine.findWidenerRefusal(read, incoming);
+            if (refusal.isPresent()) {
+                return new Result.Refused(refusal.get());
+            }
+        }
         try {
             this.engine.getApplier().getRebuilder().launchChanged();
+            if (widens) {
+                this.engine.openWidener(read);
+            }
             Set<String> targets = Set.of();
             if (whole.adoptsConfigs()) {
                 for (ClassAction action : plan.actions()) {
@@ -427,7 +544,7 @@ public final class ModUpdater {
                     FabricLauncherBase.getLauncher().addToClassPath(carried.incoming());
                     LoaderModList.replace(carried.manifest().id(), carried.incoming());
                 });
-                LOGGER.info("[Hotwire] {} is {} now, carried by {}", carried.manifest().id(),
+                GameLog.LOGGER.info("[Hotwire] {} is {} now, carried by {}", carried.manifest().id(),
                         carried.manifest().version(), manifest.id());
             }
 
@@ -437,16 +554,67 @@ public final class ModUpdater {
             });
             runAfterReplace(manifest.id(), "Hotwire's own list of mods",
                     () -> this.engine.onUpdated(manifest.id(), incoming, read));
-            LOGGER.info("[Hotwire] {} is {} now: {} classes rebuilt, {} served as they load, {} new", manifest.id(),
-                    manifest.version(), applied.rebuilt().size(), applied.notLoaded().size(),
+            String started = this.runAddedEntrypoints(manifest.id(), plan);
+            GameLog.LOGGER.info("[Hotwire] {} is {} now: {} classes rebuilt, {} served as they load, {} new",
+                    manifest.id(), manifest.version(), applied.rebuilt().size(), applied.notLoaded().size(),
                     plan.actions().stream().filter(action -> action.kind() == ClassAction.Kind.DEFINE).count());
             return new Result.Updated(manifest.id(), manifest.name(), plan, applied,
-                    this.queueToStay(manifest, running, incoming, plan));
+                    this.queueToStay(manifest, running, incoming, plan) + started);
         } catch (RebuildException e) {
             LOGGER.warn("[Hotwire] {} could not be updated in place", manifest.id(), e);
             return new Result.Failed(manifest.name() + " could not be updated in place: " + e.getMessage(), e);
         } finally {
             ResourceReload.forgetPausedReload();
+        }
+    }
+
+    private String runAddedEntrypoints(String id, UpdatePlan plan) {
+        Set<String> added = new HashSet<>();
+        for (UpdateNotice notice : plan.notices()) {
+            if (notice instanceof UpdateNotice.EntrypointRuns entrypoint) {
+                added.add(entrypoint.key() + "=" + entrypoint.value());
+            }
+        }
+        if (added.isEmpty()) {
+            return "";
+        }
+        List<Runnable> starts = new ArrayList<>();
+        collectAdded(id, "main", ModInitializer.class, ModInitializer::onInitialize, added, starts);
+        if (ModPolicy.getSide() == ModManifest.Environment.CLIENT) {
+            collectAdded(id, "client", ClientModInitializer.class, ClientModInitializer::onInitializeClient, added,
+                    starts);
+        }
+        if (starts.isEmpty()) {
+            LOGGER.info("[Hotwire] {}'s new entrypoints {} are not in the loader's list; not run", id, added);
+            return "";
+        }
+        CompletableFuture<String> ran = new CompletableFuture<>();
+        Minecraft.getInstance().execute(() -> {
+            try {
+                starts.forEach(Runnable::run);
+                ran.complete("");
+            } catch (RuntimeException | LinkageError e) {
+                LOGGER.warn("[Hotwire] {}'s new entrypoint threw", id, e);
+                ran.complete(" Its new start-up code threw " + e + "; the rest of the update stands.");
+            }
+        });
+        try {
+            return ran.get(30, TimeUnit.SECONDS);
+        } catch (InterruptedException e) {
+            Thread.currentThread().interrupt();
+            return "";
+        } catch (ExecutionException | TimeoutException e) {
+            return " Its new start-up code did not finish in time.";
+        }
+    }
+
+    private static <T> void collectAdded(String id, String key, Class<T> type, Consumer<T> start, Set<String> added,
+            List<Runnable> into) {
+        for (EntrypointContainer<T> entry : FabricLoader.getInstance().getEntrypointContainers(key, type)) {
+            if (entry.getProvider().getMetadata().getId().equals(id)
+                    && added.contains(key + "=" + entry.getDefinition())) {
+                into.add(() -> start.accept(entry.getEntrypoint()));
+            }
         }
     }
 

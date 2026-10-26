@@ -49,6 +49,11 @@ tasks.named<Jar>("jar") {
     }
 }
 
+val modMenuApi = sourceSets.create("modmenuApi") {
+    compileClasspath += configurations["compileClasspath"]
+}
+sourceSets["main"].compileClasspath += modMenuApi.output
+
 val harness = sourceSets.create("harness") {
     val main = sourceSets["main"]
     compileClasspath += main.output + main.compileClasspath

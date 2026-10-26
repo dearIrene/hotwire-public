@@ -7,7 +7,7 @@ import java.util.function.ObjIntConsumer;
 final class AdvancedPanel extends Panel {
     static final int WIDTH = 420;
     static final int PITCH = 36;
-    static final int CHOICE_W = 52;
+    static final int CHOICE_W = 64;
 
     private final ObjIntConsumer<String> onChoose;
     private final List<List<Button>> choiceButtons = new ArrayList<>();
@@ -44,14 +44,14 @@ final class AdvancedPanel extends Panel {
         super.step(dt);
         int x = this.getBoxX();
         int w = this.getBoxWidth();
-        float s = this.getShown();
+        float s = this.getBoxShown();
         for (int row = 0; row < this.choiceButtons.size(); row++) {
             List<Button> buttons = this.choiceButtons.get(row);
             int rowY = this.getBoxY() + 46 + PITCH * row;
             int bx = x + w - 14 - buttons.size() * (CHOICE_W + 4) + 4;
             for (Button button : buttons) {
                 button.setBounds(bx, rowY - 2, CHOICE_W, 20);
-                button.setAlpha(s > 0.5f ? 1 : 0);
+                button.setAlpha(s);
                 button.setActive(this.open() && s > 0.9f);
                 bx += CHOICE_W + 4;
             }

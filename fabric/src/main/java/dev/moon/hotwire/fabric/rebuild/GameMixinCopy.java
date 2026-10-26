@@ -3,6 +3,7 @@ package dev.moon.hotwire.fabric.rebuild;
 import com.google.common.collect.ImmutableList;
 import com.google.gson.Gson;
 import dev.moon.hotwire.fabric.add.FailedAddJars;
+import dev.moon.hotwire.mixin_copy.ExtensionFolder;
 import dev.moon.hotwire.mixin_copy.MixinCopy;
 import java.net.URISyntaxException;
 import java.nio.file.Path;
@@ -42,6 +43,7 @@ public final class GameMixinCopy {
                 internal -> FailedAddJars.isHiding(internal) ? null
                         : FailedAddJars.removeHiddenInterfaces(knot.findPreMixinBytes(internal)),
                 FabricLoader.getInstance().getEnvironmentType().name(), decorations);
+        copy.foldInto(new ExtensionFolder(findLaunchedExtensions()));
         copy.remapWith(mixin.findObfuscationContext());
         copy.setLevel(MixinEnvironment.getCompatibilityLevel().name());
         LOGGER.info("[Hotwire] Mixin's copy resolves refmaps in the game's context {}", mixin.findObfuscationContext());
@@ -61,6 +63,18 @@ public final class GameMixinCopy {
             }
         }
         return new ArrayList<>(jars);
+    }
+
+    private static List<String> findLaunchedExtensions() {
+        List<String> launched = new ArrayList<>();
+        for (String extension : EXTENSIONS) {
+            try {
+                Class.forName(extension, false, GameMixinCopy.class.getClassLoader());
+                launched.add(extension.substring(0, extension.lastIndexOf('.') + 1).replace('.', '/'));
+            } catch (ClassNotFoundException absent) {
+            }
+        }
+        return launched;
     }
 
     private static Path findJarOf(Class<?> type) {

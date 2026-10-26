@@ -16,6 +16,7 @@ import java.util.Optional;
 import java.util.Set;
 import java.util.SortedSet;
 import java.util.TreeSet;
+import java.util.concurrent.ConcurrentHashMap;
 import net.fabricmc.loader.api.ModContainer;
 import net.fabricmc.loader.api.metadata.ModOrigin;
 import org.jspecify.annotations.Nullable;
@@ -31,13 +32,17 @@ public final class InstalledMods {
 
     private final Map<String, Path> jarOf = new HashMap<>();
     private final Set<String> topLevel = new HashSet<>();
+
+    private final Map<String, ModJar> keptOff = new HashMap<>();
     private final Set<String> addedThisSession = new HashSet<>();
     private final Set<String> updatedThisSession = new HashSet<>();
 
-    public InstalledMods(List<ModJar> jars, Map<String, Path> jarOf, Set<String> topLevel) {
+    public InstalledMods(List<ModJar> jars, Map<String, Path> jarOf, Set<String> topLevel,
+            Map<String, ModJar> keptOff) {
         this.jars = new ArrayList<>(jars);
         this.jarOf.putAll(jarOf);
         this.topLevel.addAll(topLevel);
+        this.keptOff.putAll(keptOff);
         for (ModJar jar : jars) {
             for (String target : jar.patches().patches()) {
                 if (target.startsWith("dev/moon/hotwire/")) {
@@ -50,15 +55,22 @@ public final class InstalledMods {
         this.graph.getIds().forEach(id -> {
             List<String> called = this.graph.getCalls(id).stream().filter(ModPolicy::isSwitchable)
                     .filter(this.graph::isInstalledOnItsOwn).toList();
-            if (!called.isEmpty()) {
+            List<String> needed = called.stream().filter(other -> this.graph.needsByCode(id, other)).toList();
+            if (!needed.isEmpty()) {
                 LOGGER.info("[Hotwire] {}'s code calls {}, which its manifest does not name; it goes off with them",
-                        id, called);
+                        id, needed);
+            }
+            if (needed.size() < called.size()) {
+                LOGGER.info("[Hotwire] {} asks for {} before it calls them, a compatibility layer; it stays on when"
+                        + " they go off", id, called.stream().filter(other -> !needed.contains(other)).toList());
             }
         });
     }
 
+    private static final Map<String, Boolean> OF_GAME = new ConcurrentHashMap<>();
+
     private static boolean isOfGame(String type) {
-        return ClassLoader.getSystemResource(type + ".class") != null;
+        return OF_GAME.computeIfAbsent(type, SystemClassPath::has);
     }
 
     public synchronized ModGraph getGraph() {
@@ -91,8 +103,51 @@ public final class InstalledMods {
         return new TreeSet<>(this.topLevel);
     }
 
+    public synchronized Map<String, Path> getJarsByTopLevel() {
+        Map<String, Path> out = new HashMap<>();
+        for (String id : this.topLevel) {
+            Path jar = this.jarOf.get(id);
+            if (jar != null) {
+                out.put(id, jar);
+            }
+        }
+        return out;
+    }
+
     synchronized String nameOf(String id) {
-        return this.graph.find(id).map(ModManifest::name).orElse(id);
+        return this.graph.find(id).map(ModManifest::name).orElseGet(() -> this.findKeptOff(id)
+                .map(ModManifest::name).orElse(id));
+    }
+
+    public synchronized boolean isKeptOff(String id) {
+        return this.keptOff.containsKey(id);
+    }
+
+    public synchronized Optional<ModManifest> findKeptOff(String id) {
+        return Optional.ofNullable(this.keptOff.get(id)).map(ModJar::manifest);
+    }
+
+    public synchronized void onKeptOff(String id, Path kept) {
+        this.jars.stream().filter(jar -> jar.manifest().id().equals(id)).findFirst().ifPresent(jar -> {
+            this.jars.remove(jar);
+            this.keptOff.put(id, jar);
+        });
+        this.graph = new ModGraph(this.jars, InstalledMods::isOfGame);
+        this.jarOf.put(id, kept);
+    }
+
+    public synchronized void onRestored(String id, Path jar) {
+        ModJar back = this.keptOff.remove(id);
+        if (back != null) {
+            this.jars.add(back);
+            this.graph = new ModGraph(this.jars, InstalledMods::isOfGame);
+        }
+        this.jarOf.put(id, jar);
+    }
+
+    public synchronized void onBroughtBack(String id, Path jar) {
+        this.keptOff.remove(id);
+        this.jarOf.put(id, jar);
     }
 
     public synchronized ModGraph makeGraphWith(Collection<ModJar> more) {

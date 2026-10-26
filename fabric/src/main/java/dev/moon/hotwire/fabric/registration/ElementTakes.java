@@ -3,17 +3,30 @@ package dev.moon.hotwire.fabric.registration;
 import java.util.Collection;
 import java.util.List;
 import java.util.Map;
+import org.jspecify.annotations.Nullable;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
 final class ElementTakes {
+    private static final Logger LOGGER = LoggerFactory.getLogger(ElementTakes.class);
+
     private ElementTakes() {
     }
 
     static void runAll(List<Runnable> noted) {
+        int failed = 0;
+        @Nullable RuntimeException first = null;
         for (Runnable take : noted) {
             try {
                 take.run();
             } catch (UnsupportedOperationException | IllegalStateException e) {
+            } catch (RuntimeException e) {
+                failed++;
+                first = first == null ? e : first;
             }
+        }
+        if (first != null) {
+            LOGGER.error("[Hotwire] {} of {} noted takeouts failed; the rest were done", failed, noted.size(), first);
         }
     }
 

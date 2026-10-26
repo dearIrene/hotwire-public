@@ -31,26 +31,34 @@ import org.objectweb.asm.tree.VarInsnNode;
 
 final class BatchShapes {
     private static final String MADE = OffWindowObjects.class.getName().replace('.', '/');
+    private static final String LAMBDA_SITES = LambdaSites.class.getName().replace('.', '/');
 
     private BatchShapes() {
     }
 
-    private static String describeOperand(AbstractInsnNode insn) {
+    private static String describeOperand(AbstractInsnNode insn, boolean masked) {
         return switch (insn) {
-            case MethodInsnNode call -> call.owner + "." + call.name + call.desc;
-            case FieldInsnNode field -> field.owner + "." + field.name + field.desc;
+            case MethodInsnNode call -> call.owner + "." + (masked ? GeneratedNames.mask(call.name) : call.name)
+                    + call.desc;
+            case FieldInsnNode field -> field.owner + "." + (masked ? GeneratedNames.mask(field.name) : field.name)
+                    + field.desc;
             case TypeInsnNode type -> type.desc;
             case LdcInsnNode ldc -> String.valueOf(ldc.cst);
             case IntInsnNode number -> String.valueOf(number.operand);
             case VarInsnNode local -> String.valueOf(local.var);
             case IincInsnNode increment -> increment.var + "+" + increment.incr;
-            case InvokeDynamicInsnNode dynamic -> dynamic.name + dynamic.desc + dynamic.bsm;
+            case InvokeDynamicInsnNode dynamic -> (masked ? GeneratedNames.mask(dynamic.name) : dynamic.name)
+                    + dynamic.desc + (masked && isLambdaLink(dynamic) ? "lambda" : dynamic.bsm);
             case MultiANewArrayInsnNode array -> array.desc + array.dims;
             default -> "";
         };
     }
 
     static List<String> findConstructors(byte[] bytes, byte @Nullable [] original) {
+        return findConstructors(bytes, original, true);
+    }
+
+    static List<String> findConstructors(byte[] bytes, byte @Nullable [] original, boolean masked) {
         ClassNode node = new ClassNode();
         new ClassReader(bytes).accept(node, ClassReader.SKIP_DEBUG | ClassReader.SKIP_FRAMES);
         Set<String> own = new HashSet<>();
@@ -69,13 +77,35 @@ final class BatchShapes {
                 StringBuilder text = new StringBuilder(method.desc);
                 for (AbstractInsnNode insn : method.instructions) {
                     if (insn.getOpcode() >= 0 && !ownSetup.contains(insn)) {
-                        text.append(' ').append(insn.getOpcode()).append(describeOperand(insn));
+                        text.append(' ').append(insn.getOpcode()).append(describeOperand(insn, masked));
                     }
                 }
                 out.add(text.toString());
             }
         }
         return out;
+    }
+
+    private static boolean isLambdaLink(InvokeDynamicInsnNode dynamic) {
+        String owner = dynamic.bsm.getOwner();
+        return owner.equals("java/lang/invoke/LambdaMetafactory") || owner.equals(LAMBDA_SITES);
+    }
+
+    static String describeFirstDifference(List<String> was, List<String> now) {
+        for (int index = 0; index < Math.max(was.size(), now.size()); index++) {
+            String one = index < was.size() ? was.get(index) : "";
+            String other = index < now.size() ? now.get(index) : "";
+            if (!one.equals(other)) {
+                int at = 0;
+                while (at < one.length() && at < other.length() && one.charAt(at) == other.charAt(at)) {
+                    at++;
+                }
+                int from = Math.max(0, at - 40);
+                return "constructor " + index + ": \"" + one.substring(from, Math.min(one.length(), at + 80))
+                        + "\" became \"" + other.substring(from, Math.min(other.length(), at + 80)) + "\"";
+            }
+        }
+        return "no difference";
     }
 
     private static Set<AbstractInsnNode> findOwnSetup(String owner, MethodNode method, Set<String> own) {

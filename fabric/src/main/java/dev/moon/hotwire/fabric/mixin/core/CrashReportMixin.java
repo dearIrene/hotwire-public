@@ -28,7 +28,7 @@ public abstract class CrashReportMixin {
     @Inject(method = "saveToFile(Ljava/nio/file/Path;Lnet/minecraft/ReportType;Ljava/util/List;)Z", at = @At("RETURN"),
             require = 0)
     private void hotwire$onSaved(Path file, ReportType type, List<String> lines, CallbackInfoReturnable<Boolean> cir) {
-        if (cir.getReturnValueZ()) {
+        if (cir.getReturnValueZ() && !CrashSection.isCleared(this.describeTrace().value())) {
             GameReports.tellCrashSaved(file);
         }
     }
@@ -38,6 +38,11 @@ public abstract class CrashReportMixin {
         for (CrashSection.Detail detail : GameReports.getCrashSection().details()) {
             this.getSystemReport().setDetail(CrashSection.TITLE + ": " + detail.name(), detail.value());
         }
+        CrashSection.Detail trace = this.describeTrace();
+        this.getSystemReport().setDetail(CrashSection.TITLE + ": " + trace.name(), trace.value());
+    }
+
+    private CrashSection.Detail describeTrace() {
         Set<String> frames = new LinkedHashSet<>();
         List<String> messages = new ArrayList<>();
         int depth = 0;
@@ -47,7 +52,6 @@ public abstract class CrashReportMixin {
             }
             messages.add(at.toString());
         }
-        CrashSection.Detail trace = GameReports.describeTrace(frames, messages);
-        this.getSystemReport().setDetail(CrashSection.TITLE + ": " + trace.name(), trace.value());
+        return GameReports.describeTrace(frames, messages);
     }
 }

@@ -118,6 +118,21 @@ public final class ModAdder {
     }
 
     AddPreview preview(Path jarPath) {
+        StageTimes times = new StageTimes();
+        try {
+            return this.preview(jarPath, times);
+        } finally {
+            LOGGER.info("[Hotwire] the dry run of {} took {}", jarPath.getFileName(), times);
+        }
+    }
+
+    private AddPreview preview(Path jarPath, StageTimes times) {
+        Optional<String> plain = AddFirstLook.findRefusal(jarPath);
+        if (plain.isPresent()) {
+            return makeRefusal(String.valueOf(jarPath.getFileName()).replaceFirst("(?i)\\.jar$", ""), "",
+                    plain.get());
+        }
+        times.end("first look");
         ModJar jar;
         try {
             jar = ModJarReader.read(jarPath);
@@ -126,6 +141,7 @@ public final class ModAdder {
             return makeRefusal(jarPath.getFileName().toString(), "", Lang.get("hotwire.add.read_failed",
                     jarPath.getFileName(), e.getMessage()));
         }
+        times.end("read");
         ModManifest manifest = jar.manifest();
         String version = manifest.version();
         if (ModPolicy.isHotwire(manifest.id()) || this.engine.isInstalled(manifest.id())) {
@@ -141,6 +157,7 @@ public final class ModAdder {
             return makeRefusal(manifest.name(), version, Lang.get("hotwire.add.nested_unreadable", manifest.name(),
                     e.getMessage()));
         }
+        times.end("nested jars");
         List<ModJar> parts = found.values().stream().map(Part::jar).toList();
         for (Part part : found.values()) {
             Optional<String> missing = AddDependencies.findMissingRefusal(part.jar());
@@ -153,6 +170,7 @@ public final class ModAdder {
                 return AddPreview.ofLater(manifest.name(), version, List.of(Lang.get("hotwire.add.later.running")));
             }
         }
+        times.end("access wideners");
         SwitchPlanner planner = this.engine.makePlannerFor(this.engine.makeGraphWith(parts));
         SwitchPlan plan = AddDependencies.planOn(planner, parts, this.engine.getSwitcher().getOff());
         Optional<String> missing = AddDependencies.describe(plan, id -> id);
@@ -163,7 +181,9 @@ public final class ModAdder {
             }
             return makeRefusal(manifest.name(), version, missing.get());
         }
+        times.end("plan");
         Set<String> content = this.readContent(jarPath);
+        times.end("content");
         List<String> lines = new ArrayList<>();
         if (!manifest.authors().isEmpty()) {
             lines.add(Lang.get("hotwire.add.by", String.join(", ", manifest.authors())));
@@ -238,6 +258,52 @@ public final class ModAdder {
         return Optional.empty();
     }
 
+    public Optional<String> findWidenerRefusalOfUpdate(ModJar part, Path path) {
+        if (part.accessWidener().isEmpty()) {
+            return Optional.empty();
+        }
+        AccessWidenerText widener = part.accessWidener().get();
+        String name = part.manifest().name();
+        try {
+            LoaderClassTweaker.check(widener, name);
+        } catch (IllegalArgumentException e) {
+            return Optional.of(Objects.requireNonNull(e.getMessage()));
+        }
+        List<AccessWidenerText.Clause> loaded = widener.getClausesOnLoadedClasses(this.engine::isLoaded);
+        List<AccessWidenerText.Clause> unbridgeable = WidenerUses.findUnbridgeable(loaded, this.engine)
+                .stream().filter(clause -> !WidenerUses.JUDGED_BY_USE.contains(clause.kind())).toList();
+        if (!unbridgeable.isEmpty()) {
+            return Optional.of(AccessWidenerText.describeRefusal(name, unbridgeable.get(0)));
+        }
+        JarUseReader.JarClasses jar = JarUseReader.readJar(path);
+        for (WidenerUses.Use use : JarUseReader.findUsesOf(jar, loaded, this.engine)) {
+            if (!use.isFixable()) {
+                return Optional.of(name + " cannot be updated while it runs: " + use.describe() + ", and the game"
+                        + " has loaded that class already, so its access cannot change.");
+            }
+        }
+        return Optional.empty();
+    }
+
+    public void openWidenerOfUpdate(ModJar part) {
+        part.accessWidener().ifPresent(widener -> {
+            LoaderClassTweaker.apply(widener, part.manifest().name(), this.engine::isLoaded);
+            List<AccessWidenerText.Clause> loaded = widener.getClausesOnLoadedClasses(this.engine::isLoaded);
+            WidenerUses.Openings openings = WidenerUses.findOpenings(loaded, this.engine);
+            if (!openings.isEmpty()) {
+                Linker.open(openings);
+                for (String opened : openings.classes()) {
+                    Class<?> type = this.engine.findLoaded(opened);
+                    if (type != null) {
+                        AccessBridge.open(type);
+                    }
+                }
+                LOGGER.info("[Hotwire] {}'s update opens {} loaded classes and {} members through the bridge",
+                        part.manifest().id(), openings.classes().size(), openings.members().size());
+            }
+        });
+    }
+
     private void openLoaded(ModJar part, @Nullable Path path) {
         part.accessWidener().ifPresent(widener -> {
             List<AccessWidenerText.Clause> loaded = widener.getClausesOnLoadedClasses(this.engine::isLoaded);
@@ -310,6 +376,10 @@ public final class ModAdder {
     }
 
     public Result add(Path jarPath, Function<String, String> nameOf) {
+        Optional<String> plain = AddFirstLook.findRefusal(jarPath);
+        if (plain.isPresent()) {
+            return new Result.Refused(plain.get());
+        }
         Map<String, Part> parts = new LinkedHashMap<>();
         try {
             this.collect(jarPath, parts);
@@ -490,13 +560,17 @@ public final class ModAdder {
 
     private void collect(Path path, Map<String, Part> into) throws ModJarException, IOException {
         ModJar jar = ModJarReader.read(path);
-        for (String nestedPath : jar.manifest().nestedJars()) {
-            Path written = this.engine.getAddedJarsFolder().resolve(Path.of(nestedPath).getFileName().toString());
-            try (ZipFile zip = new ZipFile(path.toFile())) {
+        List<String> nestedPaths = new ArrayList<>(jar.manifest().nestedJars());
+        try (ZipFile zip = new ZipFile(path.toFile())) {
+            zip.stream().map(ZipEntry::getName)
+                    .filter(name -> name.endsWith(".jar") && !name.contains("/") && !nestedPaths.contains(name))
+                    .forEach(nestedPaths::add);
+            for (String nestedPath : nestedPaths) {
                 ZipEntry entry = zip.getEntry(nestedPath);
                 if (entry == null) {
                     continue;
                 }
+                Path written = this.engine.getAddedJarsFolder().resolve(Path.of(nestedPath).getFileName().toString());
                 Files.createDirectories(written.getParent());
                 byte[] bytes;
                 try (InputStream in = zip.getInputStream(entry)) {
@@ -506,18 +580,22 @@ public final class ModAdder {
                 if (!Files.exists(written) || !Arrays.equals(Files.readAllBytes(written), bytes)) {
                     Files.write(written, bytes);
                 }
-            }
-            ModJar nested;
-            try {
-                nested = ModJarReader.read(written);
-            } catch (ModJarException notAMod) {
-                continue;
-            }
-            String id = nested.manifest().id();
-            if (!this.isPresent(nested) && !into.containsKey(id)) {
-                this.collect(written, into);
+                this.collectWritten(written, into);
             }
         }
         into.put(jar.manifest().id(), new Part(path, jar));
+    }
+
+    private void collectWritten(Path written, Map<String, Part> into) throws ModJarException, IOException {
+        ModJar nested;
+        try {
+            nested = ModJarReader.read(written);
+        } catch (ModJarException notAMod) {
+            return;
+        }
+        String id = nested.manifest().id();
+        if (!this.isPresent(nested) && !into.containsKey(id)) {
+            this.collect(written, into);
+        }
     }
 }

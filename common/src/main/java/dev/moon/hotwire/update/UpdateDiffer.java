@@ -96,7 +96,9 @@ public final class UpdateDiffer {
             shape.add(ShapeChange.CLASS_NAME);
         }
         if ((was.access & FLAGS) != (now.access & FLAGS)) {
-            shape.add(ShapeChange.CLASS_MODIFIERS);
+            int differing = (was.access ^ now.access) & FLAGS;
+            boolean harmless = (differing & ~(Opcodes.ACC_FINAL | Opcodes.ACC_SUPER | Opcodes.ACC_SYNTHETIC)) == 0;
+            shape.add(harmless ? ShapeChange.CLASS_FINALITY : ShapeChange.CLASS_MODIFIERS);
         }
         if (!Objects.equals(was.superName, now.superName)) {
             shape.add(ShapeChange.SUPERCLASS);

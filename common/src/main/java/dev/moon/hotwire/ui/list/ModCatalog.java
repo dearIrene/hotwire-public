@@ -22,4 +22,11 @@ public interface ModCatalog {
     Set<String> getNeededBy(String id);
 
     float getStanding(String id);
+
+    default boolean isFavorite(String id) {
+        return false;
+    }
+
+    default void setFavorite(String id, boolean favorite) {
+    }
 }

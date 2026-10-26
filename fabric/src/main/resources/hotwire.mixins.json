@@ -30,12 +30,15 @@
     "core.fabric.resource.loader.ResourceManagerHelperImplAccessor",
     "core.fabric.resource.loader.ResourceManagerHelperImplMixin",
     "core.server.level.ServerPlayerMixin",
+    "core.server.MinecraftServerMixin",
     "core.server.TickTaskAccessor"
   ],
   "client": [
     "core.blaze3d.systems.CommandEncoderAccessor",
     "core.blaze3d.opengl.GlCommandEncoderAccessor",
     "core.client.multiplayer.ClientPacketListenerMixin",
+    "core.client.gui.screens.ScreenKeyMixin",
+    "core.client.gui.screens.TitleScreenMixin",
     "core.brigadier.tree.CommandNodeAccessor",
     "core.brigadier.tree.CommandNodeMixin",
     "core.client.renderer.entity.EntityRenderersAccessor",

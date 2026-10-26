@@ -35,6 +35,7 @@ import dev.moon.hotwire.jar.ModJarReader;
 import dev.moon.hotwire.jvm.JvmAccess;
 import dev.moon.hotwire.jvm.JvmAccessException;
 import dev.moon.hotwire.redefine.ClassRebuilder;
+import dev.moon.hotwire.redefine.FieldSlots;
 import dev.moon.hotwire.redefine.FinalWrites;
 import dev.moon.hotwire.redefine.InitHookReplay;
 import dev.moon.hotwire.redefine.Linker;
@@ -53,6 +54,7 @@ import dev.moon.hotwire.update.UpdateQueue;
 import java.io.IOException;
 import java.lang.instrument.ClassFileTransformer;
 import java.lang.instrument.Instrumentation;
+import java.nio.file.Files;
 import java.nio.file.Path;
 import java.util.ArrayList;
 import java.util.HashMap;
@@ -86,17 +88,46 @@ final class EngineStart {
         return STACK.walk(frames -> frames.anyMatch(frame -> frame.getClassName().startsWith(RELOAD_TASKS)));
     }
 
+    private static boolean isNewer(Path file, Path than) {
+        try {
+            return Files.getLastModifiedTime(file).compareTo(Files.getLastModifiedTime(than)) > 0;
+        } catch (IOException e) {
+            return false;
+        }
+    }
+
     static InstalledMods readInstalledMods(FabricLoader loader) throws IOException {
         Path mods = ModsFolder.find(loader);
         ModIndex.Snapshot snapshot = new ModIndex(ForkJoinPool.commonPool()).scan(mods);
         List<ModJar> jars = new ArrayList<>();
         Map<String, Path> jarOf = new HashMap<>();
         Set<String> topLevel = new HashSet<>();
+        Map<String, ModJar> keptOff = new HashMap<>();
         for (ModIndex.Entry entry : snapshot.mods()) {
-            jars.add(entry.jar());
-            topLevel.add(entry.jar().manifest().id());
-            jarOf.put(entry.jar().manifest().id(), entry.file());
+            if (!entry.disabled()) {
+                String id = entry.jar().manifest().id();
+                jars.add(entry.jar());
+                topLevel.add(id);
+                jarOf.put(id, entry.file());
+            }
         }
+
+        Map<String, Path> keptFile = new HashMap<>();
+        for (ModIndex.Entry entry : snapshot.mods()) {
+            String id = entry.jar().manifest().id();
+            if (!entry.disabled() || jarOf.containsKey(id) || loader.isModLoaded(id) || ModPolicy.isHotwire(id)) {
+                continue;
+            }
+            Path before = keptFile.get(id);
+            if (before == null || isNewer(entry.file(), before)) {
+                keptFile.put(id, entry.file());
+                keptOff.put(id, entry.jar());
+            }
+        }
+        keptFile.forEach((id, file) -> {
+            topLevel.add(id);
+            jarOf.put(id, file);
+        });
         for (ModContainer container : loader.getAllMods()) {
             String id = container.getMetadata().getId();
             Path jar = InstalledMods.findLoadedFrom(container, mods);
@@ -114,7 +145,7 @@ final class EngineStart {
             }
         }
         jars.replaceAll(jar -> dropUnloadedTwins(jar, loader));
-        return new InstalledMods(jars, jarOf, topLevel);
+        return new InstalledMods(jars, jarOf, topLevel, keptOff);
     }
 
     private static ModJar dropUnloadedTwins(ModJar jar, FabricLoader loader) {
@@ -190,6 +221,7 @@ final class EngineStart {
                 mixin::getGeneratedBy);
         InitHookReplay.writeStaticsWith(fieldReferences::writeStatic);
         FinalWrites.writeWith(fieldReferences::writeFinal);
+        FieldSlots.readStaticsWhen(fieldReferences::isInitialized);
         switcher.reopenToTurnOnWith(mod -> fieldReferences.hasRemovedFrom(mod)
                 || NetworkHandlers.hasLostConnection(mod));
         switcher.reopenToTurnOffWith(new ConnectionLambdas(instrumentation)::findMods);
@@ -204,11 +236,12 @@ final class EngineStart {
                 new GeneratedWrappers(applier.getRebuilder(),
                 mixin::getGeneratedBy), new MixinPlugins(mixin::getConfigObjects,
                         mixin.getProcessor()), chain);
-        return new HotwireEngine.JvmParts(runner,
-                new AddSupport(installed, applier, switcher, classes, reports, gameDir, folders, queue, icons,
-                        ids -> runner.turnOff(ids).result()),
-                new UpdateSupport(installed, applier, switcher, classes, folders, queue, reports, icons),
-                instrumentation, loadTimeMixer, classes);
+        AddSupport adds = new AddSupport(installed, applier, switcher, classes, reports, gameDir, folders, queue,
+                icons, ids -> runner.turnOff(ids).result());
+        UpdateSupport updates = new UpdateSupport(installed, applier, switcher, classes, folders, queue, reports,
+                icons);
+        updates.setAdder(adds.getAdder());
+        return new HotwireEngine.JvmParts(runner, adds, updates, instrumentation, loadTimeMixer, classes);
     }
 
     private static BiFunction<Set<String>, Set<String>, Set<String>> findForeignPatches(

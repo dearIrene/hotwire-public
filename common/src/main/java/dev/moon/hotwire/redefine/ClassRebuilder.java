@@ -4,6 +4,7 @@ import dev.moon.hotwire.concurrent.Parallel;
 import dev.moon.hotwire.mixin_copy.AppliedMixins;
 import dev.moon.hotwire.mixin_copy.MixinCopy;
 import dev.moon.hotwire.mixin_copy.MixinCopyException;
+import dev.moon.hotwire.report.GameLog;
 import java.lang.instrument.ClassDefinition;
 import java.lang.instrument.Instrumentation;
 import java.lang.instrument.UnmodifiableClassException;
@@ -301,15 +302,32 @@ public final class ClassRebuilder {
             }
             splits.put(entry.getValue(), (ClassSplit.Result) Objects.requireNonNull(split));
         }
+
         Set<String> newlyBuilt = new TreeSet<>();
+        List<String> numbersAlone = new ArrayList<>();
         splits.forEach((type, split) -> {
             String name = type.getName().replace('.', '/');
             byte[] original = originals.get(type);
-            if (!BatchShapes.findConstructors(Objects.requireNonNull(current.get(name)), original)
-                    .equals(BatchShapes.findConstructors(split.target(), original))) {
+            byte[] running = Objects.requireNonNull(current.get(name));
+            List<String> was = BatchShapes.findConstructors(running, original);
+            List<String> now = BatchShapes.findConstructors(split.target(), original);
+            if (!was.equals(now)) {
                 newlyBuilt.add(name);
+                LOGGER.debug("[Hotwire] {} builds its objects another way; {}", name,
+                        BatchShapes.describeFirstDifference(was, now));
+            } else if (!BatchShapes.findConstructors(running, original, false)
+                    .equals(BatchShapes.findConstructors(split.target(), original, false))) {
+                numbersAlone.add(name);
             }
         });
+        if (!newlyBuilt.isEmpty()) {
+            LOGGER.info("[Hotwire] {} classes build their objects another way (the debug log says where): {}",
+                    newlyBuilt.size(), List.copyOf(newlyBuilt).subList(0, Math.min(12, newlyBuilt.size())));
+        }
+        if (!numbersAlone.isEmpty()) {
+            LOGGER.info("[Hotwire] {} classes' constructors differ in Mixin's numbers alone, and are built as before:"
+                    + " {}", numbersAlone.size(), numbersAlone.subList(0, Math.min(8, numbersAlone.size())));
+        }
         long end = System.nanoTime();
         if (end - mixedAt > SLOW_SPLIT.toNanos()) {
             LOGGER.info("[Hotwire] the split of {} classes took {} ms: marks {}, shapes {}, classes {},"
@@ -401,10 +419,10 @@ public final class ClassRebuilder {
         this.mixedNow.putAll(prepared.mixed());
         this.lastApplied = new LastApply(prepared, previous, carriedBefore, mixedBefore);
         long end = System.nanoTime();
-        LOGGER.info("[Hotwire] Rebuilt {} classes ({} already so): mix {} ms, split {} ms, sidecars {} ms, redefine {}"
-                + " ms, after {} ms", prepared.splits().size(), prepared.splits().size() - definitions.size(),
-                prepared.mixMillis(), prepared.splitMillis(), (installed - start) / 1_000_000,
-                (redefined - installed) / 1_000_000, (end - redefined) / 1_000_000);
+        GameLog.LOGGER.info("[Hotwire] Rebuilt {} classes ({} already so): mix {} ms, split {} ms, sidecars {} ms, "
+                + "redefine {} ms, after {} ms", prepared.splits().size(),
+                prepared.splits().size() - definitions.size(), prepared.mixMillis(), prepared.splitMillis(),
+                (installed - start) / 1_000_000, (redefined - installed) / 1_000_000, (end - redefined) / 1_000_000);
     }
 
     @SuppressWarnings("ReferenceEquality")

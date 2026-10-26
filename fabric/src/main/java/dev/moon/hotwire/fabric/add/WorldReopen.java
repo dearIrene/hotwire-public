@@ -18,6 +18,7 @@ import java.util.concurrent.ExecutionException;
 import java.util.concurrent.RejectedExecutionException;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.TimeoutException;
+import java.util.function.Consumer;
 import java.util.function.Supplier;
 import java.util.stream.Collectors;
 import net.minecraft.client.Minecraft;
@@ -49,6 +50,12 @@ public final class WorldReopen {
     private WorldReopen() {
     }
 
+    private static volatile Consumer<Boolean> closedFor = closed -> { };
+
+    public static void tellClosedTo(Consumer<Boolean> listener) {
+        closedFor = listener;
+    }
+
     public static Optional<String> findRefusal() {
         IntegratedServer server = Minecraft.getInstance().getSingleplayerServer();
         if (server == null) {
@@ -74,13 +81,18 @@ public final class WorldReopen {
         try {
             String level = getFolderOf(Objects.requireNonNull(client.getSingleplayerServer()));
             leave(client);
-            ModAdder.Result result = add.get();
-            if (result instanceof ModAdder.Result.Failed failed && failed.leftBehind()) {
-                return new ModAdder.Result.Failed(failed.reason() + " The world stays closed until then.",
-                        failed.cause(), true);
+            closedFor.accept(true);
+            try {
+                ModAdder.Result result = add.get();
+                if (result instanceof ModAdder.Result.Failed failed && failed.leftBehind()) {
+                    return new ModAdder.Result.Failed(failed.reason() + " The world stays closed until then.",
+                            failed.cause(), true);
+                }
+                openOrSay(client, level);
+                return result;
+            } finally {
+                closedFor.accept(false);
             }
-            openOrSay(client, level);
-            return result;
         } catch (InterruptedException e) {
             Thread.currentThread().interrupt();
             return new ModAdder.Result.Refused("the add was interrupted while the world was closing or opening");
@@ -102,15 +114,20 @@ public final class WorldReopen {
         }
         String level = getFolderOf(server);
         leave(client);
-        T result;
+        closedFor.accept(true);
         try {
-            result = add.get();
-        } catch (RuntimeException e) {
+            T result;
+            try {
+                result = add.get();
+            } catch (RuntimeException e) {
+                openOrSay(client, level);
+                throw e;
+            }
             openOrSay(client, level);
-            throw e;
+            return result;
+        } finally {
+            closedFor.accept(false);
         }
-        openOrSay(client, level);
-        return result;
     }
 
     private static void openOrSay(Minecraft client, String level) throws InterruptedException {

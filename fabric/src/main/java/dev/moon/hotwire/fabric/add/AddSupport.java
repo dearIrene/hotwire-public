@@ -84,6 +84,10 @@ public final class AddSupport implements ModAdder.Engine {
     }
 
     public String queue(Path jar) {
+        Optional<String> plain = AddFirstLook.findRefusal(jar);
+        if (plain.isPresent()) {
+            return plain.get();
+        }
         try {
             ModManifest manifest = this.queueJar(jar);
             return manifest.name() + " " + manifest.version() + " is queued as a pending task: it goes into your"
@@ -205,6 +209,10 @@ public final class AddSupport implements ModAdder.Engine {
     @Override
     public ModSwitcher.Result takeOut(List<String> ids) {
         return this.takeOut.apply(ids);
+    }
+
+    public ModAdder getAdder() {
+        return this.adder;
     }
 
     @Override
