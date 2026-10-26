@@ -58,7 +58,7 @@ final class AddPanel extends Panel {
             return this.reading.join();
         } catch (RuntimeException e) {
             Throwable cause = e.getCause() == null ? e : e.getCause();
-            return AddPreview.ofRefusal(this.getFileName(), "That did not work: " + cause);
+            return AddPreview.ofRefusal(this.getFileName(), Lang.get("hotwire.add.failed", cause));
         }
     }
 
@@ -82,10 +82,9 @@ final class AddPanel extends Panel {
     static String describeHeadsUp(List<String> late) {
         String list = String.join(", ", late.subList(0, Math.min(LATE_NAMED, late.size())));
         if (late.size() > LATE_NAMED) {
-            list += ", and " + (late.size() - LATE_NAMED) + " more";
+            list += Lang.get("hotwire.list.more", late.size() - LATE_NAMED);
         }
-        return "Heads up: a few of its changes only reach what the game sets up from now on, or after a restart: "
-                + list + ".";
+        return Lang.get("hotwire.add.heads_up", list);
     }
 
     private List<MessageLine.Line> layOutBody(Canvas canvas) {
@@ -93,7 +92,7 @@ final class AddPanel extends Panel {
         int wrapAt = Math.min(MEASURE, this.getWidth() - 48 - 28);
         List<MessageLine.Line> out = new ArrayList<>();
         if (preview == null) {
-            out.add(new MessageLine.Line("Just a moment.", Palette.DIM));
+            out.add(new MessageLine.Line(Lang.get("hotwire.panel.just_a_moment"), Palette.DIM));
             return out;
         }
 
@@ -102,9 +101,8 @@ final class AddPanel extends Panel {
                 MessageLine.addWrapped(canvas, out, line, Palette.DIM, wrapAt);
             }
             out.add(new MessageLine.Line("", Palette.DIM));
-            MessageLine.addWrapped(canvas, out, "Hotwire puts it in your mods/ folder when you close the game, so"
-                    + " it's there the next time you play.", Palette.TEXT, wrapAt);
-            MessageLine.addWrapped(canvas, out, "You can undo it any time from Pending tasks.", Palette.ON, wrapAt);
+            MessageLine.addWrapped(canvas, out, Lang.get("hotwire.add.next_start.where"), Palette.TEXT, wrapAt);
+            MessageLine.addWrapped(canvas, out, Lang.get("hotwire.add.next_start.undo"), Palette.ON, wrapAt);
             return out;
         }
         boolean declined = preview.mode().isDeclinedNow();
@@ -149,7 +147,7 @@ final class AddPanel extends Panel {
     }
 
     private void drawHeading(Canvas canvas, @Nullable AddPreview preview, int x, int y, int room, float alpha) {
-        String lead = preview == null ? "Reading " : preview.mode().getLead();
+        String lead = preview == null ? Lang.get("hotwire.add.lead.reading") : preview.mode().getLead();
         String name = preview == null ? this.getFileName() : preview.name();
         boolean bad = preview != null && preview.mode() == AddMode.REFUSED;
         int leadW = canvas.measureText(lead);

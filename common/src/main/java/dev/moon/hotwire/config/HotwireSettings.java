@@ -2,6 +2,7 @@ package dev.moon.hotwire.config;
 
 import dev.moon.hotwire.plan.SwitchPlanner.NestedJars;
 import dev.moon.hotwire.ui.AdvancedOption;
+import dev.moon.hotwire.ui.Lang;
 import java.io.IOException;
 import java.nio.file.Path;
 import java.util.List;
@@ -17,16 +18,14 @@ public final class HotwireSettings {
 
     private static final Logger LOGGER = LoggerFactory.getLogger(HotwireSettings.class);
     private static final int FORMAT = 1;
-    private static final List<AdvancedOption.Choice> IN_WORLD_CHOICES = List.of(
-            new AdvancedOption.Choice("Auto", "Hotwire decides for each mod, and says when one must wait."),
-            new AdvancedOption.Choice("Off", "Never inside a world; leave it first."));
+
+    private static final List<String> IN_WORLD_CHOICES = List.of("hotwire.settings.in_world.auto",
+            "hotwire.settings.in_world.off");
 
     private static final List<InWorld> IN_WORLD_ORDER = List.of(InWorld.AUTO, InWorld.OFF);
     private static final List<NestedJars> NESTED_ORDER = List.of(NestedJars.AUTO, NestedJars.ALL, NestedJars.NONE);
-    private static final List<AdvancedOption.Choice> NESTED_CHOICES = List.of(
-            new AdvancedOption.Choice("Auto", "A mod's own parts go off and on with it."),
-            new AdvancedOption.Choice("All", "Every jar a mod carries goes with it."),
-            new AdvancedOption.Choice("None", "Jars a mod carries stay as they are."));
+    private static final List<String> NESTED_CHOICES = List.of("hotwire.settings.nested.auto",
+            "hotwire.settings.nested.all", "hotwire.settings.nested.none");
 
     @SuppressWarnings("FieldCanBeFinal")
     private static final class SettingsJson {
@@ -79,10 +78,15 @@ public final class HotwireSettings {
     }
 
     public List<AdvancedOption> getOptions() {
-        return List.of(new AdvancedOption(IN_WORLD, "In-world switching", IN_WORLD_CHOICES,
+        return List.of(new AdvancedOption(IN_WORLD, Lang.get("hotwire.settings.in_world"), read(IN_WORLD_CHOICES),
                 IN_WORLD_ORDER.indexOf(this.inWorld)),
-                new AdvancedOption(NESTED_JARS, "Nested jars", NESTED_CHOICES,
+                new AdvancedOption(NESTED_JARS, Lang.get("hotwire.settings.nested"), read(NESTED_CHOICES),
                         NESTED_ORDER.indexOf(this.nestedJars)));
+    }
+
+    private static List<AdvancedOption.Choice> read(List<String> keys) {
+        return keys.stream().map(choice -> new AdvancedOption.Choice(Lang.get(choice), Lang.get(choice + ".note")))
+                .toList();
     }
 
     public void choose(String option, int choice) {

@@ -55,7 +55,7 @@ public final class ModScreen {
 
         default CompletableFuture<AddPreview> dryRunAdd(Path jar) {
             return CompletableFuture.completedFuture(AddPreview.ofRefusal(String.valueOf(jar.getFileName()),
-                    "Adding from the screen is not in this version yet."));
+                    Lang.get("hotwire.add.not_here")));
         }
 
         default void add(Path jar, AddMode mode) {
@@ -140,8 +140,8 @@ public final class ModScreen {
     private int width;
     private int height;
     private final BottomBar bar;
-    private String offLabel = "Turn off";
-    private String onLabel = "Turn on";
+    private String offLabel = Lang.get("hotwire.screen.turn_off");
+    private String onLabel = Lang.get("hotwire.screen.turn_on");
 
     private static final long AHEAD_DWELL_NANOS = 250_000_000L;
     private @Nullable String pointed;
@@ -154,17 +154,24 @@ public final class ModScreen {
         this.model = new ModListModel(game.getCatalog());
         this.list = new ModList(new ListSource(), game.getBadges(), this.model, game.getCatalog(), game::findIcon,
                 new Gestures());
-        this.search = new TextField("Search", this::onSearched, () -> { }, game::onDone);
+        this.search = new TextField(Lang.get("hotwire.screen.search"), this::onSearched, () -> { }, game::onDone);
         this.showMenu = new Dropdown(this.root.getMenus(), Show.ALL.getLabel(), this::showPicked, index -> { });
         this.profiles = new ProfileMenu(profiles, new Setups(), this.root, this.search, this.showMenu);
-        this.turnOff = new Button("Turn off", "Off", false, () -> this.switchPicked(false));
-        this.turnOn = new Button("Turn on", "On", true, () -> this.switchPicked(true));
-        this.report = new Button("Report a problem", "Report", false, game::report);
-        this.add = new Button("Add mod", "Add", false, game::addMod);
-        this.update = new Button("Update mod", "Update", false, game::updateMod);
-        this.advanced = new Button("Advanced", "More", false, this::openAdvanced);
-        this.pending = new Button("Pending tasks", "Pending", false, this::openPending);
-        this.done = new Button("Done", false, game::onDone);
+        this.turnOff = new Button(Lang.get("hotwire.screen.turn_off"), Lang.get("hotwire.screen.off"), false,
+                () -> this.switchPicked(false));
+        this.turnOn = new Button(Lang.get("hotwire.screen.turn_on"), Lang.get("hotwire.screen.on"), true,
+                () -> this.switchPicked(true));
+        this.report = new Button(Lang.get("hotwire.screen.report"), Lang.get("hotwire.screen.report_short"), false,
+                game::report);
+        this.add = new Button(Lang.get("hotwire.screen.add"), Lang.get("hotwire.screen.add_short"), false,
+                game::addMod);
+        this.update = new Button(Lang.get("hotwire.screen.update"), Lang.get("hotwire.screen.update_short"), false,
+                game::updateMod);
+        this.advanced = new Button(Lang.get("hotwire.screen.advanced"), Lang.get("hotwire.screen.advanced_short"),
+                false, this::openAdvanced);
+        this.pending = new Button(Lang.get("hotwire.screen.pending"), Lang.get("hotwire.screen.pending_short"),
+                false, this::openPending);
+        this.done = new Button(Lang.get("hotwire.button.done"), false, game::onDone);
         this.bar = new BottomBar(List.of(this.turnOff, this.turnOn, this.report, this.add, this.update, this.advanced,
                 this.pending), this.done);
         this.progress = new ProgressPanel(game.getProgress());
@@ -276,7 +283,7 @@ public final class ModScreen {
 
     public void onFilesDropped(List<Path> files) {
         if (this.game.getProgress().isBusy()) {
-            this.showMessage("Wait for this to finish, then drop the jar again.", false);
+            this.showMessage(Lang.get("hotwire.screen.drop_wait"), false);
             return;
         }
         for (Path file : files) {
@@ -285,7 +292,7 @@ public final class ModScreen {
                 return;
             }
         }
-        this.showMessage("Only a mod's .jar file can be added.", true);
+        this.showMessage(Lang.get("hotwire.screen.drop_jar_only"), true);
     }
 
     private void confirmAdd(Path jar, AddMode mode) {
@@ -316,8 +323,8 @@ public final class ModScreen {
             switch (change) {
                 case PendingChange.Update update -> {
                     this.game.cancelPending(update.modId());
-                    this.showMessage("Cancelled: " + update.name() + " stays " + update.fromVersion() + ", and "
-                            + update.newJar() + " was removed from staging.", false);
+                    this.showMessage(Lang.get("hotwire.update.cancelled", update.name(), update.fromVersion(),
+                            update.newJar()), false);
                 }
                 case PendingChange.Copied copied -> {
                     this.game.removeCopy(copied.modId());
@@ -332,7 +339,7 @@ public final class ModScreen {
                 }
             }
         } catch (IOException e) {
-            this.showMessage("That could not be done: " + e.getMessage(), true);
+            this.showMessage(Lang.get("hotwire.screen.failed", e.getMessage()), true);
         }
         List<PendingChange> now = this.game.getPendingChanges();
         this.pendingCount = now.size();
@@ -342,9 +349,9 @@ public final class ModScreen {
     private void ignoreEarlier() {
         try {
             this.game.ignoreEarlierVersions();
-            this.showMessage("The old versions are off the list. Their jars stay in hotwire/replaced/.", false);
+            this.showMessage(Lang.get("hotwire.pending.ignored"), false);
         } catch (IOException e) {
-            this.showMessage("That could not be done: " + e.getMessage(), true);
+            this.showMessage(Lang.get("hotwire.screen.failed", e.getMessage()), true);
         }
         List<PendingChange> now = this.game.getPendingChanges();
         this.pendingCount = now.size();
@@ -408,13 +415,16 @@ public final class ModScreen {
         boolean idle = this.isIdle();
         int off = this.getPickedThatAre(true).size();
         int on = this.getPickedThatAre(false).size();
-        String offLabel = off > 0 ? "Turn off " + off : "Turn off";
-        String onLabel = on > 0 ? "Turn on " + on : "Turn on";
+        String offLabel = off > 0 ? Lang.get("hotwire.screen.turn_off_count", off)
+                : Lang.get("hotwire.screen.turn_off");
+        String onLabel = on > 0 ? Lang.get("hotwire.screen.turn_on_count", on) : Lang.get("hotwire.screen.turn_on");
         if (!offLabel.equals(this.offLabel) || !onLabel.equals(this.onLabel)) {
             this.offLabel = offLabel;
             this.onLabel = onLabel;
-            this.turnOff.label(offLabel, off > 0 ? "Off " + off : "Off");
-            this.turnOn.label(onLabel, on > 0 ? "On " + on : "On");
+            this.turnOff.label(offLabel, off > 0 ? Lang.get("hotwire.screen.off_count", off)
+                    : Lang.get("hotwire.screen.off"));
+            this.turnOn.label(onLabel, on > 0 ? Lang.get("hotwire.screen.on_count", on)
+                    : Lang.get("hotwire.screen.on"));
             this.bar.markStale();
         }
         this.turnOff.setActive(idle && off > 0);
@@ -480,7 +490,8 @@ public final class ModScreen {
         for (Show choice : Show.values()) {
             show.add(new Dropdown.Item(choice.getLabel(), this.findShowNote(choice), false, false));
         }
-        show.add(Dropdown.Item.of(this.model.isShowingLibraries() ? "Hide libraries" : "Show libraries"));
+        show.add(Dropdown.Item.of(Lang.get(this.model.isShowingLibraries() ? "hotwire.screen.hide_libraries"
+                : "hotwire.screen.show_libraries")));
         this.showMenu.setItems(show);
         this.showMenu.setHeader(this.model.getShowing().getLabel());
     }
@@ -490,7 +501,7 @@ public final class ModScreen {
             return null;
         }
         int count = this.model.getPicked().size();
-        return count == 0 ? "none yet" : String.valueOf(count);
+        return count == 0 ? Lang.get("hotwire.screen.none_picked") : String.valueOf(count);
     }
 
     private void showPicked(int index) {
@@ -575,8 +586,7 @@ public final class ModScreen {
         @Override
         public boolean pick(String id) {
             if (ModScreen.this.model.isFull()) {
-                ModScreen.this.showMessage("You can pick up to " + ModListModel.MOST_CHOSEN + " mods at a time."
-                        + " Switch these first, then pick more.", true);
+                ModScreen.this.showMessage(Lang.get("hotwire.screen.pick_limit", ModListModel.MOST_CHOSEN), true);
                 return false;
             }
             boolean took = ModScreen.this.model.pick(id);
@@ -603,9 +613,8 @@ public final class ModScreen {
         public void pickRange(int from, int to) {
             for (int at = from; at <= to && at < ModScreen.this.shown.size(); at++) {
                 if (ModScreen.this.model.isFull()) {
-                    ModScreen.this.showMessage("You can pick up to " + ModListModel.MOST_CHOSEN + " mods at a time,"
-                            + " so picking stopped there. Switch these first, then pick more.",
-                            true);
+                    ModScreen.this.showMessage(Lang.get("hotwire.screen.pick_limit_stopped",
+                            ModListModel.MOST_CHOSEN), true);
                     break;
                 }
                 ModScreen.this.model.pick(ModScreen.this.shown.get(at).id());

@@ -3,10 +3,10 @@ package dev.moon.hotwire.ui;
 import org.jspecify.annotations.Nullable;
 
 public enum AddMode {
-    NOW("Adding ", "Confirm"),
-    SAVE_AND_REOPEN("Adding ", "Save and add"),
-    NEXT_START("Waits for next launch: ", "Add at next launch"),
-    REFUSED("Can't add ", null);
+    NOW("hotwire.add.lead.now", "hotwire.add.button.confirm"),
+    SAVE_AND_REOPEN("hotwire.add.lead.now", "hotwire.add.button.save_and_add"),
+    NEXT_START("hotwire.add.lead.next_start", "hotwire.add.button.next_start"),
+    REFUSED("hotwire.add.lead.refused", null);
 
     private final String lead;
     private final @Nullable String button;
@@ -17,11 +17,11 @@ public enum AddMode {
     }
 
     String getLead() {
-        return this.lead;
+        return Lang.get(this.lead);
     }
 
     @Nullable String findButton() {
-        return this.button;
+        return this.button == null ? null : Lang.get(this.button);
     }
 
     boolean isDeclinedNow() {

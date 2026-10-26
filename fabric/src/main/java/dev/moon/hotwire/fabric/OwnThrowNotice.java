@@ -2,6 +2,7 @@ package dev.moon.hotwire.fabric;
 
 import dev.moon.hotwire.concurrent.Tasks;
 import dev.moon.hotwire.fabric.report.LoggedFaults;
+import dev.moon.hotwire.ui.Lang;
 import java.util.Set;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.function.BiConsumer;
@@ -24,10 +25,9 @@ final class OwnThrowNotice {
             String what = said + " (" + thrown + ")";
             tasks.submit("report of what Hotwire threw inside the game", () -> writeReport.apply(
                     "Hotwire's own code threw inside the game, which went on past it: " + what), where -> {
-                        String line = "Hotwire's own code failed inside the game, which went on past it: " + what
-                                + ". Restarting the game is the safe way on. " + where;
+                        String line = Lang.get("hotwire.own_fault", what, where);
                         say.accept(line, true);
-                        ModViews.showToast("Hotwire caught a fault of its own", line);
+                        ModViews.showToast(Lang.get("hotwire.own_fault.title"), line);
                     });
         });
     }

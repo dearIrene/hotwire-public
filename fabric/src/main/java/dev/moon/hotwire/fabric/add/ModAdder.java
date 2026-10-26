@@ -27,6 +27,7 @@ import dev.moon.hotwire.switching.ModSwitcher;
 import dev.moon.hotwire.switching.PlayerMessages;
 import dev.moon.hotwire.switching.SwitchApplier;
 import dev.moon.hotwire.ui.AddPreview;
+import dev.moon.hotwire.ui.Lang;
 import java.io.IOException;
 import java.io.InputStream;
 import java.nio.file.Files;
@@ -122,14 +123,14 @@ public final class ModAdder {
             jar = ModJarReader.read(jarPath);
         } catch (ModJarException e) {
             LOGGER.warn("[Hotwire] reading {} for the dry run failed", jarPath, e);
-            return makeRefusal(jarPath.getFileName().toString(), "", jarPath.getFileName() + " cannot be added: reading"
-                    + " it failed: " + e.getMessage());
+            return makeRefusal(jarPath.getFileName().toString(), "", Lang.get("hotwire.add.read_failed",
+                    jarPath.getFileName(), e.getMessage()));
         }
         ModManifest manifest = jar.manifest();
         String version = manifest.version();
         if (ModPolicy.isHotwire(manifest.id()) || this.engine.isInstalled(manifest.id())) {
             return makeRefusal(manifest.name(), version, ModPolicy.isHotwire(manifest.id())
-                    ? ModPolicy.describeSelfChange() : manifest.name() + " is already installed.");
+                    ? ModPolicy.describeSelfChange() : Lang.get("hotwire.add.installed", manifest.name()));
         }
 
         Map<String, Part> found = new LinkedHashMap<>();
@@ -137,8 +138,8 @@ public final class ModAdder {
             this.collect(jarPath, found);
         } catch (ModJarException | IOException e) {
             LOGGER.warn("[Hotwire] reading the jars inside {} for the dry run failed", jarPath, e);
-            return makeRefusal(manifest.name(), version, manifest.name() + " cannot be added: a jar inside it could"
-                    + " not be read: " + e.getMessage());
+            return makeRefusal(manifest.name(), version, Lang.get("hotwire.add.nested_unreadable", manifest.name(),
+                    e.getMessage()));
         }
         List<ModJar> parts = found.values().stream().map(Part::jar).toList();
         for (Part part : found.values()) {
@@ -149,8 +150,7 @@ public final class ModAdder {
             Optional<String> widener = this.findWidenerRefusal(part.jar(), part.path());
             if (widener.isPresent()) {
                 LOGGER.info("[Hotwire] {}", widener.get());
-                return AddPreview.ofLater(manifest.name(), version, List.of("It changes parts of the game that are"
-                        + " already running, so it can only go in when the game starts."));
+                return AddPreview.ofLater(manifest.name(), version, List.of(Lang.get("hotwire.add.later.running")));
             }
         }
         SwitchPlanner planner = this.engine.makePlannerFor(this.engine.makeGraphWith(parts));
@@ -159,40 +159,37 @@ public final class ModAdder {
         if (missing.isPresent()) {
             if (AddDependencies.isCarriedNewer(jar, plan)) {
                 LOGGER.info("[Hotwire] {}", missing.get());
-                return AddPreview.ofLater(manifest.name(), version, List.of("It brings a newer version of a library"
-                        + " the game already started with, so it can only go in when the game starts."));
+                return AddPreview.ofLater(manifest.name(), version, List.of(Lang.get("hotwire.add.later.library")));
             }
             return makeRefusal(manifest.name(), version, missing.get());
         }
         Set<String> content = this.readContent(jarPath);
         List<String> lines = new ArrayList<>();
         if (!manifest.authors().isEmpty()) {
-            lines.add("By " + String.join(", ", manifest.authors()));
+            lines.add(Lang.get("hotwire.add.by", String.join(", ", manifest.authors())));
         }
         List<String> nested = parts.stream().filter(part -> !part.manifest().id().equals(manifest.id()))
                 .map(part -> part.manifest().name()).toList();
         if (!nested.isEmpty()) {
-            lines.add("Also adds " + String.join(", ", nested) + " from inside it");
+            lines.add(Lang.get("hotwire.add.also_adds", String.join(", ", nested)));
         }
         int patched = parts.stream().mapToInt(part -> part.patches().patches().size()).sum();
-        lines.add(patched == 0 ? "Patches no game classes" : "Patches " + patched + " game classes");
+        lines.add(patched == 0 ? Lang.get("hotwire.add.patches_none") : Lang.get("hotwire.add.patches", patched));
         int widened = parts.stream().mapToInt(part -> part.accessWidener().map(text -> text.getClauses().size())
                 .orElse(0)).sum();
         if (widened > 0) {
             int onLoaded = parts.stream().mapToInt(part -> part.accessWidener()
                     .map(text -> text.getClausesOnLoadedClasses(this.engine::isLoaded).size()).orElse(0)).sum();
-            lines.add(onLoaded == 0 ? "Opens " + widened + " members of game classes as they load"
-                    : "Opens " + widened + " members of game classes, " + onLoaded + " on classes already loaded,"
-                            + " which the mod's code reaches through Hotwire");
+            lines.add(onLoaded == 0 ? Lang.get("hotwire.add.opens", widened) : Lang.get("hotwire.add.opens_loaded",
+                    widened, onLoaded));
         }
         if (!content.isEmpty() && this.engine.isInWorld()) {
             Optional<String> cannot = WorldReopen.findRefusal();
             if (cannot.isPresent()) {
-                return makeRefusal(manifest.name(), version, manifest.name() + " makes " + String.join(", ", content)
-                        + ", which a world only takes when it opens. " + cannot.get());
+                return makeRefusal(manifest.name(), version, Lang.get("hotwire.add.makes_refused", manifest.name(),
+                        String.join(", ", content), cannot.get()));
             }
-            lines.add("Makes " + String.join(", ", content) + ", which a world only takes when it opens: the world"
-                    + " is saved, closed and opened again around the add");
+            lines.add(Lang.get("hotwire.add.makes", String.join(", ", content)));
             return AddPreview.reopen(manifest.name(), version, lines);
         }
         return AddPreview.ofReady(manifest.name(), version, lines, List.of());
@@ -318,23 +315,21 @@ public final class ModAdder {
             this.collect(jarPath, parts);
         } catch (ModJarException e) {
             LOGGER.warn("[Hotwire] reading {} for the add failed", jarPath, e);
-            return new Result.Refused(jarPath.getFileName() + " cannot be added: reading it failed: " + e.getMessage());
+            return new Result.Refused(Lang.get("hotwire.add.read_failed", jarPath.getFileName(), e.getMessage()));
         } catch (IOException e) {
-            return new Result.Refused(jarPath.getFileName() + " cannot be added: a jar inside it could not be written"
-                    + " out: " + e.getMessage());
+            return new Result.Refused(Lang.get("hotwire.add.nested_unwritable", jarPath.getFileName(),
+                    e.getMessage()));
         }
         Part asked = parts.values().stream().reduce((first, second) -> second).orElseThrow();
         String name = asked.jar().manifest().name();
         String askedId = asked.jar().manifest().id();
         if (ModPolicy.isHotwire(askedId) || this.engine.isInstalled(askedId)) {
             return new Result.Refused(ModPolicy.isHotwire(askedId) ? ModPolicy.describeSelfChange()
-                    : name + " is already installed.");
+                    : Lang.get("hotwire.add.installed", name));
         }
         Set<String> content = this.engine.isInWorld() ? this.readContent(jarPath) : Set.of();
         if (!content.isEmpty()) {
-            return new Result.Refused(name + " makes " + String.join(", ", content) + ", which a world only takes"
-                    + " when it opens: add it with Save and add, which saves the world, adds it and opens the world"
-                    + " again.");
+            return new Result.Refused(Lang.get("hotwire.add.makes_use_reopen", name, String.join(", ", content)));
         }
         for (Part part : parts.values()) {
             Optional<String> missing = AddDependencies.findMissingRefusal(part.jar());

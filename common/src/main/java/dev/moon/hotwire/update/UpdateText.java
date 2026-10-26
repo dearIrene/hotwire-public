@@ -1,5 +1,6 @@
 package dev.moon.hotwire.update;
 
+import dev.moon.hotwire.ui.Lang;
 import dev.moon.hotwire.update.UpdatePlan.ClassAction;
 import dev.moon.hotwire.update.UpdatePlan.UpdateBlocker;
 import dev.moon.hotwire.update.UpdatePlan.UpdateNotice;
@@ -10,6 +11,7 @@ import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.TreeSet;
+import java.util.function.BiFunction;
 
 public final class UpdateText {
     private UpdateText() {
@@ -17,18 +19,19 @@ public final class UpdateText {
 
     public static List<String> describeLines(UpdatePlan plan) {
         List<String> out = new ArrayList<>();
-        out.add(describeTier(plan.tier()));
+        out.add(Lang.get(findTierKey(plan.tier())));
         int changed = (int) plan.actions().stream().filter(action -> action.kind() == ClassAction.Kind.REDEFINE
                 || action.kind() == ClassAction.Kind.SPLIT).count();
         if (plan.tier() == UpdateTier.IN_PLACE && changed > 0) {
-            out.add("It changes " + (changed == 1 ? "1 class" : changed + " classes") + " while the game runs.");
+            out.add(changed == 1 ? Lang.get("hotwire.update.changes_one")
+                    : Lang.get("hotwire.update.changes", changed));
         }
         Map<Class<?>, List<UpdateBlocker>> byKind = new LinkedHashMap<>();
         plan.blockers().forEach(blocker -> byKind.computeIfAbsent(blocker.getClass(), any -> new ArrayList<>())
                 .add(blocker));
         byKind.values().forEach(same -> out.add(summarize(same)));
         for (UpdateNotice notice : plan.notices()) {
-            out.add(describe(notice, plan.tier()));
+            out.add(describe(notice, plan.tier(), Lang::get));
         }
         return out;
     }
@@ -36,52 +39,56 @@ public final class UpdateText {
     private static String summarize(List<UpdateBlocker> same) {
         int count = same.size();
         return switch (same.getFirst()) {
-            case UpdateBlocker.ShapeNotCarried shape -> (count == 1 ? "1 of its classes changes" : count
-                    + " of its classes change") + " in a way a running game cannot take.";
-            case UpdateBlocker.PatchedByRunningMod patched -> "Mods that stay on patch " + (count == 1
-                    ? "1 of its classes" : count + " of its classes") + ".";
-            case UpdateBlocker.NestedJarChanged nested -> (count == 1 ? "A library it carries" : count
-                    + " libraries it carries") + " changed.";
-            case UpdateBlocker.EntrypointAdded entrypoint -> "It starts up in new ways.";
-            default -> describe(same.getFirst());
+            case UpdateBlocker.ShapeNotCarried shape -> count == 1 ? Lang.get("hotwire.update.shape_one")
+                    : Lang.get("hotwire.update.shape", count);
+            case UpdateBlocker.PatchedByRunningMod patched -> count == 1 ? Lang.get("hotwire.update.patched_one")
+                    : Lang.get("hotwire.update.patched", count);
+            case UpdateBlocker.NestedJarChanged nested -> count == 1 ? Lang.get("hotwire.update.nested_one")
+                    : Lang.get("hotwire.update.nested", count);
+            case UpdateBlocker.EntrypointAdded entrypoint -> Lang.get("hotwire.update.entrypoint_new");
+            default -> describe(same.getFirst(), Lang::get);
         };
     }
 
-    private static String describeTier(UpdateTier tier) {
+    private static String findTierKey(UpdateTier tier) {
         return switch (tier) {
-            case IN_PLACE -> "Changes the running mod in place, with no restart.";
-            case RESTART_MOD -> "Restarting only this mod is not built yet, so the new version loads next time you"
-                    + " start the game.";
-            case NEXT_START -> "The new version loads next time you start the game.";
+            case IN_PLACE -> "hotwire.update.tier.in_place";
+            case RESTART_MOD -> "hotwire.update.tier.restart_mod";
+            case NEXT_START -> "hotwire.update.tier.next_start";
         };
     }
 
     public static List<String> describeDetails(UpdatePlan plan) {
         List<String> out = new ArrayList<>();
-        out.add(describeTier(plan.tier()));
+        out.add(Lang.getEnglish(findTierKey(plan.tier())));
         Map<ClassAction.Kind, TreeSet<String>> byKind = new EnumMap<>(ClassAction.Kind.class);
         for (ClassAction action : plan.actions()) {
             byKind.computeIfAbsent(action.kind(), kind -> new TreeSet<>()).add(getSimpleName(action.className()));
         }
         byKind.forEach((kind, names) -> out.add(describe(kind, names.size()) + ": " + String.join(", ", names)));
         for (UpdateBlocker blocker : plan.blockers()) {
-            out.add(describe(blocker));
+            out.add(describe(blocker, Lang::getEnglish));
         }
         for (UpdateNotice notice : plan.notices()) {
-            out.add(describe(notice, plan.tier()));
+            out.add(describe(notice, plan.tier(), Lang::getEnglish));
         }
         return out;
     }
 
     public static String describeDone(String name, UpdatePlan plan, int rebuilt, int servedLater) {
         return switch (plan.tier()) {
-            case IN_PLACE -> name + " is " + plan.incomingVersion() + " now: " + rebuilt
-                    + (rebuilt == 1 ? " class changed" : " classes changed") + " in place"
-                    + (servedLater == 0 ? "." : ", " + servedLater + " more as they load.");
-            case RESTART_MOD, NEXT_START -> name + " " + plan.incomingVersion()
-                    + " is queued as a pending task: it runs when you close the game, putting the new jar in your"
-                    + " mods folder and the running one in hotwire/replaced. Cancel it any time from Pending tasks.";
+            case IN_PLACE -> describeInPlace(name, plan.incomingVersion(), rebuilt, servedLater);
+            case RESTART_MOD, NEXT_START -> Lang.get("hotwire.update.queued", name, plan.incomingVersion());
         };
+    }
+
+    private static String describeInPlace(String name, String version, int rebuilt, int servedLater) {
+        if (servedLater == 0) {
+            return rebuilt == 1 ? Lang.get("hotwire.update.done_one", name, version)
+                    : Lang.get("hotwire.update.done", name, version, rebuilt);
+        }
+        return rebuilt == 1 ? Lang.get("hotwire.update.done_one_later", name, version, servedLater)
+                : Lang.get("hotwire.update.done_later", name, version, rebuilt, servedLater);
     }
 
     static String describe(ClassAction.Kind kind, int count) {
@@ -97,38 +104,43 @@ public final class UpdateText {
         };
     }
 
-    static String describe(UpdateBlocker blocker) {
+    static String describe(UpdateBlocker blocker, BiFunction<String, Object[], String> say) {
         return switch (blocker) {
-            case UpdateBlocker.ShapeNotCarried shape -> getSimpleName(shape.className()) + " changes in a way a running"
-                    + " class cannot take: " + shape.parts();
-            case UpdateBlocker.PatchedByRunningMod patched -> getSimpleName(patched.className())
-                    + " is patched by " + String.join(", ", patched.mods()) + ", which stay on.";
-            case UpdateBlocker.MixinConfigChanged config -> "The mixin config " + config.config() + " changed.";
-            case UpdateBlocker.EntrypointAdded entrypoint -> "The new version adds the " + entrypoint.key()
-                    + " entrypoint " + entrypoint.value() + ".";
-            case UpdateBlocker.NestedJarChanged nested -> "The jar inside it, " + nested.path() + ", changed.";
-            case UpdateBlocker.AccessWidenerChanged widener -> "The access widener changed.";
-            case UpdateBlocker.BoundByDependents bound -> String.join(", ", bound.mods())
-                    + " depend on it and stay on.";
-            case UpdateBlocker.Downgrade downgrade -> downgrade.incoming() + " is older than the running "
-                    + downgrade.running() + ".";
-            case UpdateBlocker.DependencyUnmet unmet -> "The new version needs " + unmet.mod() + " "
-                    + String.join(" or ", unmet.ranges()) + ", which the game does not have.";
-            case UpdateBlocker.ModIsOff off -> "The mod is off.";
-            case UpdateBlocker.AddedThisSession added -> "The mod was added while the game ran.";
-            case UpdateBlocker.UpdatedEarlierThisSession updated -> "The mod was updated once already while the game"
-                    + " ran.";
-            case UpdateBlocker.NeverSwitched never -> "The game needs it running, so it updates when you close the"
-                    + " game.";
+            case UpdateBlocker.ShapeNotCarried shape -> say.apply("hotwire.update.blocker.shape", new Object[] {
+                getSimpleName(shape.className()), shape.parts()});
+            case UpdateBlocker.PatchedByRunningMod patched -> say.apply("hotwire.update.blocker.patched",
+                    new Object[] {getSimpleName(patched.className()), String.join(", ", patched.mods())});
+            case UpdateBlocker.MixinConfigChanged config -> say.apply("hotwire.update.blocker.mixin_config",
+                    new Object[] {config.config()});
+            case UpdateBlocker.EntrypointAdded entrypoint -> say.apply("hotwire.update.blocker.entrypoint",
+                    new Object[] {entrypoint.key(), entrypoint.value()});
+            case UpdateBlocker.NestedJarChanged nested -> say.apply("hotwire.update.blocker.nested",
+                    new Object[] {nested.path()});
+            case UpdateBlocker.AccessWidenerChanged widener -> say.apply("hotwire.update.blocker.widener",
+                    new Object[0]);
+            case UpdateBlocker.BoundByDependents bound -> say.apply("hotwire.update.blocker.dependents",
+                    new Object[] {String.join(", ", bound.mods())});
+            case UpdateBlocker.Downgrade downgrade -> say.apply("hotwire.update.blocker.downgrade",
+                    new Object[] {downgrade.incoming(), downgrade.running()});
+            case UpdateBlocker.DependencyUnmet unmet -> say.apply("hotwire.update.blocker.unmet", new Object[] {
+                unmet.mod(), String.join(say.apply("hotwire.list.or", new Object[0]), unmet.ranges())});
+            case UpdateBlocker.ModIsOff off -> say.apply("hotwire.update.blocker.off", new Object[0]);
+            case UpdateBlocker.AddedThisSession added -> say.apply("hotwire.update.blocker.added", new Object[0]);
+            case UpdateBlocker.UpdatedEarlierThisSession updated -> say.apply("hotwire.update.blocker.updated",
+                    new Object[0]);
+            case UpdateBlocker.NeverSwitched never -> say.apply("hotwire.update.blocker.never", new Object[0]);
         };
     }
 
-    static String describe(UpdateNotice notice, UpdateTier tier) {
+    static String describe(UpdateNotice notice, UpdateTier tier, BiFunction<String, Object[], String> say) {
         return switch (notice) {
-            case UpdateNotice.ResourcesChanged resources -> resources.paths().size()
-                    + (resources.paths().size() == 1 ? " asset or data file differs" : " asset and data files differ")
-                    + (tier == UpdateTier.IN_PLACE ? ", read at the next resource reload (F3+T)."
-                            : ", read when the game starts with the new version.");
+            case UpdateNotice.ResourcesChanged resources -> {
+                int count = resources.paths().size();
+                boolean now = tier == UpdateTier.IN_PLACE;
+                yield count == 1 ? say.apply(now ? "hotwire.update.resources_one_now"
+                        : "hotwire.update.resources_one_later", new Object[0]) : say.apply(now
+                        ? "hotwire.update.resources_now" : "hotwire.update.resources_later", new Object[] {count});
+            }
         };
     }
 

@@ -3,6 +3,7 @@ package dev.moon.hotwire.fabric;
 import dev.moon.hotwire.fabric.add.WorldReopen;
 import dev.moon.hotwire.fabric.registration.GameRegistrations;
 import dev.moon.hotwire.redefine.Tripwire;
+import dev.moon.hotwire.ui.Lang;
 import dev.moon.hotwire.ui.ModScreen;
 import dev.moon.hotwire.ui.ReopenPanel;
 import java.util.List;
@@ -44,13 +45,12 @@ final class OffCodeNotice {
         boolean fromWorld = engine.findJvmParts().map(parts -> parts.classes().isReachedFromWorld(mod, first))
                 .orElse(false);
         if (current != null && fromWorld && WorldReopen.findRefusal().isEmpty()) {
-            current.offerReopen(new ReopenPanel.Offer(true, List.of(), installed.nameOf(mod), "It's off, but your"
-                    + " world still holds things it made while it was on. Reopened, the world makes them without it."));
+            current.offerReopen(new ReopenPanel.Offer(true, List.of(), installed.nameOf(mod),
+                    Lang.get("hotwire.off_code.world")));
             return;
         }
-        engine.showMessage(installed.nameOf(mod) + " is off, yet its code just ran" + (first.size() > 1
-                ? " (reached from " + first.get(1) + ")" : "") + ": Hotwire could not take all of it out. "
-                + (fromWorld ? "Saving and reopening the world clears what the world holds of it; a restart"
-                + " clears all." : "A restart clears it."), true);
+        String clears = Lang.get(fromWorld ? "hotwire.off_code.reopen" : "hotwire.off_code.restart");
+        engine.showMessage(first.size() > 1 ? Lang.get("hotwire.off_code.ran_from", installed.nameOf(mod),
+                first.get(1), clears) : Lang.get("hotwire.off_code.ran", installed.nameOf(mod), clears), true);
     }
 }

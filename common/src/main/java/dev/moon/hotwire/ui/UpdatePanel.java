@@ -67,7 +67,7 @@ final class UpdatePanel extends Panel {
         this.changeActive(true);
         Path picked = this.jar;
         if (preview instanceof UpdatePreview.Ready ready && picked != null) {
-            this.setPrimary("Update", () -> this.onUpdate.accept(picked, ready.method()));
+            this.setPrimary(Lang.get("hotwire.update.button"), () -> this.onUpdate.accept(picked, ready.method()));
         }
     }
 
@@ -83,15 +83,18 @@ final class UpdatePanel extends Panel {
     private Body makeBody() {
         UpdatePreview preview = this.preview;
         if (preview == null) {
-            return new Body("Reading ", this.getFileName(), List.of("Just a moment."), Palette.DIM);
+            return new Body(Lang.get("hotwire.add.lead.reading"), this.getFileName(), List.of(Lang.get(
+                    "hotwire.panel.just_a_moment")), Palette.DIM);
         }
         return switch (preview) {
-            case UpdatePreview.Ready ready -> new Body("Update ", ready.name(), ready.lines(), Palette.DIM);
-            case UpdatePreview.SameVersion same -> new Body("Can't update ", same.name(),
-                    List.of(same.name() + " " + same.version() + " is already the version running."), Palette.TEXT);
-            case UpdatePreview.Unreadable unreadable -> new Body("Can't update ", unreadable.fileName(),
-                    List.of("That jar could not be read."), Palette.TEXT);
-            case UpdatePreview.Refused refused -> new Body("Can't update ", refused.name(), List.of(refused.reason()),
+            case UpdatePreview.Ready ready -> new Body(Lang.get("hotwire.update.lead.update"), ready.name(),
+                    ready.lines(), Palette.DIM);
+            case UpdatePreview.SameVersion same -> new Body(Lang.get("hotwire.update.lead.refused"), same.name(),
+                    List.of(Lang.get("hotwire.update.same_version", same.name(), same.version())), Palette.TEXT);
+            case UpdatePreview.Unreadable unreadable -> new Body(Lang.get("hotwire.update.lead.refused"),
+                    unreadable.fileName(), List.of(Lang.get("hotwire.update.unreadable")), Palette.TEXT);
+            case UpdatePreview.Refused refused -> new Body(Lang.get("hotwire.update.lead.refused"), refused.name(),
+                    List.of(refused.reason()),
                     Palette.TEXT);
         };
     }
@@ -106,7 +109,8 @@ final class UpdatePanel extends Panel {
                 Colors.fade(bad ? Palette.BAD : Palette.ACCENT, alpha));
         int linesY = y + 44;
         if (this.preview instanceof UpdatePreview.Ready ready) {
-            this.drawCard(canvas, ready, ready.name(), "Installed", ready.installedVersion(), Palette.BAD,
+            this.drawCard(canvas, ready, ready.name(), Lang.get("hotwire.update.installed"),
+                    ready.installedVersion(), Palette.BAD,
                     x + 14, y + 34, w - 28, alpha);
             int arrowX = x + (w - canvas.measureText("↓")) / 2;
             canvas.drawText("↓", arrowX, y + 34 + CARD_H + 2, Colors.fade(Palette.DIM, alpha));
@@ -121,7 +125,7 @@ final class UpdatePanel extends Panel {
 
         if (lines.size() > MOST_LINES) {
             lines = new ArrayList<>(lines.subList(0, MOST_LINES - 1));
-            lines.add("More is in the game's log.");
+            lines.add(Lang.get("hotwire.panel.more_in_log"));
         }
         this.lineCount = Math.max(1, lines.size());
         for (int i = 0; i < lines.size(); i++) {

@@ -14,7 +14,7 @@ final class AdvancedPanel extends Panel {
     private List<AdvancedOption> options = List.of();
 
     public AdvancedPanel(ObjIntConsumer<String> onChoose, Runnable onDone) {
-        super("Done", onDone);
+        super(Lang.get("hotwire.button.done"), onDone);
         this.onChoose = onChoose;
     }
 
@@ -60,7 +60,7 @@ final class AdvancedPanel extends Panel {
 
     @Override
     protected void drawContent(Canvas canvas, float alpha, int x, int y, int w, int h) {
-        canvas.drawText("Advanced", x + 14, y + 16, Colors.fade(Palette.TEXT, alpha));
+        canvas.drawText(Lang.get("hotwire.advanced.title"), x + 14, y + 16, Colors.fade(Palette.TEXT, alpha));
         for (int row = 0; row < this.options.size(); row++) {
             AdvancedOption option = this.options.get(row);
             int rowY = y + 46 + PITCH * row;

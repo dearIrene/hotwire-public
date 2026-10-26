@@ -7,6 +7,7 @@ import dev.moon.hotwire.registration.CallerOwner;
 import dev.moon.hotwire.switching.CrashPolicy;
 import dev.moon.hotwire.switching.ModSwitcher;
 import dev.moon.hotwire.switching.PlayerMessages;
+import dev.moon.hotwire.ui.Lang;
 import java.lang.annotation.Annotation;
 import java.lang.reflect.Method;
 import java.util.ArrayList;
@@ -56,10 +57,9 @@ public final class CrashGuard {
             String why = name + " threw at " + caught.site() + ": " + caught.thrown();
             if (!switching.getSwitcher().isOn(caught.mod())) {
                 tasks.submit("report of " + caught.mod() + "'s crash", () -> writeReport.apply(why), where -> {
-                    String line = name + " is off, yet code of it the game still held crashed; Hotwire kept the game"
-                            + " going. A restart clears it. " + where;
+                    String line = Lang.get("hotwire.crash.off_held", name, where);
                     say.accept(line, true);
-                    ModViews.showToast("Hotwire caught a crash", line);
+                    ModViews.showToast(Lang.get("hotwire.crash.title"), line);
                 });
                 return;
             }
@@ -104,11 +104,11 @@ public final class CrashGuard {
             InstalledMods installed, BiConsumer<String, Boolean> say, Function<String, String> writeReport) {
         boolean off = !PlayerMessages.isBad(result);
         policy.onOffFinished(mod, off);
-        String line = (off ? name + " crashed, so Hotwire turned it off; the game goes on."
-                : name + " crashed and could not be turned off: " + PlayerMessages.describe(result, installed::nameOf))
-                + " " + writeReport.apply(why);
+        String where = writeReport.apply(why);
+        String line = off ? Lang.get("hotwire.crash.turned_off", name, where) : Lang.get("hotwire.crash.not_turned_off",
+                name, PlayerMessages.describe(result, installed::nameOf), where);
         say.accept(line, true);
-        ModViews.showToast("Hotwire caught a crash", line);
+        ModViews.showToast(Lang.get("hotwire.crash.title"), line);
     }
 
     static void onBackOn(Collection<String> ids) {

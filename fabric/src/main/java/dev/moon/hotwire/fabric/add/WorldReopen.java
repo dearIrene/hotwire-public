@@ -3,6 +3,7 @@ package dev.moon.hotwire.fabric.add;
 import dev.moon.hotwire.fabric.ModViews;
 import dev.moon.hotwire.fabric.mixin.core.network.ConnectionAccessor;
 import dev.moon.hotwire.fabric.mixin.core.util.thread.BlockableEventLoopAccessor;
+import dev.moon.hotwire.ui.Lang;
 import io.netty.channel.Channel;
 import java.nio.file.Path;
 import java.time.Duration;
@@ -51,11 +52,10 @@ public final class WorldReopen {
     public static Optional<String> findRefusal() {
         IntegratedServer server = Minecraft.getInstance().getSingleplayerServer();
         if (server == null) {
-            return Optional.of("Save and add works in a single-player world; on a server, add it at the title screen.");
+            return Optional.of(Lang.get("hotwire.reopen.single_player_only"));
         }
         if (server.isPublished()) {
-            return Optional.of("This world is open to LAN, so it cannot be closed for the add; close it to LAN or add"
-                    + " the mod at the title screen.");
+            return Optional.of(Lang.get("hotwire.reopen.lan"));
         }
         return Optional.empty();
     }
@@ -86,7 +86,7 @@ public final class WorldReopen {
             return new ModAdder.Result.Refused("the add was interrupted while the world was closing or opening");
         } catch (IllegalStateException e) {
             LOGGER.warn("[Hotwire] Save and add could not finish", e);
-            return new ModAdder.Result.Failed("Save and add could not finish: " + e.getMessage(), e);
+            return new ModAdder.Result.Failed(Lang.get("hotwire.reopen.add_failed", e.getMessage()), e);
         }
     }
 
@@ -118,8 +118,7 @@ public final class WorldReopen {
             open(client, level);
         } catch (IllegalStateException e) {
             LOGGER.warn("[Hotwire] the world {} did not open again: {}", level, e.getMessage());
-            ModViews.showToast("Hotwire", "The world did not open again (" + e.getMessage()
-                    + "). Open it from the world list.");
+            ModViews.showToast("Hotwire", Lang.get("hotwire.reopen.not_reopened", e.getMessage()));
         }
     }
 

@@ -14,6 +14,7 @@ import dev.moon.hotwire.switching.ModMixins;
 import dev.moon.hotwire.switching.SwitchApplier;
 import dev.moon.hotwire.switching.SwitchApplier.ApplyResult;
 import dev.moon.hotwire.ui.Canvas;
+import dev.moon.hotwire.ui.Lang;
 import dev.moon.hotwire.ui.UpdateMethod;
 import dev.moon.hotwire.ui.UpdatePreview;
 import dev.moon.hotwire.update.JarDiff;
@@ -144,8 +145,7 @@ public final class ModUpdater {
         }
         List<String> lines = new ArrayList<>();
         for (CarriedLibrary carried : whole.bundled()) {
-            lines.add("Also updates " + carried.manifest().name() + " to " + carried.manifest().version()
-                    + ", which it carries.");
+            lines.add(Lang.get("hotwire.update.also", carried.manifest().name(), carried.manifest().version()));
         }
         lines.addAll(UpdateText.describeLines(whole.plan()));
         LOGGER.info("[Hotwire] the update of {} to {}, in full: {}", manifest.name(), manifest.version(),

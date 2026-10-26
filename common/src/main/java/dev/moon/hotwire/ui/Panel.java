@@ -25,7 +25,7 @@ class Panel extends Element {
     @SuppressWarnings("this-escape")
 
     public Panel(@Nullable Runnable onCancel) {
-        this("Cancel", onCancel);
+        this(Lang.get("hotwire.button.cancel"), onCancel);
     }
 
     @SuppressWarnings("this-escape")
@@ -72,7 +72,7 @@ class Panel extends Element {
     }
 
     public void change(@Nullable Runnable action) {
-        this.change("Pick another", action);
+        this.change(Lang.get("hotwire.button.pick_another"), action);
     }
 
     void change(String label, @Nullable Runnable action) {

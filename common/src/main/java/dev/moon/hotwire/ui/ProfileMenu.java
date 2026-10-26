@@ -10,8 +10,6 @@ import java.util.function.Predicate;
 import org.jspecify.annotations.Nullable;
 
 final class ProfileMenu {
-    static final String UNSAVED = "This setup (unsaved)";
-
     private sealed interface Row {
         record Heading() implements Row {
         }
@@ -55,8 +53,8 @@ final class ProfileMenu {
         this.root = root;
         this.search = search;
         this.showMenu = showMenu;
-        this.menu = new Dropdown(root.getMenus(), UNSAVED, this::onPicked, this::onDeleted);
-        this.naming = new TextField("Name this setup, then press Enter", text -> { }, this::onNamed, this::stopNaming);
+        this.menu = new Dropdown(root.getMenus(), Lang.get("hotwire.setup.unsaved"), this::onPicked, this::onDeleted);
+        this.naming = new TextField(Lang.get("hotwire.setup.name_hint"), text -> { }, this::onNamed, this::stopNaming);
         this.naming.setVisible(false);
     }
 
@@ -70,7 +68,7 @@ final class ProfileMenu {
         String current = null;
         List<String> names = this.profiles.getNames();
         if (names.isEmpty()) {
-            items.add(new Dropdown.Item("No saved setups yet", null, true, false));
+            items.add(new Dropdown.Item(Lang.get("hotwire.setup.none"), null, true, false));
             rows.add(new Row.Heading());
         }
         for (String name : names) {
@@ -81,15 +79,15 @@ final class ProfileMenu {
             items.add(new Dropdown.Item(name, name.equals(current) ? "current" : plan.describe(), false, true));
             rows.add(new Row.Apply(name));
         }
-        items.add(Dropdown.Item.of("Save this setup..."));
+        items.add(Dropdown.Item.of(Lang.get("hotwire.setup.save")));
         rows.add(new Row.Save());
         if (current != null) {
-            items.add(Dropdown.Item.of("Rename '" + current + "'..."));
+            items.add(Dropdown.Item.of(Lang.get("hotwire.setup.rename", current)));
             rows.add(new Row.Rename(current));
         }
         this.rows = rows;
         this.menu.setItems(items);
-        this.menu.setHeader(current == null ? UNSAVED : current);
+        this.menu.setHeader(current == null ? Lang.get("hotwire.setup.unsaved") : current);
     }
 
     private void onPicked(int index) {
@@ -116,9 +114,9 @@ final class ProfileMenu {
         }
         try {
             this.profiles.delete(name);
-            this.screen.showMessage("Deleted '" + name + "'. Nothing in the game changed.", false);
+            this.screen.showMessage(Lang.get("hotwire.setup.deleted", name), false);
         } catch (IOException e) {
-            this.screen.showMessage("Could not delete '" + name + "': " + e.getMessage(), true);
+            this.screen.showMessage(Lang.get("hotwire.setup.delete_failed", name, e.getMessage()), true);
         }
         this.screen.refilter();
     }
@@ -131,8 +129,8 @@ final class ProfileMenu {
         this.naming.setVisible(true);
         this.naming.setText(renaming == null ? "" : renaming);
         this.root.focus(this.naming);
-        this.screen.showMessage(renaming == null ? "Name this setup, then press Enter. Escape to cancel."
-                : "New name for '" + renaming + "'. Enter to save, Escape to cancel.", false);
+        this.screen.showMessage(renaming == null ? Lang.get("hotwire.setup.name_prompt")
+                : Lang.get("hotwire.setup.rename_prompt", renaming), false);
     }
 
     private void stopNaming() {
@@ -156,14 +154,14 @@ final class ProfileMenu {
                 Set<String> on = new LinkedHashSet<>();
                 this.screen.getRelevantIds().stream().filter(this.screen::isOn).forEach(on::add);
                 this.profiles.save(name, on);
-                this.screen.showMessage("Saved '" + name + "' with " + on.size() + " mods on.", false);
+                this.screen.showMessage(Lang.get("hotwire.setup.saved", name, on.size()), false);
             } else if (this.profiles.rename(from, name)) {
-                this.screen.showMessage("Renamed to '" + name + "'.", false);
+                this.screen.showMessage(Lang.get("hotwire.setup.renamed", name), false);
             } else {
-                this.screen.showMessage("Could not rename - there is already a setup called '" + name + "'.", true);
+                this.screen.showMessage(Lang.get("hotwire.setup.name_taken", name), true);
             }
         } catch (IOException e) {
-            this.screen.showMessage("Could not save '" + name + "': " + e.getMessage(), true);
+            this.screen.showMessage(Lang.get("hotwire.setup.save_failed", name, e.getMessage()), true);
         }
         this.screen.refilter();
     }

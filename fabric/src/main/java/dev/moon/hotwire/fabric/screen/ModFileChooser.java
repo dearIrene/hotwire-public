@@ -1,5 +1,6 @@
 package dev.moon.hotwire.fabric.screen;
 
+import dev.moon.hotwire.ui.Lang;
 import java.io.File;
 import java.nio.file.Files;
 import java.nio.file.Path;
@@ -25,7 +26,7 @@ public final class ModFileChooser {
     public static void choose(Consumer<Path> picked, Runnable unavailable) {
         String start = findStartFolder();
         //? if >=26.3 {
-        ByteBuffer name = MemoryUtil.memUTF8("Mod jars");
+        ByteBuffer name = MemoryUtil.memUTF8(Lang.get("hotwire.picker.filter"));
         ByteBuffer pattern = MemoryUtil.memUTF8("jar");
         SDL_DialogFileFilter.Buffer filters = SDL_DialogFileFilter.calloc(1);
         filters.get(0).name(name).pattern(pattern);
@@ -54,7 +55,8 @@ public final class ModFileChooser {
             try (MemoryStack stack = MemoryStack.stackPush()) {
                 PointerBuffer patterns = stack.mallocPointer(1);
                 patterns.put(stack.UTF8("*.jar")).flip();
-                path = TinyFileDialogs.tinyfd_openFileDialog("Add a mod", start, patterns, "Mod jars", false);
+                path = TinyFileDialogs.tinyfd_openFileDialog(Lang.get("hotwire.picker.title"), start, patterns,
+                        Lang.get("hotwire.picker.filter"), false);
             }
             deliver(path, picked);
         }, "hotwire-file-chooser");

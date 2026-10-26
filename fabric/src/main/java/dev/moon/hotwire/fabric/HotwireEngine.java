@@ -32,6 +32,7 @@ import dev.moon.hotwire.ui.AddMode;
 import dev.moon.hotwire.ui.AddPreview;
 import dev.moon.hotwire.ui.AdvancedOption;
 import dev.moon.hotwire.ui.Canvas;
+import dev.moon.hotwire.ui.Lang;
 import dev.moon.hotwire.ui.ModScreen;
 import dev.moon.hotwire.ui.Progress;
 import dev.moon.hotwire.ui.ReopenPanel;
@@ -142,7 +143,7 @@ public final class HotwireEngine implements ModScreen.Game, AutoCloseable {
         } catch (JvmAccessException | IllegalStateException e) {
             LOGGER.error("[Hotwire] Switching mods is not possible in this game: {}", e.getMessage(), e);
             engine = new HotwireEngine(installed, progress, reports, folders, queue, settings, icons,
-                    new Bound.Refused("Hotwire can't change classes in this game: " + e.getMessage()));
+                    new Bound.Refused(Lang.get("hotwire.switch.no_instrument", e.getMessage())));
         }
         engine.cleanUpdateFolders();
         HotwireEngine started = engine;
@@ -258,7 +259,7 @@ public final class HotwireEngine implements ModScreen.Game, AutoCloseable {
             return this.refuse(this.getSwitchRefusal());
         }
         if (this.isWorldLocked()) {
-            return this.refuse("In-world switching is off in Advanced: leave the world, then switch.");
+            return this.refuse(Lang.get("hotwire.switch.world_locked"));
         }
         CompletableFuture<SwitchResult> ended = HotwireApiImpl.beginSwitch();
         this.tasks.submit("switch", () -> work.apply(parts.runner()), result -> {
@@ -274,9 +275,9 @@ public final class HotwireEngine implements ModScreen.Game, AutoCloseable {
                     && failed.cause().reopenFixes() && current != null
                     && (WorldReopen.isLeftOnly() || WorldReopen.findRefusal().isEmpty())) {
                 LOGGER.info("[Hotwire] {}", said);
+                String where = WorldReopen.isLeftOnly() ? "server" : "world";
                 current.offerReopen(new ReopenPanel.Offer(off, ids, null, PlayerMessages.joinNames(ids,
-                        this.installed::nameOf), (off ? "These can't turn off" : "These can't turn on") + " while"
-                        + (WorldReopen.isLeftOnly() ? " you're on this server." : " your world is open."),
+                        this.installed::nameOf), Lang.get("hotwire.reopen.why." + (off ? "off_" : "on_") + where),
                         WorldReopen.isLeftOnly()));
             } else {
                 this.showMessage(said, PlayerMessages.isBad(result.result()) || !result.faults().isEmpty());
@@ -327,7 +328,7 @@ public final class HotwireEngine implements ModScreen.Game, AutoCloseable {
             }
         }, result -> {
             String said = result.map(done -> PlayerMessages.describe(done.result(), this.installed::nameOf)
-                    + PlayerMessages.describe(done.check())).orElse("The world is open again.");
+                    + PlayerMessages.describe(done.check())).orElse(Lang.get("hotwire.reopen.world_open_again"));
             this.showMessage(said, result.map(done -> PlayerMessages.isBad(done.result())).orElse(false));
             this.refreshScreen();
             HotwireApiImpl.endSwitch(ended, result.map(done -> HotwireApiImpl.toResult(done.result(), said))
@@ -477,16 +478,16 @@ public final class HotwireEngine implements ModScreen.Game, AutoCloseable {
     @SuppressWarnings("FutureReturnValueIgnored")
     private void reportLastCrash() {
         this.tasks.submit("report of the last session's crash", this.zips::findLastSessionCrash,
-                where -> where.ifPresent(words -> ModViews.showToast("Hotwire wrote a report about the last crash",
+                where -> where.ifPresent(words -> ModViews.showToast(Lang.get("hotwire.report.crash_last"),
                         words)));
         GameReports.listenForCrashes(crash -> this.tasks.submit("report of " + crash.getFileName(),
-                () -> this.zips.writeForCrash(crash), words -> ModViews.showToast("Hotwire wrote a report about the"
-                        + " crash", words)));
+                () -> this.zips.writeForCrash(crash), words -> ModViews.showToast(Lang.get("hotwire.report.crash"),
+                        words)));
     }
 
     @Override
     public void addMod() {
-        this.pickJar("Pick the mod's .jar file, or drop it onto this screen.", false);
+        this.pickJar(Lang.get("hotwire.add.pick"), false);
     }
 
     private void pickJar(String ask, boolean update) {
@@ -529,10 +530,10 @@ public final class HotwireEngine implements ModScreen.Game, AutoCloseable {
                     && current != null) {
                 LOGGER.info("[Hotwire] {}", ((ModAdder.Result.Failed) result).reason());
                 current.offerReopen(new ReopenPanel.Offer(false, List.of(), jar, String.valueOf(jar.getFileName()),
-                        "It can't be added while your world is open."));
+                        Lang.get("hotwire.add.world_open")));
             } else if (ModAdder.isRestartOnly(result) && current != null) {
                 LOGGER.info("[Hotwire] {}", ((ModAdder.Result.Failed) result).reason());
-                List<String> why = List.of("Part of it can only start together with the game.");
+                List<String> why = List.of(Lang.get("hotwire.add.start_only"));
                 current.offerAdd(jar, this.changes.dryRunAdd(jar).thenApply(preview -> AddPreview.ofLater(
                         preview.name(), preview.version(), why)));
             } else if (result instanceof ModAdder.Result.Added added && current != null
@@ -541,8 +542,8 @@ public final class HotwireEngine implements ModScreen.Game, AutoCloseable {
                 this.showMessage(added.name() + " is in." + this.changes.copyIntoMods(jar) + (own ? ""
                         : " It finishes setting up as you join a world: rejoin the server to have all of it."), false);
                 if (own) {
-                    current.offerReopen(new ReopenPanel.Offer(false, List.of(), null, added.name(), "It's in. Part of"
-                            + " it only starts when you join a world, so it finishes at your next join."));
+                    current.offerReopen(new ReopenPanel.Offer(false, List.of(), null, added.name(),
+                            Lang.get("hotwire.add.finishes_at_join")));
                 }
             } else {
                 this.showMessage(switch (result) {
@@ -557,11 +558,11 @@ public final class HotwireEngine implements ModScreen.Game, AutoCloseable {
 
     @Override
     public void updateMod() {
-        this.pickJar("Pick the newer .jar file, or drop it onto this screen.", true);
+        this.pickJar(Lang.get("hotwire.update.pick"), true);
     }
 
     private void tellNoPicker() {
-        this.showMessage("No file picker opened on this system. Drop the .jar file onto this screen instead.", true);
+        this.showMessage(Lang.get("hotwire.screen.no_picker"), true);
     }
 
     @Override

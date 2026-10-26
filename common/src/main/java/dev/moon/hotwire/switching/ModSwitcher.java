@@ -5,6 +5,7 @@ import dev.moon.hotwire.plan.SwitchPlan;
 import dev.moon.hotwire.plan.SwitchPlanner;
 import dev.moon.hotwire.redefine.RebuildException;
 import dev.moon.hotwire.registration.RegistrationJournal;
+import dev.moon.hotwire.ui.Lang;
 import dev.moon.hotwire.ui.Progress;
 import java.util.Collection;
 import java.util.Collections;
@@ -302,7 +303,7 @@ public final class ModSwitcher {
     public void showBegun(SwitchPlan plan) {
         this.progress.begin(plan.order().isEmpty() ? "" : plan.order().getFirst(),
                 plan.direction() == SwitchPlan.Direction.OFF, plan.order().size());
-        this.progress.count("Looking through what other mods keep of it", 0, 0);
+        this.progress.count(Lang.get("hotwire.progress.looking"), 0, 0);
     }
 
     public void hideProgress() {

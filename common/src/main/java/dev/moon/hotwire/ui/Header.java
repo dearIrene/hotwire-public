@@ -1,7 +1,7 @@
 package dev.moon.hotwire.ui;
 
 final class Header extends Element {
-    static final String CREDIT = "Made by Moonshee";
+    static final String AUTHOR = "Moonshee";
     private static final int HEART = 0xFFE0506A;
     private static final float OPEN = 0.26f;
 
@@ -43,12 +43,14 @@ final class Header extends Element {
         int x = 24 + slide;
         canvas.drawText("Hotwire", x, 14, Colors.fade(Palette.TEXT, a));
         int creditX = x + canvas.measureText("Hotwire") + 8;
-        if (creditX + canvas.measureText(CREDIT + " ❤") + 8 < searchX(this.getWidth())) {
-            canvas.drawText(CREDIT, creditX, 14, Colors.fade(Palette.DIM, a));
-            canvas.drawText("❤", creditX + canvas.measureText(CREDIT + " "), 14, Colors.fade(HEART, a));
+        String credit = Lang.get("hotwire.header.credit", AUTHOR);
+        if (creditX + canvas.measureText(credit + " ❤") + 8 < searchX(this.getWidth())) {
+            canvas.drawText(credit, creditX, 14, Colors.fade(Palette.DIM, a));
+            canvas.drawText("❤", creditX + canvas.measureText(credit + " "), 14, Colors.fade(HEART, a));
         }
         int total = this.totalShown.getRounded();
-        canvas.drawText(this.countShown.getRounded() + " of " + total + " mods on", x, 27, Colors.fade(Palette.DIM, a));
+        canvas.drawText(Lang.get("hotwire.header.mods_on", this.countShown.getRounded(), total), x, 27,
+                Colors.fade(Palette.DIM, a));
         int barW = Math.max(140, Math.min(240, this.getWidth() / 4));
         canvas.fill(24, 38, 24 + barW, 41, Colors.fade(Palette.TRACK, a));
         int filled = this.total == 0 ? 0 : (int) (barW * this.countShown.getValue() / this.total * shown);

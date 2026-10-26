@@ -11,6 +11,7 @@ import dev.moon.hotwire.fabric.registration.ModelReloadCheck;
 import dev.moon.hotwire.fabric.registration.ReloadedLists;
 import dev.moon.hotwire.redefine.FieldSlots;
 import dev.moon.hotwire.redefine.Tripwire;
+import dev.moon.hotwire.ui.Lang;
 import java.time.Duration;
 import java.util.ArrayList;
 import java.util.Arrays;
@@ -94,9 +95,9 @@ public final class ResourceReload {
     static @Nullable String describePaused(Collection<String> newlyBuilt, boolean reloadAsked) {
         List<Class<?>> types = findLoaded(newlyBuilt);
         if (reloadAsked || hasAny(types, RELOADED)) {
-            return "Reloading textures and models (the game stops for a moment)";
+            return Lang.get("hotwire.progress.reloading_models");
         }
-        return hasAny(types, RENDERERS) ? "Rebuilding its renderers (the game stops for a moment)" : null;
+        return hasAny(types, RENDERERS) ? Lang.get("hotwire.progress.rebuilding_renderers") : null;
     }
 
     static void rebuildRenderers(Collection<String> newlyBuilt, Collection<String> rebuilt, boolean reloadAsked) {

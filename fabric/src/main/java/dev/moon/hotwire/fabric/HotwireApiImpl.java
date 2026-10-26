@@ -10,6 +10,7 @@ import dev.moon.hotwire.plan.SwitchPlan;
 import dev.moon.hotwire.switching.CallerBlocks;
 import dev.moon.hotwire.switching.ModSwitcher;
 import dev.moon.hotwire.switching.PlayerMessages;
+import dev.moon.hotwire.ui.Lang;
 import dev.moon.hotwire.ui.Progress;
 import java.util.Collection;
 import java.util.List;
@@ -28,7 +29,6 @@ import org.slf4j.LoggerFactory;
 public final class HotwireApiImpl implements HotwireApi {
     private static final int REVISION = 1;
     private static final StackWalker STACK = StackWalker.getInstance(StackWalker.Option.RETAIN_CLASS_REFERENCE);
-    private static final String STARTING = "Hotwire is still starting.";
     private static final Logger LOGGER = LoggerFactory.getLogger(HotwireApiImpl.class);
 
     private static final List<Listener> LISTENERS = new CopyOnWriteArrayList<>();
@@ -139,7 +139,7 @@ public final class HotwireApiImpl implements HotwireApi {
     static void endIfFailed(CompletableFuture<SwitchResult> ended, @Nullable Throwable error, Predicate<String> on) {
         if (error != null && !ended.isDone()) {
             Minecraft.getInstance().execute(() -> endSwitch(ended, new SwitchResult(SwitchResult.Kind.FAILED,
-                    List.of(), "The switch failed: " + error), on));
+                    List.of(), Lang.get("hotwire.switch.failed", error)), on));
         }
     }
 
@@ -155,15 +155,14 @@ public final class HotwireApiImpl implements HotwireApi {
     private static SwitchPreview preview(boolean off, List<String> ids, @Nullable String caller) {
         HotwireEngine engine = HotwireClient.findEngine();
         if (engine == null) {
-            return new SwitchPreview(false, List.of(), STARTING);
+            return new SwitchPreview(false, List.of(), Lang.get("hotwire.api.starting"));
         }
         HotwireEngine.JvmParts parts = engine.findJvmParts().orElse(null);
         if (parts == null) {
             return new SwitchPreview(false, List.of(), engine.getSwitchRefusal());
         }
         if (engine.isWorldLocked()) {
-            return new SwitchPreview(false, List.of(), "In-world switching is off in Advanced: leave the world, then"
-                    + " switch.");
+            return new SwitchPreview(false, List.of(), Lang.get("hotwire.switch.world_locked"));
         }
         ModSwitcher switcher = parts.runner().getSwitcher();
         SwitchPlan plan = off ? switcher.planOff(ids) : switcher.planOn(ids);
@@ -176,10 +175,11 @@ public final class HotwireApiImpl implements HotwireApi {
             return new SwitchPreview(false, List.of(), self);
         }
         if (plan.order().isEmpty()) {
-            return new SwitchPreview(true, List.of(), off ? "Already off." : "Already on.");
+            return new SwitchPreview(true, List.of(), Lang.get(off ? "hotwire.switch.already_off"
+                    : "hotwire.switch.already_on"));
         }
-        return new SwitchPreview(true, plan.order(), (off ? "Turns off " : "Turns on ")
-                + PlayerMessages.joinNames(plan.order(), engine::nameOfMod) + ".");
+        return new SwitchPreview(true, plan.order(), Lang.get(off ? "hotwire.switch.preview_off"
+                : "hotwire.switch.preview_on", PlayerMessages.joinNames(plan.order(), engine::nameOfMod)));
     }
 
     @SuppressWarnings("FutureReturnValueIgnored")
@@ -189,7 +189,8 @@ public final class HotwireApiImpl implements HotwireApi {
         Minecraft.getInstance().execute(() -> {
             HotwireEngine engine = HotwireClient.findEngine();
             if (engine == null) {
-                ended.complete(new SwitchResult(SwitchResult.Kind.REFUSED, List.of(), STARTING));
+                ended.complete(new SwitchResult(SwitchResult.Kind.REFUSED, List.of(),
+                        Lang.get("hotwire.api.starting")));
                 return;
             }
             HotwireEngine.JvmParts parts = engine.findJvmParts().orElse(null);

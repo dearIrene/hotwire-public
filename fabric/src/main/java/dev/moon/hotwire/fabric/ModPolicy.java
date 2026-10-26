@@ -3,6 +3,7 @@ package dev.moon.hotwire.fabric;
 import dev.moon.hotwire.jar.ModManifest;
 import dev.moon.hotwire.plan.ModGraph;
 import dev.moon.hotwire.plan.SwitchPlanner;
+import dev.moon.hotwire.ui.Lang;
 import java.util.ArrayList;
 import java.util.HashSet;
 import java.util.List;
@@ -57,8 +58,7 @@ public final class ModPolicy {
     }
 
     public static String describeSelfChange() {
-        return "Hotwire can't add, update or turn off itself while it runs: put the new jar in your mods folder and"
-                + " restart the game.";
+        return Lang.get("hotwire.self_change");
     }
 
     public static boolean isSwitchable(String id) {

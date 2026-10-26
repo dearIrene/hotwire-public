@@ -7,6 +7,7 @@ import com.mojang.brigadier.builder.LiteralArgumentBuilder;
 import com.mojang.brigadier.builder.RequiredArgumentBuilder;
 import com.mojang.brigadier.context.CommandContext;
 import dev.moon.hotwire.ui.AddMode;
+import dev.moon.hotwire.ui.Lang;
 import dev.moon.hotwire.ui.UpdatePreview;
 import dev.moon.hotwire.ui.list.ModStatus;
 import java.nio.file.Files;
@@ -65,7 +66,7 @@ final class HotwireCommands {
     private static int runAdd(Path jar, boolean reopen) {
         HotwireEngine engine = HotwireClient.getEngine();
         if (!Files.isRegularFile(jar)) {
-            ModViews.showChat("There is no file at " + jar + ".", true);
+            ModViews.showChat(Lang.get("hotwire.command.no_file", jar), true);
             return 1;
         }
         engine.dryRunAdd(jar).thenAccept(preview -> Minecraft.getInstance().execute(() -> {

@@ -132,34 +132,42 @@ final class ProgressPanel extends Panel {
             this.stepTick.step(delta);
             this.stepsTick.to(total);
             this.stepsTick.step(delta);
-            return new Heading(tailing ? 1 : 0.9f * at / total, "Switching",
+            return new Heading(tailing ? 1 : 0.9f * at / total, Lang.get("hotwire.progress.heading.switching"),
                     tailing ? phase : now.describe(), tailing ? "" : now.subject(),
-                    tailing ? "" : this.stepTick.getRounded() + " of " + this.stepsTick.getRounded());
+                    tailing ? "" : Lang.get("hotwire.progress.of", this.stepTick.getRounded(),
+                    this.stepsTick.getRounded()));
         }
         int steps = Math.max(1, now.labels().size());
         int done = Math.max(0, Math.min(steps, now.at()));
         String subject = now.subject();
-        return new Heading(done / (float) steps, subject.isBlank() ? "Working" : now.adding() ? "Adding"
-                : "Switching", now.describe(), subject, "");
+        return new Heading(done / (float) steps, Lang.get(findHeadlineKey(now)), now.describe(), subject, "");
+    }
+
+    private static String findHeadlineKey(Progress.Snapshot now) {
+        if (now.subject().isBlank()) {
+            return "hotwire.progress.heading.working";
+        }
+        return now.adding() ? "hotwire.progress.heading.adding" : "hotwire.progress.heading.switching";
     }
 
     private static String getTail(Progress.Snapshot now) {
         if (now.adding()) {
             return "";
         }
-        return now.goingOff() ? "Off" : "On";
+        return Lang.get(now.goingOff() ? "hotwire.screen.off" : "hotwire.screen.on");
     }
 
     private void drawTheName(Canvas canvas, Heading heading, Progress.Snapshot now, int x, int y, float alpha) {
         String subject = heading.subject();
         int textX = x + 14;
         int textY = y + 16;
-        String widestRight = heading.rightCell().isBlank() ? "100%" : now.mods() + " of " + now.mods() + "   100%";
+        String widestRight = heading.rightCell().isBlank() ? "100%" : Lang.get("hotwire.progress.of", now.mods(),
+                now.mods()) + "   100%";
         int textCap = this.getBoxWidth() - 28 - canvas.measureText(widestRight) - 12;
         int ink = Colors.fade(Palette.TEXT, alpha);
         if (subject.isBlank()) {
             String alone = now.mods() > 1 && heading.rightCell().isEmpty()
-                    ? "Finishing " + now.mods() + " mods" : heading.headline();
+                    ? Lang.get("hotwire.progress.finishing_mods", now.mods()) : heading.headline();
             canvas.drawText(canvas.clip(alone, textCap), textX, textY, ink);
             return;
         }

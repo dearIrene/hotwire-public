@@ -3,6 +3,7 @@ package dev.moon.hotwire.ui.list;
 import dev.moon.hotwire.ui.Canvas;
 import dev.moon.hotwire.ui.Colors;
 import dev.moon.hotwire.ui.EasedValue;
+import dev.moon.hotwire.ui.Lang;
 import dev.moon.hotwire.ui.Palette;
 import org.jspecify.annotations.Nullable;
 
@@ -10,8 +11,6 @@ final class ModListRow {
     static final int CHIP_LIBRARY = 0xFFB98CE8;
     static final int CHIP_CLIENT = 0xFF7FA6E8;
     static final int CHIP_SERVER = 0xFFE0A45C;
-    private static final String WORLD_LOCKED = "Can't be done unless you're not in a world.";
-    private static final String NEEDED = "needed by your selection";
 
     private static final int ICON = 32;
     private static final int CHIP_GAP = 16;
@@ -113,13 +112,13 @@ final class ModListRow {
             this.subtitle = now.version() + "  ·  " + authors;
         }
         if (now.library() || badges.isDeclaredLibrary(now.id())) {
-            this.setChip("Library", CHIP_LIBRARY, false);
+            this.setChip(Lang.get("hotwire.row.library"), CHIP_LIBRARY, false);
             return;
         }
         switch (badges.getEnvironmentOf(now.id())) {
-            case "client" -> this.setChip("Client", CHIP_CLIENT, false);
-            case "server" -> this.setChip("Server", CHIP_SERVER, false);
-            default -> this.setChip("Client & Server", 0, true);
+            case "client" -> this.setChip(Lang.get("hotwire.row.client"), CHIP_CLIENT, false);
+            case "server" -> this.setChip(Lang.get("hotwire.row.server"), CHIP_SERVER, false);
+            default -> this.setChip(Lang.get("hotwire.row.both"), 0, true);
         }
     }
 
@@ -224,13 +223,14 @@ final class ModListRow {
         boolean overPill = this.list.isPointerIn(pillX, y + 11, pillX + 80, y + 31);
         String lockedWord = null;
         if (locked) {
-            lockedWord = worldLocked ? "locked" : "always on";
+            lockedWord = Lang.get(worldLocked ? "hotwire.row.locked" : "hotwire.row.always_on");
         }
         drawPill(canvas, pillX, y + ModList.ROW / 2 - 10, Math.max(0, Math.min(1, this.onness)), overPill,
                 lockedWord, appear);
         if (worldLocked) {
             canvas.fill(left, y, right, y + ModList.ROW, Colors.fade(LOCK_SHEET, appear));
-            canvas.drawText(WORLD_LOCKED, (left + right - canvas.measureText(WORLD_LOCKED)) / 2,
+            String worldLockedText = Lang.get("hotwire.row.world_locked");
+            canvas.drawText(worldLockedText, (left + right - canvas.measureText(worldLockedText)) / 2,
                     y + ModList.ROW / 2 - 4, Colors.fade(Palette.TEXT, appear));
         }
     }
@@ -258,13 +258,14 @@ final class ModListRow {
         }
         int count = this.dependantTick.getRounded();
         if (count > 0) {
-            String text = "Dependants: " + count;
+            String text = Lang.get("hotwire.row.dependants", count);
             if (after + canvas.measureText(text) < textX + room) {
                 canvas.drawText(text, after, y + 25, Colors.fade(Palette.ACCENT_SOFT, appear * 0.85f));
             }
         }
         if (auto && this.pick > 0.5f) {
-            canvas.drawText(NEEDED, right - 130 - canvas.measureText(NEEDED), y + 17,
+            String neededText = Lang.get("hotwire.row.needed");
+            canvas.drawText(neededText, right - 130 - canvas.measureText(neededText), y + 17,
                     Colors.fade(Palette.ACCENT_SOFT, appear * Math.min(1, (this.pick - 0.5f) * 4)));
         }
     }

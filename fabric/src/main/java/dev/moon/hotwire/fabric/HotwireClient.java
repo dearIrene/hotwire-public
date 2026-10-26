@@ -2,6 +2,7 @@ package dev.moon.hotwire.fabric;
 
 import dev.moon.hotwire.redefine.FieldHolders;
 import dev.moon.hotwire.redefine.InitHookReplay;
+import dev.moon.hotwire.ui.Lang;
 import java.io.IOException;
 import java.io.UncheckedIOException;
 import net.fabricmc.api.ClientModInitializer;
@@ -10,6 +11,7 @@ import net.fabricmc.fabric.api.client.event.lifecycle.v1.ClientLifecycleEvents;
 import net.fabricmc.fabric.api.client.networking.v1.ClientPlayConnectionEvents;
 import net.fabricmc.loader.api.FabricLoader;
 import net.minecraft.client.Minecraft;
+import net.minecraft.locale.Language;
 import org.jspecify.annotations.Nullable;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -25,6 +27,11 @@ public final class HotwireClient implements ClientModInitializer {
         LOGGER.info("[Hotwire] {} loaded; H or /hotwire opens it, and its Report button writes what went wrong to"
                 + " hotwire/reports", FabricLoader.getInstance().getModContainer(ID)
                 .map(mod -> mod.getMetadata().getVersion().getFriendlyString()).orElse("unknown"));
+
+        Lang.useTranslator((key, values) -> {
+            Language language = Language.getInstance();
+            return language.has(key) ? Lang.fill(language.getOrDefault(key), values) : null;
+        });
 
         ClientCommandRegistrationCallback.EVENT.register((dispatcher, context) -> HotwireCommands.register(dispatcher,
                 HotwireClient::openSoon));

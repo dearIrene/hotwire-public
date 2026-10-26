@@ -1,5 +1,6 @@
 package dev.moon.hotwire.ui;
 
+import java.util.ArrayList;
 import java.util.List;
 
 final class FirstOpenPanel extends Panel {
@@ -9,17 +10,18 @@ final class FirstOpenPanel extends Panel {
     static final int LINE = 14;
     static final float TITLE_SCALE = 1.5f;
 
-    private static final List<MessageLine.Line> LINES = List.of(
-            new MessageLine.Line("Hotwire changes mods while the game runs.", Palette.TEXT),
-            new MessageLine.Line("Mods weren't built for that, so Hotwire does the work.", Palette.TEXT),
-            new MessageLine.Line("If a mod misbehaves after Hotwire switched, added", Palette.BAD),
-            new MessageLine.Line("or updated it, report it to Hotwire, not its author.", Palette.BAD),
-            new MessageLine.Line("A crash report says whether Hotwire was involved.", Palette.DIM));
+    private static final List<MessageLine.Line> SENTENCES = List.of(
+            new MessageLine.Line("hotwire.first_open.what", Palette.TEXT),
+            new MessageLine.Line("hotwire.first_open.work", Palette.TEXT),
+            new MessageLine.Line("hotwire.first_open.report", Palette.BAD),
+            new MessageLine.Line("hotwire.first_open.crash", Palette.DIM));
 
     private final Runnable onAccept;
     private float waited;
 
     private long inSince;
+
+    private int lineCount = SENTENCES.size() + 1;
 
     @SuppressWarnings("this-escape")
     public FirstOpenPanel(Runnable onAccept) {
@@ -44,7 +46,7 @@ final class FirstOpenPanel extends Panel {
 
     String getLabel() {
         int left = (int) Math.ceil(WAIT - this.waited);
-        return left > 0 ? "I understand (" + left + ")" : "I understand";
+        return left > 0 ? Lang.get("hotwire.first_open.accept_wait", left) : Lang.get("hotwire.first_open.accept");
     }
 
     @Override
@@ -56,7 +58,7 @@ final class FirstOpenPanel extends Panel {
             }
             this.waited = Math.min(WAIT, Math.max(this.waited + dt, (now - this.inSince) / 1e9f));
         }
-        this.size(WIDTH, 58 + LINES.size() * LINE + 44);
+        this.size(WIDTH, 58 + this.lineCount * LINE + 44);
         this.setPrimaryLabel(this.getLabel());
         this.setPrimaryActive(this.waited >= WAIT);
         super.step(dt);
@@ -65,11 +67,16 @@ final class FirstOpenPanel extends Panel {
     @Override
     protected void drawContent(Canvas canvas, float alpha, int x, int y, int w, int h) {
         canvas.pushScale(TITLE_SCALE, x + 14, y + 14);
-        canvas.drawText("Before you use Hotwire", x + 14, y + 14, Colors.fade(Palette.TEXT, alpha));
+        canvas.drawText(Lang.get("hotwire.first_open.title"), x + 14, y + 14, Colors.fade(Palette.TEXT, alpha));
         canvas.popScale();
+        List<MessageLine.Line> lines = new ArrayList<>();
+        for (MessageLine.Line sentence : SENTENCES) {
+            MessageLine.addWrapped(canvas, lines, Lang.get(sentence.text()), sentence.color(), w - 28);
+        }
+        this.lineCount = lines.size();
         int lineY = y + 52;
-        for (MessageLine.Line line : LINES) {
-            canvas.drawText(canvas.clip(line.text(), w - 28), x + 14, lineY, Colors.fade(line.color(), alpha));
+        for (MessageLine.Line line : lines) {
+            canvas.drawText(line.text(), x + 14, lineY, Colors.fade(line.color(), alpha));
             lineY += LINE;
         }
     }

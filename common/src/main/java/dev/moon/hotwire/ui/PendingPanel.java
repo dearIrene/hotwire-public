@@ -40,7 +40,7 @@ final class PendingPanel extends Panel {
 
     PendingPanel(Consumer<PendingChange> onAct, Runnable onIgnoreAll, Runnable onDone,
             Function<String, Canvas.@Nullable Image> icons, ZoneId zone) {
-        super("Done", onDone);
+        super(Lang.get("hotwire.button.done"), onDone);
         this.onAct = onAct;
         this.onIgnoreAll = onIgnoreAll;
         this.icons = icons;
@@ -58,31 +58,32 @@ final class PendingPanel extends Panel {
         this.buttons.clear();
         for (PendingChange change : this.changes) {
             String label = switch (change) {
-                case PendingChange.Update update -> "Cancel";
-                case PendingChange.Copied copied -> "Undo";
-                case PendingChange.Revertable back -> "Revert to " + back.oldVersion();
+                case PendingChange.Update update -> Lang.get("hotwire.button.cancel");
+                case PendingChange.Copied copied -> Lang.get("hotwire.pending.undo");
+                case PendingChange.Revertable back -> Lang.get("hotwire.pending.revert", back.oldVersion());
             };
             this.buttons.add(this.add(new Button(label, false, () -> this.onAct.accept(change))));
         }
         boolean earlier = this.changes.stream().anyMatch(PendingChange.Revertable.class::isInstance);
-        this.change("Ignore all", earlier ? this.onIgnoreAll : null);
+        this.change(Lang.get("hotwire.pending.ignore_all"), earlier ? this.onIgnoreAll : null);
     }
 
     List<MessageLine.Line> getLinesOf(PendingChange change) {
         List<MessageLine.Line> lines = new ArrayList<>();
         switch (change) {
             case PendingChange.Update update -> {
-                lines.add(new MessageLine.Line("At close, " + update.newJar() + " goes into mods/"
-                        + (update.oldJar().isEmpty() ? "." : " and " + update.oldJar() + " into hotwire/replaced/.")
-                        + this.describeQueuedAt(update), Palette.DIM));
+                lines.add(new MessageLine.Line((update.oldJar().isEmpty() ? Lang.get("hotwire.pending.update",
+                        update.newJar()) : Lang.get("hotwire.pending.update_replacing", update.newJar(),
+                        update.oldJar())) + this.describeQueuedAt(update), Palette.DIM));
                 if (!update.reason().isEmpty()) {
-                    lines.add(new MessageLine.Line("The last close failed: " + update.reason(), Palette.BAD));
+                    lines.add(new MessageLine.Line(Lang.get("hotwire.pending.close_failed", update.reason()),
+                            Palette.BAD));
                 }
             }
-            case PendingChange.Copied copied -> lines.add(new MessageLine.Line("Added live, and " + copied.jar()
-                    + " was copied into mods/ so it starts with the game. Undo removes that copy.", Palette.DIM));
-            case PendingChange.Revertable back -> lines.add(new MessageLine.Line(back.oldVersion()
-                    + " is kept in hotwire/replaced/. Revert puts it back when you close the game.", Palette.DIM));
+            case PendingChange.Copied copied -> lines.add(new MessageLine.Line(Lang.get("hotwire.pending.copied",
+                    copied.jar()), Palette.DIM));
+            case PendingChange.Revertable back -> lines.add(new MessageLine.Line(Lang.get(
+                    "hotwire.pending.revertable", back.oldVersion()), Palette.DIM));
         }
         return lines;
     }
@@ -91,7 +92,8 @@ final class PendingPanel extends Panel {
         if (update.queuedAtMillis() == 0) {
             return "";
         }
-        return " Queued " + QUEUED_AT.format(Instant.ofEpochMilli(update.queuedAtMillis()).atZone(this.zone)) + ".";
+        return Lang.get("hotwire.pending.queued", QUEUED_AT.format(Instant.ofEpochMilli(update.queuedAtMillis())
+                .atZone(this.zone)));
     }
 
     private int getRowHeight(int at, PendingChange change) {
@@ -128,10 +130,10 @@ final class PendingPanel extends Panel {
 
     @Override
     protected void drawContent(Canvas canvas, float alpha, int x, int y, int w, int h) {
-        canvas.drawText("Pending tasks", x + 14, y + 16, Colors.fade(Palette.TEXT, alpha));
+        canvas.drawText(Lang.get("hotwire.pending.title"), x + 14, y + 16, Colors.fade(Palette.TEXT, alpha));
         int rowY = y + 46;
         if (this.changes.isEmpty()) {
-            canvas.drawText("Nothing is waiting for the next launch.", x + 14, rowY, Colors.fade(Palette.DIM, alpha));
+            canvas.drawText(Lang.get("hotwire.pending.none"), x + 14, rowY, Colors.fade(Palette.DIM, alpha));
             return;
         }
         List<Integer> drawn = new ArrayList<>();

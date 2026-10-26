@@ -3,6 +3,7 @@ package dev.moon.hotwire.ui.list;
 import dev.moon.hotwire.ui.Canvas;
 import dev.moon.hotwire.ui.Colors;
 import dev.moon.hotwire.ui.Element;
+import dev.moon.hotwire.ui.Lang;
 import dev.moon.hotwire.ui.Palette;
 import java.util.ArrayList;
 import java.util.Comparator;
@@ -382,7 +383,8 @@ public final class ModList extends Element {
         canvas.fill(24, bottom - 1, width - 24, bottom, Colors.fade(Palette.PANEL_EDGE, alpha));
         if (this.source.getShown().isEmpty()) {
             String filter = this.model.getFilter();
-            String nothing = filter.isEmpty() ? "No mods to show here." : "Nothing matches \"" + filter + "\".";
+            String nothing = filter.isEmpty() ? Lang.get("hotwire.list.nothing") : Lang.get("hotwire.list.no_match",
+                    filter);
             canvas.drawText(nothing, 44, top + 24, Colors.fade(Palette.DIM, alpha));
             return;
         }

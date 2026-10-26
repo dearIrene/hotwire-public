@@ -40,9 +40,8 @@ public final class ReopenPanel extends Panel {
     public void open(Offer offer) {
         this.offer = offer;
         boolean reopenOnly = offer.isReopenOnly();
-        this.setPrimary(offer.leaves() ? "Leave and switch" : offer.jar() != null ? "Save and add"
-                : reopenOnly ? "Rejoin now" : "Save and switch", () -> this.onConfirm.accept(offer));
-        this.setCancelLabel(reopenOnly ? "Later" : "Cancel");
+        this.setPrimary(Lang.get(findConfirmKey(offer)), () -> this.onConfirm.accept(offer));
+        this.setCancelLabel(Lang.get(reopenOnly ? "hotwire.reopen.later" : "hotwire.button.cancel"));
         this.setPrimaryWidth(120);
         this.show();
     }
@@ -53,22 +52,31 @@ public final class ReopenPanel extends Panel {
         super.step(dt);
     }
 
+    private static String findConfirmKey(Offer offer) {
+        if (offer.leaves()) {
+            return "hotwire.reopen.leave_and_switch";
+        }
+        if (offer.jar() != null) {
+            return "hotwire.add.button.save_and_add";
+        }
+        return offer.isReopenOnly() ? "hotwire.reopen.rejoin_now" : "hotwire.reopen.save_and_switch";
+    }
+
     static String findTitle(Offer offer) {
         if (offer.leaves()) {
-            return "Leave the server to finish this";
+            return Lang.get("hotwire.reopen.title.leave");
         }
-        return offer.isReopenOnly() ? "Rejoin to finish setting up" : "Reopen your world to finish this";
+        return Lang.get(offer.isReopenOnly() ? "hotwire.reopen.title.rejoin" : "hotwire.reopen.title.reopen");
     }
 
     static String findPlan(Offer offer) {
         if (offer.leaves()) {
-            return "Hotwire leaves the server and makes the change. Join again whenever you like.";
+            return Lang.get("hotwire.reopen.plan.leave");
         }
         if (offer.jar() != null) {
-            return "Hotwire saves your world, adds the mod, and opens your world again.";
+            return Lang.get("hotwire.reopen.plan.add");
         }
-        return offer.ids().isEmpty() ? "Hotwire saves your world and opens it again."
-                : "Hotwire saves your world, makes the change, and opens your world again.";
+        return Lang.get(offer.ids().isEmpty() ? "hotwire.reopen.plan.reopen" : "hotwire.reopen.plan.switch");
     }
 
     @Override
@@ -83,8 +91,8 @@ public final class ReopenPanel extends Panel {
         MessageLine.addWrapped(canvas, lines, shown.why(), Palette.DIM, w - 28);
         lines.add(new MessageLine.Line("", Palette.DIM));
         MessageLine.addWrapped(canvas, lines, findPlan(shown), Palette.TEXT, w - 28);
-        MessageLine.addWrapped(canvas, lines, shown.leaves() ? "Nothing on the server is lost."
-                : "Your world is saved first, so nothing is lost.", Palette.ON, w - 28);
+        MessageLine.addWrapped(canvas, lines, Lang.get(shown.leaves() ? "hotwire.reopen.safe.server"
+                : "hotwire.reopen.safe.world"), Palette.ON, w - 28);
         this.lineCount = lines.size();
         int lineY = y + 40;
         for (MessageLine.Line line : lines) {

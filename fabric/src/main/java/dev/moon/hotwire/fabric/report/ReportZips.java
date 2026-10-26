@@ -1,5 +1,6 @@
 package dev.moon.hotwire.fabric.report;
 
+import dev.moon.hotwire.ui.Lang;
 import dev.moon.hotwire.ui.list.ModStatus;
 import java.io.IOException;
 import java.nio.file.Path;
@@ -50,11 +51,10 @@ public final class ReportZips {
         try {
             Path zip = this.reports.writeBundle(why, mods.toString(), extra);
             reveal(zip);
-            return "The report is at " + FabricLoader.getInstance().getGameDir().relativize(zip)
-                    + "; send that one file.";
+            return Lang.get("hotwire.report.written", FabricLoader.getInstance().getGameDir().relativize(zip));
         } catch (IOException e) {
             LOGGER.warn("[Hotwire] the report could not be written", e);
-            return "The report could not be written: " + e.getMessage();
+            return Lang.get("hotwire.report.failed", e.getMessage());
         }
     }
 

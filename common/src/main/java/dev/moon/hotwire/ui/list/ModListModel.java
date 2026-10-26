@@ -1,5 +1,6 @@
 package dev.moon.hotwire.ui.list;
 
+import dev.moon.hotwire.ui.Lang;
 import java.util.ArrayDeque;
 import java.util.ArrayList;
 import java.util.Collections;
@@ -17,10 +18,10 @@ public final class ModListModel {
     public static final int MOST_CHOSEN = 5;
 
     public enum Show {
-        ALL("All mods"),
-        ON("Only on"),
-        OFF("Only off"),
-        SELECTED("Only selected");
+        ALL("hotwire.show.all"),
+        ON("hotwire.show.on"),
+        OFF("hotwire.show.off"),
+        SELECTED("hotwire.show.selected");
 
         private final String label;
 
@@ -29,7 +30,7 @@ public final class ModListModel {
         }
 
         public String getLabel() {
-            return this.label;
+            return Lang.get(this.label);
         }
     }
 
