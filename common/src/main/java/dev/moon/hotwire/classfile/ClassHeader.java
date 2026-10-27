@@ -23,6 +23,11 @@ public record ClassHeader(String name, @Nullable String superName, List<String> 
     }
 
     public record Member(String name, String desc, int access) {
+        public Member {
+            name = name.intern();
+            desc = desc.intern();
+        }
+
         public boolean isStatic() {
             return (this.access & Opcodes.ACC_STATIC) != 0;
         }

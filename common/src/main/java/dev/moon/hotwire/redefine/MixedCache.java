@@ -13,6 +13,7 @@ import java.io.ByteArrayOutputStream;
 import java.io.DataInputStream;
 import java.io.DataOutputStream;
 import java.io.IOException;
+import java.lang.ref.WeakReference;
 import java.nio.ByteBuffer;
 import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
@@ -53,11 +54,11 @@ final class MixedCache {
     }
 
     private static final class ReadHash {
-        private final byte[] bytes;
+        private final WeakReference<byte[]> bytes;
         private final long hash;
 
         ReadHash(byte[] bytes, long hash) {
-            this.bytes = bytes;
+            this.bytes = new WeakReference<>(bytes);
             this.hash = hash;
         }
     }
@@ -551,7 +552,7 @@ final class MixedCache {
             return 0;
         }
         ReadHash known = this.hashes.get(name);
-        if (known != null && known.bytes == bytes) {
+        if (known != null && known.bytes.get() == bytes) {
             return known.hash;
         }
         CacheKey key = CacheKey.of("read").add(bytes).build();

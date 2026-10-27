@@ -70,6 +70,13 @@ final class ReflectedOwners {
         return "";
     }
 
+    private static void addName(String name, Set<String> into) {
+        if (!name.startsWith("java.") && !name.startsWith("javax.") && !name.startsWith("jdk.")
+                && !name.startsWith("sun.") && !name.startsWith("net.minecraft.") && !name.startsWith("com.mojang.")) {
+            into.add(name.intern());
+        }
+    }
+
     private static void readNames(String binaryName, Set<String> into) {
         byte[] bytes = bytesOf.apply(binaryName.replace('.', '/'));
         if (bytes == null) {
@@ -84,20 +91,20 @@ final class ReflectedOwners {
                         @Override
                         public void visitMethodInsn(int opcode, String owner, String name, String descriptor,
                                 boolean isInterface) {
-                            into.add(owner.replace('/', '.'));
+                            addName(owner.replace('/', '.'), into);
                         }
 
                         @Override
                         public void visitFieldInsn(int opcode, String owner, String name, String descriptor) {
-                            into.add(owner.replace('/', '.'));
+                            addName(owner.replace('/', '.'), into);
                         }
 
                         @Override
                         public void visitLdcInsn(Object value) {
                             if (value instanceof String text && CLASS_NAME.matcher(text).matches()) {
-                                into.add(text);
+                                addName(text, into);
                             } else if (value instanceof Type literal && literal.getSort() == Type.OBJECT) {
-                                into.add(literal.getClassName());
+                                addName(literal.getClassName(), into);
                             }
                         }
                     };

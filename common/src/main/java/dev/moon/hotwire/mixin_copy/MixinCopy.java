@@ -3,6 +3,7 @@ package dev.moon.hotwire.mixin_copy;
 import java.io.IOException;
 import java.io.InputStream;
 import java.io.UncheckedIOException;
+import java.lang.ref.SoftReference;
 import java.net.MalformedURLException;
 import java.net.URL;
 import java.net.URLClassLoader;
@@ -16,7 +17,6 @@ import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
-import java.util.Optional;
 import java.util.ServiceConfigurationError;
 import java.util.Set;
 import java.util.TreeMap;
@@ -80,7 +80,9 @@ public final class MixinCopy implements AutoCloseable {
 
     private volatile Function<String, @Nullable Object> livePlugins = mixinPackage -> null;
     private volatile BiFunction<String, String, @Nullable Object> liveMixins = (target, mixin) -> null;
-    private final Map<String, Optional<byte[]>> read = new ConcurrentHashMap<>();
+
+    private final Map<String, SoftReference<byte[]>> read = new ConcurrentHashMap<>();
+    private final Map<String, byte[]> replaced = new ConcurrentHashMap<>();
 
     private final Map<String, Integer> missing = new ConcurrentHashMap<>();
     private static final AtomicInteger PATHS = new AtomicInteger();
@@ -110,16 +112,17 @@ public final class MixinCopy implements AutoCloseable {
     }
 
     private byte @Nullable [] findBytes(String name, Function<String, byte @Nullable []> more) {
-        Optional<byte[]> known = this.read.get(name);
-        if (known != null) {
-            return known.orElse(null);
+        byte[] updated = this.replaced.get(name);
+        if (updated != null) {
+            return updated;
+        }
+        SoftReference<byte[]> known = this.read.get(name);
+        byte[] cached = known == null ? null : known.get();
+        if (cached != null) {
+            return cached;
         }
         int paths = PATHS.get();
-        if (Integer.valueOf(paths).equals(this.missing.get(name))) {
-            return null;
-        }
-        if (this.folding.isFolded(name)) {
-            this.read.put(name, Optional.empty());
+        if (Integer.valueOf(paths).equals(this.missing.get(name)) || this.folding.isFolded(name)) {
             return null;
         }
         byte[] found = more.apply(name);
@@ -128,7 +131,7 @@ public final class MixinCopy implements AutoCloseable {
             return null;
         }
         byte[] folded = this.folding.fold(found);
-        this.read.put(name, Optional.of(folded));
+        this.read.put(name, new SoftReference<>(folded));
         return folded;
     }
 
@@ -161,8 +164,7 @@ public final class MixinCopy implements AutoCloseable {
     public Map<String, byte @Nullable []> takeReadInMix() {
         Map<String, byte @Nullable []> found = new TreeMap<>();
         for (String name : this.readInMix) {
-            Optional<byte[]> known = this.read.get(name);
-            found.put(name, known == null ? null : known.orElse(null));
+            found.put(name, this.findBytes(name, this.more));
         }
         return found;
     }
@@ -176,7 +178,7 @@ public final class MixinCopy implements AutoCloseable {
     }
 
     public void replace(Map<String, byte[]> classes) {
-        classes.forEach((name, bytes) -> this.read.put(name, Optional.of(bytes)));
+        this.replaced.putAll(classes);
         synchronized (BOOTING) {
             this.discard();
         }
@@ -184,6 +186,7 @@ public final class MixinCopy implements AutoCloseable {
 
     public void forgetReads() {
         this.read.clear();
+        this.replaced.clear();
         this.missing.clear();
 
         synchronized (BOOTING) {
