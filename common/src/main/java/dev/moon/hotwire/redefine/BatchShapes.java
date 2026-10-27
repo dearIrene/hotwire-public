@@ -1,5 +1,6 @@
 package dev.moon.hotwire.redefine;
 
+import dev.moon.hotwire.classfile.ClassHeader;
 import java.util.ArrayList;
 import java.util.Collections;
 import java.util.HashMap;
@@ -8,12 +9,12 @@ import java.util.IdentityHashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
+import java.util.WeakHashMap;
 import java.util.function.Function;
 import java.util.regex.Pattern;
 import org.jspecify.annotations.Nullable;
 import org.objectweb.asm.ClassReader;
 import org.objectweb.asm.ClassVisitor;
-import org.objectweb.asm.FieldVisitor;
 import org.objectweb.asm.MethodVisitor;
 import org.objectweb.asm.Opcodes;
 import org.objectweb.asm.tree.AbstractInsnNode;
@@ -33,6 +34,8 @@ import org.objectweb.asm.tree.VarInsnNode;
 final class BatchShapes {
     private static final String MADE = OffWindowObjects.class.getName().replace('.', '/');
     private static final String LAMBDA_SITES = LambdaSites.class.getName().replace('.', '/');
+
+    private static final Map<byte[], ClassNode> CONSTRUCTORS = Collections.synchronizedMap(new WeakHashMap<>());
     private static final Pattern MERGED = Pattern.compile("\\bmd[0-9a-f]{6}\\$");
     private static final Pattern ARGS = Pattern.compile("Args\\$\\d+");
     private static final Pattern COUNTED = Pattern.compile("(md#\\$[^\\s(;]*\\$(?:#|\\d+))\\$[0-9a-f]+");
@@ -86,8 +89,7 @@ final class BatchShapes {
     }
 
     static List<String> findConstructors(byte[] bytes, byte @Nullable [] original, boolean masked) {
-        ClassNode node = new ClassNode();
-        new ClassReader(bytes).accept(node, ClassReader.SKIP_DEBUG | ClassReader.SKIP_FRAMES);
+        ClassNode node = readConstructors(bytes);
         Set<String> own = new HashSet<>();
         if (original != null) {
             Set<String> had = ConstructedFields.readFields(original).keys();
@@ -111,6 +113,24 @@ final class BatchShapes {
             }
         }
         return out;
+    }
+
+    private static ClassNode readConstructors(byte[] bytes) {
+        ClassNode known = CONSTRUCTORS.get(bytes);
+        if (known != null) {
+            return known;
+        }
+        ClassNode node = new ClassNode();
+        new ClassReader(bytes).accept(new ClassVisitor(Opcodes.ASM9, node) {
+            @Override
+            public @Nullable MethodVisitor visitMethod(int access, String name, String descriptor,
+                    @Nullable String signature, String @Nullable [] exceptions) {
+                return name.equals("<init>") ? super.visitMethod(access, name, descriptor, signature, exceptions)
+                        : null;
+            }
+        }, ClassReader.SKIP_DEBUG | ClassReader.SKIP_FRAMES);
+        CONSTRUCTORS.put(bytes, node);
+        return node;
     }
 
     private static boolean isLambdaLink(InvokeDynamicInsnNode dynamic) {
@@ -171,24 +191,13 @@ final class BatchShapes {
                 return;
             }
             Set<String> had = new HashSet<>();
-            new ClassReader(running).accept(new ClassVisitor(Opcodes.ASM9) {
-                @Override
-                public @Nullable MethodVisitor visitMethod(int access, String method, String descriptor,
-                        @Nullable String signature, String @Nullable [] exceptions) {
-                    had.add(method + descriptor);
-                    return null;
+            ClassHeader.of(running).methods().forEach(method -> had.add(method.name() + method.desc()));
+            for (ClassHeader.Member method : ClassHeader.of(bytes).methods()) {
+                String key = method.name() + method.desc();
+                if (!had.contains(key) && !method.name().equals("<init>") && !method.name().equals("<clinit>")) {
+                    gained.add(key);
                 }
-            }, ClassReader.SKIP_CODE);
-            new ClassReader(bytes).accept(new ClassVisitor(Opcodes.ASM9) {
-                @Override
-                public @Nullable MethodVisitor visitMethod(int access, String method, String descriptor,
-                        @Nullable String signature, String @Nullable [] exceptions) {
-                    if (!had.contains(method + descriptor) && !method.equals("<init>") && !method.equals("<clinit>")) {
-                        gained.add(method + descriptor);
-                    }
-                    return null;
-                }
-            }, ClassReader.SKIP_CODE);
+            }
         });
         return gained;
     }
@@ -201,25 +210,13 @@ final class BatchShapes {
                 return;
             }
             Set<String> had = new HashSet<>();
-            new ClassReader(running).accept(new ClassVisitor(Opcodes.ASM9) {
-                @Override
-                public @Nullable FieldVisitor visitField(int access, String field, String descriptor,
-                        @Nullable String signature, @Nullable Object value) {
-                    had.add(field + descriptor);
-                    return null;
-                }
-            }, ClassReader.SKIP_CODE);
+            ClassHeader.of(running).fields().forEach(field -> had.add(field.name() + field.desc()));
             Set<String> added = new HashSet<>();
-            new ClassReader(bytes).accept(new ClassVisitor(Opcodes.ASM9) {
-                @Override
-                public @Nullable FieldVisitor visitField(int access, String field, String descriptor,
-                        @Nullable String signature, @Nullable Object value) {
-                    if (!had.contains(field + descriptor)) {
-                        added.add(field + descriptor);
-                    }
-                    return null;
+            for (ClassHeader.Member field : ClassHeader.of(bytes).fields()) {
+                if (!had.contains(field.name() + field.desc())) {
+                    added.add(field.name() + field.desc());
                 }
-            }, ClassReader.SKIP_CODE);
+            }
             if (!added.isEmpty()) {
                 gained.put(name, added);
             }

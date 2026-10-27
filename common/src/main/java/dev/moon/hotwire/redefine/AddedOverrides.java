@@ -1,5 +1,6 @@
 package dev.moon.hotwire.redefine;
 
+import dev.moon.hotwire.classfile.ClassHeader;
 import java.lang.invoke.CallSite;
 import java.lang.invoke.MethodHandle;
 import java.lang.invoke.MethodHandles;
@@ -19,10 +20,8 @@ import java.util.concurrent.atomic.AtomicInteger;
 import java.util.function.Function;
 import org.jspecify.annotations.Nullable;
 import org.objectweb.asm.ClassReader;
-import org.objectweb.asm.ClassVisitor;
 import org.objectweb.asm.ClassWriter;
 import org.objectweb.asm.Handle;
-import org.objectweb.asm.MethodVisitor;
 import org.objectweb.asm.Opcodes;
 import org.objectweb.asm.Type;
 import org.objectweb.asm.tree.ClassNode;
@@ -130,43 +129,31 @@ public final class AddedOverrides {
                 return;
             }
             Set<String> had = new HashSet<>();
-            new ClassReader(running).accept(new ClassVisitor(Opcodes.ASM9) {
-                @Override
-                public @Nullable MethodVisitor visitMethod(int access, String method, String descriptor,
-                        @Nullable String signature, String @Nullable [] exceptions) {
-                    had.add(method + descriptor);
-                    return null;
-                }
-            }, ClassReader.SKIP_CODE);
-            ClassReader reader = new ClassReader(bytes);
-            if ((reader.getAccess() & Opcodes.ACC_INTERFACE) != 0) {
+            ClassHeader.of(running).methods().forEach(method -> had.add(method.name() + method.desc()));
+            ClassHeader header = ClassHeader.of(bytes);
+            if (header.isInterface()) {
                 return;
             }
-            reader.accept(new ClassVisitor(Opcodes.ASM9) {
-                @Override
-                public @Nullable MethodVisitor visitMethod(int access, String method, String descriptor,
-                        @Nullable String signature, String @Nullable [] exceptions) {
-                    if (!had.contains(method + descriptor) && (access & NEVER_OVERRIDES) == 0
-                            && !method.startsWith("<")) {
-                        note(name, reader, method, descriptor, classBytes);
-                    }
-                    return null;
+            for (ClassHeader.Member method : header.methods()) {
+                if (!had.contains(method.name() + method.desc()) && (method.access() & NEVER_OVERRIDES) == 0
+                        && !method.name().startsWith("<")) {
+                    note(name, header, method.name(), method.desc(), classBytes);
                 }
-            }, ClassReader.SKIP_CODE);
+            }
         });
     }
 
-    private static void note(String name, ClassReader reader, String method, String descriptor,
+    private static void note(String name, ClassHeader header, String method, String descriptor,
             Function<String, byte @Nullable []> classBytes) {
         String key = method + descriptor;
 
         if (!JUDGED.add(name + "." + key)) {
             return;
         }
-        String owner = Overrides.findDeclarer(name, reader.getSuperName(), method, descriptor, classBytes);
+        String owner = Overrides.findDeclarer(name, header.superName(), method, descriptor, classBytes);
         if (owner == null) {
-            owner = Overrides.findDefaultDeclarer(List.of(reader.getInterfaces()), reader.getSuperName(), method,
-                    descriptor, classBytes);
+            owner = Overrides.findDefaultDeclarer(header.interfaces(), header.superName(), method, descriptor,
+                    classBytes);
         }
         if (owner == null) {
             return;

@@ -6,9 +6,10 @@ import java.lang.instrument.UnmodifiableClassException;
 import java.lang.reflect.Field;
 import java.lang.reflect.Modifier;
 import java.util.Arrays;
+import java.util.HashMap;
 import java.util.HashSet;
 import java.util.LinkedHashSet;
-import java.util.List;
+import java.util.Map;
 import java.util.Objects;
 import java.util.Set;
 import org.jspecify.annotations.Nullable;
@@ -26,20 +27,21 @@ final class FinalReaders {
             return;
         }
         long began = System.nanoTime();
-        Set<String> fields = new HashSet<>();
+        Map<String, Set<String>> fields = new HashMap<>();
         Set<Class<?>> readers = new LinkedHashSet<>();
         for (Field field : written) {
             readers.addAll(Arrays.asList(field.getDeclaringClass().getNestMembers()));
 
             if (!Modifier.isPrivate(field.getModifiers())) {
-                fields.add(field.getDeclaringClass().getName().replace('.', '/') + "." + field.getName());
+                fields.computeIfAbsent(field.getDeclaringClass().getName().replace('.', '/'), owner -> new HashSet<>())
+                        .add(field.getName());
             }
         }
         ClassLoader game = FinalReaders.class.getClassLoader();
         if (pools != null && !fields.isEmpty()) {
             readers.addAll(Arrays.<Class<?>>stream(instrumentation.getAllLoadedClasses()).parallel()
                     .filter(type -> Objects.equals(type.getClassLoader(), game) && !type.isHidden() && !type.isArray()
-                            && instrumentation.isModifiableClass(type) && reads(pools, type, fields))
+                            && instrumentation.isModifiableClass(type) && pools.namesField(type, fields))
                     .toList());
         }
         try {
@@ -56,15 +58,5 @@ final class FinalReaders {
         }
         LOGGER.info("[Hotwire] {} classes reading {} statics made again were read anew in {} ms", readers.size(),
                 written.size(), (System.nanoTime() - began) / 1_000_000);
-    }
-
-    private static boolean reads(ConstantPools pools, Class<?> type, Set<String> fields) {
-        List<String[]> members = pools.getMembers(type);
-        for (String[] member : members) {
-            if (fields.contains(member[0] + "." + member[1])) {
-                return true;
-            }
-        }
-        return false;
     }
 }

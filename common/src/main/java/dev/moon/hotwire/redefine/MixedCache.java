@@ -4,6 +4,7 @@ import com.google.gson.JsonObject;
 import com.google.gson.JsonParser;
 import dev.moon.hotwire.cache.CacheKey;
 import dev.moon.hotwire.cache.CacheStore;
+import dev.moon.hotwire.classfile.ClassHeader;
 import dev.moon.hotwire.mixin_copy.ConfigTrim;
 import dev.moon.hotwire.mixin_copy.MixinClassInfo;
 import dev.moon.hotwire.mixin_copy.MixinCopy;
@@ -30,7 +31,6 @@ import java.util.concurrent.atomic.AtomicLong;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 import org.jspecify.annotations.Nullable;
-import org.objectweb.asm.ClassReader;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -112,12 +112,7 @@ final class MixedCache {
         Set<String> seen = new HashSet<>();
         List<byte[]> next = new ArrayList<>(List.of(original));
         while (!next.isEmpty()) {
-            ClassReader reader = new ClassReader(next.removeLast());
-            List<String> above = new ArrayList<>(List.of(reader.getInterfaces()));
-            if (reader.getSuperName() != null) {
-                above.add(reader.getSuperName());
-            }
-            for (String type : above) {
+            for (String type : ClassHeader.of(next.removeLast()).findAbove()) {
                 byte[] bytes = classes.get(type);
                 if (bytes != null && !targets.contains(type) && seen.add(type)) {
                     handed.add(type).add(bytes);
@@ -133,12 +128,7 @@ final class MixedCache {
         Set<String> seen = new HashSet<>();
         List<byte[]> next = new ArrayList<>(List.of(original));
         while (!next.isEmpty()) {
-            ClassReader reader = new ClassReader(next.removeLast());
-            List<String> above = new ArrayList<>(List.of(reader.getInterfaces()));
-            if (reader.getSuperName() != null) {
-                above.add(reader.getSuperName());
-            }
-            for (String type : above) {
+            for (String type : ClassHeader.of(next.removeLast()).findAbove()) {
                 if (!seen.add(type) || type.startsWith("java/")) {
                     continue;
                 }
@@ -385,6 +375,21 @@ final class MixedCache {
 
     String describe() {
         return this.store.describe();
+    }
+
+    boolean isFilled(CacheKey plan) {
+        return this.store.get(this.findFilledKey(plan), null) != null;
+    }
+
+    void markFilled(CacheKey plan) {
+        this.writer.execute(() -> {
+            this.store.put(this.findFilledKey(plan), new byte[] {1}, null);
+            this.store.flush();
+        });
+    }
+
+    private CacheKey findFilledKey(CacheKey plan) {
+        return CacheKey.of("filled 1").add(this.copy.getRecipe()).add(plan.high()).add(plan.low()).build();
     }
 
     void clear() {

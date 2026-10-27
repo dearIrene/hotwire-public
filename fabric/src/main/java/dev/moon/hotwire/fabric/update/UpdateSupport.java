@@ -1,6 +1,7 @@
 package dev.moon.hotwire.fabric.update;
 
 import dev.moon.hotwire.fabric.InstalledMods;
+import dev.moon.hotwire.fabric.LoadedMods;
 import dev.moon.hotwire.fabric.ModPolicy;
 import dev.moon.hotwire.fabric.add.ModAdder;
 import dev.moon.hotwire.fabric.rebuild.GameClasses;
@@ -212,9 +213,8 @@ public final class UpdateSupport implements ModUpdater.Engine {
 
     @Override
     public @Nullable String findVersionOf(String id) {
-        return FabricLoader.getInstance().getModContainer(id)
-                .map(container -> container.getMetadata().getVersion().getFriendlyString())
-                .or(() -> this.installed.find(id).map(ModManifest::version)).orElse(null);
+        String loaded = LoadedMods.findVersion(id);
+        return loaded != null ? loaded : this.installed.find(id).map(ModManifest::version).orElse(null);
     }
 
     @Override

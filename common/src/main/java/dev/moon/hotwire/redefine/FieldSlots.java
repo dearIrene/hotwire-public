@@ -1,5 +1,6 @@
 package dev.moon.hotwire.redefine;
 
+import dev.moon.hotwire.classfile.ClassHeader;
 import java.lang.invoke.MethodHandle;
 import java.lang.invoke.MethodHandleProxies;
 import java.lang.invoke.MethodHandles;
@@ -15,9 +16,6 @@ import java.util.function.BiConsumer;
 import java.util.function.Function;
 import java.util.function.Predicate;
 import org.jspecify.annotations.Nullable;
-import org.objectweb.asm.ClassReader;
-import org.objectweb.asm.ClassVisitor;
-import org.objectweb.asm.FieldVisitor;
 import org.objectweb.asm.Opcodes;
 import org.objectweb.asm.Type;
 
@@ -214,14 +212,7 @@ public final class FieldSlots {
 
     private static List<Entry> listFields(byte[] bytes) {
         List<Entry> out = new ArrayList<>();
-        new ClassReader(bytes).accept(new ClassVisitor(Opcodes.ASM9) {
-            @Override
-            public @Nullable FieldVisitor visitField(int access, String name, String descriptor,
-                    @Nullable String signature, @Nullable Object value) {
-                out.add(new Entry(access, name, descriptor));
-                return null;
-            }
-        }, ClassReader.SKIP_CODE | ClassReader.SKIP_DEBUG);
+        ClassHeader.of(bytes).fields().forEach(field -> out.add(new Entry(field.access(), field.name(), field.desc())));
         return out;
     }
 

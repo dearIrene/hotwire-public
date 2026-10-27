@@ -1,5 +1,6 @@
 package dev.moon.hotwire.switching;
 
+import dev.moon.hotwire.cache.CacheKey;
 import dev.moon.hotwire.plan.SwitchPlan;
 import dev.moon.hotwire.redefine.ClassRebuilder;
 import dev.moon.hotwire.redefine.RebuildException;
@@ -76,6 +77,8 @@ public final class SwitchCacheFiller {
     private volatile int threadRun;
     private volatile boolean paused;
     private volatile boolean lookReady;
+
+    private volatile @Nullable CacheKey plan;
 
     SwitchCacheFiller(Host host, SwitchApplier applier) {
         this.host = host;
@@ -179,6 +182,10 @@ public final class SwitchCacheFiller {
             this.bytesDone.addAndGet(step.bytes());
             this.yieldAfter(this.nanos.get() - before);
         }
+        CacheKey filled = this.plan;
+        if (filled != null && current == this.run.get() && this.done.get() >= planned.size()) {
+            this.applier.getRebuilder().markFilled(filled);
+        }
         LOGGER.info("[Hotwire] the switch cache filled {} of {} steps: {} classes in {} ms; planned {} classes, {}"
                 + " bytes before Mixin", this.done.get(), planned.size(), mixed,
                 (System.nanoTime() - began) / 1_000_000, this.classes, this.bytes);
@@ -238,6 +245,18 @@ public final class SwitchCacheFiller {
         this.bytes = planned.stream().mapToLong(Step::bytes).sum();
         this.steps = List.copyOf(findSampleFirst(planned));
         this.sample = Math.min(SAMPLE, this.steps.size());
+
+        CacheKey.Builder plan = CacheKey.of("fill plan 1");
+        for (Step step : this.steps) {
+            new TreeSet<>(step.mods()).forEach(plan::add);
+            plan.add(step.classes()).add(step.bytes());
+        }
+        this.plan = plan.build();
+        if (this.applier.getRebuilder().isFilled(this.plan)) {
+            this.done.set(this.steps.size());
+            this.classesDone.set(this.classes);
+            this.bytesDone.set(this.bytes);
+        }
     }
 
     private static List<Step> findSampleFirst(List<Step> planned) {

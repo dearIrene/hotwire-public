@@ -1,5 +1,6 @@
 package dev.moon.hotwire.redefine;
 
+import dev.moon.hotwire.classfile.ClassHeader;
 import java.lang.invoke.MethodHandle;
 import java.lang.invoke.MethodHandleProxies;
 import java.lang.invoke.MethodHandles;
@@ -18,9 +19,6 @@ import java.util.Set;
 import java.util.function.Supplier;
 import java.util.regex.Pattern;
 import org.jspecify.annotations.Nullable;
-import org.objectweb.asm.ClassReader;
-import org.objectweb.asm.ClassVisitor;
-import org.objectweb.asm.FieldVisitor;
 import org.objectweb.asm.Opcodes;
 import org.objectweb.asm.Type;
 import org.objectweb.asm.tree.AbstractInsnNode;
@@ -98,16 +96,11 @@ final class ChangedStatics {
 
     private static Set<String> readObjectStatics(byte[] bytes) {
         Set<String> found = new HashSet<>();
-        new ClassReader(bytes).accept(new ClassVisitor(Opcodes.ASM9) {
-            @Override
-            public @Nullable FieldVisitor visitField(int access, String name, String descriptor,
-                    @Nullable String signature, @Nullable Object value) {
-                if ((access & Opcodes.ACC_STATIC) != 0 && (descriptor.startsWith("L") || descriptor.startsWith("["))) {
-                    found.add(name + descriptor);
-                }
-                return null;
+        for (ClassHeader.Member field : ClassHeader.of(bytes).fields()) {
+            if (field.isStatic() && (field.desc().startsWith("L") || field.desc().startsWith("["))) {
+                found.add(field.name() + field.desc());
             }
-        }, ClassReader.SKIP_CODE | ClassReader.SKIP_DEBUG | ClassReader.SKIP_FRAMES);
+        }
         return found;
     }
 

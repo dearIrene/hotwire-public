@@ -1,5 +1,6 @@
 package dev.moon.hotwire.redefine;
 
+import dev.moon.hotwire.classfile.ClassHeader;
 import java.io.IOException;
 import java.lang.instrument.ClassDefinition;
 import java.lang.instrument.Instrumentation;
@@ -16,9 +17,7 @@ import java.util.Set;
 import java.util.TreeSet;
 import java.util.concurrent.ConcurrentHashMap;
 import org.jspecify.annotations.Nullable;
-import org.objectweb.asm.ClassReader;
 import org.objectweb.asm.Opcodes;
-import org.objectweb.asm.tree.ClassNode;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -94,9 +93,7 @@ final class RebuildEvidence {
     static Set<String> listMethods(byte @Nullable [] bytes) {
         Set<String> out = new TreeSet<>();
         if (bytes != null) {
-            ClassNode node = new ClassNode();
-            new ClassReader(bytes).accept(node, ClassReader.SKIP_CODE);
-            node.methods.forEach(method -> out.add(method.name + method.desc));
+            ClassHeader.of(bytes).methods().forEach(method -> out.add(method.name() + method.desc()));
         }
         return out;
     }
@@ -105,12 +102,10 @@ final class RebuildEvidence {
         if (bytes == null) {
             return List.of("unreadable");
         }
-        ClassNode node = new ClassNode();
-        new ClassReader(bytes).accept(node, ClassReader.SKIP_CODE);
         List<String> out = new ArrayList<>();
 
-        node.fields.forEach(field -> out.add(Integer.toHexString(field.access & ~Opcodes.ACC_DEPRECATED) + " "
-                + field.name + " " + field.desc));
+        ClassHeader.of(bytes).fields().forEach(field -> out.add(Integer.toHexString(field.access()
+                & ~Opcodes.ACC_DEPRECATED) + " " + field.name() + " " + field.desc()));
         return out;
     }
 

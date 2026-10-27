@@ -1,5 +1,6 @@
 package dev.moon.hotwire.fabric.add;
 
+import dev.moon.hotwire.classfile.ClassHeader;
 import dev.moon.hotwire.fabric.InstalledMods;
 import dev.moon.hotwire.fabric.ModPolicy;
 import dev.moon.hotwire.fabric.rebuild.GameClasses;
@@ -41,9 +42,6 @@ import net.minecraft.client.Minecraft;
 import org.jspecify.annotations.Nullable;
 import org.objectweb.asm.ClassReader;
 import org.objectweb.asm.Opcodes;
-import org.objectweb.asm.tree.ClassNode;
-import org.objectweb.asm.tree.FieldNode;
-import org.objectweb.asm.tree.MethodNode;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -255,25 +253,19 @@ public final class AddSupport implements ModAdder.Engine {
         if (bytes == null) {
             return OptionalInt.empty();
         }
-        ClassNode node = new ClassNode();
-        new ClassReader(bytes).accept(node, ClassReader.SKIP_CODE | ClassReader.SKIP_DEBUG | ClassReader.SKIP_FRAMES);
-        for (MethodNode method : node.methods) {
-            if (method.name.equals(name) && method.desc.equals(desc)) {
-                return OptionalInt.of(method.access);
-            }
+        ClassHeader header = ClassHeader.of(bytes);
+        ClassHeader.Member method = header.findMethod(name, desc);
+        if (method != null) {
+            return OptionalInt.of(method.access());
         }
-        for (FieldNode field : node.fields) {
-            if (field.name.equals(name) && field.desc.equals(desc)) {
-                return OptionalInt.of(field.access);
-            }
-        }
-        return OptionalInt.empty();
+        ClassHeader.Member field = header.findField(name, desc);
+        return field == null ? OptionalInt.empty() : OptionalInt.of(field.access());
     }
 
     @Override
     public @Nullable String findSuperOf(String owner) {
         byte[] bytes = this.classes.findOriginalBytes(owner);
-        return bytes == null ? null : new ClassReader(bytes).getSuperName();
+        return bytes == null ? null : ClassHeader.of(bytes).superName();
     }
 
     static Optional<String> findAgentRefusal(String name, @Nullable Path jar) {

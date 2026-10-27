@@ -1,9 +1,15 @@
 package dev.moon.hotwire.fabric.screen;
 
-import java.io.IOException;
+//? if >=26.3 {
+import com.mojang.blaze3d.Blaze3D;
+//?} else if >=1.21.11 {
+/*import net.minecraft.util.Util;
+*///?} else {
+/*import net.minecraft.Util;
+*///?}
 import java.net.URI;
 import java.net.URISyntaxException;
-import java.util.List;
+import java.nio.file.Path;
 import java.util.Locale;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -31,14 +37,21 @@ public final class WebLinks {
         if (System.getProperty("hotwire.oneclient") != null) {
             return;
         }
-        String os = System.getProperty("os.name", "").toLowerCase(Locale.ROOT);
-        String address = uri.toASCIIString();
-        List<String> command = os.contains("win") ? List.of("rundll32", "url.dll,FileProtocolHandler", address)
-                : os.contains("mac") ? List.of("open", address) : List.of("xdg-open", address);
-        try {
-            new ProcessBuilder(command).start();
-        } catch (IOException e) {
-            LOGGER.info("[Hotwire] the link could not be opened: {}", e.toString());
+        //? if >=26.3 {
+        Blaze3D.openUri(uri);
+        //?} else {
+        /*Util.getPlatform().openUri(uri);
+        *///?}
+    }
+
+    public static void openFolder(Path folder) {
+        if (System.getProperty("hotwire.oneclient") != null) {
+            return;
         }
+        //? if >=26.3 {
+        Blaze3D.openPath(folder);
+        //?} else {
+        /*Util.getPlatform().openPath(folder);
+        *///?}
     }
 }

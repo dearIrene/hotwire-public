@@ -12,7 +12,9 @@ import java.util.ArrayList;
 import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Set;
+import java.util.function.Function;
 import net.fabricmc.loader.api.FabricLoader;
+import org.jspecify.annotations.Nullable;
 import org.objectweb.asm.ClassReader;
 import org.objectweb.asm.commons.Remapper;
 import org.objectweb.asm.tree.ClassNode;
@@ -36,12 +38,18 @@ public final class GameMixinCopy {
     private GameMixinCopy() {
     }
 
-    public static MixinCopy create(KnotInternals knot, MixinInternals mixin, MixinCopy.Decorations decorations) {
+    public static MixinCopy create(MixinInternals mixin, MixinCopy.Decorations decorations,
+            Function<String, byte @Nullable []> originalOf) {
         ClassLoader game = GameMixinCopy.class.getClassLoader();
 
         MixinCopy copy = new MixinCopy(findJars(), game, SHARED, mixin.getSessionId(),
-                internal -> FailedAddJars.isHiding(internal) ? null
-                        : FailedAddJars.removeHiddenInterfaces(knot.findPreMixinBytes(internal)),
+                internal -> {
+                    if (FailedAddJars.isHiding(internal)) {
+                        return null;
+                    }
+                    byte[] bytes = originalOf.apply(internal);
+                    return FailedAddJars.removeHiddenInterfaces(bytes != null ? bytes : mixin.findMadeClass(internal));
+                },
                 FabricLoader.getInstance().getEnvironmentType().name(), decorations);
         copy.foldInto(new ExtensionFolder(findLaunchedExtensions()));
         LivePluginShapes.bind(mixin);

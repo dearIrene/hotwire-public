@@ -1,6 +1,7 @@
 package dev.moon.hotwire.fabric.report;
 
 import dev.moon.hotwire.fabric.HotwireClient;
+import dev.moon.hotwire.fabric.LoadedMods;
 import dev.moon.hotwire.fabric.add.ModAdder;
 import dev.moon.hotwire.fabric.registration.GameRegistrations;
 import dev.moon.hotwire.fabric.update.ModUpdater;
@@ -45,7 +46,6 @@ import java.util.function.Consumer;
 import java.util.function.Function;
 import java.util.stream.Stream;
 import net.fabricmc.loader.api.FabricLoader;
-import net.fabricmc.loader.api.ModContainer;
 import net.minecraft.client.Minecraft;
 import org.jspecify.annotations.Nullable;
 import org.slf4j.Logger;
@@ -84,8 +84,9 @@ public final class GameReports {
         FabricLoader loader = FabricLoader.getInstance();
         this.folder = loader.getGameDir().resolve("hotwire").resolve("reports");
         this.nameOf = nameOf;
-        this.machine = new Report.Machine(getVersion(loader, HotwireClient.ID), getVersion(loader, "minecraft"),
-                getVersion(loader, "fabricloader"), MixinBootstrap.VERSION, Runtime.version().toString(),
+        this.machine = new Report.Machine(LoadedMods.findVersion(HotwireClient.ID, "unknown"),
+                LoadedMods.findVersion("minecraft", "unknown"), LoadedMods.findVersion("fabricloader", "unknown"),
+                MixinBootstrap.VERSION, Runtime.version().toString(),
                 System.getProperty("os.name", "") + " " + System.getProperty("os.version", ""),
                 "launcher agent", Map.of());
         current = this;
@@ -318,7 +319,7 @@ public final class GameReports {
         return at < 0 || !CrashSection.isCleared(text.substring(at));
     }
 
-    synchronized Path writeBundle(String why, boolean crash, List<TidyLog.Mod> mods, List<Path> extra)
+    synchronized Path writeBundle(String title, String why, List<TidyLog.Mod> mods, List<Path> extra)
             throws IOException {
         this.onWritten();
         Path game = FabricLoader.getInstance().getGameDir();
@@ -340,7 +341,7 @@ public final class GameReports {
         extra.forEach(file -> texts.put("crash-reports/" + file.getFileName(), read(file)));
         this.listSince(game, ".log").stream().filter(file -> file.getFileName().toString().startsWith("hs_err"))
                 .forEach(file -> texts.put("jvm-crashes/" + file.getFileName(), read(file)));
-        Path zip = ReportBundle.write(this.folder, now, crash ? "crash" : "report", texts,
+        Path zip = ReportBundle.write(this.folder, now, title, texts,
                 Set.of(Minecraft.getInstance().getUser().getName()));
         return zip;
     }
@@ -401,8 +402,4 @@ public final class GameReports {
         }
     }
 
-    private static String getVersion(FabricLoader loader, String id) {
-        return loader.getModContainer(id).map(ModContainer::getMetadata).map(m -> m.getVersion().getFriendlyString())
-                .orElse("unknown");
-    }
 }

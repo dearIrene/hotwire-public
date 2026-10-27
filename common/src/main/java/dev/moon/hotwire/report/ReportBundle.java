@@ -22,7 +22,8 @@ import java.util.zip.ZipOutputStream;
 
 public final class ReportBundle {
     static final int MAX_ZIPS = 10;
-    private static final DateTimeFormatter FILE_TIME = DateTimeFormatter.ofPattern("yyyy-MM-dd_HH-mm-ss",
+    private static final int MOST_TITLE = 48;
+    private static final DateTimeFormatter FILE_TIME = DateTimeFormatter.ofPattern("yyyy-MM-dd HH-mm-ss",
             Locale.ROOT).withZone(ZoneId.systemDefault());
 
     private static final Pattern SECRET_FLAG = Pattern.compile(
@@ -41,15 +42,21 @@ public final class ReportBundle {
             "(?im)^(\\s*(?:USERNAME|USER|LOGNAME|HOME|USERPROFILE)\\s*=\\s*).+$");
 
     private static final Pattern CHAT = Pattern.compile("\\[CHAT\\](?! \\[Hotwire\\])");
-    private static final Pattern ZIP = Pattern.compile("hotwire-(report|crash)-[0-9_-]+\\.zip");
+
+    private static final Pattern ZIP = Pattern.compile("(?:Hotwire ([0-9]{4}-[0-9]{2}-[0-9]{2}"
+            + " [0-9]{2}-[0-9]{2}-[0-9]{2})(?: .+)?|hotwire-(?:report|crash)-([0-9_-]+))\\.zip");
+
+    private static final Pattern UNSAFE = Pattern.compile("[\\\\/:*?\"<>|\\p{Cntrl}]");
 
     private ReportBundle() {
     }
 
-    public static Path write(Path folder, Instant at, String kind, Map<String, String> texts, Set<String> personal)
+    public static Path write(Path folder, Instant at, String title, Map<String, String> texts, Set<String> personal)
             throws IOException {
         Files.createDirectories(folder);
-        Path zip = folder.resolve("hotwire-" + kind + "-" + FILE_TIME.format(at) + ".zip");
+        String words = UNSAFE.matcher(title).replaceAll("").strip();
+        words = words.substring(0, Math.min(MOST_TITLE, words.length())).strip();
+        Path zip = folder.resolve("Hotwire " + FILE_TIME.format(at) + (words.isEmpty() ? "" : " " + words) + ".zip");
         try (OutputStream file = Files.newOutputStream(zip); ZipOutputStream out = new ZipOutputStream(file)) {
             for (Map.Entry<String, String> text : texts.entrySet()) {
                 out.putNextEntry(new ZipEntry(text.getKey()));
@@ -85,12 +92,20 @@ public final class ReportBundle {
         return out;
     }
 
+    private static String readTime(Path zip) {
+        Matcher name = ZIP.matcher(zip.getFileName().toString());
+        if (!name.matches()) {
+            return "";
+        }
+        String time = name.group(1) != null ? name.group(1) : name.group(2);
+        return time.replaceAll("\\D", "");
+    }
+
     private static void prune(Path folder) throws IOException {
         List<Path> zips;
         try (Stream<Path> files = Files.list(folder)) {
             zips = files.filter(file -> ZIP.matcher(file.getFileName().toString()).matches())
-                    .sorted(Comparator.comparing((Path file) -> file.getFileName().toString().replaceAll("\\D", ""))
-                            .reversed()).toList();
+                    .sorted(Comparator.comparing(ReportBundle::readTime).reversed()).toList();
         }
         for (Path old : zips.subList(Math.min(MAX_ZIPS, zips.size()), zips.size())) {
             Files.deleteIfExists(old);

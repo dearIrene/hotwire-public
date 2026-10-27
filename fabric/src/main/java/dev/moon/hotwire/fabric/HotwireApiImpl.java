@@ -166,7 +166,8 @@ public final class HotwireApiImpl implements HotwireApi {
             return CompletableFuture.failedFuture(new IllegalStateException(Lang.get("hotwire.api.starting")));
         }
         String asker = findCallers().findAsker();
-        return engine.writeReportZip((asker == null ? "A mod" : engine.nameOfMod(asker)) + " asked for a report: "
+        String name = asker == null ? "A mod" : engine.nameOfMod(asker);
+        return engine.writeReportZip(Lang.get("hotwire.report.file.mod_asked", name), name + " asked for a report: "
                 + why);
     }
 

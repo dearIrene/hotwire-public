@@ -1,5 +1,6 @@
 package dev.moon.hotwire.redefine;
 
+import dev.moon.hotwire.classfile.ClassHeader;
 import java.util.HashMap;
 import java.util.HashSet;
 import java.util.Map;
@@ -116,12 +117,10 @@ final class StoredArguments {
     }
 
     static Set<String> findFinals(byte[] running) {
-        ClassNode node = new ClassNode();
-        new ClassReader(running).accept(node, ClassReader.SKIP_CODE | ClassReader.SKIP_DEBUG | ClassReader.SKIP_FRAMES);
         Set<String> finals = new HashSet<>();
-        for (FieldNode field : node.fields) {
-            if ((field.access & (Opcodes.ACC_FINAL | Opcodes.ACC_STATIC)) == Opcodes.ACC_FINAL) {
-                finals.add(field.name + field.desc);
+        for (ClassHeader.Member field : ClassHeader.of(running).fields()) {
+            if ((field.access() & (Opcodes.ACC_FINAL | Opcodes.ACC_STATIC)) == Opcodes.ACC_FINAL) {
+                finals.add(field.name() + field.desc());
             }
         }
         return finals;

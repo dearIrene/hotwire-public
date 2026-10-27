@@ -1,5 +1,6 @@
 package dev.moon.hotwire.redefine;
 
+import dev.moon.hotwire.classfile.ClassHeader;
 import java.util.ArrayList;
 import java.util.HashSet;
 import java.util.LinkedHashMap;
@@ -33,12 +34,11 @@ final class StaleFields {
 
     static ClassSplit.Result reset(byte[] launched, byte[] mixed, ClassSplit.Result split) {
         ClassNode before = RetainedInitializers.read(launched);
-        ClassNode now = new ClassNode();
-        new ClassReader(mixed).accept(now, ClassReader.SKIP_CODE | ClassReader.SKIP_DEBUG | ClassReader.SKIP_FRAMES);
+        ClassHeader now = ClassHeader.of(mixed);
         Set<String> fieldsNow = new HashSet<>();
-        now.fields.forEach(field -> fieldsNow.add(field.name + field.desc));
+        now.fields().forEach(field -> fieldsNow.add(field.name() + field.desc()));
         Set<String> methodsNow = new HashSet<>();
-        now.methods.forEach(method -> methodsNow.add(method.name + method.desc));
+        now.methods().forEach(method -> methodsNow.add(method.name() + method.desc()));
 
         Map<String, List<Reset>> resets = new LinkedHashMap<>();
         for (FieldNode field : before.fields) {
@@ -100,12 +100,11 @@ final class StaleFields {
         if (before == null || holderBytes == null) {
             return split;
         }
-        ClassNode was = new ClassNode();
-        new ClassReader(before).accept(was, ClassReader.SKIP_CODE | ClassReader.SKIP_DEBUG | ClassReader.SKIP_FRAMES);
+        ClassHeader was = ClassHeader.of(before);
         Set<String> fieldsBefore = new HashSet<>();
-        was.fields.forEach(field -> fieldsBefore.add(field.name + field.desc));
+        was.fields().forEach(field -> fieldsBefore.add(field.name() + field.desc()));
         Set<String> methodsBefore = new HashSet<>();
-        was.methods.forEach(method -> methodsBefore.add(method.name + method.desc));
+        was.methods().forEach(method -> methodsBefore.add(method.name() + method.desc()));
         ClassNode now = RetainedInitializers.read(mixed);
         Set<String> records = new HashSet<>();
         for (FieldNode field : now.fields) {

@@ -70,7 +70,7 @@ final class LiveObjects {
         Map<Class<?>, ClassSplit.Result> retained = new LinkedHashMap<>(prepared.splits());
         retained.keySet().removeIf(recomputed);
         ClassRebuilder.PreparedRebuild out = withReloading(prepared, retained, game, originalOf,
-                rebuilder::findLaunchBytes);
+                rebuilder::findLaunchBytes, current);
         Map<Class<?>, byte[]> targets = new LinkedHashMap<>();
         retained.forEach((type, split) -> targets.put(type, prepared.mixed().getOrDefault(
                 type.getName().replace('.', '/'), split.target())));
@@ -138,7 +138,8 @@ final class LiveObjects {
 
     private static ClassRebuilder.PreparedRebuild withReloading(ClassRebuilder.PreparedRebuild prepared,
             Map<Class<?>, ClassSplit.Result> retained, SwitchApplier.Game game,
-            Function<String, byte @Nullable []> originalOf, Function<String, byte @Nullable []> launchOf) {
+            Function<String, byte @Nullable []> originalOf, Function<String, byte @Nullable []> launchOf,
+            Map<String, byte[]> current) {
         Set<String> reload = new TreeSet<>();
         retained.forEach((type, split) -> {
             String name = type.getName().replace('.', '/');
@@ -150,16 +151,22 @@ final class LiveObjects {
             boolean madeWithout = OffWindowObjects.countAliveFromReload(name) > 0 || (launched != null
                     && !OffWindowObjects.isMadeElsewhere(name)
                     && !ConstructedFields.findSetOutsideConstructors(mixed, launched).isEmpty());
-            if (original != null && !game.isWorldObject(type) && madeWithout
-                    && !ConstructedFields.findSetOutsideConstructors(mixed, original).isEmpty()) {
-                reload.add(name);
+            byte[] running = current.get(name);
+            byte[] base = running != null ? running : original;
+            Set<String> missing = base == null || game.isWorldObject(type) || !madeWithout ? Set.of()
+                    : ConstructedFields.findSetOutsideConstructors(mixed, base);
+            if (!missing.isEmpty()) {
+                reload.add(name + " " + missing);
             }
         });
         if (reload.isEmpty()) {
             return prepared;
         }
-        LOGGER.info("[Hotwire] objects of {} made without a mod's setup are made anew by a resource reload", reload);
-        return prepared.withPausedReloads(reload);
+        LOGGER.info("[Hotwire] objects of {} made without a mod's setup (the fields named) are made anew by a resource"
+                + " reload", reload);
+        Set<String> classes = new TreeSet<>();
+        reload.forEach(one -> classes.add(one.substring(0, one.indexOf(' '))));
+        return prepared.withPausedReloads(classes);
     }
 
     static void checkWhilePaused(ClassRebuilder.PreparedRebuild prepared) throws RebuildException {

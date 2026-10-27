@@ -225,7 +225,8 @@ public final class HotwireEngine implements ModScreen.Game, AutoCloseable {
             JvmParts parts = started.findParts();
             return parts == null ? null : parts.runner();
         }, say, started::writeReport);
-        OwnThrowNotice.install(engine.tasks, say, started::writeReport);
+        OwnThrowNotice.install(engine.tasks, say,
+                why -> started.writeReport(Lang.get("hotwire.report.file.hotwire_error"), why));
         JvmParts ready = started.findParts();
         if (ready != null) {
             ready.runner().setAfterOff(started::disableJars);
@@ -564,7 +565,8 @@ public final class HotwireEngine implements ModScreen.Game, AutoCloseable {
                     + PlayerMessages.describeFaults(result.result(), result.faults().size());
 
             if (result.result() instanceof ModSwitcher.Result.Failed failed && failed.cause().isJvmRefused()) {
-                said += " " + this.writeReport("A switch failed: " + failed.cause().getMessage());
+                said += " " + this.writeReport(Lang.get("hotwire.report.file.switch_failed"),
+                        "A switch failed: " + failed.cause().getMessage());
             }
             ModScreen current = this.screen;
             if (!ids.isEmpty() && result.result() instanceof ModSwitcher.Result.Failed failed
@@ -722,8 +724,7 @@ public final class HotwireEngine implements ModScreen.Game, AutoCloseable {
     }
 
     private static String getMajorVersion() {
-        String version = FabricLoader.getInstance().getModContainer(HotwireClient.ID)
-                .map(mod -> mod.getMetadata().getVersion().getFriendlyString()).orElse("0");
+        String version = LoadedMods.findVersion(HotwireClient.ID, "0");
         return version.split("[.+-]", 2)[0];
     }
 
@@ -750,7 +751,9 @@ public final class HotwireEngine implements ModScreen.Game, AutoCloseable {
         long saved = rebuilder.getCacheBytes();
 
         long estimated = this.fillEstimate;
-        if (estimated < 0 && fill.sampled() && sizes.classesBefore() > 0) {
+        if (estimated < 0 && fill.bytes() > 0 && fill.bytesDone() >= fill.bytes()) {
+            estimated = saved;
+        } else if (estimated < 0 && fill.sampled() && sizes.classesBefore() > 0) {
             double perByte = (sizes.classes() + sizes.reads()) / (double) sizes.classesBefore();
             estimated = Math.max(saved, Math.round(fill.bytes() * perByte));
             this.fillEstimate = estimated;
@@ -841,7 +844,7 @@ public final class HotwireEngine implements ModScreen.Game, AutoCloseable {
 
     @Override
     public String report() {
-        return this.writeReport("The player asked for a report.");
+        return this.writeReport(Lang.get("hotwire.report.file.asked"), "The player asked for a report.");
     }
 
     @Override
@@ -849,14 +852,14 @@ public final class HotwireEngine implements ModScreen.Game, AutoCloseable {
         this.zips.revealLast();
     }
 
-    String writeReport(String why) {
-        return this.zips.write(why);
+    String writeReport(String title, String why) {
+        return this.zips.write(title, why);
     }
 
-    CompletableFuture<Path> writeReportZip(String why) {
+    CompletableFuture<Path> writeReportZip(String title, String why) {
         return this.tasks.submit("report a mod asked for", () -> {
             try {
-                return this.zips.writeZip(why, false, List.of());
+                return this.zips.writeZip(title, why, List.of());
             } catch (IOException e) {
                 throw new UncheckedIOException(e);
             }

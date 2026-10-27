@@ -37,8 +37,7 @@ public final class HotwireClient implements ClientModInitializer {
     public void onInitializeClient() {
         HotwireLog.install(FabricLoader.getInstance().getGameDir().resolve("hotwire").resolve("logs"));
         GameLog.LOGGER.info("[Hotwire] {} loaded; H or /hotwire opens it, and its Report button writes what went wrong"
-                + " to hotwire/reports", FabricLoader.getInstance().getModContainer(ID)
-                .map(mod -> mod.getMetadata().getVersion().getFriendlyString()).orElse("unknown"));
+                + " to hotwire/reports", LoadedMods.findVersion(ID, "unknown"));
 
         Lang.useTranslator((key, values) -> {
             Language language = Language.getInstance();

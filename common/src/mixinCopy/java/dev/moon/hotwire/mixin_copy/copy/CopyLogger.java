@@ -9,6 +9,8 @@ import org.spongepowered.asm.logging.LoggerAdapterAbstract;
 final class CopyLogger extends LoggerAdapterAbstract {
     private static final Set<Level> LOUD = EnumSet.of(Level.FATAL, Level.ERROR, Level.WARN);
 
+    private static final boolean ALL = Boolean.getBoolean("hotwire.copyLogAll");
+
     CopyLogger(String name) {
         super(name);
     }
@@ -25,7 +27,7 @@ final class CopyLogger extends LoggerAdapterAbstract {
 
     @Override
     public void log(Level level, String message, Object... params) {
-        if (!LOUD.contains(level) || message.startsWith("Reference map ")
+        if ((!LOUD.contains(level) && !(ALL && level == Level.INFO)) || message.startsWith("Reference map ")
                 || message.startsWith("MixinEnvironment::setCompatibilityLevel is deprecated")) {
             return;
         }

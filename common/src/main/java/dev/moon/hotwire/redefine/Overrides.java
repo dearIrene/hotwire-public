@@ -1,5 +1,6 @@
 package dev.moon.hotwire.redefine;
 
+import dev.moon.hotwire.classfile.ClassHeader;
 import java.io.IOException;
 import java.io.InputStream;
 import java.util.ArrayDeque;
@@ -9,10 +10,11 @@ import java.util.HashMap;
 import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
+import java.util.Optional;
 import java.util.Set;
+import java.util.concurrent.ConcurrentHashMap;
 import java.util.function.Function;
 import org.jspecify.annotations.Nullable;
-import org.objectweb.asm.ClassReader;
 import org.objectweb.asm.Opcodes;
 import org.objectweb.asm.Type;
 import org.objectweb.asm.tree.AbstractInsnNode;
@@ -23,6 +25,7 @@ import org.objectweb.asm.tree.MethodNode;
 import org.objectweb.asm.tree.VarInsnNode;
 
 final class Overrides {
+    private static final Map<String, Optional<ClassHeader>> JDK = new ConcurrentHashMap<>();
     private static final int SKIPPED = Opcodes.ACC_STATIC | Opcodes.ACC_PRIVATE | Opcodes.ACC_ABSTRACT
             | Opcodes.ACC_NATIVE;
 
@@ -60,17 +63,17 @@ final class Overrides {
             Function<String, byte @Nullable []> classBytes) {
         List<String> interfaces = new ArrayList<>(owner.interfaces);
         for (String type = owner.superName; type != null; ) {
-            ClassNode node = read(type, classBytes);
+            ClassHeader node = read(type, classBytes);
             if (node == null) {
                 return null;
             }
-            MethodNode found = findDeclared(node, name, desc);
+            ClassHeader.Member found = findDeclared(node, name, desc);
             if (found != null) {
-                return (found.access & NOT_CALLED) == 0
+                return (found.access() & NOT_CALLED) == 0
                         ? new MethodInsnNode(Opcodes.INVOKESPECIAL, owner.superName, name, desc, false) : null;
             }
-            interfaces.addAll(node.interfaces);
-            type = node.superName;
+            interfaces.addAll(node.interfaces());
+            type = node.superName();
         }
         Map<String, List<String>> parents = new HashMap<>();
         String target = findDefault(interfaces, name, desc, classBytes, parents);
@@ -97,15 +100,15 @@ final class Overrides {
             if (!seen.add(type)) {
                 continue;
             }
-            ClassNode node = read(type, classBytes);
+            ClassHeader node = read(type, classBytes);
             if (node == null) {
                 return null;
             }
-            parents.put(type, node.interfaces);
+            parents.put(type, node.interfaces());
             if (findDeclared(node, name, desc) != null) {
                 declaring.add(type);
             }
-            queue.addAll(node.interfaces);
+            queue.addAll(node.interfaces());
         }
         List<String> specific = new ArrayList<>();
         for (String type : declaring) {
@@ -121,20 +124,20 @@ final class Overrides {
             return null;
         }
         String target = specific.getFirst();
-        MethodNode method = findDeclared(read(target, classBytes), name, desc);
-        return method == null || (method.access & (Opcodes.ACC_ABSTRACT | Opcodes.ACC_STATIC)) != 0 ? null : target;
+        ClassHeader.Member method = findDeclared(read(target, classBytes), name, desc);
+        return method == null || (method.access() & (Opcodes.ACC_ABSTRACT | Opcodes.ACC_STATIC)) != 0 ? null : target;
     }
 
     static @Nullable String findDefaultDeclarer(List<String> interfaces, @Nullable String superName, String method,
             String descriptor, Function<String, byte @Nullable []> classBytes) {
         List<String> all = new ArrayList<>(interfaces);
         for (String type = superName; type != null; ) {
-            ClassNode node = read(type, classBytes);
+            ClassHeader node = read(type, classBytes);
             if (node == null || findDeclared(node, method, descriptor) != null) {
                 return null;
             }
-            all.addAll(node.interfaces);
-            type = node.superName;
+            all.addAll(node.interfaces());
+            type = node.superName();
         }
         return findDefault(all, method, descriptor, classBytes, new HashMap<>());
     }
@@ -142,19 +145,19 @@ final class Overrides {
     static @Nullable String findDeclarer(String name, @Nullable String superName, String method, String descriptor,
             Function<String, byte @Nullable []> classBytes) {
         for (String type = superName; type != null; ) {
-            ClassNode node = read(type, classBytes);
+            ClassHeader node = read(type, classBytes);
             if (node == null) {
                 return null;
             }
-            MethodNode found = findDeclared(node, method, descriptor);
+            ClassHeader.Member found = findDeclared(node, method, descriptor);
             if (found != null) {
-                boolean open = (found.access & (Opcodes.ACC_PUBLIC | Opcodes.ACC_PROTECTED)) != 0
+                boolean open = (found.access() & (Opcodes.ACC_PUBLIC | Opcodes.ACC_PROTECTED)) != 0
                         || type.substring(0, type.lastIndexOf('/') + 1).equals(
                                 name.substring(0, name.lastIndexOf('/') + 1));
-                return open && (found.access & (NOT_CALLED | Opcodes.ACC_FINAL | Opcodes.ACC_NATIVE)) == 0
+                return open && (found.access() & (NOT_CALLED | Opcodes.ACC_FINAL | Opcodes.ACC_NATIVE)) == 0
                         ? type : null;
             }
-            type = node.superName;
+            type = node.superName();
         }
         return null;
     }
@@ -184,32 +187,21 @@ final class Overrides {
                 && call.desc.equals(method.desc);
     }
 
-    private static @Nullable MethodNode findDeclared(@Nullable ClassNode node, String name, String desc) {
-        if (node == null) {
-            return null;
-        }
-        for (MethodNode method : node.methods) {
-            if (method.name.equals(name) && method.desc.equals(desc)) {
-                return method;
-            }
-        }
-        return null;
+    private static ClassHeader.@Nullable Member findDeclared(@Nullable ClassHeader node, String name, String desc) {
+        return node == null ? null : node.findMethod(name, desc);
     }
 
-    private static @Nullable ClassNode read(String internalName, Function<String, byte @Nullable []> classBytes) {
+    private static @Nullable ClassHeader read(String internalName, Function<String, byte @Nullable []> classBytes) {
         byte[] bytes = classBytes.apply(internalName);
-        if (bytes == null) {
-            try (InputStream in = ClassLoader.getSystemResourceAsStream(internalName + ".class")) {
-                bytes = in == null ? null : in.readAllBytes();
+        if (bytes != null) {
+            return ClassHeader.of(bytes);
+        }
+        return JDK.computeIfAbsent(internalName, name -> {
+            try (InputStream in = ClassLoader.getSystemResourceAsStream(name + ".class")) {
+                return in == null ? Optional.empty() : Optional.of(ClassHeader.of(in.readAllBytes()));
             } catch (IOException e) {
-                bytes = null;
+                return Optional.empty();
             }
-        }
-        if (bytes == null) {
-            return null;
-        }
-        ClassNode node = new ClassNode();
-        new ClassReader(bytes).accept(node, ClassReader.SKIP_CODE);
-        return node;
+        }).orElse(null);
     }
 }

@@ -18,6 +18,7 @@ import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.CopyOnWriteArrayList;
 import java.util.function.BiConsumer;
+import java.util.function.BiFunction;
 import java.util.function.Function;
 import java.util.function.Supplier;
 import org.jspecify.annotations.Nullable;
@@ -41,7 +42,7 @@ public final class CrashGuard {
     @SuppressWarnings("FutureReturnValueIgnored")
 
     static void install(InstalledMods installed, Tasks tasks, Supplier<@Nullable SwitchRunner> runner,
-            BiConsumer<String, Boolean> say, Function<String, String> writeReport) {
+            BiConsumer<String, Boolean> say, BiFunction<String, String, String> writeReport) {
         CrashPolicy[] made = new CrashPolicy[1];
         made[0] = new CrashPolicy(CrashGuard::findModBehind, id -> installed.isAddedThisSession(id)
                 || SWITCHED.contains(id), caught -> {
@@ -56,7 +57,8 @@ public final class CrashGuard {
             }
             String why = name + " threw at " + caught.site() + ": " + caught.thrown();
             if (!switching.getSwitcher().isOn(caught.mod())) {
-                tasks.submit("report of " + caught.mod() + "'s crash", () -> writeReport.apply(why), where -> {
+                tasks.submit("report of " + caught.mod() + "'s crash", () -> writeReport.apply(
+                        Lang.get("hotwire.report.file.mod_crash", name), why), where -> {
                     String line = Lang.get("hotwire.crash.off_held", name, where);
                     say.accept(line, true);
                     ModViews.showToast(Lang.get("hotwire.crash.title"), line);
@@ -101,10 +103,11 @@ public final class CrashGuard {
     }
 
     private static void finish(CrashPolicy policy, String mod, String name, ModSwitcher.Result result, String why,
-            InstalledMods installed, BiConsumer<String, Boolean> say, Function<String, String> writeReport) {
+            InstalledMods installed, BiConsumer<String, Boolean> say,
+            BiFunction<String, String, String> writeReport) {
         boolean off = !PlayerMessages.isBad(result);
         policy.onOffFinished(mod, off);
-        String where = writeReport.apply(why);
+        String where = writeReport.apply(Lang.get("hotwire.report.file.mod_crash", name), why);
         String line = off ? Lang.get("hotwire.crash.turned_off", name, where) : Lang.get("hotwire.crash.not_turned_off",
                 name, PlayerMessages.describe(result, installed::nameOf), where);
         say.accept(line, true);

@@ -17,7 +17,9 @@ public final class ChooserScreen {
     static final int LEFT = 263;
     static final int RIGHT = 262;
     private static final float OPEN = 0.32f;
-    private static final float LEAVE = 0.16f;
+    private static final float LEAVE = 0.22f;
+
+    private static final float GROW = 0.04f;
     private static final float TITLE_SCALE = 3f;
     private static final float MARK_SCALE = 1.5f;
     private static final int BACKDROP = 0xD00B0912;
@@ -30,6 +32,7 @@ public final class ChooserScreen {
     private final EasedValue out = EasedValue.ofDuration(LEAVE);
 
     private @Nullable Runnable leaving;
+    private boolean closing;
 
     private boolean left;
     private final String credit = Lang.get("hotwire.header.credit", Header.AUTHOR);
@@ -49,9 +52,10 @@ public final class ChooserScreen {
         this.out.snap(0);
     }
 
-    private void leave(Runnable then) {
+    private void leave(Runnable then, boolean closing) {
         if (this.leaving == null) {
             this.leaving = then;
+            this.closing = closing;
             this.out.to(1);
         }
     }
@@ -83,7 +87,7 @@ public final class ChooserScreen {
 
     public boolean pressKey(int key, int modifiers) {
         switch (key) {
-            case ESCAPE -> this.leave(this.choice::close);
+            case ESCAPE -> this.leave(this.choice::close, true);
             case LEFT -> this.setLit(this.store);
             case RIGHT -> this.setLit(this.hotwire);
             case ENTER -> (this.hotwire.isLit() ? this.hotwire : this.store).pick();
@@ -128,12 +132,14 @@ public final class ChooserScreen {
         @Override
         protected void paint(Canvas canvas, float alpha) {
             float a = alpha * ChooserScreen.this.findShown();
+            float dim = alpha * ChooserScreen.this.in.getValue()
+                    * (ChooserScreen.this.closing ? 1 - ChooserScreen.this.out.getValue() : 1);
             int w = ChooserScreen.this.width;
             int h = ChooserScreen.this.height;
-            canvas.fill(0, 0, w, h, Colors.fade(BACKDROP, a));
+            canvas.fill(0, 0, w, h, Colors.fade(BACKDROP, dim));
 
             int band = Math.max(40, Math.min(w, h) / 4);
-            int dark = Colors.fade(0xFF06040A, a * 0.75f);
+            int dark = Colors.fade(0xFF06040A, dim * 0.75f);
             int none = 0x0006040A;
             canvas.fillDown(0, 0, w, band, dark, none);
             canvas.fillDown(0, h - band, w, h, none, dark);
@@ -173,7 +179,7 @@ public final class ChooserScreen {
         }
 
         void pick() {
-            ChooserScreen.this.leave(this.pick);
+            ChooserScreen.this.leave(this.pick, false);
         }
 
         @Override
@@ -191,11 +197,12 @@ public final class ChooserScreen {
         protected void paint(Canvas canvas, float alpha) {
             float shown = ChooserScreen.this.findShown();
             float a = alpha * shown;
-            int rise = Math.round((1 - shown) * 16);
             int x = this.getX();
-            int y = this.getY() + rise;
+            int y = this.getY();
             int w = this.getWidth();
             int h = this.getHeight();
+
+            canvas.pushScale(1 - GROW * (1 - shown), x + w / 2f, y + h / 2f);
             float hot = this.hot.getValue();
             int lift = Math.round(hot * 3);
             y -= lift;
@@ -224,6 +231,7 @@ public final class ChooserScreen {
                 canvas.drawText(this.below, x + (w - canvas.measureText(this.below)) / 2, y + h + 12,
                         Colors.fade(Colors.mix(Palette.DIM, Palette.TEXT, hot * 0.5f), a));
             }
+            canvas.popScale();
         }
 
         @Override

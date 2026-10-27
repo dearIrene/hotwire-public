@@ -65,7 +65,7 @@ public final class MixinCopy implements AutoCloseable {
     private final Set<String> readInMix = ConcurrentHashMap.newKeySet();
     private volatile byte @Nullable [] recipe;
 
-    private final List<URL> mixinJars;
+    private final List<Path> mixinJars;
     private final ClassLoader live;
     private final List<String> sharedPackages;
     private final String sessionId;
@@ -95,7 +95,7 @@ public final class MixinCopy implements AutoCloseable {
             this.readInMix.add(name);
             return this.findBytes(name, more);
         };
-        this.mixinJars = mixinJars.stream().map(MixinCopy::toUrl).toList();
+        this.mixinJars = List.copyOf(mixinJars);
         this.live = live;
         this.sharedPackages = List.copyOf(sharedPackages);
         this.sessionId = sessionId;
@@ -140,10 +140,8 @@ public final class MixinCopy implements AutoCloseable {
         try {
             MessageDigest digest = MessageDigest.getInstance("SHA-256");
             digest.update(Files.readAllBytes(copyJar()));
-            for (URL jar : this.mixinJars) {
-                try (InputStream in = jar.openStream()) {
-                    digest.update(in.readAllBytes());
-                }
+            for (Path jar : this.mixinJars) {
+                digest.update(Files.readAllBytes(jar));
             }
             digest.update(this.side.getBytes(StandardCharsets.UTF_8));
             digest.update(new TreeMap<>(this.decorations.modIds()).toString()
@@ -363,7 +361,7 @@ public final class MixinCopy implements AutoCloseable {
     }
 
     private static void log(String level, String message) {
-        if (level.equals("WARN")) {
+        if (level.equals("WARN") || level.equals("INFO")) {
             LOGGER.info("[Hotwire] Mixin's copy, {}: {}", level, message);
         } else {
             LOGGER.error("[Hotwire] Mixin's copy, {}: {}", level, message);
@@ -373,7 +371,7 @@ public final class MixinCopy implements AutoCloseable {
     private Copy open() throws MixinCopyException {
         List<URL> path = new ArrayList<>();
         path.add(toUrl(copyJar()));
-        path.addAll(this.mixinJars);
+        this.mixinJars.forEach(jar -> path.add(toUrl(jar)));
         URLClassLoader loader = new URLClassLoader(path.toArray(URL[]::new), ClassLoader.getPlatformClassLoader());
         try {
             @SuppressWarnings("unchecked")

@@ -1,5 +1,6 @@
 package dev.moon.hotwire.redefine;
 
+import dev.moon.hotwire.classfile.ClassHeader;
 import java.util.HashMap;
 import java.util.HashSet;
 import java.util.LinkedHashSet;
@@ -13,7 +14,6 @@ import org.objectweb.asm.Opcodes;
 import org.objectweb.asm.tree.AbstractInsnNode;
 import org.objectweb.asm.tree.ClassNode;
 import org.objectweb.asm.tree.FieldInsnNode;
-import org.objectweb.asm.tree.FieldNode;
 import org.objectweb.asm.tree.MethodInsnNode;
 import org.objectweb.asm.tree.MethodNode;
 import org.objectweb.asm.tree.TypeInsnNode;
@@ -28,11 +28,9 @@ public final class HandlerSetups {
             return List.of();
         }
         Set<String> gameFields = new HashSet<>();
-        ClassNode before = new ClassNode();
-        new ClassReader(original).accept(before, ClassReader.SKIP_CODE);
-        for (FieldNode field : before.fields) {
-            if ((field.access & Opcodes.ACC_STATIC) == 0) {
-                gameFields.add(field.name + field.desc);
+        for (ClassHeader.Member field : ClassHeader.of(original).fields()) {
+            if (!field.isStatic()) {
+                gameFields.add(field.name() + field.desc());
             }
         }
         ClassNode node = new ClassNode();

@@ -1,6 +1,7 @@
 package dev.moon.hotwire.fabric.store;
 
 import dev.moon.hotwire.fabric.InstalledMods;
+import dev.moon.hotwire.fabric.LoadedMods;
 import dev.moon.hotwire.modrinth.LocalJars;
 import dev.moon.hotwire.modrinth.ModrinthClient;
 import dev.moon.hotwire.modrinth.StoreCache;
@@ -145,7 +146,6 @@ public final class ModStore {
     }
 
     private static String findVersionOf(String id) {
-        return FabricLoader.getInstance().getModContainer(id)
-                .map(mod -> mod.getMetadata().getVersion().getFriendlyString()).orElse("unknown");
+        return LoadedMods.findVersion(id, "unknown");
     }
 }

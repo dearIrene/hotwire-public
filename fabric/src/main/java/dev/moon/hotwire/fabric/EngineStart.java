@@ -178,8 +178,8 @@ final class EngineStart {
                 MixinConfigs.of(installed.getGraphJars(), loadedIds), mixin.getConfigObjects());
         GameClasses classes = new GameClasses(knot, HotwireEngine.class.getClassLoader());
         SwitchApplier applier = new SwitchApplier(
-                new ClassRebuilder(instrumentation, GameMixinCopy.create(knot, mixin, MixinConfigs.readDecorations(
-                        mixins, mixin))),
+                new ClassRebuilder(instrumentation, GameMixinCopy.create(mixin, MixinConfigs.readDecorations(
+                        mixins, mixin), classes::findOriginalBytes)),
                 classes, mixins, mixins.keySet(), MixinConfigs.findUnowned(mixin.getConfigs(), mixins));
         applier.getRebuilder().resolveArgsWith(mixin::getArgsClassFor);
         applier.getRebuilder().cacheMixesIn(CacheStore.open(findCacheFolder().resolve("mixed"), "mixed", MIXED_CAP),
@@ -306,8 +306,7 @@ final class EngineStart {
         } else if (System.getProperty("os.name", "").startsWith("Mac")) {
             base = home.resolve("Library/Caches");
         }
-        String game = FabricLoader.getInstance().getModContainer("minecraft")
-                .map(mod -> mod.getMetadata().getVersion().getFriendlyString()).orElse("unknown");
+        String game = LoadedMods.findVersion("minecraft", "unknown");
         return base.resolve("hotwire").resolve(game);
     }
 

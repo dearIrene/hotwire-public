@@ -2,6 +2,7 @@ package dev.moon.hotwire.fabric.rebuild;
 
 import dev.moon.hotwire.jvm.PrivateField;
 import dev.moon.hotwire.mixin_copy.MixinCopy;
+import java.io.IOException;
 import java.lang.reflect.Field;
 import java.lang.reflect.Modifier;
 import java.util.ArrayList;
@@ -11,12 +12,16 @@ import java.util.List;
 import java.util.Map;
 import java.util.Objects;
 import org.jspecify.annotations.Nullable;
+import org.objectweb.asm.ClassWriter;
+import org.objectweb.asm.tree.ClassNode;
 import org.spongepowered.asm.mixin.FabricUtil;
 import org.spongepowered.asm.mixin.MixinEnvironment;
 import org.spongepowered.asm.mixin.extensibility.IMixinConfig;
 import org.spongepowered.asm.mixin.extensibility.IMixinInfo;
 import org.spongepowered.asm.mixin.injection.invoke.arg.ArgsClassGenerator;
+import org.spongepowered.asm.service.IMixinService;
 import org.spongepowered.asm.service.ISyntheticClassInfo;
+import org.spongepowered.asm.service.MixinService;
 
 public final class MixinInternals {
     private static final String TRANSFORMER = "org.spongepowered.asm.mixin.transformer.IMixinTransformer";
@@ -126,6 +131,28 @@ public final class MixinInternals {
         return new ArrayList<>(all);
     }
 
+    @SuppressWarnings("ReferenceEquality")
+    public byte @Nullable [] findMadeClass(String internal) {
+        String name = internal.replace('/', '.');
+        IMixinService own = MixinService.getService();
+        for (Object config : this.getConfigObjects()) {
+            if (!(config instanceof IMixinConfig made) || made.getMixinPackage().isEmpty()
+                    || !name.startsWith(made.getMixinPackage())
+                    || !(PrivateField.of(config.getClass(), "service").get(config, Object.class)
+                    instanceof IMixinService given) || given == own) {
+                continue;
+            }
+            try {
+                ClassNode node = given.getBytecodeProvider().getClassNode(name, false);
+                ClassWriter writer = new ClassWriter(0);
+                node.accept(writer);
+                return writer.toByteArray();
+            } catch (ClassNotFoundException | IOException e) {
+            }
+        }
+        return null;
+    }
+
     public List<String> getGeneratedBy(String mod) {
         Map<?, ?> classes = PrivateField.of(this.generated.getClass(), "classes").get(this.generated, Map.class);
         List<?> all = List.of();
@@ -138,9 +165,9 @@ public final class MixinInternals {
         }
         List<String> names = new ArrayList<>();
         for (Object info : all) {
-            if (info instanceof ISyntheticClassInfo generated && generated.isLoaded() && generated.getMixin() != null
-                    && mod.equals(this.modIdOf.get(generated.getMixin().getConfig().getName()))) {
-                names.add(generated.getClassName());
+            if (info instanceof ISyntheticClassInfo synthetic && synthetic.isLoaded() && synthetic.getMixin() != null
+                    && mod.equals(this.modIdOf.get(synthetic.getMixin().getConfig().getName()))) {
+                names.add(synthetic.getClassName());
             }
         }
         return names;

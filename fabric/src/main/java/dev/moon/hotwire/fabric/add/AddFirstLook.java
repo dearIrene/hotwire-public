@@ -1,5 +1,6 @@
 package dev.moon.hotwire.fabric.add;
 
+import dev.moon.hotwire.fabric.LoadedMods;
 import dev.moon.hotwire.fabric.ModPolicy;
 import dev.moon.hotwire.jar.JarKind;
 import dev.moon.hotwire.jar.ModJarException;
@@ -15,7 +16,6 @@ import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 import java.util.zip.ZipEntry;
 import java.util.zip.ZipFile;
-import net.fabricmc.loader.api.FabricLoader;
 import org.jspecify.annotations.Nullable;
 
 final class AddFirstLook {
@@ -75,7 +75,6 @@ final class AddFirstLook {
     }
 
     private static @Nullable String findVersionOf(String id) {
-        return FabricLoader.getInstance().getModContainer(id)
-                .map(mod -> mod.getMetadata().getVersion().getFriendlyString()).orElse(null);
+        return LoadedMods.findVersion(id);
     }
 }

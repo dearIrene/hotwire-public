@@ -1,10 +1,10 @@
 package dev.moon.hotwire.fabric.report;
 
 import com.sun.management.OperatingSystemMXBean;
+import dev.moon.hotwire.fabric.LoadedMods;
 import java.lang.management.ManagementFactory;
 import java.util.ArrayList;
 import java.util.List;
-import net.fabricmc.loader.api.FabricLoader;
 import oshi.SystemInfo;
 import oshi.hardware.GraphicsCard;
 import oshi.hardware.HardwareAbstractionLayer;
@@ -43,7 +43,6 @@ final class MachineFacts {
     }
 
     private static String findVersionOf(String id) {
-        return FabricLoader.getInstance().getModContainer(id)
-                .map(mod -> mod.getMetadata().getVersion().getFriendlyString()).orElse("unknown");
+        return LoadedMods.findVersion(id, "unknown");
     }
 }

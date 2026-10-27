@@ -39,6 +39,8 @@ public final class ClassRebuilder {
 
     private static final Duration SLOW_SPLIT = Duration.ofSeconds(1);
 
+    private static final int MISSES_NAMED = 12;
+
     static final ThreadLocal<BooleanSupplier> STOP = ThreadLocal.withInitial(() -> () -> false);
 
     private final Instrumentation instrumentation;
@@ -86,6 +88,18 @@ public final class ClassRebuilder {
         MixedCache cache = this.mixedCache;
         if (cache != null) {
             cache.clear();
+        }
+    }
+
+    public boolean isFilled(CacheKey plan) {
+        MixedCache cache = this.mixedCache;
+        return cache != null && cache.isFilled(plan);
+    }
+
+    public void markFilled(CacheKey plan) {
+        MixedCache cache = this.mixedCache;
+        if (cache != null) {
+            cache.markFilled(plan);
         }
     }
 
@@ -266,6 +280,7 @@ public final class ClassRebuilder {
                 toMix.add(name);
             }
         }
+        long shapedAt = System.nanoTime();
         if (!toMix.isEmpty()) {
             Map<String, byte[]> copied = this.mix(toMix, readable, resources, on, mods, STOP.get());
             copied.forEach(RebuildEvidence::dumpCopy);
@@ -274,6 +289,7 @@ public final class ClassRebuilder {
         if (MIX_ONLY.get()) {
             throw new RebuildException(MIX_SAVED, new IllegalStateException(String.valueOf(toMix.size())));
         }
+        long copiedAt = System.nanoTime();
 
         Map<String, byte[]> matched = new ConcurrentHashMap<>();
         Parallel.forEach(mixed.entrySet(), entry -> {
@@ -284,6 +300,7 @@ public final class ClassRebuilder {
             }
         });
         mixed.putAll(matched);
+        long namedAt = System.nanoTime();
         Function<String, byte @Nullable []> anyClass = read -> {
             byte[] handed = readable.get(read);
             return handed != null ? handed : this.bytesOf.apply(read);
@@ -326,6 +343,12 @@ public final class ClassRebuilder {
         });
         mixed.putAll(retained);
         long mixedAt = System.nanoTime();
+        if (mixedAt - start > SLOW_SPLIT.toNanos()) {
+            LOGGER.info("[Hotwire] the mix of {} classes took {} ms: constructors {}, copy {}, names {}, overrides {},"
+                    + " catch-ups {}", byName.size(), (mixedAt - start) / 1_000_000, (shapedAt - start) / 1_000_000,
+                    (copiedAt - shapedAt) / 1_000_000, (namedAt - copiedAt) / 1_000_000,
+                    (retainedAt - namedAt) / 1_000_000, (mixedAt - retainedAt) / 1_000_000);
+        }
         if (mixedAt - retainedAt > SLOW_SPLIT.toNanos()) {
             LOGGER.info("[Hotwire] the catch-ups of {} classes took {} ms (summed over the cores: initializers {},"
                     + " off-window replay {}, hooks {}, dispatch and moves {})", byName.size(),
@@ -599,9 +622,15 @@ public final class ClassRebuilder {
                         toMix.remove(target);
                     }
                 });
-                LOGGER.info("[Hotwire] {} of {} classes were read back from the switch cache, {} missed, {} a plugin"
+                List<String> missed = new ArrayList<>();
+                for (String target : new TreeSet<>(keys.keySet())) {
+                    if (toMix.contains(target) && missed.size() < MISSES_NAMED) {
+                        missed.add(target);
+                    }
+                }
+                LOGGER.info("[Hotwire] {} of {} classes were read back from the switch cache, {} missed{}, {} a plugin"
                         + " decides for ({})", readBack.size(), targets.size(), keys.size() - readBack.size(),
-                        targets.size() - keys.size(), cache.describe());
+                        missed.isEmpty() ? "" : " " + missed, targets.size() - keys.size(), cache.describe());
                 if (!readBack.isEmpty()) {
                     if (Boolean.parseBoolean(System.getProperty("hotwire.cacheVerify"))) {
                         verify(readBack, this.copy.mixAll(readBack.keySet(), classes, resources, configs, stop));
