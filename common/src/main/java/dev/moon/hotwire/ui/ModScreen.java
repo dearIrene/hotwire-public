@@ -97,7 +97,11 @@ public final class ModScreen implements JarHost {
         default void fillCache(boolean go) {
         }
 
-        default void clearCache() {
+        default List<CacheVersion> getCacheVersions() {
+            return List.of();
+        }
+
+        default void clearCache(@Nullable String version) {
         }
 
         default void setCacheLimit(int megabytes) {
@@ -157,6 +161,7 @@ public final class ModScreen implements JarHost {
     private final UpdatePanel updatePanel;
     private final AdvancedPanel advancedPanel;
     private final CacheFillPanel cacheFillPanel;
+    private final ManageCachePanel manageCachePanel;
     private final List<Panel> panels;
     private final PendingPanel pendingPanel;
     private final ReopenPanel reopenPanel;
@@ -197,8 +202,9 @@ public final class ModScreen implements JarHost {
                 this::openReport);
         this.pending = new Button(Lang.get("hotwire.screen.pending"), Lang.get("hotwire.screen.pending_short"), false,
                 this::openPending);
-        this.cacheFillPanel = new CacheFillPanel(game::getCacheFill, game::fillCache, game::clearCache,
-                game::setCacheLimit, this::closePanels);
+        this.manageCachePanel = new ManageCachePanel(game::getCacheVersions, game::clearCache, this::closePanels);
+        this.cacheFillPanel = new CacheFillPanel(game::getCacheFill, game::fillCache,
+                this::openManageCache, game::setCacheLimit, this::closePanels);
         this.advanced = new Button(Lang.get("hotwire.screen.advanced"), Lang.get("hotwire.screen.advanced_short"),
                 false, this::openAdvanced);
         this.switchCache = new Button(Lang.get("hotwire.screen.switch_cache"),
@@ -245,7 +251,7 @@ public final class ModScreen implements JarHost {
 
         this.panels = List.of(this.advancedPanel, this.pendingPanel, this.updatesPanel, this.addPanel,
                 this.updatePanel, this.progress, this.reopenPanel, this.firstOpen, this.reportPanel,
-                this.cacheFillPanel);
+                this.cacheFillPanel, this.manageCachePanel);
         this.panels.forEach(this.root.getModal()::add);
         if (!game.isFirstOpenAccepted()) {
             this.firstOpen.present();
@@ -417,15 +423,14 @@ public final class ModScreen implements JarHost {
         this.reopenPanel.open(offer);
     }
 
-    private void closePanels() {
-        this.addPanel.dismiss();
-        this.updatePanel.dismiss();
-        this.updatesPanel.dismiss();
-        this.advancedPanel.dismiss();
+    private void openManageCache() {
         this.cacheFillPanel.dismiss();
-        this.pendingPanel.dismiss();
-        this.reportPanel.dismiss();
-        this.reopenPanel.dismiss();
+        this.manageCachePanel.present();
+    }
+
+    private void closePanels() {
+        this.panels.stream().filter(panel -> panel != this.progress && panel != this.firstOpen)
+                .forEach(Panel::dismiss);
         this.showMessage("", false);
     }
 
@@ -466,6 +471,7 @@ public final class ModScreen implements JarHost {
             this.bar.markStale();
         }
         this.pending.setBadge(this.pendingCount);
+        CacheFillPanel.markButton(this.switchCache, this.bar, this.game.getCacheFill());
         this.toggle.setActive(idle && off + on > 0);
         this.add.setActive(idle && this.game.canAdd());
         this.report.setActive(idle);

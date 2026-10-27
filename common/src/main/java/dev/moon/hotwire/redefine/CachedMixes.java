@@ -78,11 +78,16 @@ public final class CachedMixes {
         return known == null ? -1 : known.findFilled(plan);
     }
 
-    public void markFilled(CacheKey plan, long bytes) {
+    public void markFilled(CacheKey plan, CacheKey mods, long bytes) {
         MixedCache known = this.cache;
         if (known != null) {
-            known.markFilled(plan, bytes);
+            known.markFilled(plan, mods, bytes);
         }
+    }
+
+    public boolean hasBeenFilled(CacheKey mods) {
+        MixedCache known = this.cache;
+        return known != null && known.hasBeenFilled(mods);
     }
 
     public Sizes getSizes() {

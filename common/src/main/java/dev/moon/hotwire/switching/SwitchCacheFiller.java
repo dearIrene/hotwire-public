@@ -56,7 +56,7 @@ public final class SwitchCacheFiller {
     }
 
     public record Fill(boolean running, int stepsDone, int steps, long classesDone, long classes, long bytesDone,
-            long bytes, long millis, boolean sampled, long filledBytes, long baseBytes) {
+            long bytes, long millis, boolean sampled, long filledBytes, long baseBytes, boolean outdated) {
     }
 
     private final Host host;
@@ -84,6 +84,9 @@ public final class SwitchCacheFiller {
     private volatile boolean lookReady;
 
     private volatile @Nullable CacheKey plan;
+    private volatile @Nullable CacheKey mods;
+
+    private volatile boolean outdated;
 
     SwitchCacheFiller(Host host, SwitchApplier applier) {
         this.host = host;
@@ -121,6 +124,7 @@ public final class SwitchCacheFiller {
         this.bytes = 0;
         this.baseBytes = 0;
         this.filledBytes = -1;
+        this.outdated = false;
     }
 
     public Fill getFill() {
@@ -128,7 +132,8 @@ public final class SwitchCacheFiller {
         boolean alive = running != null && running.isAlive() && !this.paused && !this.sampleOnly;
         return new Fill(alive, this.done.get(), this.steps.size(), this.classesDone.get(), this.classes,
                 this.bytesDone.get(), this.bytes, this.nanos.get() / 1_000_000,
-                !this.steps.isEmpty() && this.done.get() >= this.sample, this.filledBytes, this.baseBytes);
+                !this.steps.isEmpty() && this.done.get() >= this.sample, this.filledBytes, this.baseBytes,
+                this.outdated);
     }
 
     @SuppressWarnings("ThreadPriorityCheck")
@@ -193,12 +198,14 @@ public final class SwitchCacheFiller {
             this.yieldAfter(this.nanos.get() - before);
         }
         CacheKey filled = this.plan;
+        CacheKey filledMods = this.mods;
 
-        if (filled != null && current == this.run.get() && this.done.get() >= planned.size()
+        if (filled != null && filledMods != null && current == this.run.get() && this.done.get() >= planned.size()
                 && this.filledBytes < 0) {
             CachedMixes.Sizes sizes = this.applier.getRebuilder().getCache().getSizes();
             this.filledBytes = sizes.classes() + sizes.reads();
-            this.applier.getRebuilder().getCache().markFilled(filled, this.filledBytes);
+            this.applier.getRebuilder().getCache().markFilled(filled, filledMods, this.filledBytes);
+            this.outdated = false;
         }
 
         long[] times = this.applier.getRebuilder().getCache().findTimes();
@@ -276,12 +283,17 @@ public final class SwitchCacheFiller {
             plan.add(step.classes()).add(step.bytes());
         }
         this.plan = plan.build();
+        CacheKey.Builder mods = CacheKey.of("fill mods 1");
+        new TreeSet<>(this.host.getIds()).forEach(mods::add);
+        this.mods = mods.build();
         long known = this.applier.getRebuilder().getCache().findFilled(this.plan);
         if (known >= 0) {
             this.filledBytes = known;
             this.done.set(this.steps.size());
             this.classesDone.set(this.classes);
             this.bytesDone.set(this.bytes);
+        } else {
+            this.outdated = this.applier.getRebuilder().getCache().hasBeenFilled(this.mods);
         }
     }
 

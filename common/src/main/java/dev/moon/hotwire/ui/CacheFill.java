@@ -3,7 +3,7 @@ package dev.moon.hotwire.ui;
 import java.util.Locale;
 
 public record CacheFill(int done, int of, boolean running, long savedBytes, long estimatedBytes, long millisLeft,
-        long folderBytes, long limitBytes) {
+        long folderBytes, long limitBytes, boolean outdated) {
     public boolean isOverLimit() {
         return this.limitBytes > 0
                 && (this.estimatedBytes > this.limitBytes || this.folderBytes > this.limitBytes * 9 / 10);

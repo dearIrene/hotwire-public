@@ -45,6 +45,10 @@ final class Button extends Element {
         return true;
     }
 
+    String getLabel() {
+        return this.label;
+    }
+
     public void label(String label) {
         this.label(label, label);
     }

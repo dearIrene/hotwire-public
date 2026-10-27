@@ -30,6 +30,7 @@ import dev.moon.hotwire.ui.AddMode;
 import dev.moon.hotwire.ui.AddPreview;
 import dev.moon.hotwire.ui.AdvancedOption;
 import dev.moon.hotwire.ui.CacheFill;
+import dev.moon.hotwire.ui.CacheVersion;
 import dev.moon.hotwire.ui.Canvas;
 import dev.moon.hotwire.ui.ChooserScreen;
 import dev.moon.hotwire.ui.JarHost;
@@ -364,8 +365,13 @@ public final class HotwireEngine implements ModScreen.Game, AutoCloseable {
     }
 
     @Override
-    public void clearCache() {
-        this.cacheFill.clear();
+    public List<CacheVersion> getCacheVersions() {
+        return this.cacheFill.findVersions();
+    }
+
+    @Override
+    public void clearCache(@Nullable String version) {
+        this.cacheFill.clear(version);
     }
 
     @Override

@@ -12,28 +12,22 @@ public final class CacheFillPanel extends Panel {
     static final int LINE = 12;
     private static final int BAR_H = 4;
 
-    private static final float CONFIRM_SECONDS = 3;
-
     private static final int ROW = 22;
     private static final int EXPAND_MEGABYTES = 256;
 
     private final Supplier<@Nullable CacheFill> fill;
-    private final Runnable onClear;
     private final Button expand;
     private int lineCount = 3;
 
     private int overCount;
 
-    private float confirming;
-
-    public CacheFillPanel(Supplier<@Nullable CacheFill> fill, Consumer<Boolean> onFill, Runnable onClear,
+    public CacheFillPanel(Supplier<@Nullable CacheFill> fill, Consumer<Boolean> onFill, Runnable onManage,
             IntConsumer onLimit, Runnable onDone) {
         super(Lang.get("hotwire.button.done"), onDone);
         this.fill = fill;
-        this.onClear = onClear;
         this.expand = this.add(new Button(Lang.get("hotwire.cache.limit_expand"), false,
                 () -> onLimit.accept(EXPAND_MEGABYTES)));
-        this.change(Lang.get("hotwire.cache.clear_button"), this::clear);
+        this.change(Lang.get("hotwire.cache.manage_button"), onManage);
         this.setPrimary(Lang.get("hotwire.cache.fill_button"), () -> {
             CacheFill now = fill.get();
             if (now != null && !now.isFull()) {
@@ -44,17 +38,7 @@ public final class CacheFillPanel extends Panel {
     }
 
     public void present() {
-        this.confirming = 0;
         this.show();
-    }
-
-    private void clear() {
-        if (this.confirming > 0) {
-            this.confirming = 0;
-            this.onClear.run();
-        } else {
-            this.confirming = CONFIRM_SECONDS;
-        }
     }
 
     private static boolean isBegun(CacheFill now) {
@@ -75,14 +59,14 @@ public final class CacheFillPanel extends Panel {
                 label = "hotwire.cache.filled_button";
             } else if (now.running()) {
                 label = "hotwire.cache.pause_button";
+            } else if (now.outdated()) {
+                label = "hotwire.cache.refill_button";
             } else if (now.done() > 0) {
                 label = "hotwire.cache.resume_button";
             }
             this.setPrimaryLabel(Lang.get(label));
             this.setPrimaryActive(!now.isFull());
         }
-        this.confirming = Math.max(0, this.confirming - dt);
-        this.setChangeLabel(Lang.get(this.confirming > 0 ? "hotwire.cache.clear_sure" : "hotwire.cache.clear_button"));
         super.step(dt);
     }
 
@@ -93,7 +77,11 @@ public final class CacheFillPanel extends Panel {
         List<MessageLine.Line> lines = new ArrayList<>();
         MessageLine.addWrapped(canvas, lines, Lang.get("hotwire.cache.fill_explains"), Palette.TEXT, w - 28);
         MessageLine.addWrapped(canvas, lines, Lang.get("hotwire.cache.fill_playing"), Palette.DIM, w - 28);
-        MessageLine.addWrapped(canvas, lines, Lang.get("hotwire.cache.fill_once"), Palette.BAD, w - 28);
+        if (now != null && now.outdated()) {
+            MessageLine.addWrapped(canvas, lines, Lang.get("hotwire.cache.outdated"), Palette.WARN, w - 28);
+        } else {
+            MessageLine.addWrapped(canvas, lines, Lang.get("hotwire.cache.fill_once"), Palette.BAD, w - 28);
+        }
         this.lineCount = lines.size();
         int lineY = y + CONTENT_Y;
         for (MessageLine.Line line : lines) {
@@ -141,6 +129,16 @@ public final class CacheFillPanel extends Panel {
                         CacheFill.describeBytes(now.savedBytes()));
         canvas.drawText(canvas.clip(status, w - 28), x + 14, lineY, Colors.fade(Palette.DIM, alpha));
         canvas.drawText(canvas.clip(estimate, w - 28), x + 14, lineY + LINE, Colors.fade(Palette.DIM, alpha));
+    }
+
+    static void markButton(Button button, BottomBar bar, @Nullable CacheFill now) {
+        String mark = now != null && now.outdated() ? " !" : "";
+        String label = Lang.get("hotwire.screen.switch_cache") + mark;
+        if (!label.equals(button.getLabel())) {
+            button.label(label, Lang.get("hotwire.screen.switch_cache_short") + mark);
+            button.setTint(mark.isEmpty() ? Palette.GOOD : Palette.WARN);
+            bar.markStale();
+        }
     }
 
     private static boolean isExpandOffered(@Nullable CacheFill now) {

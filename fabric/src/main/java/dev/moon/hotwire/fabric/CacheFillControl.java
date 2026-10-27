@@ -3,12 +3,26 @@ package dev.moon.hotwire.fabric;
 import dev.moon.hotwire.redefine.CachedMixes;
 import dev.moon.hotwire.switching.SwitchCacheFiller;
 import dev.moon.hotwire.ui.CacheFill;
+import dev.moon.hotwire.ui.CacheVersion;
+import java.io.IOException;
+import java.nio.file.Files;
+import java.nio.file.Path;
+import java.util.ArrayList;
+import java.util.Comparator;
+import java.util.List;
+import java.util.Set;
+import java.util.concurrent.ConcurrentHashMap;
 import java.util.function.Supplier;
+import java.util.stream.Stream;
 import net.minecraft.client.Minecraft;
 import org.jspecify.annotations.Nullable;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
 final class CacheFillControl {
+    private static final Logger LOGGER = LoggerFactory.getLogger(CacheFillControl.class);
     private static final long FILL_READ_NANOS = 250_000_000L;
+    private static final long VERSIONS_READ_NANOS = 1_000_000_000L;
 
     private final Supplier<HotwireEngine.@Nullable JvmParts> parts;
 
@@ -16,6 +30,10 @@ final class CacheFillControl {
     private volatile long knownAt;
 
     private volatile long estimate = -1;
+
+    private volatile List<CacheVersion> versions = List.of();
+    private volatile long versionsAt;
+    private final Set<String> busy = ConcurrentHashMap.newKeySet();
 
     CacheFillControl(Supplier<HotwireEngine.@Nullable JvmParts> parts) {
         this.parts = parts;
@@ -59,15 +77,68 @@ final class CacheFillControl {
         long millisLeft = fill.bytesDone() == 0 ? -1
                 : Math.round((fill.bytes() - fill.bytesDone()) * (fill.millis() / (double) fill.bytesDone()));
         return new CacheFill((int) Math.min(fill.classesDone(), fill.classes()), (int) fill.classes(), fill.running(),
-                saved, estimated, millisLeft, cache.getBytes(), cache.getLimitBytes());
+                saved, estimated, millisLeft, cache.getBytes(), cache.getLimitBytes(), fill.outdated());
     }
 
-    void clear() {
-        HotwireEngine.JvmParts found = this.parts.get();
-        if (found != null) {
-            found.runner().getSwitcher().getFiller().restart();
-            found.adds().getApplier().getRebuilder().getCache().clear();
-            this.estimate = -1;
+    List<CacheVersion> findVersions() {
+        long now = System.nanoTime();
+        if (this.versionsAt == 0 || now - this.versionsAt > VERSIONS_READ_NANOS) {
+            this.versions = this.readVersions();
+            this.versionsAt = now;
+        }
+        return this.versions;
+    }
+
+    private List<CacheVersion> readVersions() {
+        Path here = EngineStart.findCacheFolder();
+        List<CacheVersion> found = new ArrayList<>();
+        try (Stream<Path> folders = Files.list(here.getParent())) {
+            for (Path folder : folders.filter(Files::isDirectory).toList()) {
+                String version = folder.getFileName().toString();
+                found.add(new CacheVersion(version, measure(folder), folder.equals(here), this.busy.contains(version)));
+            }
+        } catch (IOException e) {
+            return List.of();
+        }
+        found.sort(Comparator.comparing(CacheVersion::current).thenComparing(CacheVersion::version).reversed());
+        return List.copyOf(found);
+    }
+
+    private static long measure(Path folder) {
+        try (Stream<Path> files = Files.walk(folder)) {
+            return files.filter(Files::isRegularFile).mapToLong(file -> file.toFile().length()).sum();
+        } catch (IOException e) {
+            return 0;
+        }
+    }
+
+    void clear(@Nullable String version) {
+        Path here = EngineStart.findCacheFolder();
+        if (version == null || version.equals(here.getFileName().toString())) {
+            HotwireEngine.JvmParts found = this.parts.get();
+            if (found != null) {
+                found.runner().getSwitcher().getFiller().restart();
+                found.adds().getApplier().getRebuilder().getCache().clear();
+                this.estimate = -1;
+            }
+        }
+        for (CacheVersion one : this.readVersions()) {
+            if (!one.current() && (version == null || version.equals(one.version()))) {
+                this.delete(here.resolveSibling(one.version()), one.version());
+            }
+        }
+        this.versionsAt = 0;
+    }
+
+    private void delete(Path folder, String version) {
+        try (Stream<Path> files = Files.walk(folder)) {
+            for (Path file : files.sorted(Comparator.reverseOrder()).toList()) {
+                Files.delete(file);
+            }
+            this.busy.remove(version);
+        } catch (IOException e) {
+            this.busy.add(version);
+            LOGGER.info("[Hotwire] the {} switch cache is in use and was not all cleared: {}", version, e.toString());
         }
     }
 

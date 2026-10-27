@@ -489,11 +489,20 @@ final class MixedCache {
         return mark == null ? -1 : ByteBuffer.wrap(mark).getLong();
     }
 
-    void markFilled(CacheKey plan, long bytes) {
+    void markFilled(CacheKey plan, CacheKey mods, long bytes) {
         this.writer.execute(() -> {
             this.store.put(this.findFilledKey(plan), ByteBuffer.allocate(Long.BYTES).putLong(bytes).array(), null);
+            this.store.put(findModsKey(mods), new byte[] {1}, null);
             this.store.flush();
         });
+    }
+
+    boolean hasBeenFilled(CacheKey mods) {
+        return this.store.get(findModsKey(mods), null) != null;
+    }
+
+    private static CacheKey findModsKey(CacheKey mods) {
+        return CacheKey.of("filled mods 1").add(mods.high()).add(mods.low()).build();
     }
 
     private CacheKey findFilledKey(CacheKey plan) {
