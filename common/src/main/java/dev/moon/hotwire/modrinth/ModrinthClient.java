@@ -58,15 +58,21 @@ public final class ModrinthClient {
     private final Transport transport;
     private final String loader;
     private final String gameVersion;
+    private final LocalJars local;
 
-    public ModrinthClient(String hotwireVersion, String loader, String gameVersion) {
-        this(new LiveTransport(hotwireVersion), loader, gameVersion);
+    public ModrinthClient(String hotwireVersion, String loader, String gameVersion, LocalJars local) {
+        this(new LiveTransport(hotwireVersion), loader, gameVersion, local);
     }
 
     public ModrinthClient(Transport transport, String loader, String gameVersion) {
+        this(transport, loader, gameVersion, LocalJars.NONE);
+    }
+
+    public ModrinthClient(Transport transport, String loader, String gameVersion, LocalJars local) {
         this.transport = transport;
         this.loader = loader;
         this.gameVersion = gameVersion;
+        this.local = local;
     }
 
     public Search search(String words, String category, int offset, int limit) throws IOException {
@@ -145,6 +151,10 @@ public final class ModrinthClient {
     }
 
     public byte[] fetch(Version version) throws IOException {
+        byte[] copy = this.local.find(version.fileName(), version.size(), version.sha512());
+        if (copy != null) {
+            return copy;
+        }
         byte[] bytes = this.transport.fetchBytes(version.url());
         String hash = hashOf(bytes);
         if (!hash.equalsIgnoreCase(version.sha512())) {

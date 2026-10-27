@@ -1,6 +1,7 @@
 package dev.moon.hotwire.fabric.store;
 
 import dev.moon.hotwire.fabric.InstalledMods;
+import dev.moon.hotwire.modrinth.LocalJars;
 import dev.moon.hotwire.modrinth.ModrinthClient;
 import dev.moon.hotwire.modrinth.StoreCache;
 import dev.moon.hotwire.modrinth.StoreModel;
@@ -44,7 +45,8 @@ public final class ModStore {
     }
 
     public static ModrinthClient makeClient() {
-        return new ModrinthClient(findVersionOf("hotwire"), LOADER, findVersionOf("minecraft"));
+        return new ModrinthClient(findVersionOf("hotwire"), LOADER, findVersionOf("minecraft"),
+                new LocalJars(FabricLoader.getInstance().getGameDir(), LocalJars.findLauncherHomes()));
     }
 
     public StoreModel getModel() {
