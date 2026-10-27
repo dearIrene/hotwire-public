@@ -120,11 +120,11 @@ public final class KnotInternals {
             synchronized (factory) {
                 for (Iterator<? extends Map.Entry<?, ?>> cached = byUrl.entrySet().iterator(); cached.hasNext();) {
                     Map.Entry<?, ?> entry = cached.next();
-                    if (entry.getValue() instanceof JarFile held && wanted.equals(Path.of(held.getName())
+                    if (entry.getValue() instanceof JarFile open && wanted.equals(Path.of(open.getName())
                             .toAbsolutePath().normalize())) {
                         cached.remove();
-                        urlOf.remove(held);
-                        held.close();
+                        urlOf.remove(open);
+                        open.close();
                         closed++;
                     }
                 }
@@ -189,7 +189,12 @@ public final class KnotInternals {
     }
 
     byte @Nullable [] findPreMixinBytes(String internal) {
-        return this.preMixin.apply(internal.replace('/', '.'));
+        try {
+            return this.preMixin.apply(internal.replace('/', '.'));
+        } catch (RuntimeException e) {
+            LOGGER.warn("[Hotwire] {} could not be read from its jar: {}", internal, e.toString());
+            return null;
+        }
     }
 
     byte @Nullable [] findPreMixinBytes(String internal, @Nullable Class<?> loaded) {
