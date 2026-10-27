@@ -421,6 +421,10 @@ public final class Tripwire {
         return CALLS.containsKey(mod);
     }
 
+    public static boolean isAnyWatched() {
+        return !CALLS.isEmpty();
+    }
+
     public static void onLoading(String mod, String className) {
         if (!CALLS.containsKey(mod)) {
             return;
