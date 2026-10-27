@@ -26,7 +26,7 @@ public final class ModPolicy {
 
     static final Set<String> NEVER_TOUCHED = Set.of("ixeris", "ferritecore");
 
-    static final Set<String> ALWAYS_ON = Set.of("sodium", "lithium", "phosphor");
+    static final Set<String> ALWAYS_ON = Set.of("sodium", "lithium", "phosphor", "vulkanmod");
 
     private static volatile SwitchPlanner.NestedJars nestedJars = SwitchPlanner.NestedJars.AUTO;
 
@@ -59,6 +59,10 @@ public final class ModPolicy {
 
     public static boolean isHotwire(String id) {
         return id.equals(HotwireClient.ID) || id.startsWith(HotwireClient.ID + "-");
+    }
+
+    public static boolean isStartOnly(String id) {
+        return ALWAYS_ON.contains(id) || NEVER_TOUCHED.contains(id);
     }
 
     public static String describeSelfChange() {

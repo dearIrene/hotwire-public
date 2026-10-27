@@ -149,6 +149,14 @@ public final class ModAdder {
                     ? ModPolicy.describeSelfChange() : Lang.get("hotwire.add.installed", manifest.name()));
         }
 
+        String startOnly = manifest.getRelation(ModManifest.Relation.DEPENDS).keySet().stream()
+                .filter(id -> ModPolicy.isStartOnly(id) && !this.engine.isInstalled(id)).findFirst()
+                .orElse(ModPolicy.isStartOnly(manifest.id()) ? manifest.id() : null);
+        if (startOnly != null) {
+            return AddPreview.ofLater(manifest.name(), version, List.of(Lang.get("hotwire.add.later.start_only",
+                    startOnly.equals(manifest.id()) ? manifest.name() : startOnly)));
+        }
+
         Map<String, Part> found = new LinkedHashMap<>();
         try {
             this.collect(jarPath, found);
@@ -396,6 +404,9 @@ public final class ModAdder {
         if (ModPolicy.isHotwire(askedId) || this.engine.isInstalled(askedId)) {
             return new Result.Refused(ModPolicy.isHotwire(askedId) ? ModPolicy.describeSelfChange()
                     : Lang.get("hotwire.add.installed", name));
+        }
+        if (ModPolicy.isStartOnly(askedId)) {
+            return new Result.Refused(Lang.get("hotwire.add.later.start_only", name));
         }
         Set<String> content = this.engine.isInWorld() ? this.readContent(jarPath) : Set.of();
         if (!content.isEmpty()) {

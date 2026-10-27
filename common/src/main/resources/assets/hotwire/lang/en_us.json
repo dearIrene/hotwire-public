@@ -304,6 +304,7 @@
   "hotwire.add.not_a_jar": "%s isn't a mod file. Mods are .jar files.",
   "hotwire.add.nested_unreadable": "%s can't be added. A jar inside it can't be read: %s",
   "hotwire.add.nested_unwritable": "%s can't be added. A jar inside it couldn't be unpacked: %s",
+  "hotwire.add.later.start_only": "%s goes in at the next start: Hotwire never adds or removes it while the game runs.",
   "hotwire.add.later.running": "It changes parts of the game that are already running, so it can only go in when the game starts.",
   "hotwire.add.later.library": "It brings a newer version of a library the game started with, so it can only go in when the game starts.",
   "hotwire.add.by": "By %s",
