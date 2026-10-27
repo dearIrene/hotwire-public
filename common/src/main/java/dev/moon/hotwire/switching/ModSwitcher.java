@@ -282,6 +282,11 @@ public final class ModSwitcher {
             LOGGER.error("[Hotwire] what {} {} could not all be {}", order, goingOff ? "left in others" : "left behind",
                     goingOff ? "taken out" : "put back", e);
         }
+
+        if (!goingOff) {
+            order.forEach(this.lifecycle::onStarted);
+            SwitchTimes.mark("start listeners");
+        }
     }
 
     public boolean isBusy() {
@@ -511,15 +516,12 @@ public final class ModSwitcher {
                     this.withGamePaused(() -> plan.order().forEach(this.registrations::restore));
                     plan.order().forEach(this.lifecycle::onStarted);
                 } else if (ran.get()) {
+                    plan.order().forEach(this.lifecycle::onStopping);
                     this.withGamePaused(() -> plan.order().forEach(this.registrations::remove));
                 }
                 throw failure;
             } finally {
                 this.applier.getRebuilder().toLaunch(false);
-            }
-            if (!goingOff) {
-                plan.order().forEach(this.lifecycle::onStarted);
-                SwitchTimes.mark("start listeners");
             }
             Set<String> offAfter = new HashSet<>(this.graph.getIds());
             offAfter.removeAll(onAfter);
