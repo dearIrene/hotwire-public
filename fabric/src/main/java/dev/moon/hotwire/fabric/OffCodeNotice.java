@@ -1,5 +1,6 @@
 package dev.moon.hotwire.fabric;
 
+import dev.moon.hotwire.fabric.add.LoaderModList;
 import dev.moon.hotwire.fabric.add.WorldReopen;
 import dev.moon.hotwire.fabric.registration.GameRegistrations;
 import dev.moon.hotwire.redefine.Tripwire;
@@ -26,6 +27,7 @@ final class OffCodeNotice {
 
     static void install(HotwireEngine engine, InstalledMods installed) {
         Tripwire.setOwners(GameRegistrations::findModOrShipper);
+        Tripwire.setOffCheck(LoaderModList::isHidden);
         Tripwire.setGameThreads(() -> {
             Minecraft client = Minecraft.getInstance();
             MinecraftServer server = client.getSingleplayerServer();

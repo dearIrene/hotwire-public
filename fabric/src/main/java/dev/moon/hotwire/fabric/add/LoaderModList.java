@@ -224,6 +224,12 @@ public final class LoaderModList {
         }
     }
 
+    public static boolean isHidden(String id) {
+        synchronized (FabricLoaderImpl.INSTANCE) {
+            return HIDDEN.containsKey(id);
+        }
+    }
+
     public static Set<String> getHidden() {
         FabricLoaderImpl loader = FabricLoaderImpl.INSTANCE;
         synchronized (loader) {

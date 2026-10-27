@@ -24,6 +24,7 @@ import java.util.concurrent.locks.LockSupport;
 import java.util.function.BooleanSupplier;
 import java.util.function.Consumer;
 import java.util.function.Function;
+import java.util.function.Predicate;
 import java.util.stream.Collectors;
 import org.jspecify.annotations.Nullable;
 import org.objectweb.asm.ClassReader;
@@ -55,6 +56,8 @@ public final class Tripwire {
     private static final long OFF_WAIT_NANOS = TimeUnit.SECONDS.toNanos(10);
 
     private static volatile Function<Class<?>, @Nullable String> owner = type -> null;
+
+    private static volatile Predicate<String> isOff = mod -> false;
 
     private static volatile BooleanSupplier onGameThread = () -> false;
 
@@ -422,11 +425,12 @@ public final class Tripwire {
     }
 
     public static boolean isOfOffMod(Class<?> type) {
-        if (CALLS.isEmpty()) {
-            return false;
-        }
         String mod = owner.apply(type);
-        return mod != null && CALLS.containsKey(mod);
+        return mod != null && (CALLS.containsKey(mod) || isOff.test(mod));
+    }
+
+    public static void setOffCheck(Predicate<String> off) {
+        isOff = off;
     }
 
     public static boolean isAnyWatched() {
