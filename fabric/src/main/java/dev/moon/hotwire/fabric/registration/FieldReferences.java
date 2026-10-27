@@ -140,6 +140,7 @@ public final class FieldReferences {
     }
 
     public void lookForEvery(Collection<String> mods, Predicate<String> on) {
+        this.loadedChecks.readForEvery(mods, this.lambdas.open());
         this.removeElements(mods, on, this.findLoaded(mods), Map.of(), true);
     }
 

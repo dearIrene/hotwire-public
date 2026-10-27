@@ -52,6 +52,16 @@ final class LoadedCheckAnswers {
     private volatile Set<String> aheadFor = Set.of();
     private volatile @Nullable CheckSites ahead;
 
+    private volatile Set<String> everyFor = Set.of();
+    private volatile @Nullable CheckSites every;
+
+    void readForEvery(Collection<String> mods, @Nullable ConstantPools pools) {
+        if (pools != null && !mods.isEmpty()) {
+            this.every = this.find(mods, pools, type -> true);
+            this.everyFor = Set.copyOf(mods);
+        }
+    }
+
     void readAhead(Collection<String> mods, @Nullable ConstantPools pools, Predicate<Class<?>> others) {
         if (pools != null && !mods.isEmpty()) {
             this.ahead = this.find(mods, pools, others);
@@ -64,17 +74,27 @@ final class LoadedCheckAnswers {
             return;
         }
         CheckSites read = this.ahead;
-        CheckSites found = read != null && this.aheadFor.equals(Set.copyOf(mods)) ? read
-                : this.find(mods, pools, others);
+        CheckSites all = this.every;
+        CheckSites found;
+        if (read != null && this.aheadFor.equals(Set.copyOf(mods))) {
+            found = read;
+        } else if (all != null && this.everyFor.containsAll(mods)) {
+            found = all;
+        } else {
+            found = this.find(mods, pools, others);
+        }
         List<String> changed = new ArrayList<>();
         if (off) {
-            found.lookers().forEach(type -> this.clearLookups(type, mods, changed));
+            found.lookers().stream().filter(others).forEach(type -> this.clearLookups(type, mods, changed));
         }
         for (String mod : mods) {
             if (!off) {
                 this.giveBack(mod, changed);
             }
             for (FoundAsk one : found.asks().getOrDefault(mod, List.of())) {
+                if (!others.test(one.type())) {
+                    continue;
+                }
                 byte[] bytes = this.originalBytes.apply(one.type().getName().replace('.', '/'));
                 if (bytes != null) {
                     this.match(one.type(), bytes, one.ask(), mod, off, changed);
@@ -105,7 +125,7 @@ final class LoadedCheckAnswers {
             if (bytes == null) {
                 continue;
             }
-            for (String mod : mods) {
+            for (String mod : LoadedChecks.findNamed(bytes, Set.copyOf(mods))) {
                 for (LoadedChecks.Ask ask : LoadedChecks.find(bytes, Set.of(mod))) {
                     asks.computeIfAbsent(mod, any -> new ArrayList<>()).add(new FoundAsk(type, ask));
                 }

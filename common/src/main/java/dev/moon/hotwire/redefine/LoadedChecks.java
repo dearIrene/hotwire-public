@@ -1,6 +1,7 @@
 package dev.moon.hotwire.redefine;
 
 import java.util.ArrayList;
+import java.util.HashSet;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
@@ -58,6 +59,18 @@ public final class LoadedChecks {
             }
         }
         return List.copyOf(found.values());
+    }
+
+    public static Set<String> findNamed(byte[] bytes, Set<String> mods) {
+        Set<String> named = new HashSet<>();
+        for (MethodNode method : RetainedInitializers.read(bytes).methods) {
+            for (AbstractInsnNode insn : method.instructions) {
+                if (insn instanceof LdcInsnNode ldc && ldc.cst instanceof String id && mods.contains(id)) {
+                    named.add(id);
+                }
+            }
+        }
+        return named;
     }
 
     private static boolean isBoolean(String field) {
