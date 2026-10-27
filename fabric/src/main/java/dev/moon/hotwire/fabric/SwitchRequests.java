@@ -13,7 +13,6 @@ import dev.moon.hotwire.ui.ReopenPanel;
 import java.util.List;
 import java.util.Optional;
 import java.util.concurrent.CompletableFuture;
-import java.util.function.BiFunction;
 import java.util.function.Function;
 import java.util.function.Supplier;
 import org.jspecify.annotations.Nullable;
@@ -30,11 +29,9 @@ final class SwitchRequests {
     private final DisabledMods disabled;
     private final Supplier<@Nullable ModScreen> screen;
     private final Say say;
-    private final BiFunction<String, String, String> writeReport;
 
     SwitchRequests(HotwireEngine engine, Tasks tasks, InstalledMods installed, HotwireSettings settings,
-            DisabledMods disabled, Supplier<@Nullable ModScreen> screen, Say say,
-            BiFunction<String, String, String> writeReport) {
+            DisabledMods disabled, Supplier<@Nullable ModScreen> screen, Say say) {
         this.engine = engine;
         this.tasks = tasks;
         this.installed = installed;
@@ -42,7 +39,6 @@ final class SwitchRequests {
         this.disabled = disabled;
         this.screen = screen;
         this.say = say;
-        this.writeReport = writeReport;
     }
 
     CompletableFuture<SwitchResult> switchFor(boolean off, List<String> ids) {
@@ -78,9 +74,9 @@ final class SwitchRequests {
                     + PlayerMessages.describe(result.check())
                     + PlayerMessages.describeFaults(result.result(), result.faults().size());
 
-            if (result.result() instanceof ModSwitcher.Result.Failed failed && failed.cause().isJvmRefused()) {
-                said += " " + this.writeReport.apply(Lang.get("hotwire.report.file.switch_failed"),
-                        "A switch failed: " + failed.cause().getMessage());
+            if (result.result() instanceof ModSwitcher.Result.Failed failed
+                    ? FailureReports.isUnplanned(failed.cause()) : !result.faults().isEmpty()) {
+                FailureReports.report(this.engine, Lang.get("hotwire.report.file.switch_failed"), said);
             }
             ModScreen current = this.screen.get();
             if (!ids.isEmpty() && result.result() instanceof ModSwitcher.Result.Failed failed

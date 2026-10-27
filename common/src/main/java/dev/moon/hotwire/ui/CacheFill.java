@@ -2,7 +2,13 @@ package dev.moon.hotwire.ui;
 
 import java.util.Locale;
 
-public record CacheFill(int done, int of, boolean running, long savedBytes, long estimatedBytes, long millisLeft) {
+public record CacheFill(int done, int of, boolean running, long savedBytes, long estimatedBytes, long millisLeft,
+        long folderBytes, long limitBytes) {
+    public boolean isOverLimit() {
+        return this.limitBytes > 0
+                && (this.estimatedBytes > this.limitBytes || this.folderBytes > this.limitBytes * 9 / 10);
+    }
+
     public boolean isFull() {
         return this.of > 0 && this.done >= this.of;
     }

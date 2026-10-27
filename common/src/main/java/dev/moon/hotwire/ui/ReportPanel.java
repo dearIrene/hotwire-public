@@ -9,7 +9,7 @@ public final class ReportPanel extends Panel {
 
     private final Runnable onShowFile;
     private String title = "";
-    private boolean crash;
+    private String warning = "";
     private String where = "";
     private int lineCount = 5;
 
@@ -19,13 +19,13 @@ public final class ReportPanel extends Panel {
     }
 
     public void open(String title, String where) {
-        this.open(title, where, false);
+        this.open(title, where, "");
     }
 
-    public void open(String title, String where, boolean crash) {
+    public void open(String title, String where, String warning) {
         this.title = title;
         this.where = where;
-        this.crash = crash;
+        this.warning = warning;
         this.setPrimary(Lang.get("hotwire.report.show_file"), this.onShowFile);
         this.setPrimaryWidth(110);
         this.show();
@@ -33,7 +33,7 @@ public final class ReportPanel extends Panel {
 
     @Override
     public void step(float dt) {
-        this.size(WIDTH, 36 + LINE * this.lineCount + 46);
+        this.size(WIDTH, CONTENT_Y + LINE * this.lineCount + 46);
         super.step(dt);
     }
 
@@ -41,14 +41,14 @@ public final class ReportPanel extends Panel {
     protected void drawContent(Canvas canvas, float alpha, int x, int y, int w, int h) {
         canvas.drawText(canvas.clip(this.title, w - 28), x + 14, y + 16, Colors.fade(Palette.TEXT, alpha));
         List<MessageLine.Line> lines = new ArrayList<>();
-        if (this.crash) {
-            MessageLine.addWrapped(canvas, lines, Lang.get("hotwire.report.crash_blame"), Palette.BAD, w - 28);
+        if (!this.warning.isEmpty()) {
+            MessageLine.addWrapped(canvas, lines, this.warning, Palette.BAD, w - 28);
         }
         MessageLine.addWrapped(canvas, lines, this.where, Palette.PATH, w - 28);
         MessageLine.addWrapped(canvas, lines, Lang.get("hotwire.report.send"), Palette.TEXT, w - 28);
         MessageLine.addWrapped(canvas, lines, Lang.get("hotwire.report.holds"), Palette.DIM, w - 28);
         this.lineCount = lines.size();
-        int lineY = y + 36;
+        int lineY = y + CONTENT_Y;
         for (MessageLine.Line line : lines) {
             MessageLine.drawWords(canvas, line.text(), x + 14, lineY, line.color(), alpha);
             lineY += LINE;

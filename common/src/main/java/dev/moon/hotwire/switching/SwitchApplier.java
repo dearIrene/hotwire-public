@@ -179,7 +179,7 @@ public final class SwitchApplier {
         this.unowned = List.copyOf(unowned);
         this.onConfigs = this.getConfigsOf(onAtLaunch);
         this.onMods = this.onAtLaunch;
-        rebuilder.resolveRunningWith(this::findRunningBytesOf);
+        rebuilder.resolveRunningWith(this::findRunningBytes);
         rebuilder.readClassesWith(this::findOriginal);
         rebuilder.getHooks().replayHandlersWhere(type -> !game.isWorldObject(type));
     }
@@ -193,22 +193,38 @@ public final class SwitchApplier {
         this.onConfigs = this.getConfigsOf(this.onAtLaunch);
     }
 
-    private byte @Nullable [] findRunningBytesOf(String internalName) {
-        Class<?> loaded = this.game.findLoaded(internalName);
-        if (loaded == null) {
-            return null;
-        }
+    private Map<String, byte[]> findRunningBytes(Collection<String> internalNames) {
         String loading = LoadTimeMixer.findLoading();
-        if (loading != null && loading.startsWith(internalName + "$")) {
-            return this.rebuilder.getLoadedBytes().findKnown(loaded);
+        Map<String, byte[]> found = new HashMap<>();
+        List<Class<?>> toRead = new ArrayList<>();
+        for (String name : internalNames) {
+            Class<?> loaded = this.game.findLoaded(name);
+            if (loaded == null) {
+                continue;
+            }
+            if (loading != null && loading.startsWith(name + "$")) {
+                byte[] known = this.rebuilder.getLoadedBytes().findKnown(loaded);
+                if (known != null) {
+                    found.put(name, known);
+                }
+            } else {
+                toRead.add(loaded);
+            }
         }
-        try {
-            return this.rebuilder.getLoadedBytes().readCurrent(List.of(loaded)).get(internalName);
-        } catch (RebuildException e) {
-            LOGGER.warn("[Hotwire] the running bytes of {} could not be read, so references to it stay as mixed",
-                    internalName, e);
-            return null;
+        if (!toRead.isEmpty()) {
+            List<String> refused = new ArrayList<>();
+            try {
+                found.putAll(this.rebuilder.getLoadedBytes().read(toRead, refused));
+            } catch (RebuildException e) {
+                LOGGER.warn("[Hotwire] the running bytes of {} could not be read, so references to them stay as mixed",
+                        internalNames, e);
+            }
+            if (!refused.isEmpty()) {
+                LOGGER.warn("[Hotwire] the running bytes of {} could not be read, so references to them stay as mixed",
+                        refused);
+            }
         }
+        return found;
     }
 
     public synchronized void learn(String id, ModMixins mixins) {
@@ -464,9 +480,9 @@ public final class SwitchApplier {
                 patching, on::contains);
         SwitchTimes.mark("mix");
 
-        Set<String> keeping = new HashSet<>(on);
-        keeping.removeAll(replacing);
-        List<String> lost = this.carriedMixins.findLost(carriedNow, mixed.carried(), mixed.mixed(), keeping,
+        Set<String> staying = new HashSet<>(on);
+        staying.removeAll(replacing);
+        List<String> lost = this.carriedMixins.findLost(carriedNow, mixed.carried(), mixed.mixed(), staying,
                 decided::isAskedAgain, replacing);
         if (!lost.isEmpty()) {
             throw RebuildException.ofLosing("the " + what + " would drop patches of mods that stay on: " + lost,
@@ -474,8 +490,8 @@ public final class SwitchApplier {
         }
         ClassRebuilder.PreparedRebuild prepared = LiveObjects.check(mixed, current, this.rebuiltWhilePaused, this.game,
                 this::findOriginal, this.rebuilder, what, mixin -> {
-                    String maker = this.carriedMixins.findModMaking(mixin, id -> true);
-                    return maker != null && !on.contains(maker);
+                    String owner = this.carriedMixins.findModMaking(mixin, id -> true);
+                    return owner != null && !on.contains(owner);
                 }, type -> {
                     String shipping = this.carriedMixins.findModShipping(type);
                     return shipping != null && !on.contains(shipping);
@@ -488,9 +504,9 @@ public final class SwitchApplier {
         Set<String> owners = new TreeSet<>();
         for (String entry : lost) {
             String mixin = entry.substring(entry.indexOf(" <- ") + " <- ".length());
-            @Nullable String maker = this.carriedMixins.findModMaking(mixin, on::contains);
-            if (maker != null) {
-                owners.add(maker);
+            @Nullable String owner = this.carriedMixins.findModMaking(mixin, on::contains);
+            if (owner != null) {
+                owners.add(owner);
             }
         }
         return owners;

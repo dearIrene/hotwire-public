@@ -24,6 +24,8 @@ class Panel extends Element {
 
     private int primaryNeeds;
 
+    protected static final int CONTENT_Y = 46;
+
     private int lineY = 34;
 
     @SuppressWarnings("this-escape")

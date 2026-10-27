@@ -190,7 +190,7 @@ public final class GameReports {
         return report;
     }
 
-    public synchronized void onAdded(ModAdder.Result result, long millis) {
+    public synchronized void onAdded(ModAdder.Result result, String jar, long millis) {
         Report report = switch (result) {
             case ModAdder.Result.Added added -> {
                 this.added.addAll(added.ids());
@@ -200,7 +200,7 @@ public final class GameReports {
                                 ? Report.Failure.of("switch on", null, failed.cause()) : null);
             }
             case ModAdder.Result.Refused refused -> null;
-            case ModAdder.Result.Failed failed -> Report.of(Report.Operation.ADD, this.machine, Map.of(), List.of(),
+            case ModAdder.Result.Failed failed -> Report.of(Report.Operation.ADD, this.machine, Map.of(), List.of(jar),
                     new SwitchApplier.ApplyResult(List.of(), List.of(), List.of()),
                     List.of(new Report.Timing("add", millis)), Report.Failure.of("add", null, failed.cause()));
         };

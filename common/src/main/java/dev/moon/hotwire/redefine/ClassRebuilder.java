@@ -11,6 +11,7 @@ import java.lang.instrument.UnmodifiableClassException;
 import java.time.Duration;
 import java.util.ArrayList;
 import java.util.Arrays;
+import java.util.Collection;
 import java.util.Collections;
 import java.util.HashMap;
 import java.util.HashSet;
@@ -98,10 +99,14 @@ public final class ClassRebuilder {
         return MIX_SAVED.equals(e.getMessage());
     }
 
-    private volatile Function<String, byte @Nullable []> runningOf = name -> null;
+    private volatile Function<Collection<String>, Map<String, byte[]>> runningOf = names -> Map.of();
 
-    public void resolveRunningWith(Function<String, byte @Nullable []> runningOf) {
+    public void resolveRunningWith(Function<Collection<String>, Map<String, byte[]>> runningOf) {
         this.runningOf = runningOf;
+    }
+
+    private byte @Nullable [] findRunning(String name) {
+        return this.runningOf.apply(List.of(name)).get(name);
     }
 
     private volatile Function<String, byte @Nullable []> bytesOf = name -> null;
@@ -215,7 +220,8 @@ public final class ClassRebuilder {
         }
         long shapedAt = System.nanoTime();
         if (!toMix.isEmpty()) {
-            Map<String, byte[]> copied = this.mix(toMix, readable, resources, on, mods, STOP.get());
+            Map<String, byte[]> copied = this.mix(toMix, RunningAbove.add(toMix, readable, this.mixedNow::get,
+                    this.runningOf, this.bytesOf), resources, on, mods, STOP.get());
             copied.forEach(RebuildEvidence::dumpCopy);
             mixed.putAll(copied);
         }
@@ -559,8 +565,8 @@ public final class ClassRebuilder {
                     this.hooks.onGenerated(part.generated());
                 }
                 SyntheticArgs.rename(part.classes(), argsNames)
-                        .forEach((name, bytes) -> mixed.put(name, GeneratedNames.matchReferences(bytes, this.runningOf,
-                                Linker::getMovedOf)));
+                        .forEach((name, bytes) -> mixed.put(name,
+                                GeneratedNames.matchReferences(bytes, this::findRunning, Linker::getMovedOf)));
             }
             targets.forEach(target -> mixed.computeIfPresent(target,
                     (name, bytes) -> this.hooks.applyAfterMixin(name, bytes, mods)));

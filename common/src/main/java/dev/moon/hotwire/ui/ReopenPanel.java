@@ -48,7 +48,7 @@ public final class ReopenPanel extends Panel {
 
     @Override
     public void step(float dt) {
-        this.size(WIDTH, 40 + LINE * this.lineCount + 58);
+        this.size(WIDTH, CONTENT_Y + LINE * this.lineCount + 58);
         super.step(dt);
     }
 
@@ -94,7 +94,7 @@ public final class ReopenPanel extends Panel {
         MessageLine.addWrapped(canvas, lines, Lang.get(shown.leaves() ? "hotwire.reopen.safe.server"
                 : "hotwire.reopen.safe.world"), Palette.ON, w - 28);
         this.lineCount = lines.size();
-        int lineY = y + 40;
+        int lineY = y + CONTENT_Y;
         for (MessageLine.Line line : lines) {
             MessageLine.drawWords(canvas, line.text(), x + 14, lineY, line.color(), alpha);
             lineY += LINE;

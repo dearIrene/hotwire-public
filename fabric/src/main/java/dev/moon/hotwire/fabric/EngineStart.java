@@ -91,8 +91,6 @@ final class EngineStart {
     private static final Logger LOGGER = LoggerFactory.getLogger(EngineStart.class);
     private static final StackWalker STACK = StackWalker.getInstance();
 
-    private static final long MIXED_CAP = 64L << 20;
-
     private static final String RELOAD_TASKS = SimpleReloadInstance.class.getName();
 
     private EngineStart() {
@@ -191,7 +189,8 @@ final class EngineStart {
                 classes, mixins, mixins.keySet(), MixinConfigs.findUnowned(mixin.getConfigs(), mixins));
         applier.getRebuilder().resolveArgsWith(mixin::getArgsClassFor);
         applier.getRebuilder().getCache().cacheIn(
-                CacheStore.open(findCacheFolder().resolve("mixed"), "mixed", MIXED_CAP), LivePluginShapes::ask);
+                CacheStore.open(findCacheFolder().resolve("mixed"), "mixed",
+                        (long) CacheLimit.read(findCacheFolder()) << 20), LivePluginShapes::ask);
         applier.getRebuilder().getHooks()
                 .sendGeneratedTo(new GeneratedClasses(gameDir.resolve("hotwire").resolve("generated")) ::write);
         applier.orderConfigsAs(mixin.getConfigs());
@@ -302,7 +301,7 @@ final class EngineStart {
         return named;
     }
 
-    private static Path findCacheFolder() {
+    static Path findCacheFolder() {
         String local = System.getenv("LOCALAPPDATA");
         String xdg = System.getenv("XDG_CACHE_HOME");
         Path home = Path.of(System.getProperty("user.home"));

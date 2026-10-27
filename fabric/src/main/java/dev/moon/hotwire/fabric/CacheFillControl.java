@@ -46,15 +46,20 @@ final class CacheFillControl {
         long estimated = this.estimate;
         if (fill.filledBytes() >= 0) {
             estimated = fill.filledBytes();
-        } else if (estimated < 0 && fill.sampled() && sizes.classesBefore() > 0) {
-            double perByte = (sizes.classes() + sizes.reads()) / (double) sizes.classesBefore();
-            estimated = Math.round(fill.bytes() * perByte);
+        } else if (estimated < 0 && fill.sampled() && sizes.basesBefore() > 0) {
+            double perBase = sizes.bases() / (double) sizes.basesBefore();
+            long versionsBefore = sizes.classesBefore() - sizes.basesBefore();
+            double perVersion = versionsBefore > 0 ? (sizes.classes() - sizes.bases()) / (double) versionsBefore
+                    : perBase;
+            double perRead = sizes.reads() / (double) sizes.classesBefore();
+            estimated = Math.round(fill.baseBytes() * perBase + (fill.bytes() - fill.baseBytes()) * perVersion
+                    + fill.bytes() * perRead);
             this.estimate = estimated;
         }
         long millisLeft = fill.bytesDone() == 0 ? -1
                 : Math.round((fill.bytes() - fill.bytesDone()) * (fill.millis() / (double) fill.bytesDone()));
         return new CacheFill((int) Math.min(fill.classesDone(), fill.classes()), (int) fill.classes(), fill.running(),
-                saved, estimated, millisLeft);
+                saved, estimated, millisLeft, cache.getBytes(), cache.getLimitBytes());
     }
 
     void clear() {
@@ -76,6 +81,14 @@ final class CacheFillControl {
             found.runner().getSwitcher().getFiller().fillAll();
         } else {
             found.runner().getSwitcher().getFiller().pause(true);
+        }
+    }
+
+    void setLimit(int megabytes) {
+        HotwireEngine.JvmParts found = this.parts.get();
+        if (found != null) {
+            found.adds().getApplier().getRebuilder().getCache().setLimitBytes((long) CacheLimit.clamp(megabytes) << 20);
+            CacheLimit.write(EngineStart.findCacheFolder(), megabytes);
         }
     }
 

@@ -131,7 +131,7 @@ public final class HotwireEngine implements ModScreen.Game, AutoCloseable {
         this.disabled = new DisabledMods(installed, this::findParts, settings, folders.mods(), this::showMessage,
                 (jar, then) -> this.jars.add(jar, AddMode.NOW, then));
         this.switches = new SwitchRequests(this, this.tasks, installed, settings, this.disabled, () -> this.screen,
-                this::showMessage, this::writeReport);
+                this::showMessage);
         this.profiles = new ProfileStore(FabricLoader.getInstance().getConfigDir().resolve("hotwire/profiles.txt"));
     }
 
@@ -371,6 +371,11 @@ public final class HotwireEngine implements ModScreen.Game, AutoCloseable {
     @Override
     public void fillCache(boolean go) {
         this.cacheFill.fill(go);
+    }
+
+    @Override
+    public void setCacheLimit(int megabytes) {
+        this.cacheFill.setLimit(megabytes);
     }
 
     @Override

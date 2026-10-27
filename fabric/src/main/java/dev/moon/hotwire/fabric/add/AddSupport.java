@@ -158,7 +158,7 @@ public final class AddSupport implements ModAdder.Engine {
         } finally {
             this.reports.onEnded();
         }
-        this.reports.onAdded(result, (System.nanoTime() - start) / 1_000_000);
+        this.reports.onAdded(result, String.valueOf(jar.getFileName()), (System.nanoTime() - start) / 1_000_000);
         if (result instanceof ModAdder.Result.Added added) {
             try {
                 this.installed.onAdded(jar, ModJarReader.read(jar), added.ids());

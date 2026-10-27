@@ -36,7 +36,10 @@ final class BatchShapes {
     private static final String LAMBDA_SITES = LambdaSites.class.getName().replace('.', '/');
 
     private static final Map<byte[], ClassNode> CONSTRUCTORS = Collections.synchronizedMap(new WeakHashMap<>());
-    private static final Pattern MERGED = Pattern.compile("\\bmd[0-9a-f]{6}\\$");
+    private static final Pattern MERGED = Pattern.compile("\\b(?:md|fd)[0-9a-f]{6}\\$");
+
+    private static final Pattern SESSION = Pattern.compile("_\\$(md|fd)\\$[0-9a-f]{6}\\$[0-9a-f]+");
+    private static final Pattern HANDLER = Pattern.compile("\\$(?!lambda\\$)[a-z]{3}[0-9a-f]{3}\\$");
     private static final Pattern ARGS = Pattern.compile("Args\\$\\d+");
     private static final Pattern COUNTED = Pattern.compile("(md#\\$[^\\s(;]*\\$(?:#|\\d+))\\$[0-9a-f]+");
 
@@ -78,8 +81,9 @@ final class BatchShapes {
         }
         out.addAll(node.interfaces);
 
-        out.replaceAll(text -> COUNTED.matcher(ARGS.matcher(MERGED.matcher(text).replaceAll("md#\\$"))
-                .replaceAll("Args\\$#")).replaceAll("$1\\$#"));
+        out.replaceAll(text -> HANDLER.matcher(SESSION.matcher(COUNTED.matcher(ARGS.matcher(MERGED.matcher(text)
+                .replaceAll("md#\\$")).replaceAll("Args\\$#")).replaceAll("$1\\$#")).replaceAll("_\\$$1\\$#\\$#"))
+                .replaceAll("\\$#\\$"));
         Collections.sort(out);
         return out;
     }

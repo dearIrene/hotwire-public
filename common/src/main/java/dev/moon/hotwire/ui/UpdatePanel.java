@@ -51,7 +51,7 @@ final class UpdatePanel extends Panel {
             this.onPreviewReady(this.awaitPreview());
         }
         boolean cards = this.preview instanceof UpdatePreview.Ready;
-        this.size(WIDTH, 34 + (cards ? 96 + WHEN_H : 0) + 12 * this.lineCount + 44);
+        this.size(WIDTH, CONTENT_Y + (cards ? 96 + WHEN_H : 0) + 12 * this.lineCount + 44);
         super.step(dt);
     }
 
@@ -110,16 +110,16 @@ final class UpdatePanel extends Panel {
         canvas.drawText(body.lead(), x + 14, y + 14, Colors.fade(Palette.TEXT, alpha));
         canvas.drawText(canvas.clip(body.name(), Math.max(0, w - 28 - leadW)), x + 14 + leadW, y + 14,
                 Colors.fade(bad ? Palette.BAD : Palette.ACCENT, alpha));
-        int linesY = y + 44;
+        int linesY = y + CONTENT_Y;
         if (this.preview instanceof UpdatePreview.Ready ready) {
             this.drawCard(canvas, ready, ready.name(), Lang.get("hotwire.update.installed"),
                     ready.installedVersion(), Palette.BAD,
-                    x + 14, y + 34, w - 28, alpha);
+                    x + 14, y + CONTENT_Y, w - 28, alpha);
             int arrowX = x + (w - canvas.measureText("↓")) / 2;
-            canvas.drawText("↓", arrowX, y + 34 + CARD_H + 2, Colors.fade(Palette.DIM, alpha));
+            canvas.drawText("↓", arrowX, y + CONTENT_Y + CARD_H + 2, Colors.fade(Palette.DIM, alpha));
             this.drawCard(canvas, ready, ready.name(), ready.fileName(), ready.newVersion(), Palette.ON,
-                    x + 14, y + 34 + CARD_H + 14, w - 28, alpha);
-            linesY = y + 34 + 96;
+                    x + 14, y + CONTENT_Y + CARD_H + 14, w - 28, alpha);
+            linesY = y + CONTENT_Y + 96;
 
             boolean now = ready.method() == UpdateMethod.IN_PLACE;
             canvas.drawText(canvas.clip(Lang.get(now ? "hotwire.update.when.now" : "hotwire.update.when.restart"),

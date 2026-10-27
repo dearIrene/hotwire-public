@@ -138,4 +138,22 @@ public final class Root {
     private static boolean isAnyOpen(Element layer) {
         return layer.getChildren().stream().anyMatch(Element::open);
     }
+
+    public boolean hasPanelOpen() {
+        for (Element element : this.getModal().getChildren()) {
+            if (element instanceof Panel panel && panel.open()) {
+                return true;
+            }
+        }
+        return false;
+    }
+
+    public boolean pressOpenPanel() {
+        for (Element element : this.getModal().getChildren()) {
+            if (element instanceof Panel panel && panel.pressPrimary()) {
+                return true;
+            }
+        }
+        return false;
+    }
 }

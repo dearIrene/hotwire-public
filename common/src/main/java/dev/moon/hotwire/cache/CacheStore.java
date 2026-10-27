@@ -38,7 +38,7 @@ public final class CacheStore {
 
     private final Path folder;
     private final String kind;
-    private final long capBytes;
+    private volatile long capBytes;
     private final Object lock = new Object();
 
     private final Map<CacheKey, Place> places = new HashMap<>();
@@ -125,6 +125,14 @@ public final class CacheStore {
             this.pendingFlags.put(key, dictionary == null ? 0 : WITH_DICTIONARY);
         }
         return packed.length + 5;
+    }
+
+    public void setCapBytes(long capBytes) {
+        this.capBytes = capBytes;
+    }
+
+    public long getCapBytes() {
+        return this.capBytes;
     }
 
     public long getBytes() {

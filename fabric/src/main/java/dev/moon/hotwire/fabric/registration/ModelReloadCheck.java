@@ -1,6 +1,8 @@
 package dev.moon.hotwire.fabric.registration;
 
 import dev.moon.hotwire.redefine.FieldSlots;
+import java.lang.reflect.Modifier;
+import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.Collection;
 import java.util.Collections;
@@ -8,6 +10,7 @@ import java.util.ConcurrentModificationException;
 import java.util.HashMap;
 import java.util.HashSet;
 import java.util.IdentityHashMap;
+import java.util.List;
 import java.util.Map;
 import java.util.Set;
 import java.util.concurrent.ConcurrentHashMap;
@@ -42,8 +45,19 @@ public final class ModelReloadCheck {
     public static Set<String> findModelOwners(Collection<String> mods) {
         Set<String> found = new HashSet<>();
         Object manager = Minecraft.getInstance().getModelManager();
-        look(manager, Set.copyOf(mods), found, Collections.newSetFromMap(new IdentityHashMap<>()), new HashMap<>(), 0,
-                DEPTH);
+        Set<String> wanted = Set.copyOf(mods);
+        Set<Object> seen = Collections.newSetFromMap(new IdentityHashMap<>());
+        seen.add(manager);
+        Map<Class<?>, @Nullable String> owners = new HashMap<>();
+        for (Class<?> at = manager.getClass(); at != null && at != Object.class; at = at.getSuperclass()) {
+            for (FieldSlots.Slot field : Fields.getDeclared(at)) {
+                int access = field.getModifiers();
+                if (!Modifier.isStatic(access) && !Modifier.isFinal(access) && !field.getType().isPrimitive()) {
+                    List<String> path = new ArrayList<>(List.of(at.getSimpleName() + "." + field.getName()));
+                    look(read(field, manager), wanted, found, seen, owners, path, 1, DEPTH);
+                }
+            }
+        }
         return found;
     }
 
@@ -59,8 +73,8 @@ public final class ModelReloadCheck {
 
     public static Set<String> findFontOwners(Object fonts, Collection<String> mods) {
         Set<String> found = new HashSet<>();
-        look(fonts, Set.copyOf(mods), found, Collections.newSetFromMap(new IdentityHashMap<>()), new HashMap<>(), 0,
-                FONT_DEPTH);
+        look(fonts, Set.copyOf(mods), found, Collections.newSetFromMap(new IdentityHashMap<>()), new HashMap<>(),
+                new ArrayList<>(), 0, FONT_DEPTH);
         return found;
     }
 
@@ -85,14 +99,15 @@ public final class ModelReloadCheck {
     }
 
     private static void look(@Nullable Object value, Set<String> mods, Set<String> found, Set<Object> seen,
-            Map<Class<?>, @Nullable String> owners, int depth, int most) {
+            Map<Class<?>, @Nullable String> owners, List<String> path, int depth, int most) {
         if (value == null || !seen.add(value) || found.containsAll(mods)) {
             return;
         }
         String owner = owners.computeIfAbsent(value.getClass(), GameRegistrations::findModOf);
         if (owner != null && mods.contains(owner)) {
             if (found.add(owner)) {
-                LOGGER.info("[Hotwire] the game's models hold {}'s {}", owner, value.getClass().getName());
+                LOGGER.info("[Hotwire] the game's models hold {}'s {} at {}", owner, value.getClass().getName(),
+                        String.join(" > ", path));
             }
             return;
         }
@@ -100,7 +115,9 @@ public final class ModelReloadCheck {
             return;
         }
         if (value instanceof Map<?, ?> map) {
-            look(Wrappers.readValues(map), mods, found, seen, owners, depth, most);
+            path.add(value.getClass().getSimpleName() + " values");
+            look(Wrappers.readValues(map), mods, found, seen, owners, path, depth, most);
+            path.removeLast();
             return;
         }
 
@@ -122,10 +139,14 @@ public final class ModelReloadCheck {
                     String of = owners.computeIfAbsent(item.getClass(), GameRegistrations::findModOf);
                     if (of != null && mods.contains(of)) {
                         if (found.add(of)) {
-                            LOGGER.info("[Hotwire] the game's models hold {}'s {}", of, item.getClass().getName());
+                            LOGGER.info("[Hotwire] the game's models hold {}'s {} at {} > {}", of,
+                                    item.getClass().getName(), String.join(" > ", path),
+                                    value.getClass().getSimpleName() + "[" + (at - 1) + "]");
                         }
                     } else if (depth < most && !item.getClass().getName().startsWith("java.")) {
-                        look(item, mods, found, seen, owners, depth + 1, most);
+                        path.add(value.getClass().getSimpleName() + "[" + (at - 1) + "]");
+                        look(item, mods, found, seen, owners, path, depth + 1, most);
+                        path.removeLast();
                     }
                 }
             } catch (ConcurrentModificationException changing) {
@@ -134,17 +155,25 @@ public final class ModelReloadCheck {
             }
             return;
         }
-        if (depth >= most || value.getClass().getName().startsWith("java.")) {
+        if (value.getClass().getName().startsWith("java.")) {
             return;
         }
         for (Class<?> at = value.getClass(); at != null && at != Object.class; at = at.getSuperclass()) {
             for (FieldSlots.Slot field : Fields.getDeclared(at)) {
-                if (field.isStatic() || field.getType().isPrimitive()) {
+                int next = isWrapped(field, value) ? depth : depth + 1;
+                if (field.isStatic() || field.getType().isPrimitive() || next > most) {
                     continue;
                 }
-                look(read(field, value), mods, found, seen, owners, depth + 1, most);
+                path.add(at.getSimpleName() + "." + field.getName());
+                look(read(field, value), mods, found, seen, owners, path, next, most);
+                path.removeLast();
             }
         }
+    }
+
+    private static boolean isWrapped(FieldSlots.Slot field, Object holder) {
+        Class<?> type = field.getType();
+        return type != Object.class && !type.getName().startsWith("java.") && type.isInstance(holder);
     }
 
     private static boolean isShared(Object value) {

@@ -56,7 +56,7 @@ public final class SwitchCacheFiller {
     }
 
     public record Fill(boolean running, int stepsDone, int steps, long classesDone, long classes, long bytesDone,
-            long bytes, long millis, boolean sampled, long filledBytes) {
+            long bytes, long millis, boolean sampled, long filledBytes, long baseBytes) {
     }
 
     private final Host host;
@@ -64,6 +64,8 @@ public final class SwitchCacheFiller {
     private volatile List<Step> steps = List.of();
 
     private volatile long filledBytes = -1;
+
+    private volatile long baseBytes;
     private volatile long classes;
     private volatile long bytes;
     private final AtomicInteger done = new AtomicInteger();
@@ -117,6 +119,7 @@ public final class SwitchCacheFiller {
         this.nanos.set(0);
         this.classes = 0;
         this.bytes = 0;
+        this.baseBytes = 0;
         this.filledBytes = -1;
     }
 
@@ -125,7 +128,7 @@ public final class SwitchCacheFiller {
         boolean alive = running != null && running.isAlive() && !this.paused && !this.sampleOnly;
         return new Fill(alive, this.done.get(), this.steps.size(), this.classesDone.get(), this.classes,
                 this.bytesDone.get(), this.bytes, this.nanos.get() / 1_000_000,
-                !this.steps.isEmpty() && this.done.get() >= this.sample, this.filledBytes);
+                !this.steps.isEmpty() && this.done.get() >= this.sample, this.filledBytes, this.baseBytes);
     }
 
     @SuppressWarnings("ThreadPriorityCheck")
@@ -187,7 +190,9 @@ public final class SwitchCacheFiller {
             this.yieldAfter(this.nanos.get() - before);
         }
         CacheKey filled = this.plan;
-        if (filled != null && current == this.run.get() && this.done.get() >= planned.size()) {
+
+        if (filled != null && current == this.run.get() && this.done.get() >= planned.size()
+                && this.filledBytes < 0) {
             CachedMixes.Sizes sizes = this.applier.getRebuilder().getCache().getSizes();
             this.filledBytes = sizes.classes() + sizes.reads();
             this.applier.getRebuilder().getCache().markFilled(filled, this.filledBytes);
@@ -201,6 +206,8 @@ public final class SwitchCacheFiller {
         Set<String> on = this.host.findOnNow();
         Map<String, Set<String>> patchers = this.applier.getPatchersOf(this.applier.findClassesPatchedBy(on), on, "");
         Set<String> saved = new HashSet<>();
+
+        Set<String> named = new HashSet<>();
         Map<Set<String>, Step> offs = new LinkedHashMap<>();
         Map<String, Integer> patching = new HashMap<>();
         for (String id : this.host.getIds()) {
@@ -219,6 +226,7 @@ public final class SwitchCacheFiller {
                     down.retainAll(mods);
                     if (saved.add(name + " " + down)) {
                         fresh.add(name);
+                        named.add(name);
                     }
                 }
                 offs.put(mods, new Step(id, mods, patched.size(), this.sumBytes(fresh)));
@@ -243,12 +251,14 @@ public final class SwitchCacheFiller {
             }
             batch.add(id);
             batchClasses.addAll(patched);
+            named.addAll(patched);
         }
         if (!batch.isEmpty()) {
             planned.add(new Step(null, Set.copyOf(batch), batchClasses.size(), this.sumBytes(batchClasses)));
         }
         this.classes = planned.stream().mapToLong(Step::classes).sum();
         this.bytes = planned.stream().mapToLong(Step::bytes).sum();
+        this.baseBytes = this.sumBytes(named);
         this.steps = List.copyOf(findSampleFirst(planned));
         this.sample = Math.min(SAMPLE, this.steps.size());
 

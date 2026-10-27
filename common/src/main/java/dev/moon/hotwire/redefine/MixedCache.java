@@ -19,6 +19,7 @@ import java.nio.file.Files;
 import java.nio.file.Path;
 import java.nio.file.StandardOpenOption;
 import java.util.ArrayList;
+import java.util.Collections;
 import java.util.HashMap;
 import java.util.HashSet;
 import java.util.LinkedHashMap;
@@ -28,6 +29,7 @@ import java.util.Objects;
 import java.util.Set;
 import java.util.TreeMap;
 import java.util.TreeSet;
+import java.util.WeakHashMap;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
@@ -64,6 +66,8 @@ final class MixedCache {
     }
 
     private final CacheStore store;
+
+    private final ClassPacks packs;
     private final MixinCopy copy;
     private final PluginAnswers answers;
     private final AtomicBoolean flushQueued = new AtomicBoolean();
@@ -80,6 +84,9 @@ final class MixedCache {
     private final AtomicLong readsSaved = new AtomicLong();
     private final AtomicLong readLists = new AtomicLong();
 
+    private final AtomicLong basesSaved = new AtomicLong();
+    private final AtomicLong basesBefore = new AtomicLong();
+
     private final Set<CacheKey> counted = ConcurrentHashMap.newKeySet();
     @SuppressWarnings("ThreadPriorityCheck")
     private final ExecutorService writer = Executors.newSingleThreadExecutor(
@@ -89,7 +96,12 @@ final class MixedCache {
         this.store = store;
         this.copy = copy;
         this.answers = answers;
+        this.packs = new ClassPacks(store);
     }
+
+    private static final String KEYS = "mixed class 8";
+
+    private static final Map<byte[], CacheKey> SHAPES = Collections.synchronizedMap(new WeakHashMap<>());
 
     private static final @Nullable String KEY_DUMP = System.getProperty("hotwire.cacheKeyDump");
 
@@ -136,12 +148,34 @@ final class MixedCache {
             for (String type : ClassHeader.of(next.removeLast()).findAbove()) {
                 byte[] bytes = classes.get(type);
                 if (bytes != null && !targets.contains(type) && seen.add(type)) {
-                    handed.add(type).add(bytes);
+                    CacheKey shape = findShape(bytes);
+                    handed.add(type).add(shape.high()).add(shape.low());
                     next.add(bytes);
                 }
             }
         }
         return handed.build();
+    }
+
+    private static CacheKey findShape(byte[] bytes) {
+        CacheKey known = SHAPES.get(bytes);
+        if (known != null) {
+            return known;
+        }
+        ClassHeader header = ClassHeader.of(bytes);
+        CacheKey.Builder shape = CacheKey.of("shape 2").add(String.valueOf(header.superName()))
+                .add(header.access());
+        new TreeSet<>(header.interfaces()).forEach(shape::add);
+        List<String> members = new ArrayList<>();
+        header.fields().forEach(field -> members.add("f " + GeneratedNames.mask(field.name()) + field.desc()
+                + " " + field.access()));
+        header.methods().forEach(method -> members.add("m " + GeneratedNames.mask(method.name()) + method.desc()
+                + " " + method.access()));
+        members.sort(null);
+        members.forEach(shape::add);
+        CacheKey made = shape.build();
+        SHAPES.put(bytes, made);
+        return made;
     }
 
     private Set<String> findMixedAbove(byte[] original, Set<String> targets, Map<String, byte[]> classes) {
@@ -170,7 +204,7 @@ final class MixedCache {
 
     private @Nullable CacheKey findKey(String target, byte[] original, List<Config> configs, CacheKey others,
             Set<String> mixedAbove, @Nullable StringBuilder trace) {
-        CacheKey.Builder key = CacheKey.of("mixed class 4").add(this.copy.getRecipe()).add(target).add(original)
+        CacheKey.Builder key = CacheKey.of(KEYS).add(this.copy.getRecipe()).add(target).add(original)
                 .add(others.high()).add(others.low());
         if (trace != null) {
             trace.append(" handed=").append(Long.toHexString(others.high())).append(" above=").append(mixedAbove);
@@ -257,15 +291,14 @@ final class MixedCache {
             if (!this.isHolding(reads)) {
                 return null;
             }
-            byte[] mixed = this.store.get(findPartKey(key, target), original);
-            if (mixed == null) {
+            List<CacheKey> used = new ArrayList<>();
+            used.add(key);
+            ClassPacks.Read read = this.packs.get(new CacheKey(in.readLong(), in.readLong()), original, used);
+            if (read == null) {
                 return null;
             }
-            if (this.counted.add(key)) {
-                this.classesSaved.addAndGet((long) this.store.findSize(key)
-                        + this.store.findSize(findPartKey(key, target)));
-                this.classesBefore.addAndGet(original.length);
-            }
+            byte[] mixed = read.bytes();
+            this.count(used, key, original.length, read.base());
             Map<String, String> argsShapes = new LinkedHashMap<>();
             for (int count = in.readInt(); count > 0; count--) {
                 argsShapes.put(in.readUTF(), in.readUTF());
@@ -282,6 +315,24 @@ final class MixedCache {
             return new MixinCopy.MixResult(Map.of(target, mixed), argsShapes, generated);
         } catch (IOException e) {
             return null;
+        }
+    }
+
+    private void count(List<CacheKey> keys, CacheKey entry, int before, boolean base) {
+        boolean first = !this.counted.contains(entry);
+        long bytes = 0;
+        for (CacheKey one : keys) {
+            if (this.counted.add(one)) {
+                bytes += this.store.findSize(one);
+            }
+        }
+        this.classesSaved.addAndGet(bytes);
+        if (first) {
+            this.classesBefore.addAndGet(before);
+            if (base) {
+                this.basesSaved.addAndGet(bytes);
+                this.basesBefore.addAndGet(before);
+            }
         }
     }
 
@@ -365,11 +416,14 @@ final class MixedCache {
             uses.add(args.group());
         }
         ByteArrayOutputStream listed = new ByteArrayOutputStream();
-        long added = 0;
+        List<CacheKey> used = new ArrayList<>();
+        ClassPacks.Body body;
         try (DataOutputStream out = new DataOutputStream(listed)) {
             out.writeLong(reads.high());
             out.writeLong(reads.low());
-            added += this.store.put(findPartKey(key, target), mixed, originals.get(target));
+            body = this.packs.put(target, mixed, originals.get(target), used);
+            out.writeLong(body.key().high());
+            out.writeLong(body.key().low());
             Map<String, String> shapes = new TreeMap<>(made.argsShapes());
             shapes.keySet().retainAll(uses);
             out.writeInt(shapes.size());
@@ -382,30 +436,29 @@ final class MixedCache {
             out.writeInt(generated.size());
             for (Map.Entry<String, byte[]> one : generated.entrySet()) {
                 out.writeUTF(one.getKey());
-                added += this.store.put(findPartKey(key, one.getKey()), one.getValue(), null);
+                this.store.put(findPartKey(key, one.getKey()), one.getValue(), null);
             }
         } catch (IOException e) {
             return;
         }
 
-        added += this.store.put(key, listed.toByteArray(), null);
-        if (this.counted.add(key)) {
-            if (added == 0) {
-                added = (long) this.store.findSize(key) + this.store.findSize(findPartKey(key, target));
-            }
-            this.classesSaved.addAndGet(added);
-            byte[] original = originals.get(target);
-            this.classesBefore.addAndGet(original == null ? mixed.length : original.length);
-        }
+        this.store.put(key, listed.toByteArray(), null);
+        used.add(key);
+        byte[] original = originals.get(target);
+        this.count(used, key, original == null ? mixed.length : original.length, body.base());
     }
 
     long[] findSaved() {
         return new long[] {this.classesSaved.get(), this.classesBefore.get(), this.readsSaved.get(),
-            this.readLists.get()};
+            this.readLists.get(), this.basesSaved.get(), this.basesBefore.get()};
     }
 
     String describe() {
         return this.store.describe();
+    }
+
+    CacheStore getStore() {
+        return this.store;
     }
 
     long findFilled(CacheKey plan) {
@@ -421,18 +474,21 @@ final class MixedCache {
     }
 
     private CacheKey findFilledKey(CacheKey plan) {
-        return CacheKey.of("filled 2").add(this.copy.getRecipe()).add(plan.high()).add(plan.low()).build();
+        return CacheKey.of("filled 2").add(KEYS).add(this.copy.getRecipe()).add(plan.high()).add(plan.low()).build();
     }
 
     void clear() {
         this.writer.execute(() -> {
             this.store.clear();
+            this.packs.forget();
             this.holding.clear();
             this.counted.clear();
             this.classesSaved.set(0);
             this.classesBefore.set(0);
             this.readsSaved.set(0);
             this.readLists.set(0);
+            this.basesSaved.set(0);
+            this.basesBefore.set(0);
         });
     }
 

@@ -91,6 +91,9 @@ final class JarRequests {
                     case ModAdder.Result.Refused refused -> refused.reason();
                     case ModAdder.Result.Failed failed -> failed.reason();
                 }, !(result instanceof ModAdder.Result.Added));
+                if (result instanceof ModAdder.Result.Failed failed && FailureReports.isUnplanned(failed.cause())) {
+                    FailureReports.report(this.engine, Lang.get("hotwire.report.file.add_failed"), failed.reason());
+                }
             }
             this.engine.refreshScreen();
         });

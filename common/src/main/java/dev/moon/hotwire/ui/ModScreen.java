@@ -100,6 +100,9 @@ public final class ModScreen implements JarHost {
         default void clearCache() {
         }
 
+        default void setCacheLimit(int megabytes) {
+        }
+
         default List<PendingChange> getPendingChanges() {
             return List.of();
         }
@@ -171,12 +174,8 @@ public final class ModScreen implements JarHost {
     private int height;
     private final BottomBar bar;
     private String toggleLabel = "";
-
-    private static final long AHEAD_DWELL_NANOS = 250_000_000L;
-    private @Nullable String pointed;
-    private long pointedSince;
-    private boolean askedAhead;
-    private boolean askedOff;
+    private final AheadRequests ahead;
+    private final PendingActions pendingActions;
 
     public ModScreen(Game game, ProfileStore profiles) {
         this.game = game;
@@ -188,7 +187,8 @@ public final class ModScreen implements JarHost {
         this.layoutBar = new ChoiceBar(List.of(ChoiceBar.Choice.ofGlyph(ChoiceBar.Glyph.ROWS),
                 ChoiceBar.Choice.ofGlyph(ChoiceBar.Glyph.GRID)), 0, index -> this.list.setGrid(index == 1));
         this.libraries = new Button(Lang.get("hotwire.screen.show_libraries"), false, this::toggleLibraries);
-        this.profiles = new ProfileMenu(profiles, new Setups(), this.root, this.search, this.show);
+        this.profiles = new ProfileMenu(profiles, new ProfileHost(this, game, this.model), this.root, this.search,
+                this.show);
         this.toggle = new Button(Lang.get("hotwire.screen.turn_off"), Lang.get("hotwire.screen.off"), false,
                 this::switchPicked);
         this.add = new Button(Lang.get("hotwire.screen.add"), Lang.get("hotwire.screen.add_short"), false,
@@ -198,7 +198,7 @@ public final class ModScreen implements JarHost {
         this.pending = new Button(Lang.get("hotwire.screen.pending"), Lang.get("hotwire.screen.pending_short"), false,
                 this::openPending);
         this.cacheFillPanel = new CacheFillPanel(game::getCacheFill, game::fillCache, game::clearCache,
-                this::closePanels);
+                game::setCacheLimit, this::closePanels);
         this.advanced = new Button(Lang.get("hotwire.screen.advanced"), Lang.get("hotwire.screen.advanced_short"),
                 false, this::openAdvanced);
         this.switchCache = new Button(Lang.get("hotwire.screen.switch_cache"),
@@ -218,7 +218,10 @@ public final class ModScreen implements JarHost {
         this.progress = new ProgressPanel(game.getProgress());
         this.addPanel = new AddPanel(this::confirmAdd, game::addMod, this::closePanels);
         this.updatePanel = new UpdatePanel(this::confirmUpdate, game::updateMod, this::closePanels);
-        this.advancedPanel = new AdvancedPanel(this::chooseAdvanced, this::closePanels);
+        this.advancedPanel = new AdvancedPanel(this::chooseAdvanced, game::getCacheFill, game::setCacheLimit,
+                this::closePanels);
+        this.ahead = new AheadRequests(game);
+        this.pendingActions = new PendingActions(game, this::showMessage);
         this.pendingPanel = new PendingPanel(this::actOnPending, this::ignoreEarlier, this::closePending,
                 game::findIcon);
         this.reopenPanel = new ReopenPanel(offer -> {
@@ -253,7 +256,11 @@ public final class ModScreen implements JarHost {
     }
 
     public void showCrashReport(String where) {
-        this.reportPanel.open(Lang.get("hotwire.report.crash_title"), where, true);
+        this.reportPanel.open(Lang.get("hotwire.report.crash_title"), where, Lang.get("hotwire.report.crash_blame"));
+    }
+
+    public void showFailureReport(String failed, String where) {
+        this.reportPanel.open(Lang.get("hotwire.report.failure_title"), where, failed);
     }
 
     public Root getRoot() {
@@ -293,7 +300,7 @@ public final class ModScreen implements JarHost {
 
     public void drawFrame(Canvas canvas, long nowNanos, double mouseX, double mouseY) {
         this.refreshButtons();
-        this.prepareAheadOfPointer(nowNanos);
+        this.ahead.askForPointer(this.list.findPointedAt(), nowNanos, this.isIdle());
         this.bar.layIfStale(canvas, this.width, this.height);
         Set<String> picked = this.model.getPicked();
         this.note.setCounts(this.list.countLanded(picked), this.list.countLanded(this.model.getPickedForYou()));
@@ -332,24 +339,6 @@ public final class ModScreen implements JarHost {
 
     void onJarToUpdate(Path jar) {
         this.updatePanel.read(jar, this.game.dryRunUpdate(jar));
-    }
-
-    public boolean hasPanelOpen() {
-        for (Element element : this.root.getModal().getChildren()) {
-            if (element instanceof Panel panel && panel.open()) {
-                return true;
-            }
-        }
-        return false;
-    }
-
-    public boolean pressOpenPanel() {
-        for (Element element : this.root.getModal().getChildren()) {
-            if (element instanceof Panel panel && panel.pressPrimary()) {
-                return true;
-            }
-        }
-        return false;
     }
 
     @Override
@@ -408,41 +397,14 @@ public final class ModScreen implements JarHost {
     }
 
     private void actOnPending(PendingChange change) {
-        try {
-            switch (change) {
-                case PendingChange.Update update -> {
-                    this.game.cancelPending(update.modId());
-                    this.showMessage(Lang.get("hotwire.update.cancelled", update.name(), update.fromVersion(),
-                            update.newJar()), false);
-                }
-                case PendingChange.Copied copied -> {
-                    this.game.removeCopy(copied.modId());
-                    this.showMessage(copied.name() + " runs until you close the game, and the next launch is"
-                            + " without it:"
-                            + " " + copied.jar() + " was taken out of your mods folder.", false);
-                }
-                case PendingChange.Revertable back -> {
-                    this.game.revertAtNextStart(back.modId());
-                    this.showMessage(back.name() + " goes back to " + back.oldVersion() + " when you close the game."
-                            + " Cancel it any time from Pending tasks.", false);
-                }
-            }
-        } catch (IOException e) {
-            this.showMessage(Lang.get("hotwire.screen.failed", e.getMessage()), true);
-        }
-        List<PendingChange> now = this.game.getPendingChanges();
-        this.pendingCount = now.size();
-        this.pendingPanel.setChanges(now);
+        this.setPending(this.pendingActions.act(change));
     }
 
     private void ignoreEarlier() {
-        try {
-            this.game.ignoreEarlierVersions();
-            this.showMessage(Lang.get("hotwire.pending.ignored"), false);
-        } catch (IOException e) {
-            this.showMessage(Lang.get("hotwire.screen.failed", e.getMessage()), true);
-        }
-        List<PendingChange> now = this.game.getPendingChanges();
+        this.setPending(this.pendingActions.ignoreEarlier());
+    }
+
+    private void setPending(List<PendingChange> now) {
         this.pendingCount = now.size();
         this.pendingPanel.setChanges(now);
     }
@@ -465,28 +427,6 @@ public final class ModScreen implements JarHost {
         this.reportPanel.dismiss();
         this.reopenPanel.dismiss();
         this.showMessage("", false);
-    }
-
-    private void prepareAheadOfPointer(long nowNanos) {
-        String pointed = this.list.findPointedAt();
-        if (!Objects.equals(pointed, this.pointed)) {
-            this.pointed = pointed;
-            this.pointedSince = nowNanos;
-            this.askedAhead = false;
-        } else if (pointed != null && nowNanos - this.pointedSince > AHEAD_DWELL_NANOS && this.isIdle()
-                && !(this.askedAhead && this.askedOff == this.game.getCatalog().isOn(pointed))) {
-            this.askedAhead = true;
-            this.askedOff = this.game.getCatalog().isOn(pointed);
-            this.game.prepareAhead(List.of(pointed), this.askedOff);
-        }
-    }
-
-    private void prepareAheadOfPicks() {
-        List<String> on = this.getPickedThatAre(true);
-        List<String> off = this.getPickedThatAre(false);
-        if (on.isEmpty() != off.isEmpty() && this.isIdle()) {
-            this.game.prepareAhead(on.isEmpty() ? off : on, !on.isEmpty());
-        }
     }
 
     private boolean isIdle() {
@@ -566,7 +506,7 @@ public final class ModScreen implements JarHost {
         }
     }
 
-    private void refilter() {
+    void refilter() {
         Map<String, ModStatus> byId = new HashMap<>();
         List<String> all = new ArrayList<>();
         for (ModStatus mod : this.game.getMods()) {
@@ -622,34 +562,6 @@ public final class ModScreen implements JarHost {
         return this.profiles.isNaming();
     }
 
-    private final class Setups implements ProfileMenu.Screen {
-        @Override
-        public List<String> getRelevantIds() {
-            return ModScreen.this.model.filterRelevant(ModScreen.this.game.getMods().stream().map(ModStatus::id)
-                    .toList());
-        }
-
-        @Override
-        public boolean isOn(String id) {
-            return ModScreen.this.game.getCatalog().isOn(id);
-        }
-
-        @Override
-        public void showMessage(String text, boolean bad) {
-            ModScreen.this.showMessage(text, bad);
-        }
-
-        @Override
-        public void refilter() {
-            ModScreen.this.refilter();
-        }
-
-        @Override
-        public void applyProfile(String name, ProfileStore.ProfilePlan plan) {
-            ModScreen.this.game.applyProfile(name, plan);
-        }
-    }
-
     private final class ListSource implements ModList.Source {
         @Override
         public List<ModStatus> getShown() {
@@ -702,7 +614,8 @@ public final class ModScreen implements JarHost {
             boolean took = ModScreen.this.model.pick(id);
             if (took) {
                 ModScreen.this.refilter();
-                ModScreen.this.prepareAheadOfPicks();
+                ModScreen.this.ahead.askForPicks(ModScreen.this.getPickedThatAre(true),
+                        ModScreen.this.getPickedThatAre(false), ModScreen.this.isIdle());
             }
             return took;
         }
