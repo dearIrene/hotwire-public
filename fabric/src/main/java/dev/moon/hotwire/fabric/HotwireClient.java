@@ -54,8 +54,13 @@ public final class HotwireClient implements ClientModInitializer {
         ClientLifecycleEvents.CLIENT_STARTED.register(client -> client.execute(HotwireClient::getEngine));
 
         InitHookReplay.catchUpLaterWhile(() -> Minecraft.getInstance().level == null);
-        ClientPlayConnectionEvents.JOIN.register((handler, sender, client) -> client.execute(
-                FieldHolders::retryCatchUps));
+        ClientPlayConnectionEvents.JOIN.register((handler, sender, client) -> client.execute(() -> {
+            FieldHolders.retryCatchUps();
+            HotwireEngine started = engine;
+            if (started != null) {
+                started.lookAheadInWorldSoon();
+            }
+        }));
         ClientLifecycleEvents.CLIENT_STOPPING.register(client -> {
             HotwireEngine started = engine;
             if (started != null) {

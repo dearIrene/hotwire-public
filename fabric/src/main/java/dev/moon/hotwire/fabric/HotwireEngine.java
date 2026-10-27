@@ -65,6 +65,7 @@ import java.io.UncheckedIOException;
 import java.lang.instrument.ClassFileTransformer;
 import java.lang.instrument.Instrumentation;
 import java.nio.file.Path;
+import java.time.Duration;
 import java.util.ArrayDeque;
 import java.util.ArrayList;
 import java.util.Deque;
@@ -105,6 +106,8 @@ public final class HotwireEngine implements ModScreen.Game, AutoCloseable {
     }
 
     private static final Logger LOGGER = LoggerFactory.getLogger(HotwireEngine.class);
+
+    private static final Duration WORLD_SETTLES = Duration.ofSeconds(20);
 
     private final InstalledMods installed;
     private final Bound bound;
@@ -402,6 +405,15 @@ public final class HotwireEngine implements ModScreen.Game, AutoCloseable {
         } else {
             ModViews.showChat(text, bad, hint);
         }
+    }
+
+    void lookAheadInWorldSoon() {
+        CompletableFuture.delayedExecutor(WORLD_SETTLES.toSeconds(), TimeUnit.SECONDS).execute(() -> {
+            JvmParts parts = this.findParts();
+            if (parts != null && Minecraft.getInstance().level != null) {
+                parts.runner().lookAheadForAll(this.findSwitchableOn());
+            }
+        });
     }
 
     private void refreshScreen() {
