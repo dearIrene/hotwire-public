@@ -223,7 +223,7 @@ public final class SwitchRunner {
             this.fieldReferences.takeOut(ids, id -> !ids.contains(id) && this.switcher.isOn(id));
             SwitchTimes.mark("field references");
         } catch (RuntimeException | LinkageError e) {
-            LOGGER.error("[Hotwire] what {} left in others could not all be removedNames out", ids, e);
+            LOGGER.error("[Hotwire] what {} left in others could not all be taken out", ids, e);
         }
         ModViews.clearParticlesOf(ids);
         if (EntityRendererProviders.takeChanged()) {
