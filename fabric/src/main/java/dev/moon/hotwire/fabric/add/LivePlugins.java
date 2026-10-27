@@ -2,6 +2,7 @@ package dev.moon.hotwire.fabric.add;
 
 import dev.moon.hotwire.jar.ModManifest;
 import dev.moon.hotwire.jar.PluginQuestions;
+import dev.moon.hotwire.redefine.Tripwire;
 import java.io.IOException;
 import java.nio.file.Path;
 import java.util.ArrayList;
@@ -49,11 +50,14 @@ public final class LivePlugins {
             LOGGER.warn("[Hotwire] {}'s mixin plugins could not be read to run in the game", manifest.id(), e);
             return;
         }
-        for (PluginQuestions questions : all) {
-            if (RAN.add(questions.config())) {
-                ask(questions);
+
+        Tripwire.expect(Set.of(manifest.id()), () -> {
+            for (PluginQuestions questions : all) {
+                if (RAN.add(questions.config())) {
+                    ask(questions);
+                }
             }
-        }
+        });
     }
 
     private static void ask(PluginQuestions questions) {
