@@ -295,6 +295,10 @@ final class Wrappers {
         if (owner != null && mods.contains(owner)) {
             return owner;
         }
+        String id = CollectionReferences.findIdOwner(value);
+        if (id != null && mods.contains(id)) {
+            return id;
+        }
         for (String mod : type.isHidden() ? mods : List.<String>of()) {
             if (CollectionReferences.isOwnedBy(mod, value)
                     || (CollectionReferences.isLambda(value) && CollectionReferences.forwardsTo(mod, value))) {

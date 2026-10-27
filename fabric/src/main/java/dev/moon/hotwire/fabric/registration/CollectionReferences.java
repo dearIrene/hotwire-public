@@ -26,6 +26,7 @@ import java.util.function.Function;
 import java.util.function.Supplier;
 import net.minecraft.core.Registry;
 import net.minecraft.resources.Identifier;
+import net.minecraft.resources.ResourceKey;
 import org.jspecify.annotations.Nullable;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -566,6 +567,10 @@ final class CollectionReferences {
     }
 
     static @Nullable String findOwnerOfValue(Object value) {
+        String id = findIdOwner(value);
+        if (id != null) {
+            return id;
+        }
         Class<?> type = value instanceof Class<?> named ? named : value.getClass();
         String mod = GameRegistrations.findModOf(type);
         if (mod == null && type.isHidden()) {
@@ -626,6 +631,21 @@ final class CollectionReferences {
         return (name.startsWith("net.minecraft.") || name.startsWith("com.mojang.")) && !part.getClass().isHidden();
     }
 
+    static @Nullable String findIdOwner(Object value) {
+        Identifier id = value instanceof Identifier plain ? plain
+                : value instanceof ResourceKey<?> key ? findIdOf(key) : null;
+        String space = id == null ? null : id.getNamespace();
+        return space == null || space.equals("minecraft") ? null : space;
+    }
+
+    private static Identifier findIdOf(ResourceKey<?> key) {
+        //? if >=1.21.11 {
+        return key.identifier();
+        //?} else {
+        /*return key.location();
+        *///?}
+    }
+
     static boolean isPlain(Object part) {
         return part instanceof String || part instanceof Number || part instanceof Boolean
                 || part instanceof Character || part instanceof Enum<?>;
@@ -657,7 +677,7 @@ final class CollectionReferences {
 
     static boolean isOwnedBy(String mod, Object value) {
         Class<?> type = value instanceof Class<?> named ? named : value.getClass();
-        return isOwnedClass(mod, type)
+        return isOwnedClass(mod, type) || mod.equals(findIdOwner(value))
                 || (!(value instanceof Class<?>) && type.isHidden() && hasOwnedCapture(mod, value));
     }
 
