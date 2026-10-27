@@ -98,8 +98,32 @@ public final class GameReports {
         crashSaved = listener;
     }
 
-    public static void tellCrashSaved(Path file) {
+    private static final long REPEAT_NANOS = 60_000_000_000L;
+    private static String lastCrash = "";
+    private static long lastCrashAt;
+    private static int repeats;
+
+    public static synchronized void tellCrashSaved(Path file) {
+        String what = readWhat(file);
+        long now = System.nanoTime();
+        if (what.equals(lastCrash) && now - lastCrashAt < REPEAT_NANOS) {
+            repeats++;
+            LOGGER.info("[Hotwire] the same crash again ({} since its report): {}", repeats, what);
+            return;
+        }
+        lastCrash = what;
+        lastCrashAt = now;
+        repeats = 0;
         crashSaved.accept(file);
+    }
+
+    private static String readWhat(Path file) {
+        try (Stream<String> lines = Files.lines(file)) {
+            return lines.limit(12).filter(line -> line.startsWith("Description:") || line.contains("Exception")
+                    || line.contains("Error")).limit(2).reduce("", (first, second) -> first + " " + second).strip();
+        } catch (IOException | UncheckedIOException e) {
+            return file.getFileName().toString();
+        }
     }
 
     void markReported(Path crash) {
