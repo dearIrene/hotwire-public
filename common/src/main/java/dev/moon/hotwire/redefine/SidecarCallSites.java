@@ -7,12 +7,15 @@ import java.lang.invoke.MethodHandles;
 import java.lang.invoke.MethodType;
 import java.lang.invoke.MutableCallSite;
 import java.lang.ref.WeakReference;
+import java.lang.reflect.Method;
+import java.lang.reflect.Modifier;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
 import java.util.Queue;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.ConcurrentLinkedQueue;
+import org.jspecify.annotations.Nullable;
 
 final class SidecarCallSites {
     private record Bound(WeakReference<MutableCallSite> site, String name, MethodType type) {
@@ -95,10 +98,50 @@ final class SidecarCallSites {
             if (!isCallback(type) || name.startsWith(AddedOverrides.INHERITED)) {
                 return false;
             }
-            site.setTarget(MethodHandles.empty(type));
-            Linker.onSkippedCallback(target.getName() + "." + name);
+            MethodHandle renamed = findRenamed(side, name, type);
+            site.setTarget(renamed != null ? renamed : MethodHandles.empty(type));
+            if (renamed == null) {
+                Linker.onSkippedCallback(target.getName() + "." + name);
+            }
             return true;
         }
+    }
+
+    static @Nullable MethodHandle findRenamed(MethodHandles.Lookup side, String name, MethodType type) {
+        String key = stripNumber(name);
+        if (key == null) {
+            return null;
+        }
+        Method found = null;
+        for (Method method : side.lookupClass().getDeclaredMethods()) {
+            if (Modifier.isStatic(method.getModifiers()) && key.equals(stripNumber(method.getName()))
+                    && type.equals(MethodType.methodType(method.getReturnType(), method.getParameterTypes()))) {
+                if (found != null) {
+                    return null;
+                }
+                found = method;
+            }
+        }
+        try {
+            return found == null ? null : side.unreflect(found);
+        } catch (IllegalAccessException e) {
+            return null;
+        }
+    }
+
+    static @Nullable String stripNumber(String name) {
+        int first = name.indexOf('$');
+        int end = first + 7;
+        if (first <= 0 || name.length() <= end || name.charAt(end) != '$') {
+            return null;
+        }
+        for (int at = first + 1; at < end; at++) {
+            char one = name.charAt(at);
+            if (at < first + 4 ? !Character.isLetter(one) : !Character.isDigit(one)) {
+                return null;
+            }
+        }
+        return name.substring(0, first + 1) + name.substring(first + 4);
     }
 
     static boolean isCallback(MethodType type) {

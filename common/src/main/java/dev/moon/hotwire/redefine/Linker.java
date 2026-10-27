@@ -374,6 +374,10 @@ public final class Linker {
             return side.findStatic(side.lookupClass(), name, type);
         } catch (NoSuchMethodException missing) {
             if (SidecarCallSites.isCallback(type)) {
+                MethodHandle renamed = SidecarCallSites.findRenamed(side, name, type);
+                if (renamed != null) {
+                    return renamed;
+                }
                 onSkippedCallback(getHostOf(caller).getName() + "." + name);
                 return MethodHandles.empty(type);
             }
