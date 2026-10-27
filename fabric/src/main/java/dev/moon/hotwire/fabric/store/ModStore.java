@@ -6,6 +6,7 @@ import dev.moon.hotwire.modrinth.LocalJars;
 import dev.moon.hotwire.modrinth.ModrinthClient;
 import dev.moon.hotwire.modrinth.StoreCache;
 import dev.moon.hotwire.modrinth.StoreModel;
+import dev.moon.hotwire.ui.Canvas;
 import dev.moon.hotwire.ui.Lang;
 import java.io.IOException;
 import java.nio.file.Files;
@@ -18,8 +19,10 @@ import java.util.Map;
 import java.util.Set;
 import java.util.function.BiConsumer;
 import java.util.function.Consumer;
+import java.util.function.Function;
 import net.fabricmc.loader.api.FabricLoader;
 import net.minecraft.client.Minecraft;
+import org.jspecify.annotations.Nullable;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -33,7 +36,9 @@ public final class ModStore {
     private final String gameVersion;
     private final Path downloads;
 
-    public ModStore(InstalledMods installed) {
+    private volatile Map<String, String> modByProject = Map.of();
+
+    public ModStore(InstalledMods installed, Function<String, Canvas.@Nullable Image> icons) {
         this.installed = installed;
         Path game = FabricLoader.getInstance().getGameDir();
         this.gameVersion = findVersionOf("minecraft");
@@ -41,7 +46,10 @@ public final class ModStore {
         StoreCache cache = new StoreCache(game.resolve("hotwire").resolve("store-cache"));
         this.model = new StoreModel(client, cache, id -> installed.isInstalled(id)
                 || FabricLoader.getInstance().isModLoaded(id), () -> { });
-        this.icons = new StoreIconLoader(this.model, cache);
+        this.icons = new StoreIconLoader(this.model, cache, project -> {
+            String id = this.modByProject.get(project);
+            return id == null ? null : icons.apply(id);
+        });
         this.downloads = game.resolve("hotwire").resolve("store");
     }
 
@@ -73,18 +81,26 @@ public final class ModStore {
             if (hashByName.isEmpty()) {
                 return;
             }
+            Map<String, String> idByName = new HashMap<>();
+            jars.forEach((id, jar) -> idByName.put(String.valueOf(jar.getFileName()), id));
             try {
                 Map<String, ModrinthClient.Version> newest = this.model.getClient().findNewest(hashByName);
                 Set<String> projects = new HashSet<>();
+                Map<String, String> mods = new HashMap<>();
                 Map<String, ModrinthClient.Version> updates = new HashMap<>();
                 newest.forEach((name, version) -> {
                     projects.add(version.projectId());
+                    String id = idByName.get(name);
+                    if (id != null) {
+                        mods.put(version.projectId(), id);
+                    }
                     if (!version.sha512().equalsIgnoreCase(hashByName.get(name))) {
                         updates.put(version.projectId(), version);
                     }
                 });
                 LOGGER.info("[Hotwire] the store knows {} of {} mods; {} have a newer version", projects.size(),
                         hashByName.size(), updates.size());
+                this.modByProject = Map.copyOf(mods);
                 this.model.setInstalled(projects, updates);
             } catch (IOException | RuntimeException e) {
                 LOGGER.info("[Hotwire] the store could not check the installed mods: {}", e.toString());
@@ -92,7 +108,7 @@ public final class ModStore {
         });
     }
 
-    public void fetch(String projectId, String versionId, String title, BiConsumer<List<Path>, String> onJars,
+    public void fetch(String projectId, String versionId, String title, BiConsumer<List<Path>, List<String>> onJars,
             Consumer<String> onFailure) {
         Minecraft client = Minecraft.getInstance();
         this.model.findVersions(projectId, versions -> {
@@ -100,18 +116,20 @@ public final class ModStore {
                     .filter(version -> versionId.isEmpty() || version.id().equals(versionId)).findFirst()
                     .orElse(null);
             if (wanted == null) {
-                String why = Lang.get(versionId.isEmpty() ? "hotwire.store.no_version"
-                        : "hotwire.store.no_such_version", title);
+                String why = Lang.get("hotwire.store.no_version", title);
                 client.execute(() -> onFailure.accept(why));
                 return;
             }
             try {
                 List<Path> jars = new ArrayList<>();
+                List<String> projects = new ArrayList<>();
                 for (ModrinthClient.Version needed : this.findNeeded(wanted, new HashSet<>())) {
                     jars.add(this.fetchJar(needed));
+                    projects.add(needed.projectId());
                 }
                 jars.add(this.fetchJar(wanted));
-                client.execute(() -> onJars.accept(jars, projectId));
+                projects.add(projectId);
+                client.execute(() -> onJars.accept(jars, projects));
             } catch (IOException e) {
                 LOGGER.info("[Hotwire] the store could not get {}: {}", title, e.toString());
                 client.execute(() -> onFailure.accept(Lang.get("hotwire.store.download_failed", title,

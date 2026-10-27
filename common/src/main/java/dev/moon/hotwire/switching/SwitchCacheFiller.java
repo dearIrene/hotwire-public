@@ -304,7 +304,7 @@ public final class SwitchCacheFiller {
 
     @SuppressWarnings("ThreadPriorityCheck")
     private void yieldAfter(long busyNanos) throws InterruptedException {
-        boolean gently = this.playing.getAsBoolean() || this.sampleOnly;
+        boolean gently = this.playing.getAsBoolean();
         Thread.currentThread().setPriority(gently ? Thread.MIN_PRIORITY : Thread.NORM_PRIORITY);
         if (gently) {
             Thread.sleep(busyNanos / 1_000_000);

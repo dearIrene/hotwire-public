@@ -94,9 +94,9 @@ final class StoreGrid extends Element {
         int first = ((scrolled + this.getHeight()) / (CARD_H + GAP) + 1) * columns;
         int last = Math.min(cards.size(), first + ROWS_AHEAD * columns);
         for (int index = first; index < last; index++) {
-            String url = cards.get(index).hit().iconUrl();
-            if (!url.isEmpty()) {
-                this.icons.find(url);
+            StoreModel.Card ahead = cards.get(index);
+            if (!ahead.hit().iconUrl().isEmpty()) {
+                this.icons.find(ahead.hit().projectId(), ahead.hit().iconUrl());
             }
         }
     }
@@ -156,7 +156,8 @@ final class StoreGrid extends Element {
         canvas.fill(x + 1, y + 1, x + w - 1, y + CARD_H - 1, Colors.fade(Colors.mix(FACE, FACE_HOT, hot), alpha));
         int iconX = x + 10;
         int iconY = y + 10;
-        Canvas.Image icon = card.hit().iconUrl().isEmpty() ? null : this.icons.find(card.hit().iconUrl());
+        Canvas.Image icon = card.hit().iconUrl().isEmpty() ? null
+                : this.icons.find(card.hit().projectId(), card.hit().iconUrl());
         if (icon == null || !canvas.drawImage(icon, iconX, iconY, ICON, ICON, alpha)) {
             canvas.fill(iconX, iconY, iconX + ICON, iconY + ICON, Colors.fade(ICON_STAND_IN, alpha));
             String letter = card.hit().title().isEmpty() ? "?" : card.hit().title().substring(0, 1);

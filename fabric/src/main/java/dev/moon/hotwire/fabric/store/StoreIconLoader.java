@@ -13,6 +13,7 @@ import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
+import java.util.function.Function;
 import org.jspecify.annotations.Nullable;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -25,6 +26,8 @@ public final class StoreIconLoader implements StoreIcons {
 
     private final StoreModel model;
     private final StoreCache cache;
+
+    private final Function<String, Canvas.@Nullable Image> local;
     @SuppressWarnings("ThreadPriorityCheck")
     private final ExecutorService fetchers = Executors.newFixedThreadPool(FETCHERS, Thread.ofPlatform()
             .name("hotwire-store-icons-", 0).daemon().priority(Thread.MIN_PRIORITY).factory());
@@ -32,13 +35,18 @@ public final class StoreIconLoader implements StoreIcons {
 
     private final LinkedHashMap<String, Boolean> seen = new LinkedHashMap<>(MOST_LIVE, 0.75f, true);
 
-    public StoreIconLoader(StoreModel model, StoreCache cache) {
+    public StoreIconLoader(StoreModel model, StoreCache cache, Function<String, Canvas.@Nullable Image> local) {
         this.model = model;
         this.cache = cache;
+        this.local = local;
     }
 
     @Override
-    public Canvas.@Nullable Image find(String url) {
+    public Canvas.@Nullable Image find(String projectId, String url) {
+        Canvas.Image own = this.local.apply(projectId);
+        if (own != null) {
+            return own;
+        }
         if (!url.startsWith("https://cdn.modrinth.com/")) {
             return null;
         }

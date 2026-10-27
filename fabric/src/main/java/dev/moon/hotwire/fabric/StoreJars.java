@@ -44,6 +44,8 @@ final class StoreJars {
 
     private final Map<Path, String> projects = new HashMap<>();
 
+    private boolean reopenWanted;
+
     private final Set<String> needsMet = new HashSet<>();
     private List<UpdateOffer> offers = List.of();
     private boolean checked;
@@ -134,17 +136,33 @@ final class StoreJars {
         return false;
     }
 
-    void queue(List<Path> jars, boolean update, String project) {
+    void queue(List<Path> jars, boolean update, List<String> projects) {
         this.queued.clear();
+        this.reopenWanted = false;
         for (int i = 0; i < jars.size(); i++) {
             this.queued.add(new StoreJar(jars.get(i), update && i == jars.size() - 1));
+            this.projects.put(jars.get(i), projects.get(i));
         }
-        this.projects.put(jars.getLast(), project);
         this.offerNext();
+    }
+
+    boolean hasQueued() {
+        return !this.queued.isEmpty();
+    }
+
+    void markReopenWanted() {
+        this.reopenWanted = true;
+    }
+
+    boolean takeReopenWanted() {
+        boolean wanted = this.reopenWanted;
+        this.reopenWanted = false;
+        return wanted;
     }
 
     void clear() {
         this.queued.clear();
+        this.reopenWanted = false;
         this.projects.clear();
         this.needsMet.clear();
     }

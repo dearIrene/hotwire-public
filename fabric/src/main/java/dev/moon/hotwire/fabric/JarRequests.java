@@ -61,6 +61,7 @@ final class JarRequests {
                 this.progress.endAdding();
             }
         }, result -> {
+            boolean more = this.storeJars.hasQueued();
             then.accept(result);
             if (result instanceof ModAdder.Result.Added) {
                 this.storeJars.markInstalled(jar);
@@ -77,11 +78,14 @@ final class JarRequests {
                 current.offerAdd(jar, this.changes.dryRunAdd(jar).thenApply(preview -> AddPreview.ofLater(
                         preview.name(), preview.version(), why)));
             } else if (result instanceof ModAdder.Result.Added added && current != null
-                    && Minecraft.getInstance().level != null && this.changes.setsUpOnJoin(jar)) {
+                    && Minecraft.getInstance().level != null
+                    && (this.changes.setsUpOnJoin(jar) || (!more && this.storeJars.takeReopenWanted()))) {
                 boolean own = Minecraft.getInstance().getSingleplayerServer() != null;
                 this.engine.showMessage(added.name() + " is in." + this.changes.copyIntoMods(jar) + (own ? ""
                         : " It finishes setting up as you join a world: rejoin the server to have all of it."), false);
-                if (own) {
+                if (own && more) {
+                    this.storeJars.markReopenWanted();
+                } else if (own) {
                     this.engine.findReopenHost().offerReopen(new ReopenPanel.Offer(false, List.of(), null,
                             added.name(), Lang.get("hotwire.add.finishes_at_join")));
                 }

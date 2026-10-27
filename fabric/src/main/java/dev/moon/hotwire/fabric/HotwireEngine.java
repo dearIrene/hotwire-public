@@ -124,7 +124,7 @@ public final class HotwireEngine implements ModScreen.Game, AutoCloseable {
         this.changes = new ModChanges(this.findParts(), this.getSwitchRefusal(), installed, this.tasks);
         this.storeJars = new StoreJars(installed, this.changes, this::findHost, () -> this.screen,
                 this::getStore, this::showMessage);
-        this.stores = new StoreScreens(this, installed, this.storeJars);
+        this.stores = new StoreScreens(this, installed, this.storeJars, icons);
         this.jars = new JarRequests(this, this.changes, progress, this.tasks, this.storeJars);
         this.rows = new ModRows(installed, this::isOn, this.pending, this::findParts);
         WorldReopen.tellClosedTo(this::onWorldClosed);

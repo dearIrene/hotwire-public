@@ -488,7 +488,8 @@ public final class ModAdder {
                     return notSetUp;
                 };
                 this.engine.showAddStep(3);
-                CompletableFuture<Void> started = AddStart.queue(ids, grew, backedOut, this.engine.getSide(), setUp);
+                CompletableFuture<Void> started = AddStart.queue(ids, grew, backedOut, this.engine.getSide(), setUp,
+                        this.engine::findLoaded);
                 hold.releaseGame();
                 started.get(ENTRYPOINT_WAIT.toMillis(), TimeUnit.MILLISECONDS);
 

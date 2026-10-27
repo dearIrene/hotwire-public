@@ -92,7 +92,7 @@ final class CacheFillControl {
         }
     }
 
-    private static boolean isPlaying() {
+    static boolean isPlaying() {
         Minecraft client = Minecraft.getInstance();
         return client.level != null && ModViews.openScreen() == null && client.isWindowActive();
     }

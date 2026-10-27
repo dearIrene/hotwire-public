@@ -4,6 +4,7 @@ import java.io.IOException;
 import java.util.ArrayList;
 import java.util.Collections;
 import java.util.HashMap;
+import java.util.HashSet;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
@@ -291,6 +292,9 @@ public final class StoreModel implements AutoCloseable {
     }
 
     public void markInstalled(String projectId) {
+        Set<String> more = new HashSet<>(this.installedProjects);
+        more.add(projectId);
+        this.installedProjects = Set.copyOf(more);
         Map<String, ModrinthClient.Version> fewer = new HashMap<>(this.updates);
         fewer.remove(projectId);
         this.updates = Map.copyOf(fewer);

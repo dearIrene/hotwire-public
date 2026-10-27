@@ -33,7 +33,7 @@ public final class FinalWrites {
         writer = by;
     }
 
-    static void write(Field field, @Nullable Object holder, @Nullable Object value)
+    public static void write(Field field, @Nullable Object holder, @Nullable Object value)
             throws IllegalAccessException {
         writer.write(field, holder, value);
     }

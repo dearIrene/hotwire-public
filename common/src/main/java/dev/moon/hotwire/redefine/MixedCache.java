@@ -119,9 +119,14 @@ final class MixedCache {
         List<Config> configs = new ArrayList<>();
         for (String name : configNames) {
             byte[] json = resources.get(name);
-            if (json != null) {
-                configs.add(this.readConfig(name, json, resources));
+
+            if (json == null) {
+                if (this.uncached.add(name)) {
+                    LOGGER.info("[Hotwire] the switch cache cannot read {}: classes it patches are mixed afresh", name);
+                }
+                return Map.of();
             }
+            configs.add(this.readConfig(name, json, resources));
         }
         Map<String, CacheKey> keys = new LinkedHashMap<>();
         for (String target : targets) {
@@ -216,6 +221,9 @@ final class MixedCache {
             List<String> aiming = new ArrayList<>();
             for (String mixin : config.mixins()) {
                 Set<String> aims = this.findAims(mixin);
+                if (aims == null) {
+                    return null;
+                }
                 for (String type : types) {
                     if (aims.contains(type)) {
                         aiming.add(type + " " + mixin);
@@ -274,11 +282,18 @@ final class MixedCache {
         });
     }
 
-    private Set<String> findAims(String mixin) {
-        return this.aims.computeIfAbsent(mixin, name -> {
-            byte[] bytes = this.copy.findReadable(name);
-            return bytes == null ? Set.of() : MixinClassInfo.read(bytes).targets();
-        });
+    private @Nullable Set<String> findAims(String mixin) {
+        Set<String> known = this.aims.get(mixin);
+        if (known != null) {
+            return known;
+        }
+        byte[] bytes = this.copy.findReadable(mixin);
+        if (bytes == null) {
+            return null;
+        }
+        Set<String> read = MixinClassInfo.read(bytes).targets();
+        this.aims.put(mixin, read);
+        return read;
     }
 
     MixinCopy.@Nullable MixResult find(CacheKey key, String target, byte[] original) {

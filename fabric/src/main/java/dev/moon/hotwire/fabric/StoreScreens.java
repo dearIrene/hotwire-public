@@ -1,5 +1,6 @@
 package dev.moon.hotwire.fabric;
 
+import dev.moon.hotwire.fabric.screen.ModIcons;
 import dev.moon.hotwire.fabric.screen.StoreGameScreen;
 import dev.moon.hotwire.fabric.screen.WebLinks;
 import dev.moon.hotwire.fabric.store.ModStore;
@@ -13,19 +14,21 @@ final class StoreScreens {
     private final HotwireEngine engine;
     private final InstalledMods installed;
     private final StoreJars jars;
+    private final ModIcons icons;
     private @Nullable ModStore store;
     private @Nullable StoreScreen shown;
 
-    StoreScreens(HotwireEngine engine, InstalledMods installed, StoreJars jars) {
+    StoreScreens(HotwireEngine engine, InstalledMods installed, StoreJars jars, ModIcons icons) {
         this.engine = engine;
         this.installed = installed;
+        this.icons = icons;
         this.jars = jars;
     }
 
     ModStore findStore() {
         ModStore made = this.store;
         if (made == null) {
-            made = new ModStore(this.installed);
+            made = new ModStore(this.installed, this.icons::of);
             made.checkInstalled();
             this.store = made;
         }
@@ -92,14 +95,14 @@ final class StoreScreens {
         StoreModel model = made.getModel();
         StoreModel.Card card = model.getCardsByProject().get(projectId);
         boolean update = model.isInstalledProject(projectId) || (card != null && card.installed());
-        made.fetch(projectId, versionId, title, (fetched, project) -> {
+        made.fetch(projectId, versionId, title, (fetched, projects) -> {
             if (fetched.size() > 1) {
                 this.engine.showMessage(Lang.get("hotwire.store.getting_with", title, fetched.size() - 1), false);
             }
             if (this.findShown() == null) {
                 ModViews.show(this.engine.makeScreen(back));
             }
-            this.jars.queue(fetched, update, projectId);
+            this.jars.queue(fetched, update, projects);
         }, failure -> this.engine.showMessage(failure, true));
     }
 }

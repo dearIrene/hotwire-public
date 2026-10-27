@@ -171,7 +171,7 @@ public final class StoreDetail extends Panel {
 
     private void drawHeader(Canvas canvas, float alpha, ModrinthClient.Hit shown,
             ModrinthClient.@Nullable Project page, int left, int top, int right) {
-        Canvas.Image icon = shown.iconUrl().isEmpty() ? null : this.icons.find(shown.iconUrl());
+        Canvas.Image icon = shown.iconUrl().isEmpty() ? null : this.icons.find(shown.projectId(), shown.iconUrl());
         if (icon == null || !canvas.drawImage(icon, left, top, ICON, ICON, alpha)) {
             canvas.fill(left, top, left + ICON, top + ICON, Colors.fade(Palette.TRACK, alpha));
         }

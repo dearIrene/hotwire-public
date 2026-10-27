@@ -356,6 +356,7 @@ final class EngineStart {
             });
             Fields.preloadStatics(parts.instrumentation());
 
+            parts.runner().getSwitcher().getFiller().watchPlaying(CacheFillControl::isPlaying);
             parts.runner().getSwitcher().getFiller().fillSample();
         } catch (JvmAccessException | IllegalStateException e) {
             LOGGER.error("[Hotwire] Switching mods is not possible in this game: {}", e.getMessage(), e);

@@ -7,25 +7,44 @@ import java.util.List;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.CountDownLatch;
 import java.util.function.Consumer;
+import java.util.function.Function;
 import java.util.function.IntSupplier;
 import net.fabricmc.api.ClientModInitializer;
 import net.fabricmc.api.ModInitializer;
 import net.fabricmc.loader.api.FabricLoader;
 import net.fabricmc.loader.api.entrypoint.EntrypointContainer;
+import net.fabricmc.loader.api.entrypoint.PreLaunchEntrypoint;
 import net.minecraft.client.Minecraft;
+import org.jspecify.annotations.Nullable;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
 final class AddStart {
+    private static final Logger LOGGER = LoggerFactory.getLogger(AddStart.class);
+
     private AddStart() {
     }
 
     static CompletableFuture<Void> queue(List<String> ids, List<String> grew, CountDownLatch backedOut,
-            ModManifest.Environment side, IntSupplier catchUp) {
+            ModManifest.Environment side, IntSupplier catchUp, Function<String, @Nullable Class<?>> findLoaded) {
         List<Runnable> starts = new ArrayList<>();
+
+        for (Runnable early : collectEntrypoints(ids, "preLaunch", PreLaunchEntrypoint.class,
+                PreLaunchEntrypoint::onPreLaunch)) {
+            starts.add(() -> {
+                try {
+                    early.run();
+                } catch (RuntimeException e) {
+                    LOGGER.warn("[Hotwire] an added mod's preLaunch entrypoint threw, run after the game started", e);
+                }
+            });
+        }
         starts.addAll(collectEntrypoints(ids, "main", ModInitializer.class, ModInitializer::onInitialize));
         if (side == ModManifest.Environment.CLIENT) {
             starts.addAll(collectEntrypoints(ids, "client", ClientModInitializer.class,
                     ClientModInitializer::onInitializeClient));
         }
+        starts.addAll(YumiStarts.collect(ids, side));
         CompletableFuture<Void> started = new CompletableFuture<>();
         Minecraft.getInstance().execute(() -> {
             OpenRegistries registries = OpenRegistries.open();
@@ -59,6 +78,8 @@ final class AddStart {
                 grew.addAll(registries.getGrown());
             }
             if (failed == null) {
+                HostLists.join(ids);
+                EntrypointLists.join(ids, findLoaded);
                 started.complete(null);
             } else {
                 started.completeExceptionally(failed);
