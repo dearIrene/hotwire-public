@@ -123,6 +123,9 @@ public final class DuckBridge {
         if ((node.version & 0xFFFF) >= Opcodes.V1_7) {
             return true;
         }
+        if ((node.version & 0xFFFF) < Opcodes.V1_6) {
+            return false;
+        }
         for (MethodNode method : node.methods) {
             for (AbstractInsnNode insn : method.instructions) {
                 if (insn.getOpcode() == Opcodes.JSR || insn.getOpcode() == Opcodes.RET) {

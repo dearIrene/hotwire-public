@@ -67,7 +67,8 @@ public final class ReflectionBridge {
         }
         ClassNode node = new ClassNode();
         new ClassReader(classBytes).accept(node, 0);
-        if (!DuckBridge.raiseForInvokeDynamic(node) || !rewrite(node)) {
+
+        if (!rewrite(node)) {
             return classBytes;
         }
         ClassWriter writer = new ClassWriter(0);
