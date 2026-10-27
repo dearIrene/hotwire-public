@@ -46,17 +46,21 @@ public final class ReportBundle {
     private static final Pattern ZIP = Pattern.compile("(?:Hotwire ([0-9]{4}-[0-9]{2}-[0-9]{2}"
             + " [0-9]{2}-[0-9]{2}-[0-9]{2})(?: .+)?|hotwire-(?:report|crash)-([0-9_-]+))\\.zip");
 
+    private static final Pattern BUILD_COMMIT = Pattern.compile("\\.[0-9a-f]{7,}(?:-dirty)?$");
+
     private static final Pattern UNSAFE = Pattern.compile("[\\\\/:*?\"<>|\\p{Cntrl}]");
 
     private ReportBundle() {
     }
 
-    public static Path write(Path folder, Instant at, String title, Map<String, String> texts, Set<String> personal)
-            throws IOException {
+    public static Path write(Path folder, Instant at, String title, String version, Map<String, String> texts,
+            Set<String> personal) throws IOException {
         Files.createDirectories(folder);
         String words = UNSAFE.matcher(title).replaceAll("").strip();
         words = words.substring(0, Math.min(MOST_TITLE, words.length())).strip();
-        Path zip = folder.resolve("Hotwire " + FILE_TIME.format(at) + (words.isEmpty() ? "" : " " + words) + ".zip");
+        String build = UNSAFE.matcher(BUILD_COMMIT.matcher(version).replaceAll("")).replaceAll("").strip();
+        Path zip = folder.resolve("Hotwire " + FILE_TIME.format(at) + (words.isEmpty() ? "" : " " + words)
+                + (build.isEmpty() ? "" : " (" + build + ")") + ".zip");
         try (OutputStream file = Files.newOutputStream(zip); ZipOutputStream out = new ZipOutputStream(file)) {
             for (Map.Entry<String, String> text : texts.entrySet()) {
                 out.putNextEntry(new ZipEntry(text.getKey()));

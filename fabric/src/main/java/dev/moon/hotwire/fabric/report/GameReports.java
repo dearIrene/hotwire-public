@@ -365,7 +365,7 @@ public final class GameReports {
         extra.forEach(file -> texts.put("crash-reports/" + file.getFileName(), read(file)));
         this.listSince(game, ".log").stream().filter(file -> file.getFileName().toString().startsWith("hs_err"))
                 .forEach(file -> texts.put("jvm-crashes/" + file.getFileName(), read(file)));
-        Path zip = ReportBundle.write(this.folder, now, title, texts,
+        Path zip = ReportBundle.write(this.folder, now, title, this.machine.hotwireVersion(), texts,
                 Set.of(Minecraft.getInstance().getUser().getName()));
         return zip;
     }
