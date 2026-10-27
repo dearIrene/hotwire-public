@@ -513,7 +513,8 @@ public final class ModList extends Element {
         int track = bottom - top - 12;
         int thumb = Math.max(20, track * visible / lines);
         int offset = (int) (track * (this.animation.getScroll() / cols / lines));
-        canvas.fill(width - 30, top + 6 + offset, width - 27, top + 6 + offset + thumb,
+
+        canvas.fill(width - 17, top + 6 + offset, width - 14, top + 6 + offset + thumb,
                 Colors.fade(Palette.PANEL_EDGE, alpha));
     }
 }
