@@ -19,7 +19,7 @@ public final class ModSounds {
 
     public static void takeOut(Collection<String> mods) {
         Minecraft game = Minecraft.getInstance();
-        game.execute(() -> {
+        GameHold.onGameAndWait(() -> {
             SoundManager manager = game.getSoundManager();
             List<SoundInstance> theirs = new ArrayList<>();
             for (Object engine : Fields.findBelow(manager, 1, type -> type.getName().startsWith("net.minecraft."))) {

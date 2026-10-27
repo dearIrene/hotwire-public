@@ -21,6 +21,7 @@ import java.util.PriorityQueue;
 import java.util.Set;
 import java.util.concurrent.CancellationException;
 import java.util.concurrent.ConcurrentHashMap;
+import java.util.function.Consumer;
 import java.util.function.Function;
 import java.util.function.Supplier;
 import net.minecraft.core.Registry;
@@ -271,13 +272,14 @@ final class CollectionReferences {
         }
     }
 
-    private void takeOrNote(Supplier<@Nullable String> whose, Runnable take) {
+    private void takeOrNote(String owner, Supplier<@Nullable String> whose, Consumer<String> take) {
         if (!this.look.hasNoted(() -> {
-            if (whose.get() != null) {
-                take.run();
+            String now = whose.get();
+            if (now != null) {
+                take.accept(now);
             }
         })) {
-            take.run();
+            take.accept(owner);
         }
     }
 
@@ -383,8 +385,8 @@ final class CollectionReferences {
                         Object item = items.get(index);
                         String mod = item == null ? null : this.findOwnerOf(item);
                         if (mod != null) {
-                            Runnable take = () -> ElementTakes.takeFromList(items, item, this.getRemovalsOf(mod));
-                            this.takeOrNote(() -> this.findOwnerOf(item), take);
+                            this.takeOrNote(mod, () -> this.findOwnerOf(item),
+                                    owner -> ElementTakes.takeFromList(items, item, this.getRemovalsOf(owner)));
                         } else if (item != null) {
                             this.followLambda(item);
                         }
@@ -395,8 +397,8 @@ final class CollectionReferences {
                     for (Object item : new ArrayList<>(items)) {
                         String mod = item == null ? null : this.findOwnerOf(item);
                         if (mod != null) {
-                            this.takeOrNote(() -> this.findOwnerOf(item),
-                                    () -> ElementTakes.takeFromCollection(items, item, this.getRemovalsOf(mod)));
+                            this.takeOrNote(mod, () -> this.findOwnerOf(item),
+                                    owner -> ElementTakes.takeFromCollection(items, item, this.getRemovalsOf(owner)));
                         }
                     }
                 }
@@ -409,10 +411,10 @@ final class CollectionReferences {
                         Object standIn = whole != null ? (StandIns.fits(slot) ? StandIns.of(slot) : null)
                                 : parts != null ? withStandIns(parts, Objects.requireNonNull(item)) : null;
                         if (item != null && standIn != null) {
-                            String owner = whole != null ? whole : Objects.requireNonNull(parts);
+                            String found = whole != null ? whole : Objects.requireNonNull(parts);
                             int at = index;
-                            this.takeOrNote(() -> this.findOwnerOfSlot(item), () -> ElementTakes.replaceInArray(array,
-                                    at, item, standIn, this.getRemovalsOf(owner)));
+                            this.takeOrNote(found, () -> this.findOwnerOfSlot(item), owner -> ElementTakes
+                                    .replaceInArray(array, at, item, standIn, this.getRemovalsOf(owner)));
                         }
                     }
                 }
@@ -423,9 +425,8 @@ final class CollectionReferences {
                         Object element = entry.getValue();
                         String mod = this.findOwnerOfEntry(key, element);
                         if (mod != null) {
-                            String owner = mod;
-                            this.takeOrNote(() -> this.findOwnerOfEntry(key, element),
-                                    () -> ElementTakes.takeFromMap(entries, key, element, this.getRemovalsOf(owner)));
+                            this.takeOrNote(mod, () -> this.findOwnerOfEntry(key, element), owner -> ElementTakes
+                                    .takeFromMap(entries, key, element, this.getRemovalsOf(owner)));
                         } else if (element instanceof Collection<?> nested) {
                             this.collect(nested);
                         } else if (element instanceof Map<?, ?> && this.seen.add(element)) {
