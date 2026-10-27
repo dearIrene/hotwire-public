@@ -5,6 +5,7 @@ import dev.moon.hotwire.registration.ModNames;
 import java.lang.reflect.Method;
 import java.util.AbstractMap;
 import java.util.ArrayList;
+import java.util.Arrays;
 import java.util.Collection;
 import java.util.HashSet;
 import java.util.IdentityHashMap;
@@ -44,6 +45,66 @@ final class Wrappers {
     private List<String> targetsFor = List.of();
 
     private final IdentityHashMap<Class<?>, Boolean> askedOf = new IdentityHashMap<>();
+
+    static @Nullable Set<String> findCandidates(Object item) {
+        Set<String> found = new HashSet<>();
+        IdentityHashMap<Object, Boolean> visited = new IdentityHashMap<>();
+        List<Object> level = List.of(item);
+        int budget = BUDGET;
+        for (int depth = 0; depth <= DEPTH && !level.isEmpty(); depth++) {
+            List<Object> next = new ArrayList<>();
+            for (Object value : level) {
+                if (value == null || value instanceof Class<?> || visited.put(value, Boolean.TRUE) != null) {
+                    continue;
+                }
+                if (value instanceof Enum<?> constant) {
+                    addOwner(found, GameRegistrations.findModOf(constant.getDeclaringClass()));
+                    continue;
+                }
+                if (ValueOwners.isPlain(value)) {
+                    continue;
+                }
+                boolean hidden = value.getClass().isHidden();
+                if (hidden) {
+                    addOwner(found, ValueOwners.findLambdaOwner(value.getClass()));
+                }
+                addOwner(found, GameRegistrations.findModOf(value.getClass()));
+                addOwner(found, ValueOwners.findIdOwner(value));
+                boolean container = value instanceof Collection<?> || value instanceof Map<?, ?>
+                        || value instanceof Object[];
+                if (!container && !hidden && !isOfAMod(value) && Fields.getRecordParts(value.getClass()).isEmpty()) {
+                    continue;
+                }
+                if (container && GameRegistrations.isSwitchable(GameRegistrations.findModOf(value.getClass()))) {
+                    continue;
+                }
+                if (--budget < 0) {
+                    return null;
+                }
+                switch (value) {
+                    case Collection<?> all -> next.addAll(all);
+                    case Map<?, ?> map -> next.addAll(readValues(map));
+                    case Object[] array -> next.addAll(Arrays.asList(array));
+                    default -> {
+                        for (FieldSlots.Slot field : Fields.getReferenceFields(value.getClass(), false)) {
+                            try {
+                                next.add(field.get(value));
+                            } catch (ReflectiveOperationException | RuntimeException | LinkageError e) {
+                            }
+                        }
+                    }
+                }
+            }
+            level = next;
+        }
+        return found;
+    }
+
+    private static void addOwner(Set<String> found, @Nullable String mod) {
+        if (mod != null) {
+            found.add(mod);
+        }
+    }
 
     @Nullable String find(Object item, List<String> mods) {
         if (!this.askedOf.computeIfAbsent(item.getClass(), type -> isOfAnotherMod(type)

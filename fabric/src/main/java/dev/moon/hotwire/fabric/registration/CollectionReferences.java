@@ -3,14 +3,13 @@ package dev.moon.hotwire.fabric.registration;
 import dev.moon.hotwire.redefine.FieldSlots;
 import dev.moon.hotwire.redefine.Tripwire;
 import dev.moon.hotwire.registration.ModNames;
-import java.lang.reflect.Constructor;
-import java.lang.reflect.Method;
 import java.util.ArrayList;
 import java.util.Collection;
 import java.util.Collections;
 import java.util.Comparator;
 import java.util.ConcurrentModificationException;
 import java.util.HashMap;
+import java.util.HashSet;
 import java.util.IdentityHashMap;
 import java.util.LinkedHashMap;
 import java.util.List;
@@ -33,8 +32,6 @@ final class CollectionReferences {
     private static final Logger LOGGER = LoggerFactory.getLogger(CollectionReferences.class);
 
     private static final Set<String> UNREADABLE = ConcurrentHashMap.newKeySet();
-
-    private static final Object FIXED_PROBE = new Object();
 
     private static final int LARGEST = 100_000;
 
@@ -60,6 +57,12 @@ final class CollectionReferences {
 
     private final Map<String, Integer> notedBy = new HashMap<>();
 
+    private @Nullable String readingStaticsOf;
+    private int ownLeft;
+
+    private int filed;
+    private int unfiled;
+
     private Wrappers wrappers = new Wrappers();
 
     private boolean inSmall;
@@ -80,7 +83,7 @@ final class CollectionReferences {
             } else {
                 this.begin(mods);
                 long began = System.nanoTime();
-                ElementTakes.runAll(ahead);
+                ElementTakes.runAll(ahead, mods);
                 long millis = (System.nanoTime() - began) / 1_000_000;
                 if (millis >= SLOW_MILLIS) {
                     LOGGER.info("[Hotwire] {} takes the look noted were run for {} in {} ms", ahead.size(), mods,
@@ -126,34 +129,8 @@ final class CollectionReferences {
         this.begin(mods);
 
         PriorityQueue<Map.Entry<Long, String>> slowest = new PriorityQueue<>(Map.Entry.comparingByKey());
-        for (Class<?> owner : statics) {
-            if (ElementLook.isStopAsked()) {
-                throw new CancellationException("a switch began, which the notes before this look serve");
-            }
-            long ownerBegan = System.nanoTime();
-            boolean game = owner.getName().startsWith("net.minecraft.") || owner.getName().startsWith("com.mojang.");
-            for (FieldSlots.Slot field : Fields.getReferenceFields(owner, true)) {
-                Object value = read(field, null);
-                if (value != null && this.seen.add(value)) {
-                    if (game && value instanceof Map<?, ?> map && map.size() <= LARGEST) {
-                        this.readChanging(map, () -> this.removeFromNamespaced(map));
-                    }
-                    this.collect(value);
-                    if (value instanceof List<?> list && list.size() <= LARGEST && isFixedSize(list)
-                            && field.getType().isAssignableFrom(List.class)) {
-                        this.removeFromFixedList(field, null);
-                    }
-                    if (!(value instanceof Collection<?>) && !(value instanceof Map<?, ?>)
-                            && !(value instanceof Object[]) && this.findOwnerAmong(value) == null) {
-                        this.lookInto(value);
-                    }
-                }
-            }
-            slowest.add(Map.entry(System.nanoTime() - ownerBegan, owner.getName()));
-            if (slowest.size() > SLOWEST_NAMED) {
-                slowest.poll();
-            }
-        }
+
+        this.ownLeft = 0;
         long holdersBegan = System.nanoTime();
         for (Object holder : holders) {
             if (this.findOwnerAmong(holder) == null) {
@@ -168,12 +145,49 @@ final class CollectionReferences {
             }
         }
         slowest.add(Map.entry(System.nanoTime() - handedBegan, "what was handed to " + handed.consumers()));
+        List<Class<?>> ordered = new ArrayList<>(statics);
+        ordered.sort(Comparator.comparing(owner -> GameRegistrations.findModOf(owner) != null));
+        for (Class<?> owner : ordered) {
+            if (ElementLook.isStopAsked()) {
+                throw new CancellationException("a switch began, which the notes before this look serve");
+            }
+            long ownerBegan = System.nanoTime();
+            boolean game = owner.getName().startsWith("net.minecraft.") || owner.getName().startsWith("com.mojang.");
+            this.readingStaticsOf = GameRegistrations.findModOf(owner);
+            for (FieldSlots.Slot field : Fields.getReferenceFields(owner, true)) {
+                Object value = CollectionParts.read(field, null);
+                if (value != null && this.seen.add(value)) {
+                    if (game && value instanceof Map<?, ?> map && map.size() <= LARGEST) {
+                        this.readChanging(map, () -> this.removeFromNamespaced(map));
+                    }
+                    this.collect(value);
+                    if (value instanceof List<?> list && list.size() <= LARGEST && CollectionParts.isFixedSize(list)
+                            && field.getType().isAssignableFrom(List.class)) {
+                        this.removeFromFixedList(field, null);
+                    }
+                    if (!(value instanceof Collection<?>) && !(value instanceof Map<?, ?>)
+                            && !(value instanceof Object[]) && this.findOwnerAmong(value) == null) {
+                        this.lookInto(value);
+                    }
+                }
+            }
+            slowest.add(Map.entry(System.nanoTime() - ownerBegan, owner.getName()));
+            if (slowest.size() > SLOWEST_NAMED) {
+                slowest.poll();
+            }
+        }
+        this.readingStaticsOf = null;
         if (ElementLook.isLooking() && !this.notedBy.isEmpty()) {
             List<String> most = this.notedBy.entrySet().stream()
                     .sorted(Map.Entry.<String, Integer>comparingByValue().reversed()).limit(SLOWEST_NAMED)
                     .map(entry -> entry.getKey() + " " + entry.getValue()).toList();
             LOGGER.info("[Hotwire] the look noted {} takes, most of them of {}", this.notedBy.values().stream()
                     .mapToInt(Integer::intValue).sum(), most);
+            LOGGER.info("[Hotwire] {} of each mod's own objects in its own lists were left where they are; {} takes"
+                    + " were filed under the mods they could be, {} any hold asks", this.ownLeft, this.filed,
+                    this.unfiled);
+            this.filed = 0;
+            this.unfiled = 0;
             this.notedBy.clear();
         }
         long millis = (System.nanoTime() - began) / 1_000_000;
@@ -265,19 +279,8 @@ final class CollectionReferences {
                 : this.mods.stream().filter(mod -> Wrappers.isWhollyOf(mod, item)).findFirst().orElse(null);
     }
 
-    private static boolean isFixedSize(List<?> list) {
-        try {
-            list.remove(FIXED_PROBE);
-            return false;
-        } catch (UnsupportedOperationException e) {
-            return true;
-        } catch (RuntimeException e) {
-            return false;
-        }
-    }
-
     private void removeFromFixedList(FieldSlots.Slot field, @Nullable Object holder) {
-        if (!(read(field, holder) instanceof List<?> now)) {
+        if (!(CollectionParts.read(field, holder) instanceof List<?> now)) {
             return;
         }
         this.inSmall = now.size() <= WRAPPERS_IN;
@@ -307,17 +310,42 @@ final class CollectionReferences {
         }
     }
 
-    private void takeOrNote(String owner, Supplier<@Nullable String> whose, Consumer<String> take) {
-        if (!this.look.hasNoted(() -> {
+    private void takeOrNote(String owner, @Nullable Object element, Supplier<@Nullable String> whose,
+            Consumer<String> take) {
+        Runnable asked = () -> {
             String now = whose.get();
             if (now != null) {
                 take.accept(now);
             }
-        })) {
+        };
+        Set<String> candidates = ElementLook.isLooking() && element != null ? this.findCandidates(element) : null;
+        if (candidates == null) {
+            this.unfiled++;
+        } else {
+            this.filed++;
+        }
+        if (!ElementLook.isLooking() || !this.look.hasNoted(new ElementTakes.NotedTake(asked, candidates))) {
             take.accept(owner);
         } else {
             this.notedBy.merge(owner, 1, Integer::sum);
         }
+    }
+
+    private boolean isOwnPlain(String mod, Object item) {
+        return !this.inSmall && mod.equals(this.readingStaticsOf) && Fields.getRecordParts(item.getClass()).isEmpty()
+                && !ValueOwners.isLambda(item) && GameRegistrations.findModOf(item.getClass()) != null
+                && mod.equals(GameRegistrations.findModOf(item.getClass()));
+    }
+
+    private @Nullable Set<String> findCandidates(Object element) {
+        Set<String> reached = Wrappers.findCandidates(element);
+        String named = ReflectedOwners.findOwnerOf(element.getClass());
+        if (reached == null || named == null) {
+            return reached;
+        }
+        Set<String> all = new HashSet<>(reached);
+        all.add(named);
+        return all;
     }
 
     private List<Removal> getRemovalsOf(String mod) {
@@ -348,18 +376,18 @@ final class CollectionReferences {
             return;
         }
         for (FieldSlots.Slot field : Fields.getReferenceFields(holder.getClass(), false)) {
-            Object value = read(field, holder);
+            Object value = CollectionParts.read(field, holder);
             if ((value instanceof Collection<?> || value instanceof Map<?, ?> || value instanceof Object[])
                     && this.seen.add(value)) {
                 this.collect(value);
 
-                if (value instanceof List<?> list && list.size() <= LARGEST && isFixedSize(list)
+                if (value instanceof List<?> list && list.size() <= LARGEST && CollectionParts.isFixedSize(list)
                         && field.getType().isAssignableFrom(List.class)) {
                     this.removeFromFixedList(field, holder);
                 }
             } else if (value != null && Wrappers.isLookedInto(value) && this.seen.add(value)) {
                 for (FieldSlots.Slot inner : Fields.getReferenceFields(value.getClass(), false)) {
-                    Object innerValue = read(inner, value);
+                    Object innerValue = CollectionParts.read(inner, value);
                     if ((innerValue instanceof Collection<?> || innerValue instanceof Map<?, ?>
                             || innerValue instanceof Object[]) && this.seen.add(innerValue)) {
                         this.collect(innerValue);
@@ -421,8 +449,10 @@ final class CollectionReferences {
                     for (int index = items.size() - 1; index >= 0; index--) {
                         Object item = items.get(index);
                         String mod = item == null ? null : this.findOwnerOf(item);
-                        if (mod != null) {
-                            this.takeOrNote(mod, () -> this.findOwnerOf(item),
+                        if (mod != null && this.isOwnPlain(mod, item)) {
+                            this.ownLeft++;
+                        } else if (mod != null) {
+                            this.takeOrNote(mod, item, () -> this.findOwnerOf(item),
                                     owner -> ElementTakes.takeFromList(items, item, this.getRemovalsOf(owner)));
                         } else if (item != null) {
                             this.followLambda(item);
@@ -433,8 +463,10 @@ final class CollectionReferences {
                     Collection<Object> items = (Collection<Object>) collection;
                     for (Object item : new ArrayList<>(items)) {
                         String mod = item == null ? null : this.findOwnerOf(item);
-                        if (mod != null) {
-                            this.takeOrNote(mod, () -> this.findOwnerOf(item),
+                        if (mod != null && this.isOwnPlain(mod, item)) {
+                            this.ownLeft++;
+                        } else if (mod != null) {
+                            this.takeOrNote(mod, item, () -> this.findOwnerOf(item),
                                     owner -> ElementTakes.takeFromCollection(items, item, this.getRemovalsOf(owner)));
                         }
                     }
@@ -446,11 +478,12 @@ final class CollectionReferences {
                         String whole = item == null ? null : this.findWholeOwnerOfSlot(item);
                         String parts = item == null || whole != null ? null : this.findPartsOwnerOfSlot(item);
                         Object standIn = whole != null ? (StandIns.fits(slot) ? StandIns.of(slot) : null)
-                                : parts != null ? withStandIns(parts, Objects.requireNonNull(item)) : null;
+                                : parts != null ? CollectionParts.withStandIns(parts, Objects.requireNonNull(item))
+                                : null;
                         if (item != null && standIn != null) {
                             String found = whole != null ? whole : Objects.requireNonNull(parts);
                             int at = index;
-                            this.takeOrNote(found, () -> this.findOwnerOfSlot(item), owner -> ElementTakes
+                            this.takeOrNote(found, item, () -> this.findOwnerOfSlot(item), owner -> ElementTakes
                                     .replaceInArray(array, at, item, standIn, this.getRemovalsOf(owner)));
                         }
                     }
@@ -462,7 +495,7 @@ final class CollectionReferences {
                         Object element = entry.getValue();
                         String mod = this.findOwnerOfEntry(key, element);
                         if (mod != null) {
-                            this.takeOrNote(mod, () -> this.findOwnerOfEntry(key, element), owner -> ElementTakes
+                            this.takeOrNote(mod, null, () -> this.findOwnerOfEntry(key, element), owner -> ElementTakes
                                     .takeFromMap(entries, key, element, this.getRemovalsOf(owner)));
 
                             if (ElementLook.isLooking() && element instanceof Map<?, ?> && this.seen.add(element)) {
@@ -521,12 +554,8 @@ final class CollectionReferences {
         }
     }
 
-    private static @Nullable String findNamespaceOf(@Nullable Object key) {
-        return key instanceof Identifier id ? id.getNamespace() : null;
-    }
-
     private @Nullable String findModNamespaceOf(@Nullable Object key, @Nullable Object value) {
-        String named = findNamespaceOf(key);
+        String named = CollectionParts.findNamespaceOf(key);
         if (named == null || this.modSet.contains(named)) {
             return named;
         }
@@ -535,7 +564,7 @@ final class CollectionReferences {
         }
         for (FieldSlots.Slot field : Fields.getReferenceFields(value.getClass(), false)) {
             try {
-                String inner = findNamespaceOf(field.get(value));
+                String inner = CollectionParts.findNamespaceOf(field.get(value));
                 if (inner != null && this.modSet.contains(inner)) {
                     return inner;
                 }
@@ -551,44 +580,11 @@ final class CollectionReferences {
             return;
         }
         for (FieldSlots.Slot field : Fields.getReferenceFields(type, false)) {
-            Object captured = read(field, item);
+            Object captured = CollectionParts.read(field, item);
             if (captured != null && captured.getClass().getName().startsWith("net.minecraft.")
                     && this.seen.add(captured)) {
                 this.lookInto(captured);
             }
-        }
-    }
-
-    private static @Nullable Object withStandIns(String mod, Object item) {
-        try {
-            List<Method> accessors = Fields.getRecordParts(item.getClass());
-            Class<?>[] types = new Class<?>[accessors.size()];
-            Object[] parts = new Object[accessors.size()];
-            for (int index = 0; index < accessors.size(); index++) {
-                types[index] = accessors.get(index).getReturnType();
-                Object part = accessors.get(index).invoke(item);
-                if (part != null && !ValueOwners.isPlain(part)
-                        && (ValueOwners.isOwnedBy(mod, part) || ValueOwners.forwardsTo(mod, part))) {
-                    if (!StandIns.fits(types[index])) {
-                        return null;
-                    }
-                    part = StandIns.of(types[index]);
-                }
-                parts[index] = part;
-            }
-            Constructor<?> canonical = item.getClass().getDeclaredConstructor(types);
-            canonical.setAccessible(true);
-            return canonical.newInstance(parts);
-        } catch (ReflectiveOperationException | RuntimeException | LinkageError e) {
-            return null;
-        }
-    }
-
-    private static @Nullable Object read(FieldSlots.Slot field, @Nullable Object holder) {
-        try {
-            return field.get(holder);
-        } catch (ReflectiveOperationException | RuntimeException | LinkageError e) {
-            return null;
         }
     }
 }
