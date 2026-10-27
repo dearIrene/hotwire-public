@@ -15,6 +15,7 @@
   "mixins": ["hotwire.mixins.json"],
   "depends": {
     "fabricloader": ">=0.19.3",
+    "fabric-api": "*",
     "minecraft": "${minecraft}",
     "java": ">=${java}"
   },
