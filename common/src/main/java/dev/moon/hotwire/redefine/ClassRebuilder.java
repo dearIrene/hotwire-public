@@ -168,7 +168,7 @@ public final class ClassRebuilder {
             Map<String, byte[]> classes,
             Map<String, byte[]> resources, List<String> on, Predicate<String> mods) throws RebuildException {
         RebuildCache.Inputs inputs = new RebuildCache.Inputs(originals, current, classes, resources, on, this.toLaunch,
-                findMadeWithout(originals.keySet()));
+                findMadeWithout(originals.keySet()), MixinCopy.findClassPathChanges());
         PreparedRebuild cached = this.ahead.find(inputs);
         if (cached != null) {
             LOGGER.info("[Hotwire] the rebuild of {} classes was worked out ahead", originals.size());

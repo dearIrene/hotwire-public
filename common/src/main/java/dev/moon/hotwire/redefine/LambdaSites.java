@@ -71,8 +71,10 @@ public final class LambdaSites {
         String site;
         try {
             MethodHandleInfo info = caller.revealDirect(body);
-            site = name + factory + erased + instantiated + info.getReferenceKind() + info.getDeclaringClass().getName()
-                    + '.' + info.getName() + info.getMethodType();
+            site = name + factory.toMethodDescriptorString() + erased.toMethodDescriptorString()
+                    + instantiated.toMethodDescriptorString() + info.getReferenceKind()
+                    + info.getDeclaringClass().getName() + '.' + info.getName()
+                    + info.getMethodType().toMethodDescriptorString();
         } catch (IllegalArgumentException | SecurityException adapted) {
             return LambdaMetafactory.metafactory(caller, name, factory, erased, body, instantiated);
         }

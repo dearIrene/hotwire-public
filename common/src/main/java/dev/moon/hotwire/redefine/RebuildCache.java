@@ -10,7 +10,7 @@ import org.slf4j.LoggerFactory;
 
 final class RebuildCache {
     record Inputs(Map<Class<?>, byte[]> originals, Map<String, byte[]> current, Map<String, byte[]> classes,
-            Map<String, byte[]> resources, List<String> on, boolean toLaunch, Set<String> madeWithout) {
+            Map<String, byte[]> resources, List<String> on, boolean toLaunch, Set<String> madeWithout, int classPath) {
         Inputs {
             madeWithout = Set.copyOf(madeWithout);
             originals = Map.copyOf(originals);
@@ -26,6 +26,9 @@ final class RebuildCache {
             }
             if (this.toLaunch != other.toLaunch) {
                 return "whether it goes back to launch";
+            }
+            if (this.classPath != other.classPath) {
+                return "the game's class path";
             }
             if (!this.madeWithout.equals(other.madeWithout)) {
                 return "the classes with objects made while a mod was off";

@@ -735,6 +735,9 @@ public final class HotwireEngine implements ModScreen.Game, AutoCloseable {
     @Override
     public void prepareAhead(List<String> ids, boolean off) {
         JvmParts parts = this.findParts();
+        if (!off && (!this.renames.isDone() || ids.stream().anyMatch(this.installed::isKeptOff))) {
+            return;
+        }
         if (parts != null) {
             parts.runner().getSwitcher().prepareAhead(ids, off);
         }

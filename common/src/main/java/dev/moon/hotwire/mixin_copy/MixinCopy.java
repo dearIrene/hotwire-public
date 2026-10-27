@@ -95,6 +95,10 @@ public final class MixinCopy implements AutoCloseable {
         PATHS.incrementAndGet();
     }
 
+    public static int findClassPathChanges() {
+        return PATHS.get();
+    }
+
     private byte @Nullable [] findBytes(String name, Function<String, byte @Nullable []> more) {
         Optional<byte[]> known = this.read.get(name);
         if (known != null) {
