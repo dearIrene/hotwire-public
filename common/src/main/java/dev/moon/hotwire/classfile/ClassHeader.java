@@ -12,11 +12,11 @@ import org.objectweb.asm.FieldVisitor;
 import org.objectweb.asm.MethodVisitor;
 import org.objectweb.asm.Opcodes;
 
-public record ClassFacts(String name, @Nullable String superName, List<String> interfaces, int access,
+public record ClassHeader(String name, @Nullable String superName, List<String> interfaces, int access,
         List<Member> fields, List<Member> methods) {
-    private static final Map<byte[], ClassFacts> READ = Collections.synchronizedMap(new WeakHashMap<>());
+    private static final Map<byte[], ClassHeader> READ = Collections.synchronizedMap(new WeakHashMap<>());
 
-    public ClassFacts {
+    public ClassHeader {
         interfaces = List.copyOf(interfaces);
         fields = List.copyOf(fields);
         methods = List.copyOf(methods);
@@ -28,12 +28,12 @@ public record ClassFacts(String name, @Nullable String superName, List<String> i
         }
     }
 
-    public static ClassFacts of(byte[] bytes) {
-        ClassFacts known = READ.get(bytes);
+    public static ClassHeader of(byte[] bytes) {
+        ClassHeader known = READ.get(bytes);
         if (known != null) {
             return known;
         }
-        ClassFacts read = read(bytes);
+        ClassHeader read = read(bytes);
         READ.put(bytes, read);
         return read;
     }
@@ -69,7 +69,7 @@ public record ClassFacts(String name, @Nullable String superName, List<String> i
         return null;
     }
 
-    private static ClassFacts read(byte[] bytes) {
+    private static ClassHeader read(byte[] bytes) {
         ClassReader reader = new ClassReader(bytes);
         List<Member> fields = new ArrayList<>();
         List<Member> methods = new ArrayList<>();
@@ -88,7 +88,7 @@ public record ClassFacts(String name, @Nullable String superName, List<String> i
                 return null;
             }
         }, ClassReader.SKIP_CODE | ClassReader.SKIP_DEBUG | ClassReader.SKIP_FRAMES);
-        return new ClassFacts(reader.getClassName(), reader.getSuperName(), List.of(reader.getInterfaces()),
+        return new ClassHeader(reader.getClassName(), reader.getSuperName(), List.of(reader.getInterfaces()),
                 reader.getAccess(), fields, methods);
     }
 }
