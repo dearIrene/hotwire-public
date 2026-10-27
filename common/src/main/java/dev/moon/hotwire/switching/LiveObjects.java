@@ -56,6 +56,9 @@ final class LiveObjects {
         Predicate<Class<?>> alive = makeAliveCheck(rebuilder::getLoadedClasses);
         Map<Class<?>, InitHookReplay.Due> hooked = findHooked(prepared);
         hooked.keySet().removeIf(recomputed);
+
+        Set<String> byReload = new TreeSet<>();
+        hooked.keySet().removeIf(type -> game.isMadeByReload(type) && byReload.add(type.getName().replace('.', '/')));
         List<String> entries = findRegistryEntries(hooked, game);
         if (!entries.isEmpty()) {
             throw RebuildException.ofRestartOnly("the " + what + " changes how entries of the game's registries are"
@@ -70,8 +73,15 @@ final class LiveObjects {
         }
         Map<Class<?>, ClassSplit.Result> retained = new LinkedHashMap<>(prepared.splits());
         retained.keySet().removeIf(recomputed);
-        ClassRebuilder.PreparedRebuild out = withReloading(prepared, retained, game, originalOf,
+        ClassRebuilder.PreparedRebuild reloading = withReloading(prepared, retained, game, originalOf,
                 rebuilder::findLaunchBytes, current);
+        ClassRebuilder.PreparedRebuild out = reloading;
+        if (!byReload.isEmpty()) {
+            LOGGER.info("[Hotwire] objects of {} a reload makes anew meet their new hooks then", byReload);
+            Set<String> classes = new TreeSet<>(reloading.pausedReloads());
+            classes.addAll(byReload);
+            out = reloading.withPausedReloads(classes);
+        }
         Map<Class<?>, byte[]> targets = new LinkedHashMap<>();
         retained.forEach((type, split) -> targets.put(type, prepared.mixed().getOrDefault(
                 type.getName().replace('.', '/'), split.target())));

@@ -151,6 +151,11 @@ public final class GameClasses implements SwitchApplier.Game {
         return false;
     }
 
+    @Override
+    public boolean isMadeByReload(Class<?> type) {
+        return RenderPipelines.isPipeline(type);
+    }
+
     public boolean isReachedFromWorld(String mod, List<String> frames) {
         for (String frame : frames) {
             int paren = frame.indexOf('(');
