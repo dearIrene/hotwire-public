@@ -320,7 +320,6 @@
   "hotwire.report.crash_blame": "Report it to Hotwire only, not to the maker of any mod.",
   "hotwire.report.show_file_now": "Show me the file",
   "hotwire.report.show_ask": "Open the folder with that file now?",
-  "hotwire.report.crash": "Hotwire wrote a bug report about the crash",
   "hotwire.add.pick": "Pick the mod's .jar file, or drop it onto this screen.",
   "hotwire.update.pick": "Pick the newer .jar file, or drop it onto this screen.",
   "hotwire.add.world_open": "It can't be added while your world is open.",

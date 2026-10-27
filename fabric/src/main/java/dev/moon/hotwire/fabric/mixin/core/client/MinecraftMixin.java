@@ -3,6 +3,7 @@ package dev.moon.hotwire.fabric.mixin.core.client;
 import com.llamalad7.mixinextras.injector.wrapoperation.Operation;
 import com.llamalad7.mixinextras.injector.wrapoperation.WrapOperation;
 import dev.moon.hotwire.fabric.CrashGuard;
+import dev.moon.hotwire.fabric.CrashReports;
 import dev.moon.hotwire.fabric.FrameRecovery;
 import dev.moon.hotwire.fabric.ReloadFailures;
 import dev.moon.hotwire.fabric.RenderPassEnd;
@@ -13,6 +14,7 @@ import dev.moon.hotwire.fabric.add.TickEnd;
 import dev.moon.hotwire.fabric.registration.GameHold;
 import dev.moon.hotwire.redefine.StartArguments;
 import dev.moon.hotwire.switching.CrashPolicy;
+import net.minecraft.CrashReport;
 import net.minecraft.client.Minecraft;
 import net.minecraft.client.main.GameConfig;
 import org.objectweb.asm.Type;
@@ -59,6 +61,27 @@ public abstract class MinecraftMixin {
         if (ReloadFailures.runAgainOnFailure()) {
             ci.cancel();
         }
+    }
+
+    @Inject(method = "emergencySaveAndCrash", at = @At("HEAD"))
+    private void hotwire$markGoingDown(CrashReport report, CallbackInfo ci) {
+        CrashReports.markGoingDown();
+    }
+
+    @Inject(method = "emergencySaveAndCrash", at = @At(value = "INVOKE",
+            target = "Lnet/minecraft/client/Minecraft;emergencySave()V"))
+    private void hotwire$saveReportFirst(CrashReport report, CallbackInfo ci) {
+        CrashReports.saveBeforeWorld(report, ((Minecraft) (Object) this).gameDirectory);
+    }
+
+    @Inject(method = "crash", at = @At("HEAD"))
+    private static void hotwire$markGoingDownAtStart(CallbackInfo ci) {
+        CrashReports.markGoingDown();
+    }
+
+    @Inject(method = "emergencySave", at = @At("HEAD"))
+    private void hotwire$releaseForCrash(CallbackInfo ci) {
+        GameHold.releaseForCrash();
     }
 
     @Inject(method = "tick", at = @At("TAIL"))

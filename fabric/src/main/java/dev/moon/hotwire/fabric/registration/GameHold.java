@@ -41,6 +41,8 @@ public final class GameHold {
     }
 
     private static volatile boolean isServerPaused;
+
+    private static volatile boolean crashing;
     private static volatile boolean gamePaused;
 
     private static final BlockingQueue<Runnable> PAUSED_WORK = new LinkedBlockingQueue<>();
@@ -57,6 +59,12 @@ public final class GameHold {
 
     public static void dropNextHold() {
         AT_NEXT_HOLD.clear();
+    }
+
+    public static void releaseForCrash() {
+        crashing = true;
+        PAUSED_WORK.add(GameHold::unblock);
+        PAUSED_GAME_WORK.add(GameHold::unblock);
     }
 
     static boolean isServerPaused() {
@@ -348,7 +356,7 @@ public final class GameHold {
         paused.countDown();
         long said = System.nanoTime();
         try {
-            while (latch.getCount() > 0) {
+            while (latch.getCount() > 0 && !crashing) {
                 Runnable next = work.poll(1, TimeUnit.SECONDS);
                 if (next != null) {
                     next.run();

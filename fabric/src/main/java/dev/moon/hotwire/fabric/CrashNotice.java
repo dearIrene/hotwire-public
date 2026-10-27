@@ -42,6 +42,18 @@ public final class CrashNotice {
         due = Optional.of(where);
     }
 
+    static void showNow(String where) {
+        try {
+            Files.deleteIfExists(findNote());
+        } catch (IOException e) {
+            LOGGER.warn("[Hotwire] the crash notice could not be dropped", e);
+        }
+        HotwireEngine engine = HotwireClient.findEngine();
+        if (engine != null) {
+            engine.openOnCrashReport(where);
+        }
+    }
+
     public static void showIfDue() {
         Optional<String> words = due;
         HotwireEngine engine = HotwireClient.findEngine();
