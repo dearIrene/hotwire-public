@@ -79,7 +79,7 @@ final class LoadTimeBridge implements ClassFileTransformer {
         }
 
         byte[] bridged = Adoption.rewrite(AccessBridge.eraseCallSites(ReflectionBridge.rewrite(DuckBridge.rewrite(
-                ShutOverrides.renameOverrides(AccessBridge.rewrite(base, Linker.getOpenings())),
+                AccessBridge.rewrite(ShutOverrides.renameOverrides(base), Linker.getOpenings()),
                 Linker.getEverDucks())), Linker.getOpenings()), Linker.getAdopted());
         if (bridged != base) {
             bridged = OldClasses.raiseIfNeeded(bridged, loader);
