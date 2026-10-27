@@ -77,6 +77,16 @@ public final class OffWindowReplay {
                 slices.put(field, called.add(call.handler()) ? call.insns() : new InsnList());
             }
         }
+        if (slices.size() < lost.size()) {
+            Set<String> missing = new TreeSet<>();
+            lost.forEach((key, field) -> {
+                if (!slices.containsKey(key)) {
+                    missing.add(field);
+                }
+            });
+            LOGGER.info("[Hotwire] {} objects of {} made while their mod was off cannot be given {} again; the"
+                    + " live-object check weighs them", OffWindowObjects.countAlive(name), name, missing);
+        }
         if (slices.isEmpty()) {
             return new Addition(mixed, Set.of());
         }

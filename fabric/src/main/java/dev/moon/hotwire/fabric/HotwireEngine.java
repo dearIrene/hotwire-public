@@ -330,7 +330,7 @@ public final class HotwireEngine implements ModScreen.Game, AutoCloseable {
     }
 
     private List<String> findSwitchableOn() {
-        return this.installed.getTopLevel().stream().filter(ModPolicy::isSwitchable).filter(this::isOn).toList();
+        return this.installed.getGraph().getIds().stream().filter(ModPolicy::isSwitchable).filter(this::isOn).toList();
     }
 
     @Override
