@@ -147,6 +147,8 @@ public final class HotwireEngine implements ModScreen.Game, AutoCloseable {
     public void open() {
         Screen current = ModViews.openScreen();
         ModViews.show(this.makeScreen(current instanceof HotwireScreen ? this.under : current));
+
+        this.storeJars.offerNext();
     }
 
     public Screen makeScreen(@Nullable Screen back) {

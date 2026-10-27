@@ -195,6 +195,7 @@ final class StoreJars {
     void offerNext() {
         StoreJar next = this.queued.poll();
         JarHost current = this.host.get();
+        StoreJar next = current == null ? null : this.queued.poll();
         if (next == null || current == null) {
             return;
         }
