@@ -1,5 +1,7 @@
 package dev.moon.hotwire.ui;
 
+import org.jspecify.annotations.Nullable;
+
 public final class ChooserScreen {
     public interface Choice {
         void openStore();
@@ -15,6 +17,7 @@ public final class ChooserScreen {
     static final int LEFT = 263;
     static final int RIGHT = 262;
     private static final float OPEN = 0.32f;
+    private static final float LEAVE = 0.16f;
     private static final float TITLE_SCALE = 3f;
     private static final float MARK_SCALE = 1.5f;
     private static final int BACKDROP = 0xD00B0912;
@@ -24,6 +27,11 @@ public final class ChooserScreen {
     private final Tile store;
     private final Tile hotwire;
     private final EasedValue in = EasedValue.ofDuration(OPEN);
+    private final EasedValue out = EasedValue.ofDuration(LEAVE);
+
+    private @Nullable Runnable leaving;
+
+    private boolean left;
     private final String credit = Lang.get("hotwire.header.credit", Header.AUTHOR);
     private int width;
     private int height;
@@ -38,6 +46,18 @@ public final class ChooserScreen {
                 Lang.get("hotwire.chooser.hotwire_note"), Lang.get("hotwire.chooser.shift"), choice::openHotwire));
         this.in.snap(0);
         this.in.to(1);
+        this.out.snap(0);
+    }
+
+    private void leave(Runnable then) {
+        if (this.leaving == null) {
+            this.leaving = then;
+            this.out.to(1);
+        }
+    }
+
+    private float findShown() {
+        return this.in.getValue() * (1 - this.out.getValue());
     }
 
     public Root getRoot() {
@@ -49,9 +69,10 @@ public final class ChooserScreen {
         this.height = height;
         this.root.resize(width, height);
         int tileW = Math.min(360, (width - TILE_GAP * 3) / 2);
-        int tileH = Math.min(260, Math.max(160, height - 160));
+
+        int tileH = Math.max(80, Math.min(260, height - 150));
         int left = (width - tileW * 2 - TILE_GAP) / 2;
-        int top = (height - tileH) / 2 + 10;
+        int top = Math.max(72, (height - tileH) / 2 + 10);
         this.store.setBounds(left, top, tileW, tileH);
         this.hotwire.setBounds(left + tileW + TILE_GAP, top, tileW, tileH);
     }
@@ -62,7 +83,7 @@ public final class ChooserScreen {
 
     public boolean pressKey(int key, int modifiers) {
         switch (key) {
-            case ESCAPE -> this.choice.close();
+            case ESCAPE -> this.leave(this.choice::close);
             case LEFT -> this.setLit(this.store);
             case RIGHT -> this.setLit(this.hotwire);
             case ENTER -> (this.hotwire.isLit() ? this.hotwire : this.store).pick();
@@ -95,12 +116,18 @@ public final class ChooserScreen {
         @Override
         public void step(float dt) {
             ChooserScreen.this.in.step(dt);
+            ChooserScreen.this.out.step(dt);
+            Runnable then = ChooserScreen.this.leaving;
+            if (then != null && ChooserScreen.this.out.getValue() >= 1f && !ChooserScreen.this.left) {
+                ChooserScreen.this.left = true;
+                then.run();
+            }
             super.step(dt);
         }
 
         @Override
         protected void paint(Canvas canvas, float alpha) {
-            float a = alpha * ChooserScreen.this.in.getValue();
+            float a = alpha * ChooserScreen.this.findShown();
             int w = ChooserScreen.this.width;
             int h = ChooserScreen.this.height;
             canvas.fill(0, 0, w, h, Colors.fade(BACKDROP, a));
@@ -146,7 +173,7 @@ public final class ChooserScreen {
         }
 
         void pick() {
-            this.pick.run();
+            ChooserScreen.this.leave(this.pick);
         }
 
         @Override
@@ -162,7 +189,7 @@ public final class ChooserScreen {
 
         @Override
         protected void paint(Canvas canvas, float alpha) {
-            float shown = ChooserScreen.this.in.getValue();
+            float shown = ChooserScreen.this.findShown();
             float a = alpha * shown;
             int rise = Math.round((1 - shown) * 16);
             int x = this.getX();
@@ -180,13 +207,19 @@ public final class ChooserScreen {
             canvas.fillAcross(x, y + 3, x + w, y + 3 + h / 3, Colors.fade(Palette.ACCENT, a * hot * 0.1f),
                     Colors.fade(Palette.ACCENT, a * hot * 0.1f));
             float centerY = y + h / 2f - 12;
-            canvas.pushScale(TITLE_SCALE, x + w / 2f, centerY);
+
             int titleW = canvas.measureText(this.title);
+            float scale = Math.min(TITLE_SCALE, (w - 16) / (float) Math.max(1, titleW));
+            canvas.pushScale(scale, x + w / 2f, centerY);
             canvas.drawText(this.title, x + w / 2 - titleW / 2, Math.round(centerY) - 4,
                     Colors.fade(Colors.mix(Palette.TEXT, Palette.ACCENT, hot * 0.6f), a));
             canvas.popScale();
-            canvas.drawText(this.note, x + (w - canvas.measureText(this.note)) / 2, y + h / 2 + 22,
-                    Colors.fade(Palette.DIM, a));
+
+            int noteW = canvas.measureText(this.note);
+            float noteScale = Math.min(1f, (w - 8) / (float) Math.max(1, noteW));
+            canvas.pushScale(noteScale, x + w / 2f, y + h / 2f + 26);
+            canvas.drawText(this.note, x + (w - noteW) / 2, y + h / 2 + 22, Colors.fade(Palette.DIM, a));
+            canvas.popScale();
             if (!this.below.isEmpty()) {
                 canvas.drawText(this.below, x + (w - canvas.measureText(this.below)) / 2, y + h + 12,
                         Colors.fade(Colors.mix(Palette.DIM, Palette.TEXT, hot * 0.5f), a));
@@ -198,7 +231,7 @@ public final class ChooserScreen {
             if (button != 0) {
                 return false;
             }
-            this.pick.run();
+            this.pick();
             return true;
         }
     }

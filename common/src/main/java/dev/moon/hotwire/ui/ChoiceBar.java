@@ -28,6 +28,11 @@ final class ChoiceBar extends Element {
     private List<Choice> choices;
     private int chosen;
     private int[] edges = new int[0];
+    private final EasedValue scroll = EasedValue.ofSpeed(18);
+    private int scrollTo;
+
+    private int overflow;
+    private int lastChosen = -1;
 
     ChoiceBar(List<Choice> choices, int chosen, IntConsumer onPick) {
         this.choices = List.copyOf(choices);
@@ -71,6 +76,9 @@ final class ChoiceBar extends Element {
     }
 
     private OptionalInt findChoiceAt(double px) {
+        if (px < this.getX() + 1 || px >= this.getX() + this.getWidth() - 1) {
+            return OptionalInt.empty();
+        }
         for (int i = 0; i + 1 < this.edges.length; i++) {
             if (px >= this.edges[i] && px < this.edges[i + 1]) {
                 return OptionalInt.of(i);
@@ -88,6 +96,8 @@ final class ChoiceBar extends Element {
         }
         this.chosenX.step(dt);
         this.chosenW.step(dt);
+        this.scroll.to(this.scrollTo);
+        this.scroll.step(dt);
         super.step(dt);
     }
 
@@ -106,12 +116,22 @@ final class ChoiceBar extends Element {
             total += needs[i];
         }
         this.edges = new int[needs.length + 1];
-        this.edges[0] = x + 1;
         int room = w - 2;
-        for (int i = 0; i < needs.length; i++) {
-            this.edges[i + 1] = this.edges[i] + room * needs[i] / Math.max(1, total);
+        this.overflow = Math.max(0, total - room);
+        if (this.overflow == 0) {
+            this.edges[0] = x + 1;
+            for (int i = 0; i < needs.length; i++) {
+                this.edges[i + 1] = this.edges[i] + room * needs[i] / Math.max(1, total);
+            }
+            this.edges[needs.length] = x + 1 + room;
+        } else {
+            this.scrollToChosen(needs, room);
+            this.edges[0] = x + 1 - this.scroll.getRounded();
+            for (int i = 0; i < needs.length; i++) {
+                this.edges[i + 1] = this.edges[i] + needs[i];
+            }
         }
-        this.edges[needs.length] = x + 1 + room;
+        canvas.pushClip(x + 1, y + 1, x + w - 1, y + HEIGHT - 1);
         if (this.chosen >= 0 && this.chosen < needs.length) {
             this.chosenX.to(this.edges[this.chosen]);
             this.chosenW.to(this.edges[this.chosen + 1] - this.edges[this.chosen]);
@@ -143,6 +163,43 @@ final class ChoiceBar extends Element {
                         Colors.fade(lit ? Palette.ON_ACCENT : Palette.ACCENT, alpha));
             }
         }
+        if (this.overflow > 0) {
+            int fade = Colors.fade(Palette.PANEL, alpha);
+            int none = Palette.PANEL & 0x00FFFFFF;
+            if (this.scroll.getRounded() > 0) {
+                canvas.fillAcross(x + 1, y + 1, x + 13, y + HEIGHT - 1, fade, none);
+            }
+            if (this.scroll.getRounded() < this.overflow) {
+                canvas.fillAcross(x + w - 13, y + 1, x + w - 1, y + HEIGHT - 1, none, fade);
+            }
+        }
+        canvas.popClip();
+    }
+
+    private void scrollToChosen(int[] needs, int room) {
+        this.scrollTo = Math.clamp(this.scrollTo, 0, this.overflow);
+        if (this.chosen == this.lastChosen || this.chosen < 0 || this.chosen >= needs.length) {
+            return;
+        }
+        this.lastChosen = this.chosen;
+        int from = 0;
+        for (int i = 0; i < this.chosen; i++) {
+            from += needs[i];
+        }
+        if (from < this.scrollTo) {
+            this.scrollTo = from;
+        } else if (from + needs[this.chosen] > this.scrollTo + room) {
+            this.scrollTo = Math.min(this.overflow, from + needs[this.chosen] - room);
+        }
+    }
+
+    @Override
+    protected boolean onScroll(double amount) {
+        if (this.overflow == 0) {
+            return false;
+        }
+        this.scrollTo = Math.clamp(this.scrollTo - (int) Math.round(amount * 24), 0, this.overflow);
+        return true;
     }
 
     private static void drawGlyph(Canvas canvas, Glyph glyph, int cx, int cy, int ink) {
