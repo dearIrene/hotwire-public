@@ -159,14 +159,17 @@ public final class SwitchApplier {
         this.objectRebuilder.announce(prepared.newlyBuilt(), !prepared.pausedReloads().isEmpty());
         Runnable release = this.redefinitionHold.get();
         SwitchTimes.mark("pause game");
+        long pausedAt = System.nanoTime();
         try {
             Runnable rebuildObjects = RebuildSteps.apply(this.rebuilder, prepared, this.health, this.afterRebuild,
                     this.onGameThread, this.objectRebuilder, this.game.isInWorld(), this.catchUps.findHolder());
             whilePaused.run();
+            SwitchTimes.mark("paused: takeouts");
             rebuildObjects.run();
             SwitchTimes.mark("rebuild objects");
         } finally {
             release.run();
+            LOGGER.info("[Hotwire] the game was paused {} ms", (System.nanoTime() - pausedAt) / 1_000_000);
         }
     }
 

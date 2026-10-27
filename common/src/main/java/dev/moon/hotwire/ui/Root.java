@@ -141,7 +141,7 @@ public final class Root {
 
     public boolean hasPanelOpen() {
         for (Element element : this.getModal().getChildren()) {
-            if (element instanceof Panel panel && panel.open()) {
+            if (element instanceof Panel panel && panel.open() && !panel.isReading()) {
                 return true;
             }
         }

@@ -49,6 +49,10 @@ class Panel extends Element {
         this.sized = false;
     }
 
+    public boolean isReading() {
+        return false;
+    }
+
     @Override
     public boolean open() {
         return this.wanted && this.isVisible();

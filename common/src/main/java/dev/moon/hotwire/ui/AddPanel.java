@@ -27,6 +27,11 @@ final class AddPanel extends Panel {
         this.onChange = onChange;
     }
 
+    @Override
+    public boolean isReading() {
+        return this.preview == null;
+    }
+
     void read(Path jar, CompletableFuture<AddPreview> dryRun) {
         this.jar = jar;
         this.reading = dryRun;
