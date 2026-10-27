@@ -21,6 +21,8 @@ final class Wrappers {
 
     private static final int NONE_OPEN = Integer.MAX_VALUE;
 
+    private static final int BUDGET = 5_000;
+
     private final IdentityHashMap<Object, Integer> barren = new IdentityHashMap<>();
 
     private final List<Object> open = new ArrayList<>();
@@ -29,6 +31,8 @@ final class Wrappers {
 
     private int asked;
     private long lookedAt;
+    private int overBudget;
+    private int budget;
 
     private boolean reached;
 
@@ -56,7 +60,13 @@ final class Wrappers {
         this.mods = mods;
         this.reachedMod = null;
         this.isOfTwo = false;
+        this.budget = BUDGET;
         this.reach(item, this.barren);
+        if (this.budget <= 0) {
+            this.overBudget++;
+            this.barren.put(item, DEPTH);
+            return null;
+        }
         return this.reached ? this.reachedMod : null;
     }
 
@@ -103,9 +113,11 @@ final class Wrappers {
         if (container && GameRegistrations.isSwitchable(GameRegistrations.findModOf(value.getClass()))) {
             return NONE_OPEN;
         }
-        if (further <= 0) {
+        if (further <= 0 || this.budget <= 0) {
+            this.reached = false;
             return NONE_OPEN;
         }
+        this.budget--;
         this.lookedAt++;
         int place = this.open.size();
         this.open.add(value);
@@ -310,7 +322,8 @@ final class Wrappers {
 
     String describe() {
         return this.asked + " asked whether another mod's object is there for them, " + this.lookedAt
-                + " objects looked through";
+                + " objects looked through" + (this.overBudget > 0 ? ", " + this.overBudget + " stopped at "
+                + BUDGET + " objects" : "");
     }
 
     private static boolean isOfAMod(Object value) {
