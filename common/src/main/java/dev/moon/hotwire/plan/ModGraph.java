@@ -16,7 +16,9 @@ import java.util.Set;
 import java.util.SortedSet;
 import java.util.TreeMap;
 import java.util.TreeSet;
+import java.util.function.Function;
 import java.util.function.Predicate;
+import org.jspecify.annotations.Nullable;
 
 public final class ModGraph {
     private static final int GAME_TRIES = 16;
@@ -33,12 +35,15 @@ public final class ModGraph {
 
     private final Predicate<String> gameHas;
 
+    private final Function<String, @Nullable String> running;
+
     public ModGraph(Collection<ModJar> jars) {
-        this(jars, type -> false);
+        this(jars, type -> false, id -> null);
     }
 
-    public ModGraph(Collection<ModJar> jars, Predicate<String> gameHas) {
+    public ModGraph(Collection<ModJar> jars, Predicate<String> gameHas, Function<String, @Nullable String> running) {
         this.gameHas = gameHas;
+        this.running = running;
         for (ModJar jar : jars) {
             this.add(jar, Optional.empty());
             this.installed.add(jar.manifest().id());
@@ -112,8 +117,12 @@ public final class ModGraph {
 
     private void add(ModJar jar, Optional<String> container) {
         String id = jar.manifest().id();
-        this.mods.putIfAbsent(id, jar.manifest());
-        this.patches.putIfAbsent(id, jar.patches());
+        ModManifest known = this.mods.get(id);
+        String runs = this.running.apply(id);
+        if (known == null || (runs != null && !runs.equals(known.version()) && runs.equals(jar.manifest().version()))) {
+            this.mods.put(id, jar.manifest());
+            this.patches.put(id, jar.patches());
+        }
         container.ifPresent(parent -> this.getContainers.computeIfAbsent(id, key -> new TreeSet<>()).add(parent));
         jar.nested().forEach(nested -> this.add(nested, Optional.of(id)));
     }
