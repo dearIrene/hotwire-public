@@ -13,13 +13,18 @@ import java.io.ByteArrayOutputStream;
 import java.io.DataInputStream;
 import java.io.DataOutputStream;
 import java.io.IOException;
+import java.nio.ByteBuffer;
 import java.nio.charset.StandardCharsets;
+import java.nio.file.Files;
+import java.nio.file.Path;
+import java.nio.file.StandardOpenOption;
 import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.HashSet;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.Objects;
 import java.util.Set;
 import java.util.TreeMap;
 import java.util.TreeSet;
@@ -86,6 +91,17 @@ final class MixedCache {
         this.answers = answers;
     }
 
+    private static final @Nullable String KEY_DUMP = System.getProperty("hotwire.cacheKeyDump");
+
+    private static synchronized void dumpKey(String line) {
+        try {
+            Files.writeString(Path.of(Objects.requireNonNull(KEY_DUMP)), line, StandardCharsets.UTF_8,
+                    StandardOpenOption.CREATE, StandardOpenOption.APPEND);
+        } catch (IOException e) {
+            LOGGER.warn("[Hotwire] the key dump could not be written: {}", e.toString());
+        }
+    }
+
     Map<String, CacheKey> findKeys(Set<String> targets, Map<String, byte[]> classes, Map<String, byte[]> resources,
             List<String> configNames) {
         List<Config> configs = new ArrayList<>();
@@ -98,10 +114,15 @@ final class MixedCache {
         Map<String, CacheKey> keys = new LinkedHashMap<>();
         for (String target : targets) {
             byte[] original = classes.get(target);
+            StringBuilder trace = KEY_DUMP == null ? null : new StringBuilder();
             CacheKey key = original == null ? null : this.findKey(target, original, configs,
-                    this.findHandedAbove(original, targets, classes), this.findMixedAbove(original, targets, classes));
+                    this.findHandedAbove(original, targets, classes), this.findMixedAbove(original, targets, classes),
+                    trace);
             if (key != null) {
                 keys.put(target, key);
+            }
+            if (trace != null && key != null) {
+                dumpKey(target + " " + Long.toHexString(key.high()) + " batch=" + targets.size() + trace + "\n");
             }
         }
         return keys;
@@ -148,9 +169,12 @@ final class MixedCache {
     }
 
     private @Nullable CacheKey findKey(String target, byte[] original, List<Config> configs, CacheKey others,
-            Set<String> mixedAbove) {
+            Set<String> mixedAbove, @Nullable StringBuilder trace) {
         CacheKey.Builder key = CacheKey.of("mixed class 4").add(this.copy.getRecipe()).add(target).add(original)
                 .add(others.high()).add(others.low());
+        if (trace != null) {
+            trace.append(" handed=").append(Long.toHexString(others.high())).append(" above=").append(mixedAbove);
+        }
         List<String> types = new ArrayList<>();
         types.add(target);
         types.addAll(mixedAbove);
@@ -168,6 +192,10 @@ final class MixedCache {
                 continue;
             }
             key.add(config.settings().high()).add(config.settings().low());
+            if (trace != null) {
+                trace.append(" | ").append(config.name()).append(' ').append(Long.toHexString(config.settings().high()))
+                        .append(' ').append(aiming.size());
+            }
             for (String aimed : aiming) {
                 key.add(aimed);
                 if (config.plugin()) {
@@ -182,6 +210,9 @@ final class MixedCache {
                         return null;
                     }
                     key.add(answer ? 1 : 0);
+                    if (trace != null && !answer) {
+                        trace.append(" no:").append(aimed.substring(aimed.indexOf(' ') + 1));
+                    }
                 }
             }
         }
@@ -377,19 +408,20 @@ final class MixedCache {
         return this.store.describe();
     }
 
-    boolean isFilled(CacheKey plan) {
-        return this.store.get(this.findFilledKey(plan), null) != null;
+    long findFilled(CacheKey plan) {
+        byte[] mark = this.store.get(this.findFilledKey(plan), null);
+        return mark == null ? -1 : ByteBuffer.wrap(mark).getLong();
     }
 
-    void markFilled(CacheKey plan) {
+    void markFilled(CacheKey plan, long bytes) {
         this.writer.execute(() -> {
-            this.store.put(this.findFilledKey(plan), new byte[] {1}, null);
+            this.store.put(this.findFilledKey(plan), ByteBuffer.allocate(Long.BYTES).putLong(bytes).array(), null);
             this.store.flush();
         });
     }
 
     private CacheKey findFilledKey(CacheKey plan) {
-        return CacheKey.of("filled 1").add(this.copy.getRecipe()).add(plan.high()).add(plan.low()).build();
+        return CacheKey.of("filled 2").add(this.copy.getRecipe()).add(plan.high()).add(plan.low()).build();
     }
 
     void clear() {

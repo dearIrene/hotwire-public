@@ -1,7 +1,5 @@
 package dev.moon.hotwire.redefine;
 
-import dev.moon.hotwire.cache.CacheKey;
-import dev.moon.hotwire.cache.CacheStore;
 import dev.moon.hotwire.concurrent.Parallel;
 import dev.moon.hotwire.mixin_copy.AppliedMixins;
 import dev.moon.hotwire.mixin_copy.MixinCopy;
@@ -39,8 +37,6 @@ public final class ClassRebuilder {
 
     private static final Duration SLOW_SPLIT = Duration.ofSeconds(1);
 
-    private static final int MISSES_NAMED = 12;
-
     static final ThreadLocal<BooleanSupplier> STOP = ThreadLocal.withInitial(() -> () -> false);
 
     private final Instrumentation instrumentation;
@@ -68,56 +64,10 @@ public final class ClassRebuilder {
     private volatile boolean launchChanged;
     private final RebuildCache ahead = new RebuildCache();
 
-    private volatile @Nullable MixedCache mixedCache;
+    private final CachedMixes mixes;
 
     public void stopWhen(BooleanSupplier stop) {
         STOP.set(stop);
-    }
-
-    public long getCacheBytes() {
-        MixedCache cache = this.mixedCache;
-        return cache == null ? 0 : cache.getBytes();
-    }
-
-    public int getCacheEntries() {
-        MixedCache cache = this.mixedCache;
-        return cache == null ? 0 : cache.getEntries();
-    }
-
-    public void clearCache() {
-        MixedCache cache = this.mixedCache;
-        if (cache != null) {
-            cache.clear();
-        }
-    }
-
-    public boolean isFilled(CacheKey plan) {
-        MixedCache cache = this.mixedCache;
-        return cache != null && cache.isFilled(plan);
-    }
-
-    public void markFilled(CacheKey plan) {
-        MixedCache cache = this.mixedCache;
-        if (cache != null) {
-            cache.markFilled(plan);
-        }
-    }
-
-    public CacheSizes getCacheSizes() {
-        MixedCache cache = this.mixedCache;
-        long[] saved = cache == null ? new long[4] : cache.findSaved();
-        return new CacheSizes(saved[0], saved[1], saved[2], saved[3]);
-    }
-
-    public record CacheSizes(long classes, long classesBefore, long reads, long readLists) {
-    }
-
-    public void cacheMixesIn(CacheStore store, PluginAnswers answers) {
-        this.mixedCache = new MixedCache(store, this.copy, answers::ask);
-    }
-
-    public interface PluginAnswers {
-        @Nullable Boolean ask(String config, String target, String mixin);
     }
 
     public void toLaunch(boolean all) {
@@ -146,28 +96,6 @@ public final class ClassRebuilder {
 
     public static boolean isMixSaved(RebuildException e) {
         return MIX_SAVED.equals(e.getMessage());
-    }
-
-    private static void verify(Map<String, byte[]> readBack, MixinCopy.MixResult fresh) {
-        List<String> numbers = new ArrayList<>();
-        List<String> differ = new ArrayList<>();
-        fresh.classes().forEach((name, bytes) -> {
-            byte[] cached = readBack.get(name);
-            if (cached == null) {
-                differ.add(name);
-            } else if (!Arrays.equals(cached, bytes)) {
-                if (BatchShapes.describeMasked(cached).equals(BatchShapes.describeMasked(bytes))) {
-                    numbers.add(name);
-                } else {
-                    differ.add(name);
-                    String folder = System.getProperty("hotwire.cacheVerifyDump");
-                    RebuildEvidence.dumpCopyTo(folder, name + ".cached", cached);
-                    RebuildEvidence.dumpCopyTo(folder, name + ".fresh", bytes);
-                }
-            }
-        });
-        LOGGER.info("[Hotwire] cache verify: {} classes, {} in Mixin's numbers alone, {} differ {}",
-                fresh.classes().size(), numbers.size(), differ.size(), differ);
     }
 
     private volatile Function<String, byte @Nullable []> runningOf = name -> null;
@@ -199,6 +127,11 @@ public final class ClassRebuilder {
         this.instrumentation = instrumentation;
         this.loadedBytes = new LoadedClassBytes(instrumentation);
         this.copy = copy;
+        this.mixes = new CachedMixes(copy);
+    }
+
+    public CachedMixes getCache() {
+        return this.mixes;
     }
 
     public MixinCopy copy() {
@@ -607,45 +540,7 @@ public final class ClassRebuilder {
             Map<String, byte[]> resources, List<String> configs, Predicate<String> mods, BooleanSupplier stop)
             throws RebuildException {
         try {
-            MixedCache cache = this.mixedCache;
-            Map<String, CacheKey> keys = cache == null ? Map.of()
-                    : cache.findKeys(targets, classes, resources, configs);
-            List<MixinCopy.MixResult> parts = new ArrayList<>();
-            Map<String, byte[]> readBack = new HashMap<>();
-            Set<String> toMix = new LinkedHashSet<>(targets);
-            if (cache != null) {
-                keys.forEach((target, key) -> {
-                    MixinCopy.MixResult part = cache.find(key, target, Objects.requireNonNull(classes.get(target)));
-                    if (part != null) {
-                        parts.add(part);
-                        readBack.putAll(part.classes());
-                        toMix.remove(target);
-                    }
-                });
-                List<String> missed = new ArrayList<>();
-                for (String target : new TreeSet<>(keys.keySet())) {
-                    if (toMix.contains(target) && missed.size() < MISSES_NAMED) {
-                        missed.add(target);
-                    }
-                }
-                LOGGER.info("[Hotwire] {} of {} classes were read back from the switch cache, {} missed{}, {} a plugin"
-                        + " decides for ({})", readBack.size(), targets.size(), keys.size() - readBack.size(),
-                        missed.isEmpty() ? "" : " " + missed, targets.size() - keys.size(), cache.describe());
-                if (!readBack.isEmpty()) {
-                    if (Boolean.parseBoolean(System.getProperty("hotwire.cacheVerify"))) {
-                        verify(readBack, this.copy.mixAll(readBack.keySet(), classes, resources, configs, stop));
-                    }
-                }
-            }
-            if (!toMix.isEmpty()) {
-                MixinCopy.MixResult made = this.copy.mixAll(toMix, classes, resources, configs, stop);
-                parts.add(made);
-                Map<String, CacheKey> toSave = new HashMap<>(keys);
-                toSave.keySet().retainAll(toMix);
-                if (cache != null && !toSave.isEmpty() && !stop.getAsBoolean()) {
-                    cache.save(toSave, made, classes);
-                }
-            }
+            List<MixinCopy.MixResult> parts = this.mixes.mix(targets, classes, resources, configs, stop);
             if (stop.getAsBoolean()) {
                 throw new RebuildException("the rebuild worked out ahead gave way to a switch",
                         new IllegalStateException(String.valueOf(targets.size())));

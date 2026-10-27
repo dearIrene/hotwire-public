@@ -182,8 +182,8 @@ final class EngineStart {
                         mixins, mixin), classes::findOriginalBytes)),
                 classes, mixins, mixins.keySet(), MixinConfigs.findUnowned(mixin.getConfigs(), mixins));
         applier.getRebuilder().resolveArgsWith(mixin::getArgsClassFor);
-        applier.getRebuilder().cacheMixesIn(CacheStore.open(findCacheFolder().resolve("mixed"), "mixed", MIXED_CAP),
-                LivePluginShapes::ask);
+        applier.getRebuilder().getCache().cacheIn(
+                CacheStore.open(findCacheFolder().resolve("mixed"), "mixed", MIXED_CAP), LivePluginShapes::ask);
         applier.getRebuilder().getHooks()
                 .sendGeneratedTo(new GeneratedClasses(gameDir.resolve("hotwire").resolve("generated")) ::write);
         applier.orderConfigsAs(mixin.getConfigs());

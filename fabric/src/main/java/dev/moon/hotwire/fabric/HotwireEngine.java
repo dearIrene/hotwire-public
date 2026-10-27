@@ -32,13 +32,11 @@ import dev.moon.hotwire.jar.ModManifest;
 import dev.moon.hotwire.jvm.JvmAccessException;
 import dev.moon.hotwire.modrinth.StoreModel;
 import dev.moon.hotwire.plan.ModGraph;
-import dev.moon.hotwire.redefine.ClassRebuilder;
 import dev.moon.hotwire.redefine.LoadedClassBytes;
 import dev.moon.hotwire.redefine.Tripwire;
 import dev.moon.hotwire.report.GameLog;
 import dev.moon.hotwire.switching.ModSwitcher;
 import dev.moon.hotwire.switching.PlayerMessages;
-import dev.moon.hotwire.switching.SwitchCacheFiller;
 import dev.moon.hotwire.ui.AddMode;
 import dev.moon.hotwire.ui.AddPreview;
 import dev.moon.hotwire.ui.AdvancedOption;
@@ -80,11 +78,7 @@ import java.util.Objects;
 import java.util.Optional;
 import java.util.Set;
 import java.util.concurrent.CompletableFuture;
-import java.util.concurrent.ExecutionException;
-import java.util.concurrent.ExecutorService;
-import java.util.concurrent.Executors;
 import java.util.concurrent.TimeUnit;
-import java.util.concurrent.TimeoutException;
 import java.util.function.BiConsumer;
 import java.util.function.Consumer;
 import java.util.function.Function;
@@ -96,13 +90,6 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 public final class HotwireEngine implements ModScreen.Game, AutoCloseable {
-    private static final long FILL_READ_NANOS = 250_000_000L;
-
-    private volatile @Nullable CacheFill cacheFill;
-
-    private volatile long fillEstimate = -1;
-    private volatile long cacheFillAt;
-
     record JvmParts(SwitchRunner runner, AddSupport adds, UpdateSupport updates,
             Instrumentation instrumentation, ClassFileTransformer loadTimeMixer, GameClasses classes) {
     }
@@ -129,10 +116,6 @@ public final class HotwireEngine implements ModScreen.Game, AutoCloseable {
     private final ProfileStore profiles;
     private final HotwireSettings settings;
     private final Tasks tasks = new Tasks(1, Minecraft.getInstance());
-
-    private final ExecutorService renaming = Executors.newSingleThreadExecutor(
-            Thread.ofPlatform().name("hotwire-renames").daemon().factory());
-    private volatile CompletableFuture<Void> renames = CompletableFuture.completedFuture(null);
     private @Nullable ModScreen screen;
 
     private @Nullable Screen under;
@@ -154,6 +137,8 @@ public final class HotwireEngine implements ModScreen.Game, AutoCloseable {
     private final Set<String> needsMet = new HashSet<>();
     private final ModIcons icons;
     private final ModChanges changes;
+    private final CacheFillControl cacheFill = new CacheFillControl(this::findParts);
+    private final DisabledMods disabled;
 
     private HotwireEngine(InstalledMods installed, Progress progress, GameReports reports, UpdateFolders folders,
             UpdateQueue queue, HotwireSettings settings, ModIcons icons, Bound bound) {
@@ -169,6 +154,8 @@ public final class HotwireEngine implements ModScreen.Game, AutoCloseable {
         this.bound = bound;
         this.changes = new ModChanges(this.findParts(), this.getSwitchRefusal(), installed, this.tasks);
         WorldReopen.tellClosedTo(this::onWorldClosed);
+        this.disabled = new DisabledMods(installed, this::findParts, settings, folders.mods(), this::showMessage,
+                (jar, then) -> this.add(jar, AddMode.NOW, then));
         this.profiles = new ProfileStore(FabricLoader.getInstance().getConfigDir().resolve("hotwire/profiles.txt"));
     }
 
@@ -229,8 +216,8 @@ public final class HotwireEngine implements ModScreen.Game, AutoCloseable {
                 why -> started.writeReport(Lang.get("hotwire.report.file.hotwire_error"), why));
         JvmParts ready = started.findParts();
         if (ready != null) {
-            ready.runner().setAfterOff(started::disableJars);
-            ready.runner().setBeforeOn(started::restoreDisabled);
+            ready.runner().setAfterOff(started.disabled::disableAfter);
+            ready.runner().setBeforeOn(started.disabled::restore);
         }
         started.reportLastCrash();
         return engine;
@@ -352,8 +339,7 @@ public final class HotwireEngine implements ModScreen.Game, AutoCloseable {
         JvmParts parts = this.findParts();
 
         Set<String> off = parts == null ? Set.of() : parts.runner().getSwitcher().getOff();
-        this.awaitRenames();
-        this.renaming.shutdown();
+        this.disabled.close();
 
         Tripwire.releaseAll();
         ModLifecycle.onGameStopping(off, GameRegistrations.getJournal(), Minecraft.getInstance());
@@ -444,107 +430,13 @@ public final class HotwireEngine implements ModScreen.Game, AutoCloseable {
     }
 
     public CompletableFuture<SwitchResult> switchFor(boolean off, List<String> ids) {
-        List<String> disabledIds = off ? List.of() : ids.stream().filter(this::isDisabledSinceStart).toList();
-        disabledIds.forEach(this::enableByAdd);
+        List<String> disabledIds = off ? List.of() : ids.stream().filter(this.disabled::isDisabledSinceStart).toList();
+        disabledIds.forEach(this.disabled::enableByAdd);
         List<String> rest = ids.stream().filter(id -> !disabledIds.contains(id)).toList();
         if (rest.isEmpty() && !disabledIds.isEmpty()) {
             return CompletableFuture.completedFuture(new SwitchResult(SwitchResult.Kind.DONE, disabledIds, ""));
         }
         return this.run(runner -> off ? runner.turnOff(rest) : runner.turnOn(rest), off, rest);
-    }
-
-    private boolean isDisabledSinceStart(String id) {
-        JvmParts parts = this.findParts();
-        return this.installed.isDisabled(id) && (parts == null || !parts.runner().getSwitcher().getOff().contains(id));
-    }
-
-    private void restoreDisabled(List<String> order) {
-        this.awaitRenames();
-        for (String id : order) {
-            Path disabledJar = this.installed.isDisabled(id) ? this.installed.findJarOf(id) : null;
-            if (disabledJar == null) {
-                continue;
-            }
-            try {
-                this.installed.onRestored(id, DisabledJars.restore(disabledJar));
-                GameLog.LOGGER.info("[Hotwire] {} is restored for the on: {} has its name back", id,
-                        disabledJar.getFileName());
-            } catch (IOException e) {
-                LOGGER.warn("[Hotwire] {} could not be restored for the on", id, e);
-            }
-        }
-    }
-
-    private void enableByAdd(String id) {
-        this.awaitRenames();
-        Path disabledJar = this.installed.findJarOf(id);
-        if (disabledJar == null) {
-            return;
-        }
-        this.add(disabledJar, AddMode.NOW, result -> {
-            if (!(result instanceof ModAdder.Result.Added)) {
-                return;
-            }
-            try {
-                this.installed.onBroughtBack(id, DisabledJars.enable(disabledJar));
-            } catch (IOException e) {
-                LOGGER.warn("[Hotwire] {} is back on, but {} could not get its name back", id,
-                        disabledJar.getFileName(), e);
-                this.installed.onBroughtBack(id, disabledJar);
-                this.showMessage(Lang.get("hotwire.switch.brought_back_failed", this.installed.nameOf(id),
-                        e.getMessage()), true);
-            }
-        });
-    }
-
-    private void disableJars(ModSwitcher.Result result) {
-        if (!(result instanceof ModSwitcher.Result.Done done)
-                || this.settings.getOffLasts() != HotwireSettings.OffLasts.UNTIL_ON) {
-            return;
-        }
-        Path mods = this.updateFolders.mods().toAbsolutePath().normalize();
-        List<String> ids = done.plan().order().stream().filter(id -> {
-            Path jar = this.installed.findJarOf(id);
-            return jar != null && this.installed.isTopLevel(id) && !this.installed.isDisabled(id)
-                    && mods.equals(jar.toAbsolutePath().normalize().getParent());
-        }).toList();
-        if (ids.isEmpty()) {
-            return;
-        }
-        this.renames = this.renames.thenRunAsync(() -> this.renameJars(ids), this.renaming);
-    }
-
-    private void renameJars(List<String> ids) {
-        StringBuilder failed = new StringBuilder();
-        for (String id : ids) {
-            Path jar = this.installed.findJarOf(id);
-            if (jar == null || this.installed.isDisabled(id)) {
-                continue;
-            }
-            try {
-                this.installed.onDisabled(id, DisabledJars.disable(jar));
-                GameLog.LOGGER.info("[Hotwire] {} stays off: {} is now {}", id, jar.getFileName(), jar.getFileName()
-                        + DisabledJars.SUFFIX);
-            } catch (IOException e) {
-                LOGGER.warn("[Hotwire] {} could not be kept off past the close", id, e);
-                failed.append(failed.isEmpty() ? "" : "; ").append(this.installed.nameOf(id)).append(": ")
-                        .append(e.getMessage());
-            }
-        }
-        if (!failed.isEmpty()) {
-            String said = Lang.get("hotwire.switch.kept_off_failed", failed);
-            Minecraft.getInstance().execute(() -> this.showMessage(said, true));
-        }
-    }
-
-    private void awaitRenames() {
-        try {
-            this.renames.get(30, TimeUnit.SECONDS);
-        } catch (InterruptedException e) {
-            Thread.currentThread().interrupt();
-        } catch (ExecutionException | TimeoutException e) {
-            LOGGER.warn("[Hotwire] the renames of mods kept off did not finish: {}", e.toString());
-        }
     }
 
     @SuppressWarnings("FutureReturnValueIgnored")
@@ -603,8 +495,8 @@ public final class HotwireEngine implements ModScreen.Game, AutoCloseable {
     public SwitchRunner.CheckedResult switchNow(boolean off, List<String> ids) {
         SwitchRunner runner = this.requireSwitching().runner();
 
-        List<String> disabledIds = off ? List.of() : ids.stream().filter(this::isDisabledSinceStart).toList();
-        disabledIds.forEach(this::enableByAdd);
+        List<String> disabledIds = off ? List.of() : ids.stream().filter(this.disabled::isDisabledSinceStart).toList();
+        disabledIds.forEach(this.disabled::enableByAdd);
         List<String> rest = ids.stream().filter(id -> !disabledIds.contains(id)).toList();
         return off ? runner.turnOff(rest) : runner.turnOn(rest);
     }
@@ -731,67 +623,17 @@ public final class HotwireEngine implements ModScreen.Game, AutoCloseable {
 
     @Override
     public @Nullable CacheFill getCacheFill() {
-        long now = System.nanoTime();
-        CacheFill known = this.cacheFill;
-        if (known != null && now - this.cacheFillAt < FILL_READ_NANOS) {
-            return known;
-        }
-        this.cacheFill = this.findCacheFill();
-        this.cacheFillAt = now;
-        return this.cacheFill;
-    }
-
-    private @Nullable CacheFill findCacheFill() {
-        JvmParts parts = this.findParts();
-        if (parts == null) {
-            return null;
-        }
-        SwitchCacheFiller.Fill fill = parts.runner().getSwitcher().getFiller().getFill();
-        ClassRebuilder rebuilder = parts.adds().getApplier().getRebuilder();
-        ClassRebuilder.CacheSizes sizes = rebuilder.getCacheSizes();
-        long saved = rebuilder.getCacheBytes();
-
-        long estimated = this.fillEstimate;
-        if (estimated < 0 && fill.bytes() > 0 && fill.bytesDone() >= fill.bytes()) {
-            estimated = saved;
-        } else if (estimated < 0 && fill.sampled() && sizes.classesBefore() > 0) {
-            double perByte = (sizes.classes() + sizes.reads()) / (double) sizes.classesBefore();
-            estimated = Math.max(saved, Math.round(fill.bytes() * perByte));
-            this.fillEstimate = estimated;
-        }
-        long millisLeft = fill.bytesDone() == 0 ? -1
-                : Math.round((fill.bytes() - fill.bytesDone()) * (fill.millis() / (double) fill.bytesDone()));
-        return new CacheFill((int) Math.min(fill.classesDone(), fill.classes()), (int) fill.classes(), fill.running(),
-                saved, estimated, millisLeft);
-    }
-
-    private static boolean isPlaying() {
-        Minecraft client = Minecraft.getInstance();
-        return client.level != null && ModViews.openScreen() == null && client.isWindowActive();
+        return this.cacheFill.getFill();
     }
 
     @Override
     public void clearCache() {
-        JvmParts parts = this.findParts();
-        if (parts != null) {
-            parts.runner().getSwitcher().getFiller().restart();
-            parts.adds().getApplier().getRebuilder().clearCache();
-            this.fillEstimate = -1;
-        }
+        this.cacheFill.clear();
     }
 
     @Override
     public void fillCache(boolean go) {
-        JvmParts parts = this.findParts();
-        if (parts == null) {
-            return;
-        }
-        if (go) {
-            parts.runner().getSwitcher().getFiller().watchPlaying(HotwireEngine::isPlaying);
-            parts.runner().getSwitcher().getFiller().fillAll();
-        } else {
-            parts.runner().getSwitcher().getFiller().pause(true);
-        }
+        this.cacheFill.fill(go);
     }
 
     @Override
@@ -824,7 +666,7 @@ public final class HotwireEngine implements ModScreen.Game, AutoCloseable {
     @Override
     public void prepareAhead(List<String> ids, boolean off) {
         JvmParts parts = this.findParts();
-        if (!off && (!this.renames.isDone() || ids.stream().anyMatch(this.installed::isDisabled))) {
+        if (!off && (this.disabled.isRenaming() || ids.stream().anyMatch(this.installed::isDisabled))) {
             return;
         }
         if (parts != null) {

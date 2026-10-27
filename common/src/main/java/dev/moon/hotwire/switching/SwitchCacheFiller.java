@@ -2,6 +2,7 @@ package dev.moon.hotwire.switching;
 
 import dev.moon.hotwire.cache.CacheKey;
 import dev.moon.hotwire.plan.SwitchPlan;
+import dev.moon.hotwire.redefine.CachedMixes;
 import dev.moon.hotwire.redefine.ClassRebuilder;
 import dev.moon.hotwire.redefine.RebuildException;
 import java.util.ArrayList;
@@ -55,12 +56,14 @@ public final class SwitchCacheFiller {
     }
 
     public record Fill(boolean running, int stepsDone, int steps, long classesDone, long classes, long bytesDone,
-            long bytes, long millis, boolean sampled) {
+            long bytes, long millis, boolean sampled, long filledBytes) {
     }
 
     private final Host host;
     private final SwitchApplier applier;
     private volatile List<Step> steps = List.of();
+
+    private volatile long filledBytes = -1;
     private volatile long classes;
     private volatile long bytes;
     private final AtomicInteger done = new AtomicInteger();
@@ -114,6 +117,7 @@ public final class SwitchCacheFiller {
         this.nanos.set(0);
         this.classes = 0;
         this.bytes = 0;
+        this.filledBytes = -1;
     }
 
     public Fill getFill() {
@@ -121,7 +125,7 @@ public final class SwitchCacheFiller {
         boolean alive = running != null && running.isAlive() && !this.paused && !this.sampleOnly;
         return new Fill(alive, this.done.get(), this.steps.size(), this.classesDone.get(), this.classes,
                 this.bytesDone.get(), this.bytes, this.nanos.get() / 1_000_000,
-                !this.steps.isEmpty() && this.done.get() >= this.sample);
+                !this.steps.isEmpty() && this.done.get() >= this.sample, this.filledBytes);
     }
 
     @SuppressWarnings("ThreadPriorityCheck")
@@ -184,7 +188,9 @@ public final class SwitchCacheFiller {
         }
         CacheKey filled = this.plan;
         if (filled != null && current == this.run.get() && this.done.get() >= planned.size()) {
-            this.applier.getRebuilder().markFilled(filled);
+            CachedMixes.Sizes sizes = this.applier.getRebuilder().getCache().getSizes();
+            this.filledBytes = sizes.classes() + sizes.reads();
+            this.applier.getRebuilder().getCache().markFilled(filled, this.filledBytes);
         }
         LOGGER.info("[Hotwire] the switch cache filled {} of {} steps: {} classes in {} ms; planned {} classes, {}"
                 + " bytes before Mixin", this.done.get(), planned.size(), mixed,
@@ -252,7 +258,9 @@ public final class SwitchCacheFiller {
             plan.add(step.classes()).add(step.bytes());
         }
         this.plan = plan.build();
-        if (this.applier.getRebuilder().isFilled(this.plan)) {
+        long known = this.applier.getRebuilder().getCache().findFilled(this.plan);
+        if (known >= 0) {
+            this.filledBytes = known;
             this.done.set(this.steps.size());
             this.classesDone.set(this.classes);
             this.bytesDone.set(this.bytes);

@@ -15,6 +15,8 @@ import net.minecraft.client.Minecraft;
 import net.minecraft.server.packs.resources.PreparableReloadListener;
 import net.minecraft.server.packs.resources.ResourceManager;
 import org.jspecify.annotations.Nullable;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
 public final class ModelReloadCheck {
     private static final int DEPTH = 3;
@@ -24,6 +26,7 @@ public final class ModelReloadCheck {
     private static final int LOOKED_AT = 50_000;
 
     private static final int ARRAY_LOOKED_AT = 64;
+    private static final Logger LOGGER = LoggerFactory.getLogger(ModelReloadCheck.class);
     private static final Set<String> MODEL_OWNERS = ConcurrentHashMap.newKeySet();
     private static final Set<String> FONT_OWNERS = ConcurrentHashMap.newKeySet();
 
@@ -88,7 +91,9 @@ public final class ModelReloadCheck {
         }
         String owner = owners.computeIfAbsent(value.getClass(), GameRegistrations::findModOf);
         if (owner != null && mods.contains(owner)) {
-            found.add(owner);
+            if (found.add(owner)) {
+                LOGGER.info("[Hotwire] the game's models hold {}'s {}", owner, value.getClass().getName());
+            }
             return;
         }
         if (depth > 0 && isShared(value)) {
@@ -116,7 +121,9 @@ public final class ModelReloadCheck {
                     }
                     String of = owners.computeIfAbsent(item.getClass(), GameRegistrations::findModOf);
                     if (of != null && mods.contains(of)) {
-                        found.add(of);
+                        if (found.add(of)) {
+                            LOGGER.info("[Hotwire] the game's models hold {}'s {}", of, item.getClass().getName());
+                        }
                     } else if (depth < most && !item.getClass().getName().startsWith("java.")) {
                         look(item, mods, found, seen, owners, depth + 1, most);
                     }
