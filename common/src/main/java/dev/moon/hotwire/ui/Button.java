@@ -20,6 +20,8 @@ final class Button extends Element {
 
     private int badge;
 
+    private int tint;
+
     public Button(String label, boolean primary, Runnable action) {
         this(label, label, primary, action);
     }
@@ -60,6 +62,10 @@ final class Button extends Element {
         this.useShort = use;
     }
 
+    void setTint(int tint) {
+        this.tint = tint;
+    }
+
     void setBadge(int badge) {
         this.badge = badge;
     }
@@ -95,6 +101,8 @@ final class Button extends Element {
         int edge = this.looksActive ? Palette.PANEL_EDGE : INACTIVE_EDGE;
         if (lit) {
             edge = Colors.mix(Palette.ACCENT, Palette.TEXT, 0.35f + hot * 0.25f);
+        } else if (this.tint != 0 && this.looksActive) {
+            edge = Colors.mix(this.tint, Palette.PANEL_EDGE, 0.45f - hot * 0.3f);
         }
         canvas.fill(x, y, x + w, y + h, Colors.fade(edge, alpha));
         int face = lit ? Colors.mix(Palette.ACCENT, Palette.TEXT, hot * 0.15f)
@@ -128,7 +136,13 @@ final class Button extends Element {
         if (!this.looksActive) {
             return Palette.FAINT;
         }
-        return this.primary ? Palette.ON_ACCENT : Colors.mix(Palette.DIM, Palette.TEXT, hot);
+        if (this.primary) {
+            return Palette.ON_ACCENT;
+        }
+        if (this.tint != 0) {
+            return Colors.mix(this.tint, Palette.TEXT, hot * 0.4f);
+        }
+        return Colors.mix(Palette.DIM, Palette.TEXT, hot);
     }
 
     @Override

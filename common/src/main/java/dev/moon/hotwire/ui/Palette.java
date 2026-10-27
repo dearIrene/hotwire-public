@@ -16,6 +16,8 @@ public final class Palette {
     public static final int PATH = 0xFFE8C170;
     public static final int BAD = 0xFFFF8A8A;
 
+    public static final int GOOD = 0xFF8EE3A8;
+
     public static final int OFF_TINT = 0xFFFF5A6E;
     public static final int TRACK = 0xFF231B36;
     static final int SCRIM = 0xC00B0912;

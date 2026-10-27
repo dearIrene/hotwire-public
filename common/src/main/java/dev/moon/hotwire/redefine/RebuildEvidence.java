@@ -60,6 +60,23 @@ final class RebuildEvidence {
         return out;
     }
 
+    static void dumpCopy(String name, byte[] bytes) {
+        dumpCopyTo(System.getProperty("hotwire.dump"), name, bytes);
+    }
+
+    static void dumpCopyTo(@Nullable String folder, String name, byte[] bytes) {
+        if (folder == null) {
+            return;
+        }
+        try {
+            Path base = Path.of(folder).resolve(name.replace('/', '.') + ".copy." + System.currentTimeMillis());
+            Files.createDirectories(base);
+            Files.write(base.resolve("copy.class"), bytes);
+        } catch (IOException e) {
+            LOGGER.warn("[Hotwire] the copy's mix of {} could not be written out: {}", name, e.toString());
+        }
+    }
+
     static void dumpReadBack(String name, byte @Nullable [] bytes) {
         String folder = System.getProperty("hotwire.dump");
         if (folder == null || bytes == null) {

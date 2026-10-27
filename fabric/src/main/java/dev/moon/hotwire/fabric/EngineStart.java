@@ -1,5 +1,6 @@
 package dev.moon.hotwire.fabric;
 
+import dev.moon.hotwire.cache.CacheStore;
 import dev.moon.hotwire.fabric.add.AddSupport;
 import dev.moon.hotwire.fabric.rebuild.ConstantPools;
 import dev.moon.hotwire.fabric.rebuild.ForeignPatches;
@@ -7,6 +8,7 @@ import dev.moon.hotwire.fabric.rebuild.GameClasses;
 import dev.moon.hotwire.fabric.rebuild.GameMixinCopy;
 import dev.moon.hotwire.fabric.rebuild.GeneratedClasses;
 import dev.moon.hotwire.fabric.rebuild.KnotInternals;
+import dev.moon.hotwire.fabric.rebuild.LivePluginShapes;
 import dev.moon.hotwire.fabric.rebuild.LocalRefs;
 import dev.moon.hotwire.fabric.rebuild.MixinConfigs;
 import dev.moon.hotwire.fabric.rebuild.MixinInternals;
@@ -33,6 +35,7 @@ import dev.moon.hotwire.jar.ModJar;
 import dev.moon.hotwire.jar.ModJarException;
 import dev.moon.hotwire.jar.ModJarReader;
 import dev.moon.hotwire.jar.ModManifest;
+import dev.moon.hotwire.jvm.JarChannels;
 import dev.moon.hotwire.jvm.JvmAccess;
 import dev.moon.hotwire.jvm.JvmAccessException;
 import dev.moon.hotwire.redefine.ClassRebuilder;
@@ -79,6 +82,8 @@ import org.slf4j.LoggerFactory;
 final class EngineStart {
     private static final Logger LOGGER = LoggerFactory.getLogger(EngineStart.class);
     private static final StackWalker STACK = StackWalker.getInstance();
+
+    private static final long MIXED_CAP = 64L << 20;
 
     private static final String RELOAD_TASKS = SimpleReloadInstance.class.getName();
 
@@ -162,6 +167,8 @@ final class EngineStart {
     static HotwireEngine.JvmParts bind(InstalledMods installed, Progress progress, GameReports reports,
             UpdateFolders folders, UpdateQueue queue, Path gameDir, ModIcons icons) throws JvmAccessException {
         Instrumentation instrumentation = JvmAccess.getInstrumentation(findHotwireJar());
+        JarChannels.open(instrumentation);
+        LOGGER.info("[Hotwire] {} open jars read on through an interrupt", JarChannels.makeUninterruptible());
         KnotInternals knot = KnotInternals.bind();
         MixinInternals mixin = MixinInternals.bind();
         LocalRefs.prepare();
@@ -175,6 +182,8 @@ final class EngineStart {
                         mixins, mixin))),
                 classes, mixins, mixins.keySet(), MixinConfigs.findUnowned(mixin.getConfigs(), mixins));
         applier.getRebuilder().resolveArgsWith(mixin::getArgsClassFor);
+        applier.getRebuilder().cacheMixesIn(CacheStore.open(findCacheFolder().resolve("mixed"), "mixed", MIXED_CAP),
+                LivePluginShapes::ask);
         applier.getRebuilder().getHooks()
                 .sendGeneratedTo(new GeneratedClasses(gameDir.resolve("hotwire").resolve("generated")) ::write);
         applier.orderConfigsAs(mixin.getConfigs());
@@ -283,6 +292,23 @@ final class EngineStart {
         });
         named.removeIf(id -> id.equals(mod) || !installed.isInstalled(id));
         return named;
+    }
+
+    private static Path findCacheFolder() {
+        String local = System.getenv("LOCALAPPDATA");
+        String xdg = System.getenv("XDG_CACHE_HOME");
+        Path home = Path.of(System.getProperty("user.home"));
+        Path base = home.resolve(".cache");
+        if (local != null) {
+            base = Path.of(local);
+        } else if (xdg != null) {
+            base = Path.of(xdg);
+        } else if (System.getProperty("os.name", "").startsWith("Mac")) {
+            base = home.resolve("Library/Caches");
+        }
+        String game = FabricLoader.getInstance().getModContainer("minecraft")
+                .map(mod -> mod.getMetadata().getVersion().getFriendlyString()).orElse("unknown");
+        return base.resolve("hotwire").resolve(game);
     }
 
     private static String getNamespace(String key) {

@@ -32,14 +32,17 @@ import dev.moon.hotwire.jar.ModManifest;
 import dev.moon.hotwire.jvm.JvmAccessException;
 import dev.moon.hotwire.modrinth.StoreModel;
 import dev.moon.hotwire.plan.ModGraph;
+import dev.moon.hotwire.redefine.ClassRebuilder;
 import dev.moon.hotwire.redefine.LoadedClassBytes;
 import dev.moon.hotwire.redefine.Tripwire;
 import dev.moon.hotwire.report.GameLog;
 import dev.moon.hotwire.switching.ModSwitcher;
 import dev.moon.hotwire.switching.PlayerMessages;
+import dev.moon.hotwire.switching.SwitchCacheFiller;
 import dev.moon.hotwire.ui.AddMode;
 import dev.moon.hotwire.ui.AddPreview;
 import dev.moon.hotwire.ui.AdvancedOption;
+import dev.moon.hotwire.ui.CacheFill;
 import dev.moon.hotwire.ui.Canvas;
 import dev.moon.hotwire.ui.ChooserScreen;
 import dev.moon.hotwire.ui.JarHost;
@@ -93,6 +96,13 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 public final class HotwireEngine implements ModScreen.Game, AutoCloseable {
+    private static final long FILL_READ_NANOS = 250_000_000L;
+
+    private volatile @Nullable CacheFill cacheFill;
+
+    private volatile long fillEstimate = -1;
+    private volatile long cacheFillAt;
+
     record JvmParts(SwitchRunner runner, AddSupport adds, UpdateSupport updates,
             Instrumentation instrumentation, ClassFileTransformer loadTimeMixer, GameClasses classes) {
     }
@@ -198,7 +208,7 @@ public final class HotwireEngine implements ModScreen.Game, AutoCloseable {
             });
             Fields.preloadStatics(parts.instrumentation());
 
-            parts.runner().getSwitcher().preloadAhead(150);
+            parts.runner().getSwitcher().getFiller().fillSample();
         } catch (JvmAccessException | IllegalStateException e) {
             LOGGER.error("[Hotwire] Switching mods is not possible in this game: {}", e.getMessage(), e);
             engine = new HotwireEngine(installed, progress, reports, folders, queue, settings, icons,
@@ -715,6 +725,69 @@ public final class HotwireEngine implements ModScreen.Game, AutoCloseable {
         String version = FabricLoader.getInstance().getModContainer(HotwireClient.ID)
                 .map(mod -> mod.getMetadata().getVersion().getFriendlyString()).orElse("0");
         return version.split("[.+-]", 2)[0];
+    }
+
+    @Override
+    public @Nullable CacheFill getCacheFill() {
+        long now = System.nanoTime();
+        CacheFill known = this.cacheFill;
+        if (known != null && now - this.cacheFillAt < FILL_READ_NANOS) {
+            return known;
+        }
+        this.cacheFill = this.findCacheFill();
+        this.cacheFillAt = now;
+        return this.cacheFill;
+    }
+
+    private @Nullable CacheFill findCacheFill() {
+        JvmParts parts = this.findParts();
+        if (parts == null) {
+            return null;
+        }
+        SwitchCacheFiller.Fill fill = parts.runner().getSwitcher().getFiller().getFill();
+        ClassRebuilder rebuilder = parts.adds().getApplier().getRebuilder();
+        ClassRebuilder.CacheSizes sizes = rebuilder.getCacheSizes();
+        long saved = rebuilder.getCacheBytes();
+
+        long estimated = this.fillEstimate;
+        if (estimated < 0 && fill.sampled() && sizes.classesBefore() > 0) {
+            double perByte = (sizes.classes() + sizes.reads()) / (double) sizes.classesBefore();
+            estimated = Math.max(saved, Math.round(fill.bytes() * perByte));
+            this.fillEstimate = estimated;
+        }
+        long millisLeft = fill.bytesDone() == 0 ? -1
+                : Math.round((fill.bytes() - fill.bytesDone()) * (fill.millis() / (double) fill.bytesDone()));
+        return new CacheFill((int) Math.min(fill.classesDone(), fill.classes()), (int) fill.classes(), fill.running(),
+                saved, estimated, millisLeft);
+    }
+
+    private static boolean isPlaying() {
+        Minecraft client = Minecraft.getInstance();
+        return client.level != null && ModViews.openScreen() == null && client.isWindowActive();
+    }
+
+    @Override
+    public void clearCache() {
+        JvmParts parts = this.findParts();
+        if (parts != null) {
+            parts.runner().getSwitcher().getFiller().restart();
+            parts.adds().getApplier().getRebuilder().clearCache();
+            this.fillEstimate = -1;
+        }
+    }
+
+    @Override
+    public void fillCache(boolean go) {
+        JvmParts parts = this.findParts();
+        if (parts == null) {
+            return;
+        }
+        if (go) {
+            parts.runner().getSwitcher().getFiller().watchPlaying(HotwireEngine::isPlaying);
+            parts.runner().getSwitcher().getFiller().fillAll();
+        } else {
+            parts.runner().getSwitcher().getFiller().pause(true);
+        }
     }
 
     @Override

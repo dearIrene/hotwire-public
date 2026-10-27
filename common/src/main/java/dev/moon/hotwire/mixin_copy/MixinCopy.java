@@ -6,9 +6,12 @@ import java.io.UncheckedIOException;
 import java.net.MalformedURLException;
 import java.net.URL;
 import java.net.URLClassLoader;
+import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.nio.file.StandardCopyOption;
+import java.security.MessageDigest;
+import java.security.NoSuchAlgorithmException;
 import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.List;
@@ -16,6 +19,7 @@ import java.util.Map;
 import java.util.Optional;
 import java.util.ServiceConfigurationError;
 import java.util.Set;
+import java.util.TreeMap;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.ConcurrentLinkedDeque;
 import java.util.concurrent.atomic.AtomicInteger;
@@ -58,6 +62,9 @@ public final class MixinCopy implements AutoCloseable {
     }
     private static @Nullable Path copyJar;
 
+    private final Set<String> readInMix = ConcurrentHashMap.newKeySet();
+    private volatile byte @Nullable [] recipe;
+
     private final List<URL> mixinJars;
     private final ClassLoader live;
     private final List<String> sharedPackages;
@@ -84,7 +91,10 @@ public final class MixinCopy implements AutoCloseable {
             Function<String, byte @Nullable []> more, String side, Decorations decorations) {
         this.side = side;
         this.decorations = decorations;
-        this.more = name -> this.findBytes(name, more);
+        this.more = name -> {
+            this.readInMix.add(name);
+            return this.findBytes(name, more);
+        };
         this.mixinJars = mixinJars.stream().map(MixinCopy::toUrl).toList();
         this.live = live;
         this.sharedPackages = List.copyOf(sharedPackages);
@@ -120,6 +130,51 @@ public final class MixinCopy implements AutoCloseable {
         byte[] folded = this.folding.fold(found);
         this.read.put(name, Optional.of(folded));
         return folded;
+    }
+
+    public byte[] getRecipe() {
+        byte[] known = this.recipe;
+        if (known != null) {
+            return known;
+        }
+        try {
+            MessageDigest digest = MessageDigest.getInstance("SHA-256");
+            digest.update(Files.readAllBytes(copyJar()));
+            for (URL jar : this.mixinJars) {
+                try (InputStream in = jar.openStream()) {
+                    digest.update(in.readAllBytes());
+                }
+            }
+            digest.update(this.side.getBytes(StandardCharsets.UTF_8));
+            digest.update(new TreeMap<>(this.decorations.modIds()).toString()
+                    .getBytes(StandardCharsets.UTF_8));
+            digest.update(new TreeMap<>(this.decorations.levels()).toString()
+                    .getBytes(StandardCharsets.UTF_8));
+            digest.update(new TreeMap<>(this.decorations.orders()).toString()
+                    .getBytes(StandardCharsets.UTF_8));
+            known = digest.digest();
+        } catch (IOException | MixinCopyException | NoSuchAlgorithmException e) {
+            known = new byte[0];
+        }
+        this.recipe = known;
+        return known;
+    }
+
+    public Map<String, byte @Nullable []> takeReadInMix() {
+        Map<String, byte @Nullable []> found = new TreeMap<>();
+        for (String name : this.readInMix) {
+            Optional<byte[]> known = this.read.get(name);
+            found.put(name, known == null ? null : known.orElse(null));
+        }
+        return found;
+    }
+
+    public String getSide() {
+        return this.side;
+    }
+
+    public byte @Nullable [] findReadable(String name) {
+        return this.more.apply(name);
     }
 
     public void replace(Map<String, byte[]> classes) {
@@ -186,6 +241,7 @@ public final class MixinCopy implements AutoCloseable {
     public MixResult mixAll(Set<String> targets, Map<String, byte[]> classes, Map<String, byte[]> resources,
             List<String> configs, BooleanSupplier stop) throws MixinCopyException {
         synchronized (BOOTING) {
+            this.readInMix.clear();
             String service = System.getProperty(SERVICE);
             String bootstrap = System.getProperty(BOOTSTRAP);
             System.setProperty(SERVICE, COPY + "CopyMixinService");

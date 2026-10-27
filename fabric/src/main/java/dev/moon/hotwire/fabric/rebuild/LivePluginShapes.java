@@ -6,6 +6,7 @@ import java.util.List;
 import java.util.Objects;
 import org.jspecify.annotations.Nullable;
 import org.spongepowered.asm.mixin.extensibility.IMixinConfig;
+import org.spongepowered.asm.mixin.extensibility.IMixinConfigPlugin;
 import org.spongepowered.asm.mixin.extensibility.IMixinInfo;
 
 public final class LivePluginShapes {
@@ -21,6 +22,19 @@ public final class LivePluginShapes {
     public static boolean has(String config) {
         IMixinConfig found = findConfig(config);
         return (found != null && found.getPlugin() != null) || LivePlugins.findPlugin(config) != null;
+    }
+
+    public static @Nullable Boolean ask(String config, String target, String mixin) {
+        IMixinConfig found = findConfig(config);
+        Object plugin = found != null && found.getPlugin() != null ? found.getPlugin() : LivePlugins.findPlugin(config);
+        if (!(plugin instanceof IMixinConfigPlugin live)) {
+            return null;
+        }
+        try {
+            return live.shouldApplyMixin(target, mixin);
+        } catch (RuntimeException | LinkageError e) {
+            return null;
+        }
     }
 
     public static @Nullable Object findByPackage(String mixinPackage) {

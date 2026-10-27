@@ -9,6 +9,7 @@ import java.util.List;
 import java.util.Map;
 import java.util.Set;
 import java.util.function.Function;
+import java.util.regex.Pattern;
 import org.jspecify.annotations.Nullable;
 import org.objectweb.asm.ClassReader;
 import org.objectweb.asm.ClassVisitor;
@@ -32,6 +33,9 @@ import org.objectweb.asm.tree.VarInsnNode;
 final class BatchShapes {
     private static final String MADE = OffWindowObjects.class.getName().replace('.', '/');
     private static final String LAMBDA_SITES = LambdaSites.class.getName().replace('.', '/');
+    private static final Pattern MERGED = Pattern.compile("\\bmd[0-9a-f]{6}\\$");
+    private static final Pattern ARGS = Pattern.compile("Args\\$\\d+");
+    private static final Pattern COUNTED = Pattern.compile("(md#\\$[^\\s(;]*\\$(?:#|\\d+))\\$[0-9a-f]+");
 
     private BatchShapes() {
     }
@@ -52,6 +56,29 @@ final class BatchShapes {
             case MultiANewArrayInsnNode array -> array.desc + array.dims;
             default -> "";
         };
+    }
+
+    static List<String> describeMasked(byte[] bytes) {
+        ClassNode node = new ClassNode();
+        new ClassReader(bytes).accept(node, ClassReader.SKIP_DEBUG | ClassReader.SKIP_FRAMES);
+        List<String> out = new ArrayList<>();
+        node.fields.forEach(field -> out.add(GeneratedNames.mask(field.name) + field.desc + field.access));
+        for (MethodNode method : node.methods) {
+            StringBuilder text = new StringBuilder(GeneratedNames.mask(method.name)).append(method.desc)
+                    .append(method.access);
+            for (AbstractInsnNode insn : method.instructions) {
+                if (insn.getOpcode() >= 0) {
+                    text.append(' ').append(insn.getOpcode()).append(describeOperand(insn, true));
+                }
+            }
+            out.add(text.toString());
+        }
+        out.addAll(node.interfaces);
+
+        out.replaceAll(text -> COUNTED.matcher(ARGS.matcher(MERGED.matcher(text).replaceAll("md#\\$"))
+                .replaceAll("Args\\$#")).replaceAll("$1\\$#"));
+        Collections.sort(out);
+        return out;
     }
 
     static List<String> findConstructors(byte[] bytes, byte @Nullable [] original) {

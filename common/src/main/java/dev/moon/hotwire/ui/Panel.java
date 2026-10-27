@@ -107,6 +107,12 @@ class Panel extends Element {
         }
     }
 
+    void setChangeLabel(String label) {
+        if (this.change != null) {
+            this.change.label(label);
+        }
+    }
+
     void setPrimaryLabel(String label) {
         if (this.primary != null) {
             this.primary.label(label);

@@ -90,6 +90,16 @@ public final class ModScreen implements JarHost {
         default void chooseAdvanced(String option, int choice) {
         }
 
+        default @Nullable CacheFill getCacheFill() {
+            return null;
+        }
+
+        default void fillCache(boolean go) {
+        }
+
+        default void clearCache() {
+        }
+
         default List<PendingChange> getPendingChanges() {
             return List.of();
         }
@@ -137,11 +147,14 @@ public final class ModScreen implements JarHost {
     private final Button updates;
     private final UpdatesPanel updatesPanel;
     private final Button advanced;
+    private final Button switchCache;
     private final Button done;
     private final ProgressPanel progress;
     private final AddPanel addPanel;
     private final UpdatePanel updatePanel;
     private final AdvancedPanel advancedPanel;
+    private final CacheFillPanel cacheFillPanel;
+    private final List<Panel> panels;
     private final PendingPanel pendingPanel;
     private final ReopenPanel reopenPanel;
     private final ReportPanel reportPanel;
@@ -180,14 +193,21 @@ public final class ModScreen implements JarHost {
                 this::switchPicked);
         this.add = new Button(Lang.get("hotwire.screen.add"), Lang.get("hotwire.screen.add_short"), false,
                 game::addMod);
-        this.report = new Button(Lang.get("hotwire.screen.report"), false, this::openReport);
+        this.report = new Button(Lang.get("hotwire.screen.report"), Lang.get("hotwire.screen.report_short"), false,
+                this::openReport);
         this.pending = new Button(Lang.get("hotwire.screen.pending"), Lang.get("hotwire.screen.pending_short"), false,
                 this::openPending);
-        this.advanced = new Button(Lang.get("hotwire.screen.advanced"), false, this::openAdvanced);
+        this.cacheFillPanel = new CacheFillPanel(game::getCacheFill, game::fillCache, game::clearCache,
+                this::closePanels);
+        this.advanced = new Button(Lang.get("hotwire.screen.advanced"), Lang.get("hotwire.screen.advanced_short"),
+                false, this::openAdvanced);
+        this.switchCache = new Button(Lang.get("hotwire.screen.switch_cache"),
+                Lang.get("hotwire.screen.switch_cache_short"), false, this.cacheFillPanel::present);
+        this.switchCache.setTint(Palette.GOOD);
         this.updates = new Button(Lang.get("hotwire.screen.updates"), false, this::openUpdates);
         this.done = new Button(Lang.get("hotwire.button.done"), false, game::onDone);
         this.bar = new BottomBar(List.of(this.toggle, this.add, this.updates, this.report, this.pending,
-                this.advanced), this.done);
+                this.switchCache, this.advanced), this.done);
         this.updatesPanel = new UpdatesPanel(offer -> {
             this.closePanels();
             game.updateFromStore(offer);
@@ -214,15 +234,16 @@ public final class ModScreen implements JarHost {
         this.reportPanel = new ReportPanel(game::showReportFile, this::closePanels);
         Element base = this.root.getBase();
         for (Element part : List.of(this.header, this.note, this.list, this.message, this.search,
-                this.profiles.naming, this.toggle, this.add, this.updates, this.report, this.pending, this.advanced,
-                this.done,
+                this.profiles.naming, this.toggle, this.add, this.updates, this.report, this.pending, this.switchCache,
+                this.advanced, this.done,
                 this.profiles.menu, this.show, this.layoutBar, this.libraries)) {
             base.add(part);
         }
-        for (Panel panel : List.of(this.advancedPanel, this.pendingPanel, this.updatesPanel, this.addPanel,
-                this.updatePanel, this.progress, this.reopenPanel, this.firstOpen, this.reportPanel)) {
-            this.root.getModal().add(panel);
-        }
+
+        this.panels = List.of(this.advancedPanel, this.pendingPanel, this.updatesPanel, this.addPanel,
+                this.updatePanel, this.progress, this.reopenPanel, this.firstOpen, this.reportPanel,
+                this.cacheFillPanel);
+        this.panels.forEach(this.root.getModal()::add);
         if (!game.isFirstOpenAccepted()) {
             this.firstOpen.present();
         }
@@ -243,11 +264,10 @@ public final class ModScreen implements JarHost {
         this.width = width;
         this.height = height;
         this.root.resize(width, height);
-        for (Element whole : List.of(this.header, this.note, this.list, this.message, this.progress,
-                this.addPanel, this.updatePanel, this.advancedPanel, this.pendingPanel, this.updatesPanel,
-                this.reopenPanel, this.firstOpen, this.reportPanel)) {
+        for (Element whole : List.of(this.header, this.note, this.list, this.message)) {
             whole.setBounds(0, 0, width, height);
         }
+        this.panels.forEach(panel -> panel.setBounds(0, 0, width, height));
         int sw = Math.max(150, Math.min(260, width / 3));
         this.search.setBounds(width - sw - 24, 20, sw, 20);
 
@@ -258,12 +278,15 @@ public final class ModScreen implements JarHost {
         int wide = Math.max(150, Math.min(220, width / 4));
         this.profiles.menu.setBounds(24, menus, wide, Dropdown.HEIGHT);
         this.profiles.naming.setBounds(24, menus, wide, 22);
-        int showW = Math.max(170, Math.min(230, width / 3));
-        this.show.setBounds(24 + wide + 8, menus + 1, showW, ChoiceBar.HEIGHT);
         int layoutW = ChoiceBar.HEIGHT * 2 + 6;
         this.layoutBar.setBounds(width - 24 - layoutW, menus + 1, layoutW, ChoiceBar.HEIGHT);
         int librariesW = 84;
-        this.libraries.setBounds(width - 24 - layoutW - 6 - librariesW, menus + 1, librariesW, ChoiceBar.HEIGHT);
+        int librariesX = width - 24 - layoutW - 6 - librariesW;
+        this.libraries.setBounds(librariesX, menus + 1, librariesW, ChoiceBar.HEIGHT);
+
+        int showX = 24 + wide + 8;
+        int showW = Math.min(Math.max(170, Math.min(230, width / 3)), librariesX - 8 - showX);
+        this.show.setBounds(showX, menus + 1, Math.max(40, showW), ChoiceBar.HEIGHT);
         this.bar.markStale();
         this.bar.lay(null, width, height);
     }
@@ -437,6 +460,7 @@ public final class ModScreen implements JarHost {
         this.updatePanel.dismiss();
         this.updatesPanel.dismiss();
         this.advancedPanel.dismiss();
+        this.cacheFillPanel.dismiss();
         this.pendingPanel.dismiss();
         this.reportPanel.dismiss();
         this.reopenPanel.dismiss();

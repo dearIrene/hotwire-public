@@ -1,5 +1,7 @@
 package dev.moon.hotwire.redefine;
 
+import dev.moon.hotwire.cache.CacheKey;
+import dev.moon.hotwire.cache.CacheStore;
 import dev.moon.hotwire.concurrent.Parallel;
 import dev.moon.hotwire.mixin_copy.AppliedMixins;
 import dev.moon.hotwire.mixin_copy.MixinCopy;
@@ -64,8 +66,44 @@ public final class ClassRebuilder {
     private volatile boolean launchChanged;
     private final RebuildCache ahead = new RebuildCache();
 
+    private volatile @Nullable MixedCache mixedCache;
+
     public void stopWhen(BooleanSupplier stop) {
         STOP.set(stop);
+    }
+
+    public long getCacheBytes() {
+        MixedCache cache = this.mixedCache;
+        return cache == null ? 0 : cache.getBytes();
+    }
+
+    public int getCacheEntries() {
+        MixedCache cache = this.mixedCache;
+        return cache == null ? 0 : cache.getEntries();
+    }
+
+    public void clearCache() {
+        MixedCache cache = this.mixedCache;
+        if (cache != null) {
+            cache.clear();
+        }
+    }
+
+    public CacheSizes getCacheSizes() {
+        MixedCache cache = this.mixedCache;
+        long[] saved = cache == null ? new long[4] : cache.findSaved();
+        return new CacheSizes(saved[0], saved[1], saved[2], saved[3]);
+    }
+
+    public record CacheSizes(long classes, long classesBefore, long reads, long readLists) {
+    }
+
+    public void cacheMixesIn(CacheStore store, PluginAnswers answers) {
+        this.mixedCache = new MixedCache(store, this.copy, answers::ask);
+    }
+
+    public interface PluginAnswers {
+        @Nullable Boolean ask(String config, String target, String mixin);
     }
 
     public void toLaunch(boolean all) {
@@ -83,6 +121,39 @@ public final class ClassRebuilder {
     public void launchChanged() {
         this.launchChanged = true;
         this.toLaunch = false;
+    }
+
+    private static final ThreadLocal<Boolean> MIX_ONLY = ThreadLocal.withInitial(() -> false);
+    private static final String MIX_SAVED = "the mix was saved for the switch cache";
+
+    public static void mixOnly(boolean only) {
+        MIX_ONLY.set(only);
+    }
+
+    public static boolean isMixSaved(RebuildException e) {
+        return MIX_SAVED.equals(e.getMessage());
+    }
+
+    private static void verify(Map<String, byte[]> readBack, MixinCopy.MixResult fresh) {
+        List<String> numbers = new ArrayList<>();
+        List<String> differ = new ArrayList<>();
+        fresh.classes().forEach((name, bytes) -> {
+            byte[] cached = readBack.get(name);
+            if (cached == null) {
+                differ.add(name);
+            } else if (!Arrays.equals(cached, bytes)) {
+                if (BatchShapes.describeMasked(cached).equals(BatchShapes.describeMasked(bytes))) {
+                    numbers.add(name);
+                } else {
+                    differ.add(name);
+                    String folder = System.getProperty("hotwire.cacheVerifyDump");
+                    RebuildEvidence.dumpCopyTo(folder, name + ".cached", cached);
+                    RebuildEvidence.dumpCopyTo(folder, name + ".fresh", bytes);
+                }
+            }
+        });
+        LOGGER.info("[Hotwire] cache verify: {} classes, {} in Mixin's numbers alone, {} differ {}",
+                fresh.classes().size(), numbers.size(), differ.size(), differ);
     }
 
     private volatile Function<String, byte @Nullable []> runningOf = name -> null;
@@ -196,7 +267,12 @@ public final class ClassRebuilder {
             }
         }
         if (!toMix.isEmpty()) {
-            mixed.putAll(this.mix(toMix, readable, resources, on, mods, STOP.get()));
+            Map<String, byte[]> copied = this.mix(toMix, readable, resources, on, mods, STOP.get());
+            copied.forEach(RebuildEvidence::dumpCopy);
+            mixed.putAll(copied);
+        }
+        if (MIX_ONLY.get()) {
+            throw new RebuildException(MIX_SAVED, new IllegalStateException(String.valueOf(toMix.size())));
         }
 
         Map<String, byte[]> matched = new ConcurrentHashMap<>();
@@ -508,29 +584,60 @@ public final class ClassRebuilder {
             Map<String, byte[]> resources, List<String> configs, Predicate<String> mods, BooleanSupplier stop)
             throws RebuildException {
         try {
-            MixinCopy.MixResult made = this.copy.mixAll(targets, classes, resources, configs, stop);
+            MixedCache cache = this.mixedCache;
+            Map<String, CacheKey> keys = cache == null ? Map.of()
+                    : cache.findKeys(targets, classes, resources, configs);
+            List<MixinCopy.MixResult> parts = new ArrayList<>();
+            Map<String, byte[]> readBack = new HashMap<>();
+            Set<String> toMix = new LinkedHashSet<>(targets);
+            if (cache != null) {
+                keys.forEach((target, key) -> {
+                    MixinCopy.MixResult part = cache.find(key, target, Objects.requireNonNull(classes.get(target)));
+                    if (part != null) {
+                        parts.add(part);
+                        readBack.putAll(part.classes());
+                        toMix.remove(target);
+                    }
+                });
+                LOGGER.info("[Hotwire] {} of {} classes were read back from the switch cache, {} missed, {} a plugin"
+                        + " decides for ({})", readBack.size(), targets.size(), keys.size() - readBack.size(),
+                        targets.size() - keys.size(), cache.describe());
+                if (!readBack.isEmpty()) {
+                    if (Boolean.parseBoolean(System.getProperty("hotwire.cacheVerify"))) {
+                        verify(readBack, this.copy.mixAll(readBack.keySet(), classes, resources, configs, stop));
+                    }
+                }
+            }
+            if (!toMix.isEmpty()) {
+                MixinCopy.MixResult made = this.copy.mixAll(toMix, classes, resources, configs, stop);
+                parts.add(made);
+                Map<String, CacheKey> toSave = new HashMap<>(keys);
+                toSave.keySet().retainAll(toMix);
+                if (cache != null && !toSave.isEmpty() && !stop.getAsBoolean()) {
+                    cache.save(toSave, made, classes);
+                }
+            }
             if (stop.getAsBoolean()) {
                 throw new RebuildException("the rebuild worked out ahead gave way to a switch",
                         new IllegalStateException(String.valueOf(targets.size())));
             }
-            Map<String, String> argsNames = new HashMap<>();
-            made.argsShapes().forEach((name, shape) -> {
-                String running = this.argsClassOf.apply(shape);
-                if (running != null) {
-                    argsNames.put(name, running);
-                }
-            });
-            if (!made.generated().isEmpty()) {
-                this.hooks.onGenerated(made.generated());
-            }
-            if (!made.argsShapes().isEmpty()) {
-                LOGGER.info("[Hotwire] Args classes the copy used: {}; the game's for them: {}", made.argsShapes(),
-                        argsNames);
-            }
+
             Map<String, byte[]> mixed = new LinkedHashMap<>();
-            SyntheticArgs.rename(made.classes(), argsNames)
-                    .forEach((name, bytes) -> mixed.put(name, GeneratedNames.matchReferences(bytes, this.runningOf,
-                            Linker::getMovedOf)));
+            for (MixinCopy.MixResult part : parts) {
+                Map<String, String> argsNames = new HashMap<>();
+                part.argsShapes().forEach((name, shape) -> {
+                    String running = this.argsClassOf.apply(shape);
+                    if (running != null) {
+                        argsNames.put(name, running);
+                    }
+                });
+                if (!part.generated().isEmpty()) {
+                    this.hooks.onGenerated(part.generated());
+                }
+                SyntheticArgs.rename(part.classes(), argsNames)
+                        .forEach((name, bytes) -> mixed.put(name, GeneratedNames.matchReferences(bytes, this.runningOf,
+                                Linker::getMovedOf)));
+            }
             targets.forEach(target -> mixed.computeIfPresent(target,
                     (name, bytes) -> this.hooks.applyAfterMixin(name, bytes, mods)));
             return mixed;

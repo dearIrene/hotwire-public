@@ -73,6 +73,8 @@ public final class ModSwitcher {
 
     private volatile boolean aheadAsked;
 
+    private final SwitchCacheFiller filler;
+
     private volatile Consumer<List<String>> readAhead = order -> { };
 
     private volatile Runnable lookPreparing = () -> { };
@@ -114,6 +116,61 @@ public final class ModSwitcher {
         SwitchTimes.tellParts(progress::showAfter);
         this.registrations = registrations;
         this.lifecycle = lifecycle;
+        this.filler = new SwitchCacheFiller(new FillHost(), applier);
+    }
+
+    public SwitchCacheFiller getFiller() {
+        return this.filler;
+    }
+
+    private final class FillHost implements SwitchCacheFiller.Host {
+        @Override
+        public Object getLock() {
+            return ModSwitcher.this.rebuilding;
+        }
+
+        @Override
+        public boolean isSwitching() {
+            return ModSwitcher.this.waiting != null || ModSwitcher.this.busy.get() > 0
+                    || ModSwitcher.this.nextAhead.get() != null || ModSwitcher.this.aheadWorker != null;
+        }
+
+        @Override
+        public boolean isLookDue() {
+            return !ModSwitcher.this.switched && !ModSwitcher.this.aheadAsked;
+        }
+
+        @Override
+        public void prepareLook() {
+            ModSwitcher.this.lookPreparing.run();
+        }
+
+        @Override
+        public List<String> getIds() {
+            return List.copyOf(ModSwitcher.this.graph.getIds());
+        }
+
+        @Override
+        public boolean isOn(String id) {
+            return ModSwitcher.this.isOn(id);
+        }
+
+        @Override
+        public Set<String> findOnNow() {
+            Set<String> on = new LinkedHashSet<>(ModSwitcher.this.graph.getIds());
+            on.removeAll(ModSwitcher.this.off);
+            return on;
+        }
+
+        @Override
+        public SwitchPlan planOff(String id) {
+            return ModSwitcher.this.planner.planOff(List.of(id), ModSwitcher.this.getOff());
+        }
+
+        @Override
+        public @Nullable RebuildException tryOff(SwitchPlan plan) {
+            return ModSwitcher.this.dryRun(plan) instanceof Result.Failed failed ? failed.cause() : null;
+        }
     }
 
     public void reopenToTurnOnWith(Predicate<String> tookFrom) {
@@ -384,56 +441,6 @@ public final class ModSwitcher {
         Set<String> onAfter = new LinkedHashSet<>(this.graph.getIds());
         onAfter.removeAll(offAfter);
         return onAfter;
-    }
-
-    @SuppressWarnings("ThreadPriorityCheck")
-    public void preloadAhead(int classes) {
-        Thread preloader = new Thread(() -> {
-            try {
-                this.preload(classes);
-            } catch (RuntimeException e) {
-                LOGGER.info("[Hotwire] the Mixin copy could not be warmed ahead: {}", e.toString());
-            }
-        }, "hotwire-preload");
-        preloader.setDaemon(true);
-        preloader.setPriority(Thread.MIN_PRIORITY);
-        preloader.start();
-    }
-
-    @SuppressWarnings("ThreadPriorityCheck")
-    private void preload(int classes) {
-        long began = System.nanoTime();
-        int mixed = 0;
-        List<String> smallest = this.graph.getIds().stream().filter(this::isOn)
-                .map(id -> Map.entry(id, this.applier.findClassesPatchedBy(Set.of(id)).size()))
-                .filter(entry -> entry.getValue() > 0).sorted(Map.Entry.comparingByValue()).map(Map.Entry::getKey)
-                .toList();
-
-        if (!smallest.isEmpty() && !this.switched && !this.aheadAsked) {
-            Thread.currentThread().setPriority(Thread.NORM_PRIORITY);
-            this.lookPreparing.run();
-            Thread.currentThread().setPriority(Thread.MIN_PRIORITY);
-        }
-        for (String id : smallest) {
-            if (mixed >= classes || this.switched || this.aheadAsked) {
-                break;
-            }
-            synchronized (this.rebuilding) {
-                this.applier.getRebuilder().stopWhen(() -> this.waiting != null || this.aheadAsked);
-                LiveObjects.setAhead(true);
-                try {
-                    if (!this.switched && this.planner.planOff(List.of(id), this.getOff()).order().size() == 1
-                            && this.dryRun(List.of(id), true) instanceof Result.Done done) {
-                        mixed += done.applied().rebuilt().size();
-                    }
-                } finally {
-                    LiveObjects.setAhead(false);
-                    this.applier.getRebuilder().stopWhen(() -> false);
-                }
-            }
-        }
-        LOGGER.info("[Hotwire] the Mixin copy is warm: {} classes mixed for nothing in {} ms", mixed,
-                (System.nanoTime() - began) / 1_000_000);
     }
 
     static boolean isSameSwitch(SwitchPlan one, SwitchPlan other) {

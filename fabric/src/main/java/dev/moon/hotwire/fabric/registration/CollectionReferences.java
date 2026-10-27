@@ -60,6 +60,8 @@ final class CollectionReferences {
     private ModNames names = new ModNames(List.of());
     private Map<String, List<Removal>> mine = Map.of();
 
+    private final Map<String, Integer> notedBy = new HashMap<>();
+
     private Wrappers wrappers = new Wrappers();
 
     private boolean inSmall;
@@ -174,6 +176,14 @@ final class CollectionReferences {
             }
         }
         slowest.add(Map.entry(System.nanoTime() - handedBegan, "what was handed to " + handed.consumers()));
+        if (ElementLook.isLooking() && !this.notedBy.isEmpty()) {
+            List<String> most = this.notedBy.entrySet().stream()
+                    .sorted(Map.Entry.<String, Integer>comparingByValue().reversed()).limit(SLOWEST_NAMED)
+                    .map(entry -> entry.getKey() + " " + entry.getValue()).toList();
+            LOGGER.info("[Hotwire] the look noted {} takes, most of them of {}", this.notedBy.values().stream()
+                    .mapToInt(Integer::intValue).sum(), most);
+            this.notedBy.clear();
+        }
         long millis = (System.nanoTime() - began) / 1_000_000;
         if (millis >= SLOW_MILLIS) {
             List<String> named = new ArrayList<>();
@@ -300,6 +310,8 @@ final class CollectionReferences {
             }
         })) {
             take.accept(owner);
+        } else {
+            this.notedBy.merge(owner, 1, Integer::sum);
         }
     }
 

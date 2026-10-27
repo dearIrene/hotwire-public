@@ -1,0 +1,113 @@
+package dev.moon.hotwire.ui;
+
+import java.util.ArrayList;
+import java.util.List;
+import java.util.function.Consumer;
+import java.util.function.Supplier;
+import org.jspecify.annotations.Nullable;
+
+public final class CacheFillPanel extends Panel {
+    static final int WIDTH = 440;
+    static final int LINE = 12;
+    private static final int BAR_H = 4;
+
+    private static final float CONFIRM_SECONDS = 3;
+
+    private final Supplier<@Nullable CacheFill> fill;
+    private final Runnable onClear;
+    private int lineCount = 6;
+
+    private float confirming;
+
+    public CacheFillPanel(Supplier<@Nullable CacheFill> fill, Consumer<Boolean> onFill, Runnable onClear,
+            Runnable onDone) {
+        super(Lang.get("hotwire.button.done"), onDone);
+        this.fill = fill;
+        this.onClear = onClear;
+        this.change(Lang.get("hotwire.cache.clear_button"), this::clear);
+        this.setPrimary(Lang.get("hotwire.cache.fill_button"), () -> {
+            CacheFill now = fill.get();
+            if (now != null && !now.isFull()) {
+                onFill.accept(!now.running());
+            }
+        });
+        this.setPrimaryWidth(80);
+    }
+
+    public void present() {
+        this.confirming = 0;
+        this.show();
+    }
+
+    private void clear() {
+        if (this.confirming > 0) {
+            this.confirming = 0;
+            this.onClear.run();
+        } else {
+            this.confirming = CONFIRM_SECONDS;
+        }
+    }
+
+    private static boolean isBegun(CacheFill now) {
+        return now.running() || now.done() > 0;
+    }
+
+    @Override
+    public void step(float dt) {
+        CacheFill now = this.fill.get();
+        boolean begun = now != null && isBegun(now);
+        this.size(WIDTH, 36 + LINE * this.lineCount + (begun ? 10 + BAR_H + 6 + LINE : 0) + 46);
+        if (now != null) {
+            String label = "hotwire.cache.fill_button";
+            if (now.isFull()) {
+                label = "hotwire.cache.filled_button";
+            } else if (now.running()) {
+                label = "hotwire.cache.pause_button";
+            } else if (now.done() > 0) {
+                label = "hotwire.cache.resume_button";
+            }
+            this.setPrimaryLabel(Lang.get(label));
+            this.setPrimaryActive(!now.isFull());
+        }
+        this.confirming = Math.max(0, this.confirming - dt);
+        this.setChangeLabel(Lang.get(this.confirming > 0 ? "hotwire.cache.clear_sure" : "hotwire.cache.clear_button"));
+        super.step(dt);
+    }
+
+    @Override
+    protected void drawContent(Canvas canvas, float alpha, int x, int y, int w, int h) {
+        CacheFill now = this.fill.get();
+        canvas.drawText(Lang.get("hotwire.cache.fill_title"), x + 14, y + 16, Colors.fade(Palette.GOOD, alpha));
+        List<MessageLine.Line> lines = new ArrayList<>();
+        MessageLine.addWrapped(canvas, lines, Lang.get("hotwire.cache.fill_explains"), Palette.TEXT, w - 28);
+        MessageLine.addWrapped(canvas, lines, Lang.get("hotwire.cache.fill_playing"), Palette.DIM, w - 28);
+        MessageLine.addWrapped(canvas, lines, Lang.get("hotwire.cache.fill_once"), Palette.GOOD, w - 28);
+        if (now != null) {
+            MessageLine.addWrapped(canvas, lines, now.estimatedBytes() < 0 ? Lang.get("hotwire.cache.fill_size_pending")
+                    : Lang.get("hotwire.cache.fill_size", CacheFill.describeBytes(now.estimatedBytes())), Palette.DIM,
+                    w - 28);
+        }
+        this.lineCount = lines.size();
+        int lineY = y + 36;
+        for (MessageLine.Line line : lines) {
+            MessageLine.drawWords(canvas, line.text(), x + 14, lineY, line.color(), alpha);
+            lineY += LINE;
+        }
+        if (now == null || !isBegun(now)) {
+            return;
+        }
+        lineY += 10;
+        int barEnd = x + w - 14;
+        float part = now.of() == 0 ? 0 : Math.min(1f, now.done() / (float) now.of());
+        canvas.fill(x + 14, lineY, barEnd, lineY + BAR_H, Colors.fade(Palette.TRACK, alpha));
+        canvas.fill(x + 14, lineY, x + 14 + Math.round((barEnd - x - 14) * part), lineY + BAR_H,
+                Colors.fade(Palette.GOOD, alpha));
+        lineY += BAR_H + 6;
+        String left = now.millisLeft() < 0 || now.isFull() ? ""
+                : Lang.get("hotwire.cache.fill_left", CacheFill.describeMillis(now.millisLeft()));
+        String status = now.isFull() ? Lang.get("hotwire.cache.fill_full", CacheFill.describeBytes(now.savedBytes()))
+                : Lang.get("hotwire.cache.fill_progress", Math.round(part * 100), left,
+                        CacheFill.describeBytes(now.savedBytes()));
+        canvas.drawText(canvas.clip(status, w - 28), x + 14, lineY, Colors.fade(Palette.DIM, alpha));
+    }
+}
