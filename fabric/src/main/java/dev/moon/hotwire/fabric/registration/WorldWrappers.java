@@ -98,7 +98,7 @@ public final class WorldWrappers {
         }
     }
 
-    private static List<Entity> findClientEntities() {
+    static List<Entity> findClientEntities() {
         List<Entity> all = new ArrayList<>();
         ClientLevel level = Minecraft.getInstance().level;
         if (level != null) {
@@ -107,7 +107,7 @@ public final class WorldWrappers {
         return all;
     }
 
-    private static List<Entity> findServerEntities(IntegratedServer server) {
+    static List<Entity> findServerEntities(IntegratedServer server) {
         List<Entity> all = new ArrayList<>();
         server.getAllLevels().forEach(level -> level.getAllEntities().forEach(all::add));
         return all;

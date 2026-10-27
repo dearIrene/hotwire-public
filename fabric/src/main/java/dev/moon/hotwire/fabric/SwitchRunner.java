@@ -4,6 +4,7 @@ import dev.moon.hotwire.fabric.add.LoaderModList;
 import dev.moon.hotwire.fabric.rebuild.TransformerChain;
 import dev.moon.hotwire.fabric.registration.AsyncLogging;
 import dev.moon.hotwire.fabric.registration.ElementLook;
+import dev.moon.hotwire.fabric.registration.EntityAttachments;
 import dev.moon.hotwire.fabric.registration.EntityRendererProviders;
 import dev.moon.hotwire.fabric.registration.FieldReferences;
 import dev.moon.hotwire.fabric.registration.GameHold;
@@ -216,6 +217,7 @@ public final class SwitchRunner {
         SwitchTimes.mark("tripwire");
         try {
             WorldWrappers.takeOut(ids);
+            EntityAttachments.takeOut(ids);
             SwitchTimes.mark("world wrappers");
             this.wrappers.takeOut(ids);
             SwitchTimes.mark("generated wrappers");
@@ -340,6 +342,7 @@ public final class SwitchRunner {
                 OffModCommands.putBack(id -> order.contains(id) || this.switcher.isOn(id));
                 this.logging.putBack(order);
                 WorldWrappers.putBack(order);
+                EntityAttachments.putBack(order);
                 this.wrappers.putBack(order);
                 SwitchTimes.mark("put back");
                 this.fieldReferences.putBack(order);
