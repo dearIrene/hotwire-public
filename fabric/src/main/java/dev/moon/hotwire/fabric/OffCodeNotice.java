@@ -6,7 +6,12 @@ import dev.moon.hotwire.redefine.Tripwire;
 import dev.moon.hotwire.ui.Lang;
 import dev.moon.hotwire.ui.ModScreen;
 import dev.moon.hotwire.ui.ReopenPanel;
+import java.lang.reflect.Method;
+import java.util.ArrayDeque;
+import java.util.Deque;
+import java.util.HashSet;
 import java.util.List;
+import java.util.Set;
 import net.minecraft.client.Minecraft;
 import net.minecraft.server.MinecraftServer;
 import org.jspecify.annotations.Nullable;
@@ -68,6 +73,8 @@ final class OffCodeNotice {
 
     private static @Nullable String findUser(HotwireEngine engine, InstalledMods installed, String mod,
             List<String> frames) {
+        @Nullable Class<?> entered = null;
+        String enteredMethod = "";
         for (String frame : frames) {
             int paren = frame.indexOf('(');
             String method = paren < 0 ? frame : frame.substring(0, paren);
@@ -84,12 +91,38 @@ final class OffCodeNotice {
             }
             String owner = GameRegistrations.findModOf(type);
             if (mod.equals(owner)) {
+                entered = type;
+                enteredMethod = method.substring(dot + 1);
                 continue;
             }
             boolean isUser = owner != null && ModPolicy.isSwitchable(owner) && engine.isOn(owner)
-                    && !installed.getGraph().getUses(mod).contains(owner);
+                    && !installed.getGraph().getUses(mod).contains(owner)
+                    && (entered == null || !isDeclaredOutside(entered, enteredMethod, mod));
             return isUser ? owner : null;
         }
         return null;
+    }
+
+    private static boolean isDeclaredOutside(Class<?> type, String method, String mod) {
+        Deque<Class<?>> next = new ArrayDeque<>(List.of(type));
+        Set<Class<?>> seen = new HashSet<>();
+        while (!next.isEmpty()) {
+            Class<?> one = next.poll();
+            if (!seen.add(one)) {
+                continue;
+            }
+            if (one != type && !mod.equals(GameRegistrations.findModOf(one))) {
+                for (Method declared : one.getDeclaredMethods()) {
+                    if (declared.getName().equals(method)) {
+                        return true;
+                    }
+                }
+            }
+            if (one.getSuperclass() != null) {
+                next.add(one.getSuperclass());
+            }
+            next.addAll(List.of(one.getInterfaces()));
+        }
+        return false;
     }
 }

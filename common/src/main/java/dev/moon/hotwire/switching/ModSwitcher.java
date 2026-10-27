@@ -284,6 +284,7 @@ public final class ModSwitcher {
         }
 
         if (!goingOff) {
+            SwitchTimes.mark("reload");
             order.forEach(this.lifecycle::onStarted);
             SwitchTimes.mark("start listeners");
         }
