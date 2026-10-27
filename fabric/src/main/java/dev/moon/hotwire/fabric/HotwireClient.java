@@ -1,8 +1,5 @@
 package dev.moon.hotwire.fabric;
 
-//? if >=26.1 {
-import com.mojang.blaze3d.platform.InputConstants;
-//?}
 import dev.moon.hotwire.fabric.report.HotwireLog;
 import dev.moon.hotwire.redefine.FieldHolders;
 import dev.moon.hotwire.redefine.InitHookReplay;
@@ -16,12 +13,6 @@ import net.fabricmc.fabric.api.client.event.lifecycle.v1.ClientLifecycleEvents;
 import net.fabricmc.fabric.api.client.networking.v1.ClientPlayConnectionEvents;
 import net.fabricmc.loader.api.FabricLoader;
 import net.minecraft.client.Minecraft;
-//? if >=1.21.9 && <26.1 {
-/*import org.lwjgl.glfw.GLFW;
-*///?}
-//? if <1.21.9 {
-/*import net.minecraft.client.gui.screens.Screen;
-*///?}
 import net.minecraft.locale.Language;
 import org.jspecify.annotations.Nullable;
 import org.slf4j.Logger;
@@ -69,12 +60,7 @@ public final class HotwireClient implements ClientModInitializer {
     }
 
     private static void openSoon() {
-        Minecraft client = Minecraft.getInstance();
-        //? if >=1.21.2 {
-        client.schedule(HotwireClient::open);
-        //?} else {
-        /*client.tell(HotwireClient::open);
-        *///?}
+        ModViews.runSoon(HotwireClient::open);
     }
 
     private static void open() {
@@ -86,26 +72,7 @@ public final class HotwireClient implements ClientModInitializer {
     }
 
     private static void openSoonFromKey() {
-        Minecraft client = Minecraft.getInstance();
-        //? if >=26.3 {
-        boolean shift = InputConstants.isKeyDown(InputConstants.KEY_LSHIFT)
-                || InputConstants.isKeyDown(InputConstants.KEY_RSHIFT);
-        //?} elif >=26.1 {
-        /*boolean shift = InputConstants.isKeyDown(client.getWindow(), InputConstants.KEY_LSHIFT)
-                || InputConstants.isKeyDown(client.getWindow(), InputConstants.KEY_RSHIFT);
-        *///?} elif >=1.21.9 {
-        /*long window = client.getWindow().handle();
-        boolean shift = GLFW.glfwGetKey(window, GLFW.GLFW_KEY_LEFT_SHIFT) == GLFW.GLFW_PRESS
-                || GLFW.glfwGetKey(window, GLFW.GLFW_KEY_RIGHT_SHIFT) == GLFW.GLFW_PRESS;
-        *///?} else {
-        /*boolean shift = Screen.hasShiftDown();
-        *///?}
-        Runnable opening = shift ? HotwireClient::open : () -> getEngine().openChooser();
-        //? if >=1.21.2 {
-        client.schedule(opening);
-        //?} else {
-        /*client.tell(opening);
-        *///?}
+        ModViews.runSoon(ModViews.isShiftDown() ? HotwireClient::open : () -> getEngine().openChooser());
     }
 
     public static synchronized @Nullable HotwireEngine findEngine() {

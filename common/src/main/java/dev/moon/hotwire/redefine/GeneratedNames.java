@@ -26,7 +26,7 @@ import org.objectweb.asm.tree.MethodNode;
 final class GeneratedNames {
     private static final Pattern NUMBERS = Pattern.compile(
             "(?<!_\\$(?:md|fd))\\$(?!lambda\\$)[a-z]{3}[0-9a-f]{3}\\$"
-            + "|(?<=_\\$(?:md|fd)\\$[0-9a-f]{1,8})\\$[0-9a-f]+$|\\$\\d+");
+            + "|(?<=_\\$(?:md|fd)\\$[0-9a-f]{1,8})\\$[0-9a-f]+$|\\$\\d+|^(?:md|fd)[0-9a-f]{6}(?=\\$)");
     private static final String MIXIN_MERGED = "Lorg/spongepowered/asm/mixin/transformer/meta/MixinMerged;";
 
     private GeneratedNames() {

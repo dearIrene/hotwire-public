@@ -1,5 +1,8 @@
 package dev.moon.hotwire.fabric;
 
+//? if >=26.1 {
+import com.mojang.blaze3d.platform.InputConstants;
+//?}
 import dev.moon.hotwire.fabric.mixin.core.client.gui.components.toasts.ToastInstanceAccessor;
 import dev.moon.hotwire.fabric.mixin.core.client.gui.components.toasts.ToastManagerAccessor;
 import dev.moon.hotwire.fabric.registration.Fields;
@@ -26,6 +29,9 @@ import net.minecraft.client.particle.Particle;
 import net.minecraft.network.chat.Component;
 import net.minecraft.network.chat.MutableComponent;
 import org.jspecify.annotations.Nullable;
+//? if >=1.21.9 && <26.1 {
+/*import org.lwjgl.glfw.GLFW;
+*///?}
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -241,5 +247,31 @@ public final class ModViews {
     private static boolean isShownBy(Object shown, Collection<String> ids) {
         String owner = GameRegistrations.findModOf(shown.getClass());
         return owner != null && ids.contains(owner);
+    }
+
+    static void runSoon(Runnable opening) {
+        Minecraft client = Minecraft.getInstance();
+        //? if >=1.21.2 {
+        client.schedule(opening);
+        //?} else {
+        /*client.tell(opening);
+        *///?}
+    }
+
+    static boolean isShiftDown() {
+        //? if >=26.3 {
+        return InputConstants.isKeyDown(InputConstants.KEY_LSHIFT)
+                || InputConstants.isKeyDown(InputConstants.KEY_RSHIFT);
+        //?} elif >=26.1 {
+        /*Minecraft client = Minecraft.getInstance();
+        return InputConstants.isKeyDown(client.getWindow(), InputConstants.KEY_LSHIFT)
+                || InputConstants.isKeyDown(client.getWindow(), InputConstants.KEY_RSHIFT);
+        *///?} elif >=1.21.9 {
+        /*long window = Minecraft.getInstance().getWindow().handle();
+        return GLFW.glfwGetKey(window, GLFW.GLFW_KEY_LEFT_SHIFT) == GLFW.GLFW_PRESS
+                || GLFW.glfwGetKey(window, GLFW.GLFW_KEY_RIGHT_SHIFT) == GLFW.GLFW_PRESS;
+        *///?} else {
+        /*return Screen.hasShiftDown();
+        *///?}
     }
 }
