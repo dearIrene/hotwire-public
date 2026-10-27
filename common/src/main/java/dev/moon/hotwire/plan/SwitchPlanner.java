@@ -18,7 +18,6 @@ import java.util.Set;
 import java.util.SortedSet;
 import java.util.TreeMap;
 import java.util.TreeSet;
-import java.util.function.BiPredicate;
 import org.jspecify.annotations.Nullable;
 
 public final class SwitchPlanner {
@@ -39,14 +38,14 @@ public final class SwitchPlanner {
     }
 
     public record Settings(NestedJars nestedJars, Set<String> builtIn, Set<String> protectedMods, Versions versions,
-            BiPredicate<String, String> callsNow) {
+            KnownUses uses) {
         public Settings {
             builtIn = Set.copyOf(builtIn);
             protectedMods = Set.copyOf(protectedMods);
         }
 
         public Settings(NestedJars nestedJars, Set<String> builtIn, Set<String> protectedMods, Versions versions) {
-            this(nestedJars, builtIn, protectedMods, versions, (mod, other) -> false);
+            this(nestedJars, builtIn, protectedMods, versions, KnownUses.NONE);
         }
 
         boolean isProtected(String mod) {
@@ -75,10 +74,9 @@ public final class SwitchPlanner {
                     grew |= this.join(leaving, alreadyOff, dependent, new Reason.DependsOn(leavingMod));
                 }
 
-                for (String asker : this.graph.getAskers(leavingMod)) {
-                    if (!alreadyOff.contains(asker) && !leaving.containsKey(asker)
-                            && this.settings.callsNow().test(asker, leavingMod)) {
-                        grew |= this.join(leaving, alreadyOff, asker, new Reason.DependsOn(leavingMod));
+                for (String user : this.settings.uses().findUsersOf(leavingMod)) {
+                    if (this.graph.find(user).isPresent()) {
+                        grew |= this.join(leaving, alreadyOff, user, new Reason.DependsOn(leavingMod));
                     }
                 }
 
@@ -132,6 +130,12 @@ public final class SwitchPlanner {
                         grew = true;
                     } else if (this.graph.find(dependency).isEmpty() && !this.settings.builtIn().contains(dependency)) {
                         refusals.add(new Refusal.MissingDependency(mod, dependency));
+                    }
+                }
+                for (String used : this.settings.uses().findUsedBy(mod)) {
+                    if (off.contains(used) && !coming.containsKey(used) && this.graph.find(used).isPresent()) {
+                        coming.put(used, new Reason.NeededBy(mod));
+                        grew = true;
                     }
                 }
                 for (String child : this.graph.getChildrenOf(mod)) {

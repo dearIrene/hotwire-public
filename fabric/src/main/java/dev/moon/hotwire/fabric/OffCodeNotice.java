@@ -9,6 +9,7 @@ import dev.moon.hotwire.ui.ReopenPanel;
 import java.util.List;
 import net.minecraft.client.Minecraft;
 import net.minecraft.server.MinecraftServer;
+import org.jspecify.annotations.Nullable;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -41,6 +42,17 @@ final class OffCodeNotice {
         }
         List<String> first = Tripwire.peek(mod).first();
         LOGGER.warn("[Hotwire] {} is off, yet its code ran: {}", mod, String.join(" < ", first));
+
+        String user = findUser(engine, installed, mod, first);
+        SeenUses seen = ModPolicy.getSeenUses();
+        if (user != null && seen != null) {
+            if (seen.add(user, mod)) {
+                LOGGER.info("[Hotwire] {} runs {}'s code by its own hand: from now on it goes off with it", user, mod);
+            }
+            engine.showMessage(Lang.get("hotwire.off_code.used_by", installed.nameOf(mod), installed.nameOf(user)),
+                    true);
+            return;
+        }
         ModScreen current = engine.findScreen();
         boolean fromWorld = engine.findJvmParts().map(parts -> parts.classes().isReachedFromWorld(mod, first))
                 .orElse(false);
@@ -52,5 +64,32 @@ final class OffCodeNotice {
         String clears = Lang.get(fromWorld ? "hotwire.off_code.reopen" : "hotwire.off_code.restart");
         engine.showMessage(first.size() > 1 ? Lang.get("hotwire.off_code.ran_from", installed.nameOf(mod),
                 first.get(1), clears) : Lang.get("hotwire.off_code.ran", installed.nameOf(mod), clears), true);
+    }
+
+    private static @Nullable String findUser(HotwireEngine engine, InstalledMods installed, String mod,
+            List<String> frames) {
+        for (String frame : frames) {
+            int paren = frame.indexOf('(');
+            String method = paren < 0 ? frame : frame.substring(0, paren);
+            int slash = method.lastIndexOf('/');
+            int dot = method.lastIndexOf('.');
+            if (dot <= slash) {
+                continue;
+            }
+            Class<?> type;
+            try {
+                type = Class.forName(method.substring(slash + 1, dot), false, OffCodeNotice.class.getClassLoader());
+            } catch (ClassNotFoundException | LinkageError e) {
+                continue;
+            }
+            String owner = GameRegistrations.findModOf(type);
+            if (mod.equals(owner)) {
+                continue;
+            }
+            boolean isUser = owner != null && ModPolicy.isSwitchable(owner) && engine.isOn(owner)
+                    && !installed.getGraph().getUses(mod).contains(owner);
+            return isUser ? owner : null;
+        }
+        return null;
     }
 }

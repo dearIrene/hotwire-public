@@ -1,6 +1,7 @@
 package dev.moon.hotwire.fabric;
 
 import dev.moon.hotwire.jar.ModManifest;
+import dev.moon.hotwire.plan.KnownUses;
 import dev.moon.hotwire.plan.ModGraph;
 import dev.moon.hotwire.plan.SwitchPlanner;
 import dev.moon.hotwire.ui.Lang;
@@ -9,7 +10,6 @@ import java.util.HashSet;
 import java.util.List;
 import java.util.Optional;
 import java.util.Set;
-import java.util.function.BiPredicate;
 import net.fabricmc.api.EnvType;
 import net.fabricmc.loader.api.FabricLoader;
 import net.fabricmc.loader.api.ModContainer;
@@ -17,6 +17,7 @@ import net.fabricmc.loader.api.Version;
 import net.fabricmc.loader.api.VersionParsingException;
 import net.fabricmc.loader.api.metadata.ModDependency;
 import net.fabricmc.loader.api.metadata.version.VersionPredicate;
+import org.jspecify.annotations.Nullable;
 
 public final class ModPolicy {
     static final Set<String> BUILT_IN = Set.of("minecraft", "java", "fabricloader", "mixinextras");
@@ -28,7 +29,8 @@ public final class ModPolicy {
     static final Set<String> ALWAYS_ON = Set.of("sodium", "lithium", "phosphor");
 
     private static volatile SwitchPlanner.NestedJars nestedJars = SwitchPlanner.NestedJars.AUTO;
-    private static volatile BiPredicate<String, String> callsNow = (mod, other) -> false;
+
+    private static volatile @Nullable SeenUses seenUses;
 
     private ModPolicy() {
     }
@@ -90,8 +92,12 @@ public final class ModPolicy {
         nestedJars = choice;
     }
 
-    static void setCallsNow(BiPredicate<String, String> answer) {
-        callsNow = answer;
+    static void setSeenUses(SeenUses seen) {
+        seenUses = seen;
+    }
+
+    static @Nullable SeenUses getSeenUses() {
+        return seenUses;
     }
 
     public static SwitchPlanner makePlannerFor(ModGraph graph) {
@@ -99,7 +105,7 @@ public final class ModPolicy {
         graph.getIds().stream().filter(ModPolicy::isGuarded).forEach(guarded::add);
         guarded.addAll(findNeededByUnread(graph.getIds()));
         return new SwitchPlanner(graph, new SwitchPlanner.Settings(nestedJars, findBuiltIn(graph.getIds()), guarded,
-                ModPolicy::satisfies, callsNow));
+                ModPolicy::satisfies, seenUses != null ? seenUses : KnownUses.NONE));
     }
 
     static Set<String> findNeededByUnread(Set<String> known) {

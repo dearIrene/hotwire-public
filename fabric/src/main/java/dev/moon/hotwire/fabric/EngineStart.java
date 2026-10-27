@@ -12,7 +12,6 @@ import dev.moon.hotwire.fabric.rebuild.MixinConfigs;
 import dev.moon.hotwire.fabric.rebuild.MixinInternals;
 import dev.moon.hotwire.fabric.rebuild.TransformerChain;
 import dev.moon.hotwire.fabric.registration.AsyncLogging;
-import dev.moon.hotwire.fabric.registration.CodeReach;
 import dev.moon.hotwire.fabric.registration.ConnectionLambdas;
 import dev.moon.hotwire.fabric.registration.EventInvokers;
 import dev.moon.hotwire.fabric.registration.FieldReferences;
@@ -33,6 +32,7 @@ import dev.moon.hotwire.jar.ModIndex;
 import dev.moon.hotwire.jar.ModJar;
 import dev.moon.hotwire.jar.ModJarException;
 import dev.moon.hotwire.jar.ModJarReader;
+import dev.moon.hotwire.jar.ModManifest;
 import dev.moon.hotwire.jvm.JvmAccess;
 import dev.moon.hotwire.jvm.JvmAccessException;
 import dev.moon.hotwire.redefine.ClassRebuilder;
@@ -211,7 +211,8 @@ final class EngineStart {
                 return still;
             };
         });
-        ModPolicy.setCallsNow(new CodeReach(instrumentation, classes::findOriginalBytes)::callsNow);
+        ModPolicy.setSeenUses(new SeenUses(FabricLoader.getInstance().getConfigDir().resolve("hotwire/uses.json"),
+                id -> installed.find(id).map(ModManifest::version).orElse(null)));
         ModSwitcher switcher = new ModSwitcher(installed.getGraph(), ModPolicy.makePlannerFor(installed.getGraph()),
                 applier, progress, GameRegistrations.getJournal(),
                 ModLifecycle.makeLifecycle(GameRegistrations.getJournal(), Minecraft.getInstance()));

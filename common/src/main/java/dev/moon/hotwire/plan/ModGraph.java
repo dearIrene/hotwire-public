@@ -31,8 +31,6 @@ public final class ModGraph {
 
     private final Map<String, SortedSet<String>> calls = new TreeMap<>();
 
-    private final Map<String, SortedSet<String>> askers = new TreeMap<>();
-
     private final Predicate<String> gameHas;
 
     public ModGraph(Collection<ModJar> jars) {
@@ -83,8 +81,6 @@ public final class ModGraph {
 
                     if (!this.hasCompatibilityFor(patched, owner)) {
                         this.dependents.computeIfAbsent(owner, key -> new TreeSet<>()).add(mod);
-                    } else {
-                        this.askers.computeIfAbsent(owner, key -> new TreeSet<>()).add(mod);
                     }
                 }
             }
@@ -108,10 +104,6 @@ public final class ModGraph {
             }
         }
         return false;
-    }
-
-    SortedSet<String> getAskers(String id) {
-        return new TreeSet<>(this.askers.getOrDefault(id, new TreeSet<>()));
     }
 
     public SortedSet<String> getCalls(String id) {

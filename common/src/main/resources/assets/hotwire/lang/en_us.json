@@ -312,6 +312,7 @@
   "hotwire.off_code.ran": "%s is off, but some of its code just ran. Hotwire couldn't take all of it out. %s",
   "hotwire.off_code.ran_from": "%s is off, but some of its code just ran (from %s). Hotwire couldn't take all of it out. %s",
   "hotwire.off_code.restart": "A restart clears it.",
+  "hotwire.off_code.used_by": "%1$s is off, but %2$s still runs its code. Turning %2$s off too clears it, and from now on it goes off with %1$s.",
   "hotwire.off_code.reopen": "Save and reopen your world to clear what it holds. A restart clears all of it.",
   "hotwire.crash.title": "Hotwire caught a crash",
   "hotwire.crash.off_held": "%s is off, but a piece of it the game still had crashed. Hotwire kept the game going. A restart clears it. %s",
