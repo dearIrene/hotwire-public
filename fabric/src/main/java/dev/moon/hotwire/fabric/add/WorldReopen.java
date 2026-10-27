@@ -1,12 +1,19 @@
 package dev.moon.hotwire.fabric.add;
 
 import dev.moon.hotwire.fabric.ModViews;
+import dev.moon.hotwire.fabric.ResourceReload;
 import dev.moon.hotwire.fabric.mixin.core.network.ConnectionAccessor;
 import dev.moon.hotwire.fabric.mixin.core.util.thread.BlockableEventLoopAccessor;
 import dev.moon.hotwire.jvm.JarChannels;
 import dev.moon.hotwire.ui.Lang;
 import io.netty.channel.Channel;
+import java.io.IOException;
+import java.nio.channels.FileChannel;
+import java.nio.channels.FileLock;
+import java.nio.channels.OverlappingFileLockException;
+import java.nio.file.Files;
 import java.nio.file.Path;
+import java.nio.file.StandardOpenOption;
 import java.time.Duration;
 import java.util.Arrays;
 import java.util.Collections;
@@ -157,6 +164,8 @@ public final class WorldReopen {
             earlier.addAll(queue);
             queueAtLeave = new QueueAtLeave(queue, earlier);
 
+            ResourceReload.layOutChat();
+
             try {
                 //? if >=1.21.10 {
                 client.disconnectFromWorld(ClientLevel.DEFAULT_QUIT_MESSAGE);
@@ -254,6 +263,7 @@ public final class WorldReopen {
             }
             Thread.sleep(200);
         }
+        awaitUnlocked(client, level, deadline);
         boolean[] refused = new boolean[1];
         client.execute(() -> client.createWorldOpenFlows().openWorld(level, () -> refused[0] = true));
         while (client.player == null || client.level == null) {
@@ -265,6 +275,33 @@ public final class WorldReopen {
                         + " s");
             }
             Thread.sleep(200);
+        }
+    }
+
+    private static void awaitUnlocked(Minecraft client, String level, long deadline) throws InterruptedException {
+        Path lock = client.getLevelSource().getBaseDir().resolve(level).resolve("session.lock");
+        while (isLocked(lock)) {
+            if (System.nanoTime() > deadline) {
+                throw new IllegalStateException("the world " + level + " was still being saved after "
+                        + WAIT.toSeconds() + " s");
+            }
+            Thread.sleep(200);
+        }
+    }
+
+    private static boolean isLocked(Path lock) {
+        if (!Files.exists(lock)) {
+            return false;
+        }
+        try (FileChannel channel = FileChannel.open(lock, StandardOpenOption.WRITE)) {
+            FileLock free = channel.tryLock();
+            if (free == null) {
+                return true;
+            }
+            free.release();
+            return false;
+        } catch (OverlappingFileLockException | IOException e) {
+            return true;
         }
     }
 }

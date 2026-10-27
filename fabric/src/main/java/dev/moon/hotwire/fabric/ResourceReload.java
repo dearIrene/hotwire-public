@@ -425,12 +425,12 @@ public final class ResourceReload {
         });
     }
 
-    private static void layOutChat() {
+    public static void layOutChat() {
         Minecraft game = Minecraft.getInstance();
         //? if >=26.2 {
-        game.execute(() -> game.gui.hud.getChat().rescaleChat());
+        game.gui.hud.getChat().rescaleChat();
         //?} else {
-        /*game.execute(() -> game.gui.getChat().rescaleChat());
+        /*game.gui.getChat().rescaleChat();
         *///?}
     }
 
@@ -502,7 +502,7 @@ public final class ResourceReload {
                     applying, CompletableFuture.completedFuture(Unit.INSTANCE), false).done().get(WAIT.toMillis(),
                     TimeUnit.MILLISECONDS);
             LOGGER.info("[Hotwire] the fonts were made again in {} ms", (System.nanoTime() - began) / 1_000_000);
-            layOutChat();
+            Minecraft.getInstance().execute(ResourceReload::layOutChat);
         } catch (InterruptedException e) {
             Thread.currentThread().interrupt();
         } catch (ExecutionException | TimeoutException e) {
@@ -572,7 +572,7 @@ public final class ResourceReload {
                 reportFailed(why, chosen);
                 return;
             }
-            layOutChat();
+            Minecraft.getInstance().execute(ResourceReload::layOutChat);
         } catch (InterruptedException e) {
             Thread.currentThread().interrupt();
         } catch (ExecutionException | TimeoutException e) {
