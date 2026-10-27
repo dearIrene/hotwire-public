@@ -85,7 +85,13 @@ final class CollectionReferences {
                 this.look.close();
             } else {
                 this.begin(mods);
+                long began = System.nanoTime();
                 ElementTakes.runAll(ahead);
+                long millis = (System.nanoTime() - began) / 1_000_000;
+                if (millis >= SLOW_MILLIS) {
+                    LOGGER.info("[Hotwire] {} takes the look noted were run for {} in {} ms", ahead.size(), mods,
+                            millis);
+                }
             }
         } catch (RuntimeException | LinkageError e) {
             this.look.drop();
@@ -442,8 +448,7 @@ final class CollectionReferences {
                             this.takeOrNote(mod, () -> this.findOwnerOfEntry(key, element), owner -> ElementTakes
                                     .takeFromMap(entries, key, element, this.getRemovalsOf(owner)));
 
-                            if (ElementLook.isLooking() && (element instanceof Collection<?>
-                                    || element instanceof Map<?, ?>) && this.seen.add(element)) {
+                            if (ElementLook.isLooking() && element instanceof Map<?, ?> && this.seen.add(element)) {
                                 this.collect(element);
                             }
                         } else if (element instanceof Collection<?> nested) {
