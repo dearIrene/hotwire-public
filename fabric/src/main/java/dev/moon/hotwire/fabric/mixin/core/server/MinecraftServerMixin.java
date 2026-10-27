@@ -4,7 +4,7 @@ import com.llamalad7.mixinextras.injector.wrapoperation.Operation;
 import com.llamalad7.mixinextras.injector.wrapoperation.WrapOperation;
 import dev.moon.hotwire.fabric.CrashGuard;
 import dev.moon.hotwire.switching.CrashPolicy;
-//? if <26.1 {
+//? if <1.21.11 {
 /*import java.util.function.BooleanSupplier;
 *///?}
 import net.minecraft.network.protocol.status.ServerStatus;
@@ -18,7 +18,7 @@ public abstract class MinecraftServerMixin {
     @Shadow
     private ServerStatus status;
 
-    //? if >=26.1 {
+    //? if >=1.21.11 {
     @WrapOperation(method = "runServer", at = @At(value = "INVOKE",
             target = "Lnet/minecraft/server/MinecraftServer;processPacketsAndTick(Z)V"))
     @SuppressWarnings("checkstyle:IllegalCatch")
