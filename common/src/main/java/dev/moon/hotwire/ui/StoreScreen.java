@@ -73,6 +73,14 @@ public final class StoreScreen implements JarHost {
         return this.root;
     }
 
+    public boolean openPage(String projectId) {
+        StoreModel.Card card = this.model.getCardsByProject().get(projectId);
+        if (card != null) {
+            this.openDetail(card.hit());
+        }
+        return card != null;
+    }
+
     private void openDetail(ModrinthClient.Hit hit) {
         this.detail.open(hit);
     }

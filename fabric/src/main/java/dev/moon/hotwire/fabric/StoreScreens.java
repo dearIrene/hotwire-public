@@ -50,10 +50,7 @@ final class StoreScreens {
     }
 
     void openStoreNow(String words, @Nullable Screen back) {
-        ModStore made = this.store;
-        if (made == null) {
-            return;
-        }
+        ModStore made = this.findStore();
         if (!words.isEmpty()) {
             made.getModel().setWords(words);
         }

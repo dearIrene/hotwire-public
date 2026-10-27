@@ -633,6 +633,10 @@ public final class HotwireEngine implements ModScreen.Game, AutoCloseable {
         this.stores.openStoreNow(words, this.under);
     }
 
+    public @Nullable StoreScreen findShownStore() {
+        return this.stores.findShown();
+    }
+
     public void addFromStoreNow(String projectId, String versionId) {
         this.stores.addFromStoreNow(projectId, versionId, this.under);
     }
