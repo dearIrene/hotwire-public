@@ -1,6 +1,7 @@
 package dev.moon.hotwire.fabric;
 
 import dev.moon.hotwire.cache.CacheStore;
+import dev.moon.hotwire.config.HotwireSettings;
 import dev.moon.hotwire.fabric.add.AddSupport;
 import dev.moon.hotwire.fabric.rebuild.ConstantPools;
 import dev.moon.hotwire.fabric.rebuild.ForeignPatches;
@@ -17,6 +18,7 @@ import dev.moon.hotwire.fabric.registration.AsyncLogging;
 import dev.moon.hotwire.fabric.registration.ConnectionLambdas;
 import dev.moon.hotwire.fabric.registration.EventInvokers;
 import dev.moon.hotwire.fabric.registration.FieldReferences;
+import dev.moon.hotwire.fabric.registration.Fields;
 import dev.moon.hotwire.fabric.registration.GameHold;
 import dev.moon.hotwire.fabric.registration.GameRegistrations;
 import dev.moon.hotwire.fabric.registration.GeneratedWrappers;
@@ -26,9 +28,12 @@ import dev.moon.hotwire.fabric.registration.ModLifecycle;
 import dev.moon.hotwire.fabric.registration.ModLocks;
 import dev.moon.hotwire.fabric.registration.NetworkHandlers;
 import dev.moon.hotwire.fabric.registration.OffModCommands;
+import dev.moon.hotwire.fabric.registration.QuietThreads;
 import dev.moon.hotwire.fabric.registration.RegistryEntries;
 import dev.moon.hotwire.fabric.report.GameReports;
+import dev.moon.hotwire.fabric.report.LoggedFaults;
 import dev.moon.hotwire.fabric.screen.ModIcons;
+import dev.moon.hotwire.fabric.update.SwapAtClose;
 import dev.moon.hotwire.fabric.update.UpdateSupport;
 import dev.moon.hotwire.jar.ModIndex;
 import dev.moon.hotwire.jar.ModJar;
@@ -43,6 +48,7 @@ import dev.moon.hotwire.redefine.FieldSlots;
 import dev.moon.hotwire.redefine.FinalWrites;
 import dev.moon.hotwire.redefine.InitHookReplay;
 import dev.moon.hotwire.redefine.Linker;
+import dev.moon.hotwire.redefine.LoadedClassBytes;
 import dev.moon.hotwire.redefine.OffWindowObjects;
 import dev.moon.hotwire.redefine.ShutOverrides;
 import dev.moon.hotwire.redefine.Tripwire;
@@ -52,6 +58,7 @@ import dev.moon.hotwire.switching.ModSwitcher;
 import dev.moon.hotwire.switching.OffChecker;
 import dev.moon.hotwire.switching.SwitchApplier;
 import dev.moon.hotwire.switching.SwitchTimes;
+import dev.moon.hotwire.ui.Lang;
 import dev.moon.hotwire.ui.Progress;
 import dev.moon.hotwire.update.UpdateFolders;
 import dev.moon.hotwire.update.UpdateQueue;
@@ -68,6 +75,7 @@ import java.util.Map;
 import java.util.Optional;
 import java.util.Set;
 import java.util.concurrent.ForkJoinPool;
+import java.util.function.BiConsumer;
 import java.util.function.BiFunction;
 import java.util.stream.Collectors;
 import net.fabricmc.loader.api.FabricLoader;
@@ -313,5 +321,67 @@ final class EngineStart {
     private static String getNamespace(String key) {
         int colon = key.indexOf(':');
         return colon < 0 ? key : key.substring(0, colon);
+    }
+
+    static HotwireEngine start() throws IOException {
+        FabricLoader loader = FabricLoader.getInstance();
+        Path gameDir = loader.getGameDir();
+        InstalledMods installed = readInstalledMods(loader);
+        Progress progress = new Progress();
+        LoggedFaults.install();
+        GameReports reports = new GameReports(installed::nameOf);
+        UpdateFolders folders = UpdateFolders.ofMods(ModsFolder.find(loader));
+        UpdateQueue queue = new UpdateQueue(folders.queueFile());
+        HotwireSettings settings = new HotwireSettings(loader.getConfigDir().resolve("hotwire/settings.json"));
+        ModPolicy.setNestedJars(settings.getNestedJars());
+
+        ModIcons icons = new ModIcons(installed);
+        icons.readAhead(installed.getGraph().getIds());
+        HotwireEngine engine;
+        try {
+            HotwireEngine.JvmParts parts = bind(installed, progress, reports, folders, queue, gameDir, icons);
+            engine = new HotwireEngine(installed, progress, reports, folders, queue, settings, icons,
+                    new HotwireEngine.Bound.Ready(parts));
+            HotwireEngine made = engine;
+            parts.runner().getSwitcher().prepareLookWith(() -> parts.runner().prepareLookFor(made.findSwitchableOn()));
+            new SwapAtClose(queue, folders, findHotwireJar()).arm();
+            QuietThreads.install();
+            LoadedClassBytes loadedBytes = parts.adds().getApplier().getRebuilder().getLoadedBytes();
+            Fields.readWith(name -> parts.classes().findLoaded(name.replace('.', '/')) != null, type -> {
+                String internal = type.getName().replace('.', '/');
+                byte[] known = loadedBytes.findKnown(type);
+                if (known == null) {
+                    known = loadedBytes.findAsLoaded(internal);
+                }
+                return known != null ? known : parts.classes().findOriginalBytes(internal);
+            });
+            Fields.preloadStatics(parts.instrumentation());
+
+            parts.runner().getSwitcher().getFiller().fillSample();
+        } catch (JvmAccessException | IllegalStateException e) {
+            LOGGER.error("[Hotwire] Switching mods is not possible in this game: {}", e.getMessage(), e);
+            engine = new HotwireEngine(installed, progress, reports, folders, queue, settings, icons,
+                    new HotwireEngine.Bound.Refused(Lang.get("hotwire.switch.no_instrument", e.getMessage())));
+        }
+        engine.cleanUpdateFolders();
+        HotwireEngine started = engine;
+        OffCodeNotice.install(started, installed);
+        BiConsumer<String, Boolean> say = (line, bad) -> {
+            started.showMessage(line, bad);
+            started.refreshScreen();
+        };
+        CrashGuard.install(installed, engine.getTasks(), () -> {
+            HotwireEngine.JvmParts parts = started.findParts();
+            return parts == null ? null : parts.runner();
+        }, say, started::writeReport);
+        OwnThrowNotice.install(engine.getTasks(), say,
+                why -> started.writeReport(Lang.get("hotwire.report.file.hotwire_error"), why));
+        HotwireEngine.JvmParts ready = started.findParts();
+        if (ready != null) {
+            ready.runner().setAfterOff(started.getDisabled()::disableAfter);
+            ready.runner().setBeforeOn(started.getDisabled()::restore);
+        }
+        CrashReports.watch(engine.getTasks(), engine.getZips());
+        return engine;
     }
 }

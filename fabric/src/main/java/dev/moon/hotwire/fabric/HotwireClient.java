@@ -116,7 +116,7 @@ public final class HotwireClient implements ClientModInitializer {
         HotwireEngine started = engine;
         if (started == null) {
             try {
-                started = HotwireEngine.start();
+                started = EngineStart.start();
             } catch (IOException e) {
                 throw new UncheckedIOException(e);
             }

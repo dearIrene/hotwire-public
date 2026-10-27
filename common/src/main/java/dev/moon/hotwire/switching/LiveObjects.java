@@ -1,5 +1,6 @@
 package dev.moon.hotwire.switching;
 
+import dev.moon.hotwire.classfile.ClassHeader;
 import dev.moon.hotwire.redefine.ClassRebuilder;
 import dev.moon.hotwire.redefine.ClassSplit;
 import dev.moon.hotwire.redefine.ConstructedFields;
@@ -156,7 +157,7 @@ final class LiveObjects {
             Set<String> missing = base == null || game.isWorldObject(type) || !madeWithout ? Set.of()
                     : ConstructedFields.findSetOutsideConstructors(mixed, base);
             if (!missing.isEmpty()) {
-                reload.add(name + " " + missing);
+                reload.add(name + " " + missing + " " + findLikeNamed(missing, Objects.requireNonNull(base)));
             }
         });
         if (reload.isEmpty()) {
@@ -167,6 +168,24 @@ final class LiveObjects {
         Set<String> classes = new TreeSet<>();
         reload.forEach(one -> classes.add(one.substring(0, one.indexOf(' '))));
         return prepared.withPausedReloads(classes);
+    }
+
+    private static List<String> findLikeNamed(Set<String> missing, byte[] running) {
+        List<String> like = new ArrayList<>();
+        for (String key : missing) {
+            int first = key.indexOf('$');
+            int second = first < 0 ? -1 : key.indexOf('$', first + 1);
+            if (second < 0) {
+                continue;
+            }
+            String middle = key.substring(first, second + 1);
+            for (ClassHeader.Member field : ClassHeader.of(running).fields()) {
+                if (field.name().contains(middle)) {
+                    like.add(field.name() + field.desc());
+                }
+            }
+        }
+        return like;
     }
 
     static void checkWhilePaused(ClassRebuilder.PreparedRebuild prepared) throws RebuildException {

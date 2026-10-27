@@ -5,34 +5,23 @@ import dev.moon.hotwire.concurrent.Tasks;
 import dev.moon.hotwire.config.HotwireSettings;
 import dev.moon.hotwire.config.ProfileStore;
 import dev.moon.hotwire.fabric.add.AddSupport;
-import dev.moon.hotwire.fabric.add.ModAdder;
 import dev.moon.hotwire.fabric.add.WorldReopen;
 import dev.moon.hotwire.fabric.rebuild.GameClasses;
 import dev.moon.hotwire.fabric.registration.Fields;
 import dev.moon.hotwire.fabric.registration.GameRegistrations;
 import dev.moon.hotwire.fabric.registration.ModLifecycle;
-import dev.moon.hotwire.fabric.registration.QuietThreads;
 import dev.moon.hotwire.fabric.report.GameReports;
-import dev.moon.hotwire.fabric.report.LoggedFaults;
 import dev.moon.hotwire.fabric.report.ReportZips;
 import dev.moon.hotwire.fabric.screen.ChooserGameScreen;
-import dev.moon.hotwire.fabric.screen.CrashPopup;
 import dev.moon.hotwire.fabric.screen.HotwireScreen;
-import dev.moon.hotwire.fabric.screen.ModFileChooser;
 import dev.moon.hotwire.fabric.screen.ModIcons;
 import dev.moon.hotwire.fabric.screen.ScreenOpenTimer;
 import dev.moon.hotwire.fabric.screen.StoreGameScreen;
-import dev.moon.hotwire.fabric.screen.WebLinks;
 import dev.moon.hotwire.fabric.store.ModStore;
 import dev.moon.hotwire.fabric.store.UpdateCheck;
-import dev.moon.hotwire.fabric.update.ModUpdater;
 import dev.moon.hotwire.fabric.update.SwapAtClose;
 import dev.moon.hotwire.fabric.update.UpdateSupport;
-import dev.moon.hotwire.jar.ModManifest;
-import dev.moon.hotwire.jvm.JvmAccessException;
-import dev.moon.hotwire.modrinth.StoreModel;
 import dev.moon.hotwire.plan.ModGraph;
-import dev.moon.hotwire.redefine.LoadedClassBytes;
 import dev.moon.hotwire.redefine.Tripwire;
 import dev.moon.hotwire.report.GameLog;
 import dev.moon.hotwire.switching.ModSwitcher;
@@ -47,7 +36,6 @@ import dev.moon.hotwire.ui.JarHost;
 import dev.moon.hotwire.ui.Lang;
 import dev.moon.hotwire.ui.ModScreen;
 import dev.moon.hotwire.ui.Progress;
-import dev.moon.hotwire.ui.ReopenPanel;
 import dev.moon.hotwire.ui.StoreScreen;
 import dev.moon.hotwire.ui.UpdateMethod;
 import dev.moon.hotwire.ui.UpdatePreview;
@@ -58,8 +46,6 @@ import dev.moon.hotwire.update.PendingChange;
 import dev.moon.hotwire.update.PendingChanges;
 import dev.moon.hotwire.update.UpdateFolders;
 import dev.moon.hotwire.update.UpdateOffer;
-import dev.moon.hotwire.update.UpdatePlan;
-import dev.moon.hotwire.update.UpdatePlanner;
 import dev.moon.hotwire.update.UpdateQueue;
 import java.io.IOException;
 import java.io.UncheckedIOException;
@@ -67,21 +53,12 @@ import java.lang.instrument.ClassFileTransformer;
 import java.lang.instrument.Instrumentation;
 import java.nio.file.Path;
 import java.time.Duration;
-import java.util.ArrayDeque;
-import java.util.ArrayList;
-import java.util.Deque;
-import java.util.HashMap;
-import java.util.HashSet;
 import java.util.List;
-import java.util.Map;
 import java.util.Objects;
 import java.util.Optional;
 import java.util.Set;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.TimeUnit;
-import java.util.function.BiConsumer;
-import java.util.function.Consumer;
-import java.util.function.Function;
 import net.fabricmc.loader.api.FabricLoader;
 import net.minecraft.client.Minecraft;
 import net.minecraft.client.gui.screens.Screen;
@@ -94,7 +71,7 @@ public final class HotwireEngine implements ModScreen.Game, AutoCloseable {
             Instrumentation instrumentation, ClassFileTransformer loadTimeMixer, GameClasses classes) {
     }
 
-    private sealed interface Bound {
+    sealed interface Bound {
         record Ready(JvmParts parts) implements Bound {
         }
 
@@ -119,31 +96,19 @@ public final class HotwireEngine implements ModScreen.Game, AutoCloseable {
     private @Nullable ModScreen screen;
 
     private @Nullable Screen under;
-
-    private @Nullable ModStore store;
-    private @Nullable StoreScreen storeScreen;
-    private final Map<Path, String> storeProjects = new HashMap<>();
-
-    private final UpdateCheck updateCheck;
-    private List<UpdateOffer> updateOffers = List.of();
-    private boolean updatesChecked;
-    private boolean updatesStarted;
-
-    private final Deque<StoreJar> storeJars = new ArrayDeque<>();
-
-    private record StoreJar(Path jar, boolean update) {
-    }
-
-    private final Set<String> needsMet = new HashSet<>();
+    private final StoreJars storeJars;
+    private final StoreScreens stores;
+    private final JarRequests jars;
+    private final ModRows rows;
     private final ModIcons icons;
     private final ModChanges changes;
     private final CacheFillControl cacheFill = new CacheFillControl(this::findParts);
     private final DisabledMods disabled;
+    private final SwitchRequests switches;
 
-    private HotwireEngine(InstalledMods installed, Progress progress, GameReports reports, UpdateFolders folders,
+    HotwireEngine(InstalledMods installed, Progress progress, GameReports reports, UpdateFolders folders,
             UpdateQueue queue, HotwireSettings settings, ModIcons icons, Bound bound) {
         this.installed = installed;
-        this.updateCheck = new UpdateCheck(installed);
         this.icons = icons;
         this.settings = settings;
         this.progress = progress;
@@ -152,78 +117,25 @@ public final class HotwireEngine implements ModScreen.Game, AutoCloseable {
         this.updateQueue = queue;
         this.pending = new PendingChanges(queue, folders);
         this.bound = bound;
+
+        if (bound instanceof Bound.Ready ready) {
+            ready.parts().instrumentation().addTransformer(ready.parts().loadTimeMixer());
+        }
         this.changes = new ModChanges(this.findParts(), this.getSwitchRefusal(), installed, this.tasks);
+        this.storeJars = new StoreJars(installed, this.changes, this::findHost, () -> this.screen,
+                this::getStore, this::showMessage);
+        this.stores = new StoreScreens(this, installed, this.storeJars);
+        this.jars = new JarRequests(this, this.changes, progress, this.tasks, this.storeJars);
+        this.rows = new ModRows(installed, this::isOn, this.pending, this::findParts);
         WorldReopen.tellClosedTo(this::onWorldClosed);
         this.disabled = new DisabledMods(installed, this::findParts, settings, folders.mods(), this::showMessage,
-                (jar, then) -> this.add(jar, AddMode.NOW, then));
+                (jar, then) -> this.jars.add(jar, AddMode.NOW, then));
+        this.switches = new SwitchRequests(this, this.tasks, installed, settings, this.disabled, () -> this.screen,
+                this::showMessage, this::writeReport);
         this.profiles = new ProfileStore(FabricLoader.getInstance().getConfigDir().resolve("hotwire/profiles.txt"));
     }
 
-    static HotwireEngine start() throws IOException {
-        FabricLoader loader = FabricLoader.getInstance();
-        Path gameDir = loader.getGameDir();
-        InstalledMods installed = EngineStart.readInstalledMods(loader);
-        Progress progress = new Progress();
-        LoggedFaults.install();
-        GameReports reports = new GameReports(installed::nameOf);
-        UpdateFolders folders = UpdateFolders.ofMods(ModsFolder.find(loader));
-        UpdateQueue queue = new UpdateQueue(folders.queueFile());
-        HotwireSettings settings = new HotwireSettings(loader.getConfigDir().resolve("hotwire/settings.json"));
-        ModPolicy.setNestedJars(settings.getNestedJars());
-
-        ModIcons icons = new ModIcons(installed);
-        icons.readAhead(installed.getGraph().getIds());
-        HotwireEngine engine;
-        try {
-            JvmParts parts = EngineStart.bind(installed, progress, reports, folders, queue, gameDir, icons);
-
-            parts.instrumentation().addTransformer(parts.loadTimeMixer());
-            engine = new HotwireEngine(installed, progress, reports, folders, queue, settings, icons,
-                    new Bound.Ready(parts));
-            HotwireEngine made = engine;
-            parts.runner().getSwitcher().prepareLookWith(() -> parts.runner().prepareLookFor(made.findSwitchableOn()));
-            new SwapAtClose(queue, folders, EngineStart.findHotwireJar()).arm();
-            QuietThreads.install();
-            LoadedClassBytes loadedBytes = parts.adds().getApplier().getRebuilder().getLoadedBytes();
-            Fields.readWith(name -> parts.classes().findLoaded(name.replace('.', '/')) != null, type -> {
-                String internal = type.getName().replace('.', '/');
-                byte[] known = loadedBytes.findKnown(type);
-                if (known == null) {
-                    known = loadedBytes.findAsLoaded(internal);
-                }
-                return known != null ? known : parts.classes().findOriginalBytes(internal);
-            });
-            Fields.preloadStatics(parts.instrumentation());
-
-            parts.runner().getSwitcher().getFiller().fillSample();
-        } catch (JvmAccessException | IllegalStateException e) {
-            LOGGER.error("[Hotwire] Switching mods is not possible in this game: {}", e.getMessage(), e);
-            engine = new HotwireEngine(installed, progress, reports, folders, queue, settings, icons,
-                    new Bound.Refused(Lang.get("hotwire.switch.no_instrument", e.getMessage())));
-        }
-        engine.cleanUpdateFolders();
-        HotwireEngine started = engine;
-        OffCodeNotice.install(started, installed);
-        BiConsumer<String, Boolean> say = (line, bad) -> {
-            started.showMessage(line, bad);
-            started.refreshScreen();
-        };
-        CrashGuard.install(installed, engine.tasks, () -> {
-            JvmParts parts = started.findParts();
-            return parts == null ? null : parts.runner();
-        }, say, started::writeReport);
-        OwnThrowNotice.install(engine.tasks, say,
-                why -> started.writeReport(Lang.get("hotwire.report.file.hotwire_error"), why));
-        JvmParts ready = started.findParts();
-        if (ready != null) {
-            ready.runner().setAfterOff(started.disabled::disableAfter);
-            ready.runner().setBeforeOn(started.disabled::restore);
-        }
-        started.reportLastCrash();
-        return engine;
-    }
-
-    private void cleanUpdateFolders() {
+    void cleanUpdateFolders() {
         try {
             this.pending.cleanAtStart();
         } catch (IOException e) {
@@ -245,8 +157,8 @@ public final class HotwireEngine implements ModScreen.Game, AutoCloseable {
         timer.onBuilt();
         this.screen = opened;
         this.under = back;
-        opened.setUpdates(this.updateOffers, this.updatesChecked);
-        this.startUpdateCheck();
+        opened.setUpdates(this.storeJars.getOffers(), this.storeJars.isChecked());
+        this.storeJars.startCheck();
         HotwireScreen made = new HotwireScreen(opened, timer);
         JvmParts parts = this.findParts();
         if (parts != null) {
@@ -256,25 +168,6 @@ public final class HotwireEngine implements ModScreen.Game, AutoCloseable {
         return made;
     }
 
-    private void startUpdateCheck() {
-        if (this.updatesStarted) {
-            return;
-        }
-        this.updatesStarted = true;
-        this.updateCheck.start(offers -> Minecraft.getInstance().execute(() -> {
-            this.updateOffers = offers;
-            this.updatesChecked = true;
-            ModScreen current = this.screen;
-            if (current != null) {
-                current.setUpdates(offers, true);
-            }
-            if (!offers.isEmpty()) {
-                this.showMessage(offers.size() == 1 ? Lang.get("hotwire.updates.found_one")
-                        : Lang.get("hotwire.updates.found", offers.size()), false);
-            }
-        }));
-    }
-
     @Override
     public void updateFromStore(UpdateOffer offer) {
         this.updateAllFromStore(List.of(offer));
@@ -282,55 +175,10 @@ public final class HotwireEngine implements ModScreen.Game, AutoCloseable {
 
     @Override
     public void updateAllFromStore(List<UpdateOffer> offers) {
-        if (offers.isEmpty()) {
-            return;
-        }
-        this.showMessage(Lang.get("hotwire.updates.getting", offers.getFirst().name(),
-                offers.getFirst().newVersion()), false);
-        Thread.ofPlatform().name("hotwire-updates-fetch").daemon().start(() -> {
-            List<StoreJar> jars = new ArrayList<>();
-            String failure = null;
-            for (UpdateOffer offer : this.updateCheck.orderByNeeds(offers, this.updateOffers)) {
-                try {
-                    List<Path> fetched = this.updateCheck.fetchWithNeeds(offer, said -> Minecraft.getInstance()
-                            .execute(() -> this.showMessage(said, false)));
-                    for (int i = 0; i < fetched.size(); i++) {
-                        jars.add(new StoreJar(fetched.get(i), i == fetched.size() - 1));
-                    }
-                } catch (IOException e) {
-                    failure = Lang.get("hotwire.store.download_failed", offer.name(), e.getMessage());
-                    break;
-                }
-            }
-            String why = failure;
-            Minecraft.getInstance().execute(() -> {
-                if (why != null) {
-                    this.showMessage(why, true);
-                }
-                this.storeJars.clear();
-                this.storeJars.addAll(jars);
-                this.offerNextStoreJar();
-            });
-        });
+        this.storeJars.updateAll(offers);
     }
 
-    private void dropOffer(ModUpdater.Result result) {
-        String id = switch (result) {
-            case ModUpdater.Result.Updated updated -> updated.id();
-            case ModUpdater.Result.Queued queued -> queued.id();
-            default -> null;
-        };
-        if (id == null) {
-            return;
-        }
-        this.updateOffers = this.updateOffers.stream().filter(offer -> !offer.id().equals(id)).toList();
-        ModScreen current = this.screen;
-        if (current != null) {
-            current.setUpdates(this.updateOffers, true);
-        }
-    }
-
-    private List<String> findSwitchableOn() {
+    List<String> findSwitchableOn() {
         return this.installed.getGraph().getIds().stream().filter(ModPolicy::isSwitchable).filter(this::isOn).toList();
     }
 
@@ -358,7 +206,7 @@ public final class HotwireEngine implements ModScreen.Game, AutoCloseable {
         };
     }
 
-    private @Nullable JvmParts findParts() {
+    @Nullable JvmParts findParts() {
         return this.bound instanceof Bound.Ready ready ? ready.parts() : null;
     }
 
@@ -393,7 +241,7 @@ public final class HotwireEngine implements ModScreen.Game, AutoCloseable {
 
     void showMessage(String text, boolean bad, String hint) {
         GameLog.LOGGER.info("[Hotwire] told the player: {}", text);
-        StoreScreen shownStore = this.findShownStore();
+        StoreScreen shownStore = this.stores.findShown();
         ModScreen current = this.screen;
         if (shownStore != null) {
             shownStore.showMessage(text, bad, hint);
@@ -413,7 +261,7 @@ public final class HotwireEngine implements ModScreen.Game, AutoCloseable {
         });
     }
 
-    private void refreshScreen() {
+    void refreshScreen() {
         ModScreen current = this.screen;
         if (current != null) {
             current.onSwitched();
@@ -424,68 +272,8 @@ public final class HotwireEngine implements ModScreen.Game, AutoCloseable {
         }
     }
 
-    @SuppressWarnings("FutureReturnValueIgnored")
-    private void run(Function<SwitchRunner, SwitchRunner.CheckedResult> work) {
-        this.run(work, false, List.of());
-    }
-
     public CompletableFuture<SwitchResult> switchFor(boolean off, List<String> ids) {
-        List<String> disabledIds = off ? List.of() : ids.stream().filter(this.disabled::isDisabledSinceStart).toList();
-        disabledIds.forEach(this.disabled::enableByAdd);
-        List<String> rest = ids.stream().filter(id -> !disabledIds.contains(id)).toList();
-        if (rest.isEmpty() && !disabledIds.isEmpty()) {
-            return CompletableFuture.completedFuture(new SwitchResult(SwitchResult.Kind.DONE, disabledIds, ""));
-        }
-        return this.run(runner -> off ? runner.turnOff(rest) : runner.turnOn(rest), off, rest);
-    }
-
-    @SuppressWarnings("FutureReturnValueIgnored")
-    private CompletableFuture<SwitchResult> run(Function<SwitchRunner, SwitchRunner.CheckedResult> work, boolean off,
-            List<String> ids) {
-        JvmParts parts = this.findParts();
-        if (parts == null) {
-            return this.refuse(this.getSwitchRefusal());
-        }
-        if (this.isWorldLocked()) {
-            return this.refuse(Lang.get("hotwire.switch.world_locked"));
-        }
-        CompletableFuture<SwitchResult> ended = HotwireApiImpl.beginSwitch();
-        this.tasks.submit("switch", () -> work.apply(parts.runner()), result -> {
-            boolean untilOn = off && result.result() instanceof ModSwitcher.Result.Done
-                    && this.settings.getOffLasts() == HotwireSettings.OffLasts.UNTIL_ON;
-            String said = PlayerMessages.describe(result.result(), this.installed::nameOf, untilOn)
-                    + PlayerMessages.describe(result.check())
-                    + PlayerMessages.describeFaults(result.result(), result.faults().size());
-
-            if (result.result() instanceof ModSwitcher.Result.Failed failed && failed.cause().isJvmRefused()) {
-                said += " " + this.writeReport(Lang.get("hotwire.report.file.switch_failed"),
-                        "A switch failed: " + failed.cause().getMessage());
-            }
-            ModScreen current = this.screen;
-            if (!ids.isEmpty() && result.result() instanceof ModSwitcher.Result.Failed failed
-                    && failed.cause().reopenFixes() && current != null
-                    && (WorldReopen.isLeftOnly() || WorldReopen.findRefusal().isEmpty())) {
-                GameLog.LOGGER.info("[Hotwire] {}", said);
-                String where = WorldReopen.isLeftOnly() ? "server" : "world";
-                current.offerReopen(new ReopenPanel.Offer(off, ids, null, PlayerMessages.joinNames(ids,
-                        this.installed::nameOf), Lang.get("hotwire.reopen.why." + (off ? "off_" : "on_") + where),
-                        WorldReopen.isLeftOnly()));
-            } else {
-                boolean lasting = off && result.result() instanceof ModSwitcher.Result.Done done
-                        && !done.plan().order().isEmpty() && !untilOn;
-                this.showMessage(said, PlayerMessages.isBad(result.result()) || !result.faults().isEmpty(),
-                        lasting ? Lang.get("hotwire.switch.hint.session") : "");
-            }
-            this.refreshScreen();
-            HotwireApiImpl.endSwitch(ended, HotwireApiImpl.toResult(result.result(), said), this::isOn);
-        }).whenComplete((done, error) -> HotwireApiImpl.endIfFailed(ended, error, this::isOn));
-        return ended;
-    }
-
-    private CompletableFuture<SwitchResult> refuse(String said) {
-        this.showMessage(said, true);
-        this.refreshScreen();
-        return CompletableFuture.completedFuture(new SwitchResult(SwitchResult.Kind.REFUSED, List.of(), said));
+        return this.switches.switchFor(off, ids);
     }
 
     public ModChanges getChanges() {
@@ -493,12 +281,7 @@ public final class HotwireEngine implements ModScreen.Game, AutoCloseable {
     }
 
     public SwitchRunner.CheckedResult switchNow(boolean off, List<String> ids) {
-        SwitchRunner runner = this.requireSwitching().runner();
-
-        List<String> disabledIds = off ? List.of() : ids.stream().filter(this.disabled::isDisabledSinceStart).toList();
-        disabledIds.forEach(this.disabled::enableByAdd);
-        List<String> rest = ids.stream().filter(id -> !disabledIds.contains(id)).toList();
-        return off ? runner.turnOff(rest) : runner.turnOn(rest);
+        return this.switches.switchNow(this.requireSwitching().runner(), off, ids);
     }
 
     Optional<JvmParts> findJvmParts() {
@@ -514,35 +297,13 @@ public final class HotwireEngine implements ModScreen.Game, AutoCloseable {
     }
 
     @Override
-    @SuppressWarnings("FutureReturnValueIgnored")
     public void switchWithReopen(boolean off, List<String> ids) {
-        CompletableFuture<SwitchResult> ended = HotwireApiImpl.beginSwitch();
-        this.tasks.submit("save and switch", () -> {
-            try {
-                return Optional.ofNullable(this.runSwitchWithReopen(off, ids));
-            } catch (InterruptedException e) {
-                Thread.currentThread().interrupt();
-                throw new IllegalStateException("the switch was interrupted while the world closed or opened", e);
-            }
-        }, result -> {
-            String said = result.map(done -> PlayerMessages.describe(done.result(), this.installed::nameOf)
-                    + PlayerMessages.describe(done.check())).orElse(Lang.get("hotwire.reopen.world_open_again"));
-            this.showMessage(said, result.map(done -> PlayerMessages.isBad(done.result())).orElse(false));
-            this.refreshScreen();
-            HotwireApiImpl.endSwitch(ended, result.map(done -> HotwireApiImpl.toResult(done.result(), said))
-                    .orElse(new SwitchResult(SwitchResult.Kind.DONE, List.of(), said)), this::isOn);
-        }).whenComplete((done, error) -> HotwireApiImpl.endIfFailed(ended, error, this::isOn));
+        this.switches.switchWithReopen(this.requireSwitching().runner(), off, ids);
     }
 
     public SwitchRunner.@Nullable CheckedResult runSwitchWithReopen(boolean off, List<String> ids)
             throws InterruptedException {
-        SwitchRunner runner = this.requireSwitching().runner();
-        return WorldReopen.runAround(() -> {
-            if (ids.isEmpty()) {
-                return null;
-            }
-            return off ? runner.turnOff(ids) : runner.turnOn(ids);
-        });
+        return SwitchRequests.runSwitchWithReopen(this.requireSwitching().runner(), off, ids);
     }
 
     public List<String> getDryRunCandidates() {
@@ -559,15 +320,7 @@ public final class HotwireEngine implements ModScreen.Game, AutoCloseable {
 
     @Override
     public List<ModStatus> getMods() {
-        List<ModStatus> out = new ArrayList<>();
-        for (String id : this.installed.getTopLevel()) {
-            boolean disabled = this.installed.isDisabled(id);
-            (disabled ? this.installed.findDisabled(id) : this.installed.find(id)).ifPresent(mod -> out.add(
-                    new ModStatus(id, mod.name(), mod.version(), this.isOn(id), String.join(", ", mod.authors()),
-                            mod.library(), disabled)));
-        }
-        out.sort((a, b) -> a.name().compareToIgnoreCase(b.name()));
-        return out;
+        return this.rows.getMods();
     }
 
     @Override
@@ -577,23 +330,7 @@ public final class HotwireEngine implements ModScreen.Game, AutoCloseable {
 
     @Override
     public ModList.Badges getBadges() {
-        return new ModList.Badges() {
-            @Override
-            public boolean isDeclaredLibrary(String id) {
-                return HotwireEngine.this.installed.find(id).map(ModManifest::library).orElse(false);
-            }
-
-            @Override
-
-            public String getEnvironmentOf(String id) {
-                return HotwireEngine.this.installed.find(id).map(mod -> switch (mod.environment()) {
-                    case CLIENT -> "client";
-                    case SERVER -> "server";
-                    case BOTH -> mod.entrypoints().containsKey("client") && !mod.entrypoints().containsKey("main")
-                            && !mod.entrypoints().containsKey("server") ? "client" : "*";
-                }).orElse("*");
-            }
-        };
+        return this.rows.getBadges();
     }
 
     @Override
@@ -676,7 +413,7 @@ public final class HotwireEngine implements ModScreen.Game, AutoCloseable {
 
     @Override
     public void applyProfile(String name, ProfileStore.ProfilePlan plan) {
-        this.run(runner -> {
+        this.switches.run(runner -> {
             SwitchRunner.CheckedResult off = runner.turnOff(plan.turnOff());
             if (PlayerMessages.isBad(off.result()) || plan.turnOn().isEmpty()) {
                 return off;
@@ -709,24 +446,16 @@ public final class HotwireEngine implements ModScreen.Game, AutoCloseable {
         });
     }
 
-    @SuppressWarnings("FutureReturnValueIgnored")
-    private void reportLastCrash() {
-        CrashNotice.readAtStart();
-        this.tasks.submit("report of the last session's crash", this.zips::findLastSessionCrash,
-                where -> where.ifPresent(CrashNotice::setDue));
-        GameReports.listenForCrashes(crash -> {
-            String words = this.zips.writeForCrash(crash);
-            LOGGER.info("[Hotwire] {}", words);
-            CrashNotice.save(words);
-            ModViews.showToast(Lang.get("hotwire.report.crash"), words);
+    Tasks getTasks() {
+        return this.tasks;
+    }
 
-            if (!Minecraft.getInstance().isSameThread() || CrashPopup.show(Lang.get("hotwire.report.crash_title"),
-                    Lang.get("hotwire.report.crash_blame") + "\n\n" + words + "\n" + Lang.get("hotwire.report.send"),
-                    Lang.get("hotwire.report.show_file_now"), Lang.get("hotwire.report.close"),
-                    Lang.get("hotwire.report.show_ask"))) {
-                this.zips.revealLast();
-            }
-        });
+    ReportZips getZips() {
+        return this.zips;
+    }
+
+    DisabledMods getDisabled() {
+        return this.disabled;
     }
 
     private void onWorldClosed(boolean closed) {
@@ -750,44 +479,21 @@ public final class HotwireEngine implements ModScreen.Game, AutoCloseable {
 
     @Override
     public void addMod() {
-        this.pickJar(Lang.get("hotwire.add.pick"), false);
+        this.jars.pick(Lang.get("hotwire.add.pick"), false);
     }
 
-    private void pickJar(String ask, boolean update) {
-        this.showMessage(ask, false);
-        ModFileChooser.choose(jar -> {
-            JarHost host = this.findHost();
-            if (host != null) {
-                host.onJarPicked(jar, update);
-            }
-        }, this::tellNoPicker);
-    }
-
-    private @Nullable StoreScreen findShownStore() {
-        StoreScreen shown = this.storeScreen;
-        return shown != null && ModViews.openScreen() instanceof StoreGameScreen ? shown : null;
-    }
-
-    private @Nullable JarHost findHost() {
-        StoreScreen shownStore = this.findShownStore();
+    @Nullable JarHost findHost() {
+        StoreScreen shownStore = this.stores.findShown();
         return shownStore != null ? shownStore : this.screen;
     }
 
-    private ModScreen findReopenHost() {
+    ModScreen findReopenHost() {
         ModScreen current = this.screen;
-        if (current == null || this.findShownStore() != null) {
+        if (current == null || this.stores.findShown() != null) {
             ModViews.show(this.makeScreen(this.under));
             current = Objects.requireNonNull(this.screen);
         }
         return current;
-    }
-
-    private void markStoreInstalled(Path jar) {
-        String project = this.storeProjects.remove(jar);
-        ModStore made = this.store;
-        if (project != null && made != null) {
-            made.getModel().markInstalled(project);
-        }
     }
 
     @Override
@@ -802,156 +508,12 @@ public final class HotwireEngine implements ModScreen.Game, AutoCloseable {
 
     @Override
     public void add(Path jar, AddMode mode) {
-        this.add(jar, mode, result -> this.offerNextStoreJar());
-    }
-
-    @SuppressWarnings("FutureReturnValueIgnored")
-    private void offerNextStoreJar() {
-        StoreJar next = this.storeJars.poll();
-        JarHost current = this.findHost();
-        if (next == null || current == null) {
-            return;
-        }
-        if (!next.update() || this.storeJars.isEmpty()) {
-            current.onJarPicked(next.jar(), next.update());
-            return;
-        }
-        this.changes.dryRunUpdate(next.jar()).whenComplete((preview, failed) -> Minecraft.getInstance()
-                .execute(() -> {
-                    if (failed == null && preview instanceof UpdatePreview.Refused && this.hasNeedsToMeet(next)) {
-                        return;
-                    }
-                    String skip = failed != null ? failed.toString() : switch (preview) {
-                        case UpdatePreview.Ready ready -> null;
-                        case UpdatePreview.Refused refused -> refused.name() + ": " + refused.reason();
-                        case UpdatePreview.SameVersion same -> Lang.get("hotwire.update.same_version", same.name(),
-                                same.version());
-                        case UpdatePreview.Unreadable unreadable -> Lang.get("hotwire.update.unreadable");
-                    };
-                    if (skip == null) {
-                        JarHost shown = this.findHost();
-                        if (shown != null) {
-                            shown.onJarPicked(next.jar(), true);
-                        }
-                    } else {
-                        this.showMessage(skip, true);
-                        this.offerNextStoreJar();
-                    }
-                }));
-    }
-
-    private boolean hasNeedsToMeet(StoreJar asked) {
-        UpdatePlan plan = this.changes.planUpdate(asked.jar());
-        if (plan == null) {
-            return false;
-        }
-        List<String> needs = new ArrayList<>();
-        for (String id : UpdatePlanner.findUnmet(plan).keySet()) {
-            if (this.needsMet.add(id)) {
-                needs.add(id);
-            }
-        }
-        List<Path> carried = new ArrayList<>();
-        for (Path library : this.changes.findCarriedToAdd(asked.jar())) {
-            if (this.needsMet.add("carried:" + library.getFileName())) {
-                carried.add(library);
-            }
-        }
-        if (needs.isEmpty() && carried.isEmpty()) {
-            return false;
-        }
-        List<UpdateOffer> offers = this.updateOffers;
-        Thread.ofPlatform().name("hotwire-updates-needs").daemon().start(() -> {
-            List<StoreJar> front = new ArrayList<>();
-            carried.forEach(library -> front.add(new StoreJar(library, false)));
-            for (String id : needs) {
-                try {
-                    List<Path> jars = this.updateCheck.fetchById(id, offers, said -> Minecraft.getInstance()
-                            .execute(() -> this.showMessage(said, false)));
-                    for (int i = 0; i < jars.size(); i++) {
-                        boolean update = i == jars.size() - 1 && this.installed.isInstalled(id);
-                        front.add(new StoreJar(jars.get(i), update));
-                    }
-                    if (jars.isEmpty()) {
-                        LOGGER.info("[Hotwire] {} needs {}, which Modrinth does not have for this game", asked.jar()
-                                .getFileName(), id);
-                    }
-                } catch (IOException e) {
-                    LOGGER.info("[Hotwire] {} could not be fetched for {}: {}", id, asked.jar().getFileName(),
-                            e.toString());
-                }
-            }
-            Minecraft.getInstance().execute(() -> {
-                this.storeJars.addFirst(asked);
-                for (int i = front.size() - 1; i >= 0; i--) {
-                    this.storeJars.addFirst(front.get(i));
-                }
-                if (!front.isEmpty()) {
-                    this.showMessage(Lang.get("hotwire.updates.needs_first", String.valueOf(asked.jar().getFileName()),
-                            front.size()), false);
-                }
-                this.offerNextStoreJar();
-            });
-        });
-        return true;
-    }
-
-    @SuppressWarnings("FutureReturnValueIgnored")
-    private void add(Path jar, AddMode mode, Consumer<ModAdder.Result> then) {
-        if (mode == AddMode.NEXT_START) {
-            this.showMessage(this.changes.queueAdd(jar), false);
-            return;
-        }
-        this.progress.beginAdding(String.valueOf(jar.getFileName()).replaceFirst("(?i)\\.jar$", ""));
-        this.tasks.submit("add", () -> {
-            try {
-                return mode == AddMode.SAVE_AND_REOPEN ? this.changes.addWithReopen(jar) : this.changes.addNow(jar);
-            } finally {
-                this.progress.endAdding();
-            }
-        }, result -> {
-            then.accept(result);
-            if (result instanceof ModAdder.Result.Added) {
-                this.markStoreInstalled(jar);
-            }
-            JarHost current = this.findHost();
-            if (mode == AddMode.NOW && ModAdder.isWorldBuilt(result) && WorldReopen.findRefusal().isEmpty()
-                    && current != null) {
-                LOGGER.info("[Hotwire] {}", ((ModAdder.Result.Failed) result).reason());
-                this.findReopenHost().offerReopen(new ReopenPanel.Offer(false, List.of(), jar,
-                        String.valueOf(jar.getFileName()), Lang.get("hotwire.add.world_open")));
-            } else if (ModAdder.isRestartOnly(result) && current != null) {
-                LOGGER.info("[Hotwire] {}", ((ModAdder.Result.Failed) result).reason());
-                List<String> why = List.of(Lang.get("hotwire.add.start_only"));
-                current.offerAdd(jar, this.changes.dryRunAdd(jar).thenApply(preview -> AddPreview.ofLater(
-                        preview.name(), preview.version(), why)));
-            } else if (result instanceof ModAdder.Result.Added added && current != null
-                    && Minecraft.getInstance().level != null && this.changes.setsUpOnJoin(jar)) {
-                boolean own = Minecraft.getInstance().getSingleplayerServer() != null;
-                this.showMessage(added.name() + " is in." + this.changes.copyIntoMods(jar) + (own ? ""
-                        : " It finishes setting up as you join a world: rejoin the server to have all of it."), false);
-                if (own) {
-                    this.findReopenHost().offerReopen(new ReopenPanel.Offer(false, List.of(), null, added.name(),
-                            Lang.get("hotwire.add.finishes_at_join")));
-                }
-            } else {
-                this.showMessage(switch (result) {
-                    case ModAdder.Result.Added added -> added.name() + " is in." + this.changes.copyIntoMods(jar);
-                    case ModAdder.Result.Refused refused -> refused.reason();
-                    case ModAdder.Result.Failed failed -> failed.reason();
-                }, !(result instanceof ModAdder.Result.Added));
-            }
-            this.refreshScreen();
-        });
+        this.jars.add(jar, mode, result -> this.storeJars.offerNext());
     }
 
     @Override
     public void updateMod() {
-        this.pickJar(Lang.get("hotwire.update.pick"), true);
-    }
-
-    private void tellNoPicker() {
-        this.showMessage(Lang.get("hotwire.screen.no_picker"), true);
+        this.jars.pick(Lang.get("hotwire.update.pick"), true);
     }
 
     @Override
@@ -969,24 +531,9 @@ public final class HotwireEngine implements ModScreen.Game, AutoCloseable {
         return this.changes.dryRunUpdate(jar);
     }
 
-    @SuppressWarnings("FutureReturnValueIgnored")
     @Override
     public void update(Path jar, UpdateMethod method) {
-        JvmParts parts = this.findParts();
-        if (parts == null) {
-            this.showMessage(this.getSwitchRefusal(), true);
-            return;
-        }
-        this.tasks.submit("update", () -> parts.updates().update(jar, method), result -> {
-            this.showMessage(UpdateSupport.describe(result), !(result instanceof ModUpdater.Result.Updated
-                    || result instanceof ModUpdater.Result.Queued));
-            this.dropOffer(result);
-            if (result instanceof ModUpdater.Result.Updated || result instanceof ModUpdater.Result.Queued) {
-                this.markStoreInstalled(jar);
-            }
-            this.refreshScreen();
-            this.offerNextStoreJar();
-        });
+        this.jars.update(jar, method);
     }
 
     @Override
@@ -998,8 +545,6 @@ public final class HotwireEngine implements ModScreen.Game, AutoCloseable {
         this.screen = null;
         this.under = null;
         this.storeJars.clear();
-        this.storeProjects.clear();
-        this.needsMet.clear();
         ModViews.show(back);
     }
 
@@ -1010,17 +555,7 @@ public final class HotwireEngine implements ModScreen.Game, AutoCloseable {
 
     @Override
     public List<PendingChange> getPendingChanges() {
-        List<PendingChange> out = new ArrayList<>();
-        for (PendingChange change : this.pending.list()) {
-            if (!(change instanceof PendingChange.Revertable back) || this.installed.findJarOf(back.modId()) != null) {
-                out.add(change);
-            }
-        }
-        JvmParts parts = this.findParts();
-        if (parts != null) {
-            out.addAll(parts.adds().getCopied());
-        }
-        return out;
+        return this.rows.getPendingChanges();
     }
 
     @Override
@@ -1030,21 +565,12 @@ public final class HotwireEngine implements ModScreen.Game, AutoCloseable {
 
     @Override
     public void removeCopy(String id) throws IOException {
-        JvmParts parts = this.findParts();
-        if (parts != null) {
-            parts.adds().removeCopy(id);
-        }
+        this.rows.removeCopy(id);
     }
 
     @Override
     public void revertAtNextStart(String id) throws IOException {
-        Path jar = this.installed.findJarOf(id);
-        if (jar == null) {
-            throw new IllegalStateException(id + " is not installed, so there is nothing to revert.");
-        }
-        String version = this.installed.find(id).map(ModManifest::version).orElseThrow(
-                () -> new IllegalStateException("The running version of " + id + " is not known."));
-        this.pending.revert(id, jar, version, System.currentTimeMillis());
+        this.rows.revertAtNextStart(id);
     }
 
     public void openChooser() {
@@ -1053,11 +579,11 @@ public final class HotwireEngine implements ModScreen.Game, AutoCloseable {
                 || current instanceof StoreGameScreen ? this.under : current;
         this.under = back;
 
-        ModStore store = this.findStore();
+        ModStore store = this.stores.findStore();
         ModViews.show(new ChooserGameScreen(new ChooserScreen(new ChooserScreen.Choice() {
             @Override
             public void openStore() {
-                HotwireEngine.this.openStore(store, back);
+                HotwireEngine.this.stores.openStore(store, back);
             }
 
             @Override
@@ -1078,97 +604,26 @@ public final class HotwireEngine implements ModScreen.Game, AutoCloseable {
     }
 
     public UpdateCheck getUpdateCheck() {
-        return this.updateCheck;
+        return this.storeJars.getCheck();
     }
 
     public boolean updateById(String id) {
-        for (UpdateOffer offer : this.updateOffers) {
-            if (offer.id().equals(id)) {
-                this.updateFromStore(offer);
-                return true;
-            }
-        }
-        return false;
-    }
-
-    private ModStore findStore() {
-        ModStore made = this.store;
-        if (made == null) {
-            made = new ModStore(this.installed);
-            made.checkInstalled();
-            this.store = made;
-        }
-        made.getModel().open();
-        return made;
+        return this.storeJars.updateById(id);
     }
 
     public @Nullable ModStore getStore() {
-        return this.store;
+        return this.stores.getStore();
     }
 
     public void openStoreNow(String words) {
-        ModStore store = this.store;
-        if (store == null) {
-            return;
-        }
-        if (!words.isEmpty()) {
-            store.getModel().setWords(words);
-        }
-        this.openStore(store, this.under);
-    }
-
-    private void addFromStore(ModStore store, @Nullable Screen back, String projectId, String versionId,
-            String title) {
-        this.showMessage(Lang.get("hotwire.store.downloading", title), false);
-        StoreModel model = store.getModel();
-        StoreModel.Card card = model.getCardsByProject().get(projectId);
-        boolean update = model.isInstalledProject(projectId) || (card != null && card.installed());
-        store.fetch(projectId, versionId, title, (jars, project) -> {
-            if (jars.size() > 1) {
-                this.showMessage(Lang.get("hotwire.store.getting_with", title, jars.size() - 1), false);
-            }
-            if (this.findShownStore() == null) {
-                ModViews.show(this.makeScreen(back));
-            }
-            this.storeJars.clear();
-            for (int i = 0; i < jars.size(); i++) {
-                this.storeJars.add(new StoreJar(jars.get(i), update && i == jars.size() - 1));
-            }
-            this.storeProjects.put(jars.getLast(), projectId);
-            this.offerNextStoreJar();
-        }, failure -> this.showMessage(failure, true));
+        this.stores.openStoreNow(words, this.under);
     }
 
     public void addFromStoreNow(String projectId, String versionId) {
-        ModStore store = this.store;
-        if (store != null) {
-            this.addFromStore(store, this.under, projectId, versionId, projectId);
-        }
+        this.stores.addFromStoreNow(projectId, versionId, this.under);
     }
 
-    private void openStore(ModStore store, @Nullable Screen back) {
-        StoreScreen screen = new StoreScreen(store.getModel(), new StoreScreen.Game() {
-            @Override
-            public void addFromStore(String projectId, String versionId, String title) {
-                HotwireEngine.this.addFromStore(store, back, projectId, versionId, title);
-            }
-
-            @Override
-            public void openLink(String link) {
-                WebLinks.open(link);
-            }
-
-            @Override
-            public void onBack() {
-                HotwireEngine.this.under = null;
-                ModViews.show(back);
-            }
-        }, this, store.getIcons(), store.getLoader(), store.getGameVersion());
-        this.storeScreen = screen;
-        ModViews.show(new StoreGameScreen(screen, () -> {
-            if (this.storeScreen == screen) {
-                this.storeScreen = null;
-            }
-        }));
+    void forgetUnder() {
+        this.under = null;
     }
 }
