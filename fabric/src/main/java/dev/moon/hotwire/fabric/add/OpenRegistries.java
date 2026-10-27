@@ -51,7 +51,11 @@ public final class OpenRegistries implements AutoCloseable {
     public static OpenRegistries open() {
         OpenRegistries open = new OpenRegistries();
         OpenRegistries.open = true;
-        for (Registry<?> registry : BuiltInRegistries.REGISTRY) {
+
+        List<Registry<?>> all = new ArrayList<>();
+        all.add(BuiltInRegistries.REGISTRY);
+        BuiltInRegistries.REGISTRY.forEach(all::add);
+        for (Registry<?> registry : all) {
             if (registry instanceof MappedRegistry<?> mapped && ((MappedRegistryAccessor) mapped).hotwire$isFrozen()) {
                 MappedRegistryAccessor access = (MappedRegistryAccessor) mapped;
                 access.hotwire$setFrozen(false);
@@ -89,6 +93,14 @@ public final class OpenRegistries implements AutoCloseable {
             if (registry.size() > before) {
                 grew.add(nameOf(registry) + " +" + (registry.size() - before));
                 bindNoTags(registry);
+            }
+        }
+
+        for (Registry<?> registry : BuiltInRegistries.REGISTRY) {
+            if (registry instanceof MappedRegistry<?> made && !this.sizes.containsKey(made)
+                    && !((MappedRegistryAccessor) made).hotwire$isFrozen()) {
+                ((MappedRegistryAccessor) made).hotwire$setFrozen(true);
+                grew.add(nameOf(made) + " (new)");
             }
         }
         LOGGER.info("[Hotwire] registries closed again; a late mod's entries went into {}",
