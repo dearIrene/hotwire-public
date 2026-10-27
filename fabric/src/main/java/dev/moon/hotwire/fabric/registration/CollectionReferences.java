@@ -75,11 +75,12 @@ final class CollectionReferences {
         this.writer = writer;
     }
 
-    synchronized void takeOut(List<String> mods, Collection<Object> holders, Collection<Class<?>> statics) {
+    synchronized void takeOut(List<String> mods, Collection<Object> holders, Collection<Class<?>> statics,
+            HandedSearch handed) {
         List<Runnable> ahead = this.look.open(mods);
         try {
             if (ahead == null) {
-                this.walk(mods, holders, statics);
+                this.walk(mods, holders, statics, handed);
                 this.look.close();
             } else {
                 this.begin(mods);
@@ -118,7 +119,8 @@ final class CollectionReferences {
         this.mine = mine;
     }
 
-    private void walk(List<String> mods, Collection<Object> holders, Collection<Class<?>> statics) {
+    private void walk(List<String> mods, Collection<Object> holders, Collection<Class<?>> statics,
+            HandedSearch handed) {
         long began = System.nanoTime();
         this.begin(mods);
 
@@ -158,6 +160,13 @@ final class CollectionReferences {
             }
         }
         slowest.add(Map.entry(System.nanoTime() - holdersBegan, holders.size() + " game objects"));
+        long handedBegan = System.nanoTime();
+        for (Object holder : handed.findHolders()) {
+            if (this.seen.add(holder)) {
+                this.collect(holder);
+            }
+        }
+        slowest.add(Map.entry(System.nanoTime() - handedBegan, "what was handed to " + handed.consumers()));
         long millis = (System.nanoTime() - began) / 1_000_000;
         if (millis >= SLOW_MILLIS) {
             List<String> named = new ArrayList<>();

@@ -3,10 +3,13 @@ package dev.moon.hotwire.fabric.add;
 import dev.moon.hotwire.jvm.PrivateField;
 import java.io.IOException;
 import java.io.InputStream;
+import java.lang.reflect.Field;
 import java.lang.reflect.Method;
+import java.lang.reflect.Modifier;
 import java.nio.file.Path;
 import java.util.ArrayList;
 import java.util.Collection;
+import java.util.Collections;
 import java.util.Comparator;
 import java.util.HashMap;
 import java.util.IdentityHashMap;
@@ -144,6 +147,57 @@ public final class LoaderModList {
             mods.remove(container);
             byId.remove(id);
             HIDDEN.put(id, new HiddenMod(container, removed));
+        }
+    }
+
+    private static final Set<String> OWN_KEYS = Set.of("main", "client", "server", "preLaunch");
+
+    @SuppressWarnings("unchecked")
+    public static Set<Object> findHanded(Collection<String> mods) {
+        FabricLoaderImpl loader = FabricLoaderImpl.INSTANCE;
+        EntrypointStorage storage = ENTRYPOINT_STORAGE.get(loader, EntrypointStorage.class);
+        Map<String, List<Object>> entryMap = ENTRY_MAP.get(storage, Map.class);
+        Set<Object> out = Collections.newSetFromMap(new IdentityHashMap<>());
+        synchronized (loader) {
+            entryMap.forEach((key, entries) -> addMade(key, entries, mods, out));
+            for (String mod : mods) {
+                HiddenMod hidden = HIDDEN.get(mod);
+                if (hidden != null) {
+                    hidden.entries().forEach((key, entries) -> addMade(key, entries, mods, out));
+                }
+            }
+        }
+        return out;
+    }
+
+    private static void addMade(String key, List<Object> entries, Collection<String> mods, Set<Object> out) {
+        if (OWN_KEYS.contains(key)) {
+            return;
+        }
+        for (Object entry : entries) {
+            ModContainerImpl container = findContainerOf(entry);
+            if (container == null || !mods.contains(container.getMetadata().getId())) {
+                continue;
+            }
+            for (Field field : entry.getClass().getDeclaredFields()) {
+                if (Modifier.isStatic(field.getModifiers())) {
+                    continue;
+                }
+                try {
+                    field.setAccessible(true);
+                    Object value = field.get(entry);
+                    if (value instanceof Map<?, ?> made && field.getName().equals("instanceMap")) {
+                        made.values().forEach(one -> {
+                            if (one != null) {
+                                out.add(one);
+                            }
+                        });
+                    } else if (value != null && field.getName().equals("object")) {
+                        out.add(value);
+                    }
+                } catch (ReflectiveOperationException | RuntimeException e) {
+                }
+            }
         }
     }
 

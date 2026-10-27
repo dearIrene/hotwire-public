@@ -1,5 +1,6 @@
 package dev.moon.hotwire.fabric.registration;
 
+import dev.moon.hotwire.fabric.add.LoaderModList;
 import dev.moon.hotwire.fabric.mixin.core.world.item.CreativeModeTabsAccessor;
 import dev.moon.hotwire.redefine.ClassRebuilder;
 import dev.moon.hotwire.redefine.FieldSlots;
@@ -170,7 +171,7 @@ public final class FieldReferences {
         try {
             planned.forEach(this::putIn);
             if (this.elements.look.isReadyFor(mods)) {
-                this.elements.takeOut(List.copyOf(mods), List.of(), Set.of());
+                this.elements.takeOut(List.copyOf(mods), List.of(), Set.of(), HandedSearch.NONE);
                 return;
             }
             Object game = Minecraft.getInstance();
@@ -219,8 +220,13 @@ public final class FieldReferences {
                     }
                 }
             }
+
+            Set<Object> handed = LoaderModList.findHanded(mods);
+            Set<String> consumers = HandedSearch.findConsumers(handed);
+            List<Class<?>> consumerClasses = new ArrayList<>();
+            consumers.forEach(consumer -> consumerClasses.addAll(initializedOf.apply(consumer)));
             this.elements.takeOut(List.copyOf(mods), holders.stream().filter(one -> others.test(one.getClass()))
-                    .toList(), statics);
+                    .toList(), statics, new HandedSearch(handed, consumers, consumerClasses));
         } finally {
             hold.release();
         }
