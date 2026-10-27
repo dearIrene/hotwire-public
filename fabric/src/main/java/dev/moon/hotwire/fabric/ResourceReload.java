@@ -26,7 +26,6 @@ import java.util.concurrent.Executor;
 import java.util.concurrent.ForkJoinPool;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.TimeoutException;
-import java.util.function.BooleanSupplier;
 import java.util.stream.Collectors;
 import net.minecraft.client.Minecraft;
 import net.minecraft.client.gui.font.FontManager;
@@ -115,7 +114,7 @@ public final class ResourceReload {
         Minecraft game = Minecraft.getInstance();
         try {
             GameHold.onGameBeforeNextFrame(() -> {
-                awaitOngoingReload(game);
+                OngoingReload.await(game);
 
                 boolean renderersOnly = !reloadAsked && !hasAny(types, RELOADED);
                 if (reload && !reloadedWhilePaused && !(renderersOnly && reloadedRenderers)) {
@@ -165,7 +164,7 @@ public final class ResourceReload {
     static void reloadForRenderers(boolean whole) {
         Minecraft game = Minecraft.getInstance();
         GameHold.onGameAndWait(() -> {
-            awaitOngoingReload(game);
+            OngoingReload.await(game);
             reloadWhilePaused(game, !whole);
         });
     }
@@ -176,7 +175,7 @@ public final class ResourceReload {
             LOGGER.info("[Hotwire] {}: the reload that made the game's objects again brought them", why);
             return;
         }
-        if (awaitOngoingReload(game)) {
+        if (OngoingReload.await(game)) {
             LOGGER.info("[Hotwire] {}: a reload already under way brought them", why);
             return;
         }
@@ -221,9 +220,15 @@ public final class ResourceReload {
         noteOwnersAtPause();
 
         LoadingOverlay shown = ModViews.findLoadingOverlay();
-        ReloadInstance last = shown == null ? null : findReloadOf(shown);
+        ReloadInstance last = shown == null ? null : OngoingReload.findReloadOf(shown);
         if (last != null && last.isDone()) {
             ModViews.closeOverlay();
+        }
+
+        if (comingOn.isEmpty()) {
+            reloadedWhilePaused = true;
+            BackgroundReload.beginAfterHold(() -> startUnprofiled(game::reloadResourcePacks));
+            return;
         }
         boolean isWhole = !renderersOnly || !ReloadListeners.runWithoutHeavy(game,
                 () -> startUnprofiled(game::reloadResourcePacks));
@@ -231,7 +236,7 @@ public final class ResourceReload {
             startUnprofiled(game::reloadResourcePacks);
         }
         LoadingOverlay loading = ModViews.findLoadingOverlay();
-        ReloadInstance reload = loading == null ? null : findReloadOf(loading);
+        ReloadInstance reload = loading == null ? null : OngoingReload.findReloadOf(loading);
         if (reload == null) {
             LOGGER.warn("[Hotwire] the resource reload has no loading overlay to wait on; it runs with the game");
             return;
@@ -299,73 +304,6 @@ public final class ResourceReload {
             LOGGER.warn("[Hotwire] what {} have in the game's models and fonts could not be read before the reload",
                     hidden, e);
         }
-    }
-
-    private static boolean awaitOngoingReload(Minecraft game) {
-        BooleanSupplier done = findOngoingReload(game);
-        if (done == null) {
-            return false;
-        }
-        long deadline = System.nanoTime() + WAIT.toNanos();
-        if (game.isSameThread()) {
-            game.managedBlock(() -> done.getAsBoolean() || System.nanoTime() > deadline);
-        } else {
-            while (!done.getAsBoolean() && System.nanoTime() < deadline) {
-                try {
-                    Thread.sleep(50);
-                } catch (InterruptedException e) {
-                    Thread.currentThread().interrupt();
-                    return true;
-                }
-            }
-        }
-        if (done.getAsBoolean()) {
-            LOGGER.info("[Hotwire] a reload under way was waited for");
-        } else {
-            LOGGER.warn("[Hotwire] a reload under way was waited for, and did not end");
-        }
-        return true;
-    }
-
-    private static @Nullable BooleanSupplier findOngoingReload(Minecraft game) {
-        List<String> seen = new ArrayList<>();
-        for (FieldSlots.Slot field : Fields.getDeclared(Minecraft.class)) {
-            if (!field.isStatic() && CompletableFuture.class.isAssignableFrom(field.getType())) {
-                try {
-                    Object value = field.get(game);
-                    String state = "null";
-                    if (value instanceof CompletableFuture<?> future) {
-                        state = future.isDone() ? "done" : "pending";
-                        if (!future.isDone()) {
-                            return future::isDone;
-                        }
-                    }
-                    seen.add(field.getName() + "=" + state);
-                } catch (IllegalAccessException e) {
-                    seen.add(field.getName() + "=closed");
-                }
-            }
-        }
-        LoadingOverlay loading = ModViews.findLoadingOverlay();
-        ReloadInstance ongoing = loading == null ? null : findReloadOf(loading);
-        if (ongoing == null || ongoing.isDone()) {
-            LOGGER.info("[Hotwire] no reload under way: futures {}, overlay {}", seen, loading);
-            return null;
-        }
-        return ongoing::isDone;
-    }
-
-    static @Nullable ReloadInstance findReloadOf(LoadingOverlay overlay) {
-        for (FieldSlots.Slot field : Fields.getDeclared(LoadingOverlay.class)) {
-            if (ReloadInstance.class.isAssignableFrom(field.getType())) {
-                try {
-                    return (ReloadInstance) field.get(overlay);
-                } catch (IllegalAccessException e) {
-                    return null;
-                }
-            }
-        }
-        return null;
     }
 
     static void reloadResources(Collection<String> newlyBuilt, Collection<String> mods, boolean off) {
@@ -547,7 +485,7 @@ public final class ResourceReload {
     }
 
     private static void run(String why, Collection<String> closing) {
-        if (awaitOngoingReload(Minecraft.getInstance())) {
+        if (OngoingReload.await(Minecraft.getInstance())) {
             LOGGER.info("[Hotwire] {}: a reload already under way brought them", why);
             return;
         }

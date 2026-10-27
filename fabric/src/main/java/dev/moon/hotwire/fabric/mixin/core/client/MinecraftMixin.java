@@ -10,6 +10,7 @@ import dev.moon.hotwire.fabric.RenderPassEnd;
 //? if >=1.21.2 {
 import dev.moon.hotwire.fabric.ResourceReload;
 //?}
+import dev.moon.hotwire.fabric.BackgroundReload;
 import dev.moon.hotwire.fabric.add.TickEnd;
 import dev.moon.hotwire.fabric.registration.GameHold;
 import dev.moon.hotwire.redefine.StartArguments;
@@ -87,5 +88,6 @@ public abstract class MinecraftMixin {
     @Inject(method = "tick", at = @At("TAIL"))
     private void hotwire$runTickEnd(CallbackInfo ci) {
         TickEnd.runDue();
+        BackgroundReload.tick();
     }
 }

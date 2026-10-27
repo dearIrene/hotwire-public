@@ -45,7 +45,7 @@ public final class ReloadFailures {
 
     public static boolean runAgainOnFailure() {
         LoadingOverlay failed = findFailedOverlay();
-        ReloadInstance reload = failed == null ? null : ResourceReload.findReloadOf(failed);
+        ReloadInstance reload = failed == null ? null : OngoingReload.findReloadOf(failed);
         Set<String> off = LoaderModList.getHidden();
         String reason = findWhyLeftToGame(failed, reload, off);
         if (reason != null || failed == null || reload == null) {
