@@ -1,6 +1,7 @@
 package dev.moon.hotwire.fabric.store;
 
 import dev.moon.hotwire.fabric.screen.ModIcons;
+import dev.moon.hotwire.fabric.screen.Picture;
 import dev.moon.hotwire.modrinth.StoreCache;
 import dev.moon.hotwire.modrinth.StoreModel;
 import dev.moon.hotwire.ui.Canvas;
@@ -24,6 +25,8 @@ public final class StoreIconLoader implements StoreIcons {
 
     private static final int FETCHERS = 6;
 
+    private static final int MOST_PICTURES = 16;
+
     private final StoreModel model;
     private final StoreCache cache;
 
@@ -34,6 +37,8 @@ public final class StoreIconLoader implements StoreIcons {
     private final Map<String, CompletableFuture<Optional<ModIcons.Icon>>> icons = new ConcurrentHashMap<>();
 
     private final LinkedHashMap<String, Boolean> seen = new LinkedHashMap<>(MOST_LIVE, 0.75f, true);
+    private final Map<String, CompletableFuture<Optional<Picture>>> pictures = new ConcurrentHashMap<>();
+    private final LinkedHashMap<String, Boolean> picturesSeen = new LinkedHashMap<>(MOST_PICTURES, 0.75f, true);
 
     public StoreIconLoader(StoreModel model, StoreCache cache, Function<String, Canvas.@Nullable Image> local) {
         this.model = model;
@@ -60,6 +65,35 @@ public final class StoreIconLoader implements StoreIcons {
             }
         }
         return this.icons.computeIfAbsent(url, this::load).getNow(Optional.empty()).orElse(null);
+    }
+
+    @Override
+    public @Nullable PagePicture findPicture(String url) {
+        this.picturesSeen.put(url, Boolean.TRUE);
+        if (this.picturesSeen.size() > MOST_PICTURES) {
+            String oldest = this.picturesSeen.keySet().iterator().next();
+            this.picturesSeen.remove(oldest);
+            CompletableFuture<Optional<Picture>> gone = this.pictures.remove(oldest);
+            if (gone != null) {
+                gone.getNow(Optional.empty()).ifPresent(Picture::release);
+            }
+        }
+        return this.pictures.computeIfAbsent(url, this::loadPicture).getNow(Optional.empty())
+                .map(picture -> new PagePicture(picture, picture.getWidth(), picture.getHeight())).orElse(null);
+    }
+
+    private CompletableFuture<Optional<Picture>> loadPicture(String url) {
+        CompletableFuture<Optional<Picture>> future = new CompletableFuture<>();
+        this.fetchers.execute(() -> {
+            try {
+                byte[] bytes = this.model.getClient().fetchPicture(url);
+                future.complete(Picture.decode("store-" + Integer.toHexString(url.hashCode()), url, bytes));
+            } catch (IOException | RuntimeException e) {
+                LOGGER.info("[Hotwire] the store could not get a picture: {}", e.toString());
+                future.complete(Optional.empty());
+            }
+        });
+        return future;
     }
 
     private CompletableFuture<Optional<ModIcons.Icon>> load(String url) {

@@ -62,25 +62,7 @@ public final class ModIcons implements AutoCloseable {
             if (made != null || !mayMake || size <= 0) {
                 return made;
             }
-            int[] square = this.pixels.makeSquare(size);
-            NativeImage image = new NativeImage(size, size, false);
-            for (int y = 0; y < size; y++) {
-                for (int x = 0; x < size; x++) {
-                    //? if >=1.21.4 {
-                    image.setPixel(x, y, square[y * size + x]);
-                    //?} else {
-                    /*image.setPixelRGBA(x, y, swapRedBlue(square[y * size + x]));
-                    *///?}
-                }
-            }
-            String path = "icon/" + this.name + "/" + size;
-            Identifier id = Identifier.fromNamespaceAndPath("hotwire", path);
-            //? if >=1.21.5 {
-            DynamicTexture texture = new DynamicTexture(() -> "hotwire/" + path, image);
-            //?} else {
-            /*DynamicTexture texture = new DynamicTexture(image);
-            *///?}
-            Minecraft.getInstance().getTextureManager().register(id, texture);
+            Identifier id = makeTexture("icon/" + this.name + "/" + size, size, size, this.pixels.makeSquare(size));
             this.textures.put(size, id);
             return id;
         }
@@ -89,6 +71,27 @@ public final class ModIcons implements AutoCloseable {
             this.textures.values().forEach(Minecraft.getInstance().getTextureManager()::release);
             this.textures.clear();
         }
+    }
+
+    static Identifier makeTexture(String path, int width, int height, int[] argb) {
+        NativeImage image = new NativeImage(width, height, false);
+        for (int y = 0; y < height; y++) {
+            for (int x = 0; x < width; x++) {
+                //? if >=1.21.4 {
+                image.setPixel(x, y, argb[y * width + x]);
+                //?} else {
+                /*image.setPixelRGBA(x, y, swapRedBlue(argb[y * width + x]));
+                *///?}
+            }
+        }
+        Identifier id = Identifier.fromNamespaceAndPath("hotwire", path);
+        //? if >=1.21.5 {
+        DynamicTexture texture = new DynamicTexture(() -> "hotwire/" + path, image);
+        //?} else {
+        /*DynamicTexture texture = new DynamicTexture(image);
+        *///?}
+        Minecraft.getInstance().getTextureManager().register(id, texture);
+        return id;
     }
 
     private final InstalledMods installed;

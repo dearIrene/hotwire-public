@@ -2,23 +2,35 @@ package dev.moon.hotwire.ui;
 
 import java.util.ArrayList;
 import java.util.List;
+import java.util.Locale;
+import java.util.regex.MatchResult;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 import java.util.stream.Stream;
 
 final class MarkdownLines {
-    record Line(String text, int indent, int color, int above) {
+    record Line(String text, int indent, int color, int above, String picture) {
+        Line(String text, int indent, int color, int above) {
+            this(text, indent, color, above, "");
+        }
     }
 
     private static final int PARAGRAPH = 6;
     private static final int HEADING = 10;
 
     private static final int STEP = 10;
+
+    private static final Pattern SPACING = Pattern.compile("&(?:nbsp|emsp|ensp|thinsp|#8195|#8194|#160);");
+    private static final Pattern CODE_POINT = Pattern.compile("&#([0-9]{1,7}|[xX][0-9a-fA-F]{1,6});");
+    private static final Pattern BLANK_LINE = Pattern.compile("(?m)^[ \t\u00a0]+$");
     private static final Pattern COMMENT = Pattern.compile("<!--.*?-->", Pattern.DOTALL);
     private static final Pattern HTML_HEADING = Pattern.compile("(?is)<h([1-6])[^>]*>(.*?)</h\\1>");
     private static final Pattern HTML_BREAK = Pattern.compile("(?i)<br\\s*/?>|</?p(\\s[^>]*)?>");
     private static final Pattern HTML_ITEM = Pattern.compile("(?i)<li[^>]*>");
-    private static final Pattern IMAGE = Pattern.compile("!\\[[^\\]]*]\\([^)]*\\)");
+    private static final Pattern IMAGE = Pattern.compile("!\\[[^\\]]*]\\(\\s*<?([^)\\s>]*)>?[^)]*\\)");
+    private static final Pattern HTML_IMAGE = Pattern.compile("(?i)<img\\s[^>]*?src\\s*=\\s*[\"']([^\"']+)[\"'][^>]*>");
+
+    private static final char PICTURE = '\u0001';
     private static final Pattern LINK = Pattern.compile("\\[([^\\]]*)]\\([^)]*\\)");
     private static final Pattern TAG = Pattern.compile("</?[A-Za-z][^>]*>");
     private static final Pattern TITLE = Pattern.compile("^(#{1,6})\\s+(.*?)[\\s#]*$");
@@ -55,11 +67,31 @@ final class MarkdownLines {
                 "\n" + "#".repeat(Integer.parseInt(found.group(1))) + " " + found.group(2) + "\n"));
         text = HTML_BREAK.matcher(text).replaceAll("\n");
         text = HTML_ITEM.matcher(text).replaceAll("\n- ");
-        text = IMAGE.matcher(text).replaceAll("");
+        text = HTML_IMAGE.matcher(text).replaceAll(found -> Matcher.quoteReplacement(markPicture(found.group(1))));
+        text = IMAGE.matcher(text).replaceAll(found -> Matcher.quoteReplacement(markPicture(found.group(1))));
         text = LINK.matcher(text).replaceAll("$1");
         text = TAG.matcher(text).replaceAll("");
-        return text.replace("&nbsp;", " ").replace("&lt;", "<").replace("&gt;", ">").replace("&quot;", "\"")
-                .replace("&#39;", "'").replace("&amp;", "&");
+        text = SPACING.matcher(text).replaceAll(" ");
+        text = CODE_POINT.matcher(text).replaceAll(found -> Matcher.quoteReplacement(decode(found)));
+
+        text = BLANK_LINE.matcher(text).replaceAll("");
+        return text.replace("&lt;", "<").replace("&gt;", ">").replace("&quot;", "\"").replace("&amp;", "&");
+    }
+
+    private static String markPicture(String url) {
+        return url.startsWith("https://") && !url.toLowerCase(Locale.ROOT).endsWith(".svg")
+                ? "\n" + PICTURE + url + "\n" : "";
+    }
+
+    private static String decode(MatchResult found) {
+        String digits = found.group(1);
+        try {
+            int code = digits.startsWith("x") || digits.startsWith("X") ? Integer.parseInt(digits.substring(1), 16)
+                    : Integer.parseInt(digits);
+            return Character.isValidCodePoint(code) ? Character.toString(code) : found.group();
+        } catch (NumberFormatException e) {
+            return found.group();
+        }
     }
 
     private void read(String text) {
@@ -74,6 +106,15 @@ final class MarkdownLines {
             }
             if (code) {
                 this.add(line, STEP, Palette.FAINT);
+                continue;
+            }
+            if (line.strip().indexOf(PICTURE) == 0) {
+                this.endParagraph();
+                this.addRoom(PARAGRAPH);
+                this.out.add(new Line("", 0, Palette.TEXT, this.out.isEmpty() ? 0 : this.above,
+                        line.strip().substring(1)));
+                this.above = 0;
+                this.addRoom(PARAGRAPH);
                 continue;
             }
             Matcher title = TITLE.matcher(line);

@@ -2,7 +2,9 @@ package dev.moon.hotwire.ui;
 
 import dev.moon.hotwire.modrinth.ModrinthClient;
 import dev.moon.hotwire.modrinth.StoreModel;
+import java.util.HashMap;
 import java.util.List;
+import java.util.Map;
 import java.util.function.Consumer;
 import org.jspecify.annotations.Nullable;
 
@@ -20,6 +22,7 @@ public final class StoreDetail extends Panel {
     private static final int MOST_HEIGHT = 440;
 
     private static final int HEAD = 50;
+    private static final int MOST_PICTURE = 240;
 
     private final StoreModel model;
     private final StoreIcons icons;
@@ -41,6 +44,8 @@ public final class StoreDetail extends Panel {
     private int linkY = Integer.MIN_VALUE;
     private int linkWidth;
 
+    private final Map<String, Integer> pictureRooms = new HashMap<>();
+
     public StoreDetail(StoreModel model, StoreIcons icons, Adds adds, Consumer<String> openLink, Runnable onClose) {
         super(Lang.get("hotwire.button.close"), onClose);
         this.model = model;
@@ -57,6 +62,7 @@ public final class StoreDetail extends Panel {
         this.failure = null;
         this.bodyLines = List.of();
         this.bodyRead = "";
+        this.pictureRooms.clear();
         this.contentHeight = 0;
         this.scrollTarget = 0;
         this.scroll.snap(0);
@@ -135,6 +141,10 @@ public final class StoreDetail extends Panel {
         for (MarkdownLines.Line line : this.findBodyLines(canvas, page == null ? shown.description() : page.body(),
                 textW)) {
             lineY += line.above();
+            if (!line.picture().isEmpty()) {
+                lineY += this.drawPicture(canvas, alpha, line.picture(), left, lineY, textW, top, bottom);
+                continue;
+            }
             canvas.drawText(line.text(), left + line.indent(), lineY, Colors.fade(line.color(), alpha));
             lineY += LINE;
         }
@@ -188,6 +198,22 @@ public final class StoreDetail extends Panel {
         String by = shown.author() + (page == null || page.license().isEmpty() ? ""
                 : "  " + Lang.get("hotwire.store.license", page.license()));
         canvas.drawText(canvas.clip(by, right - textX), textX, top + 16, Colors.fade(Palette.DIM, alpha));
+    }
+
+    private int drawPicture(Canvas canvas, float alpha, String url, int left, int y, int width, int top, int bottom) {
+        if (y < top - MOST_HEIGHT || y > bottom + MOST_HEIGHT) {
+            return this.pictureRooms.getOrDefault(url, 0);
+        }
+        StoreIcons.PagePicture picture = this.icons.findPicture(url);
+        if (picture == null) {
+            return this.pictureRooms.getOrDefault(url, 0);
+        }
+        int wide = Math.min(width, picture.width());
+        int height = Math.max(1, Math.min(MOST_PICTURE, Math.round((float) picture.height() * wide / picture.width())));
+        int shown = Math.max(1, Math.round((float) picture.width() * height / picture.height()));
+        canvas.drawImage(picture.image(), left + (width - shown) / 2, y, shown, height, alpha);
+        this.pictureRooms.put(url, height + 4);
+        return height + 4;
     }
 
     private boolean isOnLink(double px, double py, int left) {

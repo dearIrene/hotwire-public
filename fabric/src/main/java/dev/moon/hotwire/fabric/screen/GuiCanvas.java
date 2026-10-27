@@ -116,13 +116,18 @@ public final class GuiCanvas implements Canvas {
 
     @Override
     public boolean drawImage(Canvas.Image image, int x, int y, int width, int height, float alpha) {
-        if (!(image instanceof ModIcons.Icon icon) || alpha <= 0) {
+        if (alpha <= 0) {
             return false;
         }
         double scale = Minecraft.getInstance().getWindow().getGuiScale();
         long began = System.nanoTime();
-        Identifier texture = icon.findTexture((int) Math.round(width * scale), scale,
-                this.making < MAKING_BUDGET_NANOS);
+        boolean mayMake = this.making < MAKING_BUDGET_NANOS;
+        Identifier texture = switch (image) {
+            case ModIcons.Icon icon -> icon.findTexture((int) Math.round(width * scale), scale, mayMake);
+            case Picture picture -> picture.findTexture((int) Math.round(width * scale),
+                    (int) Math.round(height * scale), mayMake);
+            default -> null;
+        };
         this.making += System.nanoTime() - began;
         if (texture == null) {
             return false;

@@ -5,6 +5,8 @@ import org.jspecify.annotations.Nullable;
 public final class IconPixels {
     static final int MAX_SIZE = 256;
 
+    private static final int PICTURE_SIZE = 1024;
+
     private final int width;
     private final int height;
     private final int[] argb;
@@ -27,12 +29,26 @@ public final class IconPixels {
                 : retained.scale(fit(retained.width, side, MAX_SIZE), fit(retained.height, side, MAX_SIZE));
     }
 
-    int getWidth() {
+    public static @Nullable IconPixels ofPicture(int width, int height, int[] argb) {
+        if (width <= 0 || height <= 0 || argb.length < width * height) {
+            return null;
+        }
+        IconPixels whole = new IconPixels(width, height, argb.clone());
+        int side = Math.max(width, height);
+        return side <= PICTURE_SIZE ? whole
+                : whole.scale(fit(width, side, PICTURE_SIZE), fit(height, side, PICTURE_SIZE));
+    }
+
+    public int getWidth() {
         return this.width;
     }
 
-    int getHeight() {
+    public int getHeight() {
         return this.height;
+    }
+
+    public int[] makeFitted(int width, int height) {
+        return width == this.width && height == this.height ? this.argb.clone() : this.scale(width, height).argb;
     }
 
     public int[] makeSquare(int size) {

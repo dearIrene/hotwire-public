@@ -53,7 +53,13 @@ public final class ModrinthClient {
         String post(String url, String json) throws IOException;
 
         byte[] fetchBytes(String url) throws IOException;
+
+        default byte[] fetchPicture(String url) throws IOException {
+            throw new IOException("no pictures here");
+        }
     }
+
+    public static final int MOST_PICTURE_BYTES = 8 * 1024 * 1024;
 
     private final Transport transport;
     private final String loader;
@@ -167,6 +173,10 @@ public final class ModrinthClient {
         return this.transport.fetchBytes(url);
     }
 
+    public byte[] fetchPicture(String url) throws IOException {
+        return this.transport.fetchPicture(url);
+    }
+
     public static String hashOf(byte[] bytes) {
         try {
             return HexFormat.of().formatHex(MessageDigest.getInstance("SHA-512").digest(bytes));
@@ -266,6 +276,23 @@ public final class ModrinthClient {
             }
             return this.send(HttpRequest.newBuilder(URI.create(url)).GET(), HttpResponse.BodyHandlers.ofByteArray(),
                     HttpResponse::body);
+        }
+
+        @Override
+        public byte[] fetchPicture(String url) throws IOException {
+            if (!url.startsWith("https://")) {
+                throw new IOException("a picture not served by HTTPS was refused: " + url);
+            }
+            return this.send(HttpRequest.newBuilder(URI.create(url)).GET(), HttpResponse.BodyHandlers.ofInputStream(),
+                    response -> {
+                        try (InputStream in = response.body()) {
+                            byte[] bytes = in.readNBytes(MOST_PICTURE_BYTES + 1);
+                            if (bytes.length > MOST_PICTURE_BYTES) {
+                                throw new IOException("the picture is larger than 8 MB: " + url);
+                            }
+                            return bytes;
+                        }
+                    });
         }
 
         private interface Reader<T, R> {
