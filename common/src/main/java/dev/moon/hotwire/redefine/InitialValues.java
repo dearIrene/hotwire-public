@@ -13,6 +13,7 @@ import java.util.function.Function;
 import java.util.function.Supplier;
 import org.objectweb.asm.ClassWriter;
 import org.objectweb.asm.Opcodes;
+import org.objectweb.asm.Type;
 import org.objectweb.asm.tree.AbstractInsnNode;
 import org.objectweb.asm.tree.ClassNode;
 import org.objectweb.asm.tree.FieldInsnNode;
@@ -20,11 +21,17 @@ import org.objectweb.asm.tree.FrameNode;
 import org.objectweb.asm.tree.InsnList;
 import org.objectweb.asm.tree.InsnNode;
 import org.objectweb.asm.tree.LabelNode;
+import org.objectweb.asm.tree.MethodInsnNode;
 import org.objectweb.asm.tree.MethodNode;
 import org.objectweb.asm.tree.TypeInsnNode;
 import org.objectweb.asm.tree.VarInsnNode;
 
 public final class InitialValues {
+    private static final Map<Integer, String> BOXES = Map.of(Type.BOOLEAN, "java/lang/Boolean", Type.CHAR,
+            "java/lang/Character", Type.BYTE, "java/lang/Byte", Type.SHORT, "java/lang/Short", Type.INT,
+            "java/lang/Integer", Type.FLOAT, "java/lang/Float", Type.LONG, "java/lang/Long", Type.DOUBLE,
+            "java/lang/Double");
+
     private InitialValues() {
     }
 
@@ -45,6 +52,13 @@ public final class InitialValues {
             if (!(insn instanceof FieldInsnNode store && store.getOpcode() == Opcodes.PUTSTATIC)) {
                 value.instructions.add(insn.clone(Map.of()));
             }
+        }
+
+        Type type = Type.getType(descriptor);
+        if (type.getSort() < Type.ARRAY) {
+            String box = BOXES.get(type.getSort());
+            value.instructions.add(new MethodInsnNode(Opcodes.INVOKESTATIC, box, "valueOf",
+                    "(" + descriptor + ")L" + box + ";", false));
         }
         value.instructions.add(new InsnNode(Opcodes.ARETURN));
         made.methods.add(value);

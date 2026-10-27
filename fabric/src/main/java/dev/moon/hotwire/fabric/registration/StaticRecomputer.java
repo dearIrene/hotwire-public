@@ -31,7 +31,8 @@ final class StaticRecomputer {
     }
 
     interface Writer {
-        void write(FieldSlots.Slot field, @Nullable Object holder, Object value) throws IllegalAccessException;
+        void write(FieldSlots.Slot field, @Nullable Object holder, @Nullable Object value)
+                throws IllegalAccessException;
     }
 
     private final ClassRebuilder rebuilder;

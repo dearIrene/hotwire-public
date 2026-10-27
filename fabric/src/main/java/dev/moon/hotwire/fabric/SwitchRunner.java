@@ -78,7 +78,7 @@ public final class SwitchRunner {
         this.plugins = plugins;
         this.chain = chain;
         switcher.readAheadWith(order -> {
-            fieldReferences.readAhead(order);
+            fieldReferences.readAhead(order, switcher::isOn);
             tripwire.readAhead(order);
             wrappers.readAhead(order);
 

@@ -61,6 +61,7 @@ public final class FieldReferences {
 
     private final Set<Field> finalsWritten = ConcurrentHashMap.newKeySet();
     private final AtomicBoolean refreshDue = new AtomicBoolean();
+    private final LoadedCheckAnswers loadedChecks;
     private final StaticRecomputer recomputer;
     private final Function<String, Set<String>> mixinTargets;
     private final Lambdas lambdas;
@@ -79,6 +80,7 @@ public final class FieldReferences {
         this.handedTo = handedTo;
         this.lambdas = new Lambdas(instrumentation);
         this.recomputer = new StaticRecomputer(rebuilder, this.lambdas::findModOf, generatedBy);
+        this.loadedChecks = new LoadedCheckAnswers(instrumentation, originalBytes, this::write);
         this.elements = new CollectionReferences(this::write);
         ValueOwners.setLambdaOwners(this.lambdas::findModOf);
         ReflectedOwners.readBytesWith(originalBytes);
@@ -94,6 +96,8 @@ public final class FieldReferences {
         SwitchTimes.mark("field references: elements");
         mods.forEach(mod -> this.recomputeStatics(mod, scan.byName(), getOthers(mods, on)));
         SwitchTimes.mark("field references: statics");
+        this.loadedChecks.match(mods, true, this.lambdas.open(), getOthers(mods, on));
+        SwitchTimes.mark("field references: loaded checks");
         this.refreshFinalReaders();
     }
 
@@ -149,7 +153,8 @@ public final class FieldReferences {
         return bytes == null ? Set.of() : ClassFileSummary.findClassesUsed(bytes);
     }
 
-    public void readAhead(Collection<String> mods) {
+    public void readAhead(Collection<String> mods, Predicate<String> on) {
+        this.loadedChecks.readAhead(mods, this.lambdas.open(), getOthers(mods, on));
         for (Class<?> type : this.instrumentation.getAllLoadedClasses()) {
             String mod = type.isArray() || type.isHidden() ? null : GameRegistrations.findModOf(type);
             if (mod != null && mods.contains(mod)) {
@@ -376,6 +381,7 @@ public final class FieldReferences {
             rebuildTabs(this.replacements.getOrDefault(mod, List.of()));
             this.replacements.remove(mod);
         }));
+        this.loadedChecks.match(mods, false, this.lambdas.open(), getOthers(Set.of(), id -> true));
         this.refreshFinalReaders();
     }
 
