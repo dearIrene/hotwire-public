@@ -108,7 +108,7 @@ record HandedSearch(Set<Object> handed, Set<String> consumers, Collection<Class<
         if (value instanceof Object[]) {
             return true;
         }
-        if (value instanceof Class<?> || CollectionReferences.isPlain(value)) {
+        if (value instanceof Class<?> || ValueOwners.isPlain(value)) {
             return false;
         }
         String mod = GameRegistrations.findModOf(value.getClass());

@@ -107,7 +107,7 @@ sealed interface Removal {
     }
 
     private static String describeKind(@Nullable Object value) {
-        return value == null ? "null" : CollectionReferences.isPlain(value) ? String.valueOf(value)
+        return value == null ? "null" : ValueOwners.isPlain(value) ? String.valueOf(value)
                 : value.getClass().getSimpleName();
     }
 

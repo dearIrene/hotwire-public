@@ -80,7 +80,7 @@ public final class FieldReferences {
         this.lambdas = new Lambdas(instrumentation);
         this.recomputer = new StaticRecomputer(rebuilder, this.lambdas::findModOf, generatedBy);
         this.elements = new CollectionReferences(this::write);
-        CollectionReferences.setLambdaOwners(this.lambdas::findModOf);
+        ValueOwners.setLambdaOwners(this.lambdas::findModOf);
         ReflectedOwners.readBytesWith(originalBytes);
     }
 

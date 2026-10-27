@@ -73,7 +73,7 @@ final class Wrappers {
                 return NONE_OPEN;
             }
         }
-        if (value == null || value instanceof Class<?> || CollectionReferences.isPlain(value)
+        if (value == null || value instanceof Class<?> || ValueOwners.isPlain(value)
                 || known.getOrDefault(value, -1) >= further) {
             this.reached = false;
             return NONE_OPEN;
@@ -188,7 +188,7 @@ final class Wrappers {
     }
 
     static @Nullable String findNamed(@Nullable Object key, @Nullable Object value, ModNames names) {
-        if (!(key instanceof String name) || value == null || CollectionReferences.isPlain(value)) {
+        if (!(key instanceof String name) || value == null || ValueOwners.isPlain(value)) {
             return null;
         }
         return isOfAnotherMod(value.getClass()) ? names.find(name) : null;
@@ -214,12 +214,12 @@ final class Wrappers {
                     continue;
                 }
                 Object part = accessor.invoke(item);
-                if (part == null || CollectionReferences.isPlain(part)) {
+                if (part == null || ValueOwners.isPlain(part)) {
                     continue;
                 }
-                String of = CollectionReferences.findOwnerOfValue(part);
+                String of = ValueOwners.findOwnerOfValue(part);
                 if (of == null) {
-                    of = CollectionReferences.findForwardedTo(part);
+                    of = ValueOwners.findForwardedTo(part);
                 }
                 if (of == null || (owner != null && !owner.equals(of))) {
                     return null;
@@ -244,10 +244,10 @@ final class Wrappers {
                     continue;
                 }
                 Object part = accessor.invoke(item);
-                if (part == null || CollectionReferences.isPlain(part)) {
+                if (part == null || ValueOwners.isPlain(part)) {
                     continue;
                 }
-                if (!CollectionReferences.isOwnedBy(mod, part) && !CollectionReferences.forwardsTo(mod, part)) {
+                if (!ValueOwners.isOwnedBy(mod, part) && !ValueOwners.forwardsTo(mod, part)) {
                     return false;
                 }
                 mods++;
@@ -295,13 +295,13 @@ final class Wrappers {
         if (owner != null && mods.contains(owner)) {
             return owner;
         }
-        String id = CollectionReferences.findIdOwner(value);
+        String id = ValueOwners.findIdOwner(value);
         if (id != null && mods.contains(id)) {
             return id;
         }
         for (String mod : type.isHidden() ? mods : List.<String>of()) {
-            if (CollectionReferences.isOwnedBy(mod, value)
-                    || (CollectionReferences.isLambda(value) && CollectionReferences.forwardsTo(mod, value))) {
+            if (ValueOwners.isOwnedBy(mod, value)
+                    || (ValueOwners.isLambda(value) && ValueOwners.forwardsTo(mod, value))) {
                 return mod;
             }
         }

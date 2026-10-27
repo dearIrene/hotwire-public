@@ -96,7 +96,7 @@ public final class CommandRecorder {
         if (mod != null) {
             mods.add(mod);
         }
-        if (!CollectionReferences.isLambda(code)) {
+        if (!ValueOwners.isLambda(code)) {
             return;
         }
         for (FieldSlots.Slot field : Fields.getReferenceFields(code.getClass(), false)) {
