@@ -23,6 +23,7 @@ import net.fabricmc.loader.impl.FabricLoaderImpl;
 import net.fabricmc.loader.impl.ModContainerImpl;
 import net.fabricmc.loader.impl.discovery.ModCandidateImpl;
 import net.fabricmc.loader.impl.entrypoint.EntrypointStorage;
+import net.fabricmc.loader.impl.launch.FabricLauncherBase;
 import net.fabricmc.loader.impl.metadata.DependencyOverrides;
 import net.fabricmc.loader.impl.metadata.EntrypointMetadata;
 import net.fabricmc.loader.impl.metadata.LoaderModMetadata;
@@ -65,6 +66,21 @@ public final class LoaderModList {
         synchronized (loader) {
             mods.add(container);
             byId.put(metadata.getId(), container);
+
+            metadata.getLanguageAdapterDefinitions().forEach((name, type) -> {
+                if (!adapters.containsKey(name)) {
+                    try {
+                        adapters.put(name, Class.forName(type, true,
+                                FabricLauncherBase.getLauncher().getTargetClassLoader())
+                                .asSubclass(LanguageAdapter.class).getDeclaredConstructor().newInstance());
+                    } catch (ReflectiveOperationException | LinkageError e) {
+                        mods.remove(container);
+                        byId.remove(metadata.getId(), container);
+                        throw new IllegalStateException("the loader could not make the " + name
+                                + " language adapter of " + metadata.getId() + ": " + e, e);
+                    }
+                }
+            });
             for (String key : metadata.getEntrypointKeys()) {
                 for (EntrypointMetadata entrypoint : metadata.getEntrypoints(key)) {
                     try {
