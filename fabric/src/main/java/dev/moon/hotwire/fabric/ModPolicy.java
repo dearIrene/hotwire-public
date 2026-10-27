@@ -9,6 +9,7 @@ import java.util.HashSet;
 import java.util.List;
 import java.util.Optional;
 import java.util.Set;
+import java.util.function.BiPredicate;
 import net.fabricmc.api.EnvType;
 import net.fabricmc.loader.api.FabricLoader;
 import net.fabricmc.loader.api.ModContainer;
@@ -27,6 +28,7 @@ public final class ModPolicy {
     static final Set<String> ALWAYS_ON = Set.of("sodium", "lithium", "phosphor");
 
     private static volatile SwitchPlanner.NestedJars nestedJars = SwitchPlanner.NestedJars.AUTO;
+    private static volatile BiPredicate<String, String> callsNow = (mod, other) -> false;
 
     private ModPolicy() {
     }
@@ -88,12 +90,16 @@ public final class ModPolicy {
         nestedJars = choice;
     }
 
+    static void setCallsNow(BiPredicate<String, String> answer) {
+        callsNow = answer;
+    }
+
     public static SwitchPlanner makePlannerFor(ModGraph graph) {
         Set<String> guarded = new HashSet<>();
         graph.getIds().stream().filter(ModPolicy::isGuarded).forEach(guarded::add);
         guarded.addAll(findNeededByUnread(graph.getIds()));
         return new SwitchPlanner(graph, new SwitchPlanner.Settings(nestedJars, findBuiltIn(graph.getIds()), guarded,
-                ModPolicy::satisfies));
+                ModPolicy::satisfies, callsNow));
     }
 
     static Set<String> findNeededByUnread(Set<String> known) {

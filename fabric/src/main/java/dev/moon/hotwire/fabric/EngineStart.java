@@ -12,6 +12,7 @@ import dev.moon.hotwire.fabric.rebuild.MixinConfigs;
 import dev.moon.hotwire.fabric.rebuild.MixinInternals;
 import dev.moon.hotwire.fabric.rebuild.TransformerChain;
 import dev.moon.hotwire.fabric.registration.AsyncLogging;
+import dev.moon.hotwire.fabric.registration.CodeReach;
 import dev.moon.hotwire.fabric.registration.ConnectionLambdas;
 import dev.moon.hotwire.fabric.registration.EventInvokers;
 import dev.moon.hotwire.fabric.registration.FieldReferences;
@@ -210,6 +211,7 @@ final class EngineStart {
                 return still;
             };
         });
+        ModPolicy.setCallsNow(new CodeReach(instrumentation, classes::findOriginalBytes)::callsNow);
         ModSwitcher switcher = new ModSwitcher(installed.getGraph(), ModPolicy.makePlannerFor(installed.getGraph()),
                 applier, progress, GameRegistrations.getJournal(),
                 ModLifecycle.makeLifecycle(GameRegistrations.getJournal(), Minecraft.getInstance()));

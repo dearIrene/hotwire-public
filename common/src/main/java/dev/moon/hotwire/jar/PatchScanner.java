@@ -46,6 +46,8 @@ final class PatchScanner {
 
     private static final List<String> RUNS_ALWAYS = List.of("main", "client", "server", "preLaunch");
 
+    private static final String SERVICES = "META-INF/services/";
+
     private static final List<String> OUTSIDE = List.of("java/", "javax/", "jdk/", "sun/", "net/minecraft/",
             "com/mojang/");
 
@@ -120,6 +122,19 @@ final class PatchScanner {
                 String type = (member < 0 ? value : value.substring(0, member)).replace('.', '/');
                 if (owns.contains(type)) {
                     reached.add(type);
+                }
+            }
+        }
+
+        for (String entry : entries) {
+            byte[] listed = entry.startsWith(SERVICES) && !entry.endsWith("/") ? reader.read(entry) : null;
+            if (listed != null) {
+                for (String line : new String(listed, StandardCharsets.UTF_8).lines().toList()) {
+                    int comment = line.indexOf('#');
+                    String type = (comment < 0 ? line : line.substring(0, comment)).strip().replace('.', '/');
+                    if (owns.contains(type)) {
+                        reached.add(type);
+                    }
                 }
             }
         }

@@ -18,6 +18,7 @@ import java.util.Set;
 import java.util.SortedSet;
 import java.util.TreeMap;
 import java.util.TreeSet;
+import java.util.function.BiPredicate;
 import org.jspecify.annotations.Nullable;
 
 public final class SwitchPlanner {
@@ -37,10 +38,15 @@ public final class SwitchPlanner {
         boolean matches(String version, List<String> ranges);
     }
 
-    public record Settings(NestedJars nestedJars, Set<String> builtIn, Set<String> protectedMods, Versions versions) {
+    public record Settings(NestedJars nestedJars, Set<String> builtIn, Set<String> protectedMods, Versions versions,
+            BiPredicate<String, String> callsNow) {
         public Settings {
             builtIn = Set.copyOf(builtIn);
             protectedMods = Set.copyOf(protectedMods);
+        }
+
+        public Settings(NestedJars nestedJars, Set<String> builtIn, Set<String> protectedMods, Versions versions) {
+            this(nestedJars, builtIn, protectedMods, versions, (mod, other) -> false);
         }
 
         boolean isProtected(String mod) {
@@ -67,6 +73,13 @@ public final class SwitchPlanner {
             for (String leavingMod : new ArrayList<>(leaving.keySet())) {
                 for (String dependent : this.graph.getDependents(leavingMod)) {
                     grew |= this.join(leaving, alreadyOff, dependent, new Reason.DependsOn(leavingMod));
+                }
+
+                for (String asker : this.graph.getAskers(leavingMod)) {
+                    if (!alreadyOff.contains(asker) && !leaving.containsKey(asker)
+                            && this.settings.callsNow().test(asker, leavingMod)) {
+                        grew |= this.join(leaving, alreadyOff, asker, new Reason.DependsOn(leavingMod));
+                    }
                 }
 
                 for (String container : this.graph.getContainers(leavingMod)) {
