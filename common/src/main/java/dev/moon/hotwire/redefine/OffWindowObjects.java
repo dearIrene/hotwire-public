@@ -17,6 +17,8 @@ import org.jspecify.annotations.Nullable;
 public final class OffWindowObjects {
     static final int CAP = 1 << 17;
     private static final Map<String, ClassRecord> MADE = new ConcurrentHashMap<>();
+
+    private static final Set<String> RECORDING = ConcurrentHashMap.newKeySet();
     private static final long COLLECTION_WAIT_NANOS = TimeUnit.SECONDS.toNanos(2);
 
     @SuppressWarnings("unused")
@@ -119,8 +121,18 @@ public final class OffWindowObjects {
         return live;
     }
 
+    static void markRecording(String className, boolean recording) {
+        if (recording) {
+            RECORDING.add(className);
+        } else {
+            RECORDING.remove(className);
+        }
+    }
+
     public static void forget(String className) {
-        MADE.remove(className);
+        if (!RECORDING.contains(className)) {
+            MADE.remove(className);
+        }
     }
 
     public static void awaitCollection() {

@@ -532,7 +532,9 @@ public final class ClassRebuilder {
 
     public byte[] prepareForLoad(String internal, byte[] mixed, byte[] launchMix, byte[] original) {
         this.launch.putIfAbsent(internal, launchMix);
-        return RetainedInitializers.retain(mixed, launchMix, original);
+        byte[] prepared = RetainedInitializers.retain(mixed, launchMix, original);
+        OffWindowObjects.markRecording(internal, OffWindowReplay.isRecording(prepared));
+        return prepared;
     }
 
     public byte[] mixForLoad(String internal, byte[] original, Map<String, byte[]> resources, List<String> configs,

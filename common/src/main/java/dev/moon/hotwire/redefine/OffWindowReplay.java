@@ -4,6 +4,7 @@ import java.lang.invoke.MethodHandle;
 import java.lang.invoke.MethodHandleProxies;
 import java.lang.invoke.MethodHandles;
 import java.lang.invoke.MethodType;
+import java.nio.charset.StandardCharsets;
 import java.util.HashMap;
 import java.util.HashSet;
 import java.util.LinkedHashMap;
@@ -25,6 +26,7 @@ import org.slf4j.LoggerFactory;
 public final class OffWindowReplay {
     private static final Logger LOGGER = LoggerFactory.getLogger(OffWindowReplay.class);
     static final String METHOD = "hotwire$replayMade";
+    private static final String RECORD = OffWindowObjects.class.getName().replace('.', '/');
 
     static final class Addition {
         private final byte[] bytes;
@@ -48,6 +50,7 @@ public final class OffWindowReplay {
     }
 
     static Addition add(String name, byte[] mixed, byte[] running, byte @Nullable [] original, boolean handlers) {
+        OffWindowObjects.markRecording(name, isRecording(mixed));
         if (original == null || OffWindowObjects.countAlive(name) == 0) {
             return new Addition(mixed, Set.of());
         }
@@ -101,6 +104,10 @@ public final class OffWindowReplay {
         ClassWriter writer = new ClassWriter(ClassWriter.COMPUTE_MAXS);
         now.accept(writer);
         return new Addition(writer.toByteArray(), fields);
+    }
+
+    static boolean isRecording(byte[] bytes) {
+        return new String(bytes, StandardCharsets.ISO_8859_1).contains(RECORD);
     }
 
     @SuppressWarnings("unchecked")
