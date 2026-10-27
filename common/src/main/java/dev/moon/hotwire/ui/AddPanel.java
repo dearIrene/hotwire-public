@@ -58,7 +58,7 @@ final class AddPanel extends Panel {
             return this.reading.join();
         } catch (RuntimeException e) {
             Throwable cause = e.getCause() == null ? e : e.getCause();
-            return AddPreview.ofRefusal(this.getFileName(), Lang.get("hotwire.add.failed", cause));
+            return AddPreview.ofRefusal(this.getFileName(), Lang.get("hotwire.failed", cause));
         }
     }
 

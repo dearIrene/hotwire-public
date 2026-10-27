@@ -16,13 +16,13 @@ public final class PlayerMessages {
         return describe(result, nameOf, false);
     }
 
-    public static String describe(ModSwitcher.Result result, Function<String, String> nameOf, boolean kept) {
+    public static String describe(ModSwitcher.Result result, Function<String, String> nameOf, boolean untilOn) {
         boolean off = result.plan().direction() == SwitchPlan.Direction.OFF;
         return switch (result) {
             case ModSwitcher.Result.Done done when done.plan().order().isEmpty() -> Lang.get(off
                     ? "hotwire.switch.already_off" : "hotwire.switch.already_on");
             case ModSwitcher.Result.Done done -> Lang.get(!off ? "hotwire.switch.turned_on"
-                    : kept ? "hotwire.switch.turned_off_kept" : "hotwire.switch.turned_off",
+                    : untilOn ? "hotwire.switch.turned_off_kept" : "hotwire.switch.turned_off",
                     joinNames(done.plan().order(), nameOf), formatSeconds(done.millis()));
             case ModSwitcher.Result.Refused refused -> describeRefusal(refused.plan().refusals().getFirst(), off,
                     nameOf);
@@ -35,7 +35,8 @@ public final class PlayerMessages {
     public static String describe(Report.OffCheck offCheck) {
         return switch (offCheck) {
             case Report.OffCheck.NotRun notRun -> "";
-            case Report.OffCheck.AllOff allOff -> Lang.get("hotwire.switch.fully_off");
+
+            case Report.OffCheck.AllOff allOff -> "";
             case Report.OffCheck.PartlyOff partly -> Lang.get("hotwire.switch.partly_off", count(partly));
         };
     }

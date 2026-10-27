@@ -130,7 +130,7 @@ final class PendingPanel extends Panel {
 
     @Override
     protected void drawContent(Canvas canvas, float alpha, int x, int y, int w, int h) {
-        canvas.drawText(Lang.get("hotwire.pending.title"), x + 14, y + 16, Colors.fade(Palette.TEXT, alpha));
+        canvas.drawText(Lang.get("hotwire.screen.pending"), x + 14, y + 16, Colors.fade(Palette.TEXT, alpha));
         int rowY = y + 46;
         if (this.changes.isEmpty()) {
             canvas.drawText(Lang.get("hotwire.pending.none"), x + 14, rowY, Colors.fade(Palette.DIM, alpha));

@@ -52,8 +52,7 @@ public final class UpdateText {
     private static String findTierKey(UpdateTier tier) {
         return switch (tier) {
             case IN_PLACE -> "hotwire.update.tier.in_place";
-            case RESTART_MOD -> "hotwire.update.tier.restart_mod";
-            case NEXT_START -> "hotwire.update.tier.next_start";
+            case RESTART_MOD, NEXT_START -> "hotwire.update.tier.next_start";
         };
     }
 

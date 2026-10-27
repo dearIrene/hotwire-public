@@ -35,7 +35,7 @@ final class PendingActions {
                 }
             }
         } catch (IOException e) {
-            this.say.accept(Lang.get("hotwire.screen.failed", e.getMessage()), true);
+            this.say.accept(Lang.get("hotwire.failed", e.getMessage()), true);
         }
         return this.game.getPendingChanges();
     }
@@ -45,7 +45,7 @@ final class PendingActions {
             this.game.ignoreEarlierVersions();
             this.say.accept(Lang.get("hotwire.pending.ignored"), false);
         } catch (IOException e) {
-            this.say.accept(Lang.get("hotwire.screen.failed", e.getMessage()), true);
+            this.say.accept(Lang.get("hotwire.failed", e.getMessage()), true);
         }
         return this.game.getPendingChanges();
     }

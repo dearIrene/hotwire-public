@@ -122,7 +122,7 @@ final class AdvancedPanel extends Panel {
 
     @Override
     protected void drawContent(Canvas canvas, float alpha, int x, int y, int w, int h) {
-        canvas.drawText(Lang.get("hotwire.advanced.title"), x + 14, y + 16, Colors.fade(Palette.TEXT, alpha));
+        canvas.drawText(Lang.get("hotwire.screen.advanced"), x + 14, y + 16, Colors.fade(Palette.TEXT, alpha));
         for (int row = 0; row < this.options.size(); row++) {
             AdvancedOption option = this.options.get(row);
             int rowY = y + 46 + PITCH * row;

@@ -258,7 +258,7 @@ public final class GameReports {
             line += ": failed, nothing changed";
         } else {
             line += ": " + report.rebuilt().size() + " classes redefined" + switch (report.offCheck()) {
-                case Report.OffCheck.AllOff allOff -> ", fully off";
+                case Report.OffCheck.AllOff allOff -> "";
                 case Report.OffCheck.PartlyOff partly -> ", partly off";
                 case Report.OffCheck.NotRun notRun -> "";
             } + (report.faults().isEmpty() ? "" : ", with faults");

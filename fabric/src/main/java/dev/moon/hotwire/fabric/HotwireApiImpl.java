@@ -194,7 +194,7 @@ public final class HotwireApiImpl implements HotwireApi {
     static void endIfFailed(CompletableFuture<SwitchResult> ended, @Nullable Throwable error, Predicate<String> on) {
         if (error != null && !ended.isDone()) {
             Minecraft.getInstance().execute(() -> endSwitch(ended, new SwitchResult(SwitchResult.Kind.FAILED,
-                    List.of(), Lang.get("hotwire.switch.failed", error)), on));
+                    List.of(), Lang.get("hotwire.failed", error)), on));
         }
     }
 

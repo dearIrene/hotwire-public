@@ -28,7 +28,7 @@ final class CrashReports {
 
             if (!Minecraft.getInstance().isSameThread() || CrashPopup.show(Lang.get("hotwire.report.crash_title"),
                     Lang.get("hotwire.report.crash_blame") + "\n\n" + words + "\n" + Lang.get("hotwire.report.send"),
-                    Lang.get("hotwire.report.show_file_now"), Lang.get("hotwire.report.close"),
+                    Lang.get("hotwire.report.show_file_now"), Lang.get("hotwire.button.close"),
                     Lang.get("hotwire.report.show_ask"))) {
                 zips.revealLast();
             }
