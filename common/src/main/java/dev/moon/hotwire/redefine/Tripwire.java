@@ -421,6 +421,14 @@ public final class Tripwire {
         return CALLS.containsKey(mod);
     }
 
+    public static boolean isOfOffMod(Class<?> type) {
+        if (CALLS.isEmpty()) {
+            return false;
+        }
+        String mod = owner.apply(type);
+        return mod != null && CALLS.containsKey(mod);
+    }
+
     public static boolean isAnyWatched() {
         return !CALLS.isEmpty();
     }
