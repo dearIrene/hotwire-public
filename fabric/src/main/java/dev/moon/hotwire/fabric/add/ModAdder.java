@@ -426,6 +426,7 @@ public final class ModAdder {
 
             FailedAddJars.remove(part.path());
             FabricLauncherBase.getLauncher().addToClassPath(part.path());
+            MixinCopy.markClassPathChanged();
             undo.addPermanent(part.path().getFileName() + " stays on the class path");
             undo.addUndo(() -> {
                 FailedAddJars.add(part.path());

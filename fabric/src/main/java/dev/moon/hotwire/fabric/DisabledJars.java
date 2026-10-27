@@ -1,6 +1,7 @@
 package dev.moon.hotwire.fabric;
 
 import dev.moon.hotwire.fabric.rebuild.KnotInternals;
+import dev.moon.hotwire.mixin_copy.MixinCopy;
 import java.io.IOException;
 import java.nio.file.Files;
 import java.nio.file.Path;
@@ -33,6 +34,7 @@ final class DisabledJars {
         Path jar = kept.resolveSibling(name.substring(0, name.length() - SUFFIX.length()));
         Files.move(kept, jar);
         FabricLauncherBase.getLauncher().addToClassPath(jar);
+        MixinCopy.markClassPathChanged();
         return jar;
     }
 }

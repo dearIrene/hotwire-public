@@ -23,7 +23,18 @@ public final class LivePlugins {
 
     private static final Map<String, Set<String>> ANSWERED = new ConcurrentHashMap<>();
 
+    private static final Map<String, IMixinConfigPlugin> BY_CONFIG = new ConcurrentHashMap<>();
+    private static final Map<String, IMixinConfigPlugin> BY_PACKAGE = new ConcurrentHashMap<>();
+
     private LivePlugins() {
+    }
+
+    public static @Nullable IMixinConfigPlugin findPlugin(String config) {
+        return BY_CONFIG.get(config);
+    }
+
+    public static @Nullable IMixinConfigPlugin findPluginByPackage(String mixinPackage) {
+        return BY_PACKAGE.get(mixinPackage);
     }
 
     public static @Nullable Set<String> findAnswers(String config) {
@@ -64,6 +75,9 @@ public final class LivePlugins {
             }
             plugin.acceptTargets(Collections.unmodifiableSet(mine), Set.of());
             ANSWERED.put(questions.config(), Set.copyOf(accepted));
+            BY_CONFIG.put(questions.config(), plugin);
+            BY_PACKAGE.put(questions.pkg().endsWith(".") ? questions.pkg().substring(0, questions.pkg().length() - 1)
+                    : questions.pkg(), plugin);
             LOGGER.info("[Hotwire] {}'s plugin ran in the game as at a launch, asked about {} mixins",
                     questions.config(), asked);
         } catch (ReflectiveOperationException | RuntimeException | LinkageError e) {

@@ -22,6 +22,7 @@ import org.objectweb.asm.tree.ClassNode;
 import org.objectweb.asm.tree.FieldInsnNode;
 import org.objectweb.asm.tree.FieldNode;
 import org.objectweb.asm.tree.FrameNode;
+import org.objectweb.asm.tree.InnerClassNode;
 import org.objectweb.asm.tree.InsnList;
 import org.objectweb.asm.tree.InsnNode;
 import org.objectweb.asm.tree.InvokeDynamicInsnNode;
@@ -166,6 +167,14 @@ public final class ClassSplit {
 
         ClassNode out = new ClassNode();
         running.accept(out);
+
+        Set<String> inner = new HashSet<>();
+        out.innerClasses.forEach(listed -> inner.add(listed.name));
+        for (InnerClassNode listed : mixed.innerClasses) {
+            if (inner.add(listed.name)) {
+                out.innerClasses.add(listed);
+            }
+        }
         List<String> stubbed = new ArrayList<>();
         List<MethodNode> bodies = new ArrayList<>();
         boolean rehashes = false;

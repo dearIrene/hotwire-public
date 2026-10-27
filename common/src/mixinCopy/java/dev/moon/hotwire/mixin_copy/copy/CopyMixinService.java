@@ -3,6 +3,9 @@ package dev.moon.hotwire.mixin_copy.copy;
 import java.io.ByteArrayInputStream;
 import java.io.IOException;
 import java.io.InputStream;
+import java.lang.reflect.Field;
+import java.lang.reflect.InvocationTargetException;
+import java.lang.reflect.Modifier;
 import java.net.MalformedURLException;
 import java.net.URI;
 import java.net.URL;
@@ -15,10 +18,15 @@ import java.util.List;
 import java.util.Map;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.function.BiConsumer;
+import java.util.function.BiFunction;
 import java.util.function.Function;
 import org.jspecify.annotations.Nullable;
 import org.objectweb.asm.ClassReader;
+import org.objectweb.asm.ClassWriter;
+import org.objectweb.asm.tree.AbstractInsnNode;
 import org.objectweb.asm.tree.ClassNode;
+import org.objectweb.asm.tree.FrameNode;
+import org.objectweb.asm.tree.MethodNode;
 import org.spongepowered.asm.launch.platform.container.ContainerHandleVirtual;
 import org.spongepowered.asm.launch.platform.container.IContainerHandle;
 import org.spongepowered.asm.logging.ILogger;
@@ -48,6 +56,9 @@ public final class CopyMixinService extends MixinServiceAbstract
     private static @Nullable BiConsumer<String, String> log;
     private static String side = "CLIENT";
     private static @Nullable String obfuscationContext;
+
+    private static Function<String, @Nullable Object> livePlugins = mixinPackage -> null;
+    private static BiFunction<String, String, @Nullable Object> liveMixins = (target, mixin) -> null;
     private static @Nullable IMixinTransformer transformer;
 
     private static @Nullable IMixinTransformerFactory factory;
@@ -139,6 +150,56 @@ public final class CopyMixinService extends MixinServiceAbstract
         CopyMixinService.log = log;
         CopyMixinService.side = side;
         CopyMixinService.obfuscationContext = obfuscationContext;
+    }
+
+    static void setLivePlugins(Function<String, @Nullable Object> plugins,
+            BiFunction<String, String, @Nullable Object> mixins) {
+        livePlugins = plugins;
+        liveMixins = mixins;
+    }
+
+    static @Nullable Object findLivePlugin(String mixinPackage) {
+        return livePlugins.apply(mixinPackage);
+    }
+
+    static void transformLive(Object plugin, String target, ClassNode node, String mixin) {
+        try {
+            for (MethodNode method : node.methods) {
+                for (AbstractInsnNode insn : method.instructions.toArray()) {
+                    if (insn instanceof FrameNode) {
+                        method.instructions.remove(insn);
+                    }
+                }
+            }
+            ClassWriter out = new ClassWriter(0);
+            node.accept(out);
+            Class<?> visitor = live.loadClass("org.objectweb.asm.ClassVisitor");
+            Class<?> nodeType = live.loadClass("org.objectweb.asm.tree.ClassNode");
+            Class<?> readerType = live.loadClass("org.objectweb.asm.ClassReader");
+            Class<?> writerType = live.loadClass("org.objectweb.asm.ClassWriter");
+            Class<?> pluginType = live.loadClass("org.spongepowered.asm.mixin.extensibility.IMixinConfigPlugin");
+            Class<?> infoType = live.loadClass("org.spongepowered.asm.mixin.extensibility.IMixinInfo");
+            Object theirs = nodeType.getConstructor().newInstance();
+            Object reader = readerType.getConstructor(byte[].class).newInstance((Object) out.toByteArray());
+            readerType.getMethod("accept", visitor, int.class).invoke(reader, theirs, 0);
+            pluginType.getMethod("preApply", String.class, nodeType, String.class, infoType).invoke(plugin, target,
+                    theirs, mixin, liveMixins.apply(target, mixin));
+            Object back = writerType.getConstructor(int.class).newInstance(0);
+            nodeType.getMethod("accept", visitor).invoke(theirs, back);
+            ClassNode read = new ClassNode();
+            new ClassReader((byte[]) writerType.getMethod("toByteArray").invoke(back)).accept(read, 0);
+            for (Field field : ClassNode.class.getFields()) {
+                if (!Modifier.isStatic(field.getModifiers())) {
+                    field.set(node, field.get(read));
+                }
+            }
+        } catch (InvocationTargetException e) {
+            throw new IllegalStateException("the game's plugin of " + mixin + " failed on " + target + ": "
+                    + e.getCause(), e.getCause());
+        } catch (ReflectiveOperationException e) {
+            throw new IllegalStateException("the game's plugin of " + mixin + " could not be handed " + target + ": "
+                    + e, e);
+        }
     }
 
     static void endMix() {

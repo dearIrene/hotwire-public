@@ -18,7 +18,9 @@ import java.util.ServiceConfigurationError;
 import java.util.Set;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.ConcurrentLinkedDeque;
+import java.util.concurrent.atomic.AtomicInteger;
 import java.util.function.BiConsumer;
+import java.util.function.BiFunction;
 import java.util.function.BooleanSupplier;
 import java.util.function.Function;
 import org.jspecify.annotations.Nullable;
@@ -68,7 +70,13 @@ public final class MixinCopy implements AutoCloseable {
     private volatile @Nullable String compatibility;
     private final Function<String, byte @Nullable []> more;
     private volatile ExtensionFolder folding = ExtensionFolder.NONE;
+
+    private volatile Function<String, @Nullable Object> livePlugins = mixinPackage -> null;
+    private volatile BiFunction<String, String, @Nullable Object> liveMixins = (target, mixin) -> null;
     private final Map<String, Optional<byte[]>> read = new ConcurrentHashMap<>();
+
+    private final Map<String, Integer> missing = new ConcurrentHashMap<>();
+    private static final AtomicInteger PATHS = new AtomicInteger();
 
     private @Nullable Copy reusable;
 
@@ -76,12 +84,38 @@ public final class MixinCopy implements AutoCloseable {
             Function<String, byte @Nullable []> more, String side, Decorations decorations) {
         this.side = side;
         this.decorations = decorations;
-        this.more = name -> this.read.computeIfAbsent(name, key -> Optional.ofNullable(this.folding.isFolded(key)
-                ? null : more.apply(key)).map(this.folding::fold)).orElse(null);
+        this.more = name -> this.findBytes(name, more);
         this.mixinJars = mixinJars.stream().map(MixinCopy::toUrl).toList();
         this.live = live;
         this.sharedPackages = List.copyOf(sharedPackages);
         this.sessionId = sessionId;
+    }
+
+    public static void markClassPathChanged() {
+        PATHS.incrementAndGet();
+    }
+
+    private byte @Nullable [] findBytes(String name, Function<String, byte @Nullable []> more) {
+        Optional<byte[]> known = this.read.get(name);
+        if (known != null) {
+            return known.orElse(null);
+        }
+        int paths = PATHS.get();
+        if (Integer.valueOf(paths).equals(this.missing.get(name))) {
+            return null;
+        }
+        if (this.folding.isFolded(name)) {
+            this.read.put(name, Optional.empty());
+            return null;
+        }
+        byte[] found = more.apply(name);
+        if (found == null) {
+            this.missing.put(name, paths);
+            return null;
+        }
+        byte[] folded = this.folding.fold(found);
+        this.read.put(name, Optional.of(folded));
+        return folded;
     }
 
     public void replace(Map<String, byte[]> classes) {
@@ -93,6 +127,7 @@ public final class MixinCopy implements AutoCloseable {
 
     public void forgetReads() {
         this.read.clear();
+        this.missing.clear();
 
         synchronized (BOOTING) {
             this.discard();
@@ -123,6 +158,12 @@ public final class MixinCopy implements AutoCloseable {
     public Map<String, byte[]> mix(Set<String> targets, Map<String, byte[]> classes, Map<String, byte[]> resources,
             List<String> configs) throws MixinCopyException {
         return this.mixAll(targets, classes, resources, configs).classes();
+    }
+
+    public void runPluginsLiveWith(Function<String, @Nullable Object> plugins,
+            BiFunction<String, String, @Nullable Object> mixins) {
+        this.livePlugins = plugins;
+        this.liveMixins = mixins;
     }
 
     public void remapWith(@Nullable String obfuscationContext) {
@@ -230,7 +271,8 @@ public final class MixinCopy implements AutoCloseable {
             return copy.mixer().apply(new Object[] {List.copyOf(targets), Map.copyOf(folded), Map.copyOf(resources),
                     List.copyOf(configs), this.sessionId, this.live, this.sharedPackages, this.more,
                     (BiConsumer<String, String>) MixinCopy::log, this.side, decorated.modIds(),
-                    decorated.levels(), this.obfuscationContext, this.compatibility, stop, decorated.orders()});
+                    decorated.levels(), this.obfuscationContext, this.compatibility, stop, decorated.orders(),
+                    this.livePlugins, this.liveMixins});
         } catch (IllegalStateException e) {
             this.discard(copy);
             throw new MixinCopyException(e.getMessage(), e);

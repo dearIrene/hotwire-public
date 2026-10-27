@@ -10,6 +10,7 @@ import java.util.Map;
 import java.util.Set;
 import java.util.TreeSet;
 import java.util.function.BiConsumer;
+import java.util.function.BiFunction;
 import java.util.function.BooleanSupplier;
 import java.util.function.Function;
 import org.jspecify.annotations.Nullable;
@@ -54,6 +55,8 @@ public final class CopyMixer implements Function<Object[], Object[]> {
         String compatibility = (String) request[13];
         BooleanSupplier stop = (BooleanSupplier) request[14];
         Map<String, Integer> orders = (Map<String, Integer>) request[15];
+        CopyMixinService.setLivePlugins((Function<String, @Nullable Object>) request[16],
+                (BiFunction<String, String, @Nullable Object>) request[17]);
 
         Thread thread = Thread.currentThread();
         ClassLoader context = thread.getContextClassLoader();

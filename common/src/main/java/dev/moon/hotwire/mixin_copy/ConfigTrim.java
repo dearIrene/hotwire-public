@@ -13,6 +13,8 @@ import java.util.function.UnaryOperator;
 import org.jspecify.annotations.Nullable;
 
 public final class ConfigTrim {
+    public static final String LIVE_PLUGIN = "dev.moon.hotwire.mixin_copy.copy.LivePluginShape";
+
     private ConfigTrim() {
     }
 
@@ -57,11 +59,12 @@ public final class ConfigTrim {
 
     public static byte[] repeatDecisions(byte[] json, String side, UnaryOperator<Set<String>> choose,
             Set<String> applied) {
-        return repeatDecisions(json, side, choose, applied, name -> false, plugin -> false);
+        return repeatDecisions(json, side, choose, applied, name -> false, plugin -> false, plugin -> false);
     }
 
     public static byte[] repeatDecisions(byte[] json, String side, UnaryOperator<Set<String>> choose,
-            Set<String> applied, Predicate<String> listedElsewhere, Predicate<String> retainsPlugin) {
+            Set<String> applied, Predicate<String> listedElsewhere, Predicate<String> retainsPlugin,
+            Predicate<String> runsLive) {
         JsonObject root = JsonParser.parseString(new String(json, StandardCharsets.UTF_8)).getAsJsonObject();
         String prefix = getPrefixOf(root);
         Set<String> full = new TreeSet<>();
@@ -74,7 +77,9 @@ public final class ConfigTrim {
         }
         boolean pluginStays = isName(root.get("plugin")) && retainsPlugin.test(root.get("plugin").getAsString());
 
-        if (!prefix.isEmpty() && !pluginStays) {
+        boolean live = pluginStays && runsLive.test(root.get("plugin").getAsString());
+
+        if (!prefix.isEmpty() && (!pluginStays || live)) {
             applied.stream().filter(mixin -> mixin.startsWith(prefix) && !listedElsewhere.test(mixin))
                     .map(mixin -> mixin.substring(prefix.length())).forEach(retained::add);
         }
@@ -83,7 +88,9 @@ public final class ConfigTrim {
         root.remove("client");
         root.remove("server");
         root.add("mixins", list);
-        if (!pluginStays) {
+        if (live) {
+            root.addProperty("plugin", LIVE_PLUGIN);
+        } else if (!pluginStays) {
             root.remove("plugin");
         }
 

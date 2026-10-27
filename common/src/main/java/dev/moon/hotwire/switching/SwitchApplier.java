@@ -54,6 +54,10 @@ public final class SwitchApplier {
             return false;
         }
 
+        default boolean hasLivePlugin(String config) {
+            return false;
+        }
+
         default @Nullable Set<String> findPluginAnswers(String config) {
             return null;
         }

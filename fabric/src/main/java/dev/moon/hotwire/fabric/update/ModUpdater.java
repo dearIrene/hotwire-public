@@ -8,12 +8,13 @@ import dev.moon.hotwire.jar.ModJarException;
 import dev.moon.hotwire.jar.ModJarReader;
 import dev.moon.hotwire.jar.ModManifest;
 import dev.moon.hotwire.jar.ModManifestParser;
+import dev.moon.hotwire.mixin_copy.MixinCopy;
 import dev.moon.hotwire.plan.ModGraph;
 import dev.moon.hotwire.redefine.RebuildException;
 import dev.moon.hotwire.report.GameLog;
 import dev.moon.hotwire.switching.ModMixins;
-import dev.moon.hotwire.switching.SwitchApplier;
 import dev.moon.hotwire.switching.SwitchApplier.ApplyResult;
+import dev.moon.hotwire.switching.SwitchApplier;
 import dev.moon.hotwire.ui.Canvas;
 import dev.moon.hotwire.ui.Lang;
 import dev.moon.hotwire.ui.UpdateMethod;
@@ -22,10 +23,10 @@ import dev.moon.hotwire.update.JarDiff;
 import dev.moon.hotwire.update.JarIntake;
 import dev.moon.hotwire.update.UpdateContext;
 import dev.moon.hotwire.update.UpdateDiffer;
-import dev.moon.hotwire.update.UpdatePlan;
 import dev.moon.hotwire.update.UpdatePlan.ClassAction;
 import dev.moon.hotwire.update.UpdatePlan.UpdateNotice;
 import dev.moon.hotwire.update.UpdatePlan.UpdateTier;
+import dev.moon.hotwire.update.UpdatePlan;
 import dev.moon.hotwire.update.UpdatePlanner;
 import dev.moon.hotwire.update.UpdateQueue;
 import dev.moon.hotwire.update.UpdateText;
@@ -542,6 +543,7 @@ public final class ModUpdater {
             for (CarriedLibrary carried : whole.bundled()) {
                 runAfterReplace(carried.manifest().id(), "the loader's mod list", () -> {
                     FabricLauncherBase.getLauncher().addToClassPath(carried.incoming());
+                    MixinCopy.markClassPathChanged();
                     LoaderModList.replace(carried.manifest().id(), carried.incoming());
                 });
                 GameLog.LOGGER.info("[Hotwire] {} is {} now, carried by {}", carried.manifest().id(),
@@ -550,6 +552,7 @@ public final class ModUpdater {
 
             runAfterReplace(manifest.id(), "the loader's mod list", () -> {
                 FabricLauncherBase.getLauncher().addToClassPath(incoming);
+                MixinCopy.markClassPathChanged();
                 LoaderModList.replace(manifest.id(), incoming);
             });
             runAfterReplace(manifest.id(), "Hotwire's own list of mods",

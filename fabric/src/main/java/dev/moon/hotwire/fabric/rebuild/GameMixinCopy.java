@@ -44,6 +44,8 @@ public final class GameMixinCopy {
                         : FailedAddJars.removeHiddenInterfaces(knot.findPreMixinBytes(internal)),
                 FabricLoader.getInstance().getEnvironmentType().name(), decorations);
         copy.foldInto(new ExtensionFolder(findLaunchedExtensions()));
+        LivePluginShapes.bind(mixin);
+        copy.runPluginsLiveWith(LivePluginShapes::findByPackage, LivePluginShapes::findMixin);
         copy.remapWith(mixin.findObfuscationContext());
         copy.setLevel(MixinEnvironment.getCompatibilityLevel().name());
         LOGGER.info("[Hotwire] Mixin's copy resolves refmaps in the game's context {}", mixin.findObfuscationContext());

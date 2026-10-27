@@ -44,6 +44,29 @@ public final class PluginShape {
         return false;
     }
 
+    public static boolean isReshapingFirstOnly(String plugin, Function<String, byte @Nullable []> bytesOf) {
+        boolean first = false;
+        String at = plugin.replace('.', '/');
+        for (int depth = 0; depth < 8 && at != null && !at.startsWith("java/")
+                && !at.startsWith("org/spongepowered/"); depth++) {
+            byte[] bytes = bytesOf.apply(at);
+            if (bytes == null) {
+                return false;
+            }
+            ClassNode node = new ClassNode();
+            new ClassReader(bytes).accept(node, ClassReader.SKIP_DEBUG | ClassReader.SKIP_FRAMES);
+            for (MethodNode method : node.methods) {
+                boolean shapes = method.desc.contains(CLASS_NODE) && hasBody(method);
+                if (isRegisteringWithMixin(method) || (shapes && method.name.equals("postApply"))) {
+                    return false;
+                }
+                first |= shapes && method.name.equals("preApply");
+            }
+            at = node.superName;
+        }
+        return first;
+    }
+
     private static boolean isRegisteringWithMixin(MethodNode method) {
         for (AbstractInsnNode insn : method.instructions) {
             if (insn instanceof MethodInsnNode call && call.name.equals("register")

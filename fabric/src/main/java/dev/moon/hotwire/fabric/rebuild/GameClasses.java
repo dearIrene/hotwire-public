@@ -72,6 +72,11 @@ public final class GameClasses implements SwitchApplier.Game {
     }
 
     @Override
+    public boolean hasLivePlugin(String config) {
+        return LivePluginShapes.has(config);
+    }
+
+    @Override
     public @Nullable Set<String> findPluginAnswers(String config) {
         return LivePlugins.findAnswers(config);
     }

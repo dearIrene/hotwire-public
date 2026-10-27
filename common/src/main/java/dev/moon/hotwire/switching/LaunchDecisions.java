@@ -29,6 +29,7 @@ final class LaunchDecisions {
     private final Map<String, Optional<byte[]>> read = new ConcurrentHashMap<>();
     private final Map<String, Set<String>> listed = new ConcurrentHashMap<>();
     private final Map<String, Boolean> transforms = new ConcurrentHashMap<>();
+    private final Map<String, Boolean> firstOnly = new ConcurrentHashMap<>();
 
     record Result(Map<String, byte[]> configs, Set<String> askedAgain) {
         boolean isAskedAgain(String mixin) {
@@ -48,6 +49,7 @@ final class LaunchDecisions {
         this.read.clear();
         this.listed.clear();
         this.transforms.clear();
+        this.firstOnly.clear();
     }
 
     private byte @Nullable [] findBytes(String name) {
@@ -104,9 +106,12 @@ final class LaunchDecisions {
             Set<String> decided = answers != null ? answers : applied;
             UnaryOperator<Set<String>> choose = answers != null ? listed -> findAnswered(listed, answers)
                     : listed -> this.choice.choose(listed, appliedByClass, ConfigTrim.readPluginOf(bytes) != null);
+            String plugin = ConfigTrim.readPluginOf(bytes);
+            boolean live = plugin != null && this.isRunLive(config, plugin);
             try {
                 trimmed.put(config, ConfigTrim.repeatDecisions(bytes, this.game.getSide(), choose, decided, elsewhere,
-                        plugin -> this.isPluginRetained(plugin, bytes, own, decided, elsewhere, asked)));
+                        name -> this.isPluginRetained(name, bytes, own, decided, elsewhere, asked, live),
+                        name -> live));
                 repeated++;
                 String refmap = ConfigTrim.readRefmapOf(bytes);
                 byte[] map = refmap == null ? null : this.findBytes(refmap);
@@ -122,6 +127,11 @@ final class LaunchDecisions {
                 + " elsewhere, named by those, come along", appliedByClass.size(), applied.size(), repeated,
                 answeredBy.size(), configs.size() - repeated, this.choice.takeElsewhere());
         return new Result(trimmed, Set.copyOf(asked));
+    }
+
+    private boolean isRunLive(String config, String plugin) {
+        return this.game.hasLivePlugin(config) && this.firstOnly.computeIfAbsent(plugin,
+                name -> PluginShape.isReshapingFirstOnly(name, type -> this.findBytes(type + ".class")));
     }
 
     private Set<String> findListedOutside(String config) {
@@ -143,10 +153,10 @@ final class LaunchDecisions {
     }
 
     private boolean isPluginRetained(String plugin, byte[] config, Set<String> listed, Set<String> applied,
-            Predicate<String> elsewhere, Set<String> asked) {
+            Predicate<String> elsewhere, Set<String> asked, boolean live) {
         boolean retained = this.transforms.computeIfAbsent(plugin,
                 name -> PluginShape.transforms(name, type -> this.findBytes(type + ".class")));
-        if (retained) {
+        if (retained && !live) {
             asked.addAll(listed);
             String prefix = ConfigTrim.readPackageOf(config);
             if (!prefix.isEmpty()) {
