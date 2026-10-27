@@ -161,9 +161,11 @@ public final class SwitchCacheFiller {
     @SuppressWarnings("ThreadPriorityCheck")
     private void fill(int current) throws InterruptedException {
         long began = System.nanoTime();
+        this.applier.getRebuilder().getCache().resetTimes();
         if (this.steps.isEmpty()) {
             this.plan();
         }
+        long planEnd = System.nanoTime();
 
         if (!this.steps.isEmpty() && this.host.isLookDue() && !this.lookReady) {
             this.lookReady = true;
@@ -172,6 +174,7 @@ public final class SwitchCacheFiller {
             this.host.prepareLook();
             Thread.currentThread().setPriority(priority);
         }
+        long looked = System.nanoTime();
         int mixed = 0;
         List<Step> planned = this.steps;
         for (Step step : planned.subList(this.done.get(), planned.size())) {
@@ -197,9 +200,14 @@ public final class SwitchCacheFiller {
             this.filledBytes = sizes.classes() + sizes.reads();
             this.applier.getRebuilder().getCache().markFilled(filled, this.filledBytes);
         }
+
+        long[] times = this.applier.getRebuilder().getCache().findTimes();
+        long work = this.nanos.get() / 1_000_000;
         LOGGER.info("[Hotwire] the switch cache filled {} of {} steps: {} classes in {} ms; planned {} classes, {}"
-                + " bytes before Mixin", this.done.get(), planned.size(), mixed,
-                (System.nanoTime() - began) / 1_000_000, this.classes, this.bytes);
+                + " bytes before Mixin; plan {} ms, look {}, keys {}, read back {}, Mixin {}, saves {}, the rest of the"
+                + " steps {}", this.done.get(), planned.size(), mixed, (System.nanoTime() - began) / 1_000_000,
+                this.classes, this.bytes, (planEnd - began) / 1_000_000, (looked - planEnd) / 1_000_000, times[0],
+                times[1], times[2], times[3], work - times[0] - times[1] - times[2] - times[3]);
     }
 
     private void plan() {

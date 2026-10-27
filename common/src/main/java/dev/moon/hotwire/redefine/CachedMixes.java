@@ -13,6 +13,7 @@ import java.util.Map;
 import java.util.Objects;
 import java.util.Set;
 import java.util.TreeSet;
+import java.util.concurrent.atomic.LongAdder;
 import java.util.function.BooleanSupplier;
 import org.jspecify.annotations.Nullable;
 import org.slf4j.Logger;
@@ -25,6 +26,11 @@ public final class CachedMixes {
 
     private final MixinCopy copy;
     private volatile @Nullable MixedCache cache;
+
+    private final LongAdder keysNanos = new LongAdder();
+    private final LongAdder readNanos = new LongAdder();
+    private final LongAdder copyNanos = new LongAdder();
+    private final LongAdder saveNanos = new LongAdder();
 
     CachedMixes(MixinCopy copy) {
         this.copy = copy;
@@ -91,7 +97,10 @@ public final class CachedMixes {
     List<MixinCopy.MixResult> mix(Set<String> targets, Map<String, byte[]> classes, Map<String, byte[]> resources,
             List<String> configs, BooleanSupplier stop) throws MixinCopyException {
         MixedCache known = this.cache;
+        long began = System.nanoTime();
         Map<String, CacheKey> keys = known == null ? Map.of() : known.findKeys(targets, classes, resources, configs);
+        long keyed = System.nanoTime();
+        this.keysNanos.add(keyed - began);
         List<MixinCopy.MixResult> parts = new ArrayList<>();
         Map<String, byte[]> readBack = new HashMap<>();
         Set<String> toMix = new LinkedHashSet<>(targets);
@@ -104,6 +113,7 @@ public final class CachedMixes {
                     toMix.remove(target);
                 }
             });
+            this.readNanos.add(System.nanoTime() - keyed);
             List<String> missed = new ArrayList<>();
             for (String target : new TreeSet<>(keys.keySet())) {
                 if (toMix.contains(target) && missed.size() < MISSES_NAMED) {
@@ -119,15 +129,31 @@ public final class CachedMixes {
             }
         }
         if (!toMix.isEmpty()) {
+            long copying = System.nanoTime();
             MixinCopy.MixResult made = this.copy.mixAll(toMix, classes, resources, configs, stop);
+            long copied = System.nanoTime();
+            this.copyNanos.add(copied - copying);
             parts.add(made);
             Map<String, CacheKey> toSave = new HashMap<>(keys);
             toSave.keySet().retainAll(toMix);
             if (known != null && !toSave.isEmpty() && !stop.getAsBoolean()) {
                 known.save(toSave, made, classes);
             }
+            this.saveNanos.add(System.nanoTime() - copied);
         }
         return parts;
+    }
+
+    public long[] findTimes() {
+        return new long[] {this.keysNanos.sum() / 1_000_000, this.readNanos.sum() / 1_000_000,
+            this.copyNanos.sum() / 1_000_000, this.saveNanos.sum() / 1_000_000};
+    }
+
+    public void resetTimes() {
+        this.keysNanos.reset();
+        this.readNanos.reset();
+        this.copyNanos.reset();
+        this.saveNanos.reset();
     }
 
     private static void verify(Map<String, byte[]> readBack, MixinCopy.MixResult fresh) {
