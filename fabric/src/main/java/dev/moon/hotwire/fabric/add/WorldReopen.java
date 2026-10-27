@@ -3,6 +3,7 @@ package dev.moon.hotwire.fabric.add;
 import dev.moon.hotwire.fabric.ModViews;
 import dev.moon.hotwire.fabric.mixin.core.network.ConnectionAccessor;
 import dev.moon.hotwire.fabric.mixin.core.util.thread.BlockableEventLoopAccessor;
+import dev.moon.hotwire.jvm.JarChannels;
 import dev.moon.hotwire.ui.Lang;
 import io.netty.channel.Channel;
 import java.nio.file.Path;
@@ -145,6 +146,7 @@ public final class WorldReopen {
     }
 
     public static void leave(Minecraft client) throws InterruptedException {
+        JarChannels.makeUninterruptible();
         IntegratedServer leaving = client.getSingleplayerServer();
         ClientPacketListener listener = client.getConnection();
         Channel channel = listener == null ? null

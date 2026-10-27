@@ -12,8 +12,11 @@ import java.net.URL;
 import java.security.CodeSource;
 import java.security.ProtectionDomain;
 import java.security.cert.Certificate;
+import java.util.ArrayList;
+import java.util.Arrays;
 import java.util.Collection;
 import java.util.Enumeration;
+import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.concurrent.ConcurrentHashMap;
@@ -25,6 +28,7 @@ import org.objectweb.asm.ClassReader;
 import org.objectweb.asm.ClassWriter;
 import org.objectweb.asm.tree.AbstractInsnNode;
 import org.objectweb.asm.tree.ClassNode;
+import org.objectweb.asm.tree.FieldNode;
 import org.objectweb.asm.tree.FrameNode;
 import org.objectweb.asm.tree.MethodNode;
 import org.spongepowered.asm.launch.platform.container.ContainerHandleVirtual;
@@ -188,11 +192,7 @@ public final class CopyMixinService extends MixinServiceAbstract
             nodeType.getMethod("accept", visitor).invoke(theirs, back);
             ClassNode read = new ClassNode();
             new ClassReader((byte[]) writerType.getMethod("toByteArray").invoke(back)).accept(read, 0);
-            for (Field field : ClassNode.class.getFields()) {
-                if (!Modifier.isStatic(field.getModifiers())) {
-                    field.set(node, field.get(read));
-                }
-            }
+            mergeInto(node, read);
         } catch (InvocationTargetException e) {
             throw new IllegalStateException("the game's plugin of " + mixin + " failed on " + target + ": "
                     + e.getCause(), e.getCause());
@@ -200,6 +200,60 @@ public final class CopyMixinService extends MixinServiceAbstract
             throw new IllegalStateException("the game's plugin of " + mixin + " could not be handed " + target + ": "
                     + e, e);
         }
+    }
+
+    private static void mergeInto(ClassNode node, ClassNode read) throws IllegalAccessException {
+        Map<String, MethodNode> methods = new HashMap<>();
+        node.methods.forEach(method -> methods.put(method.name + method.desc, method));
+        List<MethodNode> merged = new ArrayList<>();
+        for (MethodNode made : read.methods) {
+            MethodNode same = methods.get(made.name + made.desc);
+            if (same == null) {
+                merged.add(made);
+                continue;
+            }
+            if (!Arrays.equals(writeAlone(same), writeAlone(made))) {
+                for (Field field : MethodNode.class.getFields()) {
+                    if (!Modifier.isStatic(field.getModifiers())) {
+                        field.set(same, field.get(made));
+                    }
+                }
+            }
+            merged.add(same);
+        }
+        node.methods.clear();
+        node.methods.addAll(merged);
+        Map<String, FieldNode> fields = new HashMap<>();
+        node.fields.forEach(field -> fields.put(field.name + field.desc, field));
+        List<FieldNode> sameFields = new ArrayList<>();
+        for (FieldNode made : read.fields) {
+            FieldNode same = fields.get(made.name + made.desc);
+            if (same != null) {
+                same.access = made.access;
+                same.signature = made.signature;
+                same.value = made.value;
+            }
+            sameFields.add(same != null ? same : made);
+        }
+        node.fields.clear();
+        node.fields.addAll(sameFields);
+        for (Field field : ClassNode.class.getFields()) {
+            if (!Modifier.isStatic(field.getModifiers()) && !field.getName().equals("methods")
+                    && !field.getName().equals("fields")) {
+                field.set(node, field.get(read));
+            }
+        }
+    }
+
+    private static byte[] writeAlone(MethodNode method) {
+        ClassNode alone = new ClassNode();
+        alone.version = 52;
+        alone.name = "x";
+        alone.superName = "java/lang/Object";
+        alone.methods.add(method);
+        ClassWriter out = new ClassWriter(0);
+        alone.accept(out);
+        return out.toByteArray();
     }
 
     static void endMix() {
