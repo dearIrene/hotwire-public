@@ -271,6 +271,10 @@ final class CollectionReferences {
                 retained.add(item);
             }
         }
+
+        if (retained.isEmpty() && now.stream().allMatch(item -> item instanceof Enum<?>)) {
+            return;
+        }
         if (!out.isEmpty() && !this.look.hasNoted(() -> this.removeFromFixedList(field, holder))) {
             try {
                 this.writer.write(field, holder, Collections.unmodifiableList(retained));
@@ -436,6 +440,11 @@ final class CollectionReferences {
                         if (mod != null) {
                             this.takeOrNote(mod, () -> this.findOwnerOfEntry(key, element), owner -> ElementTakes
                                     .takeFromMap(entries, key, element, this.getRemovalsOf(owner)));
+
+                            if (ElementLook.isLooking() && (element instanceof Collection<?>
+                                    || element instanceof Map<?, ?>) && this.seen.add(element)) {
+                                this.collect(element);
+                            }
                         } else if (element instanceof Collection<?> nested) {
                             this.collect(nested);
                         } else if (element instanceof Map<?, ?> && this.seen.add(element)) {

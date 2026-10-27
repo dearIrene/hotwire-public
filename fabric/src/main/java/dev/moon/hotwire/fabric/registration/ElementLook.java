@@ -114,6 +114,10 @@ public final class ElementLook {
         }
     }
 
+    static boolean isLooking() {
+        return isOnlyLooking;
+    }
+
     static boolean isStopAsked() {
         return stopAsked && isOnlyLooking;
     }

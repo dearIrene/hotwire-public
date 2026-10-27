@@ -22,6 +22,8 @@ record HandedSearch(Set<Object> handed, Set<String> consumers, Collection<Class<
 
     private static final int LARGEST = 100_000;
 
+    private static final Set<String> NOT_CONSUMERS = Set.of("fabricloader", "minecraft", "java", "mixinextras");
+
     HandedSearch {
         Set<Object> same = Collections.newSetFromMap(new IdentityHashMap<>());
         same.addAll(handed);
@@ -42,7 +44,7 @@ record HandedSearch(Set<Object> handed, Set<String> consumers, Collection<Class<
                     continue;
                 }
                 String mod = GameRegistrations.findModOf(type);
-                if (mod != null && !mod.equals(own)) {
+                if (mod != null && !mod.equals(own) && !NOT_CONSUMERS.contains(mod)) {
                     out.add(mod);
                 }
                 if (type.getSuperclass() != null) {
