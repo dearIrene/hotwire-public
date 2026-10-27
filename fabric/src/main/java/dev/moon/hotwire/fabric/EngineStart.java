@@ -108,7 +108,7 @@ final class EngineStart {
         List<ModJar> jars = new ArrayList<>();
         Map<String, Path> jarOf = new HashMap<>();
         Set<String> topLevel = new HashSet<>();
-        Map<String, ModJar> keptOff = new HashMap<>();
+        Map<String, ModJar> disabled = new HashMap<>();
         for (ModIndex.Entry entry : snapshot.mods()) {
             if (!entry.disabled()) {
                 String id = entry.jar().manifest().id();
@@ -118,19 +118,19 @@ final class EngineStart {
             }
         }
 
-        Map<String, Path> keptFile = new HashMap<>();
+        Map<String, Path> disabledFile = new HashMap<>();
         for (ModIndex.Entry entry : snapshot.mods()) {
             String id = entry.jar().manifest().id();
             if (!entry.disabled() || jarOf.containsKey(id) || loader.isModLoaded(id) || ModPolicy.isHotwire(id)) {
                 continue;
             }
-            Path before = keptFile.get(id);
+            Path before = disabledFile.get(id);
             if (before == null || isNewer(entry.file(), before)) {
-                keptFile.put(id, entry.file());
-                keptOff.put(id, entry.jar());
+                disabledFile.put(id, entry.file());
+                disabled.put(id, entry.jar());
             }
         }
-        keptFile.forEach((id, file) -> {
+        disabledFile.forEach((id, file) -> {
             topLevel.add(id);
             jarOf.put(id, file);
         });
@@ -151,7 +151,7 @@ final class EngineStart {
             }
         }
         jars.replaceAll(jar -> dropUnloadedTwins(jar, loader));
-        return new InstalledMods(jars, jarOf, topLevel, keptOff);
+        return new InstalledMods(jars, jarOf, topLevel, disabled);
     }
 
     private static ModJar dropUnloadedTwins(ModJar jar, FabricLoader loader) {

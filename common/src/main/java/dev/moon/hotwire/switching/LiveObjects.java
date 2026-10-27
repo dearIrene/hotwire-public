@@ -99,7 +99,7 @@ final class LiveObjects {
         if (!game.isInWorld()) {
             return;
         }
-        List<String> kept = new ArrayList<>();
+        List<String> worldFills = new ArrayList<>();
         for (Class<?> type : prepared.splits().keySet()) {
             String name = type.getName().replace('.', '/');
             byte[] running = current.get(name);
@@ -108,13 +108,13 @@ final class LiveObjects {
             }
             List<String> fills = HandlerSetups.find(running, originalOf.apply(name), offMixin, offClass);
             if (!fills.isEmpty() && (game.isWorldObject(type) || alive.test(type))) {
-                kept.add(type.getSimpleName() + " " + fills);
+                worldFills.add(type.getSimpleName() + " " + fills);
             }
         }
-        if (!kept.isEmpty()) {
+        if (!worldFills.isEmpty()) {
             throw RebuildException.ofWorldBuilt("the " + what + " would leave the mod's objects in the game's own"
-                    + " fields of objects this world built: " + kept + ". The world is saved and opened again, which"
-                    + " builds them anew", new IllegalStateException(String.join(", ", kept)));
+                    + " fields of objects this world built: " + worldFills + ". The world is saved and opened again,"
+                    + " which builds them anew",new IllegalStateException(String.join(", ", worldFills)));
         }
     }
 

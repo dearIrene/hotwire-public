@@ -42,6 +42,9 @@ val mixinCopyJar = tasks.register<Jar>("mixinCopyJar") {
     from(mixinCopy.output)
     archiveFileName = "mixin-copy.jar"
     destinationDirectory = layout.buildDirectory.dir("generated/mixinCopy/dev/moon/hotwire/mixin_copy")
+
+    isPreserveFileTimestamps = false
+    isReproducibleFileOrder = true
 }
 sourceSets.main {
     resources.srcDir(layout.buildDirectory.dir("generated/mixinCopy"))

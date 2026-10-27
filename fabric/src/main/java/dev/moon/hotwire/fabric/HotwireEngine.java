@@ -117,7 +117,7 @@ public final class HotwireEngine implements ModScreen.Game, AutoCloseable {
 
     private static final Logger LOGGER = LoggerFactory.getLogger(HotwireEngine.class);
 
-    private static final Duration WORLD_SETTLES = Duration.ofSeconds(20);
+    private static final Duration IN_WORLD_LOOK_DELAY = Duration.ofSeconds(20);
 
     private final InstalledMods installed;
     private final Bound bound;
@@ -230,7 +230,7 @@ public final class HotwireEngine implements ModScreen.Game, AutoCloseable {
         JvmParts ready = started.findParts();
         if (ready != null) {
             ready.runner().setAfterOff(started::disableJars);
-            ready.runner().setBeforeOn(started::restoreKeptOff);
+            ready.runner().setBeforeOn(started::restoreDisabled);
         }
         started.reportLastCrash();
         return engine;
@@ -394,7 +394,7 @@ public final class HotwireEngine implements ModScreen.Game, AutoCloseable {
 
     boolean isOn(String id) {
         JvmParts parts = this.findParts();
-        return !this.installed.isKeptOff(id) && (parts == null || parts.runner().getSwitcher().isOn(id));
+        return !this.installed.isDisabled(id) && (parts == null || parts.runner().getSwitcher().isOn(id));
     }
 
     boolean isWorldLocked() {
@@ -419,7 +419,7 @@ public final class HotwireEngine implements ModScreen.Game, AutoCloseable {
     }
 
     void lookAheadInWorldSoon() {
-        CompletableFuture.delayedExecutor(WORLD_SETTLES.toSeconds(), TimeUnit.SECONDS).execute(() -> {
+        CompletableFuture.delayedExecutor(IN_WORLD_LOOK_DELAY.toSeconds(), TimeUnit.SECONDS).execute(() -> {
             JvmParts parts = this.findParts();
             if (parts != null && Minecraft.getInstance().level != null) {
                 parts.runner().lookAheadForAll(this.findSwitchableOn());
@@ -444,31 +444,31 @@ public final class HotwireEngine implements ModScreen.Game, AutoCloseable {
     }
 
     public CompletableFuture<SwitchResult> switchFor(boolean off, List<String> ids) {
-        List<String> kept = off ? List.of() : ids.stream().filter(this::isKeptOffSinceStart).toList();
-        kept.forEach(this::enableByAdd);
-        List<String> rest = ids.stream().filter(id -> !kept.contains(id)).toList();
-        if (rest.isEmpty() && !kept.isEmpty()) {
-            return CompletableFuture.completedFuture(new SwitchResult(SwitchResult.Kind.DONE, kept, ""));
+        List<String> disabledIds = off ? List.of() : ids.stream().filter(this::isDisabledSinceStart).toList();
+        disabledIds.forEach(this::enableByAdd);
+        List<String> rest = ids.stream().filter(id -> !disabledIds.contains(id)).toList();
+        if (rest.isEmpty() && !disabledIds.isEmpty()) {
+            return CompletableFuture.completedFuture(new SwitchResult(SwitchResult.Kind.DONE, disabledIds, ""));
         }
         return this.run(runner -> off ? runner.turnOff(rest) : runner.turnOn(rest), off, rest);
     }
 
-    private boolean isKeptOffSinceStart(String id) {
+    private boolean isDisabledSinceStart(String id) {
         JvmParts parts = this.findParts();
-        return this.installed.isKeptOff(id) && (parts == null || !parts.runner().getSwitcher().getOff().contains(id));
+        return this.installed.isDisabled(id) && (parts == null || !parts.runner().getSwitcher().getOff().contains(id));
     }
 
-    private void restoreKeptOff(List<String> order) {
+    private void restoreDisabled(List<String> order) {
         this.awaitRenames();
         for (String id : order) {
-            Path kept = this.installed.isKeptOff(id) ? this.installed.findJarOf(id) : null;
-            if (kept == null) {
+            Path disabledJar = this.installed.isDisabled(id) ? this.installed.findJarOf(id) : null;
+            if (disabledJar == null) {
                 continue;
             }
             try {
-                this.installed.onRestored(id, DisabledJars.restore(kept));
+                this.installed.onRestored(id, DisabledJars.restore(disabledJar));
                 GameLog.LOGGER.info("[Hotwire] {} is restored for the on: {} has its name back", id,
-                        kept.getFileName());
+                        disabledJar.getFileName());
             } catch (IOException e) {
                 LOGGER.warn("[Hotwire] {} could not be restored for the on", id, e);
             }
@@ -477,19 +477,20 @@ public final class HotwireEngine implements ModScreen.Game, AutoCloseable {
 
     private void enableByAdd(String id) {
         this.awaitRenames();
-        Path kept = this.installed.findJarOf(id);
-        if (kept == null) {
+        Path disabledJar = this.installed.findJarOf(id);
+        if (disabledJar == null) {
             return;
         }
-        this.add(kept, AddMode.NOW, result -> {
+        this.add(disabledJar, AddMode.NOW, result -> {
             if (!(result instanceof ModAdder.Result.Added)) {
                 return;
             }
             try {
-                this.installed.onBroughtBack(id, DisabledJars.enable(kept));
+                this.installed.onBroughtBack(id, DisabledJars.enable(disabledJar));
             } catch (IOException e) {
-                LOGGER.warn("[Hotwire] {} is back on, but {} could not get its name back", id, kept.getFileName(), e);
-                this.installed.onBroughtBack(id, kept);
+                LOGGER.warn("[Hotwire] {} is back on, but {} could not get its name back", id,
+                        disabledJar.getFileName(), e);
+                this.installed.onBroughtBack(id, disabledJar);
                 this.showMessage(Lang.get("hotwire.switch.brought_back_failed", this.installed.nameOf(id),
                         e.getMessage()), true);
             }
@@ -504,7 +505,7 @@ public final class HotwireEngine implements ModScreen.Game, AutoCloseable {
         Path mods = this.updateFolders.mods().toAbsolutePath().normalize();
         List<String> ids = done.plan().order().stream().filter(id -> {
             Path jar = this.installed.findJarOf(id);
-            return jar != null && this.installed.isTopLevel(id) && !this.installed.isKeptOff(id)
+            return jar != null && this.installed.isTopLevel(id) && !this.installed.isDisabled(id)
                     && mods.equals(jar.toAbsolutePath().normalize().getParent());
         }).toList();
         if (ids.isEmpty()) {
@@ -517,11 +518,11 @@ public final class HotwireEngine implements ModScreen.Game, AutoCloseable {
         StringBuilder failed = new StringBuilder();
         for (String id : ids) {
             Path jar = this.installed.findJarOf(id);
-            if (jar == null || this.installed.isKeptOff(id)) {
+            if (jar == null || this.installed.isDisabled(id)) {
                 continue;
             }
             try {
-                this.installed.onKeptOff(id, DisabledJars.disable(jar));
+                this.installed.onDisabled(id, DisabledJars.disable(jar));
                 GameLog.LOGGER.info("[Hotwire] {} stays off: {} is now {}", id, jar.getFileName(), jar.getFileName()
                         + DisabledJars.SUFFIX);
             } catch (IOException e) {
@@ -558,9 +559,9 @@ public final class HotwireEngine implements ModScreen.Game, AutoCloseable {
         }
         CompletableFuture<SwitchResult> ended = HotwireApiImpl.beginSwitch();
         this.tasks.submit("switch", () -> work.apply(parts.runner()), result -> {
-            boolean kept = off && result.result() instanceof ModSwitcher.Result.Done
+            boolean untilOn = off && result.result() instanceof ModSwitcher.Result.Done
                     && this.settings.getOffLasts() == HotwireSettings.OffLasts.UNTIL_ON;
-            String said = PlayerMessages.describe(result.result(), this.installed::nameOf, kept)
+            String said = PlayerMessages.describe(result.result(), this.installed::nameOf, untilOn)
                     + PlayerMessages.describe(result.check())
                     + PlayerMessages.describeFaults(result.result(), result.faults().size());
 
@@ -579,7 +580,7 @@ public final class HotwireEngine implements ModScreen.Game, AutoCloseable {
                         WorldReopen.isLeftOnly()));
             } else {
                 boolean lasting = off && result.result() instanceof ModSwitcher.Result.Done done
-                        && !done.plan().order().isEmpty() && !kept;
+                        && !done.plan().order().isEmpty() && !untilOn;
                 this.showMessage(said, PlayerMessages.isBad(result.result()) || !result.faults().isEmpty(),
                         lasting ? Lang.get("hotwire.switch.hint.session") : "");
             }
@@ -602,9 +603,9 @@ public final class HotwireEngine implements ModScreen.Game, AutoCloseable {
     public SwitchRunner.CheckedResult switchNow(boolean off, List<String> ids) {
         SwitchRunner runner = this.requireSwitching().runner();
 
-        List<String> kept = off ? List.of() : ids.stream().filter(this::isKeptOffSinceStart).toList();
-        kept.forEach(this::enableByAdd);
-        List<String> rest = ids.stream().filter(id -> !kept.contains(id)).toList();
+        List<String> disabledIds = off ? List.of() : ids.stream().filter(this::isDisabledSinceStart).toList();
+        disabledIds.forEach(this::enableByAdd);
+        List<String> rest = ids.stream().filter(id -> !disabledIds.contains(id)).toList();
         return off ? runner.turnOff(rest) : runner.turnOn(rest);
     }
 
@@ -668,10 +669,10 @@ public final class HotwireEngine implements ModScreen.Game, AutoCloseable {
     public List<ModStatus> getMods() {
         List<ModStatus> out = new ArrayList<>();
         for (String id : this.installed.getTopLevel()) {
-            boolean kept = this.installed.isKeptOff(id);
-            (kept ? this.installed.findKeptOff(id) : this.installed.find(id)).ifPresent(mod -> out.add(
+            boolean disabled = this.installed.isDisabled(id);
+            (disabled ? this.installed.findDisabled(id) : this.installed.find(id)).ifPresent(mod -> out.add(
                     new ModStatus(id, mod.name(), mod.version(), this.isOn(id), String.join(", ", mod.authors()),
-                            mod.library(), kept)));
+                            mod.library(), disabled)));
         }
         out.sort((a, b) -> a.name().compareToIgnoreCase(b.name()));
         return out;
@@ -823,7 +824,7 @@ public final class HotwireEngine implements ModScreen.Game, AutoCloseable {
     @Override
     public void prepareAhead(List<String> ids, boolean off) {
         JvmParts parts = this.findParts();
-        if (!off && (!this.renames.isDone() || ids.stream().anyMatch(this.installed::isKeptOff))) {
+        if (!off && (!this.renames.isDone() || ids.stream().anyMatch(this.installed::isDisabled))) {
             return;
         }
         if (parts != null) {

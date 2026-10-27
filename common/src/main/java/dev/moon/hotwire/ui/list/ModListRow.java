@@ -321,12 +321,12 @@ final class ModListRow {
                     appear * 0.9f));
             at += chipW + 12;
         }
-        if (this.mod.keptOff()) {
-            String kept = Lang.get("hotwire.row.kept_off");
-            int keptW = canvas.measureText(kept);
-            if (at + keptW <= right) {
-                canvas.drawText(kept, at, y, Colors.fade(Palette.OFF_TINT, appear * 0.9f));
-                at += keptW + 12;
+        if (this.mod.disabled()) {
+            String label = Lang.get("hotwire.row.kept_off");
+            int labelW = canvas.measureText(label);
+            if (at + labelW <= right) {
+                canvas.drawText(label, at, y, Colors.fade(Palette.OFF_TINT, appear * 0.9f));
+                at += labelW + 12;
             }
         }
         int count = this.dependantTick.getRounded();

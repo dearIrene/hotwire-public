@@ -9,10 +9,10 @@ import oshi.SystemInfo;
 import oshi.hardware.GraphicsCard;
 import oshi.hardware.HardwareAbstractionLayer;
 
-final class MachineFacts {
+final class MachineDetails {
     private static final long MIB = 1024L * 1024L;
 
-    private MachineFacts() {
+    private MachineDetails() {
     }
 
     static List<String> read() {

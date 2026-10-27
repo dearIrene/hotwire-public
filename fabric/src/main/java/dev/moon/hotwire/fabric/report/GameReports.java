@@ -326,7 +326,7 @@ public final class GameReports {
         Map<String, String> texts = new LinkedHashMap<>();
         Path log = game.resolve("logs").resolve("latest.log");
         Instant now = Instant.now();
-        texts.put("latest.log", TidyLog.write(why, WHEN.format(now), MachineFacts.read(), mods,
+        texts.put("latest.log", TidyLog.write(why, WHEN.format(now), MachineDetails.read(), mods,
                 Files.isRegularFile(log) ? getTail(read(log)) : "(the game wrote no log)\n"));
 
         Path logs = game.resolve("hotwire").resolve("logs");

@@ -33,16 +33,16 @@ public final class InstalledMods {
     private final Map<String, Path> jarOf = new HashMap<>();
     private final Set<String> topLevel = new HashSet<>();
 
-    private final Map<String, ModJar> keptOff = new HashMap<>();
+    private final Map<String, ModJar> disabled = new HashMap<>();
     private final Set<String> addedThisSession = new HashSet<>();
     private final Set<String> updatedThisSession = new HashSet<>();
 
     public InstalledMods(List<ModJar> jars, Map<String, Path> jarOf, Set<String> topLevel,
-            Map<String, ModJar> keptOff) {
+            Map<String, ModJar> disabled) {
         this.jars = new ArrayList<>(jars);
         this.jarOf.putAll(jarOf);
         this.topLevel.addAll(topLevel);
-        this.keptOff.putAll(keptOff);
+        this.disabled.putAll(disabled);
         for (ModJar jar : jars) {
             for (String target : jar.patches().patches()) {
                 if (target.startsWith("dev/moon/hotwire/")) {
@@ -115,29 +115,29 @@ public final class InstalledMods {
     }
 
     synchronized String nameOf(String id) {
-        return this.graph.find(id).map(ModManifest::name).orElseGet(() -> this.findKeptOff(id)
+        return this.graph.find(id).map(ModManifest::name).orElseGet(() -> this.findDisabled(id)
                 .map(ModManifest::name).orElse(id));
     }
 
-    public synchronized boolean isKeptOff(String id) {
-        return this.keptOff.containsKey(id);
+    public synchronized boolean isDisabled(String id) {
+        return this.disabled.containsKey(id);
     }
 
-    public synchronized Optional<ModManifest> findKeptOff(String id) {
-        return Optional.ofNullable(this.keptOff.get(id)).map(ModJar::manifest);
+    public synchronized Optional<ModManifest> findDisabled(String id) {
+        return Optional.ofNullable(this.disabled.get(id)).map(ModJar::manifest);
     }
 
-    public synchronized void onKeptOff(String id, Path kept) {
+    public synchronized void onDisabled(String id, Path renamed) {
         this.jars.stream().filter(jar -> jar.manifest().id().equals(id)).findFirst().ifPresent(jar -> {
             this.jars.remove(jar);
-            this.keptOff.put(id, jar);
+            this.disabled.put(id, jar);
         });
         this.graph = new ModGraph(this.jars, InstalledMods::isOfGame);
-        this.jarOf.put(id, kept);
+        this.jarOf.put(id, renamed);
     }
 
     public synchronized void onRestored(String id, Path jar) {
-        ModJar back = this.keptOff.remove(id);
+        ModJar back = this.disabled.remove(id);
         if (back != null) {
             this.jars.add(back);
             this.graph = new ModGraph(this.jars, InstalledMods::isOfGame);
@@ -146,7 +146,7 @@ public final class InstalledMods {
     }
 
     public synchronized void onBroughtBack(String id, Path jar) {
-        this.keptOff.remove(id);
+        this.disabled.remove(id);
         this.jarOf.put(id, jar);
     }
 

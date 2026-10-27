@@ -1,5 +1,6 @@
 package dev.moon.hotwire.fabric.rebuild;
 
+import dev.moon.hotwire.fabric.LoadedMods;
 import dev.moon.hotwire.fabric.ModPolicy;
 import dev.moon.hotwire.jar.ModJar;
 import dev.moon.hotwire.jar.ModManifest;
@@ -50,8 +51,7 @@ public final class MixinConfigs {
             LOGGER.info("[Hotwire] {} is in {} but the game did not load it; its mixins are left out", id, jar.name());
             return;
         }
-        String running = FabricLoader.getInstance().getModContainer(id)
-                .map(mod -> mod.getMetadata().getVersion().getFriendlyString()).orElse(null);
+        String running = LoadedMods.findVersion(id);
         (running == null || running.equals(jar.manifest().version()) ? into : otherVersions)
                 .putIfAbsent(id, ModMixins.of(jar, side));
         jar.nested().forEach(nested -> add(nested, side, loaded, into, otherVersions));
@@ -61,6 +61,15 @@ public final class MixinConfigs {
         Map<String, ModMixins> all = new HashMap<>(mixins);
         Set<String> listed = new HashSet<>();
         mixins.values().forEach(mod -> listed.addAll(mod.configs()));
+        Map<String, Set<String>> inGame = new HashMap<>();
+        for (Object one : live) {
+            if (one instanceof IMixinConfig config && listed.contains(config.getName())) {
+                Set<String> patched = new HashSet<>();
+                config.getTargets().forEach(target -> patched.add(target.replace('.', '/')));
+                inGame.put(config.getName(), patched);
+            }
+        }
+        all.replaceAll((id, mod) -> withGameTargets(id, mod, inGame));
         for (Object one : live) {
             if (!(one instanceof IMixinConfig config) || listed.contains(config.getName())) {
                 continue;
@@ -83,6 +92,25 @@ public final class MixinConfigs {
             }
         }
         return all;
+    }
+
+    private static ModMixins withGameTargets(String id, ModMixins mod, Map<String, Set<String>> inGame) {
+        Map<String, Set<String>> targets = new HashMap<>(mod.targetsOf());
+        boolean grown = false;
+        for (String config : mod.configs()) {
+            Set<String> listedTargets = mod.targetsOf().getOrDefault(config, Set.of());
+            Set<String> more = new TreeSet<>(inGame.getOrDefault(config, Set.of()));
+            more.removeAll(listedTargets);
+            if (!more.isEmpty()) {
+                Set<String> both = new HashSet<>(listedTargets);
+                both.addAll(more);
+                targets.put(config, Set.copyOf(both));
+                grown = true;
+                LOGGER.info("[Hotwire] {} of {} has mixins its list does not name, for {} classes: {}", config, id,
+                        more.size(), List.copyOf(more).subList(0, Math.min(6, more.size())));
+            }
+        }
+        return grown ? new ModMixins(mod.configs(), targets, mod.owns()) : mod;
     }
 
     private static boolean hasClassUnder(ModMixins mod, String prefix) {
