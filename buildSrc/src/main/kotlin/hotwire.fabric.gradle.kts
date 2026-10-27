@@ -100,7 +100,8 @@ extensions.configure<net.fabricmc.loom.api.LoomGradleExtensionAPI> {
 }
 
 tasks.named<ProcessResources>("processResources") {
-    val expanded = mapOf("version" to version.toString(), "minecraft" to minecraft, "java" to javaVersion.toString(),
+    val range = if (minecraft.startsWith("1.")) minecraft else "~$minecraft"
+    val expanded = mapOf("version" to version.toString(), "minecraft" to range, "java" to javaVersion.toString(),
             "commit" to commit, "dirty" to dirty.toString(), "committed" to committed)
     inputs.properties(expanded)
     filesMatching("fabric.mod.json") { expand(expanded) }
