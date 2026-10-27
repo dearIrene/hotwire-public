@@ -79,6 +79,8 @@ final class MixedCache {
     private final Map<String, ReadHash> hashes = new ConcurrentHashMap<>();
     private final Set<CacheKey> holding = ConcurrentHashMap.newKeySet();
 
+    private final Set<String> listed = ConcurrentHashMap.newKeySet();
+
     private final AtomicLong classesSaved = new AtomicLong();
     private final AtomicLong classesBefore = new AtomicLong();
     private final AtomicLong readsSaved = new AtomicLong();
@@ -99,7 +101,7 @@ final class MixedCache {
         this.packs = new ClassPacks(store);
     }
 
-    private static final String KEYS = "mixed class 8";
+    private static final String KEYS = "mixed class 9";
 
     private static final Map<byte[], CacheKey> SHAPES = Collections.synchronizedMap(new WeakHashMap<>());
 
@@ -132,9 +134,11 @@ final class MixedCache {
         for (String target : targets) {
             byte[] original = classes.get(target);
             StringBuilder trace = KEY_DUMP == null ? null : new StringBuilder();
+            Set<String> above = original == null ? Set.of() : this.findAbove(original, classes);
+            Set<String> mixedAbove = new TreeSet<>(above);
+            mixedAbove.retainAll(targets);
             CacheKey key = original == null ? null : this.findKey(target, original, configs,
-                    this.findHandedAbove(original, targets, classes), this.findMixedAbove(original, targets, classes),
-                    trace);
+                    this.findHandedAbove(original, targets, classes), above, mixedAbove, trace);
             if (key != null) {
                 keys.put(target, key);
             }
@@ -183,7 +187,7 @@ final class MixedCache {
         return made;
     }
 
-    private Set<String> findMixedAbove(byte[] original, Set<String> targets, Map<String, byte[]> classes) {
+    private Set<String> findAbove(byte[] original, Map<String, byte[]> classes) {
         Set<String> found = new TreeSet<>();
         Set<String> seen = new HashSet<>();
         List<byte[]> next = new ArrayList<>(List.of(original));
@@ -196,9 +200,7 @@ final class MixedCache {
                 if (bytes == null) {
                     bytes = this.copy.findReadable(type);
                 }
-                if (targets.contains(type)) {
-                    found.add(type);
-                }
+                found.add(type);
                 if (bytes != null) {
                     next.add(bytes);
                 }
@@ -208,7 +210,7 @@ final class MixedCache {
     }
 
     private @Nullable CacheKey findKey(String target, byte[] original, List<Config> configs, CacheKey others,
-            Set<String> mixedAbove, @Nullable StringBuilder trace) {
+            Set<String> above, Set<String> mixedAbove, @Nullable StringBuilder trace) {
         CacheKey.Builder key = CacheKey.of(KEYS).add(this.copy.getRecipe()).add(target).add(original)
                 .add(others.high()).add(others.low());
         if (trace != null) {
@@ -223,6 +225,10 @@ final class MixedCache {
                 Set<String> aims = this.findAims(mixin);
                 if (aims == null) {
                     return null;
+                }
+
+                if (aims.contains(target) || !Collections.disjoint(aims, above)) {
+                    key.add(mixin).add(this.hashOfMixin(mixin));
                 }
                 for (String type : types) {
                     if (aims.contains(type)) {
@@ -276,6 +282,7 @@ final class MixedCache {
             for (String listed : ConfigTrim.readListed(json, this.copy.getSide())) {
                 mixins.add(listed.replace('.', '/'));
             }
+            this.listed.addAll(mixins);
             CacheKey settings = CacheKey.of("config 1").add(name).add(root.toString())
                     .add(refmap == null ? new byte[0] : refmap).build();
             return new Config(name, settings, mixins, text.contains(LIVE) || text.contains(PLUGIN));
@@ -374,7 +381,8 @@ final class MixedCache {
     }
 
     void save(Map<String, CacheKey> keys, MixinCopy.MixResult made, Map<String, byte[]> classes) {
-        Map<String, byte @Nullable []> read = this.copy.takeReadInMix();
+        Map<String, byte @Nullable []> read = new TreeMap<>(this.copy.takeReadInMix());
+        read.keySet().removeIf(this.listed::contains);
         Map<String, byte[]> originals = new HashMap<>(classes);
         this.writer.execute(() -> {
             CacheKey reads = this.saveReads(read);
@@ -513,6 +521,19 @@ final class MixedCache {
 
     int getEntries() {
         return this.store.getEntries();
+    }
+
+    private long hashOfMixin(String mixin) {
+        long hash = 0;
+        for (String type = mixin; type != null && !type.startsWith("java/"); ) {
+            byte[] bytes = this.copy.findReadable(type);
+            if (bytes == null) {
+                break;
+            }
+            hash = hash * 31 + this.hashOf(type, bytes);
+            type = ClassHeader.of(bytes).superName();
+        }
+        return hash;
     }
 
     @SuppressWarnings("ReferenceEquality")
