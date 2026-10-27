@@ -319,6 +319,7 @@ public final class ModAdder {
             JarUseReader.JarClasses jar = JarUseReader.readJar(path);
 
             Map<String, String> moves = new LinkedHashMap<>();
+            Map<String, String> adopted = new LinkedHashMap<>();
             for (WidenerUses.Use use : JarUseReader.findUsesOf(jar, loaded, this.engine)) {
                 if (jar != null && !moves.containsKey(use.inClass())
                         && JarUseReader.isMovable(use, jar, this.engine, true)) {
@@ -331,11 +332,15 @@ public final class ModAdder {
                     ShutOverrides.register(part.manifest().id(), use.owner(), use.name() + use.desc(), use.inClass());
                 }
                 if (use.kind() == WidenerUses.Kind.PARENT_CONSTRUCTOR) {
-                    Linker.adopt(use.inClass());
-                    LOGGER.info("[Hotwire] {} is made by adoption: {}'s constructor stays closed", use.inClass(),
-                            use.owner());
+                    adopted.put(use.inClass(), use.owner());
                 }
             }
+
+            adopted.forEach((inClass, owner) -> {
+                String loadsAs = moves.getOrDefault(inClass, inClass);
+                Linker.adopt(loadsAs);
+                LOGGER.info("[Hotwire] {} is made by adoption: {}'s constructor stays closed", loadsAs, owner);
+            });
             if (!moves.isEmpty()) {
                 Map<String, byte[]> generated = new LinkedHashMap<>();
                 moves.forEach((moved, target) -> generated.put(target, Relocations.remap(
