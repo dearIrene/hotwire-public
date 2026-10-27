@@ -574,6 +574,7 @@ public final class HotwireEngine implements ModScreen.Game, AutoCloseable {
     @Override
     public void cancelPending(String id) throws IOException {
         this.pending.cancel(id);
+        this.storeJars.dropUnqueued(this.getPendingChanges());
     }
 
     @Override

@@ -37,6 +37,7 @@ final class StoreGrid extends Element {
     private final String addLabel = Lang.get("hotwire.store.add");
     private final String updateLabel = Lang.get("hotwire.store.update");
     private final String installedLabel = Lang.get("hotwire.store.installed");
+    private final String queuedLabel = Lang.get("hotwire.store.queued");
     private final String nothingLabel = Lang.get("hotwire.store.nothing");
 
     StoreGrid(StoreModel model, StoreIcons icons, BiConsumer<String, String> add,
@@ -179,9 +180,11 @@ final class StoreGrid extends Element {
         }
         int addX = x + w - 10 - ADD_W;
         int addY = y + CARD_H - 10 - ADD_H;
-        if (card.installed() && card.update() == null) {
-            canvas.drawText(this.installedLabel, x + w - 10 - canvas.measureText(this.installedLabel), addY + 5,
-                    Colors.fade(Palette.FAINT, alpha));
+        if (this.isAddless(card)) {
+            String label = this.model.isQueuedProject(card.hit().projectId()) ? this.queuedLabel
+                    : this.installedLabel;
+            canvas.drawText(label, x + w - 10 - canvas.measureText(label), addY + 5, Colors.fade(Palette.FAINT,
+                    alpha));
         } else {
             String label = card.update() == null ? this.addLabel : this.updateLabel;
             boolean overAdd = hot > 0 && this.getPointerX() >= addX && this.getPointerY() >= addY
@@ -191,6 +194,10 @@ final class StoreGrid extends Element {
             canvas.drawText(label, addX + (ADD_W - canvas.measureText(label)) / 2, addY + 5,
                     Colors.fade(Palette.ON_ACCENT, alpha));
         }
+    }
+
+    private boolean isAddless(StoreModel.Card card) {
+        return (card.installed() && card.update() == null) || this.model.isQueuedProject(card.hit().projectId());
     }
 
     private Text findText(Canvas canvas, ModrinthClient.Hit hit, int width) {
@@ -248,7 +255,7 @@ final class StoreGrid extends Element {
         int cy = this.getY() + (index / columns) * (CARD_H + GAP) - Math.round(this.scroll.getValue());
         int addX = cx + cardW - 10 - ADD_W;
         int addY = cy + CARD_H - 10 - ADD_H;
-        if ((!card.installed() || card.update() != null) && px >= addX && py >= addY && py < addY + ADD_H) {
+        if (!this.isAddless(card) && px >= addX && py >= addY && py < addY + ADD_H) {
             this.add.accept(card.hit().projectId(), card.hit().title());
         } else {
             this.open.accept(card.hit());

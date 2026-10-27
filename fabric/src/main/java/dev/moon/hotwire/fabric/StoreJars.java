@@ -7,6 +7,7 @@ import dev.moon.hotwire.ui.JarHost;
 import dev.moon.hotwire.ui.Lang;
 import dev.moon.hotwire.ui.ModScreen;
 import dev.moon.hotwire.ui.UpdatePreview;
+import dev.moon.hotwire.update.PendingChange;
 import dev.moon.hotwire.update.UpdateOffer;
 import dev.moon.hotwire.update.UpdatePlan;
 import dev.moon.hotwire.update.UpdatePlanner;
@@ -22,6 +23,7 @@ import java.util.Map;
 import java.util.Set;
 import java.util.function.BiConsumer;
 import java.util.function.Supplier;
+import java.util.stream.Collectors;
 import net.minecraft.client.Minecraft;
 import org.jspecify.annotations.Nullable;
 import org.slf4j.Logger;
@@ -183,6 +185,23 @@ final class StoreJars {
         }
     }
 
+    void markQueued(Path jar, List<PendingChange> pending) {
+        String project = this.projects.remove(jar);
+        ModStore made = this.store.get();
+        if (project != null && made != null) {
+            made.getModel().markQueued(project, String.valueOf(jar.getFileName()));
+        }
+        this.dropUnqueued(pending);
+    }
+
+    void dropUnqueued(List<PendingChange> pending) {
+        ModStore made = this.store.get();
+        if (made != null) {
+            made.getModel().dropUnqueued(pending.stream().filter(PendingChange.Update.class::isInstance)
+                    .map(change -> ((PendingChange.Update) change).newJar()).collect(Collectors.toSet()));
+        }
+    }
+
     void markInstalled(Path jar) {
         String project = this.projects.remove(jar);
         ModStore made = this.store.get();
@@ -193,7 +212,6 @@ final class StoreJars {
 
     @SuppressWarnings("FutureReturnValueIgnored")
     void offerNext() {
-        StoreJar next = this.queued.poll();
         JarHost current = this.host.get();
         StoreJar next = current == null ? null : this.queued.poll();
         if (next == null || current == null) {

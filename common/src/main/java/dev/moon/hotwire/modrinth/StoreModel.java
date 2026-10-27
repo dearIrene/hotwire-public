@@ -54,6 +54,8 @@ public final class StoreModel implements AutoCloseable {
     private volatile boolean pageWanted;
 
     private volatile Set<String> installedProjects = Set.of();
+
+    private volatile Map<String, String> queuedJars = Map.of();
     private volatile Map<String, ModrinthClient.Version> updates = Map.of();
 
     public StoreModel(ModrinthClient client, StoreCache cache, Predicate<String> isInstalled, Runnable onChanged) {
@@ -289,6 +291,22 @@ public final class StoreModel implements AutoCloseable {
         Map<String, Card> out = new ConcurrentHashMap<>();
         this.cards.forEach(card -> out.put(card.hit().projectId(), card));
         return out;
+    }
+
+    public boolean isQueuedProject(String projectId) {
+        return this.queuedJars.containsKey(projectId);
+    }
+
+    public void markQueued(String projectId, String jar) {
+        Map<String, String> more = new HashMap<>(this.queuedJars);
+        more.put(projectId, jar);
+        this.queuedJars = Map.copyOf(more);
+    }
+
+    public void dropUnqueued(Set<String> jars) {
+        Map<String, String> still = new HashMap<>(this.queuedJars);
+        still.values().retainAll(jars);
+        this.queuedJars = Map.copyOf(still);
     }
 
     public void markInstalled(String projectId) {

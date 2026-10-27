@@ -76,7 +76,10 @@ public final class StoreDetail extends Panel {
         ModrinthClient.Version update = this.model.getUpdates().get(shown.projectId());
         boolean installed = this.model.isInstalledProject(shown.projectId()) || this.model.getCardsByProject()
                 .getOrDefault(shown.projectId(), new StoreModel.Card(shown, false, null)).installed();
-        if (update != null) {
+        if (this.model.isQueuedProject(shown.projectId())) {
+            this.setPrimary(Lang.get("hotwire.store.queued"), () -> { });
+            this.setPrimaryActive(false);
+        } else if (update != null) {
             this.setPrimary(Lang.get("hotwire.store.update"), () -> this.adds.add(shown.projectId(), update.id(),
                     shown.title()));
             this.setPrimaryActive(true);

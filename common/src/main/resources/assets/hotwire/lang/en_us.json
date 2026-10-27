@@ -381,6 +381,7 @@
   "hotwire.store.back": "Back",
   "hotwire.store.add": "Add",
   "hotwire.store.installed": "Installed",
+  "hotwire.store.queued": "Next start",
   "hotwire.store.nothing": "No results.",
   "hotwire.store.failed": "Modrinth didn't answer: %s",
   "hotwire.store.no_version": "%s has no version for your Minecraft and Fabric.",

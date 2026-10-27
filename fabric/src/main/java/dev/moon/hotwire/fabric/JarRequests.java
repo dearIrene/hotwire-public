@@ -51,6 +51,7 @@ final class JarRequests {
     void add(Path jar, AddMode mode, Consumer<ModAdder.Result> then) {
         if (mode == AddMode.NEXT_START) {
             this.engine.showMessage(this.changes.queueAdd(jar), false);
+            this.storeJars.markQueued(jar, this.engine.getPendingChanges());
             return;
         }
         this.progress.beginAdding(String.valueOf(jar.getFileName()).replaceFirst("(?i)\\.jar$", ""));
