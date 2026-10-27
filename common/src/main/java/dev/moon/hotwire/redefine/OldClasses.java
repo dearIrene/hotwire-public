@@ -19,8 +19,33 @@ import org.objectweb.asm.tree.LdcInsnNode;
 import org.objectweb.asm.tree.MethodInsnNode;
 import org.objectweb.asm.tree.MethodNode;
 
-final class OldClasses {
+public final class OldClasses {
     private OldClasses() {
+    }
+
+    public static byte[] raiseIfNeeded(byte[] bytes, @Nullable ClassLoader loader) {
+        ClassReader reader = new ClassReader(bytes);
+
+        if (reader.readUnsignedShort(6) >= Opcodes.V1_7) {
+            return bytes;
+        }
+        ClassNode node = new ClassNode();
+        reader.accept(node, 0);
+        if (!usesJava7(node)) {
+            return bytes;
+        }
+        return write(node, 0, null, ClassWriter.COMPUTE_MAXS, name -> readFrom(loader, name));
+    }
+
+    private static byte @Nullable [] readFrom(@Nullable ClassLoader loader, String name) {
+        if (loader == null) {
+            return null;
+        }
+        try (InputStream in = loader.getResourceAsStream(name + ".class")) {
+            return in == null ? null : in.readAllBytes();
+        } catch (IOException e) {
+            return null;
+        }
     }
 
     static byte[] write(ClassNode node, int newest, @Nullable ClassReader pool, int flags,

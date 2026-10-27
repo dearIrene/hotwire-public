@@ -5,6 +5,7 @@ import dev.moon.hotwire.redefine.Adoption;
 import dev.moon.hotwire.redefine.DuckBridge;
 import dev.moon.hotwire.redefine.HotwireLoaders;
 import dev.moon.hotwire.redefine.Linker;
+import dev.moon.hotwire.redefine.OldClasses;
 import dev.moon.hotwire.redefine.ReflectionBridge;
 import dev.moon.hotwire.redefine.Relocations;
 import dev.moon.hotwire.redefine.ShutOverrides;
@@ -80,6 +81,9 @@ final class LoadTimeBridge implements ClassFileTransformer {
         byte[] bridged = Adoption.rewrite(AccessBridge.eraseCallSites(ReflectionBridge.rewrite(DuckBridge.rewrite(
                 ShutOverrides.renameOverrides(AccessBridge.rewrite(base, Linker.getOpenings())),
                 Linker.getEverDucks())), Linker.getOpenings()), Linker.getAdopted());
+        if (bridged != base) {
+            bridged = OldClasses.raiseIfNeeded(bridged, loader);
+        }
         dumpLoad(className, bytes, mixed, bridged);
         return bridged == base ? mixed : bridged;
     }
