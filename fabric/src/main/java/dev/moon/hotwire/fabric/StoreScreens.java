@@ -7,6 +7,8 @@ import dev.moon.hotwire.fabric.store.ModStore;
 import dev.moon.hotwire.modrinth.StoreModel;
 import dev.moon.hotwire.ui.Lang;
 import dev.moon.hotwire.ui.StoreScreen;
+import java.util.HashSet;
+import java.util.Set;
 import net.minecraft.client.gui.screens.Screen;
 import org.jspecify.annotations.Nullable;
 
@@ -15,6 +17,8 @@ final class StoreScreens {
     private final InstalledMods installed;
     private final StoreJars jars;
     private final ModIcons icons;
+
+    private final Set<String> fetching = new HashSet<>();
     private @Nullable ModStore store;
     private @Nullable StoreScreen shown;
 
@@ -92,10 +96,14 @@ final class StoreScreens {
     private void addFromStore(ModStore made, @Nullable Screen back, String projectId, String versionId,
             String title) {
         this.engine.showMessage(Lang.get("hotwire.store.downloading", title), false);
+        if (!this.fetching.add(projectId)) {
+            return;
+        }
         StoreModel model = made.getModel();
         StoreModel.Card card = model.getCardsByProject().get(projectId);
         boolean update = model.isInstalledProject(projectId) || (card != null && card.installed());
         made.fetch(projectId, versionId, title, (fetched, projects) -> {
+            this.fetching.remove(projectId);
             if (fetched.size() > 1) {
                 this.engine.showMessage(Lang.get("hotwire.store.getting_with", title, fetched.size() - 1), false);
             }
@@ -103,6 +111,9 @@ final class StoreScreens {
                 ModViews.show(this.engine.makeScreen(back));
             }
             this.jars.queue(fetched, update, projects);
-        }, failure -> this.engine.showMessage(failure, true));
+        }, failure -> {
+            this.fetching.remove(projectId);
+            this.engine.showMessage(failure, true);
+        });
     }
 }

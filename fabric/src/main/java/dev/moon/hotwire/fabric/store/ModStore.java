@@ -1,5 +1,6 @@
 package dev.moon.hotwire.fabric.store;
 
+import dev.moon.hotwire.config.AtomicFiles;
 import dev.moon.hotwire.fabric.InstalledMods;
 import dev.moon.hotwire.fabric.LoadedMods;
 import dev.moon.hotwire.modrinth.LocalJars;
@@ -159,7 +160,8 @@ public final class ModStore {
         byte[] bytes = this.model.getClient().fetch(version);
         Files.createDirectories(this.downloads);
         Path jar = this.downloads.resolve(version.fileName().replaceAll("[^A-Za-z0-9._+ -]", "_"));
-        Files.write(jar, bytes);
+
+        AtomicFiles.write(jar, bytes);
         return jar;
     }
 
