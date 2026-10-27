@@ -354,7 +354,6 @@
   "hotwire.report.file.hotwire_error": "Hotwire error",
   "hotwire.report.file.game_crash": "game crash",
   "hotwire.report.file.last_crash": "crash last session",
-  "hotwire.command.no_file": "There is no file at %s.",
   "hotwire.update.also": "Also updates %s to %s, which it carries.",
   "hotwire.picker.title": "Add a mod",
   "hotwire.picker.filter": "Mod jars",
