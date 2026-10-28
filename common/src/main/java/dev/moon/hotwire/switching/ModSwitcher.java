@@ -102,6 +102,14 @@ public final class ModSwitcher {
     private volatile Predicate<String> reopenToTurnOn = id -> false;
     private volatile Supplier<Set<String>> calledByWorld = Set::of;
 
+    private record EarlyAnswer(Set<String> mods, int switches, long at) {
+    }
+
+    private static final long CALLED_FRESH_NANOS = 10_000_000_000L;
+    private volatile @Nullable EarlyAnswer calledAhead;
+
+    private final AtomicInteger switches = new AtomicInteger();
+
     public ModSwitcher(ModGraph graph, SwitchPlanner planner, SwitchApplier applier, Progress progress,
             RegistrationJournal registrations) {
         this(graph, planner, applier, progress, registrations, Lifecycle.NONE);
@@ -392,6 +400,10 @@ public final class ModSwitcher {
         if (plan.direction() == SwitchPlan.Direction.OFF && this.waiting == null && this.busy.get() == 0
                 && this.nextAhead.get() == null) {
             this.readAhead.accept(plan.order());
+            if (this.applier.isInWorld()) {
+                int before = this.switches.get();
+                this.calledAhead = new EarlyAnswer(this.calledByWorld.get(), before, System.nanoTime());
+            }
         }
     }
 
@@ -459,6 +471,7 @@ public final class ModSwitcher {
     @SuppressWarnings("ThreadPriorityCheck")
     private Result run(SwitchPlan plan, Consumer<List<String>> theirs) {
         this.switched = true;
+        this.switches.incrementAndGet();
         if (touchesWorldBound(this.worldBound, plan.order()) && this.applier.isInWorld()) {
             return this.runAlone(plan, theirs);
         }
@@ -558,11 +571,21 @@ public final class ModSwitcher {
         Set<String> switched = Set.copyOf(plan.order());
         try {
             LiveObjects.reopenFirst(switched, onAfter, this.reopenToTurnOn, this.applier.getGame());
-            LiveObjects.reopenFirstOff(switched, onAfter, this.calledByWorld, this.applier.getGame());
+            LiveObjects.reopenFirstOff(switched, onAfter, this::findCalledByWorld, this.applier.getGame());
         } catch (RuntimeException | LinkageError e) {
             throw new RebuildException("the switch threw: " + e, e);
         }
         SwitchTimes.mark("reopen check");
+    }
+
+    private Set<String> findCalledByWorld() {
+        EarlyAnswer ahead = this.calledAhead;
+        this.calledAhead = null;
+        if (ahead != null && ahead.switches() == this.switches.get() - 1
+                && System.nanoTime() - ahead.at() < CALLED_FRESH_NANOS) {
+            return ahead.mods();
+        }
+        return this.calledByWorld.get();
     }
 
     private void withGamePaused(Runnable change) {
