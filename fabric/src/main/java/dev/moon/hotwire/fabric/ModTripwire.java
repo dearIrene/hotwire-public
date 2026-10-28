@@ -91,11 +91,11 @@ public final class ModTripwire {
         @Override
         public byte @Nullable [] transform(@Nullable ClassLoader loader, @Nullable String name,
                 @Nullable Class<?> redefining, @Nullable ProtectionDomain domain, byte[] bytes) {
-            if (name == null || redefining != null || !HotwireLoaders.seesHotwire(loader)) {
+            if (name == null || loader == null || redefining != null || !HotwireLoaders.seesHotwire(loader)) {
                 return null;
             }
             try {
-                return ModTripwire.this.armAtLoad(name, findSourceOf(domain), bytes);
+                return ModTripwire.this.armAtLoad(name, findSourceOf(domain), bytes, loader);
             } catch (RuntimeException | LinkageError e) {
                 LOGGER.error("[Hotwire] {} loaded unwatched: wiring it as it loaded threw", name, e);
                 return null;
@@ -497,7 +497,7 @@ public final class ModTripwire {
         return source == null || source.getLocation() == null ? null : source.getLocation().toString();
     }
 
-    private byte @Nullable [] armAtLoad(String name, @Nullable String source, byte[] bytes) {
+    private byte @Nullable [] armAtLoad(String name, @Nullable String source, byte[] bytes, ClassLoader loader) {
         synchronized (this.sources) {
             String mod = source == null ? null : this.sources.get(source);
             if (mod == null) {
@@ -511,6 +511,8 @@ public final class ModTripwire {
             byte[] wired = Tripwire.arm(bytes, mod);
             if (wired != null) {
                 this.armedAtLoad.put(name, new ArmedClass(mod, bytes, wired));
+
+                this.rebuilder.getLoadedBytes().onDefinedInGame(name, wired, loader);
             }
             return wired;
         }

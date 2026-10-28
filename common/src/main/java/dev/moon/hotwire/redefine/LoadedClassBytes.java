@@ -25,7 +25,11 @@ public final class LoadedClassBytes {
 
     private final Set<String> loadedAs = ConcurrentHashMap.newKeySet();
 
-    private final DefinedClasses definedAs = new DefinedClasses();
+    private static final DefinedClasses DEFINED = new DefinedClasses();
+    private final DefinedClasses definedAs = DEFINED;
+
+    private static final Map<String, Integer> IN_GAME = new ConcurrentHashMap<>();
+    private final Map<String, Integer> definedInGame = IN_GAME;
 
     LoadedClassBytes(Instrumentation instrumentation) {
         this.instrumentation = instrumentation;
@@ -38,6 +42,16 @@ public final class LoadedClassBytes {
 
     public void onDefined(String internal, byte[] bytes) {
         this.definedAs.put(internal, bytes);
+        this.definedInGame.remove(internal);
+    }
+
+    public static void recordDefinedInGame(String internal, byte[] bytes, ClassLoader loader) {
+        DEFINED.put(internal, bytes);
+        IN_GAME.put(internal, System.identityHashCode(loader));
+    }
+
+    public void onDefinedInGame(String internal, byte[] bytes, ClassLoader loader) {
+        recordDefinedInGame(internal, bytes, loader);
     }
 
     public byte @Nullable [] findAsLoaded(String internal) {
@@ -69,7 +83,10 @@ public final class LoadedClassBytes {
             String name = type.getName().replace('.', '/');
             byte[] known = this.knownBytes.get(type);
             if (known == null) {
-                known = this.loadedAs.remove(name) ? this.definedAs.find(name) : null;
+                boolean asLoaded = this.loadedAs.remove(name);
+                Integer loader = this.definedInGame.remove(name);
+                boolean inGame = loader != null && loader == System.identityHashCode(type.getClassLoader());
+                known = asLoaded || inGame ? this.definedAs.find(name) : null;
                 if (known != null) {
                     this.knownBytes.putIfAbsent(type, known);
                 }

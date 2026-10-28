@@ -30,10 +30,12 @@ final class LoadTimeMixer {
 
     ClassFileTransformer makeTransformer() {
         ClassRebuilder rebuilder = this.applier.getRebuilder();
-        return new LoadTimeBridge(this.applier::isMixedAsItLoads, this::mixAsItLoads, (name, bytes) -> {
+        return new LoadTimeBridge(this.applier::isMixedAsItLoads, this::mixAsItLoads, (name, bytes, inGame) -> {
             if ((name.startsWith("net/minecraft/") || name.startsWith("com/mojang/"))
                     && this.applier.getPatchedNames().contains(name)) {
                 rebuilder.getLoadedBytes().onLoaded(name, bytes);
+            } else if (inGame != null) {
+                rebuilder.getLoadedBytes().onDefinedInGame(name, bytes, inGame);
             } else {
                 rebuilder.getLoadedBytes().onDefined(name, bytes);
             }

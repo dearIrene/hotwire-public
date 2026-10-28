@@ -18,7 +18,6 @@ import java.security.ProtectionDomain;
 import java.util.HashSet;
 import java.util.Objects;
 import java.util.Set;
-import java.util.function.BiConsumer;
 import java.util.function.BiFunction;
 import java.util.function.Predicate;
 import org.jspecify.annotations.Nullable;
@@ -30,12 +29,16 @@ final class LoadTimeBridge implements ClassFileTransformer {
 
     private final Predicate<String> differs;
     private final BiFunction<String, byte[], byte @Nullable []> mix;
-    private final BiConsumer<String, byte[]> defined;
+    private final DefinitionWatcher defined;
+
+    interface DefinitionWatcher {
+        void accept(String name, byte[] bytes, @Nullable ClassLoader inGame);
+    }
 
     private static final ThreadLocal<Set<String>> MIXING = ThreadLocal.withInitial(HashSet::new);
 
     LoadTimeBridge(Predicate<String> differs, BiFunction<String, byte[], byte @Nullable []> mix,
-            BiConsumer<String, byte[]> defined) {
+            DefinitionWatcher defined) {
         this.differs = differs;
         this.mix = mix;
         this.defined = defined;
@@ -54,7 +57,8 @@ final class LoadTimeBridge implements ClassFileTransformer {
         }
         try {
             byte[] made = this.bridge(loader, className, domain, bytes);
-            this.defined.accept(className, made == null ? bytes : made);
+            this.defined.accept(className, made == null ? bytes : made,
+                    loader != null && HotwireLoaders.seesHotwire(loader) ? loader : null);
             return made;
         } catch (RuntimeException | LinkageError e) {
             LOGGER.error("[Hotwire] {} loaded as the game made it, with the game's own mix and no bridge to what"

@@ -9,6 +9,7 @@
   "icon": "assets/hotwire/icon.png",
   "environment": "client",
   "entrypoints": {
+    "preLaunch": ["dev.moon.hotwire.fabric.EarlyDefinitions"],
     "client": ["dev.moon.hotwire.fabric.HotwireClient"],
     "modmenu": ["dev.moon.hotwire.fabric.ModMenuEntry"]
   },
