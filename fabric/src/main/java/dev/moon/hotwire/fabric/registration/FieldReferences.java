@@ -9,6 +9,8 @@ import dev.moon.hotwire.switching.SwitchTimes;
 import io.netty.channel.Channel;
 import io.netty.channel.ChannelHandler;
 import java.lang.instrument.Instrumentation;
+import java.lang.management.ClassLoadingMXBean;
+import java.lang.management.ManagementFactory;
 import java.lang.reflect.Field;
 import java.lang.reflect.Method;
 import java.lang.reflect.Modifier;
@@ -60,6 +62,11 @@ public final class FieldReferences {
     private final CollectionReferences elements;
 
     private final Set<Field> finalsWritten = ConcurrentHashMap.newKeySet();
+
+    private record EarlyScan(Set<String> mods, LoadedClasses scan, long loaded, long unloaded) {
+    }
+
+    private volatile @Nullable EarlyScan scanAhead;
     private final AtomicBoolean refreshDue = new AtomicBoolean();
     private final LoadedCheckAnswers loadedChecks;
     private final StaticRecomputer recomputer;
@@ -87,7 +94,7 @@ public final class FieldReferences {
     }
 
     public void takeOut(Collection<String> mods, Predicate<String> on) {
-        LoadedClasses scan = this.findLoaded(mods);
+        LoadedClasses scan = this.findLoadedAhead(mods);
         SwitchTimes.mark("field references: classes");
         Map<String, List<Replacement>> planned = new HashMap<>();
         GameHold.onGameAndWait(() -> planned.putAll(this.plan(mods, on, scan)));
@@ -141,7 +148,10 @@ public final class FieldReferences {
 
     public void lookForEvery(Collection<String> mods, Predicate<String> on) {
         this.loadedChecks.readForEvery(mods, this.lambdas.open());
-        this.removeElements(mods, on, this.findLoaded(mods), Map.of(), true);
+        ElementLook.stopIfAsked();
+        LoadedClasses scan = this.findLoaded(mods);
+        ElementLook.stopIfAsked();
+        this.removeElements(mods, on, scan, Map.of(), true);
     }
 
     private LoadedClasses findLoaded(Collection<String> mods) {
@@ -156,12 +166,24 @@ public final class FieldReferences {
 
     public void readAhead(Collection<String> mods, Predicate<String> on) {
         this.loadedChecks.readAhead(mods, this.lambdas.open(), getOthers(mods, on));
-        for (Class<?> type : this.instrumentation.getAllLoadedClasses()) {
-            String mod = type.isArray() || type.isHidden() ? null : GameRegistrations.findModOf(type);
-            if (mod != null && mods.contains(mod)) {
-                this.usedBy.computeIfAbsent(type.getName().replace('.', '/'), this::findClassesUsed);
-            }
+        long[] counts = countLoads();
+        this.scanAhead = new EarlyScan(Set.copyOf(mods), this.findLoaded(mods), counts[0], counts[1]);
+    }
+
+    private LoadedClasses findLoadedAhead(Collection<String> mods) {
+        EarlyScan ahead = this.scanAhead;
+        this.scanAhead = null;
+        long[] counts = countLoads();
+        if (ahead != null && ahead.mods().equals(Set.copyOf(mods)) && ahead.loaded() == counts[0]
+                && ahead.unloaded() == counts[1]) {
+            return ahead.scan();
         }
+        return this.findLoaded(mods);
+    }
+
+    private static long[] countLoads() {
+        ClassLoadingMXBean loading = ManagementFactory.getClassLoadingMXBean();
+        return new long[] {loading.getTotalLoadedClassCount(), loading.getUnloadedClassCount()};
     }
 
     private void removeElements(Collection<String> mods, Predicate<String> on, LoadedClasses scan,

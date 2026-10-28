@@ -17,6 +17,7 @@ import java.util.Objects;
 import java.util.Set;
 import java.util.function.Function;
 import java.util.function.Predicate;
+import java.util.stream.Stream;
 import org.jspecify.annotations.Nullable;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -109,7 +110,10 @@ final class LoadedCheckAnswers {
 
     private CheckSites find(Collection<String> mods, ConstantPools pools, Predicate<Class<?>> others) {
         ClassLoader game = LoadedCheckAnswers.class.getClassLoader();
-        List<Class<?>> candidates = Arrays.<Class<?>>stream(this.instrumentation.getAllLoadedClasses()).parallel()
+
+        Stream<Class<?>> loaded = Arrays.stream(this.instrumentation.getAllLoadedClasses());
+        List<Class<?>> candidates = (ElementLook.isLooking() ? loaded : loaded.parallel())
+                .peek(type -> ElementLook.stopIfAsked())
                 .filter(type -> Objects.equals(type.getClassLoader(), game) && !type.isHidden() && !type.isArray()
                         && others.test(type) && pools.getMembers(type).stream()
                                 .anyMatch(member -> ASKS.contains(member[1]) || LOOKUPS.contains(member[1])))
@@ -118,6 +122,7 @@ final class LoadedCheckAnswers {
                 .anyMatch(member -> LOOKUPS.contains(member[1]))).toList();
         Map<String, List<FoundAsk>> asks = new HashMap<>();
         for (Class<?> type : candidates) {
+            ElementLook.stopIfAsked();
             if (pools.getMembers(type).stream().noneMatch(member -> ASKS.contains(member[1]))) {
                 continue;
             }
@@ -165,22 +170,25 @@ final class LoadedCheckAnswers {
     }
 
     private void clearLookups(Class<?> type, Collection<String> mods, List<String> changed) {
-        byte[] bytes = this.originalBytes.apply(type.getName().replace('.', '/'));
-        if (bytes == null) {
-            return;
-        }
+        byte[] bytes = null;
         for (FieldSlots.Slot field : Fields.getReferenceFields(type, true)) {
             try {
                 Object value = field.get(null);
-                if (value == null) {
+                if (value == null || Modifier.isFinal(field.getModifiers())) {
                     continue;
                 }
                 String mod = GameRegistrations.findModOf(findOwner(value));
+                if (mod == null || !mods.contains(mod)) {
+                    continue;
+                }
+                bytes = bytes != null ? bytes : this.originalBytes.apply(type.getName().replace('.', '/'));
+                if (bytes == null) {
+                    return;
+                }
                 String descriptor = field.getType().descriptorString();
 
                 boolean added = !ClassFileSummary.isDeclaredBy(bytes, field.getName(), descriptor);
-                if (mod == null || !mods.contains(mod) || Modifier.isFinal(field.getModifiers())
-                        || !(added || ClassFileSummary.isSetAgainLater(bytes, field.getName(), descriptor, true))) {
+                if (!(added || ClassFileSummary.isSetAgainLater(bytes, field.getName(), descriptor, true))) {
                     continue;
                 }
                 this.writer.write(field, null, null);
