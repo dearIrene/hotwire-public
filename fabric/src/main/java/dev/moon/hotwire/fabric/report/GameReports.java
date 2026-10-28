@@ -177,6 +177,10 @@ public final class GameReports {
         }
     }
 
+    public static void logCrashDecision(CrashSection.Detail trace) {
+        LOGGER.error("[Hotwire] ======== {}: {} ========", trace.name(), trace.value());
+    }
+
     public static CrashSection.Detail describeTrace(Collection<String> frames, Collection<String> messages) {
         GameReports reports = current;
         if (reports == null) {
@@ -343,7 +347,13 @@ public final class GameReports {
         return at < 0 || !CrashSection.isCleared(text.substring(at));
     }
 
-    synchronized Path writeBundle(String title, String why, List<TidyLog.Mod> mods, List<Path> extra)
+    Path writeBundle(String title, String why, List<TidyLog.Mod> mods, List<Path> extra) throws IOException {
+        synchronized (this.bundling) {
+            return this.writeBundleNow(title, why, mods, extra);
+        }
+    }
+
+    private Path writeBundleNow(String title, String why, List<TidyLog.Mod> mods, List<Path> extra)
             throws IOException {
         this.onWritten();
         Path game = FabricLoader.getInstance().getGameDir();
@@ -404,6 +414,8 @@ public final class GameReports {
         int retain = 4_000_000;
         return log.length() <= retain ? log : log.substring(log.length() - retain);
     }
+
+    private final Object bundling = new Object();
 
     private void write(Report report) {
         Instant written = Instant.now();

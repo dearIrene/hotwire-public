@@ -1,8 +1,11 @@
 package dev.moon.hotwire.fabric;
 
+import dev.moon.hotwire.fabric.registration.OffModClose;
+import dev.moon.hotwire.fabric.registration.OffModCommands;
 import dev.moon.hotwire.fabric.report.HotwireLog;
 import dev.moon.hotwire.redefine.FieldHolders;
 import dev.moon.hotwire.redefine.InitHookReplay;
+import dev.moon.hotwire.redefine.Tripwire;
 import dev.moon.hotwire.report.GameLog;
 import dev.moon.hotwire.ui.Lang;
 import java.io.IOException;
@@ -11,9 +14,11 @@ import net.fabricmc.api.ClientModInitializer;
 import net.fabricmc.fabric.api.client.command.v2.ClientCommandRegistrationCallback;
 import net.fabricmc.fabric.api.client.event.lifecycle.v1.ClientLifecycleEvents;
 import net.fabricmc.fabric.api.client.networking.v1.ClientPlayConnectionEvents;
+import net.fabricmc.fabric.api.event.Event;
 import net.fabricmc.loader.api.FabricLoader;
 import net.minecraft.client.Minecraft;
 import net.minecraft.locale.Language;
+import net.minecraft.resources.Identifier;
 import org.jspecify.annotations.Nullable;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -35,8 +40,18 @@ public final class HotwireClient implements ClientModInitializer {
             return language.has(key) ? Lang.fill(language.getOrDefault(key), values) : null;
         });
 
-        ClientCommandRegistrationCallback.EVENT.register((dispatcher, context) -> HotwireCommands.register(dispatcher,
-                HotwireClient::openSoon));
+        ClientCommandRegistrationCallback.EVENT.register((dispatcher, context) ->
+                HotwireCommands.register(dispatcher, HotwireClient::openSoon));
+
+        Identifier afterMods = Identifier.fromNamespaceAndPath(ID, "after_mods");
+        ClientCommandRegistrationCallback.EVENT.addPhaseOrdering(Event.DEFAULT_PHASE, afterMods);
+        ClientCommandRegistrationCallback.EVENT.register(afterMods, (dispatcher, context) -> {
+            HotwireEngine started = engine;
+            if (started != null) {
+                OffModCommands.readOffFrom(id -> !started.isOn(id) || Tripwire.isWatched(id));
+                OffModCommands.takeOutOf(dispatcher, true);
+            }
+        });
 
         OpenKey.register(HotwireClient::openSoonFromKey);
         OffTooltips.register();
@@ -48,10 +63,18 @@ public final class HotwireClient implements ClientModInitializer {
             FieldHolders.retryCatchUps();
             HotwireEngine started = engine;
             if (started != null) {
+                OffModCommands.readOffFrom(id -> !started.isOn(id) || Tripwire.isWatched(id));
                 started.lookAheadInWorldSoon();
+
+                OffModCommands.takeOut(id -> !started.isOn(id));
             }
         }));
+
+        ClientPlayConnectionEvents.DISCONNECT.register((handler, client) -> GameLog.LOGGER.info(
+                "[Hotwire] the world's connection closed", new Throwable("closed here")));
         ClientLifecycleEvents.CLIENT_STOPPING.register(client -> {
+            OffModClose.run(client);
+            OffModClose.exitWhenStuck();
             HotwireEngine started = engine;
             if (started != null) {
                 started.close();
@@ -88,6 +111,8 @@ public final class HotwireClient implements ClientModInitializer {
                 throw new UncheckedIOException(e);
             }
             engine = started;
+            HotwireEngine made = started;
+            OffModCommands.readOffFrom(id -> !made.isOn(id) || Tripwire.isWatched(id));
         }
         return started;
     }

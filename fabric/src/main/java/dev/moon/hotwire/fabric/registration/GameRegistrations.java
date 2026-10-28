@@ -1,6 +1,7 @@
 package dev.moon.hotwire.fabric.registration;
 
 import dev.moon.hotwire.fabric.ModPolicy;
+import dev.moon.hotwire.redefine.Tripwire;
 import dev.moon.hotwire.registration.CallerOwner;
 import dev.moon.hotwire.registration.RegistrationJournal;
 import java.nio.file.Path;
@@ -49,6 +50,11 @@ public final class GameRegistrations {
     public static @Nullable String findShippedBy(Class<?> type) {
         ModOfClass classes = modOfClass;
         return classes == null ? null : classes.findShippedBy(type);
+    }
+
+    public static boolean isOfOffMod(Class<?> type) {
+        String mod = findModOf(type);
+        return mod != null && Tripwire.isWatched(mod);
     }
 
     public static @Nullable String findModOf(Class<?> type) {

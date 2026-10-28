@@ -145,8 +145,8 @@ public final class ModViews {
         if (screen == null) {
             return;
         }
-        if (screen instanceof HotwireScreen) {
-            HotwireClient.getEngine().open();
+        if (screen instanceof HotwireScreen hotwire) {
+            show(hotwire.makeAgain());
             return;
         }
         if (screen instanceof StoreGameScreen) {

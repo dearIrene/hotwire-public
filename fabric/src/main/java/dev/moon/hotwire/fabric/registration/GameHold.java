@@ -1,6 +1,7 @@
 package dev.moon.hotwire.fabric.registration;
 
 import dev.moon.hotwire.fabric.ModViews;
+import dev.moon.hotwire.fabric.screen.HoldFrame;
 import java.time.Duration;
 import java.util.ArrayList;
 import java.util.Arrays;
@@ -16,6 +17,7 @@ import java.util.concurrent.LinkedBlockingQueue;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.TimeoutException;
 import java.util.concurrent.atomic.AtomicBoolean;
+import java.util.function.BooleanSupplier;
 import net.minecraft.client.Minecraft;
 import net.minecraft.server.MinecraftServer;
 import net.minecraft.server.TickTask;
@@ -233,7 +235,7 @@ public final class GameHold {
                 }
                 isServerPaused = true;
                 try {
-                    await(paused, latch, PAUSED_WORK, "server");
+                    await(paused, latch, PAUSED_WORK, "server", () -> !server.isRunning());
                 } finally {
                     isServerPaused = false;
                     runPausedWork();
@@ -254,7 +256,7 @@ public final class GameHold {
                 if (decided.compareAndSet(false, true)) {
                     gamePaused = true;
                     try {
-                        await(paused, latch, PAUSED_GAME_WORK, "game");
+                        await(paused, latch, PAUSED_GAME_WORK, "game", () -> false);
                     } finally {
                         gamePaused = false;
                         runPausedGameWork();
@@ -337,7 +339,7 @@ public final class GameHold {
     public static void holdGameUntil(CountDownLatch release) {
         gamePaused = true;
         try {
-            await(new CountDownLatch(1), release, PAUSED_GAME_WORK, "game");
+            await(new CountDownLatch(1), release, PAUSED_GAME_WORK, "game", () -> false);
         } finally {
             gamePaused = false;
             runPausedGameWork();
@@ -352,14 +354,22 @@ public final class GameHold {
     }
 
     private static void await(CountDownLatch paused, CountDownLatch latch, BlockingQueue<Runnable> work,
-            String thread) {
+            String thread, BooleanSupplier stopping) {
         paused.countDown();
         long said = System.nanoTime();
+
+        boolean drawing = thread.equals("game");
+        if (drawing) {
+            HoldFrame.begin();
+        }
         try {
-            while (latch.getCount() > 0 && !crashing) {
-                Runnable next = work.poll(1, TimeUnit.SECONDS);
+            while (latch.getCount() > 0 && !crashing && !stopping.getAsBoolean()) {
+                Runnable next = work.poll(drawing ? 15 : 1000, TimeUnit.MILLISECONDS);
                 if (next != null) {
                     next.run();
+                }
+                if (drawing) {
+                    HoldFrame.drawIfDue();
                 }
                 if (System.nanoTime() - said > LIMIT.toNanos()) {
                     said = System.nanoTime();

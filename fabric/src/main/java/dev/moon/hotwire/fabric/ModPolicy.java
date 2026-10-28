@@ -26,7 +26,7 @@ public final class ModPolicy {
 
     static final Set<String> NEVER_TOUCHED = Set.of("ixeris", "ferritecore");
 
-    static final Set<String> ALWAYS_ON = Set.of("sodium", "lithium", "phosphor", "vulkanmod");
+    static final Set<String> ALWAYS_ON = Set.of("sodium", "lithium", "phosphor", "vulkanmod", "modernfix");
 
     private static volatile SwitchPlanner.NestedJars nestedJars = SwitchPlanner.NestedJars.AUTO;
 

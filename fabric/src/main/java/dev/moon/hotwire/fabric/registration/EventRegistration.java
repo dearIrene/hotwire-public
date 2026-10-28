@@ -2,6 +2,7 @@ package dev.moon.hotwire.fabric.registration;
 
 import dev.moon.hotwire.fabric.mixin.core.fabric.base.event.ArrayBackedEventAccessor;
 import dev.moon.hotwire.fabric.mixin.core.fabric.base.event.EventPhaseDataAccessor;
+import dev.moon.hotwire.redefine.Tripwire;
 import dev.moon.hotwire.registration.Registration;
 import dev.moon.hotwire.registration.SequenceOrder;
 import java.lang.ref.WeakReference;
@@ -33,6 +34,10 @@ final class EventRegistration implements Registration {
     @SuppressWarnings("ReferenceEquality")
     boolean listensTo(Object event) {
         return this.event.get() == event;
+    }
+
+    boolean isOutOfEvent() {
+        return this.removed != null;
     }
 
     @Nullable Object findListener() {
@@ -71,7 +76,7 @@ final class EventRegistration implements Registration {
                 return;
             }
             phase.hotwire$setListeners(retained.toArray(Arrays.copyOf(listeners, 0)));
-            event.hotwire$rebuildInvoker(countTotal(event));
+            Tripwire.runAsHotwire(() -> event.hotwire$rebuildInvoker(countTotal(event)));
             this.removed = listener;
         }
     }
@@ -92,7 +97,7 @@ final class EventRegistration implements Registration {
                 return;
             }
             phase.hotwire$setListeners(placed.toArray(Arrays.copyOf(listeners, 0)));
-            event.hotwire$rebuildInvoker(countTotal(event));
+            Tripwire.runAsHotwire(() -> event.hotwire$rebuildInvoker(countTotal(event)));
         }
     }
 

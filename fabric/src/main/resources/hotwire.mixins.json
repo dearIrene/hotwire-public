@@ -32,6 +32,7 @@
     "core.fabric.resource.loader.ResourceManagerHelperImplAccessor",
     "core.fabric.resource.loader.ResourceManagerHelperImplMixin",
     "core.server.level.ServerPlayerMixin",
+    "core.server.CommandsMixin",
     "core.server.MinecraftServerMixin",
     "core.server.TickTaskAccessor"
   ],

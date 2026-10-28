@@ -179,7 +179,7 @@ final class ProgressPanel extends Panel {
     private int getQueueHeight(Progress.Snapshot now) {
         int count = now.queue().size();
         int first = Math.round(this.scroll.getValue());
-        int last = Math.min(count, first + CARDS_SHOWN);
+        int last = Math.min(Math.min(count, this.focus.size()), first + CARDS_SHOWN);
         int height = 0;
         for (int i = first; i < last; i++) {
             height += CARD + Math.round(CARD_GROWS * this.focus.get(i).getValue()) + CARD_GAP;
@@ -191,7 +191,8 @@ final class ProgressPanel extends Panel {
         List<Progress.Entry> queue = now.queue();
         int current = this.getCurrent(now);
         int first = Math.round(this.scroll.getValue());
-        int last = Math.min(queue.size(), first + CARDS_SHOWN);
+
+        int last = Math.min(Math.min(queue.size(), this.focus.size()), first + CARDS_SHOWN);
         int at = y;
         if (first > 0) {
             canvas.drawText(Lang.get("hotwire.progress.more", first), x + 6, at, Colors.fade(Palette.FAINT, alpha));

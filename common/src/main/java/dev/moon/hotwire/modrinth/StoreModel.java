@@ -29,10 +29,30 @@ public final class StoreModel implements AutoCloseable {
     public record Card(ModrinthClient.Hit hit, boolean installed, ModrinthClient.@Nullable Version update) {
     }
 
+    public enum PackState { MISSING, DOWNLOADING, OFF, ON, NEEDS_WORLD }
+
+    public interface Packs {
+        Packs NONE = new Packs() {
+            @Override
+            public PackState find(ModrinthClient.Kind kind, String projectId) {
+                return PackState.MISSING;
+            }
+
+            @Override
+            public void toggle(ModrinthClient.Kind kind, String projectId) {
+            }
+        };
+
+        PackState find(ModrinthClient.Kind kind, String projectId);
+
+        void toggle(ModrinthClient.Kind kind, String projectId);
+    }
+
     private record Answer(List<Card> cards, int total) {
     }
 
     private final ModrinthClient client;
+    private final Downloads downloads = new Downloads();
     private final StoreCache cache;
     private final Predicate<String> isInstalled;
     private final Runnable onChanged;
@@ -45,6 +65,8 @@ public final class StoreModel implements AutoCloseable {
 
     private volatile String words = "";
     private volatile String category = "";
+    private volatile ModrinthClient.Kind kind = ModrinthClient.Kind.MOD;
+    private volatile Packs packs = Packs.NONE;
     private volatile List<Card> cards = List.of();
     private volatile int total;
     private volatile boolean loading;
@@ -101,6 +123,32 @@ public final class StoreModel implements AutoCloseable {
         this.searchFresh();
     }
 
+    public ModrinthClient.Kind getKind() {
+        return this.kind;
+    }
+
+    public void setPacks(Packs packs) {
+        this.packs = packs;
+    }
+
+    public boolean isShowingPacks() {
+        return this.kind != ModrinthClient.Kind.MOD;
+    }
+
+    public PackState findPackState(String projectId) {
+        return this.packs.find(this.kind, projectId);
+    }
+
+    public void togglePack(String projectId) {
+        this.packs.toggle(this.kind, projectId);
+    }
+
+    public void setKind(ModrinthClient.Kind kind) {
+        this.kind = kind;
+        this.category = "";
+        this.searchFresh();
+    }
+
     public void open() {
         if (this.cards.isEmpty() && !this.loading) {
             this.searchFresh();
@@ -126,7 +174,7 @@ public final class StoreModel implements AutoCloseable {
         this.pageWanted = false;
         Answer answered;
         synchronized (this.answers) {
-            answered = this.answers.get(findKey(this.words, this.category));
+            answered = this.answers.get(findKey(this.kind, this.words, this.category));
         }
         if (answered != null) {
             this.asked.incrementAndGet();
@@ -141,13 +189,13 @@ public final class StoreModel implements AutoCloseable {
         this.ask(0);
     }
 
-    private static String findKey(String words, String category) {
-        return words + ":" + category;
+    private static String findKey(ModrinthClient.Kind kind, String words, String category) {
+        return kind + ":" + words + ":" + category;
     }
 
-    private void saveAnswer(String words, String category, List<Card> cards, int total) {
+    private void saveAnswer(ModrinthClient.Kind kind, String words, String category, List<Card> cards, int total) {
         synchronized (this.answers) {
-            this.answers.put(findKey(words, category), new Answer(cards, total));
+            this.answers.put(findKey(kind, words, category), new Answer(cards, total));
             if (this.answers.size() > MOST_ANSWERS) {
                 this.answers.remove(this.answers.keySet().iterator().next());
             }
@@ -164,16 +212,21 @@ public final class StoreModel implements AutoCloseable {
         int ticket = this.asked.incrementAndGet();
         String words = this.words;
         String category = this.category;
+        ModrinthClient.Kind kind = this.kind;
         this.loading = true;
         this.onChanged.run();
         this.worker.execute(() -> {
-            String key = "search:" + words + ":" + category + ":" + offset;
+            String key = this.client.getScope() + ":" + kind.getProjectType() + ":" + words + ":" + category + ":"
+                    + offset;
             ModrinthClient.Search found;
+            boolean stale;
             try {
-                found = this.cache.findAnswer(key).map(this::readCached).orElse(null);
+                StoreCache.Entry saved = this.cache.findTextEntry(StoreCache.Kind.SEARCH, key).orElse(null);
+                found = saved == null ? null : this.readCached(saved.text());
+                stale = saved != null && found != null && !saved.fresh();
                 if (found == null) {
-                    found = this.client.search(words, category, offset, PAGE);
-                    this.cache.saveAnswer(key, SearchJson.write(found));
+                    found = this.client.search(kind, words, category, offset, PAGE);
+                    this.cache.saveText(StoreCache.Kind.SEARCH, key, SearchJson.write(found));
                 }
             } catch (IOException | RuntimeException e) {
                 if (ticket == this.asked.get()) {
@@ -194,11 +247,40 @@ public final class StoreModel implements AutoCloseable {
             }
             this.cards = Collections.unmodifiableList(next);
             this.total = found.total();
-            this.saveAnswer(words, category, this.cards, this.total);
+            this.saveAnswer(kind, words, category, this.cards, this.total);
             this.loading = false;
             this.pageWanted = false;
             this.onChanged.run();
+            if (stale) {
+                this.refresh(ticket, kind, words, category, offset, key);
+            }
         });
+    }
+
+    private void refresh(int ticket, ModrinthClient.Kind kind, String words, String category, int offset,
+            String key) {
+        ModrinthClient.Search fresh;
+        try {
+            fresh = this.client.search(kind, words, category, offset, PAGE);
+        } catch (IOException | RuntimeException e) {
+            LOGGER.info("[Hotwire] the store's search could not be asked again: {}", e.toString());
+            return;
+        }
+        this.cache.saveText(StoreCache.Kind.SEARCH, key, SearchJson.write(fresh));
+        if (ticket != this.asked.get()) {
+            return;
+        }
+        List<Card> next = new ArrayList<>(this.cards.subList(0, Math.min(offset, this.cards.size())));
+        for (ModrinthClient.Hit hit : fresh.hits()) {
+            next.add(this.makeCard(hit));
+        }
+        if (offset + PAGE < this.cards.size()) {
+            next.addAll(this.cards.subList(offset + PAGE, this.cards.size()));
+        }
+        this.cards = Collections.unmodifiableList(next);
+        this.total = fresh.total();
+        this.saveAnswer(kind, words, category, this.cards, this.total);
+        this.onChanged.run();
     }
 
     private Card makeCard(ModrinthClient.Hit hit) {
@@ -227,14 +309,15 @@ public final class StoreModel implements AutoCloseable {
         return this.installedProjects.contains(projectId) || this.isInstalled.test(projectId);
     }
 
-    public void findProject(String projectId, Consumer<ModrinthClient.Project> then, Consumer<String> failed) {
+    public void findProject(ModrinthClient.Hit hit, Consumer<ModrinthClient.Project> then, Consumer<String> failed) {
         this.worker.execute(() -> {
-            String key = "project:" + projectId;
+            String key = hit.projectId() + ":" + hit.modified();
             try {
-                ModrinthClient.Project found = this.cache.findAnswer(key).map(this::readCachedProject).orElse(null);
+                ModrinthClient.Project found = hit.modified().isEmpty() ? null : this.cache.findText(
+                        StoreCache.Kind.PAGE, key).map(this::readCachedProject).orElse(null);
                 if (found == null) {
-                    found = this.client.findProject(projectId);
-                    this.cache.saveAnswer(key, SearchJson.writeProject(found));
+                    found = this.client.findProject(hit.projectId());
+                    this.cache.saveText(StoreCache.Kind.PAGE, key, SearchJson.writeProject(found));
                 }
                 then.accept(found);
             } catch (IOException | RuntimeException e) {
@@ -263,19 +346,40 @@ public final class StoreModel implements AutoCloseable {
         this.worker.execute(work);
     }
 
-    public void findVersions(String projectId, Consumer<List<ModrinthClient.Version>> then,
+    public void findVersions(ModrinthClient.Hit hit, Consumer<List<ModrinthClient.Version>> then,
             Consumer<String> failed) {
+        ModrinthClient.Kind asked = this.kind;
         this.worker.execute(() -> {
+            String key = this.client.getScope() + ":" + asked.getProjectType() + ":" + hit.projectId() + ":"
+                    + hit.modified();
             try {
-                then.accept(this.client.findVersions(projectId));
+                List<ModrinthClient.Version> found = hit.modified().isEmpty() ? null : this.cache.findText(
+                        StoreCache.Kind.VERSIONS, key).map(this::readCachedVersions).orElse(null);
+                if (found == null) {
+                    found = this.client.findVersions(asked, hit.projectId());
+                    this.cache.saveText(StoreCache.Kind.VERSIONS, key, SearchJson.writeVersions(found));
+                }
+                then.accept(found);
             } catch (IOException | RuntimeException e) {
                 failed.accept(e.getMessage() == null ? e.toString() : e.getMessage());
             }
         });
     }
 
+    private @Nullable List<ModrinthClient.Version> readCachedVersions(String json) {
+        try {
+            return SearchJson.readVersions(json);
+        } catch (RuntimeException e) {
+            return null;
+        }
+    }
+
     public ModrinthClient getClient() {
         return this.client;
+    }
+
+    public Downloads getDownloads() {
+        return this.downloads;
     }
 
     public StoreCache getCache() {

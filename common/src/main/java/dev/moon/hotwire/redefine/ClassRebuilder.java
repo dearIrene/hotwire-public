@@ -450,6 +450,10 @@ public final class ClassRebuilder {
                 this.staticsToStart.add(type);
             }
             this.loadedBytes.remember(type, split.target());
+            if (HandlerGuards.ENABLED) {
+                HandlerGuards.recordFrom(type.getName().replace('.', '/'), split.target());
+                HandlerGuards.recordSidecar(type.getName().replace('.', '/'), split.sidecar());
+            }
             this.carrying.put(type, prepared.carried().getOrDefault(type.getName().replace('.', '/'), Set.of()));
 
             List<String> live = RebuildEvidence.listLiveFields(type);

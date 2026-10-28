@@ -121,6 +121,7 @@ final class CommandRegistration implements Registration {
             if (connection != null && due.compareAndSet(false, true)) {
                 mc.execute(() -> {
                     due.set(false);
+                    OffModCommands.takeOutBeforeSending(true);
                     ((ClientPacketListenerExtension) connection).hotwire$resendCommands();
                 });
             }
@@ -130,6 +131,7 @@ final class CommandRegistration implements Registration {
         if (server != null && due.compareAndSet(false, true)) {
             server.execute(() -> {
                 due.set(false);
+                OffModCommands.takeOutBeforeSending(false);
                 server.getPlayerList().getPlayers().forEach(server.getCommands()::sendCommands);
             });
         }

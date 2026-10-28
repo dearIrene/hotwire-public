@@ -15,6 +15,10 @@ public final class HotwireScreen extends RootScreen {
         this.timer = timer;
     }
 
+    public HotwireScreen makeAgain() {
+        return new HotwireScreen(this.screen, new ScreenOpenTimer());
+    }
+
     @Override
     protected Root getRoot() {
         return this.screen.getRoot();

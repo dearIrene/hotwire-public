@@ -88,9 +88,11 @@ final class StoreJars {
             if (current != null) {
                 current.setUpdates(found, true);
             }
-            if (!found.isEmpty()) {
-                this.say.accept(found.size() == 1 ? Lang.get("hotwire.updates.found_one")
-                        : Lang.get("hotwire.updates.found", found.size()), false);
+
+            int fresh = this.check.getNewlyFound();
+            if (fresh > 0) {
+                this.say.accept(fresh == 1 ? Lang.get("hotwire.updates.found_one")
+                        : Lang.get("hotwire.updates.found", fresh), false);
             }
         }));
     }
@@ -101,6 +103,7 @@ final class StoreJars {
         }
         this.say.accept(Lang.get("hotwire.updates.getting", asked.getFirst().name(), asked.getFirst().newVersion()),
                 false);
+        this.reportDownloads();
         Thread.ofPlatform().name("hotwire-updates-fetch").daemon().start(() -> {
             List<StoreJar> jars = new ArrayList<>();
             String failure = null;
@@ -146,6 +149,21 @@ final class StoreJars {
             this.projects.put(jars.get(i), projects.get(i));
         }
         this.offerNext();
+    }
+
+    private void reportDownloads() {
+        ModStore made = this.store.get();
+        if (made != null) {
+            this.check.reportTo(made.getModel().getDownloads());
+        }
+    }
+
+    void queueForNextStart(List<Path> jars, List<String> projects, List<PendingChange> pending) {
+        for (int i = 0; i < jars.size(); i++) {
+            this.projects.put(jars.get(i), projects.get(i));
+            this.say.accept(this.changes.queueAdd(jars.get(i)), false);
+            this.markQueued(jars.get(i), pending);
+        }
     }
 
     boolean hasQueued() {
@@ -266,6 +284,7 @@ final class StoreJars {
             return false;
         }
         List<UpdateOffer> known = this.offers;
+        this.reportDownloads();
         Thread.ofPlatform().name("hotwire-updates-needs").daemon().start(() -> {
             List<StoreJar> front = new ArrayList<>();
             carried.forEach(library -> front.add(new StoreJar(library, false)));

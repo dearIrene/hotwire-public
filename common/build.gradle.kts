@@ -107,7 +107,9 @@ pitest {
     excludedClasses = listOf("dev.moon.hotwire.jvm.JvmAccess")
 
     excludedTestClasses = listOf("dev.moon.hotwire.jvm.FreshJvmTest", "dev.moon.hotwire.redefine.LiveRedefineTest",
-            "dev.moon.hotwire.redefine.LiveRebuildTest", "dev.moon.hotwire.switching.LiveSwitchTest")
+            "dev.moon.hotwire.redefine.LiveRebuildTest", "dev.moon.hotwire.switching.LiveSwitchTest",
+            "dev.moon.hotwire.api.ApiDumpTest", "dev.moon.hotwire.redefine.FieldSlotsTest",
+            "dev.moon.hotwire.redefine.RebuildEvidenceTest")
     junit5PluginVersion = "1.2.3"
     mutationThreshold = 80
     timestampedReports = false

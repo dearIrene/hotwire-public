@@ -29,14 +29,14 @@ import dev.moon.hotwire.switching.PlayerMessages;
 import dev.moon.hotwire.ui.AddMode;
 import dev.moon.hotwire.ui.AddPreview;
 import dev.moon.hotwire.ui.AdvancedOption;
-import dev.moon.hotwire.ui.CacheFill;
-import dev.moon.hotwire.ui.CacheVersion;
+import dev.moon.hotwire.ui.CacheHost;
 import dev.moon.hotwire.ui.Canvas;
 import dev.moon.hotwire.ui.ChooserScreen;
 import dev.moon.hotwire.ui.JarHost;
 import dev.moon.hotwire.ui.Lang;
 import dev.moon.hotwire.ui.ModScreen;
 import dev.moon.hotwire.ui.Progress;
+import dev.moon.hotwire.ui.StoreCacheView;
 import dev.moon.hotwire.ui.StoreScreen;
 import dev.moon.hotwire.ui.UpdateMethod;
 import dev.moon.hotwire.ui.UpdatePreview;
@@ -103,7 +103,7 @@ public final class HotwireEngine implements ModScreen.Game, AutoCloseable {
     private final ModRows rows;
     private final ModIcons icons;
     private final ModChanges changes;
-    private final CacheFillControl cacheFill = new CacheFillControl(this::findParts);
+    private final CacheFillControl cacheFill = new CacheFillControl(this::findParts, this::findStoreCacheView);
     private final DisabledMods disabled;
     private final SwitchRequests switches;
 
@@ -362,29 +362,13 @@ public final class HotwireEngine implements ModScreen.Game, AutoCloseable {
         return version.split("[.+-]", 2)[0];
     }
 
-    @Override
-    public @Nullable CacheFill getCacheFill() {
-        return this.cacheFill.getFill();
+    private StoreCacheView findStoreCacheView() {
+        return this.stores.getCacheView();
     }
 
     @Override
-    public List<CacheVersion> getCacheVersions() {
-        return this.cacheFill.findVersions();
-    }
-
-    @Override
-    public void clearCache(@Nullable String version) {
-        this.cacheFill.clear(version);
-    }
-
-    @Override
-    public void fillCache(boolean go) {
-        this.cacheFill.fill(go);
-    }
-
-    @Override
-    public void setCacheLimit(int megabytes) {
-        this.cacheFill.setLimit(megabytes);
+    public CacheHost getCaches() {
+        return this.cacheFill;
     }
 
     @Override
@@ -438,7 +422,7 @@ public final class HotwireEngine implements ModScreen.Game, AutoCloseable {
 
     @Override
     public String report() {
-        return this.writeReport(Lang.get("hotwire.report.file.asked"), "The player asked for a report.");
+        return this.zips.writeAsked(Lang.get("hotwire.report.file.asked"), "The player asked for a report.");
     }
 
     @Override

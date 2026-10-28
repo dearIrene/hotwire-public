@@ -1,5 +1,6 @@
 package dev.moon.hotwire.update;
 
+import dev.moon.hotwire.jar.FileHashes;
 import java.io.IOException;
 import java.nio.file.Files;
 import java.nio.file.Path;
@@ -59,11 +60,11 @@ public final class JarSwapper {
             if (!Files.exists(staged)) {
                 return "the new jar is no longer at " + staged;
             }
-            if (!UpdateQueue.hashSha256(staged).equals(entry.stagedSha256())) {
+            if (!FileHashes.findSha256(staged).equals(entry.stagedSha256())) {
                 return "the new jar changed after it was queued";
             }
             boolean replacing = !entry.runningJar().isEmpty();
-            if (replacing && Files.exists(running) && !UpdateQueue.hashSha256(running).equals(entry.runningSha256())) {
+            if (replacing && Files.exists(running) && !FileHashes.findSha256(running).equals(entry.runningSha256())) {
                 return "the running jar changed after the update was queued";
             }
             Files.createDirectories(replaced);

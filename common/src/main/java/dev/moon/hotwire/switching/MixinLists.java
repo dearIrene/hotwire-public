@@ -5,6 +5,7 @@ import java.util.ArrayList;
 import java.util.Collections;
 import java.util.Comparator;
 import java.util.HashMap;
+import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
@@ -48,6 +49,21 @@ final class MixinLists {
             }
         }
         return out;
+    }
+
+    static Set<String> findDifferingFromLaunch(Map<String, ModMixins> mods, Set<String> onAtLaunch, Set<String> on,
+            Predicate<String> flipped) {
+        Set<String> targets = new HashSet<>();
+        Set<String> differing = new TreeSet<>();
+        mods.forEach((id, mixins) -> {
+            if (onAtLaunch.contains(id) != on.contains(id) && !flipped.test(id)) {
+                targets.addAll(mixins.targets());
+                differing.add(id);
+            }
+        });
+        LOGGER.info("[Hotwire] classes that load from now on are mixed afresh for {} mods that differ from launch: {}",
+                differing.size(), differing.stream().limit(12).toList());
+        return Set.copyOf(targets);
     }
 
     static Set<String> findClassesPatchedBy(Map<String, ModMixins> mods, Set<String> switched) {

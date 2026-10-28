@@ -9,8 +9,10 @@ import java.io.IOException;
 import java.nio.file.Path;
 import java.util.ArrayList;
 import java.util.List;
+import java.util.Set;
 import java.util.function.Predicate;
 import java.util.function.Supplier;
+import java.util.stream.Collectors;
 import org.jspecify.annotations.Nullable;
 
 final class ModRows {
@@ -36,6 +38,9 @@ final class ModRows {
                             mod.library(), disabled)));
         }
         out.sort((a, b) -> a.name().compareToIgnoreCase(b.name()));
+
+        Set<String> ids = out.stream().map(ModStatus::id).collect(Collectors.toSet());
+        out.removeIf(row -> row.library() && ids.stream().anyMatch(other -> row.id().startsWith(other + "-")));
         return out;
     }
 

@@ -2,6 +2,7 @@ package dev.moon.hotwire.fabric.screen;
 
 import com.mojang.blaze3d.platform.NativeImage;
 import dev.moon.hotwire.fabric.InstalledMods;
+import dev.moon.hotwire.jar.JarLookup;
 import dev.moon.hotwire.jar.ModJarException;
 import dev.moon.hotwire.jar.ModJarReader;
 import dev.moon.hotwire.jar.ModManifest;
@@ -12,7 +13,6 @@ import dev.moon.hotwire.ui.OtherImages;
 import dev.moon.hotwire.ui.SvgIcon;
 import java.io.ByteArrayInputStream;
 import java.io.IOException;
-import java.io.InputStream;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.util.Collection;
@@ -25,8 +25,6 @@ import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.LinkedBlockingQueue;
 import java.util.concurrent.ThreadPoolExecutor;
 import java.util.concurrent.TimeUnit;
-import java.util.zip.ZipEntry;
-import java.util.zip.ZipFile;
 import net.fabricmc.loader.api.FabricLoader;
 import net.fabricmc.loader.api.ModContainer;
 import net.minecraft.client.Minecraft;
@@ -223,15 +221,7 @@ public final class ModIcons implements AutoCloseable {
     }
 
     private static Optional<byte[]> fromJar(Path jar, String path) throws IOException {
-        try (ZipFile zip = new ZipFile(jar.toFile())) {
-            ZipEntry entry = zip.getEntry(path);
-            if (entry == null) {
-                return Optional.empty();
-            }
-            try (InputStream in = zip.getInputStream(entry)) {
-                return Optional.of(in.readAllBytes());
-            }
-        }
+        return Optional.ofNullable(JarLookup.readEntry(jar, path));
     }
 
     //? if <1.21.4 {

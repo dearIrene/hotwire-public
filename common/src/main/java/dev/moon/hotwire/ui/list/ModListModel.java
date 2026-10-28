@@ -61,16 +61,16 @@ public final class ModListModel {
         return Collections.unmodifiableSet(this.picked);
     }
 
+    Set<String> getChosen() {
+        return Collections.unmodifiableSet(this.chosen);
+    }
+
     public boolean isFull() {
         return this.chosen.size() >= MOST_CHOSEN;
     }
 
     public Set<String> getPickedForYou() {
         return Collections.unmodifiableSet(this.pickedForYou);
-    }
-
-    Set<String> getChosen() {
-        return Collections.unmodifiableSet(this.chosen);
     }
 
     public @Nullable String findGroupedUnder(String id) {

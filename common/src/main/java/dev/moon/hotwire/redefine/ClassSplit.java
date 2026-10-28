@@ -128,6 +128,10 @@ public final class ClassSplit {
                     throw new SplitException(running.name + "." + method.name + " is abstract or native and cannot be"
                             + " moved to a sidecar");
                 }
+                if (method.name.equals("<init>")) {
+                    throw new SplitException(running.name + " gains a constructor " + method.desc + ", which cannot be"
+                            + " moved to a sidecar");
+                }
                 addedMethods.put(method.name + method.desc, method);
             }
         }
@@ -254,6 +258,10 @@ public final class ClassSplit {
         DuckBridge.rewrite(side, allDucks, allMoved);
         ReflectionBridge.rewrite(out);
         ReflectionBridge.rewrite(side);
+
+        if (HandlerGuards.ENABLED) {
+            HandlerGuards.makeSites(running.name, out);
+        }
 
         byte[] target = OldClasses.write(out, mixed.version, new ClassReader(runningBytes), ClassWriter.COMPUTE_MAXS,
                 classBytes);

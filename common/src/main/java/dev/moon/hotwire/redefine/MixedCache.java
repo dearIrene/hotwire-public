@@ -102,7 +102,7 @@ final class MixedCache {
         this.packs = new ClassPacks(store);
     }
 
-    private static final String KEYS = "mixed class 9";
+    private static final String KEYS = "mixed class 10";
 
     private static final Map<byte[], CacheKey> SHAPES = Collections.synchronizedMap(new WeakHashMap<>());
 
@@ -240,7 +240,7 @@ final class MixedCache {
             if (aiming.isEmpty()) {
                 continue;
             }
-            key.add(config.settings().high()).add(config.settings().low());
+            key.add(config.settings().high()).add(config.settings().low()).add(this.copy.findDecoration(config.name()));
             if (trace != null) {
                 trace.append(" | ").append(config.name()).append(' ').append(Long.toHexString(config.settings().high()))
                         .append(' ').append(aiming.size());
@@ -496,6 +496,11 @@ final class MixedCache {
             this.store.put(findModsKey(mods), new byte[] {1}, null);
             this.store.flush();
         });
+    }
+
+    void markStep(CacheKey step) {
+        this.writer.execute(() -> this.store.put(this.findFilledKey(step), ByteBuffer.allocate(Long.BYTES).putLong(0)
+                .array(), null));
     }
 
     boolean hasBeenFilled(CacheKey mods) {

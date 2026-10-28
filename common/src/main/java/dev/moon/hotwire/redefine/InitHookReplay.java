@@ -28,6 +28,7 @@ import org.jspecify.annotations.Nullable;
 import org.objectweb.asm.ClassReader;
 import org.objectweb.asm.ClassVisitor;
 import org.objectweb.asm.ClassWriter;
+import org.objectweb.asm.Handle;
 import org.objectweb.asm.MethodVisitor;
 import org.objectweb.asm.Opcodes;
 import org.objectweb.asm.Type;
@@ -253,6 +254,17 @@ public final class InitHookReplay {
                         String key = ChangedStatics.makeKey(called);
                         if (callOwner.equals(owner) && !key.equals(called)) {
                             keys.add(key + calledDescriptor);
+                        }
+                    }
+
+                    @Override
+                    public void visitInvokeDynamicInsn(String called, String calledDescriptor, Handle bootstrap,
+                            Object... arguments) {
+                        String key = ChangedStatics.makeKey(called);
+                        if (HandlerGuards.isSite(bootstrap) && !key.equals(called)) {
+                            boolean isStatic = arguments.length > 1 && Integer.valueOf(1).equals(arguments[1]);
+                            keys.add(key + (isStatic ? calledDescriptor
+                                    : "(" + calledDescriptor.substring(calledDescriptor.indexOf(';') + 1)));
                         }
                     }
                 };

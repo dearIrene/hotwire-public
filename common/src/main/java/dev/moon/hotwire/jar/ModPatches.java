@@ -8,7 +8,8 @@ import java.util.Set;
 import java.util.stream.Collectors;
 
 public record ModPatches(Set<String> owns, Set<String> patches, Set<String> hookOnly, List<String> missing,
-        Map<String, Set<String>> byConfig, Set<String> calls, Set<String> asks) {
+        Map<String, Set<String>> byConfig, Set<String> calls, Set<String> asks, boolean callbacksOnly,
+        Set<String> rebuildOnly) {
     public static final ModPatches NONE = new ModPatches(Set.of(), Set.of(), Set.of(), List.of(), Map.of(), Set.of());
 
     public ModPatches(Set<String> owns, Set<String> patches, Set<String> hookOnly, List<String> missing,
@@ -18,10 +19,21 @@ public record ModPatches(Set<String> owns, Set<String> patches, Set<String> hook
 
     public ModPatches(Set<String> owns, Set<String> patches, Set<String> hookOnly, List<String> missing,
             Map<String, Set<String>> byConfig, Set<String> calls) {
-        this(owns, patches, hookOnly, missing, byConfig, calls, Set.of());
+        this(owns, patches, hookOnly, missing, byConfig, calls, Set.of(), false);
+    }
+
+    public ModPatches(Set<String> owns, Set<String> patches, Set<String> hookOnly, List<String> missing,
+            Map<String, Set<String>> byConfig, Set<String> calls, Set<String> asks) {
+        this(owns, patches, hookOnly, missing, byConfig, calls, asks, false);
+    }
+
+    public ModPatches(Set<String> owns, Set<String> patches, Set<String> hookOnly, List<String> missing,
+            Map<String, Set<String>> byConfig, Set<String> calls, Set<String> asks, boolean callbacksOnly) {
+        this(owns, patches, hookOnly, missing, byConfig, calls, asks, callbacksOnly, Set.of());
     }
 
     public ModPatches {
+        rebuildOnly = Set.copyOf(rebuildOnly);
         owns = Set.copyOf(owns);
         calls = Set.copyOf(calls);
         asks = Set.copyOf(asks);

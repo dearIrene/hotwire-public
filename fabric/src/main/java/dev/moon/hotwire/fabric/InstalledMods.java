@@ -17,7 +17,6 @@ import java.util.Set;
 import java.util.SortedSet;
 import java.util.TreeSet;
 import java.util.concurrent.ConcurrentHashMap;
-import net.fabricmc.loader.api.FabricLoader;
 import net.fabricmc.loader.api.ModContainer;
 import net.fabricmc.loader.api.metadata.ModOrigin;
 import org.jspecify.annotations.Nullable;
@@ -52,7 +51,7 @@ public final class InstalledMods {
                 }
             }
         }
-        this.graph = new ModGraph(this.jars, InstalledMods::isOfGame, InstalledMods::findRunningVersion);
+        this.graph = new ModGraph(this.jars, InstalledMods::isOfGame, LoadedMods::findVersion);
         this.graph.getIds().forEach(id -> {
             List<String> called = this.graph.getCalls(id).stream().filter(ModPolicy::isSwitchable)
                     .filter(this.graph::isInstalledOnItsOwn).toList();
@@ -69,11 +68,6 @@ public final class InstalledMods {
     }
 
     private static final Map<String, Boolean> OF_GAME = new ConcurrentHashMap<>();
-
-    private static @Nullable String findRunningVersion(String id) {
-        return FabricLoader.getInstance().getModContainer(id)
-                .map(mod -> mod.getMetadata().getVersion().getFriendlyString()).orElse(null);
-    }
 
     private static boolean isOfGame(String type) {
         return OF_GAME.computeIfAbsent(type, SystemClassPath::has);
@@ -138,7 +132,7 @@ public final class InstalledMods {
             this.jars.remove(jar);
             this.disabled.put(id, jar);
         });
-        this.graph = new ModGraph(this.jars, InstalledMods::isOfGame, InstalledMods::findRunningVersion);
+        this.graph = new ModGraph(this.jars, InstalledMods::isOfGame, LoadedMods::findVersion);
         this.jarOf.put(id, renamed);
     }
 
@@ -146,7 +140,7 @@ public final class InstalledMods {
         ModJar back = this.disabled.remove(id);
         if (back != null) {
             this.jars.add(back);
-            this.graph = new ModGraph(this.jars, InstalledMods::isOfGame, InstalledMods::findRunningVersion);
+            this.graph = new ModGraph(this.jars, InstalledMods::isOfGame, LoadedMods::findVersion);
         }
         this.jarOf.put(id, jar);
     }
@@ -161,7 +155,7 @@ public final class InstalledMods {
         more.forEach(jar -> addNestedIds(jar, inside));
         List<ModJar> all = new ArrayList<>(this.jars);
         more.stream().filter(jar -> !inside.contains(jar.manifest().id())).forEach(all::add);
-        return new ModGraph(all, InstalledMods::isOfGame, InstalledMods::findRunningVersion);
+        return new ModGraph(all, InstalledMods::isOfGame, LoadedMods::findVersion);
     }
 
     private static void addNestedIds(ModJar jar, Set<String> ids) {
@@ -178,7 +172,7 @@ public final class InstalledMods {
                 this.nestedAdded.add(nested);
             }
         }
-        this.graph = new ModGraph(this.jars, InstalledMods::isOfGame, InstalledMods::findRunningVersion);
+        this.graph = new ModGraph(this.jars, InstalledMods::isOfGame, LoadedMods::findVersion);
         this.topLevel.add(read.manifest().id());
         this.jarOf.put(read.manifest().id(), jar);
         this.addedThisSession.addAll(ids);
@@ -187,7 +181,7 @@ public final class InstalledMods {
     public synchronized void onUpdated(String id, Path jar, ModJar read) {
         this.jars.removeIf(old -> old.manifest().id().equals(id));
         this.jars.add(read);
-        this.graph = new ModGraph(this.jars, InstalledMods::isOfGame, InstalledMods::findRunningVersion);
+        this.graph = new ModGraph(this.jars, InstalledMods::isOfGame, LoadedMods::findVersion);
         this.jarOf.put(id, jar);
         this.updatedThisSession.add(id);
     }

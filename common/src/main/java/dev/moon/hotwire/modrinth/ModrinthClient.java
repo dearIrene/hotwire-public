@@ -5,6 +5,7 @@ import com.google.gson.JsonElement;
 import com.google.gson.JsonObject;
 import com.google.gson.JsonParser;
 import java.io.ByteArrayInputStream;
+import java.io.ByteArrayOutputStream;
 import java.io.IOException;
 import java.io.InputStream;
 import java.net.URI;
@@ -17,10 +18,12 @@ import java.security.MessageDigest;
 import java.security.NoSuchAlgorithmException;
 import java.time.Duration;
 import java.util.ArrayList;
+import java.util.Collection;
 import java.util.HexFormat;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.function.LongConsumer;
 import java.util.zip.GZIPInputStream;
 
 public final class ModrinthClient {
@@ -33,7 +36,7 @@ public final class ModrinthClient {
     static final int GONE = 410;
 
     public record Hit(String projectId, String slug, String title, String description, String author,
-            long downloads, String iconUrl, List<String> categories) {
+            long downloads, String iconUrl, List<String> categories, String modified) {
     }
 
     public record Search(List<Hit> hits, int total) {
@@ -54,12 +57,30 @@ public final class ModrinthClient {
 
         byte[] fetchBytes(String url) throws IOException;
 
+        default byte[] fetchBytes(String url, LongConsumer onBytes) throws IOException {
+            return this.fetchBytes(url);
+        }
+
         default byte[] fetchPicture(String url) throws IOException {
             throw new IOException("no pictures here");
         }
     }
 
     public static final int MOST_PICTURE_BYTES = 8 * 1024 * 1024;
+
+    public enum Kind {
+        MOD("mod"), RESOURCE_PACK("resourcepack"), SHADER("shader"), DATA_PACK("datapack");
+
+        private final String projectType;
+
+        Kind(String projectType) {
+            this.projectType = projectType;
+        }
+
+        public String getProjectType() {
+            return this.projectType;
+        }
+    }
 
     private final Transport transport;
     private final String loader;
@@ -81,19 +102,22 @@ public final class ModrinthClient {
         this.local = local;
     }
 
-    public Search search(String words, String category, int offset, int limit) throws IOException {
+    public Search search(Kind kind, String words, String category, int offset, int limit) throws IOException {
         List<List<String>> facets = new ArrayList<>();
-        facets.add(List.of("project_type:mod"));
-        facets.add(List.of("categories:" + this.loader));
+        facets.add(List.of("project_type:" + kind.getProjectType()));
+        facets.add(this.findLoaders(kind).stream().map(loader -> "categories:" + loader).toList());
         facets.add(List.of("versions:" + this.gameVersion));
         if (!category.isEmpty()) {
             facets.add(List.of("categories:" + category));
         }
-        StringBuilder facetText = new StringBuilder("[");
-        for (int i = 0; i < facets.size(); i++) {
-            facetText.append(i == 0 ? "" : ",").append("[\"").append(facets.get(i).getFirst()).append("\"]");
+
+        JsonArray facetJson = new JsonArray();
+        for (List<String> any : facets) {
+            JsonArray inner = new JsonArray();
+            any.forEach(inner::add);
+            facetJson.add(inner);
         }
-        facetText.append(']');
+        String facetText = facetJson.toString();
         String url = API + "/search?query=" + encode(words) + "&facets=" + encode(facetText.toString())
                 + "&index=" + (words.isBlank() ? "downloads" : "relevance") + "&offset=" + offset + "&limit="
                 + limit;
@@ -103,8 +127,7 @@ public final class ModrinthClient {
             JsonObject hit = element.getAsJsonObject();
             hits.add(new Hit(readText(hit, "project_id"), readText(hit, "slug"), readText(hit, "title"),
                     readText(hit, "description"), readText(hit, "author"), readNumber(hit, "downloads"),
-                    readText(hit, "icon_url"),
-                    readStrings(hit.get("categories"))));
+                    readText(hit, "icon_url"), readStrings(hit.get("categories")), readText(hit, "date_modified")));
         }
         return new Search(hits, (int) readNumber(root, "total_hits"));
     }
@@ -122,14 +145,25 @@ public final class ModrinthClient {
                 readNumber(root, "downloads"), readNumber(root, "followers"), readText(root, "icon_url"));
     }
 
-    public List<Version> findVersions(String projectId) throws IOException {
-        String url = API + "/project/" + encode(projectId) + "/version?loaders=" + encode("[\"" + this.loader
-                + "\"]") + "&game_versions=" + encode("[\"" + this.gameVersion + "\"]");
+    public List<Version> findVersions(Kind kind, String projectId) throws IOException {
+        JsonArray loaders = new JsonArray();
+        this.findLoaders(kind).forEach(loaders::add);
+        String url = API + "/project/" + encode(projectId) + "/version?loaders=" + encode(loaders.toString())
+                + "&game_versions=" + encode("[\"" + this.gameVersion + "\"]");
         List<Version> out = new ArrayList<>();
         for (JsonElement element : JsonParser.parseString(this.transport.get(url)).getAsJsonArray()) {
             out.add(readVersion(element.getAsJsonObject()));
         }
         return out;
+    }
+
+    private List<String> findLoaders(Kind kind) {
+        return switch (kind) {
+            case MOD -> List.of(this.loader);
+            case RESOURCE_PACK -> List.of("minecraft");
+            case SHADER -> List.of("iris", "optifine");
+            case DATA_PACK -> List.of("datapack");
+        };
     }
 
     public Map<String, Version> findNewest(Map<String, String> sha512ByName) throws IOException {
@@ -156,12 +190,34 @@ public final class ModrinthClient {
         return out;
     }
 
+    public Map<String, Version> findByHashes(Map<String, String> sha512ByName) throws IOException {
+        JsonObject body = new JsonObject();
+        JsonArray hashes = new JsonArray();
+        sha512ByName.values().forEach(hashes::add);
+        body.add("hashes", hashes);
+        body.addProperty("algorithm", "sha512");
+        JsonObject root = JsonParser.parseString(this.transport.post(API + "/version_files", body.toString()))
+                .getAsJsonObject();
+        Map<String, Version> out = new LinkedHashMap<>();
+        sha512ByName.forEach((name, hash) -> {
+            JsonElement found = root.get(hash);
+            if (found != null && found.isJsonObject()) {
+                out.put(name, readVersion(found.getAsJsonObject()));
+            }
+        });
+        return out;
+    }
+
     public byte[] fetch(Version version) throws IOException {
+        return this.fetch(version, done -> { });
+    }
+
+    public byte[] fetch(Version version, LongConsumer onBytes) throws IOException {
         byte[] copy = this.local.find(version.fileName(), version.size(), version.sha512());
         if (copy != null) {
             return copy;
         }
-        byte[] bytes = this.transport.fetchBytes(version.url());
+        byte[] bytes = this.transport.fetchBytes(version.url(), onBytes);
         String hash = hashOf(bytes);
         if (!hash.equalsIgnoreCase(version.sha512())) {
             throw new IOException("the download of " + version.fileName() + " does not match Modrinth's hash");
@@ -185,7 +241,32 @@ public final class ModrinthClient {
         }
     }
 
-    private static Version readVersion(JsonObject version) {
+    public Version findVersion(String versionId) throws IOException {
+        return readVersion(JsonParser.parseString(this.transport.get(API + "/version/" + encode(versionId)))
+                .getAsJsonObject());
+    }
+
+    public String getScope() {
+        return this.loader + ":" + this.gameVersion;
+    }
+
+    public Map<String, String> findChanges(Collection<String> projectIds) throws IOException {
+        Map<String, String> out = new LinkedHashMap<>();
+        List<String> ids = List.copyOf(projectIds);
+
+        for (int at = 0; at < ids.size(); at += 400) {
+            JsonArray page = new JsonArray();
+            ids.subList(at, Math.min(ids.size(), at + 400)).forEach(page::add);
+            for (JsonElement element : JsonParser.parseString(this.transport.get(API + "/projects?ids="
+                    + encode(page.toString()))).getAsJsonArray()) {
+                JsonObject project = element.getAsJsonObject();
+                out.put(readText(project, "id"), readText(project, "updated"));
+            }
+        }
+        return out;
+    }
+
+    static Version readVersion(JsonObject version) {
         JsonObject file = null;
         for (JsonElement element : version.getAsJsonArray("files")) {
             JsonObject candidate = element.getAsJsonObject();
@@ -271,11 +352,27 @@ public final class ModrinthClient {
 
         @Override
         public byte[] fetchBytes(String url) throws IOException {
+            return this.fetchBytes(url, done -> { });
+        }
+
+        @Override
+        public byte[] fetchBytes(String url, LongConsumer onBytes) throws IOException {
             if (!url.startsWith("https://cdn.modrinth.com/")) {
                 throw new IOException("a download from somewhere other than Modrinth's CDN was refused: " + url);
             }
-            return this.send(HttpRequest.newBuilder(URI.create(url)).GET(), HttpResponse.BodyHandlers.ofByteArray(),
-                    HttpResponse::body);
+            return this.send(HttpRequest.newBuilder(URI.create(url)).GET(), HttpResponse.BodyHandlers.ofInputStream(),
+                    response -> {
+                        try (InputStream in = response.body()) {
+                            ByteArrayOutputStream out = new ByteArrayOutputStream();
+                            byte[] buffer = new byte[64 * 1024];
+                            int read;
+                            while ((read = in.read(buffer)) > 0) {
+                                out.write(buffer, 0, read);
+                                onBytes.accept(out.size());
+                            }
+                            return out.toByteArray();
+                        }
+                    });
         }
 
         @Override
@@ -302,12 +399,13 @@ public final class ModrinthClient {
         private <T, R> R send(HttpRequest.Builder request, HttpResponse.BodyHandler<T> handler,
                 Reader<T, R> read) throws IOException {
             try {
+                HttpRequest built = request.header("User-Agent", this.agent).timeout(TIMEOUT).build();
                 long wait = this.openAgainAt - System.nanoTime();
-                if (wait > 0) {
+
+                if (wait > 0 && !built.uri().getHost().startsWith("cdn.")) {
                     Thread.sleep(Math.min(wait / 1_000_000, 60_000));
                 }
-                HttpResponse<T> response = HTTP.send(request.header("User-Agent", this.agent)
-                        .timeout(TIMEOUT).build(), handler);
+                HttpResponse<T> response = HTTP.send(built, handler);
                 this.readRateLimit(response);
                 if (response.statusCode() == GONE) {
                     throw new IOException("Modrinth has retired the API this Hotwire speaks; a newer Hotwire is"

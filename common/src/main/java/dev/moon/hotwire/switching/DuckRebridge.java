@@ -30,6 +30,23 @@ final class DuckRebridge {
         return fresh;
     }
 
+    static void runAfterSwitch(Set<String> bridged, Set<String> movedBefore, Map<String, ModMixins> mods,
+            SwitchApplier.Game game, ClassRebuilder rebuilder) {
+        Set<String> fresh = new HashSet<>(Linker.getEverDucks());
+        fresh.removeAll(bridged);
+        Set<String> moved = findCalledAcross(Linker.getMoved(), movedBefore);
+        if (fresh.isEmpty() && moved.isEmpty()) {
+            return;
+        }
+        try {
+            run(fresh, moved, mods, game, rebuilder);
+            bridged.addAll(fresh);
+        } catch (RebuildException | RuntimeException | LinkageError e) {
+            LOGGER.error("[Hotwire] Loaded classes could not be bridged to the new ducks {} and moved methods {}",
+                    fresh, moved, e);
+        }
+    }
+
     @SuppressWarnings("ReferenceEquality")
     static void run(Set<String> fresh, Set<String> moved, Map<String, ModMixins> mods, SwitchApplier.Game game,
             ClassRebuilder rebuilder) throws RebuildException {

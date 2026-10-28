@@ -11,6 +11,8 @@ import org.jspecify.annotations.Nullable;
 public final class StoreDetail extends Panel {
     public interface Adds {
         void add(String projectId, String versionId, String title);
+
+        void queueForNextStart(String projectId, String versionId, String title);
     }
 
     static final int WIDTH = 520;
@@ -69,14 +71,18 @@ public final class StoreDetail extends Panel {
         this.setPrimaryWidth(110);
         this.placePrimary();
         this.show();
-        this.model.findProject(hit.projectId(), found -> this.project = found, why -> this.failure = why);
-        this.model.findVersions(hit.projectId(), found -> this.versions = found.size() > MOST_VERSIONS
+        this.model.findProject(hit, found -> this.project = found, why -> this.failure = why);
+        this.model.findVersions(hit, found -> this.versions = found.size() > MOST_VERSIONS
                 ? List.copyOf(found.subList(0, MOST_VERSIONS)) : found, why -> this.failure = why);
     }
 
     private void placePrimary() {
         ModrinthClient.Hit shown = this.hit;
         if (shown == null) {
+            return;
+        }
+        if (this.model.isShowingPacks()) {
+            this.placePackPrimary(shown);
             return;
         }
         ModrinthClient.Version update = this.model.getUpdates().get(shown.projectId());
@@ -97,6 +103,31 @@ public final class StoreDetail extends Panel {
                     shown.title()));
             this.setPrimaryActive(true);
         }
+        this.change(Lang.get("hotwire.store.download"), installed || this.model.isQueuedProject(shown.projectId())
+                ? null : () -> this.adds.queueForNextStart(shown.projectId(), update == null ? "" : update.id(),
+                        shown.title()));
+    }
+
+    private void placePackPrimary(ModrinthClient.Hit shown) {
+        StoreModel.PackState state = this.model.findPackState(shown.projectId());
+        switch (state) {
+            case MISSING -> {
+                this.setPrimary(Lang.get("hotwire.store.download"), () -> this.adds.add(shown.projectId(), "",
+                        shown.title()));
+                this.setPrimaryActive(true);
+            }
+            case ON, OFF -> {
+                this.setPrimary(Lang.get(state == StoreModel.PackState.ON ? "hotwire.store.pack.turn_off"
+                        : "hotwire.store.pack.turn_on"), () -> this.model.togglePack(shown.projectId()));
+                this.setPrimaryActive(true);
+            }
+            case DOWNLOADING, NEEDS_WORLD -> {
+                this.setPrimary(Lang.get(state == StoreModel.PackState.DOWNLOADING ? "hotwire.store.pack.downloading"
+                        : "hotwire.store.pack.needs_world"), () -> { });
+                this.setPrimaryActive(false);
+            }
+        }
+        this.change(Lang.get("hotwire.store.download"), null);
     }
 
     @Override

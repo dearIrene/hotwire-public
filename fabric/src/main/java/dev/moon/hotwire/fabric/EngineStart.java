@@ -20,6 +20,7 @@ import dev.moon.hotwire.fabric.registration.EventInvokers;
 import dev.moon.hotwire.fabric.registration.FieldReferences;
 import dev.moon.hotwire.fabric.registration.Fields;
 import dev.moon.hotwire.fabric.registration.GameHold;
+import dev.moon.hotwire.fabric.registration.GameLibraries;
 import dev.moon.hotwire.fabric.registration.GameRegistrations;
 import dev.moon.hotwire.fabric.registration.GeneratedWrappers;
 import dev.moon.hotwire.fabric.registration.InternedKeys;
@@ -30,9 +31,11 @@ import dev.moon.hotwire.fabric.registration.NetworkHandlers;
 import dev.moon.hotwire.fabric.registration.OffModCommands;
 import dev.moon.hotwire.fabric.registration.QuietThreads;
 import dev.moon.hotwire.fabric.registration.RegistryEntries;
+import dev.moon.hotwire.fabric.registration.RegistryHolders;
 import dev.moon.hotwire.fabric.report.GameReports;
 import dev.moon.hotwire.fabric.report.LoggedFaults;
 import dev.moon.hotwire.fabric.screen.ModIcons;
+import dev.moon.hotwire.fabric.screen.RootScreen;
 import dev.moon.hotwire.fabric.update.SwapAtClose;
 import dev.moon.hotwire.fabric.update.UpdateSupport;
 import dev.moon.hotwire.jar.ModIndex;
@@ -46,12 +49,14 @@ import dev.moon.hotwire.jvm.JvmAccessException;
 import dev.moon.hotwire.redefine.ClassRebuilder;
 import dev.moon.hotwire.redefine.FieldSlots;
 import dev.moon.hotwire.redefine.FinalWrites;
+import dev.moon.hotwire.redefine.HandlerGuards;
 import dev.moon.hotwire.redefine.InitHookReplay;
 import dev.moon.hotwire.redefine.Linker;
 import dev.moon.hotwire.redefine.LoadedClassBytes;
 import dev.moon.hotwire.redefine.OffWindowObjects;
 import dev.moon.hotwire.redefine.ShutOverrides;
 import dev.moon.hotwire.redefine.Tripwire;
+import dev.moon.hotwire.redefine.TripwireSites;
 import dev.moon.hotwire.registration.ModThreadFinder;
 import dev.moon.hotwire.switching.ModMixins;
 import dev.moon.hotwire.switching.ModSwitcher;
@@ -182,6 +187,14 @@ final class EngineStart {
         FabricLoader.getInstance().getAllMods().forEach(mod -> loadedIds.add(mod.getMetadata().getId()));
         Map<String, ModMixins> mixins = MixinConfigs.withCodeAdded(
                 MixinConfigs.of(installed.getGraphJars(), loadedIds), mixin.getConfigObjects());
+        if (HandlerGuards.ENABLED) {
+            mixins.forEach((id, mod) -> {
+                if (ModPolicy.isSwitchable(id)) {
+                    TripwireSites.registerClasses(id, mod.owns().stream()
+                            .filter(name -> !GameLibraries.has(name, null)).collect(Collectors.toSet()));
+                }
+            });
+        }
         GameClasses classes = new GameClasses(knot, HotwireEngine.class.getClassLoader());
         SwitchApplier applier = new SwitchApplier(
                 new ClassRebuilder(instrumentation, GameMixinCopy.create(mixin, MixinConfigs.readDecorations(
@@ -245,6 +258,7 @@ final class EngineStart {
         switcher.reopenToTurnOnWith(mod -> fieldReferences.hasRemovedFrom(mod)
                 || NetworkHandlers.hasLostConnection(mod));
         switcher.reopenToTurnOffWith(new ConnectionLambdas(instrumentation)::findMods);
+        switcher.restartToTurnOffWith(new RegistryHolders(instrumentation)::findOwnedBy);
         Tripwire.setOwnLocks(new ModLocks(instrumentation, fieldReferences::isInitialized)::of);
         applier.checkHealthWith(GameHealth::findProblems, (rebuilt, rehashed) -> {
             InternedKeys.refresh(rebuilt);
@@ -302,7 +316,7 @@ final class EngineStart {
         return named;
     }
 
-    static Path findCacheFolder() {
+    public static Path findCacheFolder() {
         String local = System.getenv("LOCALAPPDATA");
         String xdg = System.getenv("XDG_CACHE_HOME");
         Path home = Path.of(System.getProperty("user.home"));
@@ -333,6 +347,7 @@ final class EngineStart {
         UpdateFolders folders = UpdateFolders.ofMods(ModsFolder.find(loader));
         UpdateQueue queue = new UpdateQueue(folders.queueFile());
         HotwireSettings settings = new HotwireSettings(loader.getConfigDir().resolve("hotwire/settings.json"));
+        RootScreen.pauseWith(settings::isPausing);
         ModPolicy.setNestedJars(settings.getNestedJars());
 
         ModIcons icons = new ModIcons(installed);

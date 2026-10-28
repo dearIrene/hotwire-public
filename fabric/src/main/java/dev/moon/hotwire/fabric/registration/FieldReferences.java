@@ -6,8 +6,6 @@ import dev.moon.hotwire.redefine.ClassRebuilder;
 import dev.moon.hotwire.redefine.FieldSlots;
 import dev.moon.hotwire.redefine.InitialValues;
 import dev.moon.hotwire.switching.SwitchTimes;
-import io.netty.channel.Channel;
-import io.netty.channel.ChannelHandler;
 import java.lang.instrument.Instrumentation;
 import java.lang.management.ClassLoadingMXBean;
 import java.lang.management.ManagementFactory;
@@ -34,6 +32,7 @@ import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.function.Function;
 import java.util.function.Predicate;
 import net.minecraft.client.Minecraft;
+import net.minecraft.core.Registry;
 import net.minecraft.core.registries.BuiltInRegistries;
 import net.minecraft.world.item.CreativeModeTab;
 import org.jspecify.annotations.Nullable;
@@ -421,7 +420,7 @@ public final class FieldReferences {
                 || type.getName().startsWith("com.mojang."));
         List<Object> graph = new ArrayList<>(deep);
         graph.add(game);
-        List<Object> connected = findConnectionObjects();
+        List<Object> connected = NetworkHandlers.findPipelineObjects();
         List<PlacedWrappers.Wrapper> placed = PlacedWrappers.find(graph);
         for (String mod : mods) {
             List<Replacement> mine = new ArrayList<>();
@@ -478,6 +477,11 @@ public final class FieldReferences {
     private void putIn(String mod, List<Replacement> planned) {
         List<Replacement> done = new ArrayList<>();
         for (Replacement one : planned) {
+            if (one.holder() instanceof Registry<?>) {
+                LOGGER.info("[Hotwire] {} keeps {}'s object: a registry's own data is not given back",
+                        one.field().getDeclaringClass().getSimpleName() + "." + one.field().getName(), mod);
+                continue;
+            }
             try {
                 if (one.field().get(one.holder()) == one.modsValue()) {
                     carry(one.modsValue(), one.put());
@@ -495,19 +499,6 @@ public final class FieldReferences {
                     .map(one -> one.field().getDeclaringClass().getSimpleName() + "." + one.field().getName())
                     .toList());
         }
-    }
-
-    private static List<Object> findConnectionObjects() {
-        List<Object> found = new ArrayList<>();
-        for (Channel channel : NetworkHandlers.findChannels()) {
-            for (Map.Entry<String, ChannelHandler> handler : channel.pipeline()) {
-                if (handler.getValue().getClass().getName().startsWith("net.minecraft.")) {
-                    found.add(handler.getValue());
-                    found.addAll(findGameObjectsBelow(handler.getValue(), 2));
-                }
-            }
-        }
-        return found;
     }
 
     private static List<Object> findGameObjectsBelow(Object holder, int steps) {

@@ -7,6 +7,7 @@ import dev.moon.hotwire.fabric.rebuild.GameClasses;
 import dev.moon.hotwire.fabric.rebuild.MixinConfigs;
 import dev.moon.hotwire.fabric.report.GameReports;
 import dev.moon.hotwire.fabric.screen.ModIcons;
+import dev.moon.hotwire.jar.FileHashes;
 import dev.moon.hotwire.jar.ModJar;
 import dev.moon.hotwire.jar.ModJarException;
 import dev.moon.hotwire.jar.ModJarReader;
@@ -144,7 +145,7 @@ public final class AddSupport implements ModAdder.Engine {
         Path staged = this.folders.staging().resolve(String.valueOf(jar.getFileName()));
         Files.copy(jar, staged, StandardCopyOption.REPLACE_EXISTING);
         this.queue.add(new UpdateQueue.Entry(manifest.id(), manifest.name(), "", manifest.version(), "", "",
-                staged.toAbsolutePath().toString(), UpdateQueue.hashSha256(staged), "",
+                staged.toAbsolutePath().toString(), FileHashes.findSha256(staged), "",
                 System.currentTimeMillis()));
         return manifest;
     }

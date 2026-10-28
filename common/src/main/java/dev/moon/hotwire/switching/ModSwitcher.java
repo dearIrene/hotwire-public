@@ -25,6 +25,7 @@ import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.concurrent.atomic.AtomicInteger;
 import java.util.concurrent.atomic.AtomicReference;
 import java.util.function.Consumer;
+import java.util.function.Function;
 import java.util.function.Predicate;
 import java.util.function.Supplier;
 import org.jspecify.annotations.Nullable;
@@ -49,7 +50,7 @@ public final class ModSwitcher {
 
     private ModGraph graph;
 
-    private final Map<String, Set<String>> takenAlong = new ConcurrentHashMap<>();
+    private final Map<String, Set<String>> goingAlong = new ConcurrentHashMap<>();
     private SwitchPlanner planner;
     private final SwitchApplier applier;
     private final Progress progress;
@@ -101,6 +102,7 @@ public final class ModSwitcher {
     private final Lifecycle lifecycle;
     private volatile Predicate<String> reopenToTurnOn = id -> false;
     private volatile Supplier<Set<String>> calledByWorld = Set::of;
+    private volatile Function<Set<String>, Set<String>> inRegistries = mods -> Set.of();
 
     private record EarlyAnswer(Set<String> mods, int switches, long at) {
     }
@@ -189,6 +191,10 @@ public final class ModSwitcher {
         this.calledByWorld = mods;
     }
 
+    public void restartToTurnOffWith(Function<Set<String>, Set<String>> holding) {
+        this.inRegistries = holding;
+    }
+
     public synchronized void replan(SwitchPlanner planner) {
         this.planner = planner;
     }
@@ -223,11 +229,11 @@ public final class ModSwitcher {
     }
 
     public Result turnOff(Collection<String> asked, Consumer<List<String>> out) {
-        Set<String> along = this.withTakenAlong(asked, id -> true);
+        Set<String> along = this.withGoingAlong(asked, id -> true);
         Result result = this.run(this.planner.planOff(along, this.getOff()), out);
         if (result instanceof Result.Failed failed && !failed.cause().getLosing().isEmpty()) {
             Set<String> losing = failed.cause().getLosing();
-            asked.forEach(id -> this.takenAlong.computeIfAbsent(id, key -> ConcurrentHashMap.newKeySet())
+            asked.forEach(id -> this.goingAlong.computeIfAbsent(id, key -> ConcurrentHashMap.newKeySet())
                     .addAll(losing));
             along.addAll(losing);
             GameLog.LOGGER.info("[Hotwire] the off of {} would leave {} without their patches; they go with it", asked,
@@ -237,9 +243,9 @@ public final class ModSwitcher {
         return result;
     }
 
-    private Set<String> withTakenAlong(Collection<String> asked, Predicate<String> test) {
+    private Set<String> withGoingAlong(Collection<String> asked, Predicate<String> test) {
         Set<String> out = new LinkedHashSet<>(asked);
-        asked.forEach(id -> this.takenAlong.getOrDefault(id, Set.of()).stream().filter(test).forEach(out::add));
+        asked.forEach(id -> this.goingAlong.getOrDefault(id, Set.of()).stream().filter(test).forEach(out::add));
         return out;
     }
 
@@ -260,7 +266,7 @@ public final class ModSwitcher {
     }
 
     public SwitchPlan planOn(Collection<String> asked) {
-        return this.planner.planOn(this.withOffTogether(this.withTakenAlong(asked, this.off::contains)), this.getOff());
+        return this.planner.planOn(this.withOffTogether(this.withGoingAlong(asked, this.off::contains)), this.getOff());
     }
 
     private synchronized Set<String> withOffTogether(Collection<String> asked) {
@@ -572,6 +578,14 @@ public final class ModSwitcher {
         try {
             LiveObjects.reopenFirst(switched, onAfter, this.reopenToTurnOn, this.applier.getGame());
             LiveObjects.reopenFirstOff(switched, onAfter, this::findCalledByWorld, this.applier.getGame());
+            Set<String> going = new HashSet<>(switched);
+            going.removeAll(onAfter);
+            Set<String> holding = going.isEmpty() ? Set.of() : this.inRegistries.apply(going);
+            if (!holding.isEmpty()) {
+                throw RebuildException.ofRestartOnly(holding + " keep objects of theirs inside the game's registries,"
+                        + " which hold the game's own data: only a restart takes them out",
+                        new IllegalStateException(String.valueOf(holding)));
+            }
         } catch (RuntimeException | LinkageError e) {
             throw new RebuildException("the switch threw: " + e, e);
         }

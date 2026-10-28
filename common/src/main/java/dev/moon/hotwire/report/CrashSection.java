@@ -1,5 +1,6 @@
 package dev.moon.hotwire.report;
 
+import dev.moon.hotwire.redefine.HandlerGuards;
 import java.util.Collection;
 import java.util.List;
 import java.util.Set;
@@ -13,6 +14,8 @@ public record CrashSection(List<Detail> details) {
     public static final String TITLE = "Hotwire";
     private static final String OWN_PACKAGE = "dev.moon.hotwire.";
     private static final String OUT_OF_MEMORY = OutOfMemoryError.class.getName();
+    private static final List<String> LOAD_FAILURES = List.of("ClassFormatError", "VerifyError",
+            "BootstrapMethodError", "Could not initialize class", "ExceptionInInitializerError");
     private static final Pattern OWN_MIXIN = Pattern.compile("from mod (hotwire[\\w-]*)");
 
     public record Detail(String name, String value) {
@@ -40,8 +43,8 @@ public record CrashSection(List<Detail> details) {
                 new Detail("Last operation", last == null ? "none" : describeLastOperation(last))));
     }
 
-    public static boolean isCleared(String verdict) {
-        return verdict.startsWith("Hotwire involved? NO");
+    public static boolean isCleared(String decision) {
+        return decision.startsWith("Hotwire involved? NO");
     }
 
     public static Detail describeTrace(Collection<String> frames, Function<String, @Nullable String> rebuiltBy,
@@ -85,6 +88,13 @@ public record CrashSection(List<Detail> details) {
             return new Detail("This crash", "Hotwire involved? UNKNOWN. The game ran out of memory, and the trace"
                     + " shows only where, not what filled it. To tell: play the same way without switching; still"
                     + " runs out, not Hotwire's; does not, send the newest zip under hotwire/reports.");
+        }
+
+        if (own.isEmpty() && mixin == null && HandlerGuards.ENABLED && messages.stream().anyMatch(
+                one -> LOAD_FAILURES.stream().anyMatch(one::contains))) {
+            return new Detail("This crash", "Hotwire involved? MAYBE. A class failed to load or set up, and Hotwire"
+                    + " changes classes as they load. To tell: start the game once without Hotwire; still crashes,"
+                    + " not Hotwire's; does not, send the newest zip under hotwire/reports.");
         }
         if (touched.isEmpty() && mods.isEmpty() && own.isEmpty() && mixin == null) {
             return new Detail("This crash", "Hotwire involved? NO. No class Hotwire redefined, no mod it switched"

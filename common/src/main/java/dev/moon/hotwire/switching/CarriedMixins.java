@@ -48,8 +48,8 @@ public final class CarriedMixins {
             if (carried.getOrDefault(type, Set.of()).contains(mixin) || isStillImplemented(mixed.get(type), mixin)) {
                 return;
             }
-            @Nullable String maker = offMixins.contains(mixin) ? null : this.findModMaking(mixin, id -> true);
-            if (offMixins.contains(mixin) || (maker != null && !on.contains(maker))) {
+            @Nullable String source = offMixins.contains(mixin) ? null : this.findModMaking(mixin, id -> true);
+            if (offMixins.contains(mixin) || (source != null && !on.contains(source))) {
                 LOGGER.debug("[Hotwire] {} drops {}, whose mod is off", type, mixin);
             } else if (askedAgain.test(mixin)) {
                 LOGGER.info("[Hotwire] {} drops {}, which its own plugin declined with the mods on now", type, mixin);
@@ -190,5 +190,16 @@ public final class CarriedMixins {
             return null;
         }
         return null;
+    }
+
+    Set<String> findOwnersOf(List<String> lost, Set<String> on) {
+        Set<String> owners = new TreeSet<>();
+        for (String entry : lost) {
+            String owner = this.findModMaking(entry.substring(entry.indexOf(" <- ") + " <- ".length()), on::contains);
+            if (owner != null) {
+                owners.add(owner);
+            }
+        }
+        return owners;
     }
 }

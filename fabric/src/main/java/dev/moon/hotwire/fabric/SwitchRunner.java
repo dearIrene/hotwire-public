@@ -11,6 +11,7 @@ import dev.moon.hotwire.fabric.registration.GameHold;
 import dev.moon.hotwire.fabric.registration.GameRegistrations;
 import dev.moon.hotwire.fabric.registration.GameTasks;
 import dev.moon.hotwire.fabric.registration.GeneratedWrappers;
+import dev.moon.hotwire.fabric.registration.GlfwCallbacks;
 import dev.moon.hotwire.fabric.registration.LogAppenders;
 import dev.moon.hotwire.fabric.registration.MixinPlugins;
 import dev.moon.hotwire.fabric.registration.ModSounds;
@@ -18,12 +19,15 @@ import dev.moon.hotwire.fabric.registration.ModelReloadCheck;
 import dev.moon.hotwire.fabric.registration.NetworkHandlers;
 import dev.moon.hotwire.fabric.registration.OffModCommands;
 import dev.moon.hotwire.fabric.registration.OneConfigHuds;
+import dev.moon.hotwire.fabric.registration.RegistryCheck;
 import dev.moon.hotwire.fabric.registration.ReloadedLists;
+import dev.moon.hotwire.fabric.registration.UncaughtHandlers;
 import dev.moon.hotwire.fabric.registration.WindowCursor;
 import dev.moon.hotwire.fabric.registration.WorldWrappers;
 import dev.moon.hotwire.fabric.report.GameReports;
 import dev.moon.hotwire.fabric.report.SwitchFaults;
 import dev.moon.hotwire.plan.SwitchPlan;
+import dev.moon.hotwire.redefine.HandlerGuards;
 import dev.moon.hotwire.redefine.RebuildException;
 import dev.moon.hotwire.redefine.Tripwire;
 import dev.moon.hotwire.report.GameLog;
@@ -31,14 +35,18 @@ import dev.moon.hotwire.report.Report;
 import dev.moon.hotwire.switching.ModSwitcher;
 import dev.moon.hotwire.switching.OffChecker;
 import dev.moon.hotwire.switching.SwitchTimes;
+import dev.moon.hotwire.ui.Lang;
 import java.util.HashMap;
 import java.util.List;
+import java.util.Locale;
 import java.util.Map;
+import java.util.Set;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
 import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.concurrent.atomic.AtomicReference;
 import java.util.function.Consumer;
+import net.fabricmc.loader.api.FabricLoader;
 import net.minecraft.client.Minecraft;
 import org.jspecify.annotations.Nullable;
 import org.slf4j.Logger;
@@ -61,10 +69,12 @@ public final class SwitchRunner {
     private final @Nullable TransformerChain chain;
 
     private volatile Consumer<ModSwitcher.Result> afterOff = result -> { };
+    private long flipsSeen = HandlerGuards.getFlips();
     private volatile Consumer<List<String>> beforeOn = order -> { };
+
     @SuppressWarnings("ThreadPriorityCheck")
     private final ExecutorService looking = Executors.newSingleThreadExecutor(
-            Thread.ofPlatform().name("hotwire-look").daemon().priority(Thread.MIN_PRIORITY).factory());
+            Thread.ofPlatform().name("hotwire-look").daemon().priority(Thread.NORM_PRIORITY - 1).factory());
 
     public SwitchRunner(ModSwitcher switcher, OffChecker offChecker, GameReports reports, ModTripwire tripwire,
             FieldReferences fieldReferences, AsyncLogging logging, GeneratedWrappers wrappers, MixinPlugins plugins,
@@ -133,6 +143,7 @@ public final class SwitchRunner {
     CheckedResult turnOff(List<String> ids) {
         GameLog.LOGGER.info("[Hotwire] turning off {}", ids);
         SwitchTimes.begin();
+        RegistryCheck.takeKeysOnce();
         this.switcher.setBusy(true);
         this.reports.onBegun(Report.Operation.OFF, String.join(", ", ids));
         try {
@@ -149,6 +160,8 @@ public final class SwitchRunner {
     }
 
     private CheckedResult runTimedOff(List<String> ids) {
+        ResourceReload.awaitIdle();
+
         SwitchPlan plan = this.switcher.planOff(ids);
 
         List<String> wired = plan.isRefused() ? List.of() : plan.order();
@@ -158,6 +171,7 @@ public final class SwitchRunner {
         SwitchTimes.mark("plan");
         if (!plan.isRefused()) {
             this.switcher.showBegun(plan);
+
             ElementLook.findAhead(this.fieldReferences, wired, this.switcher::isOn);
             SwitchTimes.mark("look ahead");
         }
@@ -165,6 +179,8 @@ public final class SwitchRunner {
         ModSwitcher.Result result;
         AtomicReference<List<String>> out = new AtomicReference<>();
         Tripwire.beginOff(wired);
+        ModelReloadCheck.readAheadUnlessStanding(wired);
+        ResourceReload.onGoingOff(wired);
         try {
             result = this.switcher.turnOff(ids, order -> {
                 out.set(order);
@@ -194,6 +210,21 @@ public final class SwitchRunner {
                 this.tripwire.armLater(done.plan().order(), id -> !this.switcher.isOn(id), GameTasks::takeOutAgain);
             }
         }
+    }
+
+    private static void showTimeToast(ModSwitcher.Result.Done done) {
+        List<String> order = done.plan().order();
+        if (order.isEmpty()) {
+            return;
+        }
+        boolean off = done.plan().direction() == SwitchPlan.Direction.OFF;
+        String seconds = String.format(Locale.ROOT, "%.1f", done.millis() / 1000.0);
+        String first = FabricLoader.getInstance().getModContainer(order.getFirst())
+                .map(mod -> mod.getMetadata().getName()).orElse(order.getFirst());
+        String line = order.size() == 1
+                ? Lang.get(off ? "hotwire.toast.off_one" : "hotwire.toast.on_one", first, seconds)
+                : Lang.get(off ? "hotwire.toast.off_many" : "hotwire.toast.on_many", order.size(), seconds);
+        ModViews.showToast("Hotwire", line);
     }
 
     private void takeOut(List<String> ids) {
@@ -229,6 +260,8 @@ public final class SwitchRunner {
         SwitchTimes.mark("tripwire");
         try {
             WorldWrappers.takeOut(ids);
+            GlfwCallbacks.takeOut(ids);
+            UncaughtHandlers.takeOut(ids);
             EntityAttachments.takeOut(ids);
             SwitchTimes.mark("world wrappers");
             this.wrappers.takeOut(ids);
@@ -236,6 +269,8 @@ public final class SwitchRunner {
 
             this.fieldReferences.takeOut(ids, id -> !ids.contains(id) && this.switcher.isOn(id));
             SwitchTimes.mark("field references");
+            ModelReloadCheck.unwrapModels(ids);
+            SwitchTimes.mark("models");
         } catch (RuntimeException | LinkageError e) {
             LOGGER.error("[Hotwire] what {} left in others could not all be taken out", ids, e);
         }
@@ -248,6 +283,7 @@ public final class SwitchRunner {
     CheckedResult turnOn(List<String> ids) {
         GameLog.LOGGER.info("[Hotwire] turning on {}", ids);
         SwitchTimes.begin();
+        RegistryCheck.takeKeysOnce();
         this.switcher.setBusy(true);
         this.reports.onBegun(Report.Operation.ON, String.join(", ", ids));
         try {
@@ -357,6 +393,8 @@ public final class SwitchRunner {
                 OffModCommands.putBack(id -> order.contains(id) || this.switcher.isOn(id));
                 this.logging.putBack(order);
                 WorldWrappers.putBack(order);
+                GlfwCallbacks.putBack(order);
+                UncaughtHandlers.putBack(order);
                 EntityAttachments.putBack(order);
                 this.wrappers.putBack(order);
                 SwitchTimes.mark("put back");
@@ -390,6 +428,12 @@ public final class SwitchRunner {
         result.plan().order().forEach(id -> byKind.put(id, GameRegistrations.getJournal().countByKind(id)));
         if (result instanceof ModSwitcher.Result.Done done) {
             ResourceReload.reloadResources(done.applied().newlyBuilt(), done.plan().order(), off);
+
+            long flips = HandlerGuards.getFlips();
+            if (flips != this.flipsSeen) {
+                ChunkRedraw.run();
+            }
+            this.flipsSeen = flips;
             SwitchTimes.mark("reload");
             if (off) {
                 Minecraft.getInstance().execute(() -> {
@@ -400,6 +444,7 @@ public final class SwitchRunner {
                 });
             }
         }
+        RegistryCheck.checkAfter(Set.copyOf(result.plan().order()));
         List<Report.Failure> faults = SwitchFaults.take();
         this.reports.reportSwitch(result, this.switcher.getOff(), check, off ? byKind : Map.of(),
                 off ? Map.of() : byKind, faults);
@@ -407,6 +452,7 @@ public final class SwitchRunner {
 
         if (result instanceof ModSwitcher.Result.Done done) {
             result = new ModSwitcher.Result.Done(done.plan(), done.applied(), SwitchTimes.getMillisSinceBegin());
+            showTimeToast((ModSwitcher.Result.Done) result);
         }
         return new CheckedResult(result, check, faults);
     }

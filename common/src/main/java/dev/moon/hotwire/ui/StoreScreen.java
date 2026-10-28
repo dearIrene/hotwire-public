@@ -10,6 +10,8 @@ public final class StoreScreen implements JarHost {
     public interface Game {
         void addFromStore(String projectId, String versionId, String title);
 
+        void queueFromStore(String projectId, String versionId, String title);
+
         void openLink(String link);
 
         void onBack();
@@ -18,19 +20,22 @@ public final class StoreScreen implements JarHost {
     static final int TOP = 44;
 
     private static final int MESSAGE_ROOM = 30;
-    private static final List<String> CATEGORIES = List.of("", "optimization", "utility", "decoration",
-            "adventure", "library", "technology", "magic", "storage", "worldgen", "food", "social");
+    private static final List<ModrinthClient.Kind> KINDS = List.of(ModrinthClient.Kind.values());
 
     private final Root root = new Root();
     private final StoreModel model;
     private final Game game;
     private final ModScreen.Game hotwire;
     private final TextField search;
+    private final ChoiceBar kinds;
     private final ChoiceBar categories;
     private final LockedChips chips;
+    private final String loader;
+    private final String gameVersion;
     private final StoreGrid grid;
     private final Button back;
     private final MessageLine message = new MessageLine();
+    private final DownloadStrip downloads;
     private final StoreDetail detail;
     private final AddPanel addPanel;
     private final UpdatePanel updatePanel;
@@ -45,16 +50,31 @@ public final class StoreScreen implements JarHost {
         this.hotwire = hotwire;
         this.search = new TextField(Lang.get("hotwire.store.search"), model::setWords, () -> { }, game::onBack);
         this.search.setText(model.getWords());
-        this.categories = new ChoiceBar(CATEGORIES.stream().map(key -> ChoiceBar.Choice.of(
-                key.isEmpty() ? Lang.get("hotwire.store.category.all") : Lang.get("hotwire.store.category." + key)))
-                .toList(), Math.max(0, CATEGORIES.indexOf(model.getCategory())),
-                index -> model.setCategory(CATEGORIES.get(index)));
-        this.chips = new LockedChips(List.of(loader, gameVersion));
+        this.loader = loader;
+        this.gameVersion = gameVersion;
+        List<String> shown = findCategories(model.getKind());
+        this.categories = new ChoiceBar(nameCategories(shown), Math.max(0, shown.indexOf(model.getCategory())),
+                index -> model.setCategory(findCategories(model.getKind()).get(index)));
+        this.kinds = new ChoiceBar(KINDS.stream().map(kind -> ChoiceBar.Choice.of(
+                Lang.get("hotwire.store.kind." + kind.getProjectType()))).toList(), KINDS.indexOf(model.getKind()),
+                index -> this.pickKind(KINDS.get(index)));
+        this.chips = new LockedChips(this.findChips(model.getKind()));
         this.grid = new StoreGrid(model, icons, (projectId, title) -> {
             StoreModel.Card card = model.getCardsByProject().get(projectId);
             game.addFromStore(projectId, card != null && card.update() != null ? card.update().id() : "", title);
         }, this::openDetail);
-        this.detail = new StoreDetail(model, icons, game::addFromStore, game::openLink, this::closeDetail);
+        this.detail = new StoreDetail(model, icons, new StoreDetail.Adds() {
+            @Override
+            public void add(String projectId, String versionId, String title) {
+                game.addFromStore(projectId, versionId, title);
+            }
+
+            @Override
+            public void queueForNextStart(String projectId, String versionId, String title) {
+                game.queueFromStore(projectId, versionId, title);
+            }
+        }, game::openLink, this::closeDetail);
+        this.downloads = new DownloadStrip(model.getDownloads());
         this.addPanel = new AddPanel(this::confirmAdd, hotwire::addMod, this::closePanels);
         this.updatePanel = new UpdatePanel(this::confirmUpdate, hotwire::updateMod, this::closePanels);
         this.progress = new ProgressPanel(hotwire.getProgress());
@@ -63,7 +83,8 @@ public final class StoreScreen implements JarHost {
         }
         this.back = new Button(Lang.get("hotwire.store.back"), false, game::onBack);
         Element base = this.root.getBase();
-        for (Element part : List.of(this.grid, this.message, this.search, this.categories, this.chips, this.back)) {
+        for (Element part : List.of(this.grid, this.message, this.downloads, this.search, this.kinds,
+                this.categories, this.chips, this.back)) {
             base.add(part);
         }
         this.root.focus(this.search);
@@ -73,12 +94,49 @@ public final class StoreScreen implements JarHost {
         return this.root;
     }
 
+    private static List<String> findCategories(ModrinthClient.Kind kind) {
+        return switch (kind) {
+            case MOD -> List.of("", "optimization", "utility", "decoration", "adventure", "library", "technology",
+                    "magic", "storage", "worldgen", "food", "social");
+            case RESOURCE_PACK -> List.of("", "vanilla-like", "simplistic", "realistic", "themed", "tweaks", "gui",
+                    "audio", "models", "16x", "32x");
+            case SHADER -> List.of("", "vanilla-like", "semi-realistic", "realistic", "fantasy", "cartoon", "potato",
+                    "low", "medium", "high");
+            case DATA_PACK -> List.of("", "adventure", "game-mechanics", "worldgen", "mobs", "equipment", "magic",
+                    "utility", "decoration", "technology");
+        };
+    }
+
+    private static List<ChoiceBar.Choice> nameCategories(List<String> keys) {
+        return keys.stream().map(key -> ChoiceBar.Choice.of(key.isEmpty() ? Lang.get("hotwire.store.category.all")
+                : Lang.get("hotwire.store.category." + key))).toList();
+    }
+
+    private List<String> findChips(ModrinthClient.Kind kind) {
+        return switch (kind) {
+            case MOD -> List.of(this.loader, this.gameVersion);
+            case SHADER -> List.of("Iris", this.gameVersion);
+            case RESOURCE_PACK, DATA_PACK -> List.of(this.gameVersion);
+        };
+    }
+
+    private void pickKind(ModrinthClient.Kind kind) {
+        this.model.setKind(kind);
+        this.categories.setChoices(nameCategories(findCategories(kind)));
+        this.categories.setChosen(0);
+        this.chips.setWords(this.findChips(kind));
+    }
+
     public boolean openPage(String projectId) {
         StoreModel.Card card = this.model.getCardsByProject().get(projectId);
         if (card != null) {
             this.openDetail(card.hit());
         }
         return card != null;
+    }
+
+    public void queueFromStoreNow(String projectId, String versionId) {
+        this.game.queueFromStore(projectId, versionId, projectId);
     }
 
     private void openDetail(ModrinthClient.Hit hit) {
@@ -131,15 +189,20 @@ public final class StoreScreen implements JarHost {
         this.width = width;
         this.height = height;
         this.root.resize(width, height);
-        int searchW = Math.max(160, Math.min(320, width / 3));
+        int searchW = Math.max(140, Math.min(260, width / 4));
         this.search.setBounds(24, 12, searchW, 22);
-        this.chips.setBounds(24 + searchW + 10, 12, 180, 22);
         this.back.setBounds(width - 24 - 90, 12, 90, 22);
+
+        int chipsW = 130;
+        this.chips.setBounds(width - 24 - 90 - 10 - chipsW, 12, chipsW, 22);
+        int kindsX = 24 + searchW + 10;
+        this.kinds.setBounds(kindsX, 13, Math.max(60, width - 24 - 90 - 20 - chipsW - kindsX), ChoiceBar.HEIGHT);
         this.categories.setBounds(24, TOP, width - 48, ChoiceBar.HEIGHT);
         this.grid.setBounds(24, TOP + ChoiceBar.HEIGHT + 10, width - 48,
                 height - TOP - ChoiceBar.HEIGHT - 22 - MESSAGE_ROOM);
 
         this.message.setBounds(0, 0, width, height + 22);
+        this.downloads.setBounds(0, 0, width, height + 22);
         for (Element whole : List.of(this.detail, this.addPanel, this.updatePanel, this.progress)) {
             whole.setBounds(0, 0, width, height);
         }
@@ -169,9 +232,13 @@ public final class StoreScreen implements JarHost {
     }
 
     private static final class LockedChips extends Element {
-        private final List<String> words;
+        private List<String> words;
 
         LockedChips(List<String> words) {
+            this.words = words;
+        }
+
+        void setWords(List<String> words) {
             this.words = words;
         }
 

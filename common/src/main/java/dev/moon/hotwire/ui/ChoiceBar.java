@@ -24,7 +24,7 @@ final class ChoiceBar extends Element {
     private final IntConsumer onPick;
     private final EasedValue chosenX = EasedValue.ofSpeed(18);
     private final EasedValue chosenW = EasedValue.ofSpeed(18);
-    private final EasedValue[] hover;
+    private EasedValue[] hover;
     private List<Choice> choices;
     private int chosen;
     private int[] edges = new int[0];
@@ -38,15 +38,21 @@ final class ChoiceBar extends Element {
         this.choices = List.copyOf(choices);
         this.chosen = chosen;
         this.onPick = onPick;
-        this.hover = new EasedValue[choices.size()];
-        for (int i = 0; i < this.hover.length; i++) {
-            this.hover[i] = EasedValue.ofSpeed(16);
+        this.hover = makeHover(choices.size());
+    }
+
+    private static EasedValue[] makeHover(int count) {
+        EasedValue[] made = new EasedValue[count];
+        for (int i = 0; i < count; i++) {
+            made[i] = EasedValue.ofSpeed(16);
         }
+        return made;
     }
 
     void setChoices(List<Choice> choices) {
         if (choices.size() != this.choices.size()) {
             this.edges = new int[0];
+            this.hover = makeHover(choices.size());
         }
         this.choices = List.copyOf(choices);
     }

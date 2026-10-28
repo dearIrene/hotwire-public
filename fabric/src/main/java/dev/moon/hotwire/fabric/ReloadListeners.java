@@ -46,6 +46,22 @@ final class ReloadListeners {
         return true;
     }
 
+    static boolean runWithout(Minecraft game, Class<?> type, Runnable reload) {
+        List<PreparableReloadListener> listeners = findListeners(game);
+        if (listeners == null) {
+            return false;
+        }
+        List<PreparableReloadListener> all = List.copyOf(listeners);
+        try {
+            listeners.removeIf(type::isInstance);
+            reload.run();
+        } finally {
+            listeners.clear();
+            listeners.addAll(all);
+        }
+        return true;
+    }
+
     @SuppressWarnings("unchecked")
     private static @Nullable List<PreparableReloadListener> findListeners(Minecraft game) {
         Object manager = game.getResourceManager();

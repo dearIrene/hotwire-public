@@ -3,12 +3,14 @@ package dev.moon.hotwire.switching;
 import dev.moon.hotwire.redefine.AccessBridge;
 import dev.moon.hotwire.redefine.Adoption;
 import dev.moon.hotwire.redefine.DuckBridge;
+import dev.moon.hotwire.redefine.HandlerGuards;
 import dev.moon.hotwire.redefine.HotwireLoaders;
 import dev.moon.hotwire.redefine.Linker;
 import dev.moon.hotwire.redefine.OldClasses;
 import dev.moon.hotwire.redefine.ReflectionBridge;
 import dev.moon.hotwire.redefine.Relocations;
 import dev.moon.hotwire.redefine.ShutOverrides;
+import dev.moon.hotwire.redefine.TripwireSites;
 import java.io.IOException;
 import java.lang.instrument.ClassFileTransformer;
 import java.nio.file.Files;
@@ -80,6 +82,17 @@ final class LoadTimeBridge implements ClassFileTransformer {
         }
         if (!HotwireLoaders.seesHotwire(loader) || isHotwireItself(domain) || AccessBridge.isAccessor(className)) {
             return mixed;
+        }
+        byte[] guarded = HandlerGuards.ENABLED ? HandlerGuards.rewrite(className, base) : null;
+        if (guarded != null) {
+            base = guarded;
+            mixed = guarded;
+        }
+        String mod = HandlerGuards.ENABLED ? TripwireSites.findModOfClass(className) : null;
+        byte[] armed = mod == null ? null : TripwireSites.arm(className, base, mod);
+        if (armed != null) {
+            base = armed;
+            mixed = armed;
         }
 
         byte[] bridged = Adoption.rewrite(AccessBridge.eraseCallSites(ReflectionBridge.rewrite(DuckBridge.rewrite(

@@ -176,7 +176,7 @@ public final class ModThreadFinder {
             ClassLoader loader = type.getClassLoader();
             String of = this.modOf.apply(type);
             if (loader != null && !loader.equals(ClassLoader.getPlatformClassLoader()) && !mod.equals(of)
-                    && (of == null || !libraries.contains(of))) {
+                    && (of == null || (!libraries.contains(of) && !Tripwire.isHolding(of)))) {
                 return frame.toString();
             }
         }

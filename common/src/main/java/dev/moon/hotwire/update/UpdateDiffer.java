@@ -148,6 +148,9 @@ public final class UpdateDiffer {
                 && (m.access & (Opcodes.ACC_ABSTRACT | Opcodes.ACC_NATIVE)) != 0)) {
             shape.add(ShapeChange.BODILESS_METHOD_ADDED);
         }
+        if (now.stream().anyMatch(m -> !before.containsKey(m.name + m.desc) && m.name.equals("<init>"))) {
+            shape.add(ShapeChange.CONSTRUCTOR_ADDED);
+        }
     }
 
     private static void compareMembers(Map<String, Integer> before, Map<String, Integer> after,

@@ -27,6 +27,7 @@ import org.jspecify.annotations.Nullable;
 import org.objectweb.asm.AnnotationVisitor;
 import org.objectweb.asm.ClassReader;
 import org.objectweb.asm.ClassVisitor;
+import org.objectweb.asm.FieldVisitor;
 import org.objectweb.asm.MethodVisitor;
 import org.objectweb.asm.Opcodes;
 import org.objectweb.asm.Type;
@@ -37,6 +38,11 @@ final class PatchScanner {
 
     private static final Set<String> OPENERS = Set.of("Lorg/spongepowered/asm/mixin/gen/Accessor;",
             "Lorg/spongepowered/asm/mixin/gen/Invoker;");
+
+    private static final String INJECTORS = "Lorg/spongepowered/asm/mixin/injection/";
+    private static final Set<String> KNOWN_INJECTORS = Set.of(INJECTORS + "Inject;", INJECTORS + "ModifyArg;",
+            INJECTORS + "ModifyArgs;", INJECTORS + "ModifyVariable;", INJECTORS + "ModifyConstant;");
+    private static final String OVERWRITE = "Lorg/spongepowered/asm/mixin/Overwrite;";
     private static final List<String> MIXIN_ARRAYS = List.of("mixins", "client", "server");
     private static final int METHOD_ENTRY = 10;
     private static final int INTERFACE_METHOD_ENTRY = 11;
@@ -70,6 +76,8 @@ final class PatchScanner {
         Map<String, Set<String>> byConfig = new LinkedHashMap<>();
         Set<String> named = new HashSet<>();
         Set<String> asks = new TreeSet<>();
+        boolean callbacksOnly = true;
+        Set<String> rebuildOnly = new TreeSet<>();
         for (MixinConfigRef ref : manifest.mixinConfigs()) {
             byte[] config = reader.read(ref.config());
             if (config == null) {
@@ -89,6 +97,10 @@ final class PatchScanner {
                     continue;
                 }
                 Mixin read = read(bytes, mixin, refmap);
+                callbacksOnly &= read.callbacksOnly();
+                if (!read.callbacksOnly()) {
+                    rebuildOnly.addAll(read.targets());
+                }
                 patches.addAll(read.targets());
                 configTargets.addAll(read.targets());
                 (read.hook() ? hooked : tied).addAll(read.targets());
@@ -104,6 +116,10 @@ final class PatchScanner {
                     byte[] bytes = name.startsWith(pluginPackage) && !known.contains(name) ? reader.read(entry) : null;
                     if (bytes != null) {
                         Mixin added = read(bytes, name, refmap);
+                        callbacksOnly &= added.callbacksOnly();
+                        if (!added.callbacksOnly()) {
+                            rebuildOnly.addAll(added.targets());
+                        }
                         configTargets.addAll(added.targets());
                         collectNamedIfInTheGame(added, bytes, named);
                         collectModIds(bytes, asks);
@@ -169,7 +185,7 @@ final class PatchScanner {
                 calls.add(in);
             }
         });
-        return new ModPatches(owns, patches, hooked, missing, byConfig, calls, asks);
+        return new ModPatches(owns, patches, hooked, missing, byConfig, calls, asks, callbacksOnly, rebuildOnly);
     }
 
     private static void collectModIds(byte[] bytes, Set<String> into) {
@@ -333,13 +349,15 @@ final class PatchScanner {
         return out;
     }
 
-    private record Mixin(Set<String> targets, boolean hook) {
+    private record Mixin(Set<String> targets, boolean hook, boolean callbacksOnly) {
     }
 
     private static Mixin read(byte[] bytes, String mixin, Refmap refmap) {
         Set<String> targets = new TreeSet<>();
         boolean[] pseudo = {false};
         boolean[] opens = {false};
+        boolean[] beyondCallbacks = {false};
+        boolean[] ownInstanceField = {false};
         ClassReader reader = new ClassReader(bytes);
         reader.accept(new ClassVisitor(Opcodes.ASM9) {
             @Override
@@ -352,18 +370,50 @@ final class PatchScanner {
             }
 
             @Override
+            public @Nullable FieldVisitor visitField(int access, String name, String descriptor,
+                    @Nullable String signature, @Nullable Object value) {
+                ownInstanceField[0] |= (access & Opcodes.ACC_STATIC) == 0;
+                return null;
+            }
+
+            @Override
             public MethodVisitor visitMethod(int access, String name, String descriptor, @Nullable String signature,
                     String @Nullable [] exceptions) {
                 return new MethodVisitor(Opcodes.ASM9) {
                     @Override
                     public @Nullable AnnotationVisitor visitAnnotation(String annotation, boolean visible) {
                         opens[0] |= OPENERS.contains(annotation);
+                        beyondCallbacks[0] |= (annotation.startsWith(INJECTORS)
+                                && !KNOWN_INJECTORS.contains(annotation)) || annotation.equals(OVERWRITE);
                         return null;
                     }
                 };
             }
         }, ClassReader.SKIP_CODE | ClassReader.SKIP_DEBUG | ClassReader.SKIP_FRAMES);
-        return new Mixin(targets, pseudo[0] && reader.getInterfaces().length == 0 && !opens[0]);
+        if (ownInstanceField[0] && !beyondCallbacks[0]) {
+            beyondCallbacks[0] = setsOwnField(reader, mixin);
+        }
+        return new Mixin(targets, pseudo[0] && reader.getInterfaces().length == 0 && !opens[0], !beyondCallbacks[0]);
+    }
+
+    private static boolean setsOwnField(ClassReader reader, String mixin) {
+        boolean[] sets = {false};
+        reader.accept(new ClassVisitor(Opcodes.ASM9) {
+            @Override
+            public @Nullable MethodVisitor visitMethod(int access, String name, String descriptor,
+                    @Nullable String signature, String @Nullable [] exceptions) {
+                if (!name.equals("<init>")) {
+                    return null;
+                }
+                return new MethodVisitor(Opcodes.ASM9) {
+                    @Override
+                    public void visitFieldInsn(int opcode, String owner, String field, String fieldDescriptor) {
+                        sets[0] |= opcode == Opcodes.PUTFIELD && owner.equals(mixin);
+                    }
+                };
+            }
+        }, ClassReader.SKIP_DEBUG | ClassReader.SKIP_FRAMES);
+        return sets[0];
     }
 
     private static final class Targets extends AnnotationVisitor {

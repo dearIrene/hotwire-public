@@ -1,8 +1,11 @@
 package dev.moon.hotwire.fabric.store;
 
 import dev.moon.hotwire.config.AtomicFiles;
+import dev.moon.hotwire.fabric.CacheLimit;
 import dev.moon.hotwire.fabric.InstalledMods;
 import dev.moon.hotwire.fabric.LoadedMods;
+import dev.moon.hotwire.jar.FileHashes;
+import dev.moon.hotwire.modrinth.Downloads;
 import dev.moon.hotwire.modrinth.LocalJars;
 import dev.moon.hotwire.modrinth.ModrinthClient;
 import dev.moon.hotwire.modrinth.StoreCache;
@@ -18,6 +21,11 @@ import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
+import java.util.concurrent.Callable;
+import java.util.concurrent.ExecutionException;
+import java.util.concurrent.ExecutorService;
+import java.util.concurrent.Executors;
+import java.util.concurrent.Future;
 import java.util.function.BiConsumer;
 import java.util.function.Consumer;
 import java.util.function.Function;
@@ -44,7 +52,8 @@ public final class ModStore {
         Path game = FabricLoader.getInstance().getGameDir();
         this.gameVersion = findVersionOf("minecraft");
         ModrinthClient client = makeClient();
-        StoreCache cache = new StoreCache(game.resolve("hotwire").resolve("store-cache"));
+        StoreCache cache = new StoreCache(CacheLimit.findStoreFolder().resolve("answers"),
+                (long) CacheLimit.readStore() << 20);
         this.model = new StoreModel(client, cache, id -> installed.isInstalled(id)
                 || FabricLoader.getInstance().isModLoaded(id), () -> { });
         this.icons = new StoreIconLoader(this.model, cache, project -> {
@@ -78,7 +87,7 @@ public final class ModStore {
     public void checkInstalled() {
         Map<String, Path> jars = this.installed.getJarsByTopLevel();
         this.model.run(() -> {
-            Map<String, String> hashByName = JarHashes.of(jars.values());
+            Map<String, String> hashByName = FileHashes.findSha512ByName(jars.values());
             if (hashByName.isEmpty()) {
                 return;
             }
@@ -112,7 +121,16 @@ public final class ModStore {
     public void fetch(String projectId, String versionId, String title, BiConsumer<List<Path>, List<String>> onJars,
             Consumer<String> onFailure) {
         Minecraft client = Minecraft.getInstance();
-        this.model.findVersions(projectId, versions -> {
+
+        Thread.ofPlatform().name("hotwire-store-fetch").daemon().start(() -> {
+            List<ModrinthClient.Version> versions;
+            try {
+                versions = this.model.getClient().findVersions(ModrinthClient.Kind.MOD, projectId);
+            } catch (IOException | RuntimeException e) {
+                String why = Lang.get("hotwire.store.failed", e.getMessage());
+                client.execute(() -> onFailure.accept(why));
+                return;
+            }
             ModrinthClient.Version wanted = versions.stream()
                     .filter(version -> versionId.isEmpty() || version.id().equals(versionId)).findFirst()
                     .orElse(null);
@@ -121,48 +139,93 @@ public final class ModStore {
                 client.execute(() -> onFailure.accept(why));
                 return;
             }
-            try {
-                List<Path> jars = new ArrayList<>();
-                List<String> projects = new ArrayList<>();
-                for (ModrinthClient.Version needed : this.findNeeded(wanted, new HashSet<>())) {
-                    jars.add(this.fetchJar(needed));
-                    projects.add(needed.projectId());
-                }
-                jars.add(this.fetchJar(wanted));
-                projects.add(projectId);
-                client.execute(() -> onJars.accept(jars, projects));
-            } catch (IOException e) {
-                LOGGER.info("[Hotwire] the store could not get {}: {}", title, e.toString());
-                client.execute(() -> onFailure.accept(Lang.get("hotwire.store.download_failed", title,
-                        e.getMessage())));
-            }
-        }, failure -> client.execute(() -> onFailure.accept(Lang.get("hotwire.store.failed", failure))));
+            this.fetchFor(wanted, title, onJars, onFailure);
+        });
+    }
+
+    private void fetchFor(ModrinthClient.Version wanted, String title,
+            BiConsumer<List<Path>, List<String>> onJars, Consumer<String> onFailure) {
+        Minecraft client = Minecraft.getInstance();
+        try {
+            List<ModrinthClient.Version> all = new ArrayList<>(this.findNeeded(wanted, new HashSet<>()));
+            all.add(wanted);
+            List<Path> jars = this.fetchAll(all);
+            List<String> projects = all.stream().map(ModrinthClient.Version::projectId).toList();
+            client.execute(() -> onJars.accept(jars, projects));
+        } catch (IOException e) {
+            LOGGER.info("[Hotwire] the store could not get {}: {}", title, e.toString());
+            client.execute(() -> onFailure.accept(Lang.get("hotwire.store.download_failed", title,
+                    e.getMessage())));
+        }
     }
 
     private List<ModrinthClient.Version> findNeeded(ModrinthClient.Version version, Set<String> seen)
             throws IOException {
-        List<ModrinthClient.Version> out = new ArrayList<>();
+        List<Callable<ModrinthClient.Version>> asks = new ArrayList<>();
         for (String needed : version.requiredProjects()) {
-            if (!seen.add(needed) || this.model.isInstalledProject(needed)) {
-                continue;
+            if (seen.add(needed) && !this.model.isInstalledProject(needed)) {
+                asks.add(() -> {
+                    List<ModrinthClient.Version> versions = this.model.getClient()
+                            .findVersions(ModrinthClient.Kind.MOD, needed);
+                    if (versions.isEmpty()) {
+                        throw new IOException("a mod it needs has no version for this game: " + needed);
+                    }
+                    return versions.getFirst();
+                });
             }
-            List<ModrinthClient.Version> versions = this.model.getClient().findVersions(needed);
-            if (versions.isEmpty()) {
-                throw new IOException("a mod it needs has no version for this game: " + needed);
-            }
-            out.addAll(this.findNeeded(versions.getFirst(), seen));
-            out.add(versions.getFirst());
+        }
+        List<ModrinthClient.Version> out = new ArrayList<>();
+        for (ModrinthClient.Version newest : runAtOnce(asks)) {
+            out.addAll(this.findNeeded(newest, seen));
+            out.add(newest);
         }
         return out;
     }
 
-    private Path fetchJar(ModrinthClient.Version version) throws IOException {
-        byte[] bytes = this.model.getClient().fetch(version);
-        Files.createDirectories(this.downloads);
-        Path jar = this.downloads.resolve(version.fileName().replaceAll("[^A-Za-z0-9._+ -]", "_"));
+    private static <T> List<T> runAtOnce(List<Callable<T>> tasks) throws IOException {
+        List<Future<T>> futures = new ArrayList<>();
+        try (ExecutorService pool = Executors.newVirtualThreadPerTaskExecutor()) {
+            tasks.forEach(task -> futures.add(pool.submit(task)));
+        }
+        List<T> out = new ArrayList<>();
+        for (Future<T> future : futures) {
+            try {
+                out.add(future.get());
+            } catch (ExecutionException e) {
+                throw e.getCause() instanceof IOException failed ? failed : new IOException(e.getCause());
+            } catch (InterruptedException e) {
+                Thread.currentThread().interrupt();
+                throw new IOException("interrupted", e);
+            }
+        }
+        return out;
+    }
 
-        AtomicFiles.write(jar, bytes);
-        return jar;
+    private List<Path> fetchAll(List<ModrinthClient.Version> versions) throws IOException {
+        Downloads downloads = this.model.getDownloads();
+        List<Callable<Path>> fetches = new ArrayList<>();
+        for (ModrinthClient.Version version : versions) {
+            int job = downloads.begin(version.fileName(), version.size());
+            fetches.add(() -> this.fetchJar(version, job));
+        }
+        return runAtOnce(fetches);
+    }
+
+    private Path fetchJar(ModrinthClient.Version version, int job) throws IOException {
+        Downloads downloads = this.model.getDownloads();
+        downloads.start(job);
+        try {
+            byte[] bytes = this.model.getClient().fetch(version, done -> downloads.advance(job, done));
+            Files.createDirectories(this.downloads);
+            Path jar = this.downloads.resolve(version.fileName().replaceAll("[^A-Za-z0-9._+ -]", "_"));
+
+            AtomicFiles.write(jar, bytes);
+            downloads.end(job, true);
+            return jar;
+        } catch (IOException | RuntimeException e) {
+            downloads.end(job, false);
+            throw e;
+        }
     }
 
     private static String findVersionOf(String id) {

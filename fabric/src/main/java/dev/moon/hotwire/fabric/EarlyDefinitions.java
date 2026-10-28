@@ -2,6 +2,7 @@ package dev.moon.hotwire.fabric;
 
 import dev.moon.hotwire.jvm.JvmAccess;
 import dev.moon.hotwire.jvm.JvmAccessException;
+import dev.moon.hotwire.redefine.HandlerGuards;
 import dev.moon.hotwire.redefine.LoadedClassBytes;
 import java.lang.instrument.ClassFileTransformer;
 import java.lang.instrument.Instrumentation;
@@ -16,7 +17,7 @@ import org.slf4j.LoggerFactory;
 public final class EarlyDefinitions implements PreLaunchEntrypoint {
     private static final Logger LOGGER = LoggerFactory.getLogger(EarlyDefinitions.class);
     private static volatile @Nullable Instrumentation instrumentation;
-    private static volatile @Nullable ClassFileTransformer keeping;
+    private static volatile @Nullable ClassFileTransformer early;
 
     @Override
     @SuppressWarnings("ReferenceEquality")
@@ -29,19 +30,22 @@ public final class EarlyDefinitions implements PreLaunchEntrypoint {
                 return;
             }
             Instrumentation found = JvmAccess.getInstrumentation(jar);
-            ClassFileTransformer keep = new ClassFileTransformer() {
+            ClassFileTransformer watcher = new ClassFileTransformer() {
                 @Override
                 public byte @Nullable [] transform(@Nullable ClassLoader loader, @Nullable String name,
                         @Nullable Class<?> redefining, @Nullable ProtectionDomain domain, byte[] bytes) {
-                    if (name != null && redefining == null && loader == game) {
-                        LoadedClassBytes.recordDefinedInGame(name, bytes, loader);
+                    if (name == null || redefining != null || loader != game) {
+                        return null;
                     }
-                    return null;
+
+                    byte[] made = HandlerGuards.ENABLED ? HandlerGuards.rewrite(name, bytes) : null;
+                    LoadedClassBytes.recordDefinedInGame(name, made == null ? bytes : made, loader);
+                    return made;
                 }
             };
-            found.addTransformer(keep);
+            found.addTransformer(watcher);
             instrumentation = found;
-            keeping = keep;
+            early = watcher;
         } catch (JvmAccessException | RuntimeException | LinkageError e) {
             LOGGER.debug("[Hotwire] classes are not kept from the start: {}", e.toString());
         }
@@ -49,10 +53,10 @@ public final class EarlyDefinitions implements PreLaunchEntrypoint {
 
     static void stop() {
         Instrumentation found = instrumentation;
-        ClassFileTransformer keep = keeping;
-        if (found != null && keep != null) {
-            found.removeTransformer(keep);
+        ClassFileTransformer watcher = early;
+        if (found != null && watcher != null) {
+            found.removeTransformer(watcher);
         }
-        keeping = null;
+        early = null;
     }
 }

@@ -8,11 +8,22 @@ import java.util.List;
 import java.util.Map;
 import java.util.Set;
 
-public record ModMixins(List<String> configs, Map<String, Set<String>> targetsOf, Set<String> owns) {
+public record ModMixins(List<String> configs, Map<String, Set<String>> targetsOf, Set<String> owns,
+        boolean callbacksOnly, Set<String> rebuildOnly) {
     public ModMixins {
+        rebuildOnly = Set.copyOf(rebuildOnly);
         configs = List.copyOf(configs);
         targetsOf = Map.copyOf(targetsOf);
         owns = Set.copyOf(owns);
+    }
+
+    public ModMixins(List<String> configs, Map<String, Set<String>> targetsOf, Set<String> owns) {
+        this(configs, targetsOf, owns, false, Set.of());
+    }
+
+    public ModMixins(List<String> configs, Map<String, Set<String>> targetsOf, Set<String> owns,
+            boolean callbacksOnly) {
+        this(configs, targetsOf, owns, callbacksOnly, Set.of());
     }
 
     public static ModMixins of(ModJar jar, ModManifest.Environment side) {
@@ -22,7 +33,8 @@ public record ModMixins(List<String> configs, Map<String, Set<String>> targetsOf
                 configs.add(ref.config());
             }
         }
-        return new ModMixins(configs, jar.patches().byConfig(), jar.patches().owns());
+        return new ModMixins(configs, jar.patches().byConfig(), jar.patches().owns(), jar.patches().callbacksOnly(),
+                jar.patches().rebuildOnly());
     }
 
     public Set<String> targets() {

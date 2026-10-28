@@ -90,21 +90,8 @@ public final class ModScreen implements JarHost {
         default void chooseAdvanced(String option, int choice) {
         }
 
-        default @Nullable CacheFill getCacheFill() {
-            return null;
-        }
-
-        default void fillCache(boolean go) {
-        }
-
-        default List<CacheVersion> getCacheVersions() {
-            return List.of();
-        }
-
-        default void clearCache(@Nullable String version) {
-        }
-
-        default void setCacheLimit(int megabytes) {
+        default CacheHost getCaches() {
+            return CacheHost.NONE;
         }
 
         default List<PendingChange> getPendingChanges() {
@@ -202,9 +189,12 @@ public final class ModScreen implements JarHost {
                 this::openReport);
         this.pending = new Button(Lang.get("hotwire.screen.pending"), Lang.get("hotwire.screen.pending_short"), false,
                 this::openPending);
-        this.manageCachePanel = new ManageCachePanel(game::getCacheVersions, game::clearCache, this::closePanels);
-        this.cacheFillPanel = new CacheFillPanel(game::getCacheFill, game::fillCache,
-                this::openManageCache, game::setCacheLimit, this::closePanels);
+        CacheHost caches = game.getCaches();
+        this.manageCachePanel = new ManageCachePanel(caches::getCacheVersions, caches::clearCache,
+                () -> LimitRow.findMegabytes(caches.getCacheFill()), caches::setCacheLimit, caches.getStoreCache(),
+                this::closePanels);
+        this.cacheFillPanel = new CacheFillPanel(caches::getCacheFill, caches::fillCache,
+                this::openManageCache, caches::setCacheLimit, this::closePanels);
         this.advanced = new Button(Lang.get("hotwire.screen.advanced"), Lang.get("hotwire.screen.advanced_short"),
                 false, this::openAdvanced);
         this.switchCache = new Button(Lang.get("hotwire.screen.switch_cache"),
@@ -224,8 +214,8 @@ public final class ModScreen implements JarHost {
         this.progress = new ProgressPanel(game.getProgress());
         this.addPanel = new AddPanel(this::confirmAdd, game::addMod, this::closePanels);
         this.updatePanel = new UpdatePanel(this::confirmUpdate, game::updateMod, this::closePanels);
-        this.advancedPanel = new AdvancedPanel(this::chooseAdvanced, game::getCacheFill, game::setCacheLimit,
-                this::closePanels);
+        this.advancedPanel = new AdvancedPanel(this::chooseAdvanced, caches::getCacheFill, caches::setCacheLimit,
+                caches.getStoreCache(), this::closePanels);
         this.ahead = new AheadRequests(game);
         this.pendingActions = new PendingActions(game, this::showMessage);
         this.pendingPanel = new PendingPanel(this::actOnPending, this::ignoreEarlier, this::closePending,
@@ -471,7 +461,7 @@ public final class ModScreen implements JarHost {
             this.bar.markStale();
         }
         this.pending.setBadge(this.pendingCount);
-        CacheFillPanel.markButton(this.switchCache, this.bar, this.game.getCacheFill());
+        CacheFillPanel.markButton(this.switchCache, this.bar, this.game.getCaches().getCacheFill());
         this.toggle.setActive(idle && off + on > 0);
         this.add.setActive(idle && this.game.canAdd());
         this.report.setActive(idle);

@@ -55,6 +55,11 @@ final class RecorderSupport {
     static boolean record(Object key, Registration registration) {
         CallerOwner.Owner owner = findOwner();
         if (owner == null) {
+            String mod = GameRegistrations.findModOf(key.getClass());
+            if (mod != null && GameRegistrations.isSwitchable(mod)) {
+                recordAs(mod, key, registration);
+                return true;
+            }
             logUnowned(registration);
             return false;
         }

@@ -28,7 +28,11 @@ public final class ModOfClass {
         @Override
         protected Answer computeValue(Class<?> type) {
             int before = ModOfClass.this.learned.get();
-            return new Answer(ModOfClass.this.lookUp(type), before);
+            String mod = ModOfClass.this.lookUp(type);
+            Path jar = mod == null ? null : findJarOf(type);
+            Path name = jar == null ? null : jar.getFileName();
+            boolean game = name != null && GameLibraries.has(type.getName().replace('.', '/'), name.toString());
+            return new Answer(game ? null : mod, before);
         }
     };
 

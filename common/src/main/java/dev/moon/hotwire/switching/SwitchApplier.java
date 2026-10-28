@@ -2,6 +2,7 @@ package dev.moon.hotwire.switching;
 
 import dev.moon.hotwire.redefine.AddedOverrides;
 import dev.moon.hotwire.redefine.ClassRebuilder;
+import dev.moon.hotwire.redefine.HandlerGuards;
 import dev.moon.hotwire.redefine.HeapCensus;
 import dev.moon.hotwire.redefine.Linker;
 import dev.moon.hotwire.redefine.RebuildException;
@@ -107,6 +108,10 @@ public final class SwitchApplier {
     private volatile BiFunction<Set<String>, Set<String>, Set<String>> alsoRebuilt = (switched, on) -> Set.of();
     private volatile Set<String> watched = Set.of();
 
+    private final GuardFlips guardFlips;
+
+    private volatile @Nullable Set<String> onlyRebuild;
+
     private volatile Map<String, String> lateMixins = Map.of();
     private volatile @Nullable Set<String> patched;
 
@@ -179,6 +184,7 @@ public final class SwitchApplier {
         this.game = game;
         this.mods = new ConcurrentSkipListMap<>(mods);
         this.carriedMixins = new CarriedMixins(this.mods, game);
+        this.guardFlips = new GuardFlips(this.mods, game, this.onAtLaunch);
         this.mods.forEach((id, mixins) -> mixins.configs()
                 .forEach(config -> this.ownerOfConfig.putIfAbsent(config, id)));
         this.onAtLaunch.addAll(onAtLaunch);
@@ -288,21 +294,38 @@ public final class SwitchApplier {
     public ApplyResult apply(Set<String> switched, Set<String> onAfter, Runnable whilePaused) throws RebuildException {
         Set<String> movedBefore = Linker.getMoved();
         OnState before = new OnState(this.onConfigs, this.onMods, this.watched, this.lateMixins);
+        GuardFlips.Plan plan = HandlerGuards.ENABLED ? this.guardFlips.find(switched, onAfter,
+                this.alsoRebuilt.apply(switched, onAfter), this.replaced.keySet()) : null;
         this.onConfigs = this.getConfigsOf(onAfter);
         this.onMods = Set.copyOf(onAfter);
         this.watched = this.findDifferingFromLaunch(onAfter);
         this.lateMixins = ConfigReads.findLateMixins(this.onConfigs, this.ownerOfConfig, this.onAtLaunch, this.game);
+        if (plan != null && plan.isSitesAlone()) {
+            try {
+                return this.guardFlips.flip(plan, switched, onAfter, this.redefinitionHold.get(), whilePaused);
+            } catch (RuntimeException | LinkageError e) {
+                this.restore(before);
+                throw e;
+            }
+        }
         DryRun dryRun;
+        GuardFlips.Sites sites = this.guardFlips.new Sites(plan, onAfter);
         try {
+            this.onlyRebuild = plan == null ? null : plan.rebuild();
             dryRun = this.dryRun(switched, onAfter, true);
             SwitchTimes.mark("mixins retained");
             ClassRebuilder.PreparedRebuild prepared = dryRun.prepared();
             if (prepared != null) {
-                this.applyWhilePaused(prepared, whilePaused);
+                this.applyWhilePaused(prepared, sites.setBefore(whilePaused));
+            } else {
+                sites.set();
             }
         } catch (RebuildException | RuntimeException | LinkageError e) {
+            sites.restore();
             this.restore(before);
             throw e;
+        } finally {
+            this.onlyRebuild = null;
         }
         try {
             this.rebuildLoadedMeanwhile(dryRun, onAfter);
@@ -315,19 +338,7 @@ public final class SwitchApplier {
             throw e;
         }
         SwitchTimes.mark("loaded meanwhile");
-
-        Set<String> fresh = new HashSet<>(Linker.getEverDucks());
-        fresh.removeAll(this.bridged);
-        Set<String> moved = DuckRebridge.findCalledAcross(Linker.getMoved(), movedBefore);
-        if (!fresh.isEmpty() || !moved.isEmpty()) {
-            try {
-                DuckRebridge.run(fresh, moved, this.mods, this.game, this.rebuilder);
-                this.bridged.addAll(fresh);
-            } catch (RebuildException | RuntimeException | LinkageError e) {
-                LOGGER.error("[Hotwire] Loaded classes could not be bridged to the new ducks {} and moved methods {}",
-                        fresh, moved, e);
-            }
-        }
+        DuckRebridge.runAfterSwitch(this.bridged, movedBefore, this.mods, this.game, this.rebuilder);
         return dryRun.applied();
     }
 
@@ -366,6 +377,10 @@ public final class SwitchApplier {
         List<String> rebuilt = new ArrayList<>();
         List<String> notLoaded = new ArrayList<>();
         Set<String> targets = new LinkedHashSet<>(this.findClassesPatchedBy(switched));
+        Set<String> only = this.onlyRebuild;
+        if (only != null) {
+            targets.retainAll(only);
+        }
         Set<String> also = new HashSet<>(this.alsoRebuilt.apply(switched, onAfter));
         also.removeAll(targets);
         targets.addAll(also);
@@ -493,7 +508,7 @@ public final class SwitchApplier {
                 decided::isAskedAgain, replacing);
         if (!lost.isEmpty()) {
             throw RebuildException.ofLosing("the " + what + " would drop patches of mods that stay on: " + lost,
-                    new IllegalStateException(String.join(", ", lost)), this.findOwnersOf(lost, on));
+                    new IllegalStateException(String.join(", ", lost)), this.carriedMixins.findOwnersOf(lost, on));
         }
         ClassRebuilder.PreparedRebuild prepared = LiveObjects.check(mixed, current, this.rebuiltWhilePaused, this.game,
                 this::findOriginal, this.rebuilder, what, mixin -> {
@@ -505,18 +520,6 @@ public final class SwitchApplier {
                 });
         SwitchTimes.mark("live objects");
         return prepared;
-    }
-
-    private Set<String> findOwnersOf(List<String> lost, Set<String> on) {
-        Set<String> owners = new TreeSet<>();
-        for (String entry : lost) {
-            String mixin = entry.substring(entry.indexOf(" <- ") + " <- ".length());
-            @Nullable String owner = this.carriedMixins.findModMaking(mixin, on::contains);
-            if (owner != null) {
-                owners.add(owner);
-            }
-        }
-        return owners;
     }
 
     public Map<String, Set<String>> getPatchersOf(Set<String> classes, Set<String> on, String except) {
@@ -533,17 +536,7 @@ public final class SwitchApplier {
     }
 
     private Set<String> findDifferingFromLaunch(Set<String> on) {
-        Set<String> targets = new HashSet<>();
-        Set<String> differing = new TreeSet<>();
-        this.mods.forEach((id, mixins) -> {
-            if (this.onAtLaunch.contains(id) != on.contains(id)) {
-                targets.addAll(mixins.targets());
-                differing.add(id);
-            }
-        });
-        LOGGER.info("[Hotwire] classes that load from now on are mixed afresh for {} mods that differ from launch: {}",
-                differing.size(), differing.stream().limit(12).toList());
-        return Set.copyOf(targets);
+        return MixinLists.findDifferingFromLaunch(this.mods, this.onAtLaunch, on, this.guardFlips::isFlipped);
     }
 
     public ClassFileTransformer makeLoadTimeMixer() {

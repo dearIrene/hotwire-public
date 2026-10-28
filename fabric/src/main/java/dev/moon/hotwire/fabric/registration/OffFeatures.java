@@ -16,25 +16,21 @@ public final class OffFeatures {
             return false;
         }
         //? if >=26.3 {
-        if (isOfOffMod(placed.feature().value().getClass())) {
+        if (GameRegistrations.isOfOffMod(placed.feature().value().getClass())) {
             return true;
         }
         //?} else {
         /*ConfiguredFeature<?, ?> configured = placed.feature().value();
-        if (isOfOffMod(configured.feature().getClass()) || isOfOffMod(configured.config().getClass())) {
+        if (GameRegistrations.isOfOffMod(configured.feature().getClass())
+                || GameRegistrations.isOfOffMod(configured.config().getClass())) {
             return true;
         }
         *///?}
         for (PlacementModifier modifier : placed.placement()) {
-            if (isOfOffMod(modifier.getClass())) {
+            if (GameRegistrations.isOfOffMod(modifier.getClass())) {
                 return true;
             }
         }
         return false;
-    }
-
-    private static boolean isOfOffMod(Class<?> type) {
-        String mod = GameRegistrations.findModOf(type);
-        return mod != null && Tripwire.isWatched(mod);
     }
 }

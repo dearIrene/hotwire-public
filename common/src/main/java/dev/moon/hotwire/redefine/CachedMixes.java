@@ -85,6 +85,13 @@ public final class CachedMixes {
         }
     }
 
+    public void markStep(CacheKey step) {
+        MixedCache known = this.cache;
+        if (known != null) {
+            known.markStep(step);
+        }
+    }
+
     public boolean hasBeenFilled(CacheKey mods) {
         MixedCache known = this.cache;
         return known != null && known.hasBeenFilled(mods);

@@ -172,11 +172,11 @@ public final class ReloadedLists {
     }
 
     private static @Nullable String findModOf(PackResources pack, Set<String> off) {
-        if (off.contains(pack.packId())) {
-            return pack.packId();
-        }
         String mod = GameRegistrations.findModOf(pack.getClass());
-        return mod != null && off.contains(mod) ? mod : null;
+        if (mod != null) {
+            return off.contains(mod) ? mod : null;
+        }
+        return off.contains(pack.packId()) ? pack.packId() : null;
     }
 
     private static Map<Object, String> findLayersMadeBy(Set<String> off) {

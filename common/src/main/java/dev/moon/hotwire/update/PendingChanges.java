@@ -1,5 +1,6 @@
 package dev.moon.hotwire.update;
 
+import dev.moon.hotwire.jar.FileHashes;
 import java.io.IOException;
 import java.nio.file.Files;
 import java.nio.file.Path;
@@ -60,8 +61,8 @@ public final class PendingChanges {
         }
         Path old = this.folders.replaced().resolve(retained.file());
         this.queue.add(new UpdateQueue.Entry(modId, retained.name(), runningVersion, retained.version(),
-                String.valueOf(runningJar.getFileName()), UpdateQueue.hashSha256(runningJar),
-                old.toAbsolutePath().toString(), UpdateQueue.hashSha256(old), "", nowMillis));
+                String.valueOf(runningJar.getFileName()), FileHashes.findSha256(runningJar),
+                old.toAbsolutePath().toString(), FileHashes.findSha256(old), "", nowMillis));
     }
 
     public void ignoreEarlier() throws IOException {

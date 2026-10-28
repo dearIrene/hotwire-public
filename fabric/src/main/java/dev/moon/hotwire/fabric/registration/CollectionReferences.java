@@ -1,8 +1,6 @@
 package dev.moon.hotwire.fabric.registration;
 
 import dev.moon.hotwire.redefine.FieldSlots;
-import dev.moon.hotwire.redefine.Tripwire;
-import dev.moon.hotwire.registration.ModNames;
 import java.util.ArrayList;
 import java.util.Collection;
 import java.util.Collections;
@@ -19,7 +17,6 @@ import java.util.Set;
 import java.util.function.Consumer;
 import java.util.function.Supplier;
 import net.minecraft.core.Registry;
-import net.minecraft.resources.Identifier;
 import org.jspecify.annotations.Nullable;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -35,16 +32,12 @@ final class CollectionReferences {
     private static final int SLOWEST_NAMED = 8;
 
     private final Map<String, List<Removal>> removals = new HashMap<>();
-
-    private Set<Object> registered = Set.of();
     private final StaticRecomputer.Writer writer;
 
     private Set<Object> seen = Set.of();
     private List<String> mods = List.of();
 
-    private Set<String> modSet = Set.of();
-
-    private ModNames names = new ModNames(List.of());
+    private ElementOwners owners = new ElementOwners(List.of(), Set.of());
     private Map<String, List<Removal>> mine = Map.of();
 
     private final Map<String, Integer> notedBy = new HashMap<>();
@@ -54,8 +47,6 @@ final class CollectionReferences {
 
     private int filed;
     private int unfiled;
-
-    private Wrappers wrappers = new Wrappers();
 
     private boolean inSmall;
 
@@ -89,6 +80,7 @@ final class CollectionReferences {
             throw e;
         } finally {
             this.mine.forEach((mod, out) -> {
+                out.forEach(Removal::resetHolder);
                 if (!out.isEmpty()) {
                     this.removals.computeIfAbsent(mod, any -> new ArrayList<>()).addAll(out);
                     LOGGER.info("[Hotwire] {} of {}'s objects were taken out of collections others keep: {}",
@@ -97,21 +89,16 @@ final class CollectionReferences {
             });
 
             this.seen = Set.of();
-            this.registered = Set.of();
             this.mods = List.of();
-            this.modSet = Set.of();
-            this.names = new ModNames(List.of());
+            this.owners = new ElementOwners(List.of(), Set.of());
             this.mine = Map.of();
-            this.wrappers = new Wrappers();
         }
     }
 
     private void begin(List<String> mods) {
         this.seen = Collections.newSetFromMap(new IdentityHashMap<>());
-        this.registered = RegisteredContent.find();
         this.mods = List.copyOf(mods);
-        this.modSet = Set.copyOf(mods);
-        this.names = new ModNames(mods);
+        this.owners = new ElementOwners(mods, RegisteredContent.find());
         Map<String, List<Removal>> mine = new LinkedHashMap<>();
         mods.forEach(mod -> mine.put(mod, new ArrayList<>()));
         this.mine = mine;
@@ -128,7 +115,7 @@ final class CollectionReferences {
         long holdersBegan = System.nanoTime();
         for (Object holder : holders) {
             ElementLook.stopIfAsked();
-            if (this.findOwnerAmong(holder) == null) {
+            if (this.owners.findOwnerAmong(holder) == null) {
                 this.lookInto(holder);
             }
         }
@@ -159,7 +146,7 @@ final class CollectionReferences {
                         this.removeFromFixedList(field, null);
                     }
                     if (!(value instanceof Collection<?>) && !(value instanceof Map<?, ?>)
-                            && !(value instanceof Object[]) && this.findOwnerAmong(value) == null) {
+                            && !(value instanceof Object[]) && this.owners.findOwnerAmong(value) == null) {
                         this.lookInto(value);
                     }
                 }
@@ -193,87 +180,8 @@ final class CollectionReferences {
             slowest.stream().sorted(Map.Entry.<Long, String>comparingByKey().reversed())
                     .forEach(one -> named.add(one.getValue() + " " + one.getKey() / 1_000_000 + " ms"));
             LOGGER.info("[Hotwire] {} classes' statics looked through for {} in {} ms; {}; slowest {}", statics.size(),
-                    mods, millis, this.wrappers.describe(), named);
+                    mods, millis, this.owners.getWrappers().describe(), named);
         }
-    }
-
-    private static boolean isOfOffMod(Object value) {
-        String mod = GameRegistrations.findModOf(value.getClass());
-        return mod != null && Tripwire.isWatched(mod);
-    }
-
-    private @Nullable String findOwnerAmong(Object value) {
-        String own = this.findOwnOwner(value);
-        if (own != null) {
-            return own;
-        }
-
-        String named = ReflectedOwners.findOwnerOf(value instanceof Class<?> type ? type : value.getClass());
-        return named != null && this.modSet.contains(named) ? named : null;
-    }
-
-    private @Nullable String findOwnOwner(Object value) {
-        Class<?> type = value instanceof Class<?> named ? named : value.getClass();
-        String mod = GameRegistrations.findModOf(type);
-        if (mod != null && this.modSet.contains(mod)) {
-            return mod;
-        }
-        String lambda = type.isHidden() ? ValueOwners.findLambdaOwner(type) : null;
-        return lambda != null && this.modSet.contains(lambda) ? lambda : null;
-    }
-
-    private @Nullable String findOwnerOf(Object item) {
-        if (this.registered.contains(item)) {
-            return null;
-        }
-        String owner = this.findOwnerAmong(item);
-        if (owner != null) {
-            return owner;
-        }
-
-        String whole = !Fields.getRecordParts(item.getClass()).isEmpty() ? Wrappers.findWhollyOwner(item)
-                : ValueOwners.isLambda(item) ? ValueOwners.findForwardedTo(item) : null;
-        if (whole != null && this.modSet.contains(whole)) {
-            return whole;
-        }
-        return this.inSmall ? this.wrappers.find(item, this.mods) : null;
-    }
-
-    private @Nullable String findOwnerOfEntry(@Nullable Object key, @Nullable Object element) {
-        if ((key != null && this.registered.contains(key)) || (element != null && this.registered.contains(element))) {
-            return null;
-        }
-        if (this.isStayingModsType(key)) {
-            return element == null ? null : this.findOwnOwner(element);
-        }
-        String mod = key == null ? null : this.findOwnerAmong(key);
-        if (mod == null && element != null) {
-            mod = this.findOwnerOf(element);
-        }
-        return mod != null ? mod : Wrappers.findNamed(key, element, this.names);
-    }
-
-    private boolean isStayingModsType(@Nullable Object key) {
-        String mod = key instanceof Class<?> type ? GameRegistrations.findModOf(type) : null;
-        return mod != null && !this.modSet.contains(mod);
-    }
-
-    private @Nullable String findWholeOwnerOfSlot(Object item) {
-        String whole = this.findOwnerAmong(item);
-        if (whole == null && ValueOwners.isLambda(item)) {
-            whole = this.mods.stream().filter(mod -> ValueOwners.forwardsTo(mod, item)).findFirst().orElse(null);
-        }
-        return whole;
-    }
-
-    private @Nullable String findOwnerOfSlot(Object item) {
-        String whole = this.findWholeOwnerOfSlot(item);
-        return whole != null ? whole : this.findPartsOwnerOfSlot(item);
-    }
-
-    private @Nullable String findPartsOwnerOfSlot(Object item) {
-        return Fields.getRecordParts(item.getClass()).isEmpty() ? null
-                : this.mods.stream().filter(mod -> Wrappers.isWhollyOf(mod, item)).findFirst().orElse(null);
     }
 
     private void removeFromFixedList(FieldSlots.Slot field, @Nullable Object holder) {
@@ -285,7 +193,7 @@ final class CollectionReferences {
         Map<String, List<Removal>> out = new LinkedHashMap<>();
         for (int index = 0; index < now.size(); index++) {
             Object item = now.get(index);
-            String mod = item == null ? null : this.findOwnerOf(item);
+            String mod = item == null ? null : this.owners.findOwnerOf(item, this.inSmall);
             if (mod != null) {
                 out.computeIfAbsent(mod, any -> new ArrayList<>())
                         .add(new Removal.InFixedList(field, holder, index, item, this.writer));
@@ -368,6 +276,7 @@ final class CollectionReferences {
             Object value = CollectionParts.read(field, holder);
             if ((value instanceof Collection<?> || value instanceof Map<?, ?> || value instanceof Object[])
                     && this.seen.add(value)) {
+                LazyFields.noteHolder(value, holder);
                 this.collect(value);
 
                 if (value instanceof List<?> list && list.size() <= LARGEST && CollectionParts.isFixedSize(list)
@@ -388,7 +297,7 @@ final class CollectionReferences {
 
     private void collect(Object value) {
         ElementLook.stopIfAsked();
-        if (this.findOwnerAmong(value) != null || isOfOffMod(value)) {
+        if (this.owners.findOwnerAmong(value) != null || GameRegistrations.isOfOffMod(value.getClass())) {
             return;
         }
         this.readChanging(value, () -> this.collectOnce(value));
@@ -412,12 +321,12 @@ final class CollectionReferences {
                     List<Object> items = (List<Object>) list;
                     for (int index = items.size() - 1; index >= 0; index--) {
                         Object item = items.get(index);
-                        String mod = item == null ? null : this.findOwnerOf(item);
+                        String mod = item == null ? null : this.owners.findOwnerOf(item, this.inSmall);
                         if (mod != null && this.isOwnPlain(mod, item)) {
                             this.ownLeft++;
                         } else if (mod != null) {
                             this.takeOrNote(mod, this.candidates.find(item, this.inSmall),
-                                    () -> this.findOwnerOf(item),
+                                    () -> this.owners.findOwnerOf(item, this.inSmall),
                                     owner -> ElementTakes.takeFromList(items, item, this.getRemovalsOf(owner)));
                         } else if (item != null) {
                             this.followLambda(item);
@@ -427,12 +336,12 @@ final class CollectionReferences {
                 case Collection<?> collection when collection.size() <= LARGEST -> {
                     Collection<Object> items = (Collection<Object>) collection;
                     for (Object item : new ArrayList<>(items)) {
-                        String mod = item == null ? null : this.findOwnerOf(item);
+                        String mod = item == null ? null : this.owners.findOwnerOf(item, this.inSmall);
                         if (mod != null && this.isOwnPlain(mod, item)) {
                             this.ownLeft++;
                         } else if (mod != null) {
                             this.takeOrNote(mod, this.candidates.find(item, this.inSmall),
-                                    () -> this.findOwnerOf(item),
+                                    () -> this.owners.findOwnerOf(item, this.inSmall),
                                     owner -> ElementTakes.takeFromCollection(items, item, this.getRemovalsOf(owner)));
                         }
                     }
@@ -441,15 +350,16 @@ final class CollectionReferences {
                     Class<?> slot = array.getClass().getComponentType();
                     for (int index = 0; index < array.length; index++) {
                         Object item = array[index];
-                        String whole = item == null ? null : this.findWholeOwnerOfSlot(item);
-                        String parts = item == null || whole != null ? null : this.findPartsOwnerOfSlot(item);
+                        String whole = item == null ? null : this.owners.findWholeOwnerOfSlot(item);
+                        String parts = item == null || whole != null ? null : this.owners.findPartsOwnerOfSlot(item);
                         Object standIn = whole != null ? (StandIns.fits(slot) ? StandIns.of(slot) : null)
                                 : parts != null ? CollectionParts.withStandIns(parts, Objects.requireNonNull(item))
                                 : null;
                         if (item != null && standIn != null) {
                             String found = whole != null ? whole : Objects.requireNonNull(parts);
                             int at = index;
-                            this.takeOrNote(found, this.candidates.find(item, true), () -> this.findOwnerOfSlot(item),
+                            this.takeOrNote(found, this.candidates.find(item, true),
+                                    () -> this.owners.findOwnerOfSlot(item),
                                     owner -> ElementTakes.replaceInArray(array, at, item, standIn,
                                             this.getRemovalsOf(owner)));
                         }
@@ -460,12 +370,13 @@ final class CollectionReferences {
                     for (Map.Entry<Object, Object> entry : Wrappers.copyEntries(entries)) {
                         Object key = entry.getKey();
                         Object element = entry.getValue();
-                        String mod = this.findOwnerOfEntry(key, element);
+                        String mod = this.owners.findOwnerOfEntry(key, element, this.inSmall);
                         if (mod != null) {
                             this.takeOrNote(mod,
-                                    this.candidates.findForEntry(key, element, this.inSmall, this.names),
-                                    () -> this.findOwnerOfEntry(key, element), owner -> ElementTakes
-                                            .takeFromMap(entries, key, element, this.getRemovalsOf(owner)));
+                                    this.candidates.findForEntry(key, element, this.inSmall, this.owners.getNames()),
+                                    () -> this.owners.findOwnerOfEntry(key, element, this.inSmall),
+                                    owner -> ElementTakes.takeFromMap(entries, key, element,
+                                            this.getRemovalsOf(owner)));
 
                             if (ElementLook.isLooking() && element instanceof Map<?, ?> && this.seen.add(element)) {
                                 this.collect(element);
@@ -502,8 +413,8 @@ final class CollectionReferences {
                 return;
             }
             for (Map.Entry<Object, Object> entry : Wrappers.copyEntries(entries)) {
-                String mod = this.registered.contains(entry.getKey()) || this.registered.contains(entry.getValue())
-                        ? null : this.findModNamespaceOf(entry.getKey(), entry.getValue());
+                String mod = this.owners.isRegistered(entry.getKey()) || this.owners.isRegistered(entry.getValue())
+                        ? null : this.owners.findModNamespaceOf(entry.getKey(), entry.getValue());
                 if (mod != null && entries.remove(entry.getKey(), entry.getValue())) {
                     this.getRemovalsOf(mod).add(new Removal.InMap(entries, entry.getKey(), entry.getValue()));
                 }
@@ -516,8 +427,8 @@ final class CollectionReferences {
     private void noteNamespaced(Map<?, ?> map, Map<Object, Object> entries) {
         Set<String> mods = new HashSet<>();
         for (Map.Entry<Object, Object> entry : Wrappers.copyEntries(entries)) {
-            String mod = this.registered.contains(entry.getKey()) || this.registered.contains(entry.getValue())
-                    ? null : this.findModNamespaceOf(entry.getKey(), entry.getValue());
+            String mod = this.owners.isRegistered(entry.getKey()) || this.owners.isRegistered(entry.getValue())
+                    ? null : this.owners.findModNamespaceOf(entry.getKey(), entry.getValue());
             if (mod != null) {
                 mods.add(mod);
             }
@@ -531,7 +442,7 @@ final class CollectionReferences {
     private boolean hasNamespacedKey(Map<Object, Object> entries) {
         try {
             for (Map.Entry<Object, Object> entry : Wrappers.copyEntries(entries)) {
-                if (this.findModNamespaceOf(entry.getKey(), entry.getValue()) != null) {
+                if (this.owners.findModNamespaceOf(entry.getKey(), entry.getValue()) != null) {
                     return true;
                 }
             }
@@ -539,26 +450,6 @@ final class CollectionReferences {
         } catch (RuntimeException e) {
             return true;
         }
-    }
-
-    private @Nullable String findModNamespaceOf(@Nullable Object key, @Nullable Object value) {
-        String named = CollectionParts.findNamespaceOf(key);
-        if (named == null || this.modSet.contains(named)) {
-            return named;
-        }
-        if (value == null || value instanceof Identifier) {
-            return null;
-        }
-        for (FieldSlots.Slot field : Fields.getReferenceFields(value.getClass(), false)) {
-            try {
-                String inner = CollectionParts.findNamespaceOf(field.get(value));
-                if (inner != null && this.modSet.contains(inner)) {
-                    return inner;
-                }
-            } catch (IllegalAccessException e) {
-            }
-        }
-        return null;
     }
 
     private void followLambda(Object item) {

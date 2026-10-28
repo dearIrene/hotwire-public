@@ -43,6 +43,7 @@ import net.minecraft.client.resources.language.ClientLanguage;
 import net.minecraft.client.resources.language.LanguageManager;
 import net.minecraft.client.resources.model.ModelManager;
 import net.minecraft.client.resources.sounds.SoundInstance;
+import net.minecraft.client.sounds.SoundManager;
 import net.minecraft.client.sounds.WeighedSoundEvents;
 import net.minecraft.server.packs.resources.MultiPackResourceManager;
 import net.minecraft.server.packs.resources.PreparableReloadListener;
@@ -72,6 +73,7 @@ public final class ResourceReload {
     private static final Set<String> FONTS_AT_PAUSE = ConcurrentHashMap.newKeySet();
 
     private static volatile List<String> comingOn = List.of();
+    private static volatile List<String> goingOff = List.of();
 
     private static volatile List<String> awaitingAssets = List.of();
     private static final Duration WAIT = Duration.ofMinutes(2);
@@ -195,6 +197,45 @@ public final class ResourceReload {
         comingOn = List.copyOf(mods);
     }
 
+    private static volatile CompletableFuture<?> lastReload = CompletableFuture.completedFuture(null);
+
+    private static <T> CompletableFuture<T> track(CompletableFuture<T> reload) {
+        lastReload = reload;
+        return reload;
+    }
+
+    static void awaitIdle() {
+        Minecraft game = Minecraft.getInstance();
+        if (game.isSameThread()) {
+            return;
+        }
+        long until = System.nanoTime() + WAIT.toNanos();
+        try {
+            lastReload.get(WAIT.toMillis(), TimeUnit.MILLISECONDS);
+            while (ModViews.openOverlay() != null && System.nanoTime() < until) {
+                Thread.sleep(20);
+            }
+        } catch (InterruptedException e) {
+            Thread.currentThread().interrupt();
+        } catch (ExecutionException | TimeoutException | RuntimeException e) {
+            LOGGER.info("[Hotwire] the reload under way did not end well; the off goes on: {}", e.toString());
+        }
+    }
+
+    static void onGoingOff(List<String> mods) {
+        goingOff = List.copyOf(mods);
+    }
+
+    @SuppressWarnings("FutureReturnValueIgnored")
+    private static void startWhole(Minecraft game) {
+        List<String> switched = new ArrayList<>(comingOn);
+        switched.addAll(goingOff);
+        Runnable start = () -> startUnprofiled(() -> track(game.reloadResourcePacks()));
+        if (ModSoundFiles.isAnyIn(switched) || !ReloadListeners.runWithout(game, SoundManager.class, start)) {
+            start.run();
+        }
+    }
+
     static void startUnprofiled(Runnable start) {
         String manager = ReloadableResourceManager.class.getName();
         Level was = LogManager.getLogger(manager).getLevel();
@@ -227,13 +268,13 @@ public final class ResourceReload {
 
         if (comingOn.isEmpty()) {
             reloadedWhilePaused = true;
-            BackgroundReload.beginAfterHold(() -> startUnprofiled(game::reloadResourcePacks));
+            BackgroundReload.beginAfterHold(() -> startWhole(game));
             return;
         }
         boolean isWhole = !renderersOnly || !ReloadListeners.runWithoutHeavy(game,
-                () -> startUnprofiled(game::reloadResourcePacks));
+                () -> startUnprofiled(() -> track(game.reloadResourcePacks())));
         if (isWhole) {
-            startUnprofiled(game::reloadResourcePacks);
+            startWhole(game);
         }
         LoadingOverlay loading = ModViews.findLoadingOverlay();
         ReloadInstance reload = loading == null ? null : OngoingReload.findReloadOf(loading);
@@ -496,7 +537,7 @@ public final class ResourceReload {
             CompletableFuture<Void> begun = new CompletableFuture<>();
             CompletableFuture<Void> reload = CompletableFuture.completedFuture(game).thenComposeAsync(on -> {
                 List<CompletableFuture<Void>> started = new ArrayList<>();
-                Tripwire.expect(closing, () -> started.add(on.reloadResourcePacks()));
+                Tripwire.expect(closing, () -> started.add(track(on.reloadResourcePacks())));
                 begun.complete(null);
                 return started.getFirst();
             }, game);

@@ -3,7 +3,9 @@ package dev.moon.hotwire.fabric;
 import dev.moon.hotwire.redefine.CachedMixes;
 import dev.moon.hotwire.switching.SwitchCacheFiller;
 import dev.moon.hotwire.ui.CacheFill;
+import dev.moon.hotwire.ui.CacheHost;
 import dev.moon.hotwire.ui.CacheVersion;
+import dev.moon.hotwire.ui.StoreCacheView;
 import java.io.IOException;
 import java.nio.file.Files;
 import java.nio.file.Path;
@@ -19,7 +21,7 @@ import org.jspecify.annotations.Nullable;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
-final class CacheFillControl {
+final class CacheFillControl implements CacheHost {
     private static final Logger LOGGER = LoggerFactory.getLogger(CacheFillControl.class);
     private static final long FILL_READ_NANOS = 250_000_000L;
     private static final long VERSIONS_READ_NANOS = 1_000_000_000L;
@@ -34,12 +36,20 @@ final class CacheFillControl {
     private volatile List<CacheVersion> versions = List.of();
     private volatile long versionsAt;
     private final Set<String> busy = ConcurrentHashMap.newKeySet();
+    private final Supplier<StoreCacheView> store;
 
-    CacheFillControl(Supplier<HotwireEngine.@Nullable JvmParts> parts) {
+    CacheFillControl(Supplier<HotwireEngine.@Nullable JvmParts> parts, Supplier<StoreCacheView> store) {
         this.parts = parts;
+        this.store = store;
     }
 
-    @Nullable CacheFill getFill() {
+    @Override
+    public StoreCacheView getStoreCache() {
+        return this.store.get();
+    }
+
+    @Override
+    public @Nullable CacheFill getCacheFill() {
         long now = System.nanoTime();
         CacheFill last = this.known;
         if (last != null && now - this.knownAt < FILL_READ_NANOS) {
@@ -80,7 +90,8 @@ final class CacheFillControl {
                 saved, estimated, millisLeft, cache.getBytes(), cache.getLimitBytes(), fill.outdated());
     }
 
-    List<CacheVersion> findVersions() {
+    @Override
+    public List<CacheVersion> getCacheVersions() {
         long now = System.nanoTime();
         if (this.versionsAt == 0 || now - this.versionsAt > VERSIONS_READ_NANOS) {
             this.versions = this.readVersions();
@@ -112,7 +123,8 @@ final class CacheFillControl {
         }
     }
 
-    void clear(@Nullable String version) {
+    @Override
+    public void clearCache(@Nullable String version) {
         Path here = EngineStart.findCacheFolder();
         if (version == null || version.equals(here.getFileName().toString())) {
             HotwireEngine.JvmParts found = this.parts.get();
@@ -142,7 +154,8 @@ final class CacheFillControl {
         }
     }
 
-    void fill(boolean go) {
+    @Override
+    public void fillCache(boolean go) {
         HotwireEngine.JvmParts found = this.parts.get();
         if (found == null) {
             return;
@@ -155,7 +168,8 @@ final class CacheFillControl {
         }
     }
 
-    void setLimit(int megabytes) {
+    @Override
+    public void setCacheLimit(int megabytes) {
         HotwireEngine.JvmParts found = this.parts.get();
         if (found != null) {
             found.adds().getApplier().getRebuilder().getCache().setLimitBytes((long) CacheLimit.clamp(megabytes) << 20);

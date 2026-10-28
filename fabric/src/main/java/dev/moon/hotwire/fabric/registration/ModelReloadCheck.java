@@ -33,7 +33,11 @@ public final class ModelReloadCheck {
     private static final Set<String> MODEL_OWNERS = ConcurrentHashMap.newKeySet();
     private static final Set<String> FONT_OWNERS = ConcurrentHashMap.newKeySet();
 
-    private record EarlyOwners(Set<String> mods, List<Integer> made, Set<String> owners) {
+    private record EarlyOwners(Set<String> mods, List<Integer> made, Set<String> owners,
+            List<ModelWrappers.Swap> swaps) {
+        boolean standsFor(Collection<String> asked) {
+            return this.mods.equals(Set.copyOf(asked)) && this.made.equals(findMade());
+        }
     }
 
     private static volatile @Nullable EarlyOwners modelsAhead;
@@ -41,9 +45,28 @@ public final class ModelReloadCheck {
     private ModelReloadCheck() {
     }
 
+    public static void unwrapModels(Collection<String> mods) {
+        EarlyOwners ahead = modelsAhead;
+        if (ahead != null && ahead.standsFor(mods)) {
+            ModelWrappers.apply(ahead.swaps(), mods);
+        } else {
+            ModelWrappers.unwrap(Minecraft.getInstance().getModelManager(), mods);
+        }
+    }
+
+    public static void readAheadUnlessStanding(Collection<String> mods) {
+        EarlyOwners ahead = modelsAhead;
+        if (ahead == null || !ahead.standsFor(mods)) {
+            readAhead(mods);
+        }
+    }
+
     public static void readAhead(Collection<String> mods) {
         List<Integer> made = findMade();
-        modelsAhead = new EarlyOwners(Set.copyOf(mods), made, Set.copyOf(findModelOwners(mods)));
+        Set<String> owners = Set.copyOf(findModelOwners(mods));
+        List<ModelWrappers.Swap> swaps = owners.isEmpty() ? List.of()
+                : ModelWrappers.find(Minecraft.getInstance().getModelManager(), mods);
+        modelsAhead = new EarlyOwners(Set.copyOf(mods), made, owners, swaps);
     }
 
     private static List<Integer> findMade() {
@@ -63,8 +86,7 @@ public final class ModelReloadCheck {
     public static boolean hasModelsOf(Collection<String> mods) {
         EarlyOwners ahead = modelsAhead;
         modelsAhead = null;
-        Set<String> found = ahead != null && ahead.mods().equals(Set.copyOf(mods))
-                && ahead.made().equals(findMade()) ? ahead.owners() : findModelOwners(mods);
+        Set<String> found = ahead != null && ahead.standsFor(mods) ? ahead.owners() : findModelOwners(mods);
         noteModels(found);
         return !found.isEmpty();
     }

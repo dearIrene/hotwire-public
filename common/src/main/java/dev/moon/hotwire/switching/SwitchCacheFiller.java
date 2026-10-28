@@ -192,6 +192,7 @@ public final class SwitchCacheFiller {
             if (current != this.run.get()) {
                 break;
             }
+            this.applier.getRebuilder().getCache().markStep(findStepKey(step));
             this.done.incrementAndGet();
             this.classesDone.addAndGet(step.classes());
             this.bytesDone.addAndGet(step.bytes());
@@ -274,8 +275,19 @@ public final class SwitchCacheFiller {
         this.classes = planned.stream().mapToLong(Step::classes).sum();
         this.bytes = planned.stream().mapToLong(Step::bytes).sum();
         this.baseBytes = this.sumBytes(named);
-        this.steps = List.copyOf(findSampleFirst(planned));
-        this.sample = Math.min(SAMPLE, this.steps.size());
+
+        List<Step> already = new ArrayList<>();
+        List<Step> rest = new ArrayList<>();
+        for (Step step : findSampleFirst(planned)) {
+            (this.applier.getRebuilder().getCache().findFilled(findStepKey(step)) >= 0 ? already : rest).add(step);
+        }
+        List<Step> ordered = new ArrayList<>(already);
+        ordered.addAll(rest);
+        this.steps = List.copyOf(ordered);
+        this.sample = Math.min(already.size() + SAMPLE, this.steps.size());
+        this.done.set(already.size());
+        this.classesDone.set(already.stream().mapToLong(Step::classes).sum());
+        this.bytesDone.set(already.stream().mapToLong(Step::bytes).sum());
 
         CacheKey.Builder plan = CacheKey.of("fill plan 1");
         for (Step step : this.steps) {
@@ -295,6 +307,12 @@ public final class SwitchCacheFiller {
         } else {
             this.outdated = this.applier.getRebuilder().getCache().hasBeenFilled(this.mods);
         }
+    }
+
+    private static CacheKey findStepKey(Step step) {
+        CacheKey.Builder key = CacheKey.of("fill step 1");
+        new TreeSet<>(step.mods()).forEach(key::add);
+        return key.add(step.classes()).add(step.bytes()).build();
     }
 
     private static List<Step> findSampleFirst(List<Step> planned) {

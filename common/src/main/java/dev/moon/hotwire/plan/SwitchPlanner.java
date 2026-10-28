@@ -101,12 +101,27 @@ public final class SwitchPlanner {
                 }
             }
         }
+        this.tellWhyAskedGo(leaving);
         leaving.keySet().stream().filter(this.settings::isProtected).sorted()
                 .forEach(mod -> refusals.add(new Refusal.Protected(mod)));
         if (refusals.stream().anyMatch(Refusal.Protected.class::isInstance)) {
             return new SwitchPlan(Direction.OFF, List.of(), Map.of(), List.of(), refusals);
         }
         return new SwitchPlan(Direction.OFF, this.sortDeepestFirst(leaving.keySet()), leaving, retained, refusals);
+    }
+
+    private void tellWhyAskedGo(Map<String, Reason> leaving) {
+        for (Map.Entry<String, Reason> entry : leaving.entrySet()) {
+            if (!(entry.getValue() instanceof Reason.Asked)) {
+                continue;
+            }
+            for (String other : leaving.keySet()) {
+                if (!other.equals(entry.getKey()) && this.graph.getDependents(other).contains(entry.getKey())) {
+                    entry.setValue(new Reason.DependsOn(other));
+                    break;
+                }
+            }
+        }
     }
 
     public SwitchPlan planOn(Collection<String> asked, Set<String> off) {

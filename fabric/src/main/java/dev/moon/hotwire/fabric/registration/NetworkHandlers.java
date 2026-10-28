@@ -129,4 +129,18 @@ public final class NetworkHandlers {
             return null;
         }
     }
+
+    static List<Object> findPipelineObjects() {
+        List<Object> found = new ArrayList<>();
+        for (Channel channel : findChannels()) {
+            for (Map.Entry<String, ChannelHandler> handler : channel.pipeline()) {
+                if (handler.getValue().getClass().getName().startsWith("net.minecraft.")) {
+                    found.add(handler.getValue());
+                    found.addAll(Fields.findBelow(handler.getValue(), 2,
+                            type -> type.getName().startsWith("net.minecraft.")));
+                }
+            }
+        }
+        return found;
+    }
 }

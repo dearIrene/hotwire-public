@@ -17,9 +17,12 @@ public final class HotwireSettings {
 
     public enum OffLasts { SESSION, UNTIL_ON }
 
+    public enum PauseGame { NO, YES }
+
     static final String IN_WORLD = "in-world";
     static final String OFF_LASTS = "off-lasts";
     public static final String NESTED_JARS = "nested-jars";
+    static final String PAUSE_GAME = "pause-game";
 
     private static final Logger LOGGER = LoggerFactory.getLogger(HotwireSettings.class);
     private static final int FORMAT = 1;
@@ -31,6 +34,9 @@ public final class HotwireSettings {
     private static final List<OffLasts> OFF_LASTS_ORDER = List.of(OffLasts.SESSION, OffLasts.UNTIL_ON);
     private static final List<String> OFF_LASTS_CHOICES = List.of("hotwire.settings.off_lasts.session",
             "hotwire.settings.off_lasts.until_on");
+    private static final List<PauseGame> PAUSE_ORDER = List.of(PauseGame.NO, PauseGame.YES);
+    private static final List<String> PAUSE_CHOICES = List.of("hotwire.settings.pause.no",
+            "hotwire.settings.pause.yes");
     private static final List<NestedJars> NESTED_ORDER = List.of(NestedJars.AUTO, NestedJars.ALL, NestedJars.NONE);
     private static final List<String> NESTED_CHOICES = List.of("hotwire.settings.nested.auto",
             "hotwire.settings.nested.all", "hotwire.settings.nested.none");
@@ -41,6 +47,7 @@ public final class HotwireSettings {
         @Nullable InWorld inWorld = InWorld.AUTO;
         @Nullable OffLasts offLasts = OffLasts.SESSION;
         @Nullable NestedJars nestedJars = NestedJars.AUTO;
+        @Nullable PauseGame pauseGame = PauseGame.NO;
         @Nullable String promptAcceptedFor;
         @Nullable List<String> favorites = List.of();
     }
@@ -49,6 +56,7 @@ public final class HotwireSettings {
     private volatile InWorld inWorld;
     private volatile OffLasts offLasts;
     private volatile NestedJars nestedJars;
+    private volatile PauseGame pauseGame;
     private volatile @Nullable String promptAcceptedFor;
     private final Set<String> favorites = ConcurrentHashMap.newKeySet();
 
@@ -62,6 +70,7 @@ public final class HotwireSettings {
         this.inWorld = checkKnown(saved.inWorld, InWorld.AUTO, "inWorld");
         this.offLasts = checkKnown(saved.offLasts, OffLasts.SESSION, "offLasts");
         this.nestedJars = checkKnown(saved.nestedJars, NestedJars.AUTO, "nestedJars");
+        this.pauseGame = checkKnown(saved.pauseGame, PauseGame.NO, "pauseGame");
         this.promptAcceptedFor = saved.promptAcceptedFor;
         if (saved.favorites != null) {
             this.favorites.addAll(saved.favorites);
@@ -86,6 +95,10 @@ public final class HotwireSettings {
 
     public NestedJars getNestedJars() {
         return this.nestedJars;
+    }
+
+    public boolean isPausing() {
+        return this.pauseGame == PauseGame.YES;
     }
 
     public boolean isPromptAccepted(String major) {
@@ -113,7 +126,9 @@ public final class HotwireSettings {
                 new AdvancedOption(IN_WORLD, Lang.get("hotwire.settings.in_world"), read(IN_WORLD_CHOICES),
                         IN_WORLD_ORDER.indexOf(this.inWorld)),
                 new AdvancedOption(NESTED_JARS, Lang.get("hotwire.settings.nested"), read(NESTED_CHOICES),
-                        NESTED_ORDER.indexOf(this.nestedJars)));
+                        NESTED_ORDER.indexOf(this.nestedJars)),
+                new AdvancedOption(PAUSE_GAME, Lang.get("hotwire.settings.pause"), read(PAUSE_CHOICES),
+                        PAUSE_ORDER.indexOf(this.pauseGame)));
     }
 
     private static List<AdvancedOption.Choice> read(List<String> keys) {
@@ -125,9 +140,11 @@ public final class HotwireSettings {
         InWorld world = IN_WORLD.equals(option) ? pick(IN_WORLD_ORDER, choice, this.inWorld) : this.inWorld;
         OffLasts lasts = OFF_LASTS.equals(option) ? pick(OFF_LASTS_ORDER, choice, this.offLasts) : this.offLasts;
         NestedJars nested = NESTED_JARS.equals(option) ? pick(NESTED_ORDER, choice, this.nestedJars) : this.nestedJars;
-        if (world == this.inWorld && nested == this.nestedJars && lasts == this.offLasts) {
+        PauseGame pause = PAUSE_GAME.equals(option) ? pick(PAUSE_ORDER, choice, this.pauseGame) : this.pauseGame;
+        if (world == this.inWorld && nested == this.nestedJars && lasts == this.offLasts && pause == this.pauseGame) {
             return;
         }
+        this.pauseGame = pause;
         this.inWorld = world;
         this.offLasts = lasts;
         this.nestedJars = nested;
@@ -139,6 +156,7 @@ public final class HotwireSettings {
         saved.inWorld = this.inWorld;
         saved.offLasts = this.offLasts;
         saved.nestedJars = this.nestedJars;
+        saved.pauseGame = this.pauseGame;
         saved.promptAcceptedFor = this.promptAcceptedFor;
         saved.favorites = this.favorites.stream().sorted().toList();
         try {

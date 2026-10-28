@@ -23,6 +23,8 @@ final class UpdatePanel extends Panel {
     private @Nullable UpdatePreview preview;
     private int lineCount = 1;
 
+    private int whenMore;
+
     public UpdatePanel(BiConsumer<Path, UpdateMethod> onUpdate, Runnable onChange, Runnable onCancel) {
         super(onCancel);
         this.onUpdate = onUpdate;
@@ -51,7 +53,7 @@ final class UpdatePanel extends Panel {
             this.onPreviewReady(this.awaitPreview());
         }
         boolean cards = this.preview instanceof UpdatePreview.Ready;
-        this.size(WIDTH, CONTENT_Y + (cards ? 96 + WHEN_H : 0) + 12 * this.lineCount + 44);
+        this.size(WIDTH, CONTENT_Y + (cards ? 96 + WHEN_H + 11 * this.whenMore : 0) + 12 * this.lineCount + 44);
         super.step(dt);
     }
 
@@ -122,9 +124,15 @@ final class UpdatePanel extends Panel {
             linesY = y + CONTENT_Y + 96;
 
             boolean now = ready.method() == UpdateMethod.IN_PLACE;
-            canvas.drawText(canvas.clip(Lang.get(now ? "hotwire.update.when.now" : "hotwire.update.when.restart"),
-                    w - 28), x + 14, linesY, Colors.fade(now ? Palette.ON : Palette.BAD, alpha));
-            linesY += WHEN_H;
+
+            List<String> when = MessageLine.wrap(canvas, Lang.get(now ? "hotwire.update.when.now"
+                    : "hotwire.update.when.restart"), w - 28, 2);
+            for (String line : when) {
+                canvas.drawText(line, x + 14, linesY, Colors.fade(now ? Palette.ON : Palette.BAD, alpha));
+                linesY += 11;
+            }
+            this.whenMore = Math.max(0, when.size() - 1);
+            linesY += WHEN_H - 11;
         }
         List<String> lines = new ArrayList<>();
         for (String line : body.lines()) {

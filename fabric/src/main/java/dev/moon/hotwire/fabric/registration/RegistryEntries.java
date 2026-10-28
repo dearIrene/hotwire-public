@@ -33,13 +33,13 @@ public final class RegistryEntries {
         Map<Class<?>, Boolean> passive = new HashMap<>();
         for (Registry<?> registry : BuiltInRegistries.REGISTRY) {
             int count = 0;
-            int inert = 0;
+            int idle = 0;
             for (Object value : registry) {
                 if (value == null || !mod.equals(GameRegistrations.findModOf(value.getClass()))) {
                     continue;
                 }
                 if (passive.computeIfAbsent(value.getClass(), type -> isPassive(type, mod))) {
-                    inert++;
+                    idle++;
                 } else {
                     count++;
                 }
@@ -47,9 +47,9 @@ public final class RegistryEntries {
             if (count > 0) {
                 out.add("registry entries " + count + " of " + registries.getKey(registry));
             }
-            if (inert > 0) {
+            if (idle > 0) {
                 LOGGER.info("[Hotwire] {}'s {} entries of {} stay until the game closes; their classes only hand out"
-                        + " codecs", mod, inert, registries.getKey(registry));
+                        + " codecs", mod, idle, registries.getKey(registry));
             }
         }
         return out;

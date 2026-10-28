@@ -12,76 +12,35 @@ final class AdvancedPanel extends Panel {
     static final int PITCH = 36;
     static final int CHOICE_W = 64;
 
-    private static final int FIELD_W = 48;
-    private static final int LARGE_MEGABYTES = 512;
-    private static final int MOST_MEGABYTES = 1024;
-    private static final int LEAST_MEGABYTES = 16;
-
     private final ObjIntConsumer<String> onChoose;
     private final List<List<Button>> choiceButtons = new ArrayList<>();
     private List<AdvancedOption> options = List.of();
-    private final Supplier<@Nullable CacheFill> fill;
-    private final IntConsumer onLimit;
-    private final TextField limit;
+    private final LimitRow switchLimit;
+    private final LimitRow storeLimit;
 
     public AdvancedPanel(ObjIntConsumer<String> onChoose, Supplier<@Nullable CacheFill> fill, IntConsumer onLimit,
-            Runnable onDone) {
+            StoreCacheView store, Runnable onDone) {
         super(Lang.get("hotwire.button.done"), onDone);
         this.onChoose = onChoose;
-        this.fill = fill;
-        this.onLimit = onLimit;
-        this.limit = this.add(new TextField(Lang.get("hotwire.cache.limit_unit"), this::onLimitTyped,
-                this::setLimit, this::showLimit));
-        this.limit.acceptOnly(Character::isDigit);
-        this.limit.typeOnlyOnceClicked();
-        this.limit.setInk(AdvancedPanel::findLimitInk);
+        this.switchLimit = new LimitRow(this, () -> LimitRow.findMegabytes(fill.get()), onLimit,
+                "hotwire.advanced.cache_limit", "hotwire.cache.limit");
+        this.storeLimit = new LimitRow(this, store::getLimit, store::setLimit, "hotwire.advanced.store_limit",
+                "hotwire.cache.store_limit");
     }
 
     public void open(List<AdvancedOption> options) {
         this.setOptions(options);
-        this.limit.stopTyping();
-        this.showLimit();
+        for (LimitRow row : List.of(this.switchLimit, this.storeLimit)) {
+            row.stopTyping();
+            row.show();
+        }
         this.show();
-    }
-
-    private void showLimit() {
-        CacheFill now = this.fill.get();
-        this.limit.setText(now == null || now.limitBytes() <= 0 ? "" : Long.toString(now.limitBytes() >> 20));
-    }
-
-    private void onLimitTyped(String text) {
-        if (findMegabytes(text) > MOST_MEGABYTES) {
-            this.limit.setText(Integer.toString(MOST_MEGABYTES));
-        }
-    }
-
-    private void setLimit() {
-        int megabytes = findMegabytes(this.limit.getText());
-        if (megabytes >= LEAST_MEGABYTES) {
-            this.onLimit.accept(megabytes);
-        } else {
-            this.showLimit();
-        }
-    }
-
-    private static int findMegabytes(String text) {
-        if (text.isEmpty()) {
-            return 0;
-        }
-        return text.length() > 5 ? Integer.MAX_VALUE : Integer.parseInt(text);
-    }
-
-    private static int findLimitInk(String text) {
-        int megabytes = findMegabytes(text);
-        if (megabytes >= MOST_MEGABYTES) {
-            return Palette.BAD;
-        }
-        return megabytes > LARGE_MEGABYTES ? Palette.WARN : Palette.TEXT;
     }
 
     @Override
     protected boolean onClick(double px, double py, int button) {
-        this.limit.stopTyping();
+        this.switchLimit.stopTyping();
+        this.storeLimit.stopTyping();
         return super.onClick(px, py, button);
     }
 
@@ -102,7 +61,7 @@ final class AdvancedPanel extends Panel {
 
     @Override
     public void step(float dt) {
-        this.size(WIDTH, CONTENT_Y + PITCH * (this.options.size() + 1) + 40);
+        this.size(WIDTH, CONTENT_Y + PITCH * (this.options.size() + 2) + 40);
         super.step(dt);
         int x = this.getBoxX();
         int w = this.getBoxWidth();
@@ -133,14 +92,7 @@ final class AdvancedPanel extends Panel {
         }
 
         int rowY = y + CONTENT_Y + PITCH * this.options.size();
-        int unitW = canvas.measureText(Lang.get("hotwire.cache.limit_unit"));
-        int fieldX = x + w - 14 - unitW - 6 - FIELD_W;
-        this.limit.setBounds(fieldX, rowY - 2, FIELD_W, 14);
-        canvas.drawText(Lang.get("hotwire.cache.limit_unit"), fieldX + FIELD_W + 6, rowY + 1,
-                Colors.fade(Palette.DIM, alpha));
-        canvas.drawText(canvas.clip(Lang.get("hotwire.advanced.cache_limit"), fieldX - x - 20), x + 14, rowY,
-                Colors.fade(Palette.TEXT, alpha));
-        String explains = Lang.get(this.limit.isTyping() ? "hotwire.cache.limit_set" : "hotwire.cache.limit");
-        canvas.drawText(canvas.clip(explains, w - 28), x + 14, rowY + 20, Colors.fade(Palette.DIM, alpha));
+        this.switchLimit.draw(canvas, x, rowY, w, alpha);
+        this.storeLimit.draw(canvas, x, rowY + PITCH, w, alpha);
     }
 }

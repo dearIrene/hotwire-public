@@ -27,6 +27,7 @@ final class SearchJson {
             JsonArray categories = new JsonArray();
             hit.categories().forEach(categories::add);
             one.add("categories", categories);
+            one.addProperty("modified", hit.modified());
             hits.add(one);
         }
         root.add("hits", hits);
@@ -43,9 +44,53 @@ final class SearchJson {
             hits.add(new ModrinthClient.Hit(one.get("id").getAsString(), one.get("slug").getAsString(),
                     one.get("title").getAsString(), one.get("description").getAsString(),
                     one.get("author").getAsString(), one.get("downloads").getAsLong(), one.get("icon").getAsString(),
-                    categories));
+                    categories, one.has("modified") ? one.get("modified").getAsString() : ""));
         }
         return new ModrinthClient.Search(hits, root.get("total").getAsInt());
+    }
+
+    static String writeVersions(List<ModrinthClient.Version> versions) {
+        JsonArray out = new JsonArray();
+        for (ModrinthClient.Version version : versions) {
+            JsonObject one = new JsonObject();
+            one.addProperty("id", version.id());
+            one.addProperty("project_id", version.projectId());
+            one.addProperty("version_number", version.number());
+            one.addProperty("name", version.name());
+            one.addProperty("changelog", version.changelog());
+            JsonArray games = new JsonArray();
+            version.gameVersions().forEach(games::add);
+            one.add("game_versions", games);
+            JsonArray dependencies = new JsonArray();
+            for (String project : version.requiredProjects()) {
+                JsonObject dependency = new JsonObject();
+                dependency.addProperty("project_id", project);
+                dependency.addProperty("dependency_type", "required");
+                dependencies.add(dependency);
+            }
+            one.add("dependencies", dependencies);
+            JsonObject file = new JsonObject();
+            file.addProperty("filename", version.fileName());
+            file.addProperty("url", version.url());
+            file.addProperty("size", version.size());
+            file.addProperty("primary", true);
+            JsonObject hashes = new JsonObject();
+            hashes.addProperty("sha512", version.sha512());
+            file.add("hashes", hashes);
+            JsonArray files = new JsonArray();
+            files.add(file);
+            one.add("files", files);
+            out.add(one);
+        }
+        return out.toString();
+    }
+
+    static List<ModrinthClient.Version> readVersions(String json) {
+        List<ModrinthClient.Version> out = new ArrayList<>();
+        for (JsonElement element : JsonParser.parseString(json).getAsJsonArray()) {
+            out.add(ModrinthClient.readVersion(element.getAsJsonObject()));
+        }
+        return out;
     }
 
     static String writeProject(ModrinthClient.Project project) {

@@ -384,8 +384,23 @@ public final class ModList extends Element {
         return px >= right - ModListRow.STAR_ZONE && px < right;
     }
 
+    private int barX;
+    private int trackTop;
+    private int trackLength;
+    private int thumbLength;
+    private int thumbOffset;
+    private double grabbedAt = Double.NaN;
+
     @Override
     protected boolean onClick(double px, double py, int button, int modifiers) {
+        if (button == 0 && this.trackLength > 0 && px >= this.barX - 5 && px <= this.barX + 8
+                && py >= this.trackTop && py <= this.trackTop + this.trackLength) {
+            int thumbTop = this.trackTop + this.thumbOffset;
+            boolean onThumb = py >= thumbTop && py <= thumbTop + this.thumbLength;
+            this.grabbedAt = onThumb ? py - thumbTop : this.thumbLength / 2.0;
+            this.scrollBarTo(py);
+            return true;
+        }
         if (button == 2 && this.isInList(px, py)) {
             this.dragFromY = py;
             return true;
@@ -427,6 +442,10 @@ public final class ModList extends Element {
 
     @Override
     protected boolean onDrag(double px, double py, int button) {
+        if (!Double.isNaN(this.grabbedAt)) {
+            this.scrollBarTo(py);
+            return true;
+        }
         if (!Double.isNaN(this.dragFromY)) {
             return true;
         }
@@ -449,6 +468,7 @@ public final class ModList extends Element {
     @Override
     protected boolean onRelease(double px, double py, int button) {
         this.dragFromY = Double.NaN;
+        this.grabbedAt = Double.NaN;
         this.painting = 0;
         this.lastPainted = -1;
         this.layOutNow();
@@ -503,16 +523,30 @@ public final class ModList extends Element {
         canvas.fill(spine, box.y() + box.h() / 2, Math.max(spine + 1, box.x() - 4), box.y() + box.h() / 2 + 1, ink);
     }
 
+    private void scrollBarTo(double py) {
+        int cols = this.getColumns();
+        int lines = (this.source.getShown().size() + cols - 1) / cols;
+        int most = Math.max(0, lines - this.getVisibleRows()) * cols;
+        double at = (py - this.grabbedAt - this.trackTop) / this.trackLength * cols * lines;
+        this.animation.scrollTo((float) Math.max(0, Math.min(most, at)));
+    }
+
     private void paintScrollbar(Canvas canvas, int top, int bottom, int width, float alpha) {
         int cols = this.getColumns();
         int lines = (this.source.getShown().size() + cols - 1) / cols;
         int visible = this.getVisibleRows();
+        this.trackLength = 0;
         if (lines <= visible) {
             return;
         }
         int track = bottom - top - 12;
         int thumb = Math.max(20, track * visible / lines);
         int offset = (int) (track * (this.animation.getScroll() / cols / lines));
+        this.barX = width - 17;
+        this.trackTop = top + 6;
+        this.trackLength = track;
+        this.thumbLength = thumb;
+        this.thumbOffset = offset;
 
         canvas.fill(width - 17, top + 6 + offset, width - 14, top + 6 + offset + thumb,
                 Colors.fade(Palette.PANEL_EDGE, alpha));

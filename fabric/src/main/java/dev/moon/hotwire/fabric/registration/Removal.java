@@ -14,6 +14,9 @@ sealed interface Removal {
 
     String describe();
 
+    default void resetHolder() {
+    }
+
     record InList(List<Object> list, int index, Object element) implements Removal {
         @Override
         public void restore() {
@@ -25,6 +28,11 @@ sealed interface Removal {
         @Override
         public String describe() {
             return "a list of " + this.list.size() + " (" + describeKind(this.element) + ")";
+        }
+
+        @Override
+        public void resetHolder() {
+            LazyFields.resetFor(this.list);
         }
     }
 
@@ -39,6 +47,11 @@ sealed interface Removal {
         @Override
         public String describe() {
             return "a set of " + this.collection.size() + " (" + describeKind(this.element) + ")";
+        }
+
+        @Override
+        public void resetHolder() {
+            LazyFields.resetFor(this.collection);
         }
     }
 

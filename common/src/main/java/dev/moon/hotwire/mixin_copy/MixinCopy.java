@@ -147,18 +147,18 @@ public final class MixinCopy implements AutoCloseable {
                 digest.update(Files.readAllBytes(jar));
             }
             digest.update(this.side.getBytes(StandardCharsets.UTF_8));
-            digest.update(new TreeMap<>(this.decorations.modIds()).toString()
-                    .getBytes(StandardCharsets.UTF_8));
-            digest.update(new TreeMap<>(this.decorations.levels()).toString()
-                    .getBytes(StandardCharsets.UTF_8));
-            digest.update(new TreeMap<>(this.decorations.orders()).toString()
-                    .getBytes(StandardCharsets.UTF_8));
+
             known = digest.digest();
         } catch (IOException | MixinCopyException | NoSuchAlgorithmException e) {
             known = new byte[0];
         }
         this.recipe = known;
         return known;
+    }
+
+    public String findDecoration(String config) {
+        Decorations now = this.decorations;
+        return now.modIds().get(config) + "|" + now.levels().get(config) + "|" + now.orders().get(config);
     }
 
     public Map<String, byte @Nullable []> takeReadInMix() {

@@ -22,10 +22,10 @@ public final class ExtensionFolder {
 
     public boolean isFolded(String internal) {
         Matcher found = RELOCATED.matcher(internal);
-        return found.matches() && !this.isKept(found.group(1) + "mixinextras/");
+        return found.matches() && !this.isLaunched(found.group(1) + "mixinextras/");
     }
 
-    private boolean isKept(String prefix) {
+    private boolean isLaunched(String prefix) {
         return prefix.equals(GAME) || this.launched.contains(prefix);
     }
 
@@ -35,7 +35,7 @@ public final class ExtensionFolder {
             @Override
             public String map(String internalName) {
                 Matcher found = RELOCATED.matcher(internalName);
-                if (!found.matches() || ExtensionFolder.this.isKept(found.group(1) + "mixinextras/")) {
+                if (!found.matches() || ExtensionFolder.this.isLaunched(found.group(1) + "mixinextras/")) {
                     return internalName;
                 }
                 names[0] = true;

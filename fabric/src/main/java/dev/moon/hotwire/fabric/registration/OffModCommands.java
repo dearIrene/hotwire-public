@@ -8,6 +8,7 @@ import java.util.ArrayList;
 import java.util.Collection;
 import java.util.List;
 import java.util.Set;
+import java.util.concurrent.ConcurrentHashMap;
 import java.util.function.Predicate;
 import java.util.function.Supplier;
 import java.util.stream.Collectors;
@@ -27,7 +28,39 @@ public final class OffModCommands {
     private static final List<Removal> REMOVED = new ArrayList<>();
     private static volatile @Nullable Supplier<ModGraph> mods;
 
+    private static volatile Predicate<String> offNow = id -> false;
+    private static final Set<String> SAID_STAYING = ConcurrentHashMap.newKeySet();
+
     private OffModCommands() {
+    }
+
+    public static void readOffFrom(Predicate<String> off) {
+        offNow = off;
+    }
+
+    public static synchronized void takeOutBeforeSending(boolean client) {
+        CommandDispatcher<?> dispatcher = CommandRegistration.findActiveDispatcher(client);
+        if (dispatcher != null) {
+            takeOutOf(dispatcher, client);
+        }
+    }
+
+    public static synchronized void takeOutOf(CommandDispatcher<?> dispatcher, boolean client) {
+        List<String> removedNames = new ArrayList<>();
+        for (CommandNode<?> command : List.copyOf(dispatcher.getRoot().getChildren())) {
+            takeOut(dispatcher, dispatcher.getRoot(), command, offNow, client, removedNames, DEPTH);
+
+            Set<String> all = CommandRecorder.findModsRun(command);
+            if (dispatcher.getRoot().getChild(command.getName()) != null && all.stream().anyMatch(offNow)
+                    && SAID_STAYING.add(command.getName())) {
+                LOGGER.info("[Hotwire] /{} runs off mods' code and stays: it runs {}, of which off {}",
+                        command.getName(), all, all.stream().filter(offNow).toList());
+            }
+        }
+        if (!removedNames.isEmpty()) {
+            LOGGER.info("[Hotwire] before the {} commands were sent, {} went out: they run only off mods' code",
+                    client ? "client" : "server", removedNames);
+        }
     }
 
     public static synchronized void takeOut(Predicate<String> off) {

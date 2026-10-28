@@ -1,6 +1,7 @@
 package dev.moon.hotwire.fabric.screen;
 
 import dev.moon.hotwire.ui.Root;
+import java.util.function.BooleanSupplier;
 import net.minecraft.client.gui.screens.Screen;
 import net.minecraft.network.chat.Component;
 import org.jspecify.annotations.Nullable;
@@ -34,6 +35,8 @@ public abstract class RootScreen extends Screen {
             Map.entry(InputConstants.KEY_C, 67), Map.entry(InputConstants.KEY_V, 86),
             Map.entry(InputConstants.KEY_X, 88));
     //?}
+
+    private static volatile BooleanSupplier pausing = () -> false;
 
     protected RootScreen(String title) {
         super(Component.literal(title));
@@ -71,10 +74,18 @@ public abstract class RootScreen extends Screen {
 
     @Override
     public boolean isPauseScreen() {
-        return false;
+        return pausing.getAsBoolean();
+    }
+
+    public static void pauseWith(BooleanSupplier choice) {
+        pausing = choice;
     }
 
     //? if >=26.1 {
+    public void drawInHold(GuiGraphicsExtractor graphics) {
+        this.drawFrame(new GuiCanvas(graphics, this.font), System.nanoTime(), -1, -1);
+    }
+
     @Override
     public void extractRenderState(GuiGraphicsExtractor graphics, int mouseX, int mouseY, float partialTick) {
         super.extractRenderState(graphics, mouseX, mouseY, partialTick);

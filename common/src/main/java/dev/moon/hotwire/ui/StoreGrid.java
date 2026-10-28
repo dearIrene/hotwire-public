@@ -180,7 +180,9 @@ final class StoreGrid extends Element {
         }
         int addX = x + w - 10 - ADD_W;
         int addY = y + CARD_H - 10 - ADD_H;
-        if (this.isAddless(card)) {
+        if (this.model.isShowingPacks()) {
+            this.paintPackButton(canvas, this.model.findPackState(card.hit().projectId()), addX, addY, hot, alpha);
+        } else if (this.isAddless(card)) {
             String label = this.model.isQueuedProject(card.hit().projectId()) ? this.queuedLabel
                     : this.installedLabel;
             canvas.drawText(label, x + w - 10 - canvas.measureText(label), addY + 5, Colors.fade(Palette.FAINT,
@@ -193,6 +195,42 @@ final class StoreGrid extends Element {
                     overAdd ? 0.15f : 0), alpha * (0.75f + hot * 0.25f)));
             canvas.drawText(label, addX + (ADD_W - canvas.measureText(label)) / 2, addY + 5,
                     Colors.fade(Palette.ON_ACCENT, alpha));
+        }
+    }
+
+    private void paintPackButton(Canvas canvas, StoreModel.PackState state, int addX, int addY, float hot,
+            float alpha) {
+        boolean over = hot > 0 && this.getPointerX() >= addX && this.getPointerY() >= addY
+                && this.getPointerY() < addY + ADD_H;
+        switch (state) {
+            case DOWNLOADING, NEEDS_WORLD -> {
+                String label = Lang.get(state == StoreModel.PackState.DOWNLOADING ? "hotwire.store.pack.downloading"
+                        : "hotwire.store.pack.needs_world");
+                canvas.drawText(label, addX + ADD_W - canvas.measureText(label), addY + 5,
+                        Colors.fade(Palette.FAINT, alpha));
+            }
+            case MISSING -> {
+                canvas.fill(addX, addY, addX + ADD_W, addY + ADD_H, Colors.fade(Colors.mix(Palette.ACCENT,
+                        Palette.TEXT, over ? 0.15f : 0), alpha * (0.75f + hot * 0.25f)));
+                String label = Lang.get("hotwire.store.download");
+                canvas.drawText(label, addX + (ADD_W - canvas.measureText(label)) / 2, addY + 5,
+                        Colors.fade(Palette.ON_ACCENT, alpha));
+            }
+            case ON, OFF -> {
+                boolean on = state == StoreModel.PackState.ON;
+
+                canvas.fill(addX, addY, addX + ADD_W, addY + ADD_H, Colors.fade(Palette.HAIRLINE, alpha));
+                canvas.fill(addX + 1, addY + 1, addX + ADD_W - 1, addY + ADD_H - 1, Colors.fade(on
+                        ? Colors.mix(Palette.ON, Palette.TRACK, over ? 0.45f : 0.6f)
+                        : Colors.mix(Palette.TRACK, Palette.TEXT, over ? 0.08f : 0), alpha));
+                int knobX = on ? addX + ADD_W - ADD_H + 2 : addX + 2;
+                canvas.fill(knobX, addY + 2, knobX + ADD_H - 4, addY + ADD_H - 2, Colors.fade(on ? Palette.ON
+                        : Palette.FAINT, alpha));
+                String label = Lang.get(on ? "hotwire.store.pack.on" : "hotwire.store.pack.off");
+                int labelX = on ? addX + (ADD_W - ADD_H - canvas.measureText(label)) / 2
+                        : addX + ADD_H + (ADD_W - ADD_H - canvas.measureText(label)) / 2;
+                canvas.drawText(label, labelX, addY + 5, Colors.fade(on ? Palette.TEXT : Palette.DIM, alpha));
+            }
         }
     }
 
@@ -255,7 +293,15 @@ final class StoreGrid extends Element {
         int cy = this.getY() + (index / columns) * (CARD_H + GAP) - Math.round(this.scroll.getValue());
         int addX = cx + cardW - 10 - ADD_W;
         int addY = cy + CARD_H - 10 - ADD_H;
-        if (!this.isAddless(card) && px >= addX && py >= addY && py < addY + ADD_H) {
+        boolean onButton = px >= addX && py >= addY && py < addY + ADD_H;
+        if (onButton && this.model.isShowingPacks()) {
+            String projectId = card.hit().projectId();
+            switch (this.model.findPackState(projectId)) {
+                case MISSING -> this.add.accept(projectId, card.hit().title());
+                case ON, OFF -> this.model.togglePack(projectId);
+                case DOWNLOADING, NEEDS_WORLD -> { }
+            }
+        } else if (!this.model.isShowingPacks() && !this.isAddless(card) && onButton) {
             this.add.accept(card.hit().projectId(), card.hit().title());
         } else {
             this.open.accept(card.hit());

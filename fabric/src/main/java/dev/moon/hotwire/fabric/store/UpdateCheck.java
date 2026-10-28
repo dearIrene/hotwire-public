@@ -1,14 +1,19 @@
 package dev.moon.hotwire.fabric.store;
 
+import dev.moon.hotwire.fabric.CacheLimit;
 import dev.moon.hotwire.fabric.InstalledMods;
 import dev.moon.hotwire.fabric.update.ModUpdater;
+import dev.moon.hotwire.jar.FileHashes;
 import dev.moon.hotwire.jar.ModManifest;
+import dev.moon.hotwire.modrinth.Downloads;
 import dev.moon.hotwire.modrinth.ModrinthClient;
+import dev.moon.hotwire.modrinth.UpdateMemory;
 import dev.moon.hotwire.ui.Lang;
 import dev.moon.hotwire.update.UpdateOffer;
 import java.io.IOException;
 import java.nio.file.Files;
 import java.nio.file.Path;
+import java.time.Instant;
 import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.HashSet;
@@ -28,10 +33,16 @@ public final class UpdateCheck {
 
     private final InstalledMods installed;
     private final ModrinthClient client = ModStore.makeClient();
-    private final Path downloads = FabricLoader.getInstance().getGameDir().resolve("hotwire").resolve("store");
+    private final Path folder = FabricLoader.getInstance().getGameDir().resolve("hotwire").resolve("store");
 
     private volatile Set<String> installedProjects = Set.of();
     private volatile Map<String, String> idByProject = Map.of();
+
+    private volatile Downloads downloads = new Downloads();
+
+    private final Path memoryFile = CacheLimit.findStoreFolder().resolve("updates-"
+            + this.client.getScope().replaceAll("[^A-Za-z0-9.-]", "_") + ".gz");
+    private volatile int newlyFound;
 
     public UpdateCheck(InstalledMods installed) {
         this.installed = installed;
@@ -56,21 +67,88 @@ public final class UpdateCheck {
 
     private List<UpdateOffer> find() throws IOException {
         Map<String, Path> jars = this.installed.getJarsByTopLevel();
-        Map<String, String> hashByName = JarHashes.of(jars.values());
+        Map<String, String> hashByName = FileHashes.findSha512ByName(jars.values());
         if (hashByName.isEmpty()) {
             return List.of();
         }
         Map<String, String> idByName = new HashMap<>();
         jars.forEach((id, jar) -> idByName.put(String.valueOf(jar.getFileName()), id));
-        Map<String, ModrinthClient.Version> newest = this.client.findNewest(hashByName);
+        UpdateMemory memory = UpdateMemory.read(this.memoryFile);
+        memory.retain(hashByName.values());
+        Map<String, ModrinthClient.Version> newest = this.recall(memory, hashByName);
         Set<String> known = new HashSet<>();
         Map<String, String> ids = new HashMap<>();
         newest.forEach((name, version) -> {
             known.add(version.projectId());
             ids.put(version.projectId(), idByName.getOrDefault(name, name));
         });
+        hashByName.forEach((name, hash) -> {
+            UpdateMemory.Entry entry = memory.find(hash);
+            if (entry != null && !entry.isUnknown()) {
+                known.add(entry.projectId());
+                ids.putIfAbsent(entry.projectId(), idByName.getOrDefault(name, name));
+            }
+        });
         this.installedProjects = known;
         this.idByProject = ids;
+        List<UpdateOffer> found = this.makeOffers(newest, hashByName, idByName);
+
+        memory.retainTold(found.stream().map(UpdateOffer::versionId).toList());
+        int fresh = 0;
+        for (UpdateOffer offer : found) {
+            fresh += memory.tell(offer.versionId()) ? 1 : 0;
+        }
+        this.newlyFound = fresh;
+        memory.write();
+        return found;
+    }
+
+    private Map<String, ModrinthClient.Version> recall(UpdateMemory memory, Map<String, String> hashByName)
+            throws IOException {
+        Set<String> projects = memory.findProjects();
+        Map<String, String> stamps = projects.isEmpty() ? Map.of() : this.client.findChanges(projects);
+        Map<String, String> ask = memory.findToAsk(hashByName, stamps, Instant.now());
+        if (!ask.isEmpty()) {
+            Map<String, ModrinthClient.Version> answered = this.client.findNewest(ask);
+            Set<String> unstamped = new HashSet<>();
+            answered.values().forEach(version -> {
+                if (!stamps.containsKey(version.projectId())) {
+                    unstamped.add(version.projectId());
+                }
+            });
+            Map<String, String> more = unstamped.isEmpty() ? Map.of() : this.client.findChanges(unstamped);
+            long now = System.currentTimeMillis();
+            ask.forEach((name, hash) -> {
+                ModrinthClient.Version version = answered.get(name);
+                if (version == null) {
+                    memory.put(hash, new UpdateMemory.Entry("", "", null, now));
+                    return;
+                }
+                String project = version.projectId();
+                boolean same = version.sha512().equalsIgnoreCase(hash) || version.url().isEmpty();
+                memory.put(hash, new UpdateMemory.Entry(project, stamps.getOrDefault(project,
+                        more.getOrDefault(project, "")), same ? null : UpdateMemory.Newer.of(version), now));
+            });
+            LOGGER.info("[Hotwire] the update check asked Modrinth about {} of {} jars; the rest were as last time",
+                    ask.size(), hashByName.size());
+        }
+        Map<String, ModrinthClient.Version> newest = new LinkedHashMap<>();
+        hashByName.forEach((name, hash) -> {
+            UpdateMemory.Entry entry = memory.find(hash);
+            UpdateMemory.Newer newer = entry == null ? null : entry.newer();
+            if (entry != null && newer != null) {
+                newest.put(name, newer.toVersion(entry.projectId()));
+            }
+        });
+        return newest;
+    }
+
+    public int getNewlyFound() {
+        return this.newlyFound;
+    }
+
+    private List<UpdateOffer> makeOffers(Map<String, ModrinthClient.Version> newest, Map<String, String> hashByName,
+            Map<String, String> idByName) {
         List<UpdateOffer> offers = new ArrayList<>();
         newest.forEach((name, version) -> {
             if (version.sha512().equalsIgnoreCase(hashByName.get(name)) || version.url().isEmpty()) {
@@ -91,8 +169,7 @@ public final class UpdateCheck {
                     version.size(), version.requiredProjects()));
         });
         offers.sort((a, b) -> a.name().compareToIgnoreCase(b.name()));
-        LOGGER.info("[Hotwire] Modrinth knows {} of {} mods; {} have a newer version", newest.size(),
-                hashByName.size(), offers.size());
+        LOGGER.info("[Hotwire] {} of {} mods have a newer version", offers.size(), hashByName.size());
         return offers;
     }
 
@@ -136,7 +213,7 @@ public final class UpdateCheck {
         }
         List<ModrinthClient.Version> versions;
         try {
-            versions = this.client.findVersions(id);
+            versions = this.client.findVersions(ModrinthClient.Kind.MOD, id);
         } catch (IOException e) {
             LOGGER.info("[Hotwire] Modrinth has no project {}: {}", id, e.getMessage());
             return List.of();
@@ -183,7 +260,7 @@ public final class UpdateCheck {
         if (this.isInstalled(project)) {
             return;
         }
-        List<ModrinthClient.Version> versions = this.client.findVersions(projectId);
+        List<ModrinthClient.Version> versions = this.client.findVersions(ModrinthClient.Kind.MOD, projectId);
         if (versions.isEmpty()) {
             throw new IOException("a mod it needs has no version for this game: " + projectId);
         }
@@ -212,14 +289,32 @@ public final class UpdateCheck {
         ModrinthClient.Version version = new ModrinthClient.Version(offer.versionId(), offer.projectId(),
                 offer.newVersion(), "", offer.fileName(), offer.url(), offer.sha512(), offer.size(), List.of(),
                 List.of(), offer.changelog());
-        return this.write(version);
+        try {
+            return this.write(version);
+        } catch (IOException e) {
+            LOGGER.info("[Hotwire] {} was not at {}; asking Modrinth where it is", offer.fileName(), offer.url());
+            return this.write(this.client.findVersion(offer.versionId()));
+        }
+    }
+
+    public void reportTo(Downloads downloads) {
+        this.downloads = downloads;
     }
 
     private Path write(ModrinthClient.Version version) throws IOException {
-        byte[] bytes = this.client.fetch(version);
-        Files.createDirectories(this.downloads);
-        Path jar = this.downloads.resolve(version.fileName().replaceAll("[^A-Za-z0-9._+ -]", "_"));
-        Files.write(jar, bytes);
-        return jar;
+        Downloads told = this.downloads;
+        int job = told.begin(version.fileName(), version.size());
+        told.start(job);
+        try {
+            byte[] bytes = this.client.fetch(version, done -> told.advance(job, done));
+            Files.createDirectories(this.folder);
+            Path jar = this.folder.resolve(version.fileName().replaceAll("[^A-Za-z0-9._+ -]", "_"));
+            Files.write(jar, bytes);
+            told.end(job, true);
+            return jar;
+        } catch (IOException | RuntimeException e) {
+            told.end(job, false);
+            throw e;
+        }
     }
 }

@@ -7,6 +7,7 @@ import dev.moon.hotwire.redefine.HotwireLoaders;
 import dev.moon.hotwire.redefine.LambdaSites;
 import dev.moon.hotwire.redefine.RebuildException;
 import dev.moon.hotwire.redefine.Tripwire;
+import dev.moon.hotwire.redefine.TripwireSites;
 import java.lang.instrument.ClassFileTransformer;
 import java.lang.instrument.Instrumentation;
 import java.security.CodeSource;
@@ -155,6 +156,7 @@ public final class ModTripwire {
     }
 
     synchronized void offerDisarm(Collection<String> ids) {
+        ids.forEach(id -> TripwireSites.setOff(id, false));
         Map<Class<?>, byte[]> back = new LinkedHashMap<>();
         this.armed.forEach((type, was) -> {
             if (ids.contains(was.getMod()) && was.isAsWired(this.rebuilder.getLoadedBytes().findKnown(type))) {
@@ -290,6 +292,7 @@ public final class ModTripwire {
     }
 
     void unwire(Collection<String> ids) {
+        ids.forEach(id -> TripwireSites.setOff(id, false));
         this.watcher.execute(() -> {
             try {
                 this.disarm(ids);
@@ -337,10 +340,17 @@ public final class ModTripwire {
                     this.sources.put(source, mod);
                 }
             }
-            if (!type.isHidden() && this.instrumentation.isModifiableClass(type) && !this.armed.containsKey(type)) {
+            if (!type.isHidden() && this.instrumentation.isModifiableClass(type) && !this.armed.containsKey(type)
+                    && !TripwireSites.isArmed(type.getName().replace('.', '/'))) {
                 owned.put(type, mod);
             }
         });
+
+        int bySites = 0;
+        for (String id : ids) {
+            TripwireSites.setOff(id, true);
+            bySites += TripwireSites.countArmed(id);
+        }
         this.instrumentation.removeTransformer(this.loading);
         this.instrumentation.addTransformer(this.loading);
 
@@ -358,9 +368,9 @@ public final class ModTripwire {
                 }
             });
             if (ride && this.ride.offer(ids, wiredAll, arming)) {
-                return arming.size();
+                return arming.size() + bySites;
             }
-            return this.finishWiring(ids, wiredAll, arming);
+            return this.finishWiring(ids, wiredAll, arming) + bySites;
         } finally {
             ARMING.remove();
         }
@@ -528,7 +538,7 @@ public final class ModTripwire {
     private byte @Nullable [] armAtLoad(String name, @Nullable String source, byte[] bytes, ClassLoader loader) {
         synchronized (this.sources) {
             String mod = source == null ? null : this.sources.get(source);
-            if (mod == null) {
+            if (mod == null || TripwireSites.isArmed(name)) {
                 return null;
             }
             if (ARMING.get()) {

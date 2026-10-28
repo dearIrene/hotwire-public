@@ -24,13 +24,13 @@ public final class TidyLog {
     private TidyLog() {
     }
 
-    public static String write(String why, String when, List<String> facts, List<Mod> mods, String log) {
+    public static String write(String why, String when, List<String> details, List<Mod> mods, String log) {
         StringBuilder out = new StringBuilder();
         out.append(HEAD).append('\n');
         out.append("Names, logins and addresses are taken out.\n\n");
         out.append("Why: ").append(why).append('\n');
         out.append("When: ").append(when).append("\n\n");
-        facts.forEach(fact -> out.append(fact).append('\n'));
+        details.forEach(fact -> out.append(fact).append('\n'));
         long off = mods.stream().filter(mod -> mod.state() == State.OFF).count();
         out.append("\nMods (").append(mods.size()).append(off == 0 ? "" : ", " + off + " off").append("):\n");
         for (Mod mod : mods) {

@@ -60,10 +60,16 @@ public final class LoadedClassBytes {
 
     void remember(Class<?> type, byte[] bytes) {
         this.knownBytes.put(type, bytes);
+        HandlerGuards.forget(type.getName().replace('.', '/'));
+        TripwireSites.forget(type.getName().replace('.', '/'));
     }
 
     void rememberAll(Map<Class<?>, byte[]> classes) {
         this.knownBytes.putAll(classes);
+        classes.keySet().forEach(type -> {
+            HandlerGuards.forget(type.getName().replace('.', '/'));
+            TripwireSites.forget(type.getName().replace('.', '/'));
+        });
     }
 
     public byte @Nullable [] findKnown(Class<?> type) {

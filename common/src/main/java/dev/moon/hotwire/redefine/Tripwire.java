@@ -48,6 +48,15 @@ public final class Tripwire {
     private static final String POOL_WORKER = ThreadPoolExecutor.class.getName() + "$Worker";
 
     private static final Map<String, CountDownLatch> GATES = new ConcurrentHashMap<>();
+
+    private static volatile boolean exiting;
+
+    static {
+        Runtime.getRuntime().addShutdownHook(Thread.ofPlatform().name("hotwire-exit").unstarted(() -> {
+            exiting = true;
+            releaseAll();
+        }));
+    }
     private static final Map<String, Set<Thread>> WAITING = new ConcurrentHashMap<>();
 
     private static final Set<String> GOING_OFF = ConcurrentHashMap.newKeySet();
@@ -74,6 +83,8 @@ public final class Tripwire {
     private static final ThreadLocal<Set<String>> EXPECTED = ThreadLocal.withInitial(Set::of);
 
     private static final ThreadLocal<Boolean> IN_HIT = ThreadLocal.withInitial(() -> false);
+
+    private static final ThreadLocal<Boolean> HOTWIRE_WORK = ThreadLocal.withInitial(() -> false);
 
     private static final String SELF = Tripwire.class.getName().replace('.', '/');
 
@@ -112,7 +123,7 @@ public final class Tripwire {
     }
 
     public static void hit(String mod) {
-        if (EXPECTED.get().contains(mod) || IN_HIT.get()) {
+        if (EXPECTED.get().contains(mod) || IN_HIT.get() || HOTWIRE_WORK.get()) {
             return;
         }
         IN_HIT.set(true);
@@ -130,7 +141,8 @@ public final class Tripwire {
                 return;
             }
             Whose whose = classify(mod);
-            if (whose == Whose.OWN) {
+
+            if (whose == Whose.OWN && !onGameThread.getAsBoolean()) {
                 waitUntilOn(mod, gate);
                 return;
             }
@@ -213,13 +225,26 @@ public final class Tripwire {
         }
         if (calls.getAndIncrement() == 0) {
             List<String> frames = new ArrayList<>();
+
+            Set<String> seen = new HashSet<>();
             for (StackTraceElement frame : new Throwable().getStackTrace()) {
-                if (frames.size() < FRAMES && !frame.getClassName().equals(Tripwire.class.getName())) {
+                if (frames.size() < FRAMES && !frame.getClassName().equals(Tripwire.class.getName())
+                        && seen.add(frame.getClassName() + "#" + frame.getMethodName())) {
                     frames.add(frame.toString());
                 }
             }
             FIRST.put(mod, List.copyOf(frames));
             firstCall.accept(mod);
+        }
+    }
+
+    public static void runAsHotwire(Runnable work) {
+        boolean before = HOTWIRE_WORK.get();
+        HOTWIRE_WORK.set(true);
+        try {
+            work.run();
+        } finally {
+            HOTWIRE_WORK.set(before);
         }
     }
 
@@ -255,12 +280,19 @@ public final class Tripwire {
         GOING_OFF.removeAll(mods);
     }
 
+    public static boolean isHolding(String mod) {
+        return LIBRARIES.containsKey(mod);
+    }
+
     public static Set<String> getLibrariesOf(String mod) {
         Set<String> known = LIBRARIES.get(mod);
         return known != null ? known : Set.copyOf(librariesOf.apply(mod));
     }
 
     public static void hold(Collection<String> mods) {
+        if (exiting) {
+            return;
+        }
         mods.forEach(mod -> {
             LIBRARIES.put(mod, Set.copyOf(librariesOf.apply(mod)));
 
@@ -315,7 +347,7 @@ public final class Tripwire {
                 unsafe |= frame.getMethodName().equals("<clinit>") || (mine == 0 && isSynchronizedMethod(frame));
                 mine++;
                 gameBelow = false;
-            } else if (of != null && libraries.contains(of)) {
+            } else if (of != null && (libraries.contains(of) || LIBRARIES.containsKey(of))) {
                 gameBelow = game.contains(of);
                 library = true;
             } else {
@@ -391,7 +423,7 @@ public final class Tripwire {
         }
         boolean interrupted = false;
         try {
-            while (gate.getCount() > 0) {
+            while (gate.getCount() > 0 && !exiting) {
                 try {
                     gate.await();
                 } catch (InterruptedException e) {

@@ -2,13 +2,8 @@ package dev.moon.hotwire.update;
 
 import dev.moon.hotwire.config.JsonFile;
 import java.io.IOException;
-import java.io.InputStream;
-import java.nio.file.Files;
 import java.nio.file.Path;
-import java.security.MessageDigest;
-import java.security.NoSuchAlgorithmException;
 import java.util.ArrayList;
-import java.util.HexFormat;
 import java.util.List;
 
 public final class UpdateQueue {
@@ -82,19 +77,5 @@ public final class UpdateQueue {
         QueueFile queued = this.file.load();
         queued.replaced = new ArrayList<>(records);
         this.file.save(queued);
-    }
-
-    public static String hashSha256(Path file) throws IOException {
-        try (InputStream in = Files.newInputStream(file)) {
-            MessageDigest digest = MessageDigest.getInstance("SHA-256");
-            byte[] buffer = new byte[1 << 16];
-            int read;
-            while ((read = in.read(buffer)) > 0) {
-                digest.update(buffer, 0, read);
-            }
-            return HexFormat.of().formatHex(digest.digest());
-        } catch (NoSuchAlgorithmException e) {
-            throw new IllegalStateException("SHA-256 is missing from this JVM", e);
-        }
     }
 }

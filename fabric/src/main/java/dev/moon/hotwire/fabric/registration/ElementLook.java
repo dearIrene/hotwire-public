@@ -185,6 +185,12 @@ public final class ElementLook {
         } else if (made != null) {
             this.noted = made;
             this.placesOf = findPlaces(made);
+            int any = this.placesOf.getOrDefault("", new int[0]).length;
+            List<String> most = this.placesOf.entrySet().stream().filter(entry -> !entry.getKey().isEmpty())
+                    .sorted((one, other) -> Integer.compare(other.getValue().length, one.getValue().length)).limit(5)
+                    .map(entry -> entry.getKey() + " " + entry.getValue().length).toList();
+            LOGGER.info("[Hotwire] of the look's {} notes, {} are asked by every off; filed most under {}", made.size(),
+                    any, most);
             this.mods = this.buildingFor;
             this.at = System.nanoTime();
             this.building = null;

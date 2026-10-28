@@ -100,10 +100,10 @@ public final class StoreIconLoader implements StoreIcons {
         CompletableFuture<Optional<ModIcons.Icon>> future = new CompletableFuture<>();
         this.fetchers.execute(() -> {
             try {
-                Optional<byte[]> bytes = this.cache.findIcon(url);
+                Optional<byte[]> bytes = this.cache.find(StoreCache.Kind.PICTURE, url).map(StoreCache.Entry::bytes);
                 if (bytes.isEmpty()) {
                     bytes = Optional.of(this.model.getClient().fetchFromCdn(url));
-                    bytes.ifPresent(got -> this.cache.saveIcon(url, got));
+                    bytes.ifPresent(got -> this.cache.save(StoreCache.Kind.PICTURE, url, got));
                 }
                 String name = "store-" + Integer.toHexString(url.hashCode());
                 future.complete(bytes.flatMap(got -> ModIcons.decodeFor(name, url, got)));

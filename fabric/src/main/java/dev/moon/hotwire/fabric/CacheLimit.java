@@ -8,7 +8,7 @@ import java.nio.file.Path;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
-final class CacheLimit {
+public final class CacheLimit {
     private static final Logger LOGGER = LoggerFactory.getLogger(CacheLimit.class);
     static final int DEFAULT_MEGABYTES = 64;
     static final int MOST_MEGABYTES = 1024;
@@ -38,6 +38,19 @@ final class CacheLimit {
         } catch (IOException e) {
             LOGGER.warn("[Hotwire] the switch cache's limit could not be saved to {}", file, e);
         }
+    }
+
+    public static Path findStoreFolder() {
+        Path versions = EngineStart.findCacheFolder().toAbsolutePath().getParent();
+        return (versions != null ? versions : EngineStart.findCacheFolder()).resolve("store");
+    }
+
+    public static int readStore() {
+        return read(findStoreFolder().resolve("limit"));
+    }
+
+    public static void writeStore(int megabytes) {
+        write(findStoreFolder().resolve("limit"), megabytes);
     }
 
     static int clamp(int megabytes) {
