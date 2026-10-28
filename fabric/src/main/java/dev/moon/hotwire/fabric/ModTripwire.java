@@ -85,6 +85,8 @@ public final class ModTripwire {
 
     private static final int MOST_RIDING = 400;
 
+    private static final long WAIT_FOR_WIRING_NANOS = 150_000_000L;
+
     private final Set<Class<?>> putBackByRide = ConcurrentHashMap.newKeySet();
     private final Ride ride = new Ride();
     private final ClassFileTransformer loading = new ClassFileTransformer() {
@@ -126,6 +128,8 @@ public final class ModTripwire {
                     this.wire(ids, rebuilt, true);
                 } catch (RebuildException | RuntimeException e) {
                     LOGGER.warn("[Hotwire] {} could not be wired ahead of its off: {}", ids, e.toString());
+                } finally {
+                    this.ride.endMaking();
                 }
             }
         });
@@ -171,18 +175,32 @@ public final class ModTripwire {
         private final Map<Class<?>, ArmedClass> arming = new HashMap<>();
         private final Map<Class<?>, byte[]> back = new LinkedHashMap<>();
 
+        private boolean making;
+
         synchronized void open() {
             this.open = true;
+            this.making = true;
+        }
+
+        synchronized void endMaking() {
+            this.making = false;
+            this.notifyAll();
         }
 
         synchronized boolean offer(Collection<String> ids, Map<Class<?>, byte[]> wiredAll,
                 Map<Class<?>, ArmedClass> armedNow) {
             if (!this.open || wiredAll.size() > MOST_RIDING) {
+                this.making = false;
+                LOGGER.info("[Hotwire] the wiring of {} goes on its own: {}", ids, this.open
+                        ? wiredAll.size() + " classes are more than ride with a switch"
+                        : "the switch's redefinition was made before it was ready");
                 return false;
             }
             this.wiredFor = List.copyOf(ids);
             this.wired.putAll(wiredAll);
             this.arming.putAll(armedNow);
+            this.making = false;
+            this.notifyAll();
             return true;
         }
 
@@ -204,6 +222,16 @@ public final class ModTripwire {
         public Map<Class<?>, byte[]> take(Set<Class<?>> rebuilt) {
             Map<Class<?>, byte[]> all;
             synchronized (this) {
+                long until = System.nanoTime() + WAIT_FOR_WIRING_NANOS;
+                for (long left = WAIT_FOR_WIRING_NANOS; this.open && this.making && left > 0;
+                        left = until - System.nanoTime()) {
+                    try {
+                        this.wait(Math.max(1, left / 1_000_000));
+                    } catch (InterruptedException e) {
+                        Thread.currentThread().interrupt();
+                        break;
+                    }
+                }
                 this.open = false;
                 all = new LinkedHashMap<>(this.wired);
                 all.putAll(this.back);
