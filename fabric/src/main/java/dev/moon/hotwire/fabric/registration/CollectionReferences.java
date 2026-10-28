@@ -188,6 +188,10 @@ final class CollectionReferences {
             this.filed = 0;
             this.unfiled = 0;
             this.notedBy.clear();
+            List<String> widest = this.candidates.takeWidest(SLOWEST_NAMED);
+            if (!widest.isEmpty()) {
+                LOGGER.info("[Hotwire] takes filed under 50 mods or more, by their element's class: {}", widest);
+            }
         }
         long millis = (System.nanoTime() - began) / 1_000_000;
         if (millis >= SLOW_MILLIS) {
@@ -408,7 +412,7 @@ final class CollectionReferences {
                 }
                 return;
             } catch (ConcurrentModificationException | IndexOutOfBoundsException | NoSuchElementException e) {
-                if (this.look.hasNoted(read)) {
+                if (this.look.hasNoted(() -> this.readChanging(value, read))) {
                     return;
                 }
                 if (attempt == CHANGED_READS) {

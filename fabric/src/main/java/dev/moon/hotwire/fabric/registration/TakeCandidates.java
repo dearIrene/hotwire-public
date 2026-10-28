@@ -3,6 +3,7 @@ package dev.moon.hotwire.fabric.registration;
 import dev.moon.hotwire.registration.ModNames;
 import java.util.HashMap;
 import java.util.HashSet;
+import java.util.List;
 import java.util.Map;
 import java.util.Set;
 import org.jspecify.annotations.Nullable;
@@ -22,7 +23,7 @@ final class TakeCandidates {
                 return null;
             }
             all.addAll(reached);
-            return this.share(all);
+            return this.share(this.count(all, element));
         }
         add(all, GameRegistrations.findModOf(type));
         add(all, type.isHidden() ? ValueOwners.findLambdaOwner(type) : null);
@@ -32,13 +33,31 @@ final class TakeCandidates {
         if (ValueOwners.isLambda(element)) {
             add(all, ValueOwners.findForwardedTo(element));
         }
-        return this.share(all);
+        return this.share(this.count(all, element));
+    }
+
+    private Set<String> count(Set<String> all, Object element) {
+        if (all.size() >= WIDE) {
+            this.wide.merge(element.getClass().getName(), 1, Integer::sum);
+        }
+        return all;
     }
 
     private static void add(Set<String> all, @Nullable String mod) {
         if (mod != null) {
             all.add(mod);
         }
+    }
+
+    private static final int WIDE = 50;
+    private final Map<String, Integer> wide = new HashMap<>();
+
+    List<String> takeWidest(int most) {
+        List<String> top = this.wide.entrySet().stream()
+                .sorted(Map.Entry.<String, Integer>comparingByValue().reversed()).limit(most)
+                .map(entry -> entry.getKey() + " " + entry.getValue()).toList();
+        this.wide.clear();
+        return top;
     }
 
     private @Nullable Set<String> share(@Nullable Set<String> candidates) {
