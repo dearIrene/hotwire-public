@@ -142,8 +142,7 @@ public final class ElementLook {
     }
 
     private static boolean isFreshForEvery(List<String> asked) {
-        long age = System.nanoTime() - lookedAt;
-        return asked.equals(lookedFor) ? age < REFRESH_NANOS : lookedFor.containsAll(asked) && age < STANDS_NANOS;
+        return lookedFor.containsAll(asked) && System.nanoTime() - lookedAt < REFRESH_NANOS;
     }
 
     public static void giveWay() {
