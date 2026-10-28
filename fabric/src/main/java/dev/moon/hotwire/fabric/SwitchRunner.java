@@ -260,6 +260,7 @@ public final class SwitchRunner {
     }
 
     private CheckedResult runTimedOn(List<String> ids) {
+        ElementLook.giveWay();
         Tripwire.pause(true);
         try {
             SwitchPlan coming = this.switcher.planOn(ids);
