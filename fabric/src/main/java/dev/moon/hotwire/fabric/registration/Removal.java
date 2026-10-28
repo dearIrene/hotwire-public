@@ -106,6 +106,24 @@ sealed interface Removal {
         }
     }
 
+    record InFixedValue(Map<Object, Object> map, Object key, int index, Object element) implements Removal {
+        @Override
+        public void restore() {
+            if (!(this.map.get(this.key) instanceof List<?> now) || containsSame(now, this.element)) {
+                return;
+            }
+            List<Object> back = new ArrayList<>(now);
+            back.add(Math.min(this.index, back.size()), this.element);
+            this.map.put(this.key, Collections.unmodifiableList(back));
+        }
+
+        @Override
+        public String describe() {
+            return "a fixed list in a map of " + this.map.size() + " (" + describeKind(this.key) + " to "
+                    + describeKind(this.element) + ")";
+        }
+    }
+
     record InMap(Map<Object, Object> map, Object key, Object value) implements Removal {
         @Override
         public void restore() {

@@ -60,6 +60,15 @@ final class TakeCandidates {
         return top;
     }
 
+    @Nullable Set<String> withOwner(@Nullable Set<String> candidates, String owner) {
+        if (candidates == null || candidates.contains(owner)) {
+            return candidates;
+        }
+        Set<String> all = new HashSet<>(candidates);
+        all.add(owner);
+        return this.share(all);
+    }
+
     private @Nullable Set<String> share(@Nullable Set<String> candidates) {
         return candidates == null ? null : this.shared.computeIfAbsent(candidates, Set::copyOf);
     }

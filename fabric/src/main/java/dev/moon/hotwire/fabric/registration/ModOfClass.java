@@ -23,6 +23,8 @@ public final class ModOfClass {
 
     private final Map<Path, String> shipperOf = new HashMap<>();
 
+    private final Map<Path, String> nestedOf = new HashMap<>();
+
     private final AtomicInteger learned = new AtomicInteger();
     private final ClassValue<Answer> answers = new ClassValue<>() {
         @Override
@@ -44,6 +46,13 @@ public final class ModOfClass {
         protected Optional<String> computeValue(Class<?> type) {
             Path jar = findJarOf(type);
             return Optional.ofNullable(jar == null ? null : ModOfClass.this.shipperOf.get(jar));
+        }
+    };
+    private final ClassValue<Optional<String>> nested = new ClassValue<>() {
+        @Override
+        protected Optional<String> computeValue(Class<?> type) {
+            Path jar = findJarOf(type);
+            return Optional.ofNullable(jar == null ? null : ModOfClass.this.nestedOf.get(jar));
         }
     };
 
@@ -68,6 +77,7 @@ public final class ModOfClass {
                 Path jar = findJarOf(root);
                 for (Path key : jar == null ? List.<Path>of() : JarPaths.findKeysOf(jar)) {
                     this.shipperOf.put(key, top.getMetadata().getId());
+                    this.nestedOf.put(key, mod.getMetadata().getId());
                 }
             }
 
@@ -112,6 +122,10 @@ public final class ModOfClass {
 
     @Nullable String findShippedBy(Class<?> type) {
         return this.shippers.get(type).orElse(null);
+    }
+
+    @Nullable String findNested(Class<?> type) {
+        return this.nested.get(type).orElse(null);
     }
 
     private static @Nullable Path findJarOf(Class<?> type) {

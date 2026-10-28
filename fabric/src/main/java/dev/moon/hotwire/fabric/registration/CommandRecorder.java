@@ -91,8 +91,13 @@ public final class CommandRecorder {
         }
     }
 
+    private static @Nullable String findCodeMod(Class<?> type) {
+        String mod = GameRegistrations.findModOf(type);
+        return mod != null ? mod : GameRegistrations.findNestedModOf(type);
+    }
+
     private static void addModsOf(Object code, Set<String> mods) {
-        String mod = GameRegistrations.findModOf(code.getClass());
+        String mod = findCodeMod(code.getClass());
         if (mod != null) {
             mods.add(mod);
         }
@@ -115,7 +120,7 @@ public final class CommandRecorder {
             } else {
                 type = captured instanceof Class<?> named ? named : captured.getClass();
             }
-            String capturedMod = GameRegistrations.findModOf(type);
+            String capturedMod = findCodeMod(type);
             if (capturedMod != null) {
                 mods.add(capturedMod);
             }

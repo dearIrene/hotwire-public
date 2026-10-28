@@ -5,6 +5,7 @@ import dev.moon.hotwire.redefine.FieldSlots;
 import java.io.IOException;
 import java.io.InputStream;
 import java.lang.reflect.Modifier;
+import java.util.HashMap;
 import java.util.HashSet;
 import java.util.Map;
 import java.util.Set;
@@ -15,6 +16,7 @@ import org.objectweb.asm.Opcodes;
 import org.objectweb.asm.tree.AbstractInsnNode;
 import org.objectweb.asm.tree.ClassNode;
 import org.objectweb.asm.tree.FieldInsnNode;
+import org.objectweb.asm.tree.MethodInsnNode;
 import org.objectweb.asm.tree.MethodNode;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -62,19 +64,28 @@ final class LazyFields {
         if (node == null) {
             return lazy;
         }
+        Map<String, Set<String>> setBy = new HashMap<>();
         for (MethodNode method : node.methods) {
-            Set<String> tested = new HashSet<>();
             Set<String> set = new HashSet<>();
             for (AbstractInsnNode insn : method.instructions) {
-                if (!(insn instanceof FieldInsnNode field) || !field.owner.equals(node.name)) {
-                    continue;
-                }
-                AbstractInsnNode next = field.getNext();
-                if (field.getOpcode() == Opcodes.GETFIELD && next != null
-                        && (next.getOpcode() == Opcodes.IFNULL || next.getOpcode() == Opcodes.IFNONNULL)) {
-                    tested.add(field.name);
-                } else if (field.getOpcode() == Opcodes.PUTFIELD) {
+                if (insn instanceof FieldInsnNode field && field.owner.equals(node.name)
+                        && field.getOpcode() == Opcodes.PUTFIELD) {
                     set.add(field.name);
+                }
+            }
+            setBy.put(method.name + method.desc, set);
+        }
+        for (MethodNode method : node.methods) {
+            Set<String> tested = new HashSet<>();
+            Set<String> set = new HashSet<>(setBy.getOrDefault(method.name + method.desc, Set.of()));
+            for (AbstractInsnNode insn : method.instructions) {
+                if (insn instanceof MethodInsnNode call && call.owner.equals(node.name)) {
+                    set.addAll(setBy.getOrDefault(call.name + call.desc, Set.of()));
+                } else if (insn instanceof FieldInsnNode field && field.owner.equals(node.name)
+                        && field.getOpcode() == Opcodes.GETFIELD && field.getNext() != null
+                        && (field.getNext().getOpcode() == Opcodes.IFNULL
+                                || field.getNext().getOpcode() == Opcodes.IFNONNULL)) {
+                    tested.add(field.name);
                 }
             }
             tested.retainAll(set);

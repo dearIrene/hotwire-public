@@ -3,6 +3,7 @@ package dev.moon.hotwire.fabric.registration;
 import dev.moon.hotwire.redefine.FieldSlots;
 import dev.moon.hotwire.redefine.Tripwire;
 import dev.moon.hotwire.registration.ModNames;
+import java.lang.reflect.Member;
 import java.lang.reflect.Proxy;
 import java.util.HashSet;
 import java.util.List;
@@ -14,7 +15,7 @@ final class ElementOwners {
     private final List<String> mods;
     private final Set<String> modSet;
 
-    private final Set<String> librarySet;
+    private final Set<String> libraryOfSome;
     private final Set<Object> registered;
 
     private final ModNames names;
@@ -26,8 +27,7 @@ final class ElementOwners {
         this.modSet = Set.copyOf(mods);
         Set<String> libraries = new HashSet<>();
         mods.forEach(mod -> libraries.addAll(Tripwire.getLibrariesOf(mod)));
-        libraries.removeAll(this.modSet);
-        this.librarySet = Set.copyOf(libraries);
+        this.libraryOfSome = Set.copyOf(libraries);
         this.registered = registered;
         this.names = new ModNames(mods);
     }
@@ -94,14 +94,23 @@ final class ElementOwners {
 
     private @Nullable String findRegisteredBy(Object item) {
         String library = GameRegistrations.findModOf(item.getClass());
-        if (library == null || !this.librarySet.contains(library)) {
+        boolean nested = library == null && GameRegistrations.findShippedBy(item.getClass()) != null;
+        if (!nested && (library == null || !this.libraryOfSome.contains(library))) {
             return null;
         }
         for (FieldSlots.Slot field : Fields.getReferenceFields(item.getClass(), false)) {
             try {
                 Object inner = field.get(item);
-                String mod = inner == null ? null : this.findOwnOwner(inner);
-                if (mod != null) {
+                String mod = inner == null ? null : this.findRecordedOwner(inner, nested);
+                if (mod == null && inner != null && ValueOwners.isLambda(inner)) {
+                    for (FieldSlots.Slot captured : Fields.getReferenceFields(inner.getClass(), false)) {
+                        Object value = captured.get(inner);
+                        mod = mod != null || value == null ? mod : this.findRecordedOwner(value, nested);
+                    }
+                }
+
+                if (mod != null && (nested
+                        || (!mod.equals(library) && Tripwire.getLibrariesOf(mod).contains(library)))) {
                     return mod;
                 }
             } catch (IllegalAccessException | RuntimeException e) {
@@ -141,6 +150,17 @@ final class ElementOwners {
     @Nullable String findOwnerOfSlot(Object item) {
         String whole = this.findWholeOwnerOfSlot(item);
         return whole != null ? whole : this.findPartsOwnerOfSlot(item);
+    }
+
+    private @Nullable String findRecordedOwner(Object value, boolean nested) {
+        Class<?> type = value instanceof Member member ? member.getDeclaringClass() : null;
+        String mod = this.findOwnOwner(type != null ? type : value);
+        if (mod != null || !nested) {
+            return mod;
+        }
+        String of = GameRegistrations.findNestedModOf(type != null ? type
+                : value instanceof Class<?> named ? named : value.getClass());
+        return of != null && this.modSet.contains(of) ? of : null;
     }
 
     @Nullable String findPartsOwnerOfSlot(Object item) {

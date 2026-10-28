@@ -24,6 +24,7 @@ import org.objectweb.asm.tree.AbstractInsnNode;
 import org.objectweb.asm.tree.ClassNode;
 import org.objectweb.asm.tree.FieldInsnNode;
 import org.objectweb.asm.tree.IntInsnNode;
+import org.objectweb.asm.tree.InvokeDynamicInsnNode;
 import org.objectweb.asm.tree.LdcInsnNode;
 import org.objectweb.asm.tree.MethodInsnNode;
 import org.objectweb.asm.tree.MethodNode;
@@ -92,12 +93,9 @@ public final class ConstructedFields {
             }
             for (AbstractInsnNode insn : method.instructions) {
                 all.add(insn);
-                if (insn instanceof MethodInsnNode call && call.owner.equals(node.name)
-                        && !call.name.equals("<init>")) {
-                    MethodNode called = methods.get(call.name + call.desc);
-                    if (called != null) {
-                        todo.add(called);
-                    }
+                MethodNode called = methods.get(findOwnCall(insn, node.name));
+                if (called != null) {
+                    todo.add(called);
                 }
             }
         }
@@ -113,8 +111,9 @@ public final class ConstructedFields {
                 building.add(key);
             }
             for (AbstractInsnNode insn : method.instructions) {
-                if (insn instanceof MethodInsnNode call && call.owner.equals(node.name)) {
-                    callers.computeIfAbsent(call.name + call.desc, any -> new HashSet<>()).add(key);
+                String called = findOwnCall(insn, node.name);
+                if (called != null) {
+                    callers.computeIfAbsent(called, any -> new HashSet<>()).add(key);
                 }
             }
         }
@@ -174,6 +173,21 @@ public final class ConstructedFields {
         return Collections.unmodifiableSet(set);
     }
 
+    private static @Nullable String findOwnCall(AbstractInsnNode insn, String owner) {
+        if (insn instanceof MethodInsnNode call) {
+            return call.owner.equals(owner) && !call.name.equals("<init>") ? call.name + call.desc : null;
+        }
+        if (insn instanceof InvokeDynamicInsnNode site && HandlerGuards.isSite(site.bsm) && site.bsmArgs.length > 1
+                && site.bsmArgs[1] instanceof Integer isStatic) {
+            String prefix = "(L" + owner + ";";
+            if (isStatic == 1) {
+                return site.name + site.desc;
+            }
+            return site.desc.startsWith(prefix) ? site.name + "(" + site.desc.substring(prefix.length()) : null;
+        }
+        return null;
+    }
+
     private static void collectLastStores(String owner, MethodNode method, Map<String, MethodNode> methods,
             Set<String> onStack, Map<String, Boolean> last) {
         if (!onStack.add(method.name + method.desc)) {
@@ -187,8 +201,8 @@ public final class ConstructedFields {
                     value = value.getPrevious();
                 }
                 last.put(store.name, value == null || value.getOpcode() != Opcodes.ACONST_NULL);
-            } else if (insn instanceof MethodInsnNode call && call.owner.equals(owner) && !call.name.equals("<init>")) {
-                MethodNode called = methods.get(call.name + call.desc);
+            } else {
+                MethodNode called = methods.get(findOwnCall(insn, owner));
                 if (called != null) {
                     collectLastStores(owner, called, methods, onStack, last);
                 }

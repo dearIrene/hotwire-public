@@ -57,6 +57,11 @@ public final class GameRegistrations {
         return mod != null && Tripwire.isWatched(mod);
     }
 
+    static @Nullable String findNestedModOf(Class<?> type) {
+        ModOfClass classes = modOfClass;
+        return classes == null ? null : classes.findNested(type);
+    }
+
     public static @Nullable String findModOf(Class<?> type) {
         getOwners();
         return Objects.requireNonNull(modOfClass).find(type);

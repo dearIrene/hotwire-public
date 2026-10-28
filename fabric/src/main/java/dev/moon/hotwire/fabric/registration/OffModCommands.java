@@ -6,12 +6,17 @@ import dev.moon.hotwire.fabric.mixin.core.brigadier.tree.CommandNodeAccessor;
 import dev.moon.hotwire.plan.ModGraph;
 import java.util.ArrayList;
 import java.util.Collection;
+import java.util.HashMap;
 import java.util.List;
+import java.util.Map;
 import java.util.Set;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.function.Predicate;
 import java.util.function.Supplier;
 import java.util.stream.Collectors;
+import net.fabricmc.loader.api.FabricLoader;
+import net.fabricmc.loader.api.ModContainer;
+import net.fabricmc.loader.api.metadata.ModDependency;
 import org.jspecify.annotations.Nullable;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -27,6 +32,8 @@ public final class OffModCommands {
 
     private static final List<Removal> REMOVED = new ArrayList<>();
     private static volatile @Nullable Supplier<ModGraph> mods;
+
+    private static volatile Map<String, Set<String>> dependencies = Map.of();
 
     private static volatile Predicate<String> offNow = id -> false;
     private static final Set<String> SAID_STAYING = ConcurrentHashMap.newKeySet();
@@ -140,11 +147,21 @@ public final class OffModCommands {
 
     public static void readUsesFrom(Supplier<ModGraph> graph) {
         mods = graph;
+        Map<String, Set<String>> declared = new HashMap<>();
+        for (ModContainer mod : FabricLoader.getInstance().getAllMods()) {
+            declared.put(mod.getMetadata().getId(), mod.getMetadata().getDependencies().stream()
+                    .filter(dependency -> dependency.getKind() == ModDependency.Kind.DEPENDS)
+                    .map(ModDependency::getModId).collect(Collectors.toUnmodifiableSet()));
+        }
+        dependencies = Map.copyOf(declared);
     }
 
     private static boolean isDependentOf(String user, String library) {
         Supplier<ModGraph> graph = mods;
-        return graph != null && graph.get().getUses(user).contains(library);
+        if (graph != null && graph.get().getUses(user).contains(library)) {
+            return true;
+        }
+        return dependencies.getOrDefault(user, Set.of()).contains(library);
     }
 
     @SuppressWarnings("unchecked")

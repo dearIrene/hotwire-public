@@ -2,7 +2,7 @@ package dev.moon.hotwire.fabric.registration;
 
 import dev.moon.hotwire.redefine.FieldSlots;
 import dev.moon.hotwire.registration.ModNames;
-import java.lang.reflect.Method;
+import java.lang.reflect.Field;
 import java.util.AbstractMap;
 import java.util.ArrayList;
 import java.util.Arrays;
@@ -285,14 +285,14 @@ final class Wrappers {
     }
 
     static @Nullable String findWhollyOwner(Object item) {
-        List<Method> accessors = Fields.getRecordParts(item.getClass());
+        List<Field> parts = Fields.getRecordParts(item.getClass());
         String owner = null;
         try {
-            for (Method accessor : accessors) {
-                if (accessor.getReturnType().isPrimitive()) {
+            for (Field field : parts) {
+                if (field.getType().isPrimitive()) {
                     continue;
                 }
-                Object part = accessor.invoke(item);
+                Object part = field.get(item);
                 if (part == null || ValueOwners.isPlain(part)) {
                     continue;
                 }
@@ -312,17 +312,17 @@ final class Wrappers {
     }
 
     static boolean isWhollyOf(String mod, Object item) {
-        List<Method> accessors = Fields.getRecordParts(item.getClass());
-        if (accessors.isEmpty()) {
+        List<Field> parts = Fields.getRecordParts(item.getClass());
+        if (parts.isEmpty()) {
             return false;
         }
         int mods = 0;
         try {
-            for (Method accessor : accessors) {
-                if (accessor.getReturnType().isPrimitive()) {
+            for (Field field : parts) {
+                if (field.getType().isPrimitive()) {
                     continue;
                 }
-                Object part = accessor.invoke(item);
+                Object part = field.get(item);
                 if (part == null || ValueOwners.isPlain(part)) {
                     continue;
                 }

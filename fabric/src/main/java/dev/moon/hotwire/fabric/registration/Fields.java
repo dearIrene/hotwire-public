@@ -3,8 +3,8 @@ package dev.moon.hotwire.fabric.registration;
 import com.google.common.collect.MapMaker;
 import dev.moon.hotwire.redefine.FieldSlots;
 import java.lang.instrument.Instrumentation;
+import java.lang.reflect.Field;
 import java.lang.reflect.InaccessibleObjectException;
-import java.lang.reflect.Method;
 import java.lang.reflect.RecordComponent;
 import java.util.ArrayList;
 import java.util.Collection;
@@ -35,20 +35,20 @@ public final class Fields {
         }
     };
 
-    private static final ClassValue<List<Method>> RECORD_PARTS = new ClassValue<>() {
+    private static final ClassValue<List<Field>> RECORD_PARTS = new ClassValue<>() {
         @Override
-        protected List<Method> computeValue(Class<?> type) {
+        protected List<Field> computeValue(Class<?> type) {
             if (!type.isRecord()) {
                 return List.of();
             }
-            List<Method> out = new ArrayList<>();
+            List<Field> out = new ArrayList<>();
             try {
                 for (RecordComponent component : type.getRecordComponents()) {
-                    Method accessor = component.getAccessor();
-                    accessor.setAccessible(true);
-                    out.add(accessor);
+                    Field field = type.getDeclaredField(component.getName());
+                    field.setAccessible(true);
+                    out.add(field);
                 }
-            } catch (RuntimeException | LinkageError e) {
+            } catch (NoSuchFieldException | RuntimeException | LinkageError e) {
                 return List.of();
             }
             return List.copyOf(out);
@@ -94,7 +94,7 @@ public final class Fields {
         return READABLE.get(type);
     }
 
-    static List<Method> getRecordParts(Class<?> type) {
+    static List<Field> getRecordParts(Class<?> type) {
         return RECORD_PARTS.get(type);
     }
 

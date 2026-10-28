@@ -115,6 +115,11 @@ final class CommandRegistration implements Registration {
 
     static void resendCommands(boolean client) {
         Minecraft mc = Minecraft.getInstance();
+
+        if (client && mc.getSingleplayerServer() != null) {
+            resendCommands(false);
+            return;
+        }
         AtomicBoolean due = client ? CLIENT_RESEND_DUE : SERVER_RESEND_DUE;
         if (client) {
             ClientPacketListener connection = mc.getConnection();

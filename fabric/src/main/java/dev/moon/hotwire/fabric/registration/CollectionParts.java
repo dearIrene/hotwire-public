@@ -2,7 +2,7 @@ package dev.moon.hotwire.fabric.registration;
 
 import dev.moon.hotwire.redefine.FieldSlots;
 import java.lang.reflect.Constructor;
-import java.lang.reflect.Method;
+import java.lang.reflect.Field;
 import java.util.ConcurrentModificationException;
 import java.util.List;
 import java.util.NoSuchElementException;
@@ -42,12 +42,12 @@ final class CollectionParts {
 
     static @Nullable Object withStandIns(String mod, Object item) {
         try {
-            List<Method> accessors = Fields.getRecordParts(item.getClass());
-            Class<?>[] types = new Class<?>[accessors.size()];
-            Object[] parts = new Object[accessors.size()];
-            for (int index = 0; index < accessors.size(); index++) {
-                types[index] = accessors.get(index).getReturnType();
-                Object part = accessors.get(index).invoke(item);
+            List<Field> fields = Fields.getRecordParts(item.getClass());
+            Class<?>[] types = new Class<?>[fields.size()];
+            Object[] parts = new Object[fields.size()];
+            for (int index = 0; index < fields.size(); index++) {
+                types[index] = fields.get(index).getType();
+                Object part = fields.get(index).get(item);
                 if (part != null && !ValueOwners.isPlain(part)
                         && (ValueOwners.isOwnedBy(mod, part) || ValueOwners.forwardsTo(mod, part))) {
                     if (!StandIns.fits(types[index])) {

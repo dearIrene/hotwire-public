@@ -16,24 +16,28 @@ public final class OffModClose {
     private static final long EXIT_AFTER_MILLIS = 10_000;
 
     public static void exitWhenStuck() {
-        Thread game = Thread.currentThread();
+        boolean anyOff = GameRegistrations.getJournal().countByOwner().keySet().stream().anyMatch(Tripwire::isWatched);
+        if (!anyOff) {
+            return;
+        }
+
         Thread watch = new Thread(() -> {
             try {
-                game.join();
+                Thread.sleep(EXIT_AFTER_MILLIS);
+                LOGGER.warn("[Hotwire] the game was told to stop {} s ago, yet {} keep it up: it exits now",
+                        EXIT_AFTER_MILLIS / 1000, Thread.getAllStackTraces().keySet().stream()
+                                .filter(thread -> !thread.isDaemon() && thread.isAlive()
+                                        && !thread.getName().equals("DestroyJavaVM"))
+                                .map(Thread::getName).toList());
+                Thread exit = new Thread(() -> System.exit(0), "hotwire-close-exit");
+                exit.setDaemon(true);
+                exit.start();
                 Thread.sleep(EXIT_AFTER_MILLIS);
             } catch (InterruptedException e) {
                 Thread.currentThread().interrupt();
                 return;
             }
-            boolean anyOff = GameRegistrations.getJournal().countByOwner().keySet().stream()
-                    .anyMatch(Tripwire::isWatched);
-            if (anyOff) {
-                LOGGER.warn("[Hotwire] the game closed, yet {} kept it up {} s on: it exits now",
-                        Thread.getAllStackTraces().keySet().stream().filter(thread -> !thread.isDaemon()
-                                && thread.isAlive() && !thread.getName().equals("DestroyJavaVM"))
-                                .map(Thread::getName).toList(), EXIT_AFTER_MILLIS / 1000);
-                System.exit(0);
-            }
+            Runtime.getRuntime().halt(0);
         }, "hotwire-close-watch");
         watch.setDaemon(true);
         watch.start();

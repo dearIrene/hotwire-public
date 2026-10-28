@@ -5,6 +5,7 @@ import java.util.Collections;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
+import java.util.TreeSet;
 import java.util.function.Consumer;
 import java.util.function.Supplier;
 import org.jspecify.annotations.Nullable;
@@ -30,6 +31,8 @@ final class ElementTakes {
 
     static void runAll(List<Runnable> noted, Collection<String> mods) {
         int failed = 0;
+        int unchanged = 0;
+        Set<String> unchangedKinds = new TreeSet<>();
         @Nullable RuntimeException first = null;
         for (Runnable take : noted) {
             if (take instanceof NotedTake filed && filed.candidates() != null
@@ -43,6 +46,9 @@ final class ElementTakes {
             try {
                 take.run();
             } catch (UnsupportedOperationException | IllegalStateException e) {
+                unchanged++;
+                StackTraceElement top = e.getStackTrace().length == 0 ? null : e.getStackTrace()[0];
+                unchangedKinds.add(top == null ? e.toString() : top.getClassName());
             } catch (RuntimeException e) {
                 failed++;
                 first = first == null ? e : first;
@@ -50,6 +56,10 @@ final class ElementTakes {
         }
         if (first != null) {
             LOGGER.error("[Hotwire] {} of {} noted takeouts failed; the rest were done", failed, noted.size(), first);
+        }
+        if (unchanged > 0) {
+            LOGGER.info("[Hotwire] {} noted takeouts for {} met collections that cannot change: {}", unchanged, mods,
+                    unchangedKinds);
         }
     }
 

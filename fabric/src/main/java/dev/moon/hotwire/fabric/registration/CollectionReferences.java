@@ -145,8 +145,10 @@ final class CollectionReferences {
                             && field.getType().isAssignableFrom(List.class)) {
                         this.removeFromFixedList(field, null);
                     }
+
                     if (!(value instanceof Collection<?>) && !(value instanceof Map<?, ?>)
-                            && !(value instanceof Object[]) && this.owners.findOwnerAmong(value) == null) {
+                            && !(value instanceof Object[])
+                            && (ElementLook.isLooking() || this.owners.findOwnerAmong(value) == null)) {
                         this.lookInto(value);
                     }
                 }
@@ -181,6 +183,31 @@ final class CollectionReferences {
                     .forEach(one -> named.add(one.getValue() + " " + one.getKey() / 1_000_000 + " ms"));
             LOGGER.info("[Hotwire] {} classes' statics looked through for {} in {} ms; {}; slowest {}", statics.size(),
                     mods, millis, this.owners.getWrappers().describe(), named);
+        }
+    }
+
+    private void removeFromFixedValue(Map<Object, Object> entries, Object key) {
+        if (!(entries.get(key) instanceof List<?> now)) {
+            return;
+        }
+        boolean outer = this.inSmall;
+        this.inSmall = now.size() <= WRAPPERS_IN;
+        List<Object> retained = new ArrayList<>();
+        Map<String, List<Removal>> out = new LinkedHashMap<>();
+        for (int index = 0; index < now.size(); index++) {
+            Object item = now.get(index);
+            String mod = item == null ? null : this.owners.findOwnerOf(item, this.inSmall);
+            if (mod != null) {
+                out.computeIfAbsent(mod, any -> new ArrayList<>())
+                        .add(new Removal.InFixedValue(entries, key, index, item));
+            } else {
+                retained.add(item);
+            }
+        }
+        this.inSmall = outer;
+        if (!out.isEmpty() && !this.look.hasNoted(() -> this.removeFromFixedValue(entries, key))) {
+            entries.put(key, Collections.unmodifiableList(retained));
+            out.forEach((mod, removed) -> this.getRemovalsOf(mod).addAll(removed));
         }
     }
 
@@ -232,7 +259,8 @@ final class CollectionReferences {
         } else {
             this.filed++;
         }
-        if (!ElementLook.isLooking() || !this.look.hasNoted(new ElementTakes.NotedTake(whose, take, candidates))) {
+        if (!ElementLook.isLooking() || !this.look.hasNoted(new ElementTakes.NotedTake(whose, take,
+                this.candidates.withOwner(candidates, owner)))) {
             take.accept(owner);
         } else {
             this.notedBy.merge(owner, 1, Integer::sum);
@@ -367,6 +395,8 @@ final class CollectionReferences {
                 }
                 case Map<?, ?> map when map.size() <= LARGEST -> {
                     Map<Object, Object> entries = (Map<Object, Object>) map;
+                    int takesBefore = this.filed + this.unfiled;
+                    boolean handlers = false;
                     for (Map.Entry<Object, Object> entry : Wrappers.copyEntries(entries)) {
                         Object key = entry.getKey();
                         Object element = entry.getValue();
@@ -378,17 +408,27 @@ final class CollectionReferences {
                                     owner -> ElementTakes.takeFromMap(entries, key, element,
                                             this.getRemovalsOf(owner)));
 
-                            if (ElementLook.isLooking() && element instanceof Map<?, ?> && this.seen.add(element)) {
+                            boolean holds = element instanceof Map<?, ?> || element instanceof Collection<?>;
+                            if (ElementLook.isLooking() && holds && this.seen.add(element)) {
                                 this.collect(element);
                             }
                         } else if (element instanceof Collection<?> nested) {
                             this.collect(nested);
+                            if (nested instanceof List<?> list && list.size() <= LARGEST
+                                    && CollectionParts.isFixedSize(list)) {
+                                this.removeFromFixedValue(entries, key);
+                            }
                         } else if (element instanceof Map<?, ?> && this.seen.add(element)) {
                             this.collect(element);
                         } else if (element != null && this.seen.add(element)
                                 && Wrappers.isOfAnotherMod(element.getClass())) {
                             this.lookInto(element);
+                            handlers = true;
                         }
+                    }
+
+                    if (handlers && ElementLook.isLooking() && this.filed + this.unfiled > takesBefore) {
+                        this.look.hasNoted(new ElementTakes.NotedTake(() -> "", any -> this.collect(map), null));
                     }
                 }
                 default -> {

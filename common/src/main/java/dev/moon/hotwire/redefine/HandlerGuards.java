@@ -94,6 +94,15 @@ public final class HandlerGuards {
     }
 
     private static void noteBehaving(String internalName, ClassNode node) {
+        Set<String> behaving = findBehaving(node);
+        if (behaving.isEmpty()) {
+            BEHAVING.remove(internalName);
+        } else {
+            BEHAVING.put(internalName, behaving);
+        }
+    }
+
+    private static Set<String> findBehaving(ClassNode node) {
         Set<String> behaving = new HashSet<>();
         for (MethodNode method : node.methods) {
             String mixin = findMerged(method);
@@ -102,11 +111,7 @@ public final class HandlerGuards {
                 behaving.add(mixin);
             }
         }
-        if (behaving.isEmpty()) {
-            BEHAVING.remove(internalName);
-        } else {
-            BEHAVING.put(internalName, Set.copyOf(behaving));
-        }
+        return Set.copyOf(behaving);
     }
 
     private static boolean isPlainAccess(MethodNode method) {
@@ -183,6 +188,7 @@ public final class HandlerGuards {
         ClassNode node = new ClassNode();
         new ClassReader(bytes).accept(node, 0);
         boolean made = makeSites(internalName, node);
+        noteBehaving(internalName, node);
         commitStaged(internalName);
         return made ? DuckBridge.write(node, 0) : null;
     }
@@ -198,7 +204,7 @@ public final class HandlerGuards {
                 mixinOfHandler.put(method.name + method.desc, mixin);
             }
         }
-        noteBehaving(internalName, node);
+
         STAGED_PRESENT.put(internalName, Set.copyOf(mixinOfHandler.values()));
         if (mixinOfHandler.isEmpty()) {
             return false;
@@ -251,6 +257,11 @@ public final class HandlerGuards {
         }
         ClassNode node = new ClassNode();
         new ClassReader(sidecar).accept(node, ClassReader.SKIP_FRAMES);
+        Set<String> behaving = new HashSet<>(findBehavingAt(internalName));
+        behaving.addAll(findBehaving(node));
+        if (!behaving.isEmpty()) {
+            BEHAVING.put(internalName, Set.copyOf(behaving));
+        }
         for (MethodNode method : node.methods) {
             for (AbstractInsnNode insn : method.instructions) {
                 if (insn instanceof MethodInsnNode call && call.owner.equals(internalName)) {

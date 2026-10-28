@@ -415,6 +415,9 @@ public final class ClassRebuilder {
 
                 if (!Arrays.equals(split.target(), prepared.before().get(type.getName().replace('.', '/')))) {
                     definitions.add(new ClassDefinition(type, split.target()));
+                } else {
+                    GameLog.LOGGER.info("[Hotwire] {} is left as the JVM runs it: its rebuild is the same bytes",
+                            type.getName());
                 }
             }
             FieldHolders.carryOver(prepared.splits().keySet());
