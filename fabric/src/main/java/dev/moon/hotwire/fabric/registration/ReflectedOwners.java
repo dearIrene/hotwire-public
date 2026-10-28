@@ -57,6 +57,20 @@ final class ReflectedOwners {
         return answer.isEmpty() ? null : answer;
     }
 
+    static Set<String> findAllOwnersOf(Class<?> type) {
+        if (modOfName.isEmpty() || type.isArray() || type.isPrimitive() || !Wrappers.isOfAnotherMod(type)) {
+            return Set.of();
+        }
+        Set<String> mods = new HashSet<>();
+        for (String name : NAMED.get(type)) {
+            String mod = modOfName.get(name);
+            if (mod != null) {
+                mods.add(mod);
+            }
+        }
+        return mods;
+    }
+
     private static String findAfresh(Class<?> type) {
         if (!Wrappers.isOfAnotherMod(type)) {
             return "";

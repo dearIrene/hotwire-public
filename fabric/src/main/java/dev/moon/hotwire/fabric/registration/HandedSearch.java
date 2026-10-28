@@ -12,7 +12,6 @@ import java.util.IdentityHashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
-import java.util.concurrent.CancellationException;
 import org.jspecify.annotations.Nullable;
 
 record HandedSearch(Set<Object> handed, Set<String> consumers, Collection<Class<?>> roots) {
@@ -69,9 +68,7 @@ record HandedSearch(Set<Object> handed, Set<String> consumers, Collection<Class<
             }
         }
         for (int left = BUDGET; !next.isEmpty() && left > 0; left--) {
-            if (ElementLook.isStopAsked()) {
-                throw new CancellationException("a switch began, which the notes before this look serve");
-            }
+            ElementLook.stopIfAsked();
             Object one = next.poll();
             if (!isContainer(one)) {
                 for (FieldSlots.Slot field : Fields.getReferenceFields(one.getClass(), false)) {

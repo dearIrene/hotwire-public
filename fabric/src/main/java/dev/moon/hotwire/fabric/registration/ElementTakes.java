@@ -5,6 +5,8 @@ import java.util.Collections;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
+import java.util.function.Consumer;
+import java.util.function.Supplier;
 import org.jspecify.annotations.Nullable;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -15,10 +17,14 @@ final class ElementTakes {
     private ElementTakes() {
     }
 
-    record NotedTake(Runnable take, @Nullable Set<String> candidates) implements Runnable {
+    record NotedTake(Supplier<@Nullable String> whose, Consumer<String> take, @Nullable Set<String> candidates)
+            implements Runnable {
         @Override
         public void run() {
-            this.take.run();
+            String now = this.whose.get();
+            if (now != null) {
+                this.take.accept(now);
+            }
         }
     }
 
@@ -28,7 +34,11 @@ final class ElementTakes {
         for (Runnable take : noted) {
             if (take instanceof NotedTake filed && filed.candidates() != null
                     && Collections.disjoint(filed.candidates(), mods)) {
-                continue;
+                if (isCheckingSkips() && filed.whose().get() != null) {
+                    LOGGER.error("[Hotwire] a take filed under {} was {}'s", filed.candidates(), mods);
+                } else {
+                    continue;
+                }
             }
             try {
                 take.run();
@@ -41,6 +51,10 @@ final class ElementTakes {
         if (first != null) {
             LOGGER.error("[Hotwire] {} of {} noted takeouts failed; the rest were done", failed, noted.size(), first);
         }
+    }
+
+    static boolean isCheckingSkips() {
+        return System.getProperty("hotwire.checkSkips") != null;
     }
 
     @SuppressWarnings("ReferenceEquality")

@@ -5,6 +5,9 @@ import java.util.HashMap;
 import java.util.List;
 import java.util.Locale;
 import java.util.Map;
+import java.util.Set;
+import java.util.stream.Collectors;
+import java.util.stream.IntStream;
 import org.jspecify.annotations.Nullable;
 
 public final class ModNames {
@@ -33,15 +36,24 @@ public final class ModNames {
     }
 
     public @Nullable String find(String key) {
-        int best = Integer.MAX_VALUE;
+        int best = this.findPlaces(key).min().orElse(Integer.MAX_VALUE);
+        return best == Integer.MAX_VALUE ? null : this.mods.get(best);
+    }
+
+    public Set<String> findAll(String key) {
+        return this.findPlaces(key).mapToObj(this.mods::get).collect(Collectors.toSet());
+    }
+
+    private IntStream findPlaces(String key) {
+        IntStream.Builder found = IntStream.builder();
         Integer whole = this.places.get(key);
         if (whole != null) {
-            best = whole;
+            found.add(whole);
         }
         for (int dot = key.indexOf('.'); dot >= 0; dot = key.indexOf('.', dot + 1)) {
             Integer named = this.places.get(key.substring(0, dot));
-            if (named != null && named < best) {
-                best = named;
+            if (named != null) {
+                found.add(named);
             }
         }
         if (!this.byFirstWord.isEmpty()) {
@@ -50,14 +62,14 @@ public final class ModNames {
             while (start < words.length()) {
                 int end = words.indexOf('_', start);
                 for (Word word : this.byFirstWord.getOrDefault(words.substring(start, end), List.of())) {
-                    if (word.place() < best && words.contains(word.bounded())) {
-                        best = word.place();
+                    if (words.contains(word.bounded())) {
+                        found.add(word.place());
                     }
                 }
                 start = end + 1;
             }
         }
-        return best == Integer.MAX_VALUE ? null : this.mods.get(best);
+        return found.build();
     }
 
     static String toWords(String text) {

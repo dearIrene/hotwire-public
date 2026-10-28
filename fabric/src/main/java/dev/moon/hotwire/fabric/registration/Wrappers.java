@@ -54,7 +54,13 @@ final class Wrappers {
         for (int depth = 0; depth <= DEPTH && !level.isEmpty(); depth++) {
             List<Object> next = new ArrayList<>();
             for (Object value : level) {
-                if (value == null || value instanceof Class<?> || visited.put(value, Boolean.TRUE) != null) {
+                if (value == null || visited.put(value, Boolean.TRUE) != null) {
+                    continue;
+                }
+
+                if (value instanceof Class<?> type) {
+                    addOwner(found, GameRegistrations.findModOf(type));
+                    addOwner(found, type.isHidden() ? ValueOwners.findLambdaOwner(type) : null);
                     continue;
                 }
                 if (value instanceof Enum<?> constant) {

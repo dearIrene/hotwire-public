@@ -9,7 +9,6 @@ import java.util.Collections;
 import java.util.Comparator;
 import java.util.ConcurrentModificationException;
 import java.util.HashMap;
-import java.util.HashSet;
 import java.util.IdentityHashMap;
 import java.util.LinkedHashMap;
 import java.util.List;
@@ -18,7 +17,6 @@ import java.util.NoSuchElementException;
 import java.util.Objects;
 import java.util.PriorityQueue;
 import java.util.Set;
-import java.util.concurrent.CancellationException;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.function.Consumer;
 import java.util.function.Supplier;
@@ -66,6 +64,8 @@ final class CollectionReferences {
     private Wrappers wrappers = new Wrappers();
 
     private boolean inSmall;
+
+    private final TakeCandidates candidates = new TakeCandidates();
 
     final ElementLook look = new ElementLook();
 
@@ -133,6 +133,7 @@ final class CollectionReferences {
         this.ownLeft = 0;
         long holdersBegan = System.nanoTime();
         for (Object holder : holders) {
+            ElementLook.stopIfAsked();
             if (this.findOwnerAmong(holder) == null) {
                 this.lookInto(holder);
             }
@@ -148,9 +149,7 @@ final class CollectionReferences {
         List<Class<?>> ordered = new ArrayList<>(statics);
         ordered.sort(Comparator.comparing(owner -> GameRegistrations.findModOf(owner) != null));
         for (Class<?> owner : ordered) {
-            if (ElementLook.isStopAsked()) {
-                throw new CancellationException("a switch began, which the notes before this look serve");
-            }
+            ElementLook.stopIfAsked();
             long ownerBegan = System.nanoTime();
             boolean game = owner.getName().startsWith("net.minecraft.") || owner.getName().startsWith("com.mojang.");
             this.readingStaticsOf = GameRegistrations.findModOf(owner);
@@ -310,21 +309,24 @@ final class CollectionReferences {
         }
     }
 
-    private void takeOrNote(String owner, @Nullable Object element, Supplier<@Nullable String> whose,
+    private void takeOrNote(String owner, @Nullable Set<String> candidates, Supplier<@Nullable String> asked,
             Consumer<String> take) {
-        Runnable asked = () -> {
-            String now = whose.get();
-            if (now != null) {
-                take.accept(now);
+        boolean small = this.inSmall;
+        Supplier<@Nullable String> whose = () -> {
+            boolean was = this.inSmall;
+            this.inSmall = small;
+            try {
+                return asked.get();
+            } finally {
+                this.inSmall = was;
             }
         };
-        Set<String> candidates = ElementLook.isLooking() && element != null ? this.findCandidates(element) : null;
         if (candidates == null) {
             this.unfiled++;
         } else {
             this.filed++;
         }
-        if (!ElementLook.isLooking() || !this.look.hasNoted(new ElementTakes.NotedTake(asked, candidates))) {
+        if (!ElementLook.isLooking() || !this.look.hasNoted(new ElementTakes.NotedTake(whose, take, candidates))) {
             take.accept(owner);
         } else {
             this.notedBy.merge(owner, 1, Integer::sum);
@@ -335,17 +337,6 @@ final class CollectionReferences {
         return !this.inSmall && mod.equals(this.readingStaticsOf) && Fields.getRecordParts(item.getClass()).isEmpty()
                 && !ValueOwners.isLambda(item) && GameRegistrations.findModOf(item.getClass()) != null
                 && mod.equals(GameRegistrations.findModOf(item.getClass()));
-    }
-
-    private @Nullable Set<String> findCandidates(Object element) {
-        Set<String> reached = Wrappers.findCandidates(element);
-        String named = ReflectedOwners.findOwnerOf(element.getClass());
-        if (reached == null || named == null) {
-            return reached;
-        }
-        Set<String> all = new HashSet<>(reached);
-        all.add(named);
-        return all;
     }
 
     private List<Removal> getRemovalsOf(String mod) {
@@ -398,6 +389,7 @@ final class CollectionReferences {
     }
 
     private void collect(Object value) {
+        ElementLook.stopIfAsked();
         if (this.findOwnerAmong(value) != null || isOfOffMod(value)) {
             return;
         }
@@ -452,7 +444,8 @@ final class CollectionReferences {
                         if (mod != null && this.isOwnPlain(mod, item)) {
                             this.ownLeft++;
                         } else if (mod != null) {
-                            this.takeOrNote(mod, item, () -> this.findOwnerOf(item),
+                            this.takeOrNote(mod, this.candidates.find(item, this.inSmall),
+                                    () -> this.findOwnerOf(item),
                                     owner -> ElementTakes.takeFromList(items, item, this.getRemovalsOf(owner)));
                         } else if (item != null) {
                             this.followLambda(item);
@@ -466,7 +459,8 @@ final class CollectionReferences {
                         if (mod != null && this.isOwnPlain(mod, item)) {
                             this.ownLeft++;
                         } else if (mod != null) {
-                            this.takeOrNote(mod, item, () -> this.findOwnerOf(item),
+                            this.takeOrNote(mod, this.candidates.find(item, this.inSmall),
+                                    () -> this.findOwnerOf(item),
                                     owner -> ElementTakes.takeFromCollection(items, item, this.getRemovalsOf(owner)));
                         }
                     }
@@ -483,8 +477,9 @@ final class CollectionReferences {
                         if (item != null && standIn != null) {
                             String found = whole != null ? whole : Objects.requireNonNull(parts);
                             int at = index;
-                            this.takeOrNote(found, item, () -> this.findOwnerOfSlot(item), owner -> ElementTakes
-                                    .replaceInArray(array, at, item, standIn, this.getRemovalsOf(owner)));
+                            this.takeOrNote(found, this.candidates.find(item, true), () -> this.findOwnerOfSlot(item),
+                                    owner -> ElementTakes.replaceInArray(array, at, item, standIn,
+                                            this.getRemovalsOf(owner)));
                         }
                     }
                 }
@@ -495,8 +490,10 @@ final class CollectionReferences {
                         Object element = entry.getValue();
                         String mod = this.findOwnerOfEntry(key, element);
                         if (mod != null) {
-                            this.takeOrNote(mod, null, () -> this.findOwnerOfEntry(key, element), owner -> ElementTakes
-                                    .takeFromMap(entries, key, element, this.getRemovalsOf(owner)));
+                            this.takeOrNote(mod,
+                                    this.candidates.findForEntry(key, element, this.inSmall, this.names),
+                                    () -> this.findOwnerOfEntry(key, element), owner -> ElementTakes
+                                            .takeFromMap(entries, key, element, this.getRemovalsOf(owner)));
 
                             if (ElementLook.isLooking() && element instanceof Map<?, ?> && this.seen.add(element)) {
                                 this.collect(element);

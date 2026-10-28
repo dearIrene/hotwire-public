@@ -1,9 +1,15 @@
 package dev.moon.hotwire.fabric.registration;
 
 import java.util.ArrayList;
+import java.util.Arrays;
 import java.util.Collection;
+import java.util.HashMap;
 import java.util.List;
+import java.util.Map;
+import java.util.Set;
+import java.util.concurrent.CancellationException;
 import java.util.function.Predicate;
+import java.util.stream.Stream;
 import org.jspecify.annotations.Nullable;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -14,6 +20,8 @@ public final class ElementLook {
     private static final long STANDS_NANOS = 120_000_000_000L;
 
     private static final long FRESH_NANOS = 15_000_000_000L;
+
+    private static final long REFRESH_NANOS = 60_000_000_000L;
 
     private static volatile boolean isOnlyLooking;
 
@@ -28,6 +36,8 @@ public final class ElementLook {
     private static volatile boolean stopAsked;
 
     private @Nullable List<Runnable> noted;
+
+    private Map<String, int[]> placesOf = Map.of();
     private List<String> mods = List.of();
     private long at;
 
@@ -42,7 +52,7 @@ public final class ElementLook {
     public static void findAhead(FieldReferences references, Collection<String> mods, Predicate<String> on,
             boolean every) {
         List<String> asked = List.copyOf(mods);
-        if (stands(asked)) {
+        if (every ? isFreshForEvery(asked) : stands(asked)) {
             if (!every) {
                 stopLooking();
             }
@@ -57,7 +67,7 @@ public final class ElementLook {
             running.setPriority(Thread.NORM_PRIORITY);
         }
         synchronized (ONE_LOOK) {
-            if (stands(asked)) {
+            if (every ? isFreshForEvery(asked) : stands(asked)) {
                 return;
             }
             Thread self = Thread.currentThread();
@@ -101,10 +111,13 @@ public final class ElementLook {
         }
     }
 
+    @SuppressWarnings("ThreadPriorityCheck")
     private static void stopLooking() {
-        if (looking == null) {
+        Thread running = looking;
+        if (running == null) {
             return;
         }
+        running.setPriority(Thread.NORM_PRIORITY);
         stopAsked = true;
         try {
             synchronized (ONE_LOOK) {
@@ -122,6 +135,16 @@ public final class ElementLook {
         return stopAsked && isOnlyLooking;
     }
 
+    static void stopIfAsked() {
+        if (isStopAsked()) {
+            throw new CancellationException("a switch began, which the notes before this look serve");
+        }
+    }
+
+    private static boolean isFreshForEvery(List<String> asked) {
+        return lookedFor.containsAll(asked) && System.nanoTime() - lookedAt < REFRESH_NANOS;
+    }
+
     private static boolean stands(List<String> asked) {
         long age = System.nanoTime() - lookedAt;
         return asked.equals(lookedFor) ? age < FRESH_NANOS : lookedFor.containsAll(asked) && age < STANDS_NANOS;
@@ -137,7 +160,7 @@ public final class ElementLook {
         List<Runnable> ahead = this.mods.containsAll(walked) && System.nanoTime() - this.at < STANDS_NANOS
                 ? this.noted : null;
         if (ahead != null) {
-            return ahead;
+            return ElementTakes.isCheckingSkips() ? ahead : this.findFor(ahead, walked);
         }
         if (this.noted != null) {
             LOGGER.info("[Hotwire] a walk for {} looks for itself: the last look was for {}, {} ms ago", walked,
@@ -157,11 +180,33 @@ public final class ElementLook {
             this.buildingFor = List.of();
         } else if (made != null) {
             this.noted = made;
+            this.placesOf = findPlaces(made);
             this.mods = this.buildingFor;
             this.at = System.nanoTime();
             this.building = null;
             this.buildingFor = List.of();
         }
+    }
+
+    private static Map<String, int[]> findPlaces(List<Runnable> made) {
+        Map<String, List<Integer>> places = new HashMap<>();
+        for (int index = 0; index < made.size(); index++) {
+            Set<String> candidates = made.get(index) instanceof ElementTakes.NotedTake filed ? filed.candidates()
+                    : null;
+            int place = index;
+            for (String mod : candidates == null ? Set.of("") : candidates) {
+                places.computeIfAbsent(mod, any -> new ArrayList<>()).add(place);
+            }
+        }
+        Map<String, int[]> done = HashMap.newHashMap(places.size());
+        places.forEach((mod, list) -> done.put(mod, list.stream().mapToInt(Integer::intValue).toArray()));
+        return done;
+    }
+
+    private List<Runnable> findFor(List<Runnable> all, Collection<String> walked) {
+        return Stream.concat(Stream.of(""), walked.stream())
+                .flatMapToInt(mod -> Arrays.stream(this.placesOf.getOrDefault(mod, new int[0]))).sorted().distinct()
+                .mapToObj(all::get).toList();
     }
 
     boolean isReadyFor(Collection<String> walked) {

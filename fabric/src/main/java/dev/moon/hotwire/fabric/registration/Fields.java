@@ -112,6 +112,7 @@ public final class Fields {
         for (int depth = 0; depth < steps; depth++) {
             List<Object> next = new ArrayList<>();
             for (Object one : step) {
+                ElementLook.stopIfAsked();
                 for (FieldSlots.Slot field : getReferenceFields(one.getClass(), false)) {
                     try {
                         Object value = field.get(one);
