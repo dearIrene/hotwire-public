@@ -7,6 +7,7 @@ import dev.moon.hotwire.jar.ModPatches;
 import java.util.ArrayDeque;
 import java.util.ArrayList;
 import java.util.Collection;
+import java.util.Collections;
 import java.util.Deque;
 import java.util.HashMap;
 import java.util.List;
@@ -16,6 +17,7 @@ import java.util.Set;
 import java.util.SortedSet;
 import java.util.TreeMap;
 import java.util.TreeSet;
+import java.util.concurrent.ConcurrentHashMap;
 import java.util.function.Function;
 import java.util.function.Predicate;
 import org.jspecify.annotations.Nullable;
@@ -32,6 +34,8 @@ public final class ModGraph {
     private final Map<String, SortedSet<String>> hardPatchersByClass = new HashMap<>();
 
     private final Map<String, SortedSet<String>> calls = new TreeMap<>();
+
+    private final Map<String, SortedSet<String>> uses = new ConcurrentHashMap<>();
 
     private final Predicate<String> gameHas;
 
@@ -153,6 +157,10 @@ public final class ModGraph {
     }
 
     public SortedSet<String> getUses(String id) {
+        return this.uses.computeIfAbsent(id, one -> Collections.unmodifiableSortedSet(this.findUses(one)));
+    }
+
+    private SortedSet<String> findUses(String id) {
         SortedSet<String> used = new TreeSet<>();
         Deque<String> next = new ArrayDeque<>(List.of(id));
         while (!next.isEmpty()) {
