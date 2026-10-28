@@ -69,6 +69,16 @@ final class ElementTakes {
     }
 
     static void takeFromCollection(Collection<Object> items, Object item, List<Removal> out) {
+        if (items.getClass().getName().contains("Values")) {
+            return;
+        }
+        if (items instanceof Set<?> && items.contains(item)) {
+            try {
+                items.add(item);
+            } catch (UnsupportedOperationException e) {
+                return;
+            }
+        }
         if (items.remove(item)) {
             out.add(new Removal.InCollection(items, item));
         }
