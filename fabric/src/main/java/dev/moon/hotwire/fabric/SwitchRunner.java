@@ -14,6 +14,7 @@ import dev.moon.hotwire.fabric.registration.GeneratedWrappers;
 import dev.moon.hotwire.fabric.registration.LogAppenders;
 import dev.moon.hotwire.fabric.registration.MixinPlugins;
 import dev.moon.hotwire.fabric.registration.ModSounds;
+import dev.moon.hotwire.fabric.registration.ModelReloadCheck;
 import dev.moon.hotwire.fabric.registration.NetworkHandlers;
 import dev.moon.hotwire.fabric.registration.OffModCommands;
 import dev.moon.hotwire.fabric.registration.OneConfigHuds;
@@ -81,6 +82,7 @@ public final class SwitchRunner {
             fieldReferences.readAhead(order, switcher::isOn);
             tripwire.readAhead(order);
             wrappers.readAhead(order);
+            ModelReloadCheck.readAhead(order);
 
             ElementLook.findAhead(fieldReferences, order, switcher::isOn);
         });

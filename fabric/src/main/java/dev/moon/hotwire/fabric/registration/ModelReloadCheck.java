@@ -33,11 +33,38 @@ public final class ModelReloadCheck {
     private static final Set<String> MODEL_OWNERS = ConcurrentHashMap.newKeySet();
     private static final Set<String> FONT_OWNERS = ConcurrentHashMap.newKeySet();
 
+    private record EarlyOwners(Set<String> mods, List<Integer> made, Set<String> owners) {
+    }
+
+    private static volatile @Nullable EarlyOwners modelsAhead;
+
     private ModelReloadCheck() {
     }
 
+    public static void readAhead(Collection<String> mods) {
+        List<Integer> made = findMade();
+        modelsAhead = new EarlyOwners(Set.copyOf(mods), made, Set.copyOf(findModelOwners(mods)));
+    }
+
+    private static List<Integer> findMade() {
+        Object manager = Minecraft.getInstance().getModelManager();
+        List<Integer> made = new ArrayList<>();
+        for (Class<?> at = manager.getClass(); at != null && at != Object.class; at = at.getSuperclass()) {
+            for (FieldSlots.Slot field : Fields.getDeclared(at)) {
+                int access = field.getModifiers();
+                if (!Modifier.isStatic(access) && !Modifier.isFinal(access) && !field.getType().isPrimitive()) {
+                    made.add(System.identityHashCode(read(field, manager)));
+                }
+            }
+        }
+        return made;
+    }
+
     public static boolean hasModelsOf(Collection<String> mods) {
-        Set<String> found = findModelOwners(mods);
+        EarlyOwners ahead = modelsAhead;
+        modelsAhead = null;
+        Set<String> found = ahead != null && ahead.mods().equals(Set.copyOf(mods))
+                && ahead.made().equals(findMade()) ? ahead.owners() : findModelOwners(mods);
         noteModels(found);
         return !found.isEmpty();
     }
