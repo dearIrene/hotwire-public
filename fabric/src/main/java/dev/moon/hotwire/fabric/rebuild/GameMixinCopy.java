@@ -28,7 +28,7 @@ public final class GameMixinCopy {
     private static final Logger LOGGER = LoggerFactory.getLogger(GameMixinCopy.class);
 
     private static final List<String> SHARED = List.of("net.fabricmc.loader.api.", "net.fabricmc.api.",
-            "org.apache.logging.log4j.", "org.slf4j.");
+            "net.fabricmc.loader.impl.launch.FabricLauncher", "org.apache.logging.log4j.", "org.slf4j.");
 
     private static final List<String> EXTENSIONS = List.of("com.llamalad7.mixinextras.MixinExtrasBootstrap",
             "com.bawnorton.mixinsquared.MixinSquaredBootstrap",
