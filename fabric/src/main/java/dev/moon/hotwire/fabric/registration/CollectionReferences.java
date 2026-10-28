@@ -7,17 +7,15 @@ import java.util.ArrayList;
 import java.util.Collection;
 import java.util.Collections;
 import java.util.Comparator;
-import java.util.ConcurrentModificationException;
 import java.util.HashMap;
+import java.util.HashSet;
 import java.util.IdentityHashMap;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
-import java.util.NoSuchElementException;
 import java.util.Objects;
 import java.util.PriorityQueue;
 import java.util.Set;
-import java.util.concurrent.ConcurrentHashMap;
 import java.util.function.Consumer;
 import java.util.function.Supplier;
 import net.minecraft.core.Registry;
@@ -29,11 +27,7 @@ import org.slf4j.LoggerFactory;
 final class CollectionReferences {
     private static final Logger LOGGER = LoggerFactory.getLogger(CollectionReferences.class);
 
-    private static final Set<String> UNREADABLE = ConcurrentHashMap.newKeySet();
-
     private static final int LARGEST = 100_000;
-
-    private static final int CHANGED_READS = 20;
 
     private static final int WRAPPERS_IN = 512;
 
@@ -401,33 +395,7 @@ final class CollectionReferences {
     }
 
     private void readChanging(Object value, Runnable read) {
-        for (int attempt = 1; ; attempt++) {
-            try {
-                read.run();
-                return;
-            } catch (LinkageError e) {
-                if (UNREADABLE.add(value.getClass().getName())) {
-                    LOGGER.info("[Hotwire] {} cannot be read ({}); the takeout passes it by",
-                            value.getClass().getName(), e.toString());
-                }
-                return;
-            } catch (ConcurrentModificationException | IndexOutOfBoundsException | NoSuchElementException e) {
-                if (this.look.hasNoted(() -> this.readChanging(value, read))) {
-                    return;
-                }
-                if (attempt == CHANGED_READS) {
-                    LOGGER.warn("[Hotwire] {} changed under the takeout {} times; what it holds of {} stays",
-                            value.getClass().getName(), CHANGED_READS, this.mods);
-                    return;
-                }
-                try {
-                    Thread.sleep(1);
-                } catch (InterruptedException interrupted) {
-                    Thread.currentThread().interrupt();
-                    return;
-                }
-            }
-        }
+        CollectionParts.readChanging(value, read, this.look, this.mods);
     }
 
     @SuppressWarnings("unchecked")
@@ -529,16 +497,34 @@ final class CollectionReferences {
             if (!this.hasNamespacedKey(entries)) {
                 return;
             }
+            if (ElementLook.isLooking()) {
+                this.noteNamespaced(map, entries);
+                return;
+            }
             for (Map.Entry<Object, Object> entry : Wrappers.copyEntries(entries)) {
                 String mod = this.registered.contains(entry.getKey()) || this.registered.contains(entry.getValue())
                         ? null : this.findModNamespaceOf(entry.getKey(), entry.getValue());
-                if (mod != null && !this.look.hasNoted(() -> this.removeFromNamespaced(map))
-                        && entries.remove(entry.getKey(), entry.getValue())) {
+                if (mod != null && entries.remove(entry.getKey(), entry.getValue())) {
                     this.getRemovalsOf(mod).add(new Removal.InMap(entries, entry.getKey(), entry.getValue()));
                 }
             }
         } catch (UnsupportedOperationException | IllegalStateException e) {
             LOGGER.info("[Hotwire] {} keeps {}'s entries: it cannot change", map.getClass().getName(), this.mods);
+        }
+    }
+
+    private void noteNamespaced(Map<?, ?> map, Map<Object, Object> entries) {
+        Set<String> mods = new HashSet<>();
+        for (Map.Entry<Object, Object> entry : Wrappers.copyEntries(entries)) {
+            String mod = this.registered.contains(entry.getKey()) || this.registered.contains(entry.getValue())
+                    ? null : this.findModNamespaceOf(entry.getKey(), entry.getValue());
+            if (mod != null) {
+                mods.add(mod);
+            }
+        }
+        if (!mods.isEmpty()) {
+            this.look.hasNoted(new ElementTakes.NotedTake(() -> "", any -> this.removeFromNamespaced(map),
+                    Set.copyOf(mods)));
         }
     }
 
