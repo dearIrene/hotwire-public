@@ -138,6 +138,7 @@ public final class SwitchRunner {
             this.afterOff.accept(result.result());
             return result;
         } finally {
+            this.tripwire.closeRide();
             ResourceReload.forgetPausedReload();
             this.reports.onEnded();
             this.switcher.setBusy(false);
@@ -147,8 +148,11 @@ public final class SwitchRunner {
 
     private CheckedResult runTimedOff(List<String> ids) {
         SwitchPlan plan = this.switcher.planOff(ids);
-        List<String> wired = plan.isRefused() ? ids : plan.order();
-        this.tripwire.armEarly(wired, this.switcher.findPatchedBy(wired));
+
+        List<String> wired = plan.isRefused() ? List.of() : plan.order();
+        if (!wired.isEmpty()) {
+            this.tripwire.armEarly(wired, this.switcher.findPatchedBy(wired));
+        }
         SwitchTimes.mark("plan");
         if (!plan.isRefused()) {
             this.switcher.showBegun(plan);
@@ -203,11 +207,17 @@ public final class SwitchRunner {
         ReloadedLists.takeOut(ids);
         SwitchTimes.mark("checked lists");
         WindowCursor.chooseAgainFor(this.switcher.findPatchedBy(ids));
+        SwitchTimes.mark("removals: cursor");
         OneConfigHuds.takeOut(ids);
+        SwitchTimes.mark("removals: huds");
         NetworkHandlers.takeOut(ids);
+        SwitchTimes.mark("removals: network");
         EntityRendererProviders.takeOut(ids);
+        SwitchTimes.mark("removals: renderer providers");
         GameTasks.takeOut(ids);
+        SwitchTimes.mark("removals: tasks");
         OffModCommands.takeOut(id -> ids.contains(id) || !this.switcher.isOn(id));
+        SwitchTimes.mark("removals: commands");
         this.logging.takeOut(ids);
         SwitchTimes.mark("removals");
 
@@ -241,6 +251,7 @@ public final class SwitchRunner {
         try {
             return this.runTimedOn(ids);
         } finally {
+            this.tripwire.closeRide();
             ResourceReload.forgetPausedReload();
             this.reports.onEnded();
             this.switcher.setBusy(false);
@@ -254,6 +265,7 @@ public final class SwitchRunner {
             SwitchPlan coming = this.switcher.planOn(ids);
             AtomicBoolean putBack = new AtomicBoolean();
             if (!coming.isRefused()) {
+                this.tripwire.offerDisarm(coming.order());
                 this.beforeOn.accept(coming.order());
 
                 coming.order().forEach(LoaderModList::show);

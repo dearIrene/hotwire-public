@@ -233,6 +233,7 @@ final class EngineStart {
                 applier, progress, GameRegistrations.getJournal(),
                 ModLifecycle.makeLifecycle(GameRegistrations.getJournal(), Minecraft.getInstance()));
         ModTripwire tripwire = new ModTripwire(instrumentation, applier.getRebuilder(), classes::findLoaded);
+        applier.getRebuilder().setRider(tripwire.getRide());
         FieldReferences fieldReferences = new FieldReferences(instrumentation, applier.getRebuilder(),
                 classes::findOriginalBytes,
                 mod -> installed.getGraphJars().stream().filter(jar -> jar.manifest().id().equals(mod)).findFirst()

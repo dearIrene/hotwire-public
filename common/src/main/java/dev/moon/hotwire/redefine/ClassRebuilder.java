@@ -124,6 +124,12 @@ public final class ClassRebuilder {
 
     private final RebuildHooks hooks = new RebuildHooks();
 
+    private volatile @Nullable BatchRider rider;
+
+    public void setRider(@Nullable BatchRider rider) {
+        this.rider = rider;
+    }
+
     public RebuildHooks getHooks() {
         return this.hooks;
     }
@@ -396,6 +402,7 @@ public final class ClassRebuilder {
         List<ClassDefinition> definitions = new ArrayList<>();
         List<Linker.Snapshot> previous = new ArrayList<>();
         Map<Class<?>, @Nullable Set<String>> carriedBefore = new LinkedHashMap<>();
+        Map<Class<?>, byte[]> riding = Map.of();
         long installed;
         long redefined;
         try {
@@ -412,12 +419,13 @@ public final class ClassRebuilder {
             }
             FieldHolders.carryOver(prepared.splits().keySet());
             installed = System.nanoTime();
-            if (!definitions.isEmpty()) {
-                this.instrumentation.redefineClasses(definitions.toArray(ClassDefinition[]::new));
-            }
+            riding = BatchRider.takeFrom(this.rider, prepared.splits().keySet());
+            BatchRider.redefineWith(this.instrumentation, this.loadedBytes, this.rider, definitions, riding);
             redefined = System.nanoTime();
         } catch (IllegalAccessException | ClassNotFoundException | UnmodifiableClassException | RuntimeException
                 | LinkageError | InternalError e) {
+            BatchRider.end(this.rider, riding, false, false);
+
             previous.forEach(Linker::restore);
             if (e instanceof UnsupportedOperationException) {
                 LOGGER.warn("[Hotwire] The JVM refused the new shape; fields that differ from the JVM's: {}",

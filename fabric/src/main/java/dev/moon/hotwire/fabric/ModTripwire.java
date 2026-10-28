@@ -1,6 +1,7 @@
 package dev.moon.hotwire.fabric;
 
 import dev.moon.hotwire.fabric.registration.GameRegistrations;
+import dev.moon.hotwire.redefine.BatchRider;
 import dev.moon.hotwire.redefine.ClassRebuilder;
 import dev.moon.hotwire.redefine.HotwireLoaders;
 import dev.moon.hotwire.redefine.LambdaSites;
@@ -81,6 +82,11 @@ public final class ModTripwire {
 
     private final Map<String, String> loadedWhileArming = new ConcurrentHashMap<>();
     private static final ThreadLocal<Boolean> ARMING = ThreadLocal.withInitial(() -> false);
+
+    private static final int MOST_RIDING = 400;
+
+    private final Set<Class<?>> putBackByRide = ConcurrentHashMap.newKeySet();
+    private final Ride ride = new Ride();
     private final ClassFileTransformer loading = new ClassFileTransformer() {
         @Override
         public byte @Nullable [] transform(@Nullable ClassLoader loader, @Nullable String name,
@@ -109,14 +115,15 @@ public final class ModTripwire {
 
     public synchronized int arm(Collection<String> ids) throws RebuildException {
         ids.forEach(Tripwire::watchIfNew);
-        return this.wire(ids, Set.of());
+        return this.wire(ids, Set.of(), false);
     }
 
     void armEarly(Collection<String> ids, Set<String> rebuilt) {
+        this.ride.open();
         this.watcher.execute(() -> {
             synchronized (this) {
                 try {
-                    this.wire(ids, rebuilt);
+                    this.wire(ids, rebuilt, true);
                 } catch (RebuildException | RuntimeException e) {
                     LOGGER.warn("[Hotwire] {} could not be wired ahead of its off: {}", ids, e.toString());
                 }
@@ -136,6 +143,121 @@ public final class ModTripwire {
             this.rebuilder.getLoadedBytes().read(types, new ArrayList<>());
         } catch (RebuildException e) {
             LOGGER.debug("[Hotwire] {}'s classes are read at the off: {}", ids, e.toString());
+        }
+    }
+
+    BatchRider getRide() {
+        return this.ride;
+    }
+
+    synchronized void offerDisarm(Collection<String> ids) {
+        Map<Class<?>, byte[]> back = new LinkedHashMap<>();
+        this.armed.forEach((type, was) -> {
+            if (ids.contains(was.getMod()) && was.isAsWired(this.rebuilder.getLoadedBytes().findKnown(type))) {
+                back.put(type, LambdaSites.rewrite(was.getBefore()));
+            }
+        });
+        this.ride.offerBack(back);
+    }
+
+    void closeRide() {
+        this.ride.close();
+    }
+
+    private final class Ride implements BatchRider {
+        private boolean open;
+        private Collection<String> wiredFor = List.of();
+        private final Map<Class<?>, byte[]> wired = new LinkedHashMap<>();
+        private final Map<Class<?>, ArmedClass> arming = new HashMap<>();
+        private final Map<Class<?>, byte[]> back = new LinkedHashMap<>();
+
+        synchronized void open() {
+            this.open = true;
+        }
+
+        synchronized boolean offer(Collection<String> ids, Map<Class<?>, byte[]> wiredAll,
+                Map<Class<?>, ArmedClass> armedNow) {
+            if (!this.open || wiredAll.size() > MOST_RIDING) {
+                return false;
+            }
+            this.wiredFor = List.copyOf(ids);
+            this.wired.putAll(wiredAll);
+            this.arming.putAll(armedNow);
+            return true;
+        }
+
+        synchronized void offerBack(Map<Class<?>, byte[]> before) {
+            if (before.size() <= MOST_RIDING) {
+                this.open = true;
+                this.back.putAll(before);
+            }
+        }
+
+        synchronized void close() {
+            this.open = false;
+            this.wired.clear();
+            this.arming.clear();
+            this.back.clear();
+        }
+
+        @Override
+        public Map<Class<?>, byte[]> take(Set<Class<?>> rebuilt) {
+            Map<Class<?>, byte[]> all;
+            synchronized (this) {
+                this.open = false;
+                all = new LinkedHashMap<>(this.wired);
+                all.putAll(this.back);
+            }
+
+            ARMING.set(true);
+            return all;
+        }
+
+        @Override
+        public void finish(Map<Class<?>, byte[]> riding, boolean took, boolean left) {
+            ARMING.remove();
+            Map<Class<?>, byte[]> wiredNow;
+            Map<Class<?>, ArmedClass> armingNow;
+            Map<Class<?>, byte[]> backNow;
+            Collection<String> ids;
+            synchronized (this) {
+                wiredNow = new LinkedHashMap<>(this.wired);
+                wiredNow.keySet().retainAll(riding.keySet());
+                armingNow = new HashMap<>(this.arming);
+                backNow = new LinkedHashMap<>(this.back);
+                backNow.keySet().retainAll(riding.keySet());
+                ids = this.wiredFor;
+                this.wired.clear();
+                this.arming.clear();
+                this.back.clear();
+            }
+            if (took) {
+                ModTripwire.this.putBackByRide.addAll(backNow.keySet());
+            }
+            if (!took && !left) {
+                return;
+            }
+
+            ModTripwire.this.watcher.execute(() -> {
+                synchronized (ModTripwire.this) {
+                    if (took) {
+                        wiredNow.keySet().forEach(type -> ModTripwire.this.armed.put(type, armingNow.get(type)));
+                        return;
+                    }
+                    ARMING.set(true);
+                    try {
+                        ModTripwire.this.finishWiring(ids, wiredNow, armingNow);
+                        if (!backNow.isEmpty()) {
+                            ModTripwire.this.rebuilder.redefine(backNow);
+                        }
+                    } catch (RebuildException | RuntimeException e) {
+                        LOGGER.warn("[Hotwire] {} keep their probes, which only return while unwatched: {}",
+                                backNow.keySet(), e.toString());
+                    } finally {
+                        ARMING.remove();
+                    }
+                }
+            });
         }
     }
 
@@ -173,7 +295,8 @@ public final class ModTripwire {
         }
     }
 
-    private int wire(Collection<String> ids, Set<String> rebuilt) throws RebuildException {
+    private int wire(Collection<String> asked, Set<String> rebuilt, boolean ride) throws RebuildException {
+        List<String> ids = asked.stream().filter(ModPolicy::isSwitchable).toList();
         Map<Class<?>, String> owned = new LinkedHashMap<>();
         this.findOwned(ids).forEach((type, mod) -> {
             if (rebuilt.contains(type.getName().replace('.', '/'))) {
@@ -206,31 +329,38 @@ public final class ModTripwire {
                     wiredAll.put(type, wired);
                 }
             });
-
-            List<String> refused = new ArrayList<>();
-            Set<Class<?>> took = this.redefineEach(wiredAll, refused);
-            took.forEach(type -> this.armed.put(type, arming.get(type)));
-
-            List<String> unusable = new ArrayList<>();
-            arming.forEach((type, one) -> {
-                if (!took.contains(type) && this.redefineEach(Map.of(type, one.before), new ArrayList<>())
-                        .isEmpty()) {
-                    unusable.add(type.getName());
-                }
-            });
-            refused.removeIf(line -> unusable.contains(line.substring(0, line.indexOf(" ("))));
-            if (!unusable.isEmpty()) {
-                LOGGER.info("[Hotwire] {} classes of {} are not watched: the JVM takes them in no form, wired or as"
-                        + " they run: {}", unusable.size(), ids, unusable);
+            if (ride && this.ride.offer(ids, wiredAll, arming)) {
+                return arming.size();
             }
-            if (!refused.isEmpty()) {
-                LOGGER.warn("[Hotwire] {} classes of {} could not be wired, and are not watched: {}", refused.size(),
-                        ids, refused);
-            }
-            return took.size();
+            return this.finishWiring(ids, wiredAll, arming);
         } finally {
             ARMING.remove();
         }
+    }
+
+    private int finishWiring(Collection<String> ids, Map<Class<?>, byte[]> wiredAll,
+            Map<Class<?>, ArmedClass> arming) {
+        List<String> refused = new ArrayList<>();
+        Set<Class<?>> took = this.redefineEach(wiredAll, refused);
+        took.forEach(type -> this.armed.put(type, arming.get(type)));
+
+        List<String> unusable = new ArrayList<>();
+        arming.forEach((type, one) -> {
+            if (!took.contains(type) && this.redefineEach(Map.of(type, one.before), new ArrayList<>())
+                    .isEmpty()) {
+                unusable.add(type.getName());
+            }
+        });
+        refused.removeIf(line -> unusable.contains(line.substring(0, line.indexOf(" ("))));
+        if (!unusable.isEmpty()) {
+            LOGGER.info("[Hotwire] {} classes of {} are not watched: the JVM takes them in no form, wired or as"
+                    + " they run: {}", unusable.size(), ids, unusable);
+        }
+        if (!refused.isEmpty()) {
+            LOGGER.warn("[Hotwire] {} classes of {} could not be wired, and are not watched: {}", refused.size(),
+                    ids, refused);
+        }
+        return took.size();
     }
 
     void armLater(Collection<String> ids, Predicate<String> stillOff, Consumer<List<String>> whenArmed) {
@@ -342,6 +472,9 @@ public final class ModTripwire {
     }
 
     private void putBack(Class<?> type, ArmedClass was, Map<Class<?>, byte[]> back) {
+        if (this.putBackByRide.remove(type)) {
+            return;
+        }
         if (was.isAsWired(this.rebuilder.getLoadedBytes().findKnown(type))) {
             back.put(type, LambdaSites.rewrite(was.getBefore()));
         } else {
