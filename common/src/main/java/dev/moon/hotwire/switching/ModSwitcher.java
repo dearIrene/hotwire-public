@@ -387,6 +387,10 @@ public final class ModSwitcher {
 
             LiveObjects.setAhead(true);
             try {
+                if (plan.direction() == SwitchPlan.Direction.OFF && this.applier.isInWorld()) {
+                    int before = this.switches.get();
+                    this.calledAhead = new EarlyAnswer(this.calledByWorld.get(), before, System.nanoTime());
+                }
                 if (this.dryRun(plan) instanceof Result.Failed failed) {
                     LOGGER.debug("[Hotwire] {} was not worked out ahead: {}", plan.order(), failed.cause().toString());
                 }
@@ -400,10 +404,6 @@ public final class ModSwitcher {
         if (plan.direction() == SwitchPlan.Direction.OFF && this.waiting == null && this.busy.get() == 0
                 && this.nextAhead.get() == null) {
             this.readAhead.accept(plan.order());
-            if (this.applier.isInWorld()) {
-                int before = this.switches.get();
-                this.calledAhead = new EarlyAnswer(this.calledByWorld.get(), before, System.nanoTime());
-            }
         }
     }
 
