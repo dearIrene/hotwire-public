@@ -121,9 +121,15 @@ public final class ClassSplit {
         }
         Map<String, MethodNode> mixedMethods = new LinkedHashMap<>();
         Map<String, MethodNode> addedMethods = new LinkedHashMap<>();
+
+        List<String> abstractAdded = new ArrayList<>();
         for (MethodNode method : mixed.methods) {
             mixedMethods.put(method.name + method.desc, method);
             if (!inRunning.test(method)) {
+                if ((method.access & Opcodes.ACC_ABSTRACT) != 0 && (running.access & Opcodes.ACC_INTERFACE) != 0) {
+                    abstractAdded.add(method.name + method.desc);
+                    continue;
+                }
                 if ((method.access & (Opcodes.ACC_ABSTRACT | Opcodes.ACC_NATIVE)) != 0) {
                     throw new SplitException(running.name + "." + method.name + " is abstract or native and cannot be"
                             + " moved to a sidecar");
@@ -261,6 +267,7 @@ public final class ClassSplit {
             side.methods.add(method);
             moved.add(added.name + added.desc);
         }
+        moved.addAll(abstractAdded);
         Set<String> allMoved = new HashSet<>(Linker.getMoved());
         allMoved.addAll(batchMoved);
         Set<String> notMoved = new HashSet<>(declared);

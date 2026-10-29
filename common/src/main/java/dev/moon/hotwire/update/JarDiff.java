@@ -52,6 +52,8 @@ public record JarDiff(ModManifest running, ModManifest incoming, List<ClassDiff>
 
         BODILESS_METHOD_ADDED(false),
 
+        INTERFACE_METHOD_ADDED(true),
+
         CONSTRUCTOR_ADDED(false),
         METHOD_REMOVED(true),
         METHOD_MODIFIERS(false),

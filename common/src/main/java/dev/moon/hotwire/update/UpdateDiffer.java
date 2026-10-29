@@ -107,7 +107,7 @@ public final class UpdateDiffer {
             shape.add(ShapeChange.INTERFACES);
         }
         compareFields(was.fields, now.fields, shape);
-        compareMethods(was.methods, now.methods, shape);
+        compareMethods(was.methods, now.methods, shape, (now.access & Opcodes.ACC_INTERFACE) != 0);
         if (!Objects.equals(was.nestHostClass, now.nestHostClass)
                 || !asSet(was.nestMembers).equals(asSet(now.nestMembers))) {
             shape.add(ShapeChange.NEST);
@@ -137,7 +137,8 @@ public final class UpdateDiffer {
         }
     }
 
-    private static void compareMethods(List<MethodNode> was, List<MethodNode> now, Set<ShapeChange> shape) {
+    private static void compareMethods(List<MethodNode> was, List<MethodNode> now, Set<ShapeChange> shape,
+            boolean isInterface) {
         Map<String, Integer> before = new HashMap<>();
         was.forEach(m -> before.put(m.name + m.desc, m.access & FLAGS));
         Map<String, Integer> after = new HashMap<>();
@@ -145,8 +146,12 @@ public final class UpdateDiffer {
         compareMembers(before, after, shape, ShapeChange.METHOD_ADDED, ShapeChange.METHOD_REMOVED,
                 ShapeChange.METHOD_MODIFIERS);
         if (now.stream().anyMatch(m -> !before.containsKey(m.name + m.desc)
-                && (m.access & (Opcodes.ACC_ABSTRACT | Opcodes.ACC_NATIVE)) != 0)) {
+                && (m.access & Opcodes.ACC_NATIVE) != 0)) {
             shape.add(ShapeChange.BODILESS_METHOD_ADDED);
+        }
+        if (now.stream().anyMatch(m -> !before.containsKey(m.name + m.desc)
+                && (m.access & Opcodes.ACC_ABSTRACT) != 0)) {
+            shape.add(isInterface ? ShapeChange.INTERFACE_METHOD_ADDED : ShapeChange.BODILESS_METHOD_ADDED);
         }
         if (now.stream().anyMatch(m -> !before.containsKey(m.name + m.desc) && m.name.equals("<init>"))) {
             shape.add(ShapeChange.CONSTRUCTOR_ADDED);
