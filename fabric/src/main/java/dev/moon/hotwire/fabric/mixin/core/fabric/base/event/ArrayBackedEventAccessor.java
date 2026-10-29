@@ -1,6 +1,7 @@
 package dev.moon.hotwire.fabric.mixin.core.fabric.base.event;
 
 import java.util.List;
+import java.util.function.Function;
 import org.spongepowered.asm.mixin.Mixin;
 import org.spongepowered.asm.mixin.Pseudo;
 import org.spongepowered.asm.mixin.gen.Accessor;
@@ -14,6 +15,9 @@ public interface ArrayBackedEventAccessor {
 
     @Accessor("sortedPhases")
     List<Object> hotwire$getSortedPhases();
+
+    @Accessor("invokerFactory")
+    Function<?, ?> hotwire$getInvokerFactory();
 
     @Invoker("rebuildInvoker")
     void hotwire$rebuildInvoker(int length);

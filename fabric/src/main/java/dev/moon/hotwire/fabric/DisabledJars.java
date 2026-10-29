@@ -21,6 +21,7 @@ final class DisabledJars {
         } catch (IOException e) {
             throw new IOException(e.getMessage() + " (" + KnotInternals.describeOpenZips(jar) + ")", e);
         }
+        FabricLauncherBase.getLauncher().addToClassPath(disabled);
         return disabled;
     }
 
@@ -32,6 +33,7 @@ final class DisabledJars {
     static Path restore(Path disabled) throws IOException {
         String name = String.valueOf(disabled.getFileName());
         Path jar = disabled.resolveSibling(name.substring(0, name.length() - SUFFIX.length()));
+        KnotInternals.dropFromClassPath(disabled);
         Files.move(disabled, jar);
         FabricLauncherBase.getLauncher().addToClassPath(jar);
         MixinCopy.markClassPathChanged();

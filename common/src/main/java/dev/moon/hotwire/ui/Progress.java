@@ -1,6 +1,7 @@
 package dev.moon.hotwire.ui;
 
 import java.util.ArrayList;
+import java.util.Collections;
 import java.util.List;
 import java.util.Map;
 import org.jspecify.annotations.Nullable;
@@ -15,10 +16,28 @@ public final class Progress {
 
     public record Snapshot(int run, String subject, List<String> labels, int at, String words, int countDone,
             int countTotal, boolean running, boolean goingOff, boolean adding, int mods, int modsDone,
-            List<Entry> queue) {
+            List<Entry> queue, List<Integer> ticks) {
         public Snapshot {
             labels = List.copyOf(labels);
             queue = List.copyOf(queue);
+            ticks = List.copyOf(ticks);
+        }
+
+        public double getModsReached() {
+            int count = this.queue.size();
+            return Math.max(this.countTicked(), this.getFraction() * count);
+        }
+
+        public double getModFraction(int index) {
+            return Math.max(0, Math.min(1, this.getModsReached() - index));
+        }
+
+        public int countTicked() {
+            int done = 0;
+            for (int tick : this.ticks) {
+                done += tick >= MOD_TICKS ? 1 : 0;
+            }
+            return done;
         }
 
         public String current() {
@@ -50,7 +69,7 @@ public final class Progress {
     }
 
     private volatile Snapshot now = new Snapshot(0, "", List.of(), 0, "", 0, 0, false, false, false, 0, 0,
-            List.of());
+            List.of(), List.of());
 
     private volatile boolean worldClosed;
 
@@ -83,26 +102,26 @@ public final class Progress {
             return;
         }
         this.now = new Snapshot(this.now.run() + 1, subject, read(off ? OFF_STEPS : ON_STEPS), 0, "", 0, 0, true, off,
-                false, mods, 0, queue);
+                false, mods, 0, queue, makeZeros(mods));
     }
 
     public void beginAdding(String subject) {
         this.now = new Snapshot(this.now.run() + 1, subject, read(ADD_STEPS), 0, "", 0, 0, true, false, true, 1, 0,
-                List.of());
+                List.of(), List.of());
     }
 
     public void stepAdding(int at) {
         Snapshot was = this.now;
         if (was.adding() && was.running()) {
             this.now = new Snapshot(was.run(), was.subject(), was.labels(), at, "", 0, 0, true, false, true, 1, 0,
-                    was.queue());
+                    was.queue(), was.ticks());
         }
     }
 
     public void endAdding() {
         Snapshot was = this.now;
         this.now = new Snapshot(was.run(), was.subject(), was.labels(), was.labels().size(), "", 0, 0, false, false,
-                false, was.mods(), was.modsDone(), was.queue());
+                false, was.mods(), was.modsDone(), was.queue(), was.ticks());
     }
 
     private boolean isAdding() {
@@ -115,7 +134,7 @@ public final class Progress {
         }
         Snapshot was = this.now;
         this.now = new Snapshot(was.run(), subject, was.labels(), at, "", 0, 0, true, was.goingOff(), was.adding(),
-                was.mods(), was.modsDone(), was.queue());
+                was.mods(), was.modsDone(), was.queue(), was.ticks());
     }
 
     void setPhase(String words) {
@@ -126,7 +145,7 @@ public final class Progress {
         List<String> labels = new ArrayList<>(was.labels());
         labels.add(Math.min(was.at() + 1, labels.size()), words);
         this.now = new Snapshot(was.run(), was.subject(), labels, was.at() + 1, words, 0, 0, true, was.goingOff(),
-                was.adding(), was.mods(), was.modsDone(), was.queue());
+                was.adding(), was.mods(), was.modsDone(), was.queue(), was.ticks());
     }
 
     private static final String SAID = "say: ";
@@ -165,14 +184,36 @@ public final class Progress {
     public void count(String words, int done, int total) {
         Snapshot was = this.now;
         this.now = new Snapshot(was.run(), was.subject(), was.labels(), was.at(), words, done, total, true,
-                was.goingOff(), was.adding(), was.mods(), was.modsDone(), was.queue());
+                was.goingOff(), was.adding(), was.mods(), was.modsDone(), was.queue(), was.ticks());
     }
 
     public void advance() {
         Snapshot was = this.now;
+        List<Integer> ticks = new ArrayList<>(was.ticks());
+        if (was.modsDone() < ticks.size()) {
+            ticks.set(was.modsDone(), MOD_TICKS);
+        }
         this.now = new Snapshot(was.run(), was.subject(), was.labels(), was.at(), was.words(), was.countDone(),
                 was.countTotal(), was.running(), was.goingOff(), was.adding(), was.mods(), was.modsDone() + 1,
-                was.queue());
+                was.queue(), ticks);
+    }
+
+    public static final int MOD_TICKS = 3;
+
+    public void tick(int index) {
+        Snapshot was = this.now;
+        if (index < 0 || index >= was.ticks().size()) {
+            return;
+        }
+        List<Integer> ticks = new ArrayList<>(was.ticks());
+        ticks.set(index, Math.min(MOD_TICKS, ticks.get(index) + 1));
+        this.now = new Snapshot(was.run(), was.subject(), was.labels(), was.at(), was.words(), was.countDone(),
+                was.countTotal(), was.running(), was.goingOff(), was.adding(), was.mods(), was.modsDone(),
+                was.queue(), ticks);
+    }
+
+    private static List<Integer> makeZeros(int count) {
+        return Collections.nCopies(Math.max(0, count), 0);
     }
 
     public void end() {
@@ -181,6 +222,6 @@ public final class Progress {
         }
         Snapshot was = this.now;
         this.now = new Snapshot(was.run(), was.subject(), was.labels(), was.labels().size(), "", 0, 0, false,
-                was.goingOff(), was.adding(), was.mods(), was.modsDone(), was.queue());
+                was.goingOff(), was.adding(), was.mods(), was.modsDone(), was.queue(), was.ticks());
     }
 }

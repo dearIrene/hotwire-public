@@ -69,7 +69,19 @@ public final class GameRegistrations {
 
     public static @Nullable String findModOrShipper(Class<?> type) {
         String mod = findModOf(type);
-        return mod != null ? mod : findShippedBy(type);
+        if (mod == null) {
+            mod = findShippedBy(type);
+        }
+
+        int lambda = mod == null && type.isHidden() ? type.getName().indexOf("$$Lambda") : -1;
+        if (lambda < 0) {
+            return mod;
+        }
+        try {
+            return findModOrShipper(Class.forName(type.getName().substring(0, lambda), false, type.getClassLoader()));
+        } catch (ClassNotFoundException | LinkageError e) {
+            return null;
+        }
     }
 
     static boolean isNestedLibrary(Class<?> type) {

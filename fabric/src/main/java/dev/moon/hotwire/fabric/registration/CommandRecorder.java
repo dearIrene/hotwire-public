@@ -93,7 +93,12 @@ public final class CommandRecorder {
 
     private static @Nullable String findCodeMod(Class<?> type) {
         String mod = GameRegistrations.findModOf(type);
-        return mod != null ? mod : GameRegistrations.findNestedModOf(type);
+        if (mod != null) {
+            return mod;
+        }
+        String nested = GameRegistrations.findNestedModOf(type);
+        return nested != null && GameRegistrations.isSwitchable(nested) ? nested
+                : GameRegistrations.findModOrShipper(type);
     }
 
     private static void addModsOf(Object code, Set<String> mods) {

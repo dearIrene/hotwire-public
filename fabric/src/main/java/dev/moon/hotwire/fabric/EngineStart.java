@@ -23,6 +23,7 @@ import dev.moon.hotwire.fabric.registration.GameHold;
 import dev.moon.hotwire.fabric.registration.GameLibraries;
 import dev.moon.hotwire.fabric.registration.GameRegistrations;
 import dev.moon.hotwire.fabric.registration.GeneratedWrappers;
+import dev.moon.hotwire.fabric.registration.GlfwCallbacks;
 import dev.moon.hotwire.fabric.registration.InternedKeys;
 import dev.moon.hotwire.fabric.registration.MixinPlugins;
 import dev.moon.hotwire.fabric.registration.ModLifecycle;
@@ -179,6 +180,7 @@ final class EngineStart {
             UpdateFolders folders, UpdateQueue queue, Path gameDir, ModIcons icons) throws JvmAccessException {
         Instrumentation instrumentation = JvmAccess.getInstrumentation(findHotwireJar());
         JarChannels.open(instrumentation);
+        GlfwCallbacks.useInstrumentation(instrumentation);
         LOGGER.info("[Hotwire] {} open jars read on through an interrupt", JarChannels.makeUninterruptible());
         KnotInternals knot = KnotInternals.bind();
         MixinInternals mixin = MixinInternals.bind();

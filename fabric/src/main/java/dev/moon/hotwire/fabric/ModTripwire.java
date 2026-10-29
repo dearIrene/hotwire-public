@@ -532,7 +532,9 @@ public final class ModTripwire {
 
     private static @Nullable String findSourceOf(@Nullable ProtectionDomain domain) {
         CodeSource source = domain == null ? null : domain.getCodeSource();
-        return source == null || source.getLocation() == null ? null : source.getLocation().toString();
+        String location = source == null || source.getLocation() == null ? null : source.getLocation().toString();
+        return location != null && location.endsWith(".disabled")
+                ? location.substring(0, location.length() - ".disabled".length()) : location;
     }
 
     private byte @Nullable [] armAtLoad(String name, @Nullable String source, byte[] bytes, ClassLoader loader) {

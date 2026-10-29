@@ -80,7 +80,7 @@ public final class HandlerGuards {
         return GUARDED.containsKey(internalName);
     }
 
-    static @Nullable String findModInHandlerName(String name) {
+    public static @Nullable String findModInHandlerName(String name) {
         String[] parts = name.split("[$]", 4);
         if (parts.length < 4 || parts[1].length() != 6 || parts[2].isEmpty()
                 || !(KINDS.containsKey(parts[0]) || parts[0].equals("redirect"))) {
@@ -263,6 +263,12 @@ public final class HandlerGuards {
             BEHAVING.put(internalName, Set.copyOf(behaving));
         }
         for (MethodNode method : node.methods) {
+            String mixin = findMerged(method);
+            int mark = method.name.indexOf('$');
+            if (mixin != null && mark > 0 && (KINDS.containsKey(method.name.substring(0, mark))
+                    || method.name.startsWith("redirect$"))) {
+                UNFLIPPABLE_AT.computeIfAbsent(internalName, name -> ConcurrentHashMap.newKeySet()).add(mixin);
+            }
             for (AbstractInsnNode insn : method.instructions) {
                 if (insn instanceof MethodInsnNode call && call.owner.equals(internalName)) {
                     String mod = findModInHandlerName(call.name);

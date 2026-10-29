@@ -52,7 +52,6 @@ import java.util.concurrent.ExecutionException;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.TimeoutException;
 import java.util.function.Consumer;
-import java.util.regex.Pattern;
 import java.util.zip.ZipEntry;
 import java.util.zip.ZipFile;
 import net.fabricmc.api.ClientModInitializer;
@@ -130,30 +129,30 @@ public final class ModUpdater {
                 this::findRejection, this.getVersionOrder(), this::planFrom);
     }
 
-    public static final String ESSENTIAL_CONTAINER = "essential-container";
-    public static final String ESSENTIAL = "essential";
-    private static final Pattern ESSENTIAL_INNER = Pattern.compile("essential-[0-9a-f]{16,}\\.jar");
-
-    public @Nullable Path unwrap(Path jar) {
+    public Path unwrap(Path jar) {
         ModManifest manifest = JarLookup.findManifest(jar);
-        if (manifest == null || !manifest.id().equals(ESSENTIAL_CONTAINER)) {
+        String parent = manifest == null ? null : manifest.menuParent().orElse(null);
+        if (parent == null || this.engine.findRunningJarOf(parent) == null) {
             return jar;
         }
         try (ZipFile zip = new ZipFile(jar.toFile())) {
-            ZipEntry inner = zip.stream().filter(entry -> ESSENTIAL_INNER.matcher(entry.getName()).matches())
-                    .findFirst().orElse(null);
-            if (inner == null) {
-                return null;
+            for (ZipEntry entry : zip.stream().filter(one -> one.getName().endsWith(".jar")).toList()) {
+                Path written = this.engine.getStagingFolder().resolve(parent)
+                        .resolve(Path.of(entry.getName()).getFileName().toString());
+                Files.createDirectories(written.getParent());
+                try (InputStream in = zip.getInputStream(entry)) {
+                    Files.copy(in, written, StandardCopyOption.REPLACE_EXISTING);
+                }
+                ModManifest inner = JarLookup.findManifest(written);
+                if (inner != null && inner.id().equals(parent)) {
+                    return written;
+                }
+                Files.delete(written);
             }
-            Path written = this.engine.getStagingFolder().resolve("essential").resolve(inner.getName());
-            Files.createDirectories(written.getParent());
-            try (InputStream in = zip.getInputStream(inner)) {
-                Files.copy(in, written, StandardCopyOption.REPLACE_EXISTING);
-            }
-            return written;
+            return jar;
         } catch (IOException e) {
-            LOGGER.info("[Hotwire] Essential's container could not be unwrapped: {}", e.toString());
-            return null;
+            LOGGER.info("[Hotwire] {} could not be unwrapped: {}", jar.getFileName(), e.toString());
+            return jar;
         }
     }
 
@@ -165,9 +164,6 @@ public final class ModUpdater {
     UpdatePreview preview(Path picked) {
         Path jar = this.unwrap(picked);
         String fileName = String.valueOf(picked.getFileName());
-        if (jar == null) {
-            return new UpdatePreview.Refused("Essential", Lang.get("hotwire.update.essential_empty"));
-        }
         ModManifest manifest = JarLookup.findManifest(jar);
         if (manifest == null) {
             return new UpdatePreview.Unreadable(fileName);
@@ -218,8 +214,8 @@ public final class ModUpdater {
 
     public @Nullable UpdatePlan findPlan(Path picked) {
         Path jar = this.unwrap(picked);
-        ModManifest manifest = jar == null ? null : JarLookup.findManifest(jar);
-        if (jar == null || manifest == null || ModPolicy.isHotwire(manifest.id())) {
+        ModManifest manifest = JarLookup.findManifest(jar);
+        if (manifest == null || ModPolicy.isHotwire(manifest.id())) {
             return null;
         }
         Path running = this.engine.findRunningJarOf(manifest.id());
@@ -245,9 +241,6 @@ public final class ModUpdater {
 
     public Result update(Path picked, UpdateMethod method) {
         Path jar = this.unwrap(picked);
-        if (jar == null) {
-            return new Result.Refused(Lang.get("hotwire.update.essential_empty"));
-        }
         ModManifest manifest = JarLookup.findManifest(jar);
         if (manifest == null) {
             return new Result.Refused(jar.getFileName() + " is not a mod jar.");
@@ -391,9 +384,9 @@ public final class ModUpdater {
     public List<Path> findCarriedToAdd(Path picked) {
         List<Path> out = new ArrayList<>();
         Path jar = this.unwrap(picked);
-        ModManifest manifest = jar == null ? null : JarLookup.findManifest(jar);
+        ModManifest manifest = JarLookup.findManifest(jar);
         Path running = manifest == null ? null : this.engine.findRunningJarOf(manifest.id());
-        if (jar == null || manifest == null || running == null) {
+        if (manifest == null || running == null) {
             return out;
         }
         try {

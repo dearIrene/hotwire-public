@@ -89,7 +89,13 @@ final class ElementOwners {
         if (registered != null) {
             return registered;
         }
-        return inSmall ? this.wrappers.find(item, this.mods) : null;
+        String wrapped = inSmall ? this.wrappers.find(item, this.mods) : null;
+        if (wrapped != null) {
+            return wrapped;
+        }
+
+        String nested = GameRegistrations.findNestedModOf(item.getClass());
+        return nested != null && this.modSet.contains(nested) ? nested : null;
     }
 
     private @Nullable String findRegisteredBy(Object item) {
@@ -98,14 +104,18 @@ final class ElementOwners {
         if (!nested && (library == null || !this.libraryOfSome.contains(library))) {
             return null;
         }
+
+        String self = nested ? GameRegistrations.findNestedModOf(item.getClass()) : library;
         for (FieldSlots.Slot field : Fields.getReferenceFields(item.getClass(), false)) {
             try {
                 Object inner = field.get(item);
                 String mod = inner == null ? null : this.findRecordedOwner(inner, nested);
+                mod = mod != null && mod.equals(self) ? null : mod;
                 if (mod == null && inner != null && ValueOwners.isLambda(inner)) {
                     for (FieldSlots.Slot captured : Fields.getReferenceFields(inner.getClass(), false)) {
                         Object value = captured.get(inner);
-                        mod = mod != null || value == null ? mod : this.findRecordedOwner(value, nested);
+                        String of = mod != null || value == null ? null : this.findRecordedOwner(value, nested);
+                        mod = of != null && !of.equals(self) ? of : mod;
                     }
                 }
 

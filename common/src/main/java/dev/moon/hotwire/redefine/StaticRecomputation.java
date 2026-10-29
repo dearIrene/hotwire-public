@@ -57,7 +57,11 @@ public final class StaticRecomputation {
             if (insn instanceof MethodInsnNode call && call.name.contains(merged)) {
                 return true;
             }
+
             if (insn instanceof InvokeDynamicInsnNode dynamic) {
+                if (dynamic.name.contains(merged)) {
+                    return true;
+                }
                 for (Object argument : dynamic.bsmArgs) {
                     if (argument instanceof Handle handle && handle.getName().contains(merged)) {
                         return true;

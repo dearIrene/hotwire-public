@@ -6,6 +6,7 @@
   "mixins": [
     "features.compat.architectury.event.ArchitecturyEventMixin",
     "core.fabric.base.event.ArrayBackedEventAccessor",
+    "core.fabric.base.event.EventAccessor",
     "core.fabric.base.event.ArrayBackedEventMixin",
     "core.util.thread.BlockableEventLoopAccessor",
     "core.util.thread.BlockableEventLoopMixin",
@@ -40,6 +41,7 @@
     "core.blaze3d.systems.CommandEncoderAccessor",
     "core.blaze3d.opengl.GlCommandEncoderAccessor",
     "core.client.multiplayer.ClientPacketListenerMixin",
+    "core.client.server.IntegratedServerMixin",
     "core.client.gui.screens.ScreenKeyMixin",
     "core.client.gui.screens.TitleScreenMixin",
     "core.brigadier.tree.CommandNodeAccessor",

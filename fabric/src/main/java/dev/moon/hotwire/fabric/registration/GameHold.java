@@ -69,6 +69,12 @@ public final class GameHold {
         PAUSED_GAME_WORK.add(GameHold::unblock);
     }
 
+    private static volatile boolean serverHalting;
+
+    public static void onServerHalting() {
+        serverHalting = true;
+    }
+
     static boolean isServerPaused() {
         return isServerPaused;
     }
@@ -235,7 +241,8 @@ public final class GameHold {
                 }
                 isServerPaused = true;
                 try {
-                    await(paused, latch, PAUSED_WORK, "server", () -> !server.isRunning());
+                    serverHalting = false;
+                    await(paused, latch, PAUSED_WORK, "server", () -> serverHalting || !server.isRunning());
                 } finally {
                     isServerPaused = false;
                     runPausedWork();

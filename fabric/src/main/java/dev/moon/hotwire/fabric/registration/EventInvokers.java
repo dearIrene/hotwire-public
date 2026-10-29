@@ -2,7 +2,6 @@ package dev.moon.hotwire.fabric.registration;
 
 import dev.moon.hotwire.fabric.mixin.core.fabric.base.event.ArrayBackedEventAccessor;
 import dev.moon.hotwire.redefine.FieldSlots;
-import dev.moon.hotwire.redefine.Tripwire;
 import java.util.Set;
 import java.util.function.Function;
 import java.util.function.Predicate;
@@ -28,7 +27,7 @@ public final class EventInvokers {
                 }
                 if (value instanceof ArrayBackedEventAccessor event) {
                     synchronized (event.hotwire$getLock()) {
-                        Tripwire.runAsHotwire(() -> event.hotwire$rebuildInvoker(EventRegistration.countTotal(event)));
+                        EventRegistration.rebuildInvoker(event);
                     }
                 }
             }

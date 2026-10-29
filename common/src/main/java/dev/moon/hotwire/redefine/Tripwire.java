@@ -470,9 +470,6 @@ public final class Tripwire {
     }
 
     public static void onLoading(String mod, String className) {
-        if (!CALLS.containsKey(mod)) {
-            return;
-        }
         LOADERS.computeIfAbsent(mod, any -> new ConcurrentHashMap<>())
                 .put(className, new WeakReference<>(Thread.currentThread()));
         FIRST_LOAD.computeIfAbsent(mod, any -> {

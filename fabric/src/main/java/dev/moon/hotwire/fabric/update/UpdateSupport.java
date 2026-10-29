@@ -84,8 +84,7 @@ public final class UpdateSupport implements ModUpdater.Engine {
     }
 
     public boolean canUpdate(Path jar) {
-        Path inner = this.updater.unwrap(jar);
-        return inner != null && this.updater.canUpdate(inner);
+        return this.updater.canUpdate(this.updater.unwrap(jar));
     }
 
     public @Nullable UpdatePlan findPlan(Path jar) {

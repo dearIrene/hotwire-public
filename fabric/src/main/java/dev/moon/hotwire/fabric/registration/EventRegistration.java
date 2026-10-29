@@ -1,6 +1,7 @@
 package dev.moon.hotwire.fabric.registration;
 
 import dev.moon.hotwire.fabric.mixin.core.fabric.base.event.ArrayBackedEventAccessor;
+import dev.moon.hotwire.fabric.mixin.core.fabric.base.event.EventAccessor;
 import dev.moon.hotwire.fabric.mixin.core.fabric.base.event.EventPhaseDataAccessor;
 import dev.moon.hotwire.redefine.Tripwire;
 import dev.moon.hotwire.registration.Registration;
@@ -76,7 +77,7 @@ final class EventRegistration implements Registration {
                 return;
             }
             phase.hotwire$setListeners(retained.toArray(Arrays.copyOf(listeners, 0)));
-            Tripwire.runAsHotwire(() -> event.hotwire$rebuildInvoker(countTotal(event)));
+            rebuildInvoker(event);
             this.removed = listener;
         }
     }
@@ -97,7 +98,21 @@ final class EventRegistration implements Registration {
                 return;
             }
             phase.hotwire$setListeners(placed.toArray(Arrays.copyOf(listeners, 0)));
+            rebuildInvoker(event);
+        }
+    }
+
+    static void rebuildInvoker(ArrayBackedEventAccessor event) {
+        if (!GameRegistrations.isOfOffMod(event.hotwire$getInvokerFactory().getClass())) {
             Tripwire.runAsHotwire(() -> event.hotwire$rebuildInvoker(countTotal(event)));
+            return;
+        }
+        EventAccessor plain = (EventAccessor) event;
+        Object invoker = plain.hotwire$getInvoker();
+        Class<?> face = invoker == null || invoker.getClass().getInterfaces().length == 0 ? null
+                : invoker.getClass().getInterfaces()[0];
+        if (face != null && StandIns.fits(face)) {
+            plain.hotwire$setInvoker(StandIns.of(face));
         }
     }
 

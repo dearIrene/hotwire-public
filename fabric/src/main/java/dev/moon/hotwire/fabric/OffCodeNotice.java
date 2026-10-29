@@ -68,9 +68,9 @@ final class OffCodeNotice {
                     Lang.get("hotwire.off_code.world")));
             return;
         }
+
         String clears = Lang.get(fromWorld ? "hotwire.off_code.reopen" : "hotwire.off_code.restart");
-        engine.showMessage(first.size() > 1 ? Lang.get("hotwire.off_code.ran_from", installed.nameOf(mod),
-                first.get(1), clears) : Lang.get("hotwire.off_code.ran", installed.nameOf(mod), clears), true);
+        engine.showMessage(Lang.get("hotwire.off_code.ran", installed.nameOf(mod), clears), true);
     }
 
     private static @Nullable String findUser(HotwireEngine engine, InstalledMods installed, String mod,

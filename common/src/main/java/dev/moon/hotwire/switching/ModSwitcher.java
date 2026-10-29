@@ -101,14 +101,8 @@ public final class ModSwitcher {
 
     private final Lifecycle lifecycle;
     private volatile Predicate<String> reopenToTurnOn = id -> false;
-    private volatile Supplier<Set<String>> calledByWorld = Set::of;
+    private final WorldCalls calledByWorld = new WorldCalls();
     private volatile Function<Set<String>, Set<String>> inRegistries = mods -> Set.of();
-
-    private record EarlyAnswer(Set<String> mods, int switches, long at) {
-    }
-
-    private static final long CALLED_FRESH_NANOS = 10_000_000_000L;
-    private volatile @Nullable EarlyAnswer calledAhead;
 
     private final AtomicInteger switches = new AtomicInteger();
 
@@ -188,7 +182,7 @@ public final class ModSwitcher {
     }
 
     public void reopenToTurnOffWith(Supplier<Set<String>> mods) {
-        this.calledByWorld = mods;
+        this.calledByWorld.answerWith(mods);
     }
 
     public void restartToTurnOffWith(Function<Set<String>, Set<String>> holding) {
@@ -344,7 +338,7 @@ public final class ModSwitcher {
 
     private void runRegistrations(Consumer<List<String>> theirs, List<String> order, boolean goingOff) {
         if (!goingOff) {
-            this.withGamePaused(() -> order.forEach(this.registrations::restore));
+            this.withGamePaused(() -> this.tickEach(order, this.registrations::restore));
             SwitchTimes.mark("registrations back");
         }
         try {
@@ -353,10 +347,13 @@ public final class ModSwitcher {
             LOGGER.error("[Hotwire] what {} {} could not all be {}", order, goingOff ? "left in others" : "left behind",
                     goingOff ? "taken out" : "put back", e);
         }
+        for (int i = 0; i < order.size(); i++) {
+            this.progress.tick(i);
+        }
 
         if (!goingOff) {
             SwitchTimes.mark("reload");
-            order.forEach(this.lifecycle::onStarted);
+            this.tickEach(order, this.lifecycle::onStarted);
             SwitchTimes.mark("start listeners");
         }
     }
@@ -394,8 +391,7 @@ public final class ModSwitcher {
             LiveObjects.setAhead(true);
             try {
                 if (plan.direction() == SwitchPlan.Direction.OFF && this.applier.isInWorld()) {
-                    int before = this.switches.get();
-                    this.calledAhead = new EarlyAnswer(this.calledByWorld.get(), before, System.nanoTime());
+                    this.calledByWorld.workOutAhead(this.switches.get());
                 }
                 if (this.dryRun(plan) instanceof Result.Failed failed) {
                     LOGGER.debug("[Hotwire] {} was not worked out ahead: {}", plan.order(), failed.cause().toString());
@@ -516,9 +512,9 @@ public final class ModSwitcher {
             }
             this.checkReopenFirst(plan, onAfter);
             if (goingOff) {
-                plan.order().forEach(this.lifecycle::onStopping);
+                this.tickEach(plan.order(), this.lifecycle::onStopping);
                 SwitchTimes.mark("stop listeners");
-                this.withGamePaused(() -> plan.order().forEach(this.registrations::remove));
+                this.withGamePaused(() -> this.tickEach(plan.order(), this.registrations::remove));
                 SwitchTimes.mark("registrations out");
             }
             SwitchApplier.ApplyResult applied;
@@ -577,7 +573,8 @@ public final class ModSwitcher {
         Set<String> switched = Set.copyOf(plan.order());
         try {
             LiveObjects.reopenFirst(switched, onAfter, this.reopenToTurnOn, this.applier.getGame());
-            LiveObjects.reopenFirstOff(switched, onAfter, this::findCalledByWorld, this.applier.getGame());
+            LiveObjects.reopenFirstOff(switched, onAfter, () -> this.calledByWorld.find(this.switches.get(),
+                    switched, onAfter), this.applier.getGame());
             Set<String> going = new HashSet<>(switched);
             going.removeAll(onAfter);
             Set<String> holding = going.isEmpty() ? Set.of() : this.inRegistries.apply(going);
@@ -592,14 +589,11 @@ public final class ModSwitcher {
         SwitchTimes.mark("reopen check");
     }
 
-    private Set<String> findCalledByWorld() {
-        EarlyAnswer ahead = this.calledAhead;
-        this.calledAhead = null;
-        if (ahead != null && ahead.switches() == this.switches.get() - 1
-                && System.nanoTime() - ahead.at() < CALLED_FRESH_NANOS) {
-            return ahead.mods();
+    private void tickEach(List<String> order, Consumer<String> work) {
+        for (int i = 0; i < order.size(); i++) {
+            work.accept(order.get(i));
+            this.progress.tick(i);
         }
-        return this.calledByWorld.get();
     }
 
     private void withGamePaused(Runnable change) {

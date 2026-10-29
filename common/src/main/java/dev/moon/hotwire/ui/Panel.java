@@ -219,7 +219,10 @@ class Panel extends Element {
         canvas.fill(x - 1, y - 1, x + w + 1, y + h + 1, Colors.fade(Palette.PANEL_EDGE, s));
         canvas.fill(x, y, x + w, y + h, Colors.fade(Palette.PANEL, s));
         canvas.fill(x, y, x + w, y + 2, Colors.fade(this.refused ? Palette.BAD : Palette.ACCENT, s));
-        canvas.fill(x + 14, y + this.lineY, x + w - 14, y + this.lineY + 2, Colors.fade(Palette.TRACK, s));
+
+        if (this.lineY >= 0) {
+            canvas.fill(x + 14, y + this.lineY, x + w - 14, y + this.lineY + 2, Colors.fade(Palette.TRACK, s));
+        }
         this.drawContent(canvas, s, x, y, w, h);
     }
 

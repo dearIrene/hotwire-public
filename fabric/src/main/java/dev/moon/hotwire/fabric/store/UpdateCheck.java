@@ -2,7 +2,6 @@ package dev.moon.hotwire.fabric.store;
 
 import dev.moon.hotwire.fabric.CacheLimit;
 import dev.moon.hotwire.fabric.InstalledMods;
-import dev.moon.hotwire.fabric.update.ModUpdater;
 import dev.moon.hotwire.jar.FileHashes;
 import dev.moon.hotwire.jar.ModManifest;
 import dev.moon.hotwire.modrinth.Downloads;
@@ -155,8 +154,9 @@ public final class UpdateCheck {
                 return;
             }
             String id = idByName.getOrDefault(name, name);
-            if (id.equals(ModUpdater.ESSENTIAL_CONTAINER)) {
-                id = ModUpdater.ESSENTIAL;
+            String parent = this.installed.find(id).flatMap(ModManifest::menuParent).orElse(null);
+            if (parent != null && this.installed.find(parent).isPresent()) {
+                id = parent;
                 String running = this.installed.find(id).map(ModManifest::version).orElse("");
                 if (running.isEmpty() || !isNewer(version.number(), running)) {
                     return;
@@ -202,9 +202,13 @@ public final class UpdateCheck {
 
     public List<Path> fetchById(String id, List<UpdateOffer> offers, Consumer<String> saying) throws IOException {
         boolean ofTheGame = id.equals("fabricloader") || id.equals("minecraft") || id.equals("java");
-        boolean partOfFabricApi = id.startsWith("fabric-") && !id.equals("fabric-api");
-        if (ofTheGame || partOfFabricApi) {
+        if (ofTheGame) {
             return List.of();
+        }
+
+        String parent = this.installed.find(id).flatMap(ModManifest::menuParent).orElse(null);
+        if (parent != null && !parent.equals(id) && this.installed.find(parent).isPresent()) {
+            return this.fetchById(parent, offers, saying);
         }
         for (UpdateOffer offer : offers) {
             if (offer.id().equals(id)) {

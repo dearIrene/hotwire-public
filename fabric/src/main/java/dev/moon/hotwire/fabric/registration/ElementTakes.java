@@ -44,7 +44,12 @@ final class ElementTakes {
                 }
             }
             try {
-                take.run();
+                if (take instanceof NotedTake filed && filed.candidates() != null && filed.candidates().size() == 1
+                        && !isCheckingSkips()) {
+                    filed.take().accept(filed.candidates().iterator().next());
+                } else {
+                    take.run();
+                }
             } catch (UnsupportedOperationException | IllegalStateException e) {
                 unchanged++;
                 StackTraceElement top = e.getStackTrace().length == 0 ? null : e.getStackTrace()[0];

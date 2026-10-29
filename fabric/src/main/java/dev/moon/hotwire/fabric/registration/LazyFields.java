@@ -25,7 +25,8 @@ final class LazyFields {
     private static final Logger LOGGER = LoggerFactory.getLogger(LazyFields.class);
 
     private static final Map<Object, Object> HOLDERS = new MapMaker().weakKeys().weakValues().makeMap();
-    private static final Map<Class<?>, Set<String>> LAZY = new ConcurrentHashMap<>();
+
+    private static final Map<Class<?>, Map<String, Set<String>>> LAZY = new ConcurrentHashMap<>();
 
     private LazyFields() {
     }
@@ -41,9 +42,13 @@ final class LazyFields {
             return;
         }
         for (Class<?> at = holder.getClass(); at != null && at != Object.class; at = at.getSuperclass()) {
-            Set<String> lazy = LAZY.computeIfAbsent(at, LazyFields::findLazy);
+            Map<String, Set<String>> lazy = LAZY.computeIfAbsent(at, LazyFields::findLazy);
+            String of = findFieldHolding(at, holder, collection);
+            if (of == null) {
+                continue;
+            }
             for (FieldSlots.Slot field : Fields.getDeclared(at)) {
-                if (lazy.contains(field.getName()) && !field.isStatic()
+                if (lazy.getOrDefault(field.getName(), Set.of()).contains(of) && !field.isStatic()
                         && !Modifier.isFinal(field.getModifiers())) {
                     try {
                         if (field.get(holder) != null && field.get(holder) != collection) {
@@ -58,29 +63,46 @@ final class LazyFields {
         }
     }
 
-    private static Set<String> findLazy(Class<?> type) {
+    @SuppressWarnings("ReferenceEquality")
+    private static @Nullable String findFieldHolding(Class<?> at, Object holder, Object collection) {
+        for (FieldSlots.Slot field : Fields.getDeclared(at)) {
+            try {
+                if (!field.isStatic() && field.get(holder) == collection) {
+                    return field.getName();
+                }
+            } catch (ReflectiveOperationException | RuntimeException e) {
+            }
+        }
+        return null;
+    }
+
+    private static Map<String, Set<String>> findLazy(Class<?> type) {
         ClassNode node = read(type);
-        Set<String> lazy = new HashSet<>();
+        Map<String, Set<String>> lazy = new HashMap<>();
         if (node == null) {
             return lazy;
         }
         Map<String, Set<String>> setBy = new HashMap<>();
+        Map<String, Set<String>> readBy = new HashMap<>();
         for (MethodNode method : node.methods) {
             Set<String> set = new HashSet<>();
+            Set<String> read = new HashSet<>();
             for (AbstractInsnNode insn : method.instructions) {
-                if (insn instanceof FieldInsnNode field && field.owner.equals(node.name)
-                        && field.getOpcode() == Opcodes.PUTFIELD) {
-                    set.add(field.name);
+                if (insn instanceof FieldInsnNode field && field.owner.equals(node.name)) {
+                    (field.getOpcode() == Opcodes.PUTFIELD ? set : read).add(field.name);
                 }
             }
             setBy.put(method.name + method.desc, set);
+            readBy.put(method.name + method.desc, read);
         }
         for (MethodNode method : node.methods) {
             Set<String> tested = new HashSet<>();
             Set<String> set = new HashSet<>(setBy.getOrDefault(method.name + method.desc, Set.of()));
+            Set<String> read = new HashSet<>(readBy.getOrDefault(method.name + method.desc, Set.of()));
             for (AbstractInsnNode insn : method.instructions) {
                 if (insn instanceof MethodInsnNode call && call.owner.equals(node.name)) {
                     set.addAll(setBy.getOrDefault(call.name + call.desc, Set.of()));
+                    read.addAll(readBy.getOrDefault(call.name + call.desc, Set.of()));
                 } else if (insn instanceof FieldInsnNode field && field.owner.equals(node.name)
                         && field.getOpcode() == Opcodes.GETFIELD && field.getNext() != null
                         && (field.getNext().getOpcode() == Opcodes.IFNULL
@@ -89,7 +111,11 @@ final class LazyFields {
                 }
             }
             tested.retainAll(set);
-            lazy.addAll(tested);
+            for (String field : tested) {
+                Set<String> from = new HashSet<>(read);
+                from.remove(field);
+                lazy.computeIfAbsent(field, any -> new HashSet<>()).addAll(from);
+            }
         }
         return lazy;
     }

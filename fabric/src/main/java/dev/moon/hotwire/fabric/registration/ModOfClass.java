@@ -19,6 +19,7 @@ import net.fabricmc.loader.api.metadata.ModOrigin;
 import org.jspecify.annotations.Nullable;
 
 public final class ModOfClass {
+    private static final String DISABLED = ".disabled";
     private final Map<Path, String> byJar = new HashMap<>();
 
     private final Map<Path, String> shipperOf = new HashMap<>();
@@ -146,7 +147,12 @@ public final class ModOfClass {
             return null;
         }
         try {
-            return this.byJar.get(Path.of(location.toURI()).toAbsolutePath().normalize());
+            Path jar = Path.of(location.toURI()).toAbsolutePath().normalize();
+            String mod = this.byJar.get(jar);
+
+            String name = String.valueOf(jar.getFileName());
+            return mod != null || !name.endsWith(DISABLED) ? mod
+                    : this.byJar.get(jar.resolveSibling(name.substring(0, name.length() - DISABLED.length())));
         } catch (URISyntaxException | IllegalArgumentException e) {
             return null;
         }

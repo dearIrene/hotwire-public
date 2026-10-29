@@ -42,6 +42,8 @@ final class ProgressPanel extends Panel {
     public ProgressPanel(Progress progress) {
         super(null);
         this.progress = progress;
+
+        this.setLineY(-1);
     }
 
     private record Heading(float target, String headline, String note, String subject, String rightCell) {
@@ -131,9 +133,13 @@ final class ProgressPanel extends Panel {
         String percent = Math.round(this.bar.getValue() * 100) + "%";
         String right = heading.rightCell().isBlank() ? percent : heading.rightCell() + "   " + percent;
         canvas.drawText(right, x + main - 14 - canvas.measureText(right), y + 16, Colors.fade(Palette.DIM, alpha));
-        int filled = (int) ((main - 28) * Math.max(0, Math.min(1, this.bar.getValue())));
-        if (filled > 0) {
-            canvas.fill(x + 14, y + 34, x + 14 + filled, y + 38, Colors.fade(Palette.ACCENT, alpha));
+        if (listed) {
+            this.drawSegments(canvas, now, x + 14, y + 34, main - 28, alpha);
+        } else {
+            int filled = (int) ((main - 28) * Math.max(0, Math.min(1, this.bar.getValue())));
+            if (filled > 0) {
+                canvas.fill(x + 14, y + 34, x + 14 + filled, y + 38, Colors.fade(Palette.ACCENT, alpha));
+            }
         }
         this.drawTheTrail(canvas, x + 17, y + 44 + (91 - 44 - 12) / 2, main - 34, alpha);
         if (this.progress.isWorldClosed()) {
@@ -148,12 +154,33 @@ final class ProgressPanel extends Panel {
         }
     }
 
+    private void drawSegments(Canvas canvas, Progress.Snapshot now, int x, int y, int w, float alpha) {
+        int count = Math.max(1, now.queue().size());
+        int gap = count > 1 ? 2 : 0;
+        double each = (w - gap * (count - 1)) / (double) count;
+        for (int i = 0; i < count; i++) {
+            int left = x + (int) Math.round(i * (each + gap));
+            int right = x + (int) Math.round(i * (each + gap) + each);
+            double fraction = now.getModFraction(i);
+            int filled = fraction >= 1 ? right - left : (int) Math.round((right - left) * fraction);
+            if (filled > 0) {
+                int shade = Colors.mix(Palette.ON, Palette.ACCENT, count > 1 ? i / (float) (count - 1) : 1);
+                canvas.fill(left, y, left + filled, y + 4, Colors.fade(shade, alpha));
+            }
+
+            if (filled < right - left) {
+                canvas.fill(left + filled, y, right, y + 4, Colors.fade(Palette.TRACK, alpha));
+            }
+        }
+    }
+
     private int getCurrent(Progress.Snapshot now) {
         int count = now.queue().size();
         if (!now.running()) {
             return count;
         }
-        return Math.min(count - 1, (int) (now.getFraction() * count));
+        int ticked = now.countTicked();
+        return Math.min(count - 1, Math.max(ticked, (int) (now.getFraction() * count)));
     }
 
     private void easeQueue(Progress.Snapshot now, float delta) {
@@ -242,10 +269,13 @@ final class ProgressPanel extends Panel {
             this.stepTick.step(delta);
             this.stepsTick.to(total);
             this.stepsTick.step(delta);
-            return new Heading(tailing ? 1 : 0.9f * at / total, Lang.get("hotwire.progress.heading.switching"),
-                    tailing ? phase : now.describe(), tailing ? "" : now.subject(),
-                    tailing ? "" : Lang.get("hotwire.progress.of", this.stepTick.getRounded(),
-                    this.stepsTick.getRounded()));
+
+            float batch = (float) (0.9 * Math.max(at / (double) total, now.getFraction()));
+
+            this.stepTick.to(Math.max(at, (int) now.getModsReached()));
+            String count = Lang.get("hotwire.progress.of", this.stepTick.getRounded(), this.stepsTick.getRounded());
+            return new Heading(tailing ? 1 : batch, Lang.get("hotwire.progress.heading.switching"),
+                    tailing ? phase : now.describe(), tailing ? "" : now.subject(), tailing ? "" : count);
         }
         int steps = Math.max(1, now.labels().size());
         int done = Math.max(0, Math.min(steps, now.at()));

@@ -12,6 +12,6 @@ import org.spongepowered.asm.mixin.injection.callback.CallbackInfo;
 public abstract class CommandsMixin {
     @Inject(method = "sendCommands", at = @At("HEAD"))
     private void hotwire$takeOffModsOut(ServerPlayer player, CallbackInfo ci) {
-        OffModCommands.takeOutBeforeSending(false);
+        OffModCommands.takeOutOf(((Commands) (Object) this).getDispatcher(), false);
     }
 }
