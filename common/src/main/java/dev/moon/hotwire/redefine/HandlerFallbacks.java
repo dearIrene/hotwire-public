@@ -35,14 +35,20 @@ final class HandlerFallbacks {
         }
         InsnList code = body.instructions;
         code.add(new VarInsnNode(Opcodes.ALOAD, slots[operation]));
-        code.add(new LdcInsnNode(operation));
-        code.add(new TypeInsnNode(Opcodes.ANEWARRAY, "java/lang/Object"));
-        for (int at = 0; at < operation; at++) {
-            code.add(new InsnNode(Opcodes.DUP));
-            code.add(new LdcInsnNode(at));
-            code.add(new VarInsnNode(parameters[at].getOpcode(Opcodes.ILOAD), slots[at]));
-            box(code, parameters[at]);
-            code.add(new InsnNode(Opcodes.AASTORE));
+        boolean bridge = operation == 0 && parameters.length == 2
+                && parameters[1].getDescriptor().equals("[Ljava/lang/Object;");
+        if (bridge) {
+            code.add(new VarInsnNode(Opcodes.ALOAD, slots[1]));
+        } else {
+            code.add(new LdcInsnNode(operation));
+            code.add(new TypeInsnNode(Opcodes.ANEWARRAY, "java/lang/Object"));
+            for (int at = 0; at < operation; at++) {
+                code.add(new InsnNode(Opcodes.DUP));
+                code.add(new LdcInsnNode(at));
+                code.add(new VarInsnNode(parameters[at].getOpcode(Opcodes.ILOAD), slots[at]));
+                box(code, parameters[at]);
+                code.add(new InsnNode(Opcodes.AASTORE));
+            }
         }
         code.add(new MethodInsnNode(Opcodes.INVOKEINTERFACE, parameters[operation].getInternalName(), "call",
                 "([Ljava/lang/Object;)Ljava/lang/Object;", true));

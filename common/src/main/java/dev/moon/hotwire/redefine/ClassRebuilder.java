@@ -36,6 +36,8 @@ import org.slf4j.LoggerFactory;
 public final class ClassRebuilder {
     private static final Logger LOGGER = LoggerFactory.getLogger(ClassRebuilder.class);
 
+    private static final int REDEFINE_CHUNK = Integer.getInteger("hotwire.redefine_chunk", Integer.MAX_VALUE);
+
     private static final Duration SLOW_SPLIT = Duration.ofSeconds(1);
 
     static final ThreadLocal<BooleanSupplier> STOP = ThreadLocal.withInitial(() -> () -> false);
@@ -423,7 +425,17 @@ public final class ClassRebuilder {
             FieldHolders.carryOver(prepared.splits().keySet());
             installed = System.nanoTime();
             riding = BatchRider.takeFrom(this.rider, prepared.splits().keySet());
-            BatchRider.redefineWith(this.instrumentation, this.loadedBytes, this.rider, definitions, riding);
+
+            for (int from = 0; from < definitions.size() || (from == 0 && !riding.isEmpty());
+                    from += REDEFINE_CHUNK) {
+                int to = Math.min(definitions.size(), from + REDEFINE_CHUNK);
+                boolean last = to >= definitions.size();
+                BatchRider.redefineWith(this.instrumentation, this.loadedBytes, this.rider,
+                        definitions.subList(from, to), last ? riding : Map.of());
+                if (last) {
+                    break;
+                }
+            }
             redefined = System.nanoTime();
         } catch (IllegalAccessException | ClassNotFoundException | UnmodifiableClassException | RuntimeException
                 | LinkageError | InternalError e) {

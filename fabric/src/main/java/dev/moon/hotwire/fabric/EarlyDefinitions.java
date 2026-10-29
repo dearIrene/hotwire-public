@@ -4,6 +4,8 @@ import dev.moon.hotwire.jvm.JvmAccess;
 import dev.moon.hotwire.jvm.JvmAccessException;
 import dev.moon.hotwire.redefine.HandlerGuards;
 import dev.moon.hotwire.redefine.LoadedClassBytes;
+import java.io.IOException;
+import java.io.InputStream;
 import java.lang.instrument.ClassFileTransformer;
 import java.lang.instrument.Instrumentation;
 import java.nio.file.Path;
@@ -30,6 +32,14 @@ public final class EarlyDefinitions implements PreLaunchEntrypoint {
                 return;
             }
             Instrumentation found = JvmAccess.getInstrumentation(jar);
+
+            HandlerGuards.readOriginalsWith(name -> {
+                try (InputStream in = game.getResourceAsStream(name + ".class")) {
+                    return in == null ? null : in.readAllBytes();
+                } catch (IOException e) {
+                    return null;
+                }
+            });
             ClassFileTransformer watcher = new ClassFileTransformer() {
                 @Override
                 public byte @Nullable [] transform(@Nullable ClassLoader loader, @Nullable String name,

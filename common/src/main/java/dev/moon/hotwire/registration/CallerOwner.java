@@ -12,6 +12,9 @@ public final class CallerOwner {
 
     private static final Pattern MIXIN_UID = Pattern.compile("(?!lambda)[a-z]{3}[0-9a-f]{3}");
 
+    private static final Set<String> ENTRYPOINTS = Set.of("onInitialize", "onInitializeClient",
+            "onInitializeServer", "onPreLaunch");
+
     private final Function<Class<?>, @Nullable String> modOf;
     private final Set<String> skipped;
     private final Set<String> libraries;
@@ -38,6 +41,9 @@ public final class CallerOwner {
         for (Frame frame : stack) {
             String handler = findModInHandlerName(frame.method());
             String mod = handler != null ? handler : this.modOf.apply(frame.type());
+            if (mod != null && handler == null && this.skipped.contains(mod) && ENTRYPOINTS.contains(frame.method())) {
+                return null;
+            }
             if (mod == null || this.skipped.contains(mod)) {
                 continue;
             }

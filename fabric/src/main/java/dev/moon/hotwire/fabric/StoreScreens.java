@@ -56,11 +56,21 @@ final class StoreScreens {
 
     StoreCacheView getCacheView() {
         return new StoreCacheView() {
+            private static final long SIZES_READ_NANOS = 1_000_000_000L;
+            private Map<String, Long> sizes = Map.of();
+            private long sizesAt;
+
             @Override
             public Map<String, Long> getSizes() {
+                long now = System.nanoTime();
+                if (this.sizesAt != 0 && now - this.sizesAt < SIZES_READ_NANOS) {
+                    return this.sizes;
+                }
                 Map<String, Long> out = new HashMap<>();
                 StoreScreens.this.findCache().findSizes().forEach((kind, bytes) -> out.put(
                         kind.name().toLowerCase(Locale.ROOT), bytes));
+                this.sizes = out;
+                this.sizesAt = now;
                 return out;
             }
 
@@ -68,6 +78,7 @@ final class StoreScreens {
             public void clear(@Nullable String kind) {
                 StoreScreens.this.findCache().clear(kind == null ? null
                         : StoreCache.Kind.valueOf(kind.toUpperCase(Locale.ROOT)));
+                this.sizesAt = 0;
             }
 
             @Override

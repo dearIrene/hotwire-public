@@ -119,9 +119,21 @@ final class ElementTakes {
 
     static @Nullable Object findWrappedValue(Object value, String mod) {
         Class<?>[] faces = value.getClass().getInterfaces();
-        Object inner = Lambdas.findWrapped(value, faces.length == 1 ? faces[0] : Object.class, mod);
-        return inner == null || inner instanceof Collection<?> || inner instanceof Map<?, ?>
-                || GameRegistrations.findModOf(inner.getClass()) != null ? null : inner;
+        Class<?> shape = faces.length == 1 ? faces[0] : findGameClassAbove(value.getClass());
+        if (shape == Object.class) {
+            return null;
+        }
+        Object inner = Lambdas.findWrapped(value, shape, mod);
+        return inner == null || !shape.isInstance(inner) || inner instanceof Collection<?>
+                || inner instanceof Map<?, ?> || GameRegistrations.findModOf(inner.getClass()) != null ? null : inner;
+    }
+
+    private static Class<?> findGameClassAbove(Class<?> type) {
+        Class<?> above = type;
+        while (above != null && GameRegistrations.findModOf(above) != null) {
+            above = above.getSuperclass();
+        }
+        return above == null ? Object.class : above;
     }
 
     static void replaceInMap(Map<Object, Object> entries, Object key, Object value, Object inner,

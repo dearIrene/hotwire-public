@@ -202,6 +202,7 @@ final class EngineStart {
             });
         }
         GameClasses classes = new GameClasses(knot, HotwireEngine.class.getClassLoader());
+        HandlerGuards.readOriginalsWith(classes::findOriginalBytes);
         SwitchApplier applier = new SwitchApplier(
                 new ClassRebuilder(instrumentation, GameMixinCopy.create(mixin, MixinConfigs.readDecorations(
                         mixins, mixin), classes::findOriginalBytes)),

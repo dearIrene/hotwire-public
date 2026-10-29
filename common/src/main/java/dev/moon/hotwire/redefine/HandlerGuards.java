@@ -17,6 +17,7 @@ import java.util.OptionalInt;
 import java.util.Set;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.atomic.AtomicLong;
+import java.util.function.Function;
 import org.jspecify.annotations.Nullable;
 import org.objectweb.asm.ClassReader;
 import org.objectweb.asm.Handle;
@@ -56,6 +57,13 @@ public final class HandlerGuards {
             HandlerGuards.class.getName().replace('.', '/'), "bootstrap",
             MethodType.methodType(CallSite.class, MethodHandles.Lookup.class, String.class, MethodType.class,
                     String.class, int.class, int.class, int.class).toMethodDescriptorString(), false);
+    private static final Handle BOOTSTRAP_REDIRECT = new Handle(Opcodes.H_INVOKESTATIC,
+            HandlerGuards.class.getName().replace('.', '/'), "bootstrapRedirect",
+            MethodType.methodType(CallSite.class, MethodHandles.Lookup.class, String.class, MethodType.class,
+                    String.class, int.class, int.class, String.class, String.class, String.class)
+                    .toMethodDescriptorString(), false);
+
+    private static volatile Function<String, byte @Nullable []> originals = name -> null;
 
     private record Guard(MutableCallSite site, MethodHandle handler, MethodHandle standIn) {
     }
@@ -88,6 +96,10 @@ public final class HandlerGuards {
 
     public static void leaveHandlersOf(Set<String> mods) {
         neverSwitched = Set.copyOf(mods);
+    }
+
+    public static void readOriginalsWith(Function<String, byte @Nullable []> reader) {
+        originals = reader;
     }
 
     public static boolean isGuarded(String internalName) {
@@ -241,10 +253,11 @@ public final class HandlerGuards {
         if ((node.version & 0xFFFF) < Opcodes.V1_7) {
             return false;
         }
+
         Map<String, String> mixinOfHandler = new HashMap<>();
         for (MethodNode method : node.methods) {
             String mixin = findMerged(method);
-            if (mixin != null && method.name.indexOf('$') > 0) {
+            if (mixin != null && findModInHandlerName(method.name) != null) {
                 mixinOfHandler.put(method.name + method.desc, mixin);
             }
         }
@@ -254,6 +267,9 @@ public final class HandlerGuards {
             return false;
         }
         Set<String> guarded = new HashSet<>();
+
+        ClassNode[] original = new ClassNode[1];
+        boolean[] originalRead = new boolean[1];
         for (MethodNode method : node.methods) {
             for (AbstractInsnNode insn : method.instructions.toArray()) {
                 if (!(insn instanceof MethodInsnNode call) || !call.owner.equals(internalName)) {
@@ -285,6 +301,26 @@ public final class HandlerGuards {
                 if (kind == null && !prefix.equals("redirect")) {
                     continue;
                 }
+                String desc = isStatic ? call.desc : "(L" + internalName + ";" + call.desc.substring(1);
+                if (kind == null) {
+                    if (!originalRead[0]) {
+                        originalRead[0] = true;
+                        byte[] shipped = originals.apply(internalName);
+                        if (shipped != null) {
+                            original[0] = new ClassNode();
+                            new ClassReader(shipped).accept(original[0], ClassReader.SKIP_DEBUG);
+                        }
+                    }
+                    RedirectStandIns.Target target = original[0] == null ? null
+                            : RedirectStandIns.find(original[0], method, call.desc);
+                    if (target != null) {
+                        method.instructions.set(call, new InvokeDynamicInsnNode(call.name, desc, BOOTSTRAP_REDIRECT,
+                                mixin, isStatic ? 1 : 0, target.opcode(), target.owner(), target.name(),
+                                target.desc()));
+                        guarded.add(mixin);
+                        continue;
+                    }
+                }
                 OptionalInt index = kind == null ? OptionalInt.empty() : switch (kind) {
                     case AS_IT_WAS -> findAsItWas(call.name, call.desc);
                     case OPERATION -> findOperation(call.desc);
@@ -298,7 +334,6 @@ public final class HandlerGuards {
                     markUnflippable(internalName, mixin);
                     continue;
                 }
-                String desc = isStatic ? call.desc : "(L" + internalName + ";" + call.desc.substring(1);
                 method.instructions.set(call, new InvokeDynamicInsnNode(call.name, desc, BOOTSTRAP, mixin,
                         isStatic ? 1 : 0, kind, index.getAsInt() + (isStatic ? 0 : 1)));
                 guarded.add(mixin);
@@ -458,12 +493,28 @@ public final class HandlerGuards {
 
     public static CallSite bootstrap(MethodHandles.Lookup caller, String name, MethodType type, String mixin,
             int isStatic, int kind, int index) throws ReflectiveOperationException {
+        return link(caller, name, type, mixin, isStatic,
+                () -> makeStandIn(caller, type, kind, index, isStatic == 1 ? 0 : 1));
+    }
+
+    public static CallSite bootstrapRedirect(MethodHandles.Lookup caller, String name, MethodType type, String mixin,
+            int isStatic, int opcode, String owner, String target, String desc) throws ReflectiveOperationException {
+        return link(caller, name, type, mixin, isStatic, () -> RedirectStandIns.makeStandIn(caller, type,
+                isStatic == 1 ? 0 : 1, new RedirectStandIns.Target(opcode, owner, target, desc)));
+    }
+
+    private interface StandInCall {
+        MethodHandle make() throws ReflectiveOperationException;
+    }
+
+    private static CallSite link(MethodHandles.Lookup caller, String name, MethodType type, String mixin,
+            int isStatic, StandInCall standIns) throws ReflectiveOperationException {
         Class<?> owner = caller.lookupClass();
         MethodHandle handler = isStatic == 1 ? caller.findStatic(owner, name, type)
                 : caller.findSpecial(owner, name, type.dropParameterTypes(0, 1), owner);
         MethodHandle standIn;
         try {
-            standIn = makeStandIn(caller, type, kind, index, isStatic == 1 ? 0 : 1);
+            standIn = standIns.make();
         } catch (ReflectiveOperationException | RuntimeException e) {
             LOGGER.warn("[Hotwire] {}.{} {} has no stand-in and is called direct: {}", owner.getName(), name, type,
                     e.toString());
