@@ -98,6 +98,7 @@ public final class HotwireEngine implements ModScreen.Game, AutoCloseable {
 
     private @Nullable Screen under;
     private final StoreJars storeJars;
+    private final SelfUpdateRequests selfUpdate;
     private final StoreScreens stores;
     private final JarRequests jars;
     private final ModRows rows;
@@ -127,6 +128,7 @@ public final class HotwireEngine implements ModScreen.Game, AutoCloseable {
         this.storeJars = new StoreJars(installed, this.changes, this::findHost, () -> this.screen,
                 this::getStore, this::showMessage);
         this.stores = new StoreScreens(this, installed, this.storeJars, icons);
+        this.selfUpdate = new SelfUpdateRequests(this.storeJars, () -> this.screen, this::showMessage);
         this.jars = new JarRequests(this, this.changes, progress, this.tasks, this.storeJars);
         this.rows = new ModRows(installed, this::isOn, this.pending, this::findParts);
         WorldReopen.tellClosedTo(this::onWorldClosed);
@@ -163,6 +165,7 @@ public final class HotwireEngine implements ModScreen.Game, AutoCloseable {
         this.under = back;
         opened.setUpdates(this.storeJars.getOffers(), this.storeJars.isChecked());
         this.storeJars.startCheck();
+        this.selfUpdate.start();
         HotwireScreen made = new HotwireScreen(opened, timer);
         JvmParts parts = this.findParts();
         if (parts != null) {
@@ -351,6 +354,16 @@ public final class HotwireEngine implements ModScreen.Game, AutoCloseable {
     @Override
     public void acceptFirstOpen() {
         this.settings.acceptPrompt(getMajorVersion());
+    }
+
+    @Override
+    public String findNewerHotwire() {
+        return this.selfUpdate.findNewer();
+    }
+
+    @Override
+    public void updateHotwireAtNextStart() {
+        this.selfUpdate.updateAtNextStart(this.getPendingChanges());
     }
 
     private static String getMajorVersion() {

@@ -119,6 +119,13 @@ public final class ModScreen implements JarHost {
 
         default void acceptFirstOpen() {
         }
+
+        default String findNewerHotwire() {
+            return "";
+        }
+
+        default void updateHotwireAtNextStart() {
+        }
     }
 
     private final Game game;
@@ -154,6 +161,7 @@ public final class ModScreen implements JarHost {
     private final ReopenPanel reopenPanel;
     private final ReportPanel reportPanel;
     private final FirstOpenPanel firstOpen;
+    private final SelfUpdatePanel selfUpdate;
     private int pendingCount;
     private final List<ModStatus> shown = new ArrayList<>();
     private final Map<String, String> childOf = new HashMap<>();
@@ -229,6 +237,7 @@ public final class ModScreen implements JarHost {
             }
         }, this::closePanels);
         this.firstOpen = new FirstOpenPanel(game::acceptFirstOpen);
+        this.selfUpdate = new SelfUpdatePanel(game::updateHotwireAtNextStart, this::closePanels);
         this.reportPanel = new ReportPanel(game::showReportFile, this::closePanels);
         Element base = this.root.getBase();
 
@@ -240,12 +249,13 @@ public final class ModScreen implements JarHost {
         }
 
         this.panels = List.of(this.advancedPanel, this.pendingPanel, this.updatesPanel, this.addPanel,
-                this.updatePanel, this.progress, this.reopenPanel, this.firstOpen, this.reportPanel,
+                this.updatePanel, this.progress, this.reopenPanel, this.firstOpen, this.selfUpdate, this.reportPanel,
                 this.cacheFillPanel, this.manageCachePanel);
         this.panels.forEach(this.root.getModal()::add);
         if (!game.isFirstOpenAccepted()) {
             this.firstOpen.present();
         }
+        this.showNewerHotwire();
         this.root.focus(this.search);
         this.pendingCount = game.getPendingChanges().size();
         this.refilter();
@@ -311,6 +321,12 @@ public final class ModScreen implements JarHost {
     @Override
     public void showMessage(String text, boolean bad, String hint) {
         this.message.show(text, bad, hint);
+    }
+
+    public void showNewerHotwire() {
+        if (this.game.isFirstOpenAccepted()) {
+            this.selfUpdate.presentOnce(this.game.findNewerHotwire());
+        }
     }
 
     public void onSwitched() {
@@ -380,6 +396,7 @@ public final class ModScreen implements JarHost {
     }
 
     public void setUpdates(List<UpdateOffer> offers, boolean checked) {
+        this.showNewerHotwire();
         this.updatesPanel.setOffers(offers, checked);
         this.updates.setBadge(offers.size());
     }
