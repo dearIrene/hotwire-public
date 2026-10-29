@@ -190,6 +190,10 @@ final class EngineStart {
         Map<String, ModMixins> mixins = MixinConfigs.withCodeAdded(
                 MixinConfigs.of(installed.getGraphJars(), loadedIds), mixin.getConfigObjects());
         if (HandlerGuards.ENABLED) {
+            Set<String> fixed = new HashSet<>();
+            mixins.keySet().stream().filter(id -> !ModPolicy.isSwitchable(id)).forEach(fixed::add);
+            fixed.add("hotwire");
+            HandlerGuards.leaveHandlersOf(fixed);
             mixins.forEach((id, mod) -> {
                 if (ModPolicy.isSwitchable(id)) {
                     TripwireSites.registerClasses(id, mod.owns().stream()

@@ -117,6 +117,20 @@ final class ElementTakes {
         }
     }
 
+    static @Nullable Object findWrappedValue(Object value, String mod) {
+        Class<?>[] faces = value.getClass().getInterfaces();
+        Object inner = Lambdas.findWrapped(value, faces.length == 1 ? faces[0] : Object.class, mod);
+        return inner == null || inner instanceof Collection<?> || inner instanceof Map<?, ?>
+                || GameRegistrations.findModOf(inner.getClass()) != null ? null : inner;
+    }
+
+    static void replaceInMap(Map<Object, Object> entries, Object key, Object value, Object inner,
+            List<Removal> out) {
+        if (entries.replace(key, value, inner)) {
+            out.add(new Removal.InMapValue(entries, key, value, inner));
+        }
+    }
+
     @SuppressWarnings("ReferenceEquality")
     static void replaceInArray(Object[] array, int index, Object item, Object standIn, List<Removal> out) {
         if (array[index] == item) {

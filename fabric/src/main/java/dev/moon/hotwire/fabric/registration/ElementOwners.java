@@ -100,6 +100,13 @@ final class ElementOwners {
             }
         }
 
+        if (item instanceof Member member) {
+            String declaring = this.findOwnerAmong(member.getDeclaringClass());
+            if (declaring != null) {
+                return declaring;
+            }
+        }
+
         String whole = !Fields.getRecordParts(item.getClass()).isEmpty() ? Wrappers.findWhollyOwner(item)
                 : ValueOwners.isLambda(item) ? ValueOwners.findForwardedTo(item) : null;
         if (whole != null && this.modSet.contains(whole)) {

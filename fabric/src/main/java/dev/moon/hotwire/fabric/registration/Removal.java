@@ -144,6 +144,18 @@ sealed interface Removal {
         }
     }
 
+    record InMapValue(Map<Object, Object> map, Object key, Object mods, Object inner) implements Removal {
+        @Override
+        public void restore() {
+            this.map.replace(this.key, this.inner, this.mods);
+        }
+
+        @Override
+        public String describe() {
+            return "a map's value (" + this.mods.getClass().getSimpleName() + ")";
+        }
+    }
+
     record InMap(Map<Object, Object> map, Object key, Object value) implements Removal {
         @Override
         public void restore() {

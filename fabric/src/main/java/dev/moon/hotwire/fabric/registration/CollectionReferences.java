@@ -475,6 +475,16 @@ final class CollectionReferences {
                         Object key = entry.getKey();
                         Object element = entry.getValue();
                         String mod = this.owners.findOwnerOfEntry(key, element, this.inSmall);
+                        Object wrapped = mod == null || element == null ? null
+                                : ElementTakes.findWrappedValue(element, mod);
+                        if (mod != null && wrapped != null && key != null) {
+                            Object was = element;
+                            this.takeOrNote(mod, this.candidates.findForEntry(key, element, this.inSmall,
+                                    this.owners.getNames()), () -> this.owners.findOwnerOfEntry(key, was, this.inSmall),
+                                    owner -> ElementTakes.replaceInMap(entries, key, was, wrapped,
+                                            this.getRemovalsOf(owner)));
+                            continue;
+                        }
                         if (mod != null) {
                             this.takeOrNote(mod,
                                     this.candidates.findForEntry(key, element, this.inSmall, this.owners.getNames()),

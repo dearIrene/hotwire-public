@@ -81,7 +81,13 @@ public final class HandlerGuards {
             "blockcolor", "quad", "mesh", "terrain", "fluidrender", "section", "blockstatemodel");
     private static final Object LOCK = new Object();
 
+    private static volatile Set<String> neverSwitched = Set.of();
+
     private HandlerGuards() {
+    }
+
+    public static void leaveHandlersOf(Set<String> mods) {
+        neverSwitched = Set.copyOf(mods);
     }
 
     public static boolean isGuarded(String internalName) {
@@ -255,6 +261,14 @@ public final class HandlerGuards {
                 }
                 String mixin = mixinOfHandler.get(call.name + call.desc);
                 if (mixin == null) {
+                    continue;
+                }
+                String handlerMod = findModInHandlerName(call.name);
+                if (handlerMod != null && neverSwitched.contains(handlerMod)) {
+                    continue;
+                }
+                if (method.name.equals("<clinit>")) {
+                    markUnflippable(internalName, mixin);
                     continue;
                 }
                 if (method.name.equals("<init>")) {
