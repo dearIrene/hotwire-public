@@ -40,7 +40,7 @@ final class MarkdownLines {
     private static final char PICTURE = '\u0001';
     private static final char PICTURE_END = '\u0002';
     private static final Pattern PICTURE_ROW = Pattern.compile(
-            "\u0001[^\u0002]*\u0002(?:[ \t]*\u0001[^\u0002]*\u0002)*");
+            "\u0001[^\u0002]*\u0002(?:[ \t]*\n?[ \t]*\u0001[^\u0002]*\u0002)*");
     private static final Pattern LINK = Pattern.compile("\\[([^\\]]*)]\\([^)]*\\)");
 
     private static final Pattern REFERENCE = Pattern.compile("(?m)^ {0,3}\\[([^\\]]+)]:\\s*<?([^\\s>]+)>?.*$\\n?");
@@ -111,7 +111,7 @@ final class MarkdownLines {
         text = ESCAPE.matcher(text).replaceAll("$1");
         text = TAG.matcher(text).replaceAll("");
         text = PICTURE_ROW.matcher(text).replaceAll(found -> Matcher.quoteReplacement("\n" + PICTURE
-                + found.group().replaceAll("[ \t]*\u0002[ \t]*\u0001", " ").replace("\u0001", "")
+                + found.group().replaceAll("[ \t]*\u0002[ \t]*\n?[ \t]*\u0001", " ").replace("\u0001", "")
                 .replace("\u0002", "") + "\n"));
         text = SPACING.matcher(text).replaceAll(" ");
         text = CODE_POINT.matcher(text).replaceAll(found -> Matcher.quoteReplacement(decode(found)));

@@ -84,7 +84,8 @@ final class UpdatesPanel extends Panel {
         float s = this.getShown();
         for (int at = 0; at < this.buttons.size(); at++) {
             Button button = this.buttons.get(at);
-            boolean inView = rowY - 2 >= top && rowY - 2 + BUTTON_H <= bottom;
+
+            boolean inView = rowY >= top && rowY - 2 + BUTTON_H <= bottom;
             button.setBounds(x + w - 14 - BUTTON_W, rowY - 2, BUTTON_W, BUTTON_H);
 
             button.setVisible(inView);

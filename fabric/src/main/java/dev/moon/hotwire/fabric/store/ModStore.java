@@ -163,7 +163,7 @@ public final class ModStore {
             throws IOException {
         List<Callable<ModrinthClient.Version>> asks = new ArrayList<>();
         for (String needed : version.requiredProjects()) {
-            if (seen.add(needed) && !this.model.isInstalledProject(needed)) {
+            if (!seen.contains(needed) && !this.model.isInstalledProject(needed)) {
                 asks.add(() -> {
                     List<ModrinthClient.Version> versions = this.model.getClient()
                             .findVersions(ModrinthClient.Kind.MOD, needed);
@@ -175,9 +175,15 @@ public final class ModStore {
             }
         }
         List<ModrinthClient.Version> out = new ArrayList<>();
+
         for (ModrinthClient.Version newest : runAtOnce(asks)) {
+            if (seen.contains(newest.projectId())) {
+                continue;
+            }
             out.addAll(this.findNeeded(newest, seen));
-            out.add(newest);
+            if (seen.add(newest.projectId())) {
+                out.add(newest);
+            }
         }
         return out;
     }
