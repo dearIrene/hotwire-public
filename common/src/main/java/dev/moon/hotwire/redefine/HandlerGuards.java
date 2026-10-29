@@ -34,7 +34,7 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 public final class HandlerGuards {
-    public static final boolean ENABLED = Boolean.parseBoolean(System.getProperty("hotwire.guards"));
+    public static final boolean ENABLED = !"false".equals(System.getProperty("hotwire.guards"));
     private static final Logger LOGGER = LoggerFactory.getLogger(HandlerGuards.class);
     private static final String MERGED = "Lorg/spongepowered/asm/mixin/transformer/meta/MixinMerged;";
 
