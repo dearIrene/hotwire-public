@@ -59,8 +59,11 @@ public final class NoticeHud {
 
     //? if >=1.21.6 {
     private static void addLayer() {
-        HudElementRegistry.addLast(HotwireClient.NOTICES, (graphics, delta) -> draw(new GuiCanvas(graphics,
-                Minecraft.getInstance().font)));
+        try {
+            HudElementRegistry.addLast(HotwireClient.NOTICES, (graphics, delta) -> draw(new GuiCanvas(graphics,
+                    Minecraft.getInstance().font)));
+        } catch (IllegalArgumentException e) {
+        }
     }
 
     private static void removeLayer() {

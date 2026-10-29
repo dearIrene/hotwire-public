@@ -3,6 +3,7 @@ package dev.moon.hotwire.fabric;
 import dev.moon.hotwire.concurrent.Tasks;
 import dev.moon.hotwire.fabric.add.WorldReopen;
 import dev.moon.hotwire.fabric.registration.GameRegistrations;
+import dev.moon.hotwire.redefine.HandlerGuards;
 import dev.moon.hotwire.registration.CallerOwner;
 import dev.moon.hotwire.switching.CrashPolicy;
 import dev.moon.hotwire.switching.ModSwitcher;
@@ -21,11 +22,14 @@ import java.util.function.BiConsumer;
 import java.util.function.BiFunction;
 import java.util.function.Function;
 import java.util.function.Supplier;
+import java.util.regex.Matcher;
+import java.util.regex.Pattern;
 import org.jspecify.annotations.Nullable;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 public final class CrashGuard {
+    private static final Pattern MERGED_LAMBDA = Pattern.compile("^(?:md|fd)[0-9a-f]{6}[$]([^$]+)[$]");
     private static final Logger LOGGER = LoggerFactory.getLogger(CrashGuard.class);
     private static final int FRAMES = 512;
     private static final String MIXIN_MERGED = "org.spongepowered.asm.mixin.transformer.meta.MixinMerged";
@@ -197,7 +201,11 @@ public final class CrashGuard {
 
     public static @Nullable String findMergedMod(Method method) {
         String mixin = findMergedFrom(method);
-        return mixin == null ? null : mixinOwner.apply(mixin.replace('.', '/'));
+        if (mixin != null) {
+            return mixinOwner.apply(mixin.replace('.', '/'));
+        }
+        Matcher lambda = MERGED_LAMBDA.matcher(method.getName());
+        return lambda.find() ? lambda.group(1) : HandlerGuards.findModInHandlerName(method.getName());
     }
 
     private static @Nullable String findMergedFrom(Method method) {
