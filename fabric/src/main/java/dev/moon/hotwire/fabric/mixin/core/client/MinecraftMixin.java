@@ -40,6 +40,11 @@ public abstract class MinecraftMixin {
             original.call(game, advance);
         } catch (RuntimeException | Error e) {
             RenderPassEnd.run();
+            if (FrameRecovery.closeThrowingScreen(e)) {
+                CrashGuard.handle(e, CrashPolicy.Site.FRAME);
+                FrameRecovery.end(game);
+                return;
+            }
             if (!CrashGuard.handle(e, CrashPolicy.Site.FRAME)) {
                 throw e;
             }

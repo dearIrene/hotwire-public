@@ -1,5 +1,7 @@
 package dev.moon.hotwire.fabric.registration;
 
+import dev.moon.hotwire.redefine.FinalWrites;
+import java.lang.reflect.Field;
 import java.util.ArrayList;
 import java.util.Collection;
 import java.util.Collections;
@@ -12,6 +14,8 @@ import org.apache.logging.log4j.LogManager;
 import org.apache.logging.log4j.core.Appender;
 import org.apache.logging.log4j.core.Filter;
 import org.apache.logging.log4j.core.LoggerContext;
+import org.apache.logging.log4j.core.appender.rewrite.RewriteAppender;
+import org.apache.logging.log4j.core.appender.rewrite.RewritePolicy;
 import org.apache.logging.log4j.core.config.Configuration;
 import org.apache.logging.log4j.core.config.LoggerConfig;
 import org.apache.logging.log4j.core.filter.CompositeFilter;
@@ -27,7 +31,12 @@ public final class LogAppenders {
     private record FilterRemoval(String logger, Filter filter) {
     }
 
+    private record PolicyRemoval(RewriteAppender appender, Object policy) {
+    }
+
+    private static final RewritePolicy UNCHANGED = event -> event;
     private static final Map<String, List<Removal>> REMOVED = new ConcurrentHashMap<>();
+    private static final Map<String, List<PolicyRemoval>> POLICIES = new ConcurrentHashMap<>();
     private static final Map<String, List<FilterRemoval>> FILTERS_REMOVED = new ConcurrentHashMap<>();
 
     private LogAppenders() {
@@ -44,7 +53,10 @@ public final class LogAppenders {
         loggers.add(config.getRootLogger());
         for (LoggerConfig logger : loggers) {
             for (Appender appender : List.copyOf(logger.getAppenders().values())) {
-                String mod = GameRegistrations.findModOf(appender.getClass());
+                if (appender instanceof RewriteAppender rewrite) {
+                    takeOutPolicy(rewrite, mods);
+                }
+                String mod = GameRegistrations.findCodeMod(appender.getClass());
                 if (mod != null && mods.contains(mod)) {
                     logger.removeAppender(appender.getName());
                     REMOVED.computeIfAbsent(mod, any -> new ArrayList<>()).add(new Removal(logger.getName(), appender));
@@ -62,7 +74,7 @@ public final class LogAppenders {
         List<Filter> filters = filter instanceof CompositeFilter composite ? List.of(composite.getFiltersArray())
                 : filter == null ? List.of() : List.of(filter);
         for (Filter one : filters) {
-            String mod = GameRegistrations.findModOf(one.getClass());
+            String mod = GameRegistrations.findCodeMod(one.getClass());
             if (mod != null && mods.contains(mod)) {
                 logger.removeFilter(one);
                 FILTERS_REMOVED.computeIfAbsent(mod, any -> new ArrayList<>())
@@ -73,7 +85,46 @@ public final class LogAppenders {
         }
     }
 
+    private static Field findPolicyField() throws NoSuchFieldException {
+        Field field = RewriteAppender.class.getDeclaredField("rewritePolicy");
+        field.setAccessible(true);
+        return field;
+    }
+
+    private static void takeOutPolicy(RewriteAppender appender, Collection<String> mods) {
+        try {
+            Field slot = findPolicyField();
+            Object policy = slot.get(appender);
+            if (policy == null) {
+                return;
+            }
+            String mod = GameRegistrations.findCodeMod(policy.getClass());
+            if (mod != null && mods.contains(mod)) {
+                FinalWrites.write(slot, appender, UNCHANGED);
+                POLICIES.computeIfAbsent(mod, any -> new ArrayList<>()).add(new PolicyRemoval(appender, policy));
+                LOGGER.info("[Hotwire] {}'s rewrite of every log line gives way to lines as they come", mod);
+            }
+        } catch (ReflectiveOperationException | RuntimeException e) {
+            LOGGER.info("[Hotwire] the log's rewrite appender {} keeps its policy: {}", appender.getName(),
+                    e.toString());
+        }
+    }
+
+    @SuppressWarnings("ReferenceEquality")
     public static void putBack(Collection<String> mods) {
+        for (String mod : mods) {
+            for (PolicyRemoval one : POLICIES.getOrDefault(mod, List.of())) {
+                try {
+                    Field slot = findPolicyField();
+                    if (slot.get(one.appender()) == UNCHANGED) {
+                        FinalWrites.write(slot, one.appender(), one.policy());
+                    }
+                } catch (ReflectiveOperationException | RuntimeException e) {
+                    LOGGER.info("[Hotwire] {}'s rewrite of log lines could not go back: {}", mod, e.toString());
+                }
+            }
+            POLICIES.remove(mod);
+        }
         if (!(LogManager.getContext(false) instanceof LoggerContext context)) {
             return;
         }

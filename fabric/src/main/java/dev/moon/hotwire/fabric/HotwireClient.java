@@ -3,10 +3,12 @@ package dev.moon.hotwire.fabric;
 import dev.moon.hotwire.fabric.registration.OffModClose;
 import dev.moon.hotwire.fabric.registration.OffModCommands;
 import dev.moon.hotwire.fabric.report.HotwireLog;
+import dev.moon.hotwire.modrinth.Downloads;
 import dev.moon.hotwire.redefine.FieldHolders;
 import dev.moon.hotwire.redefine.InitHookReplay;
 import dev.moon.hotwire.redefine.Tripwire;
 import dev.moon.hotwire.report.GameLog;
+import dev.moon.hotwire.ui.DownloadNotices;
 import dev.moon.hotwire.ui.Lang;
 import java.io.IOException;
 import java.io.UncheckedIOException;
@@ -25,6 +27,8 @@ import org.slf4j.LoggerFactory;
 
 public final class HotwireClient implements ClientModInitializer {
     public static final String ID = "hotwire";
+
+    public static final Identifier NOTICES = Identifier.fromNamespaceAndPath(ID, "notices");
     private static final Logger LOGGER = LoggerFactory.getLogger(HotwireClient.class);
 
     private static @Nullable HotwireEngine engine;
@@ -34,6 +38,8 @@ public final class HotwireClient implements ClientModInitializer {
         HotwireLog.install(FabricLoader.getInstance().getGameDir().resolve("hotwire").resolve("logs"));
         GameLog.LOGGER.info("[Hotwire] {} loaded; H or /hotwire opens it, and its Report button writes what went wrong"
                 + " to hotwire/reports", LoadedMods.findVersion(ID, "unknown"));
+        NoticeHud.register();
+        Downloads.onEveryChange(DownloadNotices::show);
 
         Lang.useTranslator((key, values) -> {
             Language language = Language.getInstance();

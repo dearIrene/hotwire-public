@@ -205,7 +205,9 @@ final class TextField extends Element {
         this.cursor = Math.min(this.cursor, this.text.length());
         this.anchor = Math.min(this.anchor, this.text.length());
         this.scrolled = Math.min(this.scrolled, this.cursor);
-        while (canvas.measureText(this.text.substring(this.scrolled, this.cursor)) > room) {
+
+        while (this.scrolled < this.cursor
+                && canvas.measureText(this.text.substring(this.scrolled, this.cursor)) > room) {
             this.scrolled++;
         }
         String shown = canvas.clip(this.text.substring(this.scrolled), room);

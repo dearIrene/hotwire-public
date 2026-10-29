@@ -77,7 +77,6 @@ final class ModelWrappers {
         }
     }
 
-    @SuppressWarnings("unchecked")
     private void visit(@Nullable Object value, Class<?> slot, Consumer<Object> put, int depth) {
         if (value == null || depth > MOST_DEPTH) {
             return;
@@ -93,6 +92,14 @@ final class ModelWrappers {
         if (!this.seen.add(value)) {
             return;
         }
+        try {
+            this.visitParts(value, mod, depth);
+        } catch (UnsupportedOperationException | IllegalStateException e) {
+        }
+    }
+
+    @SuppressWarnings("unchecked")
+    private void visitParts(Object value, @Nullable String mod, int depth) {
         switch (value) {
             case Map<?, ?> map when map.size() <= LARGEST -> {
                 Map<Object, Object> entries = (Map<Object, Object>) map;

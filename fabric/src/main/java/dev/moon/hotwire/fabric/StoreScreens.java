@@ -10,6 +10,10 @@ import dev.moon.hotwire.modrinth.StoreModel;
 import dev.moon.hotwire.ui.Lang;
 import dev.moon.hotwire.ui.StoreCacheView;
 import dev.moon.hotwire.ui.StoreScreen;
+import java.io.IOException;
+import java.nio.file.Files;
+import java.nio.file.Path;
+import java.nio.file.StandardCopyOption;
 import java.util.HashMap;
 import java.util.HashSet;
 import java.util.Locale;
@@ -122,6 +126,11 @@ final class StoreScreens {
             }
 
             @Override
+            public void saveFromStore(String projectId, String versionId, String title) {
+                StoreScreens.this.saveFromStore(made, projectId, versionId, title);
+            }
+
+            @Override
             public void openLink(String link) {
                 WebLinks.open(link);
             }
@@ -151,6 +160,28 @@ final class StoreScreens {
         made.fetch(projectId, versionId, title, (fetched, projects) -> {
             this.fetching.remove(projectId);
             this.jars.queueForNextStart(fetched, projects, this.engine.getPendingChanges());
+        }, failure -> {
+            this.fetching.remove(projectId);
+            this.engine.showMessage(failure, true);
+        });
+    }
+
+    private void saveFromStore(ModStore made, String projectId, String versionId, String title) {
+        if (!this.fetching.add(projectId)) {
+            return;
+        }
+        made.fetch(projectId, versionId, title, (fetched, projects) -> {
+            this.fetching.remove(projectId);
+            Path folder = Path.of(System.getProperty("user.home"), "Downloads");
+            try {
+                Files.createDirectories(folder);
+                for (Path jar : fetched) {
+                    Files.copy(jar, folder.resolve(jar.getFileName()), StandardCopyOption.REPLACE_EXISTING);
+                }
+                this.engine.showMessage(Lang.get("hotwire.store.saved", title, folder), false);
+            } catch (IOException e) {
+                this.engine.showMessage(Lang.get("hotwire.store.download_failed", title, e.getMessage()), true);
+            }
         }, failure -> {
             this.fetching.remove(projectId);
             this.engine.showMessage(failure, true);

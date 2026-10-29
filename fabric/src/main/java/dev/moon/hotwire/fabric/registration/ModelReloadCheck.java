@@ -98,10 +98,11 @@ public final class ModelReloadCheck {
         Set<Object> seen = Collections.newSetFromMap(new IdentityHashMap<>());
         seen.add(manager);
         Map<Class<?>, @Nullable String> owners = new HashMap<>();
+
         for (Class<?> at = manager.getClass(); at != null && at != Object.class; at = at.getSuperclass()) {
             for (FieldSlots.Slot field : Fields.getDeclared(at)) {
                 int access = field.getModifiers();
-                if (!Modifier.isStatic(access) && !Modifier.isFinal(access) && !field.getType().isPrimitive()) {
+                if (!Modifier.isStatic(access) && !field.getType().isPrimitive()) {
                     List<String> path = new ArrayList<>(List.of(at.getSimpleName() + "." + field.getName()));
                     look(read(field, manager), wanted, found, seen, owners, path, 1, DEPTH);
                 }

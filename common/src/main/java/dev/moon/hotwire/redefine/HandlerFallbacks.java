@@ -77,7 +77,7 @@ final class HandlerFallbacks {
         MethodInsnNode wrapped = null;
         for (AbstractInsnNode insn : lambda.instructions) {
             if (insn instanceof MethodInsnNode call && call.owner.equals(parameters[0].getInternalName())
-                    && call.desc.equals(handedDesc) && (call.getOpcode() == Opcodes.INVOKEINTERFACE
+                    && isHandedTo(call.desc, handedDesc) && (call.getOpcode() == Opcodes.INVOKEINTERFACE
                     || call.getOpcode() == Opcodes.INVOKEVIRTUAL)) {
                 if (wrapped != null) {
                     return false;
@@ -95,10 +95,36 @@ final class HandlerFallbacks {
             slot += parameter.getSize();
         }
         code.add(new MethodInsnNode(wrapped.getOpcode(), wrapped.owner, wrapped.name, wrapped.desc, wrapped.itf));
-        code.add(new InsnNode(Type.getReturnType(lambda.desc).getOpcode(Opcodes.IRETURN)));
+        Type answer = Type.getReturnType(lambda.desc);
+        if (!Type.getReturnType(wrapped.desc).equals(answer) && answer.getSort() == Type.OBJECT) {
+            code.add(new TypeInsnNode(Opcodes.CHECKCAST, answer.getInternalName()));
+        }
+        code.add(new InsnNode(answer.getOpcode(Opcodes.IRETURN)));
         body.maxLocals = slot;
         body.maxStack = slot + 2;
         return true;
+    }
+
+    private static boolean isHandedTo(String call, String handed) {
+        if (call.equals(handed)) {
+            return true;
+        }
+        Type[] accepted = Type.getArgumentTypes(call);
+        Type[] given = Type.getArgumentTypes(handed);
+        if (accepted.length != given.length || !isErasedFor(Type.getReturnType(call), Type.getReturnType(handed))) {
+            return false;
+        }
+        for (int at = 0; at < accepted.length; at++) {
+            if (!isErasedFor(accepted[at], given[at])) {
+                return false;
+            }
+        }
+        return true;
+    }
+
+    private static boolean isErasedFor(Type erased, Type real) {
+        return erased.equals(real) || (erased.getDescriptor().equals("Ljava/lang/Object;")
+                && (real.getSort() == Type.OBJECT || real.getSort() == Type.ARRAY));
     }
 
     private static void box(InsnList code, Type type) {

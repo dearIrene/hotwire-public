@@ -1,6 +1,7 @@
 package dev.moon.hotwire.fabric.registration;
 
 import dev.moon.hotwire.redefine.FieldSlots;
+import java.lang.reflect.Proxy;
 import java.util.ArrayList;
 import java.util.Collection;
 import java.util.Collections;
@@ -95,6 +96,59 @@ final class CollectionReferences {
         }
     }
 
+    private static final int WRAPPED_BELOW = 3;
+
+    private static boolean isGameObject(Object value) {
+        String name = value.getClass().getName();
+        return !(value instanceof Collection<?>) && !(value instanceof Map<?, ?>) && !(value instanceof Object[])
+                && (name.startsWith("net.minecraft.") || name.startsWith("com.mojang."));
+    }
+
+    @SuppressWarnings("ReferenceEquality")
+    private void noteWrappedInside(Object holder, int steps) {
+        for (FieldSlots.Slot field : Fields.getReferenceFields(holder.getClass(), false)) {
+            Object value;
+            try {
+                value = field.get(holder);
+            } catch (ReflectiveOperationException | RuntimeException e) {
+                continue;
+            }
+            if (value == null || ValueOwners.isPlain(value) || value instanceof Collection<?>
+                    || value instanceof Map<?, ?>) {
+                continue;
+            }
+            String mod = GameRegistrations.findModOrShipper(value.getClass());
+            if (mod == null && steps > 1 && !Wrappers.isOfAnotherMod(value.getClass()) && this.seen.add(value)) {
+                this.noteWrappedInside(value, steps - 1);
+                continue;
+            }
+            if (mod == null || !this.mods.contains(mod)) {
+                continue;
+            }
+            Object inner = Lambdas.findWrapped(value, field.getType(), mod);
+            if (inner == null) {
+                continue;
+            }
+            Object mods = value;
+            String owner = mod;
+            this.takeOrNote(owner, this.candidates.withOwner(Set.of(), owner), () -> {
+                try {
+                    return field.get(holder) == mods ? owner : null;
+                } catch (ReflectiveOperationException | RuntimeException e) {
+                    return null;
+                }
+            }, taker -> {
+                try {
+                    field.set(holder, inner);
+                    this.getRemovalsOf(taker).add(new Removal.InField(holder, field, mods, inner));
+                } catch (ReflectiveOperationException | RuntimeException e) {
+                    LOGGER.info("[Hotwire] {}.{} keeps {}'s object: {}", holder.getClass().getName(),
+                            field.getName(), taker, e.toString());
+                }
+            });
+        }
+    }
+
     private void begin(List<String> mods) {
         this.seen = Collections.newSetFromMap(new IdentityHashMap<>());
         this.mods = List.copyOf(mods);
@@ -144,6 +198,10 @@ final class CollectionReferences {
                     if (value instanceof List<?> list && list.size() <= LARGEST && CollectionParts.isFixedSize(list)
                             && field.getType().isAssignableFrom(List.class)) {
                         this.removeFromFixedList(field, null);
+                    }
+
+                    if (game && isGameObject(value)) {
+                        this.noteWrappedInside(value, WRAPPED_BELOW);
                     }
 
                     if (!(value instanceof Collection<?>) && !(value instanceof Map<?, ?>)
@@ -300,6 +358,14 @@ final class CollectionReferences {
         if (holder instanceof Registry<?>) {
             return;
         }
+
+        if (Proxy.isProxyClass(holder.getClass())) {
+            Object handler = Proxy.getInvocationHandler(holder);
+            if (this.seen.add(handler)) {
+                this.lookInto(handler);
+            }
+            return;
+        }
         for (FieldSlots.Slot field : Fields.getReferenceFields(holder.getClass(), false)) {
             Object value = CollectionParts.read(field, holder);
             if ((value instanceof Collection<?> || value instanceof Map<?, ?> || value instanceof Object[])
@@ -358,6 +424,10 @@ final class CollectionReferences {
                                     owner -> ElementTakes.takeFromList(items, item, this.getRemovalsOf(owner)));
                         } else if (item != null) {
                             this.followLambda(item);
+                            if (!(item instanceof Collection<?>) && !(item instanceof Map<?, ?>)
+                                    && !Wrappers.isOfAnotherMod(item.getClass())) {
+                                this.noteWrappedInside(item, WRAPPED_BELOW);
+                            }
                         }
                     }
                 }
@@ -379,8 +449,12 @@ final class CollectionReferences {
                     for (int index = 0; index < array.length; index++) {
                         Object item = array[index];
                         String whole = item == null ? null : this.owners.findWholeOwnerOfSlot(item);
+
+                        if (whole != null && !StandIns.fits(slot)) {
+                            whole = null;
+                        }
                         String parts = item == null || whole != null ? null : this.owners.findPartsOwnerOfSlot(item);
-                        Object standIn = whole != null ? (StandIns.fits(slot) ? StandIns.of(slot) : null)
+                        Object standIn = whole != null ? StandIns.of(slot)
                                 : parts != null ? CollectionParts.withStandIns(parts, Objects.requireNonNull(item))
                                 : null;
                         if (item != null && standIn != null) {
@@ -412,6 +486,9 @@ final class CollectionReferences {
                             if (ElementLook.isLooking() && holds && this.seen.add(element)) {
                                 this.collect(element);
                             }
+                        } else if (element != null && !(element instanceof Collection<?>)
+                                && !(element instanceof Map<?, ?>) && !Wrappers.isOfAnotherMod(element.getClass())) {
+                            this.noteWrappedInside(element, WRAPPED_BELOW);
                         } else if (element instanceof Collection<?> nested) {
                             this.collect(nested);
                             if (nested instanceof List<?> list && list.size() <= LARGEST
@@ -455,7 +532,8 @@ final class CollectionReferences {
             for (Map.Entry<Object, Object> entry : Wrappers.copyEntries(entries)) {
                 String mod = this.owners.isRegistered(entry.getKey()) || this.owners.isRegistered(entry.getValue())
                         ? null : this.owners.findModNamespaceOf(entry.getKey(), entry.getValue());
-                if (mod != null && entries.remove(entry.getKey(), entry.getValue())) {
+                if (mod != null && !ElementTakes.isGameEntry(entry.getKey(), entry.getValue())
+                        && entries.remove(entry.getKey(), entry.getValue())) {
                     this.getRemovalsOf(mod).add(new Removal.InMap(entries, entry.getKey(), entry.getValue()));
                 }
             }

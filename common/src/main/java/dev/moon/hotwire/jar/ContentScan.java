@@ -19,7 +19,9 @@ import org.objectweb.asm.Handle;
 import org.objectweb.asm.Opcodes;
 import org.objectweb.asm.tree.AbstractInsnNode;
 import org.objectweb.asm.tree.ClassNode;
+import org.objectweb.asm.tree.FieldInsnNode;
 import org.objectweb.asm.tree.InvokeDynamicInsnNode;
+import org.objectweb.asm.tree.MethodInsnNode;
 import org.objectweb.asm.tree.MethodNode;
 import org.objectweb.asm.tree.TypeInsnNode;
 
@@ -33,6 +35,11 @@ public final class ContentScan {
             "net/minecraft/class_2586", "block entities");
 
     private static final Set<String> MADE_BY_CONSTRUCTING = Set.of("blocks", "items", "fluids");
+
+    private static final Map<String, String> REGISTRY_OF = Map.of("BLOCK", "blocks", "ITEM", "items", "FLUID",
+            "fluids", "ENTITY_TYPE", "entities", "BLOCK_ENTITY_TYPE", "block entities");
+    private static final Set<String> REGISTRY_HOLDERS = Set.of("net/minecraft/core/registries/BuiltInRegistries",
+            "net/minecraft/core/registries/Registries");
 
     private ContentScan() {
     }
@@ -55,7 +62,11 @@ public final class ContentScan {
         Map<String, @Nullable String> kindOf = new HashMap<>();
         Function<String, @Nullable String> kind = name -> findKindOf(name, superOf, gameSuperOf, kindOf);
         Set<String> kinds = new TreeSet<>();
+        Set<String> registered = new TreeSet<>();
+        boolean obfuscated = false;
         for (ClassNode node : nodes.values()) {
+            registered.addAll(findRegistered(node));
+            obfuscated |= node.superName != null && node.superName.startsWith("net/minecraft/class_");
             if ((node.access & Opcodes.ACC_INTERFACE) != 0) {
                 continue;
             }
@@ -82,7 +93,27 @@ public final class ContentScan {
                 }
             }
         }
+        if (!obfuscated) {
+            kinds.retainAll(registered);
+        }
         return kinds;
+    }
+
+    private static Set<String> findRegistered(ClassNode node) {
+        Set<String> named = new TreeSet<>();
+        boolean registers = false;
+        for (MethodNode method : node.methods) {
+            for (AbstractInsnNode insn : method.instructions) {
+                if (insn instanceof FieldInsnNode field && REGISTRY_HOLDERS.contains(field.owner)
+                        && REGISTRY_OF.containsKey(field.name)) {
+                    named.add(REGISTRY_OF.get(field.name));
+                } else if (insn instanceof MethodInsnNode call && (call.name.startsWith("register")
+                        || call.name.equals("create"))) {
+                    registers = true;
+                }
+            }
+        }
+        return registers ? named : Set.of();
     }
 
     private static @Nullable String findKindOf(String name, Map<String, String> superOf,

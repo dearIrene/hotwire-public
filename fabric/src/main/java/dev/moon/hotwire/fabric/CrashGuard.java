@@ -61,7 +61,7 @@ public final class CrashGuard {
                         Lang.get("hotwire.report.file.mod_crash", name), why), where -> {
                     String line = Lang.get("hotwire.crash.off_held", name, where);
                     say.accept(line, true);
-                    ModViews.showToast(Lang.get("hotwire.crash.title"), line);
+                    ModViews.showNotice(Lang.get("hotwire.crash.title"), line);
                 });
                 return;
             }
@@ -111,7 +111,7 @@ public final class CrashGuard {
         String line = off ? Lang.get("hotwire.crash.turned_off", name, where) : Lang.get("hotwire.crash.not_turned_off",
                 name, PlayerMessages.describe(result, installed::nameOf), where);
         say.accept(line, true);
-        ModViews.showToast(Lang.get("hotwire.crash.title"), line);
+        ModViews.showNotice(Lang.get("hotwire.crash.title"), line);
     }
 
     static void onBackOn(Collection<String> ids) {

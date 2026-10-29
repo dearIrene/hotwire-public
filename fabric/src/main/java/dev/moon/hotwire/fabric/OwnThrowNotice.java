@@ -27,7 +27,7 @@ final class OwnThrowNotice {
                     "Hotwire's own code threw inside the game, which went on past it: " + what), where -> {
                         String line = Lang.get("hotwire.own_fault", what, where);
                         say.accept(line, true);
-                        ModViews.showToast(Lang.get("hotwire.own_fault.title"), line);
+                        ModViews.showNotice(Lang.get("hotwire.own_fault.title"), line);
                     });
         });
     }

@@ -179,6 +179,14 @@ public final class ClassSplit {
                 out.innerClasses.add(listed);
             }
         }
+
+        Set<String> mixedMixins = new HashSet<>();
+        for (MethodNode method : mixed.methods) {
+            String merged = GeneratedNames.findMergedFrom(method.visibleAnnotations);
+            if (merged != null) {
+                mixedMixins.add(merged);
+            }
+        }
         List<String> stubbed = new ArrayList<>();
         List<MethodNode> bodies = new ArrayList<>();
         boolean rehashes = false;
@@ -190,9 +198,16 @@ public final class ClassSplit {
             body.invisibleAnnotations = shape.invisibleAnnotations;
             MethodNode from = mixedMethods.get(shape.name + shape.desc);
             if (from == null || !inRunning.test(from)) {
+                String merged = GeneratedNames.findMergedFrom(shape.visibleAnnotations);
+                if (merged != null && !mixedMixins.contains(merged)) {
+                    body.visibleAnnotations = GeneratedNames.dropMerged(shape.visibleAnnotations);
+                }
+
                 stubbed.add(shape.name + shape.desc);
                 MethodNode inherited = Overrides.findInherited(running, shape, classBytes);
-                if (inherited != null) {
+                if (shape.name.equals("<clinit>")) {
+                    body.instructions.add(new InsnNode(Opcodes.RETURN));
+                } else if (inherited != null) {
                     inherited.accept(new CodeOnly(body));
                     rehashes |= HASHING.contains(shape.name + shape.desc) && !Overrides.callsInherited(shape);
                 } else if (BodyMarks.injectCallback(shape)) {

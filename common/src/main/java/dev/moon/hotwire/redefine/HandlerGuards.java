@@ -10,7 +10,9 @@ import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.HashSet;
 import java.util.List;
+import java.util.Locale;
 import java.util.Map;
+import java.util.Objects;
 import java.util.OptionalInt;
 import java.util.Set;
 import java.util.concurrent.ConcurrentHashMap;
@@ -71,6 +73,12 @@ public final class HandlerGuards {
     private static final Map<String, Set<String>> BEHAVING = new ConcurrentHashMap<>();
 
     private static final AtomicLong FLIPS = new AtomicLong();
+
+    private static final AtomicLong CHUNK_FLIPS = new AtomicLong();
+    private static final List<String> CHUNK_HOSTS = List.of("chunk", "renderer/block/", "color/block/", "/model/",
+            "terrain", "/mesh");
+    private static final List<String> CHUNK_MIXINS = List.of("chunk", "blockmodel", "bakedmodel", "blockrender",
+            "blockcolor", "quad", "mesh", "terrain", "fluidrender", "section", "blockstatemodel");
     private static final Object LOCK = new Object();
 
     private HandlerGuards() {
@@ -139,6 +147,36 @@ public final class HandlerGuards {
 
     public static long getFlips() {
         return FLIPS.get();
+    }
+
+    private static boolean containsAny(String name, List<String> parts) {
+        for (String part : parts) {
+            if (name.contains(part)) {
+                return true;
+            }
+        }
+        return false;
+    }
+
+    public static long getChunkFlips() {
+        return CHUNK_FLIPS.get();
+    }
+
+    private static boolean isOfChunks(String mixin) {
+        String simple = mixin.substring(Math.max(mixin.lastIndexOf('/'), mixin.lastIndexOf('.')) + 1)
+                .toLowerCase(Locale.ROOT);
+        if (containsAny(simple, CHUNK_MIXINS)) {
+            return true;
+        }
+        for (Map.Entry<String, Set<String>> host : GUARDED.entrySet()) {
+            if (host.getValue().contains(mixin)) {
+                String name = host.getKey().toLowerCase(Locale.ROOT);
+                if (containsAny(name, CHUNK_HOSTS)) {
+                    return true;
+                }
+            }
+        }
+        return false;
     }
 
     public static boolean isSite(Handle bootstrap) {
@@ -217,6 +255,14 @@ public final class HandlerGuards {
                 }
                 String mixin = mixinOfHandler.get(call.name + call.desc);
                 if (mixin == null) {
+                    continue;
+                }
+                if (method.name.equals("<init>")) {
+                    if (!UNFLIPPABLE.contains(mixin)) {
+                        LOGGER.info("[Hotwire] {}'s constructor calls a handler of {}: it is rebuilt, not flipped",
+                                internalName, mixin);
+                    }
+                    markUnflippable(internalName, mixin);
                     continue;
                 }
                 boolean isStatic = call.getOpcode() == Opcodes.INVOKESTATIC;
@@ -305,6 +351,15 @@ public final class HandlerGuards {
                 if (insn instanceof InvokeDynamicInsnNode site && isSite(site.bsm) && site.bsmArgs.length > 0
                         && site.bsmArgs[0] instanceof String of) {
                     guarded.add(of);
+                } else if (insn instanceof InvokeDynamicInsnNode site && !isSite(site.bsm)
+                        && findModInHandlerName(site.name) != null) {
+                    for (Map.Entry<String, String> handler : handlers.entrySet()) {
+                        if (handler.getKey().startsWith(site.name + "(")) {
+                            markUnflippable(internalName, handler.getValue());
+                        }
+                    }
+                    DIRECT_MODS.computeIfAbsent(internalName, name -> ConcurrentHashMap.newKeySet())
+                            .add(Objects.requireNonNull(findModInHandlerName(site.name)));
                 } else if (insn instanceof MethodInsnNode call) {
                     String direct = call.owner.equals(internalName) ? handlers.get(call.name + call.desc) : null;
                     if (direct != null) {
@@ -441,21 +496,27 @@ public final class HandlerGuards {
     }
 
     public static int setOff(Set<String> mixins, boolean off) {
-        FLIPS.incrementAndGet();
         List<MutableCallSite> changed = new ArrayList<>();
+        boolean chunks = false;
         synchronized (LOCK) {
             for (String mixin : mixins) {
                 if (off ? !OFF.add(mixin) : !OFF.remove(mixin)) {
                     continue;
                 }
-                for (Guard guard : GUARDS.getOrDefault(mixin, List.of())) {
+                List<Guard> guards = GUARDS.getOrDefault(mixin, List.of());
+                for (Guard guard : guards) {
                     guard.site().setTarget(off ? guard.standIn() : guard.handler());
                     changed.add(guard.site());
                 }
+                chunks |= !guards.isEmpty() && isOfChunks(mixin);
             }
         }
         if (!changed.isEmpty()) {
+            FLIPS.incrementAndGet();
             MutableCallSite.syncAll(changed.toArray(MutableCallSite[]::new));
+        }
+        if (chunks) {
+            CHUNK_FLIPS.incrementAndGet();
         }
         LOGGER.info("[Hotwire] {} handler sites of {} mixins now call {}", changed.size(), mixins.size(),
                 off ? "their stand-ins" : "their handlers");

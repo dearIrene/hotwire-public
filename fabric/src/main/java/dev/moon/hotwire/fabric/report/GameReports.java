@@ -189,13 +189,21 @@ public final class GameReports {
         Set<String> switched = new HashSet<>(reports.off);
         switched.addAll(reports.added);
         ClassLoader game = GameReports.class.getClassLoader();
-        return CrashSection.describeTrace(frames, messages, reports.rebuiltBy::get, switched, name -> {
-            try {
-                return GameRegistrations.findModOf(Class.forName(name, false, game));
-            } catch (ClassNotFoundException | LinkageError e) {
-                return null;
-            }
-        }, reports.nameOf);
+        CrashSection.Detail trace = CrashSection.describeTrace(frames, messages, reports.rebuiltBy::get, switched,
+                name -> {
+                    try {
+                        return GameRegistrations.findModOf(Class.forName(name, false, game));
+                    } catch (ClassNotFoundException | LinkageError e) {
+                        return null;
+                    }
+                }, reports.nameOf);
+
+        String now = reports.underWay;
+        if (now != null && CrashSection.isCleared(trace.value())) {
+            return new CrashSection.Detail(trace.name(), "Hotwire involved? YES. The game crashed while Hotwire was"
+                    + " switching (" + now + "). Send the newest zip under hotwire/reports.");
+        }
+        return trace;
     }
 
     public synchronized Report reportSwitch(ModSwitcher.Result result, Set<String> off, Report.OffCheck offCheck,

@@ -14,7 +14,15 @@ final class ChunkRedraw {
                 game.levelRenderer.invalidateCompiledGeometry(game.level, game.options,
                         game.gameRenderer.mainCamera(), game.getBlockColors());
                 //?} else {
-                /*game.levelRenderer.allChanged();
+                /*int reach = (game.options.getEffectiveRenderDistance() + 1) * 16;
+                if (game.player == null) {
+                    return;
+                }
+                int x = game.player.getBlockX();
+                int z = game.player.getBlockZ();
+                int bottom = game.level.dimensionType().minY();
+                game.levelRenderer.setBlocksDirty(x - reach, bottom, z - reach, x + reach,
+                        bottom + game.level.dimensionType().height() - 1, z + reach);
                 *///?}
             }
         });

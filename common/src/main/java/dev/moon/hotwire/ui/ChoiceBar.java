@@ -11,7 +11,11 @@ final class ChoiceBar extends Element {
 
     enum Glyph { NONE, ROWS, GRID }
 
-    record Choice(String label, @Nullable String note, Glyph glyph) {
+    record Choice(String label, @Nullable String note, Glyph glyph, boolean opens) {
+        Choice(String label, @Nullable String note, Glyph glyph) {
+            this(label, note, glyph, false);
+        }
+
         static Choice of(String label) {
             return new Choice(label, null, Glyph.NONE);
         }
@@ -19,7 +23,13 @@ final class ChoiceBar extends Element {
         static Choice ofGlyph(Glyph glyph) {
             return new Choice("", null, glyph);
         }
+
+        static Choice ofMenu(String label) {
+            return new Choice(label, null, Glyph.NONE, true);
+        }
     }
+
+    private static final int ARROW = 10;
 
     private final IntConsumer onPick;
     private final EasedValue chosenX = EasedValue.ofSpeed(18);
@@ -78,7 +88,16 @@ final class ChoiceBar extends Element {
             return HEIGHT + 2;
         }
         String note = choice.note();
-        return canvas.measureText(choice.label()) + (note == null ? 0 : canvas.measureText(" " + note)) + 14;
+        return canvas.measureText(choice.label()) + (note == null ? 0 : canvas.measureText(" " + note)) + 14
+                + (choice.opens() ? ARROW : 0);
+    }
+
+    int findLeft(int index) {
+        return index >= 0 && index + 1 < this.edges.length ? this.edges[index] : this.getX();
+    }
+
+    int findRight(int index) {
+        return index >= 0 && index + 1 < this.edges.length ? this.edges[index + 1] : this.getX() + this.getWidth();
     }
 
     private OptionalInt findChoiceAt(double px) {
@@ -162,8 +181,16 @@ final class ChoiceBar extends Element {
             String note = choice.note();
             int labelW = canvas.measureText(label);
             int noteW = note == null ? 0 : canvas.measureText(" " + note);
-            int textX = from + (to - from - labelW - noteW) / 2;
+            int arrowW = choice.opens() ? ARROW : 0;
+            int textX = from + (to - from - labelW - noteW - arrowW) / 2;
             canvas.drawText(label, textX, y + (HEIGHT - 8) / 2, Colors.fade(ink, alpha));
+            if (choice.opens()) {
+                int ax = textX + labelW + noteW + 5;
+                int ay = y + HEIGHT / 2 - 1;
+                for (int row = 0; row < 3; row++) {
+                    canvas.fill(ax + row, ay + row, ax + 5 - row, ay + row + 1, Colors.fade(ink, alpha));
+                }
+            }
             if (note != null) {
                 canvas.drawText(" " + note, textX + labelW, y + (HEIGHT - 8) / 2,
                         Colors.fade(lit ? Palette.ON_ACCENT : Palette.ACCENT, alpha));

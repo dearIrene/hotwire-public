@@ -13,6 +13,7 @@ import java.util.List;
 import java.util.Map;
 import java.util.Objects;
 import java.util.Set;
+import java.util.function.Predicate;
 import net.minecraft.client.Minecraft;
 import org.jspecify.annotations.Nullable;
 import org.lwjgl.system.Callback;
@@ -100,6 +101,8 @@ public final class GlfwCallbacks {
             LOGGER.warn("[Hotwire] {}'s objects cannot be looked through: no instrumentation yet", holder);
             return objects;
         }
+
+        Predicate<Class<?>> own = type -> holder.equals(GameRegistrations.findModOf(type));
         for (Class<?> owner : found.getAllLoadedClasses()) {
             if (owner.isArray() || owner.isHidden() || !holder.equals(GameRegistrations.findModOf(owner))) {
                 continue;
@@ -109,7 +112,7 @@ public final class GlfwCallbacks {
                     Object value = field.get(null);
                     if (value != null) {
                         objects.add(value);
-                        objects.addAll(Fields.findBelow(value, BELOW, any -> !any.getName().startsWith("java.")));
+                        objects.addAll(Fields.findBelow(value, BELOW, own));
                     }
                 } catch (ReflectiveOperationException | RuntimeException e) {
                 }
@@ -119,9 +122,8 @@ public final class GlfwCallbacks {
         for (Object one : objects) {
             Collection<?> items = one instanceof Map<?, ?> map ? Wrappers.readValues(map)
                     : one instanceof Collection<?> collection ? collection : List.of();
-            items.stream().limit(1000).filter(item -> item != null && !item.getClass().getName().startsWith("java."))
-                    .forEach(below::add);
-            below.addAll(Fields.findInCollectionsOf(one, any -> !any.getName().startsWith("java.")));
+            items.stream().limit(1000).filter(item -> item != null && own.test(item.getClass())).forEach(below::add);
+            below.addAll(Fields.findInCollectionsOf(one, own));
         }
         objects.addAll(below);
         return objects;

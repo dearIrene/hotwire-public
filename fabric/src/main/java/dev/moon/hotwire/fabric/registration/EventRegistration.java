@@ -11,6 +11,7 @@ import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.List;
 import org.jspecify.annotations.Nullable;
+import org.slf4j.LoggerFactory;
 
 final class EventRegistration implements Registration {
     private final WeakReference<ArrayBackedEventAccessor> event;
@@ -98,7 +99,8 @@ final class EventRegistration implements Registration {
                 return;
             }
             phase.hotwire$setListeners(placed.toArray(Arrays.copyOf(listeners, 0)));
-            rebuildInvoker(event);
+
+            Tripwire.runAsHotwire(() -> event.hotwire$rebuildInvoker(countTotal(event)));
         }
     }
 
@@ -112,7 +114,12 @@ final class EventRegistration implements Registration {
         Class<?> face = invoker == null || invoker.getClass().getInterfaces().length == 0 ? null
                 : invoker.getClass().getInterfaces()[0];
         if (face != null && StandIns.fits(face)) {
-            plain.hotwire$setInvoker(StandIns.of(face));
+            try {
+                plain.hotwire$setInvoker(StandIns.of(face));
+            } catch (RuntimeException | LinkageError e) {
+                LoggerFactory.getLogger(EventRegistration.class).info("[Hotwire] the event of {} keeps its invoker:"
+                        + " no stand-in could be made, {}", face.getName(), e.toString());
+            }
         }
     }
 

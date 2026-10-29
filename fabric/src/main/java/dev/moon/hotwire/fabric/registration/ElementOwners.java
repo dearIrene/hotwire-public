@@ -44,12 +44,23 @@ final class ElementOwners {
         return this.wrappers;
     }
 
+    static boolean isGameObject(Object item) {
+        Class<?> type = item.getClass();
+        String name = type.getName();
+        return !type.isHidden() && !type.isRecord() && !Proxy.isProxyClass(type)
+                && GameRegistrations.findModOf(type) == null
+                && (name.startsWith("net.minecraft.") || name.startsWith("com.mojang."));
+    }
+
     @Nullable String findOwnerAmong(Object value) {
         String own = this.findOwnOwner(value);
         if (own != null) {
             return own;
         }
 
+        if (isGameObject(value)) {
+            return null;
+        }
         String named = ReflectedOwners.findOwnerOf(value instanceof Class<?> type ? type : value.getClass());
         return named != null && this.modSet.contains(named) ? named : null;
     }
@@ -60,12 +71,21 @@ final class ElementOwners {
         if (mod != null && this.modSet.contains(mod)) {
             return mod;
         }
+
+        String code = mod == null ? GameRegistrations.findCodeMod(type) : null;
+        if (code != null && this.modSet.contains(code)) {
+            return code;
+        }
         String lambda = type.isHidden() ? ValueOwners.findLambdaOwner(type) : null;
         return lambda != null && this.modSet.contains(lambda) ? lambda : null;
     }
 
     @Nullable String findOwnerOf(Object item, boolean inSmall) {
         if (this.registered.contains(item)) {
+            return null;
+        }
+
+        if (isGameObject(item)) {
             return null;
         }
         String owner = this.findOwnerAmong(item);

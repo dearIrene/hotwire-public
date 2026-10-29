@@ -74,6 +74,10 @@ public class Element {
         this.visible = false;
     }
 
+    boolean isOpenedSince(long nanos) {
+        return false;
+    }
+
     void setAlpha(float alpha) {
         this.alpha = alpha;
     }

@@ -124,6 +124,26 @@ sealed interface Removal {
         }
     }
 
+    record InField(Object holder, FieldSlots.Slot field, Object mods, Object inner) implements Removal {
+        @Override
+        @SuppressWarnings("ReferenceEquality")
+        public void restore() {
+            try {
+                if (this.field.get(this.holder) == this.inner) {
+                    this.field.set(this.holder, this.mods);
+                }
+            } catch (ReflectiveOperationException | RuntimeException e) {
+                LoggerFactory.getLogger(Removal.class).info("[Hotwire] {}.{} keeps what it was given: {}",
+                        this.holder.getClass().getName(), this.field.getName(), e.toString());
+            }
+        }
+
+        @Override
+        public String describe() {
+            return "a field of " + this.holder.getClass().getSimpleName() + " (" + describeKind(this.mods) + ")";
+        }
+    }
+
     record InMap(Map<Object, Object> map, Object key, Object value) implements Removal {
         @Override
         public void restore() {

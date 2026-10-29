@@ -7,6 +7,7 @@ import org.jspecify.annotations.Nullable;
 final class Dropdown extends Element {
     static final int HEIGHT = 22;
     static final int ITEM = 22;
+    private static final int MIN_ROWS = 3;
     private static final int FACE_HOT = 0x24B48CFF;
     private static final int EDGE = Palette.PANEL_EDGE;
     private static final int MENU = 0xFF120D1B;
@@ -24,13 +25,18 @@ final class Dropdown extends Element {
     private final Menu menu = new Menu();
     private final IntConsumer onPick;
     private final IntConsumer onRemove;
+
+    private final Element holder;
     private String header;
     private List<Item> items = List.of();
+
+    private int first;
 
     public Dropdown(Element menus, String header, IntConsumer onPick, IntConsumer onRemove) {
         this.header = header;
         this.onPick = onPick;
         this.onRemove = onRemove;
+        this.holder = menus;
         menus.add(this.menu);
         this.menu.setVisible(false);
         this.openness.snap(0);
@@ -42,6 +48,7 @@ final class Dropdown extends Element {
 
     void setItems(List<Item> items) {
         this.items = List.copyOf(items);
+        this.first = 0;
         List.copyOf(this.menu.getChildren()).forEach(this.menu::remove);
         for (int i = 0; i < this.items.size(); i++) {
             this.menu.add(new Row(i));
@@ -60,21 +67,48 @@ final class Dropdown extends Element {
 
     private void placeMenu() {
         int top = this.getY() + this.getHeight() + 2;
-        this.menu.setBounds(this.getX(), top, this.getWidth(), this.items.size() * ITEM);
+        int shown = this.findShown();
+        this.first = Math.max(0, Math.min(this.first, this.items.size() - shown));
+        this.menu.setBounds(this.getX(), top, this.getWidth(), shown * ITEM);
         for (Element row : this.menu.getChildren()) {
-            row.setBounds(this.getX(), top + ((Row) row).index * ITEM, this.getWidth(), ITEM);
+            int at = ((Row) row).index - this.first;
+            row.setBounds(this.getX(), top + at * ITEM, this.getWidth(), ITEM);
+            row.setVisible(at >= 0 && at < shown);
         }
+    }
+
+    private int findShown() {
+        int top = this.getY() + this.getHeight() + 2;
+        int room = (this.holder.getY() + this.holder.getHeight() - top - 6) / ITEM;
+        return Math.min(this.items.size(), Math.max(MIN_ROWS, room));
     }
 
     @Override
     protected boolean onClick(double px, double py, int button) {
+        this.toggle();
+        return true;
+    }
+
+    void toggle() {
         if (this.menu.open()) {
             this.menu.dismiss();
         } else {
-            this.menu.wanted = true;
-            this.menu.setVisible(true);
+            this.openMenu();
         }
-        return true;
+    }
+
+    void openMenu() {
+        this.menu.openedAt = System.nanoTime();
+        this.menu.wanted = true;
+        this.menu.setVisible(true);
+    }
+
+    void close() {
+        this.menu.dismiss();
+    }
+
+    boolean isShown() {
+        return this.menu.open();
     }
 
     @Override
@@ -109,11 +143,17 @@ final class Dropdown extends Element {
     }
 
     private int getUnrolled() {
-        return Math.max(1, (int) (this.items.size() * ITEM * Math.min(1f, this.openness.getValue() * 1.15f)));
+        return Math.max(1, (int) (this.findShown() * ITEM * Math.min(1f, this.openness.getValue() * 1.15f)));
     }
 
     private final class Menu extends Element {
         private boolean wanted;
+        private long openedAt;
+
+        @Override
+        boolean isOpenedSince(long nanos) {
+            return this.wanted && this.openedAt - nanos >= 0;
+        }
 
         @Override
         public boolean open() {
@@ -127,12 +167,22 @@ final class Dropdown extends Element {
 
         @Override
         public void step(float dt) {
+            if (!Dropdown.this.holder.open()) {
+                this.wanted = false;
+            }
             Dropdown.this.openness.to(this.wanted ? 1 : 0);
             Dropdown.this.openness.step(dt);
             if (!this.wanted && Dropdown.this.openness.getValue() <= 0.01f) {
                 this.setVisible(false);
             }
             super.step(dt);
+        }
+
+        @Override
+        protected boolean onScroll(double amount) {
+            Dropdown.this.first -= (int) Math.signum(amount) * 2;
+            Dropdown.this.placeMenu();
+            return true;
         }
 
         @Override

@@ -91,7 +91,8 @@ public final class Tripwire {
     private static final Set<Class<?>> LINKERS = Set.of(Tripwire.class, Linker.class, DuckCalls.class,
             MovedSites.class);
     private static final String HOTWIRE = "hotwire";
-    private static final int FRAMES = 16;
+    private static final int FRAMES = 28;
+    private static final ThreadLocal<@Nullable String> SENDING = new ThreadLocal<>();
     private static final Map<String, AtomicLong> CALLS = new ConcurrentHashMap<>();
     private static final Map<String, List<String>> FIRST = new ConcurrentHashMap<>();
     private static final Map<String, List<String>> FIRST_LOAD = new ConcurrentHashMap<>();
@@ -504,8 +505,20 @@ public final class Tripwire {
         return thread != null && WAITING.getOrDefault(mod, Set.of()).contains(thread);
     }
 
+    public static void noteSending(@Nullable String packet) {
+        if (packet == null) {
+            SENDING.remove();
+        } else {
+            SENDING.set(packet);
+        }
+    }
+
     private static List<String> findCallers() {
         List<String> frames = new ArrayList<>();
+        String sending = SENDING.get();
+        if (sending != null) {
+            frames.add("writing " + sending);
+        }
         StackTraceElement[] stack = new Throwable().getStackTrace();
         for (StackTraceElement frame : stack) {
             if (!frame.getClassName().equals(Tripwire.class.getName()) && frames.size() < FRAMES / 2) {

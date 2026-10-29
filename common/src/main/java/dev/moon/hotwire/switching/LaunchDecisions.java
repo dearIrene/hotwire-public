@@ -56,7 +56,7 @@ final class LaunchDecisions {
         return this.read.computeIfAbsent(name, key -> Optional.ofNullable(this.game.findConfigBytes(key))).orElse(null);
     }
 
-    Result of(List<String> configs, Map<String, Set<String>> appliedByClass)
+    Result of(List<String> configs, Map<String, Set<String>> appliedByClass, Predicate<String> on)
             throws RebuildException {
         Set<String> applied = new HashSet<>();
         appliedByClass.values().forEach(applied::addAll);
@@ -108,9 +108,11 @@ final class LaunchDecisions {
                     : listed -> this.choice.choose(listed, appliedByClass, ConfigTrim.readPluginOf(bytes) != null);
             String plugin = ConfigTrim.readPluginOf(bytes);
             boolean live = plugin != null && this.isRunLive(config, plugin);
+            String owner = this.ownerOfConfig.get(config);
+            boolean ownerOff = owner != null && !on.test(owner);
             try {
                 trimmed.put(config, ConfigTrim.repeatDecisions(bytes, this.game.getSide(), choose, decided, elsewhere,
-                        name -> this.isPluginRetained(name, bytes, own, decided, elsewhere, asked, live),
+                        name -> !ownerOff && this.isPluginRetained(name, bytes, own, decided, elsewhere, asked, live),
                         name -> live));
                 repeated++;
                 String refmap = ConfigTrim.readRefmapOf(bytes);

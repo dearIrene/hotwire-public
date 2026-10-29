@@ -51,7 +51,7 @@ public final class CarriedMixins {
             @Nullable String source = offMixins.contains(mixin) ? null : this.findModMaking(mixin, id -> true);
             if (offMixins.contains(mixin) || (source != null && !on.contains(source))) {
                 LOGGER.debug("[Hotwire] {} drops {}, whose mod is off", type, mixin);
-            } else if (askedAgain.test(mixin)) {
+            } else if (askedAgain.test(mixin) && this.isSelfContained(mixin)) {
                 LOGGER.info("[Hotwire] {} drops {}, which its own plugin declined with the mods on now", type, mixin);
             } else if (!replacing.isEmpty() && this.findModMaking(mixin, on::contains) == null) {
                 LOGGER.info("[Hotwire] {} drops {}, which no mod staying on makes: the update's own", type, mixin);

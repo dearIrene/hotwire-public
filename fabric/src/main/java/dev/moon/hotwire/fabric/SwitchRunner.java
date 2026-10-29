@@ -12,6 +12,7 @@ import dev.moon.hotwire.fabric.registration.GameRegistrations;
 import dev.moon.hotwire.fabric.registration.GameTasks;
 import dev.moon.hotwire.fabric.registration.GeneratedWrappers;
 import dev.moon.hotwire.fabric.registration.GlfwCallbacks;
+import dev.moon.hotwire.fabric.registration.ImageReaders;
 import dev.moon.hotwire.fabric.registration.LogAppenders;
 import dev.moon.hotwire.fabric.registration.MixinPlugins;
 import dev.moon.hotwire.fabric.registration.ModSounds;
@@ -36,6 +37,8 @@ import dev.moon.hotwire.switching.ModSwitcher;
 import dev.moon.hotwire.switching.OffChecker;
 import dev.moon.hotwire.switching.SwitchTimes;
 import dev.moon.hotwire.ui.Lang;
+import dev.moon.hotwire.ui.Notice;
+import dev.moon.hotwire.ui.Notices;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Locale;
@@ -46,7 +49,6 @@ import java.util.concurrent.Executors;
 import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.concurrent.atomic.AtomicReference;
 import java.util.function.Consumer;
-import net.fabricmc.loader.api.FabricLoader;
 import net.minecraft.client.Minecraft;
 import org.jspecify.annotations.Nullable;
 import org.slf4j.Logger;
@@ -212,19 +214,17 @@ public final class SwitchRunner {
         }
     }
 
-    private static void showTimeToast(ModSwitcher.Result.Done done) {
+    private static void showTimeNotice(ModSwitcher.Result.Done done) {
         List<String> order = done.plan().order();
         if (order.isEmpty()) {
             return;
         }
         boolean off = done.plan().direction() == SwitchPlan.Direction.OFF;
         String seconds = String.format(Locale.ROOT, "%.1f", done.millis() / 1000.0);
-        String first = FabricLoader.getInstance().getModContainer(order.getFirst())
-                .map(mod -> mod.getMetadata().getName()).orElse(order.getFirst());
-        String line = order.size() == 1
-                ? Lang.get(off ? "hotwire.toast.off_one" : "hotwire.toast.on_one", first, seconds)
-                : Lang.get(off ? "hotwire.toast.off_many" : "hotwire.toast.on_many", order.size(), seconds);
-        ModViews.showToast("Hotwire", line);
+        String title = order.size() == 1 ? HotwireClient.getEngine().nameOfMod(order.getFirst())
+                : Lang.get("hotwire.notice.many", order.size());
+        String detail = Lang.get(off ? "hotwire.notice.off" : "hotwire.notice.on", seconds);
+        Notices.show(off ? Notice.ofDone(title, detail) : Notice.ofOn(title, detail));
     }
 
     private void takeOut(List<String> ids) {
@@ -235,6 +235,7 @@ public final class SwitchRunner {
         }
         CrashGuard.onSwitched(ids);
         LogAppenders.takeOut(ids);
+        ImageReaders.takeOut(ids);
         ModSounds.takeOut(ids);
         SwitchTimes.mark("first removals");
         ReloadedLists.takeOut(ids);
@@ -302,6 +303,8 @@ public final class SwitchRunner {
         Tripwire.pause(true);
         try {
             SwitchPlan coming = this.switcher.planOn(ids);
+
+            ElementLook.markChanged(coming.order());
             AtomicBoolean putBack = new AtomicBoolean();
             if (!coming.isRefused()) {
                 this.tripwire.offerDisarm(coming.order());
@@ -384,6 +387,7 @@ public final class SwitchRunner {
                 this.plugins.putBack(order);
                 this.fieldReferences.putBackElements(order);
                 LogAppenders.putBack(order);
+                ImageReaders.putBack(order);
                 OneConfigHuds.putBack(order);
                 NetworkHandlers.putBack(order);
                 EntityRendererProviders.putBack(order);
@@ -429,7 +433,7 @@ public final class SwitchRunner {
         if (result instanceof ModSwitcher.Result.Done done) {
             ResourceReload.reloadResources(done.applied().newlyBuilt(), done.plan().order(), off);
 
-            long flips = HandlerGuards.getFlips();
+            long flips = HandlerGuards.getChunkFlips();
             if (flips != this.flipsSeen) {
                 ChunkRedraw.run();
             }
@@ -452,7 +456,7 @@ public final class SwitchRunner {
 
         if (result instanceof ModSwitcher.Result.Done done) {
             result = new ModSwitcher.Result.Done(done.plan(), done.applied(), SwitchTimes.getMillisSinceBegin());
-            showTimeToast((ModSwitcher.Result.Done) result);
+            showTimeNotice((ModSwitcher.Result.Done) result);
         }
         return new CheckedResult(result, check, faults);
     }

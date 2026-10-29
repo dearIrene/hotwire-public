@@ -16,6 +16,7 @@ final class StoreGrid extends Element {
     static final int ICON = 48;
     private static final int ADD_W = 70;
     private static final int ADD_H = 18;
+    private static final int SQUARE_GAP = 4;
     private static final int FACE = 0xF0140F1E;
     private static final int FACE_HOT = 0xF01E1730;
     private static final int ICON_STAND_IN = 0xFF1B1528;
@@ -28,6 +29,7 @@ final class StoreGrid extends Element {
     private final StoreIcons icons;
     private final BiConsumer<String, String> add;
     private final Consumer<ModrinthClient.Hit> open;
+    private final DownloadOpener download;
     private final EasedValue scroll = EasedValue.ofSpeed(12);
     private final EasedValue hot = EasedValue.ofSpeed(14);
     private float scrollTarget;
@@ -40,12 +42,17 @@ final class StoreGrid extends Element {
     private final String queuedLabel = Lang.get("hotwire.store.queued");
     private final String nothingLabel = Lang.get("hotwire.store.nothing");
 
+    interface DownloadOpener {
+        void open(ModrinthClient.Hit hit, int left, int y);
+    }
+
     StoreGrid(StoreModel model, StoreIcons icons, BiConsumer<String, String> add,
-            Consumer<ModrinthClient.Hit> open) {
+            Consumer<ModrinthClient.Hit> open, DownloadOpener download) {
         this.model = model;
         this.icons = icons;
         this.add = add;
         this.open = open;
+        this.download = download;
     }
 
     private int getColumns() {
@@ -182,7 +189,13 @@ final class StoreGrid extends Element {
         int addY = y + CARD_H - 10 - ADD_H;
         if (this.model.isShowingPacks()) {
             this.paintPackButton(canvas, this.model.findPackState(card.hit().projectId()), addX, addY, hot, alpha);
-        } else if (this.isAddless(card)) {
+            return;
+        }
+        this.paintDownload(canvas, addX - SQUARE_GAP - ADD_H, addY, hot, alpha);
+        if (!this.model.canAdd()) {
+            return;
+        }
+        if (this.isAddless(card)) {
             String label = this.model.isQueuedProject(card.hit().projectId()) ? this.queuedLabel
                     : this.installedLabel;
             canvas.drawText(label, x + w - 10 - canvas.measureText(label), addY + 5, Colors.fade(Palette.FAINT,
@@ -196,6 +209,21 @@ final class StoreGrid extends Element {
             canvas.drawText(label, addX + (ADD_W - canvas.measureText(label)) / 2, addY + 5,
                     Colors.fade(Palette.ON_ACCENT, alpha));
         }
+    }
+
+    private void paintDownload(Canvas canvas, int x, int y, float hot, float alpha) {
+        boolean over = hot > 0 && this.getPointerX() >= x && this.getPointerX() < x + ADD_H
+                && this.getPointerY() >= y && this.getPointerY() < y + ADD_H;
+        canvas.fill(x, y, x + ADD_H, y + ADD_H, Colors.fade(Palette.HAIRLINE, alpha));
+        canvas.fill(x + 1, y + 1, x + ADD_H - 1, y + ADD_H - 1, Colors.fade(Colors.mix(Palette.PANEL, Palette.TEXT,
+                over ? 0.16f : 0.04f), alpha));
+        int ink = Colors.fade(over ? Palette.TEXT : Palette.DIM, alpha);
+        int middle = x + ADD_H / 2;
+        canvas.fill(middle - 1, y + 4, middle + 1, y + 10, ink);
+        for (int row = 0; row < 4; row++) {
+            canvas.fill(middle - 4 + row, y + 9 + row, middle + 4 - row, y + 10 + row, ink);
+        }
+        canvas.fill(x + 4, y + 14, x + ADD_H - 4, y + 15, ink);
     }
 
     private void paintPackButton(Canvas canvas, StoreModel.PackState state, int addX, int addY, float hot,
@@ -294,6 +322,12 @@ final class StoreGrid extends Element {
         int addX = cx + cardW - 10 - ADD_W;
         int addY = cy + CARD_H - 10 - ADD_H;
         boolean onButton = px >= addX && py >= addY && py < addY + ADD_H;
+        int squareX = addX - SQUARE_GAP - ADD_H;
+        if (!this.model.isShowingPacks() && px >= squareX && px < squareX + ADD_H && py >= addY
+                && py < addY + ADD_H) {
+            this.download.open(card.hit(), addX + ADD_W - DownloadMenu.WIDTH, addY + ADD_H + 2);
+            return true;
+        }
         if (onButton && this.model.isShowingPacks()) {
             String projectId = card.hit().projectId();
             switch (this.model.findPackState(projectId)) {
@@ -301,7 +335,7 @@ final class StoreGrid extends Element {
                 case ON, OFF -> this.model.togglePack(projectId);
                 case DOWNLOADING, NEEDS_WORLD -> { }
             }
-        } else if (!this.model.isShowingPacks() && !this.isAddless(card) && onButton) {
+        } else if (!this.model.isShowingPacks() && this.model.canAdd() && !this.isAddless(card) && onButton) {
             this.add.accept(card.hit().projectId(), card.hit().title());
         } else {
             this.open.accept(card.hit());

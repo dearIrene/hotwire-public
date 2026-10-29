@@ -2,7 +2,9 @@ package dev.moon.hotwire.modrinth;
 
 import java.util.ArrayList;
 import java.util.List;
+import java.util.function.Consumer;
 import java.util.function.UnaryOperator;
+import org.jspecify.annotations.Nullable;
 
 public final class Downloads {
     private static final long SHOWN_AFTER_END_NANOS = 2_500_000_000L;
@@ -24,12 +26,20 @@ public final class Downloads {
         }
     }
 
+    private static volatile @Nullable Consumer<Job> whenChanged;
+
     private final List<Job> jobs = new ArrayList<>();
     private int next;
 
+    public static void onEveryChange(Consumer<Job> told) {
+        whenChanged = told;
+    }
+
     public synchronized int begin(String name, long total) {
         int id = ++this.next;
-        this.jobs.add(new Job(id, name, 0, total, State.WAITING, 0));
+        Job job = new Job(id, name, 0, total, State.WAITING, 0);
+        this.jobs.add(job);
+        tell(job);
         return id;
     }
 
@@ -49,9 +59,18 @@ public final class Downloads {
     private void set(int id, UnaryOperator<Job> change) {
         for (int at = 0; at < this.jobs.size(); at++) {
             if (this.jobs.get(at).id() == id) {
-                this.jobs.set(at, change.apply(this.jobs.get(at)));
+                Job changed = change.apply(this.jobs.get(at));
+                this.jobs.set(at, changed);
+                tell(changed);
                 return;
             }
+        }
+    }
+
+    private static void tell(Job job) {
+        Consumer<Job> told = whenChanged;
+        if (told != null) {
+            told.accept(job);
         }
     }
 

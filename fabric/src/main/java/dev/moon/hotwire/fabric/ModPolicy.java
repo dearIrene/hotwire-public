@@ -24,7 +24,8 @@ public final class ModPolicy {
 
     private static final String MODULE_MARK = "fabric-api:module-lifecycle";
 
-    static final Set<String> NEVER_TOUCHED = Set.of("ixeris", "ferritecore");
+    static final Set<String> NEVER_TOUCHED = Set.of("ixeris", "ferritecore", "c2me");
+    private static final String NEVER_TOUCHED_PARTS = "c2me-";
 
     static final Set<String> ALWAYS_ON = Set.of("sodium", "lithium", "phosphor", "vulkanmod", "modernfix");
 
@@ -37,7 +38,11 @@ public final class ModPolicy {
 
     static boolean isGuarded(String id) {
         return id.equals(HotwireClient.ID) || id.startsWith(HotwireClient.ID + "-") || isFabricApi(id)
-                || ALWAYS_ON.contains(id) || NEVER_TOUCHED.contains(id);
+                || ALWAYS_ON.contains(id) || isNeverTouched(id);
+    }
+
+    public static boolean isNeverTouched(String id) {
+        return NEVER_TOUCHED.contains(id) || id.startsWith(NEVER_TOUCHED_PARTS);
     }
 
     public static boolean isFabricApi(String id) {
@@ -62,7 +67,7 @@ public final class ModPolicy {
     }
 
     public static boolean isStartOnly(String id) {
-        return ALWAYS_ON.contains(id) || NEVER_TOUCHED.contains(id);
+        return ALWAYS_ON.contains(id) || isNeverTouched(id);
     }
 
     public static String describeSelfChange() {

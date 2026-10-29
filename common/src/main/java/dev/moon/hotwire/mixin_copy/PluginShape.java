@@ -5,10 +5,12 @@ import java.util.function.Function;
 import org.jspecify.annotations.Nullable;
 import org.objectweb.asm.ClassReader;
 import org.objectweb.asm.Opcodes;
+import org.objectweb.asm.Type;
 import org.objectweb.asm.tree.AbstractInsnNode;
 import org.objectweb.asm.tree.ClassNode;
 import org.objectweb.asm.tree.MethodInsnNode;
 import org.objectweb.asm.tree.MethodNode;
+import org.objectweb.asm.tree.VarInsnNode;
 
 public final class PluginShape {
     private static final String CLASS_NODE = "Lorg/objectweb/asm/tree/ClassNode;";
@@ -32,7 +34,7 @@ public final class PluginShape {
             new ClassReader(bytes).accept(node, ClassReader.SKIP_DEBUG | ClassReader.SKIP_FRAMES);
             for (MethodNode method : node.methods) {
                 if ((method.name.equals("preApply") || method.name.equals("postApply"))
-                        && method.desc.contains(CLASS_NODE) && hasBody(method)) {
+                        && method.desc.contains(CLASS_NODE) && readsClass(method)) {
                     return true;
                 }
                 if (isRegisteringWithMixin(method)) {
@@ -56,7 +58,7 @@ public final class PluginShape {
             ClassNode node = new ClassNode();
             new ClassReader(bytes).accept(node, ClassReader.SKIP_DEBUG | ClassReader.SKIP_FRAMES);
             for (MethodNode method : node.methods) {
-                boolean shapes = method.desc.contains(CLASS_NODE) && hasBody(method);
+                boolean shapes = method.desc.contains(CLASS_NODE) && readsClass(method);
                 if (isRegisteringWithMixin(method) || (shapes && method.name.equals("postApply"))) {
                     return false;
                 }
@@ -77,9 +79,18 @@ public final class PluginShape {
         return false;
     }
 
-    private static boolean hasBody(MethodNode method) {
+    private static boolean readsClass(MethodNode method) {
+        Type[] arguments = Type.getArgumentTypes(method.desc);
+        int slot = (method.access & Opcodes.ACC_STATIC) != 0 ? 0 : 1;
+        int classNode = -1;
+        for (Type argument : arguments) {
+            if (argument.getDescriptor().equals(CLASS_NODE)) {
+                classNode = slot;
+            }
+            slot += argument.getSize();
+        }
         for (AbstractInsnNode insn : method.instructions) {
-            if (insn.getOpcode() >= 0 && insn.getOpcode() != Opcodes.RETURN) {
+            if (insn instanceof VarInsnNode load && load.getOpcode() == Opcodes.ALOAD && load.var == classNode) {
                 return true;
             }
         }

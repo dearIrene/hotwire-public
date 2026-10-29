@@ -143,7 +143,7 @@ public final class WorldReopen {
             open(client, level);
         } catch (IllegalStateException e) {
             LOGGER.warn("[Hotwire] the world {} did not open again: {}", level, e.getMessage());
-            ModViews.showToast("Hotwire", Lang.get("hotwire.reopen.not_reopened", e.getMessage()));
+            ModViews.showNotice("Hotwire", Lang.get("hotwire.reopen.not_reopened", e.getMessage()));
         }
     }
 

@@ -428,13 +428,16 @@ public final class ModTripwire {
             List<String> reached = new ArrayList<>();
             List<String> onItsWay = new ArrayList<>();
             for (String name : loaded.getOrDefault(id, List.of())) {
+                if (name.contains("$hotwire")) {
+                    continue;
+                }
+
                 String internal = name.replace('.', '/');
                 int hidden = internal.indexOf("/0x");
                 internal = hidden < 0 ? internal : internal.substring(0, hidden);
                 Tripwire.Hits hits = Tripwire.peek(id);
-                boolean hiddenLambda = hidden >= 0 && !Tripwire.hasSeenLoad(id, internal) && hits.calls() == 0
-                        && hits.waiting() > 0;
-                (hiddenLambda || Tripwire.isLoadedOnItsWay(id, internal) ? onItsWay : reached).add(name);
+                boolean unhooked = !Tripwire.hasSeenLoad(id, internal) && hits.calls() == 0 && hits.waiting() > 0;
+                (unhooked || Tripwire.isLoadedOnItsWay(id, internal) ? onItsWay : reached).add(name);
             }
             seen.put(id, new Observation(Tripwire.peek(id), reached,
                     reached.isEmpty() ? List.of() : Tripwire.getFirstLoad(id), onItsWay));
@@ -580,10 +583,26 @@ public final class ModTripwire {
                 continue;
             }
             String mod = GameRegistrations.findModOf(type);
+            if (mod == null) {
+                mod = findSplitOwner(type);
+            }
             if (mod != null && ids.contains(mod)) {
                 owned.put(type, mod);
             }
         }
         return owned;
+    }
+
+    private static @Nullable String findSplitOwner(Class<?> type) {
+        String name = type.getName();
+        int split = name.indexOf("$hotwire");
+        if (split < 0) {
+            return null;
+        }
+        try {
+            return GameRegistrations.findModOf(Class.forName(name.substring(0, split), false, type.getClassLoader()));
+        } catch (ClassNotFoundException | LinkageError e) {
+            return null;
+        }
     }
 }

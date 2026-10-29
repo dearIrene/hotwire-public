@@ -2,10 +2,7 @@ package dev.moon.hotwire.ui;
 
 import java.util.ArrayList;
 import java.util.List;
-import java.util.function.IntConsumer;
 import java.util.function.ObjIntConsumer;
-import java.util.function.Supplier;
-import org.jspecify.annotations.Nullable;
 
 final class AdvancedPanel extends Panel {
     static final int WIDTH = 420;
@@ -15,33 +12,15 @@ final class AdvancedPanel extends Panel {
     private final ObjIntConsumer<String> onChoose;
     private final List<List<Button>> choiceButtons = new ArrayList<>();
     private List<AdvancedOption> options = List.of();
-    private final LimitRow switchLimit;
-    private final LimitRow storeLimit;
 
-    public AdvancedPanel(ObjIntConsumer<String> onChoose, Supplier<@Nullable CacheFill> fill, IntConsumer onLimit,
-            StoreCacheView store, Runnable onDone) {
+    public AdvancedPanel(ObjIntConsumer<String> onChoose, Runnable onDone) {
         super(Lang.get("hotwire.button.done"), onDone);
         this.onChoose = onChoose;
-        this.switchLimit = new LimitRow(this, () -> LimitRow.findMegabytes(fill.get()), onLimit,
-                "hotwire.advanced.cache_limit", "hotwire.cache.limit");
-        this.storeLimit = new LimitRow(this, store::getLimit, store::setLimit, "hotwire.advanced.store_limit",
-                "hotwire.cache.store_limit");
     }
 
     public void open(List<AdvancedOption> options) {
         this.setOptions(options);
-        for (LimitRow row : List.of(this.switchLimit, this.storeLimit)) {
-            row.stopTyping();
-            row.show();
-        }
         this.show();
-    }
-
-    @Override
-    protected boolean onClick(double px, double py, int button) {
-        this.switchLimit.stopTyping();
-        this.storeLimit.stopTyping();
-        return super.onClick(px, py, button);
     }
 
     void setOptions(List<AdvancedOption> options) {
@@ -61,7 +40,7 @@ final class AdvancedPanel extends Panel {
 
     @Override
     public void step(float dt) {
-        this.size(WIDTH, CONTENT_Y + PITCH * (this.options.size() + 2) + 40);
+        this.size(WIDTH, CONTENT_Y + PITCH * this.options.size() + 40);
         super.step(dt);
         int x = this.getBoxX();
         int w = this.getBoxWidth();
@@ -90,9 +69,5 @@ final class AdvancedPanel extends Panel {
             canvas.drawText(canvas.clip(option.label(), room), x + 14, rowY, Colors.fade(Palette.TEXT, alpha));
             canvas.drawText(canvas.clip(explains, w - 28), x + 14, rowY + 20, Colors.fade(Palette.DIM, alpha));
         }
-
-        int rowY = y + CONTENT_Y + PITCH * this.options.size();
-        this.switchLimit.draw(canvas, x, rowY, w, alpha);
-        this.storeLimit.draw(canvas, x, rowY + PITCH, w, alpha);
     }
 }

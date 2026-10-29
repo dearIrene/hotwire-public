@@ -8,6 +8,7 @@ import java.util.List;
 import java.util.Map;
 import java.util.Set;
 import java.util.concurrent.CancellationException;
+import java.util.concurrent.ConcurrentHashMap;
 import java.util.function.Predicate;
 import java.util.stream.Stream;
 import org.jspecify.annotations.Nullable;
@@ -28,18 +29,27 @@ public final class ElementLook {
     private static volatile boolean isWarmingOnly;
 
     private static final Object ONE_LOOK = new Object();
+
     private static volatile List<String> lookedFor = List.of();
     private static volatile long lookedAt;
+    private static volatile List<String> lookedForEvery = List.of();
+    private static volatile long lookedEveryAt;
+
+    private static final Set<String> CHANGED = ConcurrentHashMap.newKeySet();
 
     private static volatile @Nullable Thread looking;
 
     private static volatile boolean stopAsked;
 
-    private @Nullable List<Runnable> noted;
+    private record Notes(List<Runnable> takes, Map<String, int[]> places, List<String> mods, long at) {
+        boolean standsFor(Collection<String> walked) {
+            return this.mods.containsAll(walked) && System.nanoTime() - this.at < STANDS_NANOS
+                    && walked.stream().noneMatch(CHANGED::contains);
+        }
+    }
 
-    private Map<String, int[]> placesOf = Map.of();
-    private List<String> mods = List.of();
-    private long at;
+    private @Nullable Notes wide;
+    private @Nullable Notes recent;
 
     private @Nullable List<Runnable> building;
     private List<String> buildingFor = List.of();
@@ -64,7 +74,7 @@ public final class ElementLook {
         }
         Thread running = looking;
         if (!every && running != null && running != Thread.currentThread()) {
-            running.setPriority(Thread.NORM_PRIORITY);
+            stopLooking();
         }
         synchronized (ONE_LOOK) {
             if (every ? isFreshForEvery(asked) : stands(asked)) {
@@ -82,8 +92,14 @@ public final class ElementLook {
                         references.takeOutElementsAgain(mods, on);
                     }
                 });
-                lookedFor = asked;
-                lookedAt = System.nanoTime();
+                if (every) {
+                    CHANGED.removeAll(asked);
+                    lookedForEvery = asked;
+                    lookedEveryAt = System.nanoTime();
+                } else {
+                    lookedFor = asked;
+                    lookedAt = System.nanoTime();
+                }
             } catch (RuntimeException | LinkageError e) {
                 LOGGER.info("[Hotwire] the look ahead for {} ended early: {}", mods, e.toString());
             } finally {
@@ -141,8 +157,13 @@ public final class ElementLook {
         }
     }
 
+    public static void markChanged(Collection<String> mods) {
+        CHANGED.addAll(mods);
+    }
+
     private static boolean isFreshForEvery(List<String> asked) {
-        return lookedFor.containsAll(asked) && System.nanoTime() - lookedAt < REFRESH_NANOS;
+        return asked.stream().noneMatch(CHANGED::contains) && lookedForEvery.containsAll(asked)
+                && System.nanoTime() - lookedEveryAt < REFRESH_NANOS;
     }
 
     public static void giveWay() {
@@ -150,8 +171,13 @@ public final class ElementLook {
     }
 
     private static boolean stands(List<String> asked) {
+        if (asked.stream().anyMatch(CHANGED::contains)) {
+            return false;
+        }
         long age = System.nanoTime() - lookedAt;
-        return asked.equals(lookedFor) ? age < FRESH_NANOS : lookedFor.containsAll(asked) && age < STANDS_NANOS;
+        boolean recent = asked.equals(lookedFor) ? age < FRESH_NANOS
+                : lookedFor.containsAll(asked) && age < STANDS_NANOS;
+        return recent || (lookedForEvery.containsAll(asked) && System.nanoTime() - lookedEveryAt < STANDS_NANOS);
     }
 
     @Nullable List<Runnable> open(List<String> walked) {
@@ -161,19 +187,17 @@ public final class ElementLook {
             return null;
         }
 
-        List<Runnable> ahead = this.mods.containsAll(walked) && System.nanoTime() - this.at < STANDS_NANOS
-                ? this.noted : null;
+        Notes ahead = this.findStanding(walked);
         if (ahead != null) {
-            return ElementTakes.isCheckingSkips() ? ahead : this.findFor(ahead, walked);
+            return ElementTakes.isCheckingSkips() ? ahead.takes() : findFor(ahead, walked);
         }
-        if (this.noted != null) {
+        Notes last = this.wide;
+        if (last != null) {
             LOGGER.info("[Hotwire] a walk for {} looks for itself: the last look was for {}, {} ms ago", walked,
-                    this.mods, (System.nanoTime() - this.at) / 1_000_000);
+                    last.mods(), (System.nanoTime() - last.at()) / 1_000_000);
         }
 
-        this.noted = null;
-        this.mods = List.of();
-        lookedFor = List.of();
+        this.forget();
         return null;
     }
 
@@ -183,16 +207,20 @@ public final class ElementLook {
             this.building = null;
             this.buildingFor = List.of();
         } else if (made != null) {
-            this.noted = made;
-            this.placesOf = findPlaces(made);
-            int any = this.placesOf.getOrDefault("", new int[0]).length;
-            List<String> most = this.placesOf.entrySet().stream().filter(entry -> !entry.getKey().isEmpty())
+            Notes notes = new Notes(made, findPlaces(made), this.buildingFor, System.nanoTime());
+            Notes before = this.wide;
+            if (before == null || notes.mods().containsAll(before.mods()) || !before.standsFor(List.of())) {
+                this.wide = notes;
+                this.recent = null;
+            } else {
+                this.recent = notes;
+            }
+            int any = notes.places().getOrDefault("", new int[0]).length;
+            List<String> most = notes.places().entrySet().stream().filter(entry -> !entry.getKey().isEmpty())
                     .sorted((one, other) -> Integer.compare(other.getValue().length, one.getValue().length)).limit(5)
                     .map(entry -> entry.getKey() + " " + entry.getValue().length).toList();
             LOGGER.info("[Hotwire] of the look's {} notes, {} are asked by every off; filed most under {}", made.size(),
                     any, most);
-            this.mods = this.buildingFor;
-            this.at = System.nanoTime();
             this.building = null;
             this.buildingFor = List.of();
         }
@@ -213,16 +241,31 @@ public final class ElementLook {
         return done;
     }
 
-    private List<Runnable> findFor(List<Runnable> all, Collection<String> walked) {
+    private static List<Runnable> findFor(Notes notes, Collection<String> walked) {
         return Stream.concat(Stream.of(""), walked.stream())
-                .flatMapToInt(mod -> Arrays.stream(this.placesOf.getOrDefault(mod, new int[0]))).sorted().distinct()
-                .mapToObj(all::get).toList();
+                .flatMapToInt(mod -> Arrays.stream(notes.places().getOrDefault(mod, new int[0]))).sorted().distinct()
+                .mapToObj(notes.takes()::get).toList();
+    }
+
+    private @Nullable Notes findStanding(Collection<String> walked) {
+        Notes near = this.recent;
+        if (near != null && near.standsFor(walked)) {
+            return near;
+        }
+        Notes far = this.wide;
+        return far != null && far.standsFor(walked) ? far : null;
+    }
+
+    private void forget() {
+        this.wide = null;
+        this.recent = null;
+        lookedFor = List.of();
+        lookedForEvery = List.of();
     }
 
     boolean isReadyFor(Collection<String> walked) {
         boolean lookingHere = isOnlyLooking && Thread.currentThread().equals(looking);
-        return !lookingHere && this.noted != null && this.mods.containsAll(walked)
-                && System.nanoTime() - this.at < STANDS_NANOS;
+        return !lookingHere && this.findStanding(walked) != null;
     }
 
     boolean hasNoted(Runnable work) {
@@ -239,7 +282,6 @@ public final class ElementLook {
             this.buildingFor = List.of();
             return;
         }
-        this.noted = null;
-        this.mods = List.of();
+        this.forget();
     }
 }

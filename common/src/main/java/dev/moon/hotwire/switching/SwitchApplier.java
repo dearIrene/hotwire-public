@@ -487,7 +487,13 @@ public final class SwitchApplier {
             String name = type.getName().replace('.', '/');
             byte[] bytes = Objects.requireNonNull(current.get(name));
             rebuilt.add(name);
-            atLaunch.put(name, this.rebuilder.launchMixins(type, bytes, old));
+
+            Set<String> launched = new HashSet<>(this.rebuilder.launchMixins(type, bytes, old));
+            launched.removeIf(mixin -> {
+                String owner = this.carriedMixins.findModMaking(mixin, id -> true);
+                return owner != null && !on.contains(owner);
+            });
+            atLaunch.put(name, launched);
 
             Set<String> now = new HashSet<>(this.rebuilder.getAppliedMixins(type, bytes, old));
             atLaunch.get(name).stream()
@@ -496,7 +502,7 @@ public final class SwitchApplier {
             carriedNow.put(name, now);
         });
         List<String> patching = this.findPatching(configs, rebuilt);
-        LaunchDecisions.Result decided = this.decisions.of(patching, atLaunch);
+        LaunchDecisions.Result decided = this.decisions.of(patching, atLaunch, on::contains);
         SwitchTimes.mark("marks and decisions");
         ClassRebuilder.PreparedRebuild mixed = this.rebuilder.prepare(originals, current, classes, decided.configs(),
                 patching, on::contains);
@@ -562,7 +568,7 @@ public final class SwitchApplier {
 
     Map<String, byte[]> decideAsLaunched(List<String> configs, String className, Set<String> launch)
             throws RebuildException {
-        return this.decisions.of(configs, Map.of(className, launch)).configs();
+        return this.decisions.of(configs, Map.of(className, launch), this::isOn).configs();
     }
 
     Set<String> getPatchedNames() {

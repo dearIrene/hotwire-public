@@ -6,6 +6,7 @@ import java.util.List;
 final class ProgressPanel extends Panel {
     private static final float HOLD = 0.4f;
     private static final int OFF_GAP = 3;
+    private static final int EMPTY = Colors.mix(Palette.PANEL_EDGE, Palette.ON, 0.3f);
     private static final int SIDE_W = 176;
     private static final int CARD = 18;
     private static final int CARD_GROWS = 12;
@@ -137,6 +138,7 @@ final class ProgressPanel extends Panel {
             this.drawSegments(canvas, now, x + 14, y + 34, main - 28, alpha);
         } else {
             int filled = (int) ((main - 28) * Math.max(0, Math.min(1, this.bar.getValue())));
+            canvas.fill(x + 14 + filled, y + 34, x + main - 14, y + 38, Colors.fade(EMPTY, alpha));
             if (filled > 0) {
                 canvas.fill(x + 14, y + 34, x + 14 + filled, y + 38, Colors.fade(Palette.ACCENT, alpha));
             }
@@ -169,7 +171,7 @@ final class ProgressPanel extends Panel {
             }
 
             if (filled < right - left) {
-                canvas.fill(left + filled, y, right, y + 4, Colors.fade(Palette.TRACK, alpha));
+                canvas.fill(left + filled, y, right, y + 4, Colors.fade(EMPTY, alpha));
             }
         }
     }
@@ -265,14 +267,13 @@ final class ProgressPanel extends Panel {
         String phase = now.current();
         if (total > 1) {
             boolean tailing = at >= total && !phase.isEmpty();
-            this.stepTick.to(at);
+
+            this.stepTick.to(Math.max(at, (int) now.getModsReached()));
             this.stepTick.step(delta);
             this.stepsTick.to(total);
             this.stepsTick.step(delta);
 
             float batch = (float) (0.9 * Math.max(at / (double) total, now.getFraction()));
-
-            this.stepTick.to(Math.max(at, (int) now.getModsReached()));
             String count = Lang.get("hotwire.progress.of", this.stepTick.getRounded(), this.stepsTick.getRounded());
             return new Heading(tailing ? 1 : batch, Lang.get("hotwire.progress.heading.switching"),
                     tailing ? phase : now.describe(), tailing ? "" : now.subject(), tailing ? "" : count);

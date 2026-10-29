@@ -5,12 +5,14 @@ import java.io.InputStream;
 import java.io.UncheckedIOException;
 import java.lang.ref.SoftReference;
 import java.net.MalformedURLException;
+import java.net.URISyntaxException;
 import java.net.URL;
 import java.net.URLClassLoader;
 import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.nio.file.StandardCopyOption;
+import java.security.CodeSource;
 import java.security.MessageDigest;
 import java.security.NoSuchAlgorithmException;
 import java.util.ArrayList;
@@ -135,6 +137,16 @@ public final class MixinCopy implements AutoCloseable {
         return folded;
     }
 
+    private static @Nullable Path findOwnJar() {
+        try {
+            CodeSource source = MixinCopy.class.getProtectionDomain().getCodeSource();
+            Path path = source == null ? null : Path.of(source.getLocation().toURI());
+            return path != null && Files.isRegularFile(path) ? path : null;
+        } catch (URISyntaxException | RuntimeException e) {
+            return null;
+        }
+    }
+
     public byte[] getRecipe() {
         byte[] known = this.recipe;
         if (known != null) {
@@ -145,6 +157,10 @@ public final class MixinCopy implements AutoCloseable {
             digest.update(Files.readAllBytes(copyJar()));
             for (Path jar : this.mixinJars) {
                 digest.update(Files.readAllBytes(jar));
+            }
+            Path own = findOwnJar();
+            if (own != null) {
+                digest.update(Files.readAllBytes(own));
             }
             digest.update(this.side.getBytes(StandardCharsets.UTF_8));
 

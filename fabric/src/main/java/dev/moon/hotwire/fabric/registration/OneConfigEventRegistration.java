@@ -46,10 +46,9 @@ final class OneConfigEventRegistration implements Registration {
         try {
             Field field = this.bus.getClass().getDeclaredField("handlers");
             field.setAccessible(true);
-            Class<?> handlerType = Class.forName(HANDLER, false, this.bus.getClass().getClassLoader());
-            Object eventClass = handlerType.getMethod("getEventClass").invoke(this.handler);
-            Object listed = ((Map<?, ?>) field.get(this.bus)).get(eventClass);
-            return listed instanceof Collection<?> handlers && handlers.stream().anyMatch(one -> one == this.handler);
+            return ((Map<?, ?>) field.get(this.bus)).values().stream()
+                    .anyMatch(listed -> listed instanceof Collection<?> handlers
+                            && handlers.stream().anyMatch(one -> one == this.handler));
         } catch (ReflectiveOperationException | RuntimeException e) {
             return true;
         }

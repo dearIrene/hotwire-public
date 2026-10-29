@@ -87,6 +87,9 @@ public final class ModrinthClient {
     private final String gameVersion;
     private final LocalJars local;
 
+    private volatile String browseLoader;
+    private volatile String browseVersion;
+
     public ModrinthClient(String hotwireVersion, String loader, String gameVersion, LocalJars local) {
         this(new LiveTransport(hotwireVersion), loader, gameVersion, local);
     }
@@ -100,13 +103,56 @@ public final class ModrinthClient {
         this.loader = loader;
         this.gameVersion = gameVersion;
         this.local = local;
+        this.browseLoader = loader;
+        this.browseVersion = gameVersion;
+    }
+
+    public void setBrowsing(String loader, String gameVersion) {
+        this.browseLoader = loader;
+        this.browseVersion = gameVersion;
+    }
+
+    public boolean isBrowsingOwn() {
+        return this.browseLoader.equals(this.loader) && this.browseVersion.equals(this.gameVersion);
+    }
+
+    public String getBrowseLoader() {
+        return this.browseLoader;
+    }
+
+    public String getBrowseVersion() {
+        return this.browseVersion;
+    }
+
+    public String getLoader() {
+        return this.loader;
+    }
+
+    public String getGameVersion() {
+        return this.gameVersion;
+    }
+
+    private String findVersionFor(Kind kind) {
+        return kind == Kind.DATA_PACK ? this.gameVersion : this.browseVersion;
+    }
+
+    public List<String> findGameVersions() throws IOException {
+        List<String> out = new ArrayList<>();
+        for (JsonElement element : JsonParser.parseString(this.transport.get(API + "/tag/game_version"))
+                .getAsJsonArray()) {
+            JsonObject version = element.getAsJsonObject();
+            if ("release".equals(readText(version, "version_type"))) {
+                out.add(readText(version, "version"));
+            }
+        }
+        return out;
     }
 
     public Search search(Kind kind, String words, String category, int offset, int limit) throws IOException {
         List<List<String>> facets = new ArrayList<>();
         facets.add(List.of("project_type:" + kind.getProjectType()));
         facets.add(this.findLoaders(kind).stream().map(loader -> "categories:" + loader).toList());
-        facets.add(List.of("versions:" + this.gameVersion));
+        facets.add(List.of("versions:" + this.findVersionFor(kind)));
         if (!category.isEmpty()) {
             facets.add(List.of("categories:" + category));
         }
@@ -149,7 +195,7 @@ public final class ModrinthClient {
         JsonArray loaders = new JsonArray();
         this.findLoaders(kind).forEach(loaders::add);
         String url = API + "/project/" + encode(projectId) + "/version?loaders=" + encode(loaders.toString())
-                + "&game_versions=" + encode("[\"" + this.gameVersion + "\"]");
+                + "&game_versions=" + encode("[\"" + this.findVersionFor(kind) + "\"]");
         List<Version> out = new ArrayList<>();
         for (JsonElement element : JsonParser.parseString(this.transport.get(url)).getAsJsonArray()) {
             out.add(readVersion(element.getAsJsonObject()));
@@ -159,7 +205,7 @@ public final class ModrinthClient {
 
     private List<String> findLoaders(Kind kind) {
         return switch (kind) {
-            case MOD -> List.of(this.loader);
+            case MOD -> List.of(this.browseLoader);
             case RESOURCE_PACK -> List.of("minecraft");
             case SHADER -> List.of("iris", "optifine");
             case DATA_PACK -> List.of("datapack");
@@ -247,7 +293,7 @@ public final class ModrinthClient {
     }
 
     public String getScope() {
-        return this.loader + ":" + this.gameVersion;
+        return this.browseLoader + ":" + this.browseVersion;
     }
 
     public Map<String, String> findChanges(Collection<String> projectIds) throws IOException {

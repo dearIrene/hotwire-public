@@ -269,10 +269,6 @@ public final class HotwireEngine implements ModScreen.Game, AutoCloseable {
         ModScreen current = this.screen;
         if (current != null) {
             current.onSwitched();
-            JvmParts parts = this.findParts();
-            if (parts != null) {
-                parts.runner().lookAheadForAll(this.findSwitchableOn());
-            }
         }
     }
 

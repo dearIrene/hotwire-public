@@ -58,6 +58,11 @@ public final class OffModCommands {
             takeOut(dispatcher, dispatcher.getRoot(), command, offNow, client, removedNames, DEPTH);
 
             Set<String> all = CommandRecorder.findModsRun(command);
+            if (dispatcher.getRoot().getChild(command.getName()) != null
+                    && SAID_STAYING.add(command.getName() + " " + all)) {
+                LOGGER.info("[Hotwire] /{} stays: it runs {} (off now: {}), its requirement {}", command.getName(),
+                        all, all.stream().filter(offNow).toList(), command.getRequirement().getClass().getName());
+            }
             if (dispatcher.getRoot().getChild(command.getName()) != null && all.stream().anyMatch(offNow)
                     && SAID_STAYING.add(command.getName())) {
                 LOGGER.info("[Hotwire] /{} runs off mods' code and stays: it runs {}, of which off {}",

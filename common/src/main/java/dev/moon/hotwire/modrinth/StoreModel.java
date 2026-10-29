@@ -65,6 +65,10 @@ public final class StoreModel implements AutoCloseable {
 
     private volatile String words = "";
     private volatile String category = "";
+    private volatile boolean hideInstalled;
+    private List<Card> shown = List.of();
+    private @Nullable List<Card> shownFrom;
+    private boolean shownHiding;
     private volatile ModrinthClient.Kind kind = ModrinthClient.Kind.MOD;
     private volatile Packs packs = Packs.NONE;
     private volatile List<Card> cards = List.of();
@@ -88,8 +92,25 @@ public final class StoreModel implements AutoCloseable {
         this.worker.execute(cache::trim);
     }
 
-    public List<Card> getCards() {
-        return this.cards;
+    @SuppressWarnings("ReferenceEquality")
+    public synchronized List<Card> getCards() {
+        List<Card> all = this.cards;
+        boolean hide = this.hideInstalled;
+        if (all != this.shownFrom || hide != this.shownHiding) {
+            this.shown = hide ? all.stream().filter(card -> !card.installed()).toList() : all;
+            this.shownFrom = all;
+            this.shownHiding = hide;
+        }
+        return this.shown;
+    }
+
+    public boolean isHidingInstalled() {
+        return this.hideInstalled;
+    }
+
+    public void setHideInstalled(boolean hide) {
+        this.hideInstalled = hide;
+        this.onChanged.run();
     }
 
     public int getTotal() {
@@ -174,7 +195,7 @@ public final class StoreModel implements AutoCloseable {
         this.pageWanted = false;
         Answer answered;
         synchronized (this.answers) {
-            answered = this.answers.get(findKey(this.kind, this.words, this.category));
+            answered = this.answers.get(this.findKey(this.kind, this.words, this.category));
         }
         if (answered != null) {
             this.asked.incrementAndGet();
@@ -184,18 +205,68 @@ public final class StoreModel implements AutoCloseable {
             this.onChanged.run();
             return;
         }
+        if (this.showSaved()) {
+            return;
+        }
         this.cards = List.of();
         this.total = 0;
         this.ask(0);
     }
 
-    private static String findKey(ModrinthClient.Kind kind, String words, String category) {
-        return kind + ":" + words + ":" + category;
+    private boolean showSaved() {
+        ModrinthClient.Kind kind = this.kind;
+        String words = this.words;
+        String category = this.category;
+        String key = this.client.getScope() + ":" + kind.getProjectType() + ":" + words + ":" + category + ":0";
+        StoreCache.Entry saved = this.cache.findTextEntry(StoreCache.Kind.SEARCH, key).orElse(null);
+        ModrinthClient.Search found = saved == null ? null : this.readCached(saved.text());
+        if (saved == null || found == null) {
+            return false;
+        }
+        int ticket = this.asked.incrementAndGet();
+        List<Card> next = new ArrayList<>();
+        for (ModrinthClient.Hit hit : found.hits()) {
+            next.add(this.makeCard(hit));
+        }
+        this.cards = Collections.unmodifiableList(next);
+        this.total = found.total();
+        this.saveAnswer(kind, words, category, this.cards, this.total);
+        this.loading = false;
+        this.onChanged.run();
+        if (!saved.fresh()) {
+            this.worker.execute(() -> this.refresh(ticket, kind, words, category, 0, key));
+        }
+        return true;
+    }
+
+    private String findKey(ModrinthClient.Kind kind, String words, String category) {
+        return this.client.getScope() + ":" + kind + ":" + words + ":" + category;
+    }
+
+    public void setBrowsing(String loader, String gameVersion) {
+        this.client.setBrowsing(loader, gameVersion);
+        this.searchFresh();
+    }
+
+    public boolean canAdd() {
+        return this.client.isBrowsingOwn();
+    }
+
+    public void findGameVersions(Consumer<List<String>> then) {
+        this.worker.execute(() -> {
+            List<String> versions;
+            try {
+                versions = this.client.findGameVersions();
+            } catch (IOException | RuntimeException e) {
+                versions = List.of(this.client.getGameVersion());
+            }
+            then.accept(versions);
+        });
     }
 
     private void saveAnswer(ModrinthClient.Kind kind, String words, String category, List<Card> cards, int total) {
         synchronized (this.answers) {
-            this.answers.put(findKey(kind, words, category), new Answer(cards, total));
+            this.answers.put(this.findKey(kind, words, category), new Answer(cards, total));
             if (this.answers.size() > MOST_ANSWERS) {
                 this.answers.remove(this.answers.keySet().iterator().next());
             }

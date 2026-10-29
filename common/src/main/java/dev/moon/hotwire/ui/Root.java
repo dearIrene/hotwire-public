@@ -29,6 +29,7 @@ public final class Root {
         this.base.setBounds(0, 0, width, height);
         this.menus.setBounds(0, 0, width, height);
         this.modal.setBounds(0, 0, width, height);
+        this.menus.getChildren().stream().filter(Element::open).forEach(Element::dismiss);
     }
 
     public void drawFrame(Canvas canvas, long nowNanos, double mouseX, double mouseY) {
@@ -83,8 +84,10 @@ public final class Root {
             return true;
         }
         List<Element> wereOpen = this.menus.getChildren().stream().filter(Element::open).toList();
+        long began = System.nanoTime();
         this.pressed = this.base.press(x, y, button, modifiers);
-        wereOpen.stream().filter(Element::open).forEach(Element::dismiss);
+
+        wereOpen.stream().filter(menu -> menu.open() && !menu.isOpenedSince(began)).forEach(Element::dismiss);
         return this.pressed != null;
     }
 
@@ -102,7 +105,12 @@ public final class Root {
         if (this.isModalOpen()) {
             return this.modal.scroll(x, y, amount);
         }
-        return this.menus.scroll(x, y, amount) || this.base.scroll(x, y, amount);
+        if (this.menus.scroll(x, y, amount)) {
+            return true;
+        }
+
+        this.menus.getChildren().stream().filter(Element::open).toList().forEach(Element::dismiss);
+        return this.base.scroll(x, y, amount);
     }
 
     void focus(@Nullable Element element) {

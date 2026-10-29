@@ -36,6 +36,8 @@ public final class CacheStore {
 
     private static final int MOST_PACKS = 16;
 
+    private static final int STALE_STARTS = 20;
+
     private final Path folder;
     private final String kind;
     private volatile long capBytes;
@@ -279,7 +281,9 @@ public final class CacheStore {
             total += packed.length + 5;
         }
         boolean full = total > this.capBytes;
-        boolean compact = empty || full
+        int oldest = this.start - STALE_STARTS;
+        boolean stale = written.values().stream().anyMatch(place -> place.lastUse() < oldest);
+        boolean compact = empty || full || stale
                 || written.values().stream().map(Place::pack).distinct().count() >= MOST_PACKS;
         long limit = full ? this.capBytes * 3 / 4 : Long.MAX_VALUE;
         ByteArrayOutputStream pack = new ByteArrayOutputStream();
@@ -292,6 +296,9 @@ public final class CacheStore {
             written.clear();
             long copied = 0;
             for (Map.Entry<CacheKey, Place> entry : byUse) {
+                if (entry.getValue().lastUse() < oldest) {
+                    continue;
+                }
                 byte[] raw = this.readRaw(entry.getValue());
                 if (raw == null || copied + raw.length > limit) {
                     continue;

@@ -2,6 +2,7 @@ package dev.moon.hotwire.ui;
 
 import dev.moon.hotwire.modrinth.ModrinthClient;
 import dev.moon.hotwire.modrinth.StoreModel;
+import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
@@ -13,6 +14,8 @@ public final class StoreDetail extends Panel {
         void add(String projectId, String versionId, String title);
 
         void queueForNextStart(String projectId, String versionId, String title);
+
+        void saveToDownloads(String projectId, String versionId, String title);
     }
 
     static final int WIDTH = 520;
@@ -25,6 +28,7 @@ public final class StoreDetail extends Panel {
 
     private static final int HEAD = 50;
     private static final int MOST_PICTURE = 240;
+    private static final int PICTURE_GAP = 6;
 
     private final StoreModel model;
     private final StoreIcons icons;
@@ -48,6 +52,8 @@ public final class StoreDetail extends Panel {
 
     private final Map<String, Integer> pictureRooms = new HashMap<>();
 
+    private final DownloadMenu downloads;
+
     public StoreDetail(StoreModel model, StoreIcons icons, Adds adds, Consumer<String> openLink, Runnable onClose) {
         super(Lang.get("hotwire.button.close"), onClose);
         this.model = model;
@@ -55,6 +61,7 @@ public final class StoreDetail extends Panel {
         this.adds = adds;
         this.openLink = openLink;
         this.setLineY(HEAD - 10);
+        this.downloads = new DownloadMenu(this, model, adds);
     }
 
     public void open(ModrinthClient.Hit hit) {
@@ -88,7 +95,10 @@ public final class StoreDetail extends Panel {
         ModrinthClient.Version update = this.model.getUpdates().get(shown.projectId());
         boolean installed = this.model.isInstalledProject(shown.projectId()) || this.model.getCardsByProject()
                 .getOrDefault(shown.projectId(), new StoreModel.Card(shown, false, null)).installed();
-        if (this.model.isQueuedProject(shown.projectId())) {
+        if (!this.model.canAdd()) {
+            this.setPrimary(Lang.get("hotwire.store.download_only"), () -> { });
+            this.setPrimaryActive(false);
+        } else if (this.model.isQueuedProject(shown.projectId())) {
             this.setPrimary(Lang.get("hotwire.store.queued"), () -> { });
             this.setPrimaryActive(false);
         } else if (update != null) {
@@ -103,9 +113,10 @@ public final class StoreDetail extends Panel {
                     shown.title()));
             this.setPrimaryActive(true);
         }
-        this.change(Lang.get("hotwire.store.download"), installed || this.model.isQueuedProject(shown.projectId())
-                ? null : () -> this.adds.queueForNextStart(shown.projectId(), update == null ? "" : update.id(),
-                        shown.title()));
+        String versionId = update == null ? "" : update.id();
+        this.change(Lang.get("hotwire.store.download"), () -> this.downloads.toggle(shown, versionId,
+                this.getBoxX() + this.getBoxWidth() - 20 - BUTTON_W - DownloadMenu.WIDTH,
+                this.getBoxY() + this.getBoxHeight() - 34, true));
     }
 
     private void placePackPrimary(ModrinthClient.Hit shown) {
@@ -176,7 +187,11 @@ public final class StoreDetail extends Panel {
                 lineY += this.drawPicture(canvas, alpha, line.picture(), left, lineY, textW, top, bottom);
                 continue;
             }
-            canvas.drawText(line.text(), left + line.indent(), lineY, Colors.fade(line.color(), alpha));
+            if (line.columns().isEmpty()) {
+                canvas.drawText(line.text(), left + line.indent(), lineY, Colors.fade(line.color(), alpha));
+            } else {
+                this.drawRow(canvas, line, left, lineY, textW, alpha);
+            }
             lineY += LINE;
         }
         lineY += 6;
@@ -231,25 +246,53 @@ public final class StoreDetail extends Panel {
         canvas.drawText(canvas.clip(by, right - textX), textX, top + 16, Colors.fade(Palette.DIM, alpha));
     }
 
-    private int drawPicture(Canvas canvas, float alpha, String url, int left, int y, int width, int top, int bottom) {
+    private int drawPicture(Canvas canvas, float alpha, String urls, int left, int y, int width, int top, int bottom) {
         if (y < top - MOST_HEIGHT || y > bottom + MOST_HEIGHT) {
-            return this.pictureRooms.getOrDefault(url, 0);
+            return this.pictureRooms.getOrDefault(urls, 0);
         }
-        StoreIcons.PagePicture picture = this.icons.findPicture(url);
-        if (picture == null) {
-            return this.pictureRooms.getOrDefault(url, 0);
+        List<StoreIcons.PagePicture> pictures = new ArrayList<>();
+        for (String url : urls.split(" ", -1)) {
+            StoreIcons.PagePicture picture = this.icons.findPicture(url);
+            if (picture != null) {
+                pictures.add(picture);
+            }
         }
-        int wide = Math.min(width, picture.width());
-        int height = Math.max(1, Math.min(MOST_PICTURE, Math.round((float) picture.height() * wide / picture.width())));
-        int shown = Math.max(1, Math.round((float) picture.width() * height / picture.height()));
-        canvas.drawImage(picture.image(), left + (width - shown) / 2, y, shown, height, alpha);
-        this.pictureRooms.put(url, height + 4);
-        return height + 4;
+        if (pictures.isEmpty()) {
+            return this.pictureRooms.getOrDefault(urls, 0);
+        }
+        int gaps = PICTURE_GAP * (pictures.size() - 1);
+        float height = Math.min(MOST_PICTURE, pictures.stream().mapToInt(StoreIcons.PagePicture::height).max()
+                .orElse(1));
+        float wide = (float) pictures.stream().mapToDouble(picture -> (double) picture.width() / picture.height())
+                .sum() * height;
+        if (wide > width - gaps) {
+            height = height * (width - gaps) / wide;
+            wide = width - gaps;
+        }
+        int tall = Math.max(1, Math.round(height));
+        int x = left + Math.round((width - wide - gaps) / 2);
+        for (StoreIcons.PagePicture picture : pictures) {
+            int shown = Math.max(1, Math.round((float) picture.width() * tall / picture.height()));
+            canvas.drawImage(picture.image(), x, y, shown, tall, alpha);
+            x += shown + PICTURE_GAP;
+        }
+        this.pictureRooms.put(urls, tall + 4);
+        return tall + 4;
     }
 
     private boolean isOnLink(double px, double py, int left) {
         return this.linkY != Integer.MIN_VALUE && px >= left && px < left + this.linkWidth && py >= this.linkY - 2
                 && py < this.linkY + LINE - 2;
+    }
+
+    private void drawRow(Canvas canvas, MarkdownLines.Line line, int left, int lineY, int textW, float alpha) {
+        String[] cells = line.text().split("\t", -1);
+        List<Integer> columns = line.columns();
+        for (int at = 0; at < cells.length && at < columns.size(); at++) {
+            int end = at + 1 < columns.size() ? columns.get(at + 1) : textW;
+            canvas.drawText(canvas.clip(cells[at], end - columns.get(at) - 6), left + line.indent() + columns.get(at),
+                    lineY, Colors.fade(line.color(), alpha));
+        }
     }
 
     private List<MarkdownLines.Line> findBodyLines(Canvas canvas, String body, int width) {
@@ -269,6 +312,7 @@ public final class StoreDetail extends Panel {
 
     @Override
     protected boolean onClick(double px, double py, int button) {
+        this.downloads.close();
         ModrinthClient.Hit shown = this.hit;
         ModrinthClient.Project page = this.project;
         int left = this.getBoxX() + 14;
@@ -284,7 +328,12 @@ public final class StoreDetail extends Panel {
         }
         int index = (int) Math.floor((py - this.rowsTop) / ROW);
         if (index >= 0 && index < this.versions.size()) {
-            this.adds.add(shown.projectId(), this.versions.get(index).id(), shown.title());
+            String versionId = this.versions.get(index).id();
+            if (this.model.canAdd()) {
+                this.adds.add(shown.projectId(), versionId, shown.title());
+            } else {
+                this.adds.saveToDownloads(shown.projectId(), versionId, shown.title());
+            }
         }
         return true;
     }

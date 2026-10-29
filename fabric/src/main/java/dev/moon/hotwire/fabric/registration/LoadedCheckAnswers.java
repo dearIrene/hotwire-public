@@ -13,6 +13,7 @@ import java.util.Collection;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.NoSuchElementException;
 import java.util.Objects;
 import java.util.Set;
 import java.util.function.Function;
@@ -163,6 +164,9 @@ final class LoadedCheckAnswers {
             if (ask.kind() == LoadedChecks.Kind.SET_ONCE && old != null) {
                 this.cleared.computeIfAbsent(mod, any -> new ArrayList<>()).add(new ClearedFlag(field, old, now));
             }
+        } catch (NoSuchElementException e) {
+            LOGGER.debug("[Hotwire] {}.{} is left as it is: its setup needs {} present", type.getName(),
+                    field.getName(), mod);
         } catch (ReflectiveOperationException | RuntimeException | LinkageError e) {
             LOGGER.warn("[Hotwire] {}.{} keeps what it worked out from whether {} is there: {}", type.getName(),
                     field.getName(), mod, e.toString());

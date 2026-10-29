@@ -1,3 +1,5 @@
+import java.time.LocalDateTime
+import java.time.format.DateTimeFormatter
 import net.ltgt.gradle.errorprone.errorprone
 
 plugins {
@@ -19,7 +21,8 @@ val committed = git("show", "-s", "--format=%cI", "HEAD")
 val build = git("rev-list", "--count", "--since=${property("version_since")}", "HEAD").ifEmpty { "0" }
 val stageVersion = "${property("mod_version")}.$build"
 version = if (hasProperty("release")) "$stageVersion+mc$minecraft"
-else "$stageVersion+mc$minecraft.$commit" + if (dirty) "-dirty" else ""
+else "$stageVersion+mc$minecraft.$commit" + if (dirty) "-dirty." + LocalDateTime.now()
+    .format(DateTimeFormatter.ofPattern("MMddHHmm")) else ""
 base.archivesName = "hotwire"
 
 tasks.withType<JavaCompile>().configureEach {

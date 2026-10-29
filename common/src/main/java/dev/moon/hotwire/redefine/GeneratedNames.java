@@ -258,6 +258,19 @@ final class GeneratedNames {
         return out;
     }
 
+    static @Nullable List<AnnotationNode> dropMerged(@Nullable List<AnnotationNode> annotations) {
+        if (annotations == null) {
+            return null;
+        }
+        List<AnnotationNode> rest = new ArrayList<>();
+        for (AnnotationNode annotation : annotations) {
+            if (!annotation.desc.equals(MIXIN_MERGED)) {
+                rest.add(annotation);
+            }
+        }
+        return rest;
+    }
+
     static @Nullable String findMergedFrom(@Nullable List<AnnotationNode> annotations) {
         if (annotations == null) {
             return null;

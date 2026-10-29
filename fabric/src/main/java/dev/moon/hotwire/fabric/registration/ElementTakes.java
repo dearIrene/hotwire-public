@@ -99,8 +99,20 @@ final class ElementTakes {
         }
     }
 
+    static boolean isGameEntry(@Nullable Object key, @Nullable Object value) {
+        return key != null && value != null && isGameClass(key) && isGameClass(value)
+                && CollectionParts.findNamespaceOf(key) == null;
+    }
+
+    private static boolean isGameClass(Object item) {
+        Class<?> type = item.getClass();
+        String name = type.getName();
+        return !type.isHidden() && !type.isRecord() && (name.startsWith("net.minecraft.")
+                || name.startsWith("com.mojang."));
+    }
+
     static void takeFromMap(Map<Object, Object> entries, Object key, Object value, List<Removal> out) {
-        if (entries.remove(key, value)) {
+        if (!isGameEntry(key, value) && entries.remove(key, value)) {
             out.add(new Removal.InMap(entries, key, value));
         }
     }

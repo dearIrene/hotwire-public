@@ -53,9 +53,10 @@ public final class ScreenOpenTimer {
     }
 
     private void log() {
+        long built = this.built == 0 ? this.began : this.built;
         String line = String.format(Locale.ROOT, "the screen opened: built in %d ms, sized in %d ms, first frame"
-                + " %d ms, slowest of the next %d frames %d ms (frame %d)", (this.built - this.began) / 1_000_000,
-                (this.sized - this.built) / 1_000_000, this.firstFrame / 1_000_000, EARLY_FRAMES - 1,
+                + " %d ms, slowest of the next %d frames %d ms (frame %d)", (built - this.began) / 1_000_000,
+                (this.sized - built) / 1_000_000, this.firstFrame / 1_000_000, EARLY_FRAMES - 1,
                 this.slowestFrame / 1_000_000, this.slowestAt);
         lastOpening = line;
         LOGGER.info("[Hotwire] {}", line);

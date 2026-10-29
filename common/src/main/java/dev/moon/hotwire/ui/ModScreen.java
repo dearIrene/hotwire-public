@@ -127,7 +127,7 @@ public final class ModScreen implements JarHost {
     private final ModList list;
     private final Header header = new Header();
     private final SelectionNote note = new SelectionNote();
-    private final MessageLine message = new MessageLine();
+    private final NoticeBar message = new NoticeBar();
     private final TextField search;
     private final ProfileMenu profiles;
     private final ChoiceBar show;
@@ -214,8 +214,7 @@ public final class ModScreen implements JarHost {
         this.progress = new ProgressPanel(game.getProgress());
         this.addPanel = new AddPanel(this::confirmAdd, game::addMod, this::closePanels);
         this.updatePanel = new UpdatePanel(this::confirmUpdate, game::updateMod, this::closePanels);
-        this.advancedPanel = new AdvancedPanel(this::chooseAdvanced, caches::getCacheFill, caches::setCacheLimit,
-                caches.getStoreCache(), this::closePanels);
+        this.advancedPanel = new AdvancedPanel(this::chooseAdvanced, this::closePanels);
         this.ahead = new AheadRequests(game);
         this.pendingActions = new PendingActions(game, this::showMessage);
         this.pendingPanel = new PendingPanel(this::actOnPending, this::ignoreEarlier, this::closePending,
@@ -232,10 +231,11 @@ public final class ModScreen implements JarHost {
         this.firstOpen = new FirstOpenPanel(game::acceptFirstOpen);
         this.reportPanel = new ReportPanel(game::showReportFile, this::closePanels);
         Element base = this.root.getBase();
-        for (Element part : List.of(this.header, this.note, this.list, this.message, this.search,
+
+        for (Element part : List.of(this.header, this.note, this.list, this.search,
                 this.profiles.naming, this.toggle, this.add, this.updates, this.report, this.pending, this.switchCache,
                 this.advanced, this.done,
-                this.profiles.menu, this.show, this.layoutBar, this.libraries)) {
+                this.profiles.menu, this.show, this.layoutBar, this.libraries, this.message)) {
             base.add(part);
         }
 
@@ -305,7 +305,7 @@ public final class ModScreen implements JarHost {
     }
 
     public void showMessage(String text, boolean bad) {
-        this.message.show(text, bad);
+        this.message.show(text, bad, "");
     }
 
     @Override
@@ -530,8 +530,8 @@ public final class ModScreen implements JarHost {
     private void refreshShowMenu() {
         this.show.setChoices(getShowChoices(this.model.getPicked().size()));
         this.show.setChosen(SHOWS.indexOf(this.model.getShowing()));
-        this.libraries.label(Lang.get(this.model.isShowingLibraries() ? "hotwire.screen.hide_libraries"
-                : "hotwire.screen.show_libraries"));
+
+        this.libraries.setPrimary(this.model.isShowingLibraries());
     }
 
     private static List<ChoiceBar.Choice> getShowChoices(int picked) {

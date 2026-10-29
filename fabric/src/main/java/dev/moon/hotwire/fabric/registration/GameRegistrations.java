@@ -19,6 +19,7 @@ public final class GameRegistrations {
     private static volatile @Nullable CallerOwner owners;
     private static volatile @Nullable ModOfClass modOfClass;
     private static volatile Set<String> never = Set.of();
+    private static volatile Set<String> alone = Set.of();
 
     private GameRegistrations() {
     }
@@ -37,10 +38,11 @@ public final class GameRegistrations {
             if (current == null) {
                 FabricLoader loader = FabricLoader.getInstance();
                 never = findNeverSwitched(loader);
+                alone = findRunAlone(loader);
                 Set<String> unswitched = never;
                 ModOfClass classes = new ModOfClass(loader, unswitched::contains);
                 modOfClass = classes;
-                current = new CallerOwner(classes::find, never, findLibraries(loader));
+                current = new CallerOwner(GameRegistrations::findCodeMod, never, findLibraries(loader));
                 owners = current;
             }
             return current;
@@ -60,6 +62,25 @@ public final class GameRegistrations {
     static @Nullable String findNestedModOf(Class<?> type) {
         ModOfClass classes = modOfClass;
         return classes == null ? null : classes.findNested(type);
+    }
+
+    public static @Nullable String findCodeMod(Class<?> type) {
+        String mod = findModOf(type);
+        if (mod != null) {
+            return mod;
+        }
+        String nested = findNestedModOf(type);
+        return nested != null && isSwitchable(nested) && alone.contains(nested) ? nested : findModOrShipper(type);
+    }
+
+    private static Set<String> findRunAlone(FabricLoader loader) {
+        Set<String> ids = new HashSet<>();
+        for (ModContainer mod : loader.getAllMods()) {
+            if (mod.getContainingMod().isEmpty()) {
+                ids.add(mod.getMetadata().getId());
+            }
+        }
+        return ids;
     }
 
     public static @Nullable String findModOf(Class<?> type) {
@@ -111,7 +132,7 @@ public final class GameRegistrations {
         classes.learn(jar, modId);
         synchronized (GameRegistrations.class) {
             FabricLoader loader = FabricLoader.getInstance();
-            owners = new CallerOwner(classes::find, findNeverSwitched(loader), findLibraries(loader));
+            owners = new CallerOwner(GameRegistrations::findCodeMod, findNeverSwitched(loader), findLibraries(loader));
         }
     }
 
@@ -128,11 +149,10 @@ public final class GameRegistrations {
     }
 
     private static Set<String> findNeverSwitched(FabricLoader loader) {
-        Set<String> ids = new HashSet<>(Set.of("hotwire", "minecraft", "java", "fabricloader", "mixinextras", "ixeris",
-                "ferritecore"));
+        Set<String> ids = new HashSet<>(Set.of("hotwire", "minecraft", "java", "fabricloader", "mixinextras"));
         for (ModContainer mod : loader.getAllMods()) {
             String id = mod.getMetadata().getId();
-            if (ModPolicy.isFabricApi(id)) {
+            if (ModPolicy.isFabricApi(id) || ModPolicy.isNeverTouched(id)) {
                 ids.add(id);
             }
         }

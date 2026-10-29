@@ -11,6 +11,8 @@ import dev.moon.hotwire.fabric.registration.GameRegistrations;
 import dev.moon.hotwire.fabric.screen.HotwireScreen;
 import dev.moon.hotwire.fabric.screen.StoreGameScreen;
 import dev.moon.hotwire.redefine.FieldSlots;
+import dev.moon.hotwire.ui.Notice;
+import dev.moon.hotwire.ui.Notices;
 import java.util.ArrayList;
 import java.util.Collection;
 import java.util.List;
@@ -20,7 +22,6 @@ import java.util.Set;
 import java.util.function.Function;
 import net.minecraft.ChatFormatting;
 import net.minecraft.client.Minecraft;
-import net.minecraft.client.gui.components.toasts.SystemToast;
 import net.minecraft.client.gui.screens.LoadingOverlay;
 import net.minecraft.client.gui.screens.Overlay;
 import net.minecraft.client.gui.screens.Screen;
@@ -204,7 +205,7 @@ public final class ModViews {
         Minecraft minecraft = Minecraft.getInstance();
         minecraft.execute(() -> {
             if (minecraft.player == null) {
-                showToast("Hotwire", line);
+                showNotice("Hotwire", line);
                 return;
             }
             MutableComponent text = Component.literal("[Hotwire] " + line)
@@ -220,17 +221,8 @@ public final class ModViews {
         });
     }
 
-    public static void showToast(String title, String line) {
-        Minecraft minecraft = Minecraft.getInstance();
-        minecraft.execute(() -> SystemToast.addOrUpdate(
-                //? if >=26.2 {
-                minecraft.gui.toastManager(),
-                //?} else if >=1.21.4 {
-                /*minecraft.getToastManager(),
-                *///?} else {
-                /*minecraft.getToasts(),
-                *///?}
-                SystemToast.SystemToastId.PERIODIC_NOTIFICATION, Component.literal(title), Component.literal(line)));
+    public static void showNotice(String title, String line) {
+        Notices.show(title.equals("Hotwire") ? Notice.ofDone(line, "") : Notice.ofBad(title, line));
     }
 
     private static <T> int remove(Collection<T> entries, Collection<String> ids, Function<T, Object> toastOf) {

@@ -13,6 +13,7 @@ import org.objectweb.asm.Type;
 import org.objectweb.asm.tree.AbstractInsnNode;
 import org.objectweb.asm.tree.ClassNode;
 import org.objectweb.asm.tree.FieldInsnNode;
+import org.objectweb.asm.tree.FieldNode;
 import org.objectweb.asm.tree.InsnList;
 import org.objectweb.asm.tree.InvokeDynamicInsnNode;
 import org.objectweb.asm.tree.LdcInsnNode;
@@ -84,6 +85,14 @@ final class RetainedInitializers {
                 retained.forEach(slice -> all.add(FieldInitializers.shiftLocals(slice,
                         Math.max(method.maxLocals, 1) - 1)));
                 method.instructions.insert(setUp, all);
+            }
+        }
+
+        for (FieldNode field : was.fields) {
+            if (lost.contains(field.name + field.desc) && !unkept.contains(field.name + field.desc)
+                    && !declared.contains(field.name + field.desc)) {
+                now.fields.add(new FieldNode(field.access & ~Opcodes.ACC_FINAL, field.name, field.desc,
+                        field.signature, null));
             }
         }
         ClassWriter writer = new ClassWriter(ClassWriter.COMPUTE_MAXS);
