@@ -40,10 +40,10 @@ final class PendingActions {
         return this.game.getPendingChanges();
     }
 
-    List<PendingChange> ignoreEarlier() {
+    List<PendingChange> cleanUp(String modId) {
         try {
-            this.game.ignoreEarlierVersions();
-            this.say.accept(Lang.get("hotwire.pending.ignored"), false);
+            this.game.cleanUpEarlier(modId);
+            this.say.accept(Lang.get("hotwire.pending.cleaned"), false);
         } catch (IOException e) {
             this.say.accept(Lang.get("hotwire.failed", e.getMessage()), true);
         }

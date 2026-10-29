@@ -16,6 +16,7 @@ final class PendingPanel extends Panel {
     static final int LINE = 12;
     static final int ROW_GAP = 10;
     static final int REVERT_W = 120;
+    static final int CLEAN_W = 70;
     static final int ICON = 16;
 
     static final int LINES_MOST = 4;
@@ -25,24 +26,27 @@ final class PendingPanel extends Panel {
     private static final DateTimeFormatter QUEUED_AT = DateTimeFormatter.ofPattern("d MMM HH:mm", Locale.ROOT);
 
     private final Consumer<PendingChange> onAct;
-    private final Runnable onIgnoreAll;
+
+    private final Consumer<String> onCleanUp;
     private final Function<String, Canvas.@Nullable Image> icons;
     private final ZoneId zone;
 
     private List<Integer> heights = List.of();
     private final List<Button> buttons = new ArrayList<>();
+
+    private final List<@Nullable Button> cleanUps = new ArrayList<>();
     private List<PendingChange> changes = List.of();
 
-    public PendingPanel(Consumer<PendingChange> onAct, Runnable onIgnoreAll, Runnable onDone,
+    public PendingPanel(Consumer<PendingChange> onAct, Consumer<String> onCleanUp, Runnable onDone,
             Function<String, Canvas.@Nullable Image> icons) {
-        this(onAct, onIgnoreAll, onDone, icons, ZoneId.systemDefault());
+        this(onAct, onCleanUp, onDone, icons, ZoneId.systemDefault());
     }
 
-    PendingPanel(Consumer<PendingChange> onAct, Runnable onIgnoreAll, Runnable onDone,
+    PendingPanel(Consumer<PendingChange> onAct, Consumer<String> onCleanUp, Runnable onDone,
             Function<String, Canvas.@Nullable Image> icons, ZoneId zone) {
         super(Lang.get("hotwire.button.done"), onDone);
         this.onAct = onAct;
-        this.onIgnoreAll = onIgnoreAll;
+        this.onCleanUp = onCleanUp;
         this.icons = icons;
         this.zone = zone;
     }
@@ -56,6 +60,12 @@ final class PendingPanel extends Panel {
         this.changes = List.copyOf(changes);
         this.buttons.forEach(this::remove);
         this.buttons.clear();
+        this.cleanUps.forEach(button -> {
+            if (button != null) {
+                this.remove(button);
+            }
+        });
+        this.cleanUps.clear();
         for (PendingChange change : this.changes) {
             String label = switch (change) {
                 case PendingChange.Update update -> Lang.get("hotwire.button.cancel");
@@ -63,9 +73,11 @@ final class PendingPanel extends Panel {
                 case PendingChange.Revertable back -> Lang.get("hotwire.pending.revert", back.oldVersion());
             };
             this.buttons.add(this.add(new Button(label, false, () -> this.onAct.accept(change))));
+            this.cleanUps.add(change instanceof PendingChange.Revertable back ? this.add(new Button(
+                    Lang.get("hotwire.pending.clean_up"), false, () -> this.onCleanUp.accept(back.modId()))) : null);
         }
         boolean earlier = this.changes.stream().anyMatch(PendingChange.Revertable.class::isInstance);
-        this.change(Lang.get("hotwire.pending.ignore_all"), earlier ? this.onIgnoreAll : null);
+        this.change(Lang.get("hotwire.pending.clean_up_all"), earlier ? () -> this.onCleanUp.accept("") : null);
     }
 
     List<MessageLine.Line> getLinesOf(PendingChange change) {
@@ -124,6 +136,12 @@ final class PendingPanel extends Panel {
             button.setBounds(x + w - 14 - bw, rowY - 2, bw, BUTTON_H);
             button.setAlpha(this.getBoxShown());
             button.setActive(this.open() && s > 0.9f, true);
+            Button cleanUp = this.cleanUps.get(at);
+            if (cleanUp != null) {
+                cleanUp.setBounds(x + w - 14 - bw - 6 - CLEAN_W, rowY - 2, CLEAN_W, BUTTON_H);
+                cleanUp.setAlpha(this.getBoxShown());
+                cleanUp.setActive(this.open() && s > 0.9f, true);
+            }
             rowY += this.getRowHeight(at, change);
         }
     }
@@ -138,7 +156,7 @@ final class PendingPanel extends Panel {
         }
         List<Integer> drawn = new ArrayList<>();
         for (PendingChange change : this.changes) {
-            int bw = change instanceof PendingChange.Revertable ? REVERT_W : BUTTON_W;
+            int bw = change instanceof PendingChange.Revertable ? REVERT_W + 6 + CLEAN_W : BUTTON_W;
             int room = w - TEXT_X - 14 - bw - 8;
             Canvas.Image icon = this.icons.apply(change.modId());
             if (icon == null || !canvas.drawImage(icon, x + 14, rowY - 2, ICON, ICON, alpha)) {

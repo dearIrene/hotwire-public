@@ -543,8 +543,8 @@ public final class HotwireEngine implements ModScreen.Game, AutoCloseable {
     }
 
     @Override
-    public void ignoreEarlierVersions() throws IOException {
-        this.pending.ignoreEarlier();
+    public void cleanUpEarlier(String modId) throws IOException {
+        this.pending.cleanUp(modId);
     }
 
     @Override

@@ -104,7 +104,7 @@ public final class ModScreen implements JarHost {
         default void removeCopy(String id) throws IOException {
         }
 
-        default void ignoreEarlierVersions() throws IOException {
+        default void cleanUpEarlier(String modId) throws IOException {
         }
 
         default void revertAtNextStart(String id) throws IOException {
@@ -217,7 +217,7 @@ public final class ModScreen implements JarHost {
         this.advancedPanel = new AdvancedPanel(this::chooseAdvanced, this::closePanels);
         this.ahead = new AheadRequests(game);
         this.pendingActions = new PendingActions(game, this::showMessage);
-        this.pendingPanel = new PendingPanel(this::actOnPending, this::ignoreEarlier, this::closePending,
+        this.pendingPanel = new PendingPanel(this::actOnPending, this::cleanUpEarlier, this::closePending,
                 game::findIcon);
         this.reopenPanel = new ReopenPanel(offer -> {
             this.closePanels();
@@ -396,8 +396,8 @@ public final class ModScreen implements JarHost {
         this.setPending(this.pendingActions.act(change));
     }
 
-    private void ignoreEarlier() {
-        this.setPending(this.pendingActions.ignoreEarlier());
+    private void cleanUpEarlier(String modId) {
+        this.setPending(this.pendingActions.cleanUp(modId));
     }
 
     private void setPending(List<PendingChange> now) {

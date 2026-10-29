@@ -65,8 +65,21 @@ public final class PendingChanges {
                 old.toAbsolutePath().toString(), FileHashes.findSha256(old), "", nowMillis));
     }
 
-    public void ignoreEarlier() throws IOException {
-        this.queue.replaceReplaced(List.of());
+    public void cleanUp(String modId) throws IOException {
+        List<UpdateQueue.ReplacedJar> left = new ArrayList<>();
+        for (UpdateQueue.ReplacedJar record : this.queue.getReplaced()) {
+            if (modId.isEmpty() || record.modId().equals(modId)) {
+                Files.deleteIfExists(this.folders.replaced().resolve(record.file()));
+            } else {
+                left.add(record);
+            }
+        }
+        this.queue.replaceReplaced(left);
+        if (modId.isEmpty()) {
+            for (Path file : listFiles(this.folders.replaced())) {
+                Files.delete(file);
+            }
+        }
     }
 
     public void cleanAtStart() throws IOException {
