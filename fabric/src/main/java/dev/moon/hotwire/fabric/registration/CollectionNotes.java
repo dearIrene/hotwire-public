@@ -6,6 +6,7 @@ import java.util.ArrayList;
 import java.util.Collection;
 import java.util.Collections;
 import java.util.Deque;
+import java.util.HashSet;
 import java.util.IdentityHashMap;
 import java.util.List;
 import java.util.Map;
@@ -26,6 +27,9 @@ final class CollectionNotes {
     private final List<Object> order = new ArrayList<>();
     private final Set<Object> ofWorld = Collections.newSetFromMap(new IdentityHashMap<>());
     private final IdentityHashMap<Object, Origin> origins = new IdentityHashMap<>();
+
+    private static final String ANY = "";
+    private final IdentityHashMap<Object, Set<String>> filedUnder = new IdentityHashMap<>();
     private final Set<Class<?>> staticsRead = Collections.newSetFromMap(new IdentityHashMap<>());
 
     private @Nullable Collection<String> lookingFor;
@@ -110,6 +114,15 @@ final class CollectionNotes {
         if (frame.fresh() && this.takes.containsKey(container)) {
             this.order.add(container);
         }
+        Set<String> under = new HashSet<>();
+        for (Runnable take : frame.now()) {
+            if (take instanceof ElementTakes.NotedTake filed && filed.candidates() != null) {
+                under.addAll(filed.candidates());
+            } else {
+                under.add(ANY);
+            }
+        }
+        this.filedUnder.put(container, under);
     }
 
     synchronized void note(Runnable take) {
@@ -124,7 +137,10 @@ final class CollectionNotes {
     synchronized List<Runnable> findTakesFor(Collection<String> mods, boolean all) {
         List<Runnable> found = new ArrayList<>();
         for (Object container : this.order) {
-            addFor(found, this.takes.getOrDefault(container, List.of()), mods, all);
+            Set<String> under = this.filedUnder.get(container);
+            if (all || under == null || under.contains(ANY) || !Collections.disjoint(under, mods)) {
+                addFor(found, this.takes.getOrDefault(container, List.of()), mods, all);
+            }
         }
         addFor(found, this.takes.getOrDefault(NOWHERE, List.of()), mods, all);
         return found;
@@ -141,6 +157,17 @@ final class CollectionNotes {
 
     synchronized List<Object> findContainers() {
         return this.toRead;
+    }
+
+    synchronized List<Object> findContainersUnder(Collection<String> mods) {
+        List<Object> found = new ArrayList<>();
+        for (Object container : this.order) {
+            Set<String> under = this.filedUnder.get(container);
+            if (under != null && (under.contains(ANY) || !Collections.disjoint(under, mods))) {
+                found.add(container);
+            }
+        }
+        return found;
     }
 
     @SuppressWarnings("ReferenceEquality")
@@ -177,5 +204,6 @@ final class CollectionNotes {
     private void remove(Object container) {
         this.takes.remove(container);
         this.origins.remove(container);
+        this.filedUnder.remove(container);
     }
 }

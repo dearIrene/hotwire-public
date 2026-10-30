@@ -223,6 +223,9 @@ public final class FieldReferences {
                     type -> type.getName().startsWith("net.minecraft."))));
             Set<Class<?>> statics = new LinkedHashSet<>();
 
+            targets.stream().map(name -> loaded.get(name.replace('.', '/'))).filter(Objects::nonNull).filter(others)
+                    .forEach(statics::add);
+
             List<String> staying = classesOf.keySet().stream().filter(other -> (every || !mods.contains(other))
                     && (GameRegistrations.isLibrary(other)
                             || (on.test(other) && GameRegistrations.isSwitchable(other)))).toList();
@@ -232,7 +235,13 @@ public final class FieldReferences {
             Set<String> listed = new HashSet<>();
             Function<String, List<Class<?>>> initializedOf = group -> initialized.computeIfAbsent(group,
                     key -> classesOf.getOrDefault(key, List.of()).stream().filter(this::isInitialized).toList());
+
+            boolean again = !every && ElementLook.isLooking() && ElementLook.hasLookedForEvery();
             for (String mod : mods) {
+                if (again) {
+                    statics.addAll(initializedOf.apply(mod));
+                    continue;
+                }
                 Set<String> names = used.getOrDefault(mod, Set.of());
                 names.stream().map(loaded::get).filter(Objects::nonNull).filter(others).forEach(statics::add);
 
@@ -256,8 +265,9 @@ public final class FieldReferences {
             Set<String> consumers = HandedSearch.findConsumers(handed);
             List<Class<?>> consumerClasses = new ArrayList<>();
             consumers.forEach(consumer -> consumerClasses.addAll(initializedOf.apply(consumer)));
-            this.elements.takeOut(List.copyOf(mods), holders.stream().filter(one -> others.test(one.getClass()))
-                    .toList(), statics, new HandedSearch(handed, consumers, consumerClasses));
+            this.elements.takeOut(List.copyOf(mods), again ? List.of() : holders.stream()
+                    .filter(one -> others.test(one.getClass())).toList(), statics,
+                    new HandedSearch(handed, consumers, consumerClasses));
         } finally {
             hold.release();
         }
@@ -337,8 +347,7 @@ public final class FieldReferences {
 
     private void write(FieldSlots.Slot field, @Nullable Object holder, @Nullable Object value)
             throws IllegalAccessException {
-        boolean isStatic = field.isStatic();
-        if (!Modifier.isFinal(field.getModifiers()) || (!isStatic && !field.getDeclaringClass().isRecord())) {
+        if (!Modifier.isFinal(field.getModifiers()) || (!field.isStatic() && !field.getDeclaringClass().isRecord())) {
             field.set(holder, value);
             return;
         }
@@ -347,22 +356,7 @@ public final class FieldReferences {
         if (unsafe == null) {
             throw new IllegalAccessException("the JDK will not write " + field);
         }
-        try {
-            Field made = field.asField();
-            Class<?> type = unsafe.getClass();
-
-            Object base = isStatic ? type.getMethod("staticFieldBase", Field.class).invoke(unsafe, made)
-                    : Objects.requireNonNull(holder, () -> "no object to write " + made + " in");
-            long offset = (long) type.getMethod(isStatic ? "staticFieldOffset" : "objectFieldOffset", Field.class)
-                    .invoke(unsafe, made);
-            Class<?> kind = field.getType().isPrimitive() ? field.getType() : Object.class;
-            String put = "put" + (kind == Object.class ? "Reference" : Character.toUpperCase(kind.getName().charAt(0))
-                    + kind.getName().substring(1)) + "Volatile";
-            type.getMethod(put, Object.class, long.class, kind).invoke(unsafe, base, offset, value);
-            this.finalsWritten.add(made);
-        } catch (ReflectiveOperationException e) {
-            throw new IllegalAccessException(field + " could not be written: " + e);
-        }
+        this.finalsWritten.add(FinalFields.write(unsafe, field, holder, value));
     }
 
     private static Predicate<Class<?>> getOthers(Collection<String> mods, Predicate<String> on) {

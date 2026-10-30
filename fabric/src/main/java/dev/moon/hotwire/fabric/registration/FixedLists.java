@@ -16,6 +16,8 @@ final class FixedLists {
     interface Walk {
         ElementOwners getOwners();
 
+        List<String> getMods();
+
         boolean isInSmall();
 
         void setInSmall(boolean small);

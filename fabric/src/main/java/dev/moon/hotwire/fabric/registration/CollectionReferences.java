@@ -40,6 +40,8 @@ final class CollectionReferences implements FixedLists.Walk {
 
     private @Nullable String readingStaticsOf;
 
+    private @Nullable Object collecting;
+
     private WalkReport report = new WalkReport();
 
     private boolean inSmall;
@@ -158,7 +160,7 @@ final class CollectionReferences implements FixedLists.Walk {
         boolean completed = false;
         try {
             if (game && value instanceof Map<?, ?> map && map.size() <= LARGEST) {
-                this.readChanging(map, () -> this.removeFromNamespaced(map));
+                this.readChanging(map, () -> NamespacedMaps.removeFrom(this, map));
             }
             this.collect(value);
             if (value instanceof List<?> list && list.size() <= LARGEST && CollectionParts.isFixedSize(list)
@@ -244,10 +246,12 @@ final class CollectionReferences implements FixedLists.Walk {
             }
             this.report.time(ownerBegan, owner.getName());
         }
-        if (notes != null && every) {
+
+        boolean narrow = notes != null && !every && ElementLook.hasLookedForEvery();
+        if (notes != null && (every || narrow)) {
             long againBegan = System.nanoTime();
             int again = 0;
-            for (Object container : notes.findContainers()) {
+            for (Object container : every ? notes.findContainers() : notes.findContainersUnder(mods)) {
                 ElementLook.stopIfAsked();
                 if (!this.seen.add(container)) {
                     continue;
@@ -286,7 +290,8 @@ final class CollectionReferences implements FixedLists.Walk {
                 this.candidates.withOwner(candidates, owner)))) {
             take.accept(owner);
         } else {
-            this.report.countNoted(owner);
+            this.report.countNoted(owner, this.collecting == null ? "a field"
+                    : this.collecting.getClass().getSimpleName() + " of " + this.readingStaticsOf);
         }
     }
 
@@ -299,6 +304,11 @@ final class CollectionReferences implements FixedLists.Walk {
     @Override
     public List<Removal> getRemovalsOf(String mod) {
         return this.mine.computeIfAbsent(mod, any -> new ArrayList<>());
+    }
+
+    @Override
+    public List<String> getMods() {
+        return this.mods;
     }
 
     @Override
@@ -399,6 +409,8 @@ final class CollectionReferences implements FixedLists.Walk {
         if (notes != null) {
             notes.begin(value, new CollectionNotes.Origin(this.readingStaticsOf, false, null));
         }
+        Object collectingBefore = this.collecting;
+        this.collecting = value;
         boolean completed = false;
         try {
             this.inSmall = switch (value) {
@@ -471,6 +483,12 @@ final class CollectionReferences implements FixedLists.Walk {
                         Object key = entry.getKey();
                         Object element = entry.getValue();
                         String mod = this.owners.findOwnerOfEntry(key, element, this.inSmall);
+
+                        if (mod != null && element != null && this.isOwnPlain(mod, element)
+                                && (key == null || ValueOwners.isPlain(key) || this.isOwnPlain(mod, key))) {
+                            this.report.countOwnLeft();
+                            continue;
+                        }
                         Object wrapped = mod == null || element == null ? null
                                 : ElementTakes.findWrappedValue(element, mod);
                         if (mod != null && wrapped != null && key != null) {
@@ -523,61 +541,10 @@ final class CollectionReferences implements FixedLists.Walk {
             completed = true;
         } finally {
             this.inSmall = outer;
+            this.collecting = collectingBefore;
             if (notes != null) {
                 notes.end(value, completed);
             }
-        }
-    }
-
-    @SuppressWarnings("unchecked")
-    private void removeFromNamespaced(Map<?, ?> map) {
-        Map<Object, Object> entries = (Map<Object, Object>) map;
-        try {
-            if (!this.hasNamespacedKey(entries)) {
-                return;
-            }
-            if (ElementLook.isLooking()) {
-                this.noteNamespaced(map, entries);
-                return;
-            }
-            for (Map.Entry<Object, Object> entry : Wrappers.copyEntries(entries)) {
-                String mod = this.owners.isRegistered(entry.getKey()) || this.owners.isRegistered(entry.getValue())
-                        ? null : this.owners.findModNamespaceOf(entry.getKey(), entry.getValue());
-                if (mod != null && !ElementTakes.isGameEntry(entry.getKey(), entry.getValue())
-                        && entries.remove(entry.getKey(), entry.getValue())) {
-                    this.getRemovalsOf(mod).add(new Removal.InMap(entries, entry.getKey(), entry.getValue()));
-                }
-            }
-        } catch (UnsupportedOperationException | IllegalStateException e) {
-            LOGGER.info("[Hotwire] {} keeps {}'s entries: it cannot change", map.getClass().getName(), this.mods);
-        }
-    }
-
-    private void noteNamespaced(Map<?, ?> map, Map<Object, Object> entries) {
-        Set<String> mods = new HashSet<>();
-        for (Map.Entry<Object, Object> entry : Wrappers.copyEntries(entries)) {
-            String mod = this.owners.isRegistered(entry.getKey()) || this.owners.isRegistered(entry.getValue())
-                    ? null : this.owners.findModNamespaceOf(entry.getKey(), entry.getValue());
-            if (mod != null) {
-                mods.add(mod);
-            }
-        }
-        if (!mods.isEmpty()) {
-            this.look.hasNoted(new ElementTakes.NotedTake(() -> "", any -> this.removeFromNamespaced(map),
-                    Set.copyOf(mods)));
-        }
-    }
-
-    private boolean hasNamespacedKey(Map<Object, Object> entries) {
-        try {
-            for (Map.Entry<Object, Object> entry : Wrappers.copyEntries(entries)) {
-                if (this.owners.findModNamespaceOf(entry.getKey(), entry.getValue()) != null) {
-                    return true;
-                }
-            }
-            return false;
-        } catch (RuntimeException e) {
-            return true;
         }
     }
 

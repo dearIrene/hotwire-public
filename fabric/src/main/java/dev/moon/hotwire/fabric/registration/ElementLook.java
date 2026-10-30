@@ -15,10 +15,17 @@ public final class ElementLook {
 
     private static final long FRESH_NANOS = 15_000_000_000L;
 
-    private static volatile boolean isOnlyLooking;
-    private static volatile boolean isLookingForEvery;
+    enum Mode {
+        HOLD, LOOK, LOOK_EVERY, SETUP;
 
-    private static volatile boolean isWarmingOnly;
+        boolean isLook() {
+            return this != HOLD;
+        }
+    }
+
+    private static final ThreadLocal<Mode> MODE = ThreadLocal.withInitial(() -> Mode.HOLD);
+
+    private static volatile Mode runningMode = Mode.HOLD;
 
     private static final Object ONE_LOOK = new Object();
 
@@ -48,7 +55,7 @@ public final class ElementLook {
             return;
         }
 
-        if (isWarmingOnly) {
+        if (runningMode == Mode.SETUP) {
             stopLooking();
         }
         Thread running = looking;
@@ -62,8 +69,8 @@ public final class ElementLook {
             Thread self = Thread.currentThread();
             int priority = self.getPriority();
             looking = self;
-            isOnlyLooking = true;
-            isLookingForEvery = every;
+            runningMode = every ? Mode.LOOK_EVERY : Mode.LOOK;
+            MODE.set(runningMode);
             try {
                 GameHold.runUnheld(() -> {
                     if (every) {
@@ -80,7 +87,8 @@ public final class ElementLook {
             } catch (RuntimeException | LinkageError e) {
                 LOGGER.info("[Hotwire] the look ahead for {} ended early: {}", mods, e.toString());
             } finally {
-                isOnlyLooking = false;
+                MODE.remove();
+                runningMode = Mode.HOLD;
                 looking = null;
                 self.setPriority(priority);
             }
@@ -90,16 +98,15 @@ public final class ElementLook {
     public static void prepareAhead(FieldReferences references, Collection<String> mods, Predicate<String> on) {
         synchronized (ONE_LOOK) {
             looking = Thread.currentThread();
-            isOnlyLooking = true;
-            isLookingForEvery = true;
-            isWarmingOnly = true;
+            runningMode = Mode.SETUP;
+            MODE.set(Mode.SETUP);
             try {
                 GameHold.runUnheld(() -> references.lookForEvery(mods, on));
             } catch (RuntimeException | LinkageError e) {
                 LOGGER.info("[Hotwire] the look's warm-up ended early: {}", e.toString());
             } finally {
-                isWarmingOnly = false;
-                isOnlyLooking = false;
+                MODE.remove();
+                runningMode = Mode.HOLD;
                 looking = null;
             }
         }
@@ -122,17 +129,21 @@ public final class ElementLook {
     }
 
     static boolean isLooking() {
-        return isOnlyLooking;
+        return MODE.get().isLook();
     }
 
     static boolean isStopAsked() {
-        return stopAsked && isOnlyLooking;
+        return stopAsked && isLooking();
     }
 
     static void stopIfAsked() {
         if (isStopAsked()) {
             throw new CancellationException("a switch began, which the notes serves");
         }
+    }
+
+    static boolean hasLookedForEvery() {
+        return !lookedForEvery.isEmpty();
     }
 
     public static void markChanged(Collection<String> mods) {
@@ -157,8 +168,9 @@ public final class ElementLook {
     }
 
     @Nullable List<Runnable> open(List<String> walked) {
-        if (isOnlyLooking) {
-            this.notes.startLook(isLookingForEvery ? null : walked);
+        Mode mode = MODE.get();
+        if (mode.isLook()) {
+            this.notes.startLook(mode == Mode.LOOK ? walked : null);
             return null;
         }
         if (this.isReadyFor(walked)) {
@@ -171,19 +183,18 @@ public final class ElementLook {
     }
 
     void close() {
-        if (isOnlyLooking) {
+        if (isLooking()) {
             LOGGER.info("[Hotwire] the notes holds {} takes in {} collections", this.notes.countTakes(),
                     this.notes.countContainers());
         }
     }
 
     boolean isReadyFor(Collection<String> walked) {
-        boolean lookingHere = isOnlyLooking && Thread.currentThread().equals(looking);
-        return !lookingHere && stands(List.copyOf(walked));
+        return !isLooking() && stands(List.copyOf(walked));
     }
 
     boolean hasNoted(Runnable work) {
-        if (!isOnlyLooking) {
+        if (!isLooking()) {
             return false;
         }
         this.notes.note(work);
@@ -191,7 +202,7 @@ public final class ElementLook {
     }
 
     void drop() {
-        if (isOnlyLooking) {
+        if (isLooking()) {
             this.notes.dropLook();
         }
     }

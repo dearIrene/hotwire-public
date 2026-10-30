@@ -45,31 +45,6 @@ public final class ModTripwire {
         }
     }
 
-    private static final class ArmedClass {
-        private final String mod;
-        private final byte[] before;
-
-        private final int wired;
-
-        ArmedClass(String mod, byte[] before, byte[] wired) {
-            this.mod = mod;
-            this.before = before;
-            this.wired = Arrays.hashCode(wired);
-        }
-
-        boolean isAsWired(byte @Nullable [] known) {
-            return known == null || Arrays.hashCode(known) == this.wired;
-        }
-
-        String getMod() {
-            return this.mod;
-        }
-
-        byte[] getBefore() {
-            return this.before;
-        }
-    }
-
     private final Instrumentation instrumentation;
     private final ClassRebuilder rebuilder;
 
@@ -360,10 +335,20 @@ public final class ModTripwire {
             Map<Class<?>, byte[]> wiredAll = new LinkedHashMap<>();
             Map<Class<?>, ArmedClass> arming = new HashMap<>();
             owned.forEach((type, mod) -> {
-                byte[] bytes = current.get(type.getName().replace('.', '/'));
-                byte[] wired = bytes == null ? null : Tripwire.arm(bytes, mod);
-                if (bytes != null && wired != null) {
-                    arming.put(type, new ArmedClass(mod, bytes, wired));
+                String name = type.getName().replace('.', '/');
+                byte[] bytes = current.get(name);
+                if (bytes == null) {
+                    return;
+                }
+
+                byte[] wired = TripwireSites.arm(name, bytes, mod);
+                if (wired == null) {
+                    wired = Tripwire.arm(bytes, mod);
+                    if (wired != null) {
+                        arming.put(type, new ArmedClass(mod, bytes, wired));
+                    }
+                }
+                if (wired != null) {
                     wiredAll.put(type, wired);
                 }
             });
@@ -380,15 +365,28 @@ public final class ModTripwire {
             Map<Class<?>, ArmedClass> arming) {
         List<String> refused = new ArrayList<>();
         Set<Class<?>> took = this.redefineEach(wiredAll, refused);
-        took.forEach(type -> this.armed.put(type, arming.get(type)));
+        took.forEach(type -> {
+            if (arming.containsKey(type)) {
+                this.armed.put(type, arming.get(type));
+            }
+        });
+        wiredAll.keySet().forEach(type -> {
+            if (!took.contains(type) && !arming.containsKey(type)) {
+                TripwireSites.forget(type.getName().replace('.', '/'));
+            }
+        });
 
         List<String> unusable = new ArrayList<>();
         arming.forEach((type, one) -> {
-            if (!took.contains(type) && this.redefineEach(Map.of(type, one.before), new ArrayList<>())
+            if (!took.contains(type) && this.redefineEach(Map.of(type, one.getBefore()), new ArrayList<>())
                     .isEmpty()) {
                 unusable.add(type.getName());
             }
         });
+        if (took.size() > arming.size()) {
+            LOGGER.info("[Hotwire] {} classes of {} are wired with sites, and flip from now on",
+                    took.size() - arming.size(), ids);
+        }
         refused.removeIf(line -> unusable.contains(line.substring(0, line.indexOf(" ("))));
         if (!unusable.isEmpty()) {
             LOGGER.info("[Hotwire] {} classes of {} are not watched: the JVM takes them in no form, wired or as"
@@ -551,10 +549,14 @@ public final class ModTripwire {
             } else {
                 Tripwire.onLoading(mod, name);
             }
-            byte[] wired = Tripwire.arm(bytes, mod);
+            byte[] wired = TripwireSites.arm(name, bytes, mod);
+            if (wired == null) {
+                wired = Tripwire.arm(bytes, mod);
+                if (wired != null) {
+                    this.armedAtLoad.put(name, new ArmedClass(mod, bytes, wired));
+                }
+            }
             if (wired != null) {
-                this.armedAtLoad.put(name, new ArmedClass(mod, bytes, wired));
-
                 this.rebuilder.getLoadedBytes().onDefinedInGame(name, wired, loader);
             }
             return wired;
