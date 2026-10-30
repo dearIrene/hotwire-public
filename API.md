@@ -66,23 +66,41 @@ Your own mod, any mod it needs and any mod whose code is part of the call. Hotwi
 
 ## The store
 
-You can put the Modrinth store in your own theme, Hotwire finds the mods and does the downloading for you.
+You can put the Modrinth store in your own theme, everything Hotwire's store does you can do too.
 
 ```java
-api.searchStore("zoom").thenAccept(results -> {});          // only what works on the player's version and loader
-api.findStoreProject("zoomify").thenAccept(project -> {});  // icon, description, versions and what it needs
+StoreQuery query = StoreQuery.of("zoom");          // empty for the most downloaded
+api.searchStore(query).thenAccept(page -> {});     // 20 at a time, says if the player has each and if it has an update
+api.searchStore(query.withOffset(20));             // the next page
+api.searchStore(query.withKind(StoreKind.SHADER)); // mods, resource packs, shaders or data packs
+api.searchStore(query.withCategory("optimization"));
+api.getStoreCategories(StoreKind.MOD);
+api.findStoreProject(query, "zoomify").thenAccept(project -> {});
 ```
+
+You can browse other versions and loaders (fabric, quilt, forge or neoforge) with `query.withBrowsing("1.20.1", "forge")` and `findStoreGameVersions()`, those can only be saved though.
 
 Adding a mod is always the player's call, so ask for it and draw what you get back:
 
 ```java
-api.requestAdd("zoomify").thenAccept(add -> {
+api.requestAdd("zoomify", "").thenAccept(add -> {   // "" for the newest, or a version's id
     add.getTitle();
-    add.getLines();       // what comes with it and how big it is, show every line as it is
-    add.needsReopen();    // if the world has to be saved and opened again for it
-    add.accept();         // when the player presses add, it tells you how it went like a switch does
-    add.cancel();         // when they don't
+    add.getLines();       // show every line as it is
+    add.needsReopen();
+    add.accept();         // tells you how it went like a switch does
+    add.cancel();
 });
+```
+
+The store's other buttons:
+
+```java
+api.queueForNextStart("zoomify", "");
+api.saveToDownloads(query, "zoomify", "");
+api.fetchPack(StoreKind.SHADER, "complementary-reimagined", "");
+api.findPackState(StoreKind.SHADER, id);
+api.togglePack(StoreKind.SHADER, id);
+api.getStoreDownloads();   // read it every frame
 ```
 
 You only get to add mods from Modrinth so no links or files.
