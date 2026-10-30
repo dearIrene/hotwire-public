@@ -41,9 +41,15 @@ public final class StoreModel implements AutoCloseable {
             @Override
             public void toggle(ModrinthClient.Kind kind, String projectId) {
             }
+
+            @Override
+            public void fetch(ModrinthClient.Kind kind, String projectId, String versionId, String title) {
+            }
         };
 
         PackState find(ModrinthClient.Kind kind, String projectId);
+
+        void fetch(ModrinthClient.Kind kind, String projectId, String versionId, String title);
 
         void toggle(ModrinthClient.Kind kind, String projectId);
     }
@@ -146,6 +152,10 @@ public final class StoreModel implements AutoCloseable {
 
     public ModrinthClient.Kind getKind() {
         return this.kind;
+    }
+
+    public Packs getPacks() {
+        return this.packs;
     }
 
     public void setPacks(Packs packs) {

@@ -266,6 +266,8 @@
   "hotwire.api.add.no_prompt": "Hotwire's prompt hasn't been accepted yet.",
   "hotwire.api.add.not_found": "Modrinth has no mod called %s for this version.",
   "hotwire.api.add.done": "Added %s.",
+  "hotwire.api.add.next_start": "%s goes in at your next start.",
+  "hotwire.api.add.browsing": "Hotwire's store is looking at another version, set it back to add mods.",
   "hotwire.switch.world_locked": "In-world switching is off in Advanced! Leave the world, then switch.",
   "hotwire.switch.preview_off": "Turns off %s.",
   "hotwire.switch.preview_on": "Turns on %s.",

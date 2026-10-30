@@ -1,27 +1,32 @@
 package dev.moon.hotwire.fabric;
 
 import dev.moon.hotwire.api.StoreAdd;
+import dev.moon.hotwire.api.StoreCategory;
+import dev.moon.hotwire.api.StoreDownload;
+import dev.moon.hotwire.api.StoreKind;
 import dev.moon.hotwire.api.StoreMod;
+import dev.moon.hotwire.api.StorePackState;
+import dev.moon.hotwire.api.StorePage;
 import dev.moon.hotwire.api.StoreProject;
+import dev.moon.hotwire.api.StoreQuery;
 import dev.moon.hotwire.api.StoreVersion;
 import dev.moon.hotwire.api.SwitchResult;
-import dev.moon.hotwire.fabric.add.ModAdder;
 import dev.moon.hotwire.fabric.store.ModStore;
+import dev.moon.hotwire.modrinth.Downloads;
 import dev.moon.hotwire.modrinth.ModrinthClient;
+import dev.moon.hotwire.modrinth.StoreCategories;
+import dev.moon.hotwire.modrinth.StoreModel;
 import dev.moon.hotwire.ui.AddMode;
-import dev.moon.hotwire.ui.AddPreview;
 import dev.moon.hotwire.ui.Lang;
 import java.io.IOException;
 import java.nio.file.Files;
 import java.nio.file.Path;
-import java.util.ArrayList;
+import java.nio.file.StandardCopyOption;
 import java.util.List;
-import java.util.Locale;
 import java.util.Optional;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.CompletionException;
 import java.util.concurrent.Executor;
-import java.util.concurrent.atomic.AtomicBoolean;
 import net.minecraft.client.Minecraft;
 import org.jspecify.annotations.Nullable;
 import org.slf4j.Logger;
@@ -32,6 +37,7 @@ final class StoreApi {
     private static final int PAGE = 20;
 
     private static final Executor ASK = run -> Thread.ofVirtual().name("hotwire-api-store").start(run);
+    private static final Object BROWSING = new Object();
     private static volatile @Nullable ModrinthClient client;
 
     private StoreApi() {
@@ -46,178 +52,165 @@ final class StoreApi {
         return made;
     }
 
-    static CompletableFuture<List<StoreMod>> search(String words) {
+    static ModrinthClient.Kind toKind(StoreKind kind) {
+        return ModrinthClient.Kind.valueOf(kind.name());
+    }
+
+    private interface ClientCall<T> {
+        T run(ModrinthClient made) throws IOException;
+    }
+
+    private interface IoSupplier<T> {
+        T get() throws IOException;
+    }
+
+    private static <T> T askBrowsing(StoreQuery query, ClientCall<T> ask) throws IOException {
+        ModrinthClient made = getClient();
+        synchronized (BROWSING) {
+            made.setBrowsing(query.loader().isEmpty() ? made.getLoader() : query.loader(),
+                    query.gameVersion().isEmpty() ? made.getGameVersion() : query.gameVersion());
+            return ask.run(made);
+        }
+    }
+
+    private static <T> CompletableFuture<T> ask(IoSupplier<T> work) {
         return CompletableFuture.supplyAsync(() -> {
             try {
-                return getClient().search(ModrinthClient.Kind.MOD, words, "", 0, PAGE).hits().stream()
-                        .map(hit -> new StoreMod(hit.projectId(), hit.slug(), hit.title(), hit.description(),
-                                hit.author(), hit.downloads(), hit.iconUrl())).toList();
+                return work.get();
             } catch (IOException e) {
                 throw new CompletionException(e);
             }
         }, ASK);
     }
 
-    static CompletableFuture<Optional<StoreProject>> findProject(String idOrSlug) {
-        return CompletableFuture.supplyAsync(() -> {
+    static @Nullable ModStore findStore() {
+        HotwireEngine engine = HotwireClient.findEngine();
+        if (engine == null) {
+            return null;
+        }
+        ModStore made = engine.getStore();
+        return made != null ? made : CompletableFuture.supplyAsync(engine::findStore, Minecraft.getInstance()).join();
+    }
+
+    private static @Nullable ModStore findStoreIfMade() {
+        HotwireEngine engine = HotwireClient.findEngine();
+        return engine == null ? null : engine.getStore();
+    }
+
+    static CompletableFuture<StorePage> search(StoreQuery query) {
+        return ask(() -> {
+            ModrinthClient.Search found = askBrowsing(query, made -> made.search(toKind(query.kind()), query.words(),
+                    query.category(), Math.max(0, query.offset()), PAGE));
+            ModStore store = findStore();
+            StoreModel model = store == null ? null : store.getModel();
+            return new StorePage(found.hits().stream().map(hit -> new StoreMod(hit.projectId(), hit.slug(),
+                    hit.title(), hit.description(), hit.author(), hit.downloads(), hit.iconUrl(), hit.categories(),
+                    model != null && model.isInstalledProject(hit.projectId()),
+                    model != null && model.getUpdates().containsKey(hit.projectId()))).toList(), found.total());
+        });
+    }
+
+    static List<StoreCategory> getCategories(StoreKind kind) {
+        return StoreCategories.of(toKind(kind)).stream().map(group -> new StoreCategory(group.name(),
+                group.parts())).toList();
+    }
+
+    static CompletableFuture<List<String>> findGameVersions() {
+        return ask(() -> getClient().findGameVersions());
+    }
+
+    static CompletableFuture<Optional<StoreProject>> findProject(StoreQuery browsing, String idOrSlug) {
+        return ask(() -> {
             ModrinthClient.Project project;
             try {
                 project = getClient().findProject(idOrSlug);
             } catch (IOException e) {
                 return Optional.empty();
             }
-            try {
-                List<StoreVersion> versions = getClient().findVersions(ModrinthClient.Kind.MOD, project.id()).stream()
-                        .map(version -> new StoreVersion(version.id(), version.number(), version.name(),
-                                version.size(), version.requiredProjects())).toList();
-                return Optional.of(new StoreProject(project.id(), project.slug(), project.title(),
-                        project.description(), project.body(), project.iconUrl(), project.downloads(), versions));
-            } catch (IOException e) {
-                throw new CompletionException(e);
-            }
-        }, ASK);
+            List<StoreVersion> versions = askBrowsing(browsing, made -> made.findVersions(toKind(browsing.kind()),
+                    project.id())).stream().map(version -> new StoreVersion(version.id(), version.number(),
+                    version.name(), version.size(), version.gameVersions(), version.requiredProjects(),
+                    version.changelog())).toList();
+            return Optional.of(new StoreProject(project.id(), project.slug(), project.title(), project.description(),
+                    project.body(), project.iconUrl(), project.downloads(), project.followers(), project.license(),
+                    project.sourceUrl(), versions));
+        });
+    }
+
+    static List<StoreDownload> getDownloads() {
+        ModStore store = findStoreIfMade();
+        if (store == null) {
+            return List.of();
+        }
+        return store.getModel().getDownloads().snapshot().stream().map(job -> new StoreDownload(job.name(),
+                job.done(), job.total(), job.isOver(), job.state() == Downloads.State.DONE)).toList();
+    }
+
+    static StorePackState findPackState(StoreKind kind, String projectId) {
+        ModStore store = findStoreIfMade();
+        return store == null ? StorePackState.MISSING : StorePackState.valueOf(store.getModel().getPacks()
+                .find(toKind(kind), projectId).name());
+    }
+
+    static void togglePack(StoreKind kind, String projectId) {
+        ModStore store = findStoreIfMade();
+        if (store != null) {
+            Minecraft.getInstance().execute(() -> store.getModel().getPacks().toggle(toKind(kind), projectId));
+        }
     }
 
     @SuppressWarnings("FutureReturnValueIgnored")
-    static CompletableFuture<StoreAdd> requestAdd(String idOrSlug, @Nullable String asker) {
-        HotwireEngine engine = HotwireClient.findEngine();
-        if (engine == null || !engine.canAdd()) {
-            String why = engine == null ? Lang.get("hotwire.api.starting") : engine.getSwitchRefusal();
-            return CompletableFuture.completedFuture(makeRefusal(idOrSlug, why));
-        }
-        if (!engine.isFirstOpenAccepted()) {
-            return CompletableFuture.completedFuture(makeRefusal(idOrSlug, Lang.get("hotwire.api.add.no_prompt")));
-        }
+    static void fetchPack(StoreKind kind, String idOrSlug, String versionId) {
+        findProject(new StoreQuery(kind, "", "", 0, "", ""), idOrSlug).thenAccept(found -> found.ifPresent(project -> {
+            ModStore store = findStore();
+            if (store != null) {
+                Minecraft.getInstance().execute(() -> store.getModel().getPacks().fetch(toKind(kind), project.id(),
+                        versionId, project.name()));
+            }
+        }));
+    }
+
+    static CompletableFuture<StoreAdd> requestAdd(String idOrSlug, String versionId, @Nullable String asker) {
         LOGGER.info("[Hotwire] {} asked to add {} from Modrinth", asker == null ? "a mod" : asker, idOrSlug);
-        CompletableFuture<StoreAdd> made = new CompletableFuture<>();
-        findProject(idOrSlug).whenComplete((found, failure) -> {
-            if (failure != null || found == null || found.isEmpty()) {
-                made.complete(makeRefusal(idOrSlug, Lang.get("hotwire.api.add.not_found", idOrSlug)));
-                return;
-            }
-            StoreProject project = found.get();
-            Minecraft.getInstance().execute(() -> engine.findStore().fetch(project.id(), "", project.name(),
-                    (jars, projects) -> dryRun(engine, project.name(), jars, made),
-                    why -> made.complete(makeRefusal(project.name(), why))));
-        });
-        return made;
+        return StoreApiAdd.request(idOrSlug, versionId);
     }
 
-    @SuppressWarnings("FutureReturnValueIgnored")
-    private static void dryRun(HotwireEngine engine, String name, List<Path> jars, CompletableFuture<StoreAdd> made) {
-        List<CompletableFuture<AddPreview>> runs = jars.stream().map(engine::dryRunAdd).toList();
-        CompletableFuture.allOf(runs.toArray(CompletableFuture[]::new)).whenComplete((done, failure) -> {
-            if (failure != null) {
-                made.complete(makeRefusal(name, failure.toString()));
-                return;
-            }
-            made.complete(new Add(engine, name, jars, runs.stream().map(CompletableFuture::join).toList()));
+    static CompletableFuture<SwitchResult> queueForNextStart(String idOrSlug, String versionId) {
+        return StoreApiAdd.fetchThen(idOrSlug, versionId, (engine, name, jars) -> {
+            jars.forEach(jar -> engine.add(jar, AddMode.NEXT_START, result -> { }));
+            return new SwitchResult(SwitchResult.Kind.DONE, List.of(), Lang.get("hotwire.api.add.next_start", name));
         });
     }
 
-    private static StoreAdd makeRefusal(String name, String why) {
-        return new Add(null, name, List.of(), List.of(AddPreview.ofRefusal(name, why)));
+    static CompletableFuture<SwitchResult> saveToDownloads(StoreQuery browsing, String idOrSlug, String versionId) {
+        Path folder = Path.of(System.getProperty("user.home"), "Downloads");
+        if (browsing.kind() == StoreKind.MOD && browsing.gameVersion().isEmpty() && browsing.loader().isEmpty()) {
+            return StoreApiAdd.fetchThen(idOrSlug, versionId, (engine, name, jars) -> copyInto(folder, name, jars));
+        }
+        return ask(() -> {
+            String projectId = getClient().findProject(idOrSlug).id();
+            ModrinthClient.Version version = askBrowsing(browsing, made -> made.findVersions(toKind(browsing.kind()),
+                    projectId)).stream().filter(one -> versionId.isEmpty() || one.id().equals(versionId))
+                    .findFirst().orElseThrow(() -> new IOException(Lang.get("hotwire.store.no_version", idOrSlug)));
+            Files.createDirectories(folder);
+            Files.write(folder.resolve(version.fileName().replaceAll("[^A-Za-z0-9._+ -]", "_")),
+                    getClient().fetch(version));
+            return new SwitchResult(SwitchResult.Kind.DONE, List.of(), Lang.get("hotwire.store.saved", idOrSlug,
+                    folder));
+        }).exceptionally(failure -> new SwitchResult(SwitchResult.Kind.FAILED, List.of(),
+                String.valueOf(failure.getCause() == null ? failure.getMessage() : failure.getCause().getMessage())));
     }
 
-    private static final class Add implements StoreAdd {
-        private final @Nullable HotwireEngine engine;
-        private final String name;
-        private final List<Path> jars;
-        private final List<AddPreview> previews;
-        private final AtomicBoolean answered = new AtomicBoolean();
-
-        Add(@Nullable HotwireEngine engine, String name, List<Path> jars, List<AddPreview> previews) {
-            this.engine = engine;
-            this.name = name;
-            this.jars = List.copyOf(jars);
-            this.previews = List.copyOf(previews);
-        }
-
-        @Override
-        public String getTitle() {
-            return Lang.get("hotwire.api.add.title", this.name);
-        }
-
-        @Override
-        public List<String> getLines() {
-            List<String> lines = new ArrayList<>();
-            for (int at = 0; at < this.previews.size() - 1; at++) {
-                lines.add(Lang.get("hotwire.api.add.with", this.previews.get(at).name()));
+    private static SwitchResult copyInto(Path folder, String name, List<Path> jars) {
+        try {
+            Files.createDirectories(folder);
+            for (Path jar : jars) {
+                Files.copy(jar, folder.resolve(jar.getFileName()), StandardCopyOption.REPLACE_EXISTING);
             }
-            for (int at = 0; at < this.previews.size(); at++) {
-                AddPreview preview = this.previews.get(at);
-                if (preview.mode() == AddMode.REFUSED || at == this.previews.size() - 1) {
-                    lines.addAll(preview.lines());
-                }
-            }
-            long size = 0;
-            for (Path jar : this.jars) {
-                try {
-                    size += Files.size(jar);
-                } catch (IOException e) {
-                }
-            }
-            if (size > 0) {
-                lines.add(Lang.get("hotwire.api.add.size", String.format(Locale.ROOT, "%.1f MB",
-                        size / (1024.0 * 1024.0))));
-            }
-            return List.copyOf(lines);
-        }
-
-        @Override
-        public boolean needsReopen() {
-            return this.previews.stream().anyMatch(preview -> preview.mode() == AddMode.SAVE_AND_REOPEN);
-        }
-
-        @Override
-        public boolean canAdd() {
-            return this.engine != null && !this.jars.isEmpty()
-                    && this.previews.stream().noneMatch(preview -> preview.mode() == AddMode.REFUSED);
-        }
-
-        @Override
-        public CompletableFuture<SwitchResult> accept() {
-            CompletableFuture<SwitchResult> ended = new CompletableFuture<>();
-            HotwireEngine at = this.engine;
-            if (at == null || !this.canAdd() || !this.answered.compareAndSet(false, true)) {
-                ended.complete(new SwitchResult(SwitchResult.Kind.REFUSED, List.of(),
-                        String.join(" ", this.getLines())));
-                return ended;
-            }
-            Minecraft.getInstance().execute(() -> this.addFrom(at, 0, new ArrayList<>(), ended));
-            return ended;
-        }
-
-        private void addFrom(HotwireEngine at, int index, List<String> added, CompletableFuture<SwitchResult> ended) {
-            if (index == this.jars.size()) {
-                ended.complete(new SwitchResult(SwitchResult.Kind.DONE, List.copyOf(added),
-                        Lang.get("hotwire.api.add.done", this.name)));
-                return;
-            }
-            AddPreview preview = this.previews.get(index);
-            if (preview.mode() == AddMode.NEXT_START) {
-                at.add(this.jars.get(index), AddMode.NEXT_START, result -> { });
-                this.addFrom(at, index + 1, added, ended);
-                return;
-            }
-            at.add(this.jars.get(index), preview.mode(), result -> {
-                switch (result) {
-                    case ModAdder.Result.Added one -> {
-                        added.addAll(one.ids());
-                        this.addFrom(at, index + 1, added, ended);
-                    }
-                    case ModAdder.Result.Refused refused -> ended.complete(new SwitchResult(
-                            SwitchResult.Kind.REFUSED, List.copyOf(added), refused.reason()));
-                    case ModAdder.Result.Failed failed -> ended.complete(new SwitchResult(
-                            ModAdder.isWorldBuilt(failed) ? SwitchResult.Kind.NEEDS_REOPEN : SwitchResult.Kind.FAILED,
-                            List.copyOf(added), failed.reason()));
-                }
-            });
-        }
-
-        @Override
-        public void cancel() {
-            this.answered.set(true);
+            return new SwitchResult(SwitchResult.Kind.DONE, List.of(), Lang.get("hotwire.store.saved", name, folder));
+        } catch (IOException e) {
+            return new SwitchResult(SwitchResult.Kind.FAILED, List.of(), Lang.get("hotwire.store.download_failed",
+                    name, e.getMessage()));
         }
     }
 }

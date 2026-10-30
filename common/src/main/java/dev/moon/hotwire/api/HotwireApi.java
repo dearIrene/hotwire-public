@@ -41,11 +41,27 @@ public interface HotwireApi {
 
     void openScreen();
 
-    CompletableFuture<List<StoreMod>> searchStore(String words);
+    CompletableFuture<StorePage> searchStore(StoreQuery query);
 
-    CompletableFuture<Optional<StoreProject>> findStoreProject(String idOrSlug);
+    List<StoreCategory> getStoreCategories(StoreKind kind);
 
-    CompletableFuture<StoreAdd> requestAdd(String idOrSlug);
+    CompletableFuture<List<String>> findStoreGameVersions();
+
+    CompletableFuture<Optional<StoreProject>> findStoreProject(StoreQuery browsing, String idOrSlug);
+
+    CompletableFuture<StoreAdd> requestAdd(String idOrSlug, String versionId);
+
+    CompletableFuture<SwitchResult> queueForNextStart(String idOrSlug, String versionId);
+
+    CompletableFuture<SwitchResult> saveToDownloads(StoreQuery browsing, String idOrSlug, String versionId);
+
+    void fetchPack(StoreKind kind, String idOrSlug, String versionId);
+
+    StorePackState findPackState(StoreKind kind, String projectId);
+
+    void togglePack(StoreKind kind, String projectId);
+
+    List<StoreDownload> getStoreDownloads();
 
     CompletableFuture<Path> writeReport(String why);
 }

@@ -108,6 +108,7 @@ public final class PackFolders implements StoreModel.Packs {
         });
     }
 
+    @Override
     public void fetch(ModrinthClient.Kind kind, String projectId, String versionId, String title) {
         Path folder = findFolder(kind);
         if (folder == null) {

@@ -4,8 +4,13 @@ import dev.moon.hotwire.api.HotwireApi;
 import dev.moon.hotwire.api.ModState;
 import dev.moon.hotwire.api.OpeningPrompt;
 import dev.moon.hotwire.api.StoreAdd;
-import dev.moon.hotwire.api.StoreMod;
+import dev.moon.hotwire.api.StoreCategory;
+import dev.moon.hotwire.api.StoreDownload;
+import dev.moon.hotwire.api.StoreKind;
+import dev.moon.hotwire.api.StorePackState;
+import dev.moon.hotwire.api.StorePage;
 import dev.moon.hotwire.api.StoreProject;
+import dev.moon.hotwire.api.StoreQuery;
 import dev.moon.hotwire.api.SwitchPreview;
 import dev.moon.hotwire.api.SwitchProgress;
 import dev.moon.hotwire.api.SwitchResult;
@@ -199,18 +204,58 @@ public final class HotwireApiImpl implements HotwireApi {
     }
 
     @Override
-    public CompletableFuture<List<StoreMod>> searchStore(String words) {
-        return StoreApi.search(words);
+    public CompletableFuture<StorePage> searchStore(StoreQuery query) {
+        return StoreApi.search(query);
     }
 
     @Override
-    public CompletableFuture<Optional<StoreProject>> findStoreProject(String idOrSlug) {
-        return StoreApi.findProject(idOrSlug);
+    public List<StoreCategory> getStoreCategories(StoreKind kind) {
+        return StoreApi.getCategories(kind);
     }
 
     @Override
-    public CompletableFuture<StoreAdd> requestAdd(String idOrSlug) {
-        return StoreApi.requestAdd(idOrSlug, findCallers().findAsker());
+    public CompletableFuture<List<String>> findStoreGameVersions() {
+        return StoreApi.findGameVersions();
+    }
+
+    @Override
+    public CompletableFuture<Optional<StoreProject>> findStoreProject(StoreQuery browsing, String idOrSlug) {
+        return StoreApi.findProject(browsing, idOrSlug);
+    }
+
+    @Override
+    public CompletableFuture<StoreAdd> requestAdd(String idOrSlug, String versionId) {
+        return StoreApi.requestAdd(idOrSlug, versionId, findCallers().findAsker());
+    }
+
+    @Override
+    public CompletableFuture<SwitchResult> queueForNextStart(String idOrSlug, String versionId) {
+        return StoreApi.queueForNextStart(idOrSlug, versionId);
+    }
+
+    @Override
+    public CompletableFuture<SwitchResult> saveToDownloads(StoreQuery browsing, String idOrSlug, String versionId) {
+        return StoreApi.saveToDownloads(browsing, idOrSlug, versionId);
+    }
+
+    @Override
+    public void fetchPack(StoreKind kind, String idOrSlug, String versionId) {
+        StoreApi.fetchPack(kind, idOrSlug, versionId);
+    }
+
+    @Override
+    public StorePackState findPackState(StoreKind kind, String projectId) {
+        return StoreApi.findPackState(kind, projectId);
+    }
+
+    @Override
+    public void togglePack(StoreKind kind, String projectId) {
+        StoreApi.togglePack(kind, projectId);
+    }
+
+    @Override
+    public List<StoreDownload> getStoreDownloads() {
+        return StoreApi.getDownloads();
     }
 
     @Override

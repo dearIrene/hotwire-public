@@ -1,6 +1,7 @@
 package dev.moon.hotwire.ui;
 
 import dev.moon.hotwire.modrinth.ModrinthClient;
+import dev.moon.hotwire.modrinth.StoreCategories;
 import dev.moon.hotwire.modrinth.StoreModel;
 import java.nio.file.Path;
 import java.util.ArrayList;
@@ -123,31 +124,8 @@ public final class StoreScreen implements JarHost {
     }
 
     private static List<CategoryBar.Group> findGroups(ModrinthClient.Kind kind) {
-        CategoryBar.Group all = CategoryBar.Group.of("");
-        return switch (kind) {
-            case MOD, DATA_PACK -> List.of(all, CategoryBar.Group.of("optimization"),
-                    new CategoryBar.Group("gameplay", List.of("adventure", "game-mechanics", "mobs", "magic",
-                            "minigame", "food", "equipment")),
-                    new CategoryBar.Group("world", List.of("worldgen", "decoration", "storage", "technology",
-                            "transportation")),
-                    new CategoryBar.Group("utility", List.of("utility", "management", "social", "economy")),
-                    CategoryBar.Group.of("library"), CategoryBar.Group.of("cursed"));
-            case RESOURCE_PACK -> List.of(all,
-                    new CategoryBar.Group("style", List.of("vanilla-like", "simplistic", "realistic", "themed",
-                            "modded", "cursed")),
-                    CategoryBar.Group.of("tweaks"), CategoryBar.Group.of("gui"), CategoryBar.Group.of("audio"),
-                    CategoryBar.Group.of("models"),
-                    new CategoryBar.Group("features", List.of("blocks", "entities", "items", "equipment",
-                            "environment", "fonts", "core-shaders", "locale", "combat", "decoration", "utility")),
-                    new CategoryBar.Group("resolution", List.of("8x-", "16x", "32x", "48x", "64x", "128x", "256x",
-                            "512x+")));
-            case SHADER -> List.of(all,
-                    new CategoryBar.Group("style", List.of("vanilla-like", "semi-realistic", "realistic", "fantasy",
-                            "cartoon", "cursed")),
-                    new CategoryBar.Group("features", List.of("atmosphere", "bloom", "colored-lighting", "foliage",
-                            "path-tracing", "pbr", "reflections", "shadows")),
-                    new CategoryBar.Group("performance", List.of("potato", "low", "medium", "high", "screenshot")));
-        };
+        return StoreCategories.of(kind).stream().map(group -> group.parts().isEmpty()
+                ? CategoryBar.Group.of(group.name()) : new CategoryBar.Group(group.name(), group.parts())).toList();
     }
 
     private void toggleHideInstalled() {
