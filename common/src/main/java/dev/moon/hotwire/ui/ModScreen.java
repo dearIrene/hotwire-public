@@ -438,7 +438,6 @@ public final class ModScreen implements JarHost {
     private void closePanels() {
         this.panels.stream().filter(panel -> panel != this.progress && panel != this.firstOpen)
                 .forEach(Panel::dismiss);
-        this.showMessage("", false);
     }
 
     private boolean isIdle() {

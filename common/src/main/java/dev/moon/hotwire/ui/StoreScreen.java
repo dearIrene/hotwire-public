@@ -229,7 +229,6 @@ public final class StoreScreen implements JarHost {
     private void closePanels() {
         this.addPanel.dismiss();
         this.updatePanel.dismiss();
-        this.showMessage("", false, "");
     }
 
     public void resize(int width, int height) {
