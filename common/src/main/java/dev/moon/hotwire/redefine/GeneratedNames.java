@@ -149,7 +149,8 @@ final class GeneratedNames {
             RunningMembers members = membersOf.apply(at);
             List<String> matches = members.byKey().get(key);
             if (matches != null) {
-                return matches.size() == 1 ? matches.getFirst() : name;
+                Set<String> names = new HashSet<>(matches);
+                return names.size() == 1 ? matches.getFirst() : name;
             }
             at = members.superName();
         }
@@ -212,7 +213,11 @@ final class GeneratedNames {
 
     private record Member(String name, String desc, boolean isStatic, @Nullable String mixin) {
         String key() {
-            return mask(this.name) + this.desc + this.isStatic + this.mixin;
+            return mask(this.name) + this.desc + this.isStatic;
+        }
+
+        boolean isSameMixin(Member other) {
+            return this.mixin == null || other.mixin == null || this.mixin.equals(other.mixin);
         }
     }
 
@@ -225,13 +230,28 @@ final class GeneratedNames {
         Map<String, List<Member>> onlyMixed = groupByKey(mixed, both);
         Map<String, String> renames = new HashMap<>();
         onlyMixed.forEach((key, members) -> {
-            List<Member> old = onlyRunning.get(key);
-            if (members.size() == 1 && old != null && old.size() == 1 && !old.getFirst().name()
-                    .equals(members.getFirst().name())) {
-                renames.put(members.getFirst().name() + members.getFirst().desc(), old.getFirst().name());
+            List<Member> old = onlyRunning.getOrDefault(key, List.of());
+            for (Member member : members) {
+                Member same = findOnlySame(member, old);
+                if (same != null && member.equals(findOnlySame(same, members)) && !same.name().equals(member.name())) {
+                    renames.put(member.name() + member.desc(), same.name());
+                }
             }
         });
         return renames;
+    }
+
+    private static @Nullable Member findOnlySame(Member member, List<Member> among) {
+        Member found = null;
+        for (Member other : among) {
+            if (member.isSameMixin(other)) {
+                if (found != null) {
+                    return null;
+                }
+                found = other;
+            }
+        }
+        return found;
     }
 
     private static Map<String, List<Member>> groupByKey(List<Member> members, Set<String> inOther) {
