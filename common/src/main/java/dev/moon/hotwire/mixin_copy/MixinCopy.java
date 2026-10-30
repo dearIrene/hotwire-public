@@ -29,6 +29,8 @@ import java.util.function.BiConsumer;
 import java.util.function.BiFunction;
 import java.util.function.BooleanSupplier;
 import java.util.function.Function;
+import java.util.zip.ZipEntry;
+import java.util.zip.ZipInputStream;
 import org.jspecify.annotations.Nullable;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -158,9 +160,10 @@ public final class MixinCopy implements AutoCloseable {
             for (Path jar : this.mixinJars) {
                 digest.update(Files.readAllBytes(jar));
             }
+
             Path own = findOwnJar();
             if (own != null) {
-                digest.update(Files.readAllBytes(own));
+                addEntryMakers(digest, own);
             }
             digest.update(this.side.getBytes(StandardCharsets.UTF_8));
 
@@ -170,6 +173,19 @@ public final class MixinCopy implements AutoCloseable {
         }
         this.recipe = known;
         return known;
+    }
+
+    private static void addEntryMakers(MessageDigest digest, Path own) throws IOException {
+        try (ZipInputStream zip = new ZipInputStream(Files.newInputStream(own))) {
+            for (ZipEntry entry = zip.getNextEntry(); entry != null; entry = zip.getNextEntry()) {
+                String name = entry.getName();
+                if (name.startsWith("dev/moon/hotwire/mixin_copy/") || name.startsWith("dev/moon/hotwire/redefine/")
+                        || name.startsWith("dev/moon/hotwire/cache/")) {
+                    digest.update(name.getBytes(StandardCharsets.UTF_8));
+                    digest.update(zip.readAllBytes());
+                }
+            }
+        }
     }
 
     public String findDecoration(String config) {
