@@ -98,6 +98,7 @@ public final class ModTripwire {
     }
 
     void armEarly(Collection<String> ids, Set<String> rebuilt) {
+        ids.forEach(id -> TripwireSites.setOff(id, true));
         this.ride.open();
         this.watcher.execute(() -> {
             synchronized (this) {
@@ -110,6 +111,10 @@ public final class ModTripwire {
                 }
             }
         });
+    }
+
+    void watchNow(Collection<String> ids) {
+        ids.forEach(id -> TripwireSites.setOff(id, true));
     }
 
     void readAhead(Collection<String> ids) {

@@ -35,6 +35,7 @@ import dev.moon.hotwire.report.GameLog;
 import dev.moon.hotwire.report.Report;
 import dev.moon.hotwire.switching.ModSwitcher;
 import dev.moon.hotwire.switching.OffChecker;
+import dev.moon.hotwire.switching.PlayerMessages;
 import dev.moon.hotwire.switching.SwitchTimes;
 import dev.moon.hotwire.ui.Lang;
 import dev.moon.hotwire.ui.Notice;
@@ -223,7 +224,9 @@ public final class SwitchRunner {
         String seconds = String.format(Locale.ROOT, "%.1f", done.millis() / 1000.0);
         String title = order.size() == 1 ? HotwireClient.getEngine().nameOfMod(order.getFirst())
                 : Lang.get("hotwire.notice.many", order.size());
-        String detail = Lang.get(off ? "hotwire.notice.off" : "hotwire.notice.on", seconds);
+        String detail = done.millis() < PlayerMessages.INSTANT_MILLIS
+                ? Lang.get(off ? "hotwire.notice.off_instant" : "hotwire.notice.on_instant")
+                : Lang.get(off ? "hotwire.notice.off" : "hotwire.notice.on", seconds);
         Notices.show(off ? Notice.ofDone(title, detail) : Notice.ofOn(title, detail));
     }
 
@@ -257,6 +260,8 @@ public final class SwitchRunner {
 
         Tripwire.hold(ids);
         ids.forEach(Tripwire::watch);
+
+        this.tripwire.watchNow(ids);
         Tripwire.pause(true);
         SwitchTimes.mark("tripwire");
         try {
