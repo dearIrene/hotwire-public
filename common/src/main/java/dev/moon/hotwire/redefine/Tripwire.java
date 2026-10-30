@@ -470,6 +470,11 @@ public final class Tripwire {
         return mod != null && (CALLS.containsKey(mod) || isOff.test(mod));
     }
 
+    public static boolean isOfHiddenMod(Class<?> type) {
+        String mod = owner.apply(type);
+        return mod != null && isOff.test(mod);
+    }
+
     public static void setOffCheck(Predicate<String> off) {
         isOff = off;
     }

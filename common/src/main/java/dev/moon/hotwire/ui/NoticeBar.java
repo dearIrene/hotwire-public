@@ -11,7 +11,7 @@ final class NoticeBar extends Element {
     private static final int TWO_LINES = 40;
     private static final int LINE = 11;
     private static final int TITLE_LINES = 2;
-    private static final int DETAIL_LINES = 3;
+    private static final int DETAIL_LINES = 5;
     private static final int PAD = 10;
     private static final int GAP = 6;
     private static final int EDGE = 10;

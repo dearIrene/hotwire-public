@@ -17,7 +17,7 @@ public final class SidecarReflection {
     }
 
     private static void refuseIfOff(Class<?> type, String name) throws NoSuchMethodException {
-        if (Tripwire.isOfOffMod(type)) {
+        if (Tripwire.isOfHiddenMod(type)) {
             throw new NoSuchMethodException(name + ": its mod is off");
         }
     }
@@ -94,7 +94,7 @@ public final class SidecarReflection {
     }
 
     public static Field getDeclaredField(Class<?> type, String name) throws NoSuchFieldException {
-        if (Tripwire.isOfOffMod(type)) {
+        if (Tripwire.isOfHiddenMod(type)) {
             throw new NoSuchFieldException(name + ": its mod is off");
         }
         try {
@@ -109,7 +109,7 @@ public final class SidecarReflection {
     }
 
     public static Field getField(Class<?> type, String name) throws NoSuchFieldException {
-        if (Tripwire.isOfOffMod(type)) {
+        if (Tripwire.isOfHiddenMod(type)) {
             throw new NoSuchFieldException(name + ": its mod is off");
         }
         try {
