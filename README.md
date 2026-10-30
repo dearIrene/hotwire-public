@@ -9,6 +9,21 @@ to restart the game.
 
 > If you take the time to read the code or the explainer below, you will see that the code is actually not as horrible as it sounds.
 
+<details>
+<summary><h3>Stress test</h3></summary>
+
+Hotwire does a lot to the JVM so we spent a lot of time making it do as little as possible, then we ran these to prove it :3
+
+- AppleSkin off and on 500 times in a row in a 348 mod world, off is half a second and on is instant
+- Simple Voice Chat off and on 200 times since it runs its own threads, same result and no thread left behind
+- Xaero’s Minimap off and on 200 times since it keeps stuff in the game’s own lists
+- SkyHanni off and on 200 times since its a big kotlin mod with heavy startup code
+- Essential off and on 200 times since it has over 2000 hooks into the game
+
+during these tests we watched memory and loaded classes! memory doesnt grow and loaded classes only go up by the lambdas the JVM makes itself and the switches didn't get slower no many how many times we did them
+> Watched with the JDK’s own tools, jcmd for class histograms and loader stats, flight recorder, and the JVM’s class unloading and redefinition logs
+</details>
+
 ## How it works
 
 ### The problem
