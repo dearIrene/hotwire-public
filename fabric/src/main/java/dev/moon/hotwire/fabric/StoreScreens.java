@@ -183,13 +183,14 @@ final class StoreScreens {
         }
         made.fetch(projectId, versionId, title, (fetched, projects) -> {
             this.fetching.remove(projectId);
-            Path folder = Path.of(System.getProperty("user.home"), "Downloads");
+            Path folder = StoreApi.findDownloads();
             try {
                 Files.createDirectories(folder);
                 for (Path jar : fetched) {
                     Files.copy(jar, folder.resolve(jar.getFileName()), StandardCopyOption.REPLACE_EXISTING);
                 }
                 this.engine.showMessage(Lang.get("hotwire.store.saved", title, folder), false);
+                WebLinks.openFolder(folder);
             } catch (IOException e) {
                 this.engine.showMessage(Lang.get("hotwire.store.download_failed", title, e.getMessage()), true);
             }

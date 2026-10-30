@@ -55,6 +55,8 @@ public interface HotwireApi {
 
     CompletableFuture<SwitchResult> saveToDownloads(StoreQuery browsing, String idOrSlug, String versionId);
 
+    void openDownloads();
+
     void fetchPack(StoreKind kind, String idOrSlug, String versionId);
 
     StorePackState findPackState(StoreKind kind, String projectId);

@@ -476,10 +476,10 @@ public final class Linker {
     private static MethodHandle findFieldHandle(Class<?> target, String name, MethodType type, int kind)
             throws ReflectiveOperationException {
         return switch (kind) {
-            case GET_FIELD -> FieldHolders.findGetter(target, name, type.returnType());
-            case PUT_FIELD -> FieldHolders.findSetter(target, name, type.parameterType(1));
-            case GET_STATIC -> FieldHolders.findStaticGetter(target, name, type.returnType());
-            case PUT_STATIC -> FieldHolders.findStaticSetter(target, name, type.parameterType(0));
+            case GET_FIELD -> FieldAccess.findGetter(target, name, type.returnType());
+            case PUT_FIELD -> FieldAccess.findSetter(target, name, type.parameterType(1));
+            case GET_STATIC -> FieldAccess.findStaticGetter(target, name, type.returnType());
+            case PUT_STATIC -> FieldAccess.findStaticSetter(target, name, type.parameterType(0));
             case PUT_FINAL -> findFinalSetter(target, name);
             default -> throw new IllegalArgumentException("kind " + kind);
         };

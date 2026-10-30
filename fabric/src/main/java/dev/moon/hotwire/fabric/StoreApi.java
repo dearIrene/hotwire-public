@@ -11,6 +11,7 @@ import dev.moon.hotwire.api.StoreProject;
 import dev.moon.hotwire.api.StoreQuery;
 import dev.moon.hotwire.api.StoreVersion;
 import dev.moon.hotwire.api.SwitchResult;
+import dev.moon.hotwire.fabric.screen.WebLinks;
 import dev.moon.hotwire.fabric.store.ModStore;
 import dev.moon.hotwire.modrinth.Downloads;
 import dev.moon.hotwire.modrinth.ModrinthClient;
@@ -27,6 +28,7 @@ import java.util.Optional;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.CompletionException;
 import java.util.concurrent.Executor;
+import net.fabricmc.loader.api.FabricLoader;
 import net.minecraft.client.Minecraft;
 import org.jspecify.annotations.Nullable;
 import org.slf4j.Logger;
@@ -182,8 +184,23 @@ final class StoreApi {
         });
     }
 
+    static Path findDownloads() {
+        return FabricLoader.getInstance().getGameDir().resolve("hotwire").resolve("downloads");
+    }
+
+    static void openDownloads() {
+        Path folder = findDownloads();
+        try {
+            Files.createDirectories(folder);
+        } catch (IOException e) {
+            LOGGER.warn("[Hotwire] the downloads folder {} could not be made: {}", folder, e.toString());
+            return;
+        }
+        Minecraft.getInstance().execute(() -> WebLinks.openFolder(folder));
+    }
+
     static CompletableFuture<SwitchResult> saveToDownloads(StoreQuery browsing, String idOrSlug, String versionId) {
-        Path folder = Path.of(System.getProperty("user.home"), "Downloads");
+        Path folder = findDownloads();
         if (browsing.kind() == StoreKind.MOD && browsing.gameVersion().isEmpty() && browsing.loader().isEmpty()) {
             return StoreApiAdd.fetchThen(idOrSlug, versionId, (engine, name, jars) -> copyInto(folder, name, jars));
         }

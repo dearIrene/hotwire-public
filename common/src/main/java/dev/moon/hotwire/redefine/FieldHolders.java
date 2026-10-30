@@ -55,17 +55,6 @@ public final class FieldHolders {
     }
 
     private static final ThreadLocal<Deque<Fill>> FILLING = ThreadLocal.withInitial(ArrayDeque::new);
-    private static final MethodHandle START_STATICS;
-
-    static {
-        try {
-            START_STATICS = MethodHandles.lookup().findStatic(FieldHolders.class, "startStatics",
-                    MethodType.methodType(void.class, Holder.class));
-        } catch (ReflectiveOperationException e) {
-            throw new ExceptionInInitializerError(e);
-        }
-    }
-
     private FieldHolders() {
     }
 
@@ -224,7 +213,7 @@ public final class FieldHolders {
         }
     }
 
-    private static void startStatics(Holder holder) {
+    static void startStatics(Holder holder) {
         if (STARTED.contains(holder.type())) {
             return;
         }
@@ -236,7 +225,7 @@ public final class FieldHolders {
             try {
                 Holder last = holder.previous().get();
                 try {
-                    initStatics(holder.lookup(), holder.type());
+                    FieldAccess.initStatics(holder.lookup(), holder.type());
                 } finally {
                     if (last != null) {
                         startStatics(last);
@@ -314,8 +303,7 @@ public final class FieldHolders {
         return getHolderFor(getHolderOf(target), instance, false);
     }
 
-    @SuppressWarnings("UnusedMethod")
-    private static Object getHolderFor(Holder holder, Object instance) {
+    static Object getHolderFor(Holder holder, Object instance) {
         return getHolderFor(holder, instance, false);
     }
 
@@ -391,74 +379,12 @@ public final class FieldHolders {
         }
     }
 
-    private static void initStatics(MethodHandles.Lookup lookup, Class<?> type) {
-        try {
-            MethodHandle init = lookup.findStatic(type, FieldInitializers.INIT_STATICS,
-                    MethodType.methodType(void.class));
-            call(init);
-        } catch (ReflectiveOperationException absent) {
-        }
-    }
-
-    static MethodHandle findGetter(Class<?> target, String name, Class<?> type) throws ReflectiveOperationException {
-        Holder holder = getHolderOf(target);
-        MethodHandle get = findField(holder, name, type, false, false);
-        return MethodHandles.filterArguments(get, 0, findHolderFinder(holder));
-    }
-
-    static MethodHandle findSetter(Class<?> target, String name, Class<?> type) throws ReflectiveOperationException {
-        Holder holder = getHolderOf(target);
-        MethodHandle set = findField(holder, name, type, true, false);
-        return MethodHandles.filterArguments(set, 0, findHolderFinder(holder));
-    }
-
-    static MethodHandle findStaticGetter(Class<?> target, String name,
-            Class<?> type) throws ReflectiveOperationException {
-        Holder holder = getHolderOf(target);
-        return MethodHandles.foldArguments(findField(holder, name, type, false, true), START_STATICS.bindTo(holder));
-    }
-
-    static MethodHandle findStaticSetter(Class<?> target, String name,
-            Class<?> type) throws ReflectiveOperationException {
-        Holder holder = getHolderOf(target);
-        return MethodHandles.foldArguments(findField(holder, name, type, true, true), START_STATICS.bindTo(holder));
-    }
-
-    private static MethodHandle findField(Holder holder, String name, Class<?> type, boolean set, boolean isStatic)
-            throws ReflectiveOperationException {
-        MethodHandles.Lookup lookup = holder.lookup();
-        Class<?> owner = holder.type();
-        try {
-            return findField(lookup, owner, name, type, set, isStatic);
-        } catch (NoSuchFieldException typed) {
-            if (type == Object.class || type.isPrimitive()) {
-                throw typed;
-            }
-            return findField(lookup, owner, name, Object.class, set, isStatic);
-        }
-    }
-
-    private static MethodHandle findField(MethodHandles.Lookup lookup, Class<?> owner, String name, Class<?> type,
-            boolean set, boolean isStatic) throws ReflectiveOperationException {
-        if (isStatic) {
-            return set ? lookup.findStaticSetter(owner, name, type) : lookup.findStaticGetter(owner, name, type);
-        }
-        return set ? lookup.findSetter(owner, name, type) : lookup.findGetter(owner, name, type);
-    }
-
-    private static Holder getHolderOf(Class<?> target) {
+    static Holder getHolderOf(Class<?> target) {
         Holder holder = HOLDERS.get(target);
         if (holder == null) {
             throw new IllegalStateException("[Hotwire] no added fields are installed for " + target.getName());
         }
         return holder;
-    }
-
-    private static MethodHandle findHolderFinder(Holder holder) throws ReflectiveOperationException {
-        MethodHandle find = MethodHandles.lookup().findStatic(FieldHolders.class, "getHolderFor",
-                MethodType.methodType(Object.class, Holder.class, Object.class));
-        return MethodHandles.insertArguments(find, 0, holder).asType(MethodType.methodType(holder.type(),
-                Object.class));
     }
 
     private static Object makeHolder(Class<?> type) {
@@ -512,7 +438,7 @@ public final class FieldHolders {
         }
     }
 
-    private static void call(MethodHandle handle, @Nullable Object... arguments) {
+    static void call(MethodHandle handle, @Nullable Object... arguments) {
         try {
             handle.invokeWithArguments(arguments);
         } catch (RuntimeException | Error e) {

@@ -23,6 +23,7 @@ public abstract interface dev.moon.hotwire.api.HotwireApi
   public abstract java.util.concurrent.CompletableFuture<java.util.Optional<dev.moon.hotwire.api.StoreProject>> dev.moon.hotwire.api.HotwireApi.findStoreProject(dev.moon.hotwire.api.StoreQuery,java.lang.String)
   public abstract void dev.moon.hotwire.api.HotwireApi.addListener(java.util.function.Consumer<dev.moon.hotwire.api.SwitchResult>)
   public abstract void dev.moon.hotwire.api.HotwireApi.fetchPack(dev.moon.hotwire.api.StoreKind,java.lang.String,java.lang.String)
+  public abstract void dev.moon.hotwire.api.HotwireApi.openDownloads()
   public abstract void dev.moon.hotwire.api.HotwireApi.openScreen()
   public abstract void dev.moon.hotwire.api.HotwireApi.togglePack(dev.moon.hotwire.api.StoreKind,java.lang.String)
   public static dev.moon.hotwire.api.HotwireApi dev.moon.hotwire.api.HotwireApi.getInstance()

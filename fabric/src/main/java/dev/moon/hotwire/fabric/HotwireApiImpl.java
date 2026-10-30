@@ -48,7 +48,7 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 public final class HotwireApiImpl implements HotwireApi {
-    private static final int REVISION = 4;
+    private static final int REVISION = 5;
     private static final StackWalker STACK = StackWalker.getInstance(StackWalker.Option.RETAIN_CLASS_REFERENCE);
     private static final Logger LOGGER = LoggerFactory.getLogger(HotwireApiImpl.class);
 
@@ -236,6 +236,11 @@ public final class HotwireApiImpl implements HotwireApi {
     @Override
     public CompletableFuture<SwitchResult> saveToDownloads(StoreQuery browsing, String idOrSlug, String versionId) {
         return StoreApi.saveToDownloads(browsing, idOrSlug, versionId);
+    }
+
+    @Override
+    public void openDownloads() {
+        StoreApi.openDownloads();
     }
 
     @Override

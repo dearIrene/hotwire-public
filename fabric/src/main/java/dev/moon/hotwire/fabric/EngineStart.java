@@ -75,6 +75,7 @@ import java.io.IOException;
 import java.lang.instrument.ClassFileTransformer;
 import java.lang.instrument.Instrumentation;
 import java.nio.file.Files;
+import java.nio.file.InvalidPathException;
 import java.nio.file.Path;
 import java.util.ArrayList;
 import java.util.HashMap;
@@ -98,6 +99,7 @@ import org.slf4j.LoggerFactory;
 
 final class EngineStart {
     private static final Logger LOGGER = LoggerFactory.getLogger(EngineStart.class);
+    private static volatile @Nullable Path cacheFolder;
     private static final StackWalker STACK = StackWalker.getInstance();
 
     private static final String RELOAD_TASKS = SimpleReloadInstance.class.getName();
@@ -332,19 +334,42 @@ final class EngineStart {
     }
 
     public static Path findCacheFolder() {
-        String local = System.getenv("LOCALAPPDATA");
-        String xdg = System.getenv("XDG_CACHE_HOME");
-        Path home = Path.of(System.getProperty("user.home"));
-        Path base = home.resolve(".cache");
-        if (local != null) {
-            base = Path.of(local);
-        } else if (xdg != null) {
-            base = Path.of(xdg);
-        } else if (System.getProperty("os.name", "").startsWith("Mac")) {
-            base = home.resolve("Library/Caches");
+        Path found = cacheFolder;
+        if (found == null) {
+            String game = LoadedMods.findVersion("minecraft", "unknown");
+            List<Path> bases = new ArrayList<>();
+            String local = System.getenv("LOCALAPPDATA");
+            String xdg = System.getenv("XDG_CACHE_HOME");
+            Path home = Path.of(System.getProperty("user.home"));
+            if (local != null) {
+                bases.add(Path.of(local));
+            } else if (System.getProperty("os.name", "").startsWith("Mac")) {
+                bases.add(home.resolve("Library/Caches"));
+            }
+            if (xdg != null) {
+                bases.add(Path.of(xdg));
+            }
+            bases.add(home.resolve(".cache"));
+            found = FabricLoader.getInstance().getGameDir().resolve("hotwire").resolve("cache").resolve(game);
+            for (Path base : bases) {
+                Path at = base.resolve("hotwire").resolve(game);
+                if (isWritable(at)) {
+                    found = at;
+                    break;
+                }
+            }
+            cacheFolder = found;
         }
-        String game = LoadedMods.findVersion("minecraft", "unknown");
-        return base.resolve("hotwire").resolve(game);
+        return found;
+    }
+
+    private static boolean isWritable(Path folder) {
+        try {
+            Files.createDirectories(folder);
+            return Files.isWritable(folder);
+        } catch (IOException | SecurityException | InvalidPathException e) {
+            return false;
+        }
     }
 
     private static String getNamespace(String key) {
