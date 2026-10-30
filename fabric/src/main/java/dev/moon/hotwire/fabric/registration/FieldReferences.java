@@ -87,7 +87,6 @@ public final class FieldReferences {
         this.lambdas = new Lambdas(instrumentation);
         this.recomputer = new StaticRecomputer(rebuilder, this.lambdas::findModOf, generatedBy);
         this.loadedChecks = new LoadedCheckAnswers(instrumentation, originalBytes, this::write);
-        Fingerprints.open(instrumentation);
         this.elements = new CollectionReferences(this::write);
         ValueOwners.setLambdaOwners(this.lambdas::findModOf);
         ReflectedOwners.readBytesWith(originalBytes);
@@ -203,10 +202,14 @@ public final class FieldReferences {
         if (!ElementLook.isLooking()) {
             ElementLook.giveWay();
         }
+
+        boolean answered = !every && this.elements.look.isReadyFor(mods)
+                && this.elements.prepare(List.copyOf(mods));
+        SwitchTimes.mark("takes answered");
         GameHold hold = GameHold.begin(Minecraft.getInstance());
         try {
             planned.forEach(this::putIn);
-            if (this.elements.look.isReadyFor(mods)) {
+            if (answered || this.elements.look.isReadyFor(mods)) {
                 this.elements.takeOut(List.copyOf(mods), List.of(), Set.of(), HandedSearch.NONE);
                 return;
             }

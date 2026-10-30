@@ -28,7 +28,6 @@ final class CollectionReferences implements FixedLists.Walk {
     private static final int LARGEST = 100_000;
 
     static final int WRAPPERS_IN = 512;
-    private static final long SLOW_MILLIS = 100;
 
     private final Map<String, List<Removal>> removals = new HashMap<>();
     private final StaticRecomputer.Writer writer;
@@ -45,7 +44,10 @@ final class CollectionReferences implements FixedLists.Walk {
 
     private WalkReport report = new WalkReport();
 
-    private static final long SLOW_ASK_MILLIS = 30;
+    private ElementTakes.@Nullable Answers prepared;
+    private List<String> preparedFor = List.of();
+
+    private static final boolean NO_PRINTS = System.getProperty("hotwire.noFingerprints") != null;
     private boolean inSmall;
 
     private final TakeCandidates candidates = new TakeCandidates();
@@ -58,21 +60,18 @@ final class CollectionReferences implements FixedLists.Walk {
 
     synchronized void takeOut(List<String> mods, Collection<Object> holders, Collection<Class<?>> statics,
             HandedSearch handed) {
-        List<Runnable> ahead = this.look.open(mods);
+        ElementTakes.Answers ready = this.prepared != null && this.preparedFor.equals(mods) ? this.prepared : null;
+        this.prepared = null;
+        List<Runnable> ahead = ready != null ? List.of() : this.look.open(mods);
         try {
-            if (ahead == null) {
+            if (ready != null) {
+                this.takeAll(ready, mods);
+            } else if (ahead == null) {
                 this.walk(mods, holders, statics, handed);
                 this.look.close();
             } else {
                 this.begin(mods);
-                long began = System.nanoTime();
-                ElementTakes.runAll(ahead, mods, this.look.getContainersOfTakes(),
-                        container -> String.valueOf(this.look.getNotes().findOrigin(container).staticsOf()));
-                long millis = (System.nanoTime() - began) / 1_000_000;
-                if (millis >= SLOW_MILLIS) {
-                    LOGGER.info("[Hotwire] {} takes the look noted were run for {} in {} ms", ahead.size(), mods,
-                            millis);
-                }
+                this.takeAll(ElementTakes.prepare(ahead, mods, this.look.getContainersOfTakes()), mods);
             }
         } catch (RuntimeException | LinkageError e) {
             this.look.drop();
@@ -190,6 +189,34 @@ final class CollectionReferences implements FixedLists.Walk {
         }
     }
 
+    synchronized boolean prepare(List<String> mods) {
+        this.prepared = null;
+        if (ElementLook.isLooking()) {
+            return false;
+        }
+        List<Runnable> ahead = this.look.open(mods);
+        if (ahead == null) {
+            return false;
+        }
+        this.begin(mods);
+        long began = System.nanoTime();
+        ElementTakes.Answers made = ElementTakes.prepare(ahead, mods, this.look.getContainersOfTakes());
+        this.prepared = made;
+        this.preparedFor = List.copyOf(mods);
+        LOGGER.info("[Hotwire] {} of {} noted takes answered for {} ahead of the hold in {} ms",
+                made.takes().size(), ahead.size(), mods, (System.nanoTime() - began) / 1_000_000);
+        return true;
+    }
+
+    private void takeAll(ElementTakes.Answers answers, List<String> mods) {
+        ElementTakes.applyPrepared(answers, mods, this::describeOrigin);
+        this.look.getNotes().forgetChanged(answers.containers());
+    }
+
+    private String describeOrigin(Object container) {
+        return String.valueOf(this.look.getNotes().findOrigin(container).staticsOf());
+    }
+
     private void begin(List<String> mods) {
         this.seen = Collections.newSetFromMap(new IdentityHashMap<>());
         this.mods = List.copyOf(mods);
@@ -287,21 +314,15 @@ final class CollectionReferences implements FixedLists.Walk {
     private void takeOrNote(String owner, @Nullable Set<String> candidates, Supplier<@Nullable String> asked,
             Consumer<String> take, @Nullable Object element) {
         boolean small = this.inSmall;
-        String of = element == null ? "null" : element.getClass().getName();
-        Supplier<@Nullable String> whose = () -> {
+        Supplier<@Nullable String> whose = ElementTakes.timeAsk(() -> {
             boolean was = this.inSmall;
             this.inSmall = small;
-            long began = System.nanoTime();
             try {
                 return asked.get();
             } finally {
                 this.inSmall = was;
-                long millis = (System.nanoTime() - began) / 1_000_000;
-                if (millis >= SLOW_ASK_MILLIS) {
-                    LOGGER.info("[Hotwire] asking whose a {} is took {} ms", of, millis);
-                }
             }
-        };
+        }, element == null ? "null" : element.getClass().getName());
         this.report.count(candidates != null);
         if (!ElementLook.isLooking() || !this.look.hasNoted(new ElementTakes.NotedTake(whose, take,
                 this.candidates.withOwner(candidates, owner)))) {
@@ -416,7 +437,7 @@ final class CollectionReferences implements FixedLists.Walk {
         }
 
         CollectionNotes notes = ElementLook.isLooking() ? this.look.getNotes() : null;
-        if (notes != null && notes.isUnchanged(value)) {
+        if (notes != null && !NO_PRINTS && notes.isUnchanged(value)) {
             return;
         }
         this.readChanging(value, () -> this.collectOnce(value));

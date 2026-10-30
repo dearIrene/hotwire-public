@@ -2,6 +2,7 @@ package dev.moon.hotwire.fabric.registration;
 
 import com.google.common.collect.MapMaker;
 import dev.moon.hotwire.redefine.FieldSlots;
+import dev.moon.hotwire.registration.Fingerprints;
 import java.lang.ref.WeakReference;
 import java.util.ArrayDeque;
 import java.util.ArrayList;
@@ -19,7 +20,7 @@ import org.jspecify.annotations.Nullable;
 final class CollectionNotes {
     private static final Object NOWHERE = new Object();
 
-    private record Frame(Object container, List<Runnable> before, List<Runnable> now, boolean fresh) {
+    private record Frame(Object container, List<Runnable> before, List<Runnable> now, boolean fresh, long print) {
     }
 
     record Origin(@Nullable String staticsOf, boolean game, FieldSlots.@Nullable Slot field) {
@@ -44,14 +45,16 @@ final class CollectionNotes {
     private boolean inWorld;
     private int lastForAnyHold;
     private int leftUnchanged;
+    private boolean printing;
 
     private final Map<Object, Long> prints = new MapMaker().weakKeys().makeMap();
     private final Set<Object> readAgain = Collections.newSetFromMap(new MapMaker().weakKeys().makeMap());
 
     private final Map<String, Set<Object>> restored = new HashMap<>();
 
-    synchronized void startLook(@Nullable Collection<String> mods) {
+    synchronized void startLook(@Nullable Collection<String> mods, boolean printing) {
         this.leftUnchanged = 0;
+        this.printing = printing;
         this.lookingFor = mods == null ? null : List.copyOf(mods);
         this.every = mods == null;
         this.open.clear();
@@ -105,7 +108,7 @@ final class CollectionNotes {
         if (this.inWorld) {
             this.ofWorld.add(container);
         }
-        this.open.push(new Frame(container, before, left, fresh));
+        this.open.push(new Frame(container, before, left, fresh, Fingerprints.of(container)));
     }
 
     @SuppressWarnings("ReferenceEquality")
@@ -118,8 +121,15 @@ final class CollectionNotes {
         if (frame == this.open.peek()) {
             return;
         }
-        if (completed) {
-            this.prints.put(container, Fingerprints.of(container));
+        if (completed && !this.printing) {
+            this.prints.remove(container);
+        } else if (completed) {
+            long now = Fingerprints.of(container);
+            if (now == frame.print() && now != Fingerprints.UNKNOWN) {
+                this.prints.put(container, now);
+            } else {
+                this.prints.remove(container);
+            }
         }
         if (!completed) {
             this.takes.put(container, frame.before());
@@ -224,6 +234,13 @@ final class CollectionNotes {
 
     synchronized void markReadAgain(Object container) {
         this.readAgain.add(container);
+    }
+
+    synchronized void forgetChanged(Collection<Object> containers) {
+        for (Object container : containers) {
+            this.readAgain.remove(container);
+            this.prints.remove(container);
+        }
     }
 
     synchronized void finishEvery() {

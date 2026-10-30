@@ -1,6 +1,8 @@
 package dev.moon.hotwire.fabric.registration;
 
+import dev.moon.hotwire.registration.Fingerprints;
 import java.lang.ref.WeakReference;
+import java.util.ArrayList;
 import java.util.Collection;
 import java.util.Collections;
 import java.util.Comparator;
@@ -45,29 +47,91 @@ final class ElementTakes {
         };
     }
 
-    static void runAll(List<Runnable> noted, Collection<String> mods, List<Object> containers,
-            Function<Object, String> reachedFrom) {
+    record Answers(List<Runnable> takes, List<Object> containers, List<@Nullable String> owners,
+            IdentityHashMap<Object, Long> prints) {
+    }
+
+    private static final Object NOWHERE = new Object();
+    private static final long SLOW_ASK_MILLIS = 30;
+
+    static Supplier<@Nullable String> timeAsk(Supplier<@Nullable String> asked, String of) {
+        return () -> {
+            long began = System.nanoTime();
+            try {
+                return asked.get();
+            } finally {
+                long millis = (System.nanoTime() - began) / 1_000_000;
+                if (millis >= SLOW_ASK_MILLIS) {
+                    LOGGER.info("[Hotwire] asking whose a {} is took {} ms", of, millis);
+                }
+            }
+        };
+    }
+
+    @SuppressWarnings("ReferenceEquality")
+    static Answers prepare(List<Runnable> noted, Collection<String> mods, List<Object> containers) {
+        List<Runnable> takes = new ArrayList<>();
+        List<Object> where = new ArrayList<>();
+        List<@Nullable String> owners = new ArrayList<>();
+        IdentityHashMap<Object, Long> prints = new IdentityHashMap<>();
+        for (int at = 0; at < noted.size(); at++) {
+            Runnable take = noted.get(at);
+            Object container = at < containers.size() ? containers.get(at) : NOWHERE;
+            String owner = null;
+            if (take instanceof NotedTake filed) {
+                if (filed.candidates() != null && Collections.disjoint(filed.candidates(), mods)) {
+                    if (isCheckingSkips() && filed.whose().get() != null) {
+                        LOGGER.error("[Hotwire] a take filed under {} was {}'s", filed.candidates(), mods);
+                    } else {
+                        continue;
+                    }
+                }
+
+                owner = filed.candidates() != null && filed.candidates().size() == 1 && !isCheckingSkips()
+                        ? filed.candidates().iterator().next() : filed.whose().get();
+                if (owner == null) {
+                    continue;
+                }
+            }
+            takes.add(take);
+            where.add(container);
+            owners.add(owner);
+            if (container != NOWHERE) {
+                prints.computeIfAbsent(container, Fingerprints::of);
+            }
+        }
+        return new Answers(takes, where, owners, prints);
+    }
+
+    static void applyPrepared(Answers prepared, Collection<String> mods, Function<Object, String> reachedFrom) {
+        IdentityHashMap<Object, Boolean> changed = new IdentityHashMap<>();
+        prepared.prints().forEach((container, print) -> {
+            if (Fingerprints.of(container) != print) {
+                changed.put(container, true);
+            }
+        });
         int failed = 0;
         int unchanged = 0;
+        int askedAgain = 0;
         Set<String> unchangedKinds = new TreeSet<>();
         @Nullable RuntimeException first = null;
         IdentityHashMap<Object, long[]> spent = new IdentityHashMap<>();
         long began = System.nanoTime();
-        for (int at = 0; at < noted.size(); at++) {
-            Runnable take = noted.get(at);
+        for (int at = 0; at < prepared.takes().size(); at++) {
+            Runnable take = prepared.takes().get(at);
+            Object container = prepared.containers().get(at);
+            String owner = prepared.owners().get(at);
             long before = System.nanoTime();
-            if (take instanceof NotedTake filed && filed.candidates() != null
-                    && Collections.disjoint(filed.candidates(), mods)) {
-                if (isCheckingSkips() && filed.whose().get() != null) {
-                    LOGGER.error("[Hotwire] a take filed under {} was {}'s", filed.candidates(), mods);
-                } else {
-                    continue;
-                }
-            }
             try {
-                if (take instanceof NotedTake filed && filed.candidates() != null && filed.candidates().size() == 1
-                        && !isCheckingSkips()) {
-                    filed.take().accept(filed.candidates().iterator().next());
+                if (take instanceof NotedTake filed) {
+                    if (changed.containsKey(container)) {
+                        askedAgain++;
+                        owner = filed.whose().get();
+                        if (owner == null) {
+                            continue;
+                        }
+                    }
+                    filed.take().accept(owner);
                 } else {
                     take.run();
                 }
@@ -79,11 +143,13 @@ final class ElementTakes {
                 failed++;
                 first = first == null ? e : first;
             }
-            if (at < containers.size()) {
-                long[] sum = spent.computeIfAbsent(containers.get(at), container -> new long[2]);
-                sum[0] += System.nanoTime() - before;
-                sum[1]++;
-            }
+            long[] sum = spent.computeIfAbsent(container, any -> new long[2]);
+            sum[0] += System.nanoTime() - before;
+            sum[1]++;
+        }
+        if (askedAgain > 0 || !changed.isEmpty()) {
+            LOGGER.info("[Hotwire] {} collections changed between the asks and the hold; {} takes asked again",
+                    changed.size(), askedAgain);
         }
         if ((System.nanoTime() - began) / 1_000_000 >= SLOW_MILLIS) {
             LOGGER.info("[Hotwire] the noted takes spent the most time in {}", spent.entrySet().stream()
@@ -94,8 +160,14 @@ final class ElementTakes {
                             + describe(entry.getKey()) + " from " + reachedFrom.apply(entry.getKey()))
                     .toList());
         }
+        long millis = (System.nanoTime() - began) / 1_000_000;
+        if (millis >= SLOW_MILLIS) {
+            LOGGER.info("[Hotwire] {} takes the look noted were run for {} in {} ms", prepared.takes().size(), mods,
+                    millis);
+        }
         if (first != null) {
-            LOGGER.error("[Hotwire] {} of {} noted takeouts failed; the rest were done", failed, noted.size(), first);
+            LOGGER.error("[Hotwire] {} of {} noted takeouts failed; the rest were done", failed,
+                    prepared.takes().size(), first);
         }
         if (unchanged > 0) {
             LOGGER.info("[Hotwire] {} noted takeouts for {} met collections that cannot change: {}", unchanged, mods,

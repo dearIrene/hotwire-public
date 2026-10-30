@@ -178,7 +178,7 @@ public final class ElementLook {
     @Nullable List<Runnable> open(List<String> walked) {
         Mode mode = MODE.get();
         if (mode.isLook()) {
-            this.notes.startLook(mode == Mode.LOOK ? walked : null);
+            this.notes.startLook(mode == Mode.LOOK ? walked : null, mode != Mode.SETUP);
             return null;
         }
         if (this.isReadyFor(walked)) {
