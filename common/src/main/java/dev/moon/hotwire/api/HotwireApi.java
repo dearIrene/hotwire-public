@@ -41,5 +41,11 @@ public interface HotwireApi {
 
     void openScreen();
 
+    CompletableFuture<List<StoreMod>> searchStore(String words);
+
+    CompletableFuture<Optional<StoreProject>> findStoreProject(String idOrSlug);
+
+    CompletableFuture<StoreAdd> requestAdd(String idOrSlug);
+
     CompletableFuture<Path> writeReport(String why);
 }

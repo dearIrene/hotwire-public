@@ -3,6 +3,9 @@ package dev.moon.hotwire.fabric;
 import dev.moon.hotwire.api.HotwireApi;
 import dev.moon.hotwire.api.ModState;
 import dev.moon.hotwire.api.OpeningPrompt;
+import dev.moon.hotwire.api.StoreAdd;
+import dev.moon.hotwire.api.StoreMod;
+import dev.moon.hotwire.api.StoreProject;
 import dev.moon.hotwire.api.SwitchPreview;
 import dev.moon.hotwire.api.SwitchProgress;
 import dev.moon.hotwire.api.SwitchResult;
@@ -40,7 +43,7 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 public final class HotwireApiImpl implements HotwireApi {
-    private static final int REVISION = 3;
+    private static final int REVISION = 4;
     private static final StackWalker STACK = StackWalker.getInstance(StackWalker.Option.RETAIN_CLASS_REFERENCE);
     private static final Logger LOGGER = LoggerFactory.getLogger(HotwireApiImpl.class);
 
@@ -193,6 +196,21 @@ public final class HotwireApiImpl implements HotwireApi {
                 Minecraft.getInstance().execute(engine::open);
             }
         };
+    }
+
+    @Override
+    public CompletableFuture<List<StoreMod>> searchStore(String words) {
+        return StoreApi.search(words);
+    }
+
+    @Override
+    public CompletableFuture<Optional<StoreProject>> findStoreProject(String idOrSlug) {
+        return StoreApi.findProject(idOrSlug);
+    }
+
+    @Override
+    public CompletableFuture<StoreAdd> requestAdd(String idOrSlug) {
+        return StoreApi.requestAdd(idOrSlug, findCallers().findAsker());
     }
 
     @Override

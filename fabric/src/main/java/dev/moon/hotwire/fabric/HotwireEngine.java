@@ -5,6 +5,7 @@ import dev.moon.hotwire.concurrent.Tasks;
 import dev.moon.hotwire.config.HotwireSettings;
 import dev.moon.hotwire.config.ProfileStore;
 import dev.moon.hotwire.fabric.add.AddSupport;
+import dev.moon.hotwire.fabric.add.ModAdder;
 import dev.moon.hotwire.fabric.add.WorldReopen;
 import dev.moon.hotwire.fabric.rebuild.GameClasses;
 import dev.moon.hotwire.fabric.registration.Fields;
@@ -60,6 +61,7 @@ import java.util.Optional;
 import java.util.Set;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.TimeUnit;
+import java.util.function.Consumer;
 import net.fabricmc.loader.api.FabricLoader;
 import net.minecraft.client.Minecraft;
 import net.minecraft.client.gui.screens.Screen;
@@ -629,6 +631,14 @@ public final class HotwireEngine implements ModScreen.Game, AutoCloseable {
 
     public @Nullable ModStore getStore() {
         return this.stores.getStore();
+    }
+
+    ModStore findStore() {
+        return this.stores.findStore();
+    }
+
+    void add(Path jar, AddMode mode, Consumer<ModAdder.Result> then) {
+        this.jars.add(jar, mode, then);
     }
 
     public void openStoreNow(String words) {
