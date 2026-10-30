@@ -199,6 +199,7 @@ public final class ModTripwire {
 
         synchronized void close() {
             this.open = false;
+            forgetSites(this.wired.keySet());
             this.wired.clear();
             this.arming.clear();
             this.back.clear();
@@ -249,6 +250,7 @@ public final class ModTripwire {
                 ModTripwire.this.putBackByRide.addAll(backNow.keySet());
             }
             if (!took && !left) {
+                forgetSites(wiredNow.keySet());
                 return;
             }
 
@@ -277,6 +279,10 @@ public final class ModTripwire {
                 }
             });
         }
+    }
+
+    private static void forgetSites(Collection<Class<?>> types) {
+        types.forEach(type -> TripwireSites.forget(type.getName().replace('.', '/')));
     }
 
     void unwire(Collection<String> ids) {
@@ -342,6 +348,8 @@ public final class ModTripwire {
         }
         this.instrumentation.removeTransformer(this.loading);
         this.instrumentation.addTransformer(this.loading);
+        LOGGER.debug("[Hotwire] {} classes of {} are wired now: {}", owned.size(), ids,
+                owned.keySet().stream().map(Class::getName).toList());
 
         ARMING.set(true);
         try {
