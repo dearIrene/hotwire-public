@@ -195,9 +195,11 @@ final class LoadedCheckAnswers {
                 if (!(added || ClassFileSummary.isSetAgainLater(bytes, field.getName(), descriptor, true))) {
                     continue;
                 }
-                this.writer.write(field, null, null);
+
+                Object nothing = StandIns.fits(field.getType()) ? StandIns.of(field.getType()) : null;
+                this.writer.write(field, null, nothing);
                 changed.add(type.getSimpleName() + "." + field.getName());
-                this.cleared.computeIfAbsent(mod, any -> new ArrayList<>()).add(new ClearedFlag(field, value, null));
+                this.cleared.computeIfAbsent(mod, any -> new ArrayList<>()).add(new ClearedFlag(field, value, nothing));
             } catch (IllegalAccessException | RuntimeException e) {
                 LOGGER.warn("[Hotwire] {}.{} keeps what it looked up: {}", type.getName(), field.getName(),
                         e.toString());

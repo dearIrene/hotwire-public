@@ -42,6 +42,7 @@ public final class ModListModel {
         }
     }
 
+    private static final String HOTWIRE = "hotwire";
     private final ModCatalog catalog;
     private final Set<String> chosen = new LinkedHashSet<>();
     private final Map<String, Set<String>> broughtIn = new LinkedHashMap<>();
@@ -210,7 +211,9 @@ public final class ModListModel {
         }
         List<String> out = new ArrayList<>();
         byRank.forEach(out::addAll);
-        out.sort(Comparator.comparing(id -> !this.catalog.isFavorite(id)));
+
+        out.sort(Comparator.comparing((String id) -> !id.equals(HOTWIRE))
+                .thenComparing(id -> !this.catalog.isFavorite(id)));
         return out;
     }
 
