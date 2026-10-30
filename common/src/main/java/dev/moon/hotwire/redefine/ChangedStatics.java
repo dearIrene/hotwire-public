@@ -11,6 +11,7 @@ import java.lang.reflect.Method;
 import java.lang.reflect.Modifier;
 import java.util.ArrayList;
 import java.util.HashSet;
+import java.util.IdentityHashMap;
 import java.util.LinkedHashMap;
 import java.util.LinkedHashSet;
 import java.util.List;
@@ -225,6 +226,7 @@ final class ChangedStatics {
             return statics.size();
         }
         int failed = 0;
+        IdentityHashMap<Object, Object> replaced = new IdentityHashMap<>();
         for (Map.Entry<String, String> entry : statics.entrySet()) {
             try {
                 Field field = type.getDeclaredField(entry.getKey());
@@ -245,6 +247,9 @@ final class ChangedStatics {
                     continue;
                 }
                 writer.write(field, made);
+                if (old != null && made != null) {
+                    replaced.put(old, made);
+                }
                 LOGGER.info("[Hotwire] {}.{} was made again by the setup the mods give it now{}", type.getName(),
                         entry.getKey(), Modifier.isFinal(field.getModifiers()) ? " (a final)" : "");
             } catch (ReflectiveOperationException | RuntimeException | LinkageError e) {
@@ -253,6 +258,7 @@ final class ChangedStatics {
                         entry.getKey(), e);
             }
         }
+        ReplacedStatics.swap(replaced);
         return failed;
     }
 

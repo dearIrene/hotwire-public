@@ -25,6 +25,7 @@ import dev.moon.hotwire.fabric.registration.GameRegistrations;
 import dev.moon.hotwire.fabric.registration.GeneratedWrappers;
 import dev.moon.hotwire.fabric.registration.GlfwCallbacks;
 import dev.moon.hotwire.fabric.registration.InternedKeys;
+import dev.moon.hotwire.fabric.registration.LiveConnections;
 import dev.moon.hotwire.fabric.registration.MixinPlugins;
 import dev.moon.hotwire.fabric.registration.ModLifecycle;
 import dev.moon.hotwire.fabric.registration.ModLocks;
@@ -55,6 +56,7 @@ import dev.moon.hotwire.redefine.InitHookReplay;
 import dev.moon.hotwire.redefine.Linker;
 import dev.moon.hotwire.redefine.LoadedClassBytes;
 import dev.moon.hotwire.redefine.OffWindowObjects;
+import dev.moon.hotwire.redefine.ReplacedStatics;
 import dev.moon.hotwire.redefine.ShutOverrides;
 import dev.moon.hotwire.redefine.Tripwire;
 import dev.moon.hotwire.redefine.TripwireSites;
@@ -260,6 +262,7 @@ final class EngineStart {
                         .map(jar -> jar.patches().patches()).orElse(Set.of()), mod -> findHandedTo(mod, installed),
                 mixin::getGeneratedBy);
         InitHookReplay.writeStaticsWith(fieldReferences::writeStatic);
+        ReplacedStatics.swapWith(LiveConnections::swap);
         FinalWrites.writeWith(fieldReferences::writeFinal);
         FieldSlots.readStaticsWhen(fieldReferences::isInitialized);
         switcher.reopenToTurnOnWith(mod -> fieldReferences.hasRemovedFrom(mod)
