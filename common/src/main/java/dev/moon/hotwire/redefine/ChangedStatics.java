@@ -241,6 +241,7 @@ final class ChangedStatics {
                         + entry.getKey(), MethodType.methodType(field.getType()));
                 Object made = MethodHandleProxies.asInterfaceInstance(Supplier.class, making).get();
                 copyElements(old, made);
+                ReplacedStatics.noteRecomputed(type);
                 if (takeStateOf(old, made)) {
                     LOGGER.info("[Hotwire] {}.{} took in place what the setup the mods give it now made, so what"
                             + " holds it sees it too", type.getName(), entry.getKey());
