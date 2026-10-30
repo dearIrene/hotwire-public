@@ -2,7 +2,6 @@ package dev.moon.hotwire.redefine;
 
 import com.google.common.collect.MapMaker;
 import java.lang.invoke.MethodHandle;
-import java.lang.invoke.MethodHandleProxies;
 import java.lang.invoke.MethodHandles;
 import java.lang.invoke.MethodType;
 import java.lang.reflect.Field;
@@ -380,14 +379,13 @@ public final class FieldHolders {
         }
     }
 
-    @SuppressWarnings("unchecked")
     private static @Nullable BiConsumer<Object, Object> initInstance(MethodHandles.Lookup lookup, Class<?> type,
             Class<?> target) {
         try {
             MethodHandle init = lookup.findStatic(type, FieldInitializers.INIT_INSTANCE,
                     MethodType.methodType(void.class, Object.class, target));
-            return MethodHandleProxies.asInterfaceInstance(BiConsumer.class,
-                    init.asType(MethodType.methodType(void.class, Object.class, Object.class)));
+            MethodHandle plain = init.asType(MethodType.methodType(void.class, Object.class, Object.class));
+            return (holder, instance) -> call(plain, holder, instance);
         } catch (ReflectiveOperationException absent) {
             return null;
         }
@@ -397,7 +395,7 @@ public final class FieldHolders {
         try {
             MethodHandle init = lookup.findStatic(type, FieldInitializers.INIT_STATICS,
                     MethodType.methodType(void.class));
-            MethodHandleProxies.asInterfaceInstance(Runnable.class, init).run();
+            call(init);
         } catch (ReflectiveOperationException absent) {
         }
     }
@@ -501,18 +499,26 @@ public final class FieldHolders {
         }
     }
 
-    @SuppressWarnings("unchecked")
     private static void move(Field from, @Nullable Object source, Field to, @Nullable Object target)
             throws IllegalAccessException {
         from.setAccessible(true);
         to.setAccessible(true);
-        MethodHandle setter = MethodHandles.lookup().unreflectSetter(to);
-        setter = MethodHandles.explicitCastArguments(setter, setter.type().generic());
+        MethodHandle setter = DuckCalls.loosen(MethodHandles.lookup().unreflectSetter(to));
         Object value = from.get(source);
         if (target == null) {
-            MethodHandleProxies.asInterfaceInstance(Consumer.class, setter).accept(value);
+            call(setter, value);
         } else {
-            MethodHandleProxies.asInterfaceInstance(BiConsumer.class, setter).accept(target, value);
+            call(setter, target, value);
+        }
+    }
+
+    private static void call(MethodHandle handle, @Nullable Object... arguments) {
+        try {
+            handle.invokeWithArguments(arguments);
+        } catch (RuntimeException | Error e) {
+            throw e;
+        } catch (Throwable e) {
+            throw new IllegalStateException(e);
         }
     }
 }
