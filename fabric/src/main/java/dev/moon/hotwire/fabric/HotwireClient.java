@@ -102,6 +102,14 @@ public final class HotwireClient implements ClientModInitializer {
         }
     }
 
+    static void openFromScreen(boolean shift) {
+        if (shift) {
+            open();
+        } else {
+            getEngine().openChooser();
+        }
+    }
+
     private static void openSoonFromKey() {
         ModViews.runSoon(ModViews.isShiftDown() ? HotwireClient::open : () -> getEngine().openChooser());
 

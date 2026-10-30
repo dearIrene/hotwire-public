@@ -12,6 +12,7 @@ import dev.moon.hotwire.ui.Notice;
 import dev.moon.hotwire.ui.Notices;
 import java.util.ArrayList;
 import java.util.List;
+import java.util.function.Predicate;
 //? if >=26.1 {
 import net.fabricmc.fabric.api.client.keymapping.v1.KeyMappingHelper;
 //?} else {
@@ -20,6 +21,8 @@ import net.fabricmc.fabric.api.client.keymapping.v1.KeyMappingHelper;
 import net.fabricmc.loader.api.FabricLoader;
 import net.minecraft.client.KeyMapping;
 import net.minecraft.client.Minecraft;
+import net.minecraft.client.gui.components.EditBox;
+import net.minecraft.client.gui.components.MultiLineEditBox;
 import net.minecraft.client.gui.screens.Screen;
 import net.minecraft.network.chat.Component;
 import net.minecraft.resources.Identifier;
@@ -95,6 +98,20 @@ public final class OpenKey {
     static String findKeyName() {
         KeyMapping made = key;
         return made == null ? "H" : made.getTranslatedKeyMessage().getString();
+    }
+
+    public static boolean openAtScreen(Predicate<KeyMapping> pressed, boolean shift) {
+        KeyMapping made = key;
+        Minecraft minecraft = Minecraft.getInstance();
+        Screen shown = ModViews.openScreen();
+        if (made == null || minecraft.level != null || shown == null || shown instanceof HotwireScreen
+                || shown instanceof ChooserGameScreen || shown instanceof StoreGameScreen
+                || shown.getFocused() instanceof EditBox || shown.getFocused() instanceof MultiLineEditBox
+                || !pressed.test(made)) {
+            return false;
+        }
+        HotwireClient.openFromScreen(shift);
+        return true;
     }
 
     public static void onPressed() {

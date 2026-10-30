@@ -41,10 +41,10 @@
   "client": [
     "core.blaze3d.systems.CommandEncoderAccessor",
     "core.blaze3d.opengl.GlCommandEncoderAccessor",
+    "core.client.KeyboardHandlerMixin",
     "core.client.multiplayer.ClientPacketListenerMixin",
     "core.client.server.IntegratedServerMixin",
     "core.client.gui.GuiNoticeMixin",
-    "core.client.gui.screens.ScreenKeyMixin",
     "core.client.gui.screens.TitleScreenMixin",
     "core.brigadier.tree.CommandNodeAccessor",
     "core.brigadier.tree.CommandNodeMixin",
