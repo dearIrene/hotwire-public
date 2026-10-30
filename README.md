@@ -138,7 +138,7 @@ Every mod tested so far, with the newest result per operation.
 | 3d-Skin-Layers | 1.11.3 | 1.21.1 |  |  | ok in world | ok in world | ok |  | 2026-10-07 |
 | 3d-Skin-Layers | 1.11.3 | 1.21.11 |  |  | ok in world | ok in world | ok |  | 2026-10-30 |
 | 3d-Skin-Layers | 1.11.2 | 26.2 | clean | ok | ok in world | ok in world |  |  | 2026-10-30 |
-| 3d-Skin-Layers | 1.11.3 | 26.3 |  |  | ok in world | ok in world | ok |  | 2026-10-09 |
+| 3d-Skin-Layers | 1.11.4 | 26.3 |  |  | ok in world | ok in world | ok |  | 2026-10-30 |
 | ambientsounds |  | 26.2 | over 10 s | ok | ok in world | FAULT in world |  |  | 2026-10-30 |
 | Animatica Refabricated | 0.6.3+26.2 | 26.2 | clean | ok | ok in world | ok in world |  |  | 2026-10-30 |
 | Animatium | 4.3 | 26.2 | unjudged | ok | ok in world | ok in world |  |  | 2026-10-30 |
@@ -152,7 +152,7 @@ Every mod tested so far, with the newest result per operation.
 | Async Logger | 2.2.2+1.20.1-fabric | 1.21.1 |  |  | ok in world | ok in world | ok |  | 2026-10-30 |
 | Async Logger | 2.2.2+1.21.11-fabric | 1.21.11 |  |  | ok in world | ok in world | ok |  | 2026-10-30 |
 | Async Logger | 2.2.3+26.1.2-fabric | 26.2 | clean | ok | ok in world | ok in world |  |  | 2026-10-30 |
-| Async Logger | 2.2.2+26.1.2-fabric | 26.3 |  |  | ok in world | ok in world | ok |  | 2026-10-09 |
+| Async Logger | 2.2.3+26.1.2-fabric | 26.3 |  |  | ok in world | ok in world | ok |  | 2026-10-30 |
 | BadOptimizations | 2.4.1 | 1.21.1 |  |  | ok in world | ok in world | ok |  | 2026-10-30 |
 | BadOptimizations | 2.4.1 | 1.21.11 |  |  | ok in world | ok in world | ok |  | 2026-10-30 |
 | BadOptimizations | 2.4.1 | 26.2 | clean | ok | ok in world | ok in world |  |  | 2026-10-30 |
@@ -161,7 +161,7 @@ Every mod tested so far, with the newest result per operation.
 | BehindYouV3 | 3.5.0 | 1.21.1 |  |  | ok in world | ok in world | ok |  | 2026-10-30 |
 | BehindYouV3 | 3.5.0 | 1.21.11 |  |  | ok in world | ok in world | ok |  | 2026-10-30 |
 | BehindYouV3 | 3.4.6 | 26.2 | clean | ok | ok in world | ok in world |  |  | 2026-10-30 |
-| BehindYouV3 | 3.5.0 | 26.3 |  |  | ok in world | ok in world | ok |  | 2026-10-09 |
+| BehindYouV3 | 3.5.0 | 26.3 |  |  | ok in world | ok in world | ok |  | 2026-10-30 |
 | Better Mipmaps | 0.2-1.21.1 | 1.21.1 |  |  | ok in world | ok in world | refused, needs a restart |  | 2026-10-30 |
 | Better Mipmaps | 0.2-1.21.11 | 1.21.11 |  |  | ok in world | ok in world | refused, needs a restart |  | 2026-10-30 |
 | Better Mount HUD | 1.2.4 | 1.21.1 |  |  | ok in world | ok in world | ok |  | 2026-10-30 |
@@ -205,7 +205,7 @@ Every mod tested so far, with the newest result per operation.
 | Chat Block | 1.5.0 | 1.21.11 |  |  | ok in world | ok in world | ok |  | 2026-10-30 |
 | Chat Block | 1.5.0 | 26.2 | DIED after its on | ok | ok in world | ok in world |  |  | 2026-10-30 |
 | Chat Block | 1.7.2 | 26.3 |  |  | ok in world | ok in world | ok |  | 2026-10-30 |
-| Chat Heads | 1.3.2 to 1.3.2 | 26.2 |  |  | ok in world | ok in world |  | ok | 2026-10-30 |
+| Chat Heads | 1.2.5 to 1.3.2 | 26.2 |  |  | ok in world | ok in world |  | ok | 2026-10-30 |
 | Chatting | 3.2.0 | 1.21.1 |  |  | ok in world | ok in world | ok |  | 2026-10-30 |
 | Chatting | 3.2.0 | 1.21.11 |  |  | ok in world | ok in world |  |  | 2026-10-30 |
 | Chatting | 3.1.4 | 26.2 | clean | ok | ok in world | ok in world |  |  | 2026-10-30 |
@@ -221,13 +221,13 @@ Every mod tested so far, with the newest result per operation.
 | ColorSaturation | 1.3.0 | 1.21.1 |  |  | ok in world | ok in world | ok |  | 2026-10-07 |
 | ColorSaturation | 1.3.0 | 1.21.11 |  |  | ok in world | ok in world | ok |  | 2026-10-30 |
 | ColorSaturation | 1.2.0 | 26.2 |  |  | ok in world | ok in world |  |  | 2026-10-30 |
-| ColorSaturation | 1.3.0 | 26.3 |  |  | ok in world | ok in world | ok |  | 2026-10-07 |
-| Compose Multiplatform | 1.0.2+compose.1.12.0-alpha01 | 26.2 | clean | ok | ok in world | ok in world |  |  | 2026-10-30 |
-| Compose Multiplatform | 1.0.6+compose.1.13.0-alpha02.fabric | 26.3 |  |  | ok in world | FAILED in world |  |  | 2026-10-30 |
+| ColorSaturation | 1.3.1 | 26.3 |  |  | ok in world | ok in world | ok |  | 2026-10-30 |
+| Compose Multiplatform | 1.0.6+compose.1.13.0-alpha02.fabric | 26.2 | clean | ok | ok in world | ok in world |  |  | 2026-10-30 |
+| Compose Multiplatform | 1.0.6+compose.1.13.0-alpha02.fabric | 26.3 |  |  | ok in world | ok in world |  |  | 2026-10-30 |
 | Confirm Disconnect | 1.1.7 | 1.21.1 |  |  | ok in world | ok in world | ok |  | 2026-10-07 |
 | Confirm Disconnect | 1.1.7 | 1.21.11 |  |  | ok in world | ok in world | ok |  | 2026-10-30 |
 | Confirm Disconnect | 1.1.8 | 26.2 |  |  | ok in world | ok in world |  |  | 2026-10-30 |
-| Confirm Disconnect | 1.1.9 | 26.3 |  |  | ok in world | ok in world | ok |  | 2026-10-07 |
+| Confirm Disconnect | 1.1.9 | 26.3 |  |  | ok in world | ok in world | ok |  | 2026-10-30 |
 | Confirm Reset Keys | 1.0.1 | 26.2 | clean | ok | ok in world | ok in world |  |  | 2026-10-30 |
 | Confirm Reset Keys | 1.0.1 | 26.3 |  |  | ok in world | ok in world | ok |  | 2026-10-30 |
 | Continuity | 3.0.0+1.21 | 1.21.1 |  |  | ok in world | ok in world | ok |  | 2026-10-07 |
@@ -253,15 +253,15 @@ Every mod tested so far, with the newest result per operation.
 | Cubes Without Borders | 4.1.0+26.2 | 26.2 |  | ok | ok in world | ok in world |  |  | 2026-10-30 |
 | Cull Fewer Leaves | 1.1.2 | 1.21.1 |  |  | ok in world | ok in world | ok |  | 2026-10-07 |
 | Cull Fewer Leaves | 1.1.2 | 1.21.11 |  |  | ok in world | ok in world | ok |  | 2026-10-30 |
-| Cull Fewer Leaves | 1.1.2 | 26.3 |  |  | ok in world | ok in world | ok |  | 2026-10-09 |
+| Cull Fewer Leaves | 1.1.2 | 26.3 |  |  | ok in world | ok in world | ok |  | 2026-10-30 |
 | Custom Block Highlight | 2.91+1.21.1 | 1.21.1 |  |  | ok in world | ok in world | ok |  | 2026-10-07 |
 | Custom Block Highlight | 2.91+1.21.11 | 1.21.11 |  |  | ok in world | ok in world | ok |  | 2026-10-30 |
-| Custom Block Highlight | 2.91+26.3 | 26.3 |  |  |  |  | ok |  | 2026-10-09 |
+| Custom Block Highlight | 2.93+26.3 | 26.3 |  |  | ok in world | ok in world | ok |  | 2026-10-30 |
 | customskinloader-bootstrap |  | 26.2 |  |  | ok in world | ok in world |  |  | 2026-10-27 |
 | DamageTint | 3.7.1 | 1.21.1 |  |  | ok in world | ok in world | ok |  | 2026-10-07 |
 | DamageTint | 3.7.1 | 1.21.11 |  |  | ok in world | ok in world | ok |  | 2026-10-30 |
 | DamageTint | 3.6.1 | 26.2 | clean | ok | ok in world | ok in world |  |  | 2026-10-30 |
-| DamageTint | 3.7.1 | 26.3 |  |  | ok in world | ok in world | ok |  | 2026-10-09 |
+| DamageTint | 3.7.2 | 26.3 |  |  | ok in world | ok in world | ok |  | 2026-10-30 |
 | Dark Graph | 1.2.1 | 1.21.1 |  |  | ok in world | ok in world | ok |  | 2026-10-07 |
 | Dark Graph | 1.2.2 | 1.21.11 |  |  | ok in world | ok in world | ok |  | 2026-10-30 |
 | Debugify | 1.21.1+1.1 | 1.21.1 |  |  | ok in world | ok in world | ok |  | 2026-10-07 |
@@ -272,7 +272,7 @@ Every mod tested so far, with the newest result per operation.
 | Detail Armor Bar | 2.6.3+1.21.1-fabric | 1.21.1 |  |  | ok in world | ok in world | ok |  | 2026-10-07 |
 | Detail Armor Bar Reconstructed | 5.2.1+1.21.9_11-fabric | 1.21.11 |  |  | ok in world | ok in world | ok |  | 2026-10-30 |
 | Detail Armor Bar Reconstructed | 5.3.2-26.2-fabric | 26.2 |  |  | ok in world | ok in world |  |  | 2026-10-30 |
-| Detail Armor Bar Reconstructed | 5.3.2-26.3-fabric | 26.3 |  |  | ok in world | ok in world | ok |  | 2026-10-09 |
+| Detail Armor Bar Reconstructed | 5.3.2-26.3-fabric | 26.3 |  |  | ok in world | ok in world | ok |  | 2026-10-30 |
 | Distant Horizons | 3.3.3 | 26.2 |  |  | FAULT in world | ok in world | ok (Save and add) |  | 2026-10-27 |
 | Dropped Item Tweaks | 1.2.4 | 1.21.1 |  |  | ok in world | ok in world | ok |  | 2026-10-07 |
 | Dropped Item Tweaks | 1.2.8 | 1.21.11 |  |  | ok in world | ok in world | ok |  | 2026-10-30 |
@@ -313,7 +313,7 @@ Every mod tested so far, with the newest result per operation.
 | Fast Noise | 1.0.14+1.21 | 1.21.1 |  |  | ok in world | ok in world | ok |  | 2026-10-07 |
 | Fast Noise | 1.0.40+1.21.11 | 1.21.11 |  |  | ok in world | ok in world | next start |  | 2026-10-30 |
 | Fast Noise | 1.0.40+26.2 | 26.2 |  |  | ok in world | ok in world | ok |  | 2026-10-30 |
-| Fast Noise | 1.1.0+26.3 | 26.3 |  |  |  |  | next start |  | 2026-10-09 |
+| Fast Noise | 1.1.1+26.3 | 26.3 |  |  | ok in world | ok in world | next start |  | 2026-10-30 |
 | fastipping |  | 26.2 |  |  | ok in world | ok in world |  |  | 2026-10-27 |
 | FastQuit | 3.0.0+1.20.6 | 1.21.1 |  |  | ok in world | ok in world | ok |  | 2026-10-07 |
 | FastQuit | 3.1.3+mc1.21.11 | 1.21.11 |  |  | ok in world | ok in world | ok |  | 2026-10-30 |
@@ -348,7 +348,7 @@ Every mod tested so far, with the newest result per operation.
 | HyMod | 2.2.2 | 26.3 |  |  | ok in world | ok in world | ok |  | 2026-10-07 |
 | Hypixel AutoTip | 1.1.3 | 1.21.1 |  |  | ok in world | ok in world | ok |  | 2026-10-07 |
 | Hypixel AutoTip | 1.4.2+26.2 | 26.2 |  |  | ok in world | ok in world | ok |  | 2026-10-09 |
-| Hypixel AutoTip | 1.5.0+26.3 | 26.3 |  |  | ok in world | ok in world | ok |  | 2026-10-09 |
+| Hypixel AutoTip | 1.5.1+26.3 | 26.3 |  |  | ok in world | ok in world | ok |  | 2026-10-30 |
 | Hypixel Mod API | 1.0.2+build.1+mc26.1 | 26.2 |  |  | FAULT in world | ok in world |  |  | 2026-10-29 |
 | Hytils Reborn | 2.1.0 | 1.21.11 |  |  | ok in world | ok in world | ok |  | 2026-10-30 |
 | Hytils Reborn | 2.0.2 | 26.2 |  |  | ok in world | ok in world | ok |  | 2026-10-09 |
@@ -358,7 +358,7 @@ Every mod tested so far, with the newest result per operation.
 | ImmediatelyFast | 1.6.14+1.21.1 | 1.21.1 |  |  | ok in world | ok in world | ok |  | 2026-10-07 |
 | ImmediatelyFast | 1.14.3+1.21.11 | 1.21.11 |  |  | ok in world | ok in world | ok |  | 2026-10-30 |
 | ImmediatelyFast | 1.16.4+26.2 | 26.2 | clean | ok | ok in world | ok in world |  |  | 2026-10-28 |
-| ImmediatelyFast | 1.17.1+26.3 | 26.3 |  |  | ok in world | ok in world | ok |  | 2026-10-09 |
+| ImmediatelyFast | 1.17.1+26.3 | 26.3 |  |  | ok in world | ok in world | ok |  | 2026-10-30 |
 | ImproperUI | 1.21-0.0.6-BETA | 1.21.1 |  |  | ok in world | ok in world | ok |  | 2026-10-07 |
 | inventoryprofilesnext |  | 26.2 |  |  | ok in world | ok in world |  |  | 2026-10-27 |
 | Iris | 1.8.14-beta.1+mc1.21.1 | 1.21.1 | fault | ok | ok in world | FAULT in world |  |  | 2026-10-30 |
@@ -392,7 +392,7 @@ Every mod tested so far, with the newest result per operation.
 | Log Cleaner | 1.0.0 | 26.2 |  |  | ok in world | ok in world | ok |  | 2026-10-09 |
 | malilib |  | 26.2 |  |  | ok in world | ok in world |  |  | 2026-10-27 |
 | Melody | 1.0.17 | 26.2 |  |  | ok in world | ok in world |  |  | 2026-10-27 |
-| meowconfig |  | 26.2 |  |  | ok in world | ok in world |  |  | 2026-10-26 |
+| meowconfig | 2.0.0 | 26.2 |  |  | ok in world | ok in world |  |  | 2026-10-26 |
 | meowdding-lib |  | 26.2 |  |  | ok in world | ok in world |  |  | 2026-10-30 |
 | mezz_config |  | 26.2 |  |  | FAULT in world | ok in world |  |  | 2026-10-27 |
 | MidnightLib | 1.9.3 | 1.21.11 |  |  | ok in world | ok in world |  |  | 2026-10-30 |
@@ -411,20 +411,20 @@ Every mod tested so far, with the newest result per operation.
 | Mount Opacity | 1.0.1 | 1.21.1 |  |  | ok in world | ok in world | ok |  | 2026-10-07 |
 | Mount Opacity | 1.2.1 | 1.21.11 |  |  | ok in world | ok in world | ok |  | 2026-10-30 |
 | Mount Opacity | 1.2.2 | 26.2 |  |  | ok in world | ok in world | ok |  | 2026-10-09 |
-| Mount Opacity | 1.2.3 | 26.3 |  |  | ok in world | ok in world | ok |  | 2026-10-07 |
+| Mount Opacity | 1.2.5 | 26.3 |  |  | ok in world | ok in world | ok |  | 2026-10-30 |
 | mousetweaks |  | 26.2 |  |  | ok in world | ok in world |  |  | 2026-10-27 |
 | naturescompass |  | 26.2 |  |  | ok in world | ok in world |  |  | 2026-10-27 |
 | NBT Autocomplete | 2.1+mc1.21.1 | 1.21.1 |  |  | ok in world | ok in world | ok |  | 2026-10-07 |
 | NBT Autocomplete | 2.1+mc1.21.11 | 1.21.11 |  |  | ok in world | ok in world | ok |  | 2026-10-30 |
 | NBT Autocomplete | 1.3.15 | 26.2 |  |  | ok in world | ok in world | ok |  | 2026-10-30 |
-| NBT Autocomplete | 2.1+mc26.3 | 26.3 |  |  | ok in world | ok in world | ok |  | 2026-10-07 |
+| NBT Autocomplete | 2.1+mc26.3 | 26.3 |  |  | ok in world | ok in world | ok |  | 2026-10-30 |
 | No Chat Reports | 1.21.1-v2.9.1 | 1.21.1 |  |  | ok in world | ok in world | ok |  | 2026-10-07 |
 | No Chat Reports | 1.21.11-v2.18.0 | 1.21.11 |  |  | ok in world | ok in world | ok |  | 2026-10-30 |
 | No Chat Reports | 26.2-v2.20.2 | 26.2 | clean | ok | ok in world | ok in world |  |  | 2026-10-30 |
 | No Chat Restrictions | Fabric-MC1.21.11-v1.0.2 | 1.21.1 |  |  | ok in world | ok in world | ok |  | 2026-10-07 |
 | No Chat Restrictions | Fabric-MC1.21.11-v1.0.2 | 1.21.11 |  |  | ok in world | ok in world | ok |  | 2026-10-30 |
 | No Chat Restrictions | Fabric-MC26.2-v1.2.2 | 26.2 |  |  | ok in world | ok in world | ok |  | 2026-10-30 |
-| Not Enough Crashes | 4.5.1+26.3 | 26.3 |  |  | ok in world |  |  |  | 2026-10-29 |
+| Not Enough Crashes | 4.5.1+26.3 | 26.3 |  |  | ok in world | ok in world |  |  | 2026-10-30 |
 | notenoughanimations |  | 26.2 |  |  | ok in world | ok in world |  |  | 2026-10-27 |
 | Noxesium | 2.3.3+d22848f | 1.21.1 |  |  |  |  | next start |  | 2026-10-07 |
 | Noxesium | 3.0.0+67135f29 | 1.21.11 |  |  | ok in world | ok in world | ok |  | 2026-10-30 |
@@ -433,7 +433,7 @@ Every mod tested so far, with the newest result per operation.
 | Numerical Enchantments | 1.0.1 | 1.21.1 |  |  | ok in world | ok in world | ok |  | 2026-10-07 |
 | Numerical Enchantments | 1.0.1 | 1.21.11 |  |  | ok in world | ok in world | ok |  | 2026-10-30 |
 | Numerical Enchantments | 1.0.2 | 26.2 | clean | ok | ok in world | ok in world |  |  | 2026-10-30 |
-| Numerical Enchantments | 1.0.2 | 26.3 |  |  | ok in world | ok in world | ok |  | 2026-10-07 |
+| Numerical Enchantments | 1.0.2 | 26.3 |  |  | ok in world | ok in world | ok |  | 2026-10-30 |
 | oneconfigv1 |  | 1.21.1 |  |  | ran while off |  |  |  | 2026-10-29 |
 | oneconfigv1 |  | 1.21.11 |  |  | ran while off |  |  |  | 2026-10-29 |
 | oneconfigv1 |  | 26.2 |  |  | ran while off |  |  |  | 2026-10-30 |
@@ -441,21 +441,21 @@ Every mod tested so far, with the newest result per operation.
 | OptiGUI | 2.3.0-beta.9+1.21 | 1.21.1 |  |  | ok in world | ok in world | ok |  | 2026-10-07 |
 | OptiGUI | 2.3.0-beta.9+1.21.9 | 1.21.11 |  |  | ok in world | ok in world | ok |  | 2026-10-30 |
 | OptiGUI | 2.3.0-beta.10+26.2 | 26.2 |  |  | ok in world | ok in world |  |  | 2026-10-30 |
-| OptiGUI | 2.3.0-beta.10+26.3 | 26.3 |  |  | ok in world | ok in world | ok |  | 2026-10-09 |
+| OptiGUI | 2.3.0-beta.10+26.3 | 26.3 |  |  | ok in world | ok in world | ok |  | 2026-10-30 |
 | Optimized block entities | 1.1.46 | 1.21.1 |  |  | ok (Save and switch) in world | ok (Save and switch) in world | ok (Save and add) |  | 2026-10-07 |
 | Optimized block entities | 1.1.46 | 1.21.11 |  |  | ok in world | ok in world | ok (Save and add) |  | 2026-10-30 |
 | Optimized block entities | 1.1.43 | 26.2 |  |  | ok in world | ok in world |  |  | 2026-10-30 |
-| Optimized block entities | 1.1.49 | 26.3 |  |  | ok (Save and switch) in world | ok (Save and switch) in world | ok (Save and add) |  | 2026-10-07 |
+| Optimized block entities | 1.2.0 | 26.3 |  |  | ok in world | ok in world | ok (Save and add) |  | 2026-10-30 |
 | OptiPainting | 1.1.0+1.21.10 | 1.21.11 |  |  | ok in world | ok in world | ok |  | 2026-10-30 |
 | org_jetbrains_annotations |  | 26.2 |  |  | ok in world | ok in world |  |  | 2026-10-27 |
 | OverflowParticles | 1.2.1 | 1.21.1 |  |  | ok in world | ok in world | ok |  | 2026-10-07 |
 | OverflowParticles | 1.2.1 | 1.21.11 |  |  | ok in world | ok in world | ok |  | 2026-10-30 |
 | OverflowParticles | 1.1.5 | 26.2 | clean | ok | ok in world | ok in world |  |  | 2026-10-30 |
-| OverflowParticles | 1.2.1 | 26.3 |  |  | ok in world | ok in world | ok |  | 2026-10-09 |
+| OverflowParticles | 1.2.4 | 26.3 |  |  | ok in world | ok in world | ok |  | 2026-10-30 |
 | Overlay Tweaks | 1.10.0 | 1.21.1 |  |  | ok in world | ok in world | ok (Save and add) |  | 2026-10-07 |
 | Overlay Tweaks | 1.12.13 | 1.21.11 |  |  | ok in world | ok in world | ok |  | 2026-10-30 |
 | Overlay Tweaks | 1.12.15 | 26.2 |  |  | ok in world | ok in world | ok |  | 2026-10-30 |
-| Overlay Tweaks | 2.0.1 | 26.3 |  |  | ok in world | ok in world | ok |  | 2026-10-09 |
+| Overlay Tweaks | 2.0.4 | 26.3 |  |  | ok in world | ok in world | ok |  | 2026-10-30 |
 | owo |  | 26.2 |  |  | ok in world | ok in world |  |  | 2026-10-27 |
 | packetfixer |  | 26.2 |  |  | ok in world | ok in world |  |  | 2026-10-27 |
 | Paginated Advancements | 2.8.0+26.2 | 26.2 |  |  | ok in world | ok in world | ok |  | 2026-10-30 |
@@ -467,12 +467,12 @@ Every mod tested so far, with the newest result per operation.
 | PolyBlur | 2.2.1 | 1.21.1 |  |  | ok in world | ok in world | ok |  | 2026-10-07 |
 | PolyBlur | 2.2.1 | 1.21.11 |  |  | ok in world | ok in world | ok |  | 2026-10-30 |
 | PolyBlur | 2.1.0 | 26.2 | clean | ok | ok in world | ok in world |  |  | 2026-10-30 |
-| PolyBlur | 2.2.1 | 26.3 |  |  | ok in world | ok in world | ok |  | 2026-10-09 |
+| PolyBlur | 2.2.8 | 26.3 |  |  | ok in world | ok in world | ok |  | 2026-10-30 |
 | polydium |  | 26.3 |  |  | ok in world | FAILED in world |  |  | 2026-10-30 |
 | PolyHitbox | 1.3.0 | 1.21.1 |  |  | ok in world | ok in world | ok |  | 2026-10-07 |
 | PolyHitbox | 1.3.0 | 1.21.11 |  |  | ok in world | ok in world | ok |  | 2026-10-30 |
 | PolyHitbox | 1.2.1 | 26.2 | clean | ok | ok in world | ok in world |  |  | 2026-10-30 |
-| PolyHitbox | 1.3.0 | 26.3 |  |  | ok in world | ok in world | ok |  | 2026-10-09 |
+| PolyHitbox | 1.3.6 | 26.3 |  |  | ok in world | ok in world | ok |  | 2026-10-30 |
 | PolyNametag | 1.2.0 | 1.21.1 |  |  | ok in world | ok in world | ok |  | 2026-10-07 |
 | PolyNametag | 1.2.0 | 1.21.11 |  |  | ok in world | ok in world | ok |  | 2026-10-30 |
 | PolyNametag | 1.1.1 | 26.2 | clean | ok | ok in world | ok in world |  |  | 2026-10-30 |
@@ -500,11 +500,11 @@ Every mod tested so far, with the newest result per operation.
 | quick-pack | 1.5.1 | 1.21.11 |  |  | ok in world | ok in world | ok |  | 2026-10-30 |
 | quick-pack | 1.5.0 | 26.2 |  |  | ok in world | ok in world | ok |  | 2026-10-30 |
 | Raise Sound Limit Simplified | 1.2.2 | 26.2 |  |  | ok in world | ok in world |  |  | 2026-10-30 |
-| Raise Sound Limit Simplified | 1.4.0 | 26.3 |  |  | ok (Save and switch) in world | ok in world |  |  | 2026-10-30 |
+| Raise Sound Limit Simplified | 1.4.0 | 26.3 |  |  | ok in world | ok in world |  |  | 2026-10-30 |
 | REDACTION | 2.1.0 | 1.21.1 |  |  | ok in world | ok in world | ok |  | 2026-10-07 |
 | REDACTION | 2.1.0 | 1.21.11 |  |  | ok in world | ok in world | ok |  | 2026-10-30 |
 | REDACTION | 2.0.1 | 26.2 |  |  | ok in world | ok in world | ok |  | 2026-10-30 |
-| REDACTION | 2.1.0 | 26.3 |  |  | ok in world | ok in world | ok |  | 2026-10-09 |
+| REDACTION | 2.1.1 | 26.3 |  |  | ok in world | ok in world | ok |  | 2026-10-30 |
 | reeses-sodium-options |  | 26.2 |  |  | ok in world | ok in world |  |  | 2026-10-27 |
 | Remember My Txt | 1.0.2+MC1.20 | 1.21.1 |  |  | ok in world | ok in world | ok |  | 2026-10-07 |
 | Remember My Txt | 1.0.4+MC1.21.6 | 1.21.11 |  |  | ok in world | ok in world | ok |  | 2026-10-30 |
@@ -515,14 +515,14 @@ Every mod tested so far, with the newest result per operation.
 | Resource Pack Options | 4.14.0+1.21.1.4 | 1.21.1 |  |  | ok in world | ok in world | ok |  | 2026-10-07 |
 | Resource Pack Options | 4.14.3 | 1.21.11 |  |  | ok in world | ok in world | ok |  | 2026-10-30 |
 | Resource Pack Options | 26.2.2 | 26.2 |  |  | ok in world | ok in world | ok |  | 2026-10-30 |
-| Resource Pack Options |  | 26.3 |  |  | ran while off |  |  |  | 2026-10-29 |
+| Resource Pack Options | 26.3.0 | 26.3 |  |  | ok in world | ok in world |  |  | 2026-10-30 |
 | Resourcefulconfig | 3.0.11 | 1.21.1 |  |  | ok in world | ok in world | ok |  | 2026-10-07 |
 | Resourcefulconfig | 5.0.0 | 26.2 |  |  | ran while off | ok in world |  |  | 2026-10-30 |
 | resourcefullib |  | 26.2 |  |  | ok in world | ok in world |  |  | 2026-10-27 |
 | Resourcify | 1.8.7 | 1.21.1 |  |  | ok in world | ok in world | ok |  | 2026-10-07 |
 | Resourcify | 1.8.7 | 1.21.11 |  |  | ok in world | ok in world | ok |  | 2026-10-30 |
 | Resourcify | 1.8.5 | 26.2 |  |  | ok in world | ok in world | ok |  | 2026-10-30 |
-| Resourcify | 1.8.7 | 26.3 |  |  | ok in world | ok in world | ok |  | 2026-10-09 |
+| Resourcify | 1.8.7 | 26.3 |  |  | ok in world | ok in world | ok |  | 2026-10-30 |
 | roughlyenoughitems |  | 26.2 |  |  | ok in world | ok in world |  |  | 2026-10-27 |
 | rrls |  | 26.2 |  |  | ok in world | ok in world |  |  | 2026-10-27 |
 | ScalableLux | 0.1.0.1+fabric.d0d58ab | 1.21.1 |  |  |  |  | refused, needs a restart |  | 2026-10-07 |
@@ -532,27 +532,27 @@ Every mod tested so far, with the newest result per operation.
 | Sciophobia | 1.2.3 | 1.21.1 |  |  | ok in world | ok in world | ok |  | 2026-10-07 |
 | Sciophobia | 1.2.5 | 1.21.11 |  |  | ok in world | ok in world | ok |  | 2026-10-30 |
 | Sciophobia | 1.2.6 | 26.2 |  |  | ok in world | ok in world | ok |  | 2026-10-30 |
-| Sciophobia | 2.0.1 | 26.3 |  |  | ok in world | ok in world | ok |  | 2026-10-09 |
+| Sciophobia | 2.0.1 | 26.3 |  |  | ok in world | ok in world | ok |  | 2026-10-30 |
 | Screenshot Compression | 1.3 | 1.21.1 |  |  | ok in world | ok in world | ok |  | 2026-10-07 |
 | Screenshot Compression | 1.3 | 1.21.11 |  |  | ok in world | ok in world | ok |  | 2026-10-30 |
 | Screenshot Compression | 1.3 | 26.2 |  |  | ok in world | ok in world | ok |  | 2026-10-30 |
-| Screenshot Compression | 1.3 | 26.3 |  |  | ok in world | ok in world | ok |  | 2026-10-09 |
+| Screenshot Compression | 1.4 | 26.3 |  |  | ok in world | ok in world | ok |  | 2026-10-30 |
 | Screenshot Message Enhancer | 2.4.0 | 1.21.1 |  |  | ok in world | ok in world | ok |  | 2026-10-07 |
 | Screenshot Message Enhancer | 2.4.0 | 1.21.11 |  |  | ok in world | ok in world | ok |  | 2026-10-30 |
 | Screenshot Message Enhancer | 2.3.0 | 26.2 |  |  | ok in world | ok in world | ok |  | 2026-10-30 |
-| Screenshot Message Enhancer | 2.4.0 | 26.3 |  |  | ok in world | ok in world | ok |  | 2026-10-09 |
+| Screenshot Message Enhancer | 2.5.2 | 26.3 |  |  | ok in world | ok in world | ok |  | 2026-10-30 |
 | Scroll Tweaks | 1.0.5 | 1.21.1 |  |  | ok in world | ok in world | ok |  | 2026-10-07 |
 | Scroll Tweaks | 1.0.5 | 1.21.11 |  |  | ok in world | ok in world | ok |  | 2026-10-30 |
 | Scroll Tweaks | 1.0.7 | 26.2 |  |  | ok in world | ok in world | ok |  | 2026-10-30 |
-| Scroll Tweaks | 1.0.7 | 26.3 |  |  | ok in world | ok in world | ok |  | 2026-10-09 |
+| Scroll Tweaks | 1.0.7 | 26.3 |  |  | ok in world | ok in world | ok |  | 2026-10-30 |
 | Searchables | 1.0.1 | 26.2 |  |  | ok in world | ok in world |  |  | 2026-10-30 |
 | Secure Skins | 1.0.0 | 1.21.11 |  |  | ok in world | ok in world | ok |  | 2026-10-30 |
 | Secure Skins | 1.0.1 | 26.2 |  |  | ok in world | ok in world | ok |  | 2026-10-30 |
-| Secure Skins | 1.0.1 | 26.3 |  |  | ok in world | ok in world | ok |  | 2026-10-09 |
+| Secure Skins | 1.0.1 | 26.3 |  |  | ok in world | ok in world | ok |  | 2026-10-30 |
 | Shake Tweaks | 1.2.1 | 1.21.1 |  |  | ok in world | ok in world | ok |  | 2026-10-07 |
 | Shake Tweaks | 1.2.1 | 1.21.11 |  |  | ok in world | ok in world | ok |  | 2026-10-30 |
 | Shake Tweaks | 1.2.3 | 26.2 |  |  | ok in world | ok in world | ok |  | 2026-10-30 |
-| Shake Tweaks | 1.2.5 | 26.3 |  |  | ok in world | ok in world | ok |  | 2026-10-09 |
+| Shake Tweaks | 1.3.1 | 26.3 |  |  | ok in world | ok in world | ok |  | 2026-10-30 |
 | Shield Fixes | 2.0.4+1.21.1 | 1.21.1 |  |  | ok in world | ok in world | ok |  | 2026-10-07 |
 | Shield Fixes | 2.0.4+1.21.11 | 1.21.11 |  |  | ok in world | ok in world | ok |  | 2026-10-30 |
 | Shield Fixes | 2.0.4+26.2 | 26.2 | clean | ok | ok in world | ok in world |  |  | 2026-10-30 |
@@ -561,24 +561,24 @@ Every mod tested so far, with the newest result per operation.
 | Simple Block Overlay | 2.1.0 | 26.2 |  |  | ok in world | ok in world | ok |  | 2026-10-30 |
 | Simple Nick Hider | 0.2.0 | 1.21.11 |  |  | ok in world | ok in world | ok |  | 2026-10-30 |
 | Simple Nick Hider | 0.2.1 | 26.2 |  |  | ok in world | ok in world | ok |  | 2026-10-30 |
-| Simple Nick Hider | 0.2.1 | 26.3 |  |  | ok in world | ok in world | ok |  | 2026-10-09 |
+| Simple Nick Hider | 0.2.1 | 26.3 |  |  | ok in world | ok in world | ok |  | 2026-10-30 |
 | Simple Voice Chat | 1.21.11-2.6.24 | 1.21.11 | clean | ok | ok in world | ok in world |  |  | 2026-10-30 |
 | Simple Voice Chat | 2.6.22+26.2 | 26.2 |  |  | ok in world | ok in world |  |  | 2026-10-30 |
 | Simple Voice Chat | 2.6.27+26.3 | 26.3 | DIED in on | ok | ok in world | ok in world |  |  | 2026-10-30 |
 | skyblock-api | 4.2.31 | 26.2 |  |  | ok in world | ok in world |  |  | 2026-10-30 |
 | Skyboxify | 3.4 | 1.21.11 |  |  | ok in world | ok in world | ok |  | 2026-10-30 |
 | Skyboxify | 3.3.1 | 26.2 |  |  | ok in world | ok in world | ok |  | 2026-10-30 |
-| Skyboxify | 3.4 | 26.3 |  |  | ok in world | ok in world | ok |  | 2026-10-09 |
+| Skyboxify | 3.4 | 26.3 |  |  | ok in world | ok in world | ok |  | 2026-10-30 |
 | SkyCubed | 1.10.0 | 26.2 |  |  | ok in world | ok in world |  |  | 2026-10-30 |
-| SkyHanni | 9.2.0 | 26.2 |  |  | ok in world | ok in world |  |  | 2026-10-30 |
-| SkyOcean | 1.18.2 | 26.2 |  |  | ok in world | ok in world |  |  | 2026-10-30 |
+| SkyHanni | 9.3.0 | 26.2 |  |  | ok in world | ok in world |  |  | 2026-10-30 |
+| SkyOcean | 1.18.2 | 26.2 |  |  | ok in world | ok in world | ok |  | 2026-10-31 |
 | SmartSearch | 1.1.0-1+fabric | 1.21.1 |  |  | ok in world | ok in world | ok |  | 2026-10-07 |
 | SmartSearch | 1.1.0-1+fabric | 1.21.11 |  |  | ok in world | ok in world | ok |  | 2026-10-30 |
-| SmartSearch | 1.1.0-1+fabric | 26.3 |  |  | ok in world | ok in world | ok |  | 2026-10-09 |
+| SmartSearch | 1.2.1+fabric | 26.3 |  |  | ok in world | ok in world | ok |  | 2026-10-30 |
 | Smooth Scrolling Refurbished | 1.1.4 | 1.21.1 |  |  | ok in world | ok in world | ok |  | 2026-10-07 |
 | Smooth Scrolling Refurbished | 1.5.2 | 1.21.11 |  |  | ok in world | ok in world | ok |  | 2026-10-30 |
 | Smooth Scrolling Refurbished | 1.9.0 | 26.2 |  |  | ok in world | ok in world | ok |  | 2026-10-30 |
-| Smooth Scrolling Refurbished | 1.10.0 | 26.3 |  |  | ok in world | ok in world | ok |  | 2026-10-09 |
+| Smooth Scrolling Refurbished | 1.10.0 | 26.3 |  |  | ok in world | ok in world | ok |  | 2026-10-30 |
 | Smooth Skies | 2.10.4 | 1.21.1 |  |  | ok in world | ok in world | ok |  | 2026-10-07 |
 | Smooth Skies | 2.10.13 | 1.21.11 |  |  | ok in world | ok in world | ok |  | 2026-10-30 |
 | Smooth Skies | 2.12.1 | 26.2 | clean | ok | ok in world | ok in world |  |  | 2026-10-30 |
@@ -601,7 +601,7 @@ Every mod tested so far, with the newest result per operation.
 | Status Effect Bars | 1.0.6 | 1.21.1 |  |  | ok in world | ok in world | ok |  | 2026-10-07 |
 | Status Effect Bars | 1.0.10 | 1.21.11 |  |  | ok in world | ok in world | ok |  | 2026-10-30 |
 | Status Effect Bars | 1.0.12 | 26.2 | clean | ok | ok in world | ok in world |  |  | 2026-10-30 |
-| Status Effect Bars | 1.0.12 | 26.3 |  |  | ok in world | ok in world | ok |  | 2026-10-09 |
+| Status Effect Bars | 1.0.12 | 26.3 |  |  | ok in world | ok in world | ok |  | 2026-10-30 |
 | subtle_effects |  | 26.2 |  |  | ok (Save and switch) in world | FAILED in world |  |  | 2026-10-26 |
 | supermartijn642configlib |  | 26.2 |  |  | ok in world | ok in world |  |  | 2026-10-27 |
 | terrablender |  | 26.2 |  |  | ok in world | ok in world |  |  | 2026-10-27 |
@@ -619,13 +619,13 @@ Every mod tested so far, with the newest result per operation.
 | VanillaHUD | 3.5.1 | 1.21.1 |  |  | ok in world | ok in world | ok |  | 2026-10-07 |
 | VanillaHUD | 3.5.1 | 1.21.11 |  |  | ok in world | ok in world | ok |  | 2026-10-30 |
 | VanillaHUD | 3.4.9 | 26.2 | clean | ok | ok in world | ok in world |  |  | 2026-10-30 |
-| VanillaHUD | 3.5.1 | 26.3 |  |  | ok in world | ok in world | ok |  | 2026-10-09 |
+| VanillaHUD | 3.5.10 | 26.3 |  |  | ok in world | ok in world | ok |  | 2026-10-30 |
 | Veinminer | 2.12.1 | 26.2 |  |  | ok in world | ok in world |  |  | 2026-10-30 |
 | veinminer_client |  | 26.2 |  |  | ok in world | ok in world |  |  | 2026-10-27 |
 | Very Many Players | 0.2.0+beta.7.172+1.21.1 | 1.21.1 |  |  | ok (Save and switch) in world | ok (Save and switch) in world | ok (Save and add) |  | 2026-10-07 |
 | Very Many Players | 0.2.0+beta.7.227+1.21.11 | 1.21.11 |  |  | ok in world | ok in world | ok (Save and add) |  | 2026-10-30 |
 | Very Many Players | 0.2.0+beta.7.236+26.2 | 26.2 |  |  | ok in world | ok in world |  |  | 2026-10-30 |
-| Very Many Players | 0.2.0+beta.7.238+26.3 | 26.3 |  |  | ok (Save and switch) in world | ok (Save and switch) in world | ok (Save and add) |  | 2026-10-09 |
+| Very Many Players | 0.2.0+beta.7.238+26.3 | 26.3 |  |  | ok in world | ok in world | ok (Save and add) |  | 2026-10-30 |
 | vigilance |  | 26.2 |  |  | ok in world | ok in world |  |  | 2026-10-30 |
 | visuality |  | 26.2 |  |  | ok in world | ok in world |  |  | 2026-10-27 |
 | visualworkbench |  | 26.2 | clean | ok | ok in world | ok in world |  |  | 2026-10-27 |
@@ -633,10 +633,10 @@ Every mod tested so far, with the newest result per operation.
 | WaveyCapes | 1.11.2 | 1.21.1 |  |  | ok in world | ok in world | ok |  | 2026-10-07 |
 | WaveyCapes | 1.11.2 | 1.21.11 |  |  | ok in world | ok in world | ok |  | 2026-10-30 |
 | WaveyCapes | 1.10.2 | 26.2 | clean | ok | ok in world | ok in world |  |  | 2026-10-30 |
-| WaveyCapes | 1.11.2 | 26.3 |  |  | ok in world | ok in world | ok |  | 2026-10-09 |
+| WaveyCapes | 1.11.3 | 26.3 |  |  | ok in world | ok in world | ok |  | 2026-10-30 |
 | waystones |  | 26.2 |  |  | FAULT in world | ok in world |  |  | 2026-10-27 |
 | wWaypoints | 0.8.0 | 1.21.11 |  |  | ok in world | ok in world | ok |  | 2026-10-30 |
-| wWaypoints | 0.8.0 | 26.3 |  |  | ok in world | ok in world | ok |  | 2026-10-09 |
+| wWaypoints | 0.8.1 | 26.3 |  |  | ok in world | ok in world | ok |  | 2026-10-30 |
 | Xaero's Minimap | 26.5.1 | 26.2 | clean | ok | ran while off | ok in world |  |  | 2026-10-30 |
 | xaeroworldmap |  | 26.2 |  |  | FAULT in world | ok in world |  |  | 2026-10-27 |
 | YetAnotherConfigLib | 3.9.6+26.2-fabric | 26.2 |  |  | ok in world | ok in world |  |  | 2026-10-30 |
@@ -644,7 +644,7 @@ Every mod tested so far, with the newest result per operation.
 | Zoomify | 2.15.2+1.21.1 | 1.21.1 | clean | ok | ok in world | ok in world |  |  | 2026-10-30 |
 | Zoomify | 2.15.2+1.21.11 | 1.21.11 | unjudged | ok | ok in world | ok in world |  |  | 2026-10-30 |
 | Zoomify | 2.16.1+26.2 | 26.2 |  |  | ok in world | ok in world |  |  | 2026-10-30 |
-| Zoomify | 2.16.3+26.3 | 26.3 |  |  | ok in world | ok in world | ok |  | 2026-10-09 |
+| Zoomify | 2.17.0+mc26.3 | 26.3 |  |  | ok in world | ok in world | ok |  | 2026-10-30 |
 
 </details>
 </details>
