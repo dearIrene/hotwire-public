@@ -83,7 +83,12 @@ public final class PlayerMessages {
                 : Lang.get("hotwire.names.more", first, ids.size() - 1);
     }
 
+    public static final long INSTANT_MILLIS = 150;
+
     static String formatSeconds(long millis) {
+        if (millis < INSTANT_MILLIS) {
+            return Lang.get("hotwire.time.instant");
+        }
         return millis < 1000 ? Lang.get("hotwire.time.ms", millis) : Lang.get("hotwire.time.seconds",
                 String.format(Locale.ROOT, "%.1f", millis / 1000.0));
     }
