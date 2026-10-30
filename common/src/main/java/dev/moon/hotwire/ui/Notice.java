@@ -1,6 +1,8 @@
 package dev.moon.hotwire.ui;
 
 public record Notice(Kind kind, String title, String detail, String key, float progress, float restSeconds) {
+    static final float REST = 4.5f;
+
     public enum Kind {
         DONE(Palette.ACCENT), ON(Palette.ON), BAD(Palette.BAD), ASK(Palette.WARN);
 
@@ -45,6 +47,10 @@ public record Notice(Kind kind, String title, String detail, String key, float p
 
     public static Notice ofProgress(String title, String detail, String key, float progress) {
         return new Notice(Kind.ON, title, detail, key, Math.max(0, Math.min(1, progress)));
+    }
+
+    float findRest() {
+        return this.restSeconds > 0 ? this.restSeconds : REST;
     }
 
     public boolean isUnderWay() {

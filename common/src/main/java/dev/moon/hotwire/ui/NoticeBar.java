@@ -16,14 +16,8 @@ final class NoticeBar extends Element {
     private static final int GAP = 6;
     private static final int EDGE = 10;
 
-    private static final float REST = 4.5f;
-
     private static final int DRIFT = 28;
     private static final String CROSS = "×";
-
-    private static float findRestOf(Notice notice) {
-        return notice.restSeconds() > 0 ? notice.restSeconds() : REST;
-    }
 
     private static final class Card {
         private Notice notice;
@@ -33,17 +27,18 @@ final class NoticeBar extends Element {
         private final EasedValue hover = EasedValue.ofSpeed(14);
 
         private final EasedValue fade = EasedValue.ofSpeed(6);
-        private float rest;
+
+        private boolean placed;
         private boolean leaving;
         private boolean dismissed;
 
         private int width = WIDEST;
         private int height;
 
-        Card(Notice notice, int topAt) {
+        Card(Notice notice, int topAt, boolean fresh) {
             this.notice = notice;
-            this.rest = findRestOf(notice);
-            this.slide.snap(1);
+            this.placed = !fresh;
+            this.slide.snap(fresh ? 1 : 0);
             this.top.snap(topAt);
             this.fade.snap(1);
         }
@@ -91,10 +86,9 @@ final class NoticeBar extends Element {
             Notice notice = showing.get(i);
             Card same = this.findShowing(notice.key());
             if (same == null) {
-                this.cards.add(0, new Card(notice, EDGE));
+                this.cards.add(0, new Card(notice, EDGE, Notices.markSeen(notice.key())));
             } else if (!same.notice.equals(notice)) {
                 same.notice = notice;
-                same.rest = findRestOf(notice);
             }
         }
         int at = EDGE;
@@ -103,13 +97,17 @@ final class NoticeBar extends Element {
                 card.leaving = true;
             }
             if (!card.leaving) {
-                card.top.to(at);
+                if (card.placed) {
+                    card.top.snap(at);
+                    card.placed = false;
+                } else {
+                    card.top.to(at);
+                }
                 at += card.getHeight() + GAP;
 
-                if (!this.isPointerOn(card) && !card.notice.isUnderWay()) {
-                    card.rest -= dt;
-                }
-                if (card.rest <= 0) {
+                float rest = !this.isPointerOn(card) && !card.notice.isUnderWay()
+                        ? Notices.drain(card.notice.key(), dt) : Notices.findRestLeft(card.notice.key());
+                if (rest <= 0) {
                     card.leaving = true;
                     Notices.drop(card.notice);
                 }
@@ -219,7 +217,8 @@ final class NoticeBar extends Element {
                 canvas.fill(x + 3, y + h - 2, x + 3 + Math.round((w - 3) * notice.progress()), y + h,
                         Colors.fade(kind, a));
             } else {
-                int drained = Math.round((w - 3) * Math.max(0, Math.min(1, card.rest / REST)));
+                int drained = Math.round((w - 3) * Math.max(0, Math.min(1,
+                        Notices.findRestLeft(notice.key()) / notice.findRest())));
                 canvas.fill(x + 3, y + h - 1, x + 3 + drained, y + h,
                         Colors.fade(Colors.mix(Palette.PANEL, kind, 0.5f), a));
             }
