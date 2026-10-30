@@ -96,7 +96,8 @@ The store's other buttons:
 
 ```java
 api.queueForNextStart("zoomify", "");
-api.saveToDownloads(query, "zoomify", "");
+api.saveToDownloads(query, "zoomify", "");   // into .minecraft/hotwire/downloads
+api.openDownloads();                          // opens that folder
 api.fetchPack(StoreKind.SHADER, "complementary-reimagined", "");
 api.findPackState(StoreKind.SHADER, id);
 api.togglePack(StoreKind.SHADER, id);
