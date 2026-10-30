@@ -74,7 +74,8 @@ final class JarRequests {
                 this.engine.findReopenHost().offerReopen(new ReopenPanel.Offer(false, List.of(), jar,
                         String.valueOf(jar.getFileName()), Lang.get("hotwire.add.world_open")));
             } else if (ModAdder.isRestartOnly(result) && current != null) {
-                LOGGER.info("[Hotwire] {}", ((ModAdder.Result.Failed) result).reason());
+                LOGGER.info("[Hotwire] {}", result instanceof ModAdder.Result.Refused refused ? refused.reason()
+                        : ((ModAdder.Result.Failed) result).reason());
                 List<String> why = List.of(Lang.get("hotwire.add.start_only"));
                 current.offerAdd(jar, this.changes.dryRunAdd(jar).thenApply(preview -> AddPreview.ofLater(
                         preview.name(), preview.version(), why)));

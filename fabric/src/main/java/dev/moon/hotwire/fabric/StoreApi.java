@@ -14,6 +14,7 @@ import dev.moon.hotwire.api.SwitchResult;
 import dev.moon.hotwire.fabric.screen.WebLinks;
 import dev.moon.hotwire.fabric.store.ModStore;
 import dev.moon.hotwire.modrinth.Downloads;
+import dev.moon.hotwire.modrinth.CachedAsks;
 import dev.moon.hotwire.modrinth.ModrinthClient;
 import dev.moon.hotwire.modrinth.StoreCategories;
 import dev.moon.hotwire.modrinth.StoreModel;
@@ -94,6 +95,10 @@ final class StoreApi {
         return made != null ? made : CompletableFuture.supplyAsync(engine::findStore, Minecraft.getInstance()).join();
     }
 
+    private static @Nullable CachedAsks findAsks(@Nullable ModStore store) {
+        return store == null ? null : new CachedAsks(store.getModel().getCache());
+    }
+
     private static @Nullable ModStore findStoreIfMade() {
         HotwireEngine engine = HotwireClient.findEngine();
         return engine == null ? null : engine.getStore();
@@ -101,9 +106,12 @@ final class StoreApi {
 
     static CompletableFuture<StorePage> search(StoreQuery query) {
         return ask(() -> {
-            ModrinthClient.Search found = askBrowsing(query, made -> made.search(toKind(query.kind()), query.words(),
-                    query.category(), Math.max(0, query.offset()), PAGE));
             ModStore store = findStore();
+            CachedAsks asks = findAsks(store);
+            ModrinthClient.Search found = askBrowsing(query, made -> asks == null
+                    ? made.search(toKind(query.kind()), query.words(), query.category(), Math.max(0, query.offset()),
+                    PAGE) : asks.search(made, toKind(query.kind()), query.words(), query.category(),
+                    Math.max(0, query.offset()), PAGE));
             StoreModel model = store == null ? null : store.getModel();
             return new StorePage(found.hits().stream().map(hit -> new StoreMod(hit.projectId(), hit.slug(),
                     hit.title(), hit.description(), hit.author(), hit.downloads(), hit.iconUrl(), hit.categories(),
@@ -118,19 +126,24 @@ final class StoreApi {
     }
 
     static CompletableFuture<List<String>> findGameVersions() {
-        return ask(() -> getClient().findGameVersions());
+        return ask(() -> {
+            CachedAsks asks = findAsks(findStore());
+            return asks == null ? getClient().findGameVersions() : asks.findGameVersions(getClient());
+        });
     }
 
     static CompletableFuture<Optional<StoreProject>> findProject(StoreQuery browsing, String idOrSlug) {
         return ask(() -> {
+            CachedAsks asks = findAsks(findStore());
             ModrinthClient.Project project;
             try {
-                project = getClient().findProject(idOrSlug);
+                project = asks == null ? getClient().findProject(idOrSlug) : asks.findProject(getClient(), idOrSlug);
             } catch (IOException e) {
                 return Optional.empty();
             }
-            List<StoreVersion> versions = askBrowsing(browsing, made -> made.findVersions(toKind(browsing.kind()),
-                    project.id())).stream().map(version -> new StoreVersion(version.id(), version.number(),
+            List<StoreVersion> versions = askBrowsing(browsing, made -> asks == null
+                    ? made.findVersions(toKind(browsing.kind()), project.id())
+                    : asks.findVersions(made, toKind(browsing.kind()), project.id())).stream().map(version -> new StoreVersion(version.id(), version.number(),
                     version.name(), version.size(), version.gameVersions(), version.requiredProjects(),
                     version.changelog())).toList();
             return Optional.of(new StoreProject(project.id(), project.slug(), project.title(), project.description(),
@@ -205,9 +218,12 @@ final class StoreApi {
             return StoreApiAdd.fetchThen(idOrSlug, versionId, (engine, name, jars) -> copyInto(folder, name, jars));
         }
         return ask(() -> {
-            String projectId = getClient().findProject(idOrSlug).id();
-            ModrinthClient.Version version = askBrowsing(browsing, made -> made.findVersions(toKind(browsing.kind()),
-                    projectId)).stream().filter(one -> versionId.isEmpty() || one.id().equals(versionId))
+            CachedAsks asks = findAsks(findStore());
+            String projectId = (asks == null ? getClient().findProject(idOrSlug)
+                    : asks.findProject(getClient(), idOrSlug)).id();
+            ModrinthClient.Version version = askBrowsing(browsing, made -> asks == null
+                    ? made.findVersions(toKind(browsing.kind()), projectId)
+                    : asks.findVersions(made, toKind(browsing.kind()), projectId)).stream().filter(one -> versionId.isEmpty() || one.id().equals(versionId))
                     .findFirst().orElseThrow(() -> new IOException(Lang.get("hotwire.store.no_version", idOrSlug)));
             Files.createDirectories(folder);
             Files.write(folder.resolve(version.fileName().replaceAll("[^A-Za-z0-9._+ -]", "_")),

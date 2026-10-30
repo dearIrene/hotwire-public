@@ -63,7 +63,10 @@ public final class ModAdder {
         record Added(List<String> ids, String name, ModSwitcher.Result switched) implements Result {
         }
 
-        record Refused(String reason) implements Result {
+        record Refused(String reason, boolean restartOnly) implements Result {
+            public Refused(String reason) {
+                this(reason, false);
+            }
         }
 
         record Failed(String reason, Throwable cause, boolean leftBehind) implements Result {
@@ -368,8 +371,9 @@ public final class ModAdder {
     }
 
     public static boolean isRestartOnly(Result result) {
-        return result instanceof Result.Failed failed && !failed.leftBehind()
-                && failed.cause() instanceof RebuildException refused && refused.isRestartOnly();
+        return (result instanceof Result.Refused plain && plain.restartOnly())
+                || (result instanceof Result.Failed failed && !failed.leftBehind()
+                && failed.cause() instanceof RebuildException refused && refused.isRestartOnly());
     }
 
     private static AddPreview makeRefusal(String name, String version, String reason) {
@@ -422,9 +426,10 @@ public final class ModAdder {
             if (missing.isPresent()) {
                 return new Result.Refused(missing.get());
             }
+
             Optional<String> widener = this.findWidenerRefusal(part.jar(), part.path());
             if (widener.isPresent()) {
-                return new Result.Refused(widener.get());
+                return new Result.Refused(widener.get(), true);
             }
         }
         List<ModJar> jars = parts.values().stream().map(Part::jar).toList();
