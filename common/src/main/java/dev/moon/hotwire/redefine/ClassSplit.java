@@ -284,6 +284,10 @@ public final class ClassSplit {
         if (HandlerGuards.ENABLED) {
             HandlerGuards.makeSites(running.name, out);
         }
+        List<String> missing = SelfCalls.findMissing(out, classBytes);
+        if (!missing.isEmpty()) {
+            throw new SplitException("it would call members of its own it does not have: " + missing);
+        }
 
         byte[] target = OldClasses.write(out, mixed.version, new ClassReader(runningBytes), ClassWriter.COMPUTE_MAXS,
                 classBytes);

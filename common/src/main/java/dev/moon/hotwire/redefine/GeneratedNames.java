@@ -184,6 +184,10 @@ final class GeneratedNames {
         }
     }
 
+    static boolean isGenerated(String name) {
+        return NUMBERS.matcher(name).find();
+    }
+
     static String mask(String name) {
         return NUMBERS.matcher(name).replaceAll("\\$#");
     }
