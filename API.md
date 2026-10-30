@@ -78,7 +78,7 @@ api.getStoreCategories(StoreKind.MOD);
 api.findStoreProject(query, "zoomify").thenAccept(project -> {});
 ```
 
-You can browse other versions and loaders (fabric, quilt, forge or neoforge) with `query.withBrowsing("1.20.1", "forge")` and `findStoreGameVersions()`, those can only be saved though.
+You can browse other versions and loaders (fabric, quilt, forge or neoforge) with `query.withBrowsing("1.20.1", "forge")` and `findStoreGameVersions()`, those can only be downloaded though.
 
 Adding a mod is always the player's call, so ask for it and draw what you get back:
 
@@ -96,7 +96,7 @@ The store's other buttons:
 
 ```java
 api.queueForNextStart("zoomify", "");
-api.saveToDownloads(query, "zoomify", "");   // into .minecraft/hotwire/downloads
+api.saveToDownloads(query, "zoomify", "");   // into .minecraft/hotwire/downloads (Downloading straight to Downloads made windows scream for some users)
 api.openDownloads();                          // opens that folder
 api.fetchPack(StoreKind.SHADER, "complementary-reimagined", "");
 api.findPackState(StoreKind.SHADER, id);
