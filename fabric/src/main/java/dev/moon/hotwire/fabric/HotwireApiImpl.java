@@ -6,12 +6,14 @@ import dev.moon.hotwire.api.SwitchPreview;
 import dev.moon.hotwire.api.SwitchProgress;
 import dev.moon.hotwire.api.SwitchResult;
 import dev.moon.hotwire.fabric.registration.GameRegistrations;
+import dev.moon.hotwire.fabric.screen.PromptGameScreen;
 import dev.moon.hotwire.plan.SwitchPlan;
 import dev.moon.hotwire.switching.CallerBlocks;
 import dev.moon.hotwire.switching.ModSwitcher;
 import dev.moon.hotwire.switching.PlayerMessages;
 import dev.moon.hotwire.ui.Lang;
 import dev.moon.hotwire.ui.Progress;
+import dev.moon.hotwire.ui.PromptScreen;
 import java.lang.reflect.Method;
 import java.nio.file.Path;
 import java.util.Arrays;
@@ -23,24 +25,29 @@ import java.util.Map;
 import java.util.Optional;
 import java.util.Set;
 import java.util.concurrent.CompletableFuture;
+import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.CopyOnWriteArrayList;
 import java.util.concurrent.atomic.AtomicInteger;
 import java.util.function.Consumer;
 import java.util.function.Predicate;
 import java.util.stream.Stream;
 import net.minecraft.client.Minecraft;
+import net.minecraft.client.gui.screens.Screen;
 import org.jspecify.annotations.Nullable;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 public final class HotwireApiImpl implements HotwireApi {
-    private static final int REVISION = 2;
+    private static final int REVISION = 3;
     private static final StackWalker STACK = StackWalker.getInstance(StackWalker.Option.RETAIN_CLASS_REFERENCE);
     private static final Logger LOGGER = LoggerFactory.getLogger(HotwireApiImpl.class);
 
     private static final List<Listener> LISTENERS = new CopyOnWriteArrayList<>();
 
     private static final AtomicInteger SWITCHING = new AtomicInteger();
+
+    private static final Set<String> PROMPTED = ConcurrentHashMap.newKeySet();
+    private static final Set<String> UNPROMPTED_TOLD = ConcurrentHashMap.newKeySet();
 
     private record Listener(Consumer<SwitchResult> listener, @Nullable String mod) {
     }
@@ -109,12 +116,59 @@ public final class HotwireApiImpl implements HotwireApi {
 
     @Override
     public CompletableFuture<SwitchResult> turnOff(Collection<String> ids) {
-        return switchFor(true, List.copyOf(ids), findCallers());
+        CallerBlocks.Callers callers = findCallers();
+        tellIfUnprompted(callers);
+        return switchFor(true, List.copyOf(ids), callers);
     }
 
     @Override
     public CompletableFuture<SwitchResult> turnOn(Collection<String> ids) {
-        return switchFor(false, List.copyOf(ids), findCallers());
+        CallerBlocks.Callers callers = findCallers();
+        tellIfUnprompted(callers);
+        return switchFor(false, List.copyOf(ids), callers);
+    }
+
+    @Override
+    public boolean showPrompt() {
+        String asker = findCallers().findAsker();
+        if (asker != null) {
+            PROMPTED.add(asker);
+        }
+        HotwireEngine engine = HotwireClient.findEngine();
+        if (engine == null || engine.isFirstOpenAccepted()) {
+            return false;
+        }
+        Minecraft.getInstance().execute(() -> openPrompt(engine));
+        return true;
+    }
+
+    @Override
+    public void openScreen() {
+        HotwireEngine engine = HotwireClient.findEngine();
+        if (engine != null) {
+            Minecraft.getInstance().execute(engine::open);
+        }
+    }
+
+    private static void openPrompt(HotwireEngine engine) {
+        Screen back = ModViews.openScreen();
+        ModViews.show(new PromptGameScreen(new PromptScreen(() -> {
+            engine.acceptFirstOpen();
+            ModViews.show(back);
+        }, () -> {
+            engine.acceptFirstOpen();
+            ModViews.show(engine.makeScreen(back));
+        })));
+    }
+
+    private static void tellIfUnprompted(CallerBlocks.Callers callers) {
+        String asker = callers.findAsker();
+        HotwireEngine engine = HotwireClient.findEngine();
+        if (asker == null || engine == null || PROMPTED.contains(asker) || !UNPROMPTED_TOLD.add(asker)) {
+            return;
+        }
+        LOGGER.warn("[Hotwire] {} switched mods without showing the opening prompt (HotwireApi.showPrompt)", asker);
+        ModViews.showChat(Lang.get("hotwire.api.no_prompt", engine.nameOfMod(asker)), true);
     }
 
     private static CallerBlocks.Callers findCallers() {

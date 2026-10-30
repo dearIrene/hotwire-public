@@ -34,5 +34,9 @@ public interface HotwireApi {
 
     void addListener(Consumer<SwitchResult> listener);
 
+    boolean showPrompt();
+
+    void openScreen();
+
     CompletableFuture<Path> writeReport(String why);
 }
