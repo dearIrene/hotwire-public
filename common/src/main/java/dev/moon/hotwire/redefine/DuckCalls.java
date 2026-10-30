@@ -266,8 +266,12 @@ final class DuckCalls {
         }
         Set<String> named = findWithParents(duck, real);
         for (Class<?> at = receiver; at != null; at = at.getSuperclass()) {
+            MethodHandles.Lookup old = Linker.isPending(at) ? Linker.findLookupForOldCode(at) : null;
+            MethodHandle found = old != null ? findIn(old, at, method, type) : null;
             MethodHandles.Lookup side = Linker.findCurrentLookup(at);
-            MethodHandle found = side != null && carriesAny(named, at) ? findIn(side, at, method, type) : null;
+            if (found == null && side != null && carriesAny(named, at)) {
+                found = findIn(side, at, method, type);
+            }
             if (found != null) {
                 return found;
             }

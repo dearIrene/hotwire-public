@@ -1,6 +1,7 @@
 package dev.moon.hotwire.fabric.add;
 
 import dev.moon.hotwire.fabric.registration.GameHold;
+import dev.moon.hotwire.fabric.registration.OffModCommands;
 import dev.moon.hotwire.jar.ModManifest;
 import java.util.ArrayList;
 import java.util.List;
@@ -80,6 +81,7 @@ final class AddStart {
             if (failed == null) {
                 HostLists.join(ids);
                 EntrypointLists.join(ids, findLoaded);
+                OffModCommands.remakeClientCommands();
                 started.complete(null);
             } else {
                 started.completeExceptionally(failed);

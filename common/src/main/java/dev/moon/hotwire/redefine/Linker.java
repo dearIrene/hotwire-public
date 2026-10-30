@@ -11,6 +11,7 @@ import java.lang.reflect.Field;
 import java.lang.reflect.Member;
 import java.lang.reflect.Method;
 import java.util.ArrayDeque;
+import java.util.Collection;
 import java.util.Collections;
 import java.util.Deque;
 import java.util.HashSet;
@@ -38,6 +39,8 @@ public final class Linker {
     private static final Map<Class<?>, Class<?>> SIDECAR_TARGETS = Collections.synchronizedMap(new WeakHashMap<>());
 
     private static final Map<Class<?>, Deque<MethodHandles.Lookup>> EARLIER = new ConcurrentHashMap<>();
+
+    private static final Set<Class<?>> PENDING = ConcurrentHashMap.newKeySet();
     private static final int EARLIER_LIMIT = 4;
 
     private static final Map<Class<?>, Set<String>> INSTANCE_METHODS = Collections.synchronizedMap(new WeakHashMap<>());
@@ -63,8 +66,28 @@ public final class Linker {
     }
 
     static Class<?> installInBatch(Class<?> target, ClassSplit.Result split) throws IllegalAccessException {
+        PENDING.add(target);
         return install(target, split.sidecar(), split.ducks(), split.fieldHolder(), split.movedInstance(),
                 Set.copyOf(split.moved()), false);
+    }
+
+    static void endBatch(Collection<Class<?>> targets) {
+        PENDING.removeAll(targets);
+        DuckCalls.forget();
+    }
+
+    static boolean isPending(Class<?> target) {
+        return PENDING.contains(target);
+    }
+
+    static MethodHandles.@Nullable Lookup findLookupForOldCode(Class<?> target) {
+        if (PENDING.contains(target)) {
+            MethodHandles.Lookup before = EARLIER.getOrDefault(target, new ArrayDeque<>()).peekFirst();
+            if (before != null) {
+                return before;
+            }
+        }
+        return SIDECARS.get(target);
     }
 
     public static Class<?> install(Class<?> target, byte[] sidecar, Set<String> ducks, byte @Nullable [] fieldHolder,

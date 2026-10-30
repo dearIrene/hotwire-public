@@ -438,11 +438,13 @@ public final class ClassRebuilder {
                 }
             }
             redefined = System.nanoTime();
+            Linker.endBatch(prepared.splits().keySet());
         } catch (IllegalAccessException | ClassNotFoundException | UnmodifiableClassException | RuntimeException
                 | LinkageError | InternalError e) {
             BatchRider.end(this.rider, riding, false, false);
 
             previous.forEach(Linker::restore);
+            Linker.endBatch(prepared.splits().keySet());
             if (e instanceof UnsupportedOperationException) {
                 LOGGER.warn("[Hotwire] The JVM refused the new shape; fields that differ from the JVM's: {}",
                         RebuildEvidence.describeFieldDifferences(prepared, this.loadedBytes, this.instrumentation));

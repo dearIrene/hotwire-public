@@ -113,6 +113,10 @@ public final class OffModCommands {
         }
     }
 
+    public static void remakeClientCommands() {
+        CommandRegistration.resendCommands(true);
+    }
+
     @SuppressWarnings("ReferenceEquality")
     public static synchronized void putBack(Predicate<String> on) {
         List<Boolean> resend = new ArrayList<>();
