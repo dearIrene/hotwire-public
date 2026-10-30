@@ -304,6 +304,7 @@ public final class SwitchRunner {
     }
 
     private CheckedResult runTimedOn(List<String> ids) {
+        ResourceReload.awaitIdle();
         ElementLook.giveWay();
         SwitchTimes.mark("look gave way");
         Tripwire.pause(true);
