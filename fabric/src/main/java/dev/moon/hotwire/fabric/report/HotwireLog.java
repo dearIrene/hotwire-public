@@ -55,7 +55,9 @@ public final class HotwireLog extends AbstractAppender {
         boolean test = isTestLog();
         HotwireLog appender = new HotwireLog(out, !test);
         appender.start();
-        LoggerConfig ours = new LoggerConfig(PACKAGE, Level.INFO, test);
+
+        Level level = Boolean.getBoolean("hotwire" + ".debug") ? Level.DEBUG : Level.INFO;
+        LoggerConfig ours = new LoggerConfig(PACKAGE, level, test);
         ours.addAppender(appender, null, null);
         context.getConfiguration().addLogger(PACKAGE, ours);
         context.updateLoggers();
