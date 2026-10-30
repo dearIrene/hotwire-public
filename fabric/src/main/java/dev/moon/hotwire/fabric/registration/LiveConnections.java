@@ -2,6 +2,7 @@ package dev.moon.hotwire.fabric.registration;
 
 import dev.moon.hotwire.redefine.FieldSlots;
 import dev.moon.hotwire.redefine.FinalWrites;
+import io.netty.channel.Channel;
 import java.lang.reflect.Field;
 import java.lang.reflect.InaccessibleObjectException;
 import java.util.ArrayDeque;
@@ -19,18 +20,20 @@ import net.minecraft.network.PacketListener;
 import net.minecraft.server.MinecraftServer;
 import net.minecraft.world.entity.Entity;
 import net.minecraft.world.level.Level;
+import org.jspecify.annotations.Nullable;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 public final class LiveConnections {
     private static final Logger LOGGER = LoggerFactory.getLogger(LiveConnections.class);
 
-    private static final int MOST = 20_000;
+    private static final int MOST = 5_000;
 
     private LiveConnections() {
     }
 
     public static void swap(IdentityHashMap<Object, Object> replaced) {
+        long began = System.nanoTime();
         List<Object> roots = new ArrayList<>();
         Minecraft game = Minecraft.getInstance();
         ClientPacketListener listener = game.getConnection();
@@ -45,7 +48,13 @@ public final class LiveConnections {
             return;
         }
         Set<Object> seen = Collections.newSetFromMap(new IdentityHashMap<>());
-        Deque<Object> next = new ArrayDeque<>(roots);
+        Deque<Object> next = new ArrayDeque<>();
+        for (Object connection : roots) {
+            Channel channel = findChannel(connection);
+            if (channel != null) {
+                channel.pipeline().forEach(entry -> next.add(entry.getValue()));
+            }
+        }
         int swapped = 0;
         while (!next.isEmpty() && seen.size() < MOST) {
             Object one = next.poll();
@@ -73,18 +82,29 @@ public final class LiveConnections {
                 }
             }
         }
-        if (swapped > 0) {
-            LOGGER.info("[Hotwire] {} of the open connections' copies of statics made again took the new ones",
-                    swapped);
+        LOGGER.info("[Hotwire] {} of the open connections' copies of statics made again took the new ones ({} objects"
+                + " in {} ms)", swapped, seen.size(), (System.nanoTime() - began) / 1_000_000);
+    }
+
+    private static @Nullable Channel findChannel(Object connection) {
+        for (FieldSlots.Slot slot : Fields.getReferenceFields(connection.getClass(), false)) {
+            try {
+                if (slot.get(connection) instanceof Channel channel) {
+                    return channel;
+                }
+            } catch (IllegalAccessException | InaccessibleObjectException | SecurityException e) {
+            }
         }
+        return null;
     }
 
     private static boolean isFollowed(Object value) {
         String name = value.getClass().getName();
         return !(value instanceof Object[]) && !(value instanceof Map<?, ?>) && !(value instanceof PacketListener)
                 && !(value instanceof Level) && !(value instanceof Entity) && !(value instanceof Minecraft)
-                && !(value instanceof MinecraftServer) && (name.startsWith("net.minecraft.")
-                || name.startsWith("com.mojang.") || name.startsWith("io.netty.") || name.startsWith("net.fabricmc."));
+                && !(value instanceof MinecraftServer) && !(value instanceof Channel)
+                && (name.startsWith("net.minecraft.") || name.startsWith("com.mojang.")
+                || name.startsWith("net.fabricmc."));
     }
 
     @SuppressWarnings("unchecked")
