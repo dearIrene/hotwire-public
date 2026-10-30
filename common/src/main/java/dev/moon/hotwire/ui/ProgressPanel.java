@@ -37,6 +37,8 @@ final class ProgressPanel extends Panel {
     private int lineTotal;
     private float lineShown;
     private final List<EasedValue> focus = new ArrayList<>();
+
+    private float[] lifts = new float[0];
     private final EasedValue scroll = EasedValue.ofSpeed(8);
     private int queueRun = -1;
 
@@ -82,6 +84,7 @@ final class ProgressPanel extends Panel {
         if (listed) {
             this.easeQueue(now, delta);
         }
+        this.easeLifts(now, delta);
         int closed = this.progress.isWorldClosed() ? CLOSED_LINES : 0;
         this.size(Math.max(408, this.widestSeen + 48) + (listed ? SIDE_W + 14 : 0),
                 Math.max(91 + closed, listed ? this.getQueueHeight(now) + 24 : 0));
@@ -156,6 +159,18 @@ final class ProgressPanel extends Panel {
         }
     }
 
+    private void easeLifts(Progress.Snapshot now, float delta) {
+        int count = Math.max(1, now.queue().size());
+        if (this.lifts.length != count) {
+            this.lifts = new float[count];
+        }
+        int current = now.running() ? this.getCurrent(now) : -1;
+        for (int i = 0; i < count; i++) {
+            boolean up = i == current;
+            this.lifts[i] = EasedValue.lerp(this.lifts[i], up ? 1 : 0, EasedValue.computeFactor(up ? 12 : 8, delta));
+        }
+    }
+
     private void drawSegments(Canvas canvas, Progress.Snapshot now, int x, int y, int w, float alpha) {
         int count = Math.max(1, now.queue().size());
         int gap = count > 1 ? 2 : 0;
@@ -165,13 +180,14 @@ final class ProgressPanel extends Panel {
             int right = x + (int) Math.round(i * (each + gap) + each);
             double fraction = now.getModFraction(i);
             int filled = fraction >= 1 ? right - left : (int) Math.round((right - left) * fraction);
+            int top = y - Math.round(2 * (i < this.lifts.length ? this.lifts[i] : 0));
             if (filled > 0) {
                 int shade = Colors.mix(Palette.ON, Palette.ACCENT, count > 1 ? i / (float) (count - 1) : 1);
-                canvas.fill(left, y, left + filled, y + 4, Colors.fade(shade, alpha));
+                canvas.fill(left, top, left + filled, top + 4, Colors.fade(shade, alpha));
             }
 
             if (filled < right - left) {
-                canvas.fill(left + filled, y, right, y + 4, Colors.fade(EMPTY, alpha));
+                canvas.fill(left + filled, top, right, top + 4, Colors.fade(EMPTY, alpha));
             }
         }
     }
