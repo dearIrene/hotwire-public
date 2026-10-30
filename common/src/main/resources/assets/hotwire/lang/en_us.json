@@ -242,6 +242,7 @@
   "hotwire.refusal.protected_on": "%s can't be turned on! The game requires it.",
   "hotwire.refusal.breaks": "%s can't be turned on while %s is on! They are marked as incompatible.",
   "hotwire.refusal.missing": "%s requires %s, which isn't installed!",
+  "hotwire.refusal.carried": "%1$s can't be turned off while %2$s is on! %2$s has its own copy of it inside.",
   "hotwire.refusal.old": "%s requires %s %s, but you have %s!",
   "hotwire.names.nothing": "nothing",
   "hotwire.names.two": "%s and %s",
