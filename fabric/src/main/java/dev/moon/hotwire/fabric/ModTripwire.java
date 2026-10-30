@@ -14,7 +14,6 @@ import java.lang.instrument.Instrumentation;
 import java.security.CodeSource;
 import java.security.ProtectionDomain;
 import java.util.ArrayList;
-import java.util.Arrays;
 import java.util.Collection;
 import java.util.HashMap;
 import java.util.HashSet;
@@ -402,9 +401,11 @@ public final class ModTripwire {
         });
 
         List<String> unusable = new ArrayList<>();
-        arming.forEach((type, one) -> {
-            if (!took.contains(type) && this.redefineEach(Map.of(type, one.getBefore()), new ArrayList<>())
-                    .isEmpty()) {
+        wiredAll.keySet().forEach(type -> {
+            ArmedClass one = arming.get(type);
+            byte[] before = one != null ? one.getBefore() : this.rebuilder.getLoadedBytes().findKnown(type);
+            if (!took.contains(type) && before != null
+                    && this.redefineEach(Map.of(type, before), new ArrayList<>()).isEmpty()) {
                 unusable.add(type.getName());
             }
         });
