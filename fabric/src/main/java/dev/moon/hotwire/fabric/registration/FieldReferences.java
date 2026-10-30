@@ -87,6 +87,7 @@ public final class FieldReferences {
         this.lambdas = new Lambdas(instrumentation);
         this.recomputer = new StaticRecomputer(rebuilder, this.lambdas::findModOf, generatedBy);
         this.loadedChecks = new LoadedCheckAnswers(instrumentation, originalBytes, this::write);
+        Fingerprints.open(instrumentation);
         this.elements = new CollectionReferences(this::write);
         ValueOwners.setLambdaOwners(this.lambdas::findModOf);
         ReflectedOwners.readBytesWith(originalBytes);
@@ -143,6 +144,10 @@ public final class FieldReferences {
 
     public void takeOutElementsAgain(Collection<String> mods, Predicate<String> on) {
         this.removeElements(mods, on, this.findLoaded(mods), Map.of(), false);
+    }
+
+    public void finishEveryLook() {
+        this.elements.look.getNotes().finishEvery();
     }
 
     public void lookForEvery(Collection<String> mods, Predicate<String> on) {

@@ -1,6 +1,11 @@
 package dev.moon.hotwire.fabric;
 
 import com.mojang.blaze3d.platform.InputConstants;
+import dev.moon.hotwire.config.HotwireSettings;
+import dev.moon.hotwire.fabric.registration.GameRegistrations;
+import dev.moon.hotwire.fabric.screen.ChooserGameScreen;
+import dev.moon.hotwire.fabric.screen.HotwireScreen;
+import dev.moon.hotwire.fabric.screen.StoreGameScreen;
 import dev.moon.hotwire.report.GameLog;
 import dev.moon.hotwire.ui.Lang;
 import dev.moon.hotwire.ui.Notice;
@@ -12,8 +17,10 @@ import net.fabricmc.fabric.api.client.keymapping.v1.KeyMappingHelper;
 //?} else {
 /*import net.fabricmc.fabric.api.client.keybinding.v1.KeyBindingHelper;
 *///?}
+import net.fabricmc.loader.api.FabricLoader;
 import net.minecraft.client.KeyMapping;
 import net.minecraft.client.Minecraft;
+import net.minecraft.client.gui.screens.Screen;
 import net.minecraft.network.chat.Component;
 import net.minecraft.resources.Identifier;
 import org.jspecify.annotations.Nullable;
@@ -23,7 +30,6 @@ public final class OpenKey {
             HotwireClient.ID);
     private static @Nullable KeyMapping key;
     private static Runnable open = () -> { };
-    private static boolean told;
 
     private OpenKey() {
     }
@@ -40,9 +46,9 @@ public final class OpenKey {
     }
 
     @SuppressWarnings("ReferenceEquality")
-    static void tellConflicts() {
+    static void tellConflicts(HotwireSettings settings) {
         KeyMapping made = key;
-        if (made == null || told) {
+        if (made == null || settings.isKeyCardShown()) {
             return;
         }
         List<String> others = new ArrayList<>();
@@ -54,11 +60,28 @@ public final class OpenKey {
         if (others.isEmpty()) {
             return;
         }
-        told = true;
+        settings.markKeyCardShown();
         String keyName = made.getTranslatedKeyMessage().getString();
         GameLog.LOGGER.info("[Hotwire] {} opens Hotwire and {} too; said in a card", keyName, others);
         Notices.show(Notice.ofAsk(Lang.get("hotwire.key.taken", keyName),
-                Lang.get("hotwire.key.taken_by", keyName, joinPlainly(others))).makeResting(15));
+                Lang.get("hotwire.key.taken_by", keyName, joinPlainly(others))).makeResting(10));
+    }
+
+    static void tellIfBlocked() {
+        KeyMapping made = key;
+        Screen shown = ModViews.openScreen();
+        if (made == null || shown == null || shown instanceof HotwireScreen || shown instanceof ChooserGameScreen
+                || shown instanceof StoreGameScreen) {
+            return;
+        }
+        String keyName = made.getTranslatedKeyMessage().getString();
+        String mod = GameRegistrations.findModOf(shown.getClass());
+        String name = mod == null ? shown.getClass().getSimpleName() : FabricLoader.getInstance().getModContainer(mod)
+                .map(container -> container.getMetadata().getName()).orElse(mod);
+        GameLog.LOGGER.info("[Hotwire] {} opens {}'s {} over Hotwire; said in a card", keyName, name,
+                shown.getClass().getName());
+        Notices.show(Notice.ofAsk(Lang.get("hotwire.key.taken", keyName),
+                Lang.get("hotwire.key.blocked_by", name, keyName)).makeResting(10));
     }
 
     private static String joinPlainly(List<String> names) {
@@ -67,6 +90,11 @@ public final class OpenKey {
         }
         return String.join(", ", names.subList(0, names.size() - 1)) + " " + Lang.get("hotwire.key.and") + " "
                 + names.getLast();
+    }
+
+    static String findKeyName() {
+        KeyMapping made = key;
+        return made == null ? "H" : made.getTranslatedKeyMessage().getString();
     }
 
     public static void onPressed() {

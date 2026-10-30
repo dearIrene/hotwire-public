@@ -97,6 +97,12 @@ public final class ModGraph {
     }
 
     private boolean hasCompatibilityFor(ModPatches patched, String other) {
+        return this.isAskedFor(patched, other) || this.mods.values().stream().anyMatch(asked ->
+                this.isAskedFor(patched, asked.id()) && asked.getRelation(Relation.DEPENDS).keySet().stream()
+                        .anyMatch(dependency -> this.resolve(dependency).equals(other)));
+    }
+
+    private boolean isAskedFor(ModPatches patched, String other) {
         ModManifest manifest = this.mods.get(other);
         return patched.asks().contains(other)
                 || (manifest != null && manifest.provides().stream().anyMatch(patched.asks()::contains));

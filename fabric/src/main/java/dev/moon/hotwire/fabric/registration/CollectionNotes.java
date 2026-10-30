@@ -8,6 +8,7 @@ import java.util.ArrayList;
 import java.util.Collection;
 import java.util.Collections;
 import java.util.Deque;
+import java.util.HashMap;
 import java.util.HashSet;
 import java.util.IdentityHashMap;
 import java.util.List;
@@ -41,8 +42,16 @@ final class CollectionNotes {
     private final Deque<Frame> open = new ArrayDeque<>();
 
     private boolean inWorld;
+    private int lastForAnyHold;
+    private int leftUnchanged;
+
+    private final Map<Object, Long> prints = new MapMaker().weakKeys().makeMap();
+    private final Set<Object> readAgain = Collections.newSetFromMap(new MapMaker().weakKeys().makeMap());
+
+    private final Map<String, Set<Object>> restored = new HashMap<>();
 
     synchronized void startLook(@Nullable Collection<String> mods) {
+        this.leftUnchanged = 0;
         this.lookingFor = mods == null ? null : List.copyOf(mods);
         this.every = mods == null;
         this.open.clear();
@@ -109,6 +118,9 @@ final class CollectionNotes {
         if (frame == this.open.peek()) {
             return;
         }
+        if (completed) {
+            this.prints.put(container, Fingerprints.of(container));
+        }
         if (!completed) {
             this.takes.put(container, frame.before());
         } else if (frame.now().isEmpty() && !(container instanceof Collection<?>) && !(container instanceof Map<?, ?>)
@@ -171,15 +183,62 @@ final class CollectionNotes {
     }
 
     synchronized List<Object> findContainersUnder(Collection<String> mods) {
+        if (mods.stream().allMatch(this.restored::containsKey)) {
+            Set<Object> back = Collections.newSetFromMap(new IdentityHashMap<>());
+            mods.forEach(mod -> back.addAll(this.restored.remove(mod)));
+            this.lastForAnyHold = 0;
+            return new ArrayList<>(back);
+        }
         List<Object> found = new ArrayList<>();
+        int forAnyHold = 0;
         for (WeakReference<Object> weak : this.order) {
             Object container = weak.get();
             Set<String> under = container == null ? null : this.filedUnder.get(container);
             if (under != null && (under.contains(ANY) || !Collections.disjoint(under, mods))) {
                 found.add(container);
+                if (Collections.disjoint(under, mods)) {
+                    forAnyHold++;
+                }
             }
         }
+        this.lastForAnyHold = forAnyHold;
         return found;
+    }
+
+    synchronized boolean isUnchanged(Object container) {
+        Long print = this.prints.get(container);
+        if (print == null || print == Fingerprints.UNKNOWN || print != Fingerprints.of(container)) {
+            return false;
+        }
+        this.leftUnchanged++;
+        return true;
+    }
+
+    synchronized int countLeftUnchanged() {
+        return this.leftUnchanged;
+    }
+
+    synchronized boolean isReadAgain(Object container) {
+        return this.readAgain.contains(container);
+    }
+
+    synchronized void markReadAgain(Object container) {
+        this.readAgain.add(container);
+    }
+
+    synchronized void finishEvery() {
+        this.readAgain.clear();
+    }
+
+    synchronized void noteRestored(String mod, @Nullable Object container) {
+        if (container != null) {
+            this.restored.computeIfAbsent(mod, any -> Collections.newSetFromMap(new MapMaker().weakKeys().makeMap()))
+                    .add(container);
+        }
+    }
+
+    synchronized int countLastForAnyHold() {
+        return this.lastForAnyHold;
     }
 
     @SuppressWarnings("ReferenceEquality")

@@ -67,9 +67,9 @@ public final class HotwireClient implements ClientModInitializer {
         InitHookReplay.catchUpLaterWhile(() -> Minecraft.getInstance().level == null);
         ClientPlayConnectionEvents.JOIN.register((handler, sender, client) -> client.execute(() -> {
             FieldHolders.retryCatchUps();
-            OpenKey.tellConflicts();
             HotwireEngine started = engine;
             if (started != null) {
+                OpenKey.tellConflicts(started.getSettings());
                 OffModCommands.readOffFrom(id -> !started.isOn(id) || Tripwire.isWatched(id));
                 started.lookAheadInWorldSoon();
                 started.showUpdateInChat();
@@ -104,6 +104,8 @@ public final class HotwireClient implements ClientModInitializer {
 
     private static void openSoonFromKey() {
         ModViews.runSoon(ModViews.isShiftDown() ? HotwireClient::open : () -> getEngine().openChooser());
+
+        ModViews.runSoon(() -> ModViews.runSoon(OpenKey::tellIfBlocked));
     }
 
     public static synchronized @Nullable HotwireEngine findEngine() {

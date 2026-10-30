@@ -14,10 +14,17 @@ sealed interface Removal {
 
     String describe();
 
+    @Nullable Object container();
+
     default void resetHolder() {
     }
 
     record InList(List<Object> list, int index, Object element) implements Removal {
+        @Override
+        public Object container() {
+            return this.list;
+        }
+
         @Override
         public void restore() {
             if (!containsSame(this.list, this.element)) {
@@ -37,6 +44,11 @@ sealed interface Removal {
     }
 
     record InCollection(Collection<Object> collection, Object element) implements Removal {
+        @Override
+        public Object container() {
+            return this.collection;
+        }
+
         @Override
         public void restore() {
             if (!containsSame(this.collection, this.element)) {
@@ -69,6 +81,11 @@ sealed interface Removal {
         }
 
         @Override
+        public Object container() {
+            return this.array;
+        }
+
+        @Override
         @SuppressWarnings("ReferenceEquality")
         public void restore() {
             if (this.index < this.array.length && this.array[this.index] == this.standIn) {
@@ -84,6 +101,11 @@ sealed interface Removal {
 
     record InFixedList(FieldSlots.Slot field, @Nullable Object holder, int index, Object element,
             StaticRecomputer.Writer writer) implements Removal {
+        @Override
+        public @Nullable Object container() {
+            return read(this.field, this.holder);
+        }
+
         @Override
         public void restore() {
             if (!(read(this.field, this.holder) instanceof List<?> now) || containsSame(now, this.element)) {
@@ -108,6 +130,11 @@ sealed interface Removal {
 
     record InFixedValue(Map<Object, Object> map, Object key, int index, Object element) implements Removal {
         @Override
+        public Object container() {
+            return this.map;
+        }
+
+        @Override
         public void restore() {
             if (!(this.map.get(this.key) instanceof List<?> now) || containsSame(now, this.element)) {
                 return;
@@ -125,6 +152,11 @@ sealed interface Removal {
     }
 
     record InField(Object holder, FieldSlots.Slot field, Object mods, Object inner) implements Removal {
+        @Override
+        public Object container() {
+            return this.holder;
+        }
+
         @Override
         @SuppressWarnings("ReferenceEquality")
         public void restore() {
@@ -146,6 +178,11 @@ sealed interface Removal {
 
     record InMapValue(Map<Object, Object> map, Object key, Object mods, Object inner) implements Removal {
         @Override
+        public Object container() {
+            return this.map;
+        }
+
+        @Override
         public void restore() {
             this.map.replace(this.key, this.inner, this.mods);
         }
@@ -157,6 +194,11 @@ sealed interface Removal {
     }
 
     record InMap(Map<Object, Object> map, Object key, Object value) implements Removal {
+        @Override
+        public Object container() {
+            return this.map;
+        }
+
         @Override
         public void restore() {
             this.map.putIfAbsent(this.key, this.value);

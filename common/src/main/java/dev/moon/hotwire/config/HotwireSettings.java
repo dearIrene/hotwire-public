@@ -49,6 +49,7 @@ public final class HotwireSettings {
         @Nullable NestedJars nestedJars = NestedJars.AUTO;
         @Nullable PauseGame pauseGame = PauseGame.NO;
         @Nullable String promptAcceptedFor;
+        boolean keyCardShown;
         @Nullable List<String> favorites = List.of();
     }
 
@@ -58,6 +59,7 @@ public final class HotwireSettings {
     private volatile NestedJars nestedJars;
     private volatile PauseGame pauseGame;
     private volatile @Nullable String promptAcceptedFor;
+    private volatile boolean keyCardShown;
     private final Set<String> favorites = ConcurrentHashMap.newKeySet();
 
     public HotwireSettings(Path path) {
@@ -72,6 +74,7 @@ public final class HotwireSettings {
         this.nestedJars = checkKnown(saved.nestedJars, NestedJars.AUTO, "nestedJars");
         this.pauseGame = checkKnown(saved.pauseGame, PauseGame.NO, "pauseGame");
         this.promptAcceptedFor = saved.promptAcceptedFor;
+        this.keyCardShown = saved.keyCardShown;
         if (saved.favorites != null) {
             this.favorites.addAll(saved.favorites);
         }
@@ -113,6 +116,15 @@ public final class HotwireSettings {
         if (favorite ? this.favorites.add(id) : this.favorites.remove(id)) {
             this.save();
         }
+    }
+
+    public boolean isKeyCardShown() {
+        return this.keyCardShown;
+    }
+
+    public void markKeyCardShown() {
+        this.keyCardShown = true;
+        this.save();
     }
 
     public void acceptPrompt(String major) {
@@ -158,6 +170,7 @@ public final class HotwireSettings {
         saved.nestedJars = this.nestedJars;
         saved.pauseGame = this.pauseGame;
         saved.promptAcceptedFor = this.promptAcceptedFor;
+        saved.keyCardShown = this.keyCardShown;
         saved.favorites = this.favorites.stream().sorted().toList();
         try {
             this.file.save(saved);

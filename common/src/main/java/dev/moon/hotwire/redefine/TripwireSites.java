@@ -1,15 +1,10 @@
 package dev.moon.hotwire.redefine;
 
 import java.lang.invoke.CallSite;
+import java.lang.invoke.ConstantCallSite;
 import java.lang.invoke.MethodHandle;
 import java.lang.invoke.MethodHandles;
 import java.lang.invoke.MethodType;
-import java.lang.invoke.MutableCallSite;
-import java.lang.ref.WeakReference;
-import java.util.ArrayList;
-import java.util.HashMap;
-import java.util.HashSet;
-import java.util.List;
 import java.util.Map;
 import java.util.Set;
 import java.util.concurrent.ConcurrentHashMap;
@@ -31,21 +26,6 @@ public final class TripwireSites {
             TripwireSites.class.getName().replace('.', '/'), "bootstrap",
             MethodType.methodType(CallSite.class, MethodHandles.Lookup.class, String.class, MethodType.class,
                     String.class).toMethodDescriptorString(), false);
-    private static final MethodHandle NOTHING = MethodHandles.empty(MethodType.methodType(void.class));
-    private static final MethodHandle HIT;
-
-    static {
-        try {
-            HIT = MethodHandles.lookup().findStatic(Tripwire.class, "hit",
-                    MethodType.methodType(void.class, String.class));
-        } catch (ReflectiveOperationException e) {
-            throw new ExceptionInInitializerError(e);
-        }
-    }
-
-    private static final Map<String, List<WeakReference<MutableCallSite>>> SITES = new HashMap<>();
-    private static final Set<String> OFF = new HashSet<>();
-    private static final Object LOCK = new Object();
 
     private static final Map<String, String> ARMED = new ConcurrentHashMap<>();
 
@@ -127,33 +107,50 @@ public final class TripwireSites {
         return count;
     }
 
-    public static CallSite bootstrap(MethodHandles.Lookup caller, String name, MethodType type, String mod) {
-        synchronized (LOCK) {
-            MutableCallSite site = new MutableCallSite(OFF.contains(mod) ? HIT.bindTo(mod) : NOTHING);
-            SITES.computeIfAbsent(mod, m -> new ArrayList<>()).add(new WeakReference<>(site));
-            return site;
+    private static final class Watch {
+        private final String mod;
+        private volatile boolean off;
+
+        Watch(String mod) {
+            this.mod = mod;
         }
     }
 
+    private static final Map<String, Watch> WATCHES = new ConcurrentHashMap<>();
+    private static final MethodHandle PROBE;
+
+    static {
+        try {
+            PROBE = MethodHandles.lookup().findStatic(TripwireSites.class, "probe",
+                    MethodType.methodType(void.class, Watch.class));
+        } catch (ReflectiveOperationException e) {
+            throw new ExceptionInInitializerError(e);
+        }
+    }
+
+    private static Watch findWatch(String mod) {
+        return WATCHES.computeIfAbsent(mod, Watch::new);
+    }
+
+    @SuppressWarnings("UnusedMethod")
+    private static void probe(Watch watch) {
+        if (watch.off) {
+            Tripwire.hit(watch.mod);
+        }
+    }
+
+    public static CallSite bootstrap(MethodHandles.Lookup caller, String name, MethodType type, String mod) {
+        return new ConstantCallSite(PROBE.bindTo(findWatch(mod)));
+    }
+
     public static int setOff(String mod, boolean off) {
-        List<MutableCallSite> changed;
-        synchronized (LOCK) {
-            if (off ? !OFF.add(mod) : !OFF.remove(mod)) {
-                return 0;
-            }
-            List<WeakReference<MutableCallSite>> bound = SITES.getOrDefault(mod, List.of());
-            bound.removeIf(weak -> weak.get() == null);
-            changed = new ArrayList<>(bound.size());
-            bound.forEach(weak -> changed.add(weak.get()));
-            changed.removeIf(site -> site == null);
-            MethodHandle target = off ? HIT.bindTo(mod) : NOTHING;
-            changed.forEach(site -> site.setTarget(target));
+        Watch watch = findWatch(mod);
+        if (watch.off == off) {
+            return 0;
         }
-        if (!changed.isEmpty()) {
-            MutableCallSite.syncAll(changed.toArray(MutableCallSite[]::new));
-        }
-        LOGGER.info("[Hotwire] {} is watched by {} sites in {} classes: {}", mod, changed.size(), countArmed(mod),
-                off ? "on" : "off");
-        return changed.size();
+        watch.off = off;
+        int classes = countArmed(mod);
+        LOGGER.info("[Hotwire] {} is watched by sites in {} classes: {}", mod, classes, off ? "on" : "off");
+        return classes;
     }
 }

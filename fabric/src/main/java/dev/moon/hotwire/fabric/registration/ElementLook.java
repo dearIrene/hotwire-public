@@ -84,6 +84,7 @@ public final class ElementLook {
                 if (every) {
                     lookedForEvery = asked;
                     lookedEveryAt = System.nanoTime();
+                    references.finishEveryLook();
                 }
             } catch (RuntimeException | LinkageError e) {
                 LOGGER.info("[Hotwire] the look ahead for {} ended early: {}", mods, e.toString());

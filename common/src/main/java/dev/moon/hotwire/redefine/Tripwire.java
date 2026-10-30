@@ -88,8 +88,8 @@ public final class Tripwire {
 
     private static final String SELF = Tripwire.class.getName().replace('.', '/');
 
-    private static final Set<Class<?>> LINKERS = Set.of(Tripwire.class, Linker.class, DuckCalls.class,
-            MovedSites.class);
+    private static final Set<Class<?>> LINKERS = Set.of(Tripwire.class, TripwireSites.class, Linker.class,
+            DuckCalls.class, MovedSites.class);
     private static final String HOTWIRE = "hotwire";
     private static final int FRAMES = 28;
     private static final ThreadLocal<@Nullable String> SENDING = new ThreadLocal<>();
@@ -230,6 +230,7 @@ public final class Tripwire {
             Set<String> seen = new HashSet<>();
             for (StackTraceElement frame : new Throwable().getStackTrace()) {
                 if (frames.size() < FRAMES && !frame.getClassName().equals(Tripwire.class.getName())
+                        && !frame.getClassName().equals(TripwireSites.class.getName())
                         && seen.add(frame.getClassName() + "#" + frame.getMethodName())) {
                     frames.add(frame.toString());
                 }
@@ -418,7 +419,8 @@ public final class Tripwire {
         Thread thread = Thread.currentThread();
         if (WAITING.computeIfAbsent(mod, any -> ConcurrentHashMap.newKeySet()).add(thread)) {
             LOGGER.info("[Hotwire] {}'s thread {} waits until {} is on, stopped at {}", mod, thread.getName(), mod,
-                    WALKER.walk(frames -> frames.filter(frame -> frame.getDeclaringClass() != Tripwire.class).limit(6)
+                    WALKER.walk(frames -> frames.filter(frame -> frame.getDeclaringClass() != Tripwire.class
+                            && frame.getDeclaringClass() != TripwireSites.class).limit(6)
                             .map(frame -> frame.getClassName() + "." + frame.getMethodName())
                             .collect(Collectors.joining(" < "))));
         }
@@ -521,7 +523,8 @@ public final class Tripwire {
         }
         StackTraceElement[] stack = new Throwable().getStackTrace();
         for (StackTraceElement frame : stack) {
-            if (!frame.getClassName().equals(Tripwire.class.getName()) && frames.size() < FRAMES / 2) {
+            if (!frame.getClassName().equals(Tripwire.class.getName())
+                        && !frame.getClassName().equals(TripwireSites.class.getName()) && frames.size() < FRAMES / 2) {
                 frames.add(frame.toString());
             }
         }

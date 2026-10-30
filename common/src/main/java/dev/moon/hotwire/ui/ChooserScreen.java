@@ -39,14 +39,15 @@ public final class ChooserScreen {
     private int width;
     private int height;
 
-    public ChooserScreen(Choice choice) {
+    public ChooserScreen(String keyName, Choice choice) {
         this.choice = choice;
         Element base = this.root.getBase();
         base.add(new Backdrop());
         this.store = base.add(new Tile(Lang.get("hotwire.chooser.store"), Lang.get("hotwire.chooser.store_note"),
                 "", choice::openStore));
         this.hotwire = base.add(new Tile(Lang.get("hotwire.chooser.hotwire"),
-                Lang.get("hotwire.chooser.hotwire_note"), Lang.get("hotwire.chooser.shift"), choice::openHotwire));
+                Lang.get("hotwire.chooser.hotwire_note"), Lang.get("hotwire.chooser.shift", keyName),
+                choice::openHotwire));
         this.in.snap(0);
         this.in.to(1);
         this.out.snap(0);

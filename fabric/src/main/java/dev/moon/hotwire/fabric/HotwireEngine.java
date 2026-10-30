@@ -233,6 +233,10 @@ public final class HotwireEngine implements ModScreen.Game, AutoCloseable {
         return this.isOn(id);
     }
 
+    HotwireSettings getSettings() {
+        return this.settings;
+    }
+
     boolean isOn(String id) {
         JvmParts parts = this.findParts();
         return !this.installed.isDisabled(id) && (parts == null || parts.runner().getSwitcher().isOn(id));
@@ -592,7 +596,7 @@ public final class HotwireEngine implements ModScreen.Game, AutoCloseable {
         this.under = back;
 
         ModStore store = this.stores.findStore();
-        ModViews.show(new ChooserGameScreen(new ChooserScreen(new ChooserScreen.Choice() {
+        ModViews.show(new ChooserGameScreen(new ChooserScreen(OpenKey.findKeyName(), new ChooserScreen.Choice() {
             @Override
             public void openStore() {
                 HotwireEngine.this.stores.openStore(store, back);
