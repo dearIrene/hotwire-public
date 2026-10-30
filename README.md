@@ -116,22 +116,14 @@ Other mods can switch mods through Hotwire:
 
 ```java
 HotwireApi api = HotwireApi.getInstance();
-
-SwitchPreview preview = api.previewOff(List.of("zoomify"));   // what would go with it, nothing changes yet
-api.turnOff(List.of("zoomify")).thenAccept(result -> {
-    if (result.kind() == SwitchResult.Kind.DONE) {
-        // result.switched() has every mod that went off
-    }
-});
-api.turnOn(List.of("zoomify"));
-api.addListener(result -> refreshMyList());
 api.showPrompt();   // show Hotwire's prompt over your screen, do this before you let players switch anything
-api.openScreen();   // open Hotwire
+api.turnOff(List.of("zoomify"));
+api.turnOn(List.of("zoomify"));
 ```
 
 If your mod switches mods you must show the prompt first. If you don’t then Hotwire will scream in chat.
 
-WARNING: NEVER call `.join()` on the future from the game thread as that will freeze the game!!!
+The whole API is in [API.md](API.md).
 
 <details>
 <summary><h2>Tested mods</h2></summary>
