@@ -171,7 +171,6 @@ final class ManageCachePanel extends Panel {
         int w = this.getBoxWidth();
         float s = this.getBoxShown();
         this.caches.setBounds(x + 14, this.getBoxY() + CONTENT_Y, w - 28, ChoiceBar.HEIGHT);
-        this.caches.setAlpha(s);
         this.switchLimit.setVisible(!this.isStore());
         this.storeLimit.setVisible(this.isStore());
         for (int row = 0; row < this.clears.size() && row < this.shown.size(); row++) {
@@ -180,7 +179,6 @@ final class ManageCachePanel extends Panel {
             button.label(Lang.get(one.key().equals(this.asked) && this.confirming > 0 ? "hotwire.cache.clear_sure"
                     : "hotwire.cache.clear_one"));
             button.setBounds(x + w - 14 - CLEAR_W, this.getBoxY() + ROWS_Y + ROW * row - 5, CLEAR_W, 18);
-            button.setAlpha(s);
             button.setVisible(!one.inUse());
             button.setActive(this.open() && s > 0.9f, true);
         }

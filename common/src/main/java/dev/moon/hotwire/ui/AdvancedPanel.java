@@ -51,7 +51,6 @@ final class AdvancedPanel extends Panel {
             int bx = x + w - 14 - buttons.size() * (CHOICE_W + 4) + 4;
             for (Button button : buttons) {
                 button.setBounds(bx, rowY - 2, CHOICE_W, 20);
-                button.setAlpha(s);
                 button.setActive(this.open() && s > 0.9f, true);
                 bx += CHOICE_W + 4;
             }

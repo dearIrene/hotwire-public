@@ -174,6 +174,9 @@ class Panel extends Element {
         if (!this.wanted && this.shown.getValue() <= 0.01f) {
             this.setVisible(false);
         }
+
+        float s = this.getBoxShown();
+        this.getChildren().forEach(child -> child.setAlpha(s));
         this.placeButtons();
         super.step(dt);
     }
@@ -187,17 +190,14 @@ class Panel extends Element {
         int cancelX = x + w - 14 - BUTTON_W;
         if (this.cancel != null) {
             this.cancel.setBounds(cancelX, y, BUTTON_W, BUTTON_H);
-            this.cancel.setAlpha(s);
             this.cancel.setActive(ready, true);
         }
         if (this.change != null) {
             this.change.setBounds(cancelX - 6 - BUTTON_W, y, BUTTON_W, BUTTON_H);
-            this.change.setAlpha(s);
             this.change.setActive(ready && this.changeActive, this.changeActive);
         }
         if (this.primary != null) {
             this.primary.setBounds(x + 14, y, Math.max(this.primaryWidth, this.primaryNeeds), BUTTON_H);
-            this.primary.setAlpha(s);
             this.primary.setActive(ready && this.primaryActive, this.primaryActive);
         }
     }

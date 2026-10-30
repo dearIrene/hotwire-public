@@ -43,9 +43,9 @@ public final class HotwireSettings {
     private static final List<PauseGame> PAUSE_ORDER = List.of(PauseGame.NO, PauseGame.YES);
     private static final List<String> PAUSE_CHOICES = List.of("hotwire.settings.pause.no",
             "hotwire.settings.pause.yes");
-    private static final List<KeyAlert> KEY_ALERT_ORDER = List.of(KeyAlert.ON, KeyAlert.OFF);
-    private static final List<String> KEY_ALERT_CHOICES = List.of("hotwire.settings.key_alert.on",
-            "hotwire.settings.key_alert.off");
+    private static final List<KeyAlert> KEY_ALERT_ORDER = List.of(KeyAlert.OFF, KeyAlert.ON);
+    private static final List<String> KEY_ALERT_CHOICES = List.of("hotwire.settings.key_alert.off",
+            "hotwire.settings.key_alert.on");
     private static final List<AutoFill> AUTO_FILL_ORDER = List.of(AutoFill.OFF, AutoFill.ON);
     private static final List<String> AUTO_FILL_CHOICES = List.of("hotwire.settings.auto_fill.off",
             "hotwire.settings.auto_fill.on");
