@@ -31,7 +31,6 @@ import dev.moon.hotwire.plan.SwitchPlan;
 import dev.moon.hotwire.redefine.HandlerGuards;
 import dev.moon.hotwire.redefine.RebuildException;
 import dev.moon.hotwire.redefine.Tripwire;
-import dev.moon.hotwire.report.GameLog;
 import dev.moon.hotwire.report.Report;
 import dev.moon.hotwire.switching.ModSwitcher;
 import dev.moon.hotwire.switching.OffChecker;
@@ -116,7 +115,7 @@ public final class SwitchRunner {
             }
             long start = System.nanoTime();
             ElementLook.findAhead(this.fieldReferences, mods, this.switcher::isOn, true);
-            GameLog.LOGGER.info("[Hotwire] the look ahead for every mod that could go off ({}) took {} ms",
+            LOGGER.info("[Hotwire] the look ahead for every mod that could go off ({}) took {} ms",
                     mods.size(), (System.nanoTime() - start) / 1_000_000);
         });
     }
@@ -144,7 +143,7 @@ public final class SwitchRunner {
     }
 
     CheckedResult turnOff(List<String> ids) {
-        GameLog.LOGGER.info("[Hotwire] turning off {}", ids);
+        LOGGER.info("[Hotwire] turning off {}", ids);
         SwitchTimes.begin();
         RegistryCheck.takeKeysOnce();
         this.switcher.setBusy(true);
@@ -287,7 +286,7 @@ public final class SwitchRunner {
     }
 
     CheckedResult turnOn(List<String> ids) {
-        GameLog.LOGGER.info("[Hotwire] turning on {}", ids);
+        LOGGER.info("[Hotwire] turning on {}", ids);
         SwitchTimes.begin();
         RegistryCheck.takeKeysOnce();
         this.switcher.setBusy(true);

@@ -481,7 +481,7 @@ public final class HotwireEngine implements ModScreen.Game, AutoCloseable {
         if (closed && current != null && !Minecraft.getInstance().isSameThread()) {
             Minecraft.getInstance().submit(() -> ModViews.show(new HotwireScreen(current, new ScreenOpenTimer())))
                     .join();
-            GameLog.LOGGER.info("[Hotwire] the world is closed for the work; Hotwire's screen is up until it opens"
+            LOGGER.info("[Hotwire] the world is closed for the work; Hotwire's screen is up until it opens"
                     + " again");
         }
     }

@@ -12,7 +12,6 @@ import dev.moon.hotwire.jar.ModManifest;
 import dev.moon.hotwire.mixin_copy.MixinCopy;
 import dev.moon.hotwire.plan.ModGraph;
 import dev.moon.hotwire.redefine.RebuildException;
-import dev.moon.hotwire.report.GameLog;
 import dev.moon.hotwire.switching.ModMixins;
 import dev.moon.hotwire.switching.SwitchApplier;
 import dev.moon.hotwire.switching.SwitchApplier.ApplyResult;
@@ -376,7 +375,7 @@ public final class ModUpdater {
         if (adopted.tier() == UpdateTier.IN_PLACE && bundled != null) {
             return new Whole(adopted, bundled, configs);
         }
-        GameLog.LOGGER.info("[Hotwire] {}'s update waits for the next start: {}", id, bundled == null
+        LOGGER.info("[Hotwire] {}'s update waits for the next start: {}", id, bundled == null
                 ? "a library it carries cannot update with it" : adopted.blockers());
         return new Whole(plan, List.of(), false);
     }
@@ -479,7 +478,7 @@ public final class ModUpdater {
                     MixinCopy.markClassPathChanged();
                     LoaderModList.replace(carried.manifest().id(), carried.incoming());
                 });
-                GameLog.LOGGER.info("[Hotwire] {} is {} now, carried by {}", carried.manifest().id(),
+                LOGGER.info("[Hotwire] {} is {} now, carried by {}", carried.manifest().id(),
                         carried.manifest().version(), manifest.id());
             }
 
@@ -491,7 +490,7 @@ public final class ModUpdater {
             runAfterReplace(manifest.id(), "Hotwire's own list of mods",
                     () -> this.engine.onUpdated(manifest.id(), incoming, read));
             String started = this.runAddedEntrypoints(manifest.id(), plan);
-            GameLog.LOGGER.info("[Hotwire] {} is {} now: {} classes rebuilt, {} served as they load, {} new",
+            LOGGER.info("[Hotwire] {} is {} now: {} classes rebuilt, {} served as they load, {} new",
                     manifest.id(), manifest.version(), applied.rebuilt().size(), applied.notLoaded().size(),
                     plan.actions().stream().filter(action -> action.kind() == ClassAction.Kind.DEFINE).count());
             return new Result.Updated(manifest.id(), manifest.name(), plan, applied,

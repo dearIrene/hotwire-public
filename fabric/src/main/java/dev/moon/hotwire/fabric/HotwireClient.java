@@ -78,7 +78,7 @@ public final class HotwireClient implements ClientModInitializer {
             }
         }));
 
-        ClientPlayConnectionEvents.DISCONNECT.register((handler, client) -> GameLog.LOGGER.info(
+        ClientPlayConnectionEvents.DISCONNECT.register((handler, client) -> LOGGER.info(
                 "[Hotwire] the world's connection closed", new Throwable("closed here")));
         ClientLifecycleEvents.CLIENT_STOPPING.register(client -> {
             OffModClose.run(client);

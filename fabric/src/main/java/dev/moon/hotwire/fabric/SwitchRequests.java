@@ -4,7 +4,6 @@ import dev.moon.hotwire.api.SwitchResult;
 import dev.moon.hotwire.concurrent.Tasks;
 import dev.moon.hotwire.config.HotwireSettings;
 import dev.moon.hotwire.fabric.add.WorldReopen;
-import dev.moon.hotwire.report.GameLog;
 import dev.moon.hotwire.switching.ModSwitcher;
 import dev.moon.hotwire.switching.PlayerMessages;
 import dev.moon.hotwire.ui.Lang;
@@ -16,8 +15,12 @@ import java.util.concurrent.CompletableFuture;
 import java.util.function.Function;
 import java.util.function.Supplier;
 import org.jspecify.annotations.Nullable;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
 final class SwitchRequests {
+    private static final Logger LOGGER = LoggerFactory.getLogger(SwitchRequests.class);
+
     interface Say {
         void show(String line, boolean bad, String hint);
     }
@@ -82,7 +85,7 @@ final class SwitchRequests {
             if (!ids.isEmpty() && result.result() instanceof ModSwitcher.Result.Failed failed
                     && failed.cause().reopenFixes() && current != null
                     && (WorldReopen.isLeftOnly() || WorldReopen.findRefusal().isEmpty())) {
-                GameLog.LOGGER.info("[Hotwire] {}", said);
+                LOGGER.info("[Hotwire] {}", said);
                 String where = WorldReopen.isLeftOnly() ? "server" : "world";
                 current.offerReopen(new ReopenPanel.Offer(off, ids, null, PlayerMessages.joinNames(ids,
                         this.installed::nameOf), Lang.get("hotwire.reopen.why." + (off ? "off_" : "on_") + where),

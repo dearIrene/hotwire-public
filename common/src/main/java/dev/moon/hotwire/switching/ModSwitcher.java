@@ -6,7 +6,6 @@ import dev.moon.hotwire.plan.SwitchPlan;
 import dev.moon.hotwire.plan.SwitchPlanner;
 import dev.moon.hotwire.redefine.RebuildException;
 import dev.moon.hotwire.registration.RegistrationJournal;
-import dev.moon.hotwire.report.GameLog;
 import dev.moon.hotwire.ui.Lang;
 import dev.moon.hotwire.ui.Progress;
 import java.util.ArrayList;
@@ -230,7 +229,7 @@ public final class ModSwitcher {
             asked.forEach(id -> this.goingAlong.computeIfAbsent(id, key -> ConcurrentHashMap.newKeySet())
                     .addAll(losing));
             along.addAll(losing);
-            GameLog.LOGGER.info("[Hotwire] the off of {} would leave {} without their patches; they go with it", asked,
+            LOGGER.info("[Hotwire] the off of {} would leave {} without their patches; they go with it", asked,
                     losing);
             return this.run(this.planner.planOff(along, this.getOff()), out);
         }
@@ -556,7 +555,7 @@ public final class ModSwitcher {
             return new Result.Done(plan, applied, (System.nanoTime() - start) / 1_000_000);
         } catch (RebuildException e) {
             if (e.reopenFixes() || e.isRestartOnly()) {
-                GameLog.LOGGER.info("[Hotwire] Switching {} {} needs {}, and nothing changed: {}",
+                LOGGER.info("[Hotwire] Switching {} {} needs {}, and nothing changed: {}",
                         goingOff ? "off" : "on", plan.order(),
                         e.reopenFixes() ? "the world saved and opened again" : "a restart", e.getMessage());
             } else {

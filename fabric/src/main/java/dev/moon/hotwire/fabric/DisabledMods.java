@@ -2,7 +2,6 @@ package dev.moon.hotwire.fabric;
 
 import dev.moon.hotwire.config.HotwireSettings;
 import dev.moon.hotwire.fabric.add.ModAdder;
-import dev.moon.hotwire.report.GameLog;
 import dev.moon.hotwire.switching.ModSwitcher;
 import dev.moon.hotwire.ui.Lang;
 import java.io.IOException;
@@ -73,7 +72,7 @@ final class DisabledMods {
             }
             try {
                 this.installed.onRestored(id, DisabledJars.restore(disabledJar));
-                GameLog.LOGGER.info("[Hotwire] {} is restored for the on: {} has its name back", id,
+                LOGGER.info("[Hotwire] {} is restored for the on: {} has its name back", id,
                         disabledJar.getFileName());
             } catch (IOException e) {
                 LOGGER.warn("[Hotwire] {} could not be restored for the on", id, e);
@@ -129,7 +128,7 @@ final class DisabledMods {
             }
             try {
                 this.installed.onDisabled(id, DisabledJars.disable(jar));
-                GameLog.LOGGER.info("[Hotwire] {} stays off: {} is now {}", id, jar.getFileName(), jar.getFileName()
+                LOGGER.info("[Hotwire] {} stays off: {} is now {}", id, jar.getFileName(), jar.getFileName()
                         + DisabledJars.SUFFIX);
             } catch (IOException e) {
                 LOGGER.warn("[Hotwire] {} could not be kept off past the close", id, e);

@@ -83,7 +83,7 @@ public final class ReportZips {
         Path before = this.replaceable;
         if (before != null && !before.equals(zip)) {
             Files.deleteIfExists(before);
-            GameLog.LOGGER.info("[Hotwire] {} carries {}, which it replaces", zip.getFileName(),
+            LOGGER.info("[Hotwire] {} carries {}, which it replaces", zip.getFileName(),
                     before.getFileName());
         }
         this.replaceable = asked ? null : zip;

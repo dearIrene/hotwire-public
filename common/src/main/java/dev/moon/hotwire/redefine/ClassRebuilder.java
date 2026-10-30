@@ -4,7 +4,6 @@ import dev.moon.hotwire.concurrent.Parallel;
 import dev.moon.hotwire.mixin_copy.AppliedMixins;
 import dev.moon.hotwire.mixin_copy.MixinCopy;
 import dev.moon.hotwire.mixin_copy.MixinCopyException;
-import dev.moon.hotwire.report.GameLog;
 import java.lang.instrument.ClassDefinition;
 import java.lang.instrument.Instrumentation;
 import java.lang.instrument.UnmodifiableClassException;
@@ -419,7 +418,7 @@ public final class ClassRebuilder {
                 if (!Arrays.equals(split.target(), prepared.before().get(type.getName().replace('.', '/')))) {
                     definitions.add(new ClassDefinition(type, split.target()));
                 } else {
-                    GameLog.LOGGER.info("[Hotwire] {} is left as the JVM runs it: its rebuild is the same bytes",
+                    LOGGER.info("[Hotwire] {} is left as the JVM runs it: its rebuild is the same bytes",
                             type.getName());
                 }
             }
@@ -491,7 +490,7 @@ public final class ClassRebuilder {
         this.mixedNow.putAll(prepared.mixed());
         this.lastApplied = new LastApply(prepared, previous, carriedBefore, mixedBefore);
         long end = System.nanoTime();
-        GameLog.LOGGER.info("[Hotwire] Rebuilt {} classes ({} already so): mix {} ms, split {} ms, sidecars {} ms, "
+        LOGGER.info("[Hotwire] Rebuilt {} classes ({} already so): mix {} ms, split {} ms, sidecars {} ms, "
                 + "redefine {} ms, after {} ms", prepared.splits().size(),
                 prepared.splits().size() - definitions.size(), prepared.mixMillis(), prepared.splitMillis(),
                 (installed - start) / 1_000_000, (redefined - installed) / 1_000_000, (end - redefined) / 1_000_000);

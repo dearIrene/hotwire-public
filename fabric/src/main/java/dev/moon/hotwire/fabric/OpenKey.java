@@ -6,7 +6,6 @@ import dev.moon.hotwire.fabric.registration.GameRegistrations;
 import dev.moon.hotwire.fabric.screen.ChooserGameScreen;
 import dev.moon.hotwire.fabric.screen.HotwireScreen;
 import dev.moon.hotwire.fabric.screen.StoreGameScreen;
-import dev.moon.hotwire.report.GameLog;
 import dev.moon.hotwire.ui.Lang;
 import dev.moon.hotwire.ui.Notice;
 import dev.moon.hotwire.ui.Notices;
@@ -27,8 +26,11 @@ import net.minecraft.client.gui.screens.Screen;
 import net.minecraft.network.chat.Component;
 import net.minecraft.resources.Identifier;
 import org.jspecify.annotations.Nullable;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
 public final class OpenKey {
+    private static final Logger LOGGER = LoggerFactory.getLogger(OpenKey.class);
     private static final Identifier CATEGORY = Identifier.fromNamespaceAndPath(HotwireClient.ID,
             HotwireClient.ID);
     private static @Nullable KeyMapping key;
@@ -65,7 +67,7 @@ public final class OpenKey {
         }
         settings.markKeyCardShown();
         String keyName = made.getTranslatedKeyMessage().getString();
-        GameLog.LOGGER.info("[Hotwire] {} opens Hotwire and {} too; said in a card", keyName, others);
+        LOGGER.info("[Hotwire] {} opens Hotwire and {} too; said in a card", keyName, others);
         Notices.show(Notice.ofAsk(Lang.get("hotwire.key.taken", keyName),
                 Lang.get("hotwire.key.taken_by", keyName, joinPlainly(others))).makeResting(10));
     }
@@ -81,7 +83,7 @@ public final class OpenKey {
         String mod = GameRegistrations.findModOf(shown.getClass());
         String name = mod == null ? shown.getClass().getSimpleName() : FabricLoader.getInstance().getModContainer(mod)
                 .map(container -> container.getMetadata().getName()).orElse(mod);
-        GameLog.LOGGER.info("[Hotwire] {} opens {}'s {} over Hotwire; said in a card", keyName, name,
+        LOGGER.info("[Hotwire] {} opens {}'s {} over Hotwire; said in a card", keyName, name,
                 shown.getClass().getName());
         Notices.show(Notice.ofAsk(Lang.get("hotwire.key.taken", keyName),
                 Lang.get("hotwire.key.blocked_by", name, keyName)).makeResting(10));

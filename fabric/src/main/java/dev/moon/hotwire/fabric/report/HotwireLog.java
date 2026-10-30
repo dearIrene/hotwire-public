@@ -36,10 +36,13 @@ public final class HotwireLog extends AbstractAppender {
         this.handsOn = handsOn;
     }
 
-    public static void install(Path folder) {
-        if (!(LogManager.getContext(false) instanceof LoggerContext context)) {
+    private static boolean installed;
+
+    public static synchronized void install(Path folder) {
+        if (installed || !(LogManager.getContext(false) instanceof LoggerContext context)) {
             return;
         }
+        installed = true;
         Writer out;
         try {
             Files.createDirectories(folder);
