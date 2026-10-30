@@ -5,8 +5,10 @@ import dev.moon.hotwire.redefine.Tripwire;
 import dev.moon.hotwire.registration.CallerOwner;
 import dev.moon.hotwire.registration.RegistrationJournal;
 import java.nio.file.Path;
+import java.util.HashMap;
 import java.util.HashSet;
 import java.util.List;
+import java.util.Map;
 import java.util.Objects;
 import java.util.Set;
 import net.fabricmc.loader.api.FabricLoader;
@@ -65,19 +67,34 @@ public final class GameRegistrations {
     }
 
     public static @Nullable String findCodeMod(Class<?> type) {
-        String mod = findModOf(type);
-        if (mod != null) {
-            return mod;
-        }
+        return findModOrShipper(type);
+    }
+
+    private static @Nullable String findOwnNested(Class<?> type) {
         String nested = findNestedModOf(type);
-        return nested != null && isSwitchable(nested) && alone.contains(nested) ? nested : findModOrShipper(type);
+        return nested != null && isSwitchable(nested) && alone.contains(nested) ? nested : null;
     }
 
     private static Set<String> findRunAlone(FabricLoader loader) {
         Set<String> ids = new HashSet<>();
+        Map<String, String> tops = new HashMap<>();
         for (ModContainer mod : loader.getAllMods()) {
-            if (mod.getContainingMod().isEmpty()) {
+            ModContainer top = mod;
+            while (top.getContainingMod().isPresent()) {
+                top = top.getContainingMod().get();
+            }
+            tops.put(mod.getMetadata().getId(), top.getMetadata().getId());
+            if (top.equals(mod)) {
                 ids.add(mod.getMetadata().getId());
+            }
+        }
+        for (ModContainer mod : loader.getAllMods()) {
+            for (ModDependency dependency : mod.getMetadata().getDependencies()) {
+                String top = tops.get(dependency.getModId());
+                if (dependency.getKind() == ModDependency.Kind.DEPENDS && top != null
+                        && !top.equals(tops.get(mod.getMetadata().getId()))) {
+                    ids.add(dependency.getModId());
+                }
             }
         }
         return ids;
@@ -90,6 +107,9 @@ public final class GameRegistrations {
 
     public static @Nullable String findModOrShipper(Class<?> type) {
         String mod = findModOf(type);
+        if (mod == null) {
+            mod = findOwnNested(type);
+        }
         if (mod == null) {
             mod = findShippedBy(type);
         }

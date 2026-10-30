@@ -41,11 +41,13 @@ public final class WorldWrappers {
 
     public static synchronized void takeOut(Collection<String> mods) {
         Map<Class<?>, List<FieldSlots.Slot>> fieldsOf = new HashMap<>();
-        GameHold.onGameAndWait(() -> unwrap(findClientEntities(), mods, fieldsOf));
+        int[] lookedThrough = new int[2];
+        GameHold.onGameAndWait(() -> lookedThrough[0] = unwrap(findClientEntities(), mods, fieldsOf));
         SwitchTimes.mark("client entities");
         IntegratedServer server = Minecraft.getInstance().getSingleplayerServer();
         if (server != null) {
-            GameHold.onServerAndWait(server, () -> unwrap(findServerEntities(server), mods, fieldsOf));
+            GameHold.onServerAndWait(server, () -> lookedThrough[1] = unwrap(findServerEntities(server), mods,
+                    fieldsOf));
         }
         mods.forEach(mod -> {
             int count = REMOVED.getOrDefault(mod, List.of()).size();
@@ -54,10 +56,12 @@ public final class WorldWrappers {
                         mod);
             }
         });
+        LOGGER.info("[Hotwire] {} client and {} server entities were looked through for {}'s wrappers",
+                lookedThrough[0], lookedThrough[1], mods);
         prunePeriodically();
     }
 
-    private static void unwrap(List<Entity> entities, Collection<String> mods,
+    private static int unwrap(List<Entity> entities, Collection<String> mods,
             Map<Class<?>, List<FieldSlots.Slot>> fieldsOf) {
         for (Entity entity : entities) {
             for (FieldSlots.Slot field : fieldsOf.computeIfAbsent(entity.getClass(), WorldWrappers::findGameFields)) {
@@ -73,6 +77,7 @@ public final class WorldWrappers {
                 }
             }
         }
+        return entities.size();
     }
 
     public static synchronized void putBack(Collection<String> mods) {

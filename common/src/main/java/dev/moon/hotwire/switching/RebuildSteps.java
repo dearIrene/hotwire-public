@@ -24,7 +24,7 @@ final class RebuildSteps {
     static Runnable apply(ClassRebuilder rebuilder, ClassRebuilder.PreparedRebuild prepared,
             Supplier<List<String>> health, BiConsumer<Set<String>, Set<Class<?>>> afterRebuild,
             Consumer<Runnable> onGameThread, GameObjectRebuilder objectRebuilder, boolean inWorld,
-            @Nullable Consumer<IntSupplier> catchUpLater) throws RebuildException {
+            @Nullable Consumer<IntSupplier> catchUpLater, Set<String> flipped) throws RebuildException {
         LiveObjects.checkWhilePaused(prepared);
         SwitchTimes.mark("check paused");
 
@@ -48,8 +48,10 @@ final class RebuildSteps {
                     new IllegalStateException(String.join("; ", broken)));
         }
         int notSetUp = 0;
+        Set<String> changed = new HashSet<>(rebuilt);
+        changed.addAll(flipped);
         Runnable rebuildObjects = () -> {
-            objectRebuilder.rebuild(prepared.newlyBuilt(), rebuilt, !prepared.pausedReloads().isEmpty());
+            objectRebuilder.rebuild(prepared.newlyBuilt(), changed, !prepared.pausedReloads().isEmpty());
 
             prepared.pausedReloads().forEach(OffWindowObjects::forget);
         };

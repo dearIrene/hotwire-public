@@ -28,7 +28,6 @@ final class CollectionReferences implements FixedLists.Walk {
     private static final int LARGEST = 100_000;
 
     static final int WRAPPERS_IN = 512;
-
     private final Map<String, List<Removal>> removals = new HashMap<>();
     private final StaticRecomputer.Writer writer;
 
@@ -579,9 +578,13 @@ final class CollectionReferences implements FixedLists.Walk {
                                     ElementTakes.makeWeak(entries, (now, owner) -> ElementTakes.takeFromMap(now, key,
                                             element, this.getRemovalsOf(owner))), element);
 
-                            boolean holds = element instanceof Map<?, ?> || element instanceof Collection<?>;
-                            if (ElementLook.isLooking() && holds && this.seen.add(element)) {
-                                this.collect(element);
+                            if (ElementLook.isLooking() && element != null && this.seen.add(element)) {
+                                if (element instanceof Map<?, ?> || element instanceof Collection<?>) {
+                                    this.collect(element);
+                                } else if (Wrappers.isOfAnotherMod(element.getClass())) {
+                                    this.lookInto(element);
+                                    handlers = true;
+                                }
                             }
                         } else if (element != null && !(element instanceof Collection<?>)
                                 && !(element instanceof Map<?, ?>) && !Wrappers.isOfAnotherMod(element.getClass())) {
@@ -605,8 +608,7 @@ final class CollectionReferences implements FixedLists.Walk {
                         this.look.hasNoted(new ElementTakes.NotedTake(() -> "", any -> this.collect(map), null));
                     }
                 }
-                default -> {
-                }
+                default -> { }
             }
             completed = true;
         } catch (UnsupportedOperationException | IllegalStateException e) {

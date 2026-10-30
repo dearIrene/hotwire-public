@@ -177,9 +177,9 @@ final class GeneratedNames {
 
     private static void addMissing(List<Member> into, List<Member> more) {
         Set<String> had = new HashSet<>();
-        into.forEach(member -> had.add(member.name() + member.desc()));
+        into.forEach(member -> had.add(member.key()));
         for (Member member : more) {
-            if (had.add(member.name() + member.desc())) {
+            if (had.add(member.key())) {
                 into.add(member);
             }
         }

@@ -110,7 +110,6 @@ public final class SwitchApplier {
     private volatile Set<String> watched = Set.of();
 
     private final GuardFlips guardFlips;
-
     private volatile @Nullable Set<String> onlyRebuild;
 
     private volatile Map<String, String> lateMixins = Map.of();
@@ -160,15 +159,16 @@ public final class SwitchApplier {
         return this.catchUps;
     }
 
-    private void applyWhilePaused(ClassRebuilder.PreparedRebuild prepared,
-            Runnable whilePaused) throws RebuildException {
+    private void applyWhilePaused(ClassRebuilder.PreparedRebuild prepared, Runnable whilePaused, Set<String> flipped)
+            throws RebuildException {
         this.objectRebuilder.announce(prepared.newlyBuilt(), !prepared.pausedReloads().isEmpty());
         Runnable release = this.redefinitionHold.get();
         SwitchTimes.mark("pause game");
         long pausedAt = System.nanoTime();
         try {
             Runnable rebuildObjects = RebuildSteps.apply(this.rebuilder, prepared, this.health, this.afterRebuild,
-                    this.onGameThread, this.objectRebuilder, this.game.isInWorld(), this.catchUps.findHolder());
+                    this.onGameThread, this.objectRebuilder, this.game.isInWorld(), this.catchUps.findHolder(),
+                    flipped);
             whilePaused.run();
             SwitchTimes.mark("paused: takeouts");
             rebuildObjects.run();
@@ -322,7 +322,7 @@ public final class SwitchApplier {
             SwitchTimes.mark("mixins retained");
             ClassRebuilder.PreparedRebuild prepared = dryRun.prepared();
             if (prepared != null) {
-                this.applyWhilePaused(prepared, sites.setBefore(whilePaused));
+                this.applyWhilePaused(prepared, sites.setBefore(whilePaused), plan == null ? Set.of() : plan.flipped());
             } else {
                 sites.set();
             }
@@ -373,8 +373,7 @@ public final class SwitchApplier {
         LOGGER.info("[Hotwire] {} loaded while the switch ran and are rebuilt after it", originals.keySet().stream()
                 .map(Class::getName).toList());
         this.applyWhilePaused(this.prepare(originals, originals, Map.of(), this.onConfigs, onAfter, Set.of(),
-                "rebuild"),
-                () -> { });
+                "rebuild"), () -> { }, Set.of());
     }
 
     DryRun dryRun(Set<String> switched, Set<String> onAfter, boolean forClick) throws RebuildException {
@@ -473,7 +472,7 @@ public final class SwitchApplier {
         }
         if (!originals.isEmpty()) {
             this.applyWhilePaused(this.prepare(originals, before, classes, this.onConfigs, on, Set.copyOf(ids),
-                    "update"), () -> { });
+                    "update"), () -> { }, Set.of());
         }
         this.replaced.putAll(classes);
         this.rebuilder.copy().replace(classes);

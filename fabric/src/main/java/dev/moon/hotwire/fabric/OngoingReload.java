@@ -51,6 +51,11 @@ final class OngoingReload {
     }
 
     private static @Nullable BooleanSupplier findOngoing(Minecraft game) {
+        LoadingOverlay loading = ModViews.findLoadingOverlay();
+        ReloadInstance ongoing = loading == null ? null : findReloadOf(loading);
+        if (ongoing != null) {
+            return ongoing.isDone() ? null : ongoing::isDone;
+        }
         List<String> seen = new ArrayList<>();
         for (FieldSlots.Slot field : Fields.getDeclared(Minecraft.class)) {
             if (!field.isStatic() && CompletableFuture.class.isAssignableFrom(field.getType())) {
@@ -69,13 +74,8 @@ final class OngoingReload {
                 }
             }
         }
-        LoadingOverlay loading = ModViews.findLoadingOverlay();
-        ReloadInstance ongoing = loading == null ? null : findReloadOf(loading);
-        if (ongoing == null || ongoing.isDone()) {
-            LOGGER.info("[Hotwire] no reload under way: futures {}, overlay {}", seen, loading);
-            return null;
-        }
-        return ongoing::isDone;
+        LOGGER.info("[Hotwire] no reload under way: futures {}, overlay {}", seen, loading);
+        return null;
     }
 
     static @Nullable ReloadInstance findReloadOf(LoadingOverlay overlay) {
