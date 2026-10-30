@@ -413,7 +413,9 @@ final class EngineStart {
             Fields.preloadStatics(parts.instrumentation());
 
             parts.runner().getSwitcher().getFiller().watchPlaying(CacheFillControl::isPlaying);
-            parts.runner().getSwitcher().getFiller().fillSample();
+            if (settings.isAutoFillOn()) {
+                parts.runner().getSwitcher().getFiller().fillAll();
+            }
         } catch (JvmAccessException | IllegalStateException e) {
             LOGGER.error("[Hotwire] Switching mods is not possible in this game: {}", e.getMessage(), e);
             engine = new HotwireEngine(installed, progress, reports, folders, queue, settings, icons,

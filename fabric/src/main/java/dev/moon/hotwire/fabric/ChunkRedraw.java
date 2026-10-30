@@ -11,8 +11,7 @@ final class ChunkRedraw {
         game.execute(() -> {
             if (game.level != null) {
                 //? if >=26.2 {
-                game.levelRenderer.invalidateCompiledGeometry(game.level, game.options,
-                        game.gameRenderer.mainCamera(), game.getBlockColors());
+                game.levelExtractor.allChanged();
                 //?} else {
                 /*int reach = (game.options.getEffectiveRenderDistance() + 1) * 16;
                 if (game.player == null) {

@@ -21,11 +21,14 @@ public final class HotwireSettings {
 
     public enum KeyAlert { ON, OFF }
 
+    public enum AutoFill { OFF, ON }
+
     static final String IN_WORLD = "in-world";
     static final String OFF_LASTS = "off-lasts";
     public static final String NESTED_JARS = "nested-jars";
     static final String PAUSE_GAME = "pause-game";
     static final String KEY_ALERT = "key-alert";
+    static final String AUTO_FILL = "auto-fill";
 
     private static final Logger LOGGER = LoggerFactory.getLogger(HotwireSettings.class);
     private static final int FORMAT = 1;
@@ -43,6 +46,9 @@ public final class HotwireSettings {
     private static final List<KeyAlert> KEY_ALERT_ORDER = List.of(KeyAlert.ON, KeyAlert.OFF);
     private static final List<String> KEY_ALERT_CHOICES = List.of("hotwire.settings.key_alert.on",
             "hotwire.settings.key_alert.off");
+    private static final List<AutoFill> AUTO_FILL_ORDER = List.of(AutoFill.OFF, AutoFill.ON);
+    private static final List<String> AUTO_FILL_CHOICES = List.of("hotwire.settings.auto_fill.off",
+            "hotwire.settings.auto_fill.on");
     private static final List<NestedJars> NESTED_ORDER = List.of(NestedJars.AUTO, NestedJars.ALL, NestedJars.NONE);
     private static final List<String> NESTED_CHOICES = List.of("hotwire.settings.nested.auto",
             "hotwire.settings.nested.all", "hotwire.settings.nested.none");
@@ -55,6 +61,7 @@ public final class HotwireSettings {
         @Nullable NestedJars nestedJars = NestedJars.AUTO;
         @Nullable PauseGame pauseGame = PauseGame.NO;
         @Nullable KeyAlert keyAlert = KeyAlert.ON;
+        @Nullable AutoFill autoFill = AutoFill.OFF;
         @Nullable String promptAcceptedFor;
         boolean keyCardShown;
         @Nullable List<String> favorites = List.of();
@@ -66,6 +73,7 @@ public final class HotwireSettings {
     private volatile NestedJars nestedJars;
     private volatile PauseGame pauseGame;
     private volatile KeyAlert keyAlert;
+    private volatile AutoFill autoFill;
     private volatile @Nullable String promptAcceptedFor;
     private volatile boolean keyCardShown;
     private final Set<String> favorites = ConcurrentHashMap.newKeySet();
@@ -82,6 +90,7 @@ public final class HotwireSettings {
         this.nestedJars = checkKnown(saved.nestedJars, NestedJars.AUTO, "nestedJars");
         this.pauseGame = checkKnown(saved.pauseGame, PauseGame.NO, "pauseGame");
         this.keyAlert = checkKnown(saved.keyAlert, KeyAlert.ON, "keyAlert");
+        this.autoFill = checkKnown(saved.autoFill, AutoFill.OFF, "autoFill");
         this.promptAcceptedFor = saved.promptAcceptedFor;
         this.keyCardShown = saved.keyCardShown;
         if (saved.favorites != null) {
@@ -115,6 +124,10 @@ public final class HotwireSettings {
 
     public boolean isKeyAlertOn() {
         return this.keyAlert == KeyAlert.ON;
+    }
+
+    public boolean isAutoFillOn() {
+        return this.autoFill == AutoFill.ON;
     }
 
     public boolean isPromptAccepted(String major) {
@@ -155,7 +168,9 @@ public final class HotwireSettings {
                 new AdvancedOption(PAUSE_GAME, Lang.get("hotwire.settings.pause"), read(PAUSE_CHOICES),
                         PAUSE_ORDER.indexOf(this.pauseGame)),
                 new AdvancedOption(KEY_ALERT, Lang.get("hotwire.settings.key_alert"), read(KEY_ALERT_CHOICES),
-                        KEY_ALERT_ORDER.indexOf(this.keyAlert)));
+                        KEY_ALERT_ORDER.indexOf(this.keyAlert)),
+                new AdvancedOption(AUTO_FILL, Lang.get("hotwire.settings.auto_fill"), read(AUTO_FILL_CHOICES),
+                        AUTO_FILL_ORDER.indexOf(this.autoFill)));
     }
 
     private static List<AdvancedOption.Choice> read(List<String> keys) {
@@ -169,10 +184,12 @@ public final class HotwireSettings {
         NestedJars nested = NESTED_JARS.equals(option) ? pick(NESTED_ORDER, choice, this.nestedJars) : this.nestedJars;
         PauseGame pause = PAUSE_GAME.equals(option) ? pick(PAUSE_ORDER, choice, this.pauseGame) : this.pauseGame;
         KeyAlert alert = KEY_ALERT.equals(option) ? pick(KEY_ALERT_ORDER, choice, this.keyAlert) : this.keyAlert;
+        AutoFill fill = AUTO_FILL.equals(option) ? pick(AUTO_FILL_ORDER, choice, this.autoFill) : this.autoFill;
         if (world == this.inWorld && nested == this.nestedJars && lasts == this.offLasts && pause == this.pauseGame
-                && alert == this.keyAlert) {
+                && alert == this.keyAlert && fill == this.autoFill) {
             return;
         }
+        this.autoFill = fill;
         this.pauseGame = pause;
         this.keyAlert = alert;
         this.inWorld = world;
@@ -188,6 +205,7 @@ public final class HotwireSettings {
         saved.nestedJars = this.nestedJars;
         saved.pauseGame = this.pauseGame;
         saved.keyAlert = this.keyAlert;
+        saved.autoFill = this.autoFill;
         saved.promptAcceptedFor = this.promptAcceptedFor;
         saved.keyCardShown = this.keyCardShown;
         saved.favorites = this.favorites.stream().sorted().toList();

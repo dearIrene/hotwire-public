@@ -72,7 +72,7 @@ public final class SwitchRunner {
     private final @Nullable TransformerChain chain;
 
     private volatile Consumer<ModSwitcher.Result> afterOff = result -> { };
-    private long flipsSeen = HandlerGuards.getFlips();
+    private long flipsSeen = HandlerGuards.getChunkFlips();
     private volatile Consumer<List<String>> beforeOn = order -> { };
 
     @SuppressWarnings("ThreadPriorityCheck")
