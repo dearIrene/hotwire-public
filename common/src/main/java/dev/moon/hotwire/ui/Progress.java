@@ -89,15 +89,15 @@ public final class Progress {
         return this.now.running();
     }
 
-    public void begin(String subject, boolean off, int mods) {
+    public synchronized void begin(String subject, boolean off, int mods) {
         this.begin(subject, off, mods, List.of());
     }
 
-    public void begin(boolean off, List<Entry> queue) {
+    public synchronized void begin(boolean off, List<Entry> queue) {
         this.begin(queue.isEmpty() ? "" : queue.getFirst().name(), off, queue.size(), queue);
     }
 
-    private void begin(String subject, boolean off, int mods, List<Entry> queue) {
+    private synchronized void begin(String subject, boolean off, int mods, List<Entry> queue) {
         if (this.isAdding()) {
             return;
         }
@@ -105,12 +105,12 @@ public final class Progress {
                 false, mods, 0, queue, makeZeros(mods));
     }
 
-    public void beginAdding(String subject) {
+    public synchronized void beginAdding(String subject) {
         this.now = new Snapshot(this.now.run() + 1, subject, read(ADD_STEPS), 0, "", 0, 0, true, false, true, 1, 0,
                 List.of(), List.of());
     }
 
-    public void stepAdding(int at) {
+    public synchronized void stepAdding(int at) {
         Snapshot was = this.now;
         if (was.adding() && was.running()) {
             this.now = new Snapshot(was.run(), was.subject(), was.labels(), at, "", 0, 0, true, false, true, 1, 0,
@@ -118,7 +118,7 @@ public final class Progress {
         }
     }
 
-    public void endAdding() {
+    public synchronized void endAdding() {
         Snapshot was = this.now;
         this.now = new Snapshot(was.run(), was.subject(), was.labels(), was.labels().size(), "", 0, 0, false, false,
                 false, was.mods(), was.modsDone(), was.queue(), was.ticks());
@@ -128,7 +128,7 @@ public final class Progress {
         return this.now.adding() && this.now.running();
     }
 
-    public void step(int at, String subject) {
+    public synchronized void step(int at, String subject) {
         if (this.isAdding()) {
             return;
         }
@@ -137,7 +137,7 @@ public final class Progress {
                 was.mods(), was.modsDone(), was.queue(), was.ticks());
     }
 
-    void setPhase(String words) {
+    synchronized void setPhase(String words) {
         if (this.isAdding()) {
             return;
         }
@@ -158,7 +158,7 @@ public final class Progress {
             "rebuild objects", "hotwire.progress.finishing",
             "start listeners", "hotwire.progress.reloading");
 
-    public void showAfter(String part) {
+    public synchronized void showAfter(String part) {
         Snapshot was = this.now;
         String next = findNext(part, was.goingOff());
         if (was.running() && !was.adding() && next != null && !next.equals(was.words())) {
@@ -181,13 +181,13 @@ public final class Progress {
         return keys.stream().map(Lang::get).toList();
     }
 
-    public void count(String words, int done, int total) {
+    public synchronized void count(String words, int done, int total) {
         Snapshot was = this.now;
         this.now = new Snapshot(was.run(), was.subject(), was.labels(), was.at(), words, done, total, true,
                 was.goingOff(), was.adding(), was.mods(), was.modsDone(), was.queue(), was.ticks());
     }
 
-    public void advance() {
+    public synchronized void advance() {
         Snapshot was = this.now;
         List<Integer> ticks = new ArrayList<>(was.ticks());
         if (was.modsDone() < ticks.size()) {
@@ -200,7 +200,7 @@ public final class Progress {
 
     public static final int MOD_TICKS = 3;
 
-    public void tick(int index) {
+    public synchronized void tick(int index) {
         Snapshot was = this.now;
         if (index < 0 || index >= was.ticks().size()) {
             return;
@@ -216,7 +216,7 @@ public final class Progress {
         return Collections.nCopies(Math.max(0, count), 0);
     }
 
-    public void end() {
+    public synchronized void end() {
         if (this.isAdding()) {
             return;
         }
