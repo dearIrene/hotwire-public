@@ -25,6 +25,8 @@ import org.slf4j.LoggerFactory;
 
 public final class ReloadFailures {
     private static final Logger LOGGER = LoggerFactory.getLogger(ReloadFailures.class);
+    private static final long RETRY_GAP_NANOS = 10_000_000_000L;
+    private static volatile long retriedForWaitAt = -RETRY_GAP_NANOS;
 
     private static final Set<ReloadInstance> RUN_AGAIN = Collections.newSetFromMap(new MapMaker().weakKeys()
             .makeMap());
@@ -44,6 +46,14 @@ public final class ReloadFailures {
     }
 
     public static boolean runAgainOnFailure() {
+        long now = System.nanoTime();
+        if (ResourceReload.isAwaitingAssets() && now - retriedForWaitAt > RETRY_GAP_NANOS) {
+            retriedForWaitAt = now;
+            LOGGER.info("[Hotwire] a resource reload failed while a mod's state is still coming; it runs again");
+            Minecraft game = Minecraft.getInstance();
+            ModViews.runSoon(() -> ResourceReload.startAgain(game));
+            return true;
+        }
         LoadingOverlay failed = findFailedOverlay();
         ReloadInstance reload = failed == null ? null : OngoingReload.findReloadOf(failed);
         Set<String> off = LoaderModList.getHidden();

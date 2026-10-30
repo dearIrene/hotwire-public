@@ -503,6 +503,11 @@ public final class ResourceReload {
         return null;
     }
 
+    @SuppressWarnings("FutureReturnValueIgnored")
+    public static void startAgain(Minecraft game) {
+        startUnprofiled(() -> track(game.reloadResourcePacks()));
+    }
+
     public static void awaitAssets(List<String> mods) {
         awaitingAssets = List.copyOf(mods);
     }

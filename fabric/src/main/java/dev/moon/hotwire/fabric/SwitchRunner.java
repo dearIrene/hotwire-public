@@ -291,7 +291,7 @@ public final class SwitchRunner {
             return this.runTimedOn(ids);
         } finally {
             this.tripwire.closeRide();
-            ResourceReload.forgetPausedReload();
+            ResourceReload.endAssetWait();
             this.reports.onEnded();
             this.switcher.setBusy(false);
             SwitchTimes.end("the on of " + ids);
@@ -323,6 +323,8 @@ public final class SwitchRunner {
                 });
             }
             SwitchTimes.mark("put back queued");
+
+            ResourceReload.awaitAssets(coming.order());
             ResourceReload.onComingOn(coming.order());
             ModSwitcher.Result result;
             AtomicBoolean allBack = new AtomicBoolean();
