@@ -51,13 +51,14 @@ public final class GameTasks {
         }
         Runnable task = unwrap(queued);
         String mod = findOwnerOf(task, WRAPPED_DEPTH);
-        if (mod == null) {
+        if (mod == null || !MODS_OFF.contains(mod)) {
+            if (LOGGER.isDebugEnabled() && SAID.add(task.getClass())) {
+                LOGGER.debug("[Hotwire] a task of {} ({}) runs while mods are off; it holds {}", mod,
+                        task.getClass().getName(), describeCaptures(task));
+            }
             return false;
         }
         synchronized (GameTasks.class) {
-            if (!MODS_OFF.contains(mod)) {
-                return false;
-            }
             REMOVED.computeIfAbsent(mod, any -> new ArrayList<>()).add(new Removal(loop, task));
             if (SAID.add(task.getClass())) {
                 LOGGER.info("[Hotwire] {}'s task {} waits for its on", mod, task.getClass().getName());
@@ -66,11 +67,27 @@ public final class GameTasks {
         return true;
     }
 
-    private static final int WRAPPED_DEPTH = 2;
+    private static final int WRAPPED_DEPTH = 6;
+
+    private static List<String> describeCaptures(Object task) {
+        List<String> found = new ArrayList<>();
+        for (FieldSlots.Slot field : Fields.getReferenceFields(task.getClass(), false)) {
+            try {
+                Object captured = field.get(task);
+                if (captured != null) {
+                    found.add(field.getName() + ": " + captured.getClass().getName());
+                }
+            } catch (IllegalAccessException | RuntimeException e) {
+                found.add(field.getName() + ": ?");
+            }
+        }
+        return found;
+    }
 
     private static @Nullable String findOwnerOf(Object task, int depth) {
         String mod = GameRegistrations.findModOf(task.getClass());
-        if (depth == 0 || (mod != null && !GameRegistrations.isLibrary(mod))) {
+
+        if (depth == 0 || (mod != null && MODS_OFF.contains(mod))) {
             return mod;
         }
         for (FieldSlots.Slot field : Fields.getReferenceFields(task.getClass(), false)) {
@@ -80,7 +97,9 @@ public final class GameTasks {
             } catch (IllegalAccessException | RuntimeException e) {
                 continue;
             }
-            String inner = captured == null ? null : findOwnerOf(captured, depth - 1);
+
+            String inner = captured == null || CollectionParts.isGameObject(captured) ? null
+                    : findOwnerOf(captured, depth - 1);
             if (inner != null && MODS_OFF.contains(inner)) {
                 return inner;
             }
