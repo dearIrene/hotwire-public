@@ -23,6 +23,12 @@ public interface Canvas {
 
     void popScale();
 
+    default void pushShift(float dx, float dy) {
+    }
+
+    default void popShift() {
+    }
+
     interface Image {
     }
 }

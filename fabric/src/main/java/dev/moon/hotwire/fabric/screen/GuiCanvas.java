@@ -175,6 +175,22 @@ public final class GuiCanvas implements Canvas {
     }
 
     @Override
+    public void pushShift(float dx, float dy) {
+        //? if >=1.21.6 {
+        this.graphics.pose().pushMatrix();
+        this.graphics.pose().translate(dx, dy);
+        //?} else {
+        /*this.graphics.pose().pushPose();
+        this.graphics.pose().translate(dx, dy, 0);
+        *///?}
+    }
+
+    @Override
+    public void popShift() {
+        this.popScale();
+    }
+
+    @Override
     public void popScale() {
         //? if >=1.21.6 {
         this.graphics.pose().popMatrix();

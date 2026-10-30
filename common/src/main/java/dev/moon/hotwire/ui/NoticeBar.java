@@ -27,8 +27,9 @@ final class NoticeBar extends Element {
 
     private static final class Card {
         private Notice notice;
-        private final EasedValue slide = EasedValue.ofSpeed(11);
-        private final EasedValue top = EasedValue.ofSpeed(9);
+
+        private final EasedValue slide = EasedValue.ofDuration(0.22f);
+        private final EasedValue top = EasedValue.ofDuration(0.18f);
         private final EasedValue hover = EasedValue.ofSpeed(14);
 
         private final EasedValue fade = EasedValue.ofSpeed(6);
@@ -159,8 +160,12 @@ final class NoticeBar extends Element {
     }
 
     private int findX(Card card) {
-        return this.getWidth() - EDGE - card.width + Math.round(card.slide.getValue() * (card.width + EDGE))
-                + Math.round((1 - card.fade.getValue()) * DRIFT);
+        return (int) Math.floor(this.findSlidX(card));
+    }
+
+    private float findSlidX(Card card) {
+        return this.getWidth() - EDGE - card.width + card.slide.getValue() * (card.width + EDGE)
+                + (1 - card.fade.getValue()) * DRIFT;
     }
 
     @Override
@@ -178,11 +183,13 @@ final class NoticeBar extends Element {
                     DETAIL_LINES) : List.of();
             card.height = 15 + titleLines.size() * LINE + (detailed ? 3 + detailLines.size() * LINE : 0);
             int h = card.height;
-            int x = this.findX(card);
-            int y = Math.round(card.top.getValue());
+            float slidX = this.findSlidX(card);
+            int x = (int) Math.floor(slidX);
+            int y = (int) Math.floor(card.top.getValue());
             if (x >= this.getWidth()) {
                 continue;
             }
+            canvas.pushShift(slidX - x, card.top.getValue() - y);
             int kind = notice.kind().getColor();
             float hover = card.hover.getValue();
             float a = alpha * card.fade.getValue();
@@ -216,6 +223,7 @@ final class NoticeBar extends Element {
                 canvas.fill(x + 3, y + h - 1, x + 3 + drained, y + h,
                         Colors.fade(Colors.mix(Palette.PANEL, kind, 0.5f), a));
             }
+            canvas.popShift();
         }
     }
 }
