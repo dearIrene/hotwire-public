@@ -110,6 +110,18 @@ public final class GameClasses implements SwitchApplier.Game {
     }
 
     @Override
+    public byte @Nullable [] findClassFile(String internalName) {
+        SoftReference<byte[]> retained = this.originals.get(internalName);
+        byte[] known = retained == null ? null : retained.get();
+        if (known != null) {
+            return known;
+        }
+        Class<?> loaded = this.findLoaded(internalName);
+        byte[] raw = loaded == null ? null : PreMixinReads.readFile(internalName, loaded);
+        return raw != null ? raw : this.findOriginalBytes(internalName);
+    }
+
+    @Override
     public void useConfigs(Map<String, byte[]> configs) {
         this.updatedConfigs.putAll(configs);
     }

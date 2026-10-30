@@ -38,6 +38,10 @@ public final class SwitchApplier {
 
         byte @Nullable [] findOriginalBytes(String internalName);
 
+        default byte @Nullable [] findClassFile(String internalName) {
+            return this.findOriginalBytes(internalName);
+        }
+
         byte @Nullable [] findConfigBytes(String config);
 
         default void useConfigs(Map<String, byte[]> configs) {

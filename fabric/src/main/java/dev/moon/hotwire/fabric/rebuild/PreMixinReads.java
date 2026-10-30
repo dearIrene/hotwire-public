@@ -58,6 +58,18 @@ final class PreMixinReads {
         }
     }
 
+    static byte @Nullable [] readFile(String internal, Class<?> loaded) {
+        URL file = findFile(internal, loaded);
+        if (file == null) {
+            return null;
+        }
+        try (InputStream in = file.openStream()) {
+            return in.readAllBytes();
+        } catch (IOException | RuntimeException e) {
+            return null;
+        }
+    }
+
     private static @Nullable URL findFile(String internal, Class<?> loaded) {
         CodeSource source = loaded.getProtectionDomain().getCodeSource();
         URL location = source == null ? null : source.getLocation();

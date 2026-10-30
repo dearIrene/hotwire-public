@@ -59,7 +59,7 @@ final class DuckRebridge {
             for (String name : mixins.owns()) {
                 Class<?> loaded = game.findLoaded(name);
 
-                byte[] jar = loaded == null ? null : game.findOriginalBytes(name);
+                byte[] jar = loaded == null ? null : game.findClassFile(name);
                 if (loaded != null && (jar == null || DuckBridge.names(jar, declares ? fresh : Set.of(), moved))) {
                     found.add(loaded);
                 }
