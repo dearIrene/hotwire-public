@@ -11,6 +11,7 @@ import dev.moon.hotwire.redefine.StopPoint;
 import java.lang.instrument.ClassFileTransformer;
 import java.util.ArrayList;
 import java.util.Collection;
+import java.util.Collections;
 import java.util.HashMap;
 import java.util.HashSet;
 import java.util.LinkedHashMap;
@@ -321,6 +322,10 @@ public final class SwitchApplier {
             dryRun = this.dryRun(switched, onAfter, true);
             SwitchTimes.mark("mixins retained");
             ClassRebuilder.PreparedRebuild prepared = dryRun.prepared();
+
+            if (Collections.disjoint(switched, onAfter)) {
+                sites.set();
+            }
             if (prepared != null) {
                 this.applyWhilePaused(prepared, sites.setBefore(whilePaused), plan == null ? Set.of() : plan.flipped());
             } else {
