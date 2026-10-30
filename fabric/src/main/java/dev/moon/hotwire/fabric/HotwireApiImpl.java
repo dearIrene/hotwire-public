@@ -2,6 +2,7 @@ package dev.moon.hotwire.fabric;
 
 import dev.moon.hotwire.api.HotwireApi;
 import dev.moon.hotwire.api.ModState;
+import dev.moon.hotwire.api.OpeningPrompt;
 import dev.moon.hotwire.api.SwitchPreview;
 import dev.moon.hotwire.api.SwitchProgress;
 import dev.moon.hotwire.api.SwitchResult;
@@ -11,6 +12,7 @@ import dev.moon.hotwire.plan.SwitchPlan;
 import dev.moon.hotwire.switching.CallerBlocks;
 import dev.moon.hotwire.switching.ModSwitcher;
 import dev.moon.hotwire.switching.PlayerMessages;
+import dev.moon.hotwire.ui.FirstOpenPanel;
 import dev.moon.hotwire.ui.Lang;
 import dev.moon.hotwire.ui.Progress;
 import dev.moon.hotwire.ui.PromptScreen;
@@ -140,6 +142,57 @@ public final class HotwireApiImpl implements HotwireApi {
         }
         Minecraft.getInstance().execute(() -> openPrompt(engine));
         return true;
+    }
+
+    @Override
+    public @Nullable OpeningPrompt findOpeningPrompt() {
+        HotwireEngine engine = HotwireClient.findEngine();
+        if (engine == null || engine.isFirstOpenAccepted()) {
+            return null;
+        }
+
+        String asker = findCallers().findAsker();
+        if (asker != null) {
+            PROMPTED.add(asker);
+        }
+        return new OpeningPrompt() {
+            @Override
+            public String getTitle() {
+                return Lang.get("hotwire.first_open.title");
+            }
+
+            @Override
+            public List<String> getLines() {
+                return List.of(Lang.get("hotwire.first_open.what"), Lang.get("hotwire.first_open.work"),
+                        Lang.get("hotwire.first_open.report"), Lang.get("hotwire.first_open.crash"));
+            }
+
+            @Override
+            public String getAcceptText() {
+                return Lang.get("hotwire.first_open.accept");
+            }
+
+            @Override
+            public String getOpenHotwireText() {
+                return Lang.get("hotwire.first_open.open_hotwire");
+            }
+
+            @Override
+            public int getWaitSeconds() {
+                return (int) FirstOpenPanel.WAIT;
+            }
+
+            @Override
+            public void accept() {
+                Minecraft.getInstance().execute(engine::acceptFirstOpen);
+            }
+
+            @Override
+            public void acceptAndOpenHotwire() {
+                this.accept();
+                Minecraft.getInstance().execute(engine::open);
+            }
+        };
     }
 
     @Override

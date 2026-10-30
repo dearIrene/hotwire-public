@@ -4,8 +4,8 @@ import java.util.ArrayList;
 import java.util.List;
 import org.jspecify.annotations.Nullable;
 
-final class FirstOpenPanel extends Panel {
-    static final float WAIT = 10;
+public final class FirstOpenPanel extends Panel {
+    public static final float WAIT = 10;
     static final int WIDTH = 380;
     static final int ACCEPT_W = 130;
     static final int LINE = 14;

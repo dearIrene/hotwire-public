@@ -6,6 +6,7 @@ import java.util.List;
 import java.util.Optional;
 import java.util.concurrent.CompletableFuture;
 import java.util.function.Consumer;
+import org.jspecify.annotations.Nullable;
 
 public interface HotwireApi {
     static HotwireApi getInstance() {
@@ -35,6 +36,8 @@ public interface HotwireApi {
     void addListener(Consumer<SwitchResult> listener);
 
     boolean showPrompt();
+
+    @Nullable OpeningPrompt findOpeningPrompt();
 
     void openScreen();
 

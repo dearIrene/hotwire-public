@@ -2,6 +2,7 @@ public abstract interface dev.moon.hotwire.api.HotwireApi
   public abstract boolean dev.moon.hotwire.api.HotwireApi.isReady()
   public abstract boolean dev.moon.hotwire.api.HotwireApi.isSwitching()
   public abstract boolean dev.moon.hotwire.api.HotwireApi.showPrompt()
+  public abstract dev.moon.hotwire.api.OpeningPrompt dev.moon.hotwire.api.HotwireApi.findOpeningPrompt()
   public abstract dev.moon.hotwire.api.SwitchPreview dev.moon.hotwire.api.HotwireApi.previewOff(java.util.Collection<java.lang.String>)
   public abstract dev.moon.hotwire.api.SwitchPreview dev.moon.hotwire.api.HotwireApi.previewOn(java.util.Collection<java.lang.String>)
   public abstract dev.moon.hotwire.api.SwitchProgress dev.moon.hotwire.api.HotwireApi.getProgress()
@@ -25,6 +26,14 @@ public final dev.moon.hotwire.api.ModState
   public java.lang.String dev.moon.hotwire.api.ModState.id()
   public java.lang.String dev.moon.hotwire.api.ModState.name()
   public java.lang.String dev.moon.hotwire.api.ModState.version()
+public abstract interface dev.moon.hotwire.api.OpeningPrompt
+  public abstract int dev.moon.hotwire.api.OpeningPrompt.getWaitSeconds()
+  public abstract java.lang.String dev.moon.hotwire.api.OpeningPrompt.getAcceptText()
+  public abstract java.lang.String dev.moon.hotwire.api.OpeningPrompt.getOpenHotwireText()
+  public abstract java.lang.String dev.moon.hotwire.api.OpeningPrompt.getTitle()
+  public abstract java.util.List<java.lang.String> dev.moon.hotwire.api.OpeningPrompt.getLines()
+  public abstract void dev.moon.hotwire.api.OpeningPrompt.accept()
+  public abstract void dev.moon.hotwire.api.OpeningPrompt.acceptAndOpenHotwire()
 public final dev.moon.hotwire.api.SwitchPreview
   public boolean dev.moon.hotwire.api.SwitchPreview.possible()
   public dev.moon.hotwire.api.SwitchPreview(boolean,java.util.List<java.lang.String>,java.lang.String)
