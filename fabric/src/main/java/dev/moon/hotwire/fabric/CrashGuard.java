@@ -12,6 +12,7 @@ import dev.moon.hotwire.ui.Lang;
 import java.lang.annotation.Annotation;
 import java.lang.reflect.Method;
 import java.util.ArrayList;
+import java.util.Arrays;
 import java.util.Collection;
 import java.util.List;
 import java.util.Set;
@@ -142,7 +143,7 @@ public final class CrashGuard {
         ClassLoader game = CrashGuard.class.getClassLoader();
         int depth = 0;
         for (Throwable at = thrown; at != null && frames.size() < FRAMES && depth < 32; at = at.getCause(), depth++) {
-            for (StackTraceElement element : at.getStackTrace()) {
+            for (StackTraceElement element : findFramesAbove(at)) {
                 try {
                     frames.add(new CallerOwner.Frame(Class.forName(element.getClassName(), false, game),
                             element.getMethodName()));
@@ -152,6 +153,16 @@ public final class CrashGuard {
         }
         CallerOwner.Owner owner = GameRegistrations.findOwnerOf(frames);
         return owner == null ? null : owner.mod();
+    }
+
+    private static List<StackTraceElement> findFramesAbove(Throwable thrown) {
+        StackTraceElement[] frames = thrown.getStackTrace();
+        for (int at = 0; at < frames.length; at++) {
+            if (frames[at].getMethodName().startsWith("hotwire$catch")) {
+                return Arrays.asList(frames).subList(0, at);
+            }
+        }
+        return Arrays.asList(frames);
     }
 
     private static @Nullable String findMergedOwner(Throwable thrown) {
@@ -171,7 +182,7 @@ public final class CrashGuard {
 
     private static @Nullable String findMergedOwnerOf(Throwable thrown) {
         ClassLoader game = CrashGuard.class.getClassLoader();
-        for (StackTraceElement element : thrown.getStackTrace()) {
+        for (StackTraceElement element : findFramesAbove(thrown)) {
             Class<?> type;
             try {
                 type = Class.forName(element.getClassName(), false, game);
