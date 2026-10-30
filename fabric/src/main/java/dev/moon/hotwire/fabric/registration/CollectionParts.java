@@ -3,8 +3,10 @@ package dev.moon.hotwire.fabric.registration;
 import dev.moon.hotwire.redefine.FieldSlots;
 import java.lang.reflect.Constructor;
 import java.lang.reflect.Field;
+import java.util.Collection;
 import java.util.ConcurrentModificationException;
 import java.util.List;
+import java.util.Map;
 import java.util.NoSuchElementException;
 import java.util.Set;
 import java.util.concurrent.ConcurrentHashMap;
@@ -101,5 +103,11 @@ final class CollectionParts {
                 }
             }
         }
+    }
+
+    static boolean isGameObject(Object value) {
+        String name = value.getClass().getName();
+        return !(value instanceof Collection<?>) && !(value instanceof Map<?, ?>) && !(value instanceof Object[])
+                && (name.startsWith("net.minecraft.") || name.startsWith("com.mojang."));
     }
 }

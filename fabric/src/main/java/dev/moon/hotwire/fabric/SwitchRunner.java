@@ -333,6 +333,11 @@ public final class SwitchRunner {
             }
             if (result instanceof ModSwitcher.Result.Done) {
                 CrashGuard.onBackOn(coming.order());
+
+                if (isLookingAhead()) {
+                    this.looking.execute(() -> ElementLook.findAhead(this.fieldReferences, coming.order(),
+                            this.switcher::isOn));
+                }
             } else if (!coming.isRefused()) {
                 List<String> stillOff = coming.order().stream().filter(id -> !this.switcher.isOn(id)).toList();
                 if (allBack.get()) {

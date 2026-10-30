@@ -108,11 +108,13 @@ public final class HandlerGuards {
 
     public static @Nullable String findModInHandlerName(String name) {
         String[] parts = name.split("[$]", 4);
-        if (parts.length < 4 || parts[1].length() != 6 || parts[2].isEmpty()
-                || !(KINDS.containsKey(parts[0]) || parts[0].equals("redirect"))) {
-            return null;
-        }
-        return parts[2];
+        return isHandlerName(name) && parts.length == 4 && !parts[2].isEmpty() ? parts[2] : null;
+    }
+
+    public static boolean isHandlerName(String name) {
+        String[] parts = name.split("[$]", 4);
+        return parts.length >= 3 && parts[1].length() == 6
+                && (KINDS.containsKey(parts[0]) || parts[0].equals("redirect"));
     }
 
     public static Set<String> findBehavingAt(String internalName) {
@@ -257,7 +259,7 @@ public final class HandlerGuards {
         Map<String, String> mixinOfHandler = new HashMap<>();
         for (MethodNode method : node.methods) {
             String mixin = findMerged(method);
-            if (mixin != null && findModInHandlerName(method.name) != null) {
+            if (mixin != null && isHandlerName(method.name)) {
                 mixinOfHandler.put(method.name + method.desc, mixin);
             }
         }
@@ -401,7 +403,7 @@ public final class HandlerGuards {
                         && site.bsmArgs[0] instanceof String of) {
                     guarded.add(of);
                 } else if (insn instanceof InvokeDynamicInsnNode site && !isSite(site.bsm)
-                        && findModInHandlerName(site.name) != null) {
+                        && isHandlerName(site.name)) {
                     for (Map.Entry<String, String> handler : handlers.entrySet()) {
                         if (handler.getKey().startsWith(site.name + "(")) {
                             markUnflippable(internalName, handler.getValue());

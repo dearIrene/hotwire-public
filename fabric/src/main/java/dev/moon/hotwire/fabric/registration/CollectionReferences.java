@@ -13,7 +13,6 @@ import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Objects;
-import java.util.PriorityQueue;
 import java.util.Set;
 import java.util.function.Consumer;
 import java.util.function.Supplier;
@@ -22,15 +21,13 @@ import org.jspecify.annotations.Nullable;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
-final class CollectionReferences {
+final class CollectionReferences implements FixedLists.Walk {
     private static final Logger LOGGER = LoggerFactory.getLogger(CollectionReferences.class);
 
     private static final int LARGEST = 100_000;
 
-    private static final int WRAPPERS_IN = 512;
-
+    static final int WRAPPERS_IN = 512;
     private static final long SLOW_MILLIS = 100;
-    private static final int SLOWEST_NAMED = 8;
 
     private final Map<String, List<Removal>> removals = new HashMap<>();
     private final StaticRecomputer.Writer writer;
@@ -41,13 +38,9 @@ final class CollectionReferences {
     private ElementOwners owners = new ElementOwners(List.of(), Set.of());
     private Map<String, List<Removal>> mine = Map.of();
 
-    private final Map<String, Integer> notedBy = new HashMap<>();
-
     private @Nullable String readingStaticsOf;
-    private int ownLeft;
 
-    private int filed;
-    private int unfiled;
+    private WalkReport report = new WalkReport();
 
     private boolean inSmall;
 
@@ -98,14 +91,22 @@ final class CollectionReferences {
 
     private static final int WRAPPED_BELOW = 3;
 
-    private static boolean isGameObject(Object value) {
-        String name = value.getClass().getName();
-        return !(value instanceof Collection<?>) && !(value instanceof Map<?, ?>) && !(value instanceof Object[])
-                && (name.startsWith("net.minecraft.") || name.startsWith("com.mojang."));
+    private void noteWrappedInside(Object holder, int steps) {
+        CollectionNotes notes = ElementLook.isLooking() ? this.look.getNotes() : null;
+        if (notes != null) {
+            notes.begin(holder, new CollectionNotes.Origin(this.readingStaticsOf, false, null));
+        }
+        try {
+            this.noteWrappedFields(holder, steps);
+        } finally {
+            if (notes != null) {
+                notes.end(holder, true);
+            }
+        }
     }
 
     @SuppressWarnings("ReferenceEquality")
-    private void noteWrappedInside(Object holder, int steps) {
+    private void noteWrappedFields(Object holder, int steps) {
         for (FieldSlots.Slot field : Fields.getReferenceFields(holder.getClass(), false)) {
             Object value;
             try {
@@ -149,6 +150,38 @@ final class CollectionReferences {
         }
     }
 
+    private void readStatic(FieldSlots.Slot field, Object value, boolean game) {
+        CollectionNotes notes = ElementLook.isLooking() ? this.look.getNotes() : null;
+        if (notes != null) {
+            notes.begin(value, new CollectionNotes.Origin(this.readingStaticsOf, game, field));
+        }
+        boolean completed = false;
+        try {
+            if (game && value instanceof Map<?, ?> map && map.size() <= LARGEST) {
+                this.readChanging(map, () -> this.removeFromNamespaced(map));
+            }
+            this.collect(value);
+            if (value instanceof List<?> list && list.size() <= LARGEST && CollectionParts.isFixedSize(list)
+                    && field.getType().isAssignableFrom(List.class)) {
+                FixedLists.removeFromField(this, field, null);
+            }
+
+            if (game && CollectionParts.isGameObject(value)) {
+                this.noteWrappedInside(value, WRAPPED_BELOW);
+            }
+
+            if (!(value instanceof Collection<?>) && !(value instanceof Map<?, ?>) && !(value instanceof Object[])
+                    && (ElementLook.isLooking() || this.owners.findOwnerAmong(value) == null)) {
+                this.lookInto(value);
+            }
+            completed = true;
+        } finally {
+            if (notes != null) {
+                notes.end(value, completed);
+            }
+        }
+    }
+
     private void begin(List<String> mods) {
         this.seen = Collections.newSetFromMap(new IdentityHashMap<>());
         this.mods = List.copyOf(mods);
@@ -162,142 +195,78 @@ final class CollectionReferences {
             HandedSearch handed) {
         long began = System.nanoTime();
         this.begin(mods);
+        this.report = new WalkReport();
 
-        PriorityQueue<Map.Entry<Long, String>> slowest = new PriorityQueue<>(Map.Entry.comparingByKey());
-
-        this.ownLeft = 0;
+        CollectionNotes notes = ElementLook.isLooking() ? this.look.getNotes() : null;
+        boolean every = notes != null && notes.isForEvery();
         long holdersBegan = System.nanoTime();
+        if (notes != null) {
+            notes.setInWorld(true);
+        }
         for (Object holder : holders) {
             ElementLook.stopIfAsked();
             if (this.owners.findOwnerAmong(holder) == null) {
                 this.lookInto(holder);
             }
         }
-        slowest.add(Map.entry(System.nanoTime() - holdersBegan, holders.size() + " game objects"));
+        this.report.time(holdersBegan, holders.size() + " game objects");
         long handedBegan = System.nanoTime();
         for (Object holder : handed.findHolders()) {
             if (this.seen.add(holder)) {
                 this.collect(holder);
             }
         }
-        slowest.add(Map.entry(System.nanoTime() - handedBegan, "what was handed to " + handed.consumers()));
+        if (notes != null) {
+            notes.setInWorld(false);
+        }
+        this.report.time(handedBegan, "what was handed to " + handed.consumers());
         List<Class<?>> ordered = new ArrayList<>(statics);
         ordered.sort(Comparator.comparing(owner -> GameRegistrations.findModOf(owner) != null));
+        int skipped = 0;
         for (Class<?> owner : ordered) {
             ElementLook.stopIfAsked();
+
+            if (notes != null && every && notes.hasReadStatics(owner)) {
+                skipped++;
+                continue;
+            }
             long ownerBegan = System.nanoTime();
             boolean game = owner.getName().startsWith("net.minecraft.") || owner.getName().startsWith("com.mojang.");
             this.readingStaticsOf = GameRegistrations.findModOf(owner);
             for (FieldSlots.Slot field : Fields.getReferenceFields(owner, true)) {
                 Object value = CollectionParts.read(field, null);
                 if (value != null && this.seen.add(value)) {
-                    if (game && value instanceof Map<?, ?> map && map.size() <= LARGEST) {
-                        this.readChanging(map, () -> this.removeFromNamespaced(map));
-                    }
-                    this.collect(value);
-                    if (value instanceof List<?> list && list.size() <= LARGEST && CollectionParts.isFixedSize(list)
-                            && field.getType().isAssignableFrom(List.class)) {
-                        this.removeFromFixedList(field, null);
-                    }
-
-                    if (game && isGameObject(value)) {
-                        this.noteWrappedInside(value, WRAPPED_BELOW);
-                    }
-
-                    if (!(value instanceof Collection<?>) && !(value instanceof Map<?, ?>)
-                            && !(value instanceof Object[])
-                            && (ElementLook.isLooking() || this.owners.findOwnerAmong(value) == null)) {
-                        this.lookInto(value);
-                    }
+                    this.readStatic(field, value, game);
                 }
             }
-            slowest.add(Map.entry(System.nanoTime() - ownerBegan, owner.getName()));
-            if (slowest.size() > SLOWEST_NAMED) {
-                slowest.poll();
+            if (notes != null) {
+                notes.markStaticsRead(owner);
             }
+            this.report.time(ownerBegan, owner.getName());
+        }
+        if (notes != null && every) {
+            long againBegan = System.nanoTime();
+            int again = 0;
+            for (Object container : notes.findContainers()) {
+                ElementLook.stopIfAsked();
+                if (!this.seen.add(container)) {
+                    continue;
+                }
+                again++;
+                CollectionNotes.Origin origin = notes.findOrigin(container);
+                this.readingStaticsOf = origin.staticsOf();
+                if (origin.field() != null) {
+                    this.readStatic(origin.field(), container, origin.game());
+                } else {
+                    this.collect(container);
+                }
+            }
+            LOGGER.info("[Hotwire] the look read {} collections of the notes again in {} ms, and passed the statics"
+                    + " of {} classes read before", again, (System.nanoTime() - againBegan) / 1_000_000, skipped);
         }
         this.readingStaticsOf = null;
-        if (ElementLook.isLooking() && !this.notedBy.isEmpty()) {
-            List<String> most = this.notedBy.entrySet().stream()
-                    .sorted(Map.Entry.<String, Integer>comparingByValue().reversed()).limit(SLOWEST_NAMED)
-                    .map(entry -> entry.getKey() + " " + entry.getValue()).toList();
-            LOGGER.info("[Hotwire] the look noted {} takes, most of them of {}", this.notedBy.values().stream()
-                    .mapToInt(Integer::intValue).sum(), most);
-            LOGGER.info("[Hotwire] {} of each mod's own objects in its own lists were left where they are; {} takes"
-                    + " were filed under the mods they could be, {} any hold asks", this.ownLeft, this.filed,
-                    this.unfiled);
-            this.filed = 0;
-            this.unfiled = 0;
-            this.notedBy.clear();
-            List<String> widest = this.candidates.takeWidest(SLOWEST_NAMED);
-            if (!widest.isEmpty()) {
-                LOGGER.info("[Hotwire] takes filed under 50 mods or more, by their element's class: {}", widest);
-            }
-        }
-        long millis = (System.nanoTime() - began) / 1_000_000;
-        if (millis >= SLOW_MILLIS) {
-            List<String> named = new ArrayList<>();
-            slowest.stream().sorted(Map.Entry.<Long, String>comparingByKey().reversed())
-                    .forEach(one -> named.add(one.getValue() + " " + one.getKey() / 1_000_000 + " ms"));
-            LOGGER.info("[Hotwire] {} classes' statics looked through for {} in {} ms; {}; slowest {}", statics.size(),
-                    mods, millis, this.owners.getWrappers().describe(), named);
-        }
-    }
-
-    private void removeFromFixedValue(Map<Object, Object> entries, Object key) {
-        if (!(entries.get(key) instanceof List<?> now)) {
-            return;
-        }
-        boolean outer = this.inSmall;
-        this.inSmall = now.size() <= WRAPPERS_IN;
-        List<Object> retained = new ArrayList<>();
-        Map<String, List<Removal>> out = new LinkedHashMap<>();
-        for (int index = 0; index < now.size(); index++) {
-            Object item = now.get(index);
-            String mod = item == null ? null : this.owners.findOwnerOf(item, this.inSmall);
-            if (mod != null) {
-                out.computeIfAbsent(mod, any -> new ArrayList<>())
-                        .add(new Removal.InFixedValue(entries, key, index, item));
-            } else {
-                retained.add(item);
-            }
-        }
-        this.inSmall = outer;
-        if (!out.isEmpty() && !this.look.hasNoted(() -> this.removeFromFixedValue(entries, key))) {
-            entries.put(key, Collections.unmodifiableList(retained));
-            out.forEach((mod, removed) -> this.getRemovalsOf(mod).addAll(removed));
-        }
-    }
-
-    private void removeFromFixedList(FieldSlots.Slot field, @Nullable Object holder) {
-        if (!(CollectionParts.read(field, holder) instanceof List<?> now)) {
-            return;
-        }
-        this.inSmall = now.size() <= WRAPPERS_IN;
-        List<Object> retained = new ArrayList<>();
-        Map<String, List<Removal>> out = new LinkedHashMap<>();
-        for (int index = 0; index < now.size(); index++) {
-            Object item = now.get(index);
-            String mod = item == null ? null : this.owners.findOwnerOf(item, this.inSmall);
-            if (mod != null) {
-                out.computeIfAbsent(mod, any -> new ArrayList<>())
-                        .add(new Removal.InFixedList(field, holder, index, item, this.writer));
-            } else {
-                retained.add(item);
-            }
-        }
-
-        if (retained.isEmpty() && now.stream().allMatch(item -> item instanceof Enum<?>)) {
-            return;
-        }
-        if (!out.isEmpty() && !this.look.hasNoted(() -> this.removeFromFixedList(field, holder))) {
-            try {
-                this.writer.write(field, holder, Collections.unmodifiableList(retained));
-                out.forEach((mod, removed) -> this.getRemovalsOf(mod).addAll(removed));
-            } catch (IllegalAccessException e) {
-                LOGGER.warn("[Hotwire] {} keeps {}'s elements: {}", field, out.keySet(), e.toString());
-            }
-        }
+        this.report.end(ElementLook.isLooking(), mods, statics.size(), began, this.owners.getWrappers().describe(),
+                this.candidates);
     }
 
     private void takeOrNote(String owner, @Nullable Set<String> candidates, Supplier<@Nullable String> asked,
@@ -312,16 +281,12 @@ final class CollectionReferences {
                 this.inSmall = was;
             }
         };
-        if (candidates == null) {
-            this.unfiled++;
-        } else {
-            this.filed++;
-        }
+        this.report.count(candidates != null);
         if (!ElementLook.isLooking() || !this.look.hasNoted(new ElementTakes.NotedTake(whose, take,
                 this.candidates.withOwner(candidates, owner)))) {
             take.accept(owner);
         } else {
-            this.notedBy.merge(owner, 1, Integer::sum);
+            this.report.countNoted(owner);
         }
     }
 
@@ -331,8 +296,34 @@ final class CollectionReferences {
                 && mod.equals(GameRegistrations.findModOf(item.getClass()));
     }
 
-    private List<Removal> getRemovalsOf(String mod) {
+    @Override
+    public List<Removal> getRemovalsOf(String mod) {
         return this.mine.computeIfAbsent(mod, any -> new ArrayList<>());
+    }
+
+    @Override
+    public ElementOwners getOwners() {
+        return this.owners;
+    }
+
+    @Override
+    public boolean isInSmall() {
+        return this.inSmall;
+    }
+
+    @Override
+    public void setInSmall(boolean small) {
+        this.inSmall = small;
+    }
+
+    @Override
+    public ElementLook getLook() {
+        return this.look;
+    }
+
+    @Override
+    public StaticRecomputer.Writer getWriter() {
+        return this.writer;
     }
 
     synchronized void putBack(Collection<String> mods) {
@@ -375,7 +366,7 @@ final class CollectionReferences {
 
                 if (value instanceof List<?> list && list.size() <= LARGEST && CollectionParts.isFixedSize(list)
                         && field.getType().isAssignableFrom(List.class)) {
-                    this.removeFromFixedList(field, holder);
+                    FixedLists.removeFromField(this, field, holder);
                 }
             } else if (value != null && Wrappers.isLookedInto(value) && this.seen.add(value)) {
                 for (FieldSlots.Slot inner : Fields.getReferenceFields(value.getClass(), false)) {
@@ -404,6 +395,11 @@ final class CollectionReferences {
     @SuppressWarnings("unchecked")
     private void collectOnce(Object value) {
         boolean outer = this.inSmall;
+        CollectionNotes notes = ElementLook.isLooking() ? this.look.getNotes() : null;
+        if (notes != null) {
+            notes.begin(value, new CollectionNotes.Origin(this.readingStaticsOf, false, null));
+        }
+        boolean completed = false;
         try {
             this.inSmall = switch (value) {
                 case Collection<?> all -> all.size() <= WRAPPERS_IN;
@@ -417,7 +413,7 @@ final class CollectionReferences {
                         Object item = items.get(index);
                         String mod = item == null ? null : this.owners.findOwnerOf(item, this.inSmall);
                         if (mod != null && this.isOwnPlain(mod, item)) {
-                            this.ownLeft++;
+                            this.report.countOwnLeft();
                         } else if (mod != null) {
                             this.takeOrNote(mod, this.candidates.find(item, this.inSmall),
                                     () -> this.owners.findOwnerOf(item, this.inSmall),
@@ -436,7 +432,7 @@ final class CollectionReferences {
                     for (Object item : new ArrayList<>(items)) {
                         String mod = item == null ? null : this.owners.findOwnerOf(item, this.inSmall);
                         if (mod != null && this.isOwnPlain(mod, item)) {
-                            this.ownLeft++;
+                            this.report.countOwnLeft();
                         } else if (mod != null) {
                             this.takeOrNote(mod, this.candidates.find(item, this.inSmall),
                                     () -> this.owners.findOwnerOf(item, this.inSmall),
@@ -469,7 +465,7 @@ final class CollectionReferences {
                 }
                 case Map<?, ?> map when map.size() <= LARGEST -> {
                     Map<Object, Object> entries = (Map<Object, Object>) map;
-                    int takesBefore = this.filed + this.unfiled;
+                    int takesBefore = this.report.countTakes();
                     boolean handlers = false;
                     for (Map.Entry<Object, Object> entry : Wrappers.copyEntries(entries)) {
                         Object key = entry.getKey();
@@ -503,7 +499,7 @@ final class CollectionReferences {
                             this.collect(nested);
                             if (nested instanceof List<?> list && list.size() <= LARGEST
                                     && CollectionParts.isFixedSize(list)) {
-                                this.removeFromFixedValue(entries, key);
+                                FixedLists.removeFromValue(this, entries, key);
                             }
                         } else if (element instanceof Map<?, ?> && this.seen.add(element)) {
                             this.collect(element);
@@ -514,17 +510,22 @@ final class CollectionReferences {
                         }
                     }
 
-                    if (handlers && ElementLook.isLooking() && this.filed + this.unfiled > takesBefore) {
+                    if (handlers && ElementLook.isLooking() && this.report.countTakes() > takesBefore) {
                         this.look.hasNoted(new ElementTakes.NotedTake(() -> "", any -> this.collect(map), null));
                     }
                 }
                 default -> {
                 }
             }
+            completed = true;
         } catch (UnsupportedOperationException | IllegalStateException e) {
             LOGGER.info("[Hotwire] {} keeps {}'s objects: it cannot change", value.getClass().getName(), this.mods);
+            completed = true;
         } finally {
             this.inSmall = outer;
+            if (notes != null) {
+                notes.end(value, completed);
+            }
         }
     }
 

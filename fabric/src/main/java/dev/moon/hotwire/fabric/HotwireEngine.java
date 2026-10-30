@@ -361,6 +361,10 @@ public final class HotwireEngine implements ModScreen.Game, AutoCloseable {
         return this.selfUpdate.findNewer();
     }
 
+    void showUpdateInChat() {
+        this.selfUpdate.showInChat();
+    }
+
     @Override
     public void updateHotwireAtNextStart() {
         this.selfUpdate.updateAtNextStart(this.getPendingChanges());

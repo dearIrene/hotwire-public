@@ -1,16 +1,11 @@
 package dev.moon.hotwire.fabric.registration;
 
-import java.util.ArrayList;
-import java.util.Arrays;
 import java.util.Collection;
-import java.util.HashMap;
 import java.util.List;
-import java.util.Map;
 import java.util.Set;
 import java.util.concurrent.CancellationException;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.function.Predicate;
-import java.util.stream.Stream;
 import org.jspecify.annotations.Nullable;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -18,41 +13,25 @@ import org.slf4j.LoggerFactory;
 public final class ElementLook {
     private static final Logger LOGGER = LoggerFactory.getLogger(ElementLook.class);
 
-    private static final long STANDS_NANOS = 120_000_000_000L;
-
     private static final long FRESH_NANOS = 15_000_000_000L;
 
-    private static final long REFRESH_NANOS = 60_000_000_000L;
-
     private static volatile boolean isOnlyLooking;
+    private static volatile boolean isLookingForEvery;
 
     private static volatile boolean isWarmingOnly;
 
     private static final Object ONE_LOOK = new Object();
 
-    private static volatile List<String> lookedFor = List.of();
-    private static volatile long lookedAt;
     private static volatile List<String> lookedForEvery = List.of();
     private static volatile long lookedEveryAt;
 
-    private static final Set<String> CHANGED = ConcurrentHashMap.newKeySet();
+    private static final Set<String> STALE = ConcurrentHashMap.newKeySet();
 
     private static volatile @Nullable Thread looking;
 
     private static volatile boolean stopAsked;
 
-    private record Notes(List<Runnable> takes, Map<String, int[]> places, List<String> mods, long at) {
-        boolean standsFor(Collection<String> walked) {
-            return this.mods.containsAll(walked) && System.nanoTime() - this.at < STANDS_NANOS
-                    && walked.stream().noneMatch(CHANGED::contains);
-        }
-    }
-
-    private @Nullable Notes wide;
-    private @Nullable Notes recent;
-
-    private @Nullable List<Runnable> building;
-    private List<String> buildingFor = List.of();
+    private final CollectionNotes notes = new CollectionNotes();
 
     public static void findAhead(FieldReferences references, Collection<String> mods, Predicate<String> on) {
         findAhead(references, mods, on, false);
@@ -84,6 +63,7 @@ public final class ElementLook {
             int priority = self.getPriority();
             looking = self;
             isOnlyLooking = true;
+            isLookingForEvery = every;
             try {
                 GameHold.runUnheld(() -> {
                     if (every) {
@@ -92,13 +72,10 @@ public final class ElementLook {
                         references.takeOutElementsAgain(mods, on);
                     }
                 });
+                STALE.removeAll(asked);
                 if (every) {
-                    CHANGED.removeAll(asked);
                     lookedForEvery = asked;
                     lookedEveryAt = System.nanoTime();
-                } else {
-                    lookedFor = asked;
-                    lookedAt = System.nanoTime();
                 }
             } catch (RuntimeException | LinkageError e) {
                 LOGGER.info("[Hotwire] the look ahead for {} ended early: {}", mods, e.toString());
@@ -114,6 +91,7 @@ public final class ElementLook {
         synchronized (ONE_LOOK) {
             looking = Thread.currentThread();
             isOnlyLooking = true;
+            isLookingForEvery = true;
             isWarmingOnly = true;
             try {
                 GameHold.runUnheld(() -> references.lookForEvery(mods, on));
@@ -153,17 +131,17 @@ public final class ElementLook {
 
     static void stopIfAsked() {
         if (isStopAsked()) {
-            throw new CancellationException("a switch began, which the notes before this look serve");
+            throw new CancellationException("a switch began, which the notes serves");
         }
     }
 
     public static void markChanged(Collection<String> mods) {
-        CHANGED.addAll(mods);
+        STALE.addAll(mods);
     }
 
     private static boolean isFreshForEvery(List<String> asked) {
-        return asked.stream().noneMatch(CHANGED::contains) && lookedForEvery.containsAll(asked)
-                && System.nanoTime() - lookedEveryAt < REFRESH_NANOS;
+        return asked.stream().noneMatch(STALE::contains) && lookedForEvery.containsAll(asked)
+                && System.nanoTime() - lookedEveryAt < FRESH_NANOS;
     }
 
     public static void giveWay() {
@@ -171,117 +149,50 @@ public final class ElementLook {
     }
 
     private static boolean stands(List<String> asked) {
-        if (asked.stream().anyMatch(CHANGED::contains)) {
-            return false;
-        }
-        long age = System.nanoTime() - lookedAt;
-        boolean recent = asked.equals(lookedFor) ? age < FRESH_NANOS
-                : lookedFor.containsAll(asked) && age < STANDS_NANOS;
-        return recent || (lookedForEvery.containsAll(asked) && System.nanoTime() - lookedEveryAt < STANDS_NANOS);
+        return lookedForEvery.containsAll(asked) && asked.stream().noneMatch(STALE::contains);
+    }
+
+    CollectionNotes getNotes() {
+        return this.notes;
     }
 
     @Nullable List<Runnable> open(List<String> walked) {
         if (isOnlyLooking) {
-            this.building = new ArrayList<>();
-            this.buildingFor = List.copyOf(walked);
+            this.notes.startLook(isLookingForEvery ? null : walked);
             return null;
         }
-
-        Notes ahead = this.findStanding(walked);
-        if (ahead != null) {
-            return ElementTakes.isCheckingSkips() ? ahead.takes() : findFor(ahead, walked);
+        if (this.isReadyFor(walked)) {
+            return this.notes.findTakesFor(walked, ElementTakes.isCheckingSkips());
         }
-        Notes last = this.wide;
-        if (last != null) {
-            LOGGER.info("[Hotwire] a walk for {} looks for itself: the last look was for {}, {} ms ago", walked,
-                    last.mods(), (System.nanoTime() - last.at()) / 1_000_000);
-        }
-
-        this.forget();
+        LOGGER.info("[Hotwire] a walk for {} looks for itself: the notes holds {} takes in {} collections, {}",
+                walked, this.notes.countTakes(), this.notes.countContainers(), lookedForEvery.isEmpty()
+                        ? "no look for every mod has ended" : "changed since: " + STALE);
         return null;
     }
 
     void close() {
-        List<Runnable> made = this.building;
-        if (isWarmingOnly) {
-            this.building = null;
-            this.buildingFor = List.of();
-        } else if (made != null) {
-            Notes notes = new Notes(made, findPlaces(made), this.buildingFor, System.nanoTime());
-            Notes before = this.wide;
-            if (before == null || notes.mods().containsAll(before.mods()) || !before.standsFor(List.of())) {
-                this.wide = notes;
-                this.recent = null;
-            } else {
-                this.recent = notes;
-            }
-            int any = notes.places().getOrDefault("", new int[0]).length;
-            List<String> most = notes.places().entrySet().stream().filter(entry -> !entry.getKey().isEmpty())
-                    .sorted((one, other) -> Integer.compare(other.getValue().length, one.getValue().length)).limit(5)
-                    .map(entry -> entry.getKey() + " " + entry.getValue().length).toList();
-            LOGGER.info("[Hotwire] of the look's {} notes, {} are asked by every off; filed most under {}", made.size(),
-                    any, most);
-            this.building = null;
-            this.buildingFor = List.of();
+        if (isOnlyLooking) {
+            LOGGER.info("[Hotwire] the notes holds {} takes in {} collections", this.notes.countTakes(),
+                    this.notes.countContainers());
         }
-    }
-
-    private static Map<String, int[]> findPlaces(List<Runnable> made) {
-        Map<String, List<Integer>> places = new HashMap<>();
-        for (int index = 0; index < made.size(); index++) {
-            Set<String> candidates = made.get(index) instanceof ElementTakes.NotedTake filed ? filed.candidates()
-                    : null;
-            int place = index;
-            for (String mod : candidates == null ? Set.of("") : candidates) {
-                places.computeIfAbsent(mod, any -> new ArrayList<>()).add(place);
-            }
-        }
-        Map<String, int[]> done = HashMap.newHashMap(places.size());
-        places.forEach((mod, list) -> done.put(mod, list.stream().mapToInt(Integer::intValue).toArray()));
-        return done;
-    }
-
-    private static List<Runnable> findFor(Notes notes, Collection<String> walked) {
-        return Stream.concat(Stream.of(""), walked.stream())
-                .flatMapToInt(mod -> Arrays.stream(notes.places().getOrDefault(mod, new int[0]))).sorted().distinct()
-                .mapToObj(notes.takes()::get).toList();
-    }
-
-    private @Nullable Notes findStanding(Collection<String> walked) {
-        Notes near = this.recent;
-        if (near != null && near.standsFor(walked)) {
-            return near;
-        }
-        Notes far = this.wide;
-        return far != null && far.standsFor(walked) ? far : null;
-    }
-
-    private void forget() {
-        this.wide = null;
-        this.recent = null;
-        lookedFor = List.of();
-        lookedForEvery = List.of();
     }
 
     boolean isReadyFor(Collection<String> walked) {
         boolean lookingHere = isOnlyLooking && Thread.currentThread().equals(looking);
-        return !lookingHere && this.findStanding(walked) != null;
+        return !lookingHere && stands(List.copyOf(walked));
     }
 
     boolean hasNoted(Runnable work) {
-        List<Runnable> noting = isOnlyLooking ? this.building : null;
-        if (noting != null) {
-            noting.add(work);
+        if (!isOnlyLooking) {
+            return false;
         }
-        return noting != null;
+        this.notes.note(work);
+        return true;
     }
 
     void drop() {
         if (isOnlyLooking) {
-            this.building = null;
-            this.buildingFor = List.of();
-            return;
+            this.notes.dropLook();
         }
-        this.forget();
     }
 }

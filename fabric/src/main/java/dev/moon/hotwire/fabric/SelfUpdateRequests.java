@@ -19,6 +19,8 @@ final class SelfUpdateRequests {
     private final Supplier<@Nullable ModScreen> screen;
     private final BiConsumer<String, Boolean> say;
 
+    private boolean toldInChat;
+
     SelfUpdateRequests(StoreJars jars, Supplier<@Nullable ModScreen> screen, BiConsumer<String, Boolean> say) {
         this.jars = jars;
         this.screen = screen;
@@ -31,7 +33,17 @@ final class SelfUpdateRequests {
             if (current != null) {
                 current.showNewerHotwire();
             }
+            this.showInChat();
         }));
+    }
+
+    void showInChat() {
+        if (this.toldInChat || this.findNewer().isEmpty() || Minecraft.getInstance().player == null) {
+            this.start();
+            return;
+        }
+        this.toldInChat = true;
+        UpdateChat.show();
     }
 
     String findNewer() {

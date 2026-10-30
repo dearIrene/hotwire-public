@@ -194,6 +194,10 @@ public final class FieldReferences {
         Map<String, String> modOfName = new HashMap<>();
         mods.forEach(mod -> classesOf.getOrDefault(mod, List.of()).forEach(type -> modOfName.put(type.getName(), mod)));
         ReflectedOwners.useNames(modOfName);
+
+        if (!ElementLook.isLooking()) {
+            ElementLook.giveWay();
+        }
         GameHold hold = GameHold.begin(Minecraft.getInstance());
         try {
             planned.forEach(this::putIn);

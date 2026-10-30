@@ -94,6 +94,7 @@
   "hotwire.self_update.next_start": "Update at next start puts the new jar in your mods folder when you close the game. You can undo it under Pending tasks.",
   "hotwire.self_update.button": "Update at next start",
   "hotwire.self_update.later": "Later",
+  "hotwire.self_update.chat": "Hotwire is out of date! Press here to update!",
   "hotwire.updates.none": "Every mod Modrinth knows is at its newest version for your game.",
   "hotwire.updates.asking": "Asking Modrinth about your mods...",
   "hotwire.updates.all": "Update all",
