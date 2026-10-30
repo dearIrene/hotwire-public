@@ -87,31 +87,43 @@ final class ChangedStatics {
         return recomputed;
     }
 
-    static Map<String, String> addDropped(ClassNode now, ClassNode running) {
+    static Map<String, String> addSwitched(ClassNode now, ClassNode running) {
+        Map<String, String> recomputed = addAfterMembersOnlyIn(running, now, now);
+        recomputed.putAll(addAfterMembersOnlyIn(now, running, now));
+        return recomputed;
+    }
+
+    private static Map<String, String> addAfterMembersOnlyIn(ClassNode has, ClassNode lacks, ClassNode now) {
         Set<String> standing = new HashSet<>();
-        for (MethodNode method : now.methods) {
+        for (MethodNode method : lacks.methods) {
             standing.add(makeKey(method.name) + method.desc);
         }
-        Set<String> dropped = new HashSet<>();
-        for (MethodNode method : running.methods) {
+        Set<String> only = new HashSet<>();
+        for (MethodNode method : has.methods) {
             String key = makeKey(method.name) + method.desc;
             if (!key.equals(method.name + method.desc) && !standing.contains(key)) {
-                dropped.add(method.name + method.desc);
+                only.add(method.name + method.desc);
             }
         }
+        Set<String> made = new HashSet<>();
+        for (MethodNode method : now.methods) {
+            made.add(method.name);
+        }
         Set<String> stored = new HashSet<>();
-        for (MethodNode method : running.methods) {
-            if (!method.name.equals("<clinit>") || dropped.isEmpty()) {
+        for (MethodNode method : has.methods) {
+            if (!method.name.equals("<clinit>") || only.isEmpty()) {
                 continue;
             }
             boolean after = false;
             for (AbstractInsnNode insn : method.instructions) {
-                if (insn instanceof MethodInsnNode call && call.owner.equals(running.name)
-                        && dropped.contains(call.name + call.desc)) {
+                if (insn instanceof MethodInsnNode call && call.owner.equals(has.name)
+                        && only.contains(call.name + call.desc)) {
                     after = true;
                 } else if (after && insn instanceof FieldInsnNode put && put.getOpcode() == Opcodes.PUTSTATIC
-                        && put.owner.equals(running.name)) {
-                    stored.add(put.name + put.desc);
+                        && put.owner.equals(has.name)) {
+                    if (!made.contains(PREFIX + put.name)) {
+                        stored.add(put.name + put.desc);
+                    }
                     after = false;
                 }
             }

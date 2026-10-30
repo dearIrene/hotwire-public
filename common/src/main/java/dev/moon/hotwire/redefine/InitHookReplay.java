@@ -194,7 +194,7 @@ public final class InitHookReplay {
                 : ChangedStatics.add(now, values));
         ClassNode runs = RetainedInitializers.read(running);
         if (isGameClass(name)) {
-            recomputed.putAll(ChangedStatics.addDropped(now, runs));
+            recomputed.putAll(ChangedStatics.addSwitched(now, runs));
         }
         if (original != null) {
             recomputed.putAll(ChangedStatics.addMadeFresh(now, RetainedInitializers.read(original), runs));
@@ -224,7 +224,7 @@ public final class InitHookReplay {
         new ClassReader(mixed).accept(now, 0);
         ClassNode runs = RetainedInitializers.read(running);
         Map<String, String> recomputed = new LinkedHashMap<>(isGameClass(now.name)
-                ? ChangedStatics.addDropped(now, runs) : Map.of());
+                ? ChangedStatics.addSwitched(now, runs) : Map.of());
         if (original != null && ChangedStatics.hasAddedObjectStatics(mixed, original, running)) {
             recomputed.putAll(ChangedStatics.addMadeFresh(now, RetainedInitializers.read(original), runs));
         }
