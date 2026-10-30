@@ -75,7 +75,7 @@ public final class LiveConnections {
                 if (made != null) {
                     swapped += write(slot, one, made) ? 1 : 0;
                 } else if (value instanceof List<?> list) {
-                    swapped += swapIn(list, slot, one, replaced);
+                    swapped += swapIn(list, replaced);
                     list.stream().filter(item -> item != null && isFollowed(item)).forEach(next::add);
                 } else if (isFollowed(value)) {
                     next.add(value);
@@ -108,31 +108,23 @@ public final class LiveConnections {
     }
 
     @SuppressWarnings("unchecked")
-    private static int swapIn(List<?> list, FieldSlots.Slot slot, Object holder,
-            IdentityHashMap<Object, Object> replaced) {
-        List<Object> copy = new ArrayList<>(list);
+    static int swapIn(List<?> list, IdentityHashMap<Object, Object> replaced) {
         int found = 0;
-        for (int at = 0; at < copy.size(); at++) {
-            Object made = copy.get(at) == null ? null : replaced.get(copy.get(at));
-            if (made != null) {
-                copy.set(at, made);
-                found++;
-            }
-        }
-        if (found == 0) {
-            return 0;
-        }
         try {
-            for (int at = 0; at < copy.size(); at++) {
-                ((List<Object>) list).set(at, copy.get(at));
+            for (int at = 0; at < list.size(); at++) {
+                Object made = list.get(at) == null ? null : replaced.get(list.get(at));
+                if (made != null) {
+                    ((List<Object>) list).set(at, made);
+                    found++;
+                }
             }
+        } catch (UnsupportedOperationException | IndexOutOfBoundsException | IllegalStateException fixed) {
             return found;
-        } catch (UnsupportedOperationException fixed) {
-            return write(slot, holder, Collections.unmodifiableList(copy)) ? found : 0;
         }
+        return found;
     }
 
-    private static boolean write(FieldSlots.Slot slot, Object holder, Object value) {
+    static boolean write(FieldSlots.Slot slot, @Nullable Object holder, Object value) {
         try {
             Field field = slot.getDeclaringClass().getDeclaredField(slot.getName());
             field.trySetAccessible();

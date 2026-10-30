@@ -34,6 +34,7 @@ import dev.moon.hotwire.fabric.registration.OffModCommands;
 import dev.moon.hotwire.fabric.registration.QuietThreads;
 import dev.moon.hotwire.fabric.registration.RegistryEntries;
 import dev.moon.hotwire.fabric.registration.RegistryHolders;
+import dev.moon.hotwire.fabric.registration.StaticCopies;
 import dev.moon.hotwire.fabric.report.GameReports;
 import dev.moon.hotwire.fabric.report.LoggedFaults;
 import dev.moon.hotwire.fabric.screen.ModIcons;
@@ -262,7 +263,11 @@ final class EngineStart {
                         .map(jar -> jar.patches().patches()).orElse(Set.of()), mod -> findHandedTo(mod, installed),
                 mixin::getGeneratedBy);
         InitHookReplay.writeStaticsWith(fieldReferences::writeStatic);
-        ReplacedStatics.swapWith(LiveConnections::swap);
+        StaticCopies.readClassesWith(instrumentation);
+        ReplacedStatics.swapWith(replaced -> {
+            LiveConnections.swap(replaced);
+            StaticCopies.swap(replaced);
+        });
         FinalWrites.writeWith(fieldReferences::writeFinal);
         FieldSlots.readStaticsWhen(fieldReferences::isInitialized);
         switcher.reopenToTurnOnWith(mod -> fieldReferences.hasRemovedFrom(mod)
