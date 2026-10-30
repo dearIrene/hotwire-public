@@ -466,8 +466,12 @@ public final class ClassRebuilder {
             }
             this.loadedBytes.remember(type, split.target());
             if (HandlerGuards.ENABLED) {
-                HandlerGuards.recordFrom(type.getName().replace('.', '/'), split.target());
-                HandlerGuards.recordSidecar(type.getName().replace('.', '/'), split.sidecar());
+                try {
+                    HandlerGuards.recordFrom(type.getName().replace('.', '/'), split.target());
+                    HandlerGuards.recordSidecar(type.getName().replace('.', '/'), split.sidecar());
+                } catch (RuntimeException e) {
+                    LOGGER.error("[Hotwire] the handler guards could not read {} as rebuilt", type.getName(), e);
+                }
             }
             this.carrying.put(type, prepared.carried().getOrDefault(type.getName().replace('.', '/'), Set.of()));
 

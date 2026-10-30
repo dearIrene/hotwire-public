@@ -1,6 +1,8 @@
 package dev.moon.hotwire.fabric.registration;
 
+import com.google.common.collect.MapMaker;
 import dev.moon.hotwire.redefine.FieldSlots;
+import java.lang.ref.WeakReference;
 import java.util.ArrayDeque;
 import java.util.ArrayList;
 import java.util.Collection;
@@ -22,14 +24,14 @@ final class CollectionNotes {
     record Origin(@Nullable String staticsOf, boolean game, FieldSlots.@Nullable Slot field) {
     }
 
-    private final IdentityHashMap<Object, List<Runnable>> takes = new IdentityHashMap<>();
+    private final Map<Object, List<Runnable>> takes = new MapMaker().weakKeys().makeMap();
 
-    private final List<Object> order = new ArrayList<>();
-    private final Set<Object> ofWorld = Collections.newSetFromMap(new IdentityHashMap<>());
-    private final IdentityHashMap<Object, Origin> origins = new IdentityHashMap<>();
+    private final List<WeakReference<Object>> order = new ArrayList<>();
+    private final Set<Object> ofWorld = Collections.newSetFromMap(new MapMaker().weakKeys().makeMap());
+    private final Map<Object, Origin> origins = new MapMaker().weakKeys().makeMap();
 
     private static final String ANY = "";
-    private final IdentityHashMap<Object, Set<String>> filedUnder = new IdentityHashMap<>();
+    private final Map<Object, Set<String>> filedUnder = new MapMaker().weakKeys().makeMap();
     private final Set<Class<?>> staticsRead = Collections.newSetFromMap(new IdentityHashMap<>());
 
     private @Nullable Collection<String> lookingFor;
@@ -45,9 +47,12 @@ final class CollectionNotes {
         this.every = mods == null;
         this.open.clear();
         if (this.every) {
-            this.ofWorld.forEach(this::remove);
+            List.copyOf(this.ofWorld).forEach(this::remove);
             this.ofWorld.clear();
-            this.order.removeIf(container -> !this.takes.containsKey(container));
+            this.order.removeIf(weak -> {
+                Object container = weak.get();
+                return container == null || !this.takes.containsKey(container);
+            });
             this.takes.remove(NOWHERE);
         }
         this.toRead = this.every ? this.listContainers() : List.of();
@@ -112,7 +117,7 @@ final class CollectionNotes {
             return;
         }
         if (frame.fresh() && this.takes.containsKey(container)) {
-            this.order.add(container);
+            this.order.add(new WeakReference<>(container));
         }
         Set<String> under = new HashSet<>();
         for (Runnable take : frame.now()) {
@@ -134,23 +139,29 @@ final class CollectionNotes {
         this.takes.computeIfAbsent(NOWHERE, any -> new ArrayList<>()).add(take);
     }
 
-    synchronized List<Runnable> findTakesFor(Collection<String> mods, boolean all) {
+    synchronized List<Runnable> findTakesFor(Collection<String> mods, boolean all, List<Object> containers) {
         List<Runnable> found = new ArrayList<>();
-        for (Object container : this.order) {
+        for (WeakReference<Object> weak : this.order) {
+            Object container = weak.get();
+            if (container == null) {
+                continue;
+            }
             Set<String> under = this.filedUnder.get(container);
             if (all || under == null || under.contains(ANY) || !Collections.disjoint(under, mods)) {
-                addFor(found, this.takes.getOrDefault(container, List.of()), mods, all);
+                addFor(found, containers, container, this.takes.getOrDefault(container, List.of()), mods, all);
             }
         }
-        addFor(found, this.takes.getOrDefault(NOWHERE, List.of()), mods, all);
+        addFor(found, containers, NOWHERE, this.takes.getOrDefault(NOWHERE, List.of()), mods, all);
         return found;
     }
 
-    private static void addFor(List<Runnable> found, List<Runnable> takes, Collection<String> mods, boolean all) {
+    private static void addFor(List<Runnable> found, List<Object> containers, Object container, List<Runnable> takes,
+            Collection<String> mods, boolean all) {
         for (Runnable take : takes) {
             if (all || !(take instanceof ElementTakes.NotedTake filed) || filed.candidates() == null
                     || !Collections.disjoint(filed.candidates(), mods)) {
                 found.add(take);
+                containers.add(container);
             }
         }
     }
@@ -161,8 +172,9 @@ final class CollectionNotes {
 
     synchronized List<Object> findContainersUnder(Collection<String> mods) {
         List<Object> found = new ArrayList<>();
-        for (Object container : this.order) {
-            Set<String> under = this.filedUnder.get(container);
+        for (WeakReference<Object> weak : this.order) {
+            Object container = weak.get();
+            Set<String> under = container == null ? null : this.filedUnder.get(container);
             if (under != null && (under.contains(ANY) || !Collections.disjoint(under, mods))) {
                 found.add(container);
             }
@@ -173,8 +185,10 @@ final class CollectionNotes {
     @SuppressWarnings("ReferenceEquality")
     private List<Object> listContainers() {
         List<Object> found = new ArrayList<>();
-        for (Object container : this.order) {
-            if (container != NOWHERE && this.takes.containsKey(container) && !this.ofWorld.contains(container)) {
+        for (WeakReference<Object> weak : this.order) {
+            Object container = weak.get();
+            if (container != null && container != NOWHERE && this.takes.containsKey(container)
+                    && !this.ofWorld.contains(container)) {
                 found.add(container);
             }
         }

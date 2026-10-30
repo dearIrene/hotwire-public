@@ -1,6 +1,6 @@
 package dev.moon.hotwire.ui;
 
-public record Notice(Kind kind, String title, String detail, String key, float progress) {
+public record Notice(Kind kind, String title, String detail, String key, float progress, float restSeconds) {
     public enum Kind {
         DONE(Palette.ACCENT), ON(Palette.ON), BAD(Palette.BAD), ASK(Palette.WARN);
 
@@ -16,7 +16,15 @@ public record Notice(Kind kind, String title, String detail, String key, float p
     }
 
     public Notice(Kind kind, String title, String detail, String key) {
-        this(kind, title, detail, key, -1);
+        this(kind, title, detail, key, -1, 0);
+    }
+
+    public Notice(Kind kind, String title, String detail, String key, float progress) {
+        this(kind, title, detail, key, progress, 0);
+    }
+
+    public Notice makeResting(float seconds) {
+        return new Notice(this.kind, this.title, this.detail, this.key, this.progress, seconds);
     }
 
     public static Notice ofDone(String title, String detail) {

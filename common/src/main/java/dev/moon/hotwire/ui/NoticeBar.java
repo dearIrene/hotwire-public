@@ -21,6 +21,10 @@ final class NoticeBar extends Element {
     private static final int DRIFT = 28;
     private static final String CROSS = "×";
 
+    private static float findRestOf(Notice notice) {
+        return notice.restSeconds() > 0 ? notice.restSeconds() : REST;
+    }
+
     private static final class Card {
         private Notice notice;
         private final EasedValue slide = EasedValue.ofSpeed(11);
@@ -28,7 +32,7 @@ final class NoticeBar extends Element {
         private final EasedValue hover = EasedValue.ofSpeed(14);
 
         private final EasedValue fade = EasedValue.ofSpeed(6);
-        private float rest = REST;
+        private float rest;
         private boolean leaving;
         private boolean dismissed;
 
@@ -37,6 +41,7 @@ final class NoticeBar extends Element {
 
         Card(Notice notice, int topAt) {
             this.notice = notice;
+            this.rest = findRestOf(notice);
             this.slide.snap(1);
             this.top.snap(topAt);
             this.fade.snap(1);
@@ -88,7 +93,7 @@ final class NoticeBar extends Element {
                 this.cards.add(0, new Card(notice, EDGE));
             } else if (!same.notice.equals(notice)) {
                 same.notice = notice;
-                same.rest = REST;
+                same.rest = findRestOf(notice);
             }
         }
         int at = EDGE;

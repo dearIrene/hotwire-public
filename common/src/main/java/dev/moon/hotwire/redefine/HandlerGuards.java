@@ -12,7 +12,6 @@ import java.util.HashSet;
 import java.util.List;
 import java.util.Locale;
 import java.util.Map;
-import java.util.Objects;
 import java.util.OptionalInt;
 import java.util.Set;
 import java.util.concurrent.ConcurrentHashMap;
@@ -115,6 +114,13 @@ public final class HandlerGuards {
         String[] parts = name.split("[$]", 4);
         return parts.length >= 3 && parts[1].length() == 6
                 && (KINDS.containsKey(parts[0]) || parts[0].equals("redirect"));
+    }
+
+    private static void noteDirect(String internalName, String handlerName) {
+        String mod = findModInHandlerName(handlerName);
+        if (mod != null) {
+            DIRECT_MODS.computeIfAbsent(internalName, name -> ConcurrentHashMap.newKeySet()).add(mod);
+        }
     }
 
     public static Set<String> findBehavingAt(String internalName) {
@@ -368,10 +374,7 @@ public final class HandlerGuards {
             }
             for (AbstractInsnNode insn : method.instructions) {
                 if (insn instanceof MethodInsnNode call && call.owner.equals(internalName)) {
-                    String mod = findModInHandlerName(call.name);
-                    if (mod != null) {
-                        DIRECT_MODS.computeIfAbsent(internalName, name -> ConcurrentHashMap.newKeySet()).add(mod);
-                    }
+                    noteDirect(internalName, call.name);
                 }
             }
         }
@@ -409,17 +412,13 @@ public final class HandlerGuards {
                             markUnflippable(internalName, handler.getValue());
                         }
                     }
-                    DIRECT_MODS.computeIfAbsent(internalName, name -> ConcurrentHashMap.newKeySet())
-                            .add(Objects.requireNonNull(findModInHandlerName(site.name)));
+                    noteDirect(internalName, site.name);
                 } else if (insn instanceof MethodInsnNode call) {
                     String direct = call.owner.equals(internalName) ? handlers.get(call.name + call.desc) : null;
                     if (direct != null) {
                         markUnflippable(internalName, direct);
                     }
-                    String mod = findModInHandlerName(call.name);
-                    if (mod != null) {
-                        DIRECT_MODS.computeIfAbsent(internalName, name -> ConcurrentHashMap.newKeySet()).add(mod);
-                    }
+                    noteDirect(internalName, call.name);
                 }
             }
         }

@@ -1,5 +1,6 @@
 package dev.moon.hotwire.fabric.registration;
 
+import java.util.ArrayList;
 import java.util.Collection;
 import java.util.List;
 import java.util.Set;
@@ -167,6 +168,12 @@ public final class ElementLook {
         return this.notes;
     }
 
+    private List<Object> containersOfTakes = List.of();
+
+    List<Object> getContainersOfTakes() {
+        return this.containersOfTakes;
+    }
+
     @Nullable List<Runnable> open(List<String> walked) {
         Mode mode = MODE.get();
         if (mode.isLook()) {
@@ -174,7 +181,8 @@ public final class ElementLook {
             return null;
         }
         if (this.isReadyFor(walked)) {
-            return this.notes.findTakesFor(walked, ElementTakes.isCheckingSkips());
+            this.containersOfTakes = new ArrayList<>();
+            return this.notes.findTakesFor(walked, ElementTakes.isCheckingSkips(), this.containersOfTakes);
         }
         LOGGER.info("[Hotwire] a walk for {} looks for itself: the notes holds {} takes in {} collections, {}",
                 walked, this.notes.countTakes(), this.notes.countContainers(), lookedForEvery.isEmpty()

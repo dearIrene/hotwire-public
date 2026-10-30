@@ -1,6 +1,7 @@
 package dev.moon.hotwire.fabric.registration;
 
 import dev.moon.hotwire.redefine.FieldSlots;
+import java.lang.ref.WeakReference;
 import java.lang.reflect.Proxy;
 import java.util.ArrayList;
 import java.util.Collection;
@@ -64,7 +65,8 @@ final class CollectionReferences implements FixedLists.Walk {
             } else {
                 this.begin(mods);
                 long began = System.nanoTime();
-                ElementTakes.runAll(ahead, mods);
+                ElementTakes.runAll(ahead, mods, this.look.getContainersOfTakes(),
+                        container -> String.valueOf(this.look.getNotes().findOrigin(container).staticsOf()));
                 long millis = (System.nanoTime() - began) / 1_000_000;
                 if (millis >= SLOW_MILLIS) {
                     LOGGER.info("[Hotwire] {} takes the look noted were run for {} in {} ms", ahead.size(), mods,
@@ -128,27 +130,30 @@ final class CollectionReferences implements FixedLists.Walk {
             if (mod == null || !this.mods.contains(mod)) {
                 continue;
             }
-            Object inner = Lambdas.findWrapped(value, field.getType(), mod);
-            if (inner == null) {
+
+            Object inner = ElementTakes.findWrappedValue(value, mod);
+            if (inner == null || !field.getType().isInstance(inner)) {
                 continue;
             }
             Object mods = value;
             String owner = mod;
+            WeakReference<Object> weak = new WeakReference<>(holder);
             this.takeOrNote(owner, this.candidates.withOwner(Set.of(), owner), () -> {
                 try {
-                    return field.get(holder) == mods ? owner : null;
+                    Object now = weak.get();
+                    return now != null && field.get(now) == mods ? owner : null;
                 } catch (ReflectiveOperationException | RuntimeException e) {
                     return null;
                 }
-            }, taker -> {
+            }, ElementTakes.makeWeak(holder, (now, taker) -> {
                 try {
-                    field.set(holder, inner);
-                    this.getRemovalsOf(taker).add(new Removal.InField(holder, field, mods, inner));
+                    field.set(now, inner);
+                    this.getRemovalsOf(taker).add(new Removal.InField(now, field, mods, inner));
                 } catch (ReflectiveOperationException | RuntimeException e) {
-                    LOGGER.info("[Hotwire] {}.{} keeps {}'s object: {}", holder.getClass().getName(),
+                    LOGGER.info("[Hotwire] {}.{} keeps {}'s object: {}", now.getClass().getName(),
                             field.getName(), taker, e.toString());
                 }
-            });
+            }));
         }
     }
 
@@ -429,7 +434,8 @@ final class CollectionReferences implements FixedLists.Walk {
                         } else if (mod != null) {
                             this.takeOrNote(mod, this.candidates.find(item, this.inSmall),
                                     () -> this.owners.findOwnerOf(item, this.inSmall),
-                                    owner -> ElementTakes.takeFromList(items, item, this.getRemovalsOf(owner)));
+                                    ElementTakes.makeWeak(items, (now, owner) ->
+                                            ElementTakes.takeFromList(now, item, this.getRemovalsOf(owner))));
                         } else if (item != null) {
                             this.followLambda(item);
                             if (!(item instanceof Collection<?>) && !(item instanceof Map<?, ?>)
@@ -448,7 +454,8 @@ final class CollectionReferences implements FixedLists.Walk {
                         } else if (mod != null) {
                             this.takeOrNote(mod, this.candidates.find(item, this.inSmall),
                                     () -> this.owners.findOwnerOf(item, this.inSmall),
-                                    owner -> ElementTakes.takeFromCollection(items, item, this.getRemovalsOf(owner)));
+                                    ElementTakes.makeWeak(items, (now, owner) ->
+                                            ElementTakes.takeFromCollection(now, item, this.getRemovalsOf(owner))));
                         }
                     }
                 }
@@ -470,8 +477,8 @@ final class CollectionReferences implements FixedLists.Walk {
                             int at = index;
                             this.takeOrNote(found, this.candidates.find(item, true),
                                     () -> this.owners.findOwnerOfSlot(item),
-                                    owner -> ElementTakes.replaceInArray(array, at, item, standIn,
-                                            this.getRemovalsOf(owner)));
+                                    ElementTakes.makeWeak(array, (now, owner) -> ElementTakes.replaceInArray(now,
+                                            at, item, standIn, this.getRemovalsOf(owner))));
                         }
                     }
                 }
@@ -495,16 +502,16 @@ final class CollectionReferences implements FixedLists.Walk {
                             Object was = element;
                             this.takeOrNote(mod, this.candidates.findForEntry(key, element, this.inSmall,
                                     this.owners.getNames()), () -> this.owners.findOwnerOfEntry(key, was, this.inSmall),
-                                    owner -> ElementTakes.replaceInMap(entries, key, was, wrapped,
-                                            this.getRemovalsOf(owner)));
+                                    ElementTakes.makeWeak(entries, (now, owner) -> ElementTakes.replaceInMap(now, key,
+                                            was, wrapped, this.getRemovalsOf(owner))));
                             continue;
                         }
                         if (mod != null) {
                             this.takeOrNote(mod,
                                     this.candidates.findForEntry(key, element, this.inSmall, this.owners.getNames()),
                                     () -> this.owners.findOwnerOfEntry(key, element, this.inSmall),
-                                    owner -> ElementTakes.takeFromMap(entries, key, element,
-                                            this.getRemovalsOf(owner)));
+                                    ElementTakes.makeWeak(entries, (now, owner) -> ElementTakes.takeFromMap(now, key,
+                                            element, this.getRemovalsOf(owner))));
 
                             boolean holds = element instanceof Map<?, ?> || element instanceof Collection<?>;
                             if (ElementLook.isLooking() && holds && this.seen.add(element)) {

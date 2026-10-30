@@ -5,6 +5,7 @@ import java.lang.invoke.MethodHandle;
 import java.lang.invoke.MethodHandles;
 import java.lang.invoke.MethodType;
 import java.lang.invoke.MutableCallSite;
+import java.lang.ref.WeakReference;
 import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.HashSet;
@@ -17,6 +18,7 @@ import org.objectweb.asm.ClassReader;
 import org.objectweb.asm.ClassWriter;
 import org.objectweb.asm.Handle;
 import org.objectweb.asm.Opcodes;
+import org.objectweb.asm.tree.AbstractInsnNode;
 import org.objectweb.asm.tree.ClassNode;
 import org.objectweb.asm.tree.InvokeDynamicInsnNode;
 import org.objectweb.asm.tree.MethodNode;
@@ -41,7 +43,7 @@ public final class TripwireSites {
         }
     }
 
-    private static final Map<String, List<MutableCallSite>> SITES = new HashMap<>();
+    private static final Map<String, List<WeakReference<MutableCallSite>>> SITES = new HashMap<>();
     private static final Set<String> OFF = new HashSet<>();
     private static final Object LOCK = new Object();
 
@@ -67,21 +69,44 @@ public final class TripwireSites {
         ClassNode node = new ClassNode();
         new ClassReader(classBytes).accept(node, 0);
         boolean armed = false;
+        boolean inserted = false;
         for (MethodNode method : node.methods) {
             if ((method.access & (Opcodes.ACC_ABSTRACT | Opcodes.ACC_NATIVE)) != 0 || method.instructions.size() == 0) {
                 continue;
             }
+
+            if (hasSite(method)) {
+                armed = true;
+                continue;
+            }
             method.instructions.insert(new InvokeDynamicInsnNode("hit", "()V", BOOTSTRAP, mod));
             armed = true;
+            inserted = true;
         }
         if (!armed) {
             return null;
+        }
+        if (!inserted) {
+            ARMED.put(internalName, mod);
+            return classBytes;
         }
 
         ClassWriter writer = new ClassWriter(new ClassReader(classBytes), ClassWriter.COMPUTE_MAXS);
         node.accept(writer);
         ARMED.put(internalName, mod);
         return writer.toByteArray();
+    }
+
+    private static boolean hasSite(MethodNode method) {
+        for (AbstractInsnNode insn = method.instructions.getFirst(); insn != null; insn = insn.getNext()) {
+            if (insn instanceof InvokeDynamicInsnNode site) {
+                return site.name.equals("hit") && site.bsm.equals(BOOTSTRAP);
+            }
+            if (insn.getOpcode() >= 0) {
+                return false;
+            }
+        }
+        return false;
     }
 
     public static boolean isArmed(String internalName) {
@@ -105,7 +130,7 @@ public final class TripwireSites {
     public static CallSite bootstrap(MethodHandles.Lookup caller, String name, MethodType type, String mod) {
         synchronized (LOCK) {
             MutableCallSite site = new MutableCallSite(OFF.contains(mod) ? HIT.bindTo(mod) : NOTHING);
-            SITES.computeIfAbsent(mod, m -> new ArrayList<>()).add(site);
+            SITES.computeIfAbsent(mod, m -> new ArrayList<>()).add(new WeakReference<>(site));
             return site;
         }
     }
@@ -116,7 +141,11 @@ public final class TripwireSites {
             if (off ? !OFF.add(mod) : !OFF.remove(mod)) {
                 return 0;
             }
-            changed = List.copyOf(SITES.getOrDefault(mod, List.of()));
+            List<WeakReference<MutableCallSite>> bound = SITES.getOrDefault(mod, List.of());
+            bound.removeIf(weak -> weak.get() == null);
+            changed = new ArrayList<>(bound.size());
+            bound.forEach(weak -> changed.add(weak.get()));
+            changed.removeIf(site -> site == null);
             MethodHandle target = off ? HIT.bindTo(mod) : NOTHING;
             changed.forEach(site -> site.setTarget(target));
         }

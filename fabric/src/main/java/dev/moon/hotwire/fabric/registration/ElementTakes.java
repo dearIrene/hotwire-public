@@ -1,12 +1,17 @@
 package dev.moon.hotwire.fabric.registration;
 
+import java.lang.ref.WeakReference;
 import java.util.Collection;
 import java.util.Collections;
+import java.util.Comparator;
+import java.util.IdentityHashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
 import java.util.TreeSet;
+import java.util.function.BiConsumer;
 import java.util.function.Consumer;
+import java.util.function.Function;
 import java.util.function.Supplier;
 import org.jspecify.annotations.Nullable;
 import org.slf4j.Logger;
@@ -14,6 +19,7 @@ import org.slf4j.LoggerFactory;
 
 final class ElementTakes {
     private static final Logger LOGGER = LoggerFactory.getLogger(ElementTakes.class);
+    private static final long SLOW_MILLIS = 1000;
 
     private ElementTakes() {
     }
@@ -29,12 +35,27 @@ final class ElementTakes {
         }
     }
 
-    static void runAll(List<Runnable> noted, Collection<String> mods) {
+    static <C> Consumer<String> makeWeak(C container, BiConsumer<C, String> take) {
+        WeakReference<C> weak = new WeakReference<>(container);
+        return owner -> {
+            C now = weak.get();
+            if (now != null) {
+                take.accept(now, owner);
+            }
+        };
+    }
+
+    static void runAll(List<Runnable> noted, Collection<String> mods, List<Object> containers,
+            Function<Object, String> reachedFrom) {
         int failed = 0;
         int unchanged = 0;
         Set<String> unchangedKinds = new TreeSet<>();
         @Nullable RuntimeException first = null;
-        for (Runnable take : noted) {
+        IdentityHashMap<Object, long[]> spent = new IdentityHashMap<>();
+        long began = System.nanoTime();
+        for (int at = 0; at < noted.size(); at++) {
+            Runnable take = noted.get(at);
+            long before = System.nanoTime();
             if (take instanceof NotedTake filed && filed.candidates() != null
                     && Collections.disjoint(filed.candidates(), mods)) {
                 if (isCheckingSkips() && filed.whose().get() != null) {
@@ -58,6 +79,20 @@ final class ElementTakes {
                 failed++;
                 first = first == null ? e : first;
             }
+            if (at < containers.size()) {
+                long[] sum = spent.computeIfAbsent(containers.get(at), container -> new long[2]);
+                sum[0] += System.nanoTime() - before;
+                sum[1]++;
+            }
+        }
+        if ((System.nanoTime() - began) / 1_000_000 >= SLOW_MILLIS) {
+            LOGGER.info("[Hotwire] the noted takes spent the most time in {}", spent.entrySet().stream()
+                    .sorted(Comparator.comparingLong((Map.Entry<Object, long[]> entry) -> entry.getValue()[0])
+                            .reversed())
+                    .limit(6)
+                    .map(entry -> entry.getValue()[0] / 1_000_000 + " ms, " + entry.getValue()[1] + " takes in "
+                            + describe(entry.getKey()) + " from " + reachedFrom.apply(entry.getKey()))
+                    .toList());
         }
         if (first != null) {
             LOGGER.error("[Hotwire] {} of {} noted takeouts failed; the rest were done", failed, noted.size(), first);
@@ -66,6 +101,16 @@ final class ElementTakes {
             LOGGER.info("[Hotwire] {} noted takeouts for {} met collections that cannot change: {}", unchanged, mods,
                     unchangedKinds);
         }
+    }
+
+    private static String describe(Object container) {
+        String size = switch (container) {
+            case Collection<?> items -> " of " + items.size();
+            case Map<?, ?> map -> " of " + map.size();
+            case Object[] array -> " of " + array.length;
+            default -> "";
+        };
+        return container.getClass().getSimpleName() + size;
     }
 
     static boolean isCheckingSkips() {
@@ -119,13 +164,15 @@ final class ElementTakes {
 
     static @Nullable Object findWrappedValue(Object value, String mod) {
         Class<?>[] faces = value.getClass().getInterfaces();
-        Class<?> shape = faces.length == 1 ? faces[0] : findGameClassAbove(value.getClass());
+        Class<?> above = findGameClassAbove(value.getClass());
+        Class<?> shape = faces.length == 1 ? faces[0] : above;
         if (shape == Object.class) {
             return null;
         }
         Object inner = Lambdas.findWrapped(value, shape, mod);
-        return inner == null || !shape.isInstance(inner) || inner instanceof Collection<?>
-                || inner instanceof Map<?, ?> || GameRegistrations.findModOf(inner.getClass()) != null ? null : inner;
+        return inner == null || !shape.isInstance(inner) || (above != Object.class && !above.isInstance(inner))
+                || inner instanceof Collection<?> || inner instanceof Map<?, ?>
+                || GameRegistrations.findModOf(inner.getClass()) != null ? null : inner;
     }
 
     private static Class<?> findGameClassAbove(Class<?> type) {
@@ -140,6 +187,8 @@ final class ElementTakes {
             List<Removal> out) {
         if (entries.replace(key, value, inner)) {
             out.add(new Removal.InMapValue(entries, key, value, inner));
+            LOGGER.info("[Hotwire] {} gave way to {} under {} in {}", value.getClass().getName(),
+                    inner.getClass().getName(), key, entries.getClass().getName());
         }
     }
 

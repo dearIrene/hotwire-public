@@ -300,24 +300,29 @@ public final class SwitchRunner {
 
     private CheckedResult runTimedOn(List<String> ids) {
         ElementLook.giveWay();
+        SwitchTimes.mark("look gave way");
         Tripwire.pause(true);
         try {
             SwitchPlan coming = this.switcher.planOn(ids);
+            SwitchTimes.mark("plan");
 
             ElementLook.markChanged(coming.order());
             AtomicBoolean putBack = new AtomicBoolean();
             if (!coming.isRefused()) {
                 this.tripwire.offerDisarm(coming.order());
+                SwitchTimes.mark("disarm");
                 this.beforeOn.accept(coming.order());
+                SwitchTimes.mark("before on");
 
                 coming.order().forEach(LoaderModList::show);
                 this.plugins.putBack(coming.order());
+                SwitchTimes.mark("plugins back");
                 GameHold.runAtNextHold(() -> {
                     this.fieldReferences.putBackElements(coming.order());
                     putBack.set(true);
                 });
             }
-            SwitchTimes.mark("plan");
+            SwitchTimes.mark("put back queued");
             ResourceReload.onComingOn(coming.order());
             ModSwitcher.Result result;
             AtomicBoolean allBack = new AtomicBoolean();

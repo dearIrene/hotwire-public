@@ -8,6 +8,7 @@ import dev.moon.hotwire.redefine.LambdaSites;
 import dev.moon.hotwire.redefine.RebuildException;
 import dev.moon.hotwire.redefine.Tripwire;
 import dev.moon.hotwire.redefine.TripwireSites;
+import dev.moon.hotwire.switching.SwitchTimes;
 import java.lang.instrument.ClassFileTransformer;
 import java.lang.instrument.Instrumentation;
 import java.security.CodeSource;
@@ -131,13 +132,16 @@ public final class ModTripwire {
     }
 
     synchronized void offerDisarm(Collection<String> ids) {
+        SwitchTimes.mark("disarm: lock");
         ids.forEach(id -> TripwireSites.setOff(id, false));
+        SwitchTimes.mark("disarm: sites");
         Map<Class<?>, byte[]> back = new LinkedHashMap<>();
         this.armed.forEach((type, was) -> {
             if (ids.contains(was.getMod()) && was.isAsWired(this.rebuilder.getLoadedBytes().findKnown(type))) {
                 back.put(type, LambdaSites.rewrite(was.getBefore()));
             }
         });
+        SwitchTimes.mark("disarm: put back " + back.size());
         this.ride.offerBack(back);
     }
 
@@ -246,7 +250,11 @@ public final class ModTripwire {
             ModTripwire.this.watcher.execute(() -> {
                 synchronized (ModTripwire.this) {
                     if (took) {
-                        wiredNow.keySet().forEach(type -> ModTripwire.this.armed.put(type, armingNow.get(type)));
+                        armingNow.forEach((type, one) -> {
+                            if (wiredNow.containsKey(type)) {
+                                ModTripwire.this.armed.put(type, one);
+                            }
+                        });
                         return;
                     }
                     ARMING.set(true);
@@ -301,6 +309,7 @@ public final class ModTripwire {
         }
     }
 
+    @SuppressWarnings("ReferenceEquality")
     private int wire(Collection<String> asked, Set<String> rebuilt, boolean ride) throws RebuildException {
         List<String> ids = asked.stream().filter(ModPolicy::isSwitchable).toList();
         Map<Class<?>, String> owned = new LinkedHashMap<>();
@@ -342,6 +351,9 @@ public final class ModTripwire {
                 }
 
                 byte[] wired = TripwireSites.arm(name, bytes, mod);
+                if (wired == bytes) {
+                    return;
+                }
                 if (wired == null) {
                     wired = Tripwire.arm(bytes, mod);
                     if (wired != null) {

@@ -239,7 +239,6 @@ public final class FieldReferences {
             boolean again = !every && ElementLook.isLooking() && ElementLook.hasLookedForEvery();
             for (String mod : mods) {
                 if (again) {
-                    statics.addAll(initializedOf.apply(mod));
                     continue;
                 }
                 Set<String> names = used.getOrDefault(mod, Set.of());
