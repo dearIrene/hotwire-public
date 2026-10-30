@@ -34,6 +34,7 @@ import java.util.function.Predicate;
 import net.minecraft.client.Minecraft;
 import net.minecraft.core.Registry;
 import net.minecraft.core.registries.BuiltInRegistries;
+import net.minecraft.world.entity.Entity;
 import net.minecraft.world.item.CreativeModeTab;
 import org.jspecify.annotations.Nullable;
 import org.slf4j.Logger;
@@ -206,11 +207,16 @@ public final class FieldReferences {
         boolean answered = !every && this.elements.look.isReadyFor(mods)
                 && this.elements.prepare(List.copyOf(mods));
         SwitchTimes.mark("takes answered");
+        Set<String> targets = new HashSet<>();
+        mods.forEach(mod -> targets.addAll(this.mixinTargets.apply(mod)));
+
+        List<Object> entities = targets.stream().map(name -> loaded.get(name.replace('.', '/')))
+                .anyMatch(FieldReferences::isEntity) ? LevelEntities.findAll() : List.of();
         GameHold hold = GameHold.begin(Minecraft.getInstance());
         try {
             planned.forEach(this::putIn);
             if (answered || this.elements.look.isReadyFor(mods)) {
-                this.elements.takeOut(List.copyOf(mods), List.of(), Set.of(), HandedSearch.NONE);
+                this.elements.takeOut(List.copyOf(mods), entities, Set.of(), HandedSearch.NONE);
                 return;
             }
             Object game = Minecraft.getInstance();
@@ -218,9 +224,8 @@ public final class FieldReferences {
             List<Object> near = new ArrayList<>(List.of(game));
             near.addAll(findGameObjectsBelow(game, 1));
             List<Object> deep = findGameObjectsBelow(game, TARGETS_DEPTH);
-            Set<String> targets = new HashSet<>();
-            mods.forEach(mod -> targets.addAll(this.mixinTargets.apply(mod)));
             List<Object> holders = new ArrayList<>(near);
+            holders.addAll(entities);
             deep.stream().filter(one -> SuperclassNames.containsAny(one.getClass(), targets)).forEach(holders::add);
 
             List<Object> patched = holders.stream()
@@ -504,6 +509,10 @@ public final class FieldReferences {
                     .map(one -> one.field().getDeclaringClass().getSimpleName() + "." + one.field().getName())
                     .toList());
         }
+    }
+
+    private static boolean isEntity(@Nullable Class<?> type) {
+        return type != null && Entity.class.isAssignableFrom(type);
     }
 
     private static List<Object> findGameObjectsBelow(Object holder, int steps) {

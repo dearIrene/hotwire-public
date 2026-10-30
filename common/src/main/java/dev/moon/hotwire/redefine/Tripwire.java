@@ -135,6 +135,8 @@ public final class Tripwire {
         }
     }
 
+    private static final Set<String> SAID_WHOSE = ConcurrentHashMap.newKeySet();
+
     private static void hitOnce(String mod) {
         CountDownLatch gate = GATES.get(mod);
         if (gate != null) {
@@ -142,6 +144,10 @@ public final class Tripwire {
                 return;
             }
             Whose whose = classify(mod);
+            if (SAID_WHOSE.add(mod + "/" + Thread.currentThread().getName())) {
+                LOGGER.debug("[Hotwire] {}'s call on {} while it goes off is {}: {}", mod,
+                        Thread.currentThread().getName(), whose, String.join(" < ", findCallers()));
+            }
 
             if (whose == Whose.OWN && !onGameThread.getAsBoolean()) {
                 waitUntilOn(mod, gate);

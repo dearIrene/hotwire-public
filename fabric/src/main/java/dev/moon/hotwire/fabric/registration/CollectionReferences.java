@@ -1,6 +1,7 @@
 package dev.moon.hotwire.fabric.registration;
 
 import dev.moon.hotwire.redefine.FieldSlots;
+import dev.moon.hotwire.redefine.Tripwire;
 import java.lang.ref.WeakReference;
 import java.lang.reflect.Proxy;
 import java.util.ArrayList;
@@ -60,18 +61,25 @@ final class CollectionReferences implements FixedLists.Walk {
 
     synchronized void takeOut(List<String> mods, Collection<Object> holders, Collection<Class<?>> statics,
             HandedSearch handed) {
+        Tripwire.runAsHotwire(() -> this.takeOutNow(mods, holders, statics, handed));
+    }
+
+    private void takeOutNow(List<String> mods, Collection<Object> holders, Collection<Class<?>> statics,
+            HandedSearch handed) {
         ElementTakes.Answers ready = this.prepared != null && this.preparedFor.equals(mods) ? this.prepared : null;
         this.prepared = null;
         List<Runnable> ahead = ready != null ? List.of() : this.look.open(mods);
         try {
             if (ready != null) {
                 this.takeAll(ready, mods);
+                this.takeWrappedIn(holders);
             } else if (ahead == null) {
                 this.walk(mods, holders, statics, handed);
                 this.look.close();
             } else {
                 this.begin(mods);
                 this.takeAll(ElementTakes.prepare(ahead, mods, this.look.getContainersOfTakes()), mods);
+                this.takeWrappedIn(holders);
             }
         } catch (RuntimeException | LinkageError e) {
             this.look.drop();
@@ -130,13 +138,14 @@ final class CollectionReferences implements FixedLists.Walk {
             if (mod == null || !this.mods.contains(mod)) {
                 continue;
             }
-
             Object inner = ElementTakes.findWrappedValue(value, mod);
             if (inner == null || !field.getType().isInstance(inner)) {
                 continue;
             }
             Object mods = value;
             String owner = mod;
+            LOGGER.debug("[Hotwire] {}.{} holds {}'s {} around {}; the field takes the wrapped one at the off",
+                    holder.getClass().getName(), field.getName(), mod, value.getClass().getName(), inner.getClass());
             WeakReference<Object> weak = new WeakReference<>(holder);
             this.takeOrNote(owner, this.candidates.withOwner(Set.of(), owner), () -> {
                 try {
@@ -190,6 +199,12 @@ final class CollectionReferences implements FixedLists.Walk {
     }
 
     synchronized boolean prepare(List<String> mods) {
+        boolean[] ready = new boolean[1];
+        Tripwire.runAsHotwire(() -> ready[0] = this.prepareNow(mods));
+        return ready[0];
+    }
+
+    private boolean prepareNow(List<String> mods) {
         this.prepared = null;
         if (ElementLook.isLooking()) {
             return false;
@@ -206,6 +221,14 @@ final class CollectionReferences implements FixedLists.Walk {
         LOGGER.info("[Hotwire] {} of {} noted takes answered for {} ahead of the hold in {} ms",
                 made.takes().size(), ahead.size(), mods, (System.nanoTime() - began) / 1_000_000);
         return true;
+    }
+
+    private void takeWrappedIn(Collection<Object> holders) {
+        for (Object holder : holders) {
+            if (CollectionParts.isGameObject(holder) && this.owners.findOwnerAmong(holder) == null) {
+                this.noteWrappedInside(holder, WRAPPED_BELOW);
+            }
+        }
     }
 
     private void takeAll(ElementTakes.Answers answers, List<String> mods) {
@@ -242,6 +265,9 @@ final class CollectionReferences implements FixedLists.Walk {
             ElementLook.stopIfAsked();
             if (this.owners.findOwnerAmong(holder) == null) {
                 this.lookInto(holder);
+                if (CollectionParts.isGameObject(holder)) {
+                    this.noteWrappedInside(holder, WRAPPED_BELOW);
+                }
             }
         }
         this.report.time(holdersBegan, holders.size() + " game objects");

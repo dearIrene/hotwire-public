@@ -8,6 +8,7 @@ import java.lang.invoke.MethodType;
 import java.util.Map;
 import java.util.Set;
 import java.util.concurrent.ConcurrentHashMap;
+import java.util.stream.Collectors;
 import org.jspecify.annotations.Nullable;
 import org.objectweb.asm.ClassReader;
 import org.objectweb.asm.ClassWriter;
@@ -151,6 +152,11 @@ public final class TripwireSites {
         watch.off = off;
         int classes = countArmed(mod);
         LOGGER.info("[Hotwire] {} is watched by sites in {} classes: {}", mod, classes, off ? "on" : "off");
+        if (LOGGER.isDebugEnabled()) {
+            LOGGER.debug("[Hotwire] the watch of {} was set by {}", mod, StackWalker.getInstance().walk(frames ->
+                    frames.skip(1).map(frame -> frame.getClassName() + "." + frame.getMethodName()).limit(4)
+                            .collect(Collectors.joining(" < "))));
+        }
         return classes;
     }
 }
