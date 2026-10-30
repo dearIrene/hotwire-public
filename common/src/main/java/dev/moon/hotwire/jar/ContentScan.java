@@ -3,9 +3,13 @@ package dev.moon.hotwire.jar;
 import java.io.ByteArrayInputStream;
 import java.io.IOException;
 import java.io.InputStream;
+import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
 import java.nio.file.Path;
+import java.util.ArrayDeque;
+import java.util.Deque;
 import java.util.HashMap;
+import java.util.HashSet;
 import java.util.LinkedHashMap;
 import java.util.Map;
 import java.util.Set;
@@ -14,9 +18,14 @@ import java.util.function.Function;
 import java.util.zip.ZipEntry;
 import java.util.zip.ZipInputStream;
 import org.jspecify.annotations.Nullable;
+import org.objectweb.asm.AnnotationVisitor;
 import org.objectweb.asm.ClassReader;
+import org.objectweb.asm.ClassVisitor;
 import org.objectweb.asm.Handle;
+import org.objectweb.asm.MethodVisitor;
 import org.objectweb.asm.Opcodes;
+import org.objectweb.asm.commons.ClassRemapper;
+import org.objectweb.asm.commons.Remapper;
 import org.objectweb.asm.tree.AbstractInsnNode;
 import org.objectweb.asm.tree.ClassNode;
 import org.objectweb.asm.tree.FieldInsnNode;
@@ -41,7 +50,75 @@ public final class ContentScan {
     private static final Set<String> REGISTRY_HOLDERS = Set.of("net/minecraft/core/registries/BuiltInRegistries",
             "net/minecraft/core/registries/Registries");
 
+    private static final String MIXIN = "Lorg/spongepowered/asm/mixin/Mixin;";
+    private static final String REGISTRY = "net/minecraft/core/Registry";
+
+    private static final ClassVisitor BODIES = new ClassVisitor(Opcodes.ASM9) {
+        @Override
+        public MethodVisitor visitMethod(int access, String name, String descriptor, @Nullable String signature,
+                String @Nullable [] exceptions) {
+            return new MethodVisitor(Opcodes.ASM9) {
+            };
+        }
+    };
+
     private ContentScan() {
+    }
+
+    public record Classes(Map<String, byte[]> bytes, Set<String> entrypoints) {
+    }
+
+    public static Set<String> findKinds(Classes jar, Function<String, @Nullable String> gameSuperOf) {
+        return findKinds(findReached(jar), gameSuperOf);
+    }
+
+    static Map<String, byte[]> findReached(Classes jar) {
+        Map<String, byte[]> classes = jar.bytes();
+        Deque<String> next = new ArrayDeque<>(jar.entrypoints());
+        classes.forEach((name, bytes) -> {
+            if (isMixin(bytes)) {
+                next.add(name);
+            }
+        });
+        Map<String, byte[]> reached = new HashMap<>();
+        Remapper recorder = new Remapper() {
+            @Override
+            public String map(String internalName) {
+                if (classes.containsKey(internalName) && !reached.containsKey(internalName)) {
+                    next.add(internalName);
+                }
+                return internalName;
+            }
+        };
+        while (!next.isEmpty()) {
+            String name = next.poll();
+            byte[] bytes = classes.get(name);
+            if (bytes == null || reached.putIfAbsent(name, bytes) != null) {
+                continue;
+            }
+            try {
+                new ClassReader(bytes).accept(new ClassRemapper(BODIES, recorder),
+                        ClassReader.SKIP_DEBUG | ClassReader.SKIP_FRAMES);
+            } catch (IllegalArgumentException | ArrayIndexOutOfBoundsException unreadable) {
+            }
+        }
+        return reached;
+    }
+
+    private static boolean isMixin(byte[] bytes) {
+        boolean[] found = new boolean[1];
+        try {
+            new ClassReader(bytes).accept(new ClassVisitor(Opcodes.ASM9) {
+                @Override
+                public @Nullable AnnotationVisitor visitAnnotation(String descriptor, boolean visible) {
+                    found[0] |= descriptor.equals(MIXIN);
+                    return null;
+                }
+            }, ClassReader.SKIP_CODE | ClassReader.SKIP_DEBUG | ClassReader.SKIP_FRAMES);
+        } catch (IllegalArgumentException | ArrayIndexOutOfBoundsException unreadable) {
+            return false;
+        }
+        return found[0];
     }
 
     public static Set<String> findKinds(Map<String, byte[]> classes, Function<String, @Nullable String> gameSuperOf) {
@@ -100,20 +177,28 @@ public final class ContentScan {
     }
 
     private static Set<String> findRegistered(ClassNode node) {
-        Set<String> named = new TreeSet<>();
-        boolean registers = false;
+        Set<String> found = new TreeSet<>();
         for (MethodNode method : node.methods) {
+            Set<String> named = new TreeSet<>();
+            boolean registers = false;
             for (AbstractInsnNode insn : method.instructions) {
                 if (insn instanceof FieldInsnNode field && REGISTRY_HOLDERS.contains(field.owner)
                         && REGISTRY_OF.containsKey(field.name)) {
                     named.add(REGISTRY_OF.get(field.name));
-                } else if (insn instanceof MethodInsnNode call && (call.name.startsWith("register")
-                        || call.name.equals("create"))) {
+                } else if (insn instanceof MethodInsnNode call && isRegistering(call)) {
                     registers = true;
                 }
             }
+            if (registers) {
+                found.addAll(named);
+            }
         }
-        return registers ? named : Set.of();
+        return found;
+    }
+
+    private static boolean isRegistering(MethodInsnNode call) {
+        boolean named = call.name.startsWith("register") || call.name.equals("create");
+        return named && (!call.owner.startsWith("net/minecraft/") || call.owner.equals(REGISTRY));
     }
 
     private static @Nullable String findKindOf(String name, Map<String, String> superOf,
@@ -137,23 +222,43 @@ public final class ContentScan {
         return null;
     }
 
-    public static Map<String, byte[]> readClasses(Path jar) throws IOException {
+    public static Classes readClasses(Path jar) throws IOException {
         Map<String, byte[]> classes = new HashMap<>();
+        Set<String> entrypoints = new HashSet<>();
         try (InputStream in = Files.newInputStream(jar)) {
-            collect(in, classes, 0);
+            collect(in, classes, entrypoints, 0);
         }
-        return classes;
+        return new Classes(classes, entrypoints);
     }
 
-    private static void collect(InputStream in, Map<String, byte[]> into, int depth) throws IOException {
+    private static void collect(InputStream in, Map<String, byte[]> into, Set<String> entrypoints, int depth)
+            throws IOException {
         ZipInputStream zip = new ZipInputStream(in);
         for (ZipEntry entry = zip.getNextEntry(); entry != null; entry = zip.getNextEntry()) {
             String name = entry.getName();
             if (name.endsWith(".class") && !name.startsWith("META-INF/")) {
                 into.putIfAbsent(name.substring(0, name.length() - ".class".length()), zip.readAllBytes());
+            } else if (name.equals("fabric.mod.json")) {
+                addEntrypoints(zip.readAllBytes(), entrypoints);
+            } else if (name.startsWith("META-INF/services/") && !name.endsWith("/")) {
+                for (String line : new String(zip.readAllBytes(), StandardCharsets.UTF_8).lines().toList()) {
+                    int comment = line.indexOf('#');
+                    String provider = (comment < 0 ? line : line.substring(0, comment)).strip();
+                    if (!provider.isEmpty()) {
+                        entrypoints.add(provider.replace('.', '/'));
+                    }
+                }
             } else if (name.endsWith(".jar") && depth < ModJarReader.MAX_DEPTH) {
-                collect(new ByteArrayInputStream(zip.readAllBytes()), into, depth + 1);
+                collect(new ByteArrayInputStream(zip.readAllBytes()), into, entrypoints, depth + 1);
             }
+        }
+    }
+
+    private static void addEntrypoints(byte[] manifest, Set<String> into) {
+        try {
+            ModManifestParser.parse(manifest, "fabric.mod.json").entrypoints().values().forEach(list -> list.forEach(
+                    entrypoint -> into.add(entrypoint.value().split("::", 2)[0].replace('.', '/'))));
+        } catch (ModJarException unreadable) {
         }
     }
 }
