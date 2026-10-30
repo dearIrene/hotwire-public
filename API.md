@@ -64,6 +64,29 @@ Your own mod, any mod it needs and any mod whose code is part of the call. Hotwi
 
 `api.getMods()` gives you every installed mod as Hotwire's list shows it, seen from your mod. `switchable` says whether you may switch it and `blocked` says why not in the player's words, so you can show it in your own list.
 
+## The store
+
+You can put the Modrinth store in your own theme, Hotwire finds the mods and does the downloading for you.
+
+```java
+api.searchStore("zoom").thenAccept(results -> {});          // only what works on the player's version and loader
+api.findStoreProject("zoomify").thenAccept(project -> {});  // icon, description, versions and what it needs
+```
+
+Adding a mod is always the player's call, so ask for it and draw what you get back:
+
+```java
+api.requestAdd("zoomify").thenAccept(add -> {
+    add.getTitle();
+    add.getLines();       // what comes with it and how big it is, show every line as it is
+    add.needsReopen();    // if the world has to be saved and opened again for it
+    add.accept();         // when the player presses add, it tells you how it went like a switch does
+    add.cancel();         // when they don't
+});
+```
+
+You only get to add mods from Modrinth so no links or files.
+
 ## Following along
 
 ```java
