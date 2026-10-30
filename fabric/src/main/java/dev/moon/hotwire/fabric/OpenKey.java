@@ -51,7 +51,7 @@ public final class OpenKey {
     @SuppressWarnings("ReferenceEquality")
     static void tellConflicts(HotwireSettings settings) {
         KeyMapping made = key;
-        if (made == null || settings.isKeyCardShown()) {
+        if (made == null || settings.isKeyCardShown() || !settings.isKeyAlertOn()) {
             return;
         }
         List<String> others = new ArrayList<>();
@@ -70,11 +70,11 @@ public final class OpenKey {
                 Lang.get("hotwire.key.taken_by", keyName, joinPlainly(others))).makeResting(10));
     }
 
-    static void tellIfBlocked() {
+    static void tellIfBlocked(HotwireSettings settings) {
         KeyMapping made = key;
         Screen shown = ModViews.openScreen();
-        if (made == null || shown == null || shown instanceof HotwireScreen || shown instanceof ChooserGameScreen
-                || shown instanceof StoreGameScreen) {
+        if (made == null || !settings.isKeyAlertOn() || shown == null || shown instanceof HotwireScreen
+                || shown instanceof ChooserGameScreen || shown instanceof StoreGameScreen) {
             return;
         }
         String keyName = made.getTranslatedKeyMessage().getString();

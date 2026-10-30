@@ -113,7 +113,7 @@ public final class HotwireClient implements ClientModInitializer {
     private static void openSoonFromKey() {
         ModViews.runSoon(ModViews.isShiftDown() ? HotwireClient::open : () -> getEngine().openChooser());
 
-        ModViews.runSoon(() -> ModViews.runSoon(OpenKey::tellIfBlocked));
+        ModViews.runSoon(() -> ModViews.runSoon(() -> OpenKey.tellIfBlocked(getEngine().getSettings())));
     }
 
     public static synchronized @Nullable HotwireEngine findEngine() {
