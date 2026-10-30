@@ -16,7 +16,7 @@ to restart the game.
 A Fabric mod can't really be unloaded. Its mixins get merged into the game's own classes at launch, and the JVM only
 lets a loaded class take new method bodies. It also won't take new or removed fields, methods or interfaces.
 
-Therefore, Hotwire doesn't try to undo a mod. It rebuilds every class the mod touched as if the mod was never installed, then fucks around with the result until the JVM takes it.
+Therefore, Hotwire doesn't try to undo a mod. It rebuilds every class the mod touched as if the mod was never installed, then reshapes the result into something the JVM will accept.
 
 ### Cracking the JVM 🥺
 
@@ -106,17 +106,9 @@ The following mods are also automatically blacklisted:
 - Phosphor
 - FerriteCore
 - Ixeris
-
-## Commands and bug reports
-
-You can use `/hotwire` to open the screen, or switch from chat:
-
-- `/hotwire off <mod|all>` and `/hotwire on <mod|all>`
-- `/hotwire add <jar>`, or `/hotwire saveadd <jar>` to save the world and reopen it with the mod in
-- `/hotwire update <jar>`
-- `/hotwire report` for a bug report zip
-
-Every switch writes a report to `hotwire/reports`, including a game log specific to Hotwire as well as crash reports.
+- C2ME
+- ModernFix
+- VulkanMod
 
 ## API
 
