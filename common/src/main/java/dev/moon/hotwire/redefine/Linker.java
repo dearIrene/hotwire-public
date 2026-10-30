@@ -123,6 +123,10 @@ public final class Linker {
         mixinOwner = owner;
     }
 
+    public static @Nullable String findMixinOwner(String mixin) {
+        return mixinOwner.apply(mixin.replace('.', '/'));
+    }
+
     public static void onReached(String member, String mixin) {
         if (REACHED.add(member)) {
             LOGGER.info("[Hotwire] {} belongs to a mod that is off and was reached; its old body ran. The caller"

@@ -126,10 +126,10 @@ public final class GameHold {
         }
     }
 
-    private static List<StackTraceElement> getStackOf(String thread) {
+    private static Object getStackOf(String thread) {
         return Thread.getAllStackTraces().entrySet().stream().filter(entry -> entry.getKey().getName().equals(thread))
-                .findFirst().map(entry -> Arrays.asList(entry.getValue()).subList(0,
-                        Math.min(14, entry.getValue().length))).orElse(List.of());
+                .findFirst().<Object>map(entry -> Arrays.asList(entry.getValue()).subList(0,
+                        Math.min(14, entry.getValue().length))).orElse("no such thread: it has ended");
     }
 
     public static void onGameAndWait(Runnable work) {

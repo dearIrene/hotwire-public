@@ -192,9 +192,12 @@ public final class InitHookReplay {
         values.removeIf(InitHookReplay::isHandler);
         Map<String, String> recomputed = new LinkedHashMap<>(values.isEmpty() ? Map.of()
                 : ChangedStatics.add(now, values));
+        ClassNode runs = RetainedInitializers.read(running);
+        if (isGameClass(name)) {
+            recomputed.putAll(ChangedStatics.addDropped(now, runs));
+        }
         if (original != null) {
-            recomputed.putAll(ChangedStatics.addMadeFresh(now, RetainedInitializers.read(original),
-                    RetainedInitializers.read(running)));
+            recomputed.putAll(ChangedStatics.addMadeFresh(now, RetainedInitializers.read(original), runs));
         }
         if (objectKeys.isEmpty() && classKeys.isEmpty() && recomputed.isEmpty() && missed.isEmpty()) {
             return new Addition(mixed, null);
@@ -212,14 +215,19 @@ public final class InitHookReplay {
         return new Addition(writer.toByteArray(), new Due(objectKeys, classKeys, recomputed, missed, unset, caughtUp));
     }
 
+    private static boolean isGameClass(String name) {
+        return name.startsWith("net/minecraft/") || name.startsWith("com/mojang/");
+    }
+
     private static Addition addStaticsOnly(byte[] mixed, byte @Nullable [] original, byte[] running) {
-        if (original == null || !ChangedStatics.hasAddedObjectStatics(mixed, original, running)) {
-            return new Addition(mixed, null);
-        }
         ClassNode now = new ClassNode();
         new ClassReader(mixed).accept(now, 0);
-        Map<String, String> recomputed = ChangedStatics.addMadeFresh(now, RetainedInitializers.read(original),
-                RetainedInitializers.read(running));
+        ClassNode runs = RetainedInitializers.read(running);
+        Map<String, String> recomputed = new LinkedHashMap<>(isGameClass(now.name)
+                ? ChangedStatics.addDropped(now, runs) : Map.of());
+        if (original != null && ChangedStatics.hasAddedObjectStatics(mixed, original, running)) {
+            recomputed.putAll(ChangedStatics.addMadeFresh(now, RetainedInitializers.read(original), runs));
+        }
         if (recomputed.isEmpty()) {
             return new Addition(mixed, null);
         }

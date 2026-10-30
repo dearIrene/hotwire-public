@@ -87,6 +87,54 @@ final class ChangedStatics {
         return recomputed;
     }
 
+    static Map<String, String> addDropped(ClassNode now, ClassNode running) {
+        Set<String> standing = new HashSet<>();
+        for (MethodNode method : now.methods) {
+            standing.add(makeKey(method.name) + method.desc);
+        }
+        Set<String> dropped = new HashSet<>();
+        for (MethodNode method : running.methods) {
+            String key = makeKey(method.name) + method.desc;
+            if (!key.equals(method.name + method.desc) && !standing.contains(key)) {
+                dropped.add(method.name + method.desc);
+            }
+        }
+        Set<String> stored = new HashSet<>();
+        for (MethodNode method : running.methods) {
+            if (!method.name.equals("<clinit>") || dropped.isEmpty()) {
+                continue;
+            }
+            boolean after = false;
+            for (AbstractInsnNode insn : method.instructions) {
+                if (insn instanceof MethodInsnNode call && call.owner.equals(running.name)
+                        && dropped.contains(call.name + call.desc)) {
+                    after = true;
+                } else if (after && insn instanceof FieldInsnNode put && put.getOpcode() == Opcodes.PUTSTATIC
+                        && put.owner.equals(running.name)) {
+                    stored.add(put.name + put.desc);
+                    after = false;
+                }
+            }
+        }
+        Map<String, String> recomputed = new LinkedHashMap<>();
+        if (stored.isEmpty()) {
+            return recomputed;
+        }
+        FieldInitializers.findStaticSlices(now.name, now, stored).forEach((field, slice) -> {
+            AbstractInsnNode store = slice.getLast();
+            if (!(store instanceof FieldInsnNode put) || put.getOpcode() != Opcodes.PUTSTATIC) {
+                return;
+            }
+            slice.set(store, new InsnNode(Type.getType(put.desc).getOpcode(Opcodes.IRETURN)));
+            MethodNode method = new MethodNode(Opcodes.ACC_PRIVATE | Opcodes.ACC_STATIC | Opcodes.ACC_SYNTHETIC,
+                    PREFIX + put.name, "()" + put.desc, null, null);
+            method.instructions.add(slice);
+            now.methods.add(method);
+            recomputed.put(put.name, put.desc);
+        });
+        return recomputed;
+    }
+
     static boolean hasAddedObjectStatics(byte[] mixed, byte[] first, byte[] running) {
         Set<String> added = readObjectStatics(mixed);
         added.removeAll(readObjectStatics(first));

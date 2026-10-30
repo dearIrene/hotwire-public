@@ -280,8 +280,9 @@ public final class ClassRebuilder {
                     hooked.put(name, hooks.findDue());
                 }
                 long hookedBy = System.nanoTime();
-                retained.put(name, Relocations.remap(AddedOverrides.addDispatch(name, running,
-                        ShutOverrides.addDispatch(name, hooks.getBytes(), mods))));
+                byte[] dispatched = AddedOverrides.addDispatch(name, running,
+                        ShutOverrides.addDispatch(name, hooks.getBytes(), mods));
+                retained.put(name, Relocations.remap(dispatched));
                 spent[0].add(retainedBy - began);
                 spent[1].add(replayedBy - retainedBy);
                 spent[2].add(hookedBy - replayedBy);
