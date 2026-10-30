@@ -27,6 +27,7 @@ public final class GameTasks {
 
     private static final Map<String, List<Removal>> REMOVED = new HashMap<>();
     private static final Set<String> MODS_OFF = new HashSet<>();
+    private static final int MOST = 1000;
 
     private static final Set<Class<?>> SAID = new HashSet<>();
 
@@ -59,7 +60,12 @@ public final class GameTasks {
             return false;
         }
         synchronized (GameTasks.class) {
-            REMOVED.computeIfAbsent(mod, any -> new ArrayList<>()).add(new Removal(loop, task));
+            List<Removal> waiting = REMOVED.computeIfAbsent(mod, any -> new ArrayList<>());
+
+            if (waiting.size() >= MOST) {
+                waiting.removeFirst();
+            }
+            waiting.add(new Removal(loop, task));
             if (SAID.add(task.getClass())) {
                 LOGGER.info("[Hotwire] {}'s task {} waits for its on", mod, task.getClass().getName());
             }
@@ -85,7 +91,7 @@ public final class GameTasks {
     }
 
     private static @Nullable String findOwnerOf(Object task, int depth) {
-        String mod = GameRegistrations.findModOf(task.getClass());
+        String mod = GameRegistrations.findModOrShipper(task.getClass());
 
         if (depth == 0 || (mod != null && MODS_OFF.contains(mod))) {
             return mod;
