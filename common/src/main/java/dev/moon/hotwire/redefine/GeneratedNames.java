@@ -8,6 +8,7 @@ import java.util.Map;
 import java.util.Objects;
 import java.util.Set;
 import java.util.function.Function;
+import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 import org.jspecify.annotations.Nullable;
 import org.objectweb.asm.ClassReader;
@@ -28,6 +29,7 @@ final class GeneratedNames {
             "(?<=_\\$(?:md|fd))\\$[0-9a-f]{6}(?=\\$)|(?<!_\\$(?:md|fd))\\$(?!lambda\\$)[a-z]{3}[0-9a-f]{3}\\$"
             + "|(?<=_\\$(?:md|fd)\\$[0-9a-f]{1,8})\\$[0-9a-f]+$|(?<=\\$\\d{1,6})\\$[0-9a-f]+$|\\$\\d+"
             + "|^(?:md|fd)[0-9a-f]{6}(?=\\$)");
+    private static final Pattern LAST_COUNT = Pattern.compile("\\$\\d+$");
     private static final String MIXIN_MERGED = "Lorg/spongepowered/asm/mixin/transformer/meta/MixinMerged;";
 
     private GeneratedNames() {
@@ -189,6 +191,11 @@ final class GeneratedNames {
         return NUMBERS.matcher(name).find();
     }
 
+    private static String findLastCount(String name) {
+        Matcher last = LAST_COUNT.matcher(name);
+        return last.find() ? last.group() : "";
+    }
+
     static String mask(String name) {
         return NUMBERS.matcher(name).replaceAll("\\$#");
     }
@@ -243,8 +250,19 @@ final class GeneratedNames {
 
     private static @Nullable Member findOnlySame(Member member, List<Member> among) {
         Member found = null;
+        boolean several = false;
         for (Member other : among) {
             if (member.isSameMixin(other)) {
+                several |= found != null;
+                found = found == null ? other : found;
+            }
+        }
+        if (!several) {
+            return found;
+        }
+        found = null;
+        for (Member other : among) {
+            if (member.isSameMixin(other) && findLastCount(member.name()).equals(findLastCount(other.name()))) {
                 if (found != null) {
                     return null;
                 }

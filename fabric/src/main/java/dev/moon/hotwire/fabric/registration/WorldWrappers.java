@@ -10,6 +10,7 @@ import java.util.IdentityHashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
+import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.Executors;
 import java.util.concurrent.ScheduledExecutorService;
 import java.util.concurrent.ScheduledFuture;
@@ -66,11 +67,16 @@ public final class WorldWrappers {
         for (Entity entity : entities) {
             for (FieldSlots.Slot field : fieldsOf.computeIfAbsent(entity.getClass(), WorldWrappers::findGameFields)) {
                 Object value = read(field, entity);
-                String mod = value == null ? null : GameRegistrations.findModOf(value.getClass());
+                String mod = value == null ? null : GameRegistrations.findCodeMod(value.getClass());
                 if (value == null || mod == null || !mods.contains(mod)) {
                     continue;
                 }
                 Object inner = findWrapped(value, field.getType(), mod);
+                if (inner == null && SAID.add(value.getClass().getName() + field.getName())) {
+                    LOGGER.info("[Hotwire] {}.{} holds {}'s {}, which wraps nothing of the field's type: {}",
+                            entity.getClass().getName(), field.getName(), mod, value.getClass().getName(),
+                            describeFields(value));
+                }
                 if (inner != null && write(field, entity, inner)) {
                     REMOVED.computeIfAbsent(mod, any -> new ArrayList<>())
                             .add(new UnwrappedField(entity, field, value, inner));
@@ -134,10 +140,25 @@ public final class WorldWrappers {
         return fields;
     }
 
+    private static final Set<String> SAID = ConcurrentHashMap.newKeySet();
+
+    private static String describeFields(Object wrapper) {
+        List<String> out = new ArrayList<>();
+        for (Class<?> at = wrapper.getClass(); at != null && at != Object.class; at = at.getSuperclass()) {
+            for (FieldSlots.Slot field : Fields.getDeclared(at)) {
+                Object value = field.isStatic() ? null : read(field, wrapper);
+                out.add(at.getSimpleName() + "." + field.getName() + ": " + field.getType().getName() + " = "
+                        + (value == null ? "null" : value.getClass().getName() + " ("
+                        + GameRegistrations.findModOf(value.getClass()) + ")"));
+            }
+        }
+        return out.toString();
+    }
+
     private static @Nullable Object findWrapped(Object wrapper, Class<?> type, String mod) {
         Object found = null;
         for (Class<?> at = wrapper.getClass(); at != null && at != Object.class; at = at.getSuperclass()) {
-            if (!mod.equals(GameRegistrations.findModOf(at))) {
+            if (!mod.equals(GameRegistrations.findCodeMod(at))) {
                 continue;
             }
             for (FieldSlots.Slot field : Fields.getDeclared(at)) {
@@ -146,7 +167,7 @@ public final class WorldWrappers {
                 }
                 try {
                     Object value = field.get(wrapper);
-                    if (value != null && !mod.equals(GameRegistrations.findModOf(value.getClass()))) {
+                    if (value != null && !mod.equals(GameRegistrations.findCodeMod(value.getClass()))) {
                         if (found != null) {
                             return null;
                         }
