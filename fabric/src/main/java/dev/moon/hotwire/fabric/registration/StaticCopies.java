@@ -24,8 +24,8 @@ import org.slf4j.LoggerFactory;
 public final class StaticCopies {
     private static final Logger LOGGER = LoggerFactory.getLogger(StaticCopies.class);
 
-    private static final int STEPS = 3;
-    private static final int MOST = 300_000;
+    private static final int STEPS = 2;
+    private static final int MOST = 100_000;
     private static volatile @Nullable Instrumentation instrumentation;
 
     private StaticCopies() {

@@ -27,7 +27,7 @@ import org.slf4j.LoggerFactory;
 public final class LiveConnections {
     private static final Logger LOGGER = LoggerFactory.getLogger(LiveConnections.class);
 
-    private static final int MOST = 5_000;
+    private static final int MOST = 100_000;
 
     private LiveConnections() {
     }
