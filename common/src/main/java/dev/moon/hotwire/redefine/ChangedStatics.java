@@ -241,13 +241,15 @@ final class ChangedStatics {
                         + entry.getKey(), MethodType.methodType(field.getType()));
                 Object made = MethodHandleProxies.asInterfaceInstance(Supplier.class, making).get();
                 copyElements(old, made);
-                ReplacedStatics.noteRecomputed(type);
-                if (takeStateOf(old, made)) {
+                if (takeStateOf(field, old, made)) {
                     LOGGER.info("[Hotwire] {}.{} took in place what the setup the mods give it now made, so what"
                             + " holds it sees it too", type.getName(), entry.getKey());
                     continue;
                 }
                 writer.write(field, made);
+                if (old != null) {
+                    ReplacedStatics.noteWritten(field, old, made, writer);
+                }
                 if (old != null && made != null) {
                     replaced.put(old, made);
                 }
@@ -274,7 +276,8 @@ final class ChangedStatics {
     }
 
     @SuppressWarnings("ReferenceEquality")
-    private static boolean takeStateOf(@Nullable Object old, @Nullable Object made) throws IllegalAccessException {
+    private static boolean takeStateOf(Field holder, @Nullable Object old, @Nullable Object made)
+            throws IllegalAccessException {
         if (old == null || made == null || old == made || old.getClass() != made.getClass()
                 || old.getClass().isArray() || old.getClass().isHidden()) {
             return false;
@@ -293,6 +296,11 @@ final class ChangedStatics {
                 }
             }
         }
+        Map<Field, Object> before = new LinkedHashMap<>();
+        for (Field field : fields) {
+            before.put(field, field.get(old));
+        }
+        ReplacedStatics.noteInPlace(holder, old, before);
         for (Field field : fields) {
             FinalWrites.write(field, old, field.get(made));
         }

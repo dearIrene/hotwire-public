@@ -6,6 +6,7 @@ import dev.moon.hotwire.redefine.HandlerGuards;
 import dev.moon.hotwire.redefine.HeapCensus;
 import dev.moon.hotwire.redefine.Linker;
 import dev.moon.hotwire.redefine.RebuildException;
+import dev.moon.hotwire.redefine.ReplacedStatics;
 import dev.moon.hotwire.redefine.StopPoint;
 import java.lang.instrument.ClassFileTransformer;
 import java.util.ArrayList;
@@ -291,7 +292,12 @@ public final class SwitchApplier {
         return this.apply(switched, onAfter, () -> { });
     }
 
-    public ApplyResult apply(Set<String> switched, Set<String> onAfter, Runnable whilePaused) throws RebuildException {
+    public ApplyResult apply(Set<String> switched, Set<String> onAfter, Runnable inPause) throws RebuildException {
+        ReplacedStatics.beginSwitch(switched, onAfter);
+        Runnable whilePaused = () -> {
+            inPause.run();
+            ReplacedStatics.putBackFor(onAfter);
+        };
         Set<String> movedBefore = Linker.getMoved();
         OnState before = new OnState(this.onConfigs, this.onMods, this.watched, this.lateMixins);
         GuardFlips.Plan plan = HandlerGuards.ENABLED ? this.guardFlips.find(switched, onAfter,
