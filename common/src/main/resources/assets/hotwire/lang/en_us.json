@@ -140,6 +140,7 @@
   "hotwire.row.locked": "locked",
   "hotwire.row.always_on": "always on",
   "hotwire.row.kept_off": "stays off",
+  "hotwire.row.carried": "%s has its own copy",
   "hotwire.setup.unsaved": "This setup (not saved)",
   "hotwire.setup.name_hint": "Type a name, then press Enter",
   "hotwire.setup.none": "No saved setups yet",

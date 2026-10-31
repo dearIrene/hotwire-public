@@ -182,7 +182,7 @@ public final class ModGraph {
         return used;
     }
 
-    SortedSet<String> getContainers(String id) {
+    public SortedSet<String> getContainers(String id) {
         return this.getContainers.getOrDefault(id, new TreeSet<>());
     }
 
