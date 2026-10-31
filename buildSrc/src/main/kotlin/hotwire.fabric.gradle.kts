@@ -84,7 +84,9 @@ val releaseJar = tasks.named<AbstractArchiveTask>(if (tasks.names.contains("rema
 val collected = rootProject.layout.buildDirectory.dir("libs")
 val collectJar = tasks.register<Copy>("collectJar") {
     doFirst {
-        delete(fileTree(collected) { include("hotwire-*+$minecraft.jar", "hotwire-*+$minecraft.*.jar") })
+        delete(fileTree(collected) {
+            include("hotwire-*+$minecraft.jar", "hotwire-*+$minecraft.*.jar", "hotwire-*+mc$minecraft.jar")
+        })
     }
     from(releaseJar.flatMap { it.archiveFile })
     into(collected)
