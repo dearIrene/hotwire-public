@@ -5,7 +5,7 @@ import java.util.List;
 import java.util.function.ObjIntConsumer;
 
 final class AdvancedPanel extends Panel {
-    static final int WIDTH = 420;
+    static final int WIDTH = 440;
     static final int PITCH = 36;
     static final int CHOICE_W = 64;
 
@@ -65,7 +65,13 @@ final class AdvancedPanel extends Panel {
             int rowY = y + 46 + PITCH * row;
             int room = w - 28 - option.choices().size() * (CHOICE_W + 4) - 4;
             String explains = option.choices().get(option.chosen()).explains();
-            canvas.drawText(canvas.clip(option.label(), room), x + 14, rowY, Colors.fade(Palette.TEXT, alpha));
+            String label = canvas.clip(option.label(), room);
+            canvas.drawText(label, x + 14, rowY, Colors.fade(Palette.TEXT, alpha));
+            if (!option.tag().isEmpty()) {
+                int tagX = x + 14 + canvas.measureText(label + " ");
+                canvas.drawText(canvas.clip(option.tag(), x + 14 + room - tagX), tagX, rowY,
+                        Colors.fade(Palette.OFF_TINT, alpha));
+            }
             canvas.drawText(canvas.clip(explains, w - 28), x + 14, rowY + 20, Colors.fade(Palette.DIM, alpha));
         }
     }

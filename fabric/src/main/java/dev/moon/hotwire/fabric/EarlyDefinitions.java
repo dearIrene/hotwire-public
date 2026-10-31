@@ -1,5 +1,6 @@
 package dev.moon.hotwire.fabric;
 
+import dev.moon.hotwire.config.HotwireSettings;
 import dev.moon.hotwire.fabric.report.HotwireLog;
 import dev.moon.hotwire.jvm.JvmAccess;
 import dev.moon.hotwire.jvm.JvmAccessException;
@@ -26,6 +27,11 @@ public final class EarlyDefinitions implements PreLaunchEntrypoint {
     @SuppressWarnings("ReferenceEquality")
     public void onPreLaunch() {
         HotwireLog.install(FabricLoader.getInstance().getGameDir().resolve("hotwire").resolve("logs"));
+
+        if (System.getProperty("hotwire.guards") == null && new HotwireSettings(FabricLoader.getInstance()
+                .getConfigDir().resolve("hotwire/settings.json")).isDeveloperOn()) {
+            System.setProperty("hotwire.guards", "false");
+        }
         ClassLoader game = EarlyDefinitions.class.getClassLoader();
         try {
             Path jar = FabricLoader.getInstance().getModContainer("hotwire")
