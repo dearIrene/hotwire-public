@@ -16,20 +16,20 @@ public final class UpdateChat {
     private UpdateChat() {
     }
 
-    public static void show() {
-        say("hotwire.self_update.chat");
+    public static void show(String newer) {
+        say("hotwire.self_update.chat", newer);
     }
 
-    public static void showUrgent() {
-        say("hotwire.self_update.urgent_chat");
+    public static void showUrgent(String newer) {
+        say("hotwire.self_update.urgent_chat", newer);
     }
 
-    private static void say(String key) {
+    private static void say(String key, String newer) {
         Minecraft minecraft = Minecraft.getInstance();
         if (minecraft.player == null) {
             return;
         }
-        String text = Lang.get(key);
+        String text = Lang.get(key, plain(newer), plain(LoadedMods.findVersion("hotwire", "?")));
         Style style = Style.EMPTY.withClickEvent(openScreen());
         MutableComponent line = Component.empty();
         int last = Math.max(1, text.length() - 1);
@@ -43,6 +43,11 @@ public final class UpdateChat {
         //?} else {
         /*minecraft.player.displayClientMessage(line, false);
         *///?}
+    }
+
+    private static String plain(String version) {
+        int build = version.indexOf('+');
+        return build > 0 ? version.substring(0, build) : version;
     }
 
     private static ClickEvent openScreen() {

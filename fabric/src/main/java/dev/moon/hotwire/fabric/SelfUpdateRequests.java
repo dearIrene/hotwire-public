@@ -5,6 +5,7 @@ import dev.moon.hotwire.modrinth.ModrinthClient;
 import dev.moon.hotwire.ui.Lang;
 import dev.moon.hotwire.ui.ModScreen;
 import dev.moon.hotwire.update.PendingChange;
+import dev.moon.hotwire.update.UrgentUpdate;
 import java.io.IOException;
 import java.nio.file.Path;
 import java.util.List;
@@ -50,16 +51,17 @@ final class SelfUpdateRequests {
     }
 
     void showInChat() {
-        boolean urgent = UrgentNotice.find() != null;
-        if (this.toldInChat || (this.findNewer().isEmpty() && !urgent) || Minecraft.getInstance().player == null) {
+        UrgentUpdate urgent = UrgentNotice.find();
+        String newer = this.findNewer();
+        if (this.toldInChat || (newer.isEmpty() && urgent == null) || Minecraft.getInstance().player == null) {
             this.start();
             return;
         }
         this.toldInChat = true;
-        if (urgent) {
-            UpdateChat.showUrgent();
+        if (urgent != null) {
+            UpdateChat.showUrgent(urgent.version());
         } else {
-            UpdateChat.show();
+            UpdateChat.show(newer);
         }
     }
 
