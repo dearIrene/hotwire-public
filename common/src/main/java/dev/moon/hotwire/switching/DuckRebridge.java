@@ -26,7 +26,7 @@ final class DuckRebridge {
     static Set<String> findCalledAcross(Set<String> movedNow, Set<String> movedBefore) {
         Set<String> fresh = new HashSet<>(movedNow);
         fresh.removeAll(movedBefore);
-        fresh.removeIf(method -> method.substring(0, method.indexOf('(')).contains("$"));
+        fresh.removeIf(method -> method.startsWith("<") || method.substring(0, method.indexOf('(')).contains("$"));
         return fresh;
     }
 
