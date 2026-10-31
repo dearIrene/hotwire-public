@@ -459,6 +459,7 @@
   "hotwire.store.category.combat": "Combat",
   "hotwire.store.category.modded": "Modded",
   "hotwire.store.category.blocks": "Blocks",
+  "hotwire.store.open_modrinth": "Open on Modrinth",
   "hotwire.store.category.core-shaders": "Core shaders",
   "hotwire.store.category.entities": "Entities",
   "hotwire.store.category.environment": "Environment",

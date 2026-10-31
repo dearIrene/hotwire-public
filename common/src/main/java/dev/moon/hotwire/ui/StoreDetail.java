@@ -28,6 +28,7 @@ public final class StoreDetail extends Panel {
 
     private static final int HEAD = 50;
     private static final int MOST_PICTURE = 240;
+    private static final int MODRINTH_W = 104;
     private static final int PICTURE_GAP = 6;
 
     private final StoreModel model;
@@ -54,6 +55,8 @@ public final class StoreDetail extends Panel {
 
     private final DownloadMenu downloads;
 
+    private final Button onModrinth;
+
     public StoreDetail(StoreModel model, StoreIcons icons, Adds adds, Consumer<String> openLink, Runnable onClose) {
         super(Lang.get("hotwire.button.close"), onClose);
         this.model = model;
@@ -62,6 +65,15 @@ public final class StoreDetail extends Panel {
         this.openLink = openLink;
         this.setLineY(HEAD - 10);
         this.downloads = new DownloadMenu(this, model, adds);
+        this.onModrinth = this.add(new Button(Lang.get("hotwire.store.open_modrinth"), false, this::openOnModrinth));
+    }
+
+    private void openOnModrinth() {
+        ModrinthClient.Hit shown = this.hit;
+        if (shown != null) {
+            this.openLink.accept("https://modrinth.com/project/" + (shown.slug().isEmpty() ? shown.projectId()
+                    : shown.slug()));
+        }
     }
 
     public void open(ModrinthClient.Hit hit) {
@@ -150,6 +162,10 @@ public final class StoreDetail extends Panel {
         this.scroll.to(this.scrollTarget);
         this.scroll.step(dt);
         super.step(dt);
+        this.onModrinth.setBounds(this.getBoxX() + this.getBoxWidth() - 14 - MODRINTH_W, this.getBoxY() + 23,
+                MODRINTH_W, 14);
+        this.onModrinth.setVisible(this.hit != null);
+        this.onModrinth.setActive(this.open() && this.getBoxShown() > 0.9f, true);
     }
 
     @Override
@@ -243,7 +259,8 @@ public final class StoreDetail extends Panel {
                 Colors.fade(Palette.TEXT, alpha));
         String by = shown.author() + (page == null || page.license().isEmpty() ? ""
                 : "  " + Lang.get("hotwire.store.license", page.license()));
-        canvas.drawText(canvas.clip(by, right - textX), textX, top + 16, Colors.fade(Palette.DIM, alpha));
+        canvas.drawText(canvas.clip(by, right - textX - MODRINTH_W - 8), textX, top + 16,
+                Colors.fade(Palette.DIM, alpha));
     }
 
     private int drawPicture(Canvas canvas, float alpha, String urls, int left, int y, int width, int top, int bottom) {
