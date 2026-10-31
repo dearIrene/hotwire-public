@@ -53,6 +53,10 @@ public final class ModrinthClient {
     public interface Transport {
         String get(String url) throws IOException;
 
+        default long findWaitSeconds() {
+            return 0;
+        }
+
         String post(String url, String json) throws IOException;
 
         byte[] fetchBytes(String url) throws IOException;
@@ -361,15 +365,25 @@ public final class ModrinthClient {
         return URLEncoder.encode(text, StandardCharsets.UTF_8);
     }
 
+    public long findWaitSeconds() {
+        return this.transport.findWaitSeconds();
+    }
+
     private static final class LiveTransport implements Transport {
         private static final HttpClient HTTP = HttpClient.newBuilder().connectTimeout(TIMEOUT)
                 .followRedirects(HttpClient.Redirect.NORMAL).build();
         private final String agent;
 
-        private volatile long openAgainAt;
+        private static volatile long openAgainAt;
 
         LiveTransport(String hotwireVersion) {
             this.agent = USER_AGENT_PREFIX + hotwireVersion + " (" + CONTACT + ")";
+        }
+
+        @Override
+        public long findWaitSeconds() {
+            long left = openAgainAt - System.nanoTime();
+            return left > 0 ? (left + 999_999_999L) / 1_000_000_000L : 0;
         }
 
         @Override
@@ -446,7 +460,7 @@ public final class ModrinthClient {
                 Reader<T, R> read) throws IOException {
             try {
                 HttpRequest built = request.header("User-Agent", this.agent).timeout(TIMEOUT).build();
-                long wait = this.openAgainAt - System.nanoTime();
+                long wait = openAgainAt - System.nanoTime();
 
                 if (wait > 0 && !built.uri().getHost().startsWith("cdn.")) {
                     Thread.sleep(Math.min(wait / 1_000_000, 60_000));
@@ -471,7 +485,7 @@ public final class ModrinthClient {
             long remaining = response.headers().firstValueAsLong("X-Ratelimit-Remaining").orElse(1);
             long reset = response.headers().firstValueAsLong("X-Ratelimit-Reset").orElse(0);
             if (remaining <= 0 && reset > 0) {
-                this.openAgainAt = System.nanoTime() + reset * 1_000_000_000L;
+                openAgainAt = System.nanoTime() + reset * 1_000_000_000L;
             }
         }
     }

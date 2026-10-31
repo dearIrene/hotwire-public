@@ -61,6 +61,9 @@ public final class ModScreen implements JarHost {
         default void updateFromStore(UpdateOffer offer) {
         }
 
+        default void checkForUpdates() {
+        }
+
         default void updateAllFromStore(List<UpdateOffer> offers) {
             offers.forEach(this::updateFromStore);
         }
@@ -232,7 +235,7 @@ public final class ModScreen implements JarHost {
         }, offers -> {
             this.closePanels();
             game.updateAllFromStore(offers);
-        }, this::closePanels, game::findIcon);
+        }, this::closePanels, game::findIcon, game::checkForUpdates);
         this.progress = new ProgressPanel(game.getProgress());
         this.addPanel = new AddPanel(this::confirmAdd, game::addMod, this::closePanels);
         this.updatePanel = new UpdatePanel(this::confirmUpdate, game::updateMod, this::closePanels);

@@ -187,6 +187,13 @@ public final class HotwireEngine implements ModScreen.Game, AutoCloseable {
     }
 
     @Override
+    public void checkForUpdates() {
+        if (this.storeJars.recheck()) {
+            this.selfUpdate.recheck();
+        }
+    }
+
+    @Override
     public void updateAllFromStore(List<UpdateOffer> offers) {
         this.storeJars.updateAll(offers);
     }

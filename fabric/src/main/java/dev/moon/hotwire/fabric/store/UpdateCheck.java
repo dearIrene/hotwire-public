@@ -60,6 +60,10 @@ public final class UpdateCheck {
         });
     }
 
+    public long findWaitSeconds() {
+        return this.client.findWaitSeconds();
+    }
+
     public List<UpdateOffer> findNow() throws IOException {
         return this.find();
     }

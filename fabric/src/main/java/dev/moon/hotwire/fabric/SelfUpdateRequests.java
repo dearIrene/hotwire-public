@@ -44,6 +44,11 @@ final class SelfUpdateRequests {
         }), urgent -> Minecraft.getInstance().execute(() -> UrgentNotice.onChecked(urgent)));
     }
 
+    void recheck() {
+        this.check.allowAgain();
+        this.start();
+    }
+
     void showInChat() {
         boolean urgent = UrgentNotice.find() != null;
         if (this.toldInChat || (this.findNewer().isEmpty() && !urgent) || Minecraft.getInstance().player == null) {

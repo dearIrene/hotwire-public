@@ -64,6 +64,10 @@ public final class SelfUpdate {
         }
     }
 
+    public void allowAgain() {
+        this.started = false;
+    }
+
     public ModrinthClient.@Nullable Version getNewer() {
         return this.newer;
     }

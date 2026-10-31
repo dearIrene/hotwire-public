@@ -38,6 +38,10 @@ final class StoreJars {
     private final InstalledMods installed;
     private final ModChanges changes;
     private final UpdateCheck check;
+
+    private static final long RECHECK_SECONDS = 60;
+
+    private long lastStarted;
     private final Supplier<@Nullable JarHost> host;
     private final Supplier<@Nullable ModScreen> screen;
     private final Supplier<@Nullable ModStore> store;
@@ -76,11 +80,33 @@ final class StoreJars {
         return this.checked;
     }
 
+    boolean recheck() {
+        long limited = this.check.findWaitSeconds();
+        if (limited > 0) {
+            this.say.accept(Lang.get("hotwire.updates.rate_limited", limited), true);
+            return false;
+        }
+        long since = (System.nanoTime() - this.lastStarted) / 1_000_000_000L;
+        if (this.lastStarted != 0 && since < RECHECK_SECONDS) {
+            this.say.accept(Lang.get("hotwire.updates.wait", RECHECK_SECONDS - since), false);
+            return false;
+        }
+        this.started = false;
+        this.checked = false;
+        ModScreen current = this.screen.get();
+        if (current != null) {
+            current.setUpdates(this.offers, false);
+        }
+        this.startCheck();
+        return true;
+    }
+
     void startCheck() {
         if (this.started) {
             return;
         }
         this.started = true;
+        this.lastStarted = System.nanoTime();
         this.check.start(found -> Minecraft.getInstance().execute(() -> {
             this.offers = found;
             this.checked = true;

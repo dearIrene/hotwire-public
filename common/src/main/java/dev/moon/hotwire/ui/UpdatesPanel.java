@@ -25,12 +25,14 @@ final class UpdatesPanel extends Panel {
     private final EasedValue scroll = EasedValue.ofSpeed(12);
     private float scrollTarget;
 
+    @SuppressWarnings("this-escape")
     UpdatesPanel(Consumer<UpdateOffer> onUpdate, Consumer<List<UpdateOffer>> onUpdateAll, Runnable onDone,
-            Function<String, Canvas.@Nullable Image> icons) {
+            Function<String, Canvas.@Nullable Image> icons, Runnable onCheck) {
         super(Lang.get("hotwire.button.done"), onDone);
         this.onUpdate = onUpdate;
         this.onUpdateAll = onUpdateAll;
         this.icons = icons;
+        this.change(Lang.get("hotwire.updates.check"), onCheck);
     }
 
     void present() {
