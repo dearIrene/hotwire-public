@@ -5,6 +5,7 @@ import dev.moon.hotwire.redefine.FieldSlots;
 import java.lang.ref.WeakReference;
 import java.lang.reflect.Constructor;
 import java.util.Collection;
+import java.util.Collections;
 import java.util.ConcurrentModificationException;
 import java.util.List;
 import java.util.Map;
@@ -29,12 +30,13 @@ final class CollectionParts {
     private CollectionParts() {
     }
 
+    private static final String JDK_IMMUTABLE = List.of().getClass().getNestHost().getName() + "$";
+    private static final String JDK_UNMODIFIABLE = Collections.class.getName() + "$Unmodifiable";
     private static final ClassValue<Boolean> REFUSES = new ClassValue<>() {
         @Override
         protected Boolean computeValue(Class<?> type) {
             String name = type.getName();
-            return name.startsWith("java.util.ImmutableCollections$")
-                    || name.startsWith("java.util.Collections$Unmodifiable")
+            return name.startsWith(JDK_IMMUTABLE) || name.startsWith(JDK_UNMODIFIABLE)
                     || ImmutableCollection.class.isAssignableFrom(type);
         }
     };
