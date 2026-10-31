@@ -324,7 +324,7 @@ public final class ClassRebuilder {
                         Objects.requireNonNull(mixed.get(name)), anyClass, read -> {
                             byte[] now = mixed.get(read);
                             now = now != null ? now : this.mixedNow.get(read);
-                            now = now != null ? now : findRunning(read);
+                            now = now != null ? now : this.findRunning(read);
                             return now != null ? now : this.bytesOf.apply(read);
                         }, batchDucks, batchMoved, addedElsewhere);
                 byte[] launched = this.launch.get(name);

@@ -12,6 +12,7 @@ import java.util.Map;
 import java.util.Optional;
 import java.util.Set;
 import java.util.concurrent.ConcurrentHashMap;
+import java.util.function.Function;
 import java.util.function.Predicate;
 import java.util.function.UnaryOperator;
 import org.jspecify.annotations.Nullable;
@@ -26,10 +27,13 @@ final class LaunchDecisions {
     private final Set<String> onAtLaunch;
     private final MixinChoice choice;
 
+    private final Function<String, Set<String>> shippedBy;
+
     private final Map<String, Optional<byte[]>> read = new ConcurrentHashMap<>();
     private final Map<String, Set<String>> listed = new ConcurrentHashMap<>();
     private final Map<String, Boolean> transforms = new ConcurrentHashMap<>();
     private final Map<String, Boolean> firstOnly = new ConcurrentHashMap<>();
+    private final Map<String, Set<String>> unlisted = new ConcurrentHashMap<>();
 
     record Result(Map<String, byte[]> configs, Set<String> askedAgain) {
         boolean isAskedAgain(String mixin) {
@@ -39,10 +43,16 @@ final class LaunchDecisions {
 
     LaunchDecisions(SwitchApplier.Game game, Map<String, String> ownerOfConfig, Set<String> onAtLaunch,
             MixinChoice choice) {
+        this(game, ownerOfConfig, onAtLaunch, choice, id -> Set.of());
+    }
+
+    LaunchDecisions(SwitchApplier.Game game, Map<String, String> ownerOfConfig, Set<String> onAtLaunch,
+            MixinChoice choice, Function<String, Set<String>> shippedBy) {
         this.game = game;
         this.ownerOfConfig = ownerOfConfig;
         this.onAtLaunch = onAtLaunch;
         this.choice = choice;
+        this.shippedBy = shippedBy;
     }
 
     void forget() {
@@ -50,6 +60,7 @@ final class LaunchDecisions {
         this.listed.clear();
         this.transforms.clear();
         this.firstOnly.clear();
+        this.unlisted.clear();
     }
 
     private byte @Nullable [] findBytes(String name) {
@@ -104,9 +115,11 @@ final class LaunchDecisions {
             Predicate<String> elsewhere = name -> listings.getOrDefault(name, 0) > (own.contains(name) ? 1 : 0);
             Set<String> answers = answeredBy.get(config);
             Set<String> decided = answers != null ? answers : applied;
-            UnaryOperator<Set<String>> choose = answers != null ? listed -> findAnswered(listed, answers)
-                    : listed -> this.choice.choose(listed, appliedByClass, ConfigTrim.readPluginOf(bytes) != null);
             String plugin = ConfigTrim.readPluginOf(bytes);
+            Set<String> given = answers != null || plugin == null ? Set.of()
+                    : this.choice.chooseUnlisted(this.findUnlisted(config, bytes, elsewhere), appliedByClass);
+            UnaryOperator<Set<String>> choose = answers != null ? listed -> findAnswered(listed, answers)
+                    : listed -> withGiven(this.choice.choose(listed, appliedByClass, plugin != null), given);
             boolean live = plugin != null && this.isRunLive(config, plugin);
             String owner = this.ownerOfConfig.get(config);
             boolean ownerOff = owner != null && !on.test(owner);
@@ -146,6 +159,37 @@ final class LaunchDecisions {
         } catch (JsonParseException | IllegalStateException e) {
             return Set.of();
         }
+    }
+
+    private Set<String> findUnlisted(String config, byte[] bytes, Predicate<String> elsewhere) {
+        Set<String> found = this.unlisted.computeIfAbsent(config, key -> {
+            String owner = this.ownerOfConfig.get(key);
+            String prefix = ConfigTrim.readPackageOf(bytes);
+            if (owner == null || prefix.isEmpty()) {
+                return Set.of();
+            }
+            Set<String> listed = this.listed.getOrDefault(key, Set.of());
+            Set<String> out = new HashSet<>();
+            for (String shipped : this.shippedBy.apply(owner)) {
+                String name = shipped.replace('/', '.');
+                if (name.startsWith(prefix) && !listed.contains(name)) {
+                    out.add(name);
+                }
+            }
+            return Set.copyOf(out);
+        });
+        Set<String> out = new HashSet<>(found);
+        out.removeIf(elsewhere);
+        return out;
+    }
+
+    private static Set<String> withGiven(Set<String> chosen, Set<String> given) {
+        if (given.isEmpty()) {
+            return chosen;
+        }
+        Set<String> out = new HashSet<>(chosen);
+        out.addAll(given);
+        return out;
     }
 
     private static Set<String> findAnswered(Set<String> listed, Set<String> answers) {

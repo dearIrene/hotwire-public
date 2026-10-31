@@ -194,7 +194,10 @@ public final class SwitchApplier {
         this.mods.forEach((id, mixins) -> mixins.configs()
                 .forEach(config -> this.ownerOfConfig.putIfAbsent(config, id)));
         this.onAtLaunch.addAll(onAtLaunch);
-        this.decisions = new LaunchDecisions(game, this.ownerOfConfig, this.onAtLaunch, this.choice);
+        this.decisions = new LaunchDecisions(game, this.ownerOfConfig, this.onAtLaunch, this.choice, id -> {
+            ModMixins mod = this.mods.get(id);
+            return mod == null ? Set.of() : mod.owns();
+        });
         this.unowned = List.copyOf(unowned);
         this.onConfigs = this.getConfigsOf(onAtLaunch);
         this.onMods = this.onAtLaunch;

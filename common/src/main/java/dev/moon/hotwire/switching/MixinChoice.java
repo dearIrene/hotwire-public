@@ -97,6 +97,23 @@ final class MixinChoice {
         return chosen;
     }
 
+    Set<String> chooseUnlisted(Set<String> candidates, Map<String, Set<String>> appliedByClass) {
+        Set<String> chosen = new HashSet<>();
+        for (String mixin : candidates) {
+            MixinClassInfo read = this.findMixinInfo(mixin);
+            if (read == null) {
+                continue;
+            }
+            for (String target : read.targets()) {
+                Set<String> onClass = appliedByClass.get(target);
+                if (onClass != null && (onClass.contains(mixin) || this.isByInterface(mixin, read, onClass))) {
+                    chosen.add(mixin);
+                }
+            }
+        }
+        return chosen;
+    }
+
     private Set<String> findNamed(String mixin) {
         byte[] bytes = this.original.apply(mixin.replace('.', '/'));
         if (bytes == null) {
