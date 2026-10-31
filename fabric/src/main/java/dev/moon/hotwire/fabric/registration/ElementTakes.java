@@ -1,6 +1,7 @@
 package dev.moon.hotwire.fabric.registration;
 
 import dev.moon.hotwire.registration.Fingerprints;
+import dev.moon.hotwire.registration.GuavaCaches;
 import java.lang.ref.WeakReference;
 import java.util.ArrayList;
 import java.util.Collection;
@@ -15,6 +16,7 @@ import java.util.function.BiConsumer;
 import java.util.function.Consumer;
 import java.util.function.Function;
 import java.util.function.Supplier;
+import net.minecraft.client.Minecraft;
 import org.jspecify.annotations.Nullable;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -200,7 +202,19 @@ final class ElementTakes {
         }
     }
 
+    static void changeOnItsThread(Object container, Runnable change) {
+        if (GuavaCaches.isCache(container) && !Minecraft.getInstance().isSameThread()) {
+            GameHold.onGameAndWait(change);
+        } else {
+            change.run();
+        }
+    }
+
     static void takeFromCollection(Collection<Object> items, Object item, List<Removal> out) {
+        changeOnItsThread(items, () -> takeFromCollectionHere(items, item, out));
+    }
+
+    private static void takeFromCollectionHere(Collection<Object> items, Object item, List<Removal> out) {
         if (!items.contains(item)) {
             return;
         }
@@ -229,9 +243,11 @@ final class ElementTakes {
     }
 
     static void takeFromMap(Map<Object, Object> entries, Object key, Object value, List<Removal> out) {
-        if (!isGameEntry(key, value) && entries.remove(key, value)) {
-            out.add(new Removal.InMap(entries, key, value));
-        }
+        changeOnItsThread(entries, () -> {
+            if (!isGameEntry(key, value) && entries.remove(key, value)) {
+                out.add(new Removal.InMap(entries, key, value));
+            }
+        });
     }
 
     static @Nullable Object findWrappedValue(Object value, String mod) {
@@ -257,11 +273,13 @@ final class ElementTakes {
 
     static void replaceInMap(Map<Object, Object> entries, Object key, Object value, Object inner,
             List<Removal> out) {
-        if (entries.replace(key, value, inner)) {
-            out.add(new Removal.InMapValue(entries, key, value, inner));
-            LOGGER.info("[Hotwire] {} gave way to {} under {} in {}", value.getClass().getName(),
-                    inner.getClass().getName(), key, entries.getClass().getName());
-        }
+        changeOnItsThread(entries, () -> {
+            if (entries.replace(key, value, inner)) {
+                out.add(new Removal.InMapValue(entries, key, value, inner));
+                LOGGER.info("[Hotwire] {} gave way to {} under {} in {}", value.getClass().getName(),
+                        inner.getClass().getName(), key, entries.getClass().getName());
+            }
+        });
     }
 
     @SuppressWarnings("ReferenceEquality")

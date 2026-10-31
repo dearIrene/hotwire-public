@@ -175,7 +175,8 @@ public final class ModelReloadCheck {
             return;
         }
         if (value instanceof Collection<?> || value instanceof Object[]) {
-            Iterable<?> items = value instanceof Object[] array ? Arrays.asList(array) : (Collection<?>) value;
+            Iterable<?> items = value instanceof Object[] array ? Arrays.asList(array)
+                    : Wrappers.readItems((Collection<?>) value);
             int limit = value instanceof Object[] ? ARRAY_LOOKED_AT : LOOKED_AT;
             int at = 0;
             try {

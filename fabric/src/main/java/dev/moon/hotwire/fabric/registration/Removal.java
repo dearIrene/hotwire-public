@@ -51,9 +51,11 @@ sealed interface Removal {
 
         @Override
         public void restore() {
-            if (!containsSame(this.collection, this.element)) {
-                this.collection.add(this.element);
-            }
+            ElementTakes.changeOnItsThread(this.collection, () -> {
+                if (!containsSame(this.collection, this.element)) {
+                    this.collection.add(this.element);
+                }
+            });
         }
 
         @Override
@@ -184,7 +186,7 @@ sealed interface Removal {
 
         @Override
         public void restore() {
-            this.map.replace(this.key, this.inner, this.mods);
+            ElementTakes.changeOnItsThread(this.map, () -> this.map.replace(this.key, this.inner, this.mods));
         }
 
         @Override
@@ -201,7 +203,7 @@ sealed interface Removal {
 
         @Override
         public void restore() {
-            this.map.putIfAbsent(this.key, this.value);
+            ElementTakes.changeOnItsThread(this.map, () -> this.map.putIfAbsent(this.key, this.value));
         }
 
         @Override

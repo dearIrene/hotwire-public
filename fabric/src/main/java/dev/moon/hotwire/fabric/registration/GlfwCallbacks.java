@@ -121,7 +121,7 @@ public final class GlfwCallbacks {
         List<Object> below = new ArrayList<>();
         for (Object one : objects) {
             Collection<?> items = one instanceof Map<?, ?> map ? Wrappers.readValues(map)
-                    : one instanceof Collection<?> collection ? collection : List.of();
+                    : one instanceof Collection<?> collection ? Wrappers.readItems(collection) : List.of();
             items.stream().limit(1000).filter(item -> item != null && own.test(item.getClass())).forEach(below::add);
             below.addAll(Fields.findInCollectionsOf(one, own));
         }

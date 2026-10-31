@@ -511,7 +511,7 @@ final class CollectionReferences implements FixedLists.Walk {
                 }
                 case Collection<?> collection when collection.size() <= LARGEST -> {
                     Collection<Object> items = (Collection<Object>) collection;
-                    for (Object item : new ArrayList<>(items)) {
+                    for (Object item : Wrappers.readItems(items)) {
                         String mod = item == null ? null : this.owners.findOwnerOf(item, this.inSmall);
                         if (mod != null && this.isOwnPlain(mod, item)) {
                             this.report.countOwnLeft();

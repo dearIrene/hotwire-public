@@ -130,7 +130,7 @@ public final class Fields {
             try {
                 Object value = field.get(holder);
                 Collection<?> items = value instanceof Map<?, ?> map ? Wrappers.readValues(map)
-                        : value instanceof Collection<?> collection ? collection : List.of();
+                        : value instanceof Collection<?> collection ? Wrappers.readItems(collection) : List.of();
                 items.stream().limit(1000).filter(item -> item != null && followed.test(item.getClass()))
                         .forEach(found::add);
             } catch (IllegalAccessException | InaccessibleObjectException | SecurityException e) {

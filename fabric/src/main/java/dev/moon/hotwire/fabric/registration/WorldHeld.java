@@ -120,13 +120,14 @@ public final class WorldHeld {
             }
             out.add(value);
             Collection<?> items = value instanceof Map<?, ?> map ? Wrappers.readValues(map)
-                    : value instanceof Collection<?> collection ? collection : List.of();
+                    : value instanceof Collection<?> collection ? Wrappers.readItems(collection) : List.of();
             items.stream().limit(MOST_ELEMENTS).filter(item -> item != null).forEach(out::add);
         }
         if (holder instanceof Map<?, ?> map) {
             Wrappers.readValues(map).stream().limit(MOST_ELEMENTS).filter(item -> item != null).forEach(out::add);
         } else if (holder instanceof Collection<?> collection) {
-            collection.stream().limit(MOST_ELEMENTS).filter(item -> item != null).forEach(out::add);
+            Wrappers.readItems(collection).stream().limit(MOST_ELEMENTS).filter(item -> item != null)
+                    .forEach(out::add);
         }
         return out;
     }

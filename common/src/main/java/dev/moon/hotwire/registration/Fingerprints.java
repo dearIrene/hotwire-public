@@ -25,6 +25,19 @@ public final class Fingerprints {
                 || type.startsWith("com.google.common.collect.Immutable")) {
             return 1;
         }
+
+        if (GuavaCaches.isCache(container)) {
+            List<Object> items = GuavaCaches.readItems(container);
+            if (items == null) {
+                return UNKNOWN;
+            }
+            long print = items.size();
+            for (Object item : items) {
+                print += item instanceof Map.Entry<?, ?> entry ? mix(System.identityHashCode(entry.getKey()) * 31L
+                        + System.identityHashCode(entry.getValue())) : mix(System.identityHashCode(item));
+            }
+            return print;
+        }
         if (container instanceof Object[] array) {
             long print = array.length;
             for (Object item : array) {

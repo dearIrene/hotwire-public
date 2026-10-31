@@ -1,6 +1,7 @@
 package dev.moon.hotwire.fabric.registration;
 
 import dev.moon.hotwire.redefine.FieldSlots;
+import dev.moon.hotwire.registration.GuavaCaches;
 import dev.moon.hotwire.registration.ModNames;
 import java.lang.reflect.Field;
 import java.util.AbstractMap;
@@ -338,6 +339,10 @@ final class Wrappers {
     }
 
     static List<Map.Entry<Object, Object>> copyEntries(Map<Object, Object> map) {
+        if (GuavaCaches.isCache(map)) {
+            List<Map.Entry<Object, Object>> entries = GuavaCaches.readEntries(map);
+            return entries == null ? List.of() : new ArrayList<>(entries);
+        }
         boolean makesValues = makesValues(map);
         List<Map.Entry<Object, Object>> pairs = new ArrayList<>(map.size());
         for (Map.Entry<Object, Object> entry : map.entrySet()) {
@@ -361,11 +366,24 @@ final class Wrappers {
         if (makesValues(map)) {
             return List.of();
         }
+        if (GuavaCaches.isCache(map)) {
+            List<Object> values = GuavaCaches.readItems(map);
+            return values == null ? List.of() : values;
+        }
         try {
             return new ArrayList<>(map.values());
         } catch (RuntimeException refused) {
             return List.of();
         }
+    }
+
+    @SuppressWarnings("unchecked")
+    static <T> Collection<T> readItems(Collection<T> items) {
+        if (GuavaCaches.isCache(items)) {
+            List<Object> read = GuavaCaches.readItems(items);
+            return read == null ? List.of() : (Collection<T>) read;
+        }
+        return new ArrayList<>(items);
     }
 
     static @Nullable String findThereFor(Object value, List<String> mods) {
