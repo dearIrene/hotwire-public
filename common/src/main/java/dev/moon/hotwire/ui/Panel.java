@@ -23,6 +23,7 @@ class Panel extends Element {
     private int primaryWidth = BUTTON_W;
 
     private int primaryNeeds;
+    private int changeNeeds;
 
     protected static final int CONTENT_Y = 46;
 
@@ -193,7 +194,8 @@ class Panel extends Element {
             this.cancel.setActive(ready, true);
         }
         if (this.change != null) {
-            this.change.setBounds(cancelX - 6 - BUTTON_W, y, BUTTON_W, BUTTON_H);
+            int changeWidth = Math.max(BUTTON_W, this.changeNeeds);
+            this.change.setBounds(cancelX - 6 - changeWidth, y, changeWidth, BUTTON_H);
             this.change.setActive(ready && this.changeActive, this.changeActive);
         }
         if (this.primary != null) {
@@ -206,6 +208,9 @@ class Panel extends Element {
     protected final void paint(Canvas canvas, float alpha) {
         if (this.primary != null) {
             this.primaryNeeds = this.primary.measure(canvas, false);
+        }
+        if (this.change != null) {
+            this.changeNeeds = this.change.measure(canvas, false);
         }
         canvas.fill(0, 0, this.getWidth(), this.getHeight(), Colors.fade(Palette.SCRIM, alpha * this.shown.getValue()));
         float s = alpha * this.getBoxShown();
