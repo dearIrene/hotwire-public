@@ -41,6 +41,14 @@ public final class ModScreen implements JarHost {
         default void prepareAhead(List<String> ids, boolean off) {
         }
 
+        default Set<String> getModsWithSettings() {
+            return Set.of();
+        }
+
+        default boolean openSettings(String id) {
+            return false;
+        }
+
         void applyProfile(String name, ProfileStore.ProfilePlan plan);
 
         String report();
@@ -180,6 +188,8 @@ public final class ModScreen implements JarHost {
     private final FirstOpenPanel firstOpen;
     private final SelfUpdatePanel selfUpdate;
     private int pendingCount;
+
+    private Set<String> withSettings;
     private final List<ModStatus> shown = new ArrayList<>();
     private final Map<String, String> childOf = new HashMap<>();
 
@@ -277,6 +287,7 @@ public final class ModScreen implements JarHost {
         this.showNewerHotwire();
         this.root.focus(this.search);
         this.pendingCount = game.getPendingChanges().size();
+        this.withSettings = game.getModsWithSettings();
         this.refilter();
     }
 
@@ -363,7 +374,22 @@ public final class ModScreen implements JarHost {
         this.list.clearWishes();
         this.model.onCatalogChanged();
         this.pendingCount = this.game.getPendingChanges().size();
+        this.withSettings = this.game.getModsWithSettings();
         this.refilter();
+    }
+
+    public boolean pressSettings(String id) {
+        if (!this.withSettings.contains(id)) {
+            return false;
+        }
+        this.openSettings(id);
+        return true;
+    }
+
+    private void openSettings(String id) {
+        if (this.isIdle() && !this.game.openSettings(id)) {
+            this.withSettings = this.game.getModsWithSettings();
+        }
     }
 
     void onJarToAdd(Path jar) {
@@ -624,6 +650,11 @@ public final class ModScreen implements JarHost {
         public boolean isPicked(String id) {
             return ModScreen.this.model.getPicked().contains(id);
         }
+
+        @Override
+        public boolean hasSettings(String id) {
+            return ModScreen.this.withSettings.contains(id);
+        }
     }
 
     private final class Gestures implements ModList.Gestures {
@@ -685,6 +716,11 @@ public final class ModScreen implements JarHost {
                 ModScreen.this.model.pick(ModScreen.this.shown.get(at).id());
             }
             ModScreen.this.refilter();
+        }
+
+        @Override
+        public void openSettings(String id) {
+            ModScreen.this.openSettings(id);
         }
     }
 }

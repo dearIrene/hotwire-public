@@ -105,6 +105,8 @@ public final class HotwireEngine implements ModScreen.Game, AutoCloseable {
     private final ModIcons icons;
     private final ModChanges changes;
     private final CacheFillControl cacheFill = new CacheFillControl(this::findParts, this::findStoreCacheView);
+    private final ConfigScreens configScreens = new ConfigScreens(this::isOn, this::nameOfMod,
+            text -> this.showMessage(text, true));
     private final DisabledMods disabled;
     private final SwitchRequests switches;
 
@@ -338,6 +340,16 @@ public final class HotwireEngine implements ModScreen.Game, AutoCloseable {
     @Override
     public ModList.Badges getBadges() {
         return this.rows.getBadges();
+    }
+
+    @Override
+    public Set<String> getModsWithSettings() {
+        return this.configScreens.findOpenable();
+    }
+
+    @Override
+    public boolean openSettings(String id) {
+        return this.configScreens.open(id);
     }
 
     @Override

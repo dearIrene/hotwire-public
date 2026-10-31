@@ -1,5 +1,6 @@
 package dev.moon.hotwire.ui.list;
 
+import dev.moon.hotwire.ui.Button;
 import dev.moon.hotwire.ui.Canvas;
 import dev.moon.hotwire.ui.Colors;
 import dev.moon.hotwire.ui.EasedValue;
@@ -20,6 +21,10 @@ final class ModListRow {
     private static final String STARRED = "\u2605";
     private static final String UNSTARRED = "\u2606";
     static final int CARD_SWITCH_ZONE_H = 24;
+    static final int SETTINGS_H = 20;
+
+    static final int CARD_SETTINGS_H = 16;
+    private static final int SETTINGS_GAP = 8;
 
     private static final int[] TILES = {0xFF2B2447, 0xFF2E3A4F, 0xFF4A2F3F, 0xFF3A2F4F, 0xFF2B4549, 0xFF45352B,
         0xFF3F3346, 0xFF2F4A3F};
@@ -59,6 +64,11 @@ final class ModListRow {
     private @Nullable Boolean wish;
     private boolean childSeen;
     private float childness;
+
+    private int settingsLeft;
+    private int settingsTop;
+    private int settingsRight;
+    private int settingsBottom;
 
     private int measuredRoom = -1;
     private String nameFit = "";
@@ -105,6 +115,11 @@ final class ModListRow {
 
     @Nullable Boolean getWish() {
         return this.wish;
+    }
+
+    boolean isOnSettings(double px, double py) {
+        return px >= this.settingsLeft && px < this.settingsRight && py >= this.settingsTop
+                && py < this.settingsBottom;
     }
 
     float getIndent() {
@@ -204,15 +219,16 @@ final class ModListRow {
         int accent = auto ? Palette.ACCENT_SOFT : Palette.ACCENT;
         String owner = this.list.getModel().findBroughtInBy(this.id);
         boolean needed = auto && owner != null && this.list.getModel().getChosen().contains(owner);
+        int settingsW = this.list.hasSettings(this.id) ? Button.measureFor(canvas, this.list.getSettingsLabel()) : 0;
         if (card) {
             drawCheckbox(canvas, x + w - 22, y + 6, this.pick, needed, locked, accent, appear);
             this.paintIcon(canvas, appear, this.mod.on(), x + 8, y + 8);
-            this.paintCardText(canvas, x, y, w, appear);
+            this.paintCardText(canvas, x, y, w, appear, settingsW);
             this.paintStar(canvas, catalog, x + w - 22 - STAR_ZONE, y + 10, appear);
         } else {
             drawCheckbox(canvas, x + 11, y + h / 2 - 8, this.pick, needed, locked, accent, appear);
             this.paintIcon(canvas, appear, this.mod.on(), x + 38, y + h / 2 - ICON / 2);
-            this.paintRowText(canvas, x, y, w, appear, auto);
+            this.paintRowText(canvas, x, y, w, appear, auto, settingsW);
             this.paintStar(canvas, catalog, x + w - SWITCH_ZONE - STAR_ZONE, y + h / 2 - 4, appear);
         }
         int switchX = x + w - 8 - SWITCH_W;
@@ -234,6 +250,23 @@ final class ModListRow {
             canvas.drawText(text, x + (w - canvas.measureText(text)) / 2, y + h / 2 - 4,
                     Colors.fade(Palette.TEXT, appear));
         }
+
+        this.paintSettings(canvas, x, y, w, h, card, settingsW, appear);
+    }
+
+    private void paintSettings(Canvas canvas, int x, int y, int w, int h, boolean card, int width, float appear) {
+        int height = card ? CARD_SETTINGS_H : SETTINGS_H;
+        int left = card ? x + 8 + ICON + 8 : x + w - SWITCH_ZONE - STAR_ZONE - width;
+        int top = card ? y + 32 : y + (h - height) / 2;
+        this.settingsLeft = left;
+        this.settingsTop = top;
+        this.settingsRight = left + width;
+        this.settingsBottom = top + height;
+        if (width == 0) {
+            return;
+        }
+        boolean hot = this.list.isPointerIn(left, top, left + width - 1, top + height - 1);
+        Button.paintPlain(canvas, this.list.getSettingsLabel(), left, top, width, height, hot ? 1 : 0, appear);
     }
 
     private void paintGround(Canvas canvas, int x, int y, int w, int h, boolean card, float onness, float appear) {
@@ -279,10 +312,10 @@ final class ModListRow {
         canvas.popScale();
     }
 
-    private void paintRowText(Canvas canvas, int x, int y, int w, float appear, boolean auto) {
+    private void paintRowText(Canvas canvas, int x, int y, int w, float appear, boolean auto, int settingsW) {
         boolean on = this.mod.on();
         int textX = x + 38 + ICON + 12;
-        int room = x + w - SWITCH_ZONE - STAR_ZONE - 8 - textX;
+        int room = x + w - SWITCH_ZONE - STAR_ZONE - 8 - textX - (settingsW > 0 ? settingsW + SETTINGS_GAP : 0);
         this.measure(canvas, room);
         canvas.drawText(this.nameFit, textX, y + 8, Colors.fade(on ? Palette.TEXT : Palette.DIM, appear));
         canvas.drawText(this.subFit, textX, y + 25, Colors.fade(Palette.FAINT, appear));
@@ -298,14 +331,15 @@ final class ModListRow {
         }
     }
 
-    private void paintCardText(Canvas canvas, int x, int y, int w, float appear) {
+    private void paintCardText(Canvas canvas, int x, int y, int w, float appear, int settingsW) {
         boolean on = this.mod.on();
         int textX = x + 8 + ICON + 8;
         int room = x + w - 24 - textX;
         this.measure(canvas, room);
         canvas.drawText(this.nameFit, textX, y + 10, Colors.fade(on ? Palette.TEXT : Palette.DIM, appear));
         canvas.drawText(canvas.clip(this.mod.version(), room), textX, y + 23, Colors.fade(Palette.FAINT, appear));
-        this.paintMeta(canvas, textX, y + 36, x + w - SWITCH_ZONE, appear);
+        int metaX = textX + (settingsW > 0 ? settingsW + SETTINGS_GAP : 0);
+        this.paintMeta(canvas, metaX, y + 36, x + w - SWITCH_ZONE, appear);
     }
 
     private int paintMeta(Canvas canvas, int x, int y, int right, float appear) {

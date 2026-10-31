@@ -37,6 +37,8 @@ public final class ModList extends Element {
         int countDependants(String id);
 
         boolean isPicked(String id);
+
+        boolean hasSettings(String id);
     }
 
     public interface Badges {
@@ -55,6 +57,8 @@ public final class ModList extends Element {
         boolean unpick(String id);
 
         void pickRange(int from, int to);
+
+        void openSettings(String id);
     }
 
     record Box(int x, int y, int w, int h) {
@@ -69,6 +73,7 @@ public final class ModList extends Element {
     private final ModCatalog catalog;
     private final Function<String, Canvas.@Nullable Image> icons;
     private final Gestures gestures;
+    private final String settingsLabel = Lang.get("hotwire.row.settings");
     private int top = 96;
     private int bottomGap = 64;
     private boolean grid;
@@ -149,6 +154,14 @@ public final class ModList extends Element {
 
     ModListModel getModel() {
         return this.model;
+    }
+
+    boolean hasSettings(String id) {
+        return this.source.hasSettings(id);
+    }
+
+    String getSettingsLabel() {
+        return this.settingsLabel;
     }
 
     Canvas.@Nullable Image findIcon(String id) {
@@ -411,6 +424,11 @@ public final class ModList extends Element {
         }
         String id = mod.id();
         int index = this.getSlotAt(px, py);
+        ModListRow row = this.rows.get(id);
+        if (row != null && row.isOnSettings(px, py) && this.source.hasSettings(id)) {
+            this.gestures.openSettings(id);
+            return true;
+        }
         if (this.isOnStar(this.getBox(index), px, py)) {
             this.gestures.toggleFavorite(id);
             return true;

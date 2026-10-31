@@ -1,6 +1,6 @@
 package dev.moon.hotwire.ui;
 
-final class Button extends Element {
+public final class Button extends Element {
     static final String ELLIPSIS = "…";
 
     static final int PADDING = 4;
@@ -59,7 +59,17 @@ final class Button extends Element {
     }
 
     int measure(Canvas canvas, boolean shortForm) {
-        return canvas.measureText(shortForm ? this.shortLabel : this.label) + PADDING * 2 + 2;
+        return measureFor(canvas, shortForm ? this.shortLabel : this.label);
+    }
+
+    public static int measureFor(Canvas canvas, String label) {
+        return canvas.measureText(label) + PADDING * 2 + 2;
+    }
+
+    public static void paintPlain(Canvas canvas, String label, int x, int y, int w, int h, float hot, float alpha) {
+        canvas.fill(x, y, x + w, y + h, Colors.fade(Palette.PANEL_EDGE, alpha));
+        canvas.fill(x + 1, y + 1, x + w - 1, y + h - 1, Colors.fade(Colors.mix(Palette.PANEL, FACE_HOT, hot), alpha));
+        paintLabel(canvas, label, x, y, w, h, Colors.fade(Colors.mix(Palette.DIM, Palette.TEXT, hot), alpha));
     }
 
     void useShortForm(boolean use) {
@@ -115,16 +125,20 @@ final class Button extends Element {
         if (lit) {
             canvas.fill(x + 1, y + 1, x + w - 1, y + h / 2, Colors.fade(Colors.mix(face, Palette.TEXT, 0.08f), alpha));
         }
-        String shown = this.useShort ? this.shortLabel : this.label;
-        int room = w - 2;
-        if (canvas.measureText(shown) > room) {
-            shown = canvas.clip(shown, room - canvas.measureText(ELLIPSIS)).trim() + ELLIPSIS;
-        }
-        canvas.drawText(shown, x + (w - canvas.measureText(shown)) / 2, y + (h - 8) / 2,
+        paintLabel(canvas, this.useShort ? this.shortLabel : this.label, x, y, w, h,
                 Colors.fade(this.getInk(hot), alpha));
         if (this.badge > 0) {
             this.paintBadge(canvas, x + w - BADGE_SIDE + 3, y - 3, alpha);
         }
+    }
+
+    private static void paintLabel(Canvas canvas, String label, int x, int y, int w, int h, int ink) {
+        String shown = label;
+        int room = w - 2;
+        if (canvas.measureText(shown) > room) {
+            shown = canvas.clip(shown, room - canvas.measureText(ELLIPSIS)).trim() + ELLIPSIS;
+        }
+        canvas.drawText(shown, x + (w - canvas.measureText(shown)) / 2, y + (h - 8) / 2, ink);
     }
 
     private void paintBadge(Canvas canvas, int x, int y, float alpha) {
