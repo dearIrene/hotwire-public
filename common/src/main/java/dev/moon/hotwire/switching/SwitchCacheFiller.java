@@ -75,6 +75,8 @@ public final class SwitchCacheFiller {
 
     private volatile BooleanSupplier playing = () -> false;
     private volatile boolean sampleOnly;
+
+    private volatile boolean healing;
     private volatile int sample;
     private volatile @Nullable Thread thread;
 
@@ -98,7 +100,19 @@ public final class SwitchCacheFiller {
         this.start();
     }
 
+    public void heal() {
+        this.healing = true;
+        this.sampleOnly = false;
+        this.start();
+    }
+
+    static boolean shouldHeal(int holding, int steps) {
+        int left = steps - holding;
+        return holding > 0 && left > 0 && left * 4 <= steps;
+    }
+
     public void fillAll() {
+        this.healing = false;
         this.sampleOnly = false;
         this.paused = false;
         this.start();
@@ -129,7 +143,7 @@ public final class SwitchCacheFiller {
 
     public Fill getFill() {
         Thread running = this.thread;
-        boolean alive = running != null && running.isAlive() && !this.paused && !this.sampleOnly;
+        boolean alive = running != null && running.isAlive() && !this.paused && !this.sampleOnly && !this.healing;
         return new Fill(alive, this.done.get(), this.steps.size(), this.classesDone.get(), this.classes,
                 this.bytesDone.get(), this.bytes, this.nanos.get() / 1_000_000,
                 !this.steps.isEmpty() && this.done.get() >= this.sample, this.filledBytes, this.baseBytes,
@@ -171,6 +185,16 @@ public final class SwitchCacheFiller {
             this.plan();
         }
         long planEnd = System.nanoTime();
+        if (this.healing) {
+            if (this.filledBytes >= 0 || !shouldHeal(this.done.get(), this.steps.size())) {
+                LOGGER.info("[Hotwire] the switch cache heals nothing: {} of {} steps hold", this.done.get(),
+                        this.steps.size());
+                this.healing = false;
+                return;
+            }
+            LOGGER.info("[Hotwire] the switch cache heals {} of {} steps, which a mod's change undid",
+                    this.steps.size() - this.done.get(), this.steps.size());
+        }
 
         if (!this.steps.isEmpty() && this.host.isLookDue() && !this.lookReady) {
             this.lookReady = true;
@@ -209,6 +233,7 @@ public final class SwitchCacheFiller {
             this.outdated = false;
         }
 
+        this.healing = false;
         long[] times = this.applier.getRebuilder().getCache().findTimes();
         long work = this.nanos.get() / 1_000_000;
         LOGGER.info("[Hotwire] the switch cache filled {} of {} steps: {} classes in {} ms; planned {} classes, {}"
@@ -342,7 +367,7 @@ public final class SwitchCacheFiller {
 
     @SuppressWarnings("ThreadPriorityCheck")
     private void yieldAfter(long busyNanos) throws InterruptedException {
-        boolean gently = this.playing.getAsBoolean();
+        boolean gently = this.healing || this.playing.getAsBoolean();
         Thread.currentThread().setPriority(gently ? Thread.MIN_PRIORITY : Thread.NORM_PRIORITY);
         if (gently) {
             Thread.sleep(busyNanos / 1_000_000);

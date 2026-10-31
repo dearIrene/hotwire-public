@@ -32,6 +32,8 @@ import java.util.function.Function;
 import java.util.zip.ZipEntry;
 import java.util.zip.ZipInputStream;
 import org.jspecify.annotations.Nullable;
+import org.objectweb.asm.ClassReader;
+import org.objectweb.asm.ClassWriter;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -179,13 +181,26 @@ public final class MixinCopy implements AutoCloseable {
         try (ZipInputStream zip = new ZipInputStream(Files.newInputStream(own))) {
             for (ZipEntry entry = zip.getNextEntry(); entry != null; entry = zip.getNextEntry()) {
                 String name = entry.getName();
-                if (name.startsWith("dev/moon/hotwire/mixin_copy/") || name.startsWith("dev/moon/hotwire/redefine/")
-                        || name.startsWith("dev/moon/hotwire/cache/")) {
+                if (isEntryMaker(name)) {
                     digest.update(name.getBytes(StandardCharsets.UTF_8));
-                    digest.update(zip.readAllBytes());
+                    byte[] bytes = zip.readAllBytes();
+                    digest.update(name.endsWith(".class") ? withoutDebug(bytes) : bytes);
                 }
             }
         }
+    }
+
+    static boolean isEntryMaker(String name) {
+        return name.startsWith("dev/moon/hotwire/mixin_copy/") || name.startsWith("dev/moon/hotwire/cache/")
+                || name.startsWith("dev/moon/hotwire/redefine/ClassPacks")
+                || name.startsWith("dev/moon/hotwire/redefine/MixedCache")
+                || name.startsWith("dev/moon/hotwire/redefine/CachedMixes");
+    }
+
+    static byte[] withoutDebug(byte[] bytes) {
+        ClassWriter writer = new ClassWriter(0);
+        new ClassReader(bytes).accept(writer, ClassReader.SKIP_DEBUG);
+        return writer.toByteArray();
     }
 
     public String findDecoration(String config) {
