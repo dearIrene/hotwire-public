@@ -15,6 +15,8 @@ import java.util.List;
 import java.util.Map;
 import java.util.Objects;
 import java.util.Set;
+import java.util.TreeMap;
+import java.util.concurrent.ConcurrentHashMap;
 import java.util.function.Consumer;
 import java.util.function.Supplier;
 import net.minecraft.core.Registry;
@@ -50,6 +52,8 @@ final class CollectionReferences implements FixedLists.Walk {
     private boolean inSmall;
 
     private final TakeCandidates candidates = new TakeCandidates();
+
+    private final Map<String, Integer> cannotChange = new ConcurrentHashMap<>();
 
     final ElementLook look = new ElementLook();
 
@@ -91,6 +95,11 @@ final class CollectionReferences implements FixedLists.Walk {
                             out.size(), mod, out.stream().map(Removal::describe).distinct().toList());
                 }
             });
+            if (!this.cannotChange.isEmpty()) {
+                LOGGER.info("[Hotwire] collections that cannot change keep {}'s objects: {}", mods,
+                        new TreeMap<>(this.cannotChange));
+                this.cannotChange.clear();
+            }
 
             this.seen = Set.of();
             this.mods = List.of();
@@ -498,11 +507,15 @@ final class CollectionReferences implements FixedLists.Walk {
             switch (value) {
                 case List<?> list when list.size() <= LARGEST -> {
                     List<Object> items = (List<Object>) list;
+                    boolean fixed = CollectionParts.isFixedSize(items);
                     for (int index = items.size() - 1; index >= 0; index--) {
                         Object item = items.get(index);
                         String mod = item == null ? null : this.owners.findOwnerOf(item, this.inSmall);
                         if (mod != null && this.isOwnPlain(mod, item)) {
                             this.report.countOwnLeft();
+                        } else if (mod != null && fixed) {
+                            this.cannotChange.merge(value.getClass().getName(), 1, Integer::sum);
+                            break;
                         } else if (mod != null) {
                             this.takeOrNote(mod, this.candidates.find(item, this.inSmall),
                                     () -> this.owners.findOwnerOf(item, this.inSmall),
@@ -621,7 +634,7 @@ final class CollectionReferences implements FixedLists.Walk {
             }
             completed = true;
         } catch (UnsupportedOperationException | IllegalStateException e) {
-            LOGGER.info("[Hotwire] {} keeps {}'s objects: it cannot change", value.getClass().getName(), this.mods);
+            this.cannotChange.merge(value.getClass().getName(), 1, Integer::sum);
             completed = true;
         } finally {
             this.inSmall = outer;
