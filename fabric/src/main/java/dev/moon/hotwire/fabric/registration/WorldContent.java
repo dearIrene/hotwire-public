@@ -9,6 +9,7 @@ import java.util.Optional;
 import java.util.SortedSet;
 import java.util.TreeSet;
 import net.fabricmc.loader.api.FabricLoader;
+import net.fabricmc.loader.api.metadata.ModEnvironment;
 import net.minecraft.core.Registry;
 import net.minecraft.core.registries.BuiltInRegistries;
 
@@ -61,9 +62,14 @@ public final class WorldContent {
             String owner = !"minecraft".equals(namespace) && loader.isModLoaded(namespace) ? namespace
                     : owners.computeIfAbsent(value.getClass(),
                             type -> Optional.ofNullable(GameRegistrations.findModOf(type))).orElse(null);
-            if (owner != null && !"minecraft".equals(owner)) {
+            if (owner != null && !"minecraft".equals(owner) && !isClientOnly(loader, owner)) {
                 index.computeIfAbsent(owner, mod -> new TreeSet<>()).add(kind);
             }
         }
+    }
+
+    private static boolean isClientOnly(FabricLoader loader, String mod) {
+        return loader.getModContainer(mod).map(one -> one.getMetadata().getEnvironment() == ModEnvironment.CLIENT)
+                .orElse(false);
     }
 }

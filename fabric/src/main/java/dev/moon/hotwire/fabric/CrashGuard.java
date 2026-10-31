@@ -10,6 +10,8 @@ import dev.moon.hotwire.switching.ModSwitcher;
 import dev.moon.hotwire.switching.PlayerMessages;
 import dev.moon.hotwire.ui.Lang;
 import java.lang.annotation.Annotation;
+import java.lang.reflect.AnnotatedElement;
+import java.lang.reflect.Field;
 import java.lang.reflect.Method;
 import java.util.ArrayList;
 import java.util.Arrays;
@@ -219,8 +221,13 @@ public final class CrashGuard {
         return lambda.find() ? lambda.group(1) : HandlerGuards.findModInHandlerName(method.getName());
     }
 
-    private static @Nullable String findMergedFrom(Method method) {
-        for (Annotation annotation : method.getDeclaredAnnotations()) {
+    public static @Nullable String findMergedMod(Field field) {
+        String mixin = findMergedFrom(field);
+        return mixin == null ? null : mixinOwner.apply(mixin.replace('.', '/'));
+    }
+
+    private static @Nullable String findMergedFrom(AnnotatedElement member) {
+        for (Annotation annotation : member.getDeclaredAnnotations()) {
             if (annotation.annotationType().getName().equals(MIXIN_MERGED)) {
                 try {
                     return String.valueOf(annotation.annotationType().getMethod("mixin").invoke(annotation));
