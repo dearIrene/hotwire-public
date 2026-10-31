@@ -5,6 +5,7 @@ import dev.moon.hotwire.concurrent.Tasks;
 import dev.moon.hotwire.config.HotwireSettings;
 import dev.moon.hotwire.fabric.add.WorldReopen;
 import dev.moon.hotwire.fabric.registration.WorldContent;
+import dev.moon.hotwire.fabric.registration.WorldHeld;
 import dev.moon.hotwire.switching.ModSwitcher;
 import dev.moon.hotwire.switching.PlayerMessages;
 import dev.moon.hotwire.ui.Lang;
@@ -118,7 +119,8 @@ final class SwitchRequests {
         Set<String> kinds = new TreeSet<>();
         WorldContent.find(order).values().forEach(kinds::addAll);
         if (kinds.isEmpty()) {
-            return Lang.get("hotwire.reopen.why.restart_only");
+            return Lang.get(WorldHeld.find(order).isEmpty() ? "hotwire.reopen.why.restart_only"
+                    : "hotwire.reopen.why.world_data");
         }
         List<String> named = List.copyOf(kinds);
         String listed = named.size() == 1 ? named.getFirst() : String.join(", ", named.subList(0, named.size() - 1))

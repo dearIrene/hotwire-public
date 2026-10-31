@@ -173,6 +173,7 @@
   "hotwire.reopen.safe.next_start": "Worlds you open without it lose what it added, like taking it out of your mods folder.",
   "hotwire.reopen.why.content": "It adds %s to your worlds, and those can't leave a running game.",
   "hotwire.reopen.why.restart_only": "Only a restart can undo what it changed.",
+  "hotwire.reopen.why.world_data": "Your world's creatures carry its data, and that can't leave a running game.",
   "hotwire.pending.off_at_start": "Turns off when you close the game, and stays off until you turn it back on.",
   "hotwire.pending.off_at_start_undone": "%s stays on.",
   "hotwire.switch.off_at_start": "%s turns off when you close the game. You can undo this under Pending tasks.",
