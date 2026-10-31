@@ -4,13 +4,17 @@ import dev.moon.hotwire.api.SwitchResult;
 import dev.moon.hotwire.concurrent.Tasks;
 import dev.moon.hotwire.config.HotwireSettings;
 import dev.moon.hotwire.fabric.add.WorldReopen;
+import dev.moon.hotwire.fabric.registration.WorldContent;
 import dev.moon.hotwire.switching.ModSwitcher;
 import dev.moon.hotwire.switching.PlayerMessages;
 import dev.moon.hotwire.ui.Lang;
 import dev.moon.hotwire.ui.ModScreen;
 import dev.moon.hotwire.ui.ReopenPanel;
+import java.util.ArrayList;
 import java.util.List;
 import java.util.Optional;
+import java.util.Set;
+import java.util.TreeSet;
 import java.util.concurrent.CompletableFuture;
 import java.util.function.Function;
 import java.util.function.Supplier;
@@ -82,7 +86,15 @@ final class SwitchRequests {
                 FailureReports.report(this.engine, Lang.get("hotwire.report.file.switch_failed"), said);
             }
             ModScreen current = this.screen.get();
-            if (!ids.isEmpty() && result.result() instanceof ModSwitcher.Result.Failed failed
+            if (off && !ids.isEmpty() && result.result() instanceof ModSwitcher.Result.Failed failed
+                    && failed.cause().isRestartOnly() && current != null) {
+                LOGGER.info("[Hotwire] {}", said);
+
+                List<String> order = new ArrayList<>(ids.stream().filter(failed.plan().order()::contains).toList());
+                failed.plan().order().stream().filter(id -> !order.contains(id)).forEach(order::add);
+                current.offerReopen(ReopenPanel.Offer.ofNextStart(order, PlayerMessages.joinNames(order,
+                        this.installed::nameOf), describeWhyAtStart(order)));
+            } else if (!ids.isEmpty() && result.result() instanceof ModSwitcher.Result.Failed failed
                     && failed.cause().reopenFixes() && current != null
                     && (WorldReopen.isLeftOnly() || WorldReopen.findRefusal().isEmpty())) {
                 LOGGER.info("[Hotwire] {}", said);
@@ -100,6 +112,18 @@ final class SwitchRequests {
             HotwireApiImpl.endSwitch(ended, HotwireApiImpl.toResult(result.result(), said), this.engine::isOn);
         }).whenComplete((done, error) -> HotwireApiImpl.endIfFailed(ended, error, this.engine::isOn));
         return ended;
+    }
+
+    private static String describeWhyAtStart(List<String> order) {
+        Set<String> kinds = new TreeSet<>();
+        WorldContent.find(order).values().forEach(kinds::addAll);
+        if (kinds.isEmpty()) {
+            return Lang.get("hotwire.reopen.why.restart_only");
+        }
+        List<String> named = List.copyOf(kinds);
+        String listed = named.size() == 1 ? named.getFirst() : String.join(", ", named.subList(0, named.size() - 1))
+                + " and " + named.getLast();
+        return Lang.get("hotwire.reopen.why.content", listed);
     }
 
     private CompletableFuture<SwitchResult> refuse(String said) {

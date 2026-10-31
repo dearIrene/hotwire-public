@@ -10,21 +10,30 @@ public final class ReopenPanel extends Panel {
     static final int WIDTH = 440;
     static final int LINE = 12;
 
-    public record Offer(boolean off, List<String> ids, @Nullable Path jar, String who, String why, boolean leaves) {
+    public record Offer(boolean off, List<String> ids, @Nullable Path jar, String who, String why, boolean leaves,
+            boolean nextStart) {
         public Offer {
             ids = List.copyOf(ids);
         }
 
+        public Offer(boolean off, List<String> ids, @Nullable Path jar, String who, String why, boolean leaves) {
+            this(off, ids, jar, who, why, leaves, false);
+        }
+
         public Offer(boolean off, List<String> ids, @Nullable Path jar, String who, String why) {
-            this(off, ids, jar, who, why, false);
+            this(off, ids, jar, who, why, false, false);
         }
 
         public Offer(boolean off, List<String> ids, String who, String why) {
-            this(off, ids, null, who, why, false);
+            this(off, ids, null, who, why, false, false);
+        }
+
+        public static Offer ofNextStart(List<String> ids, String who, String why) {
+            return new Offer(true, ids, null, who, why, false, true);
         }
 
         boolean isReopenOnly() {
-            return !this.leaves && this.jar == null && this.ids.isEmpty();
+            return !this.leaves && !this.nextStart && this.jar == null && this.ids.isEmpty();
         }
     }
 
@@ -42,7 +51,7 @@ public final class ReopenPanel extends Panel {
         boolean reopenOnly = offer.isReopenOnly();
         this.setPrimary(Lang.get(findConfirmKey(offer)), () -> this.onConfirm.accept(offer));
         this.setCancelLabel(Lang.get(reopenOnly ? "hotwire.reopen.later" : "hotwire.button.cancel"));
-        this.setPrimaryWidth(120);
+        this.setPrimaryWidth(offer.nextStart() ? 150 : 120);
         this.show();
     }
 
@@ -53,6 +62,9 @@ public final class ReopenPanel extends Panel {
     }
 
     private static String findConfirmKey(Offer offer) {
+        if (offer.nextStart()) {
+            return "hotwire.reopen.off_next_start";
+        }
         if (offer.leaves()) {
             return "hotwire.reopen.leave_and_switch";
         }
@@ -63,6 +75,9 @@ public final class ReopenPanel extends Panel {
     }
 
     static String findTitle(Offer offer) {
+        if (offer.nextStart()) {
+            return Lang.get("hotwire.reopen.title.next_start");
+        }
         if (offer.leaves()) {
             return Lang.get("hotwire.reopen.title.leave");
         }
@@ -70,6 +85,9 @@ public final class ReopenPanel extends Panel {
     }
 
     static String findPlan(Offer offer) {
+        if (offer.nextStart()) {
+            return Lang.get("hotwire.reopen.plan.next_start");
+        }
         if (offer.leaves()) {
             return Lang.get("hotwire.reopen.plan.leave");
         }
@@ -91,8 +109,12 @@ public final class ReopenPanel extends Panel {
         MessageLine.addWrapped(canvas, lines, shown.why(), Palette.DIM, w - 28);
         lines.add(new MessageLine.Line("", Palette.DIM));
         MessageLine.addWrapped(canvas, lines, findPlan(shown), Palette.TEXT, w - 28);
-        MessageLine.addWrapped(canvas, lines, Lang.get(shown.leaves() ? "hotwire.reopen.safe.server"
-                : "hotwire.reopen.safe.world"), Palette.ON, w - 28);
+        if (shown.nextStart()) {
+            MessageLine.addWrapped(canvas, lines, Lang.get("hotwire.reopen.safe.next_start"), Palette.WARN, w - 28);
+        } else {
+            MessageLine.addWrapped(canvas, lines, Lang.get(shown.leaves() ? "hotwire.reopen.safe.server"
+                    : "hotwire.reopen.safe.world"), Palette.ON, w - 28);
+        }
         this.lineCount = lines.size();
         int lineY = y + CONTENT_Y;
         for (MessageLine.Line line : lines) {

@@ -2,12 +2,17 @@ package dev.moon.hotwire.fabric;
 
 import dev.moon.hotwire.config.HotwireSettings;
 import dev.moon.hotwire.fabric.add.ModAdder;
+import dev.moon.hotwire.plan.ModGraph;
 import dev.moon.hotwire.switching.ModSwitcher;
 import dev.moon.hotwire.ui.Lang;
+import dev.moon.hotwire.update.PendingChange;
 import java.io.IOException;
 import java.nio.file.Path;
+import java.util.HashSet;
 import java.util.List;
+import java.util.Set;
 import java.util.concurrent.CompletableFuture;
+import java.util.concurrent.CopyOnWriteArrayList;
 import java.util.concurrent.ExecutionException;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
@@ -39,6 +44,8 @@ final class DisabledMods {
             Thread.ofPlatform().name("hotwire-renames").daemon().factory());
     private volatile CompletableFuture<Void> renames = CompletableFuture.completedFuture(null);
 
+    private final List<PendingChange.OffAtStart> offAtStart = new CopyOnWriteArrayList<>();
+
     DisabledMods(InstalledMods installed, Supplier<HotwireEngine.@Nullable JvmParts> parts, HotwireSettings settings,
             Path modsFolder, BiConsumer<String, Boolean> say, Adder adder) {
         this.installed = installed;
@@ -56,6 +63,60 @@ final class DisabledMods {
     void close() {
         this.awaitRenames();
         this.renaming.shutdown();
+        for (PendingChange.OffAtStart off : this.offAtStart) {
+            for (String id : off.ids()) {
+                Path jar = this.installed.findJarOf(id);
+                if (jar == null || this.installed.isDisabled(id)) {
+                    continue;
+                }
+                try {
+                    Path renamed = DisabledJars.disable(jar);
+                    LOGGER.info("[Hotwire] {} is off from the next start: {} is now {}", id, jar.getFileName(),
+                            renamed.getFileName());
+                } catch (IOException e) {
+                    LOGGER.warn("[Hotwire] {} could not be turned off for the next start", id, e);
+                }
+            }
+        }
+    }
+
+    void turnOffAtNextStart(List<String> order, String who) {
+        Path mods = this.modsFolder.toAbsolutePath().normalize();
+        Set<String> waiting = this.findWaitingAtStart();
+        List<String> ids = order.stream().filter(id -> {
+            Path jar = this.installed.findJarOf(id);
+            return jar != null && this.installed.isTopLevel(id) && !this.installed.isDisabled(id)
+                    && !waiting.contains(id) && mods.equals(jar.toAbsolutePath().normalize().getParent());
+        }).toList();
+        if (!ids.isEmpty()) {
+            this.offAtStart.add(new PendingChange.OffAtStart(ids.getFirst(), who, ids));
+        }
+    }
+
+    void cancelOffAtNextStart(String id) {
+        this.offAtStart.removeIf(off -> off.ids().contains(id));
+        boolean dropped = true;
+        while (dropped) {
+            Set<String> waiting = this.findWaitingAtStart();
+            Set<String> used = new HashSet<>();
+            ModGraph graph = this.installed.getGraph();
+            for (String mod : this.installed.getTopLevel()) {
+                if (!waiting.contains(mod) && !this.installed.isDisabled(mod)) {
+                    used.addAll(graph.getUses(mod));
+                }
+            }
+            dropped = this.offAtStart.removeIf(off -> off.ids().stream().anyMatch(used::contains));
+        }
+    }
+
+    List<PendingChange.OffAtStart> getOffAtStart() {
+        return List.copyOf(this.offAtStart);
+    }
+
+    private Set<String> findWaitingAtStart() {
+        Set<String> waiting = new HashSet<>();
+        this.offAtStart.forEach(off -> waiting.addAll(off.ids()));
+        return waiting;
     }
 
     boolean isDisabledSinceStart(String id) {

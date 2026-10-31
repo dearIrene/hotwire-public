@@ -110,6 +110,12 @@ public final class ModScreen implements JarHost {
         default void revertAtNextStart(String id) throws IOException {
         }
 
+        default void turnOffAtNextStart(List<String> ids) {
+        }
+
+        default void cancelOffAtNextStart(String id) {
+        }
+
         default void switchWithReopen(boolean off, List<String> ids) {
         }
 
@@ -230,7 +236,9 @@ public final class ModScreen implements JarHost {
         this.reopenPanel = new ReopenPanel(offer -> {
             this.closePanels();
             Path jar = offer.jar();
-            if (jar != null) {
+            if (offer.nextStart()) {
+                this.game.turnOffAtNextStart(offer.ids());
+            } else if (jar != null) {
                 this.game.add(jar, AddMode.SAVE_AND_REOPEN);
             } else {
                 this.game.switchWithReopen(offer.off(), offer.ids());

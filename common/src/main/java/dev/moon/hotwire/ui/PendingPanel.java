@@ -70,6 +70,7 @@ final class PendingPanel extends Panel {
             String label = switch (change) {
                 case PendingChange.Update update -> Lang.get("hotwire.button.cancel");
                 case PendingChange.Copied copied -> Lang.get("hotwire.pending.undo");
+                case PendingChange.OffAtStart off -> Lang.get("hotwire.pending.undo");
                 case PendingChange.Revertable back -> Lang.get("hotwire.pending.revert", back.oldVersion());
             };
             this.buttons.add(this.add(new Button(label, false, () -> this.onAct.accept(change))));
@@ -94,6 +95,8 @@ final class PendingPanel extends Panel {
             }
             case PendingChange.Copied copied -> lines.add(new MessageLine.Line(Lang.get("hotwire.pending.copied",
                     copied.jar()), Palette.DIM));
+            case PendingChange.OffAtStart off -> lines.add(new MessageLine.Line(Lang.get(
+                    "hotwire.pending.off_at_start"), Palette.DIM));
             case PendingChange.Revertable back -> lines.add(new MessageLine.Line(Lang.get(
                     "hotwire.pending.revertable", back.oldVersion()), Palette.DIM));
         }

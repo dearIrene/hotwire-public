@@ -28,6 +28,10 @@ final class PendingActions {
                             + " without it:"
                             + " " + copied.jar() + " was taken out of your mods folder.", false);
                 }
+                case PendingChange.OffAtStart off -> {
+                    this.game.cancelOffAtNextStart(off.modId());
+                    this.say.accept(Lang.get("hotwire.pending.off_at_start_undone", off.name()), false);
+                }
                 case PendingChange.Revertable back -> {
                     this.game.revertAtNextStart(back.modId());
                     this.say.accept(back.name() + " goes back to " + back.oldVersion() + " when you close the game."

@@ -55,6 +55,7 @@ import java.lang.instrument.ClassFileTransformer;
 import java.lang.instrument.Instrumentation;
 import java.nio.file.Path;
 import java.time.Duration;
+import java.util.ArrayList;
 import java.util.List;
 import java.util.Objects;
 import java.util.Optional;
@@ -572,7 +573,23 @@ public final class HotwireEngine implements ModScreen.Game, AutoCloseable {
 
     @Override
     public List<PendingChange> getPendingChanges() {
-        return this.rows.getPendingChanges();
+        List<PendingChange> out = new ArrayList<>(this.rows.getPendingChanges());
+        out.addAll(this.disabled.getOffAtStart());
+        return out;
+    }
+
+    @Override
+    public void turnOffAtNextStart(List<String> ids) {
+        String who = PlayerMessages.joinNames(ids, this.installed::nameOf);
+        this.disabled.turnOffAtNextStart(ids, who);
+        this.showMessage(Lang.get("hotwire.switch.off_at_start", who), false);
+        this.refreshScreen();
+    }
+
+    @Override
+    public void cancelOffAtNextStart(String id) {
+        this.disabled.cancelOffAtNextStart(id);
+        this.refreshScreen();
     }
 
     @Override

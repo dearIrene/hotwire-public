@@ -24,6 +24,7 @@ import dev.moon.hotwire.fabric.registration.RegistryCheck;
 import dev.moon.hotwire.fabric.registration.ReloadedLists;
 import dev.moon.hotwire.fabric.registration.UncaughtHandlers;
 import dev.moon.hotwire.fabric.registration.WindowCursor;
+import dev.moon.hotwire.fabric.registration.WorldContent;
 import dev.moon.hotwire.fabric.registration.WorldWrappers;
 import dev.moon.hotwire.fabric.report.GameReports;
 import dev.moon.hotwire.fabric.report.SwitchFaults;
@@ -167,6 +168,15 @@ public final class SwitchRunner {
         SwitchPlan plan = this.switcher.planOff(ids);
 
         List<String> wired = plan.isRefused() ? List.of() : plan.order();
+
+        Map<String, List<String>> content = WorldContent.find(wired);
+        if (!content.isEmpty()) {
+            LOGGER.info("[Hotwire] the off of {} waits for the next start: the game's registries hold {}", ids,
+                    content);
+            String held = "the game's registries hold " + content;
+            return new CheckedResult(new ModSwitcher.Result.Failed(plan, RebuildException.ofRestartOnly(held,
+                    new IllegalStateException(held))), new Report.OffCheck.NotRun(), List.of());
+        }
         if (!wired.isEmpty()) {
             this.tripwire.armEarly(wired, this.switcher.findPatchedBy(wired));
         }
