@@ -52,6 +52,8 @@ public final class CopyMixinService extends MixinServiceAbstract
         implements IClassProvider, IClassBytecodeProvider, ITransformerProvider, IClassTracker {
     static final String NAME = "HotwireCopy";
 
+    private static final String GAME_NAME = "Knot/Fabric";
+
     private static Map<String, byte[]> classes = Map.of();
     private static Function<String, byte @Nullable []> more = name -> null;
     private static Map<String, byte[]> resources = Map.of();
@@ -295,7 +297,7 @@ public final class CopyMixinService extends MixinServiceAbstract
 
     @Override
     public String getName() {
-        return NAME;
+        return GAME_NAME;
     }
 
     @Override
