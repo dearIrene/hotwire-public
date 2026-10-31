@@ -34,7 +34,9 @@ public final class HotwireSettings {
     static final String DEVELOPER = "developer";
 
     private static final Logger LOGGER = LoggerFactory.getLogger(HotwireSettings.class);
-    private static final int FORMAT = 1;
+
+    private static final int FORMAT = 2;
+    private static final int AUTO_FILL_ON_FROM = 2;
 
     private static final List<String> IN_WORLD_CHOICES = List.of("hotwire.settings.in_world.auto",
             "hotwire.settings.in_world.off");
@@ -67,7 +69,7 @@ public final class HotwireSettings {
         @Nullable NestedJars nestedJars = NestedJars.AUTO;
         @Nullable PauseGame pauseGame = PauseGame.NO;
         @Nullable KeyAlert keyAlert = KeyAlert.ON;
-        @Nullable AutoFill autoFill = AutoFill.OFF;
+        @Nullable AutoFill autoFill = AutoFill.ON;
         @Nullable Developer developer = Developer.OFF;
         @Nullable String promptAcceptedFor;
         boolean keyCardShown;
@@ -98,7 +100,8 @@ public final class HotwireSettings {
         this.nestedJars = checkKnown(saved.nestedJars, NestedJars.AUTO, "nestedJars");
         this.pauseGame = checkKnown(saved.pauseGame, PauseGame.NO, "pauseGame");
         this.keyAlert = checkKnown(saved.keyAlert, KeyAlert.ON, "keyAlert");
-        this.autoFill = checkKnown(saved.autoFill, AutoFill.OFF, "autoFill");
+        this.autoFill = saved.format < AUTO_FILL_ON_FROM ? AutoFill.ON
+                : checkKnown(saved.autoFill, AutoFill.ON, "autoFill");
         this.developer = checkKnown(saved.developer, Developer.OFF, "developer");
         this.promptAcceptedFor = saved.promptAcceptedFor;
         this.keyCardShown = saved.keyCardShown;
