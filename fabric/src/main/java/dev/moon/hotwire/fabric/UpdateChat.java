@@ -16,7 +16,15 @@ public final class UpdateChat {
     private UpdateChat() {
     }
 
-    public static void show(String key) {
+    public static void show() {
+        say("hotwire.self_update.chat");
+    }
+
+    public static void showUrgent() {
+        say("hotwire.self_update.urgent_chat");
+    }
+
+    private static void say(String key) {
         Minecraft minecraft = Minecraft.getInstance();
         if (minecraft.player == null) {
             return;

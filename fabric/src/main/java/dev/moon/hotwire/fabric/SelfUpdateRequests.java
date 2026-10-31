@@ -56,7 +56,11 @@ final class SelfUpdateRequests {
             return;
         }
         this.toldInChat = true;
-        UpdateChat.show(urgent ? "hotwire.self_update.urgent_chat" : "hotwire.self_update.chat");
+        if (urgent) {
+            UpdateChat.showUrgent();
+        } else {
+            UpdateChat.show();
+        }
     }
 
     String findNewer() {

@@ -69,7 +69,7 @@ public final class UrgentNotice {
         if (ModViews.openScreen() instanceof TitleScreen) {
             showIfDue();
         } else if (game.player != null) {
-            UpdateChat.show("hotwire.self_update.urgent_chat");
+            UpdateChat.showUrgent();
         }
     }
 
