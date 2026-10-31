@@ -5,6 +5,7 @@ import dev.moon.hotwire.fabric.ModPolicy;
 import dev.moon.hotwire.fabric.registration.ModOfClass;
 import dev.moon.hotwire.jar.JarPaths;
 import dev.moon.hotwire.jar.ModJar;
+import dev.moon.hotwire.jvm.LoadedClassList;
 import java.lang.instrument.Instrumentation;
 import java.net.URISyntaxException;
 import java.net.URL;
@@ -164,7 +165,7 @@ public final class ForeignPatches {
         }
         List<Class<?>> read = new ArrayList<>();
         List<Class<?>> others = new ArrayList<>();
-        for (Class<?> type : this.instrumentation.getAllLoadedClasses()) {
+        for (Class<?> type : LoadedClassList.of(this.instrumentation)) {
             if (type.getClassLoader() != this.game || type.isHidden()) {
                 continue;
             }

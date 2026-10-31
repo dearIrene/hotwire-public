@@ -76,7 +76,7 @@ final class CollectionReferences implements FixedLists.Walk {
                 this.look.close();
             } else {
                 this.begin(mods);
-                this.takeAll(ElementTakes.prepare(ahead, mods, this.look.getContainersOfTakes()), mods);
+                this.takeAll(ElementTakes.prepare(ahead, mods, this.look.takeContainersOfTakes()), mods);
                 this.takeWrappedIn(holders);
             }
         } catch (RuntimeException | LinkageError e) {
@@ -104,7 +104,8 @@ final class CollectionReferences implements FixedLists.Walk {
     private void noteWrappedInside(Object holder, int steps) {
         CollectionNotes notes = ElementLook.isLooking() ? this.look.getNotes() : null;
         if (notes != null) {
-            notes.begin(holder, new CollectionNotes.Origin(this.readingStaticsOf, false, null));
+            notes.begin(holder, CollectionNotes.Origin.of(this.readingStaticsOf));
+            notes.markWrapped(holder, steps);
         }
         try {
             this.noteWrappedFields(holder, steps);
@@ -166,13 +167,17 @@ final class CollectionReferences implements FixedLists.Walk {
 
     private void readStatic(FieldSlots.Slot field, Object value, boolean game) {
         CollectionNotes notes = ElementLook.isLooking() ? this.look.getNotes() : null;
+
+        if (notes != null && !NO_PRINTS && notes.isUnchanged(value)) {
+            return;
+        }
         if (notes != null) {
             notes.begin(value, new CollectionNotes.Origin(this.readingStaticsOf, game, field));
         }
         boolean completed = false;
         try {
             if (game && value instanceof Map<?, ?> map && map.size() <= LARGEST) {
-                this.readChanging(map, () -> NamespacedMaps.removeFrom(this, map));
+                this.readChanging(map, now -> NamespacedMaps.removeFrom(this, (Map<?, ?>) now));
             }
             this.collect(value);
             if (value instanceof List<?> list && list.size() <= LARGEST && CollectionParts.isFixedSize(list)
@@ -213,7 +218,7 @@ final class CollectionReferences implements FixedLists.Walk {
         }
         this.begin(mods);
         long began = System.nanoTime();
-        ElementTakes.Answers made = ElementTakes.prepare(ahead, mods, this.look.getContainersOfTakes());
+        ElementTakes.Answers made = ElementTakes.prepare(ahead, mods, this.look.takeContainersOfTakes());
         this.prepared = made;
         this.preparedFor = List.copyOf(mods);
         LOGGER.info("[Hotwire] {} of {} noted takes answered for {} ahead of the hold in {} ms",
@@ -321,6 +326,9 @@ final class CollectionReferences implements FixedLists.Walk {
                 this.readingStaticsOf = origin.staticsOf();
                 if (origin.field() != null) {
                     this.readStatic(origin.field(), container, origin.game());
+                } else if (!(container instanceof Collection<?>) && !(container instanceof Map<?, ?>)
+                        && !(container instanceof Object[]) && notes.findWrapped(container) > 0) {
+                    this.noteWrappedInside(container, notes.findWrapped(container));
                 } else {
                     this.collect(container);
                 }
@@ -464,10 +472,10 @@ final class CollectionReferences implements FixedLists.Walk {
         if (notes != null && !NO_PRINTS && notes.isUnchanged(value)) {
             return;
         }
-        this.readChanging(value, () -> this.collectOnce(value));
+        this.readChanging(value, this::collectOnce);
     }
 
-    private void readChanging(Object value, Runnable read) {
+    private void readChanging(Object value, Consumer<Object> read) {
         CollectionParts.readChanging(value, read, this.look, this.mods);
     }
 
@@ -476,7 +484,7 @@ final class CollectionReferences implements FixedLists.Walk {
         boolean outer = this.inSmall;
         CollectionNotes notes = ElementLook.isLooking() ? this.look.getNotes() : null;
         if (notes != null) {
-            notes.begin(value, new CollectionNotes.Origin(this.readingStaticsOf, false, null));
+            notes.begin(value, CollectionNotes.Origin.of(this.readingStaticsOf));
         }
         Object collectingBefore = this.collecting;
         this.collecting = value;
@@ -605,7 +613,8 @@ final class CollectionReferences implements FixedLists.Walk {
                     }
 
                     if (handlers && ElementLook.isLooking() && this.report.countTakes() > takesBefore) {
-                        this.look.hasNoted(new ElementTakes.NotedTake(() -> "", any -> this.collect(map), null));
+                        this.look.hasNoted(new ElementTakes.NotedTake(() -> "",
+                                ElementTakes.makeWeak(map, (now, any) -> this.collect(now)), null));
                     }
                 }
                 default -> { }

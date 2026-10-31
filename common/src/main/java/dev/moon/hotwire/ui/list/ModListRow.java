@@ -3,12 +3,13 @@ package dev.moon.hotwire.ui.list;
 import dev.moon.hotwire.ui.Canvas;
 import dev.moon.hotwire.ui.Colors;
 import dev.moon.hotwire.ui.EasedValue;
+import dev.moon.hotwire.ui.IconPixels;
 import dev.moon.hotwire.ui.Lang;
 import dev.moon.hotwire.ui.Palette;
 import org.jspecify.annotations.Nullable;
 
 final class ModListRow {
-    static final int ICON = 32;
+    static final int ICON = IconPixels.LIST_BOX;
     static final int SWITCH_W = 24;
     static final int SWITCH_H = 12;
 

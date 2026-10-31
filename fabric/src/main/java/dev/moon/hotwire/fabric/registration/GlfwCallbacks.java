@@ -1,5 +1,6 @@
 package dev.moon.hotwire.fabric.registration;
 
+import dev.moon.hotwire.jvm.LoadedClassList;
 import dev.moon.hotwire.redefine.FieldSlots;
 import dev.moon.hotwire.redefine.HandlerGuards;
 import java.lang.instrument.Instrumentation;
@@ -103,7 +104,7 @@ public final class GlfwCallbacks {
         }
 
         Predicate<Class<?>> own = type -> holder.equals(GameRegistrations.findModOf(type));
-        for (Class<?> owner : found.getAllLoadedClasses()) {
+        for (Class<?> owner : LoadedClassList.of(found)) {
             if (owner.isArray() || owner.isHidden() || !holder.equals(GameRegistrations.findModOf(owner))) {
                 continue;
             }

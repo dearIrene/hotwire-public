@@ -3,6 +3,9 @@ package dev.moon.hotwire.ui;
 import org.jspecify.annotations.Nullable;
 
 public final class IconPixels {
+    public static final int LIST_BOX = 32;
+    public static final int STORE_BOX = 48;
+
     static final int MAX_SIZE = 256;
 
     private static final int PICTURE_SIZE = 1024;

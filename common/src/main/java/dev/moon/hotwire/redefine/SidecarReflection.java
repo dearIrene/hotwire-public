@@ -250,8 +250,15 @@ public final class SidecarReflection {
         }
     }
 
+    private static final ClassValue<String> INTERNAL = new ClassValue<>() {
+        @Override
+        protected String computeValue(Class<?> type) {
+            return type.getName().replace('.', '/');
+        }
+    };
+
     public static boolean isInstance(Class<?> type, @Nullable Object object) {
-        return type.isInstance(object) || Linker.carries(type.getName().replace('.', '/'), object);
+        return type.isInstance(object) || Linker.carries(INTERNAL.get(type), object);
     }
 
     public static @Nullable Object cast(Class<?> type, @Nullable Object object) {
@@ -262,7 +269,7 @@ public final class SidecarReflection {
     }
 
     public static boolean isAssignableFrom(Class<?> type, Class<?> other) {
-        return type.isAssignableFrom(other) || DuckCalls.carries(type.getName().replace('.', '/'), other);
+        return type.isAssignableFrom(other) || DuckCalls.carries(INTERNAL.get(type), other);
     }
 
     private interface Unreflect {

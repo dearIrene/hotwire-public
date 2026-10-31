@@ -1,5 +1,6 @@
 package dev.moon.hotwire.fabric.registration;
 
+import dev.moon.hotwire.jvm.LoadedClassList;
 import dev.moon.hotwire.redefine.FieldSlots;
 import io.netty.channel.Channel;
 import java.lang.instrument.Instrumentation;
@@ -44,7 +45,7 @@ public final class StaticCopies {
         Set<Object> seen = Collections.newSetFromMap(new IdentityHashMap<>());
         Deque<Object> step = new ArrayDeque<>();
         int swapped = 0;
-        for (Class<?> type : reader.getAllLoadedClasses()) {
+        for (Class<?> type : LoadedClassList.of(reader)) {
             if (type.isArray() || type.isPrimitive() || !isWalked(type.getName())) {
                 continue;
             }

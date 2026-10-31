@@ -1,6 +1,8 @@
 package dev.moon.hotwire.fabric;
 
+import com.google.common.collect.MapMaker;
 import dev.moon.hotwire.fabric.registration.GameRegistrations;
+import dev.moon.hotwire.jvm.LoadedClassList;
 import dev.moon.hotwire.redefine.BatchRider;
 import dev.moon.hotwire.redefine.ClassRebuilder;
 import dev.moon.hotwire.redefine.HotwireLoaders;
@@ -21,6 +23,7 @@ import java.util.HashSet;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.Optional;
 import java.util.Set;
 import java.util.TreeMap;
 import java.util.concurrent.ConcurrentHashMap;
@@ -54,8 +57,11 @@ public final class ModTripwire {
 
     private final Map<String, ArmedClass> armedAtLoad = new HashMap<>();
 
-    private final Map<String, String> sources = new HashMap<>();
-    private final Set<Class<?>> loadedAtArm = new HashSet<>();
+    private final Map<String, String> sources = new ConcurrentHashMap<>();
+
+    private static final Map<ProtectionDomain, Optional<String>> SOURCE_OF = new MapMaker().weakKeys().makeMap();
+
+    private final Map<Class<?>, String> loadedAtArm = new HashMap<>();
 
     private final Map<String, String> loadedWhileArming = new ConcurrentHashMap<>();
     private static final ThreadLocal<Boolean> ARMING = ThreadLocal.withInitial(() -> false);
@@ -73,9 +79,13 @@ public final class ModTripwire {
             if (name == null || loader == null || redefining != null || !HotwireLoaders.seesHotwire(loader)) {
                 return null;
             }
+            String source = findSourceOf(domain);
+            if (source == null || !ModTripwire.this.sources.containsKey(source)) {
+                return null;
+            }
             long began = System.nanoTime();
             try {
-                return ModTripwire.this.armAtLoad(name, findSourceOf(domain), bytes, loader);
+                return ModTripwire.this.armAtLoad(name, source, bytes, loader);
             } catch (RuntimeException | LinkageError e) {
                 LOGGER.error("[Hotwire] {} loaded unwatched: wiring it as it loaded threw", name, e);
                 return null;
@@ -331,7 +341,7 @@ public final class ModTripwire {
             if (rebuilt.contains(type.getName().replace('.', '/'))) {
                 return;
             }
-            this.loadedAtArm.add(type);
+            this.loadedAtArm.put(type, mod);
             String source = findSourceOf(type.getProtectionDomain());
             if (source != null) {
                 synchronized (this.sources) {
@@ -366,7 +376,7 @@ public final class ModTripwire {
                     return;
                 }
 
-                byte[] wired = TripwireSites.arm(name, bytes, mod);
+                byte[] wired = TripwireSites.arm(name, bytes, mod, true);
                 if (wired == bytes) {
                     return;
                 }
@@ -409,7 +419,7 @@ public final class ModTripwire {
             ArmedClass one = arming.get(type);
             byte[] before = one != null ? one.getBefore() : this.rebuilder.getLoadedBytes().findKnown(type);
             if (!took.contains(type) && before != null
-                    && this.redefineEach(Map.of(type, before), new ArrayList<>()).isEmpty()) {
+                    && this.redefineEach(Map.of(type, LambdaSites.rewrite(before)), new ArrayList<>()).isEmpty()) {
                 unusable.add(type.getName());
             }
         });
@@ -522,10 +532,7 @@ public final class ModTripwire {
                 this.putBack(type, was, back);
             }
         });
-        this.loadedAtArm.removeIf(type -> {
-            String mod = GameRegistrations.findModOf(type);
-            return mod != null && ids.contains(mod);
-        });
+        this.loadedAtArm.values().removeIf(ids::contains);
         this.loadedWhileArming.values().removeIf(ids::contains);
 
         this.watcher.execute(() -> {
@@ -554,7 +561,7 @@ public final class ModTripwire {
     private Map<String, List<String>> findLoadedSinceArm(Collection<String> ids) {
         Map<String, List<String>> loaded = new TreeMap<>();
         this.findOwned(ids).forEach((type, mod) -> {
-            if (!this.loadedAtArm.contains(type) && !this.loadedWhileArming.containsKey(type.getName())) {
+            if (!this.loadedAtArm.containsKey(type) && !this.loadedWhileArming.containsKey(type.getName())) {
                 loaded.computeIfAbsent(mod, any -> new ArrayList<>()).add(type.getName());
             }
         });
@@ -562,7 +569,12 @@ public final class ModTripwire {
     }
 
     private static @Nullable String findSourceOf(@Nullable ProtectionDomain domain) {
-        CodeSource source = domain == null ? null : domain.getCodeSource();
+        return domain == null ? null : SOURCE_OF.computeIfAbsent(domain, at -> Optional.ofNullable(readSourceOf(at)))
+                .orElse(null);
+    }
+
+    private static @Nullable String readSourceOf(ProtectionDomain domain) {
+        CodeSource source = domain.getCodeSource();
         String location = source == null || source.getLocation() == null ? null : source.getLocation().toString();
         return location != null && location.endsWith(".disabled")
                 ? location.substring(0, location.length() - ".disabled".length()) : location;
@@ -610,7 +622,7 @@ public final class ModTripwire {
 
     private Map<Class<?>, String> findOwned(Collection<String> ids) {
         Map<Class<?>, String> owned = new LinkedHashMap<>();
-        for (Class<?> type : this.instrumentation.getAllLoadedClasses()) {
+        for (Class<?> type : LoadedClassList.of(this.instrumentation)) {
             if (type.isArray() || type.isPrimitive() || !HotwireLoaders.seesHotwire(type.getClassLoader())) {
                 continue;
             }

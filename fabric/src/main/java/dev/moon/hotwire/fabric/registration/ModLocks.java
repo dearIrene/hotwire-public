@@ -1,5 +1,6 @@
 package dev.moon.hotwire.fabric.registration;
 
+import dev.moon.hotwire.jvm.LoadedClassList;
 import dev.moon.hotwire.redefine.FieldSlots;
 import java.lang.instrument.Instrumentation;
 import java.util.Collections;
@@ -27,7 +28,7 @@ public final class ModLocks {
     public Set<Integer> of(String mod) {
         Set<Integer> locks = new HashSet<>();
         Set<Object> seen = Collections.newSetFromMap(new IdentityHashMap<>());
-        for (Class<?> type : this.instrumentation.getAllLoadedClasses()) {
+        for (Class<?> type : LoadedClassList.of(this.instrumentation)) {
             if (type.isArray() || type.isHidden() || !mod.equals(GameRegistrations.findModOf(type))
                     || !this.initialized.test(type)) {
                 continue;

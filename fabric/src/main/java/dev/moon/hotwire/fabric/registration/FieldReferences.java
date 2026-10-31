@@ -2,6 +2,7 @@ package dev.moon.hotwire.fabric.registration;
 
 import dev.moon.hotwire.fabric.add.LoaderModList;
 import dev.moon.hotwire.fabric.mixin.core.world.item.CreativeModeTabsAccessor;
+import dev.moon.hotwire.jvm.LoadedClassList;
 import dev.moon.hotwire.redefine.ClassRebuilder;
 import dev.moon.hotwire.redefine.FieldSlots;
 import dev.moon.hotwire.redefine.InitialValues;
@@ -56,6 +57,7 @@ public final class FieldReferences {
 
     private final Instrumentation instrumentation;
     private final Function<String, byte @Nullable []> originalBytes;
+    private final Function<String, byte @Nullable []> readOnce;
     private final Map<String, List<Replacement>> replacements = new ConcurrentHashMap<>();
 
     private final Map<String, Set<String>> usedBy = new ConcurrentHashMap<>();
@@ -78,10 +80,12 @@ public final class FieldReferences {
     private @Nullable Object unsafe;
 
     public FieldReferences(Instrumentation instrumentation, ClassRebuilder rebuilder,
-            Function<String, byte @Nullable []> originalBytes, Function<String, Set<String>> mixinTargets,
-            Function<String, Set<String>> handedTo, Function<String, List<String>> generatedBy) {
+            Function<String, byte @Nullable []> originalBytes, Function<String, byte @Nullable []> readOnce,
+            Function<String, Set<String>> mixinTargets, Function<String, Set<String>> handedTo,
+            Function<String, List<String>> generatedBy) {
         this.instrumentation = instrumentation;
         this.originalBytes = originalBytes;
+        this.readOnce = readOnce;
         this.mixinTargets = mixinTargets;
         Wrappers.readTargetsWith(mixinTargets);
         this.handedTo = handedTo;
@@ -164,8 +168,17 @@ public final class FieldReferences {
     }
 
     private Set<String> findClassesUsed(String internalName) {
-        byte[] bytes = this.originalBytes.apply(internalName);
-        return bytes == null ? Set.of() : ClassFileSummary.findClassesUsed(bytes);
+        byte[] bytes = this.readOnce.apply(internalName);
+        if (bytes == null) {
+            return Set.of();
+        }
+        Set<String> used = ClassFileSummary.findClassesUsed(bytes);
+        String[] names = new String[used.size()];
+        int at = 0;
+        for (String name : used) {
+            names[at++] = name.intern();
+        }
+        return Set.of(names);
     }
 
     public void readAhead(Collection<String> mods, Predicate<String> on) {
@@ -308,7 +321,7 @@ public final class FieldReferences {
 
     public void rehash(Set<Class<?>> changed) {
         if (!changed.isEmpty()) {
-            Rehash.rehashMaps(changed, List.of(this.instrumentation.getAllLoadedClasses()), this::isInitialized);
+            Rehash.rehashMaps(changed, Arrays.asList(LoadedClassList.of(this.instrumentation)), this::isInitialized);
         }
     }
 

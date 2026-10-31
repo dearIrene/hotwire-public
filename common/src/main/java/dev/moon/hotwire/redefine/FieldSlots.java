@@ -1,19 +1,16 @@
 package dev.moon.hotwire.redefine;
 
 import dev.moon.hotwire.classfile.ClassHeader;
-import java.lang.invoke.MethodHandle;
-import java.lang.invoke.MethodHandleProxies;
 import java.lang.invoke.MethodHandles;
-import java.lang.invoke.MethodType;
+import java.lang.invoke.VarHandle;
 import java.lang.reflect.Field;
 import java.lang.reflect.InaccessibleObjectException;
 import java.lang.reflect.Modifier;
 import java.util.ArrayList;
 import java.util.LinkedHashSet;
 import java.util.List;
+import java.util.Objects;
 import java.util.Set;
-import java.util.function.BiConsumer;
-import java.util.function.Function;
 import java.util.function.Predicate;
 import org.jspecify.annotations.Nullable;
 import org.objectweb.asm.Opcodes;
@@ -33,12 +30,15 @@ public final class FieldSlots {
 
     public static final class Slot {
         private volatile @Nullable Field field;
+        private volatile @Nullable VarHandle handle;
+
+        private final MethodHandles.@Nullable Lookup lookup;
+
+        private volatile boolean unhandled;
         private final Class<?> owner;
         private final String name;
         private final Class<?> type;
         private final int modifiers;
-        private final @Nullable Function<@Nullable Object, @Nullable Object> getter;
-        private final @Nullable BiConsumer<@Nullable Object, @Nullable Object> setter;
 
         public static Slot of(Field field) {
             return new Slot(field);
@@ -50,20 +50,17 @@ public final class FieldSlots {
             this.name = field.getName();
             this.type = field.getType();
             this.modifiers = field.getModifiers();
-            this.getter = null;
-            this.setter = null;
+            this.lookup = null;
         }
 
-        private Slot(Class<?> owner, String name, Class<?> type, int modifiers,
-                Function<@Nullable Object, @Nullable Object> getter,
-                @Nullable BiConsumer<@Nullable Object, @Nullable Object> setter) {
-            this.field = null;
+        private Slot(Class<?> owner, String name, Class<?> type, int modifiers, @Nullable VarHandle handle,
+                MethodHandles.@Nullable Lookup lookup) {
+            this.handle = handle;
+            this.lookup = lookup;
             this.owner = owner;
             this.name = name;
             this.type = type;
             this.modifiers = modifiers;
-            this.getter = getter;
-            this.setter = setter;
         }
 
         public String getName() {
@@ -90,34 +87,68 @@ public final class FieldSlots {
             if (holder == null && this.isStatic() && !setUp.test(this.owner)) {
                 return null;
             }
-            if (this.field != null) {
-                return this.field.get(holder);
+            VarHandle read = this.findHandle();
+            if (read == null) {
+                Field reflected = this.field;
+                if (reflected == null) {
+                    throw new IllegalAccessException(this.owner.getName() + "." + this.name + " cannot be read");
+                }
+                return reflected.get(holder);
             }
-            Function<@Nullable Object, @Nullable Object> get = this.getter;
-            if (get == null) {
-                throw new IllegalAccessException(this.owner.getName() + "." + this.name + " cannot be read");
-            }
+            boolean ordered = Modifier.isVolatile(this.modifiers);
             try {
-                return get.apply(holder);
+                if (this.isStatic()) {
+                    return ordered ? (Object) read.getVolatile() : (Object) read.get();
+                }
+                return ordered ? (Object) read.getVolatile(holder) : (Object) read.get(holder);
             } catch (RuntimeException | LinkageError e) {
                 throw new IllegalAccessException(this.owner.getName() + "." + this.name + ": " + e);
             }
         }
 
         public void set(@Nullable Object holder, @Nullable Object value) throws IllegalAccessException {
-            if (this.field != null) {
-                this.field.set(holder, value);
+            VarHandle write = Modifier.isFinal(this.modifiers) ? null
+                    : this.field != null ? this.handle : this.findHandle();
+            if (write == null) {
+                Field reflected = this.field;
+                if (reflected == null) {
+                    throw new IllegalAccessException(this.owner.getName() + "." + this.name + " cannot be set");
+                }
+                reflected.set(holder, value);
                 return;
             }
-            BiConsumer<@Nullable Object, @Nullable Object> set = this.setter;
-            if (set == null) {
-                throw new IllegalAccessException(this.owner.getName() + "." + this.name + " cannot be set");
-            }
+            boolean ordered = Modifier.isVolatile(this.modifiers);
             try {
-                set.accept(holder, value);
+                if (this.isStatic() && ordered) {
+                    write.setVolatile(value);
+                } else if (this.isStatic()) {
+                    write.set(value);
+                } else if (ordered) {
+                    write.setVolatile(holder, value);
+                } else {
+                    write.set(holder, value);
+                }
             } catch (RuntimeException | LinkageError e) {
                 throw new IllegalAccessException(this.owner.getName() + "." + this.name + ": " + e);
             }
+        }
+
+        private @Nullable VarHandle findHandle() {
+            VarHandle made = this.handle;
+            Field reflected = this.field;
+            MethodHandles.Lookup found = this.lookup;
+            if (made != null || this.unhandled || (reflected == null && found == null)) {
+                return made;
+            }
+            try {
+                made = reflected != null
+                        ? MethodHandles.privateLookupIn(this.owner, LOOKUP).unreflectVarHandle(reflected)
+                        : Objects.requireNonNull(found).findStaticVarHandle(this.owner, this.name, this.type);
+                this.handle = made;
+            } catch (ReflectiveOperationException | RuntimeException e) {
+                this.unhandled = true;
+            }
+            return made;
         }
 
         public Field asField() throws NoSuchFieldException {
@@ -178,17 +209,12 @@ public final class FieldSlots {
                 continue;
             }
             boolean isStatic = (field.access() & Opcodes.ACC_STATIC) != 0;
-            boolean isFinal = (field.access() & Opcodes.ACC_FINAL) != 0;
             try {
-                MethodHandle getter = isStatic ? lookup.findStaticGetter(type, field.name(), fieldType)
-                        : lookup.findGetter(type, field.name(), fieldType);
-                MethodHandle setter = null;
-                if (!isFinal) {
-                    setter = isStatic ? lookup.findStaticSetter(type, field.name(), fieldType)
-                            : lookup.findSetter(type, field.name(), fieldType);
+                if (isStatic) {
+                    lookup.findStaticGetter(type, field.name(), fieldType);
                 }
-                slots.add(new Slot(type, field.name(), fieldType, field.access(), asObjectGetter(getter, isStatic),
-                        setter == null ? null : asObjectSetter(setter, isStatic)));
+                VarHandle handle = isStatic ? null : lookup.findVarHandle(type, field.name(), fieldType);
+                slots.add(new Slot(type, field.name(), fieldType, field.access(), handle, isStatic ? lookup : null));
             } catch (ReflectiveOperationException | SecurityException e) {
             }
         }
@@ -247,21 +273,5 @@ public final class FieldSlots {
         } catch (ClassNotFoundException | LinkageError e) {
             return null;
         }
-    }
-
-    @SuppressWarnings("unchecked")
-    private static Function<@Nullable Object, @Nullable Object> asObjectGetter(MethodHandle getter,
-            boolean isStatic) {
-        MethodHandle taking = isStatic ? MethodHandles.dropArguments(getter, 0, Object.class) : getter;
-        return MethodHandleProxies.asInterfaceInstance(Function.class,
-                taking.asType(MethodType.methodType(Object.class, Object.class)));
-    }
-
-    @SuppressWarnings("unchecked")
-    private static BiConsumer<@Nullable Object, @Nullable Object> asObjectSetter(MethodHandle setter,
-            boolean isStatic) {
-        MethodHandle taking = isStatic ? MethodHandles.dropArguments(setter, 0, Object.class) : setter;
-        return MethodHandleProxies.asInterfaceInstance(BiConsumer.class,
-                taking.asType(MethodType.methodType(void.class, Object.class, Object.class)));
     }
 }

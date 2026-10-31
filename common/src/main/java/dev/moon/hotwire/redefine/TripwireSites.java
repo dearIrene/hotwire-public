@@ -44,6 +44,10 @@ public final class TripwireSites {
     }
 
     public static byte @Nullable [] arm(String internalName, byte[] classBytes, String mod) {
+        return arm(internalName, classBytes, mod, false);
+    }
+
+    public static byte @Nullable [] arm(String internalName, byte[] classBytes, String mod, boolean relinked) {
         if (new ClassReader(classBytes).readUnsignedShort(6) < Opcodes.V1_7) {
             return null;
         }
@@ -70,6 +74,9 @@ public final class TripwireSites {
         if (!inserted) {
             ARMED.put(internalName, mod);
             return classBytes;
+        }
+        if (relinked) {
+            LambdaSites.relink(node);
         }
 
         ClassWriter writer = new ClassWriter(new ClassReader(classBytes), ClassWriter.COMPUTE_MAXS);

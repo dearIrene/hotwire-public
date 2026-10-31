@@ -349,6 +349,14 @@ public final class ResourceReload {
     }
 
     static void reloadResources(Collection<String> newlyBuilt, Collection<String> mods, boolean off) {
+        try {
+            reloadResourcesNow(newlyBuilt, mods, off);
+        } finally {
+            ModelReloadCheck.forgetAhead();
+        }
+    }
+
+    private static void reloadResourcesNow(Collection<String> newlyBuilt, Collection<String> mods, boolean off) {
         Set<String> available = getAvailablePacks();
         if (off) {
             Set<String> atPause = packsAtPause;

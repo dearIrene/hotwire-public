@@ -1,5 +1,6 @@
 package dev.moon.hotwire.fabric.registration;
 
+import dev.moon.hotwire.jvm.LoadedClassList;
 import java.lang.instrument.Instrumentation;
 import java.util.ArrayList;
 import java.util.Collection;
@@ -31,7 +32,7 @@ record LoadedClasses(Map<String, Class<?>> byName, Map<String, Set<String>> used
 
     static LoadedClasses scan(Instrumentation instrumentation, Collection<String> mods,
             Function<String, Set<String>> usedBy) {
-        Class<?>[] all = instrumentation.getAllLoadedClasses();
+        Class<?>[] all = LoadedClassList.of(instrumentation);
         Map<String, Class<?>> loaded = HashMap.newHashMap(all.length);
         Map<String, Set<String>> used = new HashMap<>();
         Map<String, List<Class<?>>> classesOf = new HashMap<>();

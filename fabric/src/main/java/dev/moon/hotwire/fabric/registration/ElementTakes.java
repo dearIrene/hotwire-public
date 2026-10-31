@@ -260,7 +260,8 @@ final class ElementTakes {
         Object inner = Lambdas.findWrapped(value, shape, mod);
         return inner == null || !shape.isInstance(inner) || (above != Object.class && !above.isInstance(inner))
                 || inner instanceof Collection<?> || inner instanceof Map<?, ?>
-                || GameRegistrations.findModOf(inner.getClass()) != null ? null : inner;
+                || GameRegistrations.findModOf(inner.getClass()) != null
+                || mod.equals(GameRegistrations.findModOrShipper(inner.getClass())) ? null : inner;
     }
 
     private static Class<?> findGameClassAbove(Class<?> type) {

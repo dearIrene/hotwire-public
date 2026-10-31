@@ -1,6 +1,7 @@
 package dev.moon.hotwire.fabric.registration;
 
 import dev.moon.hotwire.fabric.rebuild.ConstantPools;
+import dev.moon.hotwire.jvm.LoadedClassList;
 import java.lang.instrument.Instrumentation;
 import java.lang.instrument.UnmodifiableClassException;
 import java.lang.reflect.Field;
@@ -39,7 +40,7 @@ final class FinalReaders {
         }
         ClassLoader game = FinalReaders.class.getClassLoader();
         if (pools != null && !fields.isEmpty()) {
-            readers.addAll(Arrays.<Class<?>>stream(instrumentation.getAllLoadedClasses()).parallel()
+            readers.addAll(Arrays.<Class<?>>stream(LoadedClassList.of(instrumentation)).parallel()
                     .filter(type -> Objects.equals(type.getClassLoader(), game) && !type.isHidden() && !type.isArray()
                             && instrumentation.isModifiableClass(type) && pools.namesField(type, fields))
                     .toList());

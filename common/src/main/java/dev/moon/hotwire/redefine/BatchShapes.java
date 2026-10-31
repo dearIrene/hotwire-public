@@ -13,10 +13,15 @@ import java.util.WeakHashMap;
 import java.util.function.Function;
 import java.util.regex.Pattern;
 import org.jspecify.annotations.Nullable;
+import org.objectweb.asm.AnnotationVisitor;
 import org.objectweb.asm.ClassReader;
 import org.objectweb.asm.ClassVisitor;
+import org.objectweb.asm.FieldVisitor;
+import org.objectweb.asm.Label;
 import org.objectweb.asm.MethodVisitor;
 import org.objectweb.asm.Opcodes;
+import org.objectweb.asm.RecordComponentVisitor;
+import org.objectweb.asm.TypePath;
 import org.objectweb.asm.tree.AbstractInsnNode;
 import org.objectweb.asm.tree.ClassNode;
 import org.objectweb.asm.tree.FieldInsnNode;
@@ -124,13 +129,65 @@ final class BatchShapes {
         if (known != null) {
             return known;
         }
+
         ClassNode node = new ClassNode();
         new ClassReader(bytes).accept(new ClassVisitor(Opcodes.ASM9, node) {
             @Override
+            public @Nullable AnnotationVisitor visitTypeAnnotation(int typeRef, @Nullable TypePath typePath,
+                    String descriptor, boolean visible) {
+                return null;
+            }
+
+            @Override
+            public @Nullable RecordComponentVisitor visitRecordComponent(String name, String descriptor,
+                    @Nullable String signature) {
+                return null;
+            }
+
+            @Override
+            public @Nullable FieldVisitor visitField(int access, String name, String descriptor,
+                    @Nullable String signature, @Nullable Object value) {
+                FieldVisitor field = super.visitField(access, name, descriptor, signature, value);
+                return field == null ? null : new FieldVisitor(Opcodes.ASM9, field) {
+                    @Override
+                    public @Nullable AnnotationVisitor visitTypeAnnotation(int typeRef, @Nullable TypePath typePath,
+                            String descriptor, boolean visible) {
+                        return null;
+                    }
+                };
+            }
+
+            @Override
             public @Nullable MethodVisitor visitMethod(int access, String name, String descriptor,
                     @Nullable String signature, String @Nullable [] exceptions) {
-                return name.equals("<init>") ? super.visitMethod(access, name, descriptor, signature, exceptions)
-                        : null;
+                MethodVisitor method = name.equals("<init>")
+                        ? super.visitMethod(access, name, descriptor, signature, exceptions) : null;
+                return method == null ? null : new MethodVisitor(Opcodes.ASM9, method) {
+                    @Override
+                    public @Nullable AnnotationVisitor visitTypeAnnotation(int typeRef, @Nullable TypePath typePath,
+                            String descriptor, boolean visible) {
+                        return null;
+                    }
+
+                    @Override
+                    public @Nullable AnnotationVisitor visitInsnAnnotation(int typeRef, @Nullable TypePath typePath,
+                            String descriptor, boolean visible) {
+                        return null;
+                    }
+
+                    @Override
+                    public @Nullable AnnotationVisitor visitTryCatchAnnotation(int typeRef,
+                            @Nullable TypePath typePath, String descriptor, boolean visible) {
+                        return null;
+                    }
+
+                    @Override
+                    public @Nullable AnnotationVisitor visitLocalVariableAnnotation(int typeRef,
+                            @Nullable TypePath typePath, Label[] start, Label[] end, int[] index, String descriptor,
+                            boolean visible) {
+                        return null;
+                    }
+                };
             }
         }, ClassReader.SKIP_DEBUG | ClassReader.SKIP_FRAMES);
         CONSTRUCTORS.put(bytes, node);

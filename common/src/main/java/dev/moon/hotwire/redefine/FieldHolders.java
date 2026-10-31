@@ -14,7 +14,6 @@ import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
-import java.util.WeakHashMap;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.atomic.AtomicReference;
 import java.util.function.BiConsumer;
@@ -40,14 +39,13 @@ public final class FieldHolders {
 
     private static final Map<String, Set<String>> ADDED_BY_NAME = new ConcurrentHashMap<>();
 
-    private static final Map<Class<?>, Class<?>> TARGET_OF = Collections.synchronizedMap(new WeakHashMap<>());
+    private static final Map<Class<?>, Class<?>> TARGET_OF = new MapMaker().weakKeys().makeMap();
 
     private static final Map<Field, Field> NOW = new ConcurrentHashMap<>();
 
     private static final Map<Class<?>, Consumer<Object>> CATCH_UP = new ConcurrentHashMap<>();
 
-    private static final Set<Class<?>> STARTED = Collections.newSetFromMap(Collections.synchronizedMap(
-            new WeakHashMap<>()));
+    private static final Set<Class<?>> STARTED = Collections.newSetFromMap(new MapMaker().weakKeys().makeMap());
 
     private static final Set<Class<?>> STARTING = ConcurrentHashMap.newKeySet();
 

@@ -26,7 +26,7 @@ final class OffTooltips {
 
     private static @Nullable ClientTooltipComponent findFor(TooltipComponent data) {
         String mod = GameRegistrations.findModOf(data.getClass());
-        return mod != null && LoaderModList.getHidden().contains(mod)
+        return mod != null && LoaderModList.isHidden(mod)
                 ? ClientTooltipComponent.create(FormattedCharSequence.EMPTY) : null;
     }
 }

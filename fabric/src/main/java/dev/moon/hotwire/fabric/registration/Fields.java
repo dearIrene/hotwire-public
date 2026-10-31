@@ -1,6 +1,5 @@
 package dev.moon.hotwire.fabric.registration;
 
-import com.google.common.collect.MapMaker;
 import dev.moon.hotwire.redefine.FieldSlots;
 import dev.moon.hotwire.report.StartTimes;
 import java.lang.instrument.Instrumentation;
@@ -24,30 +23,32 @@ public final class Fields {
     private static volatile Predicate<String> loaded = name -> true;
     private static volatile Function<Class<?>, byte @Nullable []> bytesOf = type -> null;
 
-    private static final Map<Class<?>, Set<String>> PARTIAL = new MapMaker().weakKeys().makeMap();
-    private static final ClassValue<List<FieldSlots.Slot>> READABLE = new ClassValue<>() {
+    private static final class Kept {
+        private volatile @Nullable List<FieldSlots.Slot> readable;
+        private volatile @Nullable Set<String> waiting;
+        private volatile @Nullable List<FieldSlots.Slot> statics;
+        private volatile @Nullable List<FieldSlots.Slot> instances;
+    }
+
+    private static final ClassValue<Kept> KEPT = new ClassValue<>() {
         @Override
-        protected List<FieldSlots.Slot> computeValue(Class<?> type) {
-            FieldSlots.Read read = FieldSlots.read(type, bytesOf.apply(type), loaded);
-            if (!read.unloaded().isEmpty()) {
-                PARTIAL.put(type, read.unloaded());
-            }
-            return read.slots();
+        protected Kept computeValue(Class<?> type) {
+            return new Kept();
         }
     };
 
-    private static final ClassValue<List<Field>> RECORD_PARTS = new ClassValue<>() {
+    private static final ClassValue<List<FieldSlots.Slot>> RECORD_PARTS = new ClassValue<>() {
         @Override
-        protected List<Field> computeValue(Class<?> type) {
+        protected List<FieldSlots.Slot> computeValue(Class<?> type) {
             if (!type.isRecord()) {
                 return List.of();
             }
-            List<Field> out = new ArrayList<>();
+            List<FieldSlots.Slot> out = new ArrayList<>();
             try {
                 for (RecordComponent component : type.getRecordComponents()) {
                     Field field = type.getDeclaredField(component.getName());
                     field.setAccessible(true);
-                    out.add(field);
+                    out.add(FieldSlots.Slot.of(field));
                 }
             } catch (NoSuchFieldException | RuntimeException | LinkageError e) {
                 return List.of();
@@ -56,8 +57,6 @@ public final class Fields {
         }
     };
     private static final AtomicBoolean PRELOADING = new AtomicBoolean();
-    private static final ClassValue<List<FieldSlots.Slot>> STATIC_HOLDING = getReferenceFields(true);
-    private static final ClassValue<List<FieldSlots.Slot>> INSTANCE_HOLDING = getReferenceFields(false);
 
     private Fields() {
     }
@@ -94,10 +93,22 @@ public final class Fields {
 
     public static List<FieldSlots.Slot> getDeclared(Class<?> type) {
         refresh(type);
-        return READABLE.get(type);
+        return readReadable(type);
     }
 
-    static List<Field> getRecordParts(Class<?> type) {
+    private static List<FieldSlots.Slot> readReadable(Class<?> type) {
+        Kept kept = KEPT.get(type);
+        List<FieldSlots.Slot> readable = kept.readable;
+        if (readable == null) {
+            FieldSlots.Read read = FieldSlots.read(type, bytesOf.apply(type), loaded);
+            kept.waiting = read.unloaded().isEmpty() ? null : read.unloaded();
+            readable = read.slots();
+            kept.readable = readable;
+        }
+        return readable;
+    }
+
+    static List<FieldSlots.Slot> getRecordParts(Class<?> type) {
         return RECORD_PARTS.get(type);
     }
 
@@ -148,15 +159,26 @@ public final class Fields {
                 : at.getSuperclass()) {
             changed |= refresh(at);
         }
-        ClassValue<List<FieldSlots.Slot>> holding = statics ? STATIC_HOLDING : INSTANCE_HOLDING;
+        Kept kept = KEPT.get(owner);
         if (changed) {
-            holding.remove(owner);
+            kept.statics = null;
+            kept.instances = null;
         }
-        return holding.get(owner);
+        List<FieldSlots.Slot> holding = statics ? kept.statics : kept.instances;
+        if (holding == null) {
+            holding = findHolding(owner, statics);
+            if (statics) {
+                kept.statics = holding;
+            } else {
+                kept.instances = holding;
+            }
+        }
+        return holding;
     }
 
     private static boolean refresh(Class<?> type) {
-        Set<String> waiting = PARTIAL.get(type);
+        Kept kept = KEPT.get(type);
+        Set<String> waiting = kept.waiting;
         if (waiting == null) {
             return false;
         }
@@ -165,28 +187,23 @@ public final class Fields {
                 return false;
             }
         }
-        PARTIAL.remove(type);
-        READABLE.remove(type);
-        STATIC_HOLDING.remove(type);
-        INSTANCE_HOLDING.remove(type);
+        kept.waiting = null;
+        kept.readable = null;
+        kept.statics = null;
+        kept.instances = null;
         return true;
     }
 
-    private static ClassValue<List<FieldSlots.Slot>> getReferenceFields(boolean statics) {
-        return new ClassValue<>() {
-            @Override
-            protected List<FieldSlots.Slot> computeValue(Class<?> owner) {
-                List<FieldSlots.Slot> out = new ArrayList<>();
-                for (Class<?> at = owner; at != null && !at.getName().startsWith("java.");
-                        at = statics ? null : at.getSuperclass()) {
-                    for (FieldSlots.Slot field : READABLE.get(at)) {
-                        if (field.isStatic() == statics && !field.getType().isPrimitive()) {
-                            out.add(field);
-                        }
-                    }
+    private static List<FieldSlots.Slot> findHolding(Class<?> owner, boolean statics) {
+        List<FieldSlots.Slot> out = new ArrayList<>();
+        for (Class<?> at = owner; at != null && !at.getName().startsWith("java."); at = statics ? null
+                : at.getSuperclass()) {
+            for (FieldSlots.Slot field : readReadable(at)) {
+                if (field.isStatic() == statics && !field.getType().isPrimitive()) {
+                    out.add(field);
                 }
-                return List.copyOf(out);
             }
-        };
+        }
+        return List.copyOf(out);
     }
 }

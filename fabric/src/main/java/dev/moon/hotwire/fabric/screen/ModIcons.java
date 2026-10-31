@@ -20,6 +20,7 @@ import java.util.HashMap;
 import java.util.Locale;
 import java.util.Map;
 import java.util.Optional;
+import java.util.Set;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.LinkedBlockingQueue;
@@ -42,33 +43,113 @@ public final class ModIcons implements AutoCloseable {
 
     public static final class Icon implements Canvas.Image {
         private final String name;
-        private final IconPixels pixels;
-        private final Map<Integer, Identifier> textures = new HashMap<>();
-        private double scale;
+        private final String path;
+        private final byte @Nullable [] encoded;
+        private final @Nullable IconPixels pixels;
 
-        private Icon(String name, IconPixels pixels) {
+        private final Map<Integer, int[]> ahead = new ConcurrentHashMap<>();
+        private final Set<Integer> decoding = ConcurrentHashMap.newKeySet();
+        private final Map<Integer, Identifier> textures = new HashMap<>();
+        private volatile double scale;
+
+        private Icon(String name, String path, byte @Nullable [] encoded, @Nullable IconPixels pixels, double scale) {
             this.name = name;
+            this.path = path;
+            this.encoded = encoded;
             this.pixels = pixels;
+            this.scale = scale;
         }
 
         @Nullable Identifier findTexture(int size, double scale, boolean mayMake) {
             if (scale != this.scale) {
                 this.release();
+                this.ahead.clear();
                 this.scale = scale;
             }
             Identifier made = this.textures.get(size);
             if (made != null || !mayMake || size <= 0) {
                 return made;
             }
-            Identifier id = makeTexture("icon/" + this.name + "/" + size, size, size, this.pixels.makeSquare(size));
+            int[] square = this.ahead.remove(size);
+            IconPixels kept = this.pixels;
+            if (square == null && kept != null) {
+                square = kept.makeSquare(size);
+            }
+            if (square == null) {
+                this.decodeSoon(size, scale);
+                return null;
+            }
+            Identifier id = makeTexture("icon/" + this.name + "/" + size, size, size, square);
             this.textures.put(size, id);
             return id;
+        }
+
+        @SuppressWarnings("FutureReturnValueIgnored")
+        private void decodeSoon(int size, double scale) {
+            byte[] file = this.encoded;
+            if (file == null || !this.decoding.add(size)) {
+                return;
+            }
+            DECODER.execute(() -> {
+                try {
+                    IconPixels decoded = decode(this.path, file);
+                    if (decoded != null && scale == this.scale) {
+                        this.ahead.put(size, decoded.makeSquare(size));
+                    }
+                } finally {
+                    this.decoding.remove(size);
+                }
+            });
         }
 
         public void release() {
             this.textures.values().forEach(Minecraft.getInstance().getTextureManager()::release);
             this.textures.clear();
         }
+    }
+
+    @SuppressWarnings("ThreadPriorityCheck")
+    private static final ThreadPoolExecutor DECODER = new ThreadPoolExecutor(0, 1, 30, TimeUnit.SECONDS,
+            new LinkedBlockingQueue<>(), Thread.ofPlatform().name("hotwire-icon-decode").daemon()
+                    .priority(Thread.MIN_PRIORITY).factory());
+
+    private static Optional<Icon> makeIcon(String name, String path, byte[] encoded, int box) {
+        IconPixels decoded = decode(path, encoded);
+        if (decoded == null) {
+            return Optional.empty();
+        }
+
+        double scale = Minecraft.getInstance().getWindow().getGuiScale();
+        int size = Math.max(0, (int) Math.round(box * scale));
+        long asFile = encoded.length + 4L * size * size;
+        boolean byFile = asFile < 4L * decoded.getWidth() * decoded.getHeight();
+        Icon icon = new Icon(name, path, byFile ? encoded : null, byFile ? null : decoded, scale);
+        if (byFile && size > 0) {
+            icon.ahead.put(size, decoded.makeSquare(size));
+        }
+        return Optional.of(icon);
+    }
+
+    private static @Nullable IconPixels decode(String path, byte[] encoded) {
+        try {
+            return decodePixels(path, encoded);
+        } catch (IOException | RuntimeException e) {
+            LOGGER.info("[Hotwire] the icon {} could not be read: {}", path, e.toString());
+            return null;
+        }
+    }
+
+    static @Nullable IconPixels decodePixels(String path, byte[] bytes) throws IOException {
+        if (path.toLowerCase(Locale.ROOT).endsWith(".svg")) {
+            return SvgIcon.render(bytes);
+        }
+        if (WebpLossless.isWebp(bytes)) {
+            return WebpLossless.decode(bytes);
+        }
+        if (OtherImages.isKnown(bytes)) {
+            return OtherImages.decode(bytes);
+        }
+        return decodePng(bytes);
     }
 
     static Identifier makeTexture(String path, int width, int height, int[] argb) {
@@ -156,22 +237,7 @@ public final class ModIcons implements AutoCloseable {
     }
 
     public static Optional<Icon> decodeFor(String name, String path, byte[] bytes) {
-        try {
-            IconPixels pixels;
-            if (path.toLowerCase(Locale.ROOT).endsWith(".svg")) {
-                pixels = SvgIcon.render(bytes);
-            } else if (WebpLossless.isWebp(bytes)) {
-                pixels = WebpLossless.decode(bytes);
-            } else if (OtherImages.isKnown(bytes)) {
-                pixels = OtherImages.decode(bytes);
-            } else {
-                pixels = decodePng(bytes);
-            }
-            return Optional.ofNullable(pixels).map(retained -> new Icon(name, retained));
-        } catch (IOException | RuntimeException e) {
-            LOGGER.info("[Hotwire] the icon {} could not be read: {}", path, e.toString());
-            return Optional.empty();
-        }
+        return makeIcon(name, path, bytes, IconPixels.STORE_BOX);
     }
 
     private static Optional<Icon> decode(Source source) {
@@ -181,15 +247,9 @@ public final class ModIcons implements AutoCloseable {
             if (bytes.isEmpty()) {
                 return Optional.empty();
             }
-            IconPixels pixels;
-            if (source.path().toLowerCase(Locale.ROOT).endsWith(".svg")) {
-                pixels = SvgIcon.render(bytes.get());
-            } else {
-                pixels = decodePng(bytes.get());
-            }
             String name = (jar == null ? "" : "jar-" + Integer.toHexString(jar.hashCode()) + "-")
                     + source.id().toLowerCase(Locale.ROOT).replaceAll("[^a-z0-9_.-]", "_");
-            return Optional.ofNullable(pixels).map(retained -> new Icon(name, retained));
+            return makeIcon(name, source.path(), bytes.get(), IconPixels.LIST_BOX);
         } catch (IOException | RuntimeException e) {
             LOGGER.info("[Hotwire] {}'s icon {} could not be read: {}", source.id(), source.path(), e.toString());
             return Optional.empty();

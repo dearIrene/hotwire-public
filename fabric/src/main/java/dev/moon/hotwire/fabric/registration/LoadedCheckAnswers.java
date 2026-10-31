@@ -1,6 +1,7 @@
 package dev.moon.hotwire.fabric.registration;
 
 import dev.moon.hotwire.fabric.rebuild.ConstantPools;
+import dev.moon.hotwire.jvm.LoadedClassList;
 import dev.moon.hotwire.redefine.FieldSlots;
 import dev.moon.hotwire.redefine.InitialValues;
 import dev.moon.hotwire.redefine.LoadedChecks;
@@ -112,7 +113,7 @@ final class LoadedCheckAnswers {
     private CheckSites find(Collection<String> mods, ConstantPools pools, Predicate<Class<?>> others) {
         ClassLoader game = LoadedCheckAnswers.class.getClassLoader();
 
-        Stream<Class<?>> loaded = Arrays.stream(this.instrumentation.getAllLoadedClasses());
+        Stream<Class<?>> loaded = Arrays.stream(LoadedClassList.of(this.instrumentation));
         List<Class<?>> candidates = (ElementLook.isLooking() ? loaded : loaded.parallel())
                 .peek(type -> ElementLook.stopIfAsked())
                 .filter(type -> Objects.equals(type.getClassLoader(), game) && !type.isHidden() && !type.isArray()

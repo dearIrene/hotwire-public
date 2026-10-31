@@ -15,6 +15,10 @@ import org.objectweb.asm.ClassWriter;
 import org.objectweb.asm.Handle;
 import org.objectweb.asm.MethodVisitor;
 import org.objectweb.asm.Opcodes;
+import org.objectweb.asm.tree.AbstractInsnNode;
+import org.objectweb.asm.tree.ClassNode;
+import org.objectweb.asm.tree.InvokeDynamicInsnNode;
+import org.objectweb.asm.tree.MethodNode;
 
 public final class LambdaSites {
     private static final String JDK = "java/lang/invoke/LambdaMetafactory";
@@ -42,6 +46,16 @@ public final class LambdaSites {
 
     private static boolean isJdkFactory(Handle bootstrap) {
         return bootstrap.getOwner().equals(JDK) && bootstrap.getName().equals(JDK_NAME);
+    }
+
+    static void relink(ClassNode node) {
+        for (MethodNode method : node.methods) {
+            for (AbstractInsnNode insn : method.instructions) {
+                if (insn instanceof InvokeDynamicInsnNode site && isJdkFactory(site.bsm)) {
+                    site.bsm = REMEMBERING;
+                }
+            }
+        }
     }
 
     public static byte[] rewrite(byte[] classBytes) {

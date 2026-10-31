@@ -1,8 +1,9 @@
 package dev.moon.hotwire.fabric.registration;
 
+import com.google.common.collect.ImmutableCollection;
 import dev.moon.hotwire.redefine.FieldSlots;
+import java.lang.ref.WeakReference;
 import java.lang.reflect.Constructor;
-import java.lang.reflect.Field;
 import java.util.Collection;
 import java.util.ConcurrentModificationException;
 import java.util.List;
@@ -10,6 +11,7 @@ import java.util.Map;
 import java.util.NoSuchElementException;
 import java.util.Set;
 import java.util.concurrent.ConcurrentHashMap;
+import java.util.function.Consumer;
 import net.minecraft.resources.Identifier;
 import org.jspecify.annotations.Nullable;
 import org.slf4j.Logger;
@@ -27,7 +29,20 @@ final class CollectionParts {
     private CollectionParts() {
     }
 
+    private static final ClassValue<Boolean> REFUSES = new ClassValue<>() {
+        @Override
+        protected Boolean computeValue(Class<?> type) {
+            String name = type.getName();
+            return name.startsWith("java.util.ImmutableCollections$")
+                    || name.startsWith("java.util.Collections$Unmodifiable")
+                    || ImmutableCollection.class.isAssignableFrom(type);
+        }
+    };
+
     static boolean isFixedSize(List<?> list) {
+        if (REFUSES.get(list.getClass())) {
+            return true;
+        }
         try {
             list.remove(FIXED_PROBE);
             return false;
@@ -44,9 +59,9 @@ final class CollectionParts {
 
     static @Nullable Object withStandIns(String mod, Object item) {
         try {
-            List<Field> fields = Fields.getRecordParts(item.getClass());
+            List<FieldSlots.Slot> fields = Fields.getRecordParts(item.getClass());
             Class<?>[] types = new Class<?>[fields.size()];
-            Object[] parts = new Object[fields.size()];
+            @Nullable Object[] parts = new @Nullable Object[fields.size()];
             for (int index = 0; index < fields.size(); index++) {
                 types[index] = fields.get(index).getType();
                 Object part = fields.get(index).get(item);
@@ -75,10 +90,10 @@ final class CollectionParts {
         }
     }
 
-    static void readChanging(Object value, Runnable read, ElementLook look, List<String> mods) {
+    static void readChanging(Object value, Consumer<Object> read, ElementLook look, List<String> mods) {
         for (int attempt = 1; ; attempt++) {
             try {
-                read.run();
+                read.accept(value);
                 return;
             } catch (LinkageError e) {
                 if (UNREADABLE.add(value.getClass().getName())) {
@@ -87,7 +102,13 @@ final class CollectionParts {
                 }
                 return;
             } catch (ConcurrentModificationException | IndexOutOfBoundsException | NoSuchElementException e) {
-                if (look.hasNoted(() -> readChanging(value, read, look, mods))) {
+                WeakReference<Object> weak = new WeakReference<>(value);
+                if (look.hasNoted(() -> {
+                    Object now = weak.get();
+                    if (now != null) {
+                        readChanging(now, read, look, mods);
+                    }
+                })) {
                     return;
                 }
                 if (attempt == CHANGED_READS) {

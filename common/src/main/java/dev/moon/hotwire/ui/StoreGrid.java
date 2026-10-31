@@ -13,7 +13,7 @@ final class StoreGrid extends Element {
     static final int CARD_W_MIN = 220;
     static final int CARD_H = 96;
     static final int GAP = 8;
-    static final int ICON = 48;
+    static final int ICON = IconPixels.STORE_BOX;
     private static final int ADD_W = 70;
     private static final int ADD_H = 18;
     private static final int SQUARE_GAP = 4;

@@ -27,19 +27,29 @@ public final class ModOfClass {
     private final Map<Path, String> nestedOf = new HashMap<>();
 
     private final AtomicInteger learned = new AtomicInteger();
+
     private final ClassValue<Answer> answers = new ClassValue<>() {
         @Override
         protected Answer computeValue(Class<?> type) {
-            int before = ModOfClass.this.learned.get();
-            String mod = ModOfClass.this.lookUp(type);
-            Path jar = mod == null ? null : findJarOf(type);
-            Path name = jar == null ? null : jar.getFileName();
-            boolean game = name != null && GameLibraries.has(type.getName().replace('.', '/'), name.toString());
-            return new Answer(game ? null : mod, before);
+            Answer answer = new Answer();
+            ModOfClass.this.answer(type, answer);
+            return answer;
         }
     };
 
-    private record Answer(@Nullable String mod, int learned) {
+    private void answer(Class<?> type, Answer into) {
+        int before = this.learned.get();
+        String mod = this.lookUp(type);
+        Path jar = mod == null ? null : findJarOf(type);
+        Path name = jar == null ? null : jar.getFileName();
+        boolean game = name != null && GameLibraries.has(type.getName().replace('.', '/'), name.toString());
+        into.mod = game ? null : mod;
+        into.learned = before;
+    }
+
+    private static final class Answer {
+        private volatile @Nullable String mod;
+        private volatile int learned;
     }
 
     private final ClassValue<Optional<String>> shippers = new ClassValue<>() {
@@ -114,11 +124,13 @@ public final class ModOfClass {
 
     @Nullable String find(Class<?> type) {
         Answer answer = this.answers.get(type);
-        if (answer.mod() == null && answer.learned() != this.learned.get()) {
-            this.answers.remove(type);
-            answer = this.answers.get(type);
+        int learnedThen = answer.learned;
+        String mod = answer.mod;
+        if (mod == null && learnedThen != this.learned.get()) {
+            this.answer(type, answer);
+            mod = answer.mod;
         }
-        return answer.mod();
+        return mod;
     }
 
     @Nullable String findShippedBy(Class<?> type) {

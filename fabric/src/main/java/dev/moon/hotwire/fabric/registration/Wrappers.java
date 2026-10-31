@@ -3,7 +3,6 @@ package dev.moon.hotwire.fabric.registration;
 import dev.moon.hotwire.redefine.FieldSlots;
 import dev.moon.hotwire.registration.GuavaCaches;
 import dev.moon.hotwire.registration.ModNames;
-import java.lang.reflect.Field;
 import java.util.AbstractMap;
 import java.util.ArrayList;
 import java.util.Arrays;
@@ -189,13 +188,17 @@ final class Wrappers {
         this.lookedAt++;
         int place = this.open.size();
         this.open.add(value);
-        int rests = switch (value) {
-            case Collection<?> all -> this.reachThroughAll(all, known);
-            case Map<?, ?> map -> this.reachThroughAll(readValues(map), known);
-            case Object[] array -> this.reachThroughAll(List.of(array), known);
-            default -> this.reachThroughAField(value, known);
-        };
-        this.open.remove(place);
+        int rests;
+        try {
+            rests = switch (value) {
+                case Collection<?> all -> this.reachThroughAll(all, known);
+                case Map<?, ?> map -> this.reachThroughMap(map, known);
+                case Object[] array -> this.reachThroughAll(Arrays.asList(array), known);
+                default -> this.reachThroughAField(value, known);
+            };
+        } finally {
+            this.open.remove(place);
+        }
         if (this.reached) {
             return NONE_OPEN;
         }
@@ -205,6 +208,22 @@ final class Wrappers {
         }
         this.closed.put(value, rests);
         return rests;
+    }
+
+    private int reachThroughMap(Map<?, ?> map, IdentityHashMap<Object, Integer> known) {
+        if (makesValues(map) || GuavaCaches.isCache(map)) {
+            return this.reachThroughAll(readValues(map), known);
+        }
+        try {
+            if (map.isEmpty() || map.size() > ELEMENTS) {
+                this.reached = false;
+                return NONE_OPEN;
+            }
+        } catch (RuntimeException | LinkageError e) {
+            this.reached = false;
+            return NONE_OPEN;
+        }
+        return this.reachThroughAll(readValues(map), known);
     }
 
     private int reachThroughAll(Collection<?> all, IdentityHashMap<Object, Integer> known) {
@@ -286,10 +305,10 @@ final class Wrappers {
     }
 
     static @Nullable String findWhollyOwner(Object item) {
-        List<Field> parts = Fields.getRecordParts(item.getClass());
+        List<FieldSlots.Slot> parts = Fields.getRecordParts(item.getClass());
         String owner = null;
         try {
-            for (Field field : parts) {
+            for (FieldSlots.Slot field : parts) {
                 if (field.getType().isPrimitive()) {
                     continue;
                 }
@@ -313,13 +332,13 @@ final class Wrappers {
     }
 
     static boolean isWhollyOf(String mod, Object item) {
-        List<Field> parts = Fields.getRecordParts(item.getClass());
+        List<FieldSlots.Slot> parts = Fields.getRecordParts(item.getClass());
         if (parts.isEmpty()) {
             return false;
         }
         int mods = 0;
         try {
-            for (Field field : parts) {
+            for (FieldSlots.Slot field : parts) {
                 if (field.getType().isPrimitive()) {
                     continue;
                 }

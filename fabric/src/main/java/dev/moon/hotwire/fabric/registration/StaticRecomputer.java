@@ -1,6 +1,7 @@
 package dev.moon.hotwire.fabric.registration;
 
 import dev.moon.hotwire.fabric.rebuild.ConstantPools;
+import dev.moon.hotwire.jvm.LoadedClassList;
 import dev.moon.hotwire.redefine.ClassRebuilder;
 import dev.moon.hotwire.redefine.FieldSlots;
 import dev.moon.hotwire.redefine.InitialValues;
@@ -118,7 +119,7 @@ final class StaticRecomputer {
         for (int depth = 0; depth < 6 && !level.isEmpty() && pools != null && made.size() < 300; depth++) {
             Set<String> names = new HashSet<>();
             level.forEach(one -> names.add(findNameRead(one)));
-            List<Class<?>> readers = Arrays.<Class<?>>stream(instrumentation.getAllLoadedClasses()).parallel()
+            List<Class<?>> readers = Arrays.<Class<?>>stream(LoadedClassList.of(instrumentation)).parallel()
                     .filter(type -> Objects.equals(type.getClassLoader(), game) && !type.isHidden()
                             && !type.isArray() && pools.getMembers(type).stream()
                                     .anyMatch(member -> names.contains(member[0] + "." + member[1])))

@@ -109,6 +109,15 @@ public final class GameClasses implements SwitchApplier.Game {
         return FailedAddJars.removeHiddenInterfaces(bytes);
     }
 
+    public byte @Nullable [] readOriginalBytes(String internalName) {
+        SoftReference<byte[]> retained = this.originals.get(internalName);
+        byte[] bytes = retained == null ? null : retained.get();
+        if (bytes == null) {
+            bytes = this.knot.findPreMixinBytes(internalName, this.findLoaded(internalName));
+        }
+        return FailedAddJars.removeHiddenInterfaces(bytes);
+    }
+
     @Override
     public byte @Nullable [] findClassFile(String internalName) {
         SoftReference<byte[]> retained = this.originals.get(internalName);

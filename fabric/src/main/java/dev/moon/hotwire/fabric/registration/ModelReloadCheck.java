@@ -69,6 +69,13 @@ public final class ModelReloadCheck {
         modelsAhead = new EarlyOwners(Set.copyOf(mods), made, owners, swaps);
     }
 
+    public static void forgetAhead() {
+        EarlyOwners ahead = modelsAhead;
+        if (ahead != null && !ahead.made().equals(findMade())) {
+            modelsAhead = null;
+        }
+    }
+
     private static List<Integer> findMade() {
         Object manager = Minecraft.getInstance().getModelManager();
         List<Integer> made = new ArrayList<>();
