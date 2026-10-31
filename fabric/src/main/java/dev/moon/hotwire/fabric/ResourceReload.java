@@ -78,6 +78,8 @@ public final class ResourceReload {
     private static final Duration WAIT = Duration.ofMinutes(2);
     private static final Duration PAUSED_WAIT = Duration.ofSeconds(30);
 
+    private static final Duration HANDED_ON = Duration.ofSeconds(2);
+
     private static final List<Class<?>> RENDERERS = List.of(EntityRenderer.class, BlockEntityRenderer.class,
             EntityModel.class);
 
@@ -550,6 +552,11 @@ public final class ResourceReload {
             long deadline = System.nanoTime() + WAIT.toNanos();
             while (ModViews.findLoadingOverlay() != null && System.nanoTime() < deadline) {
                 Thread.sleep(50);
+            }
+
+            long handedOn = System.nanoTime() + HANDED_ON.toNanos();
+            while (!reload.isDone() && System.nanoTime() < handedOn) {
+                Thread.sleep(20);
             }
             if (!reload.isDone()) {
                 reportFailed(why, chosen);
