@@ -104,7 +104,7 @@ final class GuardFlips {
                     rebuild.add(target);
                     if (said) {
                         why.put(target, stuck ? "sites that cannot flip" : replaced.contains(target) ? "replaced"
-                                : mixins.rebuildOnly().contains(target) ? "a redirect or overwrite"
+                                : mixins.rebuildOnly().contains(target) ? "an overwrite or fields set up"
                                 : !HandlerGuards.isWritten(target) ? "not written as it loaded" : "mixins not in it");
                     }
                 } else if (!present && onAfter.contains(id)) {

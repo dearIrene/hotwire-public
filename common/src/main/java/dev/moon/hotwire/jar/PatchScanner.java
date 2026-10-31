@@ -40,8 +40,10 @@ final class PatchScanner {
             "Lorg/spongepowered/asm/mixin/gen/Invoker;");
 
     private static final String INJECTORS = "Lorg/spongepowered/asm/mixin/injection/";
+
     private static final Set<String> KNOWN_INJECTORS = Set.of(INJECTORS + "Inject;", INJECTORS + "ModifyArg;",
-            INJECTORS + "ModifyArgs;", INJECTORS + "ModifyVariable;", INJECTORS + "ModifyConstant;");
+            INJECTORS + "ModifyArgs;", INJECTORS + "ModifyVariable;", INJECTORS + "ModifyConstant;",
+            INJECTORS + "Redirect;");
     private static final String OVERWRITE = "Lorg/spongepowered/asm/mixin/Overwrite;";
     private static final List<String> MIXIN_ARRAYS = List.of("mixins", "client", "server");
     private static final int METHOD_ENTRY = 10;
