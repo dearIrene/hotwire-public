@@ -21,6 +21,8 @@ final class SelfUpdateRequests {
 
     private boolean toldInChat;
 
+    private @Nullable List<PendingChange> waiting;
+
     SelfUpdateRequests(StoreJars jars, Supplier<@Nullable ModScreen> screen, BiConsumer<String, Boolean> say) {
         this.jars = jars;
         this.screen = screen;
@@ -34,16 +36,22 @@ final class SelfUpdateRequests {
                 current.showNewerHotwire();
             }
             this.showInChat();
-        }));
+            List<PendingChange> asked = this.waiting;
+            if (asked != null) {
+                this.waiting = null;
+                this.updateAtNextStart(asked);
+            }
+        }), urgent -> Minecraft.getInstance().execute(() -> UrgentNotice.onChecked(urgent)));
     }
 
     void showInChat() {
-        if (this.toldInChat || this.findNewer().isEmpty() || Minecraft.getInstance().player == null) {
+        boolean urgent = UrgentNotice.find() != null;
+        if (this.toldInChat || (this.findNewer().isEmpty() && !urgent) || Minecraft.getInstance().player == null) {
             this.start();
             return;
         }
         this.toldInChat = true;
-        UpdateChat.show();
+        UpdateChat.show(urgent ? "hotwire.self_update.urgent_chat" : "hotwire.self_update.chat");
     }
 
     String findNewer() {
@@ -54,14 +62,21 @@ final class SelfUpdateRequests {
     void updateAtNextStart(List<PendingChange> pending) {
         ModrinthClient.Version newer = this.check.getNewer();
         if (newer == null) {
+            this.waiting = pending;
+            this.start();
             return;
         }
         this.say.accept(Lang.get("hotwire.updates.getting", "Hotwire", newer.number()), false);
         Thread.ofPlatform().name("hotwire-self-update-fetch").daemon().start(() -> {
             try {
                 Path jar = this.check.fetch(newer);
-                Minecraft.getInstance().execute(() -> this.jars.queueForNextStart(List.of(jar),
-                        List.of(SelfUpdate.PROJECT), pending));
+                Minecraft.getInstance().execute(() -> {
+                    this.jars.queueForNextStart(List.of(jar), List.of(SelfUpdate.PROJECT), pending);
+                    ModScreen current = this.screen.get();
+                    if (current != null) {
+                        current.showHotwireUpdateReady(newer.number());
+                    }
+                });
             } catch (IOException e) {
                 Minecraft.getInstance().execute(() -> this.say.accept(
                         Lang.get("hotwire.store.download_failed", "Hotwire", e.getMessage()), true));

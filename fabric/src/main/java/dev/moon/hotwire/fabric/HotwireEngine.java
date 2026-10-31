@@ -36,6 +36,7 @@ import dev.moon.hotwire.ui.ChooserScreen;
 import dev.moon.hotwire.ui.JarHost;
 import dev.moon.hotwire.ui.Lang;
 import dev.moon.hotwire.ui.ModScreen;
+import dev.moon.hotwire.update.UrgentUpdate;
 import dev.moon.hotwire.ui.Progress;
 import dev.moon.hotwire.ui.StoreCacheView;
 import dev.moon.hotwire.ui.StoreScreen;
@@ -132,6 +133,8 @@ public final class HotwireEngine implements ModScreen.Game, AutoCloseable {
                 this::getStore, this::showMessage);
         this.stores = new StoreScreens(this, installed, this.storeJars, icons);
         this.selfUpdate = new SelfUpdateRequests(this.storeJars, () -> this.screen, this::showMessage);
+
+        this.selfUpdate.start();
         this.jars = new JarRequests(this, this.changes, progress, this.tasks, this.storeJars);
         this.rows = new ModRows(installed, this::isOn, this.pending, this::findParts);
         WorldReopen.tellClosedTo(this::onWorldClosed);
@@ -485,6 +488,24 @@ public final class HotwireEngine implements ModScreen.Game, AutoCloseable {
             LOGGER.info("[Hotwire] the world is closed for the work; Hotwire's screen is up until it opens"
                     + " again");
         }
+    }
+
+    void openOnUrgentUpdate(UrgentUpdate urgent) {
+        this.open();
+        ModScreen current = this.screen;
+        if (current != null) {
+            current.showUrgentUpdate(urgent);
+        }
+    }
+
+    @Override
+    public @Nullable UrgentUpdate findUrgentHotwire() {
+        return UrgentNotice.find();
+    }
+
+    @Override
+    public void closeGame() {
+        Minecraft.getInstance().stop();
     }
 
     void openOnCrashReport(String where) {

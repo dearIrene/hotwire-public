@@ -1,6 +1,7 @@
 package dev.moon.hotwire.fabric.mixin.core.client.gui.screens;
 
 import dev.moon.hotwire.fabric.CrashNotice;
+import dev.moon.hotwire.fabric.UrgentNotice;
 import net.minecraft.client.gui.screens.TitleScreen;
 import org.spongepowered.asm.mixin.Mixin;
 import org.spongepowered.asm.mixin.injection.At;
@@ -12,5 +13,6 @@ public abstract class TitleScreenMixin {
     @Inject(method = "init", at = @At("TAIL"))
     private void hotwire$showCrashNotice(CallbackInfo ci) {
         CrashNotice.showIfDue();
+        UrgentNotice.showIfDue();
     }
 }

@@ -3,10 +3,12 @@ package dev.moon.hotwire.fabric.store;
 import dev.moon.hotwire.config.AtomicFiles;
 import dev.moon.hotwire.fabric.LoadedMods;
 import dev.moon.hotwire.modrinth.ModrinthClient;
+import dev.moon.hotwire.update.UrgentUpdate;
 import java.io.IOException;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.util.List;
+import java.util.Optional;
 import java.util.function.Consumer;
 import net.fabricmc.loader.api.FabricLoader;
 import net.fabricmc.loader.api.Version;
@@ -24,13 +26,13 @@ public final class SelfUpdate {
     private volatile ModrinthClient.@Nullable Version newer;
     private boolean started;
 
-    public void start(Consumer<ModrinthClient.Version> then) {
+    public void start(Consumer<ModrinthClient.Version> then, Consumer<Optional<UrgentUpdate>> checked) {
         if (this.started) {
             return;
         }
         this.started = true;
         Thread.ofPlatform().name("hotwire-self-update").daemon().start(() -> {
-            ModrinthClient.Version found = this.find();
+            ModrinthClient.Version found = this.find(checked);
             if (found != null) {
                 this.newer = found;
                 then.accept(found);
@@ -38,21 +40,23 @@ public final class SelfUpdate {
         });
     }
 
-    private ModrinthClient.@Nullable Version find() {
+    private ModrinthClient.@Nullable Version find(Consumer<Optional<UrgentUpdate>> checked) {
         try {
             List<ModrinthClient.Version> versions = this.client.findVersions(ModrinthClient.Kind.MOD, PROJECT);
+            String running = LoadedMods.findVersion("hotwire", "0");
+            checked.accept(Optional.ofNullable(UrgentUpdate.find(versions, number -> isNewer(number, running))));
             if (versions.isEmpty()) {
                 return null;
             }
             ModrinthClient.Version newest = versions.getFirst();
-            return isNewer(newest.number(), LoadedMods.findVersion("hotwire", "0")) ? newest : null;
+            return isNewer(newest.number(), running) ? newest : null;
         } catch (IOException | RuntimeException e) {
             LOGGER.info("[Hotwire] could not ask Modrinth for a newer Hotwire: {}", e.toString());
             return null;
         }
     }
 
-    static boolean isNewer(String modrinth, String running) {
+    public static boolean isNewer(String modrinth, String running) {
         try {
             return Version.parse(modrinth).compareTo(Version.parse(running)) > 0;
         } catch (VersionParsingException e) {

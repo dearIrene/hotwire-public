@@ -16,12 +16,12 @@ public final class UpdateChat {
     private UpdateChat() {
     }
 
-    public static void show() {
+    public static void show(String key) {
         Minecraft minecraft = Minecraft.getInstance();
         if (minecraft.player == null) {
             return;
         }
-        String text = Lang.get("hotwire.self_update.chat");
+        String text = Lang.get(key);
         Style style = Style.EMPTY.withClickEvent(openScreen());
         MutableComponent line = Component.empty();
         int last = Math.max(1, text.length() - 1);

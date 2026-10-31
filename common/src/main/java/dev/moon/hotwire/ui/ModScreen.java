@@ -9,6 +9,7 @@ import dev.moon.hotwire.ui.list.ModListModel.Unpick;
 import dev.moon.hotwire.ui.list.ModStatus;
 import dev.moon.hotwire.update.PendingChange;
 import dev.moon.hotwire.update.UpdateOffer;
+import dev.moon.hotwire.update.UrgentUpdate;
 import java.io.IOException;
 import java.nio.file.Path;
 import java.util.ArrayList;
@@ -132,6 +133,13 @@ public final class ModScreen implements JarHost {
 
         default void updateHotwireAtNextStart() {
         }
+
+        default @Nullable UrgentUpdate findUrgentHotwire() {
+            return null;
+        }
+
+        default void closeGame() {
+        }
     }
 
     private final Game game;
@@ -245,7 +253,7 @@ public final class ModScreen implements JarHost {
             }
         }, this::closePanels);
         this.firstOpen = new FirstOpenPanel(game::acceptFirstOpen);
-        this.selfUpdate = new SelfUpdatePanel(game::updateHotwireAtNextStart, this::closePanels);
+        this.selfUpdate = new SelfUpdatePanel(game::updateHotwireAtNextStart, this::closePanels, game::closeGame);
         this.reportPanel = new ReportPanel(game::showReportFile, this::closePanels);
         Element base = this.root.getBase();
 
@@ -332,9 +340,20 @@ public final class ModScreen implements JarHost {
     }
 
     public void showNewerHotwire() {
-        if (this.game.isFirstOpenAccepted()) {
+        UrgentUpdate urgent = this.game.findUrgentHotwire();
+        if (urgent != null) {
+            this.selfUpdate.presentUrgent(urgent.version(), urgent.message());
+        } else if (this.game.isFirstOpenAccepted()) {
             this.selfUpdate.presentOnce(this.game.findNewerHotwire());
         }
+    }
+
+    public void showUrgentUpdate(UrgentUpdate urgent) {
+        this.selfUpdate.presentUrgent(urgent.version(), urgent.message());
+    }
+
+    public void showHotwireUpdateReady(String version) {
+        this.selfUpdate.showReady(version);
     }
 
     public void onSwitched() {
