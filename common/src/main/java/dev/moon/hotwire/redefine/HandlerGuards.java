@@ -314,6 +314,7 @@ public final class HandlerGuards {
                     continue;
                 }
                 String desc = isStatic ? call.desc : "(L" + internalName + ";" + call.desc.substring(1);
+                String why = "";
                 if (kind == null) {
                     if (!originalRead[0]) {
                         originalRead[0] = true;
@@ -325,6 +326,9 @@ public final class HandlerGuards {
                     }
                     RedirectStandIns.Target target = original[0] == null ? null
                             : RedirectStandIns.find(original[0], method, call.desc);
+                    if (target == null && !UNFLIPPABLE.contains(mixin)) {
+                        why = " (" + RedirectStandIns.explainMiss(original[0], method, call.desc) + ")";
+                    }
                     if (target != null) {
                         method.instructions.set(call, new InvokeDynamicInsnNode(call.name, desc, BOOTSTRAP_REDIRECT,
                                 mixin, how, target.opcode(), target.owner(), target.name(),
@@ -340,8 +344,8 @@ public final class HandlerGuards {
                 };
                 if (index.isEmpty()) {
                     if (!UNFLIPPABLE.contains(mixin)) {
-                        LOGGER.info("[Hotwire] {}.{} has no stand-in: {} is rebuilt, not flipped", internalName,
-                                call.name, mixin);
+                        LOGGER.info("[Hotwire] {}.{} has no stand-in{}: {} is rebuilt, not flipped", internalName,
+                                call.name, why, mixin);
                     }
                     markUnflippable(internalName, mixin);
                     continue;

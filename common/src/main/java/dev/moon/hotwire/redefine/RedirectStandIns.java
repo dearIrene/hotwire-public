@@ -3,6 +3,7 @@ package dev.moon.hotwire.redefine;
 import java.lang.invoke.MethodHandle;
 import java.lang.invoke.MethodHandles;
 import java.lang.invoke.MethodType;
+import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
@@ -49,6 +50,34 @@ final class RedirectStandIns {
             found = target;
         }
         return found;
+    }
+
+    static String explainMiss(@Nullable ClassNode original, MethodNode merged, String handlerDesc) {
+        if (original == null) {
+            return "the shipped class is not at hand";
+        }
+        MethodNode was = null;
+        for (MethodNode method : original.methods) {
+            if (method.name.equals(merged.name) && method.desc.equals(merged.desc)) {
+                was = method;
+            }
+        }
+        if (was == null) {
+            return "the shipped class has no " + merged.name + merged.desc;
+        }
+        Type[] parameters = Type.getArgumentTypes(handlerDesc);
+        Type answer = Type.getReturnType(handlerDesc);
+        Map<Target, Integer> after = count(merged);
+        List<String> gone = new ArrayList<>();
+        count(was).forEach((target, times) -> {
+            if (times > after.getOrDefault(target, 0)) {
+                gone.add(target.opcode() + " " + target.owner() + "." + target.name() + target.desc()
+                        + (answerOf(target).equals(answer) ? "" : " answers otherwise")
+                        + (startsWith(parameters, findShape(target)) ? "" : " shaped otherwise"));
+            }
+        });
+        return gone.isEmpty() ? "nothing of the shipped method is gone" : "gone: " + gone.stream().sorted().limit(4)
+                .toList() + (gone.size() > 4 ? " and " + (gone.size() - 4) + " more" : "");
     }
 
     private static Map<Target, Integer> count(MethodNode method) {
