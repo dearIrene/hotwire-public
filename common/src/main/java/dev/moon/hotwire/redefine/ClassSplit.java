@@ -289,7 +289,8 @@ public final class ClassSplit {
         if (HandlerGuards.ENABLED) {
             HandlerGuards.makeSites(running.name, out);
         }
-        List<String> missing = SelfCalls.findMissing(out, classBytes);
+
+        List<String> missing = SelfCalls.findMissing(out, mixedOf);
         if (!missing.isEmpty()) {
             throw new SplitException("it would call members of its own it does not have: " + missing);
         }

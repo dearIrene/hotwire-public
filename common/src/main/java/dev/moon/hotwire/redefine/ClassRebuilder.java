@@ -324,6 +324,7 @@ public final class ClassRebuilder {
                         Objects.requireNonNull(mixed.get(name)), anyClass, read -> {
                             byte[] now = mixed.get(read);
                             now = now != null ? now : this.mixedNow.get(read);
+                            now = now != null ? now : findRunning(read);
                             return now != null ? now : this.bytesOf.apply(read);
                         }, batchDucks, batchMoved, addedElsewhere);
                 byte[] launched = this.launch.get(name);
@@ -335,6 +336,8 @@ public final class ClassRebuilder {
                 RebuildEvidence.dump(name, Objects.requireNonNull(current.get(name)),
                         Objects.requireNonNull(mixed.get(name)), split);
             } catch (SplitException e) {
+                RebuildEvidence.dumpFailed(name, Objects.requireNonNull(current.get(name)),
+                        Objects.requireNonNull(mixed.get(name)));
                 splitOrFailure.put(name, e);
             }
         });

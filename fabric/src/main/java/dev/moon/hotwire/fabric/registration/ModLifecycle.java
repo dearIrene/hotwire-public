@@ -16,6 +16,7 @@ import java.util.concurrent.ExecutionException;
 import java.util.concurrent.TimeoutException;
 import java.util.function.Consumer;
 import java.util.function.Function;
+import java.util.function.Predicate;
 import net.fabricmc.fabric.api.client.event.lifecycle.v1.ClientLifecycleEvents;
 import net.fabricmc.fabric.api.client.networking.v1.ClientPlayConnectionEvents;
 import net.fabricmc.fabric.api.client.networking.v1.ClientPlayNetworking;
@@ -37,14 +38,14 @@ public final class ModLifecycle {
     private static final Map<String, CompletableFuture<?>> STUCK = new ConcurrentHashMap<>();
 
     private record LastStop(@Nullable WeakReference<MinecraftServer> server, boolean ofServer, boolean ofPlayers,
-            boolean ofClient) {
+            boolean ofClient, @Nullable Set<String> serverParts) {
         @SuppressWarnings("ReferenceEquality")
         boolean isOf(@Nullable MinecraftServer now) {
             return now != null && this.server != null && this.server.get() == now;
         }
     }
 
-    private static final LastStop EVERYTHING = new LastStop(null, true, true, true);
+    private static final LastStop EVERYTHING = new LastStop(null, true, true, true, null);
     private static final Map<String, LastStop> LAST_STOPS = new ConcurrentHashMap<>();
 
     private ModLifecycle() {
@@ -55,6 +56,11 @@ public final class ModLifecycle {
         List<String> ofServer = new ArrayList<>();
         List<String> ofClient = new ArrayList<>();
         MinecraftServer server = client.getSingleplayerServer();
+        Set<String> serverParts = ConcurrentHashMap.newKeySet();
+        Predicate<Object> noted = listener -> {
+            serverParts.add(findPartOf(id, listener));
+            return true;
+        };
         if (server != null && !server.isStopped() && listensTo(id, journal, ServerPlayConnectionEvents.DISCONNECT,
                 ServerLifecycleEvents.SERVER_STOPPING, ServerLifecycleEvents.SERVER_STOPPED,
                 ArchitecturyEventRegistration.findLifecycleEvent("SERVER_STOPPING"),
@@ -66,10 +72,10 @@ public final class ModLifecycle {
                                     server));
                 }
                 callEach(id, journal, ServerLifecycleEvents.SERVER_STOPPING, ofServer, listener ->
-                        ((ServerLifecycleEvents.ServerStopping) listener).onServerStopping(server));
+                        ((ServerLifecycleEvents.ServerStopping) listener).onServerStopping(server), noted);
                 callArchitectury(id, journal, "SERVER_STOPPING", ofServer, server);
                 callEach(id, journal, ServerLifecycleEvents.SERVER_STOPPED, ofServer, listener ->
-                        ((ServerLifecycleEvents.ServerStopped) listener).onServerStopped(server));
+                        ((ServerLifecycleEvents.ServerStopped) listener).onServerStopped(server), noted);
                 callArchitectury(id, journal, "SERVER_STOPPED", ofServer, server);
             }, "server");
         }
@@ -83,7 +89,7 @@ public final class ModLifecycle {
             }, "client");
         }
         LAST_STOPS.put(id, new LastStop(server == null ? null : new WeakReference<>(server), !ofServer.isEmpty(),
-                !ofPlayers.isEmpty(), !ofClient.isEmpty()));
+                !ofPlayers.isEmpty(), !ofClient.isEmpty(), Set.copyOf(serverParts)));
         List<String> ran = new ArrayList<>(ofPlayers);
         ran.addAll(ofServer);
         ran.addAll(ofClient);
@@ -99,13 +105,16 @@ public final class ModLifecycle {
                 ServerLifecycleEvents.SERVER_STARTED, ServerPlayConnectionEvents.JOIN,
                 ArchitecturyEventRegistration.findLifecycleEvent("SERVER_STARTING"),
                 ArchitecturyEventRegistration.findLifecycleEvent("SERVER_STARTED"))) {
+            Set<String> parts = last.serverParts();
+            Predicate<Object> stopped = parts == null ? listener -> true
+                    : listener -> parts.contains(findPartOf(id, listener));
             onThread(work -> GameHold.onServer(server, work), () -> {
                 if (last.ofServer()) {
                     callEach(id, journal, ServerLifecycleEvents.SERVER_STARTING, ran, listener ->
-                            ((ServerLifecycleEvents.ServerStarting) listener).onServerStarting(server));
+                            ((ServerLifecycleEvents.ServerStarting) listener).onServerStarting(server), stopped);
                     callArchitectury(id, journal, "SERVER_STARTING", ran, server);
                     callEach(id, journal, ServerLifecycleEvents.SERVER_STARTED, ran, listener ->
-                            ((ServerLifecycleEvents.ServerStarted) listener).onServerStarted(server));
+                            ((ServerLifecycleEvents.ServerStarted) listener).onServerStarted(server), stopped);
                     callArchitectury(id, journal, "SERVER_STARTED", ran, server);
                 }
                 for (ServerPlayer player : last.ofPlayers() ? List.copyOf(server.getPlayerList().getPlayers())
@@ -141,12 +150,17 @@ public final class ModLifecycle {
 
     private static void callEach(String id, RegistrationJournal journal, Object event, List<String> ran,
             Consumer<Object> call) {
+        callEach(id, journal, event, ran, call, listener -> true);
+    }
+
+    private static void callEach(String id, RegistrationJournal journal, Object event, List<String> ran,
+            Consumer<Object> call, Predicate<Object> runs) {
         for (RegistrationJournal.Entry entry : journal.getLive(id)) {
             if (!(entry.registration() instanceof EventRegistration registration) || !registration.listensTo(event)) {
                 continue;
             }
             Object listener = registration.findListener();
-            if (listener == null) {
+            if (listener == null || !runs.test(listener)) {
                 continue;
             }
             try {
@@ -157,6 +171,20 @@ public final class ModLifecycle {
                         registration.describe(), e);
             }
         }
+    }
+
+    private static String findPartOf(String id, Object listener) {
+        Class<?> type = listener.getClass();
+        int lambda = type.isHidden() ? type.getName().indexOf("$$Lambda") : -1;
+        if (lambda >= 0) {
+            try {
+                type = Class.forName(type.getName().substring(0, lambda), false, type.getClassLoader());
+            } catch (ClassNotFoundException | LinkageError e) {
+                return id;
+            }
+        }
+        String nested = GameRegistrations.findNestedModOf(type);
+        return nested != null ? nested : id;
     }
 
     private static void callArchitectury(String id, RegistrationJournal journal, String name, List<String> ran,

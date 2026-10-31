@@ -44,6 +44,21 @@ final class RebuildEvidence {
         }
     }
 
+    static void dumpFailed(String name, byte[] running, byte[] mixed) {
+        String folder = System.getProperty("hotwire.dump");
+        if (folder == null) {
+            return;
+        }
+        try {
+            Path base = Path.of(folder).resolve(name.replace('/', '.') + ".failed." + System.currentTimeMillis());
+            Files.createDirectories(base);
+            Files.write(base.resolve("running.class"), running);
+            Files.write(base.resolve("mixed.class"), mixed);
+        } catch (IOException e) {
+            LOGGER.warn("[Hotwire] could not dump {} to {}", name, folder, e);
+        }
+    }
+
     static List<String> listLiveFields(Class<?> type) {
         List<String> out = new ArrayList<>();
         try {
