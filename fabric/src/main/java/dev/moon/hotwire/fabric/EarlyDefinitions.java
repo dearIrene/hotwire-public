@@ -6,6 +6,7 @@ import dev.moon.hotwire.jvm.JvmAccess;
 import dev.moon.hotwire.jvm.JvmAccessException;
 import dev.moon.hotwire.redefine.HandlerGuards;
 import dev.moon.hotwire.redefine.LoadedClassBytes;
+import dev.moon.hotwire.report.StartTimes;
 import java.io.IOException;
 import java.io.InputStream;
 import java.lang.instrument.ClassFileTransformer;
@@ -24,8 +25,16 @@ public final class EarlyDefinitions implements PreLaunchEntrypoint {
     private static volatile @Nullable ClassFileTransformer early;
 
     @Override
-    @SuppressWarnings("ReferenceEquality")
     public void onPreLaunch() {
+        StartTimes.mark("Hotwire's pre-launch begins");
+        long began = System.nanoTime();
+        this.watch();
+        StartTimes.add("pre-launch", began);
+        StartTimes.mark("Hotwire's pre-launch ends");
+    }
+
+    @SuppressWarnings("ReferenceEquality")
+    private void watch() {
         HotwireLog.install(FabricLoader.getInstance().getGameDir().resolve("hotwire").resolve("logs"));
 
         if (System.getProperty("hotwire.guards") == null && new HotwireSettings(FabricLoader.getInstance()
@@ -39,7 +48,9 @@ public final class EarlyDefinitions implements PreLaunchEntrypoint {
             if (jar == null) {
                 return;
             }
+            long reach = System.nanoTime();
             Instrumentation found = JvmAccess.getInstrumentation(jar);
+            StartTimes.add("pre-launch: reach the JVM", reach);
 
             HandlerGuards.readOriginalsWith(name -> {
                 try (InputStream in = game.getResourceAsStream(name + ".class")) {
@@ -56,8 +67,14 @@ public final class EarlyDefinitions implements PreLaunchEntrypoint {
                         return null;
                     }
 
+                    long began = System.nanoTime();
                     byte[] made = HandlerGuards.ENABLED ? HandlerGuards.rewrite(name, bytes) : null;
-                    LoadedClassBytes.recordDefinedInGame(name, made == null ? bytes : made, loader);
+                    long rewritten = System.nanoTime();
+                    byte[] kept = made == null ? bytes : made;
+                    LoadedClassBytes.recordDefinedInGame(name, kept, loader);
+                    StartTimes.add("early watcher: call sites", began, rewritten);
+                    StartTimes.add("early watcher: keep the bytes", rewritten);
+                    StartTimes.addBytes("early watcher: keep the bytes", kept.length);
                     return made;
                 }
             };

@@ -5,6 +5,7 @@ import dev.moon.hotwire.plan.SwitchPlan;
 import dev.moon.hotwire.redefine.CachedMixes;
 import dev.moon.hotwire.redefine.ClassRebuilder;
 import dev.moon.hotwire.redefine.RebuildException;
+import dev.moon.hotwire.report.StartTimes;
 import java.util.ArrayList;
 import java.util.Comparator;
 import java.util.HashMap;
@@ -159,12 +160,16 @@ public final class SwitchCacheFiller {
         }
         this.threadRun = current;
         Thread filler = new Thread(() -> {
+            StartTimes.Job job = StartTimes.begin(this.healing ? "switch cache heal, own thread"
+                    : "switch cache fill, own thread");
             try {
                 this.fill(current);
             } catch (RuntimeException e) {
                 LOGGER.info("[Hotwire] the switch cache stopped filling: {}", e.toString());
             } catch (InterruptedException e) {
                 Thread.currentThread().interrupt();
+            } finally {
+                job.end();
             }
         }, "hotwire-preload");
         filler.setDaemon(true);

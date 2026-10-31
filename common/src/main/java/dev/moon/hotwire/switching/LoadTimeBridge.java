@@ -11,6 +11,7 @@ import dev.moon.hotwire.redefine.ReflectionBridge;
 import dev.moon.hotwire.redefine.Relocations;
 import dev.moon.hotwire.redefine.ShutOverrides;
 import dev.moon.hotwire.redefine.TripwireSites;
+import dev.moon.hotwire.report.StartTimes;
 import java.io.IOException;
 import java.lang.instrument.ClassFileTransformer;
 import java.nio.file.Files;
@@ -57,6 +58,7 @@ final class LoadTimeBridge implements ClassFileTransformer {
                     new IllegalStateException(className));
             return null;
         }
+        long began = System.nanoTime();
         try {
             byte[] made = this.bridge(loader, className, domain, bytes);
             this.defined.accept(className, made == null ? bytes : made,
@@ -68,6 +70,7 @@ final class LoadTimeBridge implements ClassFileTransformer {
             return null;
         } finally {
             MIXING.get().remove(className);
+            StartTimes.add("load-time mixer, per class", began);
         }
     }
 

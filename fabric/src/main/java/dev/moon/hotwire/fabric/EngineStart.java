@@ -62,6 +62,7 @@ import dev.moon.hotwire.redefine.ShutOverrides;
 import dev.moon.hotwire.redefine.Tripwire;
 import dev.moon.hotwire.redefine.TripwireSites;
 import dev.moon.hotwire.registration.ModThreadFinder;
+import dev.moon.hotwire.report.StartTimes;
 import dev.moon.hotwire.switching.ModMixins;
 import dev.moon.hotwire.switching.ModSwitcher;
 import dev.moon.hotwire.switching.OffChecker;
@@ -183,13 +184,16 @@ final class EngineStart {
 
     static HotwireEngine.JvmParts bind(InstalledMods installed, Progress progress, GameReports reports,
             UpdateFolders folders, UpdateQueue queue, Path gameDir, ModIcons icons) throws JvmAccessException {
+        StartTimes.Laps laps = StartTimes.laps("engine bind: ");
         Instrumentation instrumentation = JvmAccess.getInstrumentation(findHotwireJar());
         JarChannels.open(instrumentation);
         GlfwCallbacks.useInstrumentation(instrumentation);
         LOGGER.info("[Hotwire] {} open jars read on through an interrupt", JarChannels.makeUninterruptible());
+        laps.lap("reach the JVM, open jars");
         KnotInternals knot = KnotInternals.bind();
         MixinInternals mixin = MixinInternals.bind();
         LocalRefs.prepare();
+        laps.lap("reach Knot and Mixin");
         Set<String> loadedIds = new HashSet<>();
         FabricLoader.getInstance().getAllMods().forEach(mod -> loadedIds.add(mod.getMetadata().getId()));
         Map<String, ModMixins> mixins = MixinConfigs.withCodeAdded(
@@ -206,18 +210,21 @@ final class EngineStart {
                 }
             });
         }
+        laps.lap("read the mixin configs, call sites");
         GameClasses classes = new GameClasses(knot, HotwireEngine.class.getClassLoader());
         HandlerGuards.readOriginalsWith(classes::findOriginalBytes);
         SwitchApplier applier = new SwitchApplier(
                 new ClassRebuilder(instrumentation, GameMixinCopy.create(mixin, MixinConfigs.readDecorations(
                         mixins, mixin), classes::findOriginalBytes)),
                 classes, mixins, mixins.keySet(), MixinConfigs.findUnowned(mixin.getConfigs(), mixins));
+        laps.lap("applier and Mixin copy");
         applier.getRebuilder().resolveArgsWith(mixin::getArgsClassFor);
         applier.getRebuilder().getCache().cacheIn(
                 CacheStore.open(findCacheFolder().resolve("mixed"), "mixed",
                         (long) CacheLimit.read(findCacheFolder()) << 20), LivePluginShapes::ask);
         applier.getRebuilder().getHooks()
                 .sendGeneratedTo(new GeneratedClasses(gameDir.resolve("hotwire").resolve("generated")) ::write);
+        laps.lap("open the switch cache");
         applier.orderConfigsAs(mixin.getConfigs());
         ClassFileTransformer loadTimeMixer = applier.makeLoadTimeMixer();
         applier.holdRedefinitionWith(() -> GameHold.begin(Minecraft.getInstance())::release);
@@ -230,6 +237,7 @@ final class EngineStart {
         CrashGuard.setMixinOwners(applier.getCarriedMixins()::findModShipping);
         OffModCommands.readUsesFrom(installed::getGraph);
         Linker.setMixinOwners(applier.getCarriedMixins()::findModShipping);
+        laps.lap("load-time mixer, hooks");
         TransformerChain chain = TransformerChain.bind(ForeignPatches.makeOwnerFinder(installed.getGraphJars()));
         BiFunction<Set<String>, Set<String>, Set<String>> foreign = findForeignPatches(instrumentation, installed,
                 applier, chain);
@@ -240,6 +248,7 @@ final class EngineStart {
             return also;
         });
 
+        laps.lap("foreign patches");
         OffChecker offChecker = new OffChecker(GameRegistrations.getJournal(), () -> {
             ModThreadFinder threads = ModThreadFinder.ofLiveThreads(GameRegistrations::findModOrShipper,
                     classes::findLoadedNamed, Tripwire::isLinking);
@@ -257,8 +266,10 @@ final class EngineStart {
         ModSwitcher switcher = new ModSwitcher(installed.getGraph(), ModPolicy.makePlannerFor(installed.getGraph()),
                 applier, progress, GameRegistrations.getJournal(),
                 ModLifecycle.makeLifecycle(GameRegistrations.getJournal(), Minecraft.getInstance()));
+        laps.lap("off checker, seen uses, switcher");
         ModTripwire tripwire = new ModTripwire(instrumentation, applier.getRebuilder(), classes::findLoaded);
         applier.getRebuilder().setRider(tripwire.getRide());
+        laps.lap("tripwire");
         FieldReferences fieldReferences = new FieldReferences(instrumentation, applier.getRebuilder(),
                 classes::findOriginalBytes,
                 mod -> installed.getGraphJars().stream().filter(jar -> jar.manifest().id().equals(mod)).findFirst()
@@ -272,6 +283,7 @@ final class EngineStart {
         });
         FinalWrites.writeWith(fieldReferences::writeFinal);
         FieldSlots.readStaticsWhen(fieldReferences::isInitialized);
+        laps.lap("field references, statics");
         switcher.reopenToTurnOnWith(mod -> fieldReferences.hasRemovedFrom(mod)
                 || NetworkHandlers.hasLostConnection(mod));
         switcher.reopenToTurnOffWith(new ConnectionLambdas(instrumentation)::findMods);
@@ -282,6 +294,7 @@ final class EngineStart {
             fieldReferences.rehash(rehashed);
             EventInvokers.rebuild(rebuilt, classes::findLoaded, fieldReferences::isInitialized);
         });
+        laps.lap("reopen checks, locks, health");
         SwitchRunner runner = new SwitchRunner(switcher, offChecker, reports, tripwire, fieldReferences,
                 new AsyncLogging(applier.getRebuilder(), instrumentation),
                 new GeneratedWrappers(applier.getRebuilder(),
@@ -292,6 +305,7 @@ final class EngineStart {
         UpdateSupport updates = new UpdateSupport(installed, applier, switcher, classes, folders, queue, reports,
                 icons);
         updates.setAdder(adds.getAdder());
+        laps.lap("runner, adds, updates");
         return new HotwireEngine.JvmParts(runner, adds, updates, instrumentation, loadTimeMixer, classes);
     }
 
@@ -380,7 +394,9 @@ final class EngineStart {
     static HotwireEngine start() throws IOException {
         FabricLoader loader = FabricLoader.getInstance();
         Path gameDir = loader.getGameDir();
+        StartTimes.Laps laps = StartTimes.laps("engine start: ");
         InstalledMods installed = readInstalledMods(loader);
+        laps.lap("read the installed mods");
         Progress progress = new Progress();
         LoggedFaults.install();
         GameReports reports = new GameReports(installed::nameOf);
@@ -392,15 +408,19 @@ final class EngineStart {
 
         ModIcons icons = new ModIcons(installed);
         icons.readAhead(installed.getGraph().getIds());
+        laps.lap("settings, folders, icons");
         HotwireEngine engine;
         try {
             HotwireEngine.JvmParts parts = bind(installed, progress, reports, folders, queue, gameDir, icons);
+            laps.lap("bind, in all");
             engine = new HotwireEngine(installed, progress, reports, folders, queue, settings, icons,
                     new HotwireEngine.Bound.Ready(parts));
+            laps.lap("make the engine");
             HotwireEngine made = engine;
             parts.runner().getSwitcher().prepareLookWith(() -> parts.runner().prepareLookFor(made.findSwitchableOn()));
             new SwapAtClose(queue, folders, findHotwireJar()).arm();
             QuietThreads.install();
+            laps.lap("look, swap at close, quiet threads");
             LoadedClassBytes loadedBytes = parts.adds().getApplier().getRebuilder().getLoadedBytes();
             Fields.readWith(name -> parts.classes().findLoaded(name.replace('.', '/')) != null, type -> {
                 String internal = type.getName().replace('.', '/');
@@ -411,6 +431,7 @@ final class EngineStart {
                 return known != null ? known : parts.classes().findOriginalBytes(internal);
             });
             Fields.preloadStatics(parts.instrumentation());
+            laps.lap("fields");
 
             parts.runner().getSwitcher().getFiller().watchPlaying(CacheFillControl::isPlaying);
             if (settings.isAutoFillOn()) {
@@ -418,12 +439,14 @@ final class EngineStart {
             } else {
                 parts.runner().getSwitcher().getFiller().heal();
             }
+            laps.lap("switch cache");
         } catch (JvmAccessException | IllegalStateException e) {
             LOGGER.error("[Hotwire] Switching mods is not possible in this game: {}", e.getMessage(), e);
             engine = new HotwireEngine(installed, progress, reports, folders, queue, settings, icons,
                     new HotwireEngine.Bound.Refused(Lang.get("hotwire.switch.no_instrument", e.getMessage())));
         }
         engine.cleanUpdateFolders();
+        laps.lap("clean the update folders");
         HotwireEngine started = engine;
         OffCodeNotice.install(started, installed);
         BiConsumer<String, Boolean> say = (line, bad) -> {
@@ -442,6 +465,7 @@ final class EngineStart {
             ready.runner().setBeforeOn(started.getDisabled()::restore);
         }
         CrashReports.watch(engine.getTasks(), engine.getZips());
+        laps.lap("crash guards and notices");
         return engine;
     }
 }

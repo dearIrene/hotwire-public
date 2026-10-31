@@ -8,10 +8,16 @@ import dev.moon.hotwire.redefine.FieldHolders;
 import dev.moon.hotwire.redefine.InitHookReplay;
 import dev.moon.hotwire.redefine.Tripwire;
 import dev.moon.hotwire.report.GameLog;
+import dev.moon.hotwire.report.StartTimes;
 import dev.moon.hotwire.ui.DownloadNotices;
 import dev.moon.hotwire.ui.Lang;
 import java.io.IOException;
 import java.io.UncheckedIOException;
+import java.nio.file.Path;
+import java.util.concurrent.CompletableFuture;
+import java.util.concurrent.Executor;
+import java.util.concurrent.ForkJoinPool;
+import java.util.concurrent.TimeUnit;
 import net.fabricmc.api.ClientModInitializer;
 import net.fabricmc.fabric.api.client.command.v2.ClientCommandRegistrationCallback;
 import net.fabricmc.fabric.api.client.event.lifecycle.v1.ClientLifecycleEvents;
@@ -32,9 +38,13 @@ public final class HotwireClient implements ClientModInitializer {
     private static final Logger LOGGER = LoggerFactory.getLogger(HotwireClient.class);
 
     private static @Nullable HotwireEngine engine;
+    private static final String TITLE = "title screen";
+    public static final String STARTUP = "startup.txt";
 
     @Override
     public void onInitializeClient() {
+        StartTimes.mark("Hotwire's client start begins");
+        long began = System.nanoTime();
         HotwireLog.install(FabricLoader.getInstance().getGameDir().resolve("hotwire").resolve("logs"));
         GameLog.LOGGER.info("[Hotwire] {} loaded; H or /hotwire opens it, and its Report button writes what went wrong"
                 + " to hotwire/reports", LoadedMods.findVersion(ID, "unknown"));
@@ -62,7 +72,10 @@ public final class HotwireClient implements ClientModInitializer {
         OpenKey.register(HotwireClient::openSoonFromKey);
         OffTooltips.register();
 
-        ClientLifecycleEvents.CLIENT_STARTED.register(client -> client.execute(HotwireClient::getEngine));
+        ClientLifecycleEvents.CLIENT_STARTED.register(client -> {
+            StartTimes.mark("the game started, Hotwire's engine queued");
+            client.execute(HotwireClient::getEngine);
+        });
 
         InitHookReplay.catchUpLaterWhile(() -> Minecraft.getInstance().level == null);
         ClientPlayConnectionEvents.JOIN.register((handler, sender, client) -> client.execute(() -> {
@@ -88,6 +101,33 @@ public final class HotwireClient implements ClientModInitializer {
                 started.close();
             }
         });
+        StartTimes.add("client start", began);
+        StartTimes.mark("Hotwire's client start ends");
+    }
+
+    public static void onTitleScreen() {
+        if (StartTimes.hasMark(TITLE)) {
+            return;
+        }
+        StartTimes.mark(TITLE);
+        Path file = FabricLoader.getInstance().getGameDir().resolve("hotwire").resolve("logs").resolve(STARTUP);
+        String about = "Hotwire " + LoadedMods.findVersion(ID, "unknown") + " on Minecraft "
+                + LoadedMods.findVersion("minecraft", "unknown") + ", " + FabricLoader.getInstance().getAllMods().size()
+                + " mods loaded";
+        Executor later = CompletableFuture.delayedExecutor(60, TimeUnit.SECONDS);
+        ForkJoinPool.commonPool().execute(() -> writeStartTimes(file, about + ", at the title screen", true));
+        later.execute(() -> writeStartTimes(file, about + ", a minute after the title screen", false));
+    }
+
+    private static void writeStartTimes(Path file, String heading, boolean first) {
+        try {
+            StartTimes.write(file, heading, first);
+            if (first) {
+                LOGGER.info("[Hotwire] the start's timings are in {}", file);
+            }
+        } catch (IOException e) {
+            LOGGER.warn("[Hotwire] the start's timings could not be written to {}", file, e);
+        }
     }
 
     private static void openSoon() {
@@ -123,11 +163,15 @@ public final class HotwireClient implements ClientModInitializer {
     public static synchronized HotwireEngine getEngine() {
         HotwireEngine started = engine;
         if (started == null) {
+            StartTimes.mark("Hotwire's engine start begins");
+            long began = System.nanoTime();
             try {
                 started = EngineStart.start();
             } catch (IOException e) {
                 throw new UncheckedIOException(e);
             }
+            StartTimes.add("engine start, in all", began);
+            StartTimes.mark("Hotwire's engine start ends");
             engine = started;
             HotwireEngine made = started;
             OffModCommands.readOffFrom(id -> !made.isOn(id) || Tripwire.isWatched(id));

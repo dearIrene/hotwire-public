@@ -377,6 +377,9 @@ public final class GameReports {
                 texts.put("hotwire-" + name, getTail(read(logs.resolve(name))));
             }
         }
+        if (Files.isRegularFile(logs.resolve(HotwireClient.STARTUP))) {
+            texts.put("hotwire-" + HotwireClient.STARTUP, read(logs.resolve(HotwireClient.STARTUP)));
+        }
         this.listSince(this.folder, ".txt").forEach(file -> texts.put("reports/" + file.getFileName(), read(file)));
         this.listSince(game.resolve("crash-reports"), ".txt")
                 .forEach(file -> texts.put("crash-reports/" + file.getFileName(), read(file)));

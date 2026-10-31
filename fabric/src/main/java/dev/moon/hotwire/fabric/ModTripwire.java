@@ -8,6 +8,7 @@ import dev.moon.hotwire.redefine.LambdaSites;
 import dev.moon.hotwire.redefine.RebuildException;
 import dev.moon.hotwire.redefine.Tripwire;
 import dev.moon.hotwire.redefine.TripwireSites;
+import dev.moon.hotwire.report.StartTimes;
 import dev.moon.hotwire.switching.SwitchTimes;
 import java.lang.instrument.ClassFileTransformer;
 import java.lang.instrument.Instrumentation;
@@ -72,11 +73,14 @@ public final class ModTripwire {
             if (name == null || loader == null || redefining != null || !HotwireLoaders.seesHotwire(loader)) {
                 return null;
             }
+            long began = System.nanoTime();
             try {
                 return ModTripwire.this.armAtLoad(name, findSourceOf(domain), bytes, loader);
             } catch (RuntimeException | LinkageError e) {
                 LOGGER.error("[Hotwire] {} loaded unwatched: wiring it as it loaded threw", name, e);
                 return null;
+            } finally {
+                StartTimes.add("tripwire watcher, per class", began);
             }
         }
     };

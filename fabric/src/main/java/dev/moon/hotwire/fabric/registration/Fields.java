@@ -2,6 +2,7 @@ package dev.moon.hotwire.fabric.registration;
 
 import com.google.common.collect.MapMaker;
 import dev.moon.hotwire.redefine.FieldSlots;
+import dev.moon.hotwire.report.StartTimes;
 import java.lang.instrument.Instrumentation;
 import java.lang.reflect.Field;
 import java.lang.reflect.InaccessibleObjectException;
@@ -72,6 +73,7 @@ public final class Fields {
             return;
         }
         Thread preloader = new Thread(() -> {
+            StartTimes.Job job = StartTimes.begin("statics preload, own thread");
             try {
                 ClassLoader game = Fields.class.getClassLoader();
                 for (Class<?> type : instrumentation.getAllLoadedClasses()) {
@@ -81,6 +83,7 @@ public final class Fields {
                     }
                 }
             } finally {
+                job.end();
                 PRELOADING.set(false);
             }
         }, "hotwire-preload-fields");
