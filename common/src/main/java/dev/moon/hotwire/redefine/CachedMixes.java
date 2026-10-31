@@ -30,8 +30,8 @@ public final class CachedMixes {
 
     private static final int SPLIT_FROM = 64;
     private static final int WAYS = findWays();
-    private static final ExecutorService LOTS = Executors.newCachedThreadPool(Thread.ofPlatform().name("hotwire-mix-", 1)
-            .daemon().factory());
+    private static final ExecutorService LOTS = Executors.newCachedThreadPool(
+            Thread.ofPlatform().name("hotwire-mix-", 1).daemon().factory());
 
     private final MixinCopy copy;
     private volatile @Nullable MixedCache cache;

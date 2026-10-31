@@ -36,7 +36,6 @@ import dev.moon.hotwire.ui.ChooserScreen;
 import dev.moon.hotwire.ui.JarHost;
 import dev.moon.hotwire.ui.Lang;
 import dev.moon.hotwire.ui.ModScreen;
-import dev.moon.hotwire.update.UrgentUpdate;
 import dev.moon.hotwire.ui.Progress;
 import dev.moon.hotwire.ui.StoreCacheView;
 import dev.moon.hotwire.ui.StoreScreen;
@@ -50,19 +49,18 @@ import dev.moon.hotwire.update.PendingChanges;
 import dev.moon.hotwire.update.UpdateFolders;
 import dev.moon.hotwire.update.UpdateOffer;
 import dev.moon.hotwire.update.UpdateQueue;
+import dev.moon.hotwire.update.UrgentUpdate;
 import java.io.IOException;
 import java.io.UncheckedIOException;
 import java.lang.instrument.ClassFileTransformer;
 import java.lang.instrument.Instrumentation;
 import java.nio.file.Path;
-import java.time.Duration;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Objects;
 import java.util.Optional;
 import java.util.Set;
 import java.util.concurrent.CompletableFuture;
-import java.util.concurrent.TimeUnit;
 import java.util.function.Consumer;
 import net.fabricmc.loader.api.FabricLoader;
 import net.minecraft.client.Minecraft;
@@ -85,8 +83,6 @@ public final class HotwireEngine implements ModScreen.Game, AutoCloseable {
     }
 
     private static final Logger LOGGER = LoggerFactory.getLogger(HotwireEngine.class);
-
-    private static final Duration IN_WORLD_LOOK_DELAY = Duration.ofSeconds(20);
 
     private final InstalledMods installed;
     private final Bound bound;
@@ -188,8 +184,8 @@ public final class HotwireEngine implements ModScreen.Game, AutoCloseable {
 
     @Override
     public void checkForUpdates() {
-        if (this.storeJars.recheck()) {
-            this.selfUpdate.recheck();
+        if (this.storeJars.checkAgain()) {
+            this.selfUpdate.checkAgain();
         }
     }
 
@@ -274,15 +270,6 @@ public final class HotwireEngine implements ModScreen.Game, AutoCloseable {
         } else {
             ModViews.showChat(text, bad, hint);
         }
-    }
-
-    void lookAheadInWorldSoon() {
-        CompletableFuture.delayedExecutor(IN_WORLD_LOOK_DELAY.toSeconds(), TimeUnit.SECONDS).execute(() -> {
-            JvmParts parts = this.findParts();
-            if (parts != null && Minecraft.getInstance().level != null) {
-                parts.runner().lookAheadForAll(this.findSwitchableOn());
-            }
-        });
     }
 
     void refreshScreen() {

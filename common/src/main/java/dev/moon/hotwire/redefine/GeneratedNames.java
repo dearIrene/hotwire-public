@@ -36,7 +36,7 @@ final class GeneratedNames {
     private static final int MOST_NAMES = 100_000;
     private static final String MIXIN_MERGED = "Lorg/spongepowered/asm/mixin/transformer/meta/MixinMerged;";
 
-    private static final String KEPT_ASIDE = "Ldev/moon/hotwire/redefine/MergedOnceFrom;";
+    private static final String MERGED_ASIDE = "Ldev/moon/hotwire/redefine/MergedOnceFrom;";
 
     private GeneratedNames() {
     }
@@ -317,14 +317,14 @@ final class GeneratedNames {
         return out;
     }
 
-    static @Nullable List<AnnotationNode> keepMergedAside(@Nullable List<AnnotationNode> annotations) {
+    static @Nullable List<AnnotationNode> renameMergedMarks(@Nullable List<AnnotationNode> annotations) {
         if (annotations == null) {
             return null;
         }
         List<AnnotationNode> out = new ArrayList<>();
         for (AnnotationNode annotation : annotations) {
             if (annotation.desc.equals(MIXIN_MERGED)) {
-                AnnotationNode aside = new AnnotationNode(KEPT_ASIDE);
+                AnnotationNode aside = new AnnotationNode(MERGED_ASIDE);
                 aside.values = annotation.values;
                 out.add(aside);
             } else {
@@ -340,7 +340,7 @@ final class GeneratedNames {
 
     static @Nullable String findMixinOf(@Nullable List<AnnotationNode> annotations) {
         String merged = findMixinIn(annotations, MIXIN_MERGED);
-        return merged != null ? merged : findMixinIn(annotations, KEPT_ASIDE);
+        return merged != null ? merged : findMixinIn(annotations, MERGED_ASIDE);
     }
 
     private static @Nullable String findMixinIn(@Nullable List<AnnotationNode> annotations, String desc) {

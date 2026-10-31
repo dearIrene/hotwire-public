@@ -48,7 +48,7 @@ public final class LambdaSites {
         return bootstrap.getOwner().equals(JDK) && bootstrap.getName().equals(JDK_NAME);
     }
 
-    static void relink(ClassNode node) {
+    static void rewriteTree(ClassNode node) {
         for (MethodNode method : node.methods) {
             for (AbstractInsnNode insn : method.instructions) {
                 if (insn instanceof InvokeDynamicInsnNode site && isJdkFactory(site.bsm)) {

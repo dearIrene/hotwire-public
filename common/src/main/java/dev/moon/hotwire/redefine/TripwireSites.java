@@ -76,7 +76,7 @@ public final class TripwireSites {
             return classBytes;
         }
         if (relinked) {
-            LambdaSites.relink(node);
+            LambdaSites.rewriteTree(node);
         }
 
         ClassWriter writer = new ClassWriter(new ClassReader(classBytes), ClassWriter.COMPUTE_MAXS);

@@ -322,9 +322,9 @@ final class ModListRow {
                     appear * 0.9f));
             at += chipW + 12;
         }
-        String carrier = this.mod.carrier();
-        if (carrier != null) {
-            String label = Lang.get("hotwire.row.carried", carrier);
+        String container = this.mod.container();
+        if (container != null) {
+            String label = Lang.get("hotwire.row.carried", container);
             int labelW = canvas.measureText(label);
             if (at + labelW <= right) {
                 canvas.drawText(label, at, y, Colors.fade(Palette.DIM, appear * 0.9f));

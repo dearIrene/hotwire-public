@@ -80,7 +80,7 @@ final class StoreJars {
         return this.checked;
     }
 
-    boolean recheck() {
+    boolean checkAgain() {
         long limited = this.check.findWaitSeconds();
         if (limited > 0) {
             this.say.accept(Lang.get("hotwire.updates.rate_limited", limited), true);

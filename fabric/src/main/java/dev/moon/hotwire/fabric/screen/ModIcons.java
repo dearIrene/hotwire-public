@@ -71,9 +71,9 @@ public final class ModIcons implements AutoCloseable {
                 return made;
             }
             int[] square = this.ahead.remove(size);
-            IconPixels kept = this.pixels;
-            if (square == null && kept != null) {
-                square = kept.makeSquare(size);
+            IconPixels decoded = this.pixels;
+            if (square == null && decoded != null) {
+                square = decoded.makeSquare(size);
             }
             if (square == null) {
                 this.decodeSoon(size, scale);

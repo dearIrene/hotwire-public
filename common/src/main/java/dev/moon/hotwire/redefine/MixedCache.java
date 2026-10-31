@@ -64,11 +64,11 @@ final class MixedCache {
         }
     }
 
-    private record Aimed(int config, int place, String mixin, Set<String> aims) {
+    private record AimedMixin(int config, int place, String mixin, Set<String> aims) {
     }
 
-    private static final Comparator<Aimed> AIMED_ORDER = Comparator.comparingInt(Aimed::config)
-            .thenComparingInt(Aimed::place);
+    private static final Comparator<AimedMixin> AIMED_ORDER = Comparator.comparingInt(AimedMixin::config)
+            .thenComparingInt(AimedMixin::place);
 
     private record Config(String name, CacheKey settings, Set<String> mixins, boolean plugin) {
     }
@@ -138,7 +138,7 @@ final class MixedCache {
             }
             configs.add(this.readConfig(name, json, resources));
         }
-        Map<String, List<Aimed>> byAim = this.indexAims(configs);
+        Map<String, List<AimedMixin>> byAim = this.indexAims(configs);
         if (byAim == null) {
             return Map.of();
         }
@@ -222,7 +222,7 @@ final class MixedCache {
     }
 
     private @Nullable CacheKey findKey(String target, byte[] original, List<Config> configs,
-            Map<String, List<Aimed>> byAim, CacheKey others, Set<String> above, Set<String> mixedAbove,
+            Map<String, List<AimedMixin>> byAim, CacheKey others, Set<String> above, Set<String> mixedAbove,
             @Nullable StringBuilder trace) {
         CacheKey.Builder key = CacheKey.of(KEYS).add(this.copy.getRecipe()).add(target).add(original)
                 .add(others.high()).add(others.low());
@@ -233,15 +233,15 @@ final class MixedCache {
         types.add(target);
         types.addAll(mixedAbove);
 
-        TreeSet<Aimed> relevant = new TreeSet<>(AIMED_ORDER);
+        TreeSet<AimedMixin> relevant = new TreeSet<>(AIMED_ORDER);
         relevant.addAll(byAim.getOrDefault(target, List.of()));
         above.forEach(type -> relevant.addAll(byAim.getOrDefault(type, List.of())));
-        Map<Integer, List<Aimed>> byConfig = new TreeMap<>();
+        Map<Integer, List<AimedMixin>> byConfig = new TreeMap<>();
         relevant.forEach(one -> byConfig.computeIfAbsent(one.config(), any -> new ArrayList<>()).add(one));
-        for (Map.Entry<Integer, List<Aimed>> each : byConfig.entrySet()) {
+        for (Map.Entry<Integer, List<AimedMixin>> each : byConfig.entrySet()) {
             Config config = configs.get(each.getKey());
             List<String> aiming = new ArrayList<>();
-            for (Aimed one : each.getValue()) {
+            for (AimedMixin one : each.getValue()) {
                 key.add(one.mixin()).add(this.hashOfMixin(one.mixin()));
                 for (String type : types) {
                     if (one.aims().contains(type)) {
@@ -280,8 +280,8 @@ final class MixedCache {
         return key.build();
     }
 
-    private @Nullable Map<String, List<Aimed>> indexAims(List<Config> configs) {
-        Map<String, List<Aimed>> byAim = new HashMap<>();
+    private @Nullable Map<String, List<AimedMixin>> indexAims(List<Config> configs) {
+        Map<String, List<AimedMixin>> byAim = new HashMap<>();
         for (int at = 0; at < configs.size(); at++) {
             int place = 0;
             for (String mixin : configs.get(at).mixins()) {
@@ -289,7 +289,7 @@ final class MixedCache {
                 if (aims == null) {
                     return null;
                 }
-                Aimed one = new Aimed(at, place++, mixin, aims);
+                AimedMixin one = new AimedMixin(at, place++, mixin, aims);
                 aims.forEach(aim -> byAim.computeIfAbsent(aim, any -> new ArrayList<>()).add(one));
             }
         }

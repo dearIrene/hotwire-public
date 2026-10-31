@@ -13,8 +13,8 @@ import dev.moon.hotwire.api.StoreVersion;
 import dev.moon.hotwire.api.SwitchResult;
 import dev.moon.hotwire.fabric.screen.WebLinks;
 import dev.moon.hotwire.fabric.store.ModStore;
-import dev.moon.hotwire.modrinth.Downloads;
 import dev.moon.hotwire.modrinth.CachedAsks;
+import dev.moon.hotwire.modrinth.Downloads;
 import dev.moon.hotwire.modrinth.ModrinthClient;
 import dev.moon.hotwire.modrinth.StoreCategories;
 import dev.moon.hotwire.modrinth.StoreModel;
@@ -143,9 +143,9 @@ final class StoreApi {
             }
             List<StoreVersion> versions = askBrowsing(browsing, made -> asks == null
                     ? made.findVersions(toKind(browsing.kind()), project.id())
-                    : asks.findVersions(made, toKind(browsing.kind()), project.id())).stream().map(version -> new StoreVersion(version.id(), version.number(),
-                    version.name(), version.size(), version.gameVersions(), version.requiredProjects(),
-                    version.changelog())).toList();
+                    : asks.findVersions(made, toKind(browsing.kind()), project.id())).stream()
+                    .map(version -> new StoreVersion(version.id(), version.number(), version.name(), version.size(),
+                            version.gameVersions(), version.requiredProjects(), version.changelog())).toList();
             return Optional.of(new StoreProject(project.id(), project.slug(), project.title(), project.description(),
                     project.body(), project.iconUrl(), project.downloads(), project.followers(), project.license(),
                     project.sourceUrl(), versions));
@@ -223,8 +223,9 @@ final class StoreApi {
                     : asks.findProject(getClient(), idOrSlug)).id();
             ModrinthClient.Version version = askBrowsing(browsing, made -> asks == null
                     ? made.findVersions(toKind(browsing.kind()), projectId)
-                    : asks.findVersions(made, toKind(browsing.kind()), projectId)).stream().filter(one -> versionId.isEmpty() || one.id().equals(versionId))
-                    .findFirst().orElseThrow(() -> new IOException(Lang.get("hotwire.store.no_version", idOrSlug)));
+                    : asks.findVersions(made, toKind(browsing.kind()), projectId)).stream()
+                    .filter(one -> versionId.isEmpty() || one.id().equals(versionId)).findFirst()
+                    .orElseThrow(() -> new IOException(Lang.get("hotwire.store.no_version", idOrSlug)));
             Files.createDirectories(folder);
             Files.write(folder.resolve(version.fileName().replaceAll("[^A-Za-z0-9._+ -]", "_")),
                     getClient().fetch(version));

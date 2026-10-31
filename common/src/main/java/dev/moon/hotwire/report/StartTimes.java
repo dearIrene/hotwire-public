@@ -86,7 +86,7 @@ public final class StartTimes {
         return new Job(step);
     }
 
-    public static Laps laps(String prefix) {
+    public static Laps startLaps(String prefix) {
         return new Laps(prefix);
     }
 
@@ -98,7 +98,7 @@ public final class StartTimes {
             this.prefix = prefix;
         }
 
-        public void lap(String step) {
+        public void endLap(String step) {
             long now = System.nanoTime();
             add(this.prefix + step, this.last, now);
             this.last = now;

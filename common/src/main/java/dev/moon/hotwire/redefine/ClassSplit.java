@@ -206,7 +206,7 @@ public final class ClassSplit {
             if (from == null || !inRunning.test(from)) {
                 String merged = GeneratedNames.findMergedFrom(shape.visibleAnnotations);
                 if (merged != null && !mixedMixins.contains(merged)) {
-                    body.visibleAnnotations = GeneratedNames.keepMergedAside(shape.visibleAnnotations);
+                    body.visibleAnnotations = GeneratedNames.renameMergedMarks(shape.visibleAnnotations);
                 }
 
                 stubbed.add(shape.name + shape.desc);

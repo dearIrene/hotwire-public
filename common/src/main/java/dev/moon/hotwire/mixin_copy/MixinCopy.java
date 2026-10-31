@@ -109,7 +109,7 @@ public final class MixinCopy implements AutoCloseable {
 
     private final List<Copy> reusable = new ArrayList<>();
     private int generation;
-    private static final int WARM = 3;
+    private static final int MAX_REUSABLE = 3;
 
     public MixinCopy(List<Path> mixinJars, ClassLoader live, List<String> sharedPackages, String sessionId,
             Function<String, byte @Nullable []> more, String side, Decorations decorations) {
@@ -184,7 +184,7 @@ public final class MixinCopy implements AutoCloseable {
 
             Path own = findOwnJar();
             if (own != null) {
-                addEntryMakers(digest, own);
+                addEntryCode(digest, own);
             }
             digest.update(this.side.getBytes(StandardCharsets.UTF_8));
 
@@ -196,27 +196,27 @@ public final class MixinCopy implements AutoCloseable {
         return known;
     }
 
-    private static void addEntryMakers(MessageDigest digest, Path own) throws IOException {
+    private static void addEntryCode(MessageDigest digest, Path own) throws IOException {
         try (ZipInputStream zip = new ZipInputStream(Files.newInputStream(own))) {
             for (ZipEntry entry = zip.getNextEntry(); entry != null; entry = zip.getNextEntry()) {
                 String name = entry.getName();
-                if (isEntryMaker(name)) {
+                if (isEntryCode(name)) {
                     digest.update(name.getBytes(StandardCharsets.UTF_8));
                     byte[] bytes = zip.readAllBytes();
-                    digest.update(name.endsWith(".class") ? withoutDebug(bytes) : bytes);
+                    digest.update(name.endsWith(".class") ? stripDebug(bytes) : bytes);
                 }
             }
         }
     }
 
-    static boolean isEntryMaker(String name) {
+    static boolean isEntryCode(String name) {
         return name.startsWith("dev/moon/hotwire/mixin_copy/") || name.startsWith("dev/moon/hotwire/cache/")
                 || name.startsWith("dev/moon/hotwire/redefine/ClassPacks")
                 || name.startsWith("dev/moon/hotwire/redefine/MixedCache")
                 || name.startsWith("dev/moon/hotwire/redefine/CachedMixes");
     }
 
-    static byte[] withoutDebug(byte[] bytes) {
+    static byte[] stripDebug(byte[] bytes) {
         ClassWriter writer = new ClassWriter(0);
         new ClassReader(bytes).accept(writer, ClassReader.SKIP_DEBUG);
         return writer.toByteArray();
@@ -411,7 +411,7 @@ public final class MixinCopy implements AutoCloseable {
 
     private void giveBack(Copy copy, int opened) {
         synchronized (BOOTING) {
-            if (opened == this.generation && this.reusable.size() < WARM) {
+            if (opened == this.generation && this.reusable.size() < MAX_REUSABLE) {
                 this.reusable.add(copy);
                 return;
             }

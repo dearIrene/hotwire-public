@@ -50,7 +50,13 @@ final class MixSplit {
             lots.add(new ArrayList<>());
         }
         for (List<String> group : bySize) {
-            lots.stream().min(Comparator.comparingInt(List::size)).orElseThrow().addAll(group);
+            List<String> smallest = lots.get(0);
+            for (List<String> lot : lots) {
+                if (lot.size() < smallest.size()) {
+                    smallest = lot;
+                }
+            }
+            smallest.addAll(group);
         }
         Map<String, Integer> order = new HashMap<>();
         int at = 0;

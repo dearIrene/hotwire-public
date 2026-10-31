@@ -143,7 +143,7 @@ public final class ReportWriter {
             case Refusal.MissingDependency missing -> this.report.nameOf(missing.mod()) + " needs "
                     + missing.dependency() + ", which is not installed";
             case Refusal.CarriedBy carried -> this.report.nameOf(carried.mod()) + " is also inside "
-                    + this.report.nameOf(carried.carrier()) + ", which stays on";
+                    + this.report.nameOf(carried.container()) + ", which stays on";
             case Refusal.OldDependency old -> this.report.nameOf(old.mod()) + " needs "
                     + this.report.nameOf(old.dependency()) + " " + old.wanted() + ", and the game has " + old.present();
         };

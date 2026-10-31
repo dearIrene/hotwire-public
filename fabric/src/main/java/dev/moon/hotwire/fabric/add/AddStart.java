@@ -81,7 +81,7 @@ final class AddStart {
             if (failed == null) {
                 HostLists.join(ids);
                 EntrypointLists.join(ids, findLoaded);
-                OffModCommands.remakeClientCommands();
+                OffModCommands.rebuildClientCommands();
                 started.complete(null);
             } else {
                 started.completeExceptionally(failed);

@@ -4,6 +4,7 @@ import java.lang.invoke.MethodHandle;
 import java.lang.invoke.MethodHandles;
 import java.lang.invoke.MethodType;
 import java.util.ArrayList;
+import java.util.Collections;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
@@ -76,8 +77,12 @@ final class RedirectStandIns {
                         + (startsWith(parameters, findShape(target)) ? "" : " shaped otherwise"));
             }
         });
-        return gone.isEmpty() ? "nothing of the shipped method is gone" : "gone: " + gone.stream().sorted().limit(4)
-                .toList() + (gone.size() > 4 ? " and " + (gone.size() - 4) + " more" : "");
+        if (gone.isEmpty()) {
+            return "nothing of the shipped method is gone";
+        }
+        Collections.sort(gone);
+        String more = gone.size() > 4 ? " and " + (gone.size() - 4) + " more" : "";
+        return "gone: " + gone.subList(0, Math.min(4, gone.size())) + more;
     }
 
     private static Map<Target, Integer> count(MethodNode method) {

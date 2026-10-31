@@ -59,11 +59,11 @@ public final class SwitchPlanner {
         Set<String> askedIds = new TreeSet<>(asked.stream().map(this.graph::resolve).toList());
         for (String mod : new TreeSet<>(asked)) {
             String id = this.graph.resolve(mod);
-            String carrier = this.findCarrierStaying(id, askedIds, alreadyOff);
+            String stayingContainer = this.findContainerStaying(id, askedIds, alreadyOff);
             if (this.graph.find(id).isEmpty()) {
                 refusals.add(new Refusal.NotInstalled(mod));
-            } else if (carrier != null) {
-                refusals.add(new Refusal.CarriedBy(id, carrier));
+            } else if (stayingContainer != null) {
+                refusals.add(new Refusal.CarriedBy(id, stayingContainer));
             } else if (!alreadyOff.contains(id)) {
                 leaving.put(id, new Reason.Asked());
             }
@@ -114,12 +114,12 @@ public final class SwitchPlanner {
         return new SwitchPlan(Direction.OFF, this.sortDeepestFirst(leaving.keySet()), leaving, retained, refusals);
     }
 
-    private @Nullable String findCarrierStaying(String mod, Set<String> asked, Set<String> alreadyOff) {
+    private @Nullable String findContainerStaying(String mod, Set<String> asked, Set<String> alreadyOff) {
         if (!this.graph.isInstalledOnItsOwn(mod) || alreadyOff.contains(mod)) {
             return null;
         }
-        return this.graph.getContainers(mod).stream().filter(carrier -> !asked.contains(carrier)
-                && !alreadyOff.contains(carrier)).findFirst().orElse(null);
+        return this.graph.getContainers(mod).stream().filter(container -> !asked.contains(container)
+                && !alreadyOff.contains(container)).findFirst().orElse(null);
     }
 
     private void tellWhyAskedGo(Map<String, Reason> leaving) {

@@ -5,6 +5,7 @@ import dev.moon.hotwire.fabric.rebuild.TransformerChain;
 import dev.moon.hotwire.fabric.registration.AsyncLogging;
 import dev.moon.hotwire.fabric.registration.ElementLook;
 import dev.moon.hotwire.fabric.registration.EntityAttachments;
+import dev.moon.hotwire.fabric.registration.EntityHolders;
 import dev.moon.hotwire.fabric.registration.EntityRendererProviders;
 import dev.moon.hotwire.fabric.registration.FieldReferences;
 import dev.moon.hotwire.fabric.registration.GameHold;
@@ -25,7 +26,6 @@ import dev.moon.hotwire.fabric.registration.ReloadedLists;
 import dev.moon.hotwire.fabric.registration.UncaughtHandlers;
 import dev.moon.hotwire.fabric.registration.WindowCursor;
 import dev.moon.hotwire.fabric.registration.WorldContent;
-import dev.moon.hotwire.fabric.registration.WorldHeld;
 import dev.moon.hotwire.fabric.registration.WorldWrappers;
 import dev.moon.hotwire.fabric.report.GameReports;
 import dev.moon.hotwire.fabric.report.SwitchFaults;
@@ -172,13 +172,13 @@ public final class SwitchRunner {
 
         Map<String, List<String>> content = WorldContent.find(wired);
 
-        Map<String, String> inEntities = content.isEmpty() ? WorldHeld.find(wired) : Map.of();
+        Map<String, String> inEntities = content.isEmpty() ? EntityHolders.find(wired) : Map.of();
         if (!content.isEmpty() || !inEntities.isEmpty()) {
-            String held = content.isEmpty() ? "the world's entities hold objects of " + inEntities
+            String why = content.isEmpty() ? "the world's entities hold objects of " + inEntities
                     : "the game's registries hold " + content;
-            LOGGER.info("[Hotwire] the off of {} waits for the next start: {}", ids, held);
-            return new CheckedResult(new ModSwitcher.Result.Failed(plan, RebuildException.ofRestartOnly(held,
-                    new IllegalStateException(held))), new Report.OffCheck.NotRun(), List.of());
+            LOGGER.info("[Hotwire] the off of {} waits for the next start: {}", ids, why);
+            return new CheckedResult(new ModSwitcher.Result.Failed(plan, RebuildException.ofRestartOnly(why,
+                    new IllegalStateException(why))), new Report.OffCheck.NotRun(), List.of());
         }
         if (!wired.isEmpty()) {
             this.tripwire.armEarly(wired, this.switcher.findPatchedBy(wired));

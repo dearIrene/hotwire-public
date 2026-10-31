@@ -67,7 +67,7 @@ public final class PlayerMessages {
             case Refusal.MissingDependency missing -> Lang.get("hotwire.refusal.missing", nameOf.apply(missing.mod()),
                     missing.dependency());
             case Refusal.CarriedBy carried -> Lang.get("hotwire.refusal.carried", nameOf.apply(carried.mod()),
-                    nameOf.apply(carried.carrier()));
+                    nameOf.apply(carried.container()));
             case Refusal.OldDependency old -> Lang.get("hotwire.refusal.old", nameOf.apply(old.mod()),
                     nameOf.apply(old.dependency()), old.wanted(), old.present());
         };

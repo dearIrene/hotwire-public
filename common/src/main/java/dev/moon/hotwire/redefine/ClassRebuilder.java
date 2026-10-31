@@ -96,9 +96,9 @@ public final class ClassRebuilder {
     private static final String MIX_SAVED = "the mix was saved for the switch cache";
 
     public Set<String> takeConstructorsChanged() {
-        Set<String> taken = Set.copyOf(this.constructorsChanged);
-        this.constructorsChanged.removeAll(taken);
-        return taken;
+        Set<String> changed = Set.copyOf(this.constructorsChanged);
+        this.constructorsChanged.removeAll(changed);
+        return changed;
     }
 
     public static void mixOnly(boolean only) {

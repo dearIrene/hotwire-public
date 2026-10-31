@@ -70,11 +70,11 @@ public final class EarlyDefinitions implements PreLaunchEntrypoint {
                     long began = System.nanoTime();
                     byte[] made = HandlerGuards.ENABLED ? HandlerGuards.rewrite(name, bytes) : null;
                     long rewritten = System.nanoTime();
-                    byte[] kept = made == null ? bytes : made;
-                    LoadedClassBytes.recordDefinedInGame(name, kept, loader);
+                    byte[] recorded = made == null ? bytes : made;
+                    LoadedClassBytes.recordDefinedInGame(name, recorded, loader);
                     StartTimes.add("early watcher: call sites", began, rewritten);
                     StartTimes.add("early watcher: keep the bytes", rewritten);
-                    StartTimes.addBytes("early watcher: keep the bytes", kept.length);
+                    StartTimes.addBytes("early watcher: keep the bytes", recorded.length);
                     return made;
                 }
             };

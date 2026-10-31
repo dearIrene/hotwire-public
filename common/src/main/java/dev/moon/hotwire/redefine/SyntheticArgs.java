@@ -27,7 +27,14 @@ public final class SyntheticArgs {
         Map<String, byte[]> out = new LinkedHashMap<>();
         SimpleRemapper remapper = new SimpleRemapper(renames);
 
-        boolean onlyArgs = renames.keySet().stream().allMatch(from -> from.startsWith(PREFIX));
+        boolean other = false;
+        for (String from : renames.keySet()) {
+            if (!from.startsWith(PREFIX)) {
+                other = true;
+                break;
+            }
+        }
+        boolean onlyArgs = !other;
         classes.forEach((name, bytes) -> {
             if (onlyArgs && !ClassBytes.mentions(bytes, PREFIX)) {
                 out.put(name, bytes);

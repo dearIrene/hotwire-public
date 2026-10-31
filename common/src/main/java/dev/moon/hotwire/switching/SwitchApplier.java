@@ -640,6 +640,16 @@ public final class SwitchApplier {
         return names;
     }
 
+    int countLoaded(Collection<String> classes) {
+        int loaded = 0;
+        for (String name : classes) {
+            if (this.game.findLoaded(name) != null) {
+                loaded++;
+            }
+        }
+        return loaded;
+    }
+
     Set<String> findClassesPatchedBy(Set<String> switched) {
         return MixinLists.findClassesPatchedBy(this.mods, switched);
     }

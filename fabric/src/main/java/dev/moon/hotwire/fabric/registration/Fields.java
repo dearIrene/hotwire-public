@@ -23,17 +23,17 @@ public final class Fields {
     private static volatile Predicate<String> loaded = name -> true;
     private static volatile Function<Class<?>, byte @Nullable []> bytesOf = type -> null;
 
-    private static final class Kept {
+    private static final class FieldCache {
         private volatile @Nullable List<FieldSlots.Slot> readable;
         private volatile @Nullable Set<String> waiting;
         private volatile @Nullable List<FieldSlots.Slot> statics;
         private volatile @Nullable List<FieldSlots.Slot> instances;
     }
 
-    private static final ClassValue<Kept> KEPT = new ClassValue<>() {
+    private static final ClassValue<FieldCache> CACHES = new ClassValue<>() {
         @Override
-        protected Kept computeValue(Class<?> type) {
-            return new Kept();
+        protected FieldCache computeValue(Class<?> type) {
+            return new FieldCache();
         }
     };
 
@@ -97,13 +97,13 @@ public final class Fields {
     }
 
     private static List<FieldSlots.Slot> readReadable(Class<?> type) {
-        Kept kept = KEPT.get(type);
-        List<FieldSlots.Slot> readable = kept.readable;
+        FieldCache cache = CACHES.get(type);
+        List<FieldSlots.Slot> readable = cache.readable;
         if (readable == null) {
             FieldSlots.Read read = FieldSlots.read(type, bytesOf.apply(type), loaded);
-            kept.waiting = read.unloaded().isEmpty() ? null : read.unloaded();
+            cache.waiting = read.unloaded().isEmpty() ? null : read.unloaded();
             readable = read.slots();
-            kept.readable = readable;
+            cache.readable = readable;
         }
         return readable;
     }
@@ -159,26 +159,26 @@ public final class Fields {
                 : at.getSuperclass()) {
             changed |= refresh(at);
         }
-        Kept kept = KEPT.get(owner);
+        FieldCache cache = CACHES.get(owner);
         if (changed) {
-            kept.statics = null;
-            kept.instances = null;
+            cache.statics = null;
+            cache.instances = null;
         }
-        List<FieldSlots.Slot> holding = statics ? kept.statics : kept.instances;
+        List<FieldSlots.Slot> holding = statics ? cache.statics : cache.instances;
         if (holding == null) {
             holding = findHolding(owner, statics);
             if (statics) {
-                kept.statics = holding;
+                cache.statics = holding;
             } else {
-                kept.instances = holding;
+                cache.instances = holding;
             }
         }
         return holding;
     }
 
     private static boolean refresh(Class<?> type) {
-        Kept kept = KEPT.get(type);
-        Set<String> waiting = kept.waiting;
+        FieldCache cache = CACHES.get(type);
+        Set<String> waiting = cache.waiting;
         if (waiting == null) {
             return false;
         }
@@ -187,10 +187,10 @@ public final class Fields {
                 return false;
             }
         }
-        kept.waiting = null;
-        kept.readable = null;
-        kept.statics = null;
-        kept.instances = null;
+        cache.waiting = null;
+        cache.readable = null;
+        cache.statics = null;
+        cache.instances = null;
         return true;
     }
 

@@ -12,6 +12,7 @@ import net.fabricmc.loader.api.FabricLoader;
 import net.fabricmc.loader.api.metadata.ModEnvironment;
 import net.minecraft.core.Registry;
 import net.minecraft.core.registries.BuiltInRegistries;
+import net.minecraft.resources.Identifier;
 
 public final class WorldContent {
     private static Map<String, SortedSet<String>> found = Map.of();
@@ -33,11 +34,11 @@ public final class WorldContent {
     }
 
     private static Map<String, SortedSet<String>> findIndex() {
-        List<Registry<?>> held = List.of(BuiltInRegistries.BLOCK, BuiltInRegistries.ITEM,
+        List<Registry<?>> registries = List.of(BuiltInRegistries.BLOCK, BuiltInRegistries.ITEM,
                 BuiltInRegistries.ENTITY_TYPE, BuiltInRegistries.BLOCK_ENTITY_TYPE, BuiltInRegistries.FLUID);
         List<String> kinds = List.of("blocks", "items", "entities", "block entities", "fluids");
         long size = 0;
-        for (Registry<?> registry : held) {
+        for (Registry<?> registry : registries) {
             size = size * 31 + registry.size();
         }
         if (size == foundAt) {
@@ -45,8 +46,8 @@ public final class WorldContent {
         }
         Map<String, SortedSet<String>> index = new HashMap<>();
         Map<Class<?>, Optional<String>> owners = new HashMap<>();
-        for (int at = 0; at < held.size(); at++) {
-            addOwners(held.get(at), kinds.get(at), index, owners);
+        for (int at = 0; at < registries.size(); at++) {
+            addOwners(registries.get(at), kinds.get(at), index, owners);
         }
         found = index;
         foundAt = size;
@@ -57,7 +58,7 @@ public final class WorldContent {
             Map<Class<?>, Optional<String>> owners) {
         FabricLoader loader = FabricLoader.getInstance();
         for (T value : registry) {
-            var key = registry.getKey(value);
+            Identifier key = registry.getKey(value);
             String namespace = key == null ? "minecraft" : key.getNamespace();
             String owner = !"minecraft".equals(namespace) && loader.isModLoaded(namespace) ? namespace
                     : owners.computeIfAbsent(value.getClass(),

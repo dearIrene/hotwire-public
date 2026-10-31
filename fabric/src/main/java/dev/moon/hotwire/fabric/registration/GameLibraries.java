@@ -16,7 +16,7 @@ public final class GameLibraries {
     public static boolean has(String internalName, @Nullable String modJar) {
         int nested = internalName.indexOf('$');
         String file = (nested < 0 ? internalName : internalName.substring(0, nested)) + ".class";
-        if (!ClassPathListing.mayHave(file)) {
+        if (!ClassPathListing.canHave(file)) {
             if (VERIFY && ClassLoader.getSystemClassLoader().getResource(file) != null) {
                 LOGGER.warn("[Hotwire] the class path listing missed {}", file);
             }

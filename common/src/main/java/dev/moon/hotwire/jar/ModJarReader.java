@@ -29,21 +29,21 @@ public final class ModJarReader {
         return read(jar, null);
     }
 
-    public static ModJar read(Path jar, @Nullable JarFacts facts) throws ModJarException {
+    public static ModJar read(Path jar, @Nullable JarScans scans) throws ModJarException {
         String name = String.valueOf(jar.getFileName());
         try (ZipFile zip = new ZipFile(jar.toFile())) {
-            CacheKey key = facts == null ? null : facts.findKey(zip, name);
-            ModJar known = facts == null || key == null ? null : facts.find(key);
+            CacheKey key = scans == null ? null : scans.findKey(zip, name);
+            ModJar known = scans == null || key == null ? null : scans.find(key);
             if (known != null) {
                 return known;
             }
             List<String> names = zip.stream().map(ZipEntry::getName).toList();
-            JarFacts.Scanned scanned = build(name, 0, names, entry -> {
+            JarScans.Scan scanned = build(name, 0, names, entry -> {
                 ZipEntry found = zip.getEntry(entry);
                 return found == null ? null : readBytes(zip, found);
             });
-            if (facts != null && key != null) {
-                facts.keep(key, scanned);
+            if (scans != null && key != null) {
+                scans.save(key, scanned);
             }
             return scanned.jar();
         } catch (IOException e) {
@@ -51,7 +51,7 @@ public final class ModJarReader {
         }
     }
 
-    private static JarFacts.Scanned readNested(byte[] jar, String name, int depth) throws ModJarException {
+    private static JarScans.Scan readNested(byte[] jar, String name, int depth) throws ModJarException {
         if (depth > MAX_DEPTH) {
             throw new ModJarException(Reason.NESTED_TOO_DEEP, name, "its jars are nested more than " + MAX_DEPTH
                     + " deep");
@@ -71,7 +71,7 @@ public final class ModJarReader {
         }
     }
 
-    private static JarFacts.Scanned readNestedStreaming(byte[] jar, String name, int depth)
+    private static JarScans.Scan readNestedStreaming(byte[] jar, String name, int depth)
             throws ModJarException {
         Map<String, byte[]> entries = new HashMap<>();
         List<String> names = new ArrayList<>();
@@ -89,7 +89,7 @@ public final class ModJarReader {
         }
     }
 
-    private static JarFacts.Scanned build(String name, int depth, Collection<String> names, EntryReader entries)
+    private static JarScans.Scan build(String name, int depth, Collection<String> names, EntryReader entries)
             throws ModJarException, IOException {
         byte[] manifestBytes = entries.read(MANIFEST);
         if (manifestBytes == null) {
@@ -106,7 +106,7 @@ public final class ModJarReader {
             declared.put(path, bytes);
         }
         ModPatches patches = PatchScanner.scan(manifest, names, withNested(entries, declared.values()));
-        List<JarFacts.Scanned> mods = new ArrayList<>();
+        List<JarScans.Scan> mods = new ArrayList<>();
         List<String> notMods = new ArrayList<>();
         for (Map.Entry<String, byte[]> nested : declared.entrySet()) {
             try {
@@ -118,7 +118,7 @@ public final class ModJarReader {
                 notMods.add(nested.getKey());
             }
         }
-        return new JarFacts.Scanned(new ModJar(name, manifest, patches, mods.stream().map(JarFacts.Scanned::jar)
+        return new JarScans.Scan(new ModJar(name, manifest, patches, mods.stream().map(JarScans.Scan::jar)
                 .toList(), notMods, readAccessWidener(name, manifest, entries)), manifestBytes, mods);
     }
 

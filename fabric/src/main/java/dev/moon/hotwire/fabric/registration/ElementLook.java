@@ -172,9 +172,9 @@ public final class ElementLook {
     private List<Object> containersOfTakes = List.of();
 
     List<Object> takeContainersOfTakes() {
-        List<Object> taken = this.containersOfTakes;
+        List<Object> containers = this.containersOfTakes;
         this.containersOfTakes = List.of();
-        return taken;
+        return containers;
     }
 
     @Nullable List<Runnable> open(List<String> walked) {

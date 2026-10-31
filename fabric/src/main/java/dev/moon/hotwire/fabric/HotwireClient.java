@@ -84,7 +84,8 @@ public final class HotwireClient implements ClientModInitializer {
             if (started != null) {
                 OpenKey.tellConflicts(started.getSettings());
                 OffModCommands.readOffFrom(id -> !started.isOn(id) || Tripwire.isWatched(id));
-                started.lookAheadInWorldSoon();
+                InWorldWork.lookAheadSoon(started);
+                InWorldWork.fillCacheSoon(started);
                 started.showUpdateInChat();
 
                 OffModCommands.takeOut(id -> !started.isOn(id));

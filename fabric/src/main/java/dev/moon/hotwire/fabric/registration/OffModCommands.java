@@ -113,7 +113,7 @@ public final class OffModCommands {
         }
     }
 
-    public static void remakeClientCommands() {
+    public static void rebuildClientCommands() {
         CommandRegistration.resendCommands(true);
     }
 

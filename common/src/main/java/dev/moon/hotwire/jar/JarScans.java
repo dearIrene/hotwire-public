@@ -27,25 +27,25 @@ import org.jspecify.annotations.Nullable;
 import org.objectweb.asm.ClassReader;
 import org.objectweb.asm.ClassWriter;
 
-public final class JarFacts {
-    private static final String KEYS = "jar facts 1";
+public final class JarScans {
+    private static final String KEYS = "jar scans 1";
     private static final String SCANNER = "dev/moon/hotwire/jar/";
 
     private final CacheStore store;
 
     private final byte @Nullable [] recipe;
 
-    public JarFacts(CacheStore store) {
+    public JarScans(CacheStore store) {
         this(store, findRecipe());
     }
 
-    JarFacts(CacheStore store, byte @Nullable [] recipe) {
+    JarScans(CacheStore store, byte @Nullable [] recipe) {
         this.store = store;
         this.recipe = recipe;
     }
 
     @SuppressWarnings("ArrayRecordComponent")
-    record Scanned(ModJar jar, byte[] manifest, List<Scanned> nested) {
+    record Scan(ModJar jar, byte[] manifest, List<Scan> nested) {
     }
 
     @Nullable CacheKey findKey(ZipFile zip, String name) {
@@ -58,18 +58,18 @@ public final class JarFacts {
     }
 
     @Nullable ModJar find(CacheKey key) {
-        byte[] kept = this.store.get(key, null);
-        if (kept == null) {
+        byte[] stored = this.store.get(key, null);
+        if (stored == null) {
             return null;
         }
-        try (DataInputStream in = new DataInputStream(new ByteArrayInputStream(kept))) {
+        try (DataInputStream in = new DataInputStream(new ByteArrayInputStream(stored))) {
             return readJar(in);
         } catch (IOException | ModJarException | IllegalArgumentException e) {
             return null;
         }
     }
 
-    void keep(CacheKey key, Scanned scanned) {
+    void save(CacheKey key, Scan scanned) {
         ByteArrayOutputStream bytes = new ByteArrayOutputStream();
         try (DataOutputStream out = new DataOutputStream(bytes)) {
             writeJar(out, scanned);
@@ -83,7 +83,7 @@ public final class JarFacts {
         this.store.flush();
     }
 
-    private static void writeJar(DataOutputStream out, Scanned scanned) throws IOException {
+    private static void writeJar(DataOutputStream out, Scan scanned) throws IOException {
         ModJar jar = scanned.jar();
         out.writeUTF(jar.name());
         writeBytes(out, scanned.manifest());
@@ -102,7 +102,7 @@ public final class JarFacts {
         out.writeBoolean(patches.callbacksOnly());
         writeAll(out, patches.rebuildOnly());
         out.writeInt(scanned.nested().size());
-        for (Scanned nested : scanned.nested()) {
+        for (Scan nested : scanned.nested()) {
             writeJar(out, nested);
         }
         writeAll(out, jar.nestedNotMods());
@@ -173,7 +173,7 @@ public final class JarFacts {
         CacheKey.Builder recipe = CacheKey.of("jar scanner 1");
         boolean any = false;
         try {
-            CodeSource source = JarFacts.class.getProtectionDomain().getCodeSource();
+            CodeSource source = JarScans.class.getProtectionDomain().getCodeSource();
             Path own = source == null ? null : Path.of(source.getLocation().toURI());
             if (own == null || !Files.isRegularFile(own)) {
                 return null;

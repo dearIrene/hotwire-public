@@ -15,7 +15,7 @@ import net.minecraft.world.entity.Entity;
 import net.minecraft.world.level.Level;
 import org.jspecify.annotations.Nullable;
 
-public final class WorldHeld {
+public final class EntityHolders {
     private static final int TRIES = 3;
 
     private static final int MOST_ELEMENTS = 64;
@@ -39,7 +39,7 @@ public final class WorldHeld {
         }
     };
 
-    private WorldHeld() {
+    private EntityHolders() {
     }
 
     public static Map<String, String> find(Collection<String> mods) {

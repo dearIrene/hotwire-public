@@ -14,11 +14,11 @@ public final class LoadedClassList {
     private static volatile boolean said;
 
     private static volatile long shortBy = -1;
-    private static volatile @Nullable Listed last;
+    private static volatile @Nullable ListSnapshot last;
 
     private static final long STANDS_NANOS = 1_000_000_000L;
 
-    private record Listed(long loaded, long unloaded, long made, WeakReference<Class<?>[]> classes) {
+    private record ListSnapshot(long loaded, long unloaded, long made, WeakReference<Class<?>[]> classes) {
     }
 
     private LoadedClassList() {
@@ -28,19 +28,19 @@ public final class LoadedClassList {
         long loaded = LOADING.getTotalLoadedClassCount();
         long unloaded = LOADING.getUnloadedClassCount();
         long now = System.nanoTime();
-        Listed listed = last;
-        Class<?>[] classes = listed != null && listed.loaded() == loaded && listed.unloaded() == unloaded
-                && now - listed.made() < STANDS_NANOS ? listed.classes().get() : null;
+        ListSnapshot snapshot = last;
+        Class<?>[] classes = snapshot != null && snapshot.loaded() == loaded && snapshot.unloaded() == unloaded
+                && now - snapshot.made() < STANDS_NANOS ? snapshot.classes().get() : null;
         if (classes != null) {
             return classes;
         }
         classes = instrumentation.getAllLoadedClasses();
         boolean still = LOADING.getTotalLoadedClassCount() == loaded && LOADING.getUnloadedClassCount() == unloaded;
         long missing = loaded - unloaded - countInstanceClasses(classes);
-        boolean settled = still && missing == shortBy;
+        boolean steady = still && missing == shortBy;
         shortBy = missing;
-        last = settled ? new Listed(loaded, unloaded, now, new WeakReference<>(classes)) : null;
-        if (settled && !said) {
+        last = steady ? new ListSnapshot(loaded, unloaded, now, new WeakReference<>(classes)) : null;
+        if (steady && !said) {
             said = true;
             LOGGER.info("[Hotwire] the loaded classes are listed once and shared ({} short of the JVM's count)",
                     missing);

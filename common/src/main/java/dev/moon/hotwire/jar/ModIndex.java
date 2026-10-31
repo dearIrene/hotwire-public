@@ -19,15 +19,15 @@ public final class ModIndex {
 
     private final Executor readers;
     private final Map<Path, CacheEntry> cache = new ConcurrentHashMap<>();
-    private final @Nullable JarFacts facts;
+    private final @Nullable JarScans scans;
 
     public ModIndex(Executor readers) {
         this(readers, null);
     }
 
-    public ModIndex(Executor readers, @Nullable JarFacts facts) {
+    public ModIndex(Executor readers, @Nullable JarScans scans) {
         this.readers = readers;
-        this.facts = facts;
+        this.scans = scans;
     }
 
     public record Entry(Path file, boolean disabled, ModJar jar) {
@@ -77,8 +77,8 @@ public final class ModIndex {
                 case Result.Refused refused -> failures.add(new Failure(file, refused.reason()));
             }
         }
-        if (this.facts != null) {
-            this.facts.flush();
+        if (this.scans != null) {
+            this.scans.flush();
         }
         return new Snapshot(mods, failures);
     }
@@ -98,7 +98,7 @@ public final class ModIndex {
         return CompletableFuture.supplyAsync(() -> {
             Result result;
             try {
-                result = new Result.Read(ModJarReader.read(file, this.facts));
+                result = new Result.Read(ModJarReader.read(file, this.scans));
             } catch (ModJarException e) {
                 result = new Result.Refused(e);
             }

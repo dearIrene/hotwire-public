@@ -28,7 +28,7 @@ public final class ClassPathListing {
     private ClassPathListing() {
     }
 
-    public static boolean mayHave(String file) {
+    public static boolean canHave(String file) {
         int slash = file.lastIndexOf('/');
         if (JDK.contains(slash < 0 ? "" : file.substring(0, slash))) {
             return true;
@@ -95,7 +95,8 @@ public final class ClassPathListing {
         }
         int end = name.indexOf('/', VERSIONED.length());
         String version = end < 0 ? "" : name.substring(VERSIONED.length(), end);
-        if (!version.isEmpty() && version.chars().allMatch(Character::isDigit) && Integer.parseInt(version) <= runtime) {
+        if (!version.isEmpty() && version.chars().allMatch(Character::isDigit)
+                && Integer.parseInt(version) <= runtime) {
             names.add(name.substring(end + 1));
         }
     }

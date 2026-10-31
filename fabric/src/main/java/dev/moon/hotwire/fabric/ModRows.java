@@ -35,11 +35,11 @@ final class ModRows {
         ModGraph graph = this.installed.getGraph();
         for (String id : this.installed.getTopLevel()) {
             boolean disabled = this.installed.isDisabled(id);
-            String carrier = graph.getContainers(id).stream().filter(this.isOn).findFirst()
+            String container = graph.getContainers(id).stream().filter(this.isOn).findFirst()
                     .map(this.installed::nameOf).orElse(null);
             (disabled ? this.installed.findDisabled(id) : this.installed.find(id)).ifPresent(mod -> out.add(
                     new ModStatus(id, mod.name(), mod.version(), this.isOn.test(id), String.join(", ", mod.authors()),
-                            mod.library(), disabled, carrier)));
+                            mod.library(), disabled, container)));
         }
         out.sort((a, b) -> a.name().compareToIgnoreCase(b.name()));
 

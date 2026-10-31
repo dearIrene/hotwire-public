@@ -45,7 +45,7 @@ final class SelfUpdateRequests {
         }), urgent -> Minecraft.getInstance().execute(() -> UrgentNotice.onChecked(urgent)));
     }
 
-    void recheck() {
+    void checkAgain() {
         this.check.allowAgain();
         this.start();
     }

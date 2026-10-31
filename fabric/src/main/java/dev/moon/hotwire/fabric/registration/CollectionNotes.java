@@ -87,7 +87,7 @@ final class CollectionNotes {
     private long printedAs = Fingerprints.UNKNOWN;
 
     synchronized void startLook(@Nullable Collection<String> mods, boolean printing) {
-        this.expunge();
+        this.dropCleared();
         this.printed = null;
         this.leftUnchanged = 0;
         this.printing = printing;
@@ -129,7 +129,7 @@ final class CollectionNotes {
 
     @SuppressWarnings("ReferenceEquality")
     synchronized void begin(Object container, Origin origin) {
-        this.expunge();
+        this.dropCleared();
         Frame outer = this.open.peek();
         if (outer != null && outer.container() == container) {
             this.printed = null;
@@ -185,18 +185,18 @@ final class CollectionNotes {
         }
         if (frame.fresh()) {
             this.order.add(note);
-            this.compact();
+            this.pruneOrder();
         }
 
         Set<String> under = new HashSet<>();
-        fileUnder(under, note.takes);
+        addCandidates(under, note.takes);
         if (!completed) {
-            fileUnder(under, frame.now());
+            addCandidates(under, frame.now());
         }
         note.under = Set.copyOf(under);
     }
 
-    private static void fileUnder(Set<String> under, List<Runnable> takes) {
+    private static void addCandidates(Set<String> under, List<Runnable> takes) {
         for (Runnable take : takes) {
             if (take instanceof ElementTakes.NotedTake filed && filed.candidates() != null) {
                 under.addAll(filed.candidates());
@@ -216,7 +216,7 @@ final class CollectionNotes {
     }
 
     synchronized List<Runnable> findTakesFor(Collection<String> mods, boolean all, List<Object> containers) {
-        this.expunge();
+        this.dropCleared();
         List<Runnable> found = new ArrayList<>();
         for (Note note : this.order) {
             Object container = note.findFiled();
@@ -381,7 +381,7 @@ final class CollectionNotes {
         this.dead++;
     }
 
-    private void expunge() {
+    private void dropCleared() {
         for (Reference<?> cleared = this.gone.poll(); cleared != null; cleared = this.gone.poll()) {
             Note note = (Note) cleared;
             note.filed = false;
@@ -390,10 +390,10 @@ final class CollectionNotes {
             note.origin = Origin.NONE;
             this.dead++;
         }
-        this.compact();
+        this.pruneOrder();
     }
 
-    private void compact() {
+    private void pruneOrder() {
         if (this.dead > 1024 && this.dead * 4 > this.notes.size()) {
             this.order.removeIf(note -> note.findFiled() == null);
             this.dead = 0;
