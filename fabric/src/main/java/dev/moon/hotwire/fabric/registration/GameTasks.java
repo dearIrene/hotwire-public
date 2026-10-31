@@ -67,7 +67,8 @@ public final class GameTasks {
             }
             waiting.add(new Removal(loop, task));
             if (SAID.add(task.getClass())) {
-                LOGGER.info("[Hotwire] {}'s task {} waits for its on", mod, task.getClass().getName());
+                LOGGER.info("[Hotwire] {}'s task {} waits for its on; it holds {}", mod, task.getClass().getName(),
+                        describeCaptures(task));
             }
         }
         return true;
@@ -93,7 +94,7 @@ public final class GameTasks {
     private static @Nullable String findOwnerOf(Object task, int depth) {
         String mod = GameRegistrations.findModOrShipper(task.getClass());
 
-        if (depth == 0 || (mod != null && MODS_OFF.contains(mod))) {
+        if (depth == 0 || (mod != null && MODS_OFF.contains(mod)) || CollectionParts.isGameObject(task)) {
             return mod;
         }
         for (FieldSlots.Slot field : Fields.getReferenceFields(task.getClass(), false)) {
