@@ -6,6 +6,7 @@ import java.lang.invoke.MethodHandle;
 import java.lang.invoke.MethodHandles;
 import java.lang.invoke.MethodType;
 import java.lang.invoke.MutableCallSite;
+import java.nio.charset.StandardCharsets;
 import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.HashSet;
@@ -14,6 +15,7 @@ import java.util.Locale;
 import java.util.Map;
 import java.util.OptionalInt;
 import java.util.Set;
+import java.util.WeakHashMap;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.atomic.AtomicLong;
 import java.util.function.Function;
@@ -37,6 +39,7 @@ public final class HandlerGuards {
     public static final boolean ENABLED = !"false".equals(System.getProperty("hotwire.guards"));
     private static final Logger LOGGER = LoggerFactory.getLogger(HandlerGuards.class);
     private static final String MERGED = "Lorg/spongepowered/asm/mixin/transformer/meta/MixinMerged;";
+    private static final byte[] MERGED_BYTES = MERGED.getBytes(StandardCharsets.UTF_8);
 
     private static final int OWN = 0;
     private static final int STATIC = 1;
@@ -67,10 +70,10 @@ public final class HandlerGuards {
 
     private static volatile Function<String, byte @Nullable []> originals = name -> null;
 
-    private record Guard(MutableCallSite site, MethodHandle handler, MethodHandle standIn) {
+    private record Guard(MethodHandle handler, MethodHandle standIn) {
     }
 
-    private static final Map<String, List<Guard>> GUARDS = new HashMap<>();
+    private static final Map<String, Map<MutableCallSite, Guard>> GUARDS = new HashMap<>();
     private static final Set<String> OFF = new HashSet<>();
 
     private static final Map<String, Set<String>> GUARDED = new ConcurrentHashMap<>();
@@ -252,6 +255,14 @@ public final class HandlerGuards {
     }
 
     private static byte @Nullable [] rewriteOrThrow(String internalName, byte[] bytes) {
+        if (!ClassBytes.mentions(bytes, MERGED_BYTES)) {
+            if (bytes.length >= 8 && ((bytes[6] & 0xFF) << 8 | (bytes[7] & 0xFF)) >= Opcodes.V1_7) {
+                STAGED_PRESENT.put(internalName, Set.of());
+            }
+            BEHAVING.remove(internalName);
+            commitStaged(internalName);
+            return null;
+        }
         ClassNode node = new ClassNode();
         new ClassReader(bytes).accept(node, 0);
         boolean made = makeSites(internalName, node);
@@ -533,7 +544,7 @@ public final class HandlerGuards {
         }
         synchronized (LOCK) {
             MutableCallSite site = new MutableCallSite(OFF.contains(mixin) ? standIn : handler);
-            GUARDS.computeIfAbsent(mixin, m -> new ArrayList<>()).add(new Guard(site, handler, standIn));
+            GUARDS.computeIfAbsent(mixin, m -> new WeakHashMap<>()).put(site, new Guard(handler, standIn));
             return site;
         }
     }
@@ -578,11 +589,11 @@ public final class HandlerGuards {
                 if (off ? !OFF.add(mixin) : !OFF.remove(mixin)) {
                     continue;
                 }
-                List<Guard> guards = GUARDS.getOrDefault(mixin, List.of());
-                for (Guard guard : guards) {
-                    guard.site().setTarget(off ? guard.standIn() : guard.handler());
-                    changed.add(guard.site());
-                }
+                Map<MutableCallSite, Guard> guards = GUARDS.getOrDefault(mixin, Map.of());
+                guards.forEach((site, guard) -> {
+                    site.setTarget(off ? guard.standIn() : guard.handler());
+                    changed.add(site);
+                });
                 chunks |= !guards.isEmpty() && isOfChunks(mixin);
             }
         }

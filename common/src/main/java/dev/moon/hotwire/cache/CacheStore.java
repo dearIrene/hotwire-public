@@ -318,7 +318,10 @@ public final class CacheStore {
             pack.write(entryHeader.array());
             pack.write(packed);
         }
-        Files.write(this.folder.resolve(this.kind + "." + next + ".pack"), pack.toByteArray());
+
+        if (compact || !this.pending.isEmpty()) {
+            Files.write(this.folder.resolve(this.kind + "." + next + ".pack"), pack.toByteArray());
+        }
         ByteBuffer index = ByteBuffer.allocate(HEADER + written.size() * RECORD);
         index.putInt(INDEX_MAGIC).putInt(written.size());
         new TreeMap<>(written).forEach((key, place) -> index.putLong(key.high()).putLong(key.low())

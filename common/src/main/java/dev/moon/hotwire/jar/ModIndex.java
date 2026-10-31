@@ -12,15 +12,22 @@ import java.util.concurrent.CompletionException;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.Executor;
 import java.util.stream.Stream;
+import org.jspecify.annotations.Nullable;
 
 public final class ModIndex {
     static final String DISABLED_SUFFIX = ".jar.disabled";
 
     private final Executor readers;
     private final Map<Path, CacheEntry> cache = new ConcurrentHashMap<>();
+    private final @Nullable JarFacts facts;
 
     public ModIndex(Executor readers) {
+        this(readers, null);
+    }
+
+    public ModIndex(Executor readers, @Nullable JarFacts facts) {
         this.readers = readers;
+        this.facts = facts;
     }
 
     public record Entry(Path file, boolean disabled, ModJar jar) {
@@ -70,6 +77,9 @@ public final class ModIndex {
                 case Result.Refused refused -> failures.add(new Failure(file, refused.reason()));
             }
         }
+        if (this.facts != null) {
+            this.facts.flush();
+        }
         return new Snapshot(mods, failures);
     }
 
@@ -88,7 +98,7 @@ public final class ModIndex {
         return CompletableFuture.supplyAsync(() -> {
             Result result;
             try {
-                result = new Result.Read(ModJarReader.read(file));
+                result = new Result.Read(ModJarReader.read(file, this.facts));
             } catch (ModJarException e) {
                 result = new Result.Refused(e);
             }

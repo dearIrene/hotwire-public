@@ -41,6 +41,7 @@ import dev.moon.hotwire.fabric.screen.ModIcons;
 import dev.moon.hotwire.fabric.screen.RootScreen;
 import dev.moon.hotwire.fabric.update.SwapAtClose;
 import dev.moon.hotwire.fabric.update.UpdateSupport;
+import dev.moon.hotwire.jar.JarFacts;
 import dev.moon.hotwire.jar.ModIndex;
 import dev.moon.hotwire.jar.ModJar;
 import dev.moon.hotwire.jar.ModJarException;
@@ -103,6 +104,8 @@ final class EngineStart {
     private static volatile @Nullable Path cacheFolder;
     private static final StackWalker STACK = StackWalker.getInstance();
 
+    private static final long JAR_FACTS_BYTES = 64L << 20;
+
     private static final String RELOAD_TASKS = SimpleReloadInstance.class.getName();
 
     private EngineStart() {
@@ -122,7 +125,8 @@ final class EngineStart {
 
     static InstalledMods readInstalledMods(FabricLoader loader) throws IOException {
         Path mods = ModsFolder.find(loader);
-        ModIndex.Snapshot snapshot = new ModIndex(ForkJoinPool.commonPool()).scan(mods);
+        JarFacts facts = new JarFacts(CacheStore.open(findCacheFolder().resolve("jars"), "jars", JAR_FACTS_BYTES));
+        ModIndex.Snapshot snapshot = new ModIndex(ForkJoinPool.commonPool(), facts).scan(mods);
         List<ModJar> jars = new ArrayList<>();
         Map<String, Path> jarOf = new HashMap<>();
         Set<String> topLevel = new HashSet<>();
@@ -159,7 +163,7 @@ final class EngineStart {
                 continue;
             }
             try {
-                ModJar read = ModJarReader.read(jar);
+                ModJar read = ModJarReader.read(jar, facts);
                 jars.add(read);
                 topLevel.add(id);
                 jarOf.put(id, jar);
@@ -168,6 +172,7 @@ final class EngineStart {
                 LOGGER.warn("[Hotwire] {} runs from {}, which could not be read: {}", id, jar, e.getMessage());
             }
         }
+        facts.flush();
         jars.replaceAll(jar -> dropUnloadedTwins(jar, loader));
         return new InstalledMods(jars, jarOf, topLevel, disabled);
     }
@@ -219,12 +224,14 @@ final class EngineStart {
                 classes, mixins, mixins.keySet(), MixinConfigs.findUnowned(mixin.getConfigs(), mixins));
         laps.lap("applier and Mixin copy");
         applier.getRebuilder().resolveArgsWith(mixin::getArgsClassFor);
+        laps.lap("args classes");
         applier.getRebuilder().getCache().cacheIn(
                 CacheStore.open(findCacheFolder().resolve("mixed"), "mixed",
                         (long) CacheLimit.read(findCacheFolder()) << 20), LivePluginShapes::ask);
+        laps.lap("open the switch cache");
         applier.getRebuilder().getHooks()
                 .sendGeneratedTo(new GeneratedClasses(gameDir.resolve("hotwire").resolve("generated")) ::write);
-        laps.lap("open the switch cache");
+        laps.lap("clear the generated classes");
         applier.orderConfigsAs(mixin.getConfigs());
         ClassFileTransformer loadTimeMixer = applier.makeLoadTimeMixer();
         applier.holdRedefinitionWith(() -> GameHold.begin(Minecraft.getInstance())::release);
@@ -271,7 +278,7 @@ final class EngineStart {
         applier.getRebuilder().setRider(tripwire.getRide());
         laps.lap("tripwire");
         FieldReferences fieldReferences = new FieldReferences(instrumentation, applier.getRebuilder(),
-                classes::findOriginalBytes,
+                classes::findOriginalBytes, classes::readOriginalBytes,
                 mod -> installed.getGraphJars().stream().filter(jar -> jar.manifest().id().equals(mod)).findFirst()
                         .map(jar -> jar.patches().patches()).orElse(Set.of()), mod -> findHandedTo(mod, installed),
                 mixin::getGeneratedBy);
@@ -352,6 +359,11 @@ final class EngineStart {
         if (found == null) {
             String game = LoadedMods.findVersion("minecraft", "unknown");
             List<Path> bases = new ArrayList<>();
+
+            String chosen = System.getProperty("hotwire.cacheFolder");
+            if (chosen != null) {
+                bases.add(Path.of(chosen));
+            }
             String local = System.getenv("LOCALAPPDATA");
             String xdg = System.getenv("XDG_CACHE_HOME");
             Path home = Path.of(System.getProperty("user.home"));
@@ -428,7 +440,7 @@ final class EngineStart {
                 if (known == null) {
                     known = loadedBytes.findAsLoaded(internal);
                 }
-                return known != null ? known : parts.classes().findOriginalBytes(internal);
+                return known != null ? known : parts.classes().readOriginalBytes(internal);
             });
             Fields.preloadStatics(parts.instrumentation());
             laps.lap("fields");
