@@ -23,7 +23,6 @@ import org.jspecify.annotations.Nullable;
 import org.objectweb.asm.ClassReader;
 import org.objectweb.asm.Handle;
 import org.objectweb.asm.Opcodes;
-import org.objectweb.asm.Type;
 import org.objectweb.asm.tree.AbstractInsnNode;
 import org.objectweb.asm.tree.AnnotationNode;
 import org.objectweb.asm.tree.ClassNode;
@@ -44,16 +43,18 @@ public final class HandlerGuards {
     private static final int OWN = 0;
     private static final int STATIC = 1;
     private static final int VIRTUAL = 2;
-    private static final int NOTHING = 0;
-    private static final int AS_IT_WAS = 1;
-    private static final int OPERATION = 2;
-    private static final int TRUE = 3;
-    private static final Map<String, Integer> KINDS = Map.ofEntries(Map.entry("handler", NOTHING),
-            Map.entry("args", NOTHING), Map.entry("modify", AS_IT_WAS), Map.entry("localvar", AS_IT_WAS),
-            Map.entry("constant", AS_IT_WAS), Map.entry("modifyExpressionValue", AS_IT_WAS),
-            Map.entry("modifyReturnValue", AS_IT_WAS), Map.entry("modifyReceiver", AS_IT_WAS),
-            Map.entry("wrapOperation", OPERATION), Map.entry("wrapMethod", OPERATION),
-            Map.entry("wrapWithCondition", TRUE));
+    private static final Map<String, Integer> KINDS = Map.ofEntries(
+            Map.entry("handler", HandlerStandIns.NOTHING),
+            Map.entry("args", HandlerStandIns.NOTHING),
+            Map.entry("modify", HandlerStandIns.AS_IT_WAS),
+            Map.entry("localvar", HandlerStandIns.AS_IT_WAS),
+            Map.entry("constant", HandlerStandIns.AS_IT_WAS),
+            Map.entry("modifyExpressionValue", HandlerStandIns.AS_IT_WAS),
+            Map.entry("modifyReturnValue", HandlerStandIns.AS_IT_WAS),
+            Map.entry("modifyReceiver", HandlerStandIns.AS_IT_WAS),
+            Map.entry("wrapOperation", HandlerStandIns.OPERATION),
+            Map.entry("wrapMethod", HandlerStandIns.OPERATION),
+            Map.entry("wrapWithCondition", HandlerStandIns.TRUE));
 
     private static final Set<String> UNFLIPPABLE = ConcurrentHashMap.newKeySet();
 
@@ -303,7 +304,7 @@ public final class HandlerGuards {
                     continue;
                 }
                 String mixin = mixinOfHandler.get(call.name + call.desc);
-                if (mixin == null) {
+                if (mixin == null || mixin.equals(mixinOfHandler.get(method.name + method.desc))) {
                     continue;
                 }
                 String handlerMod = findModInHandlerName(call.name);
@@ -341,9 +342,9 @@ public final class HandlerGuards {
                         }
                     }
                     RedirectStandIns.Target target = original[0] == null ? null
-                            : RedirectStandIns.find(original[0], method, call.desc);
+                            : RedirectStandIns.find(original[0], node, method, call.desc);
                     if (target == null && !UNFLIPPABLE.contains(mixin)) {
-                        why = " (" + RedirectStandIns.explainMiss(original[0], method, call.desc) + ")";
+                        why = " (" + RedirectStandIns.explainMiss(original[0], node, method, call.desc) + ")";
                     }
                     if (target != null) {
                         method.instructions.set(call, new InvokeDynamicInsnNode(call.name, desc, BOOTSTRAP_REDIRECT,
@@ -354,8 +355,8 @@ public final class HandlerGuards {
                     }
                 }
                 OptionalInt index = kind == null ? OptionalInt.empty() : switch (kind) {
-                    case AS_IT_WAS -> findAsItWas(call.name, call.desc);
-                    case OPERATION -> findOperation(call.desc);
+                    case HandlerStandIns.AS_IT_WAS -> HandlerStandIns.findAsItWas(call);
+                    case HandlerStandIns.OPERATION -> HandlerStandIns.findOperation(call.desc);
                     default -> OptionalInt.of(0);
                 };
                 if (index.isEmpty()) {
@@ -425,6 +426,7 @@ public final class HandlerGuards {
             }
         }
         for (MethodNode method : node.methods) {
+            String outer = handlers.get(method.name + method.desc);
             for (AbstractInsnNode insn : method.instructions) {
                 if (insn instanceof InvokeDynamicInsnNode site && isSite(site.bsm) && site.bsmArgs.length > 0
                         && site.bsmArgs[0] instanceof String of) {
@@ -439,6 +441,9 @@ public final class HandlerGuards {
                     noteDirect(internalName, site.name);
                 } else if (insn instanceof MethodInsnNode call) {
                     String direct = call.owner.equals(internalName) ? handlers.get(call.name + call.desc) : null;
+                    if (direct != null && direct.equals(outer)) {
+                        continue;
+                    }
                     if (direct != null) {
                         markUnflippable(internalName, direct);
                     }
@@ -466,35 +471,6 @@ public final class HandlerGuards {
         }
     }
 
-    private static OptionalInt findAsItWas(String name, String desc) {
-        Type returned = Type.getReturnType(desc);
-        Type[] arguments = Type.getArgumentTypes(desc);
-        if (!name.startsWith("modify$")) {
-            return arguments.length > 0 && arguments[0].equals(returned) ? OptionalInt.of(0) : OptionalInt.empty();
-        }
-        OptionalInt found = OptionalInt.empty();
-        for (int at = 0; at < arguments.length; at++) {
-            if (arguments[at].equals(returned)) {
-                if (found.isPresent()) {
-                    return OptionalInt.empty();
-                }
-                found = OptionalInt.of(at);
-            }
-        }
-        return found;
-    }
-
-    private static OptionalInt findOperation(String desc) {
-        Type[] arguments = Type.getArgumentTypes(desc);
-        for (int at = 0; at < arguments.length; at++) {
-            String name = arguments[at].getDescriptor();
-            if (name.endsWith("/Operation;") && name.contains("mixinextras")) {
-                return OptionalInt.of(at);
-            }
-        }
-        return OptionalInt.empty();
-    }
-
     private static @Nullable String findMerged(MethodNode method) {
         List<AnnotationNode> annotations = new ArrayList<>();
         if (method.visibleAnnotations != null) {
@@ -519,7 +495,7 @@ public final class HandlerGuards {
     public static CallSite bootstrap(MethodHandles.Lookup caller, String name, MethodType type, String mixin,
             int isStatic, int kind, int index) throws ReflectiveOperationException {
         return link(caller, name, type, mixin, isStatic,
-                () -> makeStandIn(caller, type, kind, index, isStatic == STATIC ? 0 : 1));
+                () -> HandlerStandIns.make(caller, type, kind, index, isStatic == STATIC ? 0 : 1));
     }
 
     public static CallSite bootstrapRedirect(MethodHandles.Lookup caller, String name, MethodType type, String mixin,
@@ -552,38 +528,6 @@ public final class HandlerGuards {
             GUARDS.computeIfAbsent(mixin, m -> new WeakHashMap<>()).put(site, new Guard(handler, standIn));
             return site;
         }
-    }
-
-    private static MethodHandle makeStandIn(MethodHandles.Lookup caller, MethodType type, int kind, int index,
-            int first) throws ReflectiveOperationException {
-        return switch (kind) {
-            case AS_IT_WAS -> MethodHandles.permuteArguments(MethodHandles.identity(type.returnType()), type, index);
-            case OPERATION -> {
-                Class<?> operation = type.parameterType(index);
-                MethodHandle call = caller.findVirtual(operation, "call",
-                        MethodType.methodType(Object.class, Object[].class));
-                int count = index - first;
-                List<Class<?>> arguments = type.parameterList().subList(first, index);
-                MethodHandle spread = call.asCollector(Object[].class, count);
-                int[] order = new int[count + 1];
-                order[0] = count;
-                for (int at = 0; at < count; at++) {
-                    order[at + 1] = at;
-                }
-
-                MethodType withOperationFirst = MethodType.methodType(Object.class, operation)
-                        .appendParameterTypes(arguments);
-                MethodType head = MethodType.methodType(Object.class, arguments).appendParameterTypes(operation);
-                MethodHandle ordered = MethodHandles.permuteArguments(spread.asType(withOperationFirst), head, order);
-                MethodHandle whole = MethodHandles.dropArguments(ordered, 0, type.parameterList().subList(0, first));
-                whole = MethodHandles.dropArguments(whole, index + 1,
-                        type.parameterList().subList(index + 1, type.parameterCount()));
-                yield MethodHandles.explicitCastArguments(whole, type);
-            }
-            case TRUE -> MethodHandles.dropArguments(MethodHandles.constant(boolean.class, true), 0,
-                    type.parameterList());
-            default -> MethodHandles.empty(type);
-        };
     }
 
     public static int setOff(Set<String> mixins, boolean off) {

@@ -9,68 +9,65 @@ import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 import org.jspecify.annotations.Nullable;
+import org.objectweb.asm.Handle;
 import org.objectweb.asm.Opcodes;
 import org.objectweb.asm.Type;
 import org.objectweb.asm.tree.AbstractInsnNode;
 import org.objectweb.asm.tree.ClassNode;
 import org.objectweb.asm.tree.FieldInsnNode;
+import org.objectweb.asm.tree.InvokeDynamicInsnNode;
 import org.objectweb.asm.tree.MethodInsnNode;
 import org.objectweb.asm.tree.MethodNode;
 
 final class RedirectStandIns {
+    private static final int BRIDGES = 4;
+
     record Target(int opcode, String owner, String name, String desc) {
+    }
+
+    private record Pair(MethodNode was, MethodNode merged) {
     }
 
     private RedirectStandIns() {
     }
 
-    static @Nullable Target find(ClassNode original, MethodNode merged, String handlerDesc) {
-        MethodNode was = null;
-        for (MethodNode method : original.methods) {
-            if (method.name.equals(merged.name) && method.desc.equals(merged.desc)) {
-                was = method;
-            }
-        }
-        if (was == null) {
+    static @Nullable Target find(ClassNode original, ClassNode mergedClass, MethodNode merged, String handlerDesc) {
+        Pair pair = findPair(original, mergedClass, merged, BRIDGES);
+        if (pair == null) {
             return null;
         }
         Type[] parameters = Type.getArgumentTypes(handlerDesc);
         Type answer = Type.getReturnType(handlerDesc);
-        Map<Target, Integer> before = count(was);
-        Map<Target, Integer> after = count(merged);
-        Target found = null;
+        Map<Target, Integer> before = count(pair.was());
+        Map<Target, Integer> after = count(pair.merged());
+        List<Target> found = new ArrayList<>();
         for (Map.Entry<Target, Integer> entry : before.entrySet()) {
             Target target = entry.getKey();
-            if (entry.getValue() <= after.getOrDefault(target, 0) || !answerOf(target).equals(answer)
-                    || !startsWith(parameters, findShape(target))) {
-                continue;
+            if (entry.getValue() > after.getOrDefault(target, 0) && answerOf(target).equals(answer)
+                    && startsWith(parameters, findShape(target))) {
+                found.add(target);
             }
-            if (found != null) {
-                return null;
-            }
-            found = target;
         }
-        return found;
+        if (found.size() > 1) {
+            found.removeIf(target -> findShape(target).length != parameters.length);
+        }
+        return found.size() == 1 ? found.get(0) : null;
     }
 
-    static String explainMiss(@Nullable ClassNode original, MethodNode merged, String handlerDesc) {
+    static String explainMiss(@Nullable ClassNode original, ClassNode mergedClass, MethodNode merged,
+            String handlerDesc) {
         if (original == null) {
             return "the shipped class is not at hand";
         }
-        MethodNode was = null;
-        for (MethodNode method : original.methods) {
-            if (method.name.equals(merged.name) && method.desc.equals(merged.desc)) {
-                was = method;
-            }
-        }
-        if (was == null) {
+        Pair pair = findPair(original, mergedClass, merged, BRIDGES);
+        if (pair == null) {
             return "the shipped class has no " + merged.name + merged.desc;
         }
         Type[] parameters = Type.getArgumentTypes(handlerDesc);
         Type answer = Type.getReturnType(handlerDesc);
-        Map<Target, Integer> after = count(merged);
+        Map<Target, Integer> after = count(pair.merged());
         List<String> gone = new ArrayList<>();
-        count(was).forEach((target, times) -> {
+        count(pair.was()).forEach((target, times) -> {
             if (times > after.getOrDefault(target, 0)) {
                 gone.add(target.opcode() + " " + target.owner() + "." + target.name() + target.desc()
                         + (answerOf(target).equals(answer) ? "" : " answers otherwise")
@@ -83,6 +80,60 @@ final class RedirectStandIns {
         Collections.sort(gone);
         String more = gone.size() > 4 ? " and " + (gone.size() - 4) + " more" : "";
         return "gone: " + gone.subList(0, Math.min(4, gone.size())) + more;
+    }
+
+    private static @Nullable Pair findPair(ClassNode original, ClassNode mergedClass, MethodNode merged, int bridges) {
+        MethodNode was = findMethod(original, merged.name, merged.desc);
+        if (was != null) {
+            return new Pair(was, merged);
+        }
+        int wrapped = merged.name.indexOf("$mixinextras$wrapped$");
+        if (wrapped > 0) {
+            MethodNode shipped = findMethod(original, merged.name.substring(0, wrapped), merged.desc);
+            return shipped == null ? null : new Pair(shipped, merged);
+        }
+        if (bridges == 0) {
+            return null;
+        }
+        Pair found = null;
+        for (MethodNode caller : mergedClass.methods) {
+            if (caller.equals(merged) || !isCalledFrom(caller, mergedClass.name, merged)) {
+                continue;
+            }
+            Pair pair = findPair(original, mergedClass, caller, bridges - 1);
+            if (pair == null || (found != null && !found.was().equals(pair.was()))) {
+                return null;
+            }
+            found = pair;
+        }
+        return found;
+    }
+
+    private static @Nullable MethodNode findMethod(ClassNode node, String name, String desc) {
+        for (MethodNode method : node.methods) {
+            if (method.name.equals(name) && method.desc.equals(desc)) {
+                return method;
+            }
+        }
+        return null;
+    }
+
+    private static boolean isCalledFrom(MethodNode method, String owner, MethodNode callee) {
+        for (AbstractInsnNode insn : method.instructions) {
+            if (insn instanceof MethodInsnNode call && call.owner.equals(owner) && call.name.equals(callee.name)
+                    && call.desc.equals(callee.desc)) {
+                return true;
+            }
+            if (insn instanceof InvokeDynamicInsnNode site) {
+                for (Object argument : site.bsmArgs) {
+                    if (argument instanceof Handle handle && handle.getOwner().equals(owner)
+                            && handle.getName().equals(callee.name) && handle.getDesc().equals(callee.desc)) {
+                        return true;
+                    }
+                }
+            }
+        }
+        return false;
     }
 
     private static Map<Target, Integer> count(MethodNode method) {
