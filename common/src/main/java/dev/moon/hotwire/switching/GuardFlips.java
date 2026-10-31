@@ -8,6 +8,7 @@ import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
+import java.util.TreeMap;
 import java.util.TreeSet;
 import java.util.concurrent.ConcurrentHashMap;
 import org.jspecify.annotations.Nullable;
@@ -68,6 +69,8 @@ final class GuardFlips {
         Map<String, Set<String>> flips = new LinkedHashMap<>();
         Set<String> rebuild = new TreeSet<>();
         Set<String> flipped = new TreeSet<>();
+
+        Map<String, String> why = new TreeMap<>();
         for (String id : switched) {
             ModMixins mixins = this.mods.get(id);
             if (mixins == null || !this.onAtLaunch.contains(id)
@@ -99,8 +102,16 @@ final class GuardFlips {
                 if (stuck || replaced.contains(target) || mixins.rebuildOnly().contains(target)
                         || !HandlerGuards.isWritten(target) || (!present && !here.isEmpty())) {
                     rebuild.add(target);
+                    if (said) {
+                        why.put(target, stuck ? "sites that cannot flip" : replaced.contains(target) ? "replaced"
+                                : mixins.rebuildOnly().contains(target) ? "a redirect or overwrite"
+                                : !HandlerGuards.isWritten(target) ? "not written as it loaded" : "mixins not in it");
+                    }
                 } else if (!present && onAfter.contains(id)) {
                     rebuild.add(target);
+                    if (said) {
+                        why.put(target, "loaded or rebuilt without them");
+                    }
                 } else {
                     own.addAll(here);
                     if (!here.isEmpty()) {
@@ -109,6 +120,12 @@ final class GuardFlips {
                 }
             }
             flips.put(id, own);
+        }
+        if (said && !why.isEmpty()) {
+            Map<String, List<String>> byWhy = new TreeMap<>();
+            why.forEach((target, reason) -> byWhy.computeIfAbsent(reason, any -> new ArrayList<>()).add(target));
+            byWhy.forEach((reason, targets) -> LOGGER.info("[Hotwire] {} rebuilds {} classes for {}: {}", switched,
+                    targets.size(), reason, targets.stream().limit(6).toList()));
         }
         return new Plan(flips, rebuild, flipped);
     }

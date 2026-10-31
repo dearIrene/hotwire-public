@@ -277,14 +277,19 @@ public final class HandlerGuards {
         }
 
         Map<String, String> mixinOfHandler = new HashMap<>();
+
+        Set<String> merged = new HashSet<>();
         for (MethodNode method : node.methods) {
             String mixin = findMerged(method);
-            if (mixin != null && isHandlerName(method.name)) {
-                mixinOfHandler.put(method.name + method.desc, mixin);
+            if (mixin != null) {
+                merged.add(mixin);
+                if (isHandlerName(method.name)) {
+                    mixinOfHandler.put(method.name + method.desc, mixin);
+                }
             }
         }
 
-        STAGED_PRESENT.put(internalName, Set.copyOf(mixinOfHandler.values()));
+        STAGED_PRESENT.put(internalName, Set.copyOf(merged));
         if (mixinOfHandler.isEmpty()) {
             return false;
         }
