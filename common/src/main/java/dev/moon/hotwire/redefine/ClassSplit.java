@@ -206,7 +206,7 @@ public final class ClassSplit {
             if (from == null || !inRunning.test(from)) {
                 String merged = GeneratedNames.findMergedFrom(shape.visibleAnnotations);
                 if (merged != null && !mixedMixins.contains(merged)) {
-                    body.visibleAnnotations = GeneratedNames.dropMerged(shape.visibleAnnotations);
+                    body.visibleAnnotations = GeneratedNames.keepMergedAside(shape.visibleAnnotations);
                 }
 
                 stubbed.add(shape.name + shape.desc);
@@ -224,11 +224,16 @@ public final class ClassSplit {
                     BodyMarks.prependSkipNotice(body, running.name);
                 } else {
                     shape.accept(new CodeOnly(body));
-                    String mixin = GeneratedNames.findMergedFrom(shape.visibleAnnotations);
+                    String mixin = GeneratedNames.findMixinOf(shape.visibleAnnotations);
                     BodyMarks.prependReachNotice(body, running.name, mixin == null ? "" : mixin);
                 }
             } else {
                 from.accept(new CodeOnly(body));
+
+                if (GeneratedNames.findMergedFrom(from.visibleAnnotations) != null
+                        && GeneratedNames.findMergedFrom(body.visibleAnnotations) == null) {
+                    body.visibleAnnotations = from.visibleAnnotations;
+                }
                 split.rewrite(body, false);
                 if (body.name.equals("<init>") && !addedFields.isEmpty()) {
                     BodyMarks.markMade(body, running);

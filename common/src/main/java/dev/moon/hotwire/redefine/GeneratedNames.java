@@ -32,6 +32,8 @@ final class GeneratedNames {
     private static final Pattern LAST_COUNT = Pattern.compile("\\$\\d+$");
     private static final String MIXIN_MERGED = "Lorg/spongepowered/asm/mixin/transformer/meta/MixinMerged;";
 
+    private static final String KEPT_ASIDE = "Ldev/moon/hotwire/redefine/MergedOnceFrom;";
+
     private GeneratedNames() {
     }
 
@@ -286,7 +288,7 @@ final class GeneratedNames {
         List<Member> out = new ArrayList<>();
         for (MethodNode method : methods) {
             out.add(new Member(method.name, method.desc, (method.access & Opcodes.ACC_STATIC) != 0,
-                    findMergedFrom(method.visibleAnnotations)));
+                    findMixinOf(method.visibleAnnotations)));
         }
         return out;
     }
@@ -295,30 +297,43 @@ final class GeneratedNames {
         List<Member> out = new ArrayList<>();
         for (FieldNode field : fields) {
             out.add(new Member(field.name, field.desc, (field.access & Opcodes.ACC_STATIC) != 0,
-                    findMergedFrom(field.visibleAnnotations)));
+                    findMixinOf(field.visibleAnnotations)));
         }
         return out;
     }
 
-    static @Nullable List<AnnotationNode> dropMerged(@Nullable List<AnnotationNode> annotations) {
+    static @Nullable List<AnnotationNode> keepMergedAside(@Nullable List<AnnotationNode> annotations) {
         if (annotations == null) {
             return null;
         }
-        List<AnnotationNode> rest = new ArrayList<>();
+        List<AnnotationNode> out = new ArrayList<>();
         for (AnnotationNode annotation : annotations) {
-            if (!annotation.desc.equals(MIXIN_MERGED)) {
-                rest.add(annotation);
+            if (annotation.desc.equals(MIXIN_MERGED)) {
+                AnnotationNode aside = new AnnotationNode(KEPT_ASIDE);
+                aside.values = annotation.values;
+                out.add(aside);
+            } else {
+                out.add(annotation);
             }
         }
-        return rest;
+        return out;
     }
 
     static @Nullable String findMergedFrom(@Nullable List<AnnotationNode> annotations) {
+        return findMixinIn(annotations, MIXIN_MERGED);
+    }
+
+    static @Nullable String findMixinOf(@Nullable List<AnnotationNode> annotations) {
+        String merged = findMixinIn(annotations, MIXIN_MERGED);
+        return merged != null ? merged : findMixinIn(annotations, KEPT_ASIDE);
+    }
+
+    private static @Nullable String findMixinIn(@Nullable List<AnnotationNode> annotations, String desc) {
         if (annotations == null) {
             return null;
         }
         for (AnnotationNode annotation : annotations) {
-            if (annotation.desc.equals(MIXIN_MERGED) && annotation.values != null) {
+            if (annotation.desc.equals(desc) && annotation.values != null) {
                 for (int i = 0; i + 1 < annotation.values.size(); i += 2) {
                     if (Objects.equals(annotation.values.get(i), "mixin")
                             && annotation.values.get(i + 1) instanceof String name) {
