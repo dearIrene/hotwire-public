@@ -7,6 +7,7 @@ import java.util.List;
 import java.util.Map;
 import java.util.Objects;
 import java.util.Set;
+import java.util.concurrent.ConcurrentHashMap;
 import java.util.function.Function;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
@@ -30,6 +31,9 @@ final class GeneratedNames {
             + "|(?<=_\\$(?:md|fd)\\$[0-9a-f]{1,8})\\$[0-9a-f]+$|(?<=\\$\\d{1,6})\\$[0-9a-f]+$|\\$\\d+"
             + "|^(?:md|fd)[0-9a-f]{6}(?=\\$)");
     private static final Pattern LAST_COUNT = Pattern.compile("\\$\\d+$");
+
+    private static final Map<String, Boolean> GENERATED = new ConcurrentHashMap<>();
+    private static final int MOST_NAMES = 100_000;
     private static final String MIXIN_MERGED = "Lorg/spongepowered/asm/mixin/transformer/meta/MixinMerged;";
 
     private static final String KEPT_ASIDE = "Ldev/moon/hotwire/redefine/MergedOnceFrom;";
@@ -138,12 +142,12 @@ final class GeneratedNames {
     }
 
     private static boolean isNumbered(String self, String owner, String name, String descriptor, Set<String> declared) {
-        return NUMBERS.matcher(name).find() && !(owner.equals(self) && declared.contains(name + descriptor));
+        return isGenerated(name) && !(owner.equals(self) && declared.contains(name + descriptor));
     }
 
     private static String findRunningName(String owner, String name, String descriptor, String self,
             Set<String> declared, @Nullable String selfSuper, Function<String, RunningMembers> membersOf) {
-        if (!NUMBERS.matcher(name).find() || (owner.equals(self) && declared.contains(name + descriptor))) {
+        if (!isGenerated(name) || (owner.equals(self) && declared.contains(name + descriptor))) {
             return name;
         }
         String key = mask(name) + descriptor;
@@ -169,7 +173,7 @@ final class GeneratedNames {
             Map<String, List<String>> members = running == null ? new HashMap<>() : findMaskedMembers(running);
             for (String member : moved) {
                 int descriptor = member.indexOf('(');
-                if (descriptor < 0 || !NUMBERS.matcher(member.substring(0, descriptor)).find()) {
+                if (descriptor < 0 || !isGenerated(member.substring(0, descriptor))) {
                     continue;
                 }
                 String name = member.substring(0, descriptor);
@@ -190,7 +194,18 @@ final class GeneratedNames {
     }
 
     static boolean isGenerated(String name) {
-        return NUMBERS.matcher(name).find();
+        if (name.indexOf('$') < 0) {
+            return false;
+        }
+        Boolean known = GENERATED.get(name);
+        if (known == null) {
+            known = NUMBERS.matcher(name).find();
+            if (GENERATED.size() > MOST_NAMES) {
+                GENERATED.clear();
+            }
+            GENERATED.put(name, known);
+        }
+        return known;
     }
 
     private static String findLastCount(String name) {
@@ -199,20 +214,20 @@ final class GeneratedNames {
     }
 
     static String mask(String name) {
-        return NUMBERS.matcher(name).replaceAll("\\$#");
+        return isGenerated(name) ? NUMBERS.matcher(name).replaceAll("\\$#") : name;
     }
 
     private static Map<String, List<String>> findMaskedMembers(byte[] running) {
         Map<String, List<String>> members = new HashMap<>();
         ClassNode node = read(running);
         for (MethodNode method : node.methods) {
-            if (NUMBERS.matcher(method.name).find()) {
+            if (isGenerated(method.name)) {
                 members.computeIfAbsent(mask(method.name) + method.desc,
                         key -> new ArrayList<>()).add(method.name);
             }
         }
         for (FieldNode field : node.fields) {
-            if (NUMBERS.matcher(field.name).find()) {
+            if (isGenerated(field.name)) {
                 members.computeIfAbsent(mask(field.name) + field.desc,
                         key -> new ArrayList<>()).add(field.name);
             }
@@ -277,7 +292,7 @@ final class GeneratedNames {
     private static Map<String, List<Member>> groupByKey(List<Member> members, Set<String> inOther) {
         Map<String, List<Member>> grouped = new HashMap<>();
         for (Member member : members) {
-            if (!inOther.contains(member.name() + member.desc()) && NUMBERS.matcher(member.name()).find()) {
+            if (!inOther.contains(member.name() + member.desc()) && isGenerated(member.name())) {
                 grouped.computeIfAbsent(member.key(), key -> new ArrayList<>()).add(member);
             }
         }

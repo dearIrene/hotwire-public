@@ -174,6 +174,19 @@ public final class ModSwitcher {
         public @Nullable RebuildException tryOff(SwitchPlan plan) {
             return ModSwitcher.this.dryRun(plan) instanceof Result.Failed failed ? failed.cause() : null;
         }
+
+        @Override
+        public @Nullable RebuildException tryOffAll(Set<String> mods, List<String> parts) {
+            SwitchPlan plan = ModSwitcher.this.planner.planOff(mods, ModSwitcher.this.getOff());
+            if (plan.isRefused()) {
+                return null;
+            }
+            List<Set<String>> offs = new ArrayList<>();
+            for (String id : parts) {
+                offs.add(Set.copyOf(ModSwitcher.this.planner.planOff(List.of(id), ModSwitcher.this.getOff()).order()));
+            }
+            return ModSwitcher.this.dryRun(plan, offs) instanceof Result.Failed failed ? failed.cause() : null;
+        }
     }
 
     public void reopenToTurnOnWith(Predicate<String> tookFrom) {
@@ -301,12 +314,17 @@ public final class ModSwitcher {
     }
 
     private Result dryRun(SwitchPlan plan) {
+        return this.dryRun(plan, List.of(Set.copyOf(plan.order())));
+    }
+
+    private Result dryRun(SwitchPlan plan, List<Set<String>> switches) {
         boolean off = plan.direction() == SwitchPlan.Direction.OFF;
         Set<String> onAfter = this.onAfter(plan, off);
         long start = System.nanoTime();
         try {
             this.applier.getRebuilder().toLaunch(!off && onAfter.containsAll(this.graph.getIds()));
-            SwitchApplier.DryRun dryRun = this.applier.dryRun(Set.copyOf(plan.order()), onAfter, false);
+            SwitchApplier.DryRun dryRun = this.applier.dryRunAsSwitched(switches, Set.copyOf(plan.order()),
+                    onAfter);
             return new Result.Done(plan, dryRun.applied(), (System.nanoTime() - start) / 1_000_000);
         } catch (RebuildException e) {
             return new Result.Failed(plan, e);

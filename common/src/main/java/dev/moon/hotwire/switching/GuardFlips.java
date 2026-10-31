@@ -39,6 +39,29 @@ final class GuardFlips {
     }
 
     @Nullable Plan find(Set<String> switched, Set<String> onAfter, Collection<String> also, Set<String> replaced) {
+        Plan plan = this.plan(switched, onAfter, also, replaced, true);
+        if (plan == null) {
+            return null;
+        }
+        if (plan.isSitesAlone()) {
+            switched.forEach(id -> {
+                if (onAfter.contains(id)) {
+                    this.flipped.remove(id);
+                } else {
+                    this.flipped.add(id);
+                }
+            });
+        } else {
+            this.flipped.removeAll(switched);
+            LOGGER.info("[Hotwire] {} flips {} mixins and rebuilds {} classes: {}", switched,
+                    plan.flips().values().stream().mapToInt(Set::size).sum(), plan.rebuild().size(),
+                    plan.rebuild().stream().limit(8).toList());
+        }
+        return plan;
+    }
+
+    @Nullable Plan plan(Set<String> switched, Set<String> onAfter, Collection<String> also, Set<String> replaced,
+            boolean said) {
         if (!also.isEmpty()) {
             return null;
         }
@@ -49,8 +72,10 @@ final class GuardFlips {
             ModMixins mixins = this.mods.get(id);
             if (mixins == null || !this.onAtLaunch.contains(id)
                     || (!mixins.callbacksOnly() && mixins.rebuildOnly().isEmpty())) {
-                LOGGER.info("[Hotwire] {} is rebuilt, not flipped: known {}, on at launch {}", id, mixins != null,
-                        this.onAtLaunch.contains(id));
+                if (said) {
+                    LOGGER.info("[Hotwire] {} is rebuilt, not flipped: known {}, on at launch {}", id, mixins != null,
+                            this.onAtLaunch.contains(id));
+                }
                 return null;
             }
             Set<String> own = new HashSet<>();
@@ -85,22 +110,7 @@ final class GuardFlips {
             }
             flips.put(id, own);
         }
-        Plan plan = new Plan(flips, rebuild, flipped);
-        if (plan.isSitesAlone()) {
-            switched.forEach(id -> {
-                if (onAfter.contains(id)) {
-                    this.flipped.remove(id);
-                } else {
-                    this.flipped.add(id);
-                }
-            });
-        } else {
-            this.flipped.removeAll(switched);
-            LOGGER.info("[Hotwire] {} flips {} mixins and rebuilds {} classes: {}", switched,
-                    flips.values().stream().mapToInt(Set::size).sum(), rebuild.size(),
-                    rebuild.stream().limit(8).toList());
-        }
-        return plan;
+        return new Plan(flips, rebuild, flipped);
     }
 
     int setSites(Plan plan, Set<String> onAfter) {

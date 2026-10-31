@@ -11,6 +11,7 @@ import java.util.List;
 import java.util.Map;
 import java.util.Optional;
 import java.util.Set;
+import java.util.TreeSet;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.function.Function;
 import java.util.function.Predicate;
@@ -69,7 +70,7 @@ final class LaunchDecisions {
 
     Result of(List<String> configs, Map<String, Set<String>> appliedByClass, Predicate<String> on)
             throws RebuildException {
-        Set<String> applied = new HashSet<>();
+        Set<String> applied = new TreeSet<>();
         appliedByClass.values().forEach(applied::addAll);
         Map<String, byte[]> trimmed = new HashMap<>();
         Map<String, byte[]> readable = new LinkedHashMap<>();
@@ -119,7 +120,7 @@ final class LaunchDecisions {
             Set<String> given = answers != null || plugin == null ? Set.of()
                     : this.choice.chooseUnlisted(this.findUnlisted(config, bytes, elsewhere), appliedByClass);
             UnaryOperator<Set<String>> choose = answers != null ? listed -> findAnswered(listed, answers)
-                    : listed -> withGiven(this.choice.choose(listed, appliedByClass, plugin != null), given);
+                    : listed -> withGiven(this.choice.choose(listed, appliedByClass, applied, plugin != null), given);
             boolean live = plugin != null && this.isRunLive(config, plugin);
             String owner = this.ownerOfConfig.get(config);
             boolean ownerOff = owner != null && !on.test(owner);
@@ -206,8 +207,11 @@ final class LaunchDecisions {
             asked.addAll(listed);
             String prefix = ConfigTrim.readPackageOf(config);
             if (!prefix.isEmpty()) {
-                applied.stream().filter(mixin -> mixin.startsWith(prefix) && !elsewhere.test(mixin))
-                        .forEach(asked::add);
+                for (String mixin : ConfigTrim.findInPackage(applied, prefix)) {
+                    if (!elsewhere.test(mixin)) {
+                        asked.add(mixin);
+                    }
+                }
             }
         }
         return retained;

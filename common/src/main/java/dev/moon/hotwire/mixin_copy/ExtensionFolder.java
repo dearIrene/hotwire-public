@@ -1,7 +1,12 @@
 package dev.moon.hotwire.mixin_copy;
 
+import java.nio.charset.StandardCharsets;
+import java.util.Collections;
 import java.util.List;
+import java.util.Map;
+import java.util.Optional;
 import java.util.Set;
+import java.util.WeakHashMap;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 import org.objectweb.asm.ClassReader;
@@ -14,13 +19,22 @@ public final class ExtensionFolder {
     private static final String GAME = "com/llamalad7/mixinextras/";
     private static final Pattern RELOCATED = Pattern.compile("^(.+/)mixinextras/(.*)$");
 
+    private static final String MARK = "mixinextras/";
+    private static final byte[] MARK_BYTES = MARK.getBytes(StandardCharsets.UTF_8);
+
     private final Set<String> launched;
+
+    @SuppressWarnings("ArrayAsKeyOfSetOrMap")
+    private final Map<byte[], Optional<byte[]>> folded = Collections.synchronizedMap(new WeakHashMap<>());
 
     public ExtensionFolder(List<String> launched) {
         this.launched = Set.copyOf(launched);
     }
 
     public boolean isFolded(String internal) {
+        if (!internal.contains(MARK)) {
+            return false;
+        }
         Matcher found = RELOCATED.matcher(internal);
         return found.matches() && !this.isLaunched(found.group(1) + "mixinextras/");
     }
@@ -29,11 +43,28 @@ public final class ExtensionFolder {
         return prefix.equals(GAME) || this.launched.contains(prefix);
     }
 
+    @SuppressWarnings("ReferenceEquality")
     public byte[] fold(byte[] bytes) {
+        Optional<byte[]> known = this.folded.get(bytes);
+        if (known == null) {
+            byte[] made = this.foldAfresh(bytes);
+            known = made == bytes ? Optional.empty() : Optional.of(made);
+            this.folded.put(bytes, known);
+        }
+        return known.orElse(bytes);
+    }
+
+    private byte[] foldAfresh(byte[] bytes) {
+        if (!mentionsMark(bytes)) {
+            return bytes;
+        }
         boolean[] names = {false};
         Remapper toGame = new Remapper() {
             @Override
             public String map(String internalName) {
+                if (!internalName.contains(MARK)) {
+                    return internalName;
+                }
                 Matcher found = RELOCATED.matcher(internalName);
                 if (!found.matches() || ExtensionFolder.this.isLaunched(found.group(1) + "mixinextras/")) {
                     return internalName;
@@ -45,5 +76,18 @@ public final class ExtensionFolder {
         ClassWriter writer = new ClassWriter(0);
         new ClassReader(bytes).accept(new ClassRemapper(writer, toGame), 0);
         return names[0] ? writer.toByteArray() : bytes;
+    }
+
+    private static boolean mentionsMark(byte[] bytes) {
+        outer:
+        for (int at = 0; at + MARK_BYTES.length <= bytes.length; at++) {
+            for (int in = 0; in < MARK_BYTES.length; in++) {
+                if (bytes[at + in] != MARK_BYTES[in]) {
+                    continue outer;
+                }
+            }
+            return true;
+        }
+        return false;
     }
 }

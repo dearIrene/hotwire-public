@@ -1,5 +1,6 @@
 package dev.moon.hotwire.mixin_copy;
 
+import java.io.ByteArrayInputStream;
 import java.io.IOException;
 import java.io.InputStream;
 import java.io.UncheckedIOException;
@@ -17,6 +18,7 @@ import java.security.MessageDigest;
 import java.security.NoSuchAlgorithmException;
 import java.util.ArrayList;
 import java.util.HashMap;
+import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
 import java.util.ServiceConfigurationError;
@@ -55,11 +57,15 @@ public final class MixinCopy implements AutoCloseable {
     private static final String SERVICE = "mixin.service";
     private static final String BOOTSTRAP = "mixin.bootstrapService";
     private static final String COPY = MixinCopy.class.getPackageName() + ".copy.";
+
     private static final Object BOOTING = new Object();
+    private static int swapped;
+    private static @Nullable String gameService;
+    private static @Nullable String gameBootstrap;
 
     private static final ConcurrentLinkedDeque<Span> SPANS = new ConcurrentLinkedDeque<>();
     private static final int SPAN_COUNT = 8;
-    private static volatile @Nullable Span mixing;
+    private static final Set<Span> MIXING = ConcurrentHashMap.newKeySet();
 
     private record Span(String thread, long from, long to) {
         boolean holds(String name, long millis) {
@@ -68,7 +74,7 @@ public final class MixinCopy implements AutoCloseable {
     }
     private static @Nullable Path copyJar;
 
-    private final Set<String> readInMix = ConcurrentHashMap.newKeySet();
+    private static final ThreadLocal<@Nullable Set<String>> READ_IN_MIX = new ThreadLocal<>();
     private volatile byte @Nullable [] recipe;
 
     private final List<Path> mixinJars;
@@ -93,14 +99,27 @@ public final class MixinCopy implements AutoCloseable {
     private final Map<String, Integer> missing = new ConcurrentHashMap<>();
     private static final AtomicInteger PATHS = new AtomicInteger();
 
-    private @Nullable Copy reusable;
+    private static final String DEFAULT_REFMAP = "mixin.refmap.json";
+
+    @SuppressWarnings("ArrayRecordComponent")
+    private record DefaultRefmap(int paths, byte @Nullable [] bytes) {
+    }
+
+    private volatile @Nullable DefaultRefmap defaultRefmap;
+
+    private final List<Copy> reusable = new ArrayList<>();
+    private int generation;
+    private static final int WARM = 3;
 
     public MixinCopy(List<Path> mixinJars, ClassLoader live, List<String> sharedPackages, String sessionId,
             Function<String, byte @Nullable []> more, String side, Decorations decorations) {
         this.side = side;
         this.decorations = decorations;
         this.more = name -> {
-            this.readInMix.add(name);
+            Set<String> reading = READ_IN_MIX.get();
+            if (reading != null) {
+                reading.add(name);
+            }
             return this.findBytes(name, more);
         };
         this.mixinJars = List.copyOf(mixinJars);
@@ -208,9 +227,9 @@ public final class MixinCopy implements AutoCloseable {
         return now.modIds().get(config) + "|" + now.levels().get(config) + "|" + now.orders().get(config);
     }
 
-    public Map<String, byte @Nullable []> takeReadInMix() {
+    public Map<String, byte @Nullable []> findReadBytes(Set<String> read) {
         Map<String, byte @Nullable []> found = new TreeMap<>();
-        for (String name : this.readInMix) {
+        for (String name : read) {
             found.put(name, this.findBytes(name, this.more));
         }
         return found;
@@ -226,6 +245,7 @@ public final class MixinCopy implements AutoCloseable {
 
     public void replace(Map<String, byte[]> classes) {
         this.replaced.putAll(classes);
+        this.defaultRefmap = null;
         synchronized (BOOTING) {
             this.discard();
         }
@@ -235,6 +255,7 @@ public final class MixinCopy implements AutoCloseable {
         this.read.clear();
         this.replaced.clear();
         this.missing.clear();
+        this.defaultRefmap = null;
 
         synchronized (BOOTING) {
             this.discard();
@@ -254,11 +275,12 @@ public final class MixinCopy implements AutoCloseable {
     }
 
     public record MixResult(Map<String, byte[]> classes, Map<String, String> argsShapes,
-            Map<String, byte[]> generated) {
+            Map<String, byte[]> generated, Set<String> read) {
         public MixResult {
             classes = Map.copyOf(classes);
             argsShapes = Map.copyOf(argsShapes);
             generated = Map.copyOf(generated);
+            read = Set.copyOf(read);
         }
     }
 
@@ -288,56 +310,77 @@ public final class MixinCopy implements AutoCloseable {
 
     public MixResult mixAll(Set<String> targets, Map<String, byte[]> classes, Map<String, byte[]> resources,
             List<String> configs, BooleanSupplier stop) throws MixinCopyException {
+        Set<String> reading = new HashSet<>();
+        READ_IN_MIX.set(reading);
+        swapProperties();
+        Span span = new Span(Thread.currentThread().getName(), System.currentTimeMillis(), Long.MAX_VALUE);
+        MIXING.add(span);
+        try {
+            long start = System.nanoTime();
+            int opened;
+            Copy copy;
+            synchronized (BOOTING) {
+                opened = this.generation;
+                copy = this.reusable.isEmpty() ? null : this.reusable.removeLast();
+            }
+            copy = copy == null ? null : this.reset(copy);
+            boolean reused = copy != null;
+            long reset = System.nanoTime();
+            if (copy == null) {
+                copy = this.open();
+            }
+            long loaded = System.nanoTime();
+            Object[] answer = this.mixIn(copy, targets, classes, resources, configs, stop);
+            this.giveBack(copy, opened);
+            @SuppressWarnings("unchecked")
+            Map<String, byte[]> mixed = Map.copyOf((Map<String, byte[]>) answer[0]);
+            long[] stages = (long[]) answer[1];
+            @SuppressWarnings("unchecked")
+            Map<String, String> argsShapes = (Map<String, String>) answer[2];
+            @SuppressWarnings("unchecked")
+            Map<String, byte[]> generated = (Map<String, byte[]>) answer[3];
+            LOGGER.info("[Hotwire] Mixin's {} copy mixed {} classes with {} configs in {} ms (reset {}, load {}, "
+                    + "start {}, read {}, prepare {}, patch {})", reused ? "reused" : "fresh", targets.size(),
+                    configs.size(), (System.nanoTime() - start) / 1_000_000, (reset - start) / 1_000_000,
+                    (loaded - reset) / 1_000_000, stages[0] / 1_000_000, stages[1] / 1_000_000,
+                    stages[2] / 1_000_000, stages[3] / 1_000_000);
+            return new MixResult(mixed, argsShapes, generated, reading);
+        } finally {
+            READ_IN_MIX.remove();
+            MIXING.remove(span);
+            SPANS.addLast(new Span(span.thread(), span.from(), System.currentTimeMillis()));
+            while (SPANS.size() > SPAN_COUNT) {
+                SPANS.pollFirst();
+            }
+            restoreProperties();
+        }
+    }
+
+    private static void swapProperties() {
         synchronized (BOOTING) {
-            this.readInMix.clear();
-            String service = System.getProperty(SERVICE);
-            String bootstrap = System.getProperty(BOOTSTRAP);
-            System.setProperty(SERVICE, COPY + "CopyMixinService");
-            System.setProperty(BOOTSTRAP, COPY + "CopyMixinBootstrap");
-            mixing = new Span(Thread.currentThread().getName(), System.currentTimeMillis(), Long.MAX_VALUE);
-            try {
-                long start = System.nanoTime();
-                Copy copy = this.resetReusable();
-                boolean reused = copy != null;
-                long reset = System.nanoTime();
-                if (copy == null) {
-                    copy = this.open();
-                }
-                long loaded = System.nanoTime();
-                Object[] answer = this.mixIn(copy, targets, classes, resources, configs, stop);
-                this.reusable = copy;
-                @SuppressWarnings("unchecked")
-                Map<String, byte[]> mixed = Map.copyOf((Map<String, byte[]>) answer[0]);
-                long[] stages = (long[]) answer[1];
-                @SuppressWarnings("unchecked")
-                Map<String, String> argsShapes = (Map<String, String>) answer[2];
-                @SuppressWarnings("unchecked")
-                Map<String, byte[]> generated = (Map<String, byte[]>) answer[3];
-                LOGGER.info("[Hotwire] Mixin's {} copy mixed {} classes with {} configs in {} ms (reset {}, load {}, "
-                        + "start {}, read {}, prepare {}, patch {})", reused ? "reused" : "fresh", targets.size(),
-                        configs.size(), (System.nanoTime() - start) / 1_000_000, (reset - start) / 1_000_000,
-                        (loaded - reset) / 1_000_000, stages[0] / 1_000_000, stages[1] / 1_000_000,
-                        stages[2] / 1_000_000, stages[3] / 1_000_000);
-                return new MixResult(mixed, argsShapes, generated);
-            } finally {
-                Span ended = mixing;
-                if (ended != null) {
-                    SPANS.addLast(new Span(ended.thread(), ended.from(), System.currentTimeMillis()));
-                }
-                while (SPANS.size() > SPAN_COUNT) {
-                    SPANS.pollFirst();
-                }
-                mixing = null;
-                restore(SERVICE, service);
-                restore(BOOTSTRAP, bootstrap);
+            if (swapped++ == 0) {
+                gameService = System.getProperty(SERVICE);
+                gameBootstrap = System.getProperty(BOOTSTRAP);
+                System.setProperty(SERVICE, COPY + "CopyMixinService");
+                System.setProperty(BOOTSTRAP, COPY + "CopyMixinBootstrap");
+            }
+        }
+    }
+
+    private static void restoreProperties() {
+        synchronized (BOOTING) {
+            if (--swapped == 0) {
+                restore(SERVICE, gameService);
+                restore(BOOTSTRAP, gameBootstrap);
             }
         }
     }
 
     public static boolean isMixingAt(String thread, long millis) {
-        Span now = mixing;
-        if (now != null && now.holds(thread, millis)) {
-            return true;
+        for (Span now : MIXING) {
+            if (now.holds(thread, millis)) {
+                return true;
+            }
         }
         for (Span one : SPANS) {
             if (one.holds(thread, millis)) {
@@ -354,20 +397,26 @@ public final class MixinCopy implements AutoCloseable {
         }
     }
 
-    private @Nullable Copy resetReusable() {
-        Copy copy = this.reusable;
-        if (copy == null) {
-            return null;
-        }
+    private @Nullable Copy reset(Copy copy) {
         try {
             copy.reset().run();
             return copy;
         } catch (RuntimeException | LinkageError e) {
             LOGGER.warn("[Hotwire] Mixin's copy could not be reset for another mix, so a cold copy mixes instead: {}",
                     e.toString());
-            this.discard();
+            closeLoader(copy.loader());
             return null;
         }
+    }
+
+    private void giveBack(Copy copy, int opened) {
+        synchronized (BOOTING) {
+            if (opened == this.generation && this.reusable.size() < WARM) {
+                this.reusable.add(copy);
+                return;
+            }
+        }
+        closeLoader(copy.loader());
     }
 
     private Object[] mixIn(Copy copy, Set<String> targets, Map<String, byte[]> classes,
@@ -380,7 +429,7 @@ public final class MixinCopy implements AutoCloseable {
                     List.copyOf(configs), this.sessionId, this.live, this.sharedPackages, this.more,
                     (BiConsumer<String, String>) MixinCopy::log, this.side, decorated.modIds(),
                     decorated.levels(), this.obfuscationContext, this.compatibility, stop, decorated.orders(),
-                    this.livePlugins, this.liveMixins});
+                    this.livePlugins, this.liveMixins, (Function<String, @Nullable InputStream>) this::findLive});
         } catch (IllegalStateException e) {
             this.discard(copy);
             throw new MixinCopyException(e.getMessage(), e);
@@ -390,15 +439,31 @@ public final class MixinCopy implements AutoCloseable {
         }
     }
 
-    private void discard() {
-        Copy copy = this.reusable;
-        if (copy != null) {
-            this.discard(copy);
+    private @Nullable InputStream findLive(String name) {
+        if (!name.equals(DEFAULT_REFMAP)) {
+            return this.live.getResourceAsStream(name);
         }
+        int paths = PATHS.get();
+        DefaultRefmap known = this.defaultRefmap;
+        if (known == null || known.paths() != paths) {
+            try (InputStream in = this.live.getResourceAsStream(name)) {
+                known = new DefaultRefmap(paths, in == null ? null : in.readAllBytes());
+            } catch (IOException e) {
+                return this.live.getResourceAsStream(name);
+            }
+            this.defaultRefmap = known;
+        }
+        byte[] bytes = known.bytes();
+        return bytes == null ? null : new ByteArrayInputStream(bytes);
+    }
+
+    private void discard() {
+        this.generation++;
+        this.reusable.forEach(copy -> closeLoader(copy.loader()));
+        this.reusable.clear();
     }
 
     private void discard(Copy copy) {
-        this.reusable = null;
         closeLoader(copy.loader());
     }
 

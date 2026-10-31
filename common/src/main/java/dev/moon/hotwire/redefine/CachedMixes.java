@@ -13,6 +13,10 @@ import java.util.Map;
 import java.util.Objects;
 import java.util.Set;
 import java.util.TreeSet;
+import java.util.concurrent.ExecutionException;
+import java.util.concurrent.ExecutorService;
+import java.util.concurrent.Executors;
+import java.util.concurrent.Future;
 import java.util.concurrent.atomic.LongAdder;
 import java.util.function.BooleanSupplier;
 import org.jspecify.annotations.Nullable;
@@ -23,6 +27,11 @@ public final class CachedMixes {
     private static final Logger LOGGER = LoggerFactory.getLogger(CachedMixes.class);
 
     private static final int MISSES_NAMED = 12;
+
+    private static final int SPLIT_FROM = 64;
+    private static final int WAYS = findWays();
+    private static final ExecutorService LOTS = Executors.newCachedThreadPool(Thread.ofPlatform().name("hotwire-mix-", 1)
+            .daemon().factory());
 
     private final MixinCopy copy;
     private volatile @Nullable MixedCache cache;
@@ -142,18 +151,70 @@ public final class CachedMixes {
         }
         if (!toMix.isEmpty()) {
             long copying = System.nanoTime();
-            MixinCopy.MixResult made = this.copy.mixAll(toMix, classes, resources, configs, stop);
+            List<MixinCopy.MixResult> made = this.mixInLots(toMix, classes, resources, configs, stop);
             long copied = System.nanoTime();
             this.copyNanos.add(copied - copying);
-            parts.add(made);
-            Map<String, CacheKey> toSave = new HashMap<>(keys);
-            toSave.keySet().retainAll(toMix);
-            if (known != null && !toSave.isEmpty() && !stop.getAsBoolean()) {
-                known.save(toSave, made, classes);
+            for (MixinCopy.MixResult lot : made) {
+                parts.add(lot);
+                Map<String, CacheKey> toSave = new HashMap<>(keys);
+                toSave.keySet().retainAll(lot.classes().keySet());
+                toSave.keySet().retainAll(toMix);
+                if (known != null && !toSave.isEmpty() && !stop.getAsBoolean()) {
+                    known.save(toSave, lot, classes);
+                }
             }
             this.saveNanos.add(System.nanoTime() - copied);
         }
         return parts;
+    }
+
+    @SuppressWarnings("ThreadPriorityCheck")
+    private List<MixinCopy.MixResult> mixInLots(Set<String> toMix, Map<String, byte[]> classes,
+            Map<String, byte[]> resources, List<String> configs, BooleanSupplier stop) throws MixinCopyException {
+        List<Set<String>> lots = toMix.size() < SPLIT_FROM ? List.of(toMix) : MixSplit.split(toMix,
+                name -> classes.containsKey(name) ? classes.get(name) : this.copy.findReadable(name), WAYS);
+        if (lots.size() == 1) {
+            return List.of(this.copy.mixAll(toMix, classes, resources, configs, stop));
+        }
+        int priority = Thread.currentThread().getPriority();
+        List<Future<MixinCopy.MixResult>> others = new ArrayList<>();
+        for (Set<String> lot : lots.subList(1, lots.size())) {
+            others.add(LOTS.submit(() -> {
+                Thread.currentThread().setPriority(priority);
+                return this.copy.mixAll(lot, classes, resources, configs, stop);
+            }));
+        }
+        List<MixinCopy.MixResult> made = new ArrayList<>();
+        MixinCopyException failed = null;
+        try {
+            made.add(this.copy.mixAll(lots.getFirst(), classes, resources, configs, stop));
+        } catch (MixinCopyException e) {
+            failed = e;
+        }
+        for (Future<MixinCopy.MixResult> other : others) {
+            try {
+                made.add(other.get());
+            } catch (ExecutionException e) {
+                if (failed == null) {
+                    failed = e.getCause() instanceof MixinCopyException cause ? cause
+                            : new MixinCopyException("a lot of the mix failed: " + e.getCause(), e.getCause());
+                }
+            } catch (InterruptedException e) {
+                Thread.currentThread().interrupt();
+                if (failed == null) {
+                    failed = new MixinCopyException("the mix was interrupted", e);
+                }
+            }
+        }
+        if (failed != null) {
+            throw failed;
+        }
+        return made;
+    }
+
+    private static int findWays() {
+        String chosen = System.getProperty("hotwire.mixWays");
+        return chosen == null ? 1 : Math.max(1, Integer.parseInt(chosen));
     }
 
     public long[] findTimes() {

@@ -31,8 +31,22 @@ final class CopyMixinInternals {
     private static @Nullable Start start;
     private static @Nullable Reset reset;
     private static @Nullable Order order;
+    private static @Nullable Field extensionList;
+    private static boolean extensionListBound;
 
     private CopyMixinInternals() {
+    }
+
+    static synchronized @Nullable Field findExtensionList() {
+        if (!extensionListBound) {
+            extensionListBound = true;
+            try {
+                extensionList = getField(Extensions.class, "extensions");
+            } catch (IllegalStateException e) {
+                extensionList = null;
+            }
+        }
+        return extensionList;
     }
 
     static synchronized Start start() {

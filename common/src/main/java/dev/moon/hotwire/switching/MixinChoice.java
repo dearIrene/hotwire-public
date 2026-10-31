@@ -38,12 +38,17 @@ final class MixinChoice {
     }
 
     Set<String> choose(Set<String> listed, Map<String, Set<String>> appliedByClass, boolean declinable) {
+        Set<String> carried = new HashSet<>();
+        appliedByClass.values().forEach(carried::addAll);
+        return this.choose(listed, appliedByClass, carried, declinable);
+    }
+
+    Set<String> choose(Set<String> listed, Map<String, Set<String>> appliedByClass, Set<String> carried,
+            boolean declinable) {
         Set<String> chosen = new HashSet<>();
         Map<String, MixinClassInfo> catalog = new HashMap<>();
         Map<String, MixinClassInfo> aside = new HashMap<>();
 
-        Set<String> carried = new HashSet<>();
-        appliedByClass.values().forEach(carried::addAll);
         for (String mixin : listed) {
             MixinClassInfo read = this.findMixinInfo(mixin);
             if (carried.contains(mixin)) {

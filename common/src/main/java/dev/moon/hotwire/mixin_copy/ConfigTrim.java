@@ -5,7 +5,10 @@ import com.google.gson.JsonElement;
 import com.google.gson.JsonObject;
 import com.google.gson.JsonParser;
 import java.nio.charset.StandardCharsets;
+import java.util.ArrayList;
+import java.util.List;
 import java.util.Locale;
+import java.util.NavigableSet;
 import java.util.Set;
 import java.util.TreeSet;
 import java.util.function.Predicate;
@@ -80,8 +83,11 @@ public final class ConfigTrim {
         boolean live = pluginStays && runsLive.test(root.get("plugin").getAsString());
 
         if (!prefix.isEmpty() && (!pluginStays || live)) {
-            applied.stream().filter(mixin -> mixin.startsWith(prefix) && !listedElsewhere.test(mixin))
-                    .map(mixin -> mixin.substring(prefix.length())).forEach(retained::add);
+            for (String mixin : findInPackage(applied, prefix)) {
+                if (!listedElsewhere.test(mixin)) {
+                    retained.add(mixin.substring(prefix.length()));
+                }
+            }
         }
         JsonArray list = new JsonArray();
         retained.forEach(list::add);
@@ -99,6 +105,25 @@ public final class ConfigTrim {
         injectors.addProperty("defaultRequire", 0);
         root.add("injectors", injectors);
         return root.toString().getBytes(StandardCharsets.UTF_8);
+    }
+
+    public static List<String> findInPackage(Set<String> names, String prefix) {
+        List<String> found = new ArrayList<>();
+        if (names instanceof NavigableSet<String> sorted && sorted.comparator() == null) {
+            for (String name : sorted.tailSet(prefix, true)) {
+                if (!name.startsWith(prefix)) {
+                    break;
+                }
+                found.add(name);
+            }
+            return found;
+        }
+        for (String name : names) {
+            if (name.startsWith(prefix)) {
+                found.add(name);
+            }
+        }
+        return found;
     }
 
     private static boolean isName(@Nullable JsonElement element) {

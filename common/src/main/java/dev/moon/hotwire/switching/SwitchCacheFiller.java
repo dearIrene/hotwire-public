@@ -1,12 +1,14 @@
 package dev.moon.hotwire.switching;
 
 import dev.moon.hotwire.cache.CacheKey;
+import dev.moon.hotwire.classfile.ClassHeader;
 import dev.moon.hotwire.plan.SwitchPlan;
 import dev.moon.hotwire.redefine.CachedMixes;
 import dev.moon.hotwire.redefine.ClassRebuilder;
 import dev.moon.hotwire.redefine.RebuildException;
 import dev.moon.hotwire.report.StartTimes;
 import java.util.ArrayList;
+import java.util.Collections;
 import java.util.Comparator;
 import java.util.HashMap;
 import java.util.HashSet;
@@ -14,6 +16,7 @@ import java.util.LinkedHashMap;
 import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Map;
+import java.util.Objects;
 import java.util.Set;
 import java.util.TreeSet;
 import java.util.concurrent.atomic.AtomicInteger;
@@ -29,7 +32,7 @@ public final class SwitchCacheFiller {
     private static final long WAIT_MILLIS = 250;
     private static final int TRIES = 3;
 
-    private static final int ON_BATCH = 400;
+    private static final int ON_BATCH = 1500;
 
     private static final int SAMPLE = 8;
 
@@ -51,9 +54,14 @@ public final class SwitchCacheFiller {
         SwitchPlan planOff(String id);
 
         @Nullable RebuildException tryOff(SwitchPlan plan);
+
+        @Nullable RebuildException tryOffAll(Set<String> mods, List<String> parts);
     }
 
-    private record Step(@Nullable String id, Set<String> mods, int classes, long bytes) {
+    record Step(@Nullable String id, Set<String> mods, int classes, long bytes, List<String> parts) {
+        Step(@Nullable String id, Set<String> mods, int classes, long bytes) {
+            this(id, mods, classes, bytes, List.of());
+        }
     }
 
     public record Fill(boolean running, int stepsDone, int steps, long classesDone, long classes, long bytesDone,
@@ -78,6 +86,8 @@ public final class SwitchCacheFiller {
     private volatile boolean sampleOnly;
 
     private volatile boolean healing;
+
+    private volatile boolean asked;
     private volatile int sample;
     private volatile @Nullable Thread thread;
 
@@ -114,6 +124,7 @@ public final class SwitchCacheFiller {
 
     public void fillAll() {
         this.healing = false;
+        this.asked = true;
         this.sampleOnly = false;
         this.paused = false;
         this.start();
@@ -203,10 +214,8 @@ public final class SwitchCacheFiller {
 
         if (!this.steps.isEmpty() && this.host.isLookDue() && !this.lookReady) {
             this.lookReady = true;
-            int priority = Thread.currentThread().getPriority();
-            Thread.currentThread().setPriority(Thread.NORM_PRIORITY);
-            this.host.prepareLook();
-            Thread.currentThread().setPriority(priority);
+            Thread.ofPlatform().name("hotwire-look-warm").daemon().priority(Thread.NORM_PRIORITY)
+                    .start(this.host::prepareLook);
         }
         long looked = System.nanoTime();
         int mixed = 0;
@@ -217,7 +226,9 @@ public final class SwitchCacheFiller {
             }
             long before = this.nanos.get();
             String id = step.id();
-            mixed += id != null ? this.fillOff(id) : this.fillOn(step.mods());
+            this.applier.getRebuilder().takeConstructorsChanged();
+            mixed += !step.parts().isEmpty() ? this.fillOffs(step) : id != null ? this.fillOff(id) : 0;
+            mixed += this.fillOn(step.mods(), this.applier.getRebuilder().takeConstructorsChanged());
             if (current != this.run.get()) {
                 break;
             }
@@ -255,17 +266,24 @@ public final class SwitchCacheFiller {
 
         Set<String> named = new HashSet<>();
         Map<Set<String>, Step> offs = new LinkedHashMap<>();
-        Map<String, Integer> patching = new HashMap<>();
+
+        Map<Set<String>, Set<String>> prints = new HashMap<>();
+        Map<String, Set<String>> above = new HashMap<>();
         for (String id : this.host.getIds()) {
             Set<String> own = this.host.isOn(id) ? this.applier.findClassesPatchedBy(Set.of(id)) : Set.of();
             if (own.isEmpty()) {
                 continue;
             }
-            patching.put(id, own.size());
             SwitchPlan plan = this.host.planOff(id);
             Set<String> mods = Set.copyOf(plan.order());
             if (!plan.isRefused() && !offs.containsKey(mods)) {
-                Set<String> patched = this.applier.findClassesPatchedBy(mods);
+                Set<String> after = new HashSet<>(on);
+                after.removeAll(mods);
+                Set<String> patched = new HashSet<>(this.applier.findMixedBy(mods, after));
+
+                if (patched.isEmpty()) {
+                    continue;
+                }
                 Set<String> fresh = new HashSet<>();
                 for (String name : patched) {
                     Set<String> down = new TreeSet<>(patchers.getOrDefault(name, Set.of()));
@@ -276,31 +294,19 @@ public final class SwitchCacheFiller {
                     }
                 }
                 offs.put(mods, new Step(id, mods, patched.size(), this.sumBytes(fresh)));
-            }
-        }
-        List<Step> planned = new ArrayList<>(offs.values());
-        planned.sort(Comparator.comparingInt(Step::classes));
 
-        List<String> byClasses = patching.entrySet().stream().sorted(Map.Entry.comparingByValue())
-                .map(Map.Entry::getKey).toList();
-        Set<String> seen = new HashSet<>();
-        Set<String> batch = new LinkedHashSet<>();
-        Set<String> batchClasses = new HashSet<>();
-        for (String id : byClasses) {
-            Set<String> patched = new HashSet<>(this.applier.findClassesPatchedBy(Set.of(id)));
-            patched.removeAll(seen);
-            seen.addAll(patched);
-            if (!batch.isEmpty() && batchClasses.size() + patched.size() > ON_BATCH) {
-                planned.add(new Step(null, Set.copyOf(batch), batchClasses.size(), this.sumBytes(batchClasses)));
-                batch = new LinkedHashSet<>();
-                batchClasses = new HashSet<>();
+                Set<String> print = new HashSet<>(patched);
+                patched.forEach(name -> this.findAllAbove(name, above).stream().filter(patchers::containsKey)
+                        .forEach(print::add));
+                prints.put(mods, print);
             }
-            batch.add(id);
-            batchClasses.addAll(patched);
-            named.addAll(patched);
         }
-        if (!batch.isEmpty()) {
-            planned.add(new Step(null, Set.copyOf(batch), batchClasses.size(), this.sumBytes(batchClasses)));
+
+        List<Step> planned = new ArrayList<>(offs.values());
+        if (Boolean.parseBoolean(System.getProperty("hotwire.fillOneByOne"))) {
+            planned.sort(Comparator.comparingInt(Step::classes));
+        } else {
+            planned = batchOffs(planned, prints);
         }
         this.classes = planned.stream().mapToLong(Step::classes).sum();
         this.bytes = planned.stream().mapToLong(Step::bytes).sum();
@@ -340,7 +346,7 @@ public final class SwitchCacheFiller {
     }
 
     private static CacheKey findStepKey(Step step) {
-        CacheKey.Builder key = CacheKey.of("fill step 1");
+        CacheKey.Builder key = CacheKey.of("fill step 2");
         new TreeSet<>(step.mods()).forEach(key::add);
         return key.add(step.classes()).add(step.bytes()).build();
     }
@@ -361,6 +367,68 @@ public final class SwitchCacheFiller {
         return out;
     }
 
+    static List<Step> batchOffs(List<Step> offs, Map<Set<String>, Set<String>> prints) {
+        offs.sort(Comparator.comparingInt(Step::classes));
+        List<List<Step>> batches = new ArrayList<>();
+        List<Set<String>> taken = new ArrayList<>();
+        List<Integer> sizes = new ArrayList<>();
+        for (Step off : offs) {
+            Set<String> print = prints.getOrDefault(off.mods(), Set.of());
+            int at = -1;
+            for (int batch = 0; batch < batches.size() && at < 0; batch++) {
+                if (sizes.get(batch) + off.classes() <= ON_BATCH && Collections.disjoint(taken.get(batch), print)) {
+                    at = batch;
+                }
+            }
+            if (at < 0) {
+                batches.add(new ArrayList<>());
+                taken.add(new HashSet<>());
+                sizes.add(0);
+                at = batches.size() - 1;
+            }
+            batches.get(at).add(off);
+            taken.get(at).addAll(print);
+            sizes.set(at, sizes.get(at) + off.classes());
+        }
+        List<Step> out = new ArrayList<>();
+        for (List<Step> batch : batches) {
+            if (batch.size() == 1) {
+                out.add(batch.getFirst());
+                continue;
+            }
+            Set<String> mods = new TreeSet<>();
+            List<String> parts = new ArrayList<>();
+            int classes = 0;
+            long bytes = 0;
+            for (Step off : batch) {
+                mods.addAll(off.mods());
+                parts.add(Objects.requireNonNull(off.id()));
+                classes += off.classes();
+                bytes += off.bytes();
+            }
+            out.add(new Step(null, Set.copyOf(mods), classes, bytes, List.copyOf(parts)));
+        }
+        return out;
+    }
+
+    private Set<String> findAllAbove(String name, Map<String, Set<String>> known) {
+        Set<String> found = known.get(name);
+        if (found != null) {
+            return found;
+        }
+        known.put(name, Set.of());
+        byte[] original = this.applier.findOriginal(name);
+        Set<String> all = new HashSet<>();
+        if (original != null) {
+            for (String up : ClassHeader.of(original).findAbove()) {
+                all.add(up);
+                all.addAll(this.findAllAbove(up, known));
+            }
+        }
+        known.put(name, Set.copyOf(all));
+        return known.get(name);
+    }
+
     private long sumBytes(Set<String> names) {
         long total = 0;
         for (String name : names) {
@@ -372,7 +440,7 @@ public final class SwitchCacheFiller {
 
     @SuppressWarnings("ThreadPriorityCheck")
     private void yieldAfter(long busyNanos) throws InterruptedException {
-        boolean gently = this.healing || this.playing.getAsBoolean();
+        boolean gently = this.healing || (!this.asked && this.playing.getAsBoolean());
         Thread.currentThread().setPriority(gently ? Thread.MIN_PRIORITY : Thread.NORM_PRIORITY);
         if (gently) {
             Thread.sleep(busyNanos / 1_000_000);
@@ -395,7 +463,9 @@ public final class SwitchCacheFiller {
                     SwitchPlan plan = this.host.isOn(id) ? this.host.planOff(id) : null;
                     RebuildException cause = plan == null || plan.isRefused() ? null : this.host.tryOff(plan);
                     if (plan != null && cause != null && ClassRebuilder.isMixSaved(cause)) {
-                        return this.applier.findClassesPatchedBy(Set.copyOf(plan.order())).size();
+                        Set<String> after = new HashSet<>(this.host.findOnNow());
+                        plan.order().forEach(after::remove);
+                        return this.applier.findMixedBy(Set.copyOf(plan.order()), after).size();
                     }
                     stopped = cause != null;
                 } finally {
@@ -412,7 +482,44 @@ public final class SwitchCacheFiller {
         return 0;
     }
 
-    private int fillOn(Set<String> mods) throws InterruptedException {
+    private int fillOffs(Step step) throws InterruptedException {
+        for (int tries = 0; tries < TRIES; tries++) {
+            while (this.isWaiting()) {
+                Thread.sleep(WAIT_MILLIS);
+            }
+            long began = System.nanoTime();
+            RebuildException cause;
+            synchronized (this.host.getLock()) {
+                this.applier.getRebuilder().stopWhen(this::isWaiting);
+                LiveObjects.setAhead(true);
+                ClassRebuilder.mixOnly(true);
+                try {
+                    cause = this.host.tryOffAll(step.mods(), step.parts());
+                    if (cause != null && ClassRebuilder.isMixSaved(cause)) {
+                        return step.classes();
+                    }
+                } finally {
+                    ClassRebuilder.mixOnly(false);
+                    LiveObjects.setAhead(false);
+                    this.applier.getRebuilder().stopWhen(() -> false);
+                    this.nanos.addAndGet(System.nanoTime() - began);
+                }
+            }
+            if (cause == null || !this.isWaiting()) {
+                break;
+            }
+        }
+        int mixed = 0;
+        for (String id : step.parts()) {
+            mixed += this.fillOff(id);
+        }
+        return mixed;
+    }
+
+    private int fillOn(Set<String> mods, Set<String> only) throws InterruptedException {
+        if (only.isEmpty()) {
+            return 0;
+        }
         for (int tries = 0; tries < TRIES; tries++) {
             while (this.isWaiting()) {
                 Thread.sleep(WAIT_MILLIS);
@@ -423,11 +530,12 @@ public final class SwitchCacheFiller {
                 LiveObjects.setAhead(true);
                 ClassRebuilder.mixOnly(true);
                 try {
-                    this.applier.dryRun(mods, this.host.findOnNow(), false);
+                    this.applier.dryRunMixing(mods, this.host.findOnNow(), only);
                     return 0;
                 } catch (RebuildException e) {
                     if (ClassRebuilder.isMixSaved(e)) {
-                        return this.applier.findClassesPatchedBy(mods).size();
+                        this.applier.getRebuilder().takeConstructorsChanged();
+                        return only.size();
                     }
                 } finally {
                     ClassRebuilder.mixOnly(false);

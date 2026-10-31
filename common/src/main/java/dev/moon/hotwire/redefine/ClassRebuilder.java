@@ -1,6 +1,7 @@
 package dev.moon.hotwire.redefine;
 
 import dev.moon.hotwire.concurrent.Parallel;
+import dev.moon.hotwire.jvm.LoadedClassList;
 import dev.moon.hotwire.mixin_copy.AppliedMixins;
 import dev.moon.hotwire.mixin_copy.MixinCopy;
 import dev.moon.hotwire.mixin_copy.MixinCopyException;
@@ -90,7 +91,15 @@ public final class ClassRebuilder {
     }
 
     private static final ThreadLocal<Boolean> MIX_ONLY = ThreadLocal.withInitial(() -> false);
+
+    private final Set<String> constructorsChanged = ConcurrentHashMap.newKeySet();
     private static final String MIX_SAVED = "the mix was saved for the switch cache";
+
+    public Set<String> takeConstructorsChanged() {
+        Set<String> taken = Set.copyOf(this.constructorsChanged);
+        this.constructorsChanged.removeAll(taken);
+        return taken;
+    }
 
     public static void mixOnly(boolean only) {
         MIX_ONLY.set(only);
@@ -233,6 +242,13 @@ public final class ClassRebuilder {
             mixed.putAll(copied);
         }
         if (MIX_ONLY.get()) {
+            mixed.forEach((name, bytes) -> {
+                byte[] running = current.get(name);
+                if (running != null && !BatchShapes.findConstructors(bytes, null)
+                        .equals(BatchShapes.findConstructors(running, null))) {
+                    this.constructorsChanged.add(name);
+                }
+            });
             throw new RebuildException(MIX_SAVED, new IllegalStateException(String.valueOf(toMix.size())));
         }
         long copiedAt = System.nanoTime();
@@ -555,7 +571,7 @@ public final class ClassRebuilder {
     }
 
     public Class<?>[] getLoadedClasses() {
-        return this.instrumentation.getAllLoadedClasses();
+        return LoadedClassList.of(this.instrumentation);
     }
 
     public LoadedClassBytes getLoadedBytes() {

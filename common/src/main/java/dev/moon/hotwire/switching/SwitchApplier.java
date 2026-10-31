@@ -253,6 +253,7 @@ public final class SwitchApplier {
         this.decisions.forget();
         this.patched = null;
         this.mods.put(id, mixins);
+        this.carriedMixins.forget();
         mixins.configs().forEach(config -> this.ownerOfConfig.putIfAbsent(config, id));
     }
 
@@ -275,6 +276,7 @@ public final class SwitchApplier {
         this.decisions.forget();
         this.patched = null;
         ModMixins mixins = this.mods.remove(id);
+        this.carriedMixins.forget();
         if (mixins != null) {
             mixins.configs().forEach(config -> this.ownerOfConfig.remove(config, id));
         }
@@ -301,6 +303,14 @@ public final class SwitchApplier {
     }
 
     public ApplyResult apply(Set<String> switched, Set<String> onAfter, Runnable inPause) throws RebuildException {
+        try {
+            return this.applyNow(switched, onAfter, inPause);
+        } finally {
+            HeapCensus.forget();
+        }
+    }
+
+    private ApplyResult applyNow(Set<String> switched, Set<String> onAfter, Runnable inPause) throws RebuildException {
         ReplacedStatics.beginSwitch(switched, onAfter);
         Runnable whilePaused = () -> {
             inPause.run();
@@ -386,6 +396,37 @@ public final class SwitchApplier {
                 .map(Class::getName).toList());
         this.applyWhilePaused(this.prepare(originals, originals, Map.of(), this.onConfigs, onAfter, Set.of(),
                 "rebuild"), () -> { }, Set.of());
+    }
+
+    DryRun dryRunAsSwitched(List<Set<String>> switches, Set<String> switched, Set<String> onAfter)
+            throws RebuildException {
+        Set<String> rebuild = new HashSet<>();
+        for (Set<String> one : switches) {
+            rebuild.addAll(this.findMixedBy(one, onAfter));
+        }
+        Set<String> before = this.onlyRebuild;
+        this.onlyRebuild = rebuild;
+        try {
+            return this.dryRun(switched, onAfter, false);
+        } finally {
+            this.onlyRebuild = before;
+        }
+    }
+
+    DryRun dryRunMixing(Set<String> switched, Set<String> onAfter, Set<String> only) throws RebuildException {
+        Set<String> before = this.onlyRebuild;
+        this.onlyRebuild = only;
+        try {
+            return this.dryRun(switched, onAfter, false);
+        } finally {
+            this.onlyRebuild = before;
+        }
+    }
+
+    Set<String> findMixedBy(Set<String> switched, Set<String> onAfter) {
+        GuardFlips.Plan plan = HandlerGuards.ENABLED ? this.guardFlips.plan(switched, onAfter,
+                this.alsoRebuilt.apply(switched, onAfter), this.replaced.keySet(), false) : null;
+        return plan == null ? this.findClassesPatchedBy(switched) : plan.rebuild();
     }
 
     DryRun dryRun(Set<String> switched, Set<String> onAfter, boolean forClick) throws RebuildException {

@@ -57,6 +57,8 @@ public final class CopyMixinService extends MixinServiceAbstract
     private static Map<String, byte[]> resources = Map.of();
     private static List<String> shared = List.of();
     private static ClassLoader live = ClassLoader.getPlatformClassLoader();
+
+    private static Function<String, @Nullable InputStream> liveResources = name -> live.getResourceAsStream(name);
     private static @Nullable BiConsumer<String, String> log;
     private static String side = "CLIENT";
     private static @Nullable String obfuscationContext;
@@ -145,7 +147,7 @@ public final class CopyMixinService extends MixinServiceAbstract
 
     static void startMix(Map<String, byte[]> classes, Map<String, byte[]> resources, ClassLoader live,
             List<String> shared, Function<String, byte @Nullable []> more, @Nullable BiConsumer<String, String> log,
-            String side, @Nullable String obfuscationContext) {
+            String side, @Nullable String obfuscationContext, Function<String, @Nullable InputStream> liveResources) {
         CopyMixinService.classes = classes;
         CopyMixinService.resources = resources;
         CopyMixinService.live = live;
@@ -154,6 +156,7 @@ public final class CopyMixinService extends MixinServiceAbstract
         CopyMixinService.log = log;
         CopyMixinService.side = side;
         CopyMixinService.obfuscationContext = obfuscationContext;
+        CopyMixinService.liveResources = liveResources;
     }
 
     static void setLivePlugins(Function<String, @Nullable Object> plugins,
@@ -371,7 +374,7 @@ public final class CopyMixinService extends MixinServiceAbstract
 
     public @Nullable InputStream getResourceAsStream(String name) {
         byte[] bytes = resources.get(name);
-        return bytes == null ? live.getResourceAsStream(name) : new ByteArrayInputStream(bytes);
+        return bytes == null ? liveResources.apply(name) : new ByteArrayInputStream(bytes);
     }
 
     @Override

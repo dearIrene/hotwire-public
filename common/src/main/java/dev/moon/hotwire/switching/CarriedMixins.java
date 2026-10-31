@@ -3,12 +3,14 @@ package dev.moon.hotwire.switching;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.ConcurrentModificationException;
+import java.util.HashMap;
 import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
 import java.util.TreeMap;
 import java.util.TreeSet;
+import java.util.concurrent.ConcurrentHashMap;
 import java.util.function.Predicate;
 import org.jspecify.annotations.Nullable;
 import org.objectweb.asm.ClassReader;
@@ -29,6 +31,9 @@ public final class CarriedMixins {
 
     private final Map<String, ModMixins> mods;
     private final SwitchApplier.Game game;
+
+    private volatile @Nullable Map<String, String> shipping;
+    private final Map<String, List<Map.Entry<String, Integer>>> nearest = new ConcurrentHashMap<>();
 
     CarriedMixins(Map<String, ModMixins> mods, SwitchApplier.Game game) {
         this.mods = mods;
@@ -153,22 +158,28 @@ public final class CarriedMixins {
         if (shipping != null) {
             return among.test(shipping) ? shipping : null;
         }
-        String[] parts = internal.split("/", -1);
-        int best = 2;
-        @Nullable String nearest = null;
-        for (Map.Entry<String, ModMixins> mod : this.mods.entrySet()) {
-            if (!among.test(mod.getKey())) {
-                continue;
-            }
-            for (String own : mod.getValue().owns()) {
-                int shared = countShared(parts, own.split("/", -1));
-                if (shared > best) {
-                    best = shared;
-                    nearest = mod.getKey();
-                }
+        for (Map.Entry<String, Integer> mod : this.nearest.computeIfAbsent(internal, this::rankNearest)) {
+            if (among.test(mod.getKey())) {
+                return mod.getKey();
             }
         }
-        return nearest;
+        return null;
+    }
+
+    private List<Map.Entry<String, Integer>> rankNearest(String internal) {
+        String[] parts = internal.split("/", -1);
+        List<Map.Entry<String, Integer>> ranked = new ArrayList<>();
+        for (Map.Entry<String, ModMixins> mod : this.mods.entrySet()) {
+            int best = 2;
+            for (String own : mod.getValue().owns()) {
+                best = Math.max(best, countShared(parts, own.split("/", -1)));
+            }
+            if (best > 2) {
+                ranked.add(Map.entry(mod.getKey(), best));
+            }
+        }
+        ranked.sort((a, b) -> Integer.compare(b.getValue(), a.getValue()));
+        return List.copyOf(ranked);
     }
 
     private static int countShared(String[] one, String[] other) {
@@ -180,16 +191,27 @@ public final class CarriedMixins {
     }
 
     public @Nullable String findModShipping(String internalName) {
-        try {
-            for (Map.Entry<String, ModMixins> mod : this.mods.entrySet()) {
-                if (mod.getValue().owns().contains(internalName)) {
-                    return mod.getKey();
+        Map<String, String> known = this.shipping;
+        if (known == null) {
+            try {
+                Map<String, String> made = new HashMap<>();
+                for (Map.Entry<String, ModMixins> mod : this.mods.entrySet()) {
+                    for (String own : mod.getValue().owns()) {
+                        made.putIfAbsent(own, mod.getKey());
+                    }
                 }
+                known = Map.copyOf(made);
+                this.shipping = known;
+            } catch (ConcurrentModificationException e) {
+                return null;
             }
-        } catch (ConcurrentModificationException e) {
-            return null;
         }
-        return null;
+        return known.get(internalName);
+    }
+
+    void forget() {
+        this.shipping = null;
+        this.nearest.clear();
     }
 
     Set<String> findOwnersOf(List<String> lost, Set<String> on) {

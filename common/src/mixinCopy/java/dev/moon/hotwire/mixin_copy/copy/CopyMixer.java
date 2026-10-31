@@ -1,5 +1,6 @@
 package dev.moon.hotwire.mixin_copy.copy;
 
+import java.io.InputStream;
 import java.lang.reflect.Field;
 import java.lang.reflect.InvocationTargetException;
 import java.nio.charset.StandardCharsets;
@@ -27,6 +28,7 @@ import org.spongepowered.asm.mixin.throwables.MixinError;
 import org.spongepowered.asm.mixin.throwables.MixinException;
 import org.spongepowered.asm.mixin.transformer.Config;
 import org.spongepowered.asm.mixin.transformer.IMixinTransformer;
+import org.spongepowered.asm.mixin.transformer.ext.extensions.ExtensionClassExporter;
 import org.spongepowered.asm.service.MixinService;
 
 public final class CopyMixer implements Function<Object[], Object[]> {
@@ -51,7 +53,8 @@ public final class CopyMixer implements Function<Object[], Object[]> {
         Map<String, Integer> levels = (Map<String, Integer>) request[11];
         CopyMixinService.startMix((Map<String, byte[]>) request[1], (Map<String, byte[]>) request[2],
                 (ClassLoader) request[5], (List<String>) request[6], (Function<String, byte @Nullable []>) request[7],
-                (BiConsumer<String, String>) request[8], (String) request[9], (String) request[12]);
+                (BiConsumer<String, String>) request[8], (String) request[9], (String) request[12],
+                (Function<String, @Nullable InputStream>) request[18]);
         String compatibility = (String) request[13];
         BooleanSupplier stop = (BooleanSupplier) request[14];
         Map<String, Integer> orders = (Map<String, Integer>) request[15];
@@ -95,6 +98,7 @@ public final class CopyMixer implements Function<Object[], Object[]> {
         decorate(modIds, levels);
         long added = System.nanoTime();
         IMixinTransformer transformer = prepare(sessionId, first);
+        leaveOutExport(transformer);
         orderAsLaunched(transformer, orders);
         long prepared = System.nanoTime();
         Map<String, byte[]> mixed = new LinkedHashMap<>();
@@ -232,6 +236,17 @@ public final class CopyMixer implements Function<Object[], Object[]> {
             return enterDefault(sessionId, first);
         } catch (MixinError | MixinException e) {
             throw new IllegalStateException("Mixin's copy could not start its configs: " + e.getMessage(), e);
+        }
+    }
+
+    private static void leaveOutExport(IMixinTransformer transformer) {
+        Field extensions = CopyMixinInternals.findExtensionList();
+        if (extensions == null) {
+            return;
+        }
+        try {
+            ((List<?>) extensions.get(transformer.getExtensions())).removeIf(ExtensionClassExporter.class::isInstance);
+        } catch (IllegalAccessException | IllegalArgumentException | UnsupportedOperationException e) {
         }
     }
 
