@@ -38,6 +38,9 @@ public final class HandlerGuards {
     private static final Logger LOGGER = LoggerFactory.getLogger(HandlerGuards.class);
     private static final String MERGED = "Lorg/spongepowered/asm/mixin/transformer/meta/MixinMerged;";
 
+    private static final int OWN = 0;
+    private static final int STATIC = 1;
+    private static final int VIRTUAL = 2;
     private static final int NOTHING = 0;
     private static final int AS_IT_WAS = 1;
     private static final int OPERATION = 2;
@@ -304,6 +307,7 @@ public final class HandlerGuards {
                     continue;
                 }
                 boolean isStatic = call.getOpcode() == Opcodes.INVOKESTATIC;
+                int how = isStatic ? STATIC : call.getOpcode() == Opcodes.INVOKESPECIAL ? OWN : VIRTUAL;
                 String prefix = call.name.substring(0, call.name.indexOf('$'));
                 Integer kind = KINDS.get(prefix);
                 if (kind == null && !prefix.equals("redirect")) {
@@ -323,7 +327,7 @@ public final class HandlerGuards {
                             : RedirectStandIns.find(original[0], method, call.desc);
                     if (target != null) {
                         method.instructions.set(call, new InvokeDynamicInsnNode(call.name, desc, BOOTSTRAP_REDIRECT,
-                                mixin, isStatic ? 1 : 0, target.opcode(), target.owner(), target.name(),
+                                mixin, how, target.opcode(), target.owner(), target.name(),
                                 target.desc()));
                         guarded.add(mixin);
                         continue;
@@ -343,7 +347,7 @@ public final class HandlerGuards {
                     continue;
                 }
                 method.instructions.set(call, new InvokeDynamicInsnNode(call.name, desc, BOOTSTRAP, mixin,
-                        isStatic ? 1 : 0, kind, index.getAsInt() + (isStatic ? 0 : 1)));
+                        how, kind, index.getAsInt() + (isStatic ? 0 : 1)));
                 guarded.add(mixin);
             }
         }
@@ -495,13 +499,13 @@ public final class HandlerGuards {
     public static CallSite bootstrap(MethodHandles.Lookup caller, String name, MethodType type, String mixin,
             int isStatic, int kind, int index) throws ReflectiveOperationException {
         return link(caller, name, type, mixin, isStatic,
-                () -> makeStandIn(caller, type, kind, index, isStatic == 1 ? 0 : 1));
+                () -> makeStandIn(caller, type, kind, index, isStatic == STATIC ? 0 : 1));
     }
 
     public static CallSite bootstrapRedirect(MethodHandles.Lookup caller, String name, MethodType type, String mixin,
             int isStatic, int opcode, String owner, String target, String desc) throws ReflectiveOperationException {
         return link(caller, name, type, mixin, isStatic, () -> RedirectStandIns.makeStandIn(caller, type,
-                isStatic == 1 ? 0 : 1, new RedirectStandIns.Target(opcode, owner, target, desc)));
+                isStatic == STATIC ? 0 : 1, new RedirectStandIns.Target(opcode, owner, target, desc)));
     }
 
     private interface StandInCall {
@@ -511,8 +515,9 @@ public final class HandlerGuards {
     private static CallSite link(MethodHandles.Lookup caller, String name, MethodType type, String mixin,
             int isStatic, StandInCall standIns) throws ReflectiveOperationException {
         Class<?> owner = caller.lookupClass();
-        MethodHandle handler = isStatic == 1 ? caller.findStatic(owner, name, type)
-                : caller.findSpecial(owner, name, type.dropParameterTypes(0, 1), owner);
+        MethodHandle handler = isStatic == STATIC ? caller.findStatic(owner, name, type)
+                : isStatic == VIRTUAL ? caller.findVirtual(owner, name, type.dropParameterTypes(0, 1))
+                        : caller.findSpecial(owner, name, type.dropParameterTypes(0, 1), owner);
         MethodHandle standIn;
         try {
             standIn = standIns.make();
