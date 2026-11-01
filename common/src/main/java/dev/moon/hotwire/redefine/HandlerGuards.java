@@ -8,6 +8,7 @@ import java.lang.invoke.MethodType;
 import java.lang.invoke.MutableCallSite;
 import java.nio.charset.StandardCharsets;
 import java.util.ArrayList;
+import java.util.Arrays;
 import java.util.HashMap;
 import java.util.HashSet;
 import java.util.List;
@@ -19,10 +20,12 @@ import java.util.WeakHashMap;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.atomic.AtomicLong;
 import java.util.function.Function;
+import java.util.function.Supplier;
 import org.jspecify.annotations.Nullable;
 import org.objectweb.asm.ClassReader;
 import org.objectweb.asm.Handle;
 import org.objectweb.asm.Opcodes;
+import org.objectweb.asm.Type;
 import org.objectweb.asm.tree.AbstractInsnNode;
 import org.objectweb.asm.tree.AnnotationNode;
 import org.objectweb.asm.tree.ClassNode;
@@ -298,6 +301,18 @@ public final class HandlerGuards {
 
         ClassNode[] original = new ClassNode[1];
         boolean[] originalRead = new boolean[1];
+        Supplier<@Nullable ClassNode> shipped = () -> {
+            if (!originalRead[0]) {
+                originalRead[0] = true;
+                byte[] bytes = originals.apply(internalName);
+                if (bytes != null) {
+                    original[0] = new ClassNode();
+                    new ClassReader(bytes).accept(original[0], ClassReader.SKIP_DEBUG);
+                }
+            }
+            return original[0];
+        };
+        NullArguments nulls = new NullArguments(internalName);
         for (MethodNode method : node.methods) {
             for (AbstractInsnNode insn : method.instructions.toArray()) {
                 if (!(insn instanceof MethodInsnNode call) || !call.owner.equals(internalName)) {
@@ -333,18 +348,11 @@ public final class HandlerGuards {
                 String desc = isStatic ? call.desc : "(L" + internalName + ";" + call.desc.substring(1);
                 String why = "";
                 if (kind == null) {
-                    if (!originalRead[0]) {
-                        originalRead[0] = true;
-                        byte[] shipped = originals.apply(internalName);
-                        if (shipped != null) {
-                            original[0] = new ClassNode();
-                            new ClassReader(shipped).accept(original[0], ClassReader.SKIP_DEBUG);
-                        }
-                    }
-                    RedirectStandIns.Target target = original[0] == null ? null
-                            : RedirectStandIns.find(original[0], node, method, call.desc);
+                    ClassNode before = shipped.get();
+                    RedirectStandIns.Target target = before == null ? null
+                            : RedirectStandIns.find(before, node, method, call.desc);
                     if (target == null && !UNFLIPPABLE.contains(mixin)) {
-                        why = " (" + RedirectStandIns.explainMiss(original[0], node, method, call.desc) + ")";
+                        why = " (" + RedirectStandIns.explainMiss(before, node, method, call.desc) + ")";
                     }
                     if (target != null) {
                         method.instructions.set(call, new InvokeDynamicInsnNode(call.name, desc, BOOTSTRAP_REDIRECT,
@@ -359,6 +367,27 @@ public final class HandlerGuards {
                     case HandlerStandIns.OPERATION -> HandlerStandIns.findOperation(call.desc);
                     default -> OptionalInt.of(0);
                 };
+                if (kind != null && kind == HandlerStandIns.OPERATION && index.isPresent()
+                        && nulls.isNull(method, call, index.getAsInt())) {
+                    ClassNode was = shipped.get();
+                    Type[] arguments = Type.getArgumentTypes(call.desc);
+                    String shape = Type.getMethodDescriptor(Type.getReturnType(call.desc),
+                            Arrays.copyOf(arguments, index.getAsInt()));
+                    RedirectStandIns.Target target = was == null ? null
+                            : RedirectStandIns.find(was, node, method, shape);
+                    if (target == null) {
+                        if (!UNFLIPPABLE.contains(mixin)) {
+                            LOGGER.info("[Hotwire] {}.{} runs its operation inside itself and what it wraps is not"
+                                    + " told: {} is rebuilt, not flipped", internalName, call.name, mixin);
+                        }
+                        markUnflippable(internalName, mixin);
+                        continue;
+                    }
+                    method.instructions.set(call, new InvokeDynamicInsnNode(call.name, desc, BOOTSTRAP_REDIRECT,
+                            mixin, how, target.opcode(), target.owner(), target.name(), target.desc()));
+                    guarded.add(mixin);
+                    continue;
+                }
                 if (index.isEmpty()) {
                     if (!UNFLIPPABLE.contains(mixin)) {
                         LOGGER.info("[Hotwire] {}.{} has no stand-in{}: {} is rebuilt, not flipped", internalName,
