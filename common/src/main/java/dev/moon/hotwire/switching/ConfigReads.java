@@ -39,6 +39,18 @@ final class ConfigReads {
         return Map.copyOf(late);
     }
 
+    static Map<String, byte[]> findLateConfig(String config, String internalName, SwitchApplier.Game game) {
+        byte[] bytes = game.findConfigBytes(config);
+        if (bytes == null) {
+            return Map.of();
+        }
+        try {
+            return Map.of(config, ConfigTrim.listOnly(bytes, internalName.replace('/', '.')));
+        } catch (JsonParseException | IllegalStateException e) {
+            return Map.of();
+        }
+    }
+
     static Set<String> findUnreadable(Set<String> names, SwitchApplier.Game game, ClassRebuilder rebuilder) {
         Map<String, Class<?>> loaded = new HashMap<>();
         names.forEach(name -> Optional.ofNullable(game.findLoaded(name)).ifPresent(type -> loaded.put(name, type)));

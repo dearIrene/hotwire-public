@@ -107,6 +107,17 @@ public final class ConfigTrim {
         return root.toString().getBytes(StandardCharsets.UTF_8);
     }
 
+    public static byte[] listOnly(byte[] json, String mixin) {
+        JsonObject root = JsonParser.parseString(new String(json, StandardCharsets.UTF_8)).getAsJsonObject();
+        String prefix = getPrefixOf(root);
+        JsonArray list = new JsonArray();
+        list.add(mixin.startsWith(prefix) ? mixin.substring(prefix.length()) : mixin);
+        root.remove("client");
+        root.remove("server");
+        root.add("mixins", list);
+        return root.toString().getBytes(StandardCharsets.UTF_8);
+    }
+
     public static List<String> findInPackage(Set<String> names, String prefix) {
         List<String> found = new ArrayList<>();
         if (names instanceof NavigableSet<String> sorted && sorted.comparator() == null) {

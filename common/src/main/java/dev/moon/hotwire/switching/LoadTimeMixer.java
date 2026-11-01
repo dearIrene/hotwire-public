@@ -65,8 +65,8 @@ final class LoadTimeMixer {
         String lateConfig = this.applier.findLateConfig(className);
         if (lateConfig != null) {
             try {
-                return rebuilder.mixForLoad(className, loaded, Map.of(), List.of(lateConfig),
-                        this.applier::isOn);
+                return rebuilder.mixForLoad(className, loaded, ConfigReads.findLateConfig(lateConfig, className,
+                        this.applier.getGame()), List.of(lateConfig), this.applier::isOn);
             } catch (RebuildException e) {
                 LOGGER.error("[Hotwire] {} of {} loaded as its jar has it; a static accessor in it throws when called",
                         className, lateConfig, e);
