@@ -23,7 +23,7 @@ final class NullArguments {
     }
 
     boolean isNull(MethodNode method, MethodInsnNode call, int argument) {
-        Frame<SourceValue>[] all = this.frames.computeIfAbsent(method, this::analyze);
+        Frame<SourceValue>[] all = this.frames.computeIfAbsent(method, this::findFrames);
         int at = method.instructions.indexOf(call);
         Frame<SourceValue> frame = all == null || at < 0 || at >= all.length ? null : all[at];
         if (frame == null) {
@@ -46,7 +46,7 @@ final class NullArguments {
         return true;
     }
 
-    private Frame<SourceValue> @Nullable [] analyze(MethodNode method) {
+    private Frame<SourceValue> @Nullable [] findFrames(MethodNode method) {
         try {
             return new Analyzer<>(new SourceInterpreter()).analyze(this.owner, method);
         } catch (AnalyzerException | RuntimeException e) {
