@@ -2,7 +2,6 @@ package dev.moon.hotwire.fabric.registration;
 
 import dev.moon.hotwire.redefine.FieldSlots;
 import dev.moon.hotwire.redefine.Tripwire;
-import java.lang.ref.WeakReference;
 import java.lang.reflect.Proxy;
 import java.util.ArrayList;
 import java.util.Collection;
@@ -25,6 +24,7 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 final class CollectionReferences implements FixedLists.Walk {
+    private final WrappedNotes wrappedNotes = new WrappedNotes(this);
     private static final Logger LOGGER = LoggerFactory.getLogger(CollectionReferences.class);
 
     private static final int LARGEST = 100_000;
@@ -33,13 +33,13 @@ final class CollectionReferences implements FixedLists.Walk {
     private final Map<String, List<Removal>> removals = new HashMap<>();
     private final StaticRecomputer.Writer writer;
 
-    private Set<Object> seen = Set.of();
-    private List<String> mods = List.of();
+    Set<Object> seen = Set.of();
+    List<String> mods = List.of();
 
     private ElementOwners owners = new ElementOwners(List.of(), Set.of());
     private Map<String, List<Removal>> mine = Map.of();
 
-    private @Nullable String readingStaticsOf;
+    @Nullable String readingStaticsOf;
 
     private @Nullable Object collecting;
 
@@ -51,7 +51,7 @@ final class CollectionReferences implements FixedLists.Walk {
     private static final boolean NO_PRINTS = System.getProperty("hotwire.noFingerprints") != null;
     private boolean inSmall;
 
-    private final TakeCandidates candidates = new TakeCandidates();
+    final TakeCandidates candidates = new TakeCandidates();
 
     private final Map<String, Integer> cannotChange = new ConcurrentHashMap<>();
 
@@ -115,70 +115,6 @@ final class CollectionReferences implements FixedLists.Walk {
 
     private static final int WRAPPED_BELOW = 3;
 
-    private void noteWrappedInside(Object holder, int steps) {
-        CollectionNotes notes = ElementLook.isLooking() ? this.look.getNotes() : null;
-        if (notes != null) {
-            notes.begin(holder, CollectionNotes.Origin.of(this.readingStaticsOf));
-            notes.markWrapped(holder, steps);
-        }
-        try {
-            this.noteWrappedFields(holder, steps);
-        } finally {
-            if (notes != null) {
-                notes.end(holder, true);
-            }
-        }
-    }
-
-    @SuppressWarnings("ReferenceEquality")
-    private void noteWrappedFields(Object holder, int steps) {
-        for (FieldSlots.Slot field : Fields.getReferenceFields(holder.getClass(), false)) {
-            Object value;
-            try {
-                value = field.get(holder);
-            } catch (ReflectiveOperationException | RuntimeException e) {
-                continue;
-            }
-            if (value == null || ValueOwners.isPlain(value) || value instanceof Collection<?>
-                    || value instanceof Map<?, ?>) {
-                continue;
-            }
-            String mod = GameRegistrations.findModOrShipper(value.getClass());
-            if (mod == null && steps > 1 && !Wrappers.isOfAnotherMod(value.getClass()) && this.seen.add(value)) {
-                this.noteWrappedInside(value, steps - 1);
-                continue;
-            }
-            if (mod == null || !this.mods.contains(mod)) {
-                continue;
-            }
-            Object inner = ElementTakes.findWrappedValue(value, mod);
-            if (inner == null || !field.getType().isInstance(inner)) {
-                continue;
-            }
-            Object mods = value;
-            String owner = mod;
-            LOGGER.debug("[Hotwire] {}.{} holds {}'s {} around {}; the field takes the wrapped one at the off",
-                    holder.getClass().getName(), field.getName(), mod, value.getClass().getName(), inner.getClass());
-            WeakReference<Object> weak = new WeakReference<>(holder);
-            this.takeOrNote(owner, this.candidates.withOwner(Set.of(), owner), () -> {
-                try {
-                    Object now = weak.get();
-                    return now != null && field.get(now) == mods ? owner : null;
-                } catch (ReflectiveOperationException | RuntimeException e) {
-                    return null;
-                }
-            }, ElementTakes.makeWeak(holder, (now, taker) -> {
-                try {
-                    field.set(now, inner);
-                    this.getRemovalsOf(taker).add(new Removal.InField(now, field, mods, inner));
-                } catch (ReflectiveOperationException | RuntimeException e) {
-                    LOGGER.info("[Hotwire] {}.{} keeps {}'s object: {}", now.getClass().getName(),
-                            field.getName(), taker, e.toString());
-                }
-            }), mods);
-        }
-    }
-
     private void readStatic(FieldSlots.Slot field, Object value, boolean game) {
         CollectionNotes notes = ElementLook.isLooking() ? this.look.getNotes() : null;
 
@@ -200,7 +136,7 @@ final class CollectionReferences implements FixedLists.Walk {
             }
 
             if (game && CollectionParts.isGameObject(value)) {
-                this.noteWrappedInside(value, WRAPPED_BELOW);
+                this.wrappedNotes.noteWrappedInside(value, WRAPPED_BELOW);
             }
 
             if (!(value instanceof Collection<?>) && !(value instanceof Map<?, ?>) && !(value instanceof Object[])
@@ -243,7 +179,7 @@ final class CollectionReferences implements FixedLists.Walk {
     private void takeWrappedIn(Collection<Object> holders) {
         for (Object holder : holders) {
             if (CollectionParts.isGameObject(holder) && this.owners.findOwnerAmong(holder) == null) {
-                this.noteWrappedInside(holder, WRAPPED_BELOW);
+                this.wrappedNotes.noteWrappedInside(holder, WRAPPED_BELOW);
             }
         }
     }
@@ -289,7 +225,7 @@ final class CollectionReferences implements FixedLists.Walk {
             if (this.owners.findOwnerAmong(holder) == null) {
                 this.lookInto(holder);
                 if (CollectionParts.isGameObject(holder)) {
-                    this.noteWrappedInside(holder, WRAPPED_BELOW);
+                    this.wrappedNotes.noteWrappedInside(holder, WRAPPED_BELOW);
                 }
             }
             this.report.timeHolder(holder.getClass(), holderBegan);
@@ -349,7 +285,7 @@ final class CollectionReferences implements FixedLists.Walk {
                     this.readStatic(origin.field(), container, origin.game());
                 } else if (!(container instanceof Collection<?>) && !(container instanceof Map<?, ?>)
                         && !(container instanceof Object[]) && notes.findWrapped(container) > 0) {
-                    this.noteWrappedInside(container, notes.findWrapped(container));
+                    this.wrappedNotes.noteWrappedInside(container, notes.findWrapped(container));
                 } else {
                     this.collect(container);
                 }
@@ -364,7 +300,7 @@ final class CollectionReferences implements FixedLists.Walk {
                 this.candidates);
     }
 
-    private void takeOrNote(String owner, @Nullable Set<String> candidates, Supplier<@Nullable String> asked,
+    void takeOrNote(String owner, @Nullable Set<String> candidates, Supplier<@Nullable String> asked,
             Consumer<String> take, @Nullable Object element) {
         boolean small = this.inSmall;
         Supplier<@Nullable String> whose = ElementTakes.timeAsk(() -> {
@@ -448,7 +384,7 @@ final class CollectionReferences implements FixedLists.Walk {
         }
     }
 
-    private void lookInto(Object holder) {
+    void lookInto(Object holder) {
         if (holder instanceof Registry<?>) {
             return;
         }
@@ -534,10 +470,10 @@ final class CollectionReferences implements FixedLists.Walk {
                                     ElementTakes.makeWeak(items, (now, owner) ->
                                             ElementTakes.takeFromList(now, item, this.getRemovalsOf(owner))), item);
                         } else if (item != null) {
-                            this.followLambda(item);
+                            this.wrappedNotes.followLambda(item);
                             if (!(item instanceof Collection<?>) && !(item instanceof Map<?, ?>)
                                     && !Wrappers.isOfAnotherMod(item.getClass())) {
-                                this.noteWrappedInside(item, WRAPPED_BELOW);
+                                this.wrappedNotes.noteWrappedInside(item, WRAPPED_BELOW);
                             }
                         }
                     }
@@ -621,7 +557,7 @@ final class CollectionReferences implements FixedLists.Walk {
                             }
                         } else if (element != null && !(element instanceof Collection<?>)
                                 && !(element instanceof Map<?, ?>) && !Wrappers.isOfAnotherMod(element.getClass())) {
-                            this.noteWrappedInside(element, WRAPPED_BELOW);
+                            this.wrappedNotes.noteWrappedInside(element, WRAPPED_BELOW);
                         } else if (element instanceof Collection<?> nested) {
                             this.collect(nested);
                             if (nested instanceof List<?> list && list.size() <= LARGEST
@@ -657,17 +593,4 @@ final class CollectionReferences implements FixedLists.Walk {
         }
     }
 
-    private void followLambda(Object item) {
-        Class<?> type = item.getClass();
-        if (!type.isHidden() || !type.getName().contains("$$Lambda")) {
-            return;
-        }
-        for (FieldSlots.Slot field : Fields.getReferenceFields(type, false)) {
-            Object captured = CollectionParts.read(field, item);
-            if (captured != null && captured.getClass().getName().startsWith("net.minecraft.")
-                    && this.seen.add(captured)) {
-                this.lookInto(captured);
-            }
-        }
-    }
 }

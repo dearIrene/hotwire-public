@@ -4,13 +4,11 @@ package dev.moon.hotwire.fabric;
 /*import com.mojang.blaze3d.systems.RenderSystem;
 *///?}
 import dev.moon.hotwire.fabric.add.LoaderModList;
-import dev.moon.hotwire.fabric.registration.Fields;
 import dev.moon.hotwire.fabric.registration.GameHold;
 import dev.moon.hotwire.fabric.registration.GameRegistrations;
 import dev.moon.hotwire.fabric.registration.ModelReloadCheck;
 import dev.moon.hotwire.fabric.registration.ReloadedLists;
 import dev.moon.hotwire.fabric.screen.HoldFrame;
-import dev.moon.hotwire.redefine.FieldSlots;
 import dev.moon.hotwire.redefine.Tripwire;
 import dev.moon.hotwire.ui.Lang;
 import java.time.Duration;
@@ -22,8 +20,6 @@ import java.util.Set;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.ExecutionException;
-import java.util.concurrent.Executor;
-import java.util.concurrent.ForkJoinPool;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.TimeoutException;
 import java.util.stream.Collectors;
@@ -46,11 +42,8 @@ import net.minecraft.client.resources.sounds.SoundInstance;
 import net.minecraft.client.sounds.SoundManager;
 import net.minecraft.client.sounds.WeighedSoundEvents;
 import net.minecraft.server.packs.resources.MultiPackResourceManager;
-import net.minecraft.server.packs.resources.PreparableReloadListener;
 import net.minecraft.server.packs.resources.ReloadInstance;
 import net.minecraft.server.packs.resources.ReloadableResourceManager;
-import net.minecraft.server.packs.resources.SimpleReloadInstance;
-import net.minecraft.util.Unit;
 import org.apache.logging.log4j.Level;
 import org.apache.logging.log4j.LogManager;
 import org.apache.logging.log4j.core.config.Configurator;
@@ -76,7 +69,7 @@ public final class ResourceReload {
     private static volatile List<String> goingOff = List.of();
 
     private static volatile List<String> awaitingAssets = List.of();
-    private static final Duration WAIT = Duration.ofMinutes(2);
+    static final Duration WAIT = Duration.ofMinutes(2);
     private static final Duration PAUSED_WAIT = Duration.ofSeconds(30);
 
     private static final Duration HANDED_ON = Duration.ofSeconds(2);
@@ -348,7 +341,7 @@ public final class ResourceReload {
         }
         try {
             MODELS_AT_PAUSE.addAll(ModelReloadCheck.findModelOwners(hidden));
-            FontManager fonts = findFontManager();
+            FontManager fonts = FontReload.findFontManager();
             if (fonts != null) {
                 FONTS_AT_PAUSE.addAll(ModelReloadCheck.findFontOwners(fonts, hidden));
             }
@@ -384,7 +377,7 @@ public final class ResourceReload {
             return;
         }
         boolean models = off ? ModelReloadCheck.hasModelsOf(mods) : modelsAtOn;
-        FontManager manager = findFontManager();
+        FontManager manager = FontReload.findFontManager();
         boolean fonts = manager != null && (off ? ModelReloadCheck.hasFontsOf(manager, mods) : fontsAtOn);
 
         boolean ownPack = off && hasPackOf(mods);
@@ -394,13 +387,13 @@ public final class ResourceReload {
                 + " are built";
         if (!resources.isEmpty() && !models && packsGone.isEmpty() && !ownPack
                 && resources.stream().allMatch(type -> hasAny(List.of(type), FONTS))) {
-            reloadFonts(changed, List.of());
+            FontReload.reloadFonts(changed, List.of());
         } else if (!resources.isEmpty()) {
             run(changed);
         } else if (models) {
             run(off ? "the game's baked models held " + mods + "'s" : mods + " bake their models in again");
         } else if (fonts && packsGone.isEmpty() && !ownPack) {
-            reloadFonts(off ? "the game's fonts held " + mods + "'s" : mods + " make their fonts again",
+            FontReload.reloadFonts(off ? "the game's fonts held " + mods + "'s" : mods + " make their fonts again",
                     off ? mods : List.of());
         } else if (fonts) {
             run("the game's fonts held " + mods + "'s, read through their own pack", mods);
@@ -485,43 +478,6 @@ public final class ResourceReload {
         return types.stream().anyMatch(type -> roots.stream().anyMatch(root -> root.isAssignableFrom(type)));
     }
 
-    private static void reloadFonts(String why, Collection<String> closing) {
-        Minecraft game = Minecraft.getInstance();
-        PreparableReloadListener fonts = findFontManager();
-        if (fonts == null) {
-            run(why);
-            return;
-        }
-        LOGGER.info("[Hotwire] {}; the game makes its fonts again", why);
-        long began = System.nanoTime();
-        try {
-            Executor applying = task -> game.execute(() -> Tripwire.expect(closing, task));
-            SimpleReloadInstance.create(game.getResourceManager(), List.of(fonts), ForkJoinPool.commonPool(),
-                    applying, CompletableFuture.completedFuture(Unit.INSTANCE), false).done().get(WAIT.toMillis(),
-                    TimeUnit.MILLISECONDS);
-            LOGGER.info("[Hotwire] the fonts were made again in {} ms", (System.nanoTime() - began) / 1_000_000);
-            Minecraft.getInstance().execute(ResourceReload::layOutChat);
-        } catch (InterruptedException e) {
-            Thread.currentThread().interrupt();
-        } catch (ExecutionException | TimeoutException e) {
-            LOGGER.warn("[Hotwire] the fonts could not be made again ({}); the game reloads its resources", why, e);
-            run(why);
-        }
-    }
-
-    private static @Nullable FontManager findFontManager() {
-        Minecraft game = Minecraft.getInstance();
-        for (FieldSlots.Slot field : Fields.getDeclared(Minecraft.class)) {
-            try {
-                if (FontManager.class.isAssignableFrom(field.getType()) && field.get(game) instanceof FontManager one) {
-                    return one;
-                }
-            } catch (IllegalAccessException e) {
-            }
-        }
-        return null;
-    }
-
     @SuppressWarnings("FutureReturnValueIgnored")
     public static void startAgain(Minecraft game) {
         startUnprofiled(() -> track(game.reloadResourcePacks()));
@@ -549,7 +505,7 @@ public final class ResourceReload {
         run(why, List.of());
     }
 
-    private static void run(String why, Collection<String> closing) {
+    static void run(String why, Collection<String> closing) {
         if (OngoingReload.await(Minecraft.getInstance())) {
             LOGGER.info("[Hotwire] {}: a reload already under way brought them", why);
             return;

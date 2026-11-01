@@ -8,6 +8,7 @@ import java.util.HashMap;
 import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
+import java.util.OptionalInt;
 import java.util.Set;
 import java.util.function.Consumer;
 import java.util.function.Function;
@@ -47,11 +48,11 @@ final class UpdatesPanel extends Panel {
             this.above = above;
         }
 
-        private UpdateTree.Node node() {
+        private UpdateTree.Node getNode() {
             return this.node;
         }
 
-        private List<UpdateTree.Node> above() {
+        private List<UpdateTree.Node> getAbove() {
             return this.above;
         }
     }
@@ -112,27 +113,27 @@ final class UpdatesPanel extends Panel {
         this.updatePrimary();
     }
 
-    private void listAndKeepWords() {
+    private void listWithWords() {
         Map<String, Row> known = new HashMap<>();
-        this.rows.forEach(row -> known.put(row.node().offer().projectId(), row));
+        this.rows.forEach(row -> known.put(row.getNode().offer().projectId(), row));
         this.listRows();
-        List<Row> kept = new ArrayList<>();
+        List<Row> remaining = new ArrayList<>();
         for (Row row : this.rows) {
-            Row was = known.get(row.node().offer().projectId());
-            kept.add(was != null && was.above().size() == row.above().size() ? was : row);
+            Row was = known.get(row.getNode().offer().projectId());
+            remaining.add(was != null && was.getAbove().size() == row.getAbove().size() ? was : row);
         }
-        this.rows = kept;
+        this.rows = remaining;
         this.summaryStale = true;
     }
 
-    void startRun(List<UpdateOffer> taken) {
+    void startRun(List<UpdateOffer> chosen) {
         this.running = true;
         this.seen.clear();
         this.faded.clear();
         Set<String> files = new HashSet<>();
-        taken.forEach(offer -> files.add(offer.fileName()));
+        chosen.forEach(offer -> files.add(offer.fileName()));
         this.runFiles = files;
-        this.runBytes = taken.stream().mapToLong(UpdateOffer::size).sum();
+        this.runBytes = chosen.stream().mapToLong(UpdateOffer::size).sum();
         this.runDone = 0;
         this.lastDone = 0;
         this.sinceSpeed = 0;
@@ -170,11 +171,11 @@ final class UpdatesPanel extends Panel {
         String label = picked.size() == this.offers.size() && picked.size() > 1 ? Lang.get("hotwire.updates.all")
                 : Lang.get("hotwire.updates.picked", picked.size());
         this.setPrimary(any ? label : null, () -> {
-            List<UpdateOffer> taken = this.findPicked();
-            if (taken.size() == 1) {
-                this.onUpdate.accept(taken.getFirst());
-            } else if (!taken.isEmpty()) {
-                this.onUpdateAll.accept(taken);
+            List<UpdateOffer> chosen = this.findPicked();
+            if (chosen.size() == 1) {
+                this.onUpdate.accept(chosen.getFirst());
+            } else if (!chosen.isEmpty()) {
+                this.onUpdateAll.accept(chosen);
             }
         });
         if (any) {
@@ -262,32 +263,33 @@ final class UpdatesPanel extends Panel {
         return true;
     }
 
-    private int findRowAt(double py) {
+    private OptionalInt findRowAt(double py) {
         int top = this.getBoxY() + TOP;
         if (py < top || py >= top + this.getBoxHeight() - TOP - FOOT) {
-            return -1;
+            return OptionalInt.empty();
         }
         int rowY = top - Math.round(this.scroll.getValue());
         for (int at = 0; at < this.rows.size(); at++) {
             int height = this.getRowHeight(at);
             if (py >= rowY && py < rowY + height) {
-                return at;
+                return OptionalInt.of(at);
             }
             rowY += height;
         }
-        return -1;
+        return OptionalInt.empty();
     }
 
     private int findBoxX(Row row) {
-        return this.getBoxX() + 14 + row.above().size() * INDENT + ARROW;
+        return this.getBoxX() + 14 + row.getAbove().size() * INDENT + ARROW;
     }
 
     @Override
     protected boolean onClick(double px, double py, int button) {
-        int at = this.findRowAt(py);
-        if (at < 0 || px < this.getBoxX() || px >= this.getBoxX() + this.getBoxWidth()) {
+        OptionalInt under = this.findRowAt(py);
+        if (under.isEmpty() || px < this.getBoxX() || px >= this.getBoxX() + this.getBoxWidth()) {
             return true;
         }
+        int at = under.getAsInt();
         Row row = this.rows.get(at);
         int box = this.findBoxX(row);
         if (px >= box - 3 && px < box + BOX + 3) {
@@ -295,20 +297,20 @@ final class UpdatesPanel extends Panel {
                 this.togglePicked(row);
             }
         } else {
-            String project = row.node().offer().projectId();
+            String project = row.getNode().offer().projectId();
             if (!this.opened.remove(project)) {
                 this.opened.add(project);
             }
-            this.listAndKeepWords();
+            this.listWithWords();
         }
         return true;
     }
 
     private void togglePicked(Row row) {
-        boolean pick = this.unpicked.contains(row.node().offer().projectId());
-        this.setPicked(row.node(), pick);
+        boolean pick = this.unpicked.contains(row.getNode().offer().projectId());
+        this.setPicked(row.getNode(), pick);
         if (pick) {
-            row.above().forEach(library -> this.unpicked.remove(library.offer().projectId()));
+            row.getAbove().forEach(library -> this.unpicked.remove(library.offer().projectId()));
         }
         this.updatePrimary();
     }
@@ -344,7 +346,7 @@ final class UpdatesPanel extends Panel {
         }
         canvas.pushClip(x, top - 4, x + w, y + h - FOOT);
         int rowY = top - Math.round(this.scroll.getValue());
-        int hovered = this.isHovered() ? this.findRowAt(this.getPointerY()) : -1;
+        int hovered = this.isHovered() ? this.findRowAt(this.getPointerY()).orElse(-1) : -1;
         int bottom = y + h - FOOT;
         List<Integer> drawn = new ArrayList<>(this.rows.size());
         for (int at = 0; at < this.rows.size(); at++) {
@@ -380,7 +382,7 @@ final class UpdatesPanel extends Panel {
     }
 
     private void updateWords(Canvas canvas, Row row, int x, int w) {
-        UpdateOffer offer = row.node().offer();
+        UpdateOffer offer = row.getNode().offer();
         boolean open = this.opened.contains(offer.projectId());
         int forNow = w * 2 + (open ? 1 : 0);
         if (row.wordsFor == forNow) {
@@ -390,7 +392,7 @@ final class UpdatesPanel extends Panel {
         int box = this.findBoxX(row);
         row.notes = open ? findNotes(canvas, offer, w - (box - x) - BOX - 8 - 14) : List.of();
         row.size = CacheFill.describeBytes(offer.size());
-        row.needed = row.node().isLibrary() ? Lang.get("hotwire.updates.needed_by", row.node().neededBy()) : "";
+        row.needed = row.getNode().isLibrary() ? Lang.get("hotwire.updates.needed_by", row.getNode().neededBy()) : "";
         int restEnd = x + w - 14 - canvas.measureText(row.size) - 10;
         if (!row.needed.isEmpty()) {
             restEnd -= canvas.measureText(row.needed) + 10;
@@ -403,7 +405,7 @@ final class UpdatesPanel extends Panel {
     }
 
     private void drawRow(Canvas canvas, Row row, boolean hovered, float alpha, int x, int rowY, int w, int height) {
-        UpdateOffer offer = row.node().offer();
+        UpdateOffer offer = row.getNode().offer();
         boolean open = this.opened.contains(offer.projectId());
         boolean picked = !this.unpicked.contains(offer.projectId());
         int textColor = picked ? Palette.TEXT : Palette.FAINT;
@@ -412,7 +414,7 @@ final class UpdatesPanel extends Panel {
         if (hovered) {
             canvas.fill(x + 8, rowY, x + w - 8, rowY + height, Colors.fade(Palette.HAIRLINE, alpha));
         }
-        if (!row.node().under().isEmpty()) {
+        if (!row.getNode().under().isEmpty()) {
             canvas.drawText(open ? "v" : ">", box - ARROW, textY, Colors.fade(Palette.ACCENT, alpha));
         }
         int boxY = rowY + (ROW - BOX) / 2;

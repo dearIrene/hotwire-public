@@ -124,8 +124,10 @@ public final class HoldFrame {
         RenderSystem.clear(16640, Minecraft.ON_OSX);
         target.bindWrite(true);
         RenderSystem.clear(256, Minecraft.ON_OSX);
-        RenderSystem.setProjectionMatrix(new Matrix4f().setOrtho(0.0F, (float) (window.getWidth() / window.getGuiScale()),
-                (float) (window.getHeight() / window.getGuiScale()), 0.0F, 1000.0F, 21000.0F), VertexSorting.ORTHOGRAPHIC_Z);
+        RenderSystem.setProjectionMatrix(new Matrix4f().setOrtho(0.0F,
+                (float) (window.getWidth() / window.getGuiScale()),
+                (float) (window.getHeight() / window.getGuiScale()), 0.0F, 1000.0F, 21000.0F),
+                        VertexSorting.ORTHOGRAPHIC_Z);
         Matrix4fStack view = RenderSystem.getModelViewStack();
         view.pushMatrix();
         view.translation(0.0F, 0.0F, -11000.0F);

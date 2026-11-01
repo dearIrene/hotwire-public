@@ -22,7 +22,7 @@ public final class Parallel {
     }
 
     @SuppressWarnings("ThreadPriorityCheck")
-    public static <T> void forEachBeside(Collection<T> items, Consumer<T> work) {
+    public static <T> void runEachBeside(Collection<T> items, Consumer<T> work) {
         int threads = Math.max(2, Math.min(4, Runtime.getRuntime().availableProcessors() / 4));
         Queue<T> left = new ConcurrentLinkedQueue<>(items);
         Queue<Throwable> failed = new ConcurrentLinkedQueue<>();

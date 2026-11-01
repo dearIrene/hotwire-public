@@ -4,10 +4,8 @@ import dev.moon.hotwire.fabric.BackgroundReload;
 import dev.moon.hotwire.fabric.CrashGuard;
 import dev.moon.hotwire.fabric.ModPolicy;
 import dev.moon.hotwire.fabric.ResourceReload;
-import dev.moon.hotwire.fabric.WordsReload;
 import dev.moon.hotwire.fabric.registration.GameRegistrations;
 import dev.moon.hotwire.fabric.registration.ModLifecycle;
-import dev.moon.hotwire.jar.AccessWidenerText;
 import dev.moon.hotwire.jar.ContentScan;
 import dev.moon.hotwire.jar.ModJar;
 import dev.moon.hotwire.jar.ModJarException;
@@ -18,12 +16,8 @@ import dev.moon.hotwire.mixin_copy.MixinCopy;
 import dev.moon.hotwire.plan.ModGraph;
 import dev.moon.hotwire.plan.SwitchPlan;
 import dev.moon.hotwire.plan.SwitchPlanner;
-import dev.moon.hotwire.redefine.AccessBridge;
 import dev.moon.hotwire.redefine.InitHookRuns;
-import dev.moon.hotwire.redefine.Linker;
 import dev.moon.hotwire.redefine.RebuildException;
-import dev.moon.hotwire.redefine.Relocations;
-import dev.moon.hotwire.redefine.ShutOverrides;
 import dev.moon.hotwire.switching.ModMixins;
 import dev.moon.hotwire.switching.ModSwitcher;
 import dev.moon.hotwire.switching.PlayerMessages;
@@ -38,13 +32,11 @@ import java.nio.file.Path;
 import java.time.Duration;
 import java.util.ArrayList;
 import java.util.Arrays;
-import java.util.Collection;
 import java.util.HashSet;
 import java.util.LinkedHashMap;
 import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Map;
-import java.util.Objects;
 import java.util.Optional;
 import java.util.Set;
 import java.util.concurrent.CompletableFuture;
@@ -66,6 +58,7 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 public final class ModAdder {
+    private final AddWideners addWideners = new AddWideners(this);
     public sealed interface Result {
         record Added(List<String> ids, String name, ModSwitcher.Result switched) implements Result {
         }
@@ -114,17 +107,17 @@ public final class ModAdder {
         boolean isInWorld();
     }
 
-    private record Part(Path path, ModJar jar) {
+    record Part(Path path, ModJar jar) {
     }
 
     private final Map<Path, ModJar> readsAhead = new ConcurrentHashMap<>();
-    private boolean keepingReads;
+    private boolean savingReads;
 
     private static final Logger LOGGER = LoggerFactory.getLogger(ModAdder.class);
 
     private static final Duration ENTRYPOINT_WAIT = Duration.ofSeconds(90);
 
-    private final Engine engine;
+    final Engine engine;
 
     public ModAdder(Engine engine) {
         this.engine = engine;
@@ -185,7 +178,7 @@ public final class ModAdder {
             if (missing.isPresent()) {
                 return makeRefusal(manifest.name(), version, missing.get());
             }
-            Optional<String> widener = this.findWidenerRefusal(part.jar(), part.path());
+            Optional<String> widener = this.addWideners.findWidenerRefusal(part.jar(), part.path());
             if (widener.isPresent()) {
                 LOGGER.info("[Hotwire] {}", widener.get());
                 return AddPreview.ofLater(manifest.name(), version, List.of(Lang.get("hotwire.add.later.running")));
@@ -245,147 +238,22 @@ public final class ModAdder {
         }
     }
 
-    private Optional<String> findWidenerRefusal(ModJar part, @Nullable Path path) {
-        Optional<String> agent = AddSupport.findAgentRefusal(part.manifest().name(), path);
-        if (agent.isPresent()) {
-            return agent;
-        }
-        if (part.accessWidener().isEmpty()) {
-            return Optional.empty();
-        }
-        AccessWidenerText widener = part.accessWidener().get();
-        String name = part.manifest().name();
-        try {
-            LoaderClassTweaker.check(widener, name);
-        } catch (IllegalArgumentException e) {
-            return Optional.of(Objects.requireNonNull(e.getMessage()));
-        }
-        List<AccessWidenerText.Clause> loaded = widener.getClausesOnLoadedClasses(this.engine::isLoaded);
-        if (loaded.isEmpty()) {
-            return Optional.empty();
-        }
-        List<AccessWidenerText.Clause> unbridgeable = WidenerUses.findUnbridgeable(loaded, this.engine)
-                .stream().filter(clause -> path == null || !WidenerUses.JUDGED_BY_USE.contains(clause.kind())).toList();
-        if (!unbridgeable.isEmpty()) {
-            return Optional.of(AccessWidenerText.describeRefusal(name, unbridgeable.get(0)));
-        }
-        JarUseReader.JarClasses jar = JarUseReader.readJar(path);
-        for (WidenerUses.Use use : JarUseReader.findUsesOf(jar, loaded, this.engine)) {
-            if (!use.isFixable() && !JarUseReader.isMovable(use, jar, this.engine, false)) {
-                return Optional.of(name + " cannot be added: " + use.describe() + ", and the game has loaded that"
-                        + " class already, so its access cannot change.");
-            }
-        }
-        return Optional.empty();
-    }
-
     public Optional<String> findWidenerRefusalOfUpdate(ModJar part, Path path) {
-        return part.accessWidener().flatMap(widener -> this.findRefusalOfUpdate(widener, part.manifest().name(), path));
+        return part.accessWidener().flatMap(widener -> this.addWideners.findRefusalOfUpdate(widener,
+                part.manifest().name(), path));
     }
 
     public Optional<String> findAccessRefusalOfUpdate(List<String> lines, ModJar part, Path path) {
-        return this.findRefusalOfUpdate(LoaderClassTweaker.ofLines(part.manifest().name(), lines),
+        return this.addWideners.findRefusalOfUpdate(LoaderClassTweaker.ofLines(part.manifest().name(), lines),
                 part.manifest().name(), path);
     }
 
-    private Optional<String> findRefusalOfUpdate(AccessWidenerText widener, String name, Path path) {
-        try {
-            LoaderClassTweaker.check(widener, name);
-        } catch (IllegalArgumentException e) {
-            return Optional.of(Objects.requireNonNull(e.getMessage()));
-        }
-        List<AccessWidenerText.Clause> loaded = widener.getClausesOnLoadedClasses(this.engine::isLoaded);
-        if (loaded.isEmpty()) {
-            return Optional.empty();
-        }
-        List<AccessWidenerText.Clause> unbridgeable = WidenerUses.findUnbridgeable(loaded, this.engine)
-                .stream().filter(clause -> !WidenerUses.JUDGED_BY_USE.contains(clause.kind())).toList();
-        if (!unbridgeable.isEmpty()) {
-            return Optional.of(AccessWidenerText.describeRefusal(name, unbridgeable.get(0)));
-        }
-        JarUseReader.JarClasses jar = JarUseReader.readJar(path);
-        for (WidenerUses.Use use : JarUseReader.findUsesOf(jar, loaded, this.engine)) {
-            if (!use.isFixable()) {
-                return Optional.of(name + " cannot be updated while it runs: " + use.describe() + ", and the game"
-                        + " has loaded that class already, so its access cannot change.");
-            }
-        }
-        return Optional.empty();
-    }
-
     public void openWidenerOfUpdate(ModJar part) {
-        part.accessWidener().ifPresent(widener -> this.openOfUpdate(widener, part));
+        part.accessWidener().ifPresent(widener -> this.addWideners.openOfUpdate(widener, part));
     }
 
     public void openAccessOfUpdate(List<String> lines, ModJar part) {
-        this.openOfUpdate(LoaderClassTweaker.ofLines(part.manifest().name(), lines), part);
-    }
-
-    private void openOfUpdate(AccessWidenerText widener, ModJar part) {
-        LoaderClassTweaker.apply(widener, part.manifest().name(), this.engine::isLoaded);
-        List<AccessWidenerText.Clause> loaded = widener.getClausesOnLoadedClasses(this.engine::isLoaded);
-        WidenerUses.Openings openings = WidenerUses.findOpenings(loaded, this.engine);
-        if (!openings.isEmpty()) {
-            Linker.open(openings);
-            for (String opened : openings.classes()) {
-                Class<?> type = this.engine.findLoaded(opened);
-                if (type != null) {
-                    AccessBridge.open(type);
-                }
-            }
-            LOGGER.info("[Hotwire] {}'s update opens {} loaded classes and {} members through the bridge",
-                    part.manifest().id(), openings.classes().size(), openings.members().size());
-        }
-    }
-
-    private void openLoaded(ModJar part, @Nullable Path path) {
-        part.accessWidener().ifPresent(widener -> {
-            List<AccessWidenerText.Clause> loaded = widener.getClausesOnLoadedClasses(this.engine::isLoaded);
-
-            JarUseReader.JarClasses jar = JarUseReader.readJar(path);
-
-            Map<String, String> moves = new LinkedHashMap<>();
-            Map<String, String> adopted = new LinkedHashMap<>();
-            for (WidenerUses.Use use : JarUseReader.findUsesOf(jar, loaded, this.engine)) {
-                if (jar != null && !moves.containsKey(use.inClass())
-                        && JarUseReader.isMovable(use, jar, this.engine, true)) {
-                    String target = Relocations.findTarget(use.inClass(), use.owner());
-                    moves.put(use.inClass(), target);
-                    Relocations.register(use.inClass(), target, jar.classes());
-                    LOGGER.info("[Hotwire] {} moves to {}, beside {}", use.inClass(), target, use.owner());
-                }
-                if (use.kind() == WidenerUses.Kind.OVERRIDE) {
-                    ShutOverrides.register(part.manifest().id(), use.owner(), use.name() + use.desc(), use.inClass());
-                }
-                if (use.kind() == WidenerUses.Kind.PARENT_CONSTRUCTOR) {
-                    adopted.put(use.inClass(), use.owner());
-                }
-            }
-
-            adopted.forEach((inClass, owner) -> {
-                String loadsAs = moves.getOrDefault(inClass, inClass);
-                Linker.adopt(loadsAs);
-                LOGGER.info("[Hotwire] {} is made by adoption: {}'s constructor stays closed", loadsAs, owner);
-            });
-            if (!moves.isEmpty()) {
-                Map<String, byte[]> generated = new LinkedHashMap<>();
-                moves.forEach((moved, target) -> generated.put(target, Relocations.remap(
-                        Objects.requireNonNull(Objects.requireNonNull(jar).classes().get(moved)))));
-                this.engine.getApplier().getRebuilder().getHooks().onGenerated(generated);
-            }
-            WidenerUses.Openings openings = WidenerUses.findOpenings(loaded, this.engine);
-            if (!openings.isEmpty()) {
-                Linker.open(openings);
-                for (String opened : openings.classes()) {
-                    Class<?> type = this.engine.findLoaded(opened);
-                    if (type != null) {
-                        AccessBridge.open(type);
-                    }
-                }
-                LOGGER.info("[Hotwire] {} opens {} loaded classes and {} members for its own code through the bridge",
-                        part.manifest().id(), openings.classes().size(), openings.members().size());
-            }
-        });
+        this.addWideners.openOfUpdate(LoaderClassTweaker.ofLines(part.manifest().name(), lines), part);
     }
 
     public static boolean isWorldBuilt(Result result) {
@@ -428,11 +296,11 @@ public final class ModAdder {
             Set<String> leaving) {
         Map<String, Part> parts = new LinkedHashMap<>();
         Result refused;
-        this.keepingReads = true;
+        this.savingReads = true;
         try {
             refused = this.findRefusal(jarPaths, parts);
         } finally {
-            this.keepingReads = false;
+            this.savingReads = false;
         }
         if (refused != null) {
             return Optional.of(refused instanceof Result.Refused plain ? plain.reason() : String.valueOf(refused));
@@ -483,7 +351,7 @@ public final class ModAdder {
                 return new Result.Refused(missing.get());
             }
 
-            Optional<String> widener = this.findWidenerRefusal(part.jar(), part.path());
+            Optional<String> widener = this.addWideners.findWidenerRefusal(part.jar(), part.path());
             if (widener.isPresent()) {
                 return new Result.Refused(widener.get(), true);
             }
@@ -535,7 +403,7 @@ public final class ModAdder {
                 LoaderClassTweaker.apply(text, part.jar().manifest().name(), this.engine::isLoaded);
                 undo.addPermanent("its access widener stays applied");
             });
-            this.openLoaded(part.jar(), part.path());
+            this.addWideners.openLoaded(part.jar(), part.path());
             if (leaving.isEmpty()) {
                 GameRegistrations.learnJar(part.path(), id);
             }
@@ -596,7 +464,7 @@ public final class ModAdder {
                 IntSupplier setUp = () -> InitHookRuns.runLoadFinishedAfter(
                         () -> this.engine.getApplier().getCatchUps().run(), () -> {
                             this.engine.showAddStep(4);
-                            reloadForAssets(parts.values());
+                            AddAssets.reloadForAssets(parts.values());
                         }, BackgroundReload::runAfterReload);
                 this.engine.showAddStep(3);
                 CompletableFuture<Map<String, List<String>>> started = AddStart.queue(ids, grew, backedOut,
@@ -633,28 +501,6 @@ public final class ModAdder {
         } finally {
             ResourceReload.endAssetWait();
             SwitchTimes.end("the add of " + ids);
-        }
-    }
-
-    private static void reloadForAssets(Collection<Part> parts) {
-        List<Part> shipping = parts.stream().filter(part -> shipsAssets(part.path())).toList();
-        if (shipping.isEmpty()) {
-            return;
-        }
-
-        boolean wordsAlone = shipping.stream().allMatch(part -> WordsReload.isWordsAlone(part.path()))
-                && parts.stream().noneMatch(part -> GameRegistrations.getJournal()
-                        .countByKind(part.jar().manifest().id()).containsKey("resource reloader"));
-        ResourceReload.reloadBeforeFrame(shipping.stream().map(part -> part.jar().manifest().id()).toList()
-                + " bring assets", wordsAlone);
-    }
-
-    private static boolean shipsAssets(Path jar) {
-        try (ZipFile zip = new ZipFile(jar.toFile())) {
-            return zip.stream().anyMatch(entry -> entry.getName().startsWith("assets/"));
-        } catch (IOException e) {
-            LOGGER.warn("[Hotwire] {} could not be read for assets; resources reload to be safe", jar, e);
-            return true;
         }
     }
 
@@ -695,12 +541,12 @@ public final class ModAdder {
     }
 
     public ModJar readJar(Path path) throws ModJarException {
-        ModJar kept = this.readsAhead.get(path);
-        if (kept != null) {
-            return kept;
+        ModJar known = this.readsAhead.get(path);
+        if (known != null) {
+            return known;
         }
         ModJar read = ModJarReader.read(path);
-        if (this.keepingReads) {
+        if (this.savingReads) {
             this.readsAhead.put(path, read);
         }
         return read;

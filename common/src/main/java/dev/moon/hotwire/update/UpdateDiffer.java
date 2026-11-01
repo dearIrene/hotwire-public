@@ -61,7 +61,7 @@ public final class UpdateDiffer {
                 resources.add(path);
             }
         }
-        List<ClassDiff> refined = ConstructorUses.refine(classes, running, incoming);
+        List<ClassDiff> refined = ConstructorUses.classifyChanges(classes, running, incoming);
         return new JarDiff(was, now, refined, resources, OpenedAccess.find(running, incoming, refined),
                 ConstructorUses.findAbstractsGained(refined, running, incoming),
                 ConstructorUses.findChains(refined, running, incoming));

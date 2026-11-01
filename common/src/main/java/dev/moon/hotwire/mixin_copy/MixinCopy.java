@@ -397,8 +397,8 @@ public final class MixinCopy implements AutoCloseable {
     private static void restoreProperties() {
         synchronized (BOOTING) {
             if (--swapped == 0) {
-                restore(SERVICE, gameService);
-                restore(BOOTSTRAP, gameBootstrap);
+                restoreProperty(SERVICE, gameService);
+                restoreProperty(BOOTSTRAP, gameBootstrap);
             }
         }
     }
@@ -552,7 +552,7 @@ public final class MixinCopy implements AutoCloseable {
         return jar;
     }
 
-    private static void restore(String key, @Nullable String value) {
+    private static void restoreProperty(String key, @Nullable String value) {
         if (value == null) {
             System.clearProperty(key);
         } else {

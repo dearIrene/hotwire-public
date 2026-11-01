@@ -51,7 +51,7 @@ public final class GameTasks {
             return false;
         }
         Runnable task = unwrap(queued);
-        String mod = findOwnerOf(task, depthFor(loop));
+        String mod = findOwnerOf(task, findDepthFor(loop));
         if (mod == null || !MODS_OFF.contains(mod)) {
             if (LOGGER.isDebugEnabled() && SAID.add(task.getClass())) {
                 LOGGER.debug("[Hotwire] a task of {} ({}) runs while mods are off; it holds {}", mod,
@@ -98,7 +98,7 @@ public final class GameTasks {
         return false;
     }
 
-    private static int depthFor(BlockableEventLoop<?> loop) {
+    private static int findDepthFor(BlockableEventLoop<?> loop) {
         return loop instanceof Minecraft ? WRAPPED_DEPTH : 0;
     }
 
@@ -149,7 +149,7 @@ public final class GameTasks {
             Queue<Runnable> pending = ((BlockableEventLoopAccessor) loop).hotwire$getPending();
             for (Runnable queued : List.copyOf(pending)) {
                 Runnable task = unwrap(queued);
-                String mod = findOwnerOf(task, depthFor(loop));
+                String mod = findOwnerOf(task, findDepthFor(loop));
                 if (mod != null && mods.contains(mod) && pending.remove(queued)) {
                     REMOVED.computeIfAbsent(mod, any -> new ArrayList<>()).add(new Removal(loop, task));
                 }

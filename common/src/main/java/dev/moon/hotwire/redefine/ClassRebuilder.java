@@ -4,7 +4,6 @@ import dev.moon.hotwire.concurrent.Parallel;
 import dev.moon.hotwire.jvm.LoadedClassList;
 import dev.moon.hotwire.mixin_copy.AppliedMixins;
 import dev.moon.hotwire.mixin_copy.MixinCopy;
-import dev.moon.hotwire.mixin_copy.MixinCopyException;
 import java.lang.instrument.ClassDefinition;
 import java.lang.instrument.Instrumentation;
 import java.lang.instrument.UnmodifiableClassException;
@@ -34,6 +33,7 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 public final class ClassRebuilder {
+    private final RebuildMixes rebuildMixes = new RebuildMixes(this);
     private static final Logger LOGGER = LoggerFactory.getLogger(ClassRebuilder.class);
 
     private static final int REDEFINE_CHUNK = Integer.getInteger("hotwire.redefine_chunk", Integer.MAX_VALUE);
@@ -42,9 +42,9 @@ public final class ClassRebuilder {
 
     static final ThreadLocal<BooleanSupplier> STOP = ThreadLocal.withInitial(() -> () -> false);
 
-    private final Instrumentation instrumentation;
+    final Instrumentation instrumentation;
     private final MixinCopy copy;
-    private final LoadedClassBytes loadedBytes;
+    final LoadedClassBytes loadedBytes;
 
     private final Map<Class<?>, Set<String>> carrying = Collections.synchronizedMap(new WeakHashMap<>());
 
@@ -69,7 +69,7 @@ public final class ClassRebuilder {
     private volatile boolean launchChanged;
     private final RebuildCache ahead = new RebuildCache();
 
-    private final CachedMixes mixes;
+    final CachedMixes mixes;
 
     public void stopWhen(BooleanSupplier stop) {
         STOP.set(stop);
@@ -117,7 +117,7 @@ public final class ClassRebuilder {
         this.runningOf = runningOf;
     }
 
-    private byte @Nullable [] findRunning(String name) {
+    byte @Nullable [] findRunning(String name) {
         return this.runningOf.apply(List.of(name)).get(name);
     }
 
@@ -134,13 +134,13 @@ public final class ClassRebuilder {
         StoredArguments.readParentsWith(bytesOf);
     }
 
-    private volatile Function<String, @Nullable String> argsClassOf = shape -> null;
+    volatile Function<String, @Nullable String> argsClassOf = shape -> null;
 
     public void resolveArgsWith(Function<String, @Nullable String> argsClassOf) {
         this.argsClassOf = argsClassOf;
     }
 
-    private final RebuildHooks hooks = new RebuildHooks();
+    final RebuildHooks hooks = new RebuildHooks();
 
     private volatile @Nullable BatchRider rider;
 
@@ -200,22 +200,11 @@ public final class ClassRebuilder {
                 mod -> true));
     }
 
-    private static Set<String> findMadeWithout(Set<Class<?>> types) {
-        Set<String> names = new TreeSet<>();
-        for (Class<?> type : types) {
-            String name = type.getName().replace('.', '/');
-            if (OffWindowObjects.countAlive(name) > 0) {
-                names.add(name);
-            }
-        }
-        return names;
-    }
-
     public PreparedRebuild prepare(Map<Class<?>, byte[]> originals, Map<String, byte[]> current,
             Map<String, byte[]> classes,
             Map<String, byte[]> resources, List<String> on, Predicate<String> mods) throws RebuildException {
         RebuildCache.Inputs inputs = new RebuildCache.Inputs(originals, current, classes, resources, on, this.toLaunch,
-                findMadeWithout(originals.keySet()), MixinCopy.findClassPathChanges());
+                RebuildMixes.findMadeWithout(originals.keySet()), MixinCopy.findClassPathChanges());
         PreparedRebuild cached = this.ahead.find(inputs);
         if (cached != null) {
             LOGGER.info("[Hotwire] the rebuild of {} classes was worked out ahead", originals.size());
@@ -244,7 +233,8 @@ public final class ClassRebuilder {
         }
         long shapedAt = System.nanoTime();
         if (!toMix.isEmpty()) {
-            Map<String, byte[]> copied = this.mix(toMix, RunningAbove.add(toMix, readable, this.mixedNow::get,
+            Map<String,
+                    byte[]> copied = this.rebuildMixes.mix(toMix, RunningAbove.add(toMix, readable, this.mixedNow::get,
                     this.runningOf, this.bytesOf), resources, on, mods, STOP.get());
             copied.forEach(RebuildEvidence::dumpCopy);
             mixed.putAll(copied);
@@ -417,6 +407,10 @@ public final class ClassRebuilder {
         return prepared;
     }
 
+    public void redefine(Map<Class<?>, byte[]> classes) throws RebuildException {
+        this.rebuildMixes.redefine(classes);
+    }
+
     public void startStatics() {
         for (Class<?> type : this.staticsToStart) {
             try {
@@ -495,13 +489,18 @@ public final class ClassRebuilder {
                         definition.getDefinitionClassFile()));
                 List<String> problems = BatchVerifier.findFormatProblems(made);
                 LOGGER.warn("[Hotwire] The JVM found the new classes malformed: {}", problems);
-                why = problems.stream().filter(problem -> problem.contains("ClassFormatError")).findFirst()
-                        .orElse(problems.isEmpty() ? "a class was malformed" : problems.getFirst());
+                why = problems.isEmpty() ? "a class was malformed" : problems.getFirst();
+                for (String problem : problems) {
+                    if (problem.contains("ClassFormatError")) {
+                        why = problem;
+                        break;
+                    }
+                }
                 named = BatchVerifier.findNamed(made.keySet(), problems);
             }
             LOGGER.warn("[Hotwire] Redefining {} failed and nothing changed", prepared.splits().keySet(), e);
             throw RebuildException.ofJvmRefused("could not redefine " + prepared.splits().keySet() + ": " + why, e)
-                    .blaming(named);
+                    .withBlamed(named);
         }
         Set<Class<?>> redefinedTypes = new HashSet<>();
         definitions.forEach(definition -> redefinedTypes.add(definition.getDefinitionClass()));
@@ -545,7 +544,7 @@ public final class ClassRebuilder {
         Map<Class<?>, byte[]> back = new LinkedHashMap<>();
         prepared.splits().keySet().forEach(type -> back.put(type,
                 Objects.requireNonNull(prepared.before().get(type.getName().replace('.', '/')), type.getName())));
-        this.redefine(back);
+        this.rebuildMixes.redefine(back);
         last.carried().forEach((type, carried) -> {
             if (carried == null) {
                 this.carrying.remove(type);
@@ -572,21 +571,6 @@ public final class ClassRebuilder {
         this.launchAtLoad.put(internalName, Set.copyOf(applied));
     }
 
-    public void redefine(Map<Class<?>, byte[]> classes) throws RebuildException {
-        ClassDefinition[] definitions = new ClassDefinition[classes.size()];
-        int at = 0;
-        for (Map.Entry<Class<?>, byte[]> entry : classes.entrySet()) {
-            definitions[at++] = new ClassDefinition(entry.getKey(), entry.getValue());
-        }
-        try {
-            this.instrumentation.redefineClasses(definitions);
-        } catch (ClassNotFoundException | UnmodifiableClassException | RuntimeException | LinkageError
-                | InternalError e) {
-            throw RebuildException.ofJvmRefused("could not redefine " + classes.keySet() + ": " + e, e);
-        }
-        this.loadedBytes.rememberAll(classes);
-    }
-
     public Class<?>[] getLoadedClasses() {
         return LoadedClassList.of(this.instrumentation);
     }
@@ -609,42 +593,10 @@ public final class ClassRebuilder {
 
     public byte[] mixForLoad(String internal, byte[] original, Map<String, byte[]> resources, List<String> configs,
             Predicate<String> mods) throws RebuildException {
-        byte[] mixed = this.mix(Set.of(internal), Map.of(internal, original), resources, configs, mods, () -> false)
+        byte[] mixed = this.rebuildMixes.mix(Set.of(internal), Map.of(internal, original), resources, configs, mods,
+                () -> false)
                 .get(internal);
         return Objects.requireNonNull(mixed, internal);
     }
 
-    private Map<String, byte[]> mix(Set<String> targets, Map<String, byte[]> classes,
-            Map<String, byte[]> resources, List<String> configs, Predicate<String> mods, BooleanSupplier stop)
-            throws RebuildException {
-        try {
-            List<MixinCopy.MixResult> parts = this.mixes.mix(targets, classes, resources, configs, stop);
-            if (stop.getAsBoolean()) {
-                throw new RebuildException("the rebuild worked out ahead gave way to a switch",
-                        new IllegalStateException(String.valueOf(targets.size())));
-            }
-
-            Map<String, byte[]> mixed = new LinkedHashMap<>();
-            for (MixinCopy.MixResult part : parts) {
-                Map<String, String> argsNames = new HashMap<>();
-                part.argsShapes().forEach((name, shape) -> {
-                    String running = this.argsClassOf.apply(shape);
-                    if (running != null) {
-                        argsNames.put(name, running);
-                    }
-                });
-                if (!part.generated().isEmpty()) {
-                    this.hooks.onGenerated(part.generated());
-                }
-                SyntheticArgs.rename(part.classes(), argsNames)
-                        .forEach((name, bytes) -> mixed.put(name,
-                                GeneratedNames.matchReferences(bytes, this::findRunning, Linker::getMovedOf)));
-            }
-            targets.forEach(target -> mixed.computeIfPresent(target,
-                    (name, bytes) -> this.hooks.applyAfterMixin(name, bytes, mods)));
-            return mixed;
-        } catch (MixinCopyException e) {
-            throw new RebuildException(e.getMessage(), e);
-        }
-    }
 }

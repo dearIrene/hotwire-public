@@ -63,8 +63,8 @@ final class CarriedUpdates {
         this.widener = widener;
     }
 
-    @Nullable List<Library> planBundled(Path incoming, UpdatePlan outer, List<Path> toAdd, ModManifest carrier,
-            List<Path> heldBack) throws ModJarException {
+    @Nullable List<Library> planBundled(Path incoming, UpdatePlan outer, List<Path> toAdd, ModManifest container,
+            List<Path> leftOut) throws ModJarException {
         List<Library> out = new ArrayList<>();
         for (String path : UpdatePlanner.findNestedPaths(outer)) {
             Path written = this.writeNested(incoming, path);
@@ -106,7 +106,7 @@ final class CarriedUpdates {
             UpdatePlan plan = this.widener.withWidenerChecked(this.planFrom.apply(manifest.id(), diff), read, written);
             Set<String> deeper = UpdatePlanner.findNestedPaths(plan);
             if (!deeper.isEmpty()) {
-                List<Library> inner = this.planBundled(written, plan, toAdd, carrier, heldBack);
+                List<Library> inner = this.planBundled(written, plan, toAdd, container, leftOut);
                 if (inner == null) {
                     return null;
                 }
@@ -121,11 +121,11 @@ final class CarriedUpdates {
                 LOGGER.info("[Hotwire] the carried {} {} -> {} cannot update with it: {}", manifest.id(), runs,
                         manifest.version(), plan.blockers());
 
-                List<String> ranges = carrier.getRelation(ModManifest.Relation.DEPENDS).get(manifest.id());
+                List<String> ranges = container.getRelation(ModManifest.Relation.DEPENDS).get(manifest.id());
                 if (ranges == null || !this.accepts.test(runs, ranges)) {
                     return null;
                 }
-                heldBack.add(written);
+                leftOut.add(written);
                 continue;
             }
             out.add(new Library(manifest, written, read, plan, configs));

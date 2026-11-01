@@ -37,13 +37,13 @@ public final class JarLinks {
     private JarLinks() {
     }
 
-    private static void forEachClass(InputStream jar, Consumer<byte[]> each) throws IOException {
+    private static void visitClasses(InputStream jar, Consumer<byte[]> each) throws IOException {
         ZipInputStream zip = new ZipInputStream(jar);
         for (ZipEntry entry = zip.getNextEntry(); entry != null; entry = zip.getNextEntry()) {
             if (entry.getName().endsWith(CLASS_SUFFIX)) {
                 each.accept(zip.readAllBytes());
             } else if (entry.getName().endsWith(JAR_SUFFIX)) {
-                forEachClass(new ByteArrayInputStream(zip.readAllBytes()), each);
+                visitClasses(new ByteArrayInputStream(zip.readAllBytes()), each);
             }
         }
     }
@@ -100,7 +100,7 @@ public final class JarLinks {
         Map<String, Map<String, Set<String>>> byClass = new HashMap<>();
         Map<String, Set<String>> namedBy = new HashMap<>();
         try (InputStream in = Files.newInputStream(jar)) {
-            forEachClass(in, bytes -> {
+            visitClasses(in, bytes -> {
                 ClassReader reader = new ClassReader(bytes);
                 String self = reader.getClassName();
                 collectNamed(reader, own, mayDiffer, byClass.computeIfAbsent(self, any -> new HashMap<>()));
@@ -171,11 +171,11 @@ public final class JarLinks {
         return !own.contains(owner) && OWN_CLASSES_OF_NOBODY.stream().noneMatch(owner::startsWith);
     }
 
-    public static final class Running {
+    public static final class GameClassReader {
         private final Function<String, byte @Nullable []> reader;
         private final Map<String, Optional<ClassHeader>> headers = new HashMap<>();
 
-        public Running(Function<String, byte @Nullable []> reader) {
+        public GameClassReader(Function<String, byte @Nullable []> reader) {
             this.reader = reader;
         }
 
@@ -185,7 +185,8 @@ public final class JarLinks {
         }
     }
 
-    public static @Nullable String findMissing(Map<String, Set<String>> named, Set<String> suspects, Running running) {
+    public static @Nullable String findMissing(Map<String, Set<String>> named, Set<String> suspects,
+            GameClassReader running) {
         for (Map.Entry<String, Set<String>> one : named.entrySet()) {
             String owner = one.getKey();
             if (!suspects.contains(owner)) {
@@ -203,7 +204,7 @@ public final class JarLinks {
         return null;
     }
 
-    private static boolean hasMember(String owner, String member, Running running) {
+    private static boolean hasMember(String owner, String member, GameClassReader running) {
         int space = member.indexOf(' ');
         String name = member.substring(0, space);
         String desc = member.substring(space + 1);

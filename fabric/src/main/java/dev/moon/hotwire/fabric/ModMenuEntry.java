@@ -8,7 +8,7 @@ public final class ModMenuEntry implements ModMenuApi {
     public ConfigScreenFactory<?> getModConfigScreenFactory() {
         return parent -> {
             HotwireEngine engine = HotwireClient.findEngine();
-            return engine == null ? parent : engine.makeScreen(parent);
+            return engine == null ? parent : engine.getScreens().makeScreen(parent);
         };
     }
 }

@@ -230,7 +230,7 @@ final class StoreScreens {
                 this.engine.showMessage(Lang.get("hotwire.store.getting_with", title, fetched.size() - 1), false);
             }
             if (this.findShown() == null) {
-                ModViews.show(this.engine.makeScreen(back));
+                ModViews.show(this.engine.getScreens().makeScreen(back));
             }
             this.jars.queue(fetched, update, projects);
         }, failure -> {

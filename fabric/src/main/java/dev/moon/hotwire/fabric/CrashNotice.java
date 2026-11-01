@@ -50,7 +50,7 @@ public final class CrashNotice {
         }
         HotwireEngine engine = HotwireClient.findEngine();
         if (engine != null) {
-            engine.openOnCrashReport(where);
+            engine.getScreens().openOnCrashReport(where);
         }
     }
 
@@ -61,7 +61,7 @@ public final class CrashNotice {
             return;
         }
         due = Optional.empty();
-        engine.openOnCrashReport(words.get());
+        engine.getScreens().openOnCrashReport(words.get());
     }
 
     private static Path findNote() {

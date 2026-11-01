@@ -28,10 +28,14 @@ public final class AtomicFiles {
             }
             channel.force(true);
         }
+        moveInto(temp, file);
+    }
+
+    public static void moveInto(Path whole, Path file) throws IOException {
         try {
-            Files.move(temp, file, StandardCopyOption.REPLACE_EXISTING, StandardCopyOption.ATOMIC_MOVE);
+            Files.move(whole, file, StandardCopyOption.REPLACE_EXISTING, StandardCopyOption.ATOMIC_MOVE);
         } catch (AtomicMoveNotSupportedException e) {
-            Files.move(temp, file, StandardCopyOption.REPLACE_EXISTING);
+            Files.move(whole, file, StandardCopyOption.REPLACE_EXISTING);
         }
     }
 

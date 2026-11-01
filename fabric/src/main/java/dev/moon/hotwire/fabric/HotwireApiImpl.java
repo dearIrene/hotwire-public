@@ -278,7 +278,7 @@ public final class HotwireApiImpl implements HotwireApi {
             ModViews.show(back);
         }, () -> {
             engine.acceptFirstOpen();
-            ModViews.show(engine.makeScreen(back));
+            ModViews.show(engine.getScreens().makeScreen(back));
         })));
     }
 
@@ -342,7 +342,8 @@ public final class HotwireApiImpl implements HotwireApi {
         }
         String asker = findCallers().findAsker();
         String name = asker == null ? "A mod" : engine.nameOfMod(asker);
-        return engine.writeReportZip(Lang.get("hotwire.report.file.mod_asked", name), name + " asked for a report: "
+        return engine.getScreens().writeReportZip(Lang.get("hotwire.report.file.mod_asked", name), name
+                + " asked for a report: "
                 + why);
     }
 

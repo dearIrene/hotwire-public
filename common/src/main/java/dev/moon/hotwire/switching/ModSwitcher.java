@@ -10,7 +10,6 @@ import dev.moon.hotwire.ui.Lang;
 import dev.moon.hotwire.ui.Progress;
 import java.util.ArrayList;
 import java.util.Collection;
-import java.util.Collections;
 import java.util.HashMap;
 import java.util.HashSet;
 import java.util.LinkedHashSet;
@@ -32,6 +31,7 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 public final class ModSwitcher {
+    private final ReopenChecks reopenChecks = new ReopenChecks(this);
     private static final Logger LOGGER = LoggerFactory.getLogger(ModSwitcher.class);
 
     public sealed interface Result {
@@ -51,7 +51,7 @@ public final class ModSwitcher {
 
     private final Map<String, Set<String>> goingAlong = new ConcurrentHashMap<>();
     private SwitchPlanner planner;
-    private final SwitchApplier applier;
+    final SwitchApplier applier;
     private final Progress progress;
     private final RegistrationJournal registrations;
     private final Set<String> off = ConcurrentHashMap.newKeySet();
@@ -99,11 +99,11 @@ public final class ModSwitcher {
     }
 
     private final Lifecycle lifecycle;
-    private volatile Predicate<String> reopenToTurnOn = id -> false;
-    private final WorldCalls calledByWorld = new WorldCalls();
-    private volatile Function<Set<String>, Set<String>> inRegistries = mods -> Set.of();
+    volatile Predicate<String> reopenToTurnOn = id -> false;
+    final WorldCalls calledByWorld = new WorldCalls();
+    volatile Function<Set<String>, Set<String>> inRegistries = mods -> Set.of();
 
-    private final AtomicInteger switches = new AtomicInteger();
+    final AtomicInteger switches = new AtomicInteger();
 
     public ModSwitcher(ModGraph graph, SwitchPlanner planner, SwitchApplier applier, Progress progress,
             RegistrationJournal registrations) {
@@ -495,20 +495,11 @@ public final class ModSwitcher {
         return one.direction() == other.direction() && one.order().equals(other.order());
     }
 
-    static boolean touchesWorldBound(Set<Set<String>> worldBound, List<String> order) {
-        for (Set<String> bound : worldBound) {
-            if (!Collections.disjoint(bound, order)) {
-                return true;
-            }
-        }
-        return false;
-    }
-
     @SuppressWarnings("ThreadPriorityCheck")
     private Result run(SwitchPlan plan, Consumer<List<String>> theirs) {
         this.switched = true;
         this.switches.incrementAndGet();
-        if (touchesWorldBound(this.worldBound, plan.order()) && this.applier.isInWorld()) {
+        if (ReopenChecks.touchesWorldBound(this.worldBound, plan.order()) && this.applier.isInWorld()) {
             return this.runAlone(plan, theirs);
         }
         this.waiting = plan;
@@ -539,12 +530,12 @@ public final class ModSwitcher {
         try {
             this.progress.step(1, plan.order().isEmpty() ? "" : this.nameOf(plan.order().getFirst()));
             Set<String> onAfter = this.onAfter(plan, goingOff);
-            if (touchesWorldBound(this.worldBound, plan.order()) && this.applier.isInWorld()) {
+            if (ReopenChecks.touchesWorldBound(this.worldBound, plan.order()) && this.applier.isInWorld()) {
                 throw RebuildException.ofWorldBuilt(plan.order() + " changed how this world's objects are built when"
                         + " it last switched: they are the world's, so it changes with the world saved and opened"
                         + " again", new IllegalStateException(String.valueOf(plan.order())));
             }
-            this.checkReopenFirst(plan, onAfter);
+            this.reopenChecks.checkReopenFirst(plan, onAfter);
             if (goingOff) {
                 this.tickEach(plan.order(), this.lifecycle::onStopping);
                 SwitchTimes.mark("stop listeners");
@@ -602,26 +593,6 @@ public final class ModSwitcher {
         } finally {
             this.progress.end();
         }
-    }
-
-    private void checkReopenFirst(SwitchPlan plan, Set<String> onAfter) throws RebuildException {
-        Set<String> switched = Set.copyOf(plan.order());
-        try {
-            LiveObjects.reopenFirst(switched, onAfter, this.reopenToTurnOn, this.applier.getGame());
-            LiveObjects.reopenFirstOff(switched, onAfter, () -> this.calledByWorld.find(this.switches.get(),
-                    switched, onAfter), this.applier.getGame());
-            Set<String> going = new HashSet<>(switched);
-            going.removeAll(onAfter);
-            Set<String> holding = going.isEmpty() ? Set.of() : this.inRegistries.apply(going);
-            if (!holding.isEmpty()) {
-                throw RebuildException.ofRestartOnly(holding + " keep objects of theirs inside the game's registries,"
-                        + " which hold the game's own data: only a restart takes them out",
-                        new IllegalStateException(String.valueOf(holding)));
-            }
-        } catch (RuntimeException | LinkageError e) {
-            throw new RebuildException("the switch threw: " + e, e);
-        }
-        SwitchTimes.mark("reopen check");
     }
 
     private void tickEach(List<String> order, Consumer<String> work) {

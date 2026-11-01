@@ -81,7 +81,7 @@ final class LaunchDecisions {
             if (owner != null && !this.onAtLaunch.contains(owner)) {
                 Set<String> answers = this.game.findPluginAnswers(config);
                 if (answers == null) {
-                    this.handOver(config, trimmed);
+                    this.passOver(config, trimmed);
                     continue;
                 }
                 answeredBy.put(config, answers);
@@ -146,7 +146,7 @@ final class LaunchDecisions {
         return new Result(trimmed, Set.copyOf(asked));
     }
 
-    private void handOver(String config, Map<String, byte[]> into) {
+    private void passOver(String config, Map<String, byte[]> into) {
         byte[] bytes = this.findBytes(config);
         if (bytes == null) {
             return;

@@ -220,7 +220,7 @@ public final class ModGraph {
         for (String type : this.patches.getOrDefault(owner, ModPatches.NONE).owns()) {
             for (String patcher : this.hardPatchersByClass.getOrDefault(type, Collections.emptySortedSet())) {
                 if (!patcher.equals(owner)) {
-                    out.merge(patcher, type, (kept, other) -> kept.compareTo(other) <= 0 ? kept : other);
+                    out.merge(patcher, type, (remaining, other) -> remaining.compareTo(other) <= 0 ? remaining : other);
                 }
             }
         }

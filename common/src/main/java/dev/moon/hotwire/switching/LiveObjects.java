@@ -73,7 +73,7 @@ final class LiveObjects {
             standing.add(RebuildException.ofRestartOnly("the " + what
                     + " changes how entries of the game's registries are"
                     + " made: " + entries + ". Those are made once, when the game starts, so it takes a restart",
-                    new IllegalStateException(String.join(", ", entries))).blaming(entries.stream()
+                    new IllegalStateException(String.join(", ", entries))).withBlamed(entries.stream()
                     .map(entry -> entry.substring(0, entry.lastIndexOf('.')).replace('.', '/'))
                     .collect(Collectors.toSet())));
         }
@@ -85,7 +85,7 @@ final class LiveObjects {
             checkHandlerSetups(prepared, current, game, originalOf, what, offMixin, offClass, alive);
         } catch (RebuildException e) {
             standing.add(e);
-            throw RebuildException.together(standing);
+            throw RebuildException.ofAll(standing);
         }
         ConstructedFields.Unmade unset = InitHookRuns.findUnset(hooked, game::isWorldObject, game.isInWorld(),
                 alive);
@@ -119,7 +119,7 @@ final class LiveObjects {
         ConstructedFields.Unmade now = unmade.get();
         if (now.lines().isEmpty()) {
             if (!standing.isEmpty()) {
-                throw RebuildException.together(standing);
+                throw RebuildException.ofAll(standing);
             }
             return out;
         }
@@ -128,7 +128,7 @@ final class LiveObjects {
             standing.add(makeRefusal(what, now));
         }
         if (!standing.isEmpty()) {
-            throw RebuildException.together(standing);
+            throw RebuildException.ofAll(standing);
         }
 
         return out.withPausedCheck(() -> new ConstructedFields.Unmade(unmade.get().lines(), game.isInWorld()));
@@ -312,6 +312,6 @@ final class LiveObjects {
         unmade.lines().forEach(line -> HOOK_OF_MOD.matcher(line).results().forEach(hook ->
                 classes.add(RebuildException.MOD_MARK + hook.group(1))));
         return (unmade.reopenFixes() ? RebuildException.ofWorldBuilt(message, cause)
-                : RebuildException.ofRestartOnly(message, cause)).blaming(classes);
+                : RebuildException.ofRestartOnly(message, cause)).withBlamed(classes);
     }
 }

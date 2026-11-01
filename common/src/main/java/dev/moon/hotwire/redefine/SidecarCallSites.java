@@ -53,7 +53,7 @@ final class SidecarCallSites {
                 }
             }
 
-            MethodHandle inherited = Linker.findGainedDefault(name, type.dropParameterTypes(0, 1), owner);
+            MethodHandle inherited = LinkerLookups.findGainedDefault(name, type.dropParameterTypes(0, 1), owner);
             if (inherited != null) {
                 return new ConstantCallSite(MethodHandles.explicitCastArguments(inherited, type));
             }

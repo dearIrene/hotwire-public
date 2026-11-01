@@ -32,8 +32,14 @@ final class FixedLists {
     private FixedLists() {
     }
 
+    private static boolean isPlainList(List<?> list) {
+        String name = list.getClass().getName();
+        return name.startsWith("java.util.") || name.startsWith("com.google.common.collect.")
+                || name.startsWith("kotlin.collections.");
+    }
+
     static void removeFromValue(Walk walk, Map<Object, Object> entries, Object key) {
-        if (!(entries.get(key) instanceof List<?> now)) {
+        if (!(entries.get(key) instanceof List<?> now) || !isPlainList(now)) {
             return;
         }
         boolean outer = walk.isInSmall();
@@ -58,7 +64,7 @@ final class FixedLists {
     }
 
     static void removeFromField(Walk walk, FieldSlots.Slot field, @Nullable Object holder) {
-        if (!(CollectionParts.read(field, holder) instanceof List<?> now)) {
+        if (!(CollectionParts.read(field, holder) instanceof List<?> now) || !isPlainList(now)) {
             return;
         }
         walk.setInSmall(now.size() <= CollectionReferences.WRAPPERS_IN);

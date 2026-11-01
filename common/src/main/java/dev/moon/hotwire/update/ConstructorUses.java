@@ -28,7 +28,8 @@ final class ConstructorUses {
     private ConstructorUses() {
     }
 
-    static List<ClassDiff> refine(List<ClassDiff> classes, Map<String, byte[]> running, Map<String, byte[]> incoming) {
+    static List<ClassDiff> classifyChanges(List<ClassDiff> classes, Map<String, byte[]> running, Map<String,
+            byte[]> incoming) {
         Map<String, Set<String>> added = new HashMap<>();
         List<ClassDiff> out = new ArrayList<>(classes.size());
         Map<String, Integer> at = new HashMap<>();
@@ -45,8 +46,8 @@ final class ConstructorUses {
         }
         for (String path : incoming.keySet()) {
             if (path.endsWith(".class")) {
-                Set<String> held = findHeld(Objects.requireNonNull(incoming.get(path)), added);
-                for (String owner : held) {
+                Set<String> stored = findStored(Objects.requireNonNull(incoming.get(path)), added);
+                for (String owner : stored) {
                     int index = Objects.requireNonNull(at.get(owner));
                     ClassDiff diff = out.get(index);
                     Set<ShapeChange> shape = EnumSet.copyOf(diff.shape());
@@ -210,7 +211,7 @@ final class ConstructorUses {
         return gained;
     }
 
-    private static Set<String> findHeld(byte[] bytes, Map<String, Set<String>> added) {
+    private static Set<String> findStored(byte[] bytes, Map<String, Set<String>> added) {
         ClassReader reader = new ClassReader(bytes);
         char[] buffer = new char[reader.getMaxStringLength()];
         boolean names = false;
@@ -225,7 +226,7 @@ final class ConstructorUses {
         }
         ClassNode node = new ClassNode();
         reader.accept(node, ClassReader.SKIP_DEBUG | ClassReader.SKIP_FRAMES);
-        Set<String> held = new HashSet<>();
+        Set<String> stored = new HashSet<>();
         for (MethodNode method : node.methods) {
             int made = 0;
             for (AbstractInsnNode insn : method.instructions) {
@@ -235,20 +236,20 @@ final class ConstructorUses {
                     made--;
                 } else if (insn instanceof InvokeDynamicInsnNode dynamic) {
                     for (Object argument : dynamic.bsmArgs) {
-                        addIfGained(argument, added, held);
+                        addIfGained(argument, added, stored);
                     }
                 } else if (insn instanceof LdcInsnNode constant) {
-                    addIfGained(constant.cst, added, held);
+                    addIfGained(constant.cst, added, stored);
                 }
             }
         }
-        return held;
+        return stored;
     }
 
-    private static void addIfGained(Object constant, Map<String, Set<String>> added, Set<String> held) {
+    private static void addIfGained(Object constant, Map<String, Set<String>> added, Set<String> stored) {
         if (constant instanceof Handle handle && handle.getName().equals("<init>")
                 && added.getOrDefault(handle.getOwner(), Set.of()).contains(handle.getDesc())) {
-            held.add(handle.getOwner());
+            stored.add(handle.getOwner());
         }
     }
 

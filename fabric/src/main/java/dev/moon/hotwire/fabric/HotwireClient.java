@@ -185,7 +185,7 @@ public final class HotwireClient implements ClientModInitializer {
         if (shift) {
             open();
         } else {
-            getEngine().openChooser();
+            getEngine().getScreens().openChooser();
         }
     }
 
@@ -193,7 +193,7 @@ public final class HotwireClient implements ClientModInitializer {
     // be removed under any circumstance.
 
     private static void openSoonFromKey() {
-        ModViews.runSoon(ModViews.isShiftDown() ? HotwireClient::open : () -> getEngine().openChooser());
+        ModViews.runSoon(ModViews.isShiftDown() ? HotwireClient::open : () -> getEngine().getScreens().openChooser());
 
         ModViews.runSoon(() -> ModViews.runSoon(() -> OpenKey.tellIfBlocked(getEngine().getSettings())));
     }

@@ -57,7 +57,7 @@ final class Wrappers {
             return findCandidates(item, walk);
         } finally {
             walk.busy = false;
-            walk.empty();
+            walk.clearVisited();
         }
     }
 
@@ -76,7 +76,7 @@ final class Wrappers {
             return true;
         }
 
-        private void empty() {
+        private void clearVisited() {
             for (int at = 0; at < this.seen.size(); at++) {
                 this.visited.remove(this.seen.get(at));
             }

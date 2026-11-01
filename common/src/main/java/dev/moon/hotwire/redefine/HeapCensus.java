@@ -19,7 +19,7 @@ public final class HeapCensus {
     private static final Pattern ROW = Pattern.compile("\\s*\\d+:\\s+(\\d+)\\s+\\d+\\s+(\\S+).*");
     private static volatile @Nullable Map<String, Long> counts;
     private static volatile @Nullable Map<String, Long> countsWithDead;
-    private static volatile long takenAt = System.nanoTime() - Duration.ofHours(1).toNanos();
+    private static volatile long countedAt = System.nanoTime() - Duration.ofHours(1).toNanos();
     private static final Duration STILL_GOOD = Duration.ofSeconds(10);
     private static final Duration IN_BATCH = Duration.ofSeconds(30);
     private static volatile boolean inBatch;
@@ -40,13 +40,13 @@ public final class HeapCensus {
     }
 
     public static void forgetOld() {
-        if (System.nanoTime() - takenAt >= STILL_GOOD.toNanos()) {
+        if (System.nanoTime() - countedAt >= STILL_GOOD.toNanos()) {
             forget();
         }
     }
 
     public static void forget() {
-        if (inBatch && System.nanoTime() - takenAt < IN_BATCH.toNanos()) {
+        if (inBatch && System.nanoTime() - countedAt < IN_BATCH.toNanos()) {
             return;
         }
         counts = null;
@@ -98,7 +98,7 @@ public final class HeapCensus {
         if (now == null) {
             now = ask(new String[] {"-all"});
             countsWithDead = now;
-            takenAt = System.nanoTime();
+            countedAt = System.nanoTime();
         }
         return now;
     }
@@ -108,7 +108,7 @@ public final class HeapCensus {
         if (now == null) {
             now = ask(new String[0]);
             counts = now;
-            takenAt = System.nanoTime();
+            countedAt = System.nanoTime();
         }
         return now;
     }

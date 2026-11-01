@@ -1,8 +1,6 @@
 package dev.moon.hotwire.fabric;
 
 import com.google.common.collect.MapMaker;
-import dev.moon.hotwire.fabric.registration.GameRegistrations;
-import dev.moon.hotwire.jvm.LoadedClassList;
 import dev.moon.hotwire.redefine.BatchRider;
 import dev.moon.hotwire.redefine.ClassRebuilder;
 import dev.moon.hotwire.redefine.HotwireLoaders;
@@ -40,6 +38,7 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 public final class ModTripwire {
+    private final TripwireOwners tripwireOwners = new TripwireOwners(this);
     private static final Logger LOGGER = LoggerFactory.getLogger(ModTripwire.class);
 
     public record Observation(Tripwire.Hits hits, List<String> loadedMeanwhile, List<String> firstLoad,
@@ -49,22 +48,22 @@ public final class ModTripwire {
         }
     }
 
-    private final Instrumentation instrumentation;
-    private final ClassRebuilder rebuilder;
+    final Instrumentation instrumentation;
+    final ClassRebuilder rebuilder;
 
     private final Function<String, @Nullable Class<?>> loadedClassOf;
     private final Map<Class<?>, ArmedClass> armed = new HashMap<>();
 
-    private final Map<String, ArmedClass> armedAtLoad = new HashMap<>();
+    final Map<String, ArmedClass> armedAtLoad = new HashMap<>();
 
-    private final Map<String, String> sources = new ConcurrentHashMap<>();
+    final Map<String, String> sources = new ConcurrentHashMap<>();
 
     private static final Map<ProtectionDomain, Optional<String>> SOURCE_OF = new MapMaker().weakKeys().makeMap();
 
     private final Map<Class<?>, String> loadedAtArm = new HashMap<>();
 
-    private final Map<String, String> loadedWhileArming = new ConcurrentHashMap<>();
-    private static final ThreadLocal<Boolean> ARMING = ThreadLocal.withInitial(() -> false);
+    final Map<String, String> loadedWhileArming = new ConcurrentHashMap<>();
+    static final ThreadLocal<Boolean> ARMING = ThreadLocal.withInitial(() -> false);
 
     private static final int MOST_RIDING = 400;
 
@@ -85,7 +84,7 @@ public final class ModTripwire {
             }
             long began = System.nanoTime();
             try {
-                return ModTripwire.this.armAtLoad(name, source, bytes, loader);
+                return ModTripwire.this.tripwireOwners.armAtLoad(name, source, bytes, loader);
             } catch (RuntimeException | LinkageError e) {
                 LOGGER.error("[Hotwire] {} loaded unwatched: wiring it as it loaded threw", name, e);
                 return null;
@@ -135,7 +134,7 @@ public final class ModTripwire {
 
     void readAhead(Collection<String> ids) {
         List<Class<?>> types = new ArrayList<>();
-        this.findOwned(ids).keySet().forEach(type -> {
+        this.tripwireOwners.findOwned(ids).keySet().forEach(type -> {
             if (!type.isHidden() && this.instrumentation.isModifiableClass(type)
                     && this.rebuilder.getLoadedBytes().findKnown(type) == null) {
                 types.add(type);
@@ -343,7 +342,7 @@ public final class ModTripwire {
     private int wire(Collection<String> asked, Set<String> rebuilt, boolean ride) throws RebuildException {
         List<String> ids = asked.stream().filter(ModPolicy::isSwitchable).toList();
         Map<Class<?>, String> owned = new LinkedHashMap<>();
-        this.findOwned(ids).forEach((type, mod) -> {
+        this.tripwireOwners.findOwned(ids).forEach((type, mod) -> {
             if (rebuilt.contains(type.getName().replace('.', '/'))) {
                 return;
             }
@@ -372,7 +371,7 @@ public final class ModTripwire {
 
         ARMING.set(true);
         try {
-            Map<String, byte[]> current = this.readBytes(List.copyOf(owned.keySet()));
+            Map<String, byte[]> current = this.tripwireOwners.readBytes(List.copyOf(owned.keySet()));
             Map<Class<?>, byte[]> wiredAll = new LinkedHashMap<>();
             Map<Class<?>, ArmedClass> arming = new HashMap<>();
             owned.forEach((type, mod) -> {
@@ -566,7 +565,7 @@ public final class ModTripwire {
 
     private Map<String, List<String>> findLoadedSinceArm(Collection<String> ids) {
         Map<String, List<String>> loaded = new TreeMap<>();
-        this.findOwned(ids).forEach((type, mod) -> {
+        this.tripwireOwners.findOwned(ids).forEach((type, mod) -> {
             if (!this.loadedAtArm.containsKey(type) && !this.loadedWhileArming.containsKey(type.getName())) {
                 loaded.computeIfAbsent(mod, any -> new ArrayList<>()).add(type.getName());
             }
@@ -586,73 +585,4 @@ public final class ModTripwire {
                 ? location.substring(0, location.length() - ".disabled".length()) : location;
     }
 
-    private byte @Nullable [] armAtLoad(String name, @Nullable String source, byte[] bytes, ClassLoader loader) {
-        synchronized (this.sources) {
-            String mod = source == null ? null : this.sources.get(source);
-            if (mod == null || TripwireSites.isArmed(name)) {
-                return null;
-            }
-            if (ARMING.get()) {
-                this.loadedWhileArming.put(name.replace('/', '.'), mod);
-            } else {
-                Tripwire.onLoading(mod, name);
-            }
-            byte[] wired = TripwireSites.arm(name, bytes, mod);
-            if (wired == null) {
-                wired = Tripwire.arm(bytes, mod);
-                if (wired != null) {
-                    this.armedAtLoad.put(name, new ArmedClass(mod, bytes, wired));
-                }
-            }
-            if (wired != null) {
-                this.rebuilder.getLoadedBytes().onDefinedInGame(name, wired, loader);
-            }
-            return wired;
-        }
-    }
-
-    private Map<String, byte[]> readBytes(List<Class<?>> types) {
-        List<String> refused = new ArrayList<>();
-        try {
-            Map<String, byte[]> read = this.rebuilder.getLoadedBytes().read(types, refused);
-            if (!refused.isEmpty()) {
-                LOGGER.info("[Hotwire] {} classes are left unarmed, as the JVM cannot give back their bytes: {}",
-                        refused.size(), refused);
-            }
-            return read;
-        } catch (RebuildException e) {
-            LOGGER.info("[Hotwire] {} classes are left unarmed: {}", types.size(), e.getMessage());
-            return Map.of();
-        }
-    }
-
-    private Map<Class<?>, String> findOwned(Collection<String> ids) {
-        Map<Class<?>, String> owned = new LinkedHashMap<>();
-        for (Class<?> type : LoadedClassList.of(this.instrumentation)) {
-            if (type.isArray() || type.isPrimitive() || !HotwireLoaders.seesHotwire(type.getClassLoader())) {
-                continue;
-            }
-            String mod = GameRegistrations.findModOf(type);
-            if (mod == null) {
-                mod = findSplitOwner(type);
-            }
-            if (mod != null && ids.contains(mod)) {
-                owned.put(type, mod);
-            }
-        }
-        return owned;
-    }
-
-    private static @Nullable String findSplitOwner(Class<?> type) {
-        String name = type.getName();
-        int split = name.indexOf("$hotwire");
-        if (split < 0) {
-            return null;
-        }
-        try {
-            return GameRegistrations.findModOf(Class.forName(name.substring(0, split), false, type.getClassLoader()));
-        } catch (ClassNotFoundException | LinkageError e) {
-            return null;
-        }
-    }
 }

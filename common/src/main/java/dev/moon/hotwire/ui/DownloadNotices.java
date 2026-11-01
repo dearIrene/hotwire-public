@@ -32,9 +32,9 @@ public final class DownloadNotices {
                 }
             }
             case DONE -> {
-                boolean held = HOLDING.remove(job.id()) != null;
+                boolean inHand = HOLDING.remove(job.id()) != null;
                 GONE.remove(job.id());
-                if (held && !quiet) {
+                if (inHand && !quiet) {
                     Notices.show(new Notice(Notice.Kind.DONE, job.name(), Lang.get("hotwire.notice.downloaded"),
                             key));
                 }

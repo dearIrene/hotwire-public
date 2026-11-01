@@ -146,8 +146,13 @@ public final class CachedMixes {
         Map<String, byte[]> found = new HashMap<>();
         for (String target : targets) {
             byte[] bytes = classes.get(target);
-            if (bytes != null && prefixes.stream().anyMatch(target::startsWith)) {
-                found.put(target, bytes);
+            if (bytes != null) {
+                for (String prefix : prefixes) {
+                    if (target.startsWith(prefix)) {
+                        found.put(target, bytes);
+                        break;
+                    }
+                }
             }
         }
         return found;

@@ -1,12 +1,8 @@
 package dev.moon.hotwire.redefine;
 
-import com.google.gson.JsonObject;
-import com.google.gson.JsonParser;
 import dev.moon.hotwire.cache.CacheKey;
 import dev.moon.hotwire.cache.CacheStore;
 import dev.moon.hotwire.classfile.ClassHeader;
-import dev.moon.hotwire.mixin_copy.ConfigTrim;
-import dev.moon.hotwire.mixin_copy.MixinClassInfo;
 import dev.moon.hotwire.mixin_copy.MixinCopy;
 import java.io.ByteArrayInputStream;
 import java.io.ByteArrayOutputStream;
@@ -44,9 +40,10 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 final class MixedCache {
+    private final MixedCacheKeys mixedCacheKeys = new MixedCacheKeys(this);
     private static final Logger LOGGER = LoggerFactory.getLogger(MixedCache.class);
-    private static final String LIVE = "LivePluginShape";
-    private static final String PLUGIN = "\"plugin\"";
+    static final String LIVE = "LivePluginShape";
+    static final String PLUGIN = "\"plugin\"";
     private static final Pattern ARGS = Pattern.compile("org/spongepowered/asm/synthetic/args/Args\\$\\d+");
     private static final long FLUSH_MILLIS = 2000;
 
@@ -64,34 +61,34 @@ final class MixedCache {
         }
     }
 
-    private record AimedMixin(int config, int place, String mixin, Set<String> aims) {
+    record AimedMixin(int config, int place, String mixin, Set<String> aims) {
     }
 
-    private static final Comparator<AimedMixin> AIMED_ORDER = Comparator.comparingInt(AimedMixin::config)
+    static final Comparator<AimedMixin> AIMED_ORDER = Comparator.comparingInt(AimedMixin::config)
             .thenComparingInt(AimedMixin::place);
 
-    private record Config(String name, CacheKey settings, Set<String> mixins, boolean plugin) {
+    record Config(String name, CacheKey settings, Set<String> mixins, boolean plugin) {
     }
 
-    private record Aims(long hash, Set<String> targets) {
+    record Aims(long hash, Set<String> targets) {
     }
 
     private final CacheStore store;
 
     private final ClassPacks packs;
-    private final MixinCopy copy;
-    private final PluginAnswers answers;
+    final MixinCopy copy;
+    final PluginAnswers answers;
     private final AtomicBoolean flushQueued = new AtomicBoolean();
 
-    private final Set<String> uncached = ConcurrentHashMap.newKeySet();
+    final Set<String> uncached = ConcurrentHashMap.newKeySet();
 
-    private final Map<String, Aims> aims = new ConcurrentHashMap<>();
+    final Map<String, Aims> aims = new ConcurrentHashMap<>();
     private volatile int readsAt;
-    private final Map<CacheKey, Config> parsed = new ConcurrentHashMap<>();
+    final Map<CacheKey, Config> parsed = new ConcurrentHashMap<>();
     private final Map<String, ReadHash> hashes = new ConcurrentHashMap<>();
     private final Set<CacheKey> holding = ConcurrentHashMap.newKeySet();
 
-    private final Set<String> listed = ConcurrentHashMap.newKeySet();
+    final Set<String> listed = ConcurrentHashMap.newKeySet();
 
     private final AtomicLong classesSaved = new AtomicLong();
     private final AtomicLong classesBefore = new AtomicLong();
@@ -115,9 +112,9 @@ final class MixedCache {
         this.packs = new ClassPacks(store);
     }
 
-    private static final String KEYS = "mixed class 10";
+    static final String KEYS = "mixed class 10";
 
-    private static final Map<byte[], CacheKey> SHAPES = Collections.synchronizedMap(new WeakHashMap<>());
+    static final Map<byte[], CacheKey> SHAPES = Collections.synchronizedMap(new WeakHashMap<>());
 
     private static final @Nullable String KEY_DUMP = System.getProperty("hotwire.cacheKeyDump");
 
@@ -142,9 +139,9 @@ final class MixedCache {
                 }
                 return Map.of();
             }
-            configs.add(this.readConfig(name, json, resources));
+            configs.add(this.mixedCacheKeys.readConfig(name, json, resources));
         }
-        Map<String, List<AimedMixin>> byAim = this.indexAims(configs);
+        Map<String, List<AimedMixin>> byAim = this.mixedCacheKeys.indexAims(configs);
         if (byAim == null) {
             return Map.of();
         }
@@ -152,11 +149,11 @@ final class MixedCache {
         for (String target : targets) {
             byte[] original = classes.get(target);
             StringBuilder trace = KEY_DUMP == null ? null : new StringBuilder();
-            Set<String> above = original == null ? Set.of() : this.findAbove(original, classes);
+            Set<String> above = original == null ? Set.of() : this.mixedCacheKeys.findAbove(original, classes);
             Set<String> mixedAbove = new TreeSet<>(above);
             mixedAbove.retainAll(targets);
-            CacheKey key = original == null ? null : this.findKey(target, original, configs, byAim,
-                    this.findHandedAbove(original, targets, classes), above, mixedAbove, trace);
+            CacheKey key = original == null ? null : this.mixedCacheKeys.findKey(target, original, configs, byAim,
+                    this.mixedCacheKeys.findHandedAbove(original, targets, classes), above, mixedAbove, trace);
             if (key != null) {
                 keys.put(target, key);
             }
@@ -165,179 +162,6 @@ final class MixedCache {
             }
         }
         return keys;
-    }
-
-    private CacheKey findHandedAbove(byte[] original, Set<String> targets, Map<String, byte[]> classes) {
-        CacheKey.Builder handed = CacheKey.of("handed above 1");
-        Set<String> seen = new HashSet<>();
-        List<byte[]> next = new ArrayList<>(List.of(original));
-        while (!next.isEmpty()) {
-            for (String type : ClassHeader.of(next.removeLast()).findAbove()) {
-                byte[] bytes = classes.get(type);
-                if (bytes != null && !targets.contains(type) && seen.add(type)) {
-                    CacheKey shape = findShape(bytes);
-                    handed.add(type).add(shape.high()).add(shape.low());
-                    next.add(bytes);
-                }
-            }
-        }
-        return handed.build();
-    }
-
-    private static CacheKey findShape(byte[] bytes) {
-        CacheKey known = SHAPES.get(bytes);
-        if (known != null) {
-            return known;
-        }
-        ClassHeader header = ClassHeader.of(bytes);
-        CacheKey.Builder shape = CacheKey.of("shape 2").add(String.valueOf(header.superName()))
-                .add(header.access());
-        new TreeSet<>(header.interfaces()).forEach(shape::add);
-        List<String> members = new ArrayList<>();
-        header.fields().forEach(field -> members.add("f " + GeneratedNames.mask(field.name()) + field.desc()
-                + " " + field.access()));
-        header.methods().forEach(method -> members.add("m " + GeneratedNames.mask(method.name()) + method.desc()
-                + " " + method.access()));
-        members.sort(null);
-        members.forEach(shape::add);
-        CacheKey made = shape.build();
-        SHAPES.put(bytes, made);
-        return made;
-    }
-
-    private Set<String> findAbove(byte[] original, Map<String, byte[]> classes) {
-        Set<String> found = new TreeSet<>();
-        Set<String> seen = new HashSet<>();
-        List<byte[]> next = new ArrayList<>(List.of(original));
-        while (!next.isEmpty()) {
-            for (String type : ClassHeader.of(next.removeLast()).findAbove()) {
-                if (!seen.add(type) || type.startsWith("java/")) {
-                    continue;
-                }
-                byte[] bytes = classes.get(type);
-                if (bytes == null) {
-                    bytes = this.copy.findReadable(type);
-                }
-                found.add(type);
-                if (bytes != null) {
-                    next.add(bytes);
-                }
-            }
-        }
-        return found;
-    }
-
-    private @Nullable CacheKey findKey(String target, byte[] original, List<Config> configs,
-            Map<String, List<AimedMixin>> byAim, CacheKey others, Set<String> above, Set<String> mixedAbove,
-            @Nullable StringBuilder trace) {
-        CacheKey.Builder key = CacheKey.of(KEYS).add(this.copy.getRecipe()).add(target).add(original)
-                .add(others.high()).add(others.low());
-        if (trace != null) {
-            trace.append(" handed=").append(Long.toHexString(others.high())).append(" above=").append(mixedAbove);
-        }
-        List<String> types = new ArrayList<>();
-        types.add(target);
-        types.addAll(mixedAbove);
-
-        TreeSet<AimedMixin> relevant = new TreeSet<>(AIMED_ORDER);
-        relevant.addAll(byAim.getOrDefault(target, List.of()));
-        above.forEach(type -> relevant.addAll(byAim.getOrDefault(type, List.of())));
-        Map<Integer, List<AimedMixin>> byConfig = new TreeMap<>();
-        relevant.forEach(one -> byConfig.computeIfAbsent(one.config(), any -> new ArrayList<>()).add(one));
-        for (Map.Entry<Integer, List<AimedMixin>> each : byConfig.entrySet()) {
-            Config config = configs.get(each.getKey());
-            List<String> aiming = new ArrayList<>();
-            for (AimedMixin one : each.getValue()) {
-                key.add(one.mixin()).add(this.hashOfMixin(one.mixin()));
-                for (String type : types) {
-                    if (one.aims().contains(type)) {
-                        aiming.add(type + " " + one.mixin());
-                    }
-                }
-            }
-            if (aiming.isEmpty()) {
-                continue;
-            }
-            key.add(config.settings().high()).add(config.settings().low()).add(this.copy.findDecoration(config.name()));
-            if (trace != null) {
-                trace.append(" | ").append(config.name()).append(' ').append(Long.toHexString(config.settings().high()))
-                        .append(' ').append(aiming.size());
-            }
-            for (String aimed : aiming) {
-                key.add(aimed);
-                if (config.plugin()) {
-                    int space = aimed.indexOf(' ');
-                    Boolean answer = this.answers.ask(config.name(), aimed.substring(0, space).replace('/', '.'),
-                            aimed.substring(space + 1).replace('/', '.'));
-                    if (answer == null) {
-                        if (this.uncached.add(config.name())) {
-                            LOGGER.info("[Hotwire] classes {} patches are mixed afresh each time: the game holds no"
-                                    + " plugin of it to ask", config.name());
-                        }
-                        return null;
-                    }
-                    key.add(answer ? 1 : 0);
-                    if (trace != null && !answer) {
-                        trace.append(" no:").append(aimed.substring(aimed.indexOf(' ') + 1));
-                    }
-                }
-            }
-        }
-        return key.build();
-    }
-
-    private @Nullable Map<String, List<AimedMixin>> indexAims(List<Config> configs) {
-        Map<String, List<AimedMixin>> byAim = new HashMap<>();
-        for (int at = 0; at < configs.size(); at++) {
-            int place = 0;
-            for (String mixin : configs.get(at).mixins()) {
-                Set<String> aims = this.findAims(mixin);
-                if (aims == null) {
-                    return null;
-                }
-                AimedMixin one = new AimedMixin(at, place++, mixin, aims);
-                aims.forEach(aim -> byAim.computeIfAbsent(aim, any -> new ArrayList<>()).add(one));
-            }
-        }
-        return byAim;
-    }
-
-    private Config readConfig(String name, byte[] json, Map<String, byte[]> resources) {
-        String refmapName = ConfigTrim.readRefmapOf(json);
-        byte[] refmap = refmapName == null ? null : resources.get(refmapName);
-        CacheKey bytes = CacheKey.of("config bytes 1").add(name).add(json)
-                .add(refmap == null ? new byte[0] : refmap).build();
-        return this.parsed.computeIfAbsent(bytes, any -> {
-            String text = new String(json, StandardCharsets.UTF_8);
-            JsonObject root = JsonParser.parseString(text).getAsJsonObject();
-            root.remove("mixins");
-            root.remove("client");
-            root.remove("server");
-            Set<String> mixins = new TreeSet<>();
-            for (String listed : ConfigTrim.readListed(json, this.copy.getSide())) {
-                mixins.add(listed.replace('.', '/'));
-            }
-            this.listed.addAll(mixins);
-            ConfigTrim.readUnlisted(json).forEach(unlisted -> mixins.add(unlisted.replace('.', '/')));
-            CacheKey settings = CacheKey.of("config 1").add(name).add(root.toString())
-                    .add(refmap == null ? new byte[0] : refmap).build();
-            return new Config(name, settings, mixins, text.contains(LIVE) || text.contains(PLUGIN));
-        });
-    }
-
-    private @Nullable Set<String> findAims(String mixin) {
-        byte[] bytes = this.copy.findReadable(mixin);
-        if (bytes == null) {
-            return null;
-        }
-        long hash = this.hashOf(mixin, bytes);
-        Aims known = this.aims.get(mixin);
-        if (known != null && known.hash() == hash) {
-            return known.targets();
-        }
-        Set<String> read = MixinClassInfo.read(bytes).targets();
-        this.aims.put(mixin, new Aims(hash, read));
-        return read;
     }
 
     MixinCopy.@Nullable MixResult find(CacheKey key, String target, byte[] original) {
@@ -445,9 +269,11 @@ final class MixedCache {
         synchronized (reads) {
             int changes = this.copy.findReadChanges();
             if (reads.checkedAt != changes) {
-                reads.holds = reads.read.entrySet().stream().allMatch(one ->
-                        this.hashOf(one.getKey(), one.getValue()) == this.hashOf(one.getKey(),
-                                this.copy.findReadable(one.getKey())));
+                reads.holds = true;
+                for (Map.Entry<String, byte @Nullable []> one : reads.read.entrySet()) {
+                    String name = one.getKey();
+                    reads.holds &= this.hashOf(name, one.getValue()) == this.hashOf(name, this.copy.findReadable(name));
+                }
                 reads.checkedAt = changes;
             }
             return reads.holds;
@@ -458,10 +284,10 @@ final class MixedCache {
         Map<String, byte @Nullable []> read = new TreeMap<>(this.copy.findReadBytes(made.read()));
         read.keySet().removeIf(this.listed::contains);
         Map<String, byte[]> originals = new HashMap<>(classes);
-        UnwrittenReads held = new UnwrittenReads(read);
+        UnwrittenReads unwrittenReads = new UnwrittenReads(read);
         keys.forEach((target, key) -> {
             if (made.classes().containsKey(target)) {
-                this.unwritten.put(key, new Unwritten(made, held));
+                this.unwritten.put(key, new Unwritten(made, unwrittenReads));
             }
         });
         this.writer.execute(() -> {
@@ -631,7 +457,7 @@ final class MixedCache {
         return this.store.getEntries();
     }
 
-    private long hashOfMixin(String mixin) {
+    long hashOfMixin(String mixin) {
         long hash = 0;
         for (String type = mixin; type != null && !type.startsWith("java/"); ) {
             byte[] bytes = this.copy.findReadable(type);
@@ -645,7 +471,7 @@ final class MixedCache {
     }
 
     @SuppressWarnings("ReferenceEquality")
-    private long hashOf(String name, byte @Nullable [] bytes) {
+    long hashOf(String name, byte @Nullable [] bytes) {
         if (bytes == null) {
             return 0;
         }

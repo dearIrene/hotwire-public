@@ -79,7 +79,7 @@ public final class UrgentNotice {
             return;
         }
         shown = true;
-        HotwireClient.getEngine().openOnUrgentUpdate(urgent);
+        HotwireClient.getEngine().getScreens().openOnUrgentUpdate(urgent);
     }
 
     static @Nullable UrgentUpdate find() {

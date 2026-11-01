@@ -4,6 +4,7 @@ import com.google.gson.JsonArray;
 import com.google.gson.JsonElement;
 import com.google.gson.JsonObject;
 import com.google.gson.JsonParser;
+import dev.moon.hotwire.config.AtomicFiles;
 import java.io.ByteArrayInputStream;
 import java.io.ByteArrayOutputStream;
 import java.io.IOException;
@@ -315,7 +316,7 @@ public final class ModrinthClient {
             LOGGER.info("[Hotwire] {} was downloaded: {} KB in {} ms", version.fileName(),
                     Files.size(part) / 1024, (System.nanoTime() - began) / 1_000_000);
         }
-        Files.move(part, target, StandardCopyOption.REPLACE_EXISTING, StandardCopyOption.ATOMIC_MOVE);
+        AtomicFiles.moveInto(part, target);
     }
 
     static String hashOf(Path file) throws IOException {
@@ -485,10 +486,10 @@ public final class ModrinthClient {
                 throw new IOException("a download from somewhere other than Modrinth's CDN was refused: " + url);
             }
             try {
-                return this.download(url, onBytes);
+                return this.fetchDownload(url, onBytes);
             } catch (StalledException e) {
                 LOGGER.info("[Hotwire] {}; asking once more", e.getMessage());
-                return this.download(url, onBytes);
+                return this.fetchDownload(url, onBytes);
             }
         }
 
@@ -500,7 +501,7 @@ public final class ModrinthClient {
             }
         }
 
-        private byte[] download(String url, LongConsumer onBytes) throws IOException {
+        private byte[] fetchDownload(String url, LongConsumer onBytes) throws IOException {
             ByteArrayOutputStream out = new ByteArrayOutputStream();
             AtomicLong heard = new AtomicLong(System.nanoTime());
             HttpRequest request = HttpRequest.newBuilder(URI.create(url)).header("User-Agent", this.agent)

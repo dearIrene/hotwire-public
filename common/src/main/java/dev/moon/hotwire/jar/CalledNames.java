@@ -33,14 +33,14 @@ public final class CalledNames {
     }
 
     public boolean canCall(String method) {
-        return this.mightContain(method);
+        return this.canContain(method);
     }
 
     public boolean canCall(String owner, String method) {
-        return this.mightContain(owner + '.' + method);
+        return this.canContain(owner + '.' + method);
     }
 
-    private boolean mightContain(String name) {
+    private boolean canContain(String name) {
         long[] filter = this.bits;
         if (filter == null) {
             return true;

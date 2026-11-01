@@ -84,7 +84,7 @@ public final class LoadedClassBytes {
         return this.read(types, null);
     }
 
-    public Map<String, byte[]> readRunning(Collection<Class<?>> types, List<String> refusedOut)
+    public Map<String, byte[]> makeGameClassReader(Collection<Class<?>> types, List<String> refusedOut)
             throws RebuildException {
         List<Class<?>> rest = new ArrayList<>();
         Map<String, byte[]> above = new LinkedHashMap<>();
@@ -122,8 +122,10 @@ public final class LoadedClassBytes {
             Class<?> parent = type.getSuperclass();
             String superName = type.isInterface() || parent == null ? "java/lang/Object"
                     : parent.getName().replace('.', '/');
-            List<String> interfaces = Arrays.stream(type.getInterfaces())
-                    .map(face -> face.getName().replace('.', '/')).toList();
+            List<String> interfaces = new ArrayList<>();
+            for (Class<?> face : type.getInterfaces()) {
+                interfaces.add(face.getName().replace('.', '/'));
+            }
             boolean same = header.getClassName().equals(name) && superName.equals(header.getSuperName())
                     && interfaces.equals(List.of(header.getInterfaces()));
             return same ? bytes : null;

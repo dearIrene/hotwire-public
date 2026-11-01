@@ -111,7 +111,7 @@ public final class ModPolicy {
         seenUses = seen;
     }
 
-    static void stayWhen(Predicate<String> mods) {
+    static void setStaying(Predicate<String> mods) {
         staying = mods;
     }
 

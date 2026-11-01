@@ -55,7 +55,7 @@ public final class RebuildException extends Exception {
         return new RebuildException(message, cause, false, false, false, true);
     }
 
-    public static RebuildException together(List<RebuildException> parts) {
+    public static RebuildException ofAll(List<RebuildException> parts) {
         if (parts.size() == 1) {
             return parts.getFirst();
         }
@@ -71,7 +71,7 @@ public final class RebuildException extends Exception {
         }
         RebuildException all = new RebuildException(message.toString(), parts.getFirst(), reopenFixes, false,
                 reopenFixes,
-                restartOnly).blaming(blamed);
+                restartOnly).withBlamed(blamed);
         all.parts = List.copyOf(parts);
         return all;
     }
@@ -82,7 +82,7 @@ public final class RebuildException extends Exception {
 
     public static final String MOD_MARK = "mod:";
 
-    public RebuildException blaming(Set<String> classes) {
+    public RebuildException withBlamed(Set<String> classes) {
         this.blamedClasses = Set.copyOf(classes);
         return this;
     }

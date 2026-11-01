@@ -44,16 +44,16 @@ final class UpdateBatch {
         ModUpdater.Result[] results = new ModUpdater.Result[jars.size()];
 
         Map<String, ModManifest> brought = new HashMap<>();
-        Parallel.forEachBeside(jars, this.updater::readAhead);
+        Parallel.runEachBeside(jars, this.updater::readAhead);
         SwitchTimes.mark("update: read ahead");
         jars.forEach(jar -> brought.putAll(this.updater.findComingOf(jar)));
         Map<String, String> waiting = new HashMap<>();
-        List<ModUpdater.Sorted.Planned> inPlace = new ArrayList<>();
+        List<ModUpdater.SortResult.Planned> inPlace = new ArrayList<>();
         List<Integer> inPlaceAt = new ArrayList<>();
-        Set<String> taken = new HashSet<>();
+        Set<String> claimed = new HashSet<>();
         List<Integer> later = new ArrayList<>();
         for (int i = 0; i < jars.size(); i++) {
-            ModUpdater.Sorted sorted;
+            ModUpdater.SortResult sorted;
             try {
                 sorted = this.updater.sort(jars.get(i), brought, waiting);
             } catch (RuntimeException e) {
@@ -61,22 +61,22 @@ final class UpdateBatch {
                 continue;
             }
             switch (sorted) {
-                case ModUpdater.Sorted.Refused refused -> results[i] = refused.result();
-                case ModUpdater.Sorted.IdChanged changed -> later.add(i);
-                case ModUpdater.Sorted.Planned planned when planned.method() == UpdateMethod.NEXT_START -> {
+                case ModUpdater.SortResult.Refused refused -> results[i] = refused.result();
+                case ModUpdater.SortResult.IdChanged changed -> later.add(i);
+                case ModUpdater.SortResult.Planned planned when planned.method() == UpdateMethod.NEXT_START -> {
                     results[i] = this.updater.take(planned, UpdateMethod.NEXT_START);
                     if (results[i] instanceof ModUpdater.Result.Queued) {
                         waiting.put(planned.manifest().id(), planned.manifest().version());
                     }
                 }
-                case ModUpdater.Sorted.Planned planned -> {
+                case ModUpdater.SortResult.Planned planned -> {
                     Set<String> ids = new HashSet<>(List.of(planned.manifest().id()));
                     planned.whole().bundled().forEach(carried -> ids.add(carried.manifest().id()));
-                    if (Collections.disjoint(ids, taken)) {
-                        taken.addAll(ids);
+                    if (Collections.disjoint(ids, claimed)) {
+                        claimed.addAll(ids);
                         inPlace.add(planned);
                         inPlaceAt.add(i);
-                        brought.putAll(this.updater.findComing(planned.read()));
+                        brought.putAll(this.updater.getPlans().findComing(planned.read()));
                     } else {
                         later.add(i);
                     }
@@ -119,7 +119,7 @@ final class UpdateBatch {
         return List.of(results);
     }
 
-    private void sendBackClashes(List<Path> jars, List<ModUpdater.Sorted.Planned> inPlace, List<Integer> inPlaceAt,
+    private void sendBackClashes(List<Path> jars, List<ModUpdater.SortResult.Planned> inPlace, List<Integer> inPlaceAt,
             ModUpdater.Result[] results, Map<String, String> waiting) {
         Set<String> waitingClasses = new HashSet<>();
         for (int i = 0; i < jars.size(); i++) {
@@ -134,27 +134,29 @@ final class UpdateBatch {
         Set<String> mayDiffer = new HashSet<>();
         jars.forEach(jar -> this.addClassesOf(jar, mayDiffer));
         this.updater.getQueuedJars().forEach(jar -> this.addClassesOf(jar, mayDiffer));
-        Parallel.forEachBeside(inPlace, planned -> this.updater.readNamed(planned, waitingIds, mayDiffer, this.named));
+        Parallel.runEachBeside(inPlace,
+                planned -> this.updater.getClashes().readNamed(planned, waitingIds, mayDiffer, this.named));
         SwitchTimes.mark("sort: names");
-        JarLinks.Running running = this.updater.readRunning();
+        JarLinks.GameClassReader running = this.updater.getClashes().makeGameClassReader();
         boolean sent = true;
         while (sent) {
             sent = false;
             Set<String> goingIn = new HashSet<>();
             inPlace.forEach(planned -> this.addClassesOf(planned.jar(), goingIn));
-            inPlace.forEach(planned -> planned.whole().heldBack().forEach(jar -> {
-                Set<String> held = new HashSet<>();
-                this.addClassesOf(jar, held);
-                goingIn.removeAll(held);
+            inPlace.forEach(planned -> planned.whole().leftOut().forEach(jar -> {
+                Set<String> leftOutClasses = new HashSet<>();
+                this.addClassesOf(jar, leftOutClasses);
+                goingIn.removeAll(leftOutClasses);
             }));
             Set<String> suspects = new HashSet<>(waitingClasses);
-            inPlace.forEach(planned -> planned.whole().heldBack().forEach(jar -> this.addClassesOf(jar, suspects)));
+            inPlace.forEach(planned -> planned.whole().leftOut().forEach(jar -> this.addClassesOf(jar, suspects)));
             suspects.removeAll(goingIn);
             Map<String, ModManifest> comingIn = new HashMap<>();
-            inPlace.forEach(planned -> comingIn.putAll(this.updater.findComing(planned.read())));
+            inPlace.forEach(planned -> comingIn.putAll(this.updater.getPlans().findComing(planned.read())));
             for (int i = inPlace.size() - 1; i >= 0; i--) {
-                ModUpdater.Sorted.Planned planned = inPlace.get(i);
-                String clash = this.updater.findClash(planned, suspects, this.named, running, goingIn, comingIn);
+                ModUpdater.SortResult.Planned planned = inPlace.get(i);
+                String clash = this.updater.getClashes().findClash(planned, suspects, this.named, running, goingIn,
+                        comingIn);
                 if (clash != null) {
                     LOGGER.info("[Hotwire] {} waits for the next start: {}", planned.manifest().id(), clash);
                     int at = inPlaceAt.get(i);
@@ -183,7 +185,7 @@ final class UpdateBatch {
         }));
     }
 
-    private boolean setAside(List<Path> jars, List<ModUpdater.Sorted.Planned> inPlace, List<Integer> inPlaceAt,
+    private boolean setAside(List<Path> jars, List<ModUpdater.SortResult.Planned> inPlace, List<Integer> inPlaceAt,
             List<ModUpdater.Result> made, ModUpdater.Result[] results, Map<String, String> waiting,
             BiFunction<Path, ModUpdater.Result.Failed, ModUpdater.Result> instead) {
         if (!(made.getFirst() instanceof ModUpdater.Result.Failed told)
@@ -198,7 +200,7 @@ final class UpdateBatch {
             boolean ownNamed = inPlace.stream().anyMatch(planned -> !Collections.disjoint(blamed,
                     findOwnClasses(planned)));
             for (int i = 0; i < inPlace.size(); i++) {
-                ModUpdater.Sorted.Planned planned = inPlace.get(i);
+                ModUpdater.SortResult.Planned planned = inPlace.get(i);
                 Set<String> named = ownNamed ? findOwnClasses(planned)
                         : ModMixins.of(planned.read(), ModPolicy.getSide()).targets();
                 if (modNamed ? isNamed(planned, blamed) : !Collections.disjoint(blamed, named)) {
@@ -208,7 +210,7 @@ final class UpdateBatch {
                     }
 
                     if (modNamed || (part.isRestartOnly() && !ownNamed)) {
-                        this.updater.keepFromCopies(planned.manifest().id());
+                        this.updater.getCopies().refuseCopies(planned.manifest().id());
                     }
                 }
             }
@@ -216,7 +218,7 @@ final class UpdateBatch {
         for (int i : atFault) {
             if (made.get(i) instanceof ModUpdater.Result.Failed failed) {
                 int at = inPlaceAt.get(i);
-                ModUpdater.Sorted.Planned planned = inPlace.get(i);
+                ModUpdater.SortResult.Planned planned = inPlace.get(i);
                 LOGGER.info("[Hotwire] {} is set aside: {}", planned.manifest().id(), failed.reason());
                 results[at] = instead.apply(jars.get(at), failed);
                 if (results[at] instanceof ModUpdater.Result.Queued) {
@@ -230,13 +232,13 @@ final class UpdateBatch {
         return !atFault.isEmpty();
     }
 
-    private static boolean isNamed(ModUpdater.Sorted.Planned planned, Set<String> blamed) {
+    private static boolean isNamed(ModUpdater.SortResult.Planned planned, Set<String> blamed) {
         return blamed.contains(RebuildException.MOD_MARK + planned.manifest().id())
                 || planned.whole().bundled().stream().anyMatch(carried ->
                         blamed.contains(RebuildException.MOD_MARK + carried.manifest().id()));
     }
 
-    private static Set<String> findOwnClasses(ModUpdater.Sorted.Planned planned) {
+    private static Set<String> findOwnClasses(ModUpdater.SortResult.Planned planned) {
         Set<String> own = new HashSet<>();
         planned.whole().plan().actions().forEach(action -> own.add(action.className()));
         planned.whole().bundled().forEach(carried ->

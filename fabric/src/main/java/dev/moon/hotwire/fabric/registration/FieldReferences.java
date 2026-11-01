@@ -5,7 +5,6 @@ import dev.moon.hotwire.fabric.mixin.core.world.item.CreativeModeTabsAccessor;
 import dev.moon.hotwire.jvm.LoadedClassList;
 import dev.moon.hotwire.redefine.ClassRebuilder;
 import dev.moon.hotwire.redefine.FieldSlots;
-import dev.moon.hotwire.redefine.InitialValues;
 import dev.moon.hotwire.switching.SwitchTimes;
 import java.lang.instrument.Instrumentation;
 import java.lang.management.ClassLoadingMXBean;
@@ -24,7 +23,6 @@ import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Map;
 import java.util.Objects;
-import java.util.Optional;
 import java.util.Set;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.ConcurrentHashMap;
@@ -42,21 +40,23 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 public final class FieldReferences {
+    private final FieldGiveBacks fieldGiveBacks = new FieldGiveBacks(this);
+
     private static final long REFRESH_DELAY_MILLIS = 200;
 
     private static final Logger LOGGER = LoggerFactory.getLogger(FieldReferences.class);
 
-    private record Replacement(FieldSlots.Slot field, @Nullable Object holder, Object modsValue, Object put) {
+    record Replacement(FieldSlots.Slot field, @Nullable Object holder, Object modsValue, Object put) {
     }
 
-    private record RemainingReference(FieldSlots.Slot field, @Nullable Object holder, Object value) {
+    record RemainingReference(FieldSlots.Slot field, @Nullable Object holder, Object value) {
     }
 
     private static final int GAME_DEPTH = 2;
     private static final int TARGETS_DEPTH = 4;
 
     private final Instrumentation instrumentation;
-    private final Function<String, byte @Nullable []> originalBytes;
+    final Function<String, byte @Nullable []> originalBytes;
     private final Function<String, byte @Nullable []> readOnce;
     private final Map<String, List<Replacement>> replacements = new ConcurrentHashMap<>();
 
@@ -73,7 +73,7 @@ public final class FieldReferences {
     private final LoadedCheckAnswers loadedChecks;
     private final StaticRecomputer recomputer;
     private final Function<String, Set<String>> mixinTargets;
-    private final Lambdas lambdas;
+    final Lambdas lambdas;
     private final Function<String, Set<String>> handedTo;
     private boolean askedForInitializedCheck;
     private @Nullable Method initializedCheck;
@@ -416,7 +416,7 @@ public final class FieldReferences {
             for (Replacement one : this.replacements.getOrDefault(mod, List.of())) {
                 try {
                     if (one.field().get(one.holder()) == one.put()) {
-                        carry(one.put(), one.modsValue());
+                        FieldGiveBacks.carry(one.put(), one.modsValue());
                         this.write(one.field(), one.holder(), one.modsValue());
                     }
                 } catch (IllegalAccessException | RuntimeException e) {
@@ -463,20 +463,20 @@ public final class FieldReferences {
             for (String name : owners) {
                 Class<?> owner = loaded.get(name);
                 if (owner != null && others.test(owner)) {
-                    this.giveBack(owner, null, mod, mine, retained, false);
+                    this.fieldGiveBacks.giveBack(owner, null, mod, mine, retained, false);
                 }
             }
 
             scan.classesOf().forEach((other, classes) -> {
                 if (!mods.contains(other) && on.test(other) && this.handedTo.apply(other).contains(mod)) {
                     List<Class<?>> set = classes.stream().filter(this::isInitialized).filter(others).toList();
-                    set.forEach(owner -> this.giveBack(owner, null, mod, mine, retained, true));
+                    set.forEach(owner -> this.fieldGiveBacks.giveBack(owner, null, mod, mine, retained, true));
                     LOGGER.info("[Hotwire] the statics of {} classes of {} were looked into for {}'s callbacks",
                             set.size(), other, mod);
                 }
             });
 
-            this.giveBack(game.getClass(), game, mod, mine, retained, true);
+            this.fieldGiveBacks.giveBack(game.getClass(), game, mod, mine, retained, true);
             List<Object> holders = new ArrayList<>(near);
             holders.addAll(connected);
 
@@ -487,10 +487,10 @@ public final class FieldReferences {
             Set<Object> done = Collections.newSetFromMap(new IdentityHashMap<>());
             for (Object object : holders) {
                 if (others.test(object.getClass()) && done.add(object)) {
-                    this.giveBack(object.getClass(), object, mod, mine, retained, true);
+                    this.fieldGiveBacks.giveBack(object.getClass(), object, mod, mine, retained, true);
                 }
             }
-            checkSameAsGiven(retained, mine);
+            FieldGiveBacks.checkSameAsGiven(retained, mine);
             planned.put(mod, mine);
         }
         return planned;
@@ -507,7 +507,7 @@ public final class FieldReferences {
             }
             try {
                 if (one.field().get(one.holder()) == one.modsValue()) {
-                    carry(one.modsValue(), one.put());
+                    FieldGiveBacks.carry(one.modsValue(), one.put());
                     this.write(one.field(), one.holder(), one.put());
                     done.add(one);
                 }
@@ -532,86 +532,4 @@ public final class FieldReferences {
         return Fields.findBelow(holder, steps, type -> type.getName().startsWith("net.minecraft."));
     }
 
-    private void giveBack(Class<?> owner, @Nullable Object holder, String mod, List<Replacement> mine,
-            List<RemainingReference> retained, boolean looksInto) {
-        List<FieldSlots.Slot> fields = Fields.getReferenceFields(owner, holder == null);
-        for (FieldSlots.Slot field : fields) {
-            if (field.getType().isPrimitive()) {
-                continue;
-            }
-            try {
-                Object value = field.get(holder);
-                if (value != null && holder != null && mod.equals(this.lambdas.findModOf(value.getClass()))) {
-                    Object inner = Lambdas.findWrapped(value, field.getType(), mod);
-                    if (inner != null) {
-                        mine.add(new Replacement(field, holder, value, inner));
-                    }
-                    continue;
-                }
-                if (value == null || (!mod.equals(GameRegistrations.findModOf(value.getClass()))
-                        && !(looksInto && CallbackCheck.callsInto(value, mod, this.lambdas::findModOf)))) {
-                    continue;
-                }
-                Class<?> declaring = field.getDeclaringClass();
-                byte[] original = this.originalBytes.apply(declaring.getName().replace('.', '/'));
-                String descriptor = field.getType().descriptorString();
-
-                if (original != null && !ClassFileSummary.isDeclaredBy(original, field.getName(), descriptor)) {
-                    continue;
-                }
-
-                boolean handed = holder == null && looksInto;
-                if (original != null && !handed
-                        && ClassFileSummary.isSetAgainLater(original, field.getName(), descriptor, holder == null)) {
-                    LOGGER.info("[Hotwire] {}.{} keeps {}'s object: its class sets it again over its life",
-                            declaring.getName(), field.getName(), mod);
-                    continue;
-                }
-                Optional<Object> own = original == null ? Optional.empty() : holder == null
-                        ? InitialValues.ofStatic(declaring, original, field.getName(), descriptor)
-                        : InitialValues.ofInstance(declaring, original, holder, field.getName(), descriptor);
-                if ((own.isEmpty() || mod.equals(GameRegistrations.findModOf(own.get().getClass())))
-                        && StandIns.fits(field.getType())) {
-                    own = Optional.of(StandIns.of(field.getType()));
-                }
-                if (own.isEmpty() || mod.equals(GameRegistrations.findModOf(own.get().getClass()))) {
-                    retained.add(new RemainingReference(field, holder, value));
-                    continue;
-                }
-                mine.add(new Replacement(field, holder, value, own.get()));
-            } catch (ReflectiveOperationException | RuntimeException | LinkageError e) {
-                LOGGER.warn("[Hotwire] {}.{} could not be looked at for {}'s objects", owner.getName(),
-                        field.getName(), mod, e);
-            }
-        }
-    }
-
-    @SuppressWarnings("ReferenceEquality")
-    private static void checkSameAsGiven(List<RemainingReference> retained, List<Replacement> mine) {
-        for (RemainingReference one : retained) {
-            Replacement given = mine.stream().filter(removed -> removed.modsValue() == one.value()).findFirst()
-                    .orElse(null);
-            if (given == null) {
-                LOGGER.info("[Hotwire] {}.{} keeps the mod's object: its class sets nothing plain there",
-                        one.field().getDeclaringClass().getName(), one.field().getName());
-            } else {
-                mine.add(new Replacement(one.field(), one.holder(), one.value(), given.put()));
-            }
-        }
-    }
-
-    @SuppressWarnings({"unchecked", "rawtypes"})
-    private static void carry(Object from, Object to) {
-        try {
-            if (from instanceof Map fromMap && to instanceof Map toMap) {
-                toMap.clear();
-                toMap.putAll(fromMap);
-            } else if (from instanceof Collection fromItems && to instanceof Collection toItems) {
-                toItems.clear();
-                toItems.addAll(fromItems);
-            }
-        } catch (UnsupportedOperationException e) {
-            LOGGER.info("[Hotwire] a {} takes no change; it goes in as it is", to.getClass().getName());
-        }
-    }
 }

@@ -24,7 +24,7 @@ final class PlanCache {
             return known;
         }
         ModJar read = ModJarReader.read(jar);
-        this.keep(this.reads, key, read);
+        this.store(this.reads, key, read);
         return read;
     }
 
@@ -35,7 +35,7 @@ final class PlanCache {
             return known;
         }
         JarDiff diff = UpdateDiffer.compare(running, incoming);
-        this.keep(this.diffs, key, diff);
+        this.store(this.diffs, key, diff);
         return diff;
     }
 
@@ -44,7 +44,7 @@ final class PlanCache {
         this.diffs.clear();
     }
 
-    private <T> void keep(Map<String, T> into, String key, T value) {
+    private <T> void store(Map<String, T> into, String key, T value) {
         if (into.size() >= MOST) {
             into.clear();
         }

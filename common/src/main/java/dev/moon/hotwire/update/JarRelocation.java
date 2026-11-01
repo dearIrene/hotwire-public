@@ -110,7 +110,7 @@ public final class JarRelocation {
             into.put(jars.get(i), out.get(i));
         }
         try {
-            Parallel.forEachBeside(jars, jar -> {
+            Parallel.runEachBeside(jars, jar -> {
                 try {
                     Files.write(into.get(jar), copy.makeCopy(readAll(jar)));
                 } catch (IOException e) {
@@ -132,7 +132,7 @@ public final class JarRelocation {
 
     private static void collectWithState(Map<String, byte[]> entries, BiPredicate<String, String> takes,
             Set<String> into) throws IOException {
-        for (Map<String, byte[]> nested : findTaken(entries, takes).values()) {
+        for (Map<String, byte[]> nested : findGoingAlong(entries, takes).values()) {
             JsonObject manifest = readManifest(nested);
             if ((manifest.has("mixins") && !manifest.getAsJsonArray("mixins").isEmpty())
                     || (manifest.has("entrypoints") && !manifest.getAsJsonObject("entrypoints").isEmpty())) {
@@ -163,7 +163,7 @@ public final class JarRelocation {
                 into.add(entries.get(name));
             }
         }
-        for (Map<String, byte[]> nested : findTaken(entries, takes).values()) {
+        for (Map<String, byte[]> nested : findGoingAlong(entries, takes).values()) {
             collectMixinClasses(nested, takes, into);
         }
     }
@@ -194,18 +194,18 @@ public final class JarRelocation {
 
     private static void collectCarried(Map<String, byte[]> entries, BiPredicate<String, String> takes,
             Map<String, String> into) throws IOException {
-        for (Map<String, byte[]> nested : findTaken(entries, takes).values()) {
+        for (Map<String, byte[]> nested : findGoingAlong(entries, takes).values()) {
             JsonObject manifest = readManifest(nested);
             into.put(manifest.get("id").getAsString(), manifest.get("version").getAsString());
             collectCarried(nested, takes, into);
         }
     }
 
-    private static Map<String, Map<String, byte[]>> findTaken(Map<String, byte[]> entries,
+    private static Map<String, Map<String, byte[]>> findGoingAlong(Map<String, byte[]> entries,
             BiPredicate<String, String> takes) throws IOException {
-        Map<String, Map<String, byte[]>> taken = new LinkedHashMap<>();
+        Map<String, Map<String, byte[]>> goingAlong = new LinkedHashMap<>();
         if (!entries.containsKey(MANIFEST)) {
-            return taken;
+            return goingAlong;
         }
         JsonObject parent = readManifest(entries);
         JsonArray jars = parent.getAsJsonArray("jars");
@@ -219,12 +219,12 @@ public final class JarRelocation {
 
                     if (holdsConfigOf(parent, nested)
                             || takes.test(manifest.get("id").getAsString(), manifest.get("version").getAsString())) {
-                        taken.put(file, nested);
+                        goingAlong.put(file, nested);
                     }
                 }
             }
         }
-        return taken;
+        return goingAlong;
     }
 
     private static boolean holdsConfigOf(JsonObject parent, Map<String, byte[]> nested) {
@@ -277,7 +277,7 @@ public final class JarRelocation {
         if (manifest.has("provides")) {
             manifest.getAsJsonArray("provides").forEach(one -> this.liveIds.putIfAbsent(one.getAsString(), live));
         }
-        for (Map<String, byte[]> nested : findTaken(entries, this.takesCarried).values()) {
+        for (Map<String, byte[]> nested : findGoingAlong(entries, this.takesCarried).values()) {
             this.scan(nested);
         }
     }
@@ -320,25 +320,25 @@ public final class JarRelocation {
     private byte[] makeCopy(Map<String, byte[]> entries) throws IOException {
         JsonObject manifest = readManifest(entries);
         Map<String, String> renamed = this.findRenamedFiles(entries, manifest);
-        Map<String, Map<String, byte[]>> taken = findTaken(entries, this.takesCarried);
+        Map<String, Map<String, byte[]>> goingAlong = findGoingAlong(entries, this.takesCarried);
         ByteArrayOutputStream bytes = new ByteArrayOutputStream();
         try (ZipOutputStream into = new ZipOutputStream(bytes)) {
             for (Map.Entry<String, byte[]> entry : entries.entrySet()) {
-                this.copyEntry(into, entry.getKey(), entry.getValue(), manifest, renamed, taken);
+                this.copyEntry(into, entry.getKey(), entry.getValue(), manifest, renamed, goingAlong);
             }
         }
         return bytes.toByteArray();
     }
 
     private void copyEntry(ZipOutputStream into, String name, byte[] body, JsonObject manifest,
-            Map<String, String> renamed, Map<String, Map<String, byte[]>> taken) throws IOException {
-        if (taken.containsKey(name)) {
-            put(into, this.mapNestedName(name), this.makeCopy(taken.get(name)));
+            Map<String, String> renamed, Map<String, Map<String, byte[]>> goingAlong) throws IOException {
+        if (goingAlong.containsKey(name)) {
+            put(into, this.mapNestedName(name), this.makeCopy(goingAlong.get(name)));
         } else if (name.endsWith(".SF") || name.endsWith(".RSA") || name.endsWith(".DSA")
                 || name.startsWith("META-INF/jars/") || name.startsWith("META-INF/versions/")) {
             return;
         } else if (name.equals(MANIFEST)) {
-            put(into, name, this.makeManifest(manifest, renamed, taken.keySet()));
+            put(into, name, this.makeManifest(manifest, renamed, goingAlong.keySet()));
         } else if (name.endsWith(CLASS_SUFFIX)) {
             ClassWriter writer = new ClassWriter(0);
             new ClassReader(body).accept(new ClassRemapper(writer, this.remapper), 0);
@@ -390,7 +390,7 @@ public final class JarRelocation {
         return name.substring(0, slash) + this.tag + "-" + name.substring(slash);
     }
 
-    private byte[] makeManifest(JsonObject manifest, Map<String, String> renamed, Set<String> taken) {
+    private byte[] makeManifest(JsonObject manifest, Map<String, String> renamed, Set<String> goingAlong) {
         String id = manifest.get("id").getAsString();
         manifest.addProperty("id", findLiveId(id, this.tag));
         JsonArray provides = manifest.has("provides") ? manifest.getAsJsonArray("provides") : new JsonArray();
@@ -398,16 +398,16 @@ public final class JarRelocation {
         manifest.add("provides", provides);
         JsonArray jars = manifest.getAsJsonArray("jars");
         if (jars != null) {
-            JsonArray kept = new JsonArray();
+            JsonArray listed = new JsonArray();
             jars.forEach(one -> {
                 String file = one.getAsJsonObject().get("file").getAsString();
-                if (taken.contains(file)) {
+                if (goingAlong.contains(file)) {
                     JsonObject entry = one.getAsJsonObject().deepCopy();
                     entry.addProperty("file", this.mapNestedName(file));
-                    kept.add(entry);
+                    listed.add(entry);
                 }
             });
-            manifest.add("jars", kept);
+            manifest.add("jars", listed);
         }
         JsonObject depends = manifest.getAsJsonObject("depends");
         if (depends != null) {

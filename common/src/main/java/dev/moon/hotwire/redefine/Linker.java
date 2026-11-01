@@ -7,16 +7,12 @@ import java.lang.invoke.MethodHandle;
 import java.lang.invoke.MethodHandleInfo;
 import java.lang.invoke.MethodHandles;
 import java.lang.invoke.MethodType;
-import java.lang.reflect.Field;
-import java.lang.reflect.Member;
 import java.lang.reflect.Method;
-import java.lang.reflect.Modifier;
 import java.util.ArrayDeque;
 import java.util.Collection;
 import java.util.Collections;
 import java.util.Deque;
 import java.util.HashSet;
-import java.util.List;
 import java.util.Map;
 import java.util.Set;
 import java.util.WeakHashMap;
@@ -36,11 +32,11 @@ public final class Linker {
     static final int VIRTUAL = 4;
     static final int PUT_FINAL = 5;
 
-    private static final Map<Class<?>, MethodHandles.Lookup> SIDECARS = new ConcurrentHashMap<>();
+    static final Map<Class<?>, MethodHandles.Lookup> SIDECARS = new ConcurrentHashMap<>();
 
     private static final Map<Class<?>, Class<?>> SIDECAR_TARGETS = Collections.synchronizedMap(new WeakHashMap<>());
 
-    private static final Map<Class<?>, Deque<MethodHandles.Lookup>> EARLIER = new ConcurrentHashMap<>();
+    static final Map<Class<?>, Deque<MethodHandles.Lookup>> EARLIER = new ConcurrentHashMap<>();
 
     private static final Set<Class<?>> PENDING = ConcurrentHashMap.newKeySet();
     private static final int EARLIER_LIMIT = 4;
@@ -50,7 +46,7 @@ public final class Linker {
     private static final Map<String, Set<Class<?>>> DUCKS = new ConcurrentHashMap<>();
 
     private static final Set<String> MOVED = ConcurrentHashMap.newKeySet();
-    private static final Map<Class<?>, Set<String>> MOVED_BY_TARGET = new ConcurrentHashMap<>();
+    static final Map<Class<?>, Set<String>> MOVED_BY_TARGET = new ConcurrentHashMap<>();
 
     private static volatile WidenerUses.Openings openings = WidenerUses.Openings.NONE;
     private static final Set<String> ADOPTED = ConcurrentHashMap.newKeySet();
@@ -273,7 +269,7 @@ public final class Linker {
                 return side.findStatic(side.lookupClass(), method, type.insertParameterTypes(0, at));
             }
         }
-        MethodHandle gained = findGainedDefault(method, type, receiver);
+        MethodHandle gained = LinkerLookups.findGainedDefault(method, type, receiver);
         if (gained != null) {
             return gained;
         }
@@ -292,57 +288,6 @@ public final class Linker {
             }
             throw notPublic;
         }
-    }
-
-    static @Nullable MethodHandle findGainedDefault(String method, MethodType type, Class<?> receiver) {
-        Deque<Class<?>> open = new ArrayDeque<>();
-        for (Class<?> at = receiver; at != null; at = at.getSuperclass()) {
-            open.addAll(List.of(at.getInterfaces()));
-        }
-        if (receiver.isInterface()) {
-            open.add(receiver);
-        }
-        Set<Class<?>> seen = new HashSet<>();
-        Class<?> holder = null;
-        MethodHandle body = null;
-        while (!open.isEmpty()) {
-            Class<?> at = open.remove();
-            if (seen.add(at)) {
-                open.addAll(List.of(at.getInterfaces()));
-                MethodHandle here = holder == null || holder.isAssignableFrom(at)
-                        ? findSidecarBody(at, method, type) : null;
-                if (here != null) {
-                    holder = at;
-                    body = here;
-                }
-            }
-        }
-        return body == null || hasOwnBody(receiver, method, type) ? null : body;
-    }
-
-    private static @Nullable MethodHandle findSidecarBody(Class<?> at, String method, MethodType type) {
-        MethodHandles.Lookup side = SIDECARS.get(at);
-        if (side == null || !MOVED_BY_TARGET.getOrDefault(at, Set.of()).contains(method
-                + type.toMethodDescriptorString())) {
-            return null;
-        }
-        try {
-            return side.findStatic(side.lookupClass(), method, type.insertParameterTypes(0, at));
-        } catch (NoSuchMethodException | IllegalAccessException abstractOnly) {
-            return null;
-        }
-    }
-
-    private static boolean hasOwnBody(Class<?> receiver, String method, MethodType type) {
-        for (Class<?> at = receiver; at != null; at = at.getSuperclass()) {
-            try {
-                if (!Modifier.isAbstract(at.getDeclaredMethod(method, type.parameterArray()).getModifiers())) {
-                    return !at.isInterface();
-                }
-            } catch (NoSuchMethodException | LinkageError e) {
-            }
-        }
-        return false;
     }
 
     public static CallSite bootstrapIsInstance(MethodHandles.Lookup caller, String name, MethodType type, String duck)
@@ -471,36 +416,9 @@ public final class Linker {
 
     public static CallSite bootstrapMethod(MethodHandles.Lookup caller, String name, MethodType type)
             throws ReflectiveOperationException {
-        return SidecarCallSites.bind(getHostOf(caller.lookupClass()), findInSidecars(caller.lookupClass(), name, type),
+        return SidecarCallSites.bind(getHostOf(caller.lookupClass()),
+                LinkerLookups.findInSidecars(caller.lookupClass(), name, type),
                 name, type);
-    }
-
-    private static MethodHandle findInSidecars(Class<?> caller, String name, MethodType type)
-            throws ReflectiveOperationException {
-        MethodHandles.Lookup side = getSidecarOf(caller);
-        try {
-            return side.findStatic(side.lookupClass(), name, type);
-        } catch (NoSuchMethodException missing) {
-            if (SidecarCallSites.isCallback(type)) {
-                MethodHandle renamed = SidecarCallSites.findRenamed(side, name, type);
-                if (renamed != null) {
-                    return renamed;
-                }
-                onSkippedCallback(getHostOf(caller).getName() + "." + name);
-                return MethodHandles.empty(type);
-            }
-            for (MethodHandles.Lookup earlier : EARLIER.getOrDefault(getHostOf(caller), new ArrayDeque<>())) {
-                try {
-                    MethodHandle found = earlier.findStatic(earlier.lookupClass(), name, type);
-                    LOGGER.info("[Hotwire] {} ran on through its redefinition and reached {} in its earlier sidecar",
-                            getHostOf(caller).getName(), name);
-                    return found;
-                } catch (NoSuchMethodException notThere) {
-                    missing.addSuppressed(notThere);
-                }
-            }
-            throw missing;
-        }
     }
 
     public static CallSite bootstrapSuperCall(MethodHandles.Lookup caller, String name, MethodType type, Class<?> owner)
@@ -512,15 +430,16 @@ public final class Linker {
             int kind) throws ReflectiveOperationException {
         MethodHandle handle;
         try {
-            handle = findMember(caller, name, type, owner, kind);
+            handle = LinkerLookups.findMember(caller, name, type, owner, kind);
         } catch (IllegalAccessException notPublic) {
             MethodHandles.Lookup host = MethodHandles.privateLookupIn(getHostOf(caller.lookupClass()),
                     MethodHandles.lookup());
             try {
-                handle = findMember(host, name, type, owner, kind);
+                handle = LinkerLookups.findMember(host, name, type, owner, kind);
             } catch (IllegalAccessException notProtected) {
-                Class<?> declarer = findDeclarer(owner, name, type, kind);
-                handle = findMember(MethodHandles.privateLookupIn(declarer, MethodHandles.lookup()), name, type,
+                Class<?> declarer = LinkerLookups.findDeclarer(owner, name, type, kind);
+                handle = LinkerLookups.findMember(MethodHandles.privateLookupIn(declarer, MethodHandles.lookup()),
+                        name, type,
                         declarer, kind);
             }
         } catch (NoSuchMethodException added) {
@@ -531,29 +450,6 @@ public final class Linker {
                     type.dropParameterTypes(0, 1).toMethodDescriptorString(), 0);
         }
         return new ConstantCallSite(MethodHandles.explicitCastArguments(handle, type));
-    }
-
-    private static Class<?> findDeclarer(Class<?> owner, String name, MethodType type, int kind) {
-        for (Class<?> at = owner; at != null; at = at.getSuperclass()) {
-            try {
-                Member member = kind == VIRTUAL ? at.getDeclaredMethod(name,
-                        type.dropParameterTypes(0, 1).parameterArray()) : at.getDeclaredField(name);
-                return member.getDeclaringClass();
-            } catch (NoSuchMethodException | NoSuchFieldException | LinkageError e) {
-            }
-        }
-        return owner;
-    }
-
-    private static MethodHandle findMember(MethodHandles.Lookup lookup, String name, MethodType type, Class<?> owner,
-            int kind) throws ReflectiveOperationException {
-        return switch (kind) {
-            case VIRTUAL -> lookup.findVirtual(owner, name, type.dropParameterTypes(0, 1));
-            case GET_FIELD -> lookup.findGetter(owner, name, type.returnType());
-
-            case PUT_FIELD -> OpenedMembers.findSetter(lookup, owner, name, type.parameterType(1), false);
-            default -> throw new IllegalArgumentException("kind " + kind);
-        };
     }
 
     public static CallSite bootstrapField(MethodHandles.Lookup caller, String name, MethodType type, int kind,
@@ -574,28 +470,7 @@ public final class Linker {
 
     static MethodHandle findCastFieldHandle(Class<?> target, String name, MethodType type, int kind)
             throws ReflectiveOperationException {
-        return MethodHandles.explicitCastArguments(findFieldHandle(target, name, type, kind), type);
-    }
-
-    private static MethodHandle findFieldHandle(Class<?> target, String name, MethodType type, int kind)
-            throws ReflectiveOperationException {
-        return switch (kind) {
-            case GET_FIELD -> FieldAccess.findGetter(target, name, type.returnType());
-            case PUT_FIELD -> FieldAccess.findSetter(target, name, type.parameterType(1));
-            case GET_STATIC -> FieldAccess.findStaticGetter(target, name, type.returnType());
-            case PUT_STATIC -> FieldAccess.findStaticSetter(target, name, type.parameterType(0));
-            case PUT_FINAL -> findFinalSetter(target, name);
-            default -> throw new IllegalArgumentException("kind " + kind);
-        };
-    }
-
-    private static MethodHandle findFinalSetter(Class<?> target, String name) throws ReflectiveOperationException {
-        Field field = target.getDeclaredField(name);
-        if (FinalWrites.isShut(field)) {
-            return FinalWrites.findSetter(field);
-        }
-        field.setAccessible(true);
-        return MethodHandles.lookup().unreflectSetter(field);
+        return MethodHandles.explicitCastArguments(LinkerLookups.findFieldHandle(target, name, type, kind), type);
     }
 
     public static CallSite bootstrapDuckLambda(MethodHandles.Lookup caller, String name, MethodType factory,
@@ -627,11 +502,11 @@ public final class Linker {
         MethodHandles.Lookup side = getSidecarOf(caller.lookupClass());
         MethodType implType = MethodType.fromMethodDescriptorString(implDescriptor,
                 side.lookupClass().getClassLoader());
-        MethodHandle impl = findInSidecars(caller.lookupClass(), implName, implType);
+        MethodHandle impl = LinkerLookups.findInSidecars(caller.lookupClass(), implName, implType);
         return Lambdas.spin(side, name, type, erased, impl);
     }
 
-    private static MethodHandles.Lookup getSidecarOf(Class<?> caller) {
+    static MethodHandles.Lookup getSidecarOf(Class<?> caller) {
         MethodHandles.Lookup side = SIDECARS.get(getHostOf(caller));
         if (side == null) {
             throw new IllegalStateException("[Hotwire] no sidecar is installed for " + caller.getName());

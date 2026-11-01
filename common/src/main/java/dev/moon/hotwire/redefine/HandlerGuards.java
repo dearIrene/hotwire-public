@@ -8,24 +8,20 @@ import java.lang.invoke.MethodType;
 import java.lang.invoke.MutableCallSite;
 import java.nio.charset.StandardCharsets;
 import java.util.ArrayList;
-import java.util.Arrays;
 import java.util.HashMap;
 import java.util.HashSet;
 import java.util.List;
 import java.util.Locale;
 import java.util.Map;
-import java.util.OptionalInt;
 import java.util.Set;
 import java.util.WeakHashMap;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.atomic.AtomicLong;
 import java.util.function.Function;
-import java.util.function.Supplier;
 import org.jspecify.annotations.Nullable;
 import org.objectweb.asm.ClassReader;
 import org.objectweb.asm.Handle;
 import org.objectweb.asm.Opcodes;
-import org.objectweb.asm.Type;
 import org.objectweb.asm.tree.AbstractInsnNode;
 import org.objectweb.asm.tree.AnnotationNode;
 import org.objectweb.asm.tree.ClassNode;
@@ -43,10 +39,10 @@ public final class HandlerGuards {
     private static final String MERGED = "Lorg/spongepowered/asm/mixin/transformer/meta/MixinMerged;";
     private static final byte[] MERGED_BYTES = MERGED.getBytes(StandardCharsets.UTF_8);
 
-    private static final int OWN = 0;
-    private static final int STATIC = 1;
-    private static final int VIRTUAL = 2;
-    private static final Map<String, Integer> KINDS = Map.ofEntries(
+    static final int OWN = 0;
+    static final int STATIC = 1;
+    static final int VIRTUAL = 2;
+    static final Map<String, Integer> KINDS = Map.ofEntries(
             Map.entry("handler", HandlerStandIns.NOTHING),
             Map.entry("args", HandlerStandIns.NOTHING),
             Map.entry("modify", HandlerStandIns.AS_IT_WAS),
@@ -59,20 +55,20 @@ public final class HandlerGuards {
             Map.entry("wrapMethod", HandlerStandIns.OPERATION),
             Map.entry("wrapWithCondition", HandlerStandIns.TRUE));
 
-    private static final Set<String> UNFLIPPABLE = ConcurrentHashMap.newKeySet();
+    static final Set<String> UNFLIPPABLE = ConcurrentHashMap.newKeySet();
 
     private static final Map<String, Set<String>> UNFLIPPABLE_AT = new ConcurrentHashMap<>();
-    private static final Handle BOOTSTRAP = new Handle(Opcodes.H_INVOKESTATIC,
+    static final Handle BOOTSTRAP = new Handle(Opcodes.H_INVOKESTATIC,
             HandlerGuards.class.getName().replace('.', '/'), "bootstrap",
             MethodType.methodType(CallSite.class, MethodHandles.Lookup.class, String.class, MethodType.class,
                     String.class, int.class, int.class, int.class).toMethodDescriptorString(), false);
-    private static final Handle BOOTSTRAP_REDIRECT = new Handle(Opcodes.H_INVOKESTATIC,
+    static final Handle BOOTSTRAP_REDIRECT = new Handle(Opcodes.H_INVOKESTATIC,
             HandlerGuards.class.getName().replace('.', '/'), "bootstrapRedirect",
             MethodType.methodType(CallSite.class, MethodHandles.Lookup.class, String.class, MethodType.class,
                     String.class, int.class, int.class, String.class, String.class, String.class)
                     .toMethodDescriptorString(), false);
 
-    private static volatile Function<String, byte @Nullable []> originals = name -> null;
+    static volatile Function<String, byte @Nullable []> originals = name -> null;
 
     private record Guard(MethodHandle handler, MethodHandle standIn) {
     }
@@ -81,10 +77,10 @@ public final class HandlerGuards {
     private static final Set<String> OFF = new HashSet<>();
 
     private static final Map<String, Set<String>> GUARDED = new ConcurrentHashMap<>();
-    private static final Map<String, Set<String>> STAGED = new ConcurrentHashMap<>();
+    static final Map<String, Set<String>> STAGED = new ConcurrentHashMap<>();
 
     private static final Map<String, Set<String>> PRESENT = new ConcurrentHashMap<>();
-    private static final Map<String, Set<String>> STAGED_PRESENT = new ConcurrentHashMap<>();
+    static final Map<String, Set<String>> STAGED_PRESENT = new ConcurrentHashMap<>();
     private static final Map<String, Set<String>> DIRECT_MODS = new ConcurrentHashMap<>();
 
     private static final Map<String, Set<String>> BEHAVING = new ConcurrentHashMap<>();
@@ -98,7 +94,7 @@ public final class HandlerGuards {
             "blockcolor", "quad", "mesh", "terrain", "fluidrender", "section", "blockstatemodel");
     private static final Object LOCK = new Object();
 
-    private static volatile Set<String> neverSwitched = Set.of();
+    static volatile Set<String> neverSwitched = Set.of();
 
     private HandlerGuards() {
     }
@@ -236,7 +232,7 @@ public final class HandlerGuards {
         PRESENT.remove(internalName);
     }
 
-    private static void markUnflippable(String internalName, String mixin) {
+    static void markUnflippable(String internalName, String mixin) {
         UNFLIPPABLE.add(mixin);
         UNFLIPPABLE_AT.computeIfAbsent(internalName, name -> ConcurrentHashMap.newKeySet()).add(mixin);
     }
@@ -269,143 +265,10 @@ public final class HandlerGuards {
         }
         ClassNode node = new ClassNode();
         new ClassReader(bytes).accept(node, 0);
-        boolean made = makeSites(internalName, node);
+        boolean made = HandlerSites.makeSites(internalName, node);
         noteBehaving(internalName, node);
         commitStaged(internalName);
         return made ? DuckBridge.write(node, 0) : null;
-    }
-
-    public static boolean makeSites(String internalName, ClassNode node) {
-        if ((node.version & 0xFFFF) < Opcodes.V1_7) {
-            return false;
-        }
-
-        Map<String, String> mixinOfHandler = new HashMap<>();
-
-        Set<String> merged = new HashSet<>();
-        for (MethodNode method : node.methods) {
-            String mixin = findMerged(method);
-            if (mixin != null) {
-                merged.add(mixin);
-                if (isHandlerName(method.name)) {
-                    mixinOfHandler.put(method.name + method.desc, mixin);
-                }
-            }
-        }
-
-        STAGED_PRESENT.put(internalName, Set.copyOf(merged));
-        if (mixinOfHandler.isEmpty()) {
-            return false;
-        }
-        Set<String> guarded = new HashSet<>();
-
-        ClassNode[] original = new ClassNode[1];
-        boolean[] originalRead = new boolean[1];
-        Supplier<@Nullable ClassNode> shipped = () -> {
-            if (!originalRead[0]) {
-                originalRead[0] = true;
-                byte[] bytes = originals.apply(internalName);
-                if (bytes != null) {
-                    original[0] = new ClassNode();
-                    new ClassReader(bytes).accept(original[0], ClassReader.SKIP_DEBUG);
-                }
-            }
-            return original[0];
-        };
-        NullArguments nulls = new NullArguments(internalName);
-        for (MethodNode method : node.methods) {
-            for (AbstractInsnNode insn : method.instructions.toArray()) {
-                if (!(insn instanceof MethodInsnNode call) || !call.owner.equals(internalName)) {
-                    continue;
-                }
-                String mixin = mixinOfHandler.get(call.name + call.desc);
-                if (mixin == null || mixin.equals(mixinOfHandler.get(method.name + method.desc))) {
-                    continue;
-                }
-                String handlerMod = findModInHandlerName(call.name);
-                if (handlerMod != null && neverSwitched.contains(handlerMod)) {
-                    continue;
-                }
-                if (method.name.equals("<clinit>")) {
-                    markUnflippable(internalName, mixin);
-                    continue;
-                }
-                if (method.name.equals("<init>")) {
-                    if (!UNFLIPPABLE.contains(mixin)) {
-                        LOGGER.info("[Hotwire] {}'s constructor calls a handler of {}: it is rebuilt, not flipped",
-                                internalName, mixin);
-                    }
-                    markUnflippable(internalName, mixin);
-                    continue;
-                }
-                boolean isStatic = call.getOpcode() == Opcodes.INVOKESTATIC;
-                int how = isStatic ? STATIC : call.getOpcode() == Opcodes.INVOKESPECIAL ? OWN : VIRTUAL;
-                String prefix = call.name.substring(0, call.name.indexOf('$'));
-                Integer kind = KINDS.get(prefix);
-                if (kind == null && !prefix.equals("redirect")) {
-                    continue;
-                }
-                String desc = isStatic ? call.desc : "(L" + internalName + ";" + call.desc.substring(1);
-                String why = "";
-                if (kind == null) {
-                    ClassNode before = shipped.get();
-                    RedirectStandIns.Target target = before == null ? null
-                            : RedirectStandIns.find(before, node, method, call.desc);
-                    if (target == null && !UNFLIPPABLE.contains(mixin)) {
-                        why = " (" + RedirectStandIns.explainMiss(before, node, method, call.desc) + ")";
-                    }
-                    if (target != null) {
-                        method.instructions.set(call, new InvokeDynamicInsnNode(call.name, desc, BOOTSTRAP_REDIRECT,
-                                mixin, how, target.opcode(), target.owner(), target.name(),
-                                target.desc()));
-                        guarded.add(mixin);
-                        continue;
-                    }
-                }
-                OptionalInt index = kind == null ? OptionalInt.empty() : switch (kind) {
-                    case HandlerStandIns.AS_IT_WAS -> HandlerStandIns.findAsItWas(call);
-                    case HandlerStandIns.OPERATION -> HandlerStandIns.findOperation(call.desc);
-                    default -> OptionalInt.of(0);
-                };
-                if (kind != null && kind == HandlerStandIns.OPERATION && index.isPresent()
-                        && nulls.isNull(method, call, index.getAsInt())) {
-                    ClassNode was = shipped.get();
-                    Type[] arguments = Type.getArgumentTypes(call.desc);
-                    String shape = Type.getMethodDescriptor(Type.getReturnType(call.desc),
-                            Arrays.copyOf(arguments, index.getAsInt()));
-                    RedirectStandIns.Target target = was == null ? null
-                            : RedirectStandIns.find(was, node, method, shape);
-                    if (target == null) {
-                        if (!UNFLIPPABLE.contains(mixin)) {
-                            LOGGER.info("[Hotwire] {}.{} runs its operation inside itself and what it wraps is not"
-                                    + " told: {} is rebuilt, not flipped", internalName, call.name, mixin);
-                        }
-                        markUnflippable(internalName, mixin);
-                        continue;
-                    }
-                    method.instructions.set(call, new InvokeDynamicInsnNode(call.name, desc, BOOTSTRAP_REDIRECT,
-                            mixin, how, target.opcode(), target.owner(), target.name(), target.desc()));
-                    guarded.add(mixin);
-                    continue;
-                }
-                if (index.isEmpty()) {
-                    if (!UNFLIPPABLE.contains(mixin)) {
-                        LOGGER.info("[Hotwire] {}.{} has no stand-in{}: {} is rebuilt, not flipped", internalName,
-                                call.name, why, mixin);
-                    }
-                    markUnflippable(internalName, mixin);
-                    continue;
-                }
-                method.instructions.set(call, new InvokeDynamicInsnNode(call.name, desc, BOOTSTRAP, mixin,
-                        how, kind, index.getAsInt() + (isStatic ? 0 : 1)));
-                guarded.add(mixin);
-            }
-        }
-        if (guarded.isEmpty()) {
-            return false;
-        }
-        STAGED.put(internalName, Set.copyOf(guarded));
-        return true;
     }
 
     public static void recordSidecar(String internalName, byte[] sidecar) {
@@ -500,7 +363,7 @@ public final class HandlerGuards {
         }
     }
 
-    private static @Nullable String findMerged(MethodNode method) {
+    static @Nullable String findMerged(MethodNode method) {
         List<AnnotationNode> annotations = new ArrayList<>();
         if (method.visibleAnnotations != null) {
             annotations.addAll(method.visibleAnnotations);

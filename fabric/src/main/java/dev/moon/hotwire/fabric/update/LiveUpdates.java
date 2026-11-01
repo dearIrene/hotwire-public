@@ -53,7 +53,8 @@ final class LiveUpdates {
         String queue(ModManifest manifest, Path running, Path incoming, UpdatePlan plan);
     }
 
-    private record Ready(ModUpdater.Sorted.Planned planned, Map<String, byte[]> entries, Map<String, byte[]> changed,
+    private record Ready(ModUpdater.SortResult.Planned planned, Map<String, byte[]> entries, Map<String,
+            byte[]> changed,
             List<String> ids, List<Runnable> opening, Map<String, Map<String, byte[]>> carriedEntries) {
         ModManifest manifest() {
             return this.planned.manifest();
@@ -74,12 +75,12 @@ final class LiveUpdates {
         this.stay = stay;
     }
 
-    List<ModUpdater.Result> apply(List<ModUpdater.Sorted.Planned> updates) {
+    List<ModUpdater.Result> apply(List<ModUpdater.SortResult.Planned> updates) {
         ModUpdater.Result[] results = new ModUpdater.Result[updates.size()];
         List<Ready> ready = new ArrayList<>();
         List<Integer> at = new ArrayList<>();
         for (int i = 0; i < updates.size(); i++) {
-            ModUpdater.Sorted.Planned planned = updates.get(i);
+            ModUpdater.SortResult.Planned planned = updates.get(i);
             try {
                 Ready one = this.read(planned);
                 Optional<String> notAdded = this.addCarried(planned);
@@ -105,7 +106,7 @@ final class LiveUpdates {
         return List.of(results);
     }
 
-    private Optional<String> addCarried(ModUpdater.Sorted.Planned planned) {
+    private Optional<String> addCarried(ModUpdater.SortResult.Planned planned) {
         for (Path library : planned.whole().toAdd()) {
             ModManifest carried = JarLookup.findManifest(library);
             if (carried != null && this.engine.findVersionOf(carried.id()) != null) {
@@ -122,7 +123,7 @@ final class LiveUpdates {
         return Optional.empty();
     }
 
-    private Ready read(ModUpdater.Sorted.Planned planned) throws ModJarException {
+    private Ready read(ModUpdater.SortResult.Planned planned) throws ModJarException {
         UpdatePlan plan = planned.whole().plan();
         Map<String, byte[]> entries = UpdateDiffer.readEntries(planned.jar());
         Map<String, byte[]> changed = new LinkedHashMap<>();
@@ -253,7 +254,7 @@ final class LiveUpdates {
             }
             return results;
         } catch (RebuildException e) {
-            adoptions.reversed().forEach(this.engine.getApplier()::undoAdoption);
+            adoptions.reversed().forEach(this.engine.getApplier()::revertAdoption);
             Linker.removeAddedConstructors(this.registered);
             List<ModUpdater.Result> failed = new ArrayList<>();
             for (Ready one : ready) {

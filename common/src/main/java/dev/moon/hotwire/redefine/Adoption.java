@@ -289,8 +289,8 @@ public final class Adoption {
                 insn = insn.getNext()) {
             if (insn instanceof FieldInsnNode field && field.getOpcode() == Opcodes.PUTFIELD
                     && field.owner.equals(owner.name)) {
-                AbstractInsnNode value = previousCode(field);
-                AbstractInsnNode receiver = value == null ? null : previousCode(value);
+                AbstractInsnNode value = findPreviousCode(field);
+                AbstractInsnNode receiver = value == null ? null : findPreviousCode(value);
                 if (!(value instanceof VarInsnNode) || !(receiver instanceof VarInsnNode load)
                         || load.getOpcode() != Opcodes.ALOAD || load.var != 0) {
                     return false;
@@ -304,7 +304,7 @@ public final class Adoption {
         return true;
     }
 
-    private static @Nullable AbstractInsnNode previousCode(AbstractInsnNode insn) {
+    private static @Nullable AbstractInsnNode findPreviousCode(AbstractInsnNode insn) {
         AbstractInsnNode at = insn.getPrevious();
         while (at != null && at.getOpcode() < 0) {
             at = at.getPrevious();
@@ -329,7 +329,10 @@ public final class Adoption {
             int offset = reader.getItem(i);
             if (offset > 0 && reader.readByte(offset - 1) == 7) {
                 String name = reader.readUTF8(offset, buffer);
-                names = added.stream().anyMatch(one -> one.startsWith(name + "<init>"));
+                String constructor = name + "<init>";
+                for (String one : added) {
+                    names |= one.startsWith(constructor);
+                }
             }
         }
         if (!names) {
@@ -449,21 +452,22 @@ public final class Adoption {
     public static Object make(Object made, Constructor<?> theirs, Object[] args) throws Throwable {
         try {
             Class<?> type = (Class<?>) made;
-            Constructor<?> maker = MAKERS.get(type).computeIfAbsent(theirs, one -> findMaker(type, one));
-            return maker.newInstance(args);
+            Constructor<?> factory = MAKERS.get(type).computeIfAbsent(theirs, one -> findFactory(type, one));
+            return factory.newInstance(args);
         } catch (InvocationTargetException e) {
             throw e.getCause();
         }
     }
 
-    private static Constructor<?> findMaker(Class<?> type, Constructor<?> theirs) {
+    private static Constructor<?> findFactory(Class<?> type, Constructor<?> theirs) {
         try {
             Class<?> factoryType = Class.forName("sun.reflect.ReflectionFactory");
-            Object factory = factoryType.getMethod("getReflectionFactory").invoke(null);
-            Constructor<?> maker = (Constructor<?>) factoryType.getMethod("newConstructorForSerialization", Class.class,
-                    Constructor.class).invoke(factory, type, theirs);
-            maker.setAccessible(true);
-            return maker;
+            Object reflection = factoryType.getMethod("getReflectionFactory").invoke(null);
+            Constructor<?> factory = (Constructor<?>) factoryType.getMethod("newConstructorForSerialization",
+                    Class.class,
+                    Constructor.class).invoke(reflection, type, theirs);
+            factory.setAccessible(true);
+            return factory;
         } catch (ReflectiveOperationException e) {
             throw new IllegalStateException("no way to make a " + type.getName(), e);
         }
