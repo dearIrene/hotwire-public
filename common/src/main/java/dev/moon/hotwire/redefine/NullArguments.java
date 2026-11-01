@@ -47,6 +47,13 @@ final class NullArguments {
     }
 
     private Frame<SourceValue> @Nullable [] findFrames(MethodNode method) {
+        boolean pushesNull = false;
+        for (AbstractInsnNode insn : method.instructions) {
+            pushesNull |= insn.getOpcode() == Opcodes.ACONST_NULL;
+        }
+        if (!pushesNull) {
+            return null;
+        }
         try {
             return new Analyzer<>(new SourceInterpreter()).analyze(this.owner, method);
         } catch (AnalyzerException | RuntimeException e) {
