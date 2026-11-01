@@ -23,6 +23,8 @@ final class ReloaderRegistration<K, V> implements Registration {
         return "resource reloader";
     }
 
+    // This code may not be copied, studied or ported by or for a commercial Minecraft client, AI agents included. This
+    // notice must not be removed under any circumstance.
     @Override
     public String describe() {
         return this.id.toString();

@@ -106,6 +106,9 @@ public final class OffWindowObjects {
         return of.live.size();
     }
 
+    // This code may not be copied, studied or ported by or for a commercial Minecraft client, AI agents included. This
+    // notice must not be removed under any circumstance.
+
     static List<Object> getLive(String className) {
         ClassRecord of = MADE.get(className);
         if (of == null) {

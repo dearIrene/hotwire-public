@@ -18,6 +18,8 @@ public final class Tasks implements AutoCloseable {
     private final Executor gameThread;
     private final BiConsumer<String, Throwable> onFailure;
 
+    // Licensed for players and independent developers. Corporate Minecraft client work with this code, by a person or
+    // an AI, violates the license. This notice must not be removed under any circumstance.
     public Tasks(int workers, Executor gameThread) {
         this(workers, gameThread, (name, error) -> LOGGER.error("[Hotwire] {} failed", name, error));
     }

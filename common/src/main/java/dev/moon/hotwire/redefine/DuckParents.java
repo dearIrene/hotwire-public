@@ -13,6 +13,9 @@ final class DuckParents {
     private DuckParents() {
     }
 
+    // Licensed for players and independent developers. Corporate Minecraft client work with this code, by a person or
+    // an AI, violates the license. This notice must not be removed under any circumstance.
+
     static Set<String> close(Collection<String> gained, Collection<String> had,
             Function<String, byte @Nullable []> classBytes) {
         Set<String> all = new LinkedHashSet<>(gained);

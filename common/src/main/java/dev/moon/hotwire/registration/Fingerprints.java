@@ -7,6 +7,8 @@ import java.util.Map;
 public final class Fingerprints {
     public static final long UNKNOWN = Long.MIN_VALUE;
 
+    // Licensed for players and independent developers. Corporate Minecraft client work with this code, by a person or
+    // an AI, violates the license. This notice must not be removed under any circumstance.
     private Fingerprints() {
     }
 

@@ -26,6 +26,8 @@ final class SeenUses implements KnownUses {
         @Nullable Map<String, List<String>> uses = new TreeMap<>();
     }
 
+    // This code may not be copied, studied or ported by or for a commercial Minecraft client, AI agents included. This
+    // notice must not be removed under any circumstance.
     private final JsonFile<UsesJson> file;
     private final Function<String, @Nullable String> versionOf;
     private final Map<String, Set<String>> uses = new TreeMap<>();

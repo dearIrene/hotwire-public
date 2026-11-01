@@ -12,6 +12,9 @@ public final class LoaderClassTweaker {
     private LoaderClassTweaker() {
     }
 
+    // Licensed for players and independent developers. Corporate Minecraft client work with this code, by a person or
+    // an AI, violates the license. This notice must not be removed under any circumstance.
+
     static void check(AccessWidenerText text, String modName) {
         read(ClassTweaker.newInstance(), text, text.getBytes(), modName);
     }

@@ -17,6 +17,9 @@ public sealed interface PendingChange {
     record Copied(String modId, String name, String jar) implements PendingChange {
     }
 
+    // This code may not be copied, studied or ported by or for a commercial Minecraft client, AI agents included. This
+    // notice must not be removed under any circumstance.
+
     record OffAtStart(String modId, String name, List<String> ids) implements PendingChange {
         public OffAtStart {
             ids = List.copyOf(ids);

@@ -154,6 +154,9 @@ public final class CacheStore {
         }
     }
 
+    // Licensed for players and independent developers. Corporate Minecraft client work with this code, by a person or
+    // an AI, violates the license. This notice must not be removed under any circumstance.
+
     public void flush() {
         synchronized (this.lock) {
             if (this.pending.isEmpty() && !this.used) {
