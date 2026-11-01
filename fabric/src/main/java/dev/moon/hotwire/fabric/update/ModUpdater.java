@@ -435,6 +435,12 @@ public final class ModUpdater {
         return waiting != null ? waiting : this.engine.findVersionOf(id);
     }
 
+    private boolean isMetNow(String id, List<String> ranges) {
+        ModManifest coming = this.after.get(this.engine.getGraph().resolve(id));
+        String now = coming != null ? coming.version() : this.engine.findVersionOf(id);
+        return now != null && this.engine.satisfies(now, ranges);
+    }
+
     private Whole planWithCarried(String id, Path running, Path incoming) throws ModJarException {
         UpdatePlan plan = this.plan(id, running, incoming);
         Set<String> paths = UpdatePlanner.findNestedPaths(plan);
@@ -480,16 +486,19 @@ public final class ModUpdater {
             }
         }
         Map<String, List<String>> unmet = new TreeMap<>();
+        List<UpdatePlan.UpdateBlocker> waits = new ArrayList<>();
         diff.incoming().getRelation(ModManifest.Relation.DEPENDS).forEach((mod, ranges) -> {
             String have = this.findVersionAfter(mod);
             if (have == null || !this.engine.satisfies(have, ranges)) {
                 unmet.put(mod, ranges);
+            } else if (!this.isMetNow(mod, ranges)) {
+                waits.add(new UpdatePlan.UpdateBlocker.DependencyQueued(mod, have));
             }
         });
         UpdateContext context = new UpdateContext(this.engine.getStateOf(id), loaded,
                 this.engine.getApplier().getPatchersOf(names, this.engine.on(), id), this.engine.getGraph()
                 .getDependents(id), unmet, this.getVersionOrder());
-        return UpdatePlanner.plan(diff, context);
+        return UpdatePlanner.withBlockers(UpdatePlanner.plan(diff, context), waits);
     }
 
     Result queue(ModManifest manifest, Path running, Path incoming, UpdatePlan plan) {

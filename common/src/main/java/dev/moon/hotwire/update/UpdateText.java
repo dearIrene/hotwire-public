@@ -122,6 +122,8 @@ public final class UpdateText {
                     new Object[] {downgrade.incoming(), downgrade.running()});
             case UpdateBlocker.DependencyUnmet unmet -> say.apply("hotwire.update.blocker.unmet", new Object[] {
                 unmet.mod(), String.join(say.apply("hotwire.list.or", new Object[0]), unmet.ranges())});
+            case UpdateBlocker.DependencyQueued queued -> say.apply("hotwire.update.blocker.queued",
+                    new Object[] {queued.mod(), queued.version()});
             case UpdateBlocker.ModIsOff off -> say.apply("hotwire.update.blocker.off", new Object[0]);
             case UpdateBlocker.AddedThisSession added -> say.apply("hotwire.update.blocker.added", new Object[0]);
             case UpdateBlocker.UpdatedEarlierThisSession updated -> say.apply("hotwire.update.blocker.updated",

@@ -211,6 +211,16 @@ public final class UpdatePlanner {
         }
     }
 
+    public static UpdatePlan withBlockers(UpdatePlan plan, List<UpdateBlocker> added) {
+        if (added.isEmpty()) {
+            return plan;
+        }
+        List<UpdateBlocker> all = new ArrayList<>(plan.blockers());
+        all.addAll(added);
+        return new UpdatePlan(plan.modId(), plan.runningVersion(), plan.incomingVersion(), findTier(all),
+                plan.actions(), plan.notices(), all);
+    }
+
     private static UpdateTier findTier(List<UpdateBlocker> blockers) {
         UpdateTier tier = UpdateTier.IN_PLACE;
         for (UpdateBlocker blocker : blockers) {

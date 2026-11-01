@@ -87,6 +87,7 @@ public record UpdatePlan(String modId, String runningVersion, String incomingVer
                 case BoundByDependents b -> UpdateTier.NEXT_START;
                 case Downgrade d -> UpdateTier.NEXT_START;
                 case DependencyUnmet u -> UpdateTier.NEXT_START;
+                case DependencyQueued q -> UpdateTier.NEXT_START;
                 case ModIsOff o -> UpdateTier.NEXT_START;
                 case AddedThisSession t -> UpdateTier.NEXT_START;
                 case UpdatedEarlierThisSession w -> UpdateTier.NEXT_START;
@@ -131,6 +132,9 @@ public record UpdatePlan(String modId, String runningVersion, String incomingVer
             public DependencyUnmet {
                 ranges = List.copyOf(ranges);
             }
+        }
+
+        record DependencyQueued(String mod, String version) implements UpdateBlocker {
         }
 
         record ModIsOff() implements UpdateBlocker {
