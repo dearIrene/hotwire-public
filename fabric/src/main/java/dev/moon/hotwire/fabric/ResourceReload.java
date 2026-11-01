@@ -221,7 +221,8 @@ public final class ResourceReload {
         long until = System.nanoTime() + WAIT.toNanos();
         try {
             lastReload.get(WAIT.toMillis(), TimeUnit.MILLISECONDS);
-            while (ModViews.openOverlay() != null && System.nanoTime() < until) {
+
+            while ((ModViews.openOverlay() != null || BackgroundReload.isBusy()) && System.nanoTime() < until) {
                 Thread.sleep(20);
             }
         } catch (InterruptedException e) {
