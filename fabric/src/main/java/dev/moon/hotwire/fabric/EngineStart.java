@@ -435,6 +435,9 @@ final class EngineStart {
             laps.endLap("look, swap at close, quiet threads");
             LoadedClassBytes loadedBytes = parts.adds().getApplier().getRebuilder().getLoadedBytes();
             Fields.readWith(name -> parts.classes().findLoaded(name.replace('.', '/')) != null, type -> {
+                if (type.isHidden()) {
+                    return null;
+                }
                 String internal = type.getName().replace('.', '/');
                 byte[] known = loadedBytes.findKnown(type);
                 if (known == null) {
