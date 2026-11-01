@@ -29,6 +29,7 @@ import java.nio.file.Files;
 import java.nio.file.Path;
 import java.util.HashMap;
 import java.util.HashSet;
+import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;
@@ -111,9 +112,7 @@ public final class UpdateSupport implements ModUpdater.Engine {
         try {
             result = this.updater.update(jar, method);
             if (result instanceof ModUpdater.Result.Failed failed && method == UpdateMethod.IN_PLACE) {
-                LOGGER.info("[Hotwire] in place failed, queued for the next start instead: {}", failed.reason());
-                ModUpdater.Result queued = this.updater.update(jar, UpdateMethod.NEXT_START);
-                result = queued instanceof ModUpdater.Result.Queued ? queued : result;
+                result = this.queueInstead(jar, failed);
             }
         } catch (RuntimeException e) {
             journal.endThrown();
@@ -124,6 +123,37 @@ public final class UpdateSupport implements ModUpdater.Engine {
         endJournal(journal, result, method);
         this.reports.onUpdated(result, (System.nanoTime() - start) / 1_000_000);
         return result;
+    }
+
+    private ModUpdater.Result queueInstead(Path jar, ModUpdater.Result.Failed failed) {
+        LOGGER.info("[Hotwire] in place failed, queued for the next start instead: {}", failed.reason());
+        ModUpdater.Result queued = this.updater.update(jar, UpdateMethod.NEXT_START);
+        return queued instanceof ModUpdater.Result.Queued ? queued : failed;
+    }
+
+    public List<ModUpdater.Result> updateAll(List<Path> jars) {
+        long start = System.nanoTime();
+        ActionJournal.Entry journal = ActionJournal.get().begin(ActionJournal.Action.UPDATE, jars.size() + " jars");
+        this.reports.onBegun(Report.Operation.UPDATE, jars.size() + " jars");
+        List<ModUpdater.Result> results;
+        try {
+            results = this.updater.updateAll(jars, jar -> {
+                ModUpdater.Result alone = this.updater.updateAsPlanned(jar);
+                return alone instanceof ModUpdater.Result.Failed failed ? this.queueInstead(jar, failed) : alone;
+            }, this::queueInstead);
+        } catch (RuntimeException e) {
+            journal.endThrown();
+            throw e;
+        } finally {
+            this.reports.onEnded();
+        }
+        long now = results.stream().filter(ModUpdater.Result.Updated.class::isInstance).count();
+        long later = results.stream().filter(ModUpdater.Result.Queued.class::isInstance).count();
+        journal.end(now + later > 0 ? ActionJournal.Outcome.DONE : ActionJournal.Outcome.REFUSED,
+                now + " in place, " + later + " next start, " + (results.size() - now - later) + " not");
+        long millis = (System.nanoTime() - start) / 1_000_000;
+        results.forEach(result -> this.reports.onUpdated(result, millis));
+        return results;
     }
 
     public ModUpdater.Result updateNow(Path jar) {
@@ -259,9 +289,15 @@ public final class UpdateSupport implements ModUpdater.Engine {
     }
 
     @Override
-    public void onUpdated(String id, Path jar, ModJar read) {
-        this.installed.onUpdated(id, jar, read);
-        this.applier.learn(id, ModMixins.of(read, ModPolicy.getSide()));
+    public void onUpdated(Map<String, ModUpdater.NewJar> updated) {
+        Map<String, Path> paths = new LinkedHashMap<>();
+        Map<String, ModJar> reads = new LinkedHashMap<>();
+        updated.forEach((id, jar) -> {
+            paths.put(id, jar.jar());
+            reads.put(id, jar.read());
+        });
+        this.installed.onUpdated(paths, reads);
+        reads.forEach((id, read) -> this.applier.learn(id, ModMixins.of(read, ModPolicy.getSide())));
         this.switcher.learn(this.installed.getGraph(), ModPolicy.makePlannerFor(this.installed.getGraph()), List.of());
     }
 }

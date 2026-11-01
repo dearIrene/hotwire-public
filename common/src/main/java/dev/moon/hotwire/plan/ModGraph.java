@@ -80,6 +80,12 @@ public final class ModGraph {
             }
         }));
         shared.forEach(ownerOf::remove);
+
+        Map<String, List<ModManifest>> askable = new HashMap<>();
+        for (ModManifest mod : this.mods.values()) {
+            askable.computeIfAbsent(mod.id(), key -> new ArrayList<>()).add(mod);
+            mod.provides().forEach(alias -> askable.computeIfAbsent(alias, key -> new ArrayList<>()).add(mod));
+        }
         this.patches.forEach((mod, patched) -> {
             ModManifest manifest = this.mods.get(mod);
             for (String in : patched.calls()) {
@@ -88,7 +94,7 @@ public final class ModGraph {
                         && !this.getContainers(mod).contains(owner) && !this.getContainers(owner).contains(mod)) {
                     this.calls.computeIfAbsent(mod, key -> new TreeSet<>()).add(owner);
 
-                    if (!this.hasCompatibilityFor(patched, owner)) {
+                    if (!this.hasCompatibilityFor(patched, owner, askable)) {
                         this.dependents.computeIfAbsent(owner, key -> new TreeSet<>()).add(mod);
                     }
                 }
@@ -96,10 +102,19 @@ public final class ModGraph {
         });
     }
 
-    private boolean hasCompatibilityFor(ModPatches patched, String other) {
-        return this.isAskedFor(patched, other) || this.mods.values().stream().anyMatch(asked ->
-                this.isAskedFor(patched, asked.id()) && asked.getRelation(Relation.DEPENDS).keySet().stream()
-                        .anyMatch(dependency -> this.resolve(dependency).equals(other)));
+    private boolean hasCompatibilityFor(ModPatches patched, String other, Map<String, List<ModManifest>> askable) {
+        if (this.isAskedFor(patched, other)) {
+            return true;
+        }
+        for (String asked : patched.asks()) {
+            for (ModManifest mod : askable.getOrDefault(asked, List.of())) {
+                if (mod.getRelation(Relation.DEPENDS).keySet().stream()
+                        .anyMatch(dependency -> this.resolve(dependency).equals(other))) {
+                    return true;
+                }
+            }
+        }
+        return false;
     }
 
     private boolean isAskedFor(ModPatches patched, String other) {

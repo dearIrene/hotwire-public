@@ -71,6 +71,14 @@ public final class ModChanges {
         return ready == null ? new ModUpdater.Result.Refused(this.refusal) : ready.updates().updateNow(jar);
     }
 
+    public List<ModUpdater.Result> updateAllNow(List<Path> jars) {
+        HotwireEngine.JvmParts ready = this.parts;
+        if (ready == null) {
+            return jars.stream().<ModUpdater.Result>map(jar -> new ModUpdater.Result.Refused(this.refusal)).toList();
+        }
+        return ready.updates().updateAll(jars);
+    }
+
     public @Nullable UpdatePlan planUpdate(Path jar) {
         HotwireEngine.JvmParts ready = this.parts;
         return ready == null ? null : ready.updates().findPlan(jar);

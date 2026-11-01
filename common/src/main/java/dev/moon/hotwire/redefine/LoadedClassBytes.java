@@ -133,7 +133,10 @@ public final class LoadedClassBytes {
                 this.knownBytes.putIfAbsent(byName.get(name), bytes);
             }
         }
-        LOGGER.debug("[Hotwire] Read {} loaded classes in {} ms", byName.size(), (end - start) / 1_000_000);
+        if (!byName.isEmpty()) {
+            LOGGER.info("[Hotwire] the JVM gave back {} classes in {} ms, every thread stopped: {}", byName.size(),
+                    (end - start) / 1_000_000, List.copyOf(byName.keySet()).subList(0, Math.min(12, byName.size())));
+        }
         return current;
     }
 

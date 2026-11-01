@@ -1,20 +1,15 @@
 package dev.moon.hotwire.fabric.update;
 
 import dev.moon.hotwire.fabric.ModPolicy;
-import dev.moon.hotwire.fabric.ResourceReload;
-import dev.moon.hotwire.fabric.add.LoaderModList;
 import dev.moon.hotwire.jar.FileHashes;
 import dev.moon.hotwire.jar.JarLookup;
 import dev.moon.hotwire.jar.ModJar;
 import dev.moon.hotwire.jar.ModJarException;
-import dev.moon.hotwire.jar.ModJarReader;
 import dev.moon.hotwire.jar.ModManifest;
-import dev.moon.hotwire.mixin_copy.MixinCopy;
 import dev.moon.hotwire.plan.ModGraph;
-import dev.moon.hotwire.redefine.RebuildException;
-import dev.moon.hotwire.switching.ModMixins;
 import dev.moon.hotwire.switching.SwitchApplier;
 import dev.moon.hotwire.switching.SwitchApplier.ApplyResult;
+import dev.moon.hotwire.switching.SwitchTimes;
 import dev.moon.hotwire.ui.Canvas;
 import dev.moon.hotwire.ui.Lang;
 import dev.moon.hotwire.ui.UpdateMethod;
@@ -22,10 +17,7 @@ import dev.moon.hotwire.ui.UpdatePreview;
 import dev.moon.hotwire.update.JarDiff;
 import dev.moon.hotwire.update.JarIntake;
 import dev.moon.hotwire.update.UpdateContext;
-import dev.moon.hotwire.update.UpdateDiffer;
 import dev.moon.hotwire.update.UpdatePlan;
-import dev.moon.hotwire.update.UpdatePlan.ClassAction;
-import dev.moon.hotwire.update.UpdatePlan.UpdateNotice;
 import dev.moon.hotwire.update.UpdatePlan.UpdateTier;
 import dev.moon.hotwire.update.UpdatePlanner;
 import dev.moon.hotwire.update.UpdateQueue;
@@ -39,28 +31,18 @@ import java.util.ArrayList;
 import java.util.Comparator;
 import java.util.HashMap;
 import java.util.HashSet;
-import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;
 import java.util.Set;
 import java.util.TreeMap;
 import java.util.TreeSet;
-import java.util.concurrent.CompletableFuture;
-import java.util.concurrent.ExecutionException;
-import java.util.concurrent.TimeUnit;
-import java.util.concurrent.TimeoutException;
-import java.util.function.Consumer;
+import java.util.function.BiFunction;
+import java.util.function.Function;
 import java.util.zip.ZipEntry;
 import java.util.zip.ZipFile;
-import net.fabricmc.api.ClientModInitializer;
-import net.fabricmc.api.ModInitializer;
-import net.fabricmc.loader.api.FabricLoader;
 import net.fabricmc.loader.api.Version;
 import net.fabricmc.loader.api.VersionParsingException;
-import net.fabricmc.loader.api.entrypoint.EntrypointContainer;
-import net.fabricmc.loader.impl.launch.FabricLauncherBase;
-import net.minecraft.client.Minecraft;
 import org.jspecify.annotations.Nullable;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -78,6 +60,9 @@ public final class ModUpdater {
 
         record Failed(String reason, Throwable cause) implements Result {
         }
+    }
+
+    public record NewJar(Path jar, ModJar read) {
     }
 
     interface Engine {
@@ -103,7 +88,7 @@ public final class ModUpdater {
 
         UpdateQueue getQueue();
 
-        void onUpdated(String id, Path jar, ModJar read);
+        void onUpdated(Map<String, NewJar> updated);
 
         Map<String, byte[]> readRunningOf(String id);
 
@@ -120,10 +105,13 @@ public final class ModUpdater {
     private final Engine engine;
 
     private final IdChangedUpdate idChanged;
+    private final LiveUpdates live;
+    private final PlanCache plans = new PlanCache();
 
     public ModUpdater(Engine engine) {
         this.engine = engine;
         this.idChanged = new IdChangedUpdate(engine, this::queueSwap);
+        this.live = new LiveUpdates(engine, this::queueToStay);
         this.carried = new CarriedUpdates(engine::findVersionOf, engine::readRunningOf, engine::getStagingFolder,
                 this::findRejection, this.getVersionOrder(), this::planFrom);
     }
@@ -161,6 +149,7 @@ public final class ModUpdater {
     }
 
     UpdatePreview preview(Path picked) {
+        long began = System.nanoTime();
         Path jar = this.unwrap(picked);
         String fileName = String.valueOf(picked.getFileName());
         ModManifest manifest = JarLookup.findManifest(jar);
@@ -205,8 +194,8 @@ public final class ModUpdater {
             lines.add(Lang.get("hotwire.update.also", carried.manifest().name(), carried.manifest().version()));
         }
         lines.addAll(UpdateText.describeLines(whole.plan()));
-        LOGGER.info("[Hotwire] the update of {} to {}, in full: {}", manifest.name(), manifest.version(),
-                UpdateText.describeDetails(whole.plan()));
+        LOGGER.info("[Hotwire] the update of {} to {}, in full, planned in {} ms: {}", manifest.name(),
+                manifest.version(), (System.nanoTime() - began) / 1_000_000, UpdateText.describeDetails(whole.plan()));
         return UpdatePreview.Ready.of(manifest.name(), this.engine.findIcon(manifest.id(), jar), installed,
                 manifest.version(), fileName, getMethodOf(whole.plan().tier()), lines);
     }
@@ -239,45 +228,114 @@ public final class ModUpdater {
     }
 
     public Result update(Path picked, UpdateMethod method) {
+        SwitchTimes.begin();
+        try {
+            return this.updateTimed(picked, method);
+        } finally {
+            SwitchTimes.end("the update of " + picked.getFileName());
+        }
+    }
+
+    public List<Result> updateAll(List<Path> jars, Function<Path, Result> alone,
+            BiFunction<Path, Result.Failed, Result> instead) {
+        SwitchTimes.begin();
+        try {
+            return new UpdateBatch(this, this.live).run(jars, alone, instead);
+        } finally {
+            this.plans.clear();
+            SwitchTimes.end("the update of " + jars.size() + " mods");
+        }
+    }
+
+    public Result updateAsPlanned(Path picked) {
+        return switch (this.sort(picked, Map.of(), Map.of())) {
+            case Sorted.Refused refused -> refused.result();
+            case Sorted.IdChanged changed -> this.idChanged.update(changed.manifest(), changed.replaced(),
+                    changed.jar(), UpdateMethod.NEXT_START);
+            case Sorted.Planned planned -> this.take(planned, planned.method());
+        };
+    }
+
+    private Result updateTimed(Path picked, UpdateMethod method) {
+        return switch (this.sort(picked, Map.of(), Map.of())) {
+            case Sorted.Refused refused -> refused.result();
+            case Sorted.IdChanged changed -> this.idChanged.update(changed.manifest(), changed.replaced(),
+                    changed.jar(), method);
+            case Sorted.Planned planned -> this.take(planned, method);
+        };
+    }
+
+    sealed interface Sorted {
+        record Refused(Result.Refused result) implements Sorted {
+        }
+
+        record IdChanged(ModManifest manifest, String replaced, Path jar) implements Sorted {
+        }
+
+        record Planned(ModManifest manifest, Path running, Path jar, ModJar read, Whole whole) implements Sorted {
+            UpdateMethod method() {
+                return getMethodOf(this.whole.plan().tier());
+            }
+        }
+    }
+
+    Sorted sort(Path picked, Map<String, ModManifest> brought, Map<String, String> waiting) {
         Path jar = this.unwrap(picked);
         ModManifest manifest = JarLookup.findManifest(jar);
         if (manifest == null) {
-            return new Result.Refused(jar.getFileName() + " is not a mod jar.");
+            return new Sorted.Refused(new Result.Refused(jar.getFileName() + " is not a mod jar."));
         }
         if (ModPolicy.isHotwire(manifest.id())) {
-            return new Result.Refused(ModPolicy.describeSelfChange());
+            return new Sorted.Refused(new Result.Refused(ModPolicy.describeSelfChange()));
         }
         Path running = this.engine.findRunningJarOf(manifest.id());
         if (running == null) {
             String replaced = this.idChanged.findReplacedBy(manifest);
             if (replaced == null) {
-                return new Result.Refused(Lang.get("hotwire.update.not_installed", manifest.id()));
+                return new Sorted.Refused(new Result.Refused(Lang.get("hotwire.update.not_installed",
+                        manifest.id())));
             }
-            return this.idChanged.update(manifest, replaced, jar, method);
+            return new Sorted.IdChanged(manifest, replaced, jar);
         }
-        Optional<String> rejected = this.findRejection(manifest);
+        Optional<String> rejected = this.findRejection(manifest, brought);
         if (rejected.isPresent()) {
-            return new Result.Refused(rejected.get());
+            return new Sorted.Refused(new Result.Refused(rejected.get()));
         }
+        ModJar read;
         Whole whole;
         try {
-            whole = this.planWhole(manifest.id(), running, jar);
+            read = this.plans.read(jar);
+            whole = this.planWhole(manifest.id(), running, jar, read, brought, waiting);
         } catch (ModJarException e) {
-            return new Result.Refused(jar.getFileName() + " cannot be compared with the running jar: "
-                    + e.getMessage());
+            return new Sorted.Refused(new Result.Refused(jar.getFileName() + " cannot be compared with the running"
+                    + " jar: " + e.getMessage()));
         }
+        SwitchTimes.mark("update: plan");
         if (whole.refusal() != null) {
-            return new Result.Refused(whole.refusal());
+            return new Sorted.Refused(new Result.Refused(whole.refusal()));
         }
-        UpdatePlan plan = whole.plan();
-        if (getMethodOf(plan.tier()) != method) {
-            return new Result.Refused("The update of " + manifest.name() + " was planned " + getMethodOf(plan.tier())
-                    + " and asked " + method + ".");
+        return new Sorted.Planned(manifest, running, jar, read, whole);
+    }
+
+    Result take(Sorted.Planned planned, UpdateMethod method) {
+        if (planned.method() != method) {
+            return new Result.Refused("The update of " + planned.manifest().name() + " was planned "
+                    + planned.method() + " and asked " + method + ".");
         }
         return switch (method) {
-            case IN_PLACE -> this.updateInPlace(manifest, running, jar, whole);
-            case NEXT_START -> this.queue(manifest, running, jar, plan);
+            case IN_PLACE -> this.live.apply(List.of(planned)).getFirst();
+            case NEXT_START -> this.queue(planned.manifest(), planned.running(), planned.jar(),
+                    planned.whole().plan());
         };
+    }
+
+    private synchronized Optional<String> findRejection(ModManifest incoming, Map<String, ModManifest> brought) {
+        this.after = brought;
+        try {
+            return this.findRejection(incoming);
+        } finally {
+            this.after = Map.of();
+        }
     }
 
     private Optional<String> findRejection(ModManifest incoming) {
@@ -309,7 +367,7 @@ public final class ModUpdater {
         return Optional.empty();
     }
 
-    private record Whole(UpdatePlan plan, List<CarriedUpdates.Library> bundled, boolean adoptsConfigs,
+    record Whole(UpdatePlan plan, List<CarriedUpdates.Library> bundled, boolean adoptsConfigs,
             @Nullable String refusal) {
         Whole(UpdatePlan plan, List<CarriedUpdates.Library> bundled, boolean adoptsConfigs) {
             this(plan, bundled, adoptsConfigs, null);
@@ -320,11 +378,19 @@ public final class ModUpdater {
     private final CarriedUpdates carried;
     private Map<String, String> queued = Map.of();
 
-    private synchronized Whole planWhole(String id, Path running, Path incoming) throws ModJarException {
-        this.after = this.readComing(ModJarReader.read(incoming), new HashMap<>());
-        Map<String, String> waiting = new HashMap<>();
-        this.engine.getQueue().getEntries().forEach(entry -> waiting.put(entry.modId(), entry.toVersion()));
-        this.queued = waiting;
+    private Whole planWhole(String id, Path running, Path incoming) throws ModJarException {
+        return this.planWhole(id, running, incoming, this.plans.read(incoming), Map.of(), Map.of());
+    }
+
+    private synchronized Whole planWhole(String id, Path running, Path incoming, ModJar read,
+            Map<String, ModManifest> brought, Map<String, String> waiting) throws ModJarException {
+        Map<String, ModManifest> bringing = new HashMap<>(brought);
+        bringing.putAll(this.readComing(read, new HashMap<>()));
+        this.after = bringing;
+        Map<String, String> queuedNow = new HashMap<>();
+        this.engine.getQueue().getEntries().forEach(entry -> queuedNow.put(entry.modId(), entry.toVersion()));
+        queuedNow.putAll(waiting);
+        this.queued = queuedNow;
         try {
             Whole whole = this.planWithCarried(id, running, incoming);
             Map<String, List<String>> unmet = UpdatePlanner.findUnmet(whole.plan());
@@ -343,6 +409,10 @@ public final class ModUpdater {
             this.after = Map.of();
             this.queued = Map.of();
         }
+    }
+
+    Map<String, ModManifest> findComing(ModJar jar) {
+        return this.readComing(jar, new HashMap<>());
     }
 
     private Map<String, ModManifest> readComing(ModJar jar, Map<String, ModManifest> into) {
@@ -397,7 +467,7 @@ public final class ModUpdater {
     }
 
     UpdatePlan plan(String id, Path running, Path incoming) throws ModJarException {
-        return this.planFrom(id, UpdateDiffer.compare(running, incoming));
+        return this.planFrom(id, this.plans.compare(running, incoming));
     }
 
     private UpdatePlan planFrom(String id, JarDiff diff) {
@@ -422,155 +492,7 @@ public final class ModUpdater {
         return UpdatePlanner.plan(diff, context);
     }
 
-    private Result updateInPlace(ModManifest manifest, Path running, Path incoming, Whole whole) {
-        UpdatePlan plan = whole.plan();
-        ModJar read;
-        Map<String, byte[]> changed = new LinkedHashMap<>();
-        List<String> ids = new ArrayList<>(List.of(manifest.id()));
-        Map<String, byte[]> entries;
-        try {
-            read = ModJarReader.read(incoming);
-            entries = UpdateDiffer.readEntries(incoming);
-            collectChanged(entries, plan, changed);
-            for (CarriedUpdates.Library carried : whole.bundled()) {
-                collectChanged(UpdateDiffer.readEntries(carried.incoming()), carried.plan(), changed);
-                ids.add(carried.manifest().id());
-            }
-        } catch (ModJarException e) {
-            return new Result.Refused(incoming.getFileName() + " cannot be read: " + e.getMessage());
-        }
-        boolean widens = plan.notices().stream().anyMatch(UpdateNotice.WidenerOpens.class::isInstance);
-        if (widens) {
-            Optional<String> refusal = this.engine.findWidenerRefusal(read, incoming);
-            if (refusal.isPresent()) {
-                return new Result.Refused(refusal.get());
-            }
-        }
-        try {
-            this.engine.getApplier().getRebuilder().launchChanged();
-            if (widens) {
-                this.engine.openWidener(read);
-            }
-            Set<String> targets = Set.of();
-            if (whole.adoptsConfigs()) {
-                for (ClassAction action : plan.actions()) {
-                    byte[] bytes = entries.get(action.className() + ".class");
-                    if (bytes != null && action.kind() == ClassAction.Kind.DEFINE) {
-                        changed.put(action.className(), bytes);
-                    }
-                }
-                ModMixins mixins = ModMixins.of(read, ModPolicy.getSide());
-                Map<String, byte[]> configs = new LinkedHashMap<>();
-                mixins.configs().forEach(config -> {
-                    byte[] bytes = entries.get(config);
-                    if (bytes != null) {
-                        configs.put(config, bytes);
-                    }
-                });
-                targets = this.engine.getApplier().adoptUpdate(manifest.id(), mixins, configs);
-            }
-
-            SwitchApplier.ApplyResult applied = this.engine.getApplier().replace(ids, changed, this.engine.on(),
-                    targets);
-            for (CarriedUpdates.Library carried : whole.bundled()) {
-                runAfterReplace(carried.manifest().id(), "the loader's mod list", () -> {
-                    FabricLauncherBase.getLauncher().addToClassPath(carried.incoming());
-                    MixinCopy.markClassPathChanged();
-                    LoaderModList.replace(carried.manifest().id(), carried.incoming());
-                });
-                LOGGER.info("[Hotwire] {} is {} now, carried by {}", carried.manifest().id(),
-                        carried.manifest().version(), manifest.id());
-            }
-
-            runAfterReplace(manifest.id(), "the loader's mod list", () -> {
-                FabricLauncherBase.getLauncher().addToClassPath(incoming);
-                MixinCopy.markClassPathChanged();
-                LoaderModList.replace(manifest.id(), incoming);
-            });
-            runAfterReplace(manifest.id(), "Hotwire's own list of mods",
-                    () -> this.engine.onUpdated(manifest.id(), incoming, read));
-            String started = this.runAddedEntrypoints(manifest.id(), plan);
-            LOGGER.info("[Hotwire] {} is {} now: {} classes rebuilt, {} served as they load, {} new",
-                    manifest.id(), manifest.version(), applied.rebuilt().size(), applied.notLoaded().size(),
-                    plan.actions().stream().filter(action -> action.kind() == ClassAction.Kind.DEFINE).count());
-            return new Result.Updated(manifest.id(), manifest.name(), plan, applied,
-                    this.queueToStay(manifest, running, incoming, plan) + started);
-        } catch (RebuildException e) {
-            LOGGER.warn("[Hotwire] {} could not be updated in place", manifest.id(), e);
-            return new Result.Failed(manifest.name() + " could not be updated in place: " + e.getMessage(), e);
-        } finally {
-            ResourceReload.forgetPausedReload();
-        }
-    }
-
-    private String runAddedEntrypoints(String id, UpdatePlan plan) {
-        Set<String> added = new HashSet<>();
-        for (UpdateNotice notice : plan.notices()) {
-            if (notice instanceof UpdateNotice.EntrypointRuns entrypoint) {
-                added.add(entrypoint.key() + "=" + entrypoint.value());
-            }
-        }
-        if (added.isEmpty()) {
-            return "";
-        }
-        List<Runnable> starts = new ArrayList<>();
-        collectAdded(id, "main", ModInitializer.class, ModInitializer::onInitialize, added, starts);
-        if (ModPolicy.getSide() == ModManifest.Environment.CLIENT) {
-            collectAdded(id, "client", ClientModInitializer.class, ClientModInitializer::onInitializeClient, added,
-                    starts);
-        }
-        if (starts.isEmpty()) {
-            LOGGER.info("[Hotwire] {}'s new entrypoints {} are not in the loader's list; not run", id, added);
-            return "";
-        }
-        CompletableFuture<String> ran = new CompletableFuture<>();
-        Minecraft.getInstance().execute(() -> {
-            try {
-                starts.forEach(Runnable::run);
-                ran.complete("");
-            } catch (RuntimeException | LinkageError e) {
-                LOGGER.warn("[Hotwire] {}'s new entrypoint threw", id, e);
-                ran.complete(" Its new start-up code threw " + e + "; the rest of the update stands.");
-            }
-        });
-        try {
-            return ran.get(30, TimeUnit.SECONDS);
-        } catch (InterruptedException e) {
-            Thread.currentThread().interrupt();
-            return "";
-        } catch (ExecutionException | TimeoutException e) {
-            return " Its new start-up code did not finish in time.";
-        }
-    }
-
-    private static <T> void collectAdded(String id, String key, Class<T> type, Consumer<T> start, Set<String> added,
-            List<Runnable> into) {
-        for (EntrypointContainer<T> entry : FabricLoader.getInstance().getEntrypointContainers(key, type)) {
-            if (entry.getProvider().getMetadata().getId().equals(id)
-                    && added.contains(key + "=" + entry.getDefinition())) {
-                into.add(() -> start.accept(entry.getEntrypoint()));
-            }
-        }
-    }
-
-    private static void collectChanged(Map<String, byte[]> entries, UpdatePlan plan, Map<String, byte[]> into) {
-        for (ClassAction action : plan.actions()) {
-            byte[] bytes = entries.get(action.className() + ".class");
-            if (bytes != null && action.kind() != ClassAction.Kind.DEFINE) {
-                into.put(action.className(), bytes);
-            }
-        }
-    }
-
-    private static void runAfterReplace(String id, String what, Runnable step) {
-        try {
-            step.run();
-        } catch (RuntimeException | LinkageError e) {
-            LOGGER.error("[Hotwire] {} is updated, but {} could not follow it", id, what, e);
-        }
-    }
-
-    private Result queue(ModManifest manifest, Path running, Path incoming, UpdatePlan plan) {
+    Result queue(ModManifest manifest, Path running, Path incoming, UpdatePlan plan) {
         try {
             this.queueSwap(manifest, running, incoming, plan);
             return new Result.Queued(manifest.id(), manifest.name(), plan);

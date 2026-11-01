@@ -178,12 +178,12 @@ public final class InstalledMods {
         this.addedThisSession.addAll(ids);
     }
 
-    public synchronized void onUpdated(String id, Path jar, ModJar read) {
-        this.jars.removeIf(old -> old.manifest().id().equals(id));
-        this.jars.add(read);
+    public synchronized void onUpdated(Map<String, Path> paths, Map<String, ModJar> reads) {
+        this.jars.removeIf(old -> reads.containsKey(old.manifest().id()));
+        this.jars.addAll(reads.values());
+        this.jarOf.putAll(paths);
+        this.updatedThisSession.addAll(reads.keySet());
         this.graph = new ModGraph(this.jars, InstalledMods::isOfGame, LoadedMods::findVersion);
-        this.jarOf.put(id, jar);
-        this.updatedThisSession.add(id);
     }
 
     public synchronized boolean isAddedThisSession(String id) {

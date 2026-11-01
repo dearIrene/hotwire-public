@@ -519,28 +519,18 @@ public final class SwitchApplier {
 
     public synchronized ApplyResult replace(Collection<String> ids, Map<String, byte[]> classes, Set<String> on,
             Set<String> targets) throws RebuildException {
+        return this.replace(ids, classes, on, targets, () -> { });
+    }
+
+    public synchronized ApplyResult replace(Collection<String> ids, Map<String, byte[]> classes, Set<String> on,
+            Set<String> targets, Runnable joined) throws RebuildException {
         this.decisions.forget();
         Map<Class<?>, byte[]> originals = new LinkedHashMap<>();
         Map<Class<?>, byte[]> before = new LinkedHashMap<>();
         List<String> rebuilt = new ArrayList<>();
         List<String> notLoaded = new ArrayList<>();
-        Map<String, byte[]> toRebuild = new LinkedHashMap<>(classes);
-        for (String target : targets) {
-            byte[] original = this.findOriginal(target);
-            if (original != null) {
-                toRebuild.putIfAbsent(target, original);
-            }
-        }
-        for (String id : ids) {
-            for (String target : MixinLists.findTargetsOfChanged(this.mods.get(id), classes,
-                    name -> this.findOriginal(name) != null)) {
-                byte[] original = this.findOriginal(target);
-                if (original != null) {
-                    toRebuild.putIfAbsent(target, original);
-                }
-            }
-        }
-        for (Map.Entry<String, byte[]> entry : toRebuild.entrySet()) {
+        for (Map.Entry<String, byte[]> entry : MixinLists.findToRebuild(this.mods, ids, classes, targets,
+                this::findOriginal).entrySet()) {
             Class<?> loaded = this.game.findLoaded(entry.getKey());
             byte[] old = loaded == null ? null : this.findOriginal(entry.getKey());
             if (loaded == null || old == null) {
@@ -551,13 +541,25 @@ public final class SwitchApplier {
             before.put(loaded, old);
             rebuilt.add(entry.getKey());
         }
-        if (!originals.isEmpty()) {
+        Runnable served = () -> {
+            this.replaced.putAll(classes);
+            this.rebuilder.copy().replace(classes);
+            joined.run();
+        };
+        if (originals.isEmpty()) {
+            served.run();
+        } else {
             this.applyWhilePaused(this.prepare(originals, before, classes, this.onConfigs, on, Set.copyOf(ids),
-                    "update"), () -> { }, Set.of());
+                    "update"), served, Set.of());
         }
-        this.replaced.putAll(classes);
-        this.rebuilder.copy().replace(classes);
         return new ApplyResult(rebuilt, notLoaded, List.of());
+    }
+
+    public synchronized ApplyResult findShareOf(ApplyResult all, Collection<String> ids, Map<String, byte[]> classes,
+            Set<String> targets) {
+        Set<String> own = MixinLists.findToRebuild(this.mods, ids, classes, targets, this::findOriginal).keySet();
+        return new ApplyResult(all.rebuilt().stream().filter(own::contains).toList(),
+                all.notLoaded().stream().filter(own::contains).toList(), List.of());
     }
 
     private ClassRebuilder.PreparedRebuild prepare(Map<Class<?>, byte[]> originals, Map<Class<?>, byte[]> before,

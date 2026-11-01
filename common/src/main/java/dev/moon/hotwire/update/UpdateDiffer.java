@@ -65,10 +65,10 @@ public final class UpdateDiffer {
     }
 
     static ClassDiff compareClass(byte[] running, byte[] incoming) {
-        ClassNode was = read(running);
         if (Arrays.equals(running, incoming)) {
-            return new ClassDiff(was.name, ClassChange.IDENTICAL, Set.of());
+            return new ClassDiff(new ClassReader(running).getClassName(), ClassChange.IDENTICAL, Set.of());
         }
+        ClassNode was = read(running);
         ClassNode now = read(incoming);
         Set<ShapeChange> shape = diffShape(was, now);
         if (!shape.isEmpty()) {

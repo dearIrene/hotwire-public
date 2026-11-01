@@ -2,15 +2,19 @@ package dev.moon.hotwire.switching;
 
 import dev.moon.hotwire.mixin_copy.MixinClassInfo;
 import java.util.ArrayList;
+import java.util.Collection;
 import java.util.Collections;
 import java.util.Comparator;
 import java.util.HashMap;
 import java.util.HashSet;
+import java.util.LinkedHashMap;
+import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
 import java.util.TreeMap;
 import java.util.TreeSet;
+import java.util.function.Function;
 import java.util.function.Predicate;
 import org.jspecify.annotations.Nullable;
 import org.slf4j.Logger;
@@ -92,6 +96,22 @@ final class MixinLists {
         }
         ordered.sort(Comparator.comparingInt(config -> launched.getOrDefault(config, Integer.MAX_VALUE)));
         return ordered;
+    }
+
+    static Map<String, byte[]> findToRebuild(Map<String, ModMixins> mods, Collection<String> ids,
+            Map<String, byte[]> classes, Set<String> targets, Function<String, byte @Nullable []> original) {
+        Set<String> also = new LinkedHashSet<>(targets);
+        for (String id : ids) {
+            also.addAll(findTargetsOfChanged(mods.get(id), classes, name -> original.apply(name) != null));
+        }
+        Map<String, byte[]> toRebuild = new LinkedHashMap<>(classes);
+        for (String target : also) {
+            byte[] bytes = original.apply(target);
+            if (bytes != null) {
+                toRebuild.putIfAbsent(target, bytes);
+            }
+        }
+        return toRebuild;
     }
 
     static Set<String> findTargetsOfChanged(@Nullable ModMixins mixins, Map<String, byte[]> classes,
