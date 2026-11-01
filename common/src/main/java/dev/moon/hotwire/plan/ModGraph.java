@@ -202,10 +202,10 @@ public final class ModGraph {
 
     Map<String, String> getPatchersOf(String owner) {
         Map<String, String> out = new TreeMap<>();
-        for (String type : new TreeSet<>(this.patches.getOrDefault(owner, ModPatches.NONE).owns())) {
-            for (String patcher : this.hardPatchersByClass.getOrDefault(type, new TreeSet<>())) {
+        for (String type : this.patches.getOrDefault(owner, ModPatches.NONE).owns()) {
+            for (String patcher : this.hardPatchersByClass.getOrDefault(type, Collections.emptySortedSet())) {
                 if (!patcher.equals(owner)) {
-                    out.putIfAbsent(patcher, type);
+                    out.merge(patcher, type, (kept, other) -> kept.compareTo(other) <= 0 ? kept : other);
                 }
             }
         }
