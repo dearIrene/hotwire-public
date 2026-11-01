@@ -1,6 +1,5 @@
 package dev.moon.hotwire.fabric.store;
 
-import dev.moon.hotwire.config.AtomicFiles;
 import dev.moon.hotwire.fabric.CacheLimit;
 import dev.moon.hotwire.fabric.InstalledMods;
 import dev.moon.hotwire.fabric.LoadedMods;
@@ -221,11 +220,9 @@ public final class ModStore {
         Downloads downloads = this.model.getDownloads();
         downloads.start(job);
         try {
-            byte[] bytes = this.model.getClient().fetch(version, done -> downloads.advance(job, done));
             Files.createDirectories(this.downloads);
             Path jar = this.downloads.resolve(version.fileName().replaceAll("[^A-Za-z0-9._+ -]", "_"));
-
-            AtomicFiles.write(jar, bytes);
+            this.model.getClient().fetchTo(version, jar, done -> downloads.advance(job, done));
             downloads.end(job, true);
             return jar;
         } catch (IOException | RuntimeException e) {

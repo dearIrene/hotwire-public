@@ -14,6 +14,9 @@ import java.net.http.HttpClient;
 import java.net.http.HttpRequest;
 import java.net.http.HttpResponse;
 import java.nio.charset.StandardCharsets;
+import java.nio.file.Files;
+import java.nio.file.Path;
+import java.nio.file.StandardCopyOption;
 import java.security.MessageDigest;
 import java.security.NoSuchAlgorithmException;
 import java.time.Duration;
@@ -23,12 +26,22 @@ import java.util.HexFormat;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.concurrent.CompletableFuture;
+import java.util.concurrent.ExecutionException;
+import java.util.concurrent.TimeUnit;
+import java.util.concurrent.TimeoutException;
+import java.util.concurrent.atomic.AtomicLong;
 import java.util.function.LongConsumer;
 import java.util.zip.GZIPInputStream;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
 public final class ModrinthClient {
     public static final String API = "https://api.modrinth.com/v2";
     private static final Duration TIMEOUT = Duration.ofSeconds(20);
+
+    private static final Duration STALL = Duration.ofSeconds(30);
+    private static final Logger LOGGER = LoggerFactory.getLogger(ModrinthClient.class);
 
     static final String USER_AGENT_PREFIX = "moonshee/hotwire/";
     static final String CONTACT = "https://github.com/moonshee/hotwire";
@@ -63,6 +76,10 @@ public final class ModrinthClient {
 
         default byte[] fetchBytes(String url, LongConsumer onBytes) throws IOException {
             return this.fetchBytes(url);
+        }
+
+        default void fetchTo(String url, long size, Path into, LongConsumer onBytes) throws IOException {
+            Files.write(into, this.fetchBytes(url, onBytes));
         }
 
         default byte[] fetchPicture(String url) throws IOException {
@@ -263,16 +280,54 @@ public final class ModrinthClient {
     }
 
     public byte[] fetch(Version version, LongConsumer onBytes) throws IOException {
-        byte[] copy = this.local.find(version.fileName(), version.size(), version.sha512());
+        Path copy = this.local.find(version.fileName(), version.size(), version.sha512());
         if (copy != null) {
-            return copy;
+            return Files.readAllBytes(copy);
         }
+        long began = System.nanoTime();
         byte[] bytes = this.transport.fetchBytes(version.url(), onBytes);
+        LOGGER.info("[Hotwire] {} was downloaded: {} KB in {} ms", version.fileName(), bytes.length / 1024,
+                (System.nanoTime() - began) / 1_000_000);
         String hash = hashOf(bytes);
         if (!hash.equalsIgnoreCase(version.sha512())) {
             throw new IOException("the download of " + version.fileName() + " does not match Modrinth's hash");
         }
         return bytes;
+    }
+
+    public void fetchTo(Version version, Path target, LongConsumer onBytes) throws IOException {
+        Path part = target.resolveSibling(target.getFileName() + ".part");
+        try {
+            Path copy = this.local.find(version.fileName(), version.size(), version.sha512());
+            if (copy != null) {
+                Files.copy(copy, part, StandardCopyOption.REPLACE_EXISTING);
+            } else {
+                long began = System.nanoTime();
+                this.transport.fetchTo(version.url(), version.size(), part, onBytes);
+                LOGGER.info("[Hotwire] {} was downloaded: {} KB in {} ms", version.fileName(),
+                        Files.size(part) / 1024, (System.nanoTime() - began) / 1_000_000);
+                if (!hashOf(part).equalsIgnoreCase(version.sha512())) {
+                    throw new IOException("the download of " + version.fileName() + " does not match Modrinth's hash");
+                }
+            }
+            Files.move(part, target, StandardCopyOption.REPLACE_EXISTING, StandardCopyOption.ATOMIC_MOVE);
+        } finally {
+            Files.deleteIfExists(part);
+        }
+    }
+
+    static String hashOf(Path file) throws IOException {
+        try (InputStream in = Files.newInputStream(file)) {
+            MessageDigest digest = MessageDigest.getInstance("SHA-512");
+            byte[] buffer = new byte[64 * 1024];
+            int read;
+            while ((read = in.read(buffer)) > 0) {
+                digest.update(buffer, 0, read);
+            }
+            return HexFormat.of().formatHex(digest.digest());
+        } catch (NoSuchAlgorithmException e) {
+            throw new IllegalStateException(e);
+        }
     }
 
     public byte[] fetchFromCdn(String url) throws IOException {
@@ -376,6 +431,9 @@ public final class ModrinthClient {
     private static final class LiveTransport implements Transport {
         private static final HttpClient HTTP = HttpClient.newBuilder().connectTimeout(TIMEOUT)
                 .followRedirects(HttpClient.Redirect.NORMAL).build();
+
+        private static final HttpClient JARS = HttpClient.newBuilder().version(HttpClient.Version.HTTP_1_1)
+                .connectTimeout(TIMEOUT).followRedirects(HttpClient.Redirect.NORMAL).build();
         private final String agent;
 
         private static volatile long openAgainAt;
@@ -424,19 +482,69 @@ public final class ModrinthClient {
             if (!url.startsWith("https://cdn.modrinth.com/")) {
                 throw new IOException("a download from somewhere other than Modrinth's CDN was refused: " + url);
             }
-            return this.send(HttpRequest.newBuilder(URI.create(url)).GET(), HttpResponse.BodyHandlers.ofInputStream(),
-                    response -> {
-                        try (InputStream in = response.body()) {
-                            ByteArrayOutputStream out = new ByteArrayOutputStream();
-                            byte[] buffer = new byte[64 * 1024];
-                            int read;
-                            while ((read = in.read(buffer)) > 0) {
-                                out.write(buffer, 0, read);
-                                onBytes.accept(out.size());
-                            }
+            try {
+                return this.download(url, onBytes);
+            } catch (StalledException e) {
+                LOGGER.info("[Hotwire] {}; asking once more", e.getMessage());
+                return this.download(url, onBytes);
+            }
+        }
+
+        private static final class StalledException extends IOException {
+            private static final long serialVersionUID = 1L;
+
+            private StalledException(String message) {
+                super(message);
+            }
+        }
+
+        private byte[] download(String url, LongConsumer onBytes) throws IOException {
+            ByteArrayOutputStream out = new ByteArrayOutputStream();
+            AtomicLong heard = new AtomicLong(System.nanoTime());
+            HttpRequest request = HttpRequest.newBuilder(URI.create(url)).header("User-Agent", this.agent)
+                    .timeout(TIMEOUT).GET().build();
+            CompletableFuture<HttpResponse<Void>> pending = JARS.sendAsync(request,
+                    HttpResponse.BodyHandlers.ofByteArrayConsumer(chunk -> chunk.ifPresent(bytes -> {
+                        heard.set(System.nanoTime());
+                        synchronized (out) {
+                            out.write(bytes, 0, bytes.length);
+                            onBytes.accept(out.size());
+                        }
+                    })));
+            try {
+                while (true) {
+                    try {
+                        HttpResponse<Void> response = pending.get(1, TimeUnit.SECONDS);
+                        this.readRateLimit(response);
+                        if (response.statusCode() / 100 != 2) {
+                            throw new IOException("Modrinth answered " + response.statusCode());
+                        }
+                        synchronized (out) {
                             return out.toByteArray();
                         }
-                    });
+                    } catch (TimeoutException e) {
+                        if (System.nanoTime() - heard.get() > STALL.toNanos()) {
+                            pending.cancel(true);
+                            throw new StalledException("nothing of " + url + " arrived for " + STALL.toSeconds()
+                                    + " s, at " + out.size() / 1024 + " KB");
+                        }
+                    }
+                }
+            } catch (ExecutionException e) {
+                throw e.getCause() instanceof IOException io ? io : new IOException(e.getCause());
+            } catch (InterruptedException e) {
+                pending.cancel(true);
+                Thread.currentThread().interrupt();
+                throw new IOException("interrupted", e);
+            }
+        }
+
+        @Override
+        public void fetchTo(String url, long size, Path into, LongConsumer onBytes) throws IOException {
+            if (!url.startsWith("https://cdn.modrinth.com/")) {
+                throw new IOException("a download from somewhere other than Modrinth's CDN was refused: " + url);
+            }
+            new JarDownload(JARS, this.agent, TIMEOUT).fetch(url, size, into, onBytes);
         }
 
         @Override

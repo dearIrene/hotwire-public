@@ -51,7 +51,10 @@ public final class LocalJars {
         return out;
     }
 
-    public byte @Nullable [] find(String fileName, long size, String sha512) {
+    public @Nullable Path find(String fileName, long size, String sha512) {
+        if (System.getProperty("hotwire.noLocalJars") != null) {
+            return null;
+        }
         long began = System.nanoTime();
         for (Path folder : this.findModsFolders()) {
             for (Path file : list(folder)) {
@@ -63,11 +66,10 @@ public final class LocalJars {
                     if (Files.size(file) != size) {
                         continue;
                     }
-                    byte[] bytes = Files.readAllBytes(file);
-                    if (ModrinthClient.hashOf(bytes).equalsIgnoreCase(sha512)) {
+                    if (ModrinthClient.hashOf(file).equalsIgnoreCase(sha512)) {
                         LOGGER.info("[Hotwire] {} was read from {} in place of a download ({} ms)", fileName,
                                 folder, (System.nanoTime() - began) / 1_000_000);
-                        return bytes;
+                        return file;
                     }
                 } catch (IOException | UncheckedIOException e) {
                 }

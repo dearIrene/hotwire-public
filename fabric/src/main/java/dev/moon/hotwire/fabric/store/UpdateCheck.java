@@ -314,10 +314,9 @@ public final class UpdateCheck {
         int job = told.begin(version.fileName(), version.size());
         told.start(job);
         try {
-            byte[] bytes = this.client.fetch(version, done -> told.advance(job, done));
             Files.createDirectories(this.folder);
             Path jar = this.folder.resolve(version.fileName().replaceAll("[^A-Za-z0-9._+ -]", "_"));
-            Files.write(jar, bytes);
+            this.client.fetchTo(version, jar, done -> told.advance(job, done));
             told.end(job, true);
             return jar;
         } catch (IOException | RuntimeException e) {
