@@ -45,6 +45,8 @@ final class CollectionNotes {
         private boolean readAgain;
         private boolean filed = true;
 
+        private boolean readByEvery;
+
         private int wrapped;
 
         private Note(Object container, Origin origin, ReferenceQueue<Object> gone) {
@@ -174,7 +176,8 @@ final class CollectionNotes {
         if (!completed) {
             note.takes = frame.before();
         } else {
-            long now = this.printing ? Fingerprints.of(container) : Fingerprints.UNKNOWN;
+            note.readByEvery |= this.every;
+            long now = this.printing && note.readByEvery ? Fingerprints.of(container) : Fingerprints.UNKNOWN;
             note.print = now == frame.print() ? now : Fingerprints.UNKNOWN;
             if (frame.now().isEmpty() && !(container instanceof Collection<?>) && !(container instanceof Map<?, ?>)
                     && !(container instanceof Object[])) {
