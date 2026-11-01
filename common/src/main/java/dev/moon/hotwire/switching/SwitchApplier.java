@@ -240,7 +240,8 @@ public final class SwitchApplier {
         List<Class<?>> toRead = new ArrayList<>();
         for (String name : internalNames) {
             Class<?> loaded = this.game.findLoaded(name);
-            if (loaded == null) {
+
+            if (loaded == null || name.startsWith("java/")) {
                 continue;
             }
             if (loading != null && loading.startsWith(name + "$")) {
