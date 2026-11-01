@@ -37,6 +37,8 @@ public final class CrashReports {
             CrashNotice.save(words);
             if (!goingDown) {
                 Minecraft.getInstance().execute(() -> CrashNotice.showNow(words));
+            } else if (System.getProperty("hotwire.oneclient") != null) {
+                LOGGER.info("[Hotwire] the crash box is not shown in a test launch");
             } else if (!Minecraft.getInstance().isSameThread() || CrashPopup.showOnItsOwnThread(
                     Lang.get("hotwire.report.crash_title"),
                     Lang.get("hotwire.report.crash_blame") + "\n\n" + words + "\n" + Lang.get("hotwire.report.send"),
