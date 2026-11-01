@@ -51,7 +51,7 @@ public final class GameTasks {
             return false;
         }
         Runnable task = unwrap(queued);
-        String mod = findOwnerOf(task, WRAPPED_DEPTH);
+        String mod = findOwnerOf(task, depthFor(loop));
         if (mod == null || !MODS_OFF.contains(mod)) {
             if (LOGGER.isDebugEnabled() && SAID.add(task.getClass())) {
                 LOGGER.debug("[Hotwire] a task of {} ({}) runs while mods are off; it holds {}", mod,
@@ -75,6 +75,32 @@ public final class GameTasks {
     }
 
     private static final int WRAPPED_DEPTH = 6;
+
+    private static final Set<String> KOTLIN_WORK = Set.of("kotlin.Function", "kotlin.coroutines.Continuation",
+            "kotlin.coroutines.CoroutineContext");
+
+    private static final ClassValue<Boolean> IS_WORK = new ClassValue<>() {
+        @Override
+        protected Boolean computeValue(Class<?> type) {
+            return type.isHidden() || hasWorkInterface(type);
+        }
+    };
+
+    private static boolean hasWorkInterface(Class<?> type) {
+        for (Class<?> at = type; at != null; at = at.getSuperclass()) {
+            for (Class<?> one : at.getInterfaces()) {
+                if (one.isAnnotationPresent(FunctionalInterface.class) || KOTLIN_WORK.contains(one.getName())
+                        || hasWorkInterface(one)) {
+                    return true;
+                }
+            }
+        }
+        return false;
+    }
+
+    private static int depthFor(BlockableEventLoop<?> loop) {
+        return loop instanceof Minecraft ? WRAPPED_DEPTH : 0;
+    }
 
     private static List<String> describeCaptures(Object task) {
         List<String> found = new ArrayList<>();
@@ -105,8 +131,8 @@ public final class GameTasks {
                 continue;
             }
 
-            String inner = captured == null || CollectionParts.isGameObject(captured) ? null
-                    : findOwnerOf(captured, depth - 1);
+            String inner = captured == null || CollectionParts.isGameObject(captured)
+                    || !IS_WORK.get(captured.getClass()) ? null : findOwnerOf(captured, depth - 1);
             if (inner != null && MODS_OFF.contains(inner)) {
                 return inner;
             }
@@ -123,7 +149,7 @@ public final class GameTasks {
             Queue<Runnable> pending = ((BlockableEventLoopAccessor) loop).hotwire$getPending();
             for (Runnable queued : List.copyOf(pending)) {
                 Runnable task = unwrap(queued);
-                String mod = findOwnerOf(task, WRAPPED_DEPTH);
+                String mod = findOwnerOf(task, depthFor(loop));
                 if (mod != null && mods.contains(mod) && pending.remove(queued)) {
                     REMOVED.computeIfAbsent(mod, any -> new ArrayList<>()).add(new Removal(loop, task));
                 }
@@ -135,6 +161,10 @@ public final class GameTasks {
                 LOGGER.info("[Hotwire] {} tasks {} had queued on the game's loops wait until its on", removed, mod);
             }
         });
+    }
+
+    public static synchronized void forgetServerTasks() {
+        REMOVED.values().forEach(waiting -> waiting.removeIf(one -> !(one.loop() instanceof Minecraft)));
     }
 
     public static synchronized void putBack(Collection<String> mods) {
