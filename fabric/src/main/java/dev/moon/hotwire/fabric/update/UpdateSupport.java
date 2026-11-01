@@ -10,6 +10,7 @@ import dev.moon.hotwire.fabric.screen.ModIcons;
 import dev.moon.hotwire.jar.ModJar;
 import dev.moon.hotwire.jar.ModManifest;
 import dev.moon.hotwire.plan.ModGraph;
+import dev.moon.hotwire.report.ActionJournal;
 import dev.moon.hotwire.report.Report;
 import dev.moon.hotwire.switching.ModMixins;
 import dev.moon.hotwire.switching.ModSwitcher;
@@ -101,6 +102,8 @@ public final class UpdateSupport implements ModUpdater.Engine {
 
     public ModUpdater.Result update(Path jar, UpdateMethod method) {
         long start = System.nanoTime();
+        ActionJournal.Entry journal = ActionJournal.get().begin(ActionJournal.Action.UPDATE,
+                String.valueOf(jar.getFileName()));
         this.reports.onBegun(Report.Operation.UPDATE, String.valueOf(jar.getFileName()));
         ModUpdater.Result result;
         try {
@@ -110,19 +113,44 @@ public final class UpdateSupport implements ModUpdater.Engine {
                 ModUpdater.Result queued = this.updater.update(jar, UpdateMethod.NEXT_START);
                 result = queued instanceof ModUpdater.Result.Queued ? queued : result;
             }
+        } catch (RuntimeException e) {
+            journal.endThrown();
+            throw e;
         } finally {
             this.reports.onEnded();
         }
+        endJournal(journal, result, method);
         this.reports.onUpdated(result, (System.nanoTime() - start) / 1_000_000);
         return result;
     }
 
     public ModUpdater.Result updateNow(Path jar) {
+        ActionJournal.Entry journal = ActionJournal.get().begin(ActionJournal.Action.UPDATE,
+                String.valueOf(jar.getFileName()));
         UpdatePreview preview = this.updater.preview(jar);
         if (!(preview instanceof UpdatePreview.Ready ready)) {
+            journal.end(ActionJournal.Outcome.REFUSED);
             return new ModUpdater.Result.Refused(preview.toString());
         }
-        return this.updater.update(jar, ready.method());
+        ModUpdater.Result result = null;
+        try {
+            result = this.updater.update(jar, ready.method());
+            return result;
+        } finally {
+            endJournal(journal, result, ready.method());
+        }
+    }
+
+    private static void endJournal(ActionJournal.Entry journal, ModUpdater.@Nullable Result result,
+            UpdateMethod method) {
+        String how = method == UpdateMethod.IN_PLACE ? "in place" : "next start";
+        switch (result) {
+            case null -> journal.endThrown();
+            case ModUpdater.Result.Updated updated -> journal.end(ActionJournal.Outcome.DONE, how + " " + updated.id());
+            case ModUpdater.Result.Queued queued -> journal.end(ActionJournal.Outcome.QUEUED, how + " " + queued.id());
+            case ModUpdater.Result.Refused refused -> journal.end(ActionJournal.Outcome.REFUSED, how);
+            case ModUpdater.Result.Failed failed -> journal.end(ActionJournal.Outcome.REVERTED, how);
+        }
     }
 
     public static String describe(ModUpdater.Result result) {

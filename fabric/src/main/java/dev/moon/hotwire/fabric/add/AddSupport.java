@@ -15,6 +15,7 @@ import dev.moon.hotwire.jar.ModManifest;
 import dev.moon.hotwire.mixin_copy.MixinCopy;
 import dev.moon.hotwire.plan.ModGraph;
 import dev.moon.hotwire.plan.SwitchPlanner;
+import dev.moon.hotwire.report.ActionJournal;
 import dev.moon.hotwire.report.Report;
 import dev.moon.hotwire.switching.ModSwitcher;
 import dev.moon.hotwire.switching.SwitchApplier;
@@ -83,15 +84,21 @@ public final class AddSupport implements ModAdder.Engine {
     }
 
     public String queue(Path jar) {
+        ActionJournal.Entry journal = ActionJournal.get().begin(ActionJournal.Action.LATER_ADD,
+                String.valueOf(jar.getFileName()));
+
         Optional<String> plain = AddFirstLook.findRefusal(jar);
         if (plain.isPresent()) {
+            journal.end(ActionJournal.Outcome.REFUSED);
             return plain.get();
         }
         try {
             ModManifest manifest = this.queueJar(jar);
+            journal.end(ActionJournal.Outcome.QUEUED, manifest.id());
             return manifest.name() + " " + manifest.version() + " is queued as a pending task: it goes into your"
                     + " mods folder when you close the game. Cancel it any time from Pending tasks.";
         } catch (ModJarException | IOException e) {
+            journal.end(ActionJournal.Outcome.FAILED, e.getClass().getSimpleName());
             return jar.getFileName() + " could not be queued: " + e.getMessage();
         }
     }
@@ -152,13 +159,19 @@ public final class AddSupport implements ModAdder.Engine {
 
     public ModAdder.Result add(Path jar, Function<String, String> nameOf) {
         long start = System.nanoTime();
+        ActionJournal.Entry journal = ActionJournal.get().begin(ActionJournal.Action.ADD,
+                String.valueOf(jar.getFileName()));
         this.reports.onBegun(Report.Operation.ADD, String.valueOf(jar.getFileName()));
         ModAdder.Result result;
         try {
             result = this.adder.add(jar, nameOf);
+        } catch (RuntimeException e) {
+            journal.endThrown();
+            throw e;
         } finally {
             this.reports.onEnded();
         }
+        endJournal(journal, result);
         this.reports.onAdded(result, String.valueOf(jar.getFileName()), (System.nanoTime() - start) / 1_000_000);
         if (result instanceof ModAdder.Result.Added added) {
             try {
@@ -168,6 +181,21 @@ public final class AddSupport implements ModAdder.Engine {
             }
         }
         return result;
+    }
+
+    public static void endJournal(ActionJournal.Entry journal, ModAdder.Result result) {
+        switch (result) {
+            case ModAdder.Result.Added added -> journal.end(added.switched() instanceof ModSwitcher.Result.Done
+                    ? ActionJournal.Outcome.DONE : ActionJournal.Outcome.FAILED, "as " + String.join("+", added.ids()));
+            case ModAdder.Result.Refused refused -> journal.end(ActionJournal.Outcome.REFUSED,
+                    refused.restartOnly() ? "restart" : "");
+            case ModAdder.Result.Failed failed when ModAdder.isWorldBuilt(result) -> journal.end(
+                    ActionJournal.Outcome.REFUSED, "reopen");
+            case ModAdder.Result.Failed failed when ModAdder.isRestartOnly(result) -> journal.end(
+                    ActionJournal.Outcome.REFUSED, "restart");
+            case ModAdder.Result.Failed failed -> journal.end(failed.leftBehind() ? ActionJournal.Outcome.FAILED
+                    : ActionJournal.Outcome.REVERTED);
+        }
     }
 
     @Override

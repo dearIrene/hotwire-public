@@ -11,6 +11,7 @@ import java.util.HexFormat;
 import java.util.LinkedHashMap;
 import java.util.Map;
 import java.util.concurrent.ConcurrentHashMap;
+import org.jspecify.annotations.Nullable;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -33,6 +34,18 @@ public final class FileHashes {
         return hash("SHA-512", file);
     }
 
+    public static String findSha1(Path file) throws IOException {
+        return hash("SHA-1", file);
+    }
+
+    public static @Nullable String findHashedSha1(Path file) {
+        try {
+            return KNOWN.get(stampOf("SHA-1", file));
+        } catch (IOException e) {
+            return null;
+        }
+    }
+
     public static Map<String, String> findSha512ByName(Collection<Path> files) {
         Map<String, String> out = new LinkedHashMap<>();
         for (Path file : files) {
@@ -45,9 +58,13 @@ public final class FileHashes {
         return out;
     }
 
-    private static String hash(String algorithm, Path file) throws IOException {
-        Stamp stamp = new Stamp(algorithm, file.toAbsolutePath().normalize(), Files.size(file),
+    private static Stamp stampOf(String algorithm, Path file) throws IOException {
+        return new Stamp(algorithm, file.toAbsolutePath().normalize(), Files.size(file),
                 Files.getLastModifiedTime(file).toMillis());
+    }
+
+    private static String hash(String algorithm, Path file) throws IOException {
+        Stamp stamp = stampOf(algorithm, file);
         String known = KNOWN.get(stamp);
         if (known != null) {
             return known;

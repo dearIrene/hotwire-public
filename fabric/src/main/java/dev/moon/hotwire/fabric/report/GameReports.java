@@ -6,6 +6,7 @@ import dev.moon.hotwire.fabric.add.ModAdder;
 import dev.moon.hotwire.fabric.registration.GameRegistrations;
 import dev.moon.hotwire.fabric.update.ModUpdater;
 import dev.moon.hotwire.plan.SwitchPlan;
+import dev.moon.hotwire.report.ActionJournal;
 import dev.moon.hotwire.report.CrashSection;
 import dev.moon.hotwire.report.Report;
 import dev.moon.hotwire.report.ReportBundle;
@@ -90,6 +91,7 @@ public final class GameReports {
                 System.getProperty("os.name", "") + " " + System.getProperty("os.version", ""),
                 "launcher agent", Map.of());
         current = this;
+        ActionJournal.get().flushWith(this.writer);
     }
 
     private static volatile Consumer<Path> crashSaved = file -> { };
@@ -355,14 +357,15 @@ public final class GameReports {
         return at < 0 || !CrashSection.isCleared(text.substring(at));
     }
 
-    Path writeBundle(String title, String why, List<TidyLog.Mod> mods, List<Path> extra) throws IOException {
+    Path writeBundle(String title, String why, List<TidyLog.Mod> mods, List<Path> extra, String environment)
+            throws IOException {
         synchronized (this.bundling) {
-            return this.writeBundleNow(title, why, mods, extra);
+            return this.writeBundleNow(title, why, mods, extra, environment);
         }
     }
 
-    private Path writeBundleNow(String title, String why, List<TidyLog.Mod> mods, List<Path> extra)
-            throws IOException {
+    private Path writeBundleNow(String title, String why, List<TidyLog.Mod> mods, List<Path> extra,
+            String environment) throws IOException {
         this.onWritten();
         Path game = FabricLoader.getInstance().getGameDir();
         Map<String, String> texts = new LinkedHashMap<>();
@@ -380,6 +383,14 @@ public final class GameReports {
         if (Files.isRegularFile(logs.resolve(HotwireClient.STARTUP))) {
             texts.put("hotwire-" + HotwireClient.STARTUP, read(logs.resolve(HotwireClient.STARTUP)));
         }
+        ActionJournal.get().flush();
+        for (String name : extra.isEmpty() ? List.of(ActionJournal.FILE)
+                : List.of(ActionJournal.FILE, ActionJournal.LAST)) {
+            if (Files.isRegularFile(logs.resolve(name))) {
+                texts.put("hotwire-" + name, read(logs.resolve(name)));
+            }
+        }
+        texts.put("hotwire-environment.txt", environment);
         this.listSince(this.folder, ".txt").forEach(file -> texts.put("reports/" + file.getFileName(), read(file)));
         this.listSince(game.resolve("crash-reports"), ".txt")
                 .forEach(file -> texts.put("crash-reports/" + file.getFileName(), read(file)));

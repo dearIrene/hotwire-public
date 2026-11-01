@@ -7,6 +7,7 @@ import dev.moon.hotwire.modrinth.Downloads;
 import dev.moon.hotwire.redefine.FieldHolders;
 import dev.moon.hotwire.redefine.InitHookReplay;
 import dev.moon.hotwire.redefine.Tripwire;
+import dev.moon.hotwire.report.ActionJournal;
 import dev.moon.hotwire.report.GameLog;
 import dev.moon.hotwire.report.StartTimes;
 import dev.moon.hotwire.ui.DownloadNotices;
@@ -23,9 +24,11 @@ import net.fabricmc.fabric.api.client.command.v2.ClientCommandRegistrationCallba
 import net.fabricmc.fabric.api.client.event.lifecycle.v1.ClientLifecycleEvents;
 import net.fabricmc.fabric.api.client.networking.v1.ClientPlayConnectionEvents;
 import net.fabricmc.fabric.api.event.Event;
+import net.fabricmc.fabric.api.event.lifecycle.v1.ServerLifecycleEvents;
 import net.fabricmc.loader.api.FabricLoader;
 import net.minecraft.client.Minecraft;
 import net.minecraft.locale.Language;
+import net.minecraft.network.Connection;
 import net.minecraft.resources.Identifier;
 import org.jspecify.annotations.Nullable;
 import org.slf4j.Logger;
@@ -46,6 +49,8 @@ public final class HotwireClient implements ClientModInitializer {
         StartTimes.mark("Hotwire's client start begins");
         long began = System.nanoTime();
         HotwireLog.install(FabricLoader.getInstance().getGameDir().resolve("hotwire").resolve("logs"));
+        ActionJournal.open(FabricLoader.getInstance().getGameDir().resolve("hotwire").resolve("logs"),
+                HotwireClient::findPlace);
         GameLog.LOGGER.info("[Hotwire] {} loaded; H or /hotwire opens it, and its Report button writes what went wrong"
                 + " to hotwire/reports", LoadedMods.findVersion(ID, "unknown"));
         NoticeHud.register();
@@ -78,23 +83,20 @@ public final class HotwireClient implements ClientModInitializer {
         });
 
         InitHookReplay.catchUpLaterWhile(() -> Minecraft.getInstance().level == null);
-        ClientPlayConnectionEvents.JOIN.register((handler, sender, client) -> client.execute(() -> {
-            FieldHolders.retryCatchUps();
-            HotwireEngine started = engine;
-            if (started != null) {
-                OpenKey.tellConflicts(started.getSettings());
-                OffModCommands.readOffFrom(id -> !started.isOn(id) || Tripwire.isWatched(id));
-                InWorldWork.lookAheadSoon(started);
-                InWorldWork.fillCacheSoon(started);
-                started.showUpdateInChat();
 
-                OffModCommands.takeOut(id -> !started.isOn(id));
-            }
-        }));
+        ServerLifecycleEvents.SERVER_STARTING.register(server -> ActionJournal.get().note(ActionJournal.Action.OPEN,
+                ""));
+        ClientPlayConnectionEvents.JOIN.register((handler, sender, client) -> {
+            ActionJournal.get().note(ActionJournal.Action.JOIN, "", findPlaceOf(handler.getConnection()));
+            client.execute(HotwireClient::onJoined);
+        });
 
-        ClientPlayConnectionEvents.DISCONNECT.register((handler, client) -> LOGGER.info(
-                "[Hotwire] the world's connection closed", new Throwable("closed here")));
+        ClientPlayConnectionEvents.DISCONNECT.register((handler, client) -> {
+            ActionJournal.get().note(ActionJournal.Action.LEAVE, "", findPlaceOf(handler.getConnection()));
+            LOGGER.info("[Hotwire] the world's connection closed", new Throwable("closed here"));
+        });
         ClientLifecycleEvents.CLIENT_STOPPING.register(client -> {
+            ActionJournal.get().flush();
             OffModClose.run(client);
             OffModClose.exitWhenStuck();
             HotwireEngine started = engine;
@@ -106,11 +108,26 @@ public final class HotwireClient implements ClientModInitializer {
         StartTimes.mark("Hotwire's client start ends");
     }
 
+    private static void onJoined() {
+        FieldHolders.retryCatchUps();
+        HotwireEngine started = engine;
+        if (started != null) {
+            OpenKey.tellConflicts(started.getSettings());
+            OffModCommands.readOffFrom(id -> !started.isOn(id) || Tripwire.isWatched(id));
+            InWorldWork.lookAheadSoon(started);
+            InWorldWork.fillCacheSoon(started);
+            started.showUpdateInChat();
+
+            OffModCommands.takeOut(id -> !started.isOn(id));
+        }
+    }
+
     public static void onTitleScreen() {
         if (StartTimes.hasMark(TITLE)) {
             return;
         }
         StartTimes.mark(TITLE);
+        ActionJournal.get().note(ActionJournal.Action.TITLE, "");
         Path file = FabricLoader.getInstance().getGameDir().resolve("hotwire").resolve("logs").resolve(STARTUP);
         String about = "Hotwire " + LoadedMods.findVersion(ID, "unknown") + " on Minecraft "
                 + LoadedMods.findVersion("minecraft", "unknown") + ", " + FabricLoader.getInstance().getAllMods().size()
@@ -118,6 +135,18 @@ public final class HotwireClient implements ClientModInitializer {
         Executor later = CompletableFuture.delayedExecutor(60, TimeUnit.SECONDS);
         ForkJoinPool.commonPool().execute(() -> writeStartTimes(file, about + ", at the title screen", true));
         later.execute(() -> writeStartTimes(file, about + ", a minute after the title screen", false));
+    }
+
+    private static ActionJournal.Place findPlace() {
+        Minecraft client = Minecraft.getInstance();
+        if (client.level == null) {
+            return ActionJournal.Place.TITLE;
+        }
+        return client.hasSingleplayerServer() ? ActionJournal.Place.WORLD : ActionJournal.Place.SERVER;
+    }
+
+    private static ActionJournal.Place findPlaceOf(Connection connection) {
+        return connection.isMemoryConnection() ? ActionJournal.Place.WORLD : ActionJournal.Place.SERVER;
     }
 
     private static void writeStartTimes(Path file, String heading, boolean first) {

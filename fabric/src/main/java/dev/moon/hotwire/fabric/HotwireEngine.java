@@ -11,6 +11,7 @@ import dev.moon.hotwire.fabric.rebuild.GameClasses;
 import dev.moon.hotwire.fabric.registration.Fields;
 import dev.moon.hotwire.fabric.registration.GameRegistrations;
 import dev.moon.hotwire.fabric.registration.ModLifecycle;
+import dev.moon.hotwire.fabric.report.GameEnvironment;
 import dev.moon.hotwire.fabric.report.GameReports;
 import dev.moon.hotwire.fabric.report.ReportZips;
 import dev.moon.hotwire.fabric.screen.ChooserGameScreen;
@@ -24,6 +25,7 @@ import dev.moon.hotwire.fabric.update.SwapAtClose;
 import dev.moon.hotwire.fabric.update.UpdateSupport;
 import dev.moon.hotwire.plan.ModGraph;
 import dev.moon.hotwire.redefine.Tripwire;
+import dev.moon.hotwire.report.ActionJournal;
 import dev.moon.hotwire.report.GameLog;
 import dev.moon.hotwire.switching.ModSwitcher;
 import dev.moon.hotwire.switching.PlayerMessages;
@@ -116,7 +118,8 @@ public final class HotwireEngine implements ModScreen.Game, AutoCloseable {
         this.icons = icons;
         this.settings = settings;
         this.progress = progress;
-        this.zips = new ReportZips(reports, this::getMods, installed::isAddedThisSession);
+        this.zips = new ReportZips(reports, this::getMods, installed::isAddedThisSession, new GameEnvironment(
+                installed, FabricLoader.getInstance().getConfigDir().resolve("hotwire/settings.json")));
         this.updateFolders = folders;
         this.updateQueue = queue;
         this.pending = new PendingChanges(queue, folders);
@@ -407,12 +410,14 @@ public final class HotwireEngine implements ModScreen.Game, AutoCloseable {
 
     @Override
     public void chooseAdvanced(String option, int choice) {
+        ActionJournal.Entry journal = ActionJournal.get().begin(ActionJournal.Action.SETTING, option + ":" + choice);
         this.settings.choose(option, choice);
         ModPolicy.setNestedJars(this.settings.getNestedJars());
         JvmParts parts = this.findParts();
         if (parts != null && option.equals(HotwireSettings.NESTED_JARS)) {
             parts.runner().getSwitcher().replan(ModPolicy.makePlannerFor(this.installed.getGraph()));
         }
+        journal.end(ActionJournal.Outcome.DONE);
     }
 
     @Override
@@ -607,15 +612,19 @@ public final class HotwireEngine implements ModScreen.Game, AutoCloseable {
 
     @Override
     public void turnOffAtNextStart(List<String> ids) {
+        ActionJournal.Entry journal = ActionJournal.get().begin(ActionJournal.Action.LATER_OFF, ids);
         String who = PlayerMessages.joinNames(ids, this.installed::nameOf);
         this.disabled.turnOffAtNextStart(ids, who);
+        journal.end(ActionJournal.Outcome.QUEUED);
         this.showMessage(Lang.get("hotwire.switch.off_at_start", who), false);
         this.refreshScreen();
     }
 
     @Override
     public void cancelOffAtNextStart(String id) {
+        ActionJournal.Entry journal = ActionJournal.get().begin(ActionJournal.Action.UNDO_LATER, id);
         this.disabled.cancelOffAtNextStart(id);
+        journal.end(ActionJournal.Outcome.DONE);
         this.refreshScreen();
     }
 

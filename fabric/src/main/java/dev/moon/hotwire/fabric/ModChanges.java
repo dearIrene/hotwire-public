@@ -1,9 +1,11 @@
 package dev.moon.hotwire.fabric;
 
 import dev.moon.hotwire.concurrent.Tasks;
+import dev.moon.hotwire.fabric.add.AddSupport;
 import dev.moon.hotwire.fabric.add.ModAdder;
 import dev.moon.hotwire.fabric.add.WorldReopen;
 import dev.moon.hotwire.fabric.update.ModUpdater;
+import dev.moon.hotwire.report.ActionJournal;
 import dev.moon.hotwire.ui.AddPreview;
 import dev.moon.hotwire.ui.UpdatePreview;
 import dev.moon.hotwire.update.UpdatePlan;
@@ -36,7 +38,17 @@ public final class ModChanges {
     }
 
     public ModAdder.Result addWithReopen(Path jar) {
-        return WorldReopen.add(() -> this.addNow(jar));
+        ActionJournal.Entry journal = ActionJournal.get().begin(ActionJournal.Action.REOPEN_ADD,
+                String.valueOf(jar.getFileName()));
+        ModAdder.Result result;
+        try {
+            result = WorldReopen.add(() -> this.addNow(jar));
+        } catch (RuntimeException e) {
+            journal.endThrown();
+            throw e;
+        }
+        AddSupport.endJournal(journal, result);
+        return result;
     }
 
     public String queueAdd(Path jar) {

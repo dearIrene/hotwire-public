@@ -1,6 +1,7 @@
 package dev.moon.hotwire.fabric.report;
 
 import dev.moon.hotwire.fabric.screen.WebLinks;
+import dev.moon.hotwire.report.ActionJournal;
 import dev.moon.hotwire.report.GameLog;
 import dev.moon.hotwire.report.TidyLog;
 import dev.moon.hotwire.ui.Lang;
@@ -24,11 +25,15 @@ public final class ReportZips {
     private final GameReports reports;
     private final Supplier<List<ModStatus>> mods;
     private final Predicate<String> addedThisSession;
+    private final GameEnvironment environment;
 
-    public ReportZips(GameReports reports, Supplier<List<ModStatus>> mods, Predicate<String> addedThisSession) {
+    public ReportZips(GameReports reports, Supplier<List<ModStatus>> mods, Predicate<String> addedThisSession,
+            GameEnvironment environment) {
         this.reports = reports;
         this.mods = mods;
         this.addedThisSession = addedThisSession;
+        this.environment = environment;
+        environment.hashSoon();
     }
 
     private volatile @Nullable Path last;
@@ -74,12 +79,13 @@ public final class ReportZips {
 
     private synchronized Path writeZip(String title, String why, List<Path> extra, boolean asked)
             throws IOException {
+        ActionJournal.get().note(ActionJournal.Action.REPORT, asked ? "asked" : "by itself");
         List<TidyLog.Mod> mods = new ArrayList<>();
         for (ModStatus mod : this.mods.get()) {
             mods.add(new TidyLog.Mod(mod.name(), mod.version(), !mod.on() ? TidyLog.State.OFF
                     : this.addedThisSession.test(mod.id()) ? TidyLog.State.ADDED : TidyLog.State.ON));
         }
-        Path zip = this.reports.writeBundle(title, why, mods, extra);
+        Path zip = this.reports.writeBundle(title, why, mods, extra, this.environment.describe());
         Path before = this.replaceable;
         if (before != null && !before.equals(zip)) {
             Files.deleteIfExists(before);

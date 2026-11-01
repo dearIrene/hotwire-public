@@ -6,6 +6,8 @@ import dev.moon.hotwire.config.HotwireSettings;
 import dev.moon.hotwire.fabric.add.WorldReopen;
 import dev.moon.hotwire.fabric.registration.EntityHolders;
 import dev.moon.hotwire.fabric.registration.WorldContent;
+import dev.moon.hotwire.report.ActionJournal;
+import dev.moon.hotwire.report.Report;
 import dev.moon.hotwire.switching.ModSwitcher;
 import dev.moon.hotwire.switching.PlayerMessages;
 import dev.moon.hotwire.ui.Lang;
@@ -163,11 +165,25 @@ final class SwitchRequests {
 
     static SwitchRunner.@Nullable CheckedResult runSwitchWithReopen(SwitchRunner runner, boolean off, List<String> ids)
             throws InterruptedException {
-        return WorldReopen.runAround(() -> {
-            if (ids.isEmpty()) {
-                return null;
-            }
-            return off ? runner.turnOff(ids) : runner.turnOn(ids);
-        });
+        ActionJournal.Entry journal = ActionJournal.get().begin(off ? ActionJournal.Action.REOPEN_OFF
+                : ActionJournal.Action.REOPEN_ON, ids);
+        SwitchRunner.@Nullable CheckedResult result;
+        try {
+            result = WorldReopen.runAround(() -> {
+                if (ids.isEmpty()) {
+                    return null;
+                }
+                return off ? runner.turnOff(ids) : runner.turnOn(ids);
+            });
+        } catch (InterruptedException | RuntimeException e) {
+            journal.endThrown();
+            throw e;
+        }
+        if (result == null) {
+            journal.end(ActionJournal.Outcome.DONE);
+        } else {
+            journal.endSwitch(result.result(), result.check() instanceof Report.OffCheck.PartlyOff);
+        }
+        return result;
     }
 }

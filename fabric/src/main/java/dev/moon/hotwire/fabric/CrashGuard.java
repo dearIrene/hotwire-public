@@ -5,6 +5,8 @@ import dev.moon.hotwire.fabric.add.WorldReopen;
 import dev.moon.hotwire.fabric.registration.GameRegistrations;
 import dev.moon.hotwire.redefine.HandlerGuards;
 import dev.moon.hotwire.registration.CallerOwner;
+import dev.moon.hotwire.report.ActionJournal;
+import dev.moon.hotwire.report.Report;
 import dev.moon.hotwire.switching.CrashPolicy;
 import dev.moon.hotwire.switching.ModSwitcher;
 import dev.moon.hotwire.switching.PlayerMessages;
@@ -73,10 +75,10 @@ public final class CrashGuard {
                 return;
             }
             endWhenThrown(made[0], caught.mod(), tasks.submit("turning off " + caught.mod() + " after its crash",
-                    () -> switching.turnOff(List.of(caught.mod())), reported -> {
+                    () -> turnOffAfterCrash(caught.mod(), () -> switching.turnOff(List.of(caught.mod()))), reported -> {
                         if (isWorldBuilt(reported.result())) {
                             endWhenThrown(made[0], caught.mod(), tasks.submit("saving the world and turning off "
-                                    + caught.mod() + " after its crash", () -> {
+                                    + caught.mod() + " after its crash", () -> turnOffAfterCrash(caught.mod(), () -> {
                                         try {
                                             return WorldReopen.runAround(
                                                     () -> switching.turnOff(List.of(caught.mod())));
@@ -85,7 +87,7 @@ public final class CrashGuard {
                                             throw new IllegalStateException("the off was interrupted while the"
                                                     + " world closed or opened", e);
                                         }
-                                    },
+                                    }),
                                     reopened -> finish(made[0], caught.mod(), name, reopened.result(), why,
                                             installed, say, writeReport)));
                             return;
@@ -103,6 +105,20 @@ public final class CrashGuard {
                 policy.onOffFinished(mod, false);
             }
         });
+    }
+
+    private static SwitchRunner.CheckedResult turnOffAfterCrash(String mod,
+            Supplier<SwitchRunner.CheckedResult> off) {
+        ActionJournal.Entry journal = ActionJournal.get().begin(ActionJournal.Action.CRASH_OFF, mod);
+        SwitchRunner.CheckedResult result;
+        try {
+            result = off.get();
+        } catch (RuntimeException e) {
+            journal.endThrown();
+            throw e;
+        }
+        journal.endSwitch(result.result(), result.check() instanceof Report.OffCheck.PartlyOff);
+        return result;
     }
 
     private static boolean isWorldBuilt(ModSwitcher.Result result) {

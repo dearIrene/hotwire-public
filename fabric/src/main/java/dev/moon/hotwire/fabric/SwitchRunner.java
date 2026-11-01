@@ -33,6 +33,7 @@ import dev.moon.hotwire.plan.SwitchPlan;
 import dev.moon.hotwire.redefine.HandlerGuards;
 import dev.moon.hotwire.redefine.RebuildException;
 import dev.moon.hotwire.redefine.Tripwire;
+import dev.moon.hotwire.report.ActionJournal;
 import dev.moon.hotwire.report.Report;
 import dev.moon.hotwire.switching.ModSwitcher;
 import dev.moon.hotwire.switching.OffChecker;
@@ -146,12 +147,14 @@ public final class SwitchRunner {
 
     CheckedResult turnOff(List<String> ids) {
         LOGGER.info("[Hotwire] turning off {}", ids);
+        ActionJournal.Entry journal = ActionJournal.get().begin(ActionJournal.Action.OFF, ids);
         SwitchTimes.begin();
         RegistryCheck.takeKeysOnce();
         this.switcher.setBusy(true);
         this.reports.onBegun(Report.Operation.OFF, String.join(", ", ids));
+        CheckedResult result = null;
         try {
-            CheckedResult result = this.runTimedOff(ids);
+            result = this.runTimedOff(ids);
             this.afterOff.accept(result.result());
             return result;
         } finally {
@@ -160,6 +163,15 @@ public final class SwitchRunner {
             this.reports.onEnded();
             this.switcher.setBusy(false);
             SwitchTimes.end("the off of " + ids);
+            endJournal(journal, result);
+        }
+    }
+
+    private static void endJournal(ActionJournal.Entry journal, @Nullable CheckedResult result) {
+        if (result == null) {
+            journal.endThrown();
+        } else {
+            journal.endSwitch(result.result(), result.check() instanceof Report.OffCheck.PartlyOff);
         }
     }
 
@@ -300,18 +312,22 @@ public final class SwitchRunner {
 
     CheckedResult turnOn(List<String> ids) {
         LOGGER.info("[Hotwire] turning on {}", ids);
+        ActionJournal.Entry journal = ActionJournal.get().begin(ActionJournal.Action.ON, ids);
         SwitchTimes.begin();
         RegistryCheck.takeKeysOnce();
         this.switcher.setBusy(true);
         this.reports.onBegun(Report.Operation.ON, String.join(", ", ids));
+        CheckedResult result = null;
         try {
-            return this.runTimedOn(ids);
+            result = this.runTimedOn(ids);
+            return result;
         } finally {
             this.tripwire.closeRide();
             ResourceReload.endAssetWait();
             this.reports.onEnded();
             this.switcher.setBusy(false);
             SwitchTimes.end("the on of " + ids);
+            endJournal(journal, result);
         }
     }
 

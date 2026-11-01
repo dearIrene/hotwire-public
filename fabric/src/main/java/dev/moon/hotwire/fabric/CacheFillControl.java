@@ -1,6 +1,7 @@
 package dev.moon.hotwire.fabric;
 
 import dev.moon.hotwire.redefine.CachedMixes;
+import dev.moon.hotwire.report.ActionJournal;
 import dev.moon.hotwire.switching.SwitchCacheFiller;
 import dev.moon.hotwire.ui.CacheFill;
 import dev.moon.hotwire.ui.CacheHost;
@@ -125,6 +126,8 @@ final class CacheFillControl implements CacheHost {
 
     @Override
     public void clearCache(@Nullable String version) {
+        ActionJournal.Entry journal = ActionJournal.get().begin(ActionJournal.Action.FILL,
+                version == null ? "clear" : "clear:" + version);
         Path here = EngineStart.findCacheFolder();
         if (version == null || version.equals(here.getFileName().toString())) {
             HotwireEngine.JvmParts found = this.parts.get();
@@ -140,6 +143,7 @@ final class CacheFillControl implements CacheHost {
             }
         }
         this.versionsAt = 0;
+        journal.end(ActionJournal.Outcome.DONE);
     }
 
     private void delete(Path folder, String version) {
@@ -160,12 +164,15 @@ final class CacheFillControl implements CacheHost {
         if (found == null) {
             return;
         }
+
+        ActionJournal.Entry journal = ActionJournal.get().begin(ActionJournal.Action.FILL, go ? "start" : "pause");
         if (go) {
             found.runner().getSwitcher().getFiller().watchPlaying(CacheFillControl::isPlaying);
             found.runner().getSwitcher().getFiller().fillAll();
         } else {
             found.runner().getSwitcher().getFiller().pause(true);
         }
+        journal.end(ActionJournal.Outcome.DONE);
     }
 
     @Override
