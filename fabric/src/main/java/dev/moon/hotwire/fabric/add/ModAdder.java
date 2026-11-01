@@ -522,15 +522,15 @@ public final class ModAdder {
                             reloadForAssets(parts.values());
                         }, BackgroundReload::runAfterReload);
                 this.engine.showAddStep(3);
-                CompletableFuture<Void> started = AddStart.queue(ids, grew, backedOut, this.engine.getSide(), setUp,
-                        this.engine::findLoaded);
+                CompletableFuture<Map<String, List<String>>> started = AddStart.queue(ids, grew, backedOut,
+                        this.engine.getSide(), setUp, this.engine::findLoaded);
                 hold.get().releaseGame();
-                started.get(ENTRYPOINT_WAIT.toMillis(), TimeUnit.MILLISECONDS);
+                Map<String, List<String>> clientStarted = started.get(ENTRYPOINT_WAIT.toMillis(),
+                        TimeUnit.MILLISECONDS);
                 SwitchTimes.mark("add: entrypoints");
 
                 for (String id : ids) {
-                    List<String> ran = new ArrayList<>(ModLifecycle.runSetup(id, GameRegistrations.getJournal(),
-                            Minecraft.getInstance()));
+                    List<String> ran = new ArrayList<>(clientStarted.getOrDefault(id, List.of()));
                     ran.addAll(ModLifecycle.start(id, GameRegistrations.getJournal(), Minecraft.getInstance()));
                     if (!ran.isEmpty()) {
                         LOGGER.info("[Hotwire] {} started with the running server: {}", id, ran);
