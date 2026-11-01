@@ -381,6 +381,7 @@ public final class SwitchApplier {
         }
         SwitchTimes.mark("loaded meanwhile");
         DuckRebridge.runAfterSwitch(this.bridged, movedBefore, this.mods, this.game, this.rebuilder);
+        SwitchTimes.mark("duck bridges");
         return dryRun.applied();
     }
 

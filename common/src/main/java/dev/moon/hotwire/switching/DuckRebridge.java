@@ -51,6 +51,7 @@ final class DuckRebridge {
     static void run(Set<String> fresh, Set<String> moved, Map<String, ModMixins> mods, SwitchApplier.Game game,
             ClassRebuilder rebuilder) throws RebuildException {
         Set<Class<?>> found = new LinkedHashSet<>();
+        int[] read = new int[1];
         mods.values().forEach(mixins -> {
             boolean declares = fresh.stream().anyMatch(mixins.owns()::contains);
             if (!declares && moved.isEmpty()) {
@@ -60,12 +61,15 @@ final class DuckRebridge {
                 Class<?> loaded = game.findLoaded(name);
 
                 byte[] jar = loaded == null ? null : game.findClassFile(name);
+                read[0] += jar == null ? 0 : 1;
                 if (loaded != null && (jar == null || DuckBridge.names(jar, declares ? fresh : Set.of(), moved))) {
                     found.add(loaded);
                 }
             }
         });
         List<Class<?>> candidates = new ArrayList<>(found);
+        LOGGER.info("[Hotwire] the new ducks {} and moved {} were looked for in {} loaded classes read from their jars;"
+                + " {} name them", fresh.size(), moved, read[0], candidates.size());
         if (candidates.isEmpty()) {
             return;
         }
