@@ -1,6 +1,7 @@
 package dev.moon.hotwire.fabric.registration;
 
 import java.util.ArrayList;
+import java.util.Comparator;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
@@ -23,6 +24,14 @@ final class WalkReport {
 
     private int filed;
     private int unfiled;
+
+    private final Map<Class<?>, long[]> holders = new HashMap<>();
+
+    void timeHolder(Class<?> type, long began) {
+        long[] counts = this.holders.computeIfAbsent(type, any -> new long[2]);
+        counts[0]++;
+        counts[1] += System.nanoTime() - began;
+    }
 
     void time(long began, String what) {
         this.slowest.add(Map.entry(System.nanoTime() - began, what));
@@ -78,6 +87,10 @@ final class WalkReport {
                     .forEach(one -> named.add(one.getValue() + " " + one.getKey() / 1_000_000 + " ms"));
             LOGGER.info("[Hotwire] {} classes' statics looked through for {} in {} ms; {}; slowest {}", statics,
                     mods, millis, wrappers, named);
+            LOGGER.info("[Hotwire] the game objects the walk took longest over, by class: {}", this.holders.entrySet()
+                    .stream().sorted(Comparator.comparingLong(one -> -one.getValue()[1])).limit(SLOWEST_NAMED)
+                    .map(one -> one.getKey().getName() + " " + one.getValue()[0] + " in "
+                            + one.getValue()[1] / 1_000_000 + " ms").toList());
         }
     }
 }

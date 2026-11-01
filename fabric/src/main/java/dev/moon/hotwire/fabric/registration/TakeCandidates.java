@@ -7,9 +7,18 @@ import java.util.List;
 import java.util.Map;
 import java.util.Set;
 import org.jspecify.annotations.Nullable;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
 final class TakeCandidates {
+    private static final Logger LOGGER = LoggerFactory.getLogger(TakeCandidates.class);
+
     private final Map<Set<String>, Set<String>> shared = new HashMap<>();
+
+    private @Nullable CandidateReach reach;
+
+    private static final boolean VERIFY = Boolean.parseBoolean(System.getProperty("hotwire.verifyCandidates"));
+    private int differed;
 
     @Nullable Set<String> find(@Nullable Object element, boolean deep) {
         if (!ElementLook.isLooking() || element == null) {
@@ -18,11 +27,20 @@ final class TakeCandidates {
         Class<?> type = element instanceof Class<?> named ? named : element.getClass();
         Set<String> all = new HashSet<>(ReflectedOwners.findAllOwnersOf(type));
         if (deep) {
-            Set<String> reached = Wrappers.findCandidates(element);
-            if (reached == null) {
-                return null;
+            CandidateReach walk = this.reach;
+            if (walk != null) {
+                Set<String> reached = walk.find(element);
+                if (VERIFY) {
+                    this.verify(element, reached);
+                }
+                all.addAll(reached);
+            } else {
+                Set<String> reached = Wrappers.findCandidates(element);
+                if (reached == null) {
+                    return null;
+                }
+                all.addAll(reached);
             }
-            all.addAll(reached);
             return this.share(this.count(all, element));
         }
         add(all, GameRegistrations.findModOf(type));
@@ -34,6 +52,29 @@ final class TakeCandidates {
             add(all, ValueOwners.findForwardedTo(element));
         }
         return this.share(this.count(all, element));
+    }
+
+    void beginWalk() {
+        this.reach = new CandidateReach();
+        this.differed = 0;
+    }
+
+    void endWalk() {
+        CandidateReach walk = this.reach;
+        this.reach = null;
+        if (walk != null) {
+            LOGGER.info("[Hotwire] the walk's candidates: {}{}", walk.describe(),
+                    VERIFY ? ", " + this.differed + " differed from a walk of each" : "");
+        }
+    }
+
+    private void verify(Object element, Set<String> reached) {
+        Set<String> walked = Wrappers.findCandidates(element);
+
+        if (walked != null && !walked.equals(reached) && this.differed++ < 5) {
+            LOGGER.warn("[Hotwire] candidates of a {} differ: {} once, {} afresh, {} walked",
+                    element.getClass().getName(), reached, new CandidateReach().find(element), walked);
+        }
     }
 
     private Set<String> count(Set<String> all, Object element) {

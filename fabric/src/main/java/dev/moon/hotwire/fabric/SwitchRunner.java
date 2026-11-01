@@ -42,6 +42,8 @@ import dev.moon.hotwire.switching.SwitchTimes;
 import dev.moon.hotwire.ui.Lang;
 import dev.moon.hotwire.ui.Notice;
 import dev.moon.hotwire.ui.Notices;
+import java.lang.management.ManagementFactory;
+import java.lang.management.ThreadMXBean;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Locale;
@@ -62,6 +64,8 @@ public final class SwitchRunner {
     }
 
     private static final Logger LOGGER = LoggerFactory.getLogger(SwitchRunner.class);
+
+    private static final ThreadMXBean THREADS = ManagementFactory.getThreadMXBean();
 
     private final ModSwitcher switcher;
     private final OffChecker offChecker;
@@ -117,9 +121,11 @@ public final class SwitchRunner {
                 return;
             }
             long start = System.nanoTime();
+            long ran = THREADS.getCurrentThreadCpuTime();
             ElementLook.findAhead(this.fieldReferences, mods, this.switcher::isOn, true);
-            LOGGER.info("[Hotwire] the look ahead for every mod that could go off ({}) took {} ms",
-                    mods.size(), (System.nanoTime() - start) / 1_000_000);
+            LOGGER.info("[Hotwire] the look ahead for every mod that could go off ({}) took {} ms, {} ms of it running",
+                    mods.size(), (System.nanoTime() - start) / 1_000_000,
+                    (THREADS.getCurrentThreadCpuTime() - ran) / 1_000_000);
         });
     }
 
@@ -128,9 +134,10 @@ public final class SwitchRunner {
             return;
         }
         long start = System.nanoTime();
+        long ran = THREADS.getCurrentThreadCpuTime();
         ElementLook.prepareAhead(this.fieldReferences, mods, this.switcher::isOn);
-        LOGGER.info("[Hotwire] the look's warm-up for {} mods took {} ms", mods.size(),
-                (System.nanoTime() - start) / 1_000_000);
+        LOGGER.info("[Hotwire] the look's warm-up for {} mods took {} ms, {} ms of it running", mods.size(),
+                (System.nanoTime() - start) / 1_000_000, (THREADS.getCurrentThreadCpuTime() - ran) / 1_000_000);
     }
 
     private static boolean isLookingAhead() {

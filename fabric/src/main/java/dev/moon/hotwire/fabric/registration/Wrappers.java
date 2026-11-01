@@ -17,7 +17,7 @@ import java.util.function.Function;
 import org.jspecify.annotations.Nullable;
 
 final class Wrappers {
-    private static final int DEPTH = 9;
+    static final int DEPTH = 9;
 
     private static final int ELEMENTS = 64;
 
@@ -130,20 +130,7 @@ final class Wrappers {
                 if (--budget < 0) {
                     return null;
                 }
-                switch (value) {
-                    case Collection<?> all -> next.addAll(all);
-                    case Map<?, ?> map -> addValues(map, next);
-                    case Object[] array -> Collections.addAll(next, array);
-                    default -> {
-                        List<FieldSlots.Slot> fields = Fields.getReferenceFields(value.getClass(), false);
-                        for (int field = 0; field < fields.size(); field++) {
-                            try {
-                                next.add(fields.get(field).get(value));
-                            } catch (ReflectiveOperationException | RuntimeException | LinkageError e) {
-                            }
-                        }
-                    }
-                }
+                addParts(value, next);
             }
             ArrayList<Object> done = level;
             level = next;
@@ -443,6 +430,23 @@ final class Wrappers {
         }
     }
 
+    static void addParts(Object value, List<Object> into) {
+        switch (value) {
+            case Collection<?> all -> into.addAll(all);
+            case Map<?, ?> map -> addValues(map, into);
+            case Object[] array -> Collections.addAll(into, array);
+            default -> {
+                List<FieldSlots.Slot> fields = Fields.getReferenceFields(value.getClass(), false);
+                for (int field = 0; field < fields.size(); field++) {
+                    try {
+                        into.add(fields.get(field).get(value));
+                    } catch (ReflectiveOperationException | RuntimeException | LinkageError e) {
+                    }
+                }
+            }
+        }
+    }
+
     private static void addValues(Map<?, ?> map, List<Object> into) {
         if (makesValues(map)) {
             return;
@@ -494,8 +498,11 @@ final class Wrappers {
                 + BUDGET + " objects" : "");
     }
 
-    private static boolean isOfAMod(Object value) {
-        Class<?> type = value.getClass();
+    static boolean isOfAMod(Object value) {
+        return isOfAMod(value.getClass());
+    }
+
+    static boolean isOfAMod(Class<?> type) {
         String mod = GameRegistrations.findModOf(type);
         return mod == null ? GameRegistrations.findShippedBy(type) != null
                 : !mod.equals("minecraft") && !mod.equals("java");

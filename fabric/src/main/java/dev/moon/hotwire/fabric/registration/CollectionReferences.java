@@ -76,7 +76,12 @@ final class CollectionReferences implements FixedLists.Walk {
                 this.takeAll(ready, mods);
                 this.takeWrappedIn(holders);
             } else if (ahead == null) {
-                this.walk(mods, holders, statics, handed);
+                this.candidates.beginWalk();
+                try {
+                    this.walk(mods, holders, statics, handed);
+                } finally {
+                    this.candidates.endWalk();
+                }
                 this.look.close();
             } else {
                 this.begin(mods);
@@ -275,12 +280,14 @@ final class CollectionReferences implements FixedLists.Walk {
         }
         for (Object holder : holders) {
             ElementLook.stopIfAsked();
+            long holderBegan = System.nanoTime();
             if (this.owners.findOwnerAmong(holder) == null) {
                 this.lookInto(holder);
                 if (CollectionParts.isGameObject(holder)) {
                     this.noteWrappedInside(holder, WRAPPED_BELOW);
                 }
             }
+            this.report.timeHolder(holder.getClass(), holderBegan);
         }
         this.report.time(holdersBegan, holders.size() + " game objects");
         long handedBegan = System.nanoTime();
