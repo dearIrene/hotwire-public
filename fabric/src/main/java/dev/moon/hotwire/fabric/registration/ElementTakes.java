@@ -279,7 +279,8 @@ final class ElementTakes {
 
     private static Class<?> findGameClassAbove(Class<?> type) {
         Class<?> above = type;
-        while (above != null && GameRegistrations.findModOf(above) != null) {
+        while (above != null && GameRegistrations.findModOf(above) != null
+                && !"minecraft".equals(GameRegistrations.findModOf(above))) {
             above = above.getSuperclass();
         }
         return above == null ? Object.class : above;

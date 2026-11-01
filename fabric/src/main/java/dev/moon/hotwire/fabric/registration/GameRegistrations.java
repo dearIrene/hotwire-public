@@ -44,7 +44,8 @@ public final class GameRegistrations {
                 Set<String> unswitched = never;
                 ModOfClass classes = new ModOfClass(loader, unswitched::contains);
                 modOfClass = classes;
-                current = new CallerOwner(GameRegistrations::findCodeMod, never, findLibraries(loader));
+                current = new CallerOwner(GameRegistrations::findCodeMod, never, findLibraries(loader),
+                        GameRegistrations::isOfNestedLibrary);
                 owners = current;
             }
             return current;
@@ -59,6 +60,10 @@ public final class GameRegistrations {
     public static boolean isOfOffMod(Class<?> type) {
         String mod = findModOf(type);
         return mod != null && Tripwire.isWatched(mod);
+    }
+
+    private static boolean isOfNestedLibrary(Class<?> type) {
+        return findModOf(type) == null && findNestedModOf(type) != null && findOwnNested(type) == null;
     }
 
     static @Nullable String findNestedModOf(Class<?> type) {
@@ -152,7 +157,8 @@ public final class GameRegistrations {
         classes.learn(jar, modId);
         synchronized (GameRegistrations.class) {
             FabricLoader loader = FabricLoader.getInstance();
-            owners = new CallerOwner(GameRegistrations::findCodeMod, findNeverSwitched(loader), findLibraries(loader));
+            owners = new CallerOwner(GameRegistrations::findCodeMod, findNeverSwitched(loader), findLibraries(loader),
+                    GameRegistrations::isOfNestedLibrary);
         }
     }
 

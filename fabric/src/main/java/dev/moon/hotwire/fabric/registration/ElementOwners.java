@@ -47,8 +47,10 @@ final class ElementOwners {
     static boolean isGameObject(Object item) {
         Class<?> type = item.getClass();
         String name = type.getName();
+
+        String mod = GameRegistrations.findModOf(type);
         return !type.isHidden() && !type.isRecord() && !Proxy.isProxyClass(type)
-                && GameRegistrations.findModOf(type) == null
+                && (mod == null || mod.equals("minecraft"))
                 && (name.startsWith("net.minecraft.") || name.startsWith("com.mojang."));
     }
 

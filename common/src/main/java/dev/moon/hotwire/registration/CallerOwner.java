@@ -3,6 +3,7 @@ package dev.moon.hotwire.registration;
 import java.util.List;
 import java.util.Set;
 import java.util.function.Function;
+import java.util.function.Predicate;
 import java.util.regex.Pattern;
 import org.jspecify.annotations.Nullable;
 
@@ -18,11 +19,18 @@ public final class CallerOwner {
     private final Function<Class<?>, @Nullable String> modOf;
     private final Set<String> skipped;
     private final Set<String> libraries;
+    private final Predicate<Class<?>> nestedLibrary;
 
     public CallerOwner(Function<Class<?>, @Nullable String> modOf, Set<String> skipped, Set<String> libraries) {
+        this(modOf, skipped, libraries, type -> false);
+    }
+
+    public CallerOwner(Function<Class<?>, @Nullable String> modOf, Set<String> skipped, Set<String> libraries,
+            Predicate<Class<?>> nestedLibrary) {
         this.modOf = modOf;
         this.skipped = Set.copyOf(skipped);
         this.libraries = Set.copyOf(libraries);
+        this.nestedLibrary = nestedLibrary;
     }
 
     public record Frame(Class<?> type, String method) {
@@ -60,7 +68,7 @@ public final class CallerOwner {
                 }
                 continue;
             }
-            if (!this.libraries.contains(mod)) {
+            if (!this.libraries.contains(mod) && !this.nestedLibrary.test(frame.type())) {
                 return new Owner(mod, firstLibrary);
             }
             if (firstLibrary == null) {
