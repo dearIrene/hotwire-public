@@ -133,6 +133,10 @@ public final class SwitchApplier {
         this.redefinitionHold = hold;
     }
 
+    public Supplier<Runnable> getRedefinitionHold() {
+        return this.redefinitionHold;
+    }
+
     Runnable holdGame() {
         return this.redefinitionHold.get();
     }
@@ -166,11 +170,17 @@ public final class SwitchApplier {
 
     private void applyWhilePaused(ClassRebuilder.PreparedRebuild prepared, Runnable whilePaused, Set<String> flipped)
             throws RebuildException {
+        this.applyWhilePaused(prepared, () -> { }, whilePaused, flipped);
+    }
+
+    private void applyWhilePaused(ClassRebuilder.PreparedRebuild prepared, Runnable beforeChange, Runnable whilePaused,
+            Set<String> flipped) throws RebuildException {
         this.objectRebuilder.announce(prepared.newlyBuilt(), !prepared.pausedReloads().isEmpty());
         Runnable release = this.redefinitionHold.get();
         SwitchTimes.mark("pause game");
         long pausedAt = System.nanoTime();
         try {
+            beforeChange.run();
             Runnable rebuildObjects = RebuildSteps.apply(this.rebuilder, prepared, this.health, this.afterRebuild,
                     this.onGameThread, this.objectRebuilder, this.game.isInWorld(), this.catchUps.findHolder(),
                     flipped);
@@ -340,13 +350,17 @@ public final class SwitchApplier {
             SwitchTimes.mark("mixins retained");
             ClassRebuilder.PreparedRebuild prepared = dryRun.prepared();
 
-            if (Collections.disjoint(switched, onAfter)) {
-                sites.set();
-            }
+            Runnable beforeChange = Collections.disjoint(switched, onAfter) ? sites::set : () -> { };
             if (prepared != null) {
-                this.applyWhilePaused(prepared, sites.setBefore(whilePaused), plan == null ? Set.of() : plan.flipped());
+                this.applyWhilePaused(prepared, beforeChange, sites.setBefore(whilePaused),
+                        plan == null ? Set.of() : plan.flipped());
             } else {
-                sites.set();
+                Runnable release = this.redefinitionHold.get();
+                try {
+                    sites.set();
+                } finally {
+                    release.run();
+                }
             }
         } catch (RebuildException | RuntimeException | LinkageError e) {
             sites.restore();
