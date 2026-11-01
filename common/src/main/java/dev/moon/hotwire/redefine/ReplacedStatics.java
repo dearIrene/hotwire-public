@@ -11,6 +11,7 @@ import java.util.List;
 import java.util.Map;
 import java.util.Set;
 import java.util.function.Consumer;
+import org.jspecify.annotations.Nullable;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -23,6 +24,8 @@ public final class ReplacedStatics {
     }
 
     private static final List<Change> CHANGES = new ArrayList<>();
+
+    private static @Nullable IdentityHashMap<Object, Object> batch;
     private static Set<String> goingOff = Set.of();
 
     private ReplacedStatics() {
@@ -94,8 +97,22 @@ public final class ReplacedStatics {
     }
 
     static void swap(IdentityHashMap<Object, Object> replaced) {
-        if (!replaced.isEmpty()) {
+        IdentityHashMap<Object, Object> pending = batch;
+        if (pending != null) {
+            pending.putAll(replaced);
+        } else if (!replaced.isEmpty()) {
             swap.accept(replaced);
+        }
+    }
+
+    public static void runInOneWalk(Runnable remaking) {
+        IdentityHashMap<Object, Object> pending = new IdentityHashMap<>();
+        batch = pending;
+        try {
+            remaking.run();
+        } finally {
+            batch = null;
+            swap(pending);
         }
     }
 }

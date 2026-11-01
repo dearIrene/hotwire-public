@@ -10,6 +10,7 @@ import dev.moon.hotwire.redefine.InitHookReplay;
 import dev.moon.hotwire.redefine.OffWindowObjects;
 import dev.moon.hotwire.redefine.OffWindowReplay;
 import dev.moon.hotwire.redefine.RebuildException;
+import dev.moon.hotwire.redefine.ReplacedStatics;
 import dev.moon.hotwire.redefine.StopPoint;
 import java.lang.reflect.Field;
 import java.util.ArrayList;
@@ -223,7 +224,7 @@ final class LiveObjects {
         }
         SwitchTimes.mark("replay: collection");
         AtomicInteger failed = new AtomicInteger();
-        onGameThread.accept(() -> {
+        onGameThread.accept(() -> ReplacedStatics.runInOneWalk(() -> {
             failed.addAndGet(InitHookReplay.run(findHooked(prepared)));
             prepared.splits().keySet().forEach(type -> {
                 Set<String> fields = prepared.replayed().get(type.getName().replace('.', '/'));
@@ -231,7 +232,7 @@ final class LiveObjects {
                     failed.addAndGet(OffWindowReplay.run(type, fields));
                 }
             });
-        });
+        }));
         SwitchTimes.mark("replay: setups");
         return failed.get();
     }
