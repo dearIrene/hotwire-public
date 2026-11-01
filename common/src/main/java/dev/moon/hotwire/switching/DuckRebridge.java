@@ -14,6 +14,7 @@ import java.util.LinkedHashMap;
 import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Map;
+import java.util.Objects;
 import java.util.Set;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -53,7 +54,8 @@ final class DuckRebridge {
             ClassRebuilder rebuilder) throws RebuildException {
         Set<Class<?>> found = new LinkedHashSet<>();
         int[] read = new int[1];
-        Map<String, Set<String>> owners = findOwners(moved, rebuilder.getLoadedClasses());
+        Map<String, Set<String>> owners = moved.isEmpty() ? Map.of()
+                : findOwners(moved, rebuilder.getLoadedClasses());
         mods.values().forEach(mixins -> {
             boolean declares = fresh.stream().anyMatch(mixins.owns()::contains);
 
@@ -116,21 +118,40 @@ final class DuckRebridge {
     }
 
     private static Map<String, Set<String>> findOwners(Set<String> moved, Class<?>[] loaded) {
-        Map<String, Set<String>> owners = new HashMap<>();
+        Map<Class<?>, Set<String>> namesOf = new HashMap<>();
+        Map<Class<?>, List<String>> methodsOf = new HashMap<>();
         Linker.getMovedByTarget().forEach((target, methods) -> {
             List<String> here = methods.stream().filter(moved::contains).toList();
-            if (here.isEmpty()) {
-                return;
+            if (!here.isEmpty()) {
+                methodsOf.put(target, here);
+                Set<String> names = new HashSet<>();
+                addSupertypes(target, names);
+                namesOf.put(target, names);
             }
-            Set<String> names = new HashSet<>();
-            addSupertypes(target, names);
-            for (Class<?> type : loaded) {
-                if (type != target && !type.isArray() && target.isAssignableFrom(type)) {
+        });
+        if (methodsOf.isEmpty()) {
+            return Map.of();
+        }
+        List<Class<?>> interfaces = methodsOf.keySet().stream().filter(Class::isInterface).toList();
+        for (Class<?> type : loaded) {
+            if (type.isArray()) {
+                continue;
+            }
+            for (Class<?> up = type.getSuperclass(); up != null; up = up.getSuperclass()) {
+                Set<String> names = namesOf.get(up);
+                if (names != null) {
                     names.add(type.getName().replace('.', '/'));
                 }
             }
-            here.forEach(method -> owners.computeIfAbsent(method, key -> new HashSet<>()).addAll(names));
-        });
+            for (Class<?> target : interfaces) {
+                if (type != target && target.isAssignableFrom(type)) {
+                    Objects.requireNonNull(namesOf.get(target)).add(type.getName().replace('.', '/'));
+                }
+            }
+        }
+        Map<String, Set<String>> owners = new HashMap<>();
+        methodsOf.forEach((target, methods) -> methods.forEach(method -> owners.computeIfAbsent(method,
+                key -> new HashSet<>()).addAll(Objects.requireNonNull(namesOf.get(target)))));
         return owners;
     }
 
