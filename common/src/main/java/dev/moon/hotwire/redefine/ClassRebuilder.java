@@ -63,6 +63,8 @@ public final class ClassRebuilder {
 
     private final Map<String, byte[]> launch = new ConcurrentHashMap<>();
 
+    private final Map<String, byte[]> firstDefined = new ConcurrentHashMap<>();
+
     private volatile boolean toLaunch;
     private volatile boolean launchChanged;
     private final RebuildCache ahead = new RebuildCache();
@@ -290,7 +292,8 @@ public final class ClassRebuilder {
                 }
                 long replayedBy = System.nanoTime();
                 InitHookReplay.Addition hooks = InitHookReplay.add(name, added.getBytes(), running,
-                        this.launch.get(name), this.mixedNow.get(name), originals.get(entry.getValue()));
+                        this.firstDefined.getOrDefault(name, this.launch.get(name)), this.mixedNow.get(name),
+                        originals.get(entry.getValue()));
                 if (hooks.findDue() != null) {
                     hooked.put(name, hooks.findDue());
                 }
@@ -585,6 +588,7 @@ public final class ClassRebuilder {
     public byte[] prepareForLoad(String internal, byte[] mixed, byte[] launchMix, byte[] original) {
         this.launch.putIfAbsent(internal, launchMix);
         byte[] prepared = RetainedInitializers.retain(mixed, launchMix, original);
+        this.firstDefined.putIfAbsent(internal, prepared);
         OffWindowObjects.markRecording(internal, OffWindowReplay.isRecording(prepared));
         return prepared;
     }
