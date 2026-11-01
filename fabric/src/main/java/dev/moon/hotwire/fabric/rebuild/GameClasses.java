@@ -9,6 +9,7 @@ import java.io.IOException;
 import java.io.InputStream;
 import java.lang.ref.SoftReference;
 import java.util.ArrayList;
+import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
@@ -78,7 +79,7 @@ public final class GameClasses implements SwitchApplier.Game {
 
     @Override
     public @Nullable Set<String> findPluginAnswers(String config) {
-        return LivePlugins.findAnswers(config);
+        return this.updatedConfigs.containsKey(config) ? null : LivePlugins.findAnswers(config);
     }
 
     @Override
@@ -131,8 +132,22 @@ public final class GameClasses implements SwitchApplier.Game {
     }
 
     @Override
-    public void useConfigs(Map<String, byte[]> configs) {
+    public Map<String, byte[]> useConfigs(Map<String, byte[]> configs) {
+        Map<String, byte[]> before = new HashMap<>();
+        configs.keySet().forEach(name -> {
+            byte[] used = this.updatedConfigs.get(name);
+            if (used != null) {
+                before.put(name, used);
+            }
+        });
         this.updatedConfigs.putAll(configs);
+        return before;
+    }
+
+    @Override
+    public void restoreConfigs(Set<String> names, Map<String, byte[]> before) {
+        names.forEach(this.updatedConfigs::remove);
+        this.updatedConfigs.putAll(before);
     }
 
     @Override

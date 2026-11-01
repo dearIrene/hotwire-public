@@ -1,5 +1,6 @@
 package dev.moon.hotwire.switching;
 
+import dev.moon.hotwire.mixin_copy.ConfigTrim;
 import dev.moon.hotwire.redefine.AddedOverrides;
 import dev.moon.hotwire.redefine.BatchRider;
 import dev.moon.hotwire.redefine.ClassRebuilder;
@@ -45,7 +46,11 @@ public final class SwitchApplier {
 
         byte @Nullable [] findConfigBytes(String config);
 
-        default void useConfigs(Map<String, byte[]> configs) {
+        default Map<String, byte[]> useConfigs(Map<String, byte[]> configs) {
+            return Map.of();
+        }
+
+        default void restoreConfigs(Set<String> names, Map<String, byte[]> before) {
         }
 
         String getSide();
@@ -128,6 +133,8 @@ public final class SwitchApplier {
     private volatile @Nullable LastDryRun lastDryRun;
 
     private final Map<String, byte[]> replaced = new ConcurrentHashMap<>();
+
+    private final Set<String> updatedLive = ConcurrentHashMap.newKeySet();
 
     private volatile Supplier<Runnable> redefinitionHold = () -> () -> { };
 
@@ -212,7 +219,8 @@ public final class SwitchApplier {
         });
         this.unowned = List.copyOf(unowned);
         this.onConfigs = this.getConfigsOf(onAtLaunch);
-        this.onMods = this.onAtLaunch;
+
+        this.onMods = Set.copyOf(this.onAtLaunch);
         rebuilder.resolveRunningWith(this::findRunningBytes);
         rebuilder.readClassesWith(this::findOriginal);
         rebuilder.askLoadedWith(name -> game.findLoaded(name.replace('.', '/')) != null);
@@ -231,7 +239,7 @@ public final class SwitchApplier {
 
     public void orderConfigsAs(List<String> launchOrder) {
         this.launchOrder = List.copyOf(launchOrder);
-        this.onConfigs = this.getConfigsOf(this.onAtLaunch);
+        this.onConfigs = this.getConfigsOf(this.onMods);
     }
 
     private Map<String, byte[]> findRunningBytes(Collection<String> internalNames) {
@@ -256,7 +264,7 @@ public final class SwitchApplier {
         if (!toRead.isEmpty()) {
             List<String> refused = new ArrayList<>();
             try {
-                found.putAll(this.rebuilder.getLoadedBytes().read(toRead, refused));
+                found.putAll(this.rebuilder.getLoadedBytes().readRunning(toRead, refused));
             } catch (RebuildException e) {
                 LOGGER.warn("[Hotwire] the running bytes of {} could not be read, so references to them stay as mixed",
                         internalNames, e);
@@ -277,19 +285,51 @@ public final class SwitchApplier {
         mixins.configs().forEach(config -> this.ownerOfConfig.putIfAbsent(config, id));
     }
 
-    public synchronized Set<String> adoptUpdate(String id, ModMixins mixins, Map<String, byte[]> configs) {
+    public static Map<String, byte[]> findRefmaps(Map<String, byte[]> configs, Map<String, byte[]> entries) {
+        Map<String, byte[]> refmaps = new HashMap<>();
+        configs.values().forEach(bytes -> {
+            String refmap = ConfigTrim.readRefmapOf(bytes);
+            byte[] map = refmap == null ? null : entries.get(refmap);
+            if (map != null) {
+                refmaps.put(refmap, map);
+            }
+        });
+        return refmaps;
+    }
+
+    public synchronized Adoption adoptUpdate(String id, ModMixins mixins, Map<String, byte[]> configs) {
         Set<String> targets = new TreeSet<>(mixins.targets());
         ModMixins old = this.mods.get(id);
         if (old != null) {
             targets.addAll(old.targets());
         }
-        this.game.useConfigs(configs);
+        boolean atLaunch = this.onAtLaunch.contains(id);
+        Map<String, byte[]> before = this.game.useConfigs(configs);
         this.learn(id, mixins);
         this.onAtLaunch.remove(id);
         this.onConfigs = this.getConfigsOf(this.onMods);
         this.watched = this.findDifferingFromLaunch(this.onMods);
         this.lateMixins = ConfigReads.findLateMixins(this.onConfigs, this.ownerOfConfig, this.onAtLaunch, this.game);
-        return targets;
+        return new Adoption(id, old, atLaunch, Set.copyOf(configs.keySet()), before, targets);
+    }
+
+    public record Adoption(String id, @Nullable ModMixins mixins, boolean atLaunch, Set<String> configs,
+            Map<String, byte[]> configsBefore, Set<String> targets) {
+    }
+
+    public synchronized void undoAdoption(Adoption adoption) {
+        this.game.restoreConfigs(adoption.configs(), adoption.configsBefore());
+        this.forget(adoption.id());
+        ModMixins mixins = adoption.mixins();
+        if (mixins != null) {
+            this.learn(adoption.id(), mixins);
+        }
+        if (adoption.atLaunch()) {
+            this.onAtLaunch.add(adoption.id());
+        }
+        this.onConfigs = this.getConfigsOf(this.onMods);
+        this.watched = this.findDifferingFromLaunch(this.onMods);
+        this.lateMixins = ConfigReads.findLateMixins(this.onConfigs, this.ownerOfConfig, this.onAtLaunch, this.game);
     }
 
     public synchronized void forget(String id) {
@@ -382,7 +422,7 @@ public final class SwitchApplier {
             this.onlyRebuild = null;
         }
         try {
-            this.rebuildLoadedMeanwhile(dryRun, onAfter);
+            this.rebuildLoadedMeanwhile(dryRun.applied().notLoaded(), onAfter);
         } catch (RebuildException | RuntimeException | LinkageError e) {
             this.duckRide.disarm();
             ClassRebuilder.PreparedRebuild prepared = dryRun.prepared();
@@ -408,9 +448,9 @@ public final class SwitchApplier {
         this.lateMixins = state.late();
     }
 
-    private void rebuildLoadedMeanwhile(DryRun dryRun, Set<String> onAfter) throws RebuildException {
+    private void rebuildLoadedMeanwhile(List<String> notLoaded, Set<String> onAfter) throws RebuildException {
         Map<Class<?>, byte[]> originals = new LinkedHashMap<>();
-        for (String target : dryRun.applied().notLoaded()) {
+        for (String target : notLoaded) {
             Class<?> loaded = this.game.findLoaded(target);
             byte[] original = loaded == null ? null : this.findOriginal(target);
             if (original != null) {
@@ -458,7 +498,7 @@ public final class SwitchApplier {
     }
 
     DryRun dryRun(Set<String> switched, Set<String> onAfter, boolean forClick) throws RebuildException {
-        HeapCensus.forget();
+        HeapCensus.forgetOld();
         Map<Class<?>, byte[]> originals = new LinkedHashMap<>();
         List<String> rebuilt = new ArrayList<>();
         List<String> notLoaded = new ArrayList<>();
@@ -544,13 +584,41 @@ public final class SwitchApplier {
         Runnable served = () -> {
             this.replaced.putAll(classes);
             this.rebuilder.copy().replace(classes);
-            joined.run();
         };
         if (originals.isEmpty()) {
             served.run();
-        } else {
-            this.applyWhilePaused(this.prepare(originals, before, classes, this.onConfigs, on, Set.copyOf(ids),
-                    "update"), served, Set.of());
+            joined.run();
+            this.updatedLive.addAll(ids);
+            return new ApplyResult(rebuilt, notLoaded, List.of());
+        }
+        ClassRebuilder.PreparedRebuild prepared;
+        this.rebuilder.copy().startReplacing(classes);
+        try {
+            prepared = this.prepare(originals, before, classes, this.onConfigs, on, Set.copyOf(ids), "update");
+        } finally {
+            this.rebuilder.copy().endReplacing();
+        }
+        Map<String, byte[]> servedBefore = new HashMap<>();
+        classes.keySet().forEach(name -> {
+            byte[] old = this.replaced.get(name);
+            if (old != null) {
+                servedBefore.put(name, old);
+            }
+        });
+        try {
+            this.applyWhilePaused(prepared, served, joined, Set.of());
+        } catch (RebuildException e) {
+            classes.keySet().forEach(this.replaced::remove);
+            this.replaced.putAll(servedBefore);
+            this.rebuilder.copy().restore(classes.keySet(), servedBefore);
+            throw e;
+        }
+        this.updatedLive.addAll(ids);
+
+        try {
+            this.rebuildLoadedMeanwhile(notLoaded, on);
+        } catch (RebuildException | RuntimeException | LinkageError e) {
+            LOGGER.error("[Hotwire] classes that loaded during the update could not follow it", e);
         }
         return new ApplyResult(rebuilt, notLoaded, List.of());
     }
@@ -577,13 +645,16 @@ public final class SwitchApplier {
             rebuilt.add(name);
 
             Set<String> launched = new HashSet<>(this.rebuilder.launchMixins(type, bytes, old));
+            Set<String> applied = this.rebuilder.getAppliedMixins(type, bytes, old);
+
             launched.removeIf(mixin -> {
                 String owner = this.carriedMixins.findModMaking(mixin, id -> true);
-                return owner != null && !on.contains(owner);
+                return owner != null && (!on.contains(owner)
+                        || (this.updatedLive.contains(owner) && !applied.contains(mixin)));
             });
             atLaunch.put(name, launched);
 
-            Set<String> now = new HashSet<>(this.rebuilder.getAppliedMixins(type, bytes, old));
+            Set<String> now = new HashSet<>(applied);
             atLaunch.get(name).stream()
                     .filter(mixin -> this.carriedMixins.findModShipping(mixin.replace('.', '/')) != null)
                     .forEach(now::add);
@@ -614,6 +685,10 @@ public final class SwitchApplier {
                 });
         SwitchTimes.mark("live objects");
         return prepared;
+    }
+
+    public boolean patchesLiveBackend(String id) {
+        return this.carriedMixins.patchesLiveBackend(id);
     }
 
     public Map<String, Set<String>> getPatchersOf(Set<String> classes, Set<String> on, String except) {

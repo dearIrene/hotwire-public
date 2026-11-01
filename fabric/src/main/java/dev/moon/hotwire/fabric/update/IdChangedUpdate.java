@@ -66,7 +66,8 @@ final class IdChangedUpdate {
         }
         Path running = Objects.requireNonNull(this.engine.findRunningJarOf(replaced));
         UpdatePlan plan = new UpdatePlan(replaced, this.findInstalledVersion(replaced), incoming.version(),
-                UpdateTier.NEXT_START, List.of(), List.of(), List.of());
+                UpdateTier.NEXT_START, List.of(), List.of(),
+                List.of(new UpdatePlan.UpdateBlocker.IdChanged(replaced, incoming.id())));
         try {
             this.swapper.queue(replaced, incoming.name(), running, jar, plan);
             return new ModUpdater.Result.Queued(replaced, incoming.name(), plan);

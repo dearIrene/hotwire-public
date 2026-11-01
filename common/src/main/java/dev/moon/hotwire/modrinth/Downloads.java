@@ -48,7 +48,17 @@ public final class Downloads {
     }
 
     public synchronized void advance(int id, long done) {
-        this.set(id, job -> new Job(id, job.name(), done, job.total(), job.state(), 0));
+        for (int at = 0; at < this.jobs.size(); at++) {
+            Job job = this.jobs.get(at);
+            if (job.id() == id) {
+                if (job.total() <= 0 || done * 100 / job.total() != job.done() * 100 / job.total()) {
+                    Job changed = new Job(id, job.name(), done, job.total(), job.state(), 0);
+                    this.jobs.set(at, changed);
+                    tell(changed);
+                }
+                return;
+            }
+        }
     }
 
     public synchronized void end(int id, boolean ok) {

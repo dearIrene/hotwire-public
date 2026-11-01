@@ -10,6 +10,7 @@ import java.util.HashSet;
 import java.util.List;
 import java.util.Optional;
 import java.util.Set;
+import java.util.function.Predicate;
 import net.fabricmc.api.EnvType;
 import net.fabricmc.loader.api.FabricLoader;
 import net.fabricmc.loader.api.ModContainer;
@@ -32,6 +33,7 @@ public final class ModPolicy {
     private static volatile SwitchPlanner.NestedJars nestedJars = SwitchPlanner.NestedJars.AUTO;
 
     private static volatile @Nullable SeenUses seenUses;
+    private static volatile Predicate<String> staying = mod -> false;
 
     private ModPolicy() {
     }
@@ -74,6 +76,10 @@ public final class ModPolicy {
         return Lang.get("hotwire.self_change");
     }
 
+    public static boolean isUpdatedLive(String id) {
+        return isSwitchable(id) || isFabricApi(id) || ALWAYS_ON.contains(id);
+    }
+
     public static boolean isSwitchable(String id) {
         return !isGuarded(id) && !BUILT_IN.contains(id);
     }
@@ -105,6 +111,10 @@ public final class ModPolicy {
         seenUses = seen;
     }
 
+    static void stayWhen(Predicate<String> mods) {
+        staying = mods;
+    }
+
     static @Nullable SeenUses getSeenUses() {
         return seenUses;
     }
@@ -114,7 +124,7 @@ public final class ModPolicy {
         graph.getIds().stream().filter(ModPolicy::isGuarded).forEach(guarded::add);
         guarded.addAll(findNeededByUnread(graph.getIds()));
         return new SwitchPlanner(graph, new SwitchPlanner.Settings(nestedJars, findBuiltIn(graph.getIds()), guarded,
-                ModPolicy::satisfies, seenUses != null ? seenUses : KnownUses.NONE));
+                ModPolicy::satisfies, seenUses != null ? seenUses : KnownUses.NONE, staying));
     }
 
     static Set<String> findNeededByUnread(Set<String> known) {

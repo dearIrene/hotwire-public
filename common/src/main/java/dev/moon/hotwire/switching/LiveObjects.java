@@ -15,7 +15,9 @@ import dev.moon.hotwire.redefine.ReplacedStatics;
 import dev.moon.hotwire.redefine.StopPoint;
 import java.lang.reflect.Field;
 import java.util.ArrayList;
+import java.util.Arrays;
 import java.util.HashMap;
+import java.util.HashSet;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
@@ -28,11 +30,14 @@ import java.util.function.Consumer;
 import java.util.function.Function;
 import java.util.function.Predicate;
 import java.util.function.Supplier;
+import java.util.regex.Pattern;
+import java.util.stream.Collectors;
 import org.jspecify.annotations.Nullable;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 final class LiveObjects {
+    private static final Pattern HOOK_OF_MOD = Pattern.compile("[\\[ ]([a-z0-9_-]+)\\$[A-Za-z0-9_]+\\(");
     private static final Logger LOGGER = LoggerFactory.getLogger(LiveObjects.class);
 
     private static final ThreadLocal<Boolean> AHEAD = ThreadLocal.withInitial(() -> false);
@@ -61,17 +66,34 @@ final class LiveObjects {
 
         Set<String> byReload = new TreeSet<>();
         hooked.keySet().removeIf(type -> game.isMadeByReload(type) && byReload.add(type.getName().replace('.', '/')));
+
+        List<RebuildException> standing = new ArrayList<>();
         List<String> entries = findRegistryEntries(hooked, game);
         if (!entries.isEmpty()) {
-            throw RebuildException.ofRestartOnly("the " + what + " changes how entries of the game's registries are"
+            standing.add(RebuildException.ofRestartOnly("the " + what
+                    + " changes how entries of the game's registries are"
                     + " made: " + entries + ". Those are made once, when the game starts, so it takes a restart",
-                    new IllegalStateException(String.join(", ", entries)));
+                    new IllegalStateException(String.join(", ", entries))).blaming(entries.stream()
+                    .map(entry -> entry.substring(0, entry.lastIndexOf('.')).replace('.', '/'))
+                    .collect(Collectors.toSet())));
         }
-        checkHandlerSetups(prepared, current, game, originalOf, what, offMixin, offClass, alive);
+        boolean gathers = what.equals("update");
+        if (!gathers && !standing.isEmpty()) {
+            throw standing.getFirst();
+        }
+        try {
+            checkHandlerSetups(prepared, current, game, originalOf, what, offMixin, offClass, alive);
+        } catch (RebuildException e) {
+            standing.add(e);
+            throw RebuildException.together(standing);
+        }
         ConstructedFields.Unmade unset = InitHookRuns.findUnset(hooked, game::isWorldObject, game.isInWorld(),
                 alive);
         if (!unset.lines().isEmpty()) {
-            throw makeRefusal(what, unset);
+            standing.add(makeRefusal(what, unset));
+            if (!gathers) {
+                throw standing.getFirst();
+            }
         }
         Map<Class<?>, ClassSplit.Result> retained = new LinkedHashMap<>(prepared.splits());
         retained.keySet().removeIf(recomputed);
@@ -96,11 +118,17 @@ final class LiveObjects {
                 rebuilder::findLaunchBytes);
         ConstructedFields.Unmade now = unmade.get();
         if (now.lines().isEmpty()) {
+            if (!standing.isEmpty()) {
+                throw RebuildException.together(standing);
+            }
             return out;
         }
         if (!ConstructedFields.findUnmade(targets, running, live, game::isWorldObject, originalOf, name -> 0, replayed,
                 alive, rebuilder::findLaunchBytes).lines().isEmpty()) {
-            throw makeRefusal(what, now);
+            standing.add(makeRefusal(what, now));
+        }
+        if (!standing.isEmpty()) {
+            throw RebuildException.together(standing);
         }
 
         return out.withPausedCheck(() -> new ConstructedFields.Unmade(unmade.get().lines(), game.isInWorld()));
@@ -276,7 +304,14 @@ final class LiveObjects {
                 + " they live: " + (unmade.reopenFixes() ? "they are the world's, so it changes with the world"
                 + " saved and opened again" : "it takes a restart");
         IllegalStateException cause = new IllegalStateException(String.join("; ", unmade.lines()));
-        return unmade.reopenFixes() ? RebuildException.ofWorldBuilt(message, cause)
-                : RebuildException.ofRestartOnly(message, cause);
+
+        Set<String> classes = unmade.lines().stream().flatMap(line -> Arrays.stream(line.split(" ", -1)))
+                .filter(word -> word.indexOf('/') > 0 && word.indexOf('(') < 0)
+                .collect(Collectors.toCollection(HashSet::new));
+
+        unmade.lines().forEach(line -> HOOK_OF_MOD.matcher(line).results().forEach(hook ->
+                classes.add(RebuildException.MOD_MARK + hook.group(1))));
+        return (unmade.reopenFixes() ? RebuildException.ofWorldBuilt(message, cause)
+                : RebuildException.ofRestartOnly(message, cause)).blaming(classes);
     }
 }

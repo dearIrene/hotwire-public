@@ -29,6 +29,8 @@ public final class CarriedMixins {
     private static final String INJECTION = "Lorg/spongepowered/asm/mixin/injection/";
     private static final String MIXIN_EXTRAS = "Lcom/llamalad7/mixinextras/injector/";
 
+    private static final String VULKAN_BACKEND = "com/mojang/renderpearl/backend/vulkan/";
+
     private final Map<String, ModMixins> mods;
     private final SwitchApplier.Game game;
 
@@ -62,6 +64,8 @@ public final class CarriedMixins {
                 LOGGER.info("[Hotwire] {} drops {}, which no mod staying on makes: the update's own", type, mixin);
             } else if (this.game.findLoaded(mixin.replace('.', '/')) != null) {
                 LOGGER.info("[Hotwire] {} drops {}, a loaded class and so not a mixin", type, mixin);
+            } else if (this.isOfLiveBackendMod(mixin)) {
+                LOGGER.info("[Hotwire] {} drops {}, of a mod that stays on through the switch", type, mixin);
             } else if (isGaining(type, carriedNow, carried) && this.isSelfContained(mixin)) {
                 LOGGER.info("[Hotwire] {} drops {}, which a mod coming on takes the place of", type, mixin);
             } else {
@@ -69,6 +73,23 @@ public final class CarriedMixins {
             }
         }));
         return found;
+    }
+
+    private boolean isOfLiveBackendMod(String mixin) {
+        String owner = this.findModMaking(mixin, id -> true);
+        return owner != null && this.patchesLiveBackend(owner);
+    }
+
+    boolean patchesLiveBackend(String id) {
+        ModMixins mixins = this.mods.get(id);
+        if (mixins != null) {
+            for (String target : mixins.targets()) {
+                if (target.startsWith(VULKAN_BACKEND) && this.game.findLoaded(target) != null) {
+                    return true;
+                }
+            }
+        }
+        return false;
     }
 
     private static boolean isStillImplemented(byte @Nullable [] mixed, String name) {

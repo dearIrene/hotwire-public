@@ -10,11 +10,13 @@ import java.lang.invoke.MethodType;
 import java.lang.reflect.Field;
 import java.lang.reflect.Member;
 import java.lang.reflect.Method;
+import java.lang.reflect.Modifier;
 import java.util.ArrayDeque;
 import java.util.Collection;
 import java.util.Collections;
 import java.util.Deque;
 import java.util.HashSet;
+import java.util.List;
 import java.util.Map;
 import java.util.Set;
 import java.util.WeakHashMap;
@@ -52,6 +54,7 @@ public final class Linker {
 
     private static volatile WidenerUses.Openings openings = WidenerUses.Openings.NONE;
     private static final Set<String> ADOPTED = ConcurrentHashMap.newKeySet();
+    private static final Set<String> ADDED_CONSTRUCTORS = ConcurrentHashMap.newKeySet();
 
     private Linker() {
     }
@@ -118,6 +121,13 @@ public final class Linker {
         INSTANCE_METHODS.put(side.lookupClass(), Set.copyOf(instanceMethods));
         MOVED_BY_TARGET.put(target, Set.copyOf(moved));
         MovedSites.reset(MOVED, MOVED_BY_TARGET.values());
+        String internal = target.getName().replace('.', '/');
+        for (String one : moved) {
+            if (one.startsWith(Adoption.CONSTRUCT + "(Ljava/lang/Object;")) {
+                ADDED_CONSTRUCTORS.add(internal + "<init>(" + one.substring(Adoption.CONSTRUCT.length()
+                        + "(Ljava/lang/Object;".length(), one.lastIndexOf(')')) + ")V");
+            }
+        }
         setDucksOf(target, ducks);
         EVER_DUCKS.addAll(ducks);
         DuckCalls.forget();
@@ -263,6 +273,10 @@ public final class Linker {
                 return side.findStatic(side.lookupClass(), method, type.insertParameterTypes(0, at));
             }
         }
+        MethodHandle gained = findGainedDefault(method, type, receiver);
+        if (gained != null) {
+            return gained;
+        }
         if (plain != null) {
             return plain;
         }
@@ -278,6 +292,57 @@ public final class Linker {
             }
             throw notPublic;
         }
+    }
+
+    static @Nullable MethodHandle findGainedDefault(String method, MethodType type, Class<?> receiver) {
+        Deque<Class<?>> open = new ArrayDeque<>();
+        for (Class<?> at = receiver; at != null; at = at.getSuperclass()) {
+            open.addAll(List.of(at.getInterfaces()));
+        }
+        if (receiver.isInterface()) {
+            open.add(receiver);
+        }
+        Set<Class<?>> seen = new HashSet<>();
+        Class<?> holder = null;
+        MethodHandle body = null;
+        while (!open.isEmpty()) {
+            Class<?> at = open.remove();
+            if (seen.add(at)) {
+                open.addAll(List.of(at.getInterfaces()));
+                MethodHandle here = holder == null || holder.isAssignableFrom(at)
+                        ? findSidecarBody(at, method, type) : null;
+                if (here != null) {
+                    holder = at;
+                    body = here;
+                }
+            }
+        }
+        return body == null || hasOwnBody(receiver, method, type) ? null : body;
+    }
+
+    private static @Nullable MethodHandle findSidecarBody(Class<?> at, String method, MethodType type) {
+        MethodHandles.Lookup side = SIDECARS.get(at);
+        if (side == null || !MOVED_BY_TARGET.getOrDefault(at, Set.of()).contains(method
+                + type.toMethodDescriptorString())) {
+            return null;
+        }
+        try {
+            return side.findStatic(side.lookupClass(), method, type.insertParameterTypes(0, at));
+        } catch (NoSuchMethodException | IllegalAccessException abstractOnly) {
+            return null;
+        }
+    }
+
+    private static boolean hasOwnBody(Class<?> receiver, String method, MethodType type) {
+        for (Class<?> at = receiver; at != null; at = at.getSuperclass()) {
+            try {
+                if (!Modifier.isAbstract(at.getDeclaredMethod(method, type.parameterArray()).getModifiers())) {
+                    return !at.isInterface();
+                }
+            } catch (NoSuchMethodException | LinkageError e) {
+            }
+        }
+        return false;
     }
 
     public static CallSite bootstrapIsInstance(MethodHandles.Lookup caller, String name, MethodType type, String duck)
@@ -386,6 +451,18 @@ public final class Linker {
 
     public static void adopt(String internalName) {
         ADOPTED.add(internalName);
+    }
+
+    public static void addAddedConstructors(Set<String> keys) {
+        ADDED_CONSTRUCTORS.addAll(keys);
+    }
+
+    public static void removeAddedConstructors(Set<String> keys) {
+        ADDED_CONSTRUCTORS.removeAll(keys);
+    }
+
+    public static Set<String> getAddedConstructors() {
+        return Set.copyOf(ADDED_CONSTRUCTORS);
     }
 
     public static Set<String> getAdopted() {
@@ -531,6 +608,17 @@ public final class Linker {
             body = DuckCalls.bind(owner, info.getName(), shape.toMethodDescriptorString())
                     .asCollector(Object[].class, shape.parameterCount());
         }
+        return Lambdas.spin(caller, name, factory, erased, DuckCalls.loosen(body));
+    }
+
+    public static CallSite bootstrapMovedLambda(MethodHandles.Lookup caller, String name, MethodType factory,
+            MethodType erased, String owner, String method, String descriptor, int isStatic)
+            throws ReflectiveOperationException {
+        MethodType shape = MethodType.fromMethodDescriptorString(descriptor, caller.lookupClass().getClassLoader());
+        MethodHandle body = isStatic != 0
+                ? bootstrapMoved(caller, method, shape, owner, method, descriptor, 1).dynamicInvoker()
+                : bootstrapMoved(caller, method, shape.insertParameterTypes(0, Object.class), owner, method, descriptor,
+                        0).dynamicInvoker();
         return Lambdas.spin(caller, name, factory, erased, DuckCalls.loosen(body));
     }
 

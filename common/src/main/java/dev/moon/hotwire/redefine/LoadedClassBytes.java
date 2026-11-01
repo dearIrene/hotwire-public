@@ -1,7 +1,10 @@
 package dev.moon.hotwire.redefine;
 
+import java.io.IOException;
+import java.io.InputStream;
 import java.lang.instrument.Instrumentation;
 import java.util.ArrayList;
+import java.util.Arrays;
 import java.util.Collection;
 import java.util.Collections;
 import java.util.LinkedHashMap;
@@ -11,6 +14,7 @@ import java.util.Set;
 import java.util.WeakHashMap;
 import java.util.concurrent.ConcurrentHashMap;
 import org.jspecify.annotations.Nullable;
+import org.objectweb.asm.ClassReader;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -78,6 +82,54 @@ public final class LoadedClassBytes {
 
     public Map<String, byte[]> readCurrent(Collection<Class<?>> types) throws RebuildException {
         return this.read(types, null);
+    }
+
+    public Map<String, byte[]> readRunning(Collection<Class<?>> types, List<String> refusedOut)
+            throws RebuildException {
+        List<Class<?>> rest = new ArrayList<>();
+        Map<String, byte[]> above = new LinkedHashMap<>();
+        for (Class<?> type : types) {
+            byte[] bytes = this.knownBytes.get(type) == null ? readAboveGame(type) : null;
+            if (bytes == null) {
+                rest.add(type);
+            } else {
+                above.put(type.getName().replace('.', '/'), bytes);
+            }
+        }
+        Map<String, byte[]> out = new LinkedHashMap<>(above);
+        out.putAll(this.read(rest, refusedOut));
+        return out;
+    }
+
+    @SuppressWarnings("ReferenceEquality")
+    private static byte @Nullable [] readAboveGame(Class<?> type) {
+        ClassLoader loader = type.getClassLoader();
+        ClassLoader game = LoadedClassBytes.class.getClassLoader();
+        boolean above = false;
+        for (ClassLoader at = game == null ? null : game.getParent(); at != null && !above; at = at.getParent()) {
+            above = at == loader;
+        }
+        if (!above) {
+            return null;
+        }
+        String name = type.getName().replace('.', '/');
+        try (InputStream in = loader.getResourceAsStream(name + ".class")) {
+            if (in == null) {
+                return null;
+            }
+            byte[] bytes = in.readAllBytes();
+            ClassReader header = new ClassReader(bytes);
+            Class<?> parent = type.getSuperclass();
+            String superName = type.isInterface() || parent == null ? "java/lang/Object"
+                    : parent.getName().replace('.', '/');
+            List<String> interfaces = Arrays.stream(type.getInterfaces())
+                    .map(face -> face.getName().replace('.', '/')).toList();
+            boolean same = header.getClassName().equals(name) && superName.equals(header.getSuperName())
+                    && interfaces.equals(List.of(header.getInterfaces()));
+            return same ? bytes : null;
+        } catch (IOException | RuntimeException e) {
+            return null;
+        }
     }
 
     public Map<String, byte[]> read(Collection<Class<?>> types, @Nullable List<String> refusedOut)

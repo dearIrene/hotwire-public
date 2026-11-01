@@ -44,6 +44,22 @@ public final class Notices {
         }
     }
 
+    static synchronized boolean replace(Notice notice) {
+        int at = indexOf(showing, notice.key());
+        if (at < 0) {
+            return false;
+        }
+        List<Notice> next = new ArrayList<>(showing);
+        next.set(at, notice);
+        resting.put(notice.key(), notice.findRest());
+        showing = List.copyOf(next);
+        Consumer<Notice> told = whenShown;
+        if (told != null) {
+            told.accept(notice);
+        }
+        return true;
+    }
+
     public static void onShown(Consumer<Notice> told) {
         whenShown = told;
     }

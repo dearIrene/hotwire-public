@@ -34,7 +34,9 @@ public record MixinClassInfo(Set<String> targets, Set<String> interfaces, String
         for (String face : reader.getInterfaces()) {
             interfaces.add(face.replace('/', '.'));
         }
-        return new MixinClassInfo(targets, interfaces, reader.getSuperName().replace('/', '.'),
+
+        String parent = reader.getSuperName();
+        return new MixinClassInfo(targets, interfaces, parent == null ? "java.lang.Object" : parent.replace('/', '.'),
                 (reader.getAccess() & Opcodes.ACC_INTERFACE) != 0);
     }
 

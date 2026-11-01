@@ -18,6 +18,27 @@ final class ClassFileSummary {
     private ClassFileSummary() {
     }
 
+    static boolean isOnlyReadTestedForNull(byte[] bytes, String name, String descriptor) {
+        ClassNode node = new ClassNode();
+        new ClassReader(bytes).accept(node, ClassReader.SKIP_DEBUG | ClassReader.SKIP_FRAMES);
+        for (MethodNode method : node.methods) {
+            for (AbstractInsnNode at = method.instructions.getFirst(); at != null; at = at.getNext()) {
+                if (at instanceof FieldInsnNode read && read.getOpcode() == Opcodes.GETSTATIC
+                        && read.owner.equals(node.name)
+                        && read.name.equals(name) && read.desc.equals(descriptor)) {
+                    AbstractInsnNode next = read.getNext();
+                    while (next != null && next.getOpcode() < 0) {
+                        next = next.getNext();
+                    }
+                    if (next == null || (next.getOpcode() != Opcodes.IFNULL && next.getOpcode() != Opcodes.IFNONNULL)) {
+                        return false;
+                    }
+                }
+            }
+        }
+        return true;
+    }
+
     static boolean isSetAgainLater(byte[] original, String name, String descriptor, boolean isStatic) {
         ClassNode node = new ClassNode();
         new ClassReader(original).accept(node, ClassReader.SKIP_DEBUG | ClassReader.SKIP_FRAMES);

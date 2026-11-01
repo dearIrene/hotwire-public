@@ -41,6 +41,11 @@ public final class AccessWidenerText {
         return this.clauses;
     }
 
+    public static AccessWidenerText ofLines(String path, String namespace, List<String> lines) {
+        return parse(path, ("accessWidener v2 " + namespace + "\n" + String.join("\n", lines) + "\n")
+                .getBytes(StandardCharsets.UTF_8));
+    }
+
     static AccessWidenerText parse(String path, byte[] bytes) {
         List<String> lines = new String(bytes, StandardCharsets.UTF_8).lines().toList();
         if (lines.isEmpty()) {

@@ -72,9 +72,12 @@ public final class ClassSplit {
     private final Set<String> writtenFinals;
     private final Set<String> writtenInPlace;
 
+    private final List<FieldNode> runningFields;
+
     private ClassSplit(String target, Set<String> addedFields, Function<String, Set<String>> addedElsewhere,
             Map<String, MethodNode> addedMethods, Set<String> declared, Set<String> stillFinal,
-            Set<String> writtenFinals, Set<String> writtenInPlace) {
+            Set<String> writtenFinals, Set<String> writtenInPlace, List<FieldNode> runningFields) {
+        this.runningFields = runningFields;
         this.target = target;
         this.sidecar = target + "$hotwire";
         this.addedFields = addedFields;
@@ -94,7 +97,8 @@ public final class ClassSplit {
             Function<String, byte @Nullable []> mixedOf, Set<String> batchDucks, Set<String> batchMoved,
             Function<String, Set<String>> addedElsewhere) throws SplitException {
         ClassNode running = read(runningBytes);
-        ClassNode mixed = read(GeneratedNames.matchRunning(runningBytes, mixedBytes));
+        byte[] matched = GeneratedNames.matchRunning(runningBytes, mixedBytes);
+        ClassNode mixed = read(matched);
         if (!running.name.equals(mixed.name)) {
             throw new SplitException(running.name + " was mixed as " + mixed.name);
         }
@@ -109,16 +113,30 @@ public final class ClassSplit {
             }
         });
 
+        Set<String> runningBodiless = new HashSet<>();
+        running.methods.stream().filter(m -> (m.access & Opcodes.ACC_ABSTRACT) != 0)
+                .forEach(m -> runningBodiless.add(m.name + m.desc));
+        Set<String> gainedConstructors = new HashSet<>(Linker.getAddedConstructors());
+        batchMoved.stream().filter(key -> key.contains("<init>")).forEach(gainedConstructors::add);
+
         Predicate<MethodNode> inRunning = m -> runningMethods.contains(m.name + m.desc)
-                && runningStatic.contains(m.name + m.desc) == ((m.access & Opcodes.ACC_STATIC) != 0);
+                && runningStatic.contains(m.name + m.desc) == ((m.access & Opcodes.ACC_STATIC) != 0)
+                && runningBodiless.contains(m.name + m.desc) == ((m.access & Opcodes.ACC_ABSTRACT) != 0)
+                && !gainedConstructors.contains(running.name + m.name + m.desc);
         Set<String> addedFields = new HashSet<>();
         List<FieldNode> holderFields = new ArrayList<>();
+        Set<String> runningStaticFields = new HashSet<>();
+        running.fields.stream().filter(f -> (f.access & Opcodes.ACC_STATIC) != 0)
+                .forEach(f -> runningStaticFields.add(f.name + f.desc));
         for (FieldNode field : mixed.fields) {
-            if (!runningFields.contains(field.name + field.desc)) {
+            if (!runningFields.contains(field.name + field.desc)
+                    || runningStaticFields.contains(field.name + field.desc)
+                    != ((field.access & Opcodes.ACC_STATIC) != 0)) {
                 addedFields.add(field.name + field.desc);
                 holderFields.add(field);
             }
         }
+        Map<String, MethodNode> addedConstructors = new LinkedHashMap<>();
         Map<String, MethodNode> mixedMethods = new LinkedHashMap<>();
         Map<String, MethodNode> addedMethods = new LinkedHashMap<>();
 
@@ -126,7 +144,8 @@ public final class ClassSplit {
         for (MethodNode method : mixed.methods) {
             mixedMethods.put(method.name + method.desc, method);
             if (!inRunning.test(method)) {
-                if ((method.access & Opcodes.ACC_ABSTRACT) != 0 && (running.access & Opcodes.ACC_INTERFACE) != 0) {
+                if ((method.access & Opcodes.ACC_ABSTRACT) != 0 && (running.access & (Opcodes.ACC_INTERFACE
+                        | Opcodes.ACC_ABSTRACT)) != 0) {
                     abstractAdded.add(method.name + method.desc);
                     continue;
                 }
@@ -135,8 +154,8 @@ public final class ClassSplit {
                             + " moved to a sidecar");
                 }
                 if (method.name.equals("<init>")) {
-                    throw new SplitException(running.name + " gains a constructor " + method.desc + ", which cannot be"
-                            + " moved to a sidecar");
+                    addedConstructors.put(method.desc, method);
+                    continue;
                 }
                 addedMethods.put(method.name + method.desc, method);
             }
@@ -173,7 +192,7 @@ public final class ClassSplit {
         Set<String> declared = new HashSet<>(runningFields);
         declared.addAll(runningMethods);
         ClassSplit split = new ClassSplit(running.name, addedFields, addedElsewhere, addedMethods, declared,
-                findStillFinal(running), written, routes.throughWriter());
+                findStillFinal(running), written, routes.throughWriter(), running.fields);
 
         ClassNode out = new ClassNode();
         running.accept(out);
@@ -209,6 +228,11 @@ public final class ClassSplit {
                     body.visibleAnnotations = GeneratedNames.renameMergedMarks(shape.visibleAnnotations);
                 }
 
+                if ((shape.access & (Opcodes.ACC_ABSTRACT | Opcodes.ACC_NATIVE)) != 0) {
+                    bodies.add(body);
+                    continue;
+                }
+
                 stubbed.add(shape.name + shape.desc);
                 MethodNode inherited = Overrides.findInherited(running, shape, classBytes);
                 if (shape.name.equals("<clinit>")) {
@@ -235,6 +259,10 @@ public final class ClassSplit {
                     body.visibleAnnotations = from.visibleAnnotations;
                 }
                 split.rewrite(body, false);
+
+                if ((from.access & Opcodes.ACC_SYNCHRONIZED) != 0 && (shape.access & Opcodes.ACC_SYNCHRONIZED) == 0) {
+                    split.holdLock(body, (shape.access & Opcodes.ACC_STATIC) != 0);
+                }
                 if (body.name.equals("<init>") && !addedFields.isEmpty()) {
                     BodyMarks.markMade(body, running);
                 }
@@ -273,10 +301,22 @@ public final class ClassSplit {
             moved.add(added.name + added.desc);
         }
         moved.addAll(abstractAdded);
+        addedConstructors.keySet().forEach(desc -> gainedConstructors.add(running.name + "<init>" + desc));
+        for (MethodNode init : findExpanded(matched, addedConstructors.keySet())) {
+            MethodNode construct = Adoption.makeAddedConstruct(mixed, init, gainedConstructors);
+            if (construct == null) {
+                throw new SplitException(running.name + " gains a constructor " + init.desc + " too odd to move");
+            }
+            split.rewrite(construct, true);
+            side.methods.add(construct);
+            moved.add(construct.name + construct.desc);
+        }
         Set<String> allMoved = new HashSet<>(Linker.getMoved());
         allMoved.addAll(batchMoved);
         Set<String> notMoved = new HashSet<>(declared);
         notMoved.addAll(addedMethods.keySet());
+        Adoption.rewriteAddedNews(out, gainedConstructors);
+        Adoption.rewriteAddedNews(side, gainedConstructors);
         DuckBridge.rewriteInheritedMoved(out, running.name, allMoved, notMoved);
         DuckBridge.rewriteInheritedMoved(side, running.name, allMoved, notMoved);
         AccessBridge.rewriteMembers(out, running.name, Linker.getOpenings());
@@ -331,6 +371,7 @@ public final class ClassSplit {
         this.rewrite(instance, false);
         this.rewrite(statics, false);
         WrittenFinals.start(this.target, this.writtenFinals, fields, name, instance, statics);
+        FieldInitializers.carryRetyped(this.target, this.runningFields, fields, name, instance, statics);
         holder.methods.add(instance);
         holder.methods.add(statics);
         AccessBridge.rewriteMembers(holder, target, Linker.getOpenings());
@@ -534,6 +575,15 @@ public final class ClassSplit {
     private String makeStaticDescriptor(MethodNode method) {
         return (method.access & Opcodes.ACC_STATIC) != 0 ? method.desc : "(L" + this.target + ";"
                 + method.desc.substring(1);
+    }
+
+    private static List<MethodNode> findExpanded(byte[] bytes, Set<String> descriptors) {
+        if (descriptors.isEmpty()) {
+            return List.of();
+        }
+        ClassNode node = new ClassNode();
+        new ClassReader(bytes).accept(node, ClassReader.EXPAND_FRAMES);
+        return node.methods.stream().filter(m -> m.name.equals("<init>") && descriptors.contains(m.desc)).toList();
     }
 
     private static ClassNode read(byte[] bytes) {

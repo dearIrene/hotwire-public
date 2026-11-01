@@ -18,6 +18,7 @@ import java.util.Set;
 import java.util.SortedSet;
 import java.util.TreeMap;
 import java.util.TreeSet;
+import java.util.function.Predicate;
 import org.jspecify.annotations.Nullable;
 
 public final class SwitchPlanner {
@@ -38,10 +39,15 @@ public final class SwitchPlanner {
     }
 
     public record Settings(NestedJars nestedJars, Set<String> builtIn, Set<String> protectedMods, Versions versions,
-            KnownUses uses) {
+            KnownUses uses, Predicate<String> staying) {
         public Settings {
             builtIn = Set.copyOf(builtIn);
             protectedMods = Set.copyOf(protectedMods);
+        }
+
+        public Settings(NestedJars nestedJars, Set<String> builtIn, Set<String> protectedMods, Versions versions,
+                KnownUses uses) {
+            this(nestedJars, builtIn, protectedMods, versions, uses, mod -> false);
         }
 
         public Settings(NestedJars nestedJars, Set<String> builtIn, Set<String> protectedMods, Versions versions) {
@@ -62,6 +68,8 @@ public final class SwitchPlanner {
             String stayingContainer = this.findContainerStaying(id, askedIds, alreadyOff);
             if (this.graph.find(id).isEmpty()) {
                 refusals.add(new Refusal.NotInstalled(mod));
+            } else if (this.settings.staying().test(id)) {
+                refusals.add(new Refusal.Protected(id));
             } else if (stayingContainer != null) {
                 refusals.add(new Refusal.CarriedBy(id, stayingContainer));
             } else if (!alreadyOff.contains(id)) {
@@ -185,7 +193,7 @@ public final class SwitchPlanner {
     }
 
     private boolean join(Map<String, Reason> leaving, Set<String> alreadyOff, String mod, Reason reason) {
-        if (alreadyOff.contains(mod) || leaving.containsKey(mod)) {
+        if (alreadyOff.contains(mod) || leaving.containsKey(mod) || this.settings.staying().test(mod)) {
             return false;
         }
         leaving.put(mod, reason);

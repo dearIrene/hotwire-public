@@ -16,9 +16,28 @@ import java.util.function.UnaryOperator;
 import org.jspecify.annotations.Nullable;
 
 public final class ConfigTrim {
+    private static final String UNLISTED = "hotwire:unlisted";
+
     public static final String LIVE_PLUGIN = "dev.moon.hotwire.mixin_copy.copy.LivePluginShape";
 
     private ConfigTrim() {
+    }
+
+    public static byte[] addUnlisted(byte[] json, Set<String> mixins) {
+        JsonObject root = JsonParser.parseString(new String(json, StandardCharsets.UTF_8)).getAsJsonObject();
+        JsonArray names = new JsonArray();
+        new TreeSet<>(mixins).forEach(names::add);
+        root.add(UNLISTED, names);
+        return root.toString().getBytes(StandardCharsets.UTF_8);
+    }
+
+    public static Set<String> readUnlisted(byte[] json) {
+        JsonObject root = JsonParser.parseString(new String(json, StandardCharsets.UTF_8)).getAsJsonObject();
+        Set<String> names = new TreeSet<>();
+        if (root.has(UNLISTED)) {
+            root.getAsJsonArray(UNLISTED).forEach(name -> names.add(name.getAsString()));
+        }
+        return names;
     }
 
     public static @Nullable String readRefmapOf(byte[] json) {

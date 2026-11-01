@@ -12,7 +12,7 @@ import java.util.zip.Inflater;
 import java.util.zip.ZipException;
 import org.jspecify.annotations.Nullable;
 
-final class ZipBytes {
+public final class ZipBytes {
     private static final int END_OF_DIRECTORY = 0x06054b50;
     private static final int DIRECTORY_ENTRY = 0x02014b50;
     private static final int LOCAL_HEADER = 0x04034b50;
@@ -33,7 +33,7 @@ final class ZipBytes {
         }
     }
 
-    ZipBytes(byte[] zip) throws IOException {
+    public ZipBytes(byte[] zip) throws IOException {
         this.bytes = ByteBuffer.wrap(zip).order(ByteOrder.LITTLE_ENDIAN);
         int end = this.findEndOfDirectory();
         int count = Short.toUnsignedInt(this.bytes.getShort(end + 10));
@@ -63,11 +63,11 @@ final class ZipBytes {
         }
     }
 
-    Set<String> getNames() {
+    public Set<String> getNames() {
         return this.entries.keySet();
     }
 
-    byte @Nullable [] read(String name) throws IOException {
+    public byte @Nullable [] read(String name) throws IOException {
         Entry entry = this.entries.get(name);
         if (entry == null) {
             return null;

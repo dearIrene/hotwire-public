@@ -28,9 +28,14 @@ public final class UpdateQueue {
     }
 
     private final JsonFile<QueueFile> file;
+    private Runnable onAdded = () -> { };
 
     public UpdateQueue(Path path) {
         this.file = new JsonFile<>(path, QueueFile.class, QueueFile::new);
+    }
+
+    public synchronized void setOnAdded(Runnable onAdded) {
+        this.onAdded = onAdded;
     }
 
     public synchronized List<Entry> getEntries() {
@@ -42,6 +47,7 @@ public final class UpdateQueue {
         queued.entries.removeIf(other -> other.modId().equals(entry.modId()));
         queued.entries.add(entry);
         this.file.save(queued);
+        this.onAdded.run();
     }
 
     public synchronized void remove(String modId) throws IOException {

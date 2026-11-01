@@ -305,6 +305,10 @@ public final class UpdateCheck {
         }
     }
 
+    public Downloads getDownloads() {
+        return this.downloads;
+    }
+
     public void reportTo(Downloads downloads) {
         this.downloads = downloads;
     }

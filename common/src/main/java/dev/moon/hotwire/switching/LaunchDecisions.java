@@ -81,6 +81,7 @@ final class LaunchDecisions {
             if (owner != null && !this.onAtLaunch.contains(owner)) {
                 Set<String> answers = this.game.findPluginAnswers(config);
                 if (answers == null) {
+                    this.handOver(config, trimmed);
                     continue;
                 }
                 answeredBy.put(config, answers);
@@ -143,6 +144,26 @@ final class LaunchDecisions {
                 + " elsewhere, named by those, come along", appliedByClass.size(), applied.size(), repeated,
                 answeredBy.size(), configs.size() - repeated, this.choice.takeElsewhere());
         return new Result(trimmed, Set.copyOf(asked));
+    }
+
+    private void handOver(String config, Map<String, byte[]> into) {
+        byte[] bytes = this.findBytes(config);
+        if (bytes == null) {
+            return;
+        }
+
+        Set<String> unlisted = ConfigTrim.readPluginOf(bytes) == null ? Set.of()
+                : this.findUnlisted(config, bytes, name -> false);
+        into.put(config, unlisted.isEmpty() ? bytes : ConfigTrim.addUnlisted(bytes, unlisted));
+        try {
+            String refmap = ConfigTrim.readRefmapOf(bytes);
+            byte[] map = refmap == null ? null : this.findBytes(refmap);
+            if (map != null) {
+                into.put(refmap, map);
+            }
+        } catch (JsonParseException | IllegalStateException e) {
+            LOGGER.info("[Hotwire] the mixin config {} names no refmap that can be read", config);
+        }
     }
 
     private boolean isRunLive(String config, String plugin) {

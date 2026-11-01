@@ -24,6 +24,7 @@ public final class SwapAtClose {
     private final UpdateFolders folders;
     private final Path hotwireJar;
     private final Path swapperCopy;
+    private boolean started;
 
     public SwapAtClose(UpdateQueue queue, UpdateFolders folders, Path hotwireJar) {
         this.queue = queue;
@@ -34,11 +35,15 @@ public final class SwapAtClose {
 
     public void arm() {
         Runtime.getRuntime().addShutdownHook(new Thread(this::start, "Hotwire swapper launch"));
+        this.queue.setOnAdded(this::start);
+        if (!this.queue.getEntries().isEmpty()) {
+            Thread.ofPlatform().name("Hotwire swapper launch").daemon().start(this::start);
+        }
     }
 
-    private void start() {
+    private synchronized void start() {
         List<UpdateQueue.Entry> entries = this.queue.getEntries();
-        if (entries.isEmpty()) {
+        if (this.started || entries.isEmpty()) {
             return;
         }
         Optional<String> java = ProcessHandle.current().info().command();
@@ -50,13 +55,15 @@ public final class SwapAtClose {
         try {
             Files.createDirectories(this.swapperCopy.getParent());
             Files.copy(this.hotwireJar, this.swapperCopy, StandardCopyOption.REPLACE_EXISTING);
-            new ProcessBuilder(java.get(), "-cp", this.getClassPath(), JarSwapper.class.getName(),
+            new ProcessBuilder(java.get(), "-Xmx16m", "-XX:+UseSerialGC", "-XX:TieredStopAtLevel=1", "-cp",
+                    this.getClassPath(), JarSwapper.class.getName(),
                     this.folders.queueFile().toString(), this.folders.mods().toString(),
                     this.folders.replaced().toString(), Long.toString(ProcessHandle.current().pid()))
                     .redirectErrorStream(true)
                     .redirectOutput(this.swapperCopy.resolveSibling("swapper.log").toFile())
                     .start();
-            LOGGER.info("[Hotwire] the swapper will put {} updates in place once the game closes",
+            this.started = true;
+            LOGGER.info("[Hotwire] the swapper waits to put what is queued in place once the game ends ({} now)",
                     entries.size());
         } catch (IOException e) {
             LOGGER.error("[Hotwire] the swapper could not start; {} queued updates wait for the next close",

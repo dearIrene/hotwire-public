@@ -67,6 +67,8 @@ public final class LoaderModList {
             mods.add(container);
             byId.put(metadata.getId(), container);
 
+            metadata.getProvides().forEach(provided -> byId.putIfAbsent(provided, container));
+
             metadata.getLanguageAdapterDefinitions().forEach((name, type) -> {
                 if (!adapters.containsKey(name)) {
                     try {

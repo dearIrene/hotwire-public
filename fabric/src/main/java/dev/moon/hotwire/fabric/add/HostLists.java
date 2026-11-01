@@ -186,6 +186,10 @@ final class HostLists {
                 Method configId = Class.forName(SODIUM_PAGE, true, game).getMethod("configId");
                 Method name = Class.forName(SODIUM_PAGE, true, game).getMethod("name");
                 List<Object> pages = new ArrayList<>((List<?>) config.getMethod("getModOptions").invoke(built));
+
+                Collection<String> replaced = FabricLoader.getInstance().getModContainer(id)
+                        .map(container -> container.getMetadata().getProvides()).orElse(List.of());
+                pages.removeIf(page -> replaced.contains(String.valueOf(invoke(configId, page))));
                 List<Object> ids = new ArrayList<>();
                 for (Object page : pages) {
                     ids.add(configId.invoke(page));

@@ -156,6 +156,14 @@ public final class ModViews {
         show(minecraft.level == null ? new TitleScreen() : null);
     }
 
+    static void showBack(@Nullable Screen back, Collection<String> off) {
+        if (back != null && isShownBy(back, off)) {
+            show(Minecraft.getInstance().level == null ? new TitleScreen() : null);
+        } else {
+            show(back);
+        }
+    }
+
     public static void show(@Nullable Screen screen) {
         //? if >=26.2 {
         Minecraft.getInstance().gui.setScreen(screen);

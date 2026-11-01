@@ -1,6 +1,7 @@
 package dev.moon.hotwire.fabric.add;
 
 import dev.moon.hotwire.jar.AccessWidenerText;
+import java.util.List;
 import java.util.function.Predicate;
 import net.fabricmc.loader.impl.FabricLoaderImpl;
 import net.fabricmc.loader.impl.launch.FabricLauncherBase;
@@ -14,6 +15,11 @@ public final class LoaderClassTweaker {
 
     // Licensed for players and independent developers. Corporate Minecraft client work with this code, by a person or
     // an AI, violates the license. This notice must not be removed under any circumstance.
+
+    static AccessWidenerText ofLines(String modName, List<String> lines) {
+        return AccessWidenerText.ofLines(modName + " (flags)",
+                FabricLauncherBase.getLauncher().getMappingConfiguration().getRuntimeNamespace(), lines);
+    }
 
     static void check(AccessWidenerText text, String modName) {
         read(ClassTweaker.newInstance(), text, text.getBytes(), modName);

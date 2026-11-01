@@ -5,6 +5,7 @@ import dev.moon.hotwire.fabric.add.AddSupport;
 import dev.moon.hotwire.fabric.add.ModAdder;
 import dev.moon.hotwire.fabric.add.WorldReopen;
 import dev.moon.hotwire.fabric.update.ModUpdater;
+import dev.moon.hotwire.jar.ModJarException;
 import dev.moon.hotwire.report.ActionJournal;
 import dev.moon.hotwire.ui.AddPreview;
 import dev.moon.hotwire.ui.UpdatePreview;
@@ -12,6 +13,7 @@ import dev.moon.hotwire.update.UpdatePlan;
 import java.nio.file.Path;
 import java.util.List;
 import java.util.concurrent.CompletableFuture;
+import java.util.function.Consumer;
 import org.jspecify.annotations.Nullable;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -77,6 +79,32 @@ public final class ModChanges {
             return jars.stream().<ModUpdater.Result>map(jar -> new ModUpdater.Result.Refused(this.refusal)).toList();
         }
         return ready.updates().updateAll(jars);
+    }
+
+    @SuppressWarnings("FutureReturnValueIgnored")
+    void updateAfterWorld() {
+        HotwireEngine.JvmParts ready = this.parts;
+        if (ready != null) {
+            this.tasks.submit("update after the world", () -> {
+                ready.updates().updateAfterWorld();
+                return true;
+            });
+        }
+    }
+
+    public void describePlans(Path jar, Consumer<String> out) throws ModJarException {
+        HotwireEngine.JvmParts ready = this.parts;
+        if (ready != null) {
+            ready.updates().describePlans(jar, out);
+        }
+    }
+
+    CompletableFuture<Boolean> planAhead(Path jar) {
+        return this.tasks.submit("plan ahead", () -> this.planUpdate(jar) != null);
+    }
+
+    CompletableFuture<List<ModUpdater.Result>> updateAll(List<Path> jars) {
+        return this.tasks.submit("update all", () -> this.updateAllNow(jars));
     }
 
     public @Nullable UpdatePlan planUpdate(Path jar) {

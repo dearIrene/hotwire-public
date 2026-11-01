@@ -272,6 +272,7 @@ final class EngineStart {
         });
         ModPolicy.setSeenUses(new SeenUses(FabricLoader.getInstance().getConfigDir().resolve("hotwire/uses.json"),
                 id -> installed.find(id).map(ModManifest::version).orElse(null)));
+        ModPolicy.stayWhen(applier::patchesLiveBackend);
         ModSwitcher switcher = new ModSwitcher(installed.getGraph(), ModPolicy.makePlannerFor(installed.getGraph()),
                 applier, progress, GameRegistrations.getJournal(),
                 ModLifecycle.makeLifecycle(GameRegistrations.getJournal(), Minecraft.getInstance()));

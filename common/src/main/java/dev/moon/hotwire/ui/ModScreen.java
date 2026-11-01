@@ -1,6 +1,7 @@
 package dev.moon.hotwire.ui;
 
 import dev.moon.hotwire.config.ProfileStore;
+import dev.moon.hotwire.modrinth.Downloads;
 import dev.moon.hotwire.ui.list.ModCatalog;
 import dev.moon.hotwire.ui.list.ModList;
 import dev.moon.hotwire.ui.list.ModListModel;
@@ -31,6 +32,10 @@ public final class ModScreen implements JarHost {
         ModList.Badges getBadges();
 
         Canvas.@Nullable Image findIcon(String id);
+
+        default List<Downloads.Job> findUpdateDownloads() {
+            return List.of();
+        }
 
         Progress getProgress();
 
@@ -242,10 +247,8 @@ public final class ModScreen implements JarHost {
         this.updatesPanel = new UpdatesPanel(offer -> {
             this.closePanels();
             game.updateFromStore(offer);
-        }, offers -> {
-            this.closePanels();
-            game.updateAllFromStore(offers);
-        }, this::closePanels, game::findIcon, game::checkForUpdates);
+        }, game::updateAllFromStore, this::closePanels, game::findIcon, game::checkForUpdates,
+                game::findUpdateDownloads);
         this.progress = new ProgressPanel(game.getProgress());
         this.addPanel = new AddPanel(this::confirmAdd, game::addMod, this::closePanels);
         this.updatePanel = new UpdatePanel(this::confirmUpdate, game::updateMod, this::closePanels);
@@ -459,6 +462,18 @@ public final class ModScreen implements JarHost {
 
     public void openUpdates() {
         this.updatesPanel.present();
+    }
+
+    public void startUpdateRun(List<UpdateOffer> offers) {
+        this.updatesPanel.startRun(offers);
+        if (!this.updatesPanel.open()) {
+            this.updatesPanel.present();
+        }
+    }
+
+    public void endUpdateRun() {
+        this.updatesPanel.endRun();
+        this.updatesPanel.dismiss();
     }
 
     private void openPending() {

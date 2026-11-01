@@ -5,10 +5,19 @@ import java.util.List;
 import java.util.Set;
 
 public record JarDiff(ModManifest running, ModManifest incoming, List<ClassDiff> classes,
-        List<String> changedResources) {
+        List<String> changedResources, List<String> opens, List<String> abstractsGained,
+        List<String> constructorChains) {
+    public JarDiff(ModManifest running, ModManifest incoming, List<ClassDiff> classes,
+            List<String> changedResources) {
+        this(running, incoming, classes, changedResources, List.of(), List.of(), List.of());
+    }
+
     public JarDiff {
         classes = List.copyOf(classes);
         changedResources = List.copyOf(changedResources);
+        opens = List.copyOf(opens);
+        abstractsGained = List.copyOf(abstractsGained);
+        constructorChains = List.copyOf(constructorChains);
         if (!running.id().equals(incoming.id())) {
             throw new IllegalArgumentException("An update of " + running.id() + " was given a jar of "
                     + incoming.id());
@@ -43,21 +52,37 @@ public record JarDiff(ModManifest running, ModManifest incoming, List<ClassDiff>
 
         CLASS_FINALITY(true),
         SUPERCLASS(false),
+
         INTERFACES(false),
+
+        INTERFACES_OWN(true),
+
+        INTERFACES_DROPPED(true),
         FIELD_ADDED(true),
+
+        STATIC_SET_ELSEWHERE(false),
+
+        ENUM_CONSTANT_ADDED(false),
         FIELD_REMOVED(true),
         FIELD_ORDER(true),
-        FIELD_MODIFIERS(false),
+        FIELD_MODIFIERS(true),
         METHOD_ADDED(true),
 
         BODILESS_METHOD_ADDED(false),
 
         INTERFACE_METHOD_ADDED(true),
 
-        CONSTRUCTOR_ADDED(false),
+        CONSTRUCTOR_ADDED(true),
+
+        CONSTRUCTOR_CHAINED(false),
         METHOD_REMOVED(true),
-        METHOD_MODIFIERS(false),
-        NEST(false),
+        METHOD_MODIFIERS(true),
+
+        METHOD_KIND(false),
+
+        METHOD_ABSTRACTNESS(true),
+
+        NEST(true),
         PERMITTED_SUBCLASSES(false),
         RECORD_COMPONENTS(false);
 

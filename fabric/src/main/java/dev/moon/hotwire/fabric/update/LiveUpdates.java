@@ -3,9 +3,13 @@ package dev.moon.hotwire.fabric.update;
 import dev.moon.hotwire.fabric.ModPolicy;
 import dev.moon.hotwire.fabric.ResourceReload;
 import dev.moon.hotwire.fabric.add.LoaderModList;
+import dev.moon.hotwire.jar.JarLookup;
+import dev.moon.hotwire.jar.ModJar;
 import dev.moon.hotwire.jar.ModJarException;
 import dev.moon.hotwire.jar.ModManifest;
 import dev.moon.hotwire.mixin_copy.MixinCopy;
+import dev.moon.hotwire.redefine.ConstructedFields;
+import dev.moon.hotwire.redefine.Linker;
 import dev.moon.hotwire.redefine.RebuildException;
 import dev.moon.hotwire.switching.ModMixins;
 import dev.moon.hotwire.switching.SwitchApplier;
@@ -15,11 +19,15 @@ import dev.moon.hotwire.update.UpdatePlan;
 import dev.moon.hotwire.update.UpdatePlan.ClassAction;
 import dev.moon.hotwire.update.UpdatePlan.UpdateNotice;
 import java.nio.file.Path;
+import java.util.ArrayDeque;
 import java.util.ArrayList;
+import java.util.Deque;
+import java.util.HashMap;
 import java.util.HashSet;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.Objects;
 import java.util.Optional;
 import java.util.Set;
 import java.util.TreeSet;
@@ -32,6 +40,7 @@ import net.fabricmc.api.ClientModInitializer;
 import net.fabricmc.api.ModInitializer;
 import net.fabricmc.loader.api.FabricLoader;
 import net.fabricmc.loader.api.entrypoint.EntrypointContainer;
+import net.fabricmc.loader.api.entrypoint.PreLaunchEntrypoint;
 import net.fabricmc.loader.impl.launch.FabricLauncherBase;
 import net.minecraft.client.Minecraft;
 import org.slf4j.Logger;
@@ -45,7 +54,7 @@ final class LiveUpdates {
     }
 
     private record Ready(ModUpdater.Sorted.Planned planned, Map<String, byte[]> entries, Map<String, byte[]> changed,
-            List<String> ids, boolean widens) {
+            List<String> ids, List<Runnable> opening, Map<String, Map<String, byte[]>> carriedEntries) {
         ModManifest manifest() {
             return this.planned.manifest();
         }
@@ -57,6 +66,8 @@ final class LiveUpdates {
 
     private final ModUpdater.Engine engine;
     private final Stay stay;
+
+    private final Set<String> registered = new HashSet<>();
 
     LiveUpdates(ModUpdater.Engine engine, Stay stay) {
         this.engine = engine;
@@ -71,10 +82,10 @@ final class LiveUpdates {
             ModUpdater.Sorted.Planned planned = updates.get(i);
             try {
                 Ready one = this.read(planned);
-                Optional<String> refusal = one.widens()
-                        ? this.engine.findWidenerRefusal(planned.read(), planned.jar()) : Optional.empty();
-                if (refusal.isPresent()) {
-                    results[i] = new ModUpdater.Result.Refused(refusal.get());
+                Optional<String> notAdded = this.addCarried(planned);
+                if (notAdded.isPresent()) {
+                    results[i] = new ModUpdater.Result.Failed(notAdded.get(),
+                            new IllegalStateException(notAdded.get()));
                 } else {
                     ready.add(one);
                     at.add(i);
@@ -94,32 +105,118 @@ final class LiveUpdates {
         return List.of(results);
     }
 
+    private Optional<String> addCarried(ModUpdater.Sorted.Planned planned) {
+        for (Path library : planned.whole().toAdd()) {
+            ModManifest carried = JarLookup.findManifest(library);
+            if (carried != null && this.engine.findVersionOf(carried.id()) != null) {
+                continue;
+            }
+            Optional<String> refusal = this.engine.addCarried(library);
+            if (refusal.isPresent()) {
+                LOGGER.info("[Hotwire] {} carries {}, which could not be added: {}", planned.manifest().id(),
+                        library.getFileName(), refusal.get());
+                return Optional.of(planned.manifest().name() + " could not be updated in place: its library "
+                        + library.getFileName() + " could not be added: " + refusal.get());
+            }
+        }
+        return Optional.empty();
+    }
+
     private Ready read(ModUpdater.Sorted.Planned planned) throws ModJarException {
         UpdatePlan plan = planned.whole().plan();
         Map<String, byte[]> entries = UpdateDiffer.readEntries(planned.jar());
         Map<String, byte[]> changed = new LinkedHashMap<>();
         List<String> ids = new ArrayList<>(List.of(planned.manifest().id()));
         collectChanged(entries, plan, changed);
+        List<Runnable> opening = new ArrayList<>();
+        this.collectOpening(plan, planned.read(), opening);
+        Map<String, Map<String, byte[]>> carriedEntries = new HashMap<>();
         for (CarriedUpdates.Library carried : planned.whole().bundled()) {
-            collectChanged(UpdateDiffer.readEntries(carried.incoming()), carried.plan(), changed);
+            Map<String, byte[]> own = UpdateDiffer.readEntries(carried.incoming());
+            collectChanged(own, carried.plan(), changed);
             ids.add(carried.manifest().id());
+            carriedEntries.put(carried.manifest().id(), own);
+            this.collectOpening(carried.plan(), carried.read(), opening);
         }
-        boolean widens = plan.notices().stream().anyMatch(UpdateNotice.WidenerOpens.class::isInstance);
-        return new Ready(planned, entries, changed, ids, widens);
+        return new Ready(planned, entries, changed, ids, opening, carriedEntries);
+    }
+
+    private Set<String> findChained(List<String> lines) {
+        Set<String> chained = new HashSet<>();
+        Map<String, List<String>> callers = new HashMap<>();
+        for (String line : lines) {
+            int space = line.indexOf(' ');
+            if (space < 0) {
+                if (this.engine.getClasses().findLoaded(line.substring(0, line.indexOf("<init>"))) != null) {
+                    chained.add(line);
+                }
+            } else {
+                callers.computeIfAbsent(line.substring(space + 1), any -> new ArrayList<>())
+                        .add(line.substring(0, space));
+            }
+        }
+        Deque<String> next = new ArrayDeque<>(chained);
+        while (!next.isEmpty()) {
+            for (String caller : callers.getOrDefault(next.removeFirst(), List.of())) {
+                if (chained.add(caller)) {
+                    next.add(caller);
+                }
+            }
+        }
+        return chained;
+    }
+
+    private void collectOpening(UpdatePlan plan, ModJar read, List<Runnable> into) {
+        for (UpdateNotice notice : plan.notices()) {
+            if (notice instanceof UpdateNotice.WidenerOpens) {
+                into.add(() -> this.engine.openWidener(read));
+            } else if (notice instanceof UpdateNotice.AccessOpens access) {
+                into.add(() -> this.engine.openAccess(access.lines(), read));
+            } else if (notice instanceof UpdateNotice.ConstructorChains chains) {
+                into.add(() -> {
+                    Set<String> keys = this.findChained(chains.lines());
+                    Linker.addAddedConstructors(keys);
+                    this.registered.addAll(keys);
+                });
+            }
+        }
     }
 
     private List<ModUpdater.Result> applyReady(List<Ready> ready) {
+        List<SwitchApplier.Adoption> adoptions = new ArrayList<>();
+        this.registered.clear();
         try {
             this.engine.getApplier().getRebuilder().launchChanged();
+
+            ready.forEach(one -> {
+                one.planned().whole().bundled().forEach(carried ->
+                        FabricLauncherBase.getLauncher().addToClassPath(carried.incoming()));
+                FabricLauncherBase.getLauncher().addToClassPath(one.planned().jar());
+            });
+            MixinCopy.markClassPathChanged();
             Map<String, byte[]> changed = new LinkedHashMap<>();
             List<String> ids = new ArrayList<>();
             Set<String> targets = new TreeSet<>();
             List<Set<String>> targetsOf = new ArrayList<>();
             for (Ready one : ready) {
-                if (one.widens()) {
-                    this.engine.openWidener(one.planned().read());
+                one.opening().forEach(Runnable::run);
+                Set<String> own = new TreeSet<>();
+                if (one.planned().whole().adoptsConfigs()) {
+                    SwitchApplier.Adoption adoption = this.adopt(one.planned().read(), one.entries(), one.plan(),
+                            one.changed());
+                    adoptions.add(adoption);
+                    own.addAll(adoption.targets());
                 }
-                Set<String> own = one.planned().whole().adoptsConfigs() ? this.adopt(one) : Set.of();
+                for (CarriedUpdates.Library carried : one.planned().whole().bundled()) {
+                    if (carried.adoptsConfigs()) {
+                        SwitchApplier.Adoption adoption = this.adopt(carried.read(),
+                                Objects.requireNonNull(one.carriedEntries().get(carried.manifest().id())),
+                                        carried.plan(),
+                                one.changed());
+                        adoptions.add(adoption);
+                        own.addAll(adoption.targets());
+                    }
+                }
                 targetsOf.add(own);
                 targets.addAll(own);
                 changed.putAll(one.changed());
@@ -128,13 +225,18 @@ final class LiveUpdates {
 
             Runnable joined = () -> ready.forEach(one -> {
                 for (CarriedUpdates.Library carried : one.planned().whole().bundled()) {
-                    joinClassPath(carried.manifest().id(), carried.incoming());
+                    joinModList(carried.manifest().id(), carried.incoming());
                 }
-                joinClassPath(one.manifest().id(), one.planned().jar());
+                joinModList(one.manifest().id(), one.planned().jar());
             });
 
-            SwitchApplier.ApplyResult applied = this.engine.getApplier().replace(ids, changed, this.engine.on(),
-                    targets, joined);
+            ConstructedFields.startUpdating(changed.keySet());
+            SwitchApplier.ApplyResult applied;
+            try {
+                applied = this.engine.getApplier().replace(ids, changed, this.engine.on(), targets, joined);
+            } finally {
+                ConstructedFields.endUpdating();
+            }
             SwitchTimes.mark("update: class path");
             Map<String, ModUpdater.NewJar> jars = new LinkedHashMap<>();
             ready.forEach(one -> jars.put(one.manifest().id(), new ModUpdater.NewJar(one.planned().jar(),
@@ -151,6 +253,8 @@ final class LiveUpdates {
             }
             return results;
         } catch (RebuildException e) {
+            adoptions.reversed().forEach(this.engine.getApplier()::undoAdoption);
+            Linker.removeAddedConstructors(this.registered);
             List<ModUpdater.Result> failed = new ArrayList<>();
             for (Ready one : ready) {
                 LOGGER.warn("[Hotwire] {} could not be updated in place", one.manifest().id(), e);
@@ -163,24 +267,26 @@ final class LiveUpdates {
         }
     }
 
-    private Set<String> adopt(Ready one) {
-        for (ClassAction action : one.plan().actions()) {
-            byte[] bytes = one.entries().get(action.className() + ".class");
+    private SwitchApplier.Adoption adopt(ModJar read, Map<String, byte[]> entries, UpdatePlan plan,
+            Map<String, byte[]> changed) {
+        for (ClassAction action : plan.actions()) {
+            byte[] bytes = entries.get(action.className() + ".class");
             if (bytes != null && action.kind() == ClassAction.Kind.DEFINE) {
-                one.changed().put(action.className(), bytes);
+                changed.put(action.className(), bytes);
             }
         }
-        ModMixins mixins = ModMixins.of(one.planned().read(), ModPolicy.getSide());
+        ModMixins mixins = ModMixins.of(read, ModPolicy.getSide());
         Map<String, byte[]> configs = new LinkedHashMap<>();
         mixins.configs().forEach(config -> {
-            byte[] bytes = one.entries().get(config);
+            byte[] bytes = entries.get(config);
             if (bytes != null) {
                 configs.put(config, bytes);
             }
         });
-        Set<String> targets = this.engine.getApplier().adoptUpdate(one.manifest().id(), mixins, configs);
+        configs.putAll(SwitchApplier.findRefmaps(configs, entries));
+        SwitchApplier.Adoption adoption = this.engine.getApplier().adoptUpdate(read.manifest().id(), mixins, configs);
         SwitchTimes.mark("update: adopt configs");
-        return targets;
+        return adoption;
     }
 
     private ModUpdater.Result finish(Ready one, SwitchApplier.ApplyResult applied) {
@@ -190,7 +296,10 @@ final class LiveUpdates {
             LOGGER.info("[Hotwire] {} is {} now, carried by {}", carried.manifest().id(),
                     carried.manifest().version(), manifest.id());
         }
-        String started = runAddedEntrypoints(manifest.id(), one.plan());
+        StringBuilder started = new StringBuilder(runAddedEntrypoints(manifest.id(), one.plan()));
+        for (CarriedUpdates.Library carried : one.planned().whole().bundled()) {
+            started.append(runAddedEntrypoints(carried.manifest().id(), carried.plan()));
+        }
         SwitchTimes.mark("update: entrypoints");
         LOGGER.info("[Hotwire] {} is {} now: {} classes rebuilt, {} served as they load, {} new",
                 manifest.id(), manifest.version(), applied.rebuilt().size(), applied.notLoaded().size(),
@@ -210,6 +319,7 @@ final class LiveUpdates {
             return "";
         }
         List<Runnable> starts = new ArrayList<>();
+        collectAdded(id, "preLaunch", PreLaunchEntrypoint.class, PreLaunchEntrypoint::onPreLaunch, added, starts);
         collectAdded(id, "main", ModInitializer.class, ModInitializer::onInitialize, added, starts);
         if (ModPolicy.getSide() == ModManifest.Environment.CLIENT) {
             collectAdded(id, "client", ClientModInitializer.class, ClientModInitializer::onInitializeClient, added,
@@ -258,12 +368,8 @@ final class LiveUpdates {
         }
     }
 
-    private static void joinClassPath(String id, Path jar) {
-        runAfterReplace(id, "the loader's mod list", () -> {
-            FabricLauncherBase.getLauncher().addToClassPath(jar);
-            MixinCopy.markClassPathChanged();
-            LoaderModList.replace(id, jar);
-        });
+    private static void joinModList(String id, Path jar) {
+        runAfterReplace(id, "the loader's mod list", () -> LoaderModList.replace(id, jar));
     }
 
     private static void runAfterReplace(String id, String what, Runnable step) {

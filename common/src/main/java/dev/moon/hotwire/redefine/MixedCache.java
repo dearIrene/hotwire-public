@@ -73,6 +73,9 @@ final class MixedCache {
     private record Config(String name, CacheKey settings, Set<String> mixins, boolean plugin) {
     }
 
+    private record Aims(long hash, Set<String> targets) {
+    }
+
     private final CacheStore store;
 
     private final ClassPacks packs;
@@ -82,7 +85,8 @@ final class MixedCache {
 
     private final Set<String> uncached = ConcurrentHashMap.newKeySet();
 
-    private final Map<String, Set<String>> aims = new ConcurrentHashMap<>();
+    private final Map<String, Aims> aims = new ConcurrentHashMap<>();
+    private volatile int readsAt;
     private final Map<CacheKey, Config> parsed = new ConcurrentHashMap<>();
     private final Map<String, ReadHash> hashes = new ConcurrentHashMap<>();
     private final Set<CacheKey> holding = ConcurrentHashMap.newKeySet();
@@ -98,6 +102,8 @@ final class MixedCache {
     private final AtomicLong basesBefore = new AtomicLong();
 
     private final Set<CacheKey> counted = ConcurrentHashMap.newKeySet();
+
+    private final Map<CacheKey, Unwritten> unwritten = new ConcurrentHashMap<>();
     @SuppressWarnings("ThreadPriorityCheck")
     private final ExecutorService writer = Executors.newSingleThreadExecutor(
             Thread.ofPlatform().name("hotwire-cache").daemon().priority(Thread.MIN_PRIORITY).factory());
@@ -312,6 +318,7 @@ final class MixedCache {
                 mixins.add(listed.replace('.', '/'));
             }
             this.listed.addAll(mixins);
+            ConfigTrim.readUnlisted(json).forEach(unlisted -> mixins.add(unlisted.replace('.', '/')));
             CacheKey settings = CacheKey.of("config 1").add(name).add(root.toString())
                     .add(refmap == null ? new byte[0] : refmap).build();
             return new Config(name, settings, mixins, text.contains(LIVE) || text.contains(PLUGIN));
@@ -319,20 +326,27 @@ final class MixedCache {
     }
 
     private @Nullable Set<String> findAims(String mixin) {
-        Set<String> known = this.aims.get(mixin);
-        if (known != null) {
-            return known;
-        }
         byte[] bytes = this.copy.findReadable(mixin);
         if (bytes == null) {
             return null;
         }
+        long hash = this.hashOf(mixin, bytes);
+        Aims known = this.aims.get(mixin);
+        if (known != null && known.hash() == hash) {
+            return known.targets();
+        }
         Set<String> read = MixinClassInfo.read(bytes).targets();
-        this.aims.put(mixin, read);
+        this.aims.put(mixin, new Aims(hash, read));
         return read;
     }
 
     MixinCopy.@Nullable MixResult find(CacheKey key, String target, byte[] original) {
+        Unwritten waiting = this.unwritten.get(key);
+        if (waiting != null && this.isHoldingStill(waiting.reads())) {
+            byte[] mixed = Objects.requireNonNull(waiting.made().classes().get(target));
+            return new MixinCopy.MixResult(Map.of(target, mixed), findShapesUsed(mixed, waiting.made()),
+                    findGeneratedFor(target, waiting.made()), Set.of());
+        }
         byte[] listed = this.store.get(key, null);
         if (listed == null) {
             return null;
@@ -388,6 +402,11 @@ final class MixedCache {
     }
 
     private boolean isHolding(CacheKey reads) {
+        int changes = this.copy.findReadChanges();
+        if (changes != this.readsAt) {
+            this.holding.clear();
+            this.readsAt = changes;
+        }
         if (this.holding.contains(reads)) {
             return true;
         }
@@ -409,21 +428,57 @@ final class MixedCache {
         return true;
     }
 
+    private record Unwritten(MixinCopy.MixResult made, UnwrittenReads reads) {
+    }
+
+    private static final class UnwrittenReads {
+        private final Map<String, byte @Nullable []> read;
+        private int checkedAt = -1;
+        private boolean holds;
+
+        UnwrittenReads(Map<String, byte @Nullable []> read) {
+            this.read = read;
+        }
+    }
+
+    private boolean isHoldingStill(UnwrittenReads reads) {
+        synchronized (reads) {
+            int changes = this.copy.findReadChanges();
+            if (reads.checkedAt != changes) {
+                reads.holds = reads.read.entrySet().stream().allMatch(one ->
+                        this.hashOf(one.getKey(), one.getValue()) == this.hashOf(one.getKey(),
+                                this.copy.findReadable(one.getKey())));
+                reads.checkedAt = changes;
+            }
+            return reads.holds;
+        }
+    }
+
     void save(Map<String, CacheKey> keys, MixinCopy.MixResult made, Map<String, byte[]> classes) {
         Map<String, byte @Nullable []> read = new TreeMap<>(this.copy.findReadBytes(made.read()));
         read.keySet().removeIf(this.listed::contains);
         Map<String, byte[]> originals = new HashMap<>(classes);
-        this.writer.execute(() -> {
-            CacheKey reads = this.saveReads(read);
-            if (reads == null) {
-                return;
+        UnwrittenReads held = new UnwrittenReads(read);
+        keys.forEach((target, key) -> {
+            if (made.classes().containsKey(target)) {
+                this.unwritten.put(key, new Unwritten(made, held));
             }
-            keys.forEach((target, key) -> {
-                byte[] mixed = made.classes().get(target);
-                if (mixed != null) {
-                    this.write(key, reads, target, mixed, made, originals);
+        });
+        this.writer.execute(() -> {
+            try {
+                CacheKey reads = this.saveReads(read);
+                if (reads == null) {
+                    return;
                 }
-            });
+                keys.forEach((target, key) -> {
+                    byte[] mixed = made.classes().get(target);
+                    if (mixed != null) {
+                        this.write(key, reads, target, mixed, made, originals);
+                    }
+                });
+            } finally {
+                keys.values().forEach(this.unwritten::remove);
+            }
         });
         if (this.flushQueued.compareAndSet(false, true)) {
             this.writer.execute(() -> {
@@ -460,13 +515,25 @@ final class MixedCache {
         return reads;
     }
 
-    private void write(CacheKey key, CacheKey reads, String target, byte[] mixed, MixinCopy.MixResult made,
-            Map<String, byte[]> originals) {
+    private static Map<String, String> findShapesUsed(byte[] mixed, MixinCopy.MixResult made) {
         Set<String> uses = new HashSet<>();
         Matcher args = ARGS.matcher(new String(mixed, StandardCharsets.ISO_8859_1));
         while (args.find()) {
             uses.add(args.group());
         }
+        Map<String, String> shapes = new TreeMap<>(made.argsShapes());
+        shapes.keySet().retainAll(uses);
+        return shapes;
+    }
+
+    private static Map<String, byte[]> findGeneratedFor(String target, MixinCopy.MixResult made) {
+        Map<String, byte[]> generated = new TreeMap<>(made.generated());
+        generated.keySet().removeIf(name -> !name.startsWith(target + "$"));
+        return generated;
+    }
+
+    private void write(CacheKey key, CacheKey reads, String target, byte[] mixed, MixinCopy.MixResult made,
+            Map<String, byte[]> originals) {
         ByteArrayOutputStream listed = new ByteArrayOutputStream();
         List<CacheKey> used = new ArrayList<>();
         ClassPacks.Body body;
@@ -476,15 +543,13 @@ final class MixedCache {
             body = this.packs.put(target, mixed, originals.get(target), used);
             out.writeLong(body.key().high());
             out.writeLong(body.key().low());
-            Map<String, String> shapes = new TreeMap<>(made.argsShapes());
-            shapes.keySet().retainAll(uses);
+            Map<String, String> shapes = findShapesUsed(mixed, made);
             out.writeInt(shapes.size());
             for (Map.Entry<String, String> shape : shapes.entrySet()) {
                 out.writeUTF(shape.getKey());
                 out.writeUTF(shape.getValue());
             }
-            Map<String, byte[]> generated = new TreeMap<>(made.generated());
-            generated.keySet().removeIf(name -> !name.startsWith(target + "$"));
+            Map<String, byte[]> generated = findGeneratedFor(target, made);
             out.writeInt(generated.size());
             for (Map.Entry<String, byte[]> one : generated.entrySet()) {
                 out.writeUTF(one.getKey());

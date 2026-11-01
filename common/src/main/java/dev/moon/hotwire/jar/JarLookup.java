@@ -6,6 +6,7 @@ import java.nio.file.Files;
 import java.nio.file.Path;
 import java.nio.file.StandardCopyOption;
 import java.util.Map;
+import java.util.Objects;
 import java.util.Optional;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.zip.ZipEntry;
@@ -53,6 +54,24 @@ public final class JarLookup {
             try (InputStream in = zip.getInputStream(entry)) {
                 return in.readAllBytes();
             }
+        }
+    }
+
+    public static @Nullable Path copyEntryOnce(Path jar, String path, Path folder) throws IOException {
+        try (ZipFile zip = new ZipFile(jar.toFile())) {
+            ZipEntry entry = zip.getEntry(path);
+            if (entry == null) {
+                return null;
+            }
+            Path at = folder.resolve(Long.toHexString(entry.getCrc())).resolve(Path.of(path).getFileName());
+            if (Files.exists(at) && Files.size(at) == entry.getSize()) {
+                return at;
+            }
+            Files.createDirectories(Objects.requireNonNull(at.getParent()));
+            try (InputStream in = zip.getInputStream(entry)) {
+                Files.copy(in, at, StandardCopyOption.REPLACE_EXISTING);
+            }
+            return at;
         }
     }
 

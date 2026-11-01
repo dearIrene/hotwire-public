@@ -16,7 +16,6 @@ import java.util.Map;
 import java.util.Objects;
 import java.util.Set;
 import java.util.TreeSet;
-import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.atomic.AtomicInteger;
 import java.util.function.BooleanSupplier;
 import java.util.function.Consumer;
@@ -29,8 +28,6 @@ import org.slf4j.LoggerFactory;
 public final class InitHookRuns {
     private static final Logger LOGGER = LoggerFactory.getLogger(InitHookRuns.class);
     private static volatile BooleanSupplier isLaterAllowed = () -> false;
-
-    private static final Map<Class<?>, Map<Object, Boolean>> RAN_ON = new ConcurrentHashMap<>();
 
     private static volatile @Nullable List<IntSupplier> waitingLate;
 
@@ -239,7 +236,7 @@ public final class InitHookRuns {
                         MethodType.methodType(void.class, type)).asType(MethodType.methodType(void.class,
                                 Object.class)));
 
-                Map<Object, Boolean> ranOn = RAN_ON.computeIfAbsent(type, any -> new MapMaker().weakKeys().makeMap());
+                Map<Object, Boolean> ranOn = new MapMaker().weakKeys().makeMap();
                 Consumer<Object> each = object -> {
                     if (ranOn.put(object, Boolean.TRUE) == null) {
                         hooks.accept(object);

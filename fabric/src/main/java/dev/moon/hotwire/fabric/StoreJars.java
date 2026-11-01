@@ -3,9 +3,13 @@ package dev.moon.hotwire.fabric;
 import dev.moon.hotwire.fabric.store.ModStore;
 import dev.moon.hotwire.fabric.store.UpdateCheck;
 import dev.moon.hotwire.fabric.update.ModUpdater;
+import dev.moon.hotwire.jar.JarLookup;
+import dev.moon.hotwire.jar.ModManifest;
+import dev.moon.hotwire.modrinth.Downloads;
 import dev.moon.hotwire.ui.JarHost;
 import dev.moon.hotwire.ui.Lang;
 import dev.moon.hotwire.ui.ModScreen;
+import dev.moon.hotwire.ui.Progress;
 import dev.moon.hotwire.ui.UpdatePreview;
 import dev.moon.hotwire.update.PendingChange;
 import dev.moon.hotwire.update.UpdateOffer;
@@ -56,9 +60,12 @@ final class StoreJars {
     private List<UpdateOffer> offers = List.of();
     private boolean checked;
     private boolean started;
+    private final StoreUpdates all;
+    private final Runnable refresh;
 
     StoreJars(InstalledMods installed, ModChanges changes, Supplier<@Nullable JarHost> host,
-            Supplier<@Nullable ModScreen> screen, Supplier<@Nullable ModStore> store, BiConsumer<String, Boolean> say) {
+            Supplier<@Nullable ModScreen> screen, Supplier<@Nullable ModStore> store, BiConsumer<String, Boolean> say,
+            Progress progress, Runnable refresh) {
         this.installed = installed;
         this.changes = changes;
         this.check = new UpdateCheck(installed);
@@ -66,6 +73,12 @@ final class StoreJars {
         this.screen = screen;
         this.store = store;
         this.say = say;
+        this.refresh = refresh;
+        this.all = new StoreUpdates(this.check, changes, progress, say);
+    }
+
+    StoreUpdates getAll() {
+        return this.all;
     }
 
     UpdateCheck getCheck() {
@@ -124,6 +137,39 @@ final class StoreJars {
     }
 
     void updateAll(List<UpdateOffer> asked) {
+        if (asked.size() > 1) {
+            this.reportDownloads();
+            ModScreen shown = this.screen.get();
+            if (shown != null) {
+                shown.startUpdateRun(asked);
+            }
+            this.all.run(this.check.orderByNeeds(asked, this.offers), needing -> {
+                this.queued.clear();
+                needing.forEach(jar -> this.queued.add(new StoreJar(jar, this.isUpdate(jar))));
+                this.offerNext();
+            }, (jar, result) -> {
+                this.dropOffer(result);
+                if (result instanceof ModUpdater.Result.Updated || result instanceof ModUpdater.Result.Queued) {
+                    this.markInstalled(jar);
+                }
+                this.refresh.run();
+            }, () -> {
+                ModScreen now = this.screen.get();
+                if (now != null) {
+                    now.endUpdateRun();
+                }
+            });
+            return;
+        }
+        this.updateOne(asked);
+    }
+
+    private boolean isUpdate(Path jar) {
+        ModManifest manifest = JarLookup.findManifest(jar);
+        return manifest != null && this.installed.isInstalled(manifest.id());
+    }
+
+    private void updateOne(List<UpdateOffer> asked) {
         if (asked.isEmpty()) {
             return;
         }
@@ -175,6 +221,10 @@ final class StoreJars {
             this.projects.put(jars.get(i), projects.get(i));
         }
         this.offerNext();
+    }
+
+    List<Downloads.Job> findDownloads() {
+        return this.check.getDownloads().snapshot();
     }
 
     private void reportDownloads() {

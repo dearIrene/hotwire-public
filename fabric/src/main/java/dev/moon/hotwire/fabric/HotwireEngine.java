@@ -23,6 +23,7 @@ import dev.moon.hotwire.fabric.store.ModStore;
 import dev.moon.hotwire.fabric.store.UpdateCheck;
 import dev.moon.hotwire.fabric.update.SwapAtClose;
 import dev.moon.hotwire.fabric.update.UpdateSupport;
+import dev.moon.hotwire.modrinth.Downloads;
 import dev.moon.hotwire.plan.ModGraph;
 import dev.moon.hotwire.redefine.Tripwire;
 import dev.moon.hotwire.report.ActionJournal;
@@ -131,7 +132,7 @@ public final class HotwireEngine implements ModScreen.Game, AutoCloseable {
         }
         this.changes = new ModChanges(this.findParts(), this.getSwitchRefusal(), installed, this.tasks);
         this.storeJars = new StoreJars(installed, this.changes, this::findHost, () -> this.screen,
-                this::getStore, this::showMessage);
+                this::getStore, this::showMessage, progress, this::refreshScreen);
         this.stores = new StoreScreens(this, installed, this.storeJars, icons);
         this.selfUpdate = new SelfUpdateRequests(this.storeJars, () -> this.screen, this::showMessage);
 
@@ -356,6 +357,11 @@ public final class HotwireEngine implements ModScreen.Game, AutoCloseable {
     }
 
     @Override
+    public List<Downloads.Job> findUpdateDownloads() {
+        return this.storeJars.findDownloads();
+    }
+
+    @Override
     public Canvas.@Nullable Image findIcon(String id) {
         return this.icons.of(id);
     }
@@ -490,6 +496,10 @@ public final class HotwireEngine implements ModScreen.Game, AutoCloseable {
         return this.disabled;
     }
 
+    boolean isWorldClosedForWork() {
+        return this.progress.isWorldClosed();
+    }
+
     private void onWorldClosed(boolean closed) {
         this.progress.setWorldClosed(closed);
         ModScreen current = this.screen;
@@ -595,7 +605,12 @@ public final class HotwireEngine implements ModScreen.Game, AutoCloseable {
         this.screen = null;
         this.under = null;
         this.storeJars.clear();
-        ModViews.show(back);
+        this.showBack(back);
+    }
+
+    void showBack(@Nullable Screen back) {
+        JvmParts parts = this.findParts();
+        ModViews.showBack(back, parts == null ? Set.of() : parts.runner().getSwitcher().getOff());
     }
 
     @Override
@@ -665,7 +680,7 @@ public final class HotwireEngine implements ModScreen.Game, AutoCloseable {
             @Override
             public void close() {
                 HotwireEngine.this.under = null;
-                ModViews.show(back);
+                HotwireEngine.this.showBack(back);
             }
         })));
     }
@@ -680,6 +695,22 @@ public final class HotwireEngine implements ModScreen.Game, AutoCloseable {
 
     public boolean updateById(String id) {
         return this.storeJars.updateById(id);
+    }
+
+    public @Nullable CompletableFuture<String> pressUpdateAll() {
+        if (!this.storeJars.isChecked()) {
+            return null;
+        }
+        List<UpdateOffer> offers = this.storeJars.getOffers();
+        if (offers.size() < 2) {
+            return CompletableFuture.completedFuture(offers.size() + " offered");
+        }
+        this.updateAllFromStore(offers);
+        return this.storeJars.getAll().getLast().thenApply(StoreUpdates.Ran::describe);
+    }
+
+    public CompletableFuture<String> findUpdateAllRun() {
+        return this.storeJars.getAll().getLast().thenApply(StoreUpdates.Ran::describe);
     }
 
     public @Nullable ModStore getStore() {

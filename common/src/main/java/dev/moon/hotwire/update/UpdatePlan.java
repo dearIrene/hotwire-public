@@ -71,6 +71,24 @@ public record UpdatePlan(String modId, String runningVersion, String incomingVer
         record EntrypointRuns(String key, String value) implements UpdateNotice {
         }
 
+        record ConstructorChains(List<String> lines) implements UpdateNotice {
+            public ConstructorChains {
+                lines = List.copyOf(lines);
+            }
+        }
+
+        record AbstractsGained(List<String> methods) implements UpdateNotice {
+            public AbstractsGained {
+                methods = List.copyOf(methods);
+            }
+        }
+
+        record AccessOpens(List<String> lines) implements UpdateNotice {
+            public AccessOpens {
+                lines = List.copyOf(lines);
+            }
+        }
+
         record WidenerOpens() implements UpdateNotice {
         }
     }
@@ -88,6 +106,7 @@ public record UpdatePlan(String modId, String runningVersion, String incomingVer
                 case Downgrade d -> UpdateTier.NEXT_START;
                 case DependencyUnmet u -> UpdateTier.NEXT_START;
                 case DependencyQueued q -> UpdateTier.NEXT_START;
+                case IdChanged i -> UpdateTier.NEXT_START;
                 case ModIsOff o -> UpdateTier.NEXT_START;
                 case AddedThisSession t -> UpdateTier.NEXT_START;
                 case UpdatedEarlierThisSession w -> UpdateTier.NEXT_START;
@@ -135,6 +154,9 @@ public record UpdatePlan(String modId, String runningVersion, String incomingVer
         }
 
         record DependencyQueued(String mod, String version) implements UpdateBlocker {
+        }
+
+        record IdChanged(String from, String to) implements UpdateBlocker {
         }
 
         record ModIsOff() implements UpdateBlocker {

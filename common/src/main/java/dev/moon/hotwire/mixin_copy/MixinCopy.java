@@ -95,6 +95,8 @@ public final class MixinCopy implements AutoCloseable {
 
     private final Map<String, SoftReference<byte[]>> read = new ConcurrentHashMap<>();
     private final Map<String, byte[]> replaced = new ConcurrentHashMap<>();
+    private final AtomicInteger readChanges = new AtomicInteger();
+    private static final ThreadLocal<Map<String, byte[]>> REPLACING = new ThreadLocal<>();
 
     private final Map<String, Integer> missing = new ConcurrentHashMap<>();
     private static final AtomicInteger PATHS = new AtomicInteger();
@@ -137,6 +139,11 @@ public final class MixinCopy implements AutoCloseable {
     }
 
     private byte @Nullable [] findBytes(String name, Function<String, byte @Nullable []> more) {
+        Map<String, byte[]> coming = REPLACING.get();
+        byte[] next = coming == null ? null : coming.get(name);
+        if (next != null) {
+            return next;
+        }
         byte[] updated = this.replaced.get(name);
         if (updated != null) {
             return updated;
@@ -239,11 +246,26 @@ public final class MixinCopy implements AutoCloseable {
         return this.side;
     }
 
+    public int findReadChanges() {
+        return this.readChanges.get() + PATHS.get();
+    }
+
     public byte @Nullable [] findReadable(String name) {
         return this.more.apply(name);
     }
 
+    public void startReplacing(Map<String, byte[]> classes) {
+        this.readChanges.incrementAndGet();
+        REPLACING.set(classes);
+    }
+
+    public void endReplacing() {
+        REPLACING.remove();
+        this.readChanges.incrementAndGet();
+    }
+
     public void replace(Map<String, byte[]> classes) {
+        this.readChanges.incrementAndGet();
         this.replaced.putAll(classes);
         this.defaultRefmap = null;
         synchronized (BOOTING) {
@@ -251,9 +273,14 @@ public final class MixinCopy implements AutoCloseable {
         }
     }
 
+    public void restore(Set<String> names, Map<String, byte[]> before) {
+        names.forEach(this.replaced::remove);
+        this.replace(before);
+    }
+
     public void forgetReads() {
+        this.readChanges.incrementAndGet();
         this.read.clear();
-        this.replaced.clear();
         this.missing.clear();
         this.defaultRefmap = null;
 

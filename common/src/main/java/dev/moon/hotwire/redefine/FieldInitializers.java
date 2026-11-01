@@ -8,8 +8,10 @@ import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
+import java.util.TreeSet;
 import org.jspecify.annotations.Nullable;
 import org.objectweb.asm.Opcodes;
+import org.objectweb.asm.Type;
 import org.objectweb.asm.tree.AbstractInsnNode;
 import org.objectweb.asm.tree.ClassNode;
 import org.objectweb.asm.tree.FieldInsnNode;
@@ -20,8 +22,10 @@ import org.objectweb.asm.tree.InsnList;
 import org.objectweb.asm.tree.InsnNode;
 import org.objectweb.asm.tree.JumpInsnNode;
 import org.objectweb.asm.tree.LabelNode;
+import org.objectweb.asm.tree.LdcInsnNode;
 import org.objectweb.asm.tree.LineNumberNode;
 import org.objectweb.asm.tree.LookupSwitchInsnNode;
+import org.objectweb.asm.tree.MethodInsnNode;
 import org.objectweb.asm.tree.MethodNode;
 import org.objectweb.asm.tree.TableSwitchInsnNode;
 import org.objectweb.asm.tree.TryCatchBlockNode;
@@ -32,6 +36,7 @@ import org.slf4j.LoggerFactory;
 
 @SuppressWarnings("ReferenceEquality")
 final class FieldInitializers {
+    private static final String FIELD_HOLDERS = FieldHolders.class.getName().replace('.', '/');
     private static final Logger LOGGER = LoggerFactory.getLogger(FieldInitializers.class);
     static final String INIT_INSTANCE = "hotwire$initInstance";
     static final String INIT_STATICS = "hotwire$initStatics";
@@ -129,6 +134,76 @@ final class FieldInitializers {
 
     static Map<String, InsnList> findStaticSlices(String target, ClassNode node, Set<String> fields) {
         return findSlices(target, node, fields, Opcodes.PUTSTATIC, false);
+    }
+
+    static void carryRetyped(String target, List<FieldNode> running, List<FieldNode> added, String holder,
+            MethodNode instance, MethodNode statics) {
+        Map<String, FieldNode> byName = new HashMap<>();
+        running.forEach(field -> byName.put(field.name, field));
+        for (FieldNode field : added) {
+            FieldNode was = byName.get(field.name);
+            boolean isStatic = (field.access & Opcodes.ACC_STATIC) != 0;
+            if (was == null || was.desc.equals(field.desc) || isStatic != ((was.access & Opcodes.ACC_STATIC) != 0)
+                    || !isReference(was.desc) || !isReference(field.desc)) {
+                continue;
+            }
+            InsnList carry = new InsnList();
+            if (!isStatic) {
+                carry.add(new VarInsnNode(Opcodes.ALOAD, 0));
+                carry.add(new TypeInsnNode(Opcodes.CHECKCAST, holder));
+                carry.add(new VarInsnNode(Opcodes.ALOAD, 1));
+                carry.add(new FieldInsnNode(Opcodes.GETFIELD, target, was.name, was.desc));
+            } else {
+                carry.add(new FieldInsnNode(Opcodes.GETSTATIC, target, was.name, was.desc));
+            }
+            carry.add(new LdcInsnNode(Type.getType(field.desc)));
+            if (!isStatic) {
+                carry.add(new VarInsnNode(Opcodes.ALOAD, 0));
+                carry.add(new TypeInsnNode(Opcodes.CHECKCAST, holder));
+                carry.add(new FieldInsnNode(Opcodes.GETFIELD, holder, field.name, field.desc));
+            } else {
+                carry.add(new FieldInsnNode(Opcodes.GETSTATIC, holder, field.name, field.desc));
+            }
+            carry.add(new MethodInsnNode(Opcodes.INVOKESTATIC, FIELD_HOLDERS, "findCarried",
+                    "(Ljava/lang/Object;Ljava/lang/Class;Ljava/lang/Object;)Ljava/lang/Object;", false));
+            carry.add(new TypeInsnNode(Opcodes.CHECKCAST, Type.getType(field.desc).getInternalName()));
+            carry.add(new FieldInsnNode(isStatic ? Opcodes.PUTSTATIC : Opcodes.PUTFIELD, holder, field.name,
+                    field.desc));
+            MethodNode into = isStatic ? statics : instance;
+            into.instructions.insertBefore(findLastReturn(into), carry);
+        }
+    }
+
+    private static boolean isReference(String desc) {
+        return desc.startsWith("L") || desc.startsWith("[");
+    }
+
+    private static AbstractInsnNode findLastReturn(MethodNode method) {
+        AbstractInsnNode at = method.instructions.getLast();
+        while (at.getOpcode() != Opcodes.RETURN) {
+            at = at.getPrevious();
+        }
+        return at;
+    }
+
+    static Set<String> findStoredFromArguments(String target, ClassNode mixed, Set<String> added) {
+        if (added.isEmpty()) {
+            return Set.of();
+        }
+        Set<String> plain = findSlices(target, mixed, added, Opcodes.PUTFIELD, false).keySet();
+        Set<String> found = new TreeSet<>();
+        for (MethodNode method : mixed.methods) {
+            if (method.name.equals("<init>")) {
+                for (AbstractInsnNode insn : method.instructions) {
+                    if (insn instanceof FieldInsnNode store && store.getOpcode() == Opcodes.PUTFIELD
+                            && store.owner.equals(target) && added.contains(store.name + store.desc)
+                            && !plain.contains(store.name + store.desc)) {
+                        found.add(store.name);
+                    }
+                }
+            }
+        }
+        return found;
     }
 
     private static Map<String, InsnList> findSlices(String target, ClassNode mixed, Set<String> added, int storeOpcode,

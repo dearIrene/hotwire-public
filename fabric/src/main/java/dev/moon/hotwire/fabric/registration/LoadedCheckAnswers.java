@@ -203,6 +203,11 @@ final class LoadedCheckAnswers {
                 }
 
                 Object nothing = StandIns.fits(field.getType()) ? StandIns.of(field.getType()) : null;
+                if (nothing == null && !ClassFileSummary.isOnlyReadTestedForNull(bytes, field.getName(), descriptor)) {
+                    LOGGER.info("[Hotwire] {}.{} keeps what it looked up: its class reads it with no test for null",
+                            type.getName(), field.getName());
+                    continue;
+                }
                 this.writer.write(field, null, nothing);
                 changed.add(type.getSimpleName() + "." + field.getName());
                 this.cleared.computeIfAbsent(mod, any -> new ArrayList<>()).add(new ClearedFlag(field, value, nothing));

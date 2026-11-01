@@ -307,6 +307,11 @@ public final class GameReports {
         }
     }
 
+    public void onRebuilt(Collection<String> classes, String line) {
+        this.story.add(line + ": " + classes.size() + " classes redefined");
+        classes.forEach(rebuilt -> this.rebuiltBy.putIfAbsent(rebuilt, line));
+    }
+
     private Map<String, String> getNames(List<String> ids) {
         Map<String, String> names = new HashMap<>();
         ids.forEach(id -> names.put(id, this.nameOf.apply(id)));

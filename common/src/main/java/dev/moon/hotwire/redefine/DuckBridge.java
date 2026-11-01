@@ -29,6 +29,10 @@ public final class DuckBridge {
     private static final Handle MOVED = new Handle(Opcodes.H_INVOKESTATIC, LINKER, "bootstrapMoved",
             "(" + BOOTSTRAP + "Ljava/lang/String;Ljava/lang/String;Ljava/lang/String;I)Ljava/lang/invoke/CallSite;",
             false);
+    private static final Handle MOVED_LAMBDA = new Handle(Opcodes.H_INVOKESTATIC, LINKER, "bootstrapMovedLambda",
+            "(Ljava/lang/invoke/MethodHandles$Lookup;Ljava/lang/String;Ljava/lang/invoke/MethodType;"
+                    + "Ljava/lang/invoke/MethodType;Ljava/lang/String;Ljava/lang/String;Ljava/lang/String;I)"
+                    + "Ljava/lang/invoke/CallSite;", false);
     private static final Handle DUCK_LAMBDA = new Handle(Opcodes.H_INVOKESTATIC, LINKER, "bootstrapDuckLambda",
             "(" + BOOTSTRAP + "Ljava/lang/invoke/MethodType;Ljava/lang/invoke/MethodHandle;"
                     + "Ljava/lang/invoke/MethodType;)Ljava/lang/invoke/CallSite;", false);
@@ -169,6 +173,13 @@ public final class DuckBridge {
                     method.instructions.set(insn, new InvokeDynamicInsnNode(call.name,
                             "(Ljava/lang/Object;" + call.desc.substring(1), DUCK, call.owner, call.name, call.desc));
                 }
+
+                case InvokeDynamicInsnNode lambda when isMovedLambda(self, lambda, moved) -> {
+                    Handle target = (Handle) lambda.bsmArgs[1];
+                    method.instructions.set(insn, new InvokeDynamicInsnNode(lambda.name, lambda.desc, MOVED_LAMBDA,
+                            lambda.bsmArgs[0], target.getOwner(), target.getName(), target.getDesc(),
+                            target.getTag() == Opcodes.H_INVOKESTATIC ? 1 : 0));
+                }
                 case InvokeDynamicInsnNode lambda when isDuckLambda(lambda, ducks) -> lambda.bsm = DUCK_LAMBDA;
 
                 case MethodInsnNode call when !self.equals(call.owner)
@@ -183,7 +194,7 @@ public final class DuckBridge {
         }
     }
 
-    private static InvokeDynamicInsnNode makeMovedCall(MethodInsnNode call) {
+    static InvokeDynamicInsnNode makeMovedCall(MethodInsnNode call) {
         boolean isStatic = call.getOpcode() == Opcodes.INVOKESTATIC;
         String shape = isStatic ? call.desc : "(Ljava/lang/Object;" + call.desc.substring(1);
         return new InvokeDynamicInsnNode(call.name, shape, MOVED, call.owner, call.name, call.desc, isStatic ? 1 : 0);
@@ -199,6 +210,16 @@ public final class DuckBridge {
                 }
             }
         }
+    }
+
+    private static boolean isMovedLambda(String self, InvokeDynamicInsnNode lambda, Set<String> moved) {
+        if (!LambdaSites.isFactory(lambda.bsm) || lambda.bsmArgs.length != 3
+                || !(lambda.bsmArgs[1] instanceof Handle target) || target.getOwner().equals(self)) {
+            return false;
+        }
+        int kind = target.getTag();
+        return (kind == Opcodes.H_INVOKEVIRTUAL || kind == Opcodes.H_INVOKEINTERFACE || kind == Opcodes.H_INVOKESTATIC)
+                && moved.contains(target.getName() + target.getDesc());
     }
 
     private static boolean isDuckLambda(InvokeDynamicInsnNode lambda, Set<String> ducks) {

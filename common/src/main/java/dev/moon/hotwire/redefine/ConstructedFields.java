@@ -30,6 +30,16 @@ import org.objectweb.asm.tree.MethodInsnNode;
 import org.objectweb.asm.tree.MethodNode;
 
 public final class ConstructedFields {
+    private static volatile Set<String> updating = Set.of();
+
+    public static void startUpdating(Set<String> classes) {
+        updating = Set.copyOf(classes);
+    }
+
+    public static void endUpdating() {
+        updating = Set.of();
+    }
+
     record ClassFields(List<FieldInfo> fields, Set<String> set, Map<String, String> arraySizes, Set<String> read,
             Set<String> maybeUnset, Set<String> storedAfter) {
         Set<String> keys() {
@@ -424,6 +434,27 @@ public final class ConstructedFields {
             }
         }
         relied.retainAll(references);
+
+        if (updating.contains(name)) {
+            relied.removeAll(readFields(running).storedAfter());
+        }
+
+        Set<String> had = readFields(running).keys();
+        Set<String> gained = new HashSet<>();
+        Set<String> gainedReferences = new HashSet<>();
+        for (FieldInfo field : readFields(target).fields()) {
+            if (field.isInstance() && !had.contains(field.key())) {
+                gained.add(field.name() + field.desc());
+                if (field.isReference()) {
+                    gainedReferences.add(field.name());
+                }
+            }
+        }
+        for (String field : FieldInitializers.findStoredFromArguments(name, read(target), gained)) {
+            if (gainedReferences.contains(field) && !readAsMaybeUnset(target, field)) {
+                relied.add(field);
+            }
+        }
         if (!relied.isEmpty()) {
             unmade.add(name + " would rely on " + relied + ", which its live objects never set");
         }

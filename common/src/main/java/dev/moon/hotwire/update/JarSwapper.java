@@ -5,15 +5,11 @@ import java.io.IOException;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.nio.file.StandardCopyOption;
-import java.time.Duration;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Optional;
-import java.util.concurrent.TimeUnit;
 
 public final class JarSwapper {
-    private static final Duration GAME_WAIT = Duration.ofMinutes(2);
-
     private JarSwapper() {
     }
 
@@ -24,8 +20,7 @@ public final class JarSwapper {
         long pid = Long.parseLong(args[3]);
         Optional<ProcessHandle> game = ProcessHandle.of(pid);
         if (game.isPresent()) {
-            game.get().onExit().orTimeout(GAME_WAIT.toSeconds(), TimeUnit.SECONDS)
-                    .exceptionally(timedOut -> null).join();
+            game.get().onExit().join();
         }
         swap(new UpdateQueue(queueFile), mods, replaced);
     }

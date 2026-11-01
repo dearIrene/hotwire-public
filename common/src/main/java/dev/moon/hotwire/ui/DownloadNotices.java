@@ -1,38 +1,71 @@
 package dev.moon.hotwire.ui;
 
 import dev.moon.hotwire.modrinth.Downloads;
+import java.util.HashMap;
+import java.util.HashSet;
 import java.util.Locale;
 import java.util.Map;
-import java.util.concurrent.ConcurrentHashMap;
+import java.util.Set;
 
 public final class DownloadNotices {
-    private static final Map<Integer, Integer> PERCENT = new ConcurrentHashMap<>();
+    private static final int ROOM = 3;
+
+    private static final Map<Integer, Integer> HOLDING = new HashMap<>();
+    private static final Set<Integer> GONE = new HashSet<>();
+    private static volatile boolean quiet;
 
     private DownloadNotices() {
     }
 
-    public static void show(Downloads.Job job) {
+    public static void setQuiet(boolean shownElsewhere) {
+        quiet = shownElsewhere;
+    }
+
+    public static synchronized void show(Downloads.Job job) {
         String key = "download " + job.id();
         switch (job.state()) {
-            case WAITING -> Notices.show(Notice.ofProgress(job.name(), Lang.get("hotwire.notice.download_waiting"),
-                    key, 0));
+            case WAITING -> {
+            }
             case GETTING -> {
-                int percent = (int) (job.getFraction() * 100);
-                Integer last = PERCENT.put(job.id(), percent);
-                if (last == null || last != percent) {
-                    Notices.show(Notice.ofProgress(job.name(), Lang.get("hotwire.notice.downloading",
-                            describeSize(job)), key, (float) job.getFraction()));
+                if (!quiet) {
+                    showGetting(job, key);
                 }
             }
             case DONE -> {
-                PERCENT.remove(job.id());
-                Notices.show(new Notice(Notice.Kind.DONE, job.name(), Lang.get("hotwire.notice.downloaded"), key));
+                boolean held = HOLDING.remove(job.id()) != null;
+                GONE.remove(job.id());
+                if (held && !quiet) {
+                    Notices.show(new Notice(Notice.Kind.DONE, job.name(), Lang.get("hotwire.notice.downloaded"),
+                            key));
+                }
             }
             case FAILED -> {
-                PERCENT.remove(job.id());
+                HOLDING.remove(job.id());
+                GONE.remove(job.id());
                 Notices.show(new Notice(Notice.Kind.BAD, job.name(), Lang.get("hotwire.notice.download_failed"),
                         key));
             }
+        }
+    }
+
+    private static void showGetting(Downloads.Job job, String key) {
+        int percent = (int) (job.getFraction() * 100);
+        Integer last = HOLDING.get(job.id());
+        if ((last != null && last == percent) || GONE.contains(job.id())) {
+            return;
+        }
+        Notice card = Notice.ofProgress(job.name(), Lang.get("hotwire.notice.downloading", describeSize(job)), key,
+                (float) job.getFraction());
+        if (last != null) {
+            if (Notices.replace(card)) {
+                HOLDING.put(job.id(), percent);
+            } else {
+                HOLDING.remove(job.id());
+                GONE.add(job.id());
+            }
+        } else if (HOLDING.size() < ROOM) {
+            HOLDING.put(job.id(), percent);
+            Notices.show(card);
         }
     }
 

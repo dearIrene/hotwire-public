@@ -51,6 +51,15 @@ public final class LocalJars {
         return out;
     }
 
+    static boolean isSameJar(Path file, long size, String sha512) {
+        try {
+            return System.getProperty("hotwire.noLocalJars") == null && Files.isRegularFile(file)
+                    && Files.size(file) == size && ModrinthClient.hashOf(file).equalsIgnoreCase(sha512);
+        } catch (IOException | UncheckedIOException e) {
+            return false;
+        }
+    }
+
     public @Nullable Path find(String fileName, long size, String sha512) {
         if (System.getProperty("hotwire.noLocalJars") != null) {
             return null;

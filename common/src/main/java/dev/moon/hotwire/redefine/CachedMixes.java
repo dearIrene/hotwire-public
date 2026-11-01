@@ -2,11 +2,13 @@ package dev.moon.hotwire.redefine;
 
 import dev.moon.hotwire.cache.CacheKey;
 import dev.moon.hotwire.cache.CacheStore;
+import dev.moon.hotwire.mixin_copy.ConfigTrim;
 import dev.moon.hotwire.mixin_copy.MixinCopy;
 import dev.moon.hotwire.mixin_copy.MixinCopyException;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.HashMap;
+import java.util.HashSet;
 import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Map;
@@ -115,8 +117,44 @@ public final class CachedMixes {
     public record Sizes(long classes, long classesBefore, long reads, long readLists, long bases, long basesBefore) {
     }
 
-    List<MixinCopy.MixResult> mix(Set<String> targets, Map<String, byte[]> classes, Map<String, byte[]> resources,
+    List<MixinCopy.MixResult> mix(Set<String> allTargets, Map<String, byte[]> classes, Map<String, byte[]> resources,
             List<String> configs, BooleanSupplier stop) throws MixinCopyException {
+        Map<String, byte[]> asTheyAre = findInMixinPackages(allTargets, classes, resources, configs);
+        Set<String> targets = new LinkedHashSet<>(allTargets);
+        targets.removeAll(asTheyAre.keySet());
+        if (targets.isEmpty()) {
+            return List.of(new MixinCopy.MixResult(asTheyAre, Map.of(), Map.of(), Set.of()));
+        }
+        List<MixinCopy.MixResult> mixed = new ArrayList<>(this.mixPatchable(targets, classes, resources, configs,
+                stop));
+        if (!asTheyAre.isEmpty()) {
+            mixed.add(new MixinCopy.MixResult(asTheyAre, Map.of(), Map.of(), Set.of()));
+        }
+        return mixed;
+    }
+
+    private static Map<String, byte[]> findInMixinPackages(Set<String> targets, Map<String, byte[]> classes,
+            Map<String, byte[]> resources, List<String> configs) {
+        Set<String> prefixes = new HashSet<>();
+        for (String config : configs) {
+            byte[] json = resources.get(config);
+            String prefix = json == null ? "" : ConfigTrim.readPackageOf(json);
+            if (!prefix.isEmpty()) {
+                prefixes.add(prefix.replace('.', '/'));
+            }
+        }
+        Map<String, byte[]> found = new HashMap<>();
+        for (String target : targets) {
+            byte[] bytes = classes.get(target);
+            if (bytes != null && prefixes.stream().anyMatch(target::startsWith)) {
+                found.put(target, bytes);
+            }
+        }
+        return found;
+    }
+
+    private List<MixinCopy.MixResult> mixPatchable(Set<String> targets, Map<String, byte[]> classes,
+            Map<String, byte[]> resources, List<String> configs, BooleanSupplier stop) throws MixinCopyException {
         MixedCache known = this.cache;
         long began = System.nanoTime();
         Map<String, CacheKey> keys = known == null ? Map.of() : known.findKeys(targets, classes, resources, configs);

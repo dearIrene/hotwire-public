@@ -1,7 +1,10 @@
 package dev.moon.hotwire.redefine;
 
 import java.io.Serial;
+import java.util.HashSet;
+import java.util.List;
 import java.util.Set;
+import java.util.StringJoiner;
 import org.jspecify.annotations.Nullable;
 
 public final class RebuildException extends Exception {
@@ -13,6 +16,9 @@ public final class RebuildException extends Exception {
     private final boolean worldBuilt;
     private final boolean restartOnly;
     private final transient Set<String> losing;
+
+    private transient List<RebuildException> parts = List.of();
+    private transient Set<String> blamedClasses = Set.of();
 
     public RebuildException(@Nullable String message, Throwable cause) {
         this(message, cause, false);
@@ -47,6 +53,42 @@ public final class RebuildException extends Exception {
 
     public static RebuildException ofRestartOnly(String message, Throwable cause) {
         return new RebuildException(message, cause, false, false, false, true);
+    }
+
+    public static RebuildException together(List<RebuildException> parts) {
+        if (parts.size() == 1) {
+            return parts.getFirst();
+        }
+        StringJoiner message = new StringJoiner("; ");
+        Set<String> blamed = new HashSet<>();
+        boolean reopenFixes = true;
+        boolean restartOnly = false;
+        for (RebuildException part : parts) {
+            message.add(part.getMessage());
+            blamed.addAll(part.blamedClasses);
+            reopenFixes &= part.reopenFixes;
+            restartOnly |= part.restartOnly;
+        }
+        RebuildException all = new RebuildException(message.toString(), parts.getFirst(), reopenFixes, false,
+                reopenFixes,
+                restartOnly).blaming(blamed);
+        all.parts = List.copyOf(parts);
+        return all;
+    }
+
+    public List<RebuildException> getParts() {
+        return this.parts.isEmpty() ? List.of(this) : this.parts;
+    }
+
+    public static final String MOD_MARK = "mod:";
+
+    public RebuildException blaming(Set<String> classes) {
+        this.blamedClasses = Set.copyOf(classes);
+        return this;
+    }
+
+    public Set<String> getBlamedClasses() {
+        return this.blamedClasses;
     }
 
     public static RebuildException ofLosing(String message, Throwable cause, Set<String> mods) {

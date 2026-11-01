@@ -78,8 +78,13 @@ public final class ModrinthClient {
             return this.fetchBytes(url);
         }
 
-        default void fetchTo(String url, long size, Path into, LongConsumer onBytes) throws IOException {
-            Files.write(into, this.fetchBytes(url, onBytes));
+        default void fetchTo(String url, long size, String sha512, Path into, LongConsumer onBytes)
+                throws IOException {
+            byte[] bytes = this.fetchBytes(url, onBytes);
+            if (!hashOf(bytes).equalsIgnoreCase(sha512)) {
+                throw new IOException("the download of " + url + " does not match Modrinth's hash");
+            }
+            Files.write(into, bytes);
         }
 
         default byte[] fetchPicture(String url) throws IOException {
@@ -296,24 +301,21 @@ public final class ModrinthClient {
     }
 
     public void fetchTo(Version version, Path target, LongConsumer onBytes) throws IOException {
-        Path part = target.resolveSibling(target.getFileName() + ".part");
-        try {
-            Path copy = this.local.find(version.fileName(), version.size(), version.sha512());
-            if (copy != null) {
-                Files.copy(copy, part, StandardCopyOption.REPLACE_EXISTING);
-            } else {
-                long began = System.nanoTime();
-                this.transport.fetchTo(version.url(), version.size(), part, onBytes);
-                LOGGER.info("[Hotwire] {} was downloaded: {} KB in {} ms", version.fileName(),
-                        Files.size(part) / 1024, (System.nanoTime() - began) / 1_000_000);
-                if (!hashOf(part).equalsIgnoreCase(version.sha512())) {
-                    throw new IOException("the download of " + version.fileName() + " does not match Modrinth's hash");
-                }
-            }
-            Files.move(part, target, StandardCopyOption.REPLACE_EXISTING, StandardCopyOption.ATOMIC_MOVE);
-        } finally {
-            Files.deleteIfExists(part);
+        if (LocalJars.isSameJar(target, version.size(), version.sha512())) {
+            return;
         }
+
+        Path part = target.resolveSibling(target.getFileName() + ".part");
+        Path copy = this.local.find(version.fileName(), version.size(), version.sha512());
+        if (copy != null) {
+            Files.copy(copy, part, StandardCopyOption.REPLACE_EXISTING);
+        } else {
+            long began = System.nanoTime();
+            this.transport.fetchTo(version.url(), version.size(), version.sha512(), part, onBytes);
+            LOGGER.info("[Hotwire] {} was downloaded: {} KB in {} ms", version.fileName(),
+                    Files.size(part) / 1024, (System.nanoTime() - began) / 1_000_000);
+        }
+        Files.move(part, target, StandardCopyOption.REPLACE_EXISTING, StandardCopyOption.ATOMIC_MOVE);
     }
 
     static String hashOf(Path file) throws IOException {
@@ -540,11 +542,12 @@ public final class ModrinthClient {
         }
 
         @Override
-        public void fetchTo(String url, long size, Path into, LongConsumer onBytes) throws IOException {
+        public void fetchTo(String url, long size, String sha512, Path into, LongConsumer onBytes)
+                throws IOException {
             if (!url.startsWith("https://cdn.modrinth.com/")) {
                 throw new IOException("a download from somewhere other than Modrinth's CDN was refused: " + url);
             }
-            new JarDownload(JARS, this.agent, TIMEOUT).fetch(url, size, into, onBytes);
+            new JarDownload(JARS, this.agent, TIMEOUT).fetch(url, size, sha512, into, onBytes);
         }
 
         @Override

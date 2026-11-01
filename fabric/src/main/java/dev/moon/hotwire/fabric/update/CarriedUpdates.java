@@ -18,7 +18,9 @@ import java.util.List;
 import java.util.Map;
 import java.util.Optional;
 import java.util.Set;
+import java.util.concurrent.ConcurrentHashMap;
 import java.util.function.BiFunction;
+import java.util.function.BiPredicate;
 import java.util.function.Function;
 import java.util.function.Supplier;
 import org.jspecify.annotations.Nullable;
@@ -28,7 +30,7 @@ import org.slf4j.LoggerFactory;
 final class CarriedUpdates {
     private static final Logger LOGGER = LoggerFactory.getLogger(CarriedUpdates.class);
 
-    record Library(ModManifest manifest, Path incoming, ModJar read, UpdatePlan plan) {
+    record Library(ModManifest manifest, Path incoming, ModJar read, UpdatePlan plan, boolean adoptsConfigs) {
     }
 
     private final Function<String, @Nullable String> versionOf;
@@ -37,59 +39,96 @@ final class CarriedUpdates {
     private final Function<ModManifest, Optional<String>> rejection;
     private final Comparator<String> versions;
     private final BiFunction<String, JarDiff, UpdatePlan> planFrom;
+    private final WidenerCheck widener;
+    private final BiPredicate<String, List<String>> accepts;
+
+    private final Map<Path, ModJar> reads = new ConcurrentHashMap<>();
+    private final Map<String, JarDiff> diffs = new ConcurrentHashMap<>();
+
+    interface WidenerCheck {
+        UpdatePlan withWidenerChecked(UpdatePlan plan, ModJar read, Path jar);
+    }
 
     CarriedUpdates(Function<String, @Nullable String> versionOf, Function<String, Map<String, byte[]>> runningOf,
             Supplier<Path> staging, Function<ModManifest, Optional<String>> rejection, Comparator<String> versions,
-            BiFunction<String, JarDiff, UpdatePlan> planFrom) {
+            BiFunction<String, JarDiff, UpdatePlan> planFrom, WidenerCheck widener,
+            BiPredicate<String, List<String>> accepts) {
+        this.accepts = accepts;
         this.versionOf = versionOf;
         this.runningOf = runningOf;
         this.staging = staging;
         this.rejection = rejection;
         this.versions = versions;
         this.planFrom = planFrom;
+        this.widener = widener;
     }
 
-    @Nullable List<Library> planBundled(Path incoming, UpdatePlan outer) throws ModJarException {
+    @Nullable List<Library> planBundled(Path incoming, UpdatePlan outer, List<Path> toAdd, ModManifest carrier,
+            List<Path> heldBack) throws ModJarException {
         List<Library> out = new ArrayList<>();
         for (String path : UpdatePlanner.findNestedPaths(outer)) {
             Path written = this.writeNested(incoming, path);
             if (written == null) {
                 continue;
             }
-            ModJar read = ModJarReader.read(written);
+            ModJar read = this.reads.get(written);
+            if (read == null) {
+                read = ModJarReader.read(written);
+                this.reads.put(written, read);
+            }
             ModManifest manifest = read.manifest();
             String runs = this.versionOf.apply(manifest.id());
-            if (runs == null || this.rejection.apply(manifest).isPresent()) {
+            Optional<String> rejected = this.rejection.apply(manifest);
+            if (rejected.isPresent()) {
                 LOGGER.info("[Hotwire] the carried {} {} cannot update with it: {}", manifest.id(), manifest.version(),
-                        runs == null ? "the game does not have it" : this.rejection.apply(manifest).orElseThrow());
+                        rejected.get());
                 return null;
+            }
+            if (runs == null) {
+                toAdd.add(written);
+                continue;
             }
             if (this.versions.compare(manifest.version(), runs) <= 0) {
                 continue;
             }
-            Map<String, byte[]> runningEntries = this.runningOf.apply(manifest.id());
+            Map<String, byte[]> runningEntries = this.diffs.containsKey(written + " " + runs) ? Map.of("known",
+                    new byte[0]) : this.runningOf.apply(manifest.id());
             if (runningEntries.isEmpty()) {
                 LOGGER.info("[Hotwire] the carried {} cannot update with it: the running copy cannot be read",
                         manifest.id());
                 return null;
             }
-            UpdatePlan plan = this.planFrom.apply(manifest.id(),
-                    UpdateDiffer.compare(runningEntries, UpdateDiffer.readEntries(written)));
+            JarDiff diff = this.diffs.get(written + " " + runs);
+            if (diff == null) {
+                diff = UpdateDiffer.compare(runningEntries, UpdateDiffer.readEntries(written));
+                this.diffs.put(written + " " + runs, diff);
+            }
+            UpdatePlan plan = this.widener.withWidenerChecked(this.planFrom.apply(manifest.id(), diff), read, written);
             Set<String> deeper = UpdatePlanner.findNestedPaths(plan);
             if (!deeper.isEmpty()) {
-                List<Library> inner = this.planBundled(written, plan);
+                List<Library> inner = this.planBundled(written, plan, toAdd, carrier, heldBack);
                 if (inner == null) {
                     return null;
                 }
                 out.addAll(inner);
                 plan = UpdatePlanner.withBundledUpdated(plan, deeper);
             }
+            boolean configs = UpdatePlanner.hasConfigChanged(plan);
+            if (configs) {
+                plan = UpdatePlanner.withConfigsAdopted(plan);
+            }
             if (plan.tier() != UpdateTier.IN_PLACE) {
                 LOGGER.info("[Hotwire] the carried {} {} -> {} cannot update with it: {}", manifest.id(), runs,
                         manifest.version(), plan.blockers());
-                return null;
+
+                List<String> ranges = carrier.getRelation(ModManifest.Relation.DEPENDS).get(manifest.id());
+                if (ranges == null || !this.accepts.test(runs, ranges)) {
+                    return null;
+                }
+                heldBack.add(written);
+                continue;
             }
-            out.add(new Library(manifest, written, read, plan));
+            out.add(new Library(manifest, written, read, plan, configs));
         }
         return out;
     }
@@ -107,8 +146,7 @@ final class CarriedUpdates {
 
     @Nullable Path writeNested(Path jar, String path) throws ModJarException {
         try {
-            Path written = this.staging.get().resolve("carried").resolve(Path.of(path).getFileName());
-            return JarLookup.copyEntry(jar, path, written) ? written : null;
+            return JarLookup.copyEntryOnce(jar, path, this.staging.get().resolve("carried"));
         } catch (IOException e) {
             throw new ModJarException(ModJarException.Reason.UNREADABLE, String.valueOf(jar.getFileName()),
                     path + ": " + e.getMessage(), e);

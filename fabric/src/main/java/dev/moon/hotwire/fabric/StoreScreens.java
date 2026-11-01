@@ -149,7 +149,7 @@ final class StoreScreens {
             @Override
             public void onBack() {
                 StoreScreens.this.engine.forgetUnder();
-                ModViews.show(back);
+                StoreScreens.this.engine.showBack(back);
             }
         }, this.engine, made.getIcons(), made.getLoader(), made.getGameVersion());
         this.shown = screen;

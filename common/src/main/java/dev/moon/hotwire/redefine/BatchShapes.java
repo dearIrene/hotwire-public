@@ -251,11 +251,17 @@ final class BatchShapes {
             if (running == null) {
                 return;
             }
-            Set<String> had = new HashSet<>();
-            ClassHeader.of(running).methods().forEach(method -> had.add(method.name() + method.desc()));
+            Map<String, Integer> had = new HashMap<>();
+            ClassHeader.of(running).methods().forEach(method -> had.put(method.name() + method.desc(),
+                    method.access()));
             for (ClassHeader.Member method : ClassHeader.of(bytes).methods()) {
                 String key = method.name() + method.desc();
-                if (!had.contains(key) && !method.name().equals("<init>") && !method.name().equals("<clinit>")) {
+                if (method.name().equals("<init>") && !had.containsKey(key)) {
+                    gained.add(name + key);
+                }
+                Integer was = had.get(key);
+                boolean other = was == null || ((was ^ method.access()) & Opcodes.ACC_STATIC) != 0;
+                if (other && !method.name().equals("<init>") && !method.name().equals("<clinit>")) {
                     gained.add(key);
                 }
             }

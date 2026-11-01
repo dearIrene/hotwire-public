@@ -2,8 +2,10 @@ package dev.moon.hotwire.redefine;
 
 import java.lang.invoke.MethodHandles;
 import java.util.ArrayList;
+import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
+import java.util.Set;
 import org.jspecify.annotations.Nullable;
 import org.objectweb.asm.ClassReader;
 import org.objectweb.asm.Opcodes;
@@ -17,6 +19,35 @@ import org.objectweb.asm.tree.analysis.SimpleVerifier;
 
 final class BatchVerifier {
     private BatchVerifier() {
+    }
+
+    static Set<String> findNamed(Set<Class<?>> classes, List<String> problems) {
+        Set<String> named = new HashSet<>();
+        for (Class<?> type : classes) {
+            String internal = type.getName().replace('.', '/');
+            for (String problem : problems) {
+                if (startsWithClass(problem, type.getName()) || startsWithClass(problem, internal)) {
+                    named.add(internal);
+                }
+            }
+        }
+        return named;
+    }
+
+    private static boolean startsWithClass(String problem, String name) {
+        return problem.startsWith(name) && problem.length() > name.length()
+                && ".: ".indexOf(problem.charAt(name.length())) >= 0;
+    }
+
+    static List<String> findFormatProblems(Map<Class<?>, byte[]> classes) {
+        List<String> problems = new ArrayList<>();
+        classes.forEach((type, bytes) -> {
+            String refused = findJvmProblem(type, bytes);
+            if (refused != null) {
+                problems.add(refused);
+            }
+        });
+        return problems;
     }
 
     static List<String> findProblems(Map<Class<?>, byte[]> classes) {
@@ -63,7 +94,9 @@ final class BatchVerifier {
             MethodHandles.privateLookupIn(type, MethodHandles.lookup()).defineHiddenClass(bytes, false);
             return null;
         } catch (VerifyError e) {
-            return type.getName() + ": " + e.getMessage();
+            String message = String.valueOf(e.getMessage());
+            return message.contains("'" + type.getName().replace('.', '/') + "+0x") ? null
+                    : type.getName() + ": " + message;
         } catch (LinkageError e) {
             return type.getName() + " did not link: " + e;
         } catch (IllegalAccessException | RuntimeException e) {

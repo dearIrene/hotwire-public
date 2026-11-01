@@ -332,6 +332,9 @@ public final class ClassRebuilder {
         mixed.forEach((name, bytes) -> carried.put(name, AppliedMixins.of(bytes, readable.get(name))));
         long marked = System.nanoTime();
         Set<String> batchDucks = BatchShapes.findDucksGained(current, mixed, anyClass);
+        if (!batchDucks.isEmpty()) {
+            LOGGER.info("[Hotwire] the classes rebuilt gain the interfaces {}", batchDucks);
+        }
         Set<String> batchMoved = BatchShapes.findMethodsGained(current, mixed);
         Map<String, Set<String>> batchAdded = BatchShapes.findFieldsGained(current, mixed);
 
@@ -477,6 +480,7 @@ public final class ClassRebuilder {
                         RebuildEvidence.describeFieldDifferences(prepared, this.loadedBytes, this.instrumentation));
             }
             String why = e.getMessage();
+            Set<String> named = Set.of();
             if (e instanceof VerifyError) {
                 Map<Class<?>, byte[]> made = new LinkedHashMap<>();
                 definitions.forEach(definition -> made.put(definition.getDefinitionClass(),
@@ -484,9 +488,20 @@ public final class ClassRebuilder {
                 List<String> problems = BatchVerifier.findProblems(made);
                 LOGGER.warn("[Hotwire] The JVM would not verify the new classes: {}", problems);
                 why = problems.isEmpty() ? "a class did not verify" : problems.getFirst();
+                named = BatchVerifier.findNamed(made.keySet(), problems);
+            } else if (e instanceof ClassFormatError) {
+                Map<Class<?>, byte[]> made = new LinkedHashMap<>();
+                definitions.forEach(definition -> made.put(definition.getDefinitionClass(),
+                        definition.getDefinitionClassFile()));
+                List<String> problems = BatchVerifier.findFormatProblems(made);
+                LOGGER.warn("[Hotwire] The JVM found the new classes malformed: {}", problems);
+                why = problems.stream().filter(problem -> problem.contains("ClassFormatError")).findFirst()
+                        .orElse(problems.isEmpty() ? "a class was malformed" : problems.getFirst());
+                named = BatchVerifier.findNamed(made.keySet(), problems);
             }
             LOGGER.warn("[Hotwire] Redefining {} failed and nothing changed", prepared.splits().keySet(), e);
-            throw RebuildException.ofJvmRefused("could not redefine " + prepared.splits().keySet() + ": " + why, e);
+            throw RebuildException.ofJvmRefused("could not redefine " + prepared.splits().keySet() + ": " + why, e)
+                    .blaming(named);
         }
         Set<Class<?>> redefinedTypes = new HashSet<>();
         definitions.forEach(definition -> redefinedTypes.add(definition.getDefinitionClass()));

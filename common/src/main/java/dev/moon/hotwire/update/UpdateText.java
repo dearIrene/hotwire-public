@@ -30,7 +30,10 @@ public final class UpdateText {
                 .add(blocker));
         byKind.values().forEach(same -> out.add(summarize(same)));
         for (UpdateNotice notice : plan.notices()) {
-            out.add(describe(notice, plan.tier(), Lang::get));
+            if (!(notice instanceof UpdateNotice.AccessOpens || notice instanceof UpdateNotice.AbstractsGained
+                    || notice instanceof UpdateNotice.ConstructorChains)) {
+                out.add(describe(notice, plan.tier(), Lang::get));
+            }
         }
         return out;
     }
@@ -68,7 +71,10 @@ public final class UpdateText {
             out.add(describe(blocker, Lang::getEnglish));
         }
         for (UpdateNotice notice : plan.notices()) {
-            out.add(describe(notice, plan.tier(), Lang::getEnglish));
+            if (!(notice instanceof UpdateNotice.AccessOpens || notice instanceof UpdateNotice.AbstractsGained
+                    || notice instanceof UpdateNotice.ConstructorChains)) {
+                out.add(describe(notice, plan.tier(), Lang::getEnglish));
+            }
         }
         return out;
     }
@@ -76,8 +82,12 @@ public final class UpdateText {
     public static String describeDone(String name, UpdatePlan plan, int rebuilt, int servedLater) {
         return switch (plan.tier()) {
             case IN_PLACE -> describeInPlace(name, plan.incomingVersion(), rebuilt, servedLater);
-            case RESTART_MOD, NEXT_START -> Lang.get("hotwire.update.queued", name, plan.incomingVersion());
+            case RESTART_MOD, NEXT_START -> describeQueued(name, plan);
         };
+    }
+
+    public static String describeQueued(String name, UpdatePlan plan) {
+        return Lang.get("hotwire.update.queued", name, plan.incomingVersion());
     }
 
     private static String describeInPlace(String name, String version, int rebuilt, int servedLater) {
@@ -124,6 +134,8 @@ public final class UpdateText {
                 unmet.mod(), String.join(say.apply("hotwire.list.or", new Object[0]), unmet.ranges())});
             case UpdateBlocker.DependencyQueued queued -> say.apply("hotwire.update.blocker.queued",
                     new Object[] {queued.mod(), queued.version()});
+            case UpdateBlocker.IdChanged changed -> say.apply("hotwire.update.new_id",
+                    new Object[] {changed.from(), changed.to()});
             case UpdateBlocker.ModIsOff off -> say.apply("hotwire.update.blocker.off", new Object[0]);
             case UpdateBlocker.AddedThisSession added -> say.apply("hotwire.update.blocker.added", new Object[0]);
             case UpdateBlocker.UpdatedEarlierThisSession updated -> say.apply("hotwire.update.blocker.updated",
@@ -149,6 +161,9 @@ public final class UpdateText {
             case UpdateNotice.EntrypointRuns entrypoint -> say.apply("hotwire.update.note.entrypoint",
                     new Object[] {entrypoint.key()});
             case UpdateNotice.WidenerOpens widener -> say.apply("hotwire.update.note.widener", new Object[0]);
+            case UpdateNotice.AccessOpens access -> "";
+            case UpdateNotice.AbstractsGained abstracts -> "";
+            case UpdateNotice.ConstructorChains chains -> "";
         };
     }
 

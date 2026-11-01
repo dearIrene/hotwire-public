@@ -61,7 +61,10 @@ public final class UpdateDiffer {
                 resources.add(path);
             }
         }
-        return new JarDiff(was, now, classes, resources);
+        List<ClassDiff> refined = ConstructorUses.refine(classes, running, incoming);
+        return new JarDiff(was, now, refined, resources, OpenedAccess.find(running, incoming, refined),
+                ConstructorUses.findAbstractsGained(refined, running, incoming),
+                ConstructorUses.findChains(refined, running, incoming));
     }
 
     static ClassDiff compareClass(byte[] running, byte[] incoming) {
@@ -97,17 +100,28 @@ public final class UpdateDiffer {
         }
         if ((was.access & FLAGS) != (now.access & FLAGS)) {
             int differing = (was.access ^ now.access) & FLAGS;
-            boolean harmless = (differing & ~(Opcodes.ACC_FINAL | Opcodes.ACC_SUPER | Opcodes.ACC_SYNTHETIC)) == 0;
+            boolean harmless = (differing & ~(Opcodes.ACC_FINAL | Opcodes.ACC_SUPER | Opcodes.ACC_SYNTHETIC
+                    | Opcodes.ACC_PUBLIC)) == 0;
             shape.add(harmless ? ShapeChange.CLASS_FINALITY : ShapeChange.CLASS_MODIFIERS);
         }
         if (!Objects.equals(was.superName, now.superName)) {
             shape.add(ShapeChange.SUPERCLASS);
         }
         if (!was.interfaces.equals(now.interfaces)) {
-            shape.add(ShapeChange.INTERFACES);
+            shape.add(new HashSet<>(was.interfaces).containsAll(now.interfaces) ? ShapeChange.INTERFACES_DROPPED
+                    : ShapeChange.INTERFACES);
         }
         compareFields(was.fields, now.fields, shape);
-        compareMethods(was.methods, now.methods, shape, (now.access & Opcodes.ACC_INTERFACE) != 0);
+        if (ConstructorUses.hasStaticSetElsewhere(was, now)) {
+            shape.add(ShapeChange.STATIC_SET_ELSEWHERE);
+        }
+        Set<String> constants = new HashSet<>();
+        was.fields.forEach(field -> constants.add(field.name));
+        if (now.fields.stream().anyMatch(field -> (field.access & Opcodes.ACC_ENUM) != 0
+                && !constants.contains(field.name))) {
+            shape.add(ShapeChange.ENUM_CONSTANT_ADDED);
+        }
+        compareMethods(was.methods, now.methods, shape);
         if (!Objects.equals(was.nestHostClass, now.nestHostClass)
                 || !asSet(was.nestMembers).equals(asSet(now.nestMembers))) {
             shape.add(ShapeChange.NEST);
@@ -137,21 +151,28 @@ public final class UpdateDiffer {
         }
     }
 
-    private static void compareMethods(List<MethodNode> was, List<MethodNode> now, Set<ShapeChange> shape,
-            boolean isInterface) {
+    private static void compareMethods(List<MethodNode> was, List<MethodNode> now, Set<ShapeChange> shape) {
         Map<String, Integer> before = new HashMap<>();
         was.forEach(m -> before.put(m.name + m.desc, m.access & FLAGS));
         Map<String, Integer> after = new HashMap<>();
         now.forEach(m -> after.put(m.name + m.desc, m.access & FLAGS));
         compareMembers(before, after, shape, ShapeChange.METHOD_ADDED, ShapeChange.METHOD_REMOVED,
                 ShapeChange.METHOD_MODIFIERS);
+        if (now.stream().anyMatch(m -> ((before.getOrDefault(m.name + m.desc, m.access) ^ m.access)
+                & Opcodes.ACC_NATIVE) != 0)) {
+            shape.add(ShapeChange.METHOD_KIND);
+        }
+        if (now.stream().anyMatch(m -> ((before.getOrDefault(m.name + m.desc, m.access) ^ m.access)
+                & Opcodes.ACC_ABSTRACT) != 0)) {
+            shape.add(ShapeChange.METHOD_ABSTRACTNESS);
+        }
         if (now.stream().anyMatch(m -> !before.containsKey(m.name + m.desc)
                 && (m.access & Opcodes.ACC_NATIVE) != 0)) {
             shape.add(ShapeChange.BODILESS_METHOD_ADDED);
         }
         if (now.stream().anyMatch(m -> !before.containsKey(m.name + m.desc)
                 && (m.access & Opcodes.ACC_ABSTRACT) != 0)) {
-            shape.add(isInterface ? ShapeChange.INTERFACE_METHOD_ADDED : ShapeChange.BODILESS_METHOD_ADDED);
+            shape.add(ShapeChange.INTERFACE_METHOD_ADDED);
         }
         if (now.stream().anyMatch(m -> !before.containsKey(m.name + m.desc) && m.name.equals("<init>"))) {
             shape.add(ShapeChange.CONSTRUCTOR_ADDED);

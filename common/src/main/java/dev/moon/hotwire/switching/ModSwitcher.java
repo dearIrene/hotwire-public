@@ -313,6 +313,23 @@ public final class ModSwitcher {
         return plan.isRefused() ? new Result.Refused(plan) : this.dryRun(plan);
     }
 
+    public @Nullable RebuildException tryTogether(Set<String> goingOff, Set<String> comingOn) {
+        Set<String> switched = new HashSet<>(goingOff);
+        switched.addAll(comingOn);
+        Set<String> onAfter = new LinkedHashSet<>(this.graph.getIds());
+        onAfter.removeAll(this.off);
+        onAfter.removeAll(goingOff);
+        onAfter.addAll(comingOn);
+        synchronized (this.rebuilding) {
+            try {
+                this.applier.dryRunAsSwitched(List.of(switched), switched, onAfter);
+                return null;
+            } catch (RebuildException e) {
+                return e;
+            }
+        }
+    }
+
     private Result dryRun(SwitchPlan plan) {
         return this.dryRun(plan, List.of(Set.copyOf(plan.order())));
     }
@@ -549,7 +566,8 @@ public final class ModSwitcher {
             } catch (RebuildException | RuntimeException | LinkageError e) {
                 RebuildException failure = e instanceof RebuildException known ? known
                         : new RebuildException("the switch threw: " + e, e);
-                if (failure.isWorldBuilt()) {
+
+                if (failure.isWorldBuilt() && plan.order().size() == 1) {
                     this.worldBound.add(Set.copyOf(plan.order()));
                 }
                 if (goingOff) {

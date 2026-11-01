@@ -118,6 +118,14 @@ public final class FieldHolders {
     }
 
     public static String describeStatics(Class<?> target) {
+        return describeStaticsOf(target);
+    }
+
+    public static @Nullable Object findCarried(@Nullable Object running, Class<?> type, @Nullable Object fresh) {
+        return type.isInstance(running) ? running : fresh;
+    }
+
+    private static String describeStaticsOf(Class<?> target) {
         Holder holder = HOLDERS.get(target);
         if (holder == null) {
             return "no holder";
