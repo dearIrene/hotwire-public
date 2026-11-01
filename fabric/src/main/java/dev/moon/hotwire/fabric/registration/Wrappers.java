@@ -7,6 +7,7 @@ import java.util.AbstractMap;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.Collection;
+import java.util.Collections;
 import java.util.HashSet;
 import java.util.IdentityHashMap;
 import java.util.List;
@@ -47,14 +48,56 @@ final class Wrappers {
     private final IdentityHashMap<Class<?>, Boolean> askedOf = new IdentityHashMap<>();
 
     static @Nullable Set<String> findCandidates(Object item) {
+        Walk walk = WALKS.get();
+        if (walk.busy) {
+            return findCandidates(item, new Walk());
+        }
+        walk.busy = true;
+        try {
+            return findCandidates(item, walk);
+        } finally {
+            walk.busy = false;
+            walk.empty();
+        }
+    }
+
+    private static final class Walk {
+        private final IdentityHashMap<Object, Boolean> visited = new IdentityHashMap<>();
+        private final ArrayList<Object> seen = new ArrayList<>();
+        private final ArrayList<Object> first = new ArrayList<>();
+        private final ArrayList<Object> second = new ArrayList<>();
+        private boolean busy;
+
+        private boolean see(Object value) {
+            if (this.visited.put(value, Boolean.TRUE) != null) {
+                return false;
+            }
+            this.seen.add(value);
+            return true;
+        }
+
+        private void empty() {
+            for (int at = 0; at < this.seen.size(); at++) {
+                this.visited.remove(this.seen.get(at));
+            }
+            this.seen.clear();
+            this.first.clear();
+            this.second.clear();
+        }
+    }
+
+    private static final ThreadLocal<Walk> WALKS = ThreadLocal.withInitial(Walk::new);
+
+    private static @Nullable Set<String> findCandidates(Object item, Walk walk) {
         Set<String> found = new HashSet<>();
-        IdentityHashMap<Object, Boolean> visited = new IdentityHashMap<>();
-        List<Object> level = List.of(item);
+        ArrayList<Object> level = walk.first;
+        ArrayList<Object> next = walk.second;
+        level.add(item);
         int budget = BUDGET;
         for (int depth = 0; depth <= DEPTH && !level.isEmpty(); depth++) {
-            List<Object> next = new ArrayList<>();
-            for (Object value : level) {
-                if (value == null || visited.put(value, Boolean.TRUE) != null) {
+            for (int at = 0; at < level.size(); at++) {
+                Object value = level.get(at);
+                if (value == null || !walk.see(value)) {
                     continue;
                 }
 
@@ -89,19 +132,23 @@ final class Wrappers {
                 }
                 switch (value) {
                     case Collection<?> all -> next.addAll(all);
-                    case Map<?, ?> map -> next.addAll(readValues(map));
-                    case Object[] array -> next.addAll(Arrays.asList(array));
+                    case Map<?, ?> map -> addValues(map, next);
+                    case Object[] array -> Collections.addAll(next, array);
                     default -> {
-                        for (FieldSlots.Slot field : Fields.getReferenceFields(value.getClass(), false)) {
+                        List<FieldSlots.Slot> fields = Fields.getReferenceFields(value.getClass(), false);
+                        for (int field = 0; field < fields.size(); field++) {
                             try {
-                                next.add(field.get(value));
+                                next.add(fields.get(field).get(value));
                             } catch (ReflectiveOperationException | RuntimeException | LinkageError e) {
                             }
                         }
                     }
                 }
             }
+            ArrayList<Object> done = level;
             level = next;
+            next = done;
+            next.clear();
         }
         return found;
     }
@@ -393,6 +440,23 @@ final class Wrappers {
             return new ArrayList<>(map.values());
         } catch (RuntimeException refused) {
             return List.of();
+        }
+    }
+
+    private static void addValues(Map<?, ?> map, List<Object> into) {
+        if (makesValues(map)) {
+            return;
+        }
+        if (GuavaCaches.isCache(map)) {
+            List<Object> values = GuavaCaches.readItems(map);
+            if (values != null) {
+                into.addAll(values);
+            }
+            return;
+        }
+        try {
+            map.forEach((key, value) -> into.add(value));
+        } catch (RuntimeException refused) {
         }
     }
 
