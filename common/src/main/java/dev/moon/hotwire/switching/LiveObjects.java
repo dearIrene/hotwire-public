@@ -221,6 +221,7 @@ final class LiveObjects {
         if (!prepared.replayed().isEmpty()) {
             OffWindowObjects.awaitCollection();
         }
+        SwitchTimes.mark("replay: collection");
         AtomicInteger failed = new AtomicInteger();
         onGameThread.accept(() -> {
             failed.addAndGet(InitHookReplay.run(findHooked(prepared)));
@@ -231,6 +232,7 @@ final class LiveObjects {
                 }
             });
         });
+        SwitchTimes.mark("replay: setups");
         return failed.get();
     }
 

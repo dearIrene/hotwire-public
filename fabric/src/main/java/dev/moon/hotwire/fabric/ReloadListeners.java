@@ -4,6 +4,7 @@ import dev.moon.hotwire.fabric.registration.Fields;
 import dev.moon.hotwire.redefine.FieldSlots;
 import java.util.ArrayList;
 import java.util.List;
+import java.util.function.Predicate;
 import net.minecraft.client.Minecraft;
 import net.minecraft.client.gui.font.FontManager;
 //? if <26.1 {
@@ -31,29 +32,21 @@ final class ReloadListeners {
     }
 
     static boolean runWithoutHeavy(Minecraft game, Runnable reload) {
-        List<PreparableReloadListener> listeners = findListeners(game);
-        if (listeners == null) {
-            return false;
-        }
-        List<PreparableReloadListener> all = List.copyOf(listeners);
-        try {
-            listeners.removeIf(one -> BESIDE_RENDERERS.stream().anyMatch(type -> type.isInstance(one)));
-            reload.run();
-        } finally {
-            listeners.clear();
-            listeners.addAll(all);
-        }
-        return true;
+        return runDropping(game, one -> BESIDE_RENDERERS.stream().anyMatch(type -> type.isInstance(one)), reload);
     }
 
     static boolean runWithout(Minecraft game, Class<?> type, Runnable reload) {
+        return runDropping(game, type::isInstance, reload);
+    }
+
+    private static boolean runDropping(Minecraft game, Predicate<PreparableReloadListener> dropped, Runnable reload) {
         List<PreparableReloadListener> listeners = findListeners(game);
         if (listeners == null) {
             return false;
         }
         List<PreparableReloadListener> all = List.copyOf(listeners);
         try {
-            listeners.removeIf(type::isInstance);
+            listeners.removeIf(dropped);
             reload.run();
         } finally {
             listeners.clear();

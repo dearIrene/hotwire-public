@@ -3,7 +3,7 @@ package dev.moon.hotwire.fabric.add;
 import dev.moon.hotwire.fabric.CrashGuard;
 import dev.moon.hotwire.fabric.ModPolicy;
 import dev.moon.hotwire.fabric.ResourceReload;
-import dev.moon.hotwire.fabric.registration.GameHold;
+import dev.moon.hotwire.fabric.WordsReload;
 import dev.moon.hotwire.fabric.registration.GameRegistrations;
 import dev.moon.hotwire.fabric.registration.ModLifecycle;
 import dev.moon.hotwire.jar.AccessWidenerText;
@@ -26,6 +26,7 @@ import dev.moon.hotwire.switching.ModMixins;
 import dev.moon.hotwire.switching.ModSwitcher;
 import dev.moon.hotwire.switching.PlayerMessages;
 import dev.moon.hotwire.switching.SwitchApplier;
+import dev.moon.hotwire.switching.SwitchTimes;
 import dev.moon.hotwire.ui.AddPreview;
 import dev.moon.hotwire.ui.Lang;
 import java.io.IOException;
@@ -50,6 +51,7 @@ import java.util.concurrent.TimeUnit;
 import java.util.concurrent.TimeoutException;
 import java.util.function.Function;
 import java.util.function.IntSupplier;
+import java.util.function.Supplier;
 import java.util.zip.ZipEntry;
 import java.util.zip.ZipFile;
 import net.fabricmc.loader.impl.launch.FabricLauncherBase;
@@ -478,8 +480,10 @@ public final class ModAdder {
 
         parts.values().forEach(part -> LivePlugins.run(part.jar().manifest(), part.path()));
 
-        GameHold hold = GameHold.begin(Minecraft.getInstance());
+        LateHold hold = new LateHold();
         ResourceReload.awaitAssets(ids);
+
+        SwitchTimes.begin();
         try {
             List<String> grew = new CopyOnWriteArrayList<>();
 
@@ -488,12 +492,17 @@ public final class ModAdder {
             try {
                 CrashGuard.onSwitched(ids);
                 this.engine.getApplier().getCatchUps().hold(true);
+                Supplier<Runnable> before = this.engine.getApplier().getRedefinitionHold();
+                this.engine.getApplier().holdRedefinitionWith(hold::begin);
                 try {
                     this.engine.showAddStep(2);
                     switched = this.engine.getSwitcher().turnOn(ids);
+                    SwitchTimes.mark("add: switch on");
                 } finally {
+                    this.engine.getApplier().holdRedefinitionWith(before);
                     this.engine.getApplier().getCatchUps().hold(false);
                 }
+                hold.get();
                 if (PlayerMessages.isBad(switched)) {
                     return new Result.Failed(PlayerMessages.describe(switched, nameOf) + undo.run(),
                             switched instanceof ModSwitcher.Result.Failed failed ? failed.cause()
@@ -511,8 +520,9 @@ public final class ModAdder {
                 this.engine.showAddStep(3);
                 CompletableFuture<Void> started = AddStart.queue(ids, grew, backedOut, this.engine.getSide(), setUp,
                         this.engine::findLoaded);
-                hold.releaseGame();
+                hold.get().releaseGame();
                 started.get(ENTRYPOINT_WAIT.toMillis(), TimeUnit.MILLISECONDS);
+                SwitchTimes.mark("add: entrypoints");
 
                 for (String id : ids) {
                     List<String> ran = new ArrayList<>(ModLifecycle.runSetup(id, GameRegistrations.getJournal(),
@@ -525,7 +535,7 @@ public final class ModAdder {
             } catch (ExecutionException | TimeoutException | RuntimeException e) {
                 Throwable cause = e instanceof ExecutionException && e.getCause() != null ? e.getCause() : e;
                 if (!(e instanceof ExecutionException)) {
-                    hold.pauseGame(Minecraft.getInstance());
+                    hold.get().pauseGame(Minecraft.getInstance());
                 }
                 return this.backOut(ids, name, cause, grew, undo, e);
             } catch (InterruptedException e) {
@@ -541,16 +551,21 @@ public final class ModAdder {
             return new Result.Added(ids, name, switched);
         } finally {
             ResourceReload.endAssetWait();
+            SwitchTimes.end("the add of " + ids);
         }
     }
 
     private static void reloadForAssets(Collection<Part> parts) {
-        List<String> with = parts.stream().filter(part -> shipsAssets(part.path()))
-                .map(part -> part.jar().manifest().id()).toList();
-        if (with.isEmpty()) {
+        List<Part> shipping = parts.stream().filter(part -> shipsAssets(part.path())).toList();
+        if (shipping.isEmpty()) {
             return;
         }
-        ResourceReload.reloadBeforeFrame(with + " bring assets");
+
+        boolean wordsAlone = shipping.stream().allMatch(part -> WordsReload.isWordsAlone(part.path()))
+                && parts.stream().noneMatch(part -> GameRegistrations.getJournal()
+                        .countByKind(part.jar().manifest().id()).containsKey("resource reloader"));
+        ResourceReload.reloadBeforeFrame(shipping.stream().map(part -> part.jar().manifest().id()).toList()
+                + " bring assets", wordsAlone);
     }
 
     private static boolean shipsAssets(Path jar) {

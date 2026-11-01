@@ -172,7 +172,7 @@ public final class ResourceReload {
         });
     }
 
-    public static void reloadBeforeFrame(String why) {
+    public static void reloadBeforeFrame(String why, boolean wordsAlone) {
         Minecraft game = Minecraft.getInstance();
         if (reloadedWhilePaused) {
             LOGGER.info("[Hotwire] {}: the reload that made the game's objects again brought them", why);
@@ -180,6 +180,9 @@ public final class ResourceReload {
         }
         if (OngoingReload.await(game)) {
             LOGGER.info("[Hotwire] {}: a reload already under way brought them", why);
+            return;
+        }
+        if (wordsAlone && WordsReload.reload(game)) {
             return;
         }
         LOGGER.info("[Hotwire] {}; the game reloads its resources before its next frame", why);
