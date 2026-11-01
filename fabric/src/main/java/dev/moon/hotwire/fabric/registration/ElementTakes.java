@@ -145,9 +145,11 @@ final class ElementTakes {
                 failed++;
                 first = first == null ? e : first;
             }
-            long[] sum = spent.computeIfAbsent(container, any -> new long[2]);
-            sum[0] += System.nanoTime() - before;
+            long[] sum = spent.computeIfAbsent(container, any -> new long[3]);
+            long took = System.nanoTime() - before;
+            sum[0] += took;
             sum[1]++;
+            sum[2] = Math.max(sum[2], took);
         }
         if (askedAgain > 0 || !changed.isEmpty()) {
             LOGGER.info("[Hotwire] {} collections changed between the asks and the hold; {} takes asked again",
@@ -158,7 +160,8 @@ final class ElementTakes {
                     .sorted(Comparator.comparingLong((Map.Entry<Object, long[]> entry) -> entry.getValue()[0])
                             .reversed())
                     .limit(6)
-                    .map(entry -> entry.getValue()[0] / 1_000_000 + " ms, " + entry.getValue()[1] + " takes in "
+                    .map(entry -> entry.getValue()[0] / 1_000_000 + " ms, " + entry.getValue()[1]
+                            + " takes (the slowest " + entry.getValue()[2] / 1_000_000 + " ms) in "
                             + describe(entry.getKey()) + " from " + reachedFrom.apply(entry.getKey()))
                     .toList());
         }
@@ -180,11 +183,21 @@ final class ElementTakes {
     private static String describe(Object container) {
         String size = switch (container) {
             case Collection<?> items -> " of " + items.size();
+
+            case Map<?, ?> map when !map.isEmpty() && !GuavaCaches.isCache(map) -> " of " + map.size() + " ("
+                    + describeEntry(map.entrySet().iterator().next()) + ")";
             case Map<?, ?> map -> " of " + map.size();
             case Object[] array -> " of " + array.length;
             default -> "";
         };
         return container.getClass().getSimpleName() + size;
+    }
+
+    private static String describeEntry(Map.Entry<?, ?> entry) {
+        Object key = entry.getKey();
+        Object value = entry.getValue();
+        return (key == null ? "null" : key.getClass().getName()) + " to "
+                + (value == null ? "null" : value.getClass().getName());
     }
 
     static boolean isCheckingSkips() {
