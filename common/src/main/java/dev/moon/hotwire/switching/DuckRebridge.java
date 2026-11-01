@@ -1,5 +1,6 @@
 package dev.moon.hotwire.switching;
 
+import dev.moon.hotwire.redefine.BatchRider;
 import dev.moon.hotwire.redefine.ClassRebuilder;
 import dev.moon.hotwire.redefine.DuckBridge;
 import dev.moon.hotwire.redefine.Linker;
@@ -16,6 +17,7 @@ import java.util.List;
 import java.util.Map;
 import java.util.Objects;
 import java.util.Set;
+import org.jspecify.annotations.Nullable;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -49,9 +51,18 @@ final class DuckRebridge {
         }
     }
 
-    @SuppressWarnings("ReferenceEquality")
     static void run(Set<String> fresh, Set<String> moved, Map<String, ModMixins> mods, SwitchApplier.Game game,
             ClassRebuilder rebuilder) throws RebuildException {
+        Map<Class<?>, byte[]> bridged = Objects.requireNonNull(bridge(fresh, moved, mods, game, rebuilder, Set.of()));
+        if (!bridged.isEmpty()) {
+            logBridged(bridged, fresh, moved);
+            redefineEachIfRefused(rebuilder, bridged);
+        }
+    }
+
+    @SuppressWarnings("ReferenceEquality")
+    private static @Nullable Map<Class<?>, byte[]> bridge(Set<String> fresh, Set<String> moved,
+            Map<String, ModMixins> mods, SwitchApplier.Game game, ClassRebuilder rebuilder, Set<Class<?>> leftOut) {
         Set<Class<?>> found = new LinkedHashSet<>();
         int[] read = new int[1];
         Map<String, Set<String>> owners = moved.isEmpty() ? Map.of()
@@ -77,13 +88,16 @@ final class DuckRebridge {
             }
         });
         List<Class<?>> candidates = new ArrayList<>(found);
+        if (candidates.stream().anyMatch(leftOut::contains)) {
+            return null;
+        }
         LOGGER.info("[Hotwire] the new ducks {} and moved {} were looked for in {} loaded classes read from their jars;"
                 + " {} name them", fresh.size(), moved, read[0], candidates.size());
+        Map<Class<?>, byte[]> bridged = new LinkedHashMap<>();
         if (candidates.isEmpty()) {
-            return;
+            return bridged;
         }
         Set<String> ducks = Linker.getEverDucks();
-        Map<Class<?>, byte[]> bridged = new LinkedHashMap<>();
         List<String> unread = new ArrayList<>();
         Map<String, byte[]> together;
         try {
@@ -110,10 +124,96 @@ final class DuckRebridge {
             LOGGER.warn("[Hotwire] {} loaded classes could not be read to bridge them to the new ducks {}: {}",
                     unread.size(), fresh, unread.stream().limit(8).toList());
         }
-        if (!bridged.isEmpty()) {
-            LOGGER.info("[Hotwire] {} loaded classes cast to the new ducks {} or call the moved {} and are bridged: {}",
-                    bridged.size(), fresh, moved, bridged.keySet().stream().map(Class::getName).limit(8).toList());
-            redefineEachIfRefused(rebuilder, bridged);
+        return bridged;
+    }
+
+    private static void logBridged(Map<Class<?>, byte[]> bridged, Set<String> fresh, Set<String> moved) {
+        LOGGER.info("[Hotwire] {} loaded classes cast to the new ducks {} or call the moved {} and are bridged: {}",
+                bridged.size(), fresh, moved, bridged.keySet().stream().map(Class::getName).limit(8).toList());
+    }
+
+    static final class Ride implements BatchRider {
+        private final Set<String> bridged;
+        private final Map<String, ModMixins> mods;
+        private final SwitchApplier.Game game;
+        private final ClassRebuilder rebuilder;
+
+        private @Nullable Set<String> movedDone;
+
+        private Set<String> ridingDucks = Set.of();
+        private Set<String> ridingMoved = Set.of();
+
+        Ride(Set<String> bridged, Map<String, ModMixins> mods, SwitchApplier.Game game, ClassRebuilder rebuilder) {
+            this.bridged = bridged;
+            this.mods = mods;
+            this.game = game;
+            this.rebuilder = rebuilder;
+        }
+
+        synchronized void arm(Set<String> movedBefore) {
+            this.movedDone = new HashSet<>(movedBefore);
+        }
+
+        synchronized Set<String> disarm() {
+            Set<String> done = this.movedDone == null ? Set.of() : Set.copyOf(this.movedDone);
+            this.movedDone = null;
+            return done;
+        }
+
+        @Override
+        public synchronized Map<Class<?>, byte[]> take(Set<Class<?>> rebuilt) {
+            Set<String> done = this.movedDone;
+            if (done == null) {
+                return Map.of();
+            }
+            Set<String> fresh = new HashSet<>(Linker.getEverDucks());
+            fresh.removeAll(this.bridged);
+            Set<String> moved = findCalledAcross(Linker.getMoved(), done);
+            if (fresh.isEmpty() && moved.isEmpty()) {
+                return Map.of();
+            }
+            Map<Class<?>, byte[]> made;
+            try {
+                made = bridge(fresh, moved, this.mods, this.game, this.rebuilder, rebuilt);
+            } catch (RuntimeException | LinkageError e) {
+                LOGGER.info("[Hotwire] the bridge to the new ducks {} goes after the switch: {}", fresh, e.toString());
+                return Map.of();
+            }
+            if (made == null) {
+                return Map.of();
+            }
+            if (made.isEmpty()) {
+                this.bridged.addAll(fresh);
+                done.addAll(moved);
+                return Map.of();
+            }
+            logBridged(made, fresh, moved);
+            this.ridingDucks = fresh;
+            this.ridingMoved = moved;
+            return made;
+        }
+
+        @Override
+        public synchronized void finish(Map<Class<?>, byte[]> riding, boolean took, boolean left) {
+            Set<String> done = this.movedDone;
+            try {
+                if (!took && !left) {
+                    return;
+                }
+                if (!took) {
+                    redefineEachIfRefused(this.rebuilder, riding);
+                }
+                this.bridged.addAll(this.ridingDucks);
+                if (done != null) {
+                    done.addAll(this.ridingMoved);
+                }
+            } catch (RebuildException | RuntimeException | LinkageError e) {
+                LOGGER.error("[Hotwire] Loaded classes could not be bridged to the new ducks {} and moved methods {}",
+                        this.ridingDucks, this.ridingMoved, e);
+            } finally {
+                this.ridingDucks = Set.of();
+                this.ridingMoved = Set.of();
+            }
         }
     }
 

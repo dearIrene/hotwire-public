@@ -4,6 +4,7 @@ import java.lang.instrument.ClassDefinition;
 import java.lang.instrument.Instrumentation;
 import java.lang.instrument.UnmodifiableClassException;
 import java.util.ArrayList;
+import java.util.HashSet;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
@@ -18,6 +19,34 @@ public interface BatchRider {
     Map<Class<?>, byte[]> take(Set<Class<?>> rebuilt);
 
     void finish(Map<Class<?>, byte[]> riding, boolean took, boolean left);
+
+    static BatchRider combine(BatchRider first, BatchRider second) {
+        return new BatchRider() {
+            private Set<Class<?>> firsts = Set.of();
+
+            @Override
+            public Map<Class<?>, byte[]> take(Set<Class<?>> rebuilt) {
+                Map<Class<?>, byte[]> all = new LinkedHashMap<>(first.take(rebuilt));
+                all.keySet().removeAll(rebuilt);
+                this.firsts = Set.copyOf(all.keySet());
+                Set<Class<?>> leftOut = new HashSet<>(rebuilt);
+                leftOut.addAll(this.firsts);
+                second.take(leftOut).forEach(all::putIfAbsent);
+                return all;
+            }
+
+            @Override
+            public void finish(Map<Class<?>, byte[]> riding, boolean took, boolean left) {
+                Map<Class<?>, byte[]> one = new LinkedHashMap<>(riding);
+                one.keySet().retainAll(this.firsts);
+                Map<Class<?>, byte[]> two = new LinkedHashMap<>(riding);
+                two.keySet().removeAll(this.firsts);
+                this.firsts = Set.of();
+                end(first, one, took, left);
+                end(second, two, took, left);
+            }
+        };
+    }
 
     static Map<Class<?>, byte[]> takeFrom(@Nullable BatchRider rider, Set<Class<?>> rebuilt) {
         if (rider == null) {

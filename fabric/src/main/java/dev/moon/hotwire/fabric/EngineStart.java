@@ -277,7 +277,7 @@ final class EngineStart {
                 ModLifecycle.makeLifecycle(GameRegistrations.getJournal(), Minecraft.getInstance()));
         laps.endLap("off checker, seen uses, switcher");
         ModTripwire tripwire = new ModTripwire(instrumentation, applier.getRebuilder(), classes::findLoaded);
-        applier.getRebuilder().setRider(tripwire.getRide());
+        applier.addRider(tripwire.getRide());
         laps.endLap("tripwire");
         FieldReferences fieldReferences = new FieldReferences(instrumentation, applier.getRebuilder(),
                 classes::findOriginalBytes, classes::readOriginalBytes,

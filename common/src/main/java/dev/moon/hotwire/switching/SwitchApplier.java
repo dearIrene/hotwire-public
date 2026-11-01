@@ -1,6 +1,7 @@
 package dev.moon.hotwire.switching;
 
 import dev.moon.hotwire.redefine.AddedOverrides;
+import dev.moon.hotwire.redefine.BatchRider;
 import dev.moon.hotwire.redefine.ClassRebuilder;
 import dev.moon.hotwire.redefine.HandlerGuards;
 import dev.moon.hotwire.redefine.HeapCensus;
@@ -100,6 +101,7 @@ public final class SwitchApplier {
     private final Map<String, String> ownerOfConfig = new ConcurrentHashMap<>();
 
     private final Set<String> bridged = ConcurrentHashMap.newKeySet();
+    private final DuckRebridge.Ride duckRide;
 
     private final Set<String> onAtLaunch = ConcurrentHashMap.newKeySet();
     private final MixinChoice choice = new MixinChoice(this::findOriginal);
@@ -214,7 +216,13 @@ public final class SwitchApplier {
         rebuilder.resolveRunningWith(this::findRunningBytes);
         rebuilder.readClassesWith(this::findOriginal);
         rebuilder.askLoadedWith(name -> game.findLoaded(name.replace('.', '/')) != null);
+        this.duckRide = new DuckRebridge.Ride(this.bridged, this.mods, game, rebuilder);
+        rebuilder.setRider(this.duckRide);
         rebuilder.getHooks().replayHandlersWhere(type -> !game.isWorldObject(type));
+    }
+
+    public void addRider(BatchRider other) {
+        this.rebuilder.setRider(BatchRider.combine(other, this.duckRide));
     }
 
     public void rebuildAlsoWith(BiFunction<Set<String>, Set<String>, Set<String>> also) {
@@ -345,6 +353,7 @@ public final class SwitchApplier {
         }
         DryRun dryRun;
         GuardFlips.Sites sites = this.guardFlips.new Sites(plan, onAfter);
+        this.duckRide.arm(movedBefore);
         try {
             this.onlyRebuild = plan == null ? null : plan.rebuild();
             dryRun = this.dryRun(switched, onAfter, true);
@@ -364,6 +373,7 @@ public final class SwitchApplier {
                 }
             }
         } catch (RebuildException | RuntimeException | LinkageError e) {
+            this.duckRide.disarm();
             sites.restore();
             this.restore(before);
             throw e;
@@ -373,6 +383,7 @@ public final class SwitchApplier {
         try {
             this.rebuildLoadedMeanwhile(dryRun, onAfter);
         } catch (RebuildException | RuntimeException | LinkageError e) {
+            this.duckRide.disarm();
             ClassRebuilder.PreparedRebuild prepared = dryRun.prepared();
             if (prepared != null) {
                 RebuildSteps.revertWhilePaused(this.rebuilder, prepared, this.afterRebuild, this.redefinitionHold);
@@ -381,7 +392,7 @@ public final class SwitchApplier {
             throw e;
         }
         SwitchTimes.mark("loaded meanwhile");
-        DuckRebridge.runAfterSwitch(this.bridged, movedBefore, this.mods, this.game, this.rebuilder);
+        DuckRebridge.runAfterSwitch(this.bridged, this.duckRide.disarm(), this.mods, this.game, this.rebuilder);
         SwitchTimes.mark("duck bridges");
         return dryRun.applied();
     }
