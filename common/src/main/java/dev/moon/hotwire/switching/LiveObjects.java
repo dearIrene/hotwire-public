@@ -225,7 +225,7 @@ final class LiveObjects {
         }
         SwitchTimes.mark("replay: collection");
         AtomicInteger failed = new AtomicInteger();
-        onGameThread.accept(() -> ReplacedStatics.runInOneWalk(() -> {
+        ReplacedStatics.runInOneWalk(onGameThread, () -> {
             failed.addAndGet(InitHookRuns.run(findHooked(prepared)));
             prepared.splits().keySet().forEach(type -> {
                 Set<String> fields = prepared.replayed().get(type.getName().replace('.', '/'));
@@ -233,7 +233,7 @@ final class LiveObjects {
                     failed.addAndGet(OffWindowReplay.run(type, fields));
                 }
             });
-        }));
+        });
         SwitchTimes.mark("replay: setups");
         return failed.get();
     }

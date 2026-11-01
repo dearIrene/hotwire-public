@@ -10,6 +10,7 @@ import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
+import java.util.concurrent.atomic.AtomicInteger;
 import java.util.function.Consumer;
 import org.jspecify.annotations.Nullable;
 import org.slf4j.Logger;
@@ -17,6 +18,10 @@ import org.slf4j.LoggerFactory;
 
 public final class ReplacedStatics {
     private static final Logger LOGGER = LoggerFactory.getLogger(ReplacedStatics.class);
+
+    private static final int SETTING_UP = 0;
+    private static final int SET_UP = 1;
+    private static final int GAVE_UP = 2;
     private static volatile Consumer<IdentityHashMap<Object, Object>> swap = replaced -> { };
 
     private record Change(Field field, Object old, Object made, Map<Field, Object> state,
@@ -105,14 +110,27 @@ public final class ReplacedStatics {
         }
     }
 
-    public static void runInOneWalk(Runnable remaking) {
+    public static void runInOneWalk(Consumer<Runnable> onGameThread, Runnable remaking) {
         IdentityHashMap<Object, Object> pending = new IdentityHashMap<>();
-        batch = pending;
-        try {
-            remaking.run();
-        } finally {
-            batch = null;
-            swap(pending);
+
+        AtomicInteger turn = new AtomicInteger(SETTING_UP);
+        onGameThread.accept(() -> {
+            batch = pending;
+            try {
+                remaking.run();
+            } finally {
+                batch = null;
+                if (!turn.compareAndSet(SETTING_UP, SET_UP)) {
+                    swap(pending);
+                }
+            }
+        });
+        if (!turn.compareAndSet(SETTING_UP, GAVE_UP)) {
+            try {
+                swap(pending);
+            } catch (RuntimeException | LinkageError e) {
+                LOGGER.error("[Hotwire] the copies of the statics made again could not all take the new ones", e);
+            }
         }
     }
 }
