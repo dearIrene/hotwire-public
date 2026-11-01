@@ -38,8 +38,14 @@ public final class CallerOwner {
 
     public @Nullable Owner findFrames(List<Frame> stack) {
         String firstLibrary = null;
+        Frame inner = null;
         for (Frame frame : stack) {
+            Frame within = inner;
+            inner = frame;
             String handler = findModInHandlerName(frame.method());
+            if (handler != null && within != null && this.isWrappedOriginal(within, frame)) {
+                continue;
+            }
             String mod = handler != null ? handler : this.modOf.apply(frame.type());
             if (mod != null && handler == null && this.skipped.contains(mod) && ENTRYPOINTS.contains(frame.method())) {
                 return null;
@@ -62,6 +68,14 @@ public final class CallerOwner {
             }
         }
         return firstLibrary == null ? null : new Owner(firstLibrary, null);
+    }
+
+    private boolean isWrappedOriginal(Frame within, Frame handler) {
+        if (within.type() != handler.type() || findModInHandlerName(within.method()) != null) {
+            return false;
+        }
+        String mod = this.modOf.apply(within.type());
+        return mod == null || this.skipped.contains(mod);
     }
 
     static @Nullable String findModInHandlerName(String method) {
