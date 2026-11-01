@@ -9,6 +9,7 @@ import dev.moon.hotwire.fabric.registration.GameHold;
 import dev.moon.hotwire.fabric.registration.GameRegistrations;
 import dev.moon.hotwire.fabric.registration.ModelReloadCheck;
 import dev.moon.hotwire.fabric.registration.ReloadedLists;
+import dev.moon.hotwire.fabric.screen.HoldFrame;
 import dev.moon.hotwire.redefine.FieldSlots;
 import dev.moon.hotwire.redefine.Tripwire;
 import dev.moon.hotwire.ui.Lang;
@@ -321,6 +322,7 @@ public final class ResourceReload {
             //? if <1.21.5 {
             /*RenderSystem.replayQueue();
             *///?}
+            HoldFrame.drawIfDue();
             return reload.isDone() || System.nanoTime() > deadline;
         });
     }

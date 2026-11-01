@@ -1,5 +1,6 @@
 package dev.moon.hotwire.fabric.registration;
 
+import dev.moon.hotwire.fabric.screen.HoldFrame;
 import dev.moon.hotwire.jvm.LoadedClassList;
 import dev.moon.hotwire.redefine.FieldSlots;
 import io.netty.channel.Channel;
@@ -45,21 +46,30 @@ public final class StaticCopies {
         Set<Object> seen = Collections.newSetFromMap(new IdentityHashMap<>());
         Deque<Object> step = new ArrayDeque<>();
         int swapped = 0;
+        int walked = 0;
         for (Class<?> type : LoadedClassList.of(reader)) {
             if (type.isArray() || type.isPrimitive() || !isWalked(type.getName())) {
                 continue;
             }
             swapped += swapFields(type, null, replaced, step);
+            drawHoldFrame(++walked);
         }
         for (int depth = 0; depth < STEPS && !step.isEmpty() && seen.size() < MOST; depth++) {
             Deque<Object> next = new ArrayDeque<>();
             while (!step.isEmpty() && seen.size() < MOST) {
                 swapped += swapIn(step.poll(), replaced, seen, next);
+                drawHoldFrame(++walked);
             }
             step = next;
         }
         LOGGER.info("[Hotwire] {} copies of statics made again took the new ones ({} objects in {} ms)", swapped,
                 seen.size(), (System.nanoTime() - began) / 1_000_000);
+    }
+
+    static void drawHoldFrame(int walked) {
+        if ((walked & 255) == 0) {
+            HoldFrame.drawIfDue();
+        }
     }
 
     private static int swapIn(Object one, IdentityHashMap<Object, Object> replaced, Set<Object> seen,

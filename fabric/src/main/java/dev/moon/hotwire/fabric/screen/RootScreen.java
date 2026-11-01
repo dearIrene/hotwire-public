@@ -92,7 +92,12 @@ public abstract class RootScreen extends Screen {
         this.drawFrame(new GuiCanvas(graphics, this.font), System.nanoTime(), mouseX, mouseY);
     }
     //?} else {
-    /*@Override
+    /*// Hotwire's own frame alone, drawn while a switch holds the game (HoldFrame): no other mod's screen hooks run.
+    public void drawInHold(GuiGraphics graphics) {
+        this.drawFrame(new GuiCanvas(graphics, this.font), System.nanoTime(), -1, -1);
+    }
+
+    @Override
     public void render(GuiGraphics graphics, int mouseX, int mouseY, float partialTick) {
         super.render(graphics, mouseX, mouseY, partialTick);
         this.drawFrame(new GuiCanvas(graphics, this.font), System.nanoTime(), mouseX, mouseY);

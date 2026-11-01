@@ -2,6 +2,7 @@ package dev.moon.hotwire.fabric.add;
 
 import dev.moon.hotwire.fabric.registration.GameHold;
 import dev.moon.hotwire.fabric.registration.OffModCommands;
+import dev.moon.hotwire.fabric.screen.HoldFrame;
 import dev.moon.hotwire.jar.ModManifest;
 import java.util.ArrayList;
 import java.util.List;
@@ -65,7 +66,10 @@ final class AddStart {
             }
             Throwable failed = null;
             try {
-                starts.forEach(Runnable::run);
+                for (Runnable start : starts) {
+                    start.run();
+                    HoldFrame.drawIfDue();
+                }
                 configs.markStarted();
 
                 registries.close();

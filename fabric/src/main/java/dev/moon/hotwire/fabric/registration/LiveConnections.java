@@ -64,6 +64,7 @@ public final class LiveConnections {
             if (!seen.add(one)) {
                 continue;
             }
+            StaticCopies.drawHoldFrame(seen.size());
             for (FieldSlots.Slot slot : Fields.getReferenceFields(one.getClass(), false)) {
                 Object value;
                 try {
