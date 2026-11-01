@@ -1,26 +1,16 @@
 package dev.moon.hotwire.redefine;
 
-import com.google.common.collect.MapMaker;
-import java.lang.invoke.MethodHandle;
-import java.lang.invoke.MethodHandleProxies;
-import java.lang.invoke.MethodHandles;
-import java.lang.invoke.MethodType;
 import java.lang.reflect.Field;
 import java.util.ArrayList;
-import java.util.Collections;
 import java.util.Comparator;
-import java.util.IdentityHashMap;
 import java.util.LinkedHashMap;
 import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Map;
-import java.util.Objects;
 import java.util.Set;
 import java.util.TreeSet;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.function.BiConsumer;
-import java.util.function.BooleanSupplier;
-import java.util.function.Consumer;
 import java.util.function.Function;
 import java.util.function.Predicate;
 import java.util.function.Supplier;
@@ -44,33 +34,30 @@ import org.objectweb.asm.tree.MethodInsnNode;
 import org.objectweb.asm.tree.MethodNode;
 import org.objectweb.asm.tree.TypeInsnNode;
 import org.objectweb.asm.tree.VarInsnNode;
-import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
 
 public final class InitHookReplay {
-    private static final Logger LOGGER = LoggerFactory.getLogger(InitHookReplay.class);
-    private static volatile BooleanSupplier isLaterAllowed = () -> false;
     static final String ON_OBJECTS = "hotwire$passedHooks";
     private static final String START_ARGUMENTS = StartArguments.class.getName().replace('.', '/');
     static final String ON_CLASS = "hotwire$passedStaticHooks";
+
+    static final String LATE_ON_OBJECTS = "hotwire$passedLoadHooks";
+    static final String LATE_ON_CLASS = "hotwire$passedStaticLoadHooks";
     private static final String CALLBACK = "org/spongepowered/asm/mixin/injection/callback/CallbackInfo";
 
-    private static final Set<String> RUN = ConcurrentHashMap.newKeySet();
-
-    private static final Map<Class<?>, Map<Object, Boolean>> RAN_ON = new ConcurrentHashMap<>();
+    static final Set<String> RUN = ConcurrentHashMap.newKeySet();
 
     private static volatile Supplier<List<Object>> longLived = List::of;
     private static volatile Function<String, Set<String>> startup = name -> Set.of();
 
     private static volatile Function<String, Set<String>> joining = name -> Set.of();
 
-    private static volatile Predicate<Class<?>> rebuilt = type -> false;
+    private static volatile Function<String, Set<String>> loadFinished = name -> Set.of();
     private static volatile StaticWriter statics = (field, value) -> {
         throw new IllegalAccessException("no writer of statics is set");
     };
 
     public record Due(Set<String> onObjects, Set<String> onClass, Map<String, String> statics, List<String> missed,
-            Set<String> unset, Set<String> caughtUp) {
+            Set<String> unset, Set<String> caughtUp, Set<String> lateOnObjects, Set<String> lateOnClass) {
         public Due {
             onObjects = Set.copyOf(onObjects);
             onClass = Set.copyOf(onClass);
@@ -78,6 +65,13 @@ public final class InitHookReplay {
             missed = List.copyOf(missed);
             unset = Set.copyOf(unset);
             caughtUp = Set.copyOf(caughtUp);
+            lateOnObjects = Set.copyOf(lateOnObjects);
+            lateOnClass = Set.copyOf(lateOnClass);
+        }
+
+        public Due(Set<String> onObjects, Set<String> onClass, Map<String, String> statics, List<String> missed,
+                Set<String> unset, Set<String> caughtUp) {
+            this(onObjects, onClass, statics, missed, unset, caughtUp, Set.of(), Set.of());
         }
     }
 
@@ -116,8 +110,16 @@ public final class InitHookReplay {
         joining = joins;
     }
 
-    public static void skipRebuiltWith(Predicate<Class<?>> builtAgain) {
-        rebuilt = builtAgain;
+    static List<Object> getLongLived() {
+        return longLived.get();
+    }
+
+    static StaticWriter getStatics() {
+        return statics;
+    }
+
+    public static void answerLoadFinishedWith(Function<String, Set<String>> methods) {
+        loadFinished = methods;
     }
 
     public static void writeStaticsWith(StaticWriter writer) {
@@ -159,8 +161,13 @@ public final class InitHookReplay {
         Set<String> finals = StoredArguments.findFinals(running);
         InsnList onObjects = new InsnList();
         InsnList onClass = new InsnList();
+        InsnList lateOnObjects = new InsnList();
+        InsnList lateOnClass = new InsnList();
         Set<String> objectKeys = new LinkedHashSet<>();
         Set<String> classKeys = new LinkedHashSet<>();
+        Set<String> lateObjectKeys = new LinkedHashSet<>();
+        Set<String> lateClassKeys = new LinkedHashSet<>();
+        Set<String> late = loadFinished.apply(name);
         List<String> missed = new ArrayList<>();
         Set<String> unset = new TreeSet<>();
         Set<String> caughtUp = new TreeSet<>();
@@ -180,6 +187,9 @@ public final class InitHookReplay {
                 if (onObject) {
                     unset.addAll(ConstructedFields.findReliedSetBy(mixed, site.call().name, site.call().desc));
                 }
+            } else if (late.contains(site.moment())) {
+                (onObject ? lateOnObjects : lateOnClass).add(invocation);
+                (onObject ? lateObjectKeys : lateClassKeys).add(key);
             } else {
                 (onObject ? onObjects : onClass).add(invocation);
                 (onObject ? objectKeys : classKeys).add(key);
@@ -199,7 +209,8 @@ public final class InitHookReplay {
         if (original != null) {
             recomputed.putAll(ChangedStatics.addMadeFresh(now, RetainedInitializers.read(original), runs));
         }
-        if (objectKeys.isEmpty() && classKeys.isEmpty() && recomputed.isEmpty() && missed.isEmpty()) {
+        if (objectKeys.isEmpty() && classKeys.isEmpty() && lateObjectKeys.isEmpty() && lateClassKeys.isEmpty()
+                && recomputed.isEmpty() && missed.isEmpty()) {
             return new Addition(mixed, null);
         }
         classKeys.addAll(recomputed.isEmpty() ? Set.of() : values);
@@ -210,9 +221,17 @@ public final class InitHookReplay {
             now.methods.add(makeMethod(Opcodes.ACC_PRIVATE | Opcodes.ACC_STATIC | Opcodes.ACC_SYNTHETIC, ON_CLASS,
                     onClass));
         }
+        if (!lateObjectKeys.isEmpty()) {
+            now.methods.add(makeMethod(Opcodes.ACC_PRIVATE | Opcodes.ACC_SYNTHETIC, LATE_ON_OBJECTS, lateOnObjects));
+        }
+        if (!lateClassKeys.isEmpty()) {
+            now.methods.add(makeMethod(Opcodes.ACC_PRIVATE | Opcodes.ACC_STATIC | Opcodes.ACC_SYNTHETIC, LATE_ON_CLASS,
+                    lateOnClass));
+        }
         ClassWriter writer = new ClassWriter(ClassWriter.COMPUTE_MAXS);
         now.accept(writer);
-        return new Addition(writer.toByteArray(), new Due(objectKeys, classKeys, recomputed, missed, unset, caughtUp));
+        return new Addition(writer.toByteArray(), new Due(objectKeys, classKeys, recomputed, missed, unset, caughtUp,
+                lateObjectKeys, lateClassKeys));
     }
 
     private static boolean isGameClass(String name) {
@@ -463,160 +482,5 @@ public final class InitHookReplay {
             case Type.OBJECT, Type.ARRAY -> new InsnNode(Opcodes.ACONST_NULL);
             default -> new InsnNode(Opcodes.ICONST_0);
         };
-    }
-
-    @SuppressWarnings("unchecked")
-    private static Consumer<Object> asConsumer(MethodHandle method) {
-        return MethodHandleProxies.asInterfaceInstance(Consumer.class, method);
-    }
-
-    public static int run(Map<Class<?>, Due> hooked) {
-        List<Object> made = longLived.get();
-        List<Class<?>> order = new ArrayList<>(hooked.keySet());
-        order.sort(Comparator.comparingInt(type -> {
-            for (int at = 0; at < made.size(); at++) {
-                if (type.isInstance(made.get(at))) {
-                    return at;
-                }
-            }
-            return made.size();
-        }));
-        int failed = 0;
-        for (Class<?> type : order) {
-            failed += ChangedStatics.run(type, Objects.requireNonNull(hooked.get(type)).statics(), statics);
-        }
-        for (Class<?> type : order) {
-            List<Object> ofType = new ArrayList<>();
-
-            Object[] constants = type.getEnumConstants();
-            if (constants != null) {
-                ofType.addAll(List.of(constants));
-            }
-            Set<Object> seen = Collections.newSetFromMap(new IdentityHashMap<>());
-            seen.addAll(ofType);
-            for (Object one : made) {
-                if (type.isInstance(one) && seen.add(one)) {
-                    ofType.add(one);
-                }
-            }
-            failed += run(type, Objects.requireNonNull(hooked.get(type)), ofType, true);
-        }
-        for (Class<?> type : order) {
-            failed += run(type, Objects.requireNonNull(hooked.get(type)), List.of(), false);
-        }
-        return failed;
-    }
-
-    public static void catchUpLaterWhile(BooleanSupplier noWorld) {
-        isLaterAllowed = noWorld;
-    }
-
-    public static ConstructedFields.Unmade findUnset(Map<Class<?>, Due> hooked, Predicate<Class<?>> worldObject,
-            boolean inWorld) {
-        return findUnset(hooked, worldObject, inWorld, type -> true);
-    }
-
-    public static ConstructedFields.Unmade findUnset(Map<Class<?>, Due> hooked, Predicate<Class<?>> worldObject,
-            boolean inWorld, Predicate<Class<?>> alive) {
-        List<String> lines = new ArrayList<>();
-        boolean reopenFixes = true;
-        List<Object> made = longLived.get();
-        for (Map.Entry<Class<?>, Due> entry : hooked.entrySet()) {
-            Class<?> type = entry.getKey();
-
-            boolean world = worldObject.test(type) && !holdsAny(made, type);
-            Set<String> unset = entry.getValue().unset();
-            boolean lateOnWorld = world && inWorld && !entry.getValue().onObjects().isEmpty();
-            if ((unset.isEmpty() && !lateOnWorld) || (world && !inWorld)) {
-                continue;
-            }
-            String name = type.getName().replace('.', '/');
-            if (!alive.test(type)) {
-                LOGGER.info("[Hotwire] no object of {} is alive: its hooks have none made before them", name);
-                continue;
-            }
-            lines.add(unset.isEmpty() ? "objects of " + name + " made with this world before its hooks would be"
-                    + " caught up late, with the state they gathered since: " + entry.getValue().onObjects()
-                    : "objects of " + name + " made before its hooks would go without " + new TreeSet<>(unset) + " ("
-                    + String.join("; ", entry.getValue().missed()) + ")");
-            reopenFixes &= world;
-        }
-        return new ConstructedFields.Unmade(lines, !lines.isEmpty() && reopenFixes);
-    }
-
-    private static boolean holdsAny(List<Object> objects, Class<?> type) {
-        for (Object one : objects) {
-            if (type.isInstance(one)) {
-                return true;
-            }
-        }
-        return false;
-    }
-
-    private static int run(Class<?> type, Due due, List<Object> objects, boolean onObjects) {
-        String name = type.getName().replace('.', '/');
-        Set<String> keys = onObjects ? due.onObjects() : due.onClass();
-        if (onObjects && !due.missed().isEmpty() && !objects.isEmpty()) {
-            if (rebuilt.test(type)) {
-                LOGGER.info("[Hotwire] {} objects of {} were made before hooks that read their moment's arguments,"
-                        + " and the switch builds its objects again with them: {}", objects.size(), name,
-                        due.missed());
-            } else {
-                LOGGER.warn("[Hotwire] {} objects of {} made before them go without hooks that read their moment's"
-                        + " arguments: {}", objects.size(), name, due.missed());
-            }
-        }
-        if (onObjects && objects.isEmpty() && (!keys.isEmpty() || !due.missed().isEmpty())) {
-            LOGGER.info("[Hotwire] {} gained hooks for objects made before them, and none of its objects is among the"
-                    + " game's long-lived ones: {}", name, keys.isEmpty() ? due.missed() : keys);
-        }
-        if (keys.isEmpty()) {
-            return 0;
-        }
-        MethodHandles.Lookup side = Linker.findCurrentLookup(type);
-        if (side == null) {
-            LOGGER.error("[Hotwire] {} has no sidecar for the hooks it missed: {}", name, keys);
-            return 1;
-        }
-        try {
-            if (onObjects) {
-                Consumer<Object> hooks = asConsumer(side.findStatic(side.lookupClass(), ON_OBJECTS,
-                        MethodType.methodType(void.class, type)).asType(MethodType.methodType(void.class,
-                                Object.class)));
-
-                Map<Object, Boolean> ranOn = RAN_ON.computeIfAbsent(type, any -> new MapMaker().weakKeys().makeMap());
-                Consumer<Object> each = object -> {
-                    if (ranOn.put(object, Boolean.TRUE) == null) {
-                        hooks.accept(object);
-                    }
-                };
-
-                FieldHolders.catchUpWith(type, each);
-                if (objects.isEmpty()) {
-                    keys.forEach(key -> RUN.add(name + " " + key));
-                    return 0;
-                }
-
-                boolean later = isLaterAllowed.getAsBoolean();
-                for (Object object : objects) {
-                    FieldHolders.markMade(type, object);
-                    if (later) {
-                        FieldHolders.tryCatchUp(type, each, object);
-                    } else {
-                        each.accept(object);
-                    }
-                }
-            } else {
-                MethodHandleProxies.asInterfaceInstance(Runnable.class, side.findStatic(side.lookupClass(), ON_CLASS,
-                        MethodType.methodType(void.class))).run();
-            }
-            keys.forEach(key -> RUN.add(name + " " + key));
-            LOGGER.info("[Hotwire] {} ran the hooks it missed {}: {}", name, onObjects ? "on " + objects.size()
-                    + " objects made before them" : "once", keys);
-            return 0;
-        } catch (ReflectiveOperationException | RuntimeException | LinkageError e) {
-            LOGGER.error("[Hotwire] the hooks {} of {} could not run for the moments they missed", keys, name, e);
-            return 1;
-        }
     }
 }

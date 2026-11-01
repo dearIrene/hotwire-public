@@ -7,6 +7,7 @@ import dev.moon.hotwire.redefine.ConstructedFields;
 import dev.moon.hotwire.redefine.HandlerSetups;
 import dev.moon.hotwire.redefine.HeapCensus;
 import dev.moon.hotwire.redefine.InitHookReplay;
+import dev.moon.hotwire.redefine.InitHookRuns;
 import dev.moon.hotwire.redefine.OffWindowObjects;
 import dev.moon.hotwire.redefine.OffWindowReplay;
 import dev.moon.hotwire.redefine.RebuildException;
@@ -67,7 +68,7 @@ final class LiveObjects {
                     new IllegalStateException(String.join(", ", entries)));
         }
         checkHandlerSetups(prepared, current, game, originalOf, what, offMixin, offClass, alive);
-        ConstructedFields.Unmade unset = InitHookReplay.findUnset(hooked, game::isWorldObject, game.isInWorld(),
+        ConstructedFields.Unmade unset = InitHookRuns.findUnset(hooked, game::isWorldObject, game.isInWorld(),
                 alive);
         if (!unset.lines().isEmpty()) {
             throw makeRefusal(what, unset);
@@ -225,7 +226,7 @@ final class LiveObjects {
         SwitchTimes.mark("replay: collection");
         AtomicInteger failed = new AtomicInteger();
         onGameThread.accept(() -> ReplacedStatics.runInOneWalk(() -> {
-            failed.addAndGet(InitHookReplay.run(findHooked(prepared)));
+            failed.addAndGet(InitHookRuns.run(findHooked(prepared)));
             prepared.splits().keySet().forEach(type -> {
                 Set<String> fields = prepared.replayed().get(type.getName().replace('.', '/'));
                 if (fields != null) {

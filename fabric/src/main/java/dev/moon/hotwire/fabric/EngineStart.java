@@ -55,6 +55,7 @@ import dev.moon.hotwire.redefine.FieldSlots;
 import dev.moon.hotwire.redefine.FinalWrites;
 import dev.moon.hotwire.redefine.HandlerGuards;
 import dev.moon.hotwire.redefine.InitHookReplay;
+import dev.moon.hotwire.redefine.InitHookRuns;
 import dev.moon.hotwire.redefine.Linker;
 import dev.moon.hotwire.redefine.LoadedClassBytes;
 import dev.moon.hotwire.redefine.OffWindowObjects;
@@ -236,7 +237,8 @@ final class EngineStart {
         ClassFileTransformer loadTimeMixer = applier.makeLoadTimeMixer();
         applier.holdRedefinitionWith(() -> GameHold.begin(Minecraft.getInstance())::release);
         applier.rebuildObjectsWith(ResourceReload::isRebuiltWhilePaused, new PausedRebuilds());
-        InitHookReplay.skipRebuiltWith(ResourceReload::isRebuiltWhilePaused);
+        InitHookRuns.skipRebuiltWith(ResourceReload::isRebuiltWhilePaused);
+        InitHookReplay.answerLoadFinishedWith(GameClasses::getLoadFinishedMethods);
         OffWindowObjects.setReloading(() -> ModViews.findLoadingOverlay() != null && isReloadMaking());
         InitHookReplay.answerWith(GameClasses::findLongLived, GameClasses::getStartupMethods,
                 GameClasses::getJoinMethods);

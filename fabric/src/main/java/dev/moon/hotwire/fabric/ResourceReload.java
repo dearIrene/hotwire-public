@@ -203,6 +203,10 @@ public final class ResourceReload {
 
     private static volatile CompletableFuture<?> lastReload = CompletableFuture.completedFuture(null);
 
+    static CompletableFuture<?> getLastReload() {
+        return lastReload;
+    }
+
     private static <T> CompletableFuture<T> track(CompletableFuture<T> reload) {
         lastReload = reload;
         return reload;

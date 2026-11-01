@@ -1,5 +1,6 @@
 package dev.moon.hotwire.fabric.add;
 
+import dev.moon.hotwire.fabric.BackgroundReload;
 import dev.moon.hotwire.fabric.CrashGuard;
 import dev.moon.hotwire.fabric.ModPolicy;
 import dev.moon.hotwire.fabric.ResourceReload;
@@ -18,6 +19,7 @@ import dev.moon.hotwire.plan.ModGraph;
 import dev.moon.hotwire.plan.SwitchPlan;
 import dev.moon.hotwire.plan.SwitchPlanner;
 import dev.moon.hotwire.redefine.AccessBridge;
+import dev.moon.hotwire.redefine.InitHookRuns;
 import dev.moon.hotwire.redefine.Linker;
 import dev.moon.hotwire.redefine.RebuildException;
 import dev.moon.hotwire.redefine.Relocations;
@@ -509,14 +511,11 @@ public final class ModAdder {
                                     : new IllegalStateException("refused"));
                 }
 
-                IntSupplier setUp = () -> {
-                    int notSetUp = this.engine.getApplier().getCatchUps().run();
-                    if (notSetUp == 0) {
-                        this.engine.showAddStep(4);
-                        reloadForAssets(parts.values());
-                    }
-                    return notSetUp;
-                };
+                IntSupplier setUp = () -> InitHookRuns.runLoadFinishedAfter(
+                        () -> this.engine.getApplier().getCatchUps().run(), () -> {
+                            this.engine.showAddStep(4);
+                            reloadForAssets(parts.values());
+                        }, BackgroundReload::runAfterReload);
                 this.engine.showAddStep(3);
                 CompletableFuture<Void> started = AddStart.queue(ids, grew, backedOut, this.engine.getSide(), setUp,
                         this.engine::findLoaded);

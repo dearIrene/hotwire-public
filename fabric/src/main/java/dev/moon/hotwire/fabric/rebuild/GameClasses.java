@@ -234,6 +234,16 @@ public final class GameClasses implements SwitchApplier.Game {
         };
     }
 
+    public static Set<String> getLoadFinishedMethods(String internalName) {
+        //? if >=26.1 {
+        return internalName.equals("net/minecraft/client/Minecraft") ? Set.of("onResourceLoadFinished",
+                "onGameLoadFinished", "buildInitialScreens") : Set.of();
+        //?} else {
+        /*return internalName.equals("net/minecraft/class_310") ? Set.of("method_53465", "method_51736", "method_53527")
+                : Set.of();
+        *///?}
+    }
+
     public static Set<String> getJoinMethods(String internalName) {
         if (Minecraft.getInstance().getConnection() == null) {
             return Set.of();

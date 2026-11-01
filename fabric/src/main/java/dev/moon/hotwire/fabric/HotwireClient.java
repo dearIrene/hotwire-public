@@ -5,7 +5,7 @@ import dev.moon.hotwire.fabric.registration.OffModCommands;
 import dev.moon.hotwire.fabric.report.HotwireLog;
 import dev.moon.hotwire.modrinth.Downloads;
 import dev.moon.hotwire.redefine.FieldHolders;
-import dev.moon.hotwire.redefine.InitHookReplay;
+import dev.moon.hotwire.redefine.InitHookRuns;
 import dev.moon.hotwire.redefine.Tripwire;
 import dev.moon.hotwire.report.ActionJournal;
 import dev.moon.hotwire.report.GameLog;
@@ -82,7 +82,7 @@ public final class HotwireClient implements ClientModInitializer {
             client.execute(HotwireClient::getEngine);
         });
 
-        InitHookReplay.catchUpLaterWhile(() -> Minecraft.getInstance().level == null);
+        InitHookRuns.catchUpLaterWhile(() -> Minecraft.getInstance().level == null);
 
         ServerLifecycleEvents.SERVER_STARTING.register(server -> ActionJournal.get().note(ActionJournal.Action.OPEN,
                 ""));

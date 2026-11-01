@@ -2,8 +2,11 @@ package dev.moon.hotwire.fabric;
 
 import dev.moon.hotwire.fabric.registration.Fields;
 import dev.moon.hotwire.redefine.FieldSlots;
+import java.util.List;
 import java.util.Optional;
+import java.util.concurrent.CopyOnWriteArrayList;
 import java.util.function.Consumer;
+import net.minecraft.client.Minecraft;
 import net.minecraft.client.gui.screens.LoadingOverlay;
 import net.minecraft.server.packs.resources.ReloadInstance;
 import net.minecraft.server.packs.resources.ReloadableResourceManager;
@@ -23,6 +26,8 @@ public final class BackgroundReload {
 
     private static volatile @Nullable Runnable due;
 
+    private static final List<Runnable> AFTER = new CopyOnWriteArrayList<>();
+
     private BackgroundReload() {
     }
 
@@ -32,6 +37,20 @@ public final class BackgroundReload {
 
     static void beginAfterHold(Runnable begin) {
         due = begin;
+    }
+
+    public static void runAfterReload(Runnable then) {
+        if (!isBusy()) {
+            then.run();
+            return;
+        }
+        AFTER.add(then);
+    }
+
+    private static void runAfter() {
+        List<Runnable> waiting = List.copyOf(AFTER);
+        AFTER.removeAll(waiting);
+        waiting.forEach(Runnable::run);
     }
 
     private static boolean begin(Runnable begin) {
@@ -57,12 +76,15 @@ public final class BackgroundReload {
         return true;
     }
 
+    @SuppressWarnings("FutureReturnValueIgnored")
     public static void tick() {
         Runnable begin = due;
         if (begin != null && running == null) {
             due = null;
             if (!begin(begin)) {
                 LOGGER.info("[Hotwire] the whole reload after the switch runs under its loading screen");
+                Minecraft game = Minecraft.getInstance();
+                ResourceReload.getLastReload().whenComplete((done, thrown) -> game.execute(BackgroundReload::runAfter));
             }
         }
         finishIfDone();
@@ -83,6 +105,7 @@ public final class BackgroundReload {
         }
         LOGGER.info("[Hotwire] the resources were reloaded with the game drawing in {} ms",
                 (System.nanoTime() - now.began()) / 1_000_000);
+        runAfter();
     }
 
     @SuppressWarnings("unchecked")
