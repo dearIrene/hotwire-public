@@ -250,7 +250,7 @@ public final class FieldSlots {
         return type.getSort() == Type.OBJECT ? type.getClassName() : null;
     }
 
-    private static boolean isLoaded(String binary, Predicate<String> loaded) {
+    static boolean isLoaded(String binary, Predicate<String> loaded) {
         return binary.startsWith("java.") || binary.startsWith("javax.") || binary.startsWith("jdk.")
                 || binary.startsWith("sun.") || loaded.test(binary);
     }

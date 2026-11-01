@@ -213,6 +213,7 @@ public final class SwitchApplier {
         this.onMods = this.onAtLaunch;
         rebuilder.resolveRunningWith(this::findRunningBytes);
         rebuilder.readClassesWith(this::findOriginal);
+        rebuilder.askLoadedWith(name -> game.findLoaded(name.replace('.', '/')) != null);
         rebuilder.getHooks().replayHandlersWhere(type -> !game.isWorldObject(type));
     }
 

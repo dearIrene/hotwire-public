@@ -16,6 +16,7 @@ import java.util.Objects;
 import java.util.Set;
 import java.util.TreeSet;
 import java.util.concurrent.ConcurrentHashMap;
+import java.util.function.Predicate;
 import org.jspecify.annotations.Nullable;
 import org.objectweb.asm.Opcodes;
 import org.slf4j.Logger;
@@ -56,6 +57,22 @@ final class RebuildEvidence {
             Files.write(base.resolve("mixed.class"), mixed);
         } catch (IOException e) {
             LOGGER.warn("[Hotwire] could not dump {} to {}", name, folder, e);
+        }
+    }
+
+    static void checkRunsAsGiven(Class<?> type, byte[] given, Predicate<String> loaded) {
+        for (ClassHeader.Member field : ClassHeader.of(given).fields()) {
+            String binary = FieldSlots.findClassName(field.desc());
+            if (binary != null && !FieldSlots.isLoaded(binary, loaded)) {
+                return;
+            }
+        }
+        List<String> live = listLiveFields(type);
+        List<String> fields = listFields(given);
+        if (!live.equals(fields)) {
+            LOGGER.error("[Hotwire] After redefining {}, the JVM runs it with fields {} where it was given {}; the"
+                    + " next change of this class will be refused. Please report this with the log.", type.getName(),
+                    live, fields);
         }
     }
 

@@ -123,6 +123,12 @@ public final class ClassRebuilder {
 
     private volatile Function<String, byte @Nullable []> bytesOf = name -> null;
 
+    private volatile Predicate<String> loaded = name -> true;
+
+    public void askLoadedWith(Predicate<String> loaded) {
+        this.loaded = loaded;
+    }
+
     public void readClassesWith(Function<String, byte @Nullable []> bytesOf) {
         this.bytesOf = bytesOf;
         StoredArguments.readParentsWith(bytesOf);
@@ -498,14 +504,7 @@ public final class ClassRebuilder {
                 }
             }
             this.carrying.put(type, prepared.carried().getOrDefault(type.getName().replace('.', '/'), Set.of()));
-
-            List<String> live = RebuildEvidence.listLiveFields(type);
-            List<String> given = RebuildEvidence.listFields(split.target());
-            if (!live.equals(given)) {
-                LOGGER.error("[Hotwire] After redefining {}, the JVM runs it with fields {} where it was given {};"
-                        + " the next change of this class will be refused. Please report this with the log.",
-                        type.getName(), live, given);
-            }
+            RebuildEvidence.checkRunsAsGiven(type, split.target(), this.loaded);
         });
         Map<String, byte[]> mixedBefore = new HashMap<>(this.mixedNow);
         mixedBefore.keySet().retainAll(prepared.mixed().keySet());
