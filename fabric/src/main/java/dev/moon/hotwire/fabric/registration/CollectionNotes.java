@@ -23,8 +23,28 @@ import org.jspecify.annotations.Nullable;
 final class CollectionNotes {
     private static final Object NOWHERE = new Object();
 
-    private record Frame(Object container, Note note, List<Runnable> before, List<Runnable> now, boolean fresh,
-            long print) {
+    private static final class Frame {
+        private final Object container;
+        private final @Nullable Note note;
+        private final List<Runnable> before;
+        private final List<Runnable> now;
+        private final boolean fresh;
+        private final long print;
+        private final Origin origin;
+        private final boolean inWorld;
+        private int wrapped;
+
+        private Frame(Object container, @Nullable Note note, List<Runnable> before, List<Runnable> now, boolean fresh,
+                long print, Origin origin, boolean inWorld) {
+            this.container = container;
+            this.note = note;
+            this.before = before;
+            this.now = now;
+            this.fresh = fresh;
+            this.print = print;
+            this.origin = origin;
+            this.inWorld = inWorld;
+        }
     }
 
     record Origin(@Nullable String staticsOf, boolean game, FieldSlots.@Nullable Slot field) {
@@ -117,10 +137,14 @@ final class CollectionNotes {
     synchronized void dropLook() {
         while (!this.open.isEmpty()) {
             Frame frame = this.open.pop();
-            if (frame.fresh()) {
-                this.remove(frame.container(), frame.note());
+            Note note = frame.note;
+            if (note == null) {
+                continue;
+            }
+            if (frame.fresh) {
+                this.remove(frame.container, note);
             } else {
-                frame.note().takes = frame.before();
+                note.takes = frame.before;
             }
         }
     }
@@ -133,18 +157,18 @@ final class CollectionNotes {
     synchronized void begin(Object container, Origin origin) {
         this.dropCleared();
         Frame outer = this.open.peek();
-        if (outer != null && outer.container() == container) {
+        if (outer != null && outer.container == container) {
             this.printed = null;
             this.open.push(outer);
             return;
         }
         Note note = this.notes.get(container);
         boolean fresh = note == null;
-        if (note == null) {
+        if (note == null && isCollection(container)) {
             note = new Note(container, origin, this.gone);
             this.notes.put(container, note);
         }
-        List<Runnable> before = note.takes;
+        List<Runnable> before = note == null ? List.of() : note.takes;
         List<Runnable> left = new ArrayList<>();
         if (this.lookingFor != null) {
             for (Runnable take : before) {
@@ -154,39 +178,49 @@ final class CollectionNotes {
                 }
             }
         }
-        note.takes = left;
-        note.origin = origin;
-        note.ofWorld |= this.inWorld;
+        if (note != null) {
+            note.takes = left;
+            note.origin = origin;
+            note.ofWorld |= this.inWorld;
+        }
         long print = this.printed == container ? this.printedAs : Fingerprints.of(container);
         this.printed = null;
-        this.open.push(new Frame(container, note, before, left, fresh, print));
+        this.open.push(new Frame(container, note, before, left, fresh, print, origin, this.inWorld));
     }
 
     @SuppressWarnings("ReferenceEquality")
     synchronized void end(Object container, boolean completed) {
         Frame frame = this.open.peek();
-        if (frame == null || frame.container() != container) {
+        if (frame == null || frame.container != container) {
             return;
         }
         this.open.pop();
         if (frame == this.open.peek()) {
             return;
         }
-        Note note = frame.note();
+        Note note = frame.note;
+        if (note == null) {
+            if (completed && frame.now.isEmpty()) {
+                return;
+            }
+            note = new Note(container, frame.origin, this.gone);
+            note.ofWorld = frame.inWorld;
+            note.wrapped = frame.wrapped;
+            this.notes.put(container, note);
+        }
         if (!completed) {
-            note.takes = frame.before();
+            note.takes = frame.before;
         } else {
             note.readByEvery |= this.every;
             long now = this.printing && note.readByEvery ? Fingerprints.of(container) : Fingerprints.UNKNOWN;
-            note.print = now == frame.print() ? now : Fingerprints.UNKNOWN;
-            if (frame.now().isEmpty() && !(container instanceof Collection<?>) && !(container instanceof Map<?, ?>)
-                    && !(container instanceof Object[])) {
+            note.print = now == frame.print ? now : Fingerprints.UNKNOWN;
+            if (frame.now.isEmpty() && !isCollection(container)) {
                 this.remove(container, note);
                 return;
             }
-            note.takes = List.copyOf(frame.now());
+            note.takes = List.copyOf(frame.now);
         }
-        if (frame.fresh()) {
+        if (frame.fresh) {
             this.order.add(note);
             this.pruneOrder();
         }
@@ -194,7 +228,7 @@ final class CollectionNotes {
         Set<String> under = new HashSet<>();
         addCandidates(under, note.takes);
         if (!completed) {
-            addCandidates(under, frame.now());
+            addCandidates(under, frame.now);
         }
         note.under = Set.copyOf(under);
     }
@@ -212,7 +246,7 @@ final class CollectionNotes {
     synchronized void note(Runnable take) {
         Frame frame = this.open.peek();
         if (frame != null) {
-            frame.now().add(take);
+            frame.now.add(take);
             return;
         }
         this.nowhere.add(take);
@@ -340,10 +374,14 @@ final class CollectionNotes {
         return found;
     }
 
+    @SuppressWarnings("ReferenceEquality")
     synchronized void markWrapped(Object container, int steps) {
-        Note note = this.notes.get(container);
+        Frame frame = this.open.peek();
+        Note note = frame != null && frame.container == container ? frame.note : this.notes.get(container);
         if (note != null) {
             note.wrapped = steps;
+        } else if (frame != null && frame.container == container) {
+            frame.wrapped = steps;
         }
     }
 
@@ -382,6 +420,10 @@ final class CollectionNotes {
         note.under = null;
         note.origin = Origin.NONE;
         this.dead++;
+    }
+
+    private static boolean isCollection(Object container) {
+        return container instanceof Collection<?> || container instanceof Map<?, ?> || container instanceof Object[];
     }
 
     private void dropCleared() {
