@@ -4,6 +4,7 @@ import java.util.HashSet;
 import java.util.Map;
 import java.util.Set;
 import java.util.concurrent.ConcurrentHashMap;
+import java.util.function.BiConsumer;
 import java.util.function.Function;
 import java.util.regex.Pattern;
 import org.jspecify.annotations.Nullable;
@@ -16,6 +17,9 @@ import org.objectweb.asm.Type;
 final class ReflectedOwners {
     private static final Pattern CLASS_NAME = Pattern.compile("[\\w$]+(\\.[\\w$]+)+");
 
+    private static final byte CLASS_ENTRY = 7;
+    private static final byte STRING_ENTRY = 8;
+
     private static volatile Function<String, byte @Nullable []> bytesOf = name -> null;
 
     private static volatile Map<String, String> modOfName = Map.of();
@@ -25,15 +29,14 @@ final class ReflectedOwners {
     private static final ClassValue<Set<String>> NAMED = new ClassValue<>() {
         @Override
         protected Set<String> computeValue(Class<?> type) {
-            Set<String> names = new HashSet<>();
-            Class<?> own = type.isHidden() ? type.getNestHost() : type;
-            String name = own.getName();
-            readNames(name, names);
-            int inner = name.indexOf('$');
-            if (inner > 0) {
-                readNames(name.substring(0, inner), names);
-            }
-            return Set.copyOf(names);
+            return readWithOuter(type, ReflectedOwners::readNames);
+        }
+    };
+
+    private static final ClassValue<Set<String>> POOLED = new ClassValue<>() {
+        @Override
+        protected Set<String> computeValue(Class<?> type) {
+            return readWithOuter(type, ReflectedOwners::readPooled);
         }
     };
 
@@ -62,6 +65,9 @@ final class ReflectedOwners {
             return Set.of();
         }
         Set<String> mods = new HashSet<>();
+        if (!namesAnyInUse(type)) {
+            return mods;
+        }
         for (String name : NAMED.get(type)) {
             String mod = modOfName.get(name);
             if (mod != null) {
@@ -72,7 +78,7 @@ final class ReflectedOwners {
     }
 
     private static String findAfresh(Class<?> type) {
-        if (!Wrappers.isOfAnotherMod(type)) {
+        if (!Wrappers.isOfAnotherMod(type) || !namesAnyInUse(type)) {
             return "";
         }
         for (String name : NAMED.get(type)) {
@@ -84,10 +90,62 @@ final class ReflectedOwners {
         return "";
     }
 
+    private static boolean namesAnyInUse(Class<?> type) {
+        Map<String, String> inUse = modOfName;
+        for (String name : POOLED.get(type)) {
+            if (inUse.containsKey(name)) {
+                return true;
+            }
+        }
+        return false;
+    }
+
+    private static Set<String> readWithOuter(Class<?> type, BiConsumer<String, Set<String>> reader) {
+        Set<String> names = new HashSet<>();
+        Class<?> own = type.isHidden() ? type.getNestHost() : type;
+        String name = own.getName();
+        reader.accept(name, names);
+        int inner = name.indexOf('$');
+        if (inner > 0) {
+            reader.accept(name.substring(0, inner), names);
+        }
+        return Set.copyOf(names);
+    }
+
     private static void addName(String name, Set<String> into) {
         if (!name.startsWith("java.") && !name.startsWith("javax.") && !name.startsWith("jdk.")
                 && !name.startsWith("sun.") && !name.startsWith("net.minecraft.") && !name.startsWith("com.mojang.")) {
             into.add(name.intern());
+        }
+    }
+
+    private static void readPooled(String binaryName, Set<String> into) {
+        byte[] bytes = bytesOf.apply(binaryName.replace('.', '/'));
+        if (bytes == null) {
+            return;
+        }
+        try {
+            ClassReader reader = new ClassReader(bytes);
+            char[] buffer = new char[reader.getMaxStringLength()];
+            for (int item = 1; item < reader.getItemCount(); item++) {
+                int offset = reader.getItem(item);
+                if (offset == 0) {
+                    continue;
+                }
+                byte tag = bytes[offset - 1];
+                if (tag == CLASS_ENTRY) {
+                    String name = reader.readUTF8(offset, buffer);
+                    if (name.charAt(0) != '[') {
+                        addName(name.replace('/', '.'), into);
+                    }
+                } else if (tag == STRING_ENTRY) {
+                    String text = reader.readUTF8(offset, buffer);
+                    if (CLASS_NAME.matcher(text).matches()) {
+                        addName(text, into);
+                    }
+                }
+            }
+        } catch (RuntimeException e) {
         }
     }
 
