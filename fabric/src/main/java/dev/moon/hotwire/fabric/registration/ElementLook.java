@@ -33,6 +33,8 @@ public final class ElementLook {
     private static volatile List<String> lookedForEvery = List.of();
     private static volatile long lookedEveryAt;
 
+    private static volatile Set<String> lookedAlone = Set.of();
+
     private static final Set<String> STALE = ConcurrentHashMap.newKeySet();
 
     private static volatile @Nullable Thread looking;
@@ -67,6 +69,7 @@ public final class ElementLook {
             if (every ? isFreshForEvery(asked) : stands(asked)) {
                 return;
             }
+            lookedAlone = Set.of();
             Thread self = Thread.currentThread();
             int priority = self.getPriority();
             looking = self;
@@ -85,6 +88,8 @@ public final class ElementLook {
                     lookedForEvery = asked;
                     lookedEveryAt = System.nanoTime();
                     references.finishEveryLook();
+                } else {
+                    lookedAlone = Set.copyOf(asked);
                 }
             } catch (RuntimeException | LinkageError e) {
                 LOGGER.info("[Hotwire] the look ahead for {} ended early: {}", mods, e.toString());
@@ -99,6 +104,7 @@ public final class ElementLook {
 
     public static void prepareAhead(FieldReferences references, Collection<String> mods, Predicate<String> on) {
         synchronized (ONE_LOOK) {
+            lookedAlone = Set.of();
             looking = Thread.currentThread();
             runningMode = Mode.SETUP;
             MODE.set(Mode.SETUP);
@@ -162,7 +168,8 @@ public final class ElementLook {
     }
 
     private static boolean stands(List<String> asked) {
-        return lookedForEvery.containsAll(asked) && asked.stream().noneMatch(STALE::contains);
+        return (lookedForEvery.containsAll(asked) || lookedAlone.equals(Set.copyOf(asked)))
+                && asked.stream().noneMatch(STALE::contains);
     }
 
     CollectionNotes getNotes() {
