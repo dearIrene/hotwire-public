@@ -278,8 +278,13 @@ final class CollectionReferences implements FixedLists.Walk {
         if (notes != null) {
             notes.setInWorld(true);
         }
+
+        Set<Object> looked = Collections.newSetFromMap(new IdentityHashMap<>());
         for (Object holder : holders) {
             ElementLook.stopIfAsked();
+            if (!looked.add(holder)) {
+                continue;
+            }
             long holderBegan = System.nanoTime();
             if (this.owners.findOwnerAmong(holder) == null) {
                 this.lookInto(holder);
