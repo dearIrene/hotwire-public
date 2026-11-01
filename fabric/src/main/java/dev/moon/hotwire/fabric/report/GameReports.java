@@ -354,7 +354,12 @@ public final class GameReports {
             return thread.contains("dev.moon.hotwire") || thread.contains("dev/moon/hotwire");
         }
         int at = text.indexOf("Hotwire involved? ");
-        return at < 0 || !CrashSection.isCleared(text.substring(at));
+        if (at >= 0) {
+            return !CrashSection.isCleared(text.substring(at));
+        }
+
+        return text.contains("dev.moon.hotwire") || text.contains("dev/moon/hotwire")
+                || text.contains("from mod hotwire");
     }
 
     Path writeBundle(String title, String why, List<TidyLog.Mod> mods, List<Path> extra, String environment)
