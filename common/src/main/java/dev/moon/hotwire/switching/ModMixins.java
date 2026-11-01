@@ -1,5 +1,6 @@
 package dev.moon.hotwire.switching;
 
+import dev.moon.hotwire.jar.CalledNames;
 import dev.moon.hotwire.jar.ModJar;
 import dev.moon.hotwire.jar.ModManifest;
 import java.util.ArrayList;
@@ -9,7 +10,7 @@ import java.util.Map;
 import java.util.Set;
 
 public record ModMixins(List<String> configs, Map<String, Set<String>> targetsOf, Set<String> owns,
-        boolean callbacksOnly, Set<String> rebuildOnly) {
+        boolean callbacksOnly, Set<String> rebuildOnly, CalledNames calledNames) {
     public ModMixins {
         rebuildOnly = Set.copyOf(rebuildOnly);
         configs = List.copyOf(configs);
@@ -19,6 +20,11 @@ public record ModMixins(List<String> configs, Map<String, Set<String>> targetsOf
 
     public ModMixins(List<String> configs, Map<String, Set<String>> targetsOf, Set<String> owns) {
         this(configs, targetsOf, owns, false, Set.of());
+    }
+
+    public ModMixins(List<String> configs, Map<String, Set<String>> targetsOf, Set<String> owns,
+            boolean callbacksOnly, Set<String> rebuildOnly) {
+        this(configs, targetsOf, owns, callbacksOnly, rebuildOnly, CalledNames.UNKNOWN);
     }
 
     public ModMixins(List<String> configs, Map<String, Set<String>> targetsOf, Set<String> owns,
@@ -34,7 +40,7 @@ public record ModMixins(List<String> configs, Map<String, Set<String>> targetsOf
             }
         }
         return new ModMixins(configs, jar.patches().byConfig(), jar.patches().owns(), jar.patches().callbacksOnly(),
-                jar.patches().rebuildOnly());
+                jar.patches().rebuildOnly(), jar.patches().calledNames());
     }
 
     public Set<String> targets() {

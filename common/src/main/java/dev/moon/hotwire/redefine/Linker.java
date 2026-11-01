@@ -201,6 +201,10 @@ public final class Linker {
         return Set.copyOf(MOVED);
     }
 
+    public static Map<Class<?>, Set<String>> getMovedByTarget() {
+        return Map.copyOf(MOVED_BY_TARGET);
+    }
+
     static Set<String> getMovedOf(String internalName) {
         for (Map.Entry<Class<?>, Set<String>> entry : MOVED_BY_TARGET.entrySet()) {
             if (entry.getKey().getName().replace('.', '/').equals(internalName)) {

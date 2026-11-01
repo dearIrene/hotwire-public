@@ -8,6 +8,7 @@ import java.io.IOException;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.util.ArrayList;
+import java.util.HashMap;
 import java.util.HashSet;
 import java.util.LinkedHashMap;
 import java.util.LinkedHashSet;
@@ -52,9 +53,14 @@ final class DuckRebridge {
             ClassRebuilder rebuilder) throws RebuildException {
         Set<Class<?>> found = new LinkedHashSet<>();
         int[] read = new int[1];
+        Map<String, Set<String>> owners = findOwners(moved, rebuilder.getLoadedClasses());
         mods.values().forEach(mixins -> {
             boolean declares = fresh.stream().anyMatch(mixins.owns()::contains);
-            if (!declares && moved.isEmpty()) {
+
+            boolean calls = moved.stream().anyMatch(method -> mixins.calledNames().canCall(method)
+                    && (!owners.containsKey(method) || owners.get(method).stream()
+                            .anyMatch(owner -> mixins.calledNames().canCall(owner, method))));
+            if (!declares && !calls) {
                 return;
             }
             for (String name : mixins.owns()) {
@@ -62,7 +68,8 @@ final class DuckRebridge {
 
                 byte[] jar = loaded == null ? null : game.findClassFile(name);
                 read[0] += jar == null ? 0 : 1;
-                if (loaded != null && (jar == null || DuckBridge.names(jar, declares ? fresh : Set.of(), moved))) {
+                if (loaded != null && (jar == null || DuckBridge.names(jar, declares ? fresh : Set.of(),
+                        calls ? moved : Set.of()))) {
                     found.add(loaded);
                 }
             }
@@ -105,6 +112,36 @@ final class DuckRebridge {
             LOGGER.info("[Hotwire] {} loaded classes cast to the new ducks {} or call the moved {} and are bridged: {}",
                     bridged.size(), fresh, moved, bridged.keySet().stream().map(Class::getName).limit(8).toList());
             redefineEachIfRefused(rebuilder, bridged);
+        }
+    }
+
+    private static Map<String, Set<String>> findOwners(Set<String> moved, Class<?>[] loaded) {
+        Map<String, Set<String>> owners = new HashMap<>();
+        Linker.getMovedByTarget().forEach((target, methods) -> {
+            List<String> here = methods.stream().filter(moved::contains).toList();
+            if (here.isEmpty()) {
+                return;
+            }
+            Set<String> names = new HashSet<>();
+            addSupertypes(target, names);
+            for (Class<?> type : loaded) {
+                if (type != target && !type.isArray() && target.isAssignableFrom(type)) {
+                    names.add(type.getName().replace('.', '/'));
+                }
+            }
+            here.forEach(method -> owners.computeIfAbsent(method, key -> new HashSet<>()).addAll(names));
+        });
+        return owners;
+    }
+
+    private static void addSupertypes(Class<?> type, Set<String> into) {
+        if (into.add(type.getName().replace('.', '/'))) {
+            for (Class<?> up : type.getInterfaces()) {
+                addSupertypes(up, into);
+            }
+            if (type.getSuperclass() != null) {
+                addSupertypes(type.getSuperclass(), into);
+            }
         }
     }
 

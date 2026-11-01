@@ -101,6 +101,7 @@ public final class JarScans {
         writeAll(out, patches.asks());
         out.writeBoolean(patches.callbacksOnly());
         writeAll(out, patches.rebuildOnly());
+        patches.calledNames().writeTo(out);
         out.writeInt(scanned.nested().size());
         for (Scan nested : scanned.nested()) {
             writeJar(out, nested);
@@ -127,8 +128,9 @@ public final class JarScans {
         List<String> asks = readAll(in);
         boolean callbacksOnly = in.readBoolean();
         List<String> rebuildOnly = readAll(in);
+        CalledNames calledNames = CalledNames.readFrom(in);
         ModPatches patches = new ModPatches(Set.copyOf(owns), Set.copyOf(patched), Set.copyOf(hookOnly), missing,
-                byConfig, Set.copyOf(calls), Set.copyOf(asks), callbacksOnly, Set.copyOf(rebuildOnly));
+                byConfig, Set.copyOf(calls), Set.copyOf(asks), callbacksOnly, Set.copyOf(rebuildOnly), calledNames);
         List<ModJar> nested = new ArrayList<>();
         for (int count = in.readInt(); count > 0; count--) {
             nested.add(readJar(in));

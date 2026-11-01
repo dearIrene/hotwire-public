@@ -187,7 +187,35 @@ final class PatchScanner {
                 calls.add(in);
             }
         });
-        return new ModPatches(owns, patches, hooked, missing, byConfig, calls, asks, callbacksOnly, rebuildOnly);
+        Set<String> calledNames = new HashSet<>();
+        for (String type : owns) {
+            byte[] bytes = reader.read(type + ".class");
+            if (bytes != null) {
+                collectCalledNames(bytes, calledNames);
+            }
+        }
+        return new ModPatches(owns, patches, hooked, missing, byConfig, calls, asks, callbacksOnly, rebuildOnly,
+                CalledNames.of(calledNames));
+    }
+
+    private static void collectCalledNames(byte[] bytes, Set<String> into) {
+        ClassReader reader;
+        try {
+            reader = new ClassReader(bytes);
+        } catch (RuntimeException e) {
+            return;
+        }
+        char[] buffer = new char[reader.getMaxStringLength()];
+        for (int item = 1; item < reader.getItemCount(); item++) {
+            int offset = reader.getItem(item);
+            if (offset == 0 || (bytes[offset - 1] != METHOD_ENTRY && bytes[offset - 1] != INTERFACE_METHOD_ENTRY)) {
+                continue;
+            }
+            int nameAndType = reader.getItem(reader.readUnsignedShort(offset + 2));
+            String method = reader.readUTF8(nameAndType, buffer) + reader.readUTF8(nameAndType + 2, buffer);
+            into.add(method);
+            into.add(reader.readClass(offset, buffer) + '.' + method);
+        }
     }
 
     private static void collectModIds(byte[] bytes, Set<String> into) {

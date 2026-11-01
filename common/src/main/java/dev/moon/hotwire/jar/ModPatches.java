@@ -9,7 +9,7 @@ import java.util.stream.Collectors;
 
 public record ModPatches(Set<String> owns, Set<String> patches, Set<String> hookOnly, List<String> missing,
         Map<String, Set<String>> byConfig, Set<String> calls, Set<String> asks, boolean callbacksOnly,
-        Set<String> rebuildOnly) {
+        Set<String> rebuildOnly, CalledNames calledNames) {
     public static final ModPatches NONE = new ModPatches(Set.of(), Set.of(), Set.of(), List.of(), Map.of(), Set.of());
 
     public ModPatches(Set<String> owns, Set<String> patches, Set<String> hookOnly, List<String> missing,
@@ -30,6 +30,13 @@ public record ModPatches(Set<String> owns, Set<String> patches, Set<String> hook
     public ModPatches(Set<String> owns, Set<String> patches, Set<String> hookOnly, List<String> missing,
             Map<String, Set<String>> byConfig, Set<String> calls, Set<String> asks, boolean callbacksOnly) {
         this(owns, patches, hookOnly, missing, byConfig, calls, asks, callbacksOnly, Set.of());
+    }
+
+    public ModPatches(Set<String> owns, Set<String> patches, Set<String> hookOnly, List<String> missing,
+            Map<String, Set<String>> byConfig, Set<String> calls, Set<String> asks, boolean callbacksOnly,
+            Set<String> rebuildOnly) {
+        this(owns, patches, hookOnly, missing, byConfig, calls, asks, callbacksOnly, rebuildOnly,
+                CalledNames.UNKNOWN);
     }
 
     public ModPatches {
