@@ -31,11 +31,11 @@ final class CollectionNotes {
         private final boolean fresh;
         private final long print;
         private final Origin origin;
-        private final boolean inWorld;
+        private final boolean ofWorld;
         private int wrapped;
 
         private Frame(Object container, @Nullable Note note, List<Runnable> before, List<Runnable> now, boolean fresh,
-                long print, Origin origin, boolean inWorld) {
+                long print, Origin origin, boolean ofWorld) {
             this.container = container;
             this.note = note;
             this.before = before;
@@ -43,7 +43,7 @@ final class CollectionNotes {
             this.fresh = fresh;
             this.print = print;
             this.origin = origin;
-            this.inWorld = inWorld;
+            this.ofWorld = ofWorld;
         }
     }
 
@@ -204,7 +204,7 @@ final class CollectionNotes {
                 return;
             }
             note = new Note(container, frame.origin, this.gone);
-            note.ofWorld = frame.inWorld;
+            note.ofWorld = frame.ofWorld;
             note.wrapped = frame.wrapped;
             this.notes.put(container, note);
         }

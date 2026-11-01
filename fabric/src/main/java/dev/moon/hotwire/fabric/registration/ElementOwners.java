@@ -201,8 +201,22 @@ final class ElementOwners {
     }
 
     @Nullable String findPartsOwnerOfSlot(Object item) {
-        return Fields.getRecordParts(item.getClass()).isEmpty() ? null
-                : this.mods.stream().filter(mod -> Wrappers.isWhollyOf(mod, item)).findFirst().orElse(null);
+        if (Fields.getRecordParts(item.getClass()).isEmpty()) {
+            return null;
+        }
+        Object first = Wrappers.findFirstPart(item);
+        if (first == null) {
+            return null;
+        }
+        boolean any = first instanceof Class<?> || first.getClass().isHidden();
+        String ofClass = any ? null : GameRegistrations.findModOf(first.getClass());
+        String ofId = any ? null : ValueOwners.findIdOwner(first);
+        for (String mod : this.mods) {
+            if ((any || mod.equals(ofClass) || mod.equals(ofId)) && Wrappers.isWhollyOf(mod, item)) {
+                return mod;
+            }
+        }
+        return null;
     }
 
     @Nullable String findModNamespaceOf(@Nullable Object key, @Nullable Object value) {

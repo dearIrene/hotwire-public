@@ -23,7 +23,7 @@ final class CandidateReach {
     private final Map<BitSet, BitSet> shared = new HashMap<>();
     private final IdentityHashMap<BitSet, Set<String>> named = new IdentityHashMap<>();
     private long asked;
-    private long worked;
+    private long computed;
 
     Set<String> find(Object item) {
         this.asked++;
@@ -31,7 +31,7 @@ final class CandidateReach {
     }
 
     String describe() {
-        return this.reached.size() + " objects read into for " + this.asked + " elements, " + this.worked
+        return this.reached.size() + " objects read into for " + this.asked + " elements, " + this.computed
                 + " worked out, " + (this.singles.size() + this.shared.size()) + " answers";
     }
 
@@ -75,7 +75,7 @@ final class CandidateReach {
                 }
             }
         }
-        this.worked++;
+        this.computed++;
 
         BitSet all = this.add(copy(kind.own()), ValueOwners.findIdOwner(value));
         if (left > 0) {
@@ -152,7 +152,7 @@ final class CandidateReach {
         if (bits.nextSetBit(first + 1) < 0) {
             return this.singles.get(first);
         }
-        return this.shared.computeIfAbsent(bits, kept -> kept);
+        return this.shared.computeIfAbsent(bits, same -> same);
     }
 
     private Set<String> toNames(BitSet bits) {

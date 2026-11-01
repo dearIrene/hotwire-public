@@ -365,6 +365,23 @@ final class Wrappers {
         return owner;
     }
 
+    static @Nullable Object findFirstPart(Object item) {
+        try {
+            for (FieldSlots.Slot field : Fields.getRecordParts(item.getClass())) {
+                if (field.getType().isPrimitive()) {
+                    continue;
+                }
+                Object part = field.get(item);
+                if (part != null && !ValueOwners.isPlain(part)) {
+                    return part;
+                }
+            }
+        } catch (ReflectiveOperationException | RuntimeException | LinkageError e) {
+            return null;
+        }
+        return null;
+    }
+
     static boolean isWhollyOf(String mod, Object item) {
         List<FieldSlots.Slot> parts = Fields.getRecordParts(item.getClass());
         if (parts.isEmpty()) {
