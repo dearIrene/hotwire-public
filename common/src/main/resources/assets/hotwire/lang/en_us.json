@@ -66,7 +66,7 @@
   "hotwire.first_open.crash": "Every crash report will explicitly TELL YOU if Hotwire was the reason!",
   "hotwire.client_warning.dawn_why": "It would be wild if the owner of Dawn Client knew about my mod from a friend & thought it'd be a good idea to try and steal the idea before we can release.",
   "hotwire.client_warning.dawn_unsupported": "Use of “Hotwire” in Dawn Client is completely unsupported.",
-  "hotwire.client_warning.dawn_announcement": "There definitely isnt an announcement in dawn client about something of this realm ❤️",
+  "hotwire.client_warning.dawn_announcement": "There definitely isnt an announcement in dawn client about something of this realm ❤",
   "hotwire.client_warning.title": "You're using %s",
   "hotwire.client_warning.not_made": "Hotwire was not made to be used in clients.",
   "hotwire.client_warning.no_reports": "Please do not report any bugs while using a modified client.",
