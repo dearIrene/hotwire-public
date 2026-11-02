@@ -1,7 +1,7 @@
 package dev.moon.hotwire.fabric;
 
 import dev.moon.hotwire.ui.ModifiedClients;
-import net.fabricmc.fabric.api.client.event.lifecycle.v1.ClientTickEvents;
+import net.fabricmc.fabric.api.client.event.lifecycle.v1.ClientLifecycleEvents;
 import net.fabricmc.loader.api.FabricLoader;
 import net.minecraft.client.Minecraft;
 import org.slf4j.Logger;
@@ -9,7 +9,8 @@ import org.slf4j.LoggerFactory;
 
 final class ClientWarning {
     private static final Logger LOGGER = LoggerFactory.getLogger(ClientWarning.class);
-    private static boolean opened;
+    private static final long ASK_EVERY_MS = 200;
+    private static volatile boolean opened;
 
     private ClientWarning() {
     }
@@ -26,10 +27,26 @@ final class ClientWarning {
         }
         LOGGER.warn("[Hotwire] running in a modified client: {}", client);
         ModifiedClients.setCurrent(client);
-        ClientTickEvents.END_CLIENT_TICK.register(ClientWarning::openWhenReady);
+        ClientLifecycleEvents.CLIENT_STARTED.register(ClientWarning::waitToOpen);
     }
 
-    private static void openWhenReady(Minecraft game) {
+    private static void waitToOpen(Minecraft game) {
+        Thread waiter = new Thread(() -> {
+            while (!opened) {
+                game.execute(ClientWarning::openWhenReady);
+                try {
+                    Thread.sleep(ASK_EVERY_MS);
+                } catch (InterruptedException e) {
+                    Thread.currentThread().interrupt();
+                    return;
+                }
+            }
+        }, "hotwire-client-prompt");
+        waiter.setDaemon(true);
+        waiter.start();
+    }
+
+    private static void openWhenReady() {
         if (opened || ModViews.openOverlay() != null || ModViews.openScreen() == null) {
             return;
         }
