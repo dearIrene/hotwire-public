@@ -235,6 +235,7 @@ final class EngineStart {
         laps.endLap("clear the generated classes");
         applier.orderConfigsAs(mixin.getConfigs());
         ClassFileTransformer loadTimeMixer = applier.makeLoadTimeMixer();
+        TransformerChain.setMixedAsItLoads(name -> applier.isMixedAsItLoads(name.replace('.', '/')));
         applier.holdRedefinitionWith(() -> GameHold.begin(Minecraft.getInstance())::release);
         applier.rebuildObjectsWith(ResourceReload::isRebuiltWhilePaused, new PausedRebuilds());
         InitHookRuns.skipRebuiltWith(ResourceReload::isRebuiltWhilePaused);

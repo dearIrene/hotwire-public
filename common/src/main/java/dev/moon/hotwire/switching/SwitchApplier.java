@@ -523,7 +523,7 @@ public final class SwitchApplier {
         return new LoadTimeMixer(this).makeTransformer();
     }
 
-    boolean isMixedAsItLoads(String internalName) {
+    public boolean isMixedAsItLoads(String internalName) {
         return this.watched.contains(internalName) || this.replaced.containsKey(internalName)
                 || this.lateMixins.containsKey(internalName);
     }

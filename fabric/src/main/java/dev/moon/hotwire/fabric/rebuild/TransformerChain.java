@@ -20,11 +20,14 @@ import net.fabricmc.loader.impl.launch.FabricLauncherBase;
 import org.jspecify.annotations.Nullable;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
+import org.spongepowered.asm.mixin.transformer.throwables.IllegalClassLoadError;
 
 public final class TransformerChain {
     private static final Logger LOGGER = LoggerFactory.getLogger(TransformerChain.class);
 
     private static final ThreadLocal<@Nullable String> ALONE = new ThreadLocal<>();
+
+    private static volatile Predicate<String> mixedAsItLoads = name -> false;
 
     private final List<Object> wrappers;
     private final List<String> owners;
@@ -39,6 +42,10 @@ public final class TransformerChain {
         this.owners = List.copyOf(owners);
         this.mixins = mixins;
         this.transformBytes = transformBytes;
+    }
+
+    public static void setMixedAsItLoads(Predicate<String> mixed) {
+        mixedAsItLoads = mixed;
     }
 
     public static @Nullable TransformerChain bind(Function<Class<?>, @Nullable String> modOf) {
@@ -166,6 +173,11 @@ public final class TransformerChain {
             try {
                 result = method.invoke(next, args);
             } catch (InvocationTargetException e) {
+                if (next == TransformerChain.this.mixins && e.getCause() instanceof IllegalClassLoadError
+                        && method.getName().equals("transformClassBytes") && args != null
+                        && mixedAsItLoads.test((String) args[0])) {
+                    return args[2];
+                }
                 throw e.getCause();
             }
             if (next == TransformerChain.this.mixins && transforms && !TransformerChain.this.bypassed.isEmpty()
