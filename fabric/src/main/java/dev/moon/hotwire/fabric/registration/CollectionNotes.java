@@ -135,6 +135,7 @@ final class CollectionNotes {
     }
 
     synchronized void dropLook() {
+        this.toRead = List.of();
         while (!this.open.isEmpty()) {
             Frame frame = this.open.pop();
             Note note = frame.note;
@@ -349,6 +350,7 @@ final class CollectionNotes {
     }
 
     synchronized void finishEvery() {
+        this.toRead = List.of();
         this.order.forEach(note -> note.readAgain = false);
     }
 
