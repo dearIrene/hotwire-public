@@ -58,7 +58,8 @@ final class AddStart {
         }
         starts.addAll(YumiStarts.collect(ids, side));
         CompletableFuture<Map<String, List<String>>> started = new CompletableFuture<>();
-        Minecraft.getInstance().execute(() -> {
+
+        GameHold.runNextAtFrameEdge(() -> {
             OpenRegistries registries = OpenRegistries.open();
             OpenOneConfig configs;
             try {

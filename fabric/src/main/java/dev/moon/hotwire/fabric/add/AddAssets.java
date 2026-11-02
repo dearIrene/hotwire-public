@@ -2,12 +2,18 @@ package dev.moon.hotwire.fabric.add;
 
 import dev.moon.hotwire.fabric.ResourceReload;
 import dev.moon.hotwire.fabric.WordsReload;
+import dev.moon.hotwire.fabric.mixin.core.client.ReloadableResourceManagerAccessor;
 import dev.moon.hotwire.fabric.registration.GameRegistrations;
 import java.io.IOException;
 import java.nio.file.Path;
 import java.util.Collection;
 import java.util.List;
 import java.util.zip.ZipFile;
+import net.minecraft.client.Minecraft;
+import net.minecraft.server.packs.PackType;
+import net.minecraft.server.packs.repository.PackRepository;
+import net.minecraft.server.packs.resources.MultiPackResourceManager;
+import net.minecraft.server.packs.resources.ReloadableResourceManager;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -28,6 +34,18 @@ final class AddAssets {
                         .countByKind(part.jar().manifest().id()).containsKey("resource reloader"));
         ResourceReload.reloadBeforeFrame(shipping.stream().map(part -> part.jar().manifest().id()).toList()
                 + " bring assets", wordsAlone);
+    }
+
+    static void openPacks(Collection<ModAdder.Part> parts) {
+        if (parts.stream().noneMatch(part -> shipsAssets(part.path()))
+                || !(Minecraft.getInstance().getResourceManager() instanceof ReloadableResourceManager manager)) {
+            return;
+        }
+        PackRepository packs = Minecraft.getInstance().getResourcePackRepository();
+        packs.reload();
+        ReloadableResourceManagerAccessor access = (ReloadableResourceManagerAccessor) manager;
+        access.hotwire$getResources().close();
+        access.hotwire$setResources(new MultiPackResourceManager(PackType.CLIENT_RESOURCES, packs.openAllSelected()));
     }
 
     static boolean shipsAssets(Path jar) {

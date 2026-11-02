@@ -17,6 +17,7 @@ import java.util.concurrent.LinkedBlockingQueue;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.TimeoutException;
 import java.util.concurrent.atomic.AtomicBoolean;
+import java.util.concurrent.atomic.AtomicLong;
 import java.util.function.BooleanSupplier;
 import net.minecraft.client.Minecraft;
 import net.minecraft.server.MinecraftServer;
@@ -52,6 +53,7 @@ public final class GameHold {
     private static final Queue<Runnable> AT_NEXT_HOLD = new ConcurrentLinkedQueue<>();
 
     private static final Queue<Runnable> AT_FRAME_EDGE = new ConcurrentLinkedQueue<>();
+    private static final AtomicLong FRAME_EDGES = new AtomicLong();
 
     private static final Duration EDGE = Duration.ofMillis(250);
 
@@ -282,12 +284,29 @@ public final class GameHold {
 
     @SuppressWarnings("checkstyle:IllegalCatch")
     public static void runAtFrameEdge() {
+        FRAME_EDGES.incrementAndGet();
         for (Runnable hold = AT_FRAME_EDGE.poll(); hold != null; hold = AT_FRAME_EDGE.poll()) {
             try {
                 hold.run();
             } catch (RuntimeException e) {
                 LOGGER.error("[Hotwire] the game thread's hold threw", e);
             }
+        }
+    }
+
+    public static void runNextAtFrameEdge(Runnable work) {
+        AT_FRAME_EDGE.add(work);
+    }
+
+    public static long countFrames() {
+        return FRAME_EDGES.get();
+    }
+
+    public static void awaitFrames(int frames, Duration wait) throws InterruptedException {
+        long until = FRAME_EDGES.get() + frames;
+        long deadline = System.nanoTime() + wait.toNanos();
+        while (FRAME_EDGES.get() < until && System.nanoTime() < deadline) {
+            Thread.sleep(1);
         }
     }
 

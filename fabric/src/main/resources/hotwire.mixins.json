@@ -64,6 +64,7 @@
     "core.client.MinecraftMixin",
     "core.client.OptionsAccessor",
     "core.client.OptionsMixin",
+    "core.client.ReloadableResourceManagerAccessor",
     "core.fabric.client.rendering.PictureInPictureRendererRegistryImplAccessor",
     "core.fabric.client.rendering.PictureInPictureRendererRegistryImplMixin",
     "core.fabric.client.rendering.SpecialGuiElementRegistryImplAccessor",

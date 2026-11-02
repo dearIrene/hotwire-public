@@ -4,6 +4,7 @@ import dev.moon.hotwire.fabric.BackgroundReload;
 import dev.moon.hotwire.fabric.CrashGuard;
 import dev.moon.hotwire.fabric.ModPolicy;
 import dev.moon.hotwire.fabric.ResourceReload;
+import dev.moon.hotwire.fabric.registration.GameHold;
 import dev.moon.hotwire.fabric.registration.GameRegistrations;
 import dev.moon.hotwire.fabric.registration.ModLifecycle;
 import dev.moon.hotwire.jar.ContentScan;
@@ -116,6 +117,8 @@ public final class ModAdder {
     private static final Logger LOGGER = LoggerFactory.getLogger(ModAdder.class);
 
     private static final Duration ENTRYPOINT_WAIT = Duration.ofSeconds(90);
+    private static final int FRAMES_BEFORE_SERVER = 2;
+    private static final Duration FRAMES_WAIT = Duration.ofSeconds(5);
 
     final Engine engine;
 
@@ -462,7 +465,10 @@ public final class ModAdder {
                 }
 
                 IntSupplier setUp = () -> InitHookRuns.runLoadFinishedAfter(
-                        () -> this.engine.getApplier().getCatchUps().run(), () -> {
+                        () -> {
+                            AddAssets.openPacks(parts.values());
+                            return this.engine.getApplier().getCatchUps().run();
+                        }, () -> {
                             this.engine.showAddStep(4);
                             AddAssets.reloadForAssets(parts.values());
                         }, BackgroundReload::runAfterReload);
@@ -473,6 +479,8 @@ public final class ModAdder {
                 Map<String, List<String>> clientStarted = started.get(ENTRYPOINT_WAIT.toMillis(),
                         TimeUnit.MILLISECONDS);
                 SwitchTimes.mark("add: entrypoints");
+
+                GameHold.awaitFrames(FRAMES_BEFORE_SERVER, FRAMES_WAIT);
 
                 for (String id : ids) {
                     List<String> ran = new ArrayList<>(clientStarted.getOrDefault(id, List.of()));
