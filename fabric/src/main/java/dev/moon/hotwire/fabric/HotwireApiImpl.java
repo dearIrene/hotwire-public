@@ -1,8 +1,13 @@
 package dev.moon.hotwire.fabric;
 
+import dev.moon.hotwire.api.ApiStatus;
+import dev.moon.hotwire.api.ChangePlan;
+import dev.moon.hotwire.api.ChangeRequest;
 import dev.moon.hotwire.api.HotwireApi;
 import dev.moon.hotwire.api.ModState;
+import dev.moon.hotwire.api.ModUpdates;
 import dev.moon.hotwire.api.OpeningPrompt;
+import dev.moon.hotwire.api.PendingTask;
 import dev.moon.hotwire.api.StoreAdd;
 import dev.moon.hotwire.api.StoreCategory;
 import dev.moon.hotwire.api.StoreDownload;
@@ -48,7 +53,7 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 public final class HotwireApiImpl implements HotwireApi {
-    private static final int REVISION = 5;
+    private static final int REVISION = 6;
     private static final StackWalker STACK = StackWalker.getInstance(StackWalker.Option.RETAIN_CLASS_REFERENCE);
     private static final Logger LOGGER = LoggerFactory.getLogger(HotwireApiImpl.class);
 
@@ -71,6 +76,86 @@ public final class HotwireApiImpl implements HotwireApi {
     public boolean isReady() {
         HotwireEngine engine = HotwireClient.findEngine();
         return engine != null && engine.findJvmParts().isPresent();
+    }
+
+    @Override
+    public ApiStatus getStatus() {
+        HotwireEngine engine = HotwireClient.findEngine();
+        if (engine == null) {
+            return new ApiStatus(ApiStatus.State.STARTING, 0, Lang.get("hotwire.api.starting"));
+        }
+        if (engine.findJvmParts().isEmpty()) {
+            return new ApiStatus(ApiStatus.State.UNAVAILABLE, 0, engine.getSwitchRefusal());
+        }
+        Progress.Snapshot now = engine.getProgress().snapshot();
+        if (now.running() || this.isSwitching() || ApiChanges.isRunning()) {
+            return new ApiStatus(ApiStatus.State.BUSY, now.running() ? now.getFraction() : 0,
+                    now.running() ? now.describe() : "");
+        }
+        return new ApiStatus(ApiStatus.State.READY, 0, "");
+    }
+
+    @Override
+    public CompletableFuture<Void> awaitIdle() {
+        CompletableFuture<Void> idle = new CompletableFuture<>();
+        Thread.ofPlatform().name("hotwire-api-idle").daemon().start(() -> {
+            try {
+                while (this.getStatus().state() == ApiStatus.State.BUSY) {
+                    Thread.sleep(50);
+                }
+            } catch (InterruptedException e) {
+                Thread.currentThread().interrupt();
+            }
+            idle.complete(null);
+        });
+        return idle;
+    }
+
+    @Override
+    public List<PendingTask> getPendingTasks() {
+        return ApiChanges.findPending();
+    }
+
+    @Override
+    public boolean cancelPendingTask(String modId) {
+        return ApiChanges.cancelPending(modId);
+    }
+
+    @Override
+    public boolean isAddedThisSession(String id) {
+        HotwireEngine engine = HotwireClient.findEngine();
+        return engine != null && engine.isAddedThisSession(id);
+    }
+
+    @Override
+    public Optional<byte[]> findIcon(String id) {
+        return ApiChanges.findIcon(id);
+    }
+
+    @Override
+    public String findNewerHotwire() {
+        HotwireEngine engine = HotwireClient.findEngine();
+        return engine == null ? "" : engine.findNewerHotwire();
+    }
+
+    @Override
+    public void updateHotwire() {
+        HotwireEngine engine = HotwireClient.findEngine();
+        if (engine != null) {
+            Minecraft.getInstance().execute(engine::updateHotwireAtNextStart);
+        }
+    }
+
+    @Override
+    public CompletableFuture<ModUpdates> checkUpdates() {
+        return ApiChanges.checkUpdates();
+    }
+
+    @Override
+    public CompletableFuture<ChangePlan> planChange(ChangeRequest request) {
+        CallerBlocks.Callers callers = findCallers();
+        tellIfUnprompted(callers);
+        return ApiChanges.plan(request, callers);
     }
 
     @Override
@@ -383,7 +468,7 @@ public final class HotwireApiImpl implements HotwireApi {
         };
     }
 
-    private static SwitchPreview preview(boolean off, List<String> ids, CallerBlocks.Callers callers) {
+    static SwitchPreview preview(boolean off, List<String> ids, CallerBlocks.Callers callers) {
         HotwireEngine engine = HotwireClient.findEngine();
         if (engine == null) {
             return new SwitchPreview(false, List.of(), Lang.get("hotwire.api.starting"));
@@ -414,7 +499,7 @@ public final class HotwireApiImpl implements HotwireApi {
     }
 
     @SuppressWarnings("FutureReturnValueIgnored")
-    private static CompletableFuture<SwitchResult> switchFor(boolean off, List<String> asked,
+    static CompletableFuture<SwitchResult> switchFor(boolean off, List<String> asked,
             CallerBlocks.Callers callers) {
         CompletableFuture<SwitchResult> ended = new CompletableFuture<>();
         Minecraft.getInstance().execute(() -> {

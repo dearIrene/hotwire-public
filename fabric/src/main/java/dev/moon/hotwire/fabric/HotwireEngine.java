@@ -555,6 +555,10 @@ public final class HotwireEngine implements ModScreen.Game, AutoCloseable {
         this.pending.cleanUp(modId);
     }
 
+    public boolean isAddedThisSession(String id) {
+        return this.installed.isAddedThisSession(id);
+    }
+
     @Override
     public List<PendingChange> getPendingChanges() {
         List<PendingChange> out = new ArrayList<>(this.rows.getPendingChanges());

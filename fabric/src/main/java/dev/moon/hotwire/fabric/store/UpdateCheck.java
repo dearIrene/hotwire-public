@@ -3,8 +3,6 @@ package dev.moon.hotwire.fabric.store;
 import dev.moon.hotwire.fabric.CacheLimit;
 import dev.moon.hotwire.fabric.InstalledMods;
 import dev.moon.hotwire.jar.FileHashes;
-import dev.moon.hotwire.jar.ModJarException;
-import dev.moon.hotwire.jar.ModJarReader;
 import dev.moon.hotwire.jar.ModManifest;
 import dev.moon.hotwire.modrinth.Downloads;
 import dev.moon.hotwire.modrinth.ModrinthClient;

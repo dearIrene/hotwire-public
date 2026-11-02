@@ -17,6 +17,8 @@ public interface HotwireApi {
 
     boolean isReady();
 
+    ApiStatus getStatus();
+
     boolean isSwitching();
 
     SwitchProgress getProgress();
@@ -32,6 +34,24 @@ public interface HotwireApi {
     CompletableFuture<SwitchResult> turnOff(Collection<String> ids);
 
     CompletableFuture<SwitchResult> turnOn(Collection<String> ids);
+
+    CompletableFuture<ModUpdates> checkUpdates();
+
+    CompletableFuture<ChangePlan> planChange(ChangeRequest request);
+
+    CompletableFuture<Void> awaitIdle();
+
+    List<PendingTask> getPendingTasks();
+
+    boolean cancelPendingTask(String modId);
+
+    boolean isAddedThisSession(String id);
+
+    Optional<byte[]> findIcon(String id);
+
+    String findNewerHotwire();
+
+    void updateHotwire();
 
     void addListener(Consumer<SwitchResult> listener);
 

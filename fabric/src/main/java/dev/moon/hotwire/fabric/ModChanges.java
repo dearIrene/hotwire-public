@@ -81,6 +81,16 @@ public final class ModChanges {
         return ready.updates().updateAll(jars);
     }
 
+    public ModUpdater.Result queueUpdate(Path jar) {
+        HotwireEngine.JvmParts ready = this.parts;
+        return ready == null ? new ModUpdater.Result.Refused(this.refusal) : ready.updates().queueForNextStart(jar);
+    }
+
+    public List<ModUpdater.SortResult> previewUpdates(List<Path> jars) {
+        HotwireEngine.JvmParts ready = this.parts;
+        return ready == null ? List.of() : ready.updates().previewAll(jars);
+    }
+
     @SuppressWarnings("FutureReturnValueIgnored")
     void updateAfterWorld() {
         HotwireEngine.JvmParts ready = this.parts;

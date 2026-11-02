@@ -441,6 +441,14 @@ public final class UpdateSupport implements ModUpdater.Engine {
         }
     }
 
+    public ModUpdater.Result queueForNextStart(Path jar) {
+        return this.updater.update(jar, UpdateMethod.NEXT_START);
+    }
+
+    public List<ModUpdater.SortResult> previewAll(List<Path> jars) {
+        return this.updater.previewAll(jars);
+    }
+
     public List<ModUpdater.Result> updateAll(List<Path> jars) {
         this.switcher.setBusy(true);
         try {

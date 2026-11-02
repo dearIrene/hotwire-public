@@ -275,6 +275,12 @@ public final class ModSwitcher {
         return this.planner.planOn(this.withOffTogether(this.withGoingAlong(asked, this.off::contains)), this.getOff());
     }
 
+    public SwitchPlan planOnAfter(Collection<String> asked, Collection<String> goingOff) {
+        Set<String> after = new HashSet<>(this.getOff());
+        after.addAll(goingOff);
+        return this.planner.planOn(asked, after);
+    }
+
     private synchronized Set<String> withOffTogether(Collection<String> asked) {
         Set<String> ids = new LinkedHashSet<>();
         asked.forEach(id -> ids.add(this.graph.resolve(id)));

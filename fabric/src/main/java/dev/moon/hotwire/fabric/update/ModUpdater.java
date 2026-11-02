@@ -345,6 +345,12 @@ public final class ModUpdater {
         return this.updateClashes;
     }
 
+    public List<SortResult> previewAll(List<Path> jars) {
+        Map<String, ModManifest> brought = new HashMap<>();
+        jars.forEach(jar -> brought.putAll(this.findComingOf(jar)));
+        return jars.stream().map(jar -> this.sort(jar, brought, Map.of())).toList();
+    }
+
     public List<Result> updateAll(List<Path> jars, Function<Path, Result> alone,
             BiFunction<Path, Result.Failed, Result> instead) {
         SwitchTimes.begin();
@@ -376,7 +382,7 @@ public final class ModUpdater {
         };
     }
 
-    sealed interface SortResult {
+    public sealed interface SortResult {
         record Refused(Result.Refused result) implements SortResult {
         }
 
@@ -384,7 +390,7 @@ public final class ModUpdater {
         }
 
         record Planned(ModManifest manifest, Path running, Path jar, ModJar read, Whole whole) implements SortResult {
-            UpdateMethod method() {
+            public UpdateMethod method() {
                 return getMethodOf(this.whole.plan().tier());
             }
         }

@@ -35,6 +35,12 @@ final class StoreApiAdd {
     private StoreApiAdd() {
     }
 
+    static CompletableFuture<List<Path>> fetchJars(String idOrSlug) {
+        CompletableFuture<List<Path>> made = new CompletableFuture<>();
+        fetch(idOrSlug, "", made, (engine, name, jars) -> made.complete(List.copyOf(jars)), why -> List.of());
+        return made;
+    }
+
     static CompletableFuture<StoreAdd> request(String idOrSlug, String versionId) {
         CompletableFuture<StoreAdd> made = new CompletableFuture<>();
         fetch(idOrSlug, versionId, made, (engine, name, jars) -> {
