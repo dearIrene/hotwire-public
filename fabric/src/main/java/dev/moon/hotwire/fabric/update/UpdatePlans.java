@@ -31,12 +31,14 @@ final class UpdatePlans {
         this.owner = owner;
     }
 
-    synchronized Optional<String> findRejection(ModManifest incoming, Map<String, ModManifest> brought) {
-        this.owner.after = brought;
-        try {
-            return this.findRejection(incoming);
-        } finally {
-            this.owner.after = Map.of();
+    Optional<String> findRejection(ModManifest incoming, Map<String, ModManifest> brought) {
+        synchronized (this.owner) {
+            this.owner.after = brought;
+            try {
+                return this.findRejection(incoming);
+            } finally {
+                this.owner.after = Map.of();
+            }
         }
     }
 
