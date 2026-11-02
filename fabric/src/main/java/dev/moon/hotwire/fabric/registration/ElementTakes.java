@@ -49,6 +49,10 @@ final class ElementTakes {
         };
     }
 
+    interface TwoStepTake {
+        void askAhead();
+    }
+
     record Answers(List<Runnable> takes, List<Object> containers, List<@Nullable String> owners,
             IdentityHashMap<Object, Long> prints) {
     }
@@ -94,6 +98,9 @@ final class ElementTakes {
                 if (owner == null) {
                     continue;
                 }
+            }
+            if (take instanceof NotedTake filed && filed.take() instanceof TwoStepTake ahead) {
+                ahead.askAhead();
             }
             takes.add(take);
             where.add(container);

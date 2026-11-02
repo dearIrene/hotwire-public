@@ -6,6 +6,9 @@ import java.util.Collections;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.Set;
+import java.util.function.Consumer;
+import java.util.function.Supplier;
 import org.jspecify.annotations.Nullable;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -38,9 +41,64 @@ final class FixedLists {
                 || name.startsWith("kotlin.collections.");
     }
 
-    static void removeFromValue(Walk walk, Map<Object, Object> entries, Object key) {
-        if (!(entries.get(key) instanceof List<?> now) || !isPlainList(now)) {
+    private record Plan(List<Object> retained, Map<String, List<Removal>> out) {
+    }
+
+    private static final class NotedList implements ElementTakes.TwoStepTake, Consumer<String> {
+        private final Supplier<@Nullable Object> current;
+        private final Supplier<@Nullable Plan> ask;
+        private final Consumer<Plan> write;
+        private @Nullable Object askedOf;
+        private @Nullable Plan answer;
+
+        NotedList(Supplier<@Nullable Object> current, Supplier<@Nullable Plan> ask, Consumer<Plan> write) {
+            this.current = current;
+            this.ask = ask;
+            this.write = write;
+        }
+
+        @Override
+        public void askAhead() {
+            this.askedOf = this.current.get();
+            this.answer = this.ask.get();
+        }
+
+        @Override
+        @SuppressWarnings("ReferenceEquality")
+        public void accept(String mod) {
+            boolean answered = this.askedOf != null && this.askedOf == this.current.get();
+            Plan plan = answered ? this.answer : this.ask.get();
+            this.askedOf = null;
+            this.answer = null;
+            if (plan != null) {
+                this.write.accept(plan);
+            }
+        }
+    }
+
+    private static void noteOrWrite(Walk walk, Plan plan, Supplier<@Nullable Object> current,
+            Supplier<@Nullable Plan> ask, Consumer<Plan> write) {
+        if (!ElementLook.isLooking()) {
+            write.accept(plan);
             return;
+        }
+        for (String mod : plan.out().keySet()) {
+            walk.getLook().hasNoted(new ElementTakes.NotedTake(() -> ask.get() == null ? null : mod,
+                    new NotedList(current, ask, write), Set.of(mod)));
+        }
+    }
+
+    static void removeFromValue(Walk walk, Map<Object, Object> entries, Object key) {
+        Plan plan = planValue(walk, entries, key);
+        if (plan != null) {
+            noteOrWrite(walk, plan, () -> entries.get(key), () -> planValue(walk, entries, key),
+                    found -> writeValue(walk, entries, key, found));
+        }
+    }
+
+    private static @Nullable Plan planValue(Walk walk, Map<Object, Object> entries, Object key) {
+        if (!(entries.get(key) instanceof List<?> now) || !isPlainList(now)) {
+            return null;
         }
         boolean outer = walk.isInSmall();
         walk.setInSmall(now.size() <= CollectionReferences.WRAPPERS_IN);
@@ -57,15 +115,25 @@ final class FixedLists {
             }
         }
         walk.setInSmall(outer);
-        if (!out.isEmpty() && !walk.getLook().hasNoted(() -> removeFromValue(walk, entries, key))) {
-            entries.put(key, Collections.unmodifiableList(retained));
-            out.forEach((mod, removed) -> walk.getRemovalsOf(mod).addAll(removed));
-        }
+        return out.isEmpty() ? null : new Plan(retained, out);
+    }
+
+    private static void writeValue(Walk walk, Map<Object, Object> entries, Object key, Plan plan) {
+        entries.put(key, Collections.unmodifiableList(plan.retained()));
+        plan.out().forEach((mod, removed) -> walk.getRemovalsOf(mod).addAll(removed));
     }
 
     static void removeFromField(Walk walk, FieldSlots.Slot field, @Nullable Object holder) {
+        Plan plan = planField(walk, field, holder);
+        if (plan != null) {
+            noteOrWrite(walk, plan, () -> CollectionParts.read(field, holder), () -> planField(walk, field, holder),
+                    found -> writeField(walk, field, holder, found));
+        }
+    }
+
+    private static @Nullable Plan planField(Walk walk, FieldSlots.Slot field, @Nullable Object holder) {
         if (!(CollectionParts.read(field, holder) instanceof List<?> now) || !isPlainList(now)) {
-            return;
+            return null;
         }
         walk.setInSmall(now.size() <= CollectionReferences.WRAPPERS_IN);
         List<Object> retained = new ArrayList<>();
@@ -82,15 +150,17 @@ final class FixedLists {
         }
 
         if (retained.isEmpty() && now.stream().allMatch(item -> item instanceof Enum<?>)) {
-            return;
+            return null;
         }
-        if (!out.isEmpty() && !walk.getLook().hasNoted(() -> removeFromField(walk, field, holder))) {
-            try {
-                walk.getWriter().write(field, holder, Collections.unmodifiableList(retained));
-                out.forEach((mod, removed) -> walk.getRemovalsOf(mod).addAll(removed));
-            } catch (IllegalAccessException e) {
-                LOGGER.warn("[Hotwire] {} keeps {}'s elements: {}", field, out.keySet(), e.toString());
-            }
+        return out.isEmpty() ? null : new Plan(retained, out);
+    }
+
+    private static void writeField(Walk walk, FieldSlots.Slot field, @Nullable Object holder, Plan plan) {
+        try {
+            walk.getWriter().write(field, holder, Collections.unmodifiableList(plan.retained()));
+            plan.out().forEach((mod, removed) -> walk.getRemovalsOf(mod).addAll(removed));
+        } catch (IllegalAccessException e) {
+            LOGGER.warn("[Hotwire] {} keeps {}'s elements: {}", field, plan.out().keySet(), e.toString());
         }
     }
 }
