@@ -167,7 +167,8 @@ public final class ModStore {
                     List<ModrinthClient.Version> versions = this.model.getClient()
                             .findVersions(ModrinthClient.Kind.MOD, needed);
                     if (versions.isEmpty()) {
-                        throw new IOException("a mod it needs has no version for this game: " + needed);
+                        throw new IOException(Lang.get("hotwire.store.needs_no_version",
+                                this.model.getClient().findProject(needed).title()));
                     }
                     return versions.getFirst();
                 });

@@ -270,7 +270,7 @@ public final class UpdateCheck {
         }
         List<ModrinthClient.Version> versions = this.client.findVersions(ModrinthClient.Kind.MOD, projectId);
         if (versions.isEmpty()) {
-            throw new IOException("a mod it needs has no version for this game: " + projectId);
+            throw new IOException(Lang.get("hotwire.store.needs_no_version", project.title()));
         }
         ModrinthClient.Version newest = versions.getFirst();
         for (String deeper : newest.requiredProjects()) {
