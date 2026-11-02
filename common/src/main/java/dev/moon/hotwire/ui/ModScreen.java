@@ -287,7 +287,7 @@ public final class ModScreen implements JarHost {
                 this.updatePanel, this.progress, this.reopenPanel, this.firstOpen, this.selfUpdate, this.reportPanel,
                 this.cacheFillPanel, this.manageCachePanel);
         this.panels.forEach(this.root.getModal()::add);
-        if (!game.isFirstOpenAccepted()) {
+        if (!game.isFirstOpenAccepted() || ModifiedClients.takePromptDue()) {
             this.firstOpen.present();
         }
         this.showNewerHotwire();

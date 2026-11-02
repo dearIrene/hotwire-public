@@ -54,6 +54,7 @@ public final class HotwireClient implements ClientModInitializer {
                 HotwireClient::findPlace);
         GameLog.LOGGER.info("[Hotwire] {} loaded; H or /hotwire opens it, and its Report button writes what went wrong"
                 + " to hotwire/reports", LoadedMods.findVersion(ID, "unknown"));
+        ClientWarning.register();
         NoticeHud.register();
         Downloads.onEveryChange(DownloadNotices::show);
 

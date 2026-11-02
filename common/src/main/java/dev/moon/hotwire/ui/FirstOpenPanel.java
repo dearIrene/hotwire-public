@@ -17,6 +17,14 @@ public final class FirstOpenPanel extends Panel {
             new MessageLine.Line("hotwire.first_open.report", Palette.BAD),
             new MessageLine.Line("hotwire.first_open.crash", Palette.DIM));
 
+    private static final List<MessageLine.Line> CLIENT_SENTENCES = List.of(
+            new MessageLine.Line("hotwire.client_warning.not_made", Palette.TEXT),
+            new MessageLine.Line("hotwire.client_warning.no_reports", Palette.BAD));
+    private static final List<MessageLine.Line> DAWN_SENTENCES = List.of(
+            new MessageLine.Line("hotwire.client_warning.dawn_why", Palette.TEXT),
+            new MessageLine.Line("hotwire.client_warning.dawn_unsupported", Palette.BAD),
+            new MessageLine.Line("hotwire.client_warning.dawn_announcement", Palette.DIM));
+
     private final Runnable onAccept;
 
     private final @Nullable String credit;
@@ -82,10 +90,14 @@ public final class FirstOpenPanel extends Panel {
     @Override
     protected void drawContent(Canvas canvas, float alpha, int x, int y, int w, int h) {
         canvas.pushScale(TITLE_SCALE, x + 14, y + 14);
-        canvas.drawText(Lang.get("hotwire.first_open.title"), x + 14, y + 14, Colors.fade(Palette.TEXT, alpha));
+        String client = ModifiedClients.getCurrent();
+        canvas.drawText(client == null ? Lang.get("hotwire.first_open.title")
+                : Lang.get("hotwire.client_warning.title", client), x + 14, y + 14, Colors.fade(Palette.TEXT, alpha));
         canvas.popScale();
         List<MessageLine.Line> lines = new ArrayList<>();
-        for (MessageLine.Line sentence : SENTENCES) {
+        List<MessageLine.Line> sentences = client == null ? SENTENCES
+                : client.equals(ModifiedClients.DAWN) ? DAWN_SENTENCES : CLIENT_SENTENCES;
+        for (MessageLine.Line sentence : sentences) {
             MessageLine.addWrapped(canvas, lines, Lang.get(sentence.text()), sentence.color(), w - 28);
         }
         this.lineCount = lines.size();
