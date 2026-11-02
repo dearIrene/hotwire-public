@@ -37,6 +37,8 @@ public final class ElementLook {
 
     private static final Set<String> STALE = ConcurrentHashMap.newKeySet();
 
+    private static final Set<String> BROUGHT = ConcurrentHashMap.newKeySet();
+
     private static volatile @Nullable Thread looking;
 
     private static volatile boolean stopAsked;
@@ -88,6 +90,7 @@ public final class ElementLook {
                     lookedForEvery = asked;
                     lookedEveryAt = System.nanoTime();
                     references.finishEveryLook();
+                    BROUGHT.clear();
                 } else {
                     lookedAlone = Set.copyOf(asked);
                 }
@@ -98,6 +101,54 @@ public final class ElementLook {
                 runningMode = Mode.HOLD;
                 looking = null;
                 self.setPriority(priority);
+            }
+        }
+    }
+
+    public static void readHandlers(FieldReferences references, Collection<String> mods) {
+        if (mods.isEmpty() || !stands(List.copyOf(mods))) {
+            return;
+        }
+        stopLooking();
+        synchronized (ONE_LOOK) {
+            looking = Thread.currentThread();
+            runningMode = Mode.LOOK;
+            MODE.set(Mode.LOOK);
+            try {
+                GameHold.runUnheld(() -> references.readHandlerMaps(mods));
+            } catch (RuntimeException | LinkageError e) {
+                LOGGER.info("[Hotwire] the handlers of {} were not read again: {}", mods, e.toString());
+            } finally {
+                MODE.remove();
+                runningMode = Mode.HOLD;
+                looking = null;
+            }
+        }
+    }
+
+    @SuppressWarnings("ThreadPriorityCheck")
+    public static void readBrought(FieldReferences references) {
+        List<String> brought = List.copyOf(BROUGHT);
+        if (brought.isEmpty() || lookedForEvery.isEmpty()) {
+            return;
+        }
+        stopLooking();
+        synchronized (ONE_LOOK) {
+            long began = System.nanoTime();
+            looking = Thread.currentThread();
+            runningMode = Mode.LOOK;
+            MODE.set(Mode.LOOK);
+            try {
+                GameHold.runUnheld(() -> references.readStaticsForEvery(brought, lookedForEvery));
+                BROUGHT.removeAll(brought);
+                LOGGER.info("[Hotwire] the statics of {} were read for every mod in {} ms", brought,
+                        (System.nanoTime() - began) / 1_000_000);
+            } catch (RuntimeException | LinkageError e) {
+                LOGGER.info("[Hotwire] the statics of {} were not read for every mod: {}", brought, e.toString());
+            } finally {
+                MODE.remove();
+                runningMode = Mode.HOLD;
+                looking = null;
             }
         }
     }
@@ -156,6 +207,7 @@ public final class ElementLook {
 
     public static void markChanged(Collection<String> mods) {
         STALE.addAll(mods);
+        BROUGHT.addAll(mods);
     }
 
     private static boolean isFreshForEvery(List<String> asked) {

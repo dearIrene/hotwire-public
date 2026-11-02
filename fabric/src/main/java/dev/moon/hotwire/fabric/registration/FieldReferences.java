@@ -154,6 +154,22 @@ public final class FieldReferences {
         this.elements.look.getNotes().finishEvery();
     }
 
+    public void readStaticsForEvery(Collection<String> brought, Collection<String> every) {
+        Map<String, List<Class<?>>> classesOf = this.findLoaded(brought).classesOf();
+        List<Class<?>> statics = new ArrayList<>();
+        for (String mod : brought) {
+            for (String group : List.of(mod, LoadedClasses.NESTED + mod)) {
+                classesOf.getOrDefault(group, List.of()).stream().filter(this::isInitialized).forEach(statics::add);
+            }
+        }
+        this.elements.readAlone(List.copyOf(every), statics, List.of());
+    }
+
+    public void readHandlerMaps(Collection<String> mods) {
+        List<String> asked = List.copyOf(mods);
+        this.elements.readAlone(asked, List.of(), asked);
+    }
+
     public void lookForEvery(Collection<String> mods, Predicate<String> on) {
         this.loadedChecks.readForEvery(mods, this.lambdas.open());
         ElementLook.stopIfAsked();
