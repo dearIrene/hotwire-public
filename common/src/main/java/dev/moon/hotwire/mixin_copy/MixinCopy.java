@@ -12,7 +12,6 @@ import java.net.URLClassLoader;
 import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
 import java.nio.file.Path;
-import java.nio.file.StandardCopyOption;
 import java.security.CodeSource;
 import java.security.MessageDigest;
 import java.security.NoSuchAlgorithmException;
@@ -542,10 +541,8 @@ public final class MixinCopy implements AutoCloseable {
             if (in == null) {
                 throw new MixinCopyException("Hotwire's jar has no mixin-copy.jar", null);
             }
-            jar = Files.createTempFile("hotwire-mixin-copy", ".jar");
-            jar.toFile().deleteOnExit();
-            Files.copy(in, jar, StandardCopyOption.REPLACE_EXISTING);
-        } catch (IOException e) {
+            jar = MixinCopyJar.write(in.readAllBytes());
+        } catch (IOException | NoSuchAlgorithmException e) {
             throw new MixinCopyException("mixin-copy.jar could not be written out: " + e.getMessage(), e);
         }
         copyJar = jar;
