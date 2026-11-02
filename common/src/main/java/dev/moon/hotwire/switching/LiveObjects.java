@@ -99,6 +99,11 @@ final class LiveObjects {
         retained.keySet().removeIf(recomputed);
         ClassRebuilder.PreparedRebuild reloading = withReloading(prepared, retained, game, originalOf,
                 rebuilder::findLaunchBytes, current);
+        Map<Class<?>, byte[]> targets = new LinkedHashMap<>();
+        retained.forEach((type, split) -> targets.put(type, prepared.mixed().getOrDefault(
+                type.getName().replace('.', '/'), split.target())));
+
+        targets.keySet().removeIf(type -> game.isMadeByReload(type) && byReload.add(type.getName().replace('.', '/')));
         ClassRebuilder.PreparedRebuild out = reloading;
         if (!byReload.isEmpty()) {
             LOGGER.info("[Hotwire] objects of {} a reload makes anew meet their new hooks then", byReload);
@@ -106,9 +111,6 @@ final class LiveObjects {
             classes.addAll(byReload);
             out = reloading.withPausedReloads(classes);
         }
-        Map<Class<?>, byte[]> targets = new LinkedHashMap<>();
-        retained.forEach((type, split) -> targets.put(type, prepared.mixed().getOrDefault(
-                type.getName().replace('.', '/'), split.target())));
         Map<String, byte[]> running = new HashMap<>(current);
         running.replaceAll((name, bytes) -> Objects.requireNonNullElse(rebuilder.findMixedNow(name), bytes));
         Predicate<Class<?>> live = type -> !game.isWorldObject(type) || game.isInWorld();

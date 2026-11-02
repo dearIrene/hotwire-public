@@ -26,6 +26,7 @@ import net.minecraft.server.level.ChunkMap;
 import net.minecraft.server.level.ChunkTracker;
 import net.minecraft.server.level.DistanceManager;
 import net.minecraft.server.network.ServerGamePacketListenerImpl;
+import net.minecraft.server.packs.PackResources;
 import net.minecraft.world.entity.Entity;
 import net.minecraft.world.level.Level;
 import net.minecraft.world.level.block.entity.BlockEntity;
@@ -189,7 +190,7 @@ public final class GameClasses implements SwitchApplier.Game {
 
     @Override
     public boolean isMadeByReload(Class<?> type) {
-        return RenderPipelines.isPipeline(type);
+        return RenderPipelines.isPipeline(type) || PackResources.class.isAssignableFrom(type);
     }
 
     public boolean isReachedFromWorld(String mod, List<String> frames) {
