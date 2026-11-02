@@ -682,7 +682,8 @@ We currently support these Minecraft versions, targetting a minimum of Java 21:
 PolyForm Strict 1.0.0 with additional terms. See [LICENSE.md](LICENSE.md).
 
 - Modpacks may include Hotwire, using the official jar, unmodified.
-- Mods may call Hotwire's API, as long as they don't bundle Hotwire or copy its code. Any mod calling the Hotwire API MUST show our opening prompt.
+- Mods may call Hotwire's API, as long as they don't bundle Hotwire or copy its code. Any mod calling the Hotwire API MUST show our opening prompt. (The one about sending crash logs to us and not mod developers)
+- Additionally, clients may not use Hotwire's API. Any usage of the Hotwire API in a way that relates to clients in any way is strictly prohibited even by an independent mod.
 - Minecraft clients (Lunar, Badlion, Feather, LabyMod, Dawn and the like) may not use, ship, copy or study Hotwire
   in any way without written permission.
 
