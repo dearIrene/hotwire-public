@@ -5,6 +5,7 @@ import java.lang.invoke.ConstantCallSite;
 import java.lang.invoke.MethodHandle;
 import java.lang.invoke.MethodHandles;
 import java.lang.invoke.MethodType;
+import java.util.List;
 import java.util.Map;
 import java.util.Set;
 import java.util.concurrent.ConcurrentHashMap;
@@ -168,5 +169,17 @@ public final class TripwireSites {
                             .collect(Collectors.joining(" < "))));
         }
         return classes;
+    }
+
+    static boolean isLetGo(List<String> frames) {
+        if (frames.isEmpty() || !frames.getFirst().contains(".close(")) {
+            return false;
+        }
+        for (String frame : frames.subList(1, frames.size())) {
+            if (!frame.startsWith("java.")) {
+                return frame.contains("net.minecraft.") || frame.contains("com.mojang.");
+            }
+        }
+        return false;
     }
 }

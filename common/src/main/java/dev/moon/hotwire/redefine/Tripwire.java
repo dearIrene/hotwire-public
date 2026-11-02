@@ -241,6 +241,10 @@ public final class Tripwire {
                     frames.add(frame.toString());
                 }
             }
+            if (TripwireSites.isLetGo(frames)) {
+                calls.set(0);
+                return;
+            }
             FIRST.put(mod, List.copyOf(frames));
             firstCall.accept(mod);
         }
