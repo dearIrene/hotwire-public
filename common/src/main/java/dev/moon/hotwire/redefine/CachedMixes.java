@@ -136,17 +136,23 @@ public final class CachedMixes {
     private static Map<String, byte[]> findInMixinPackages(Set<String> targets, Map<String, byte[]> classes,
             Map<String, byte[]> resources, List<String> configs) {
         Set<String> prefixes = new HashSet<>();
+
+        Set<String> listed = new HashSet<>();
         for (String config : configs) {
             byte[] json = resources.get(config);
             String prefix = json == null ? "" : ConfigTrim.readPackageOf(json);
             if (!prefix.isEmpty()) {
                 prefixes.add(prefix.replace('.', '/'));
             }
+            if (json != null) {
+                ConfigTrim.readListed(json, "CLIENT").forEach(name -> listed.add(name.replace('.', '/')));
+                ConfigTrim.readListed(json, "SERVER").forEach(name -> listed.add(name.replace('.', '/')));
+            }
         }
         Map<String, byte[]> found = new HashMap<>();
         for (String target : targets) {
             byte[] bytes = classes.get(target);
-            if (bytes != null) {
+            if (bytes != null && !listed.contains(target)) {
                 for (String prefix : prefixes) {
                     if (target.startsWith(prefix)) {
                         found.put(target, bytes);
