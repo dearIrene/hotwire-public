@@ -118,6 +118,11 @@ public final class GameTasks {
     }
 
     private static @Nullable String findOwnerOf(Object task, int depth) {
+        Object submitted = FutureWork.find(task);
+        if (submitted != null) {
+            return GameRegistrations.findModOrShipper(submitted.getClass());
+        }
+
         String mod = GameRegistrations.findModOrShipper(task.getClass());
 
         if (depth == 0 || (mod != null && MODS_OFF.contains(mod)) || CollectionParts.isGameObject(task)) {
