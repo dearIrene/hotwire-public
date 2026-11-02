@@ -186,12 +186,15 @@ public final class SwitchRunner {
         ResourceReload.awaitIdle();
 
         SwitchPlan plan = this.switcher.planOff(ids);
+        SwitchTimes.mark("plan: order");
 
         List<String> wired = plan.isRefused() ? List.of() : plan.order();
 
         Map<String, List<String>> content = WorldContent.find(wired);
+        SwitchTimes.mark("plan: content");
 
         Map<String, String> inEntities = content.isEmpty() ? EntityHolders.find(wired) : Map.of();
+        SwitchTimes.mark("plan: entities");
         if (!content.isEmpty() || !inEntities.isEmpty()) {
             String why = content.isEmpty() ? "the world's entities hold objects of " + inEntities
                     : "the game's registries hold " + content;
@@ -207,6 +210,8 @@ public final class SwitchRunner {
             this.switcher.showBegun(plan);
 
             ElementLook.findAhead(this.fieldReferences, wired, this.switcher::isOn);
+            ElementLook.readBrought(this.fieldReferences);
+            ElementLook.readHandlers(this.fieldReferences, wired);
             SwitchTimes.mark("look ahead");
         }
 
