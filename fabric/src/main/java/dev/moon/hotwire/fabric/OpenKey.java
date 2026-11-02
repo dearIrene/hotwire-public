@@ -17,12 +17,14 @@ import net.fabricmc.fabric.api.client.keymapping.v1.KeyMappingHelper;
 //?} else {
 /*import net.fabricmc.fabric.api.client.keybinding.v1.KeyBindingHelper;
 *///?}
+import net.fabricmc.fabric.api.client.screen.v1.ScreenEvents;
 import net.fabricmc.loader.api.FabricLoader;
 import net.minecraft.client.KeyMapping;
 import net.minecraft.client.Minecraft;
 import net.minecraft.client.gui.components.EditBox;
 import net.minecraft.client.gui.components.MultiLineEditBox;
 import net.minecraft.client.gui.screens.Screen;
+import net.minecraft.client.gui.screens.TitleScreen;
 import net.minecraft.network.chat.Component;
 import net.minecraft.resources.Identifier;
 import org.jspecify.annotations.Nullable;
@@ -34,6 +36,7 @@ public final class OpenKey {
     private static final Identifier CATEGORY = Identifier.fromNamespaceAndPath(HotwireClient.ID,
             HotwireClient.ID);
     private static @Nullable KeyMapping key;
+    private static @Nullable Class<?> homeScreen;
     private static Runnable open = () -> { };
 
     private OpenKey() {
@@ -46,6 +49,7 @@ public final class OpenKey {
         //?} else {
         /*KeyBindingHelper.registerKeyBinding(made);
         *///?}
+        ScreenEvents.BEFORE_INIT.register((game, screen, width, height) -> onScreenShown(screen));
         open = opener;
         key = made;
     }
@@ -106,7 +110,8 @@ public final class OpenKey {
         KeyMapping made = key;
         Minecraft minecraft = Minecraft.getInstance();
         Screen shown = ModViews.openScreen();
-        if (made == null || minecraft.level != null || shown == null || shown instanceof HotwireScreen
+        if (made == null || minecraft.level != null || shown == null
+                || !(shown instanceof TitleScreen || shown.getClass() == homeScreen) || shown instanceof HotwireScreen
                 || shown instanceof ChooserGameScreen || shown instanceof StoreGameScreen
                 || shown.getFocused() instanceof EditBox || shown.getFocused() instanceof MultiLineEditBox
                 || !pressed.test(made)) {
@@ -114,6 +119,13 @@ public final class OpenKey {
         }
         HotwireClient.openFromScreen(shift);
         return true;
+    }
+
+    private static void onScreenShown(Screen screen) {
+        if (homeScreen == null && !(screen instanceof HotwireScreen)
+                && !(screen instanceof ChooserGameScreen) && !(screen instanceof StoreGameScreen)) {
+            homeScreen = screen.getClass();
+        }
     }
 
     public static void onPressed() {
