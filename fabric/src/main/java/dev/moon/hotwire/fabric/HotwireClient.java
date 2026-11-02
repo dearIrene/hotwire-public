@@ -3,6 +3,7 @@ package dev.moon.hotwire.fabric;
 import dev.moon.hotwire.fabric.registration.GameTasks;
 import dev.moon.hotwire.fabric.registration.OffModClose;
 import dev.moon.hotwire.fabric.registration.OffModCommands;
+import dev.moon.hotwire.fabric.report.FreezeDump;
 import dev.moon.hotwire.fabric.report.HotwireLog;
 import dev.moon.hotwire.modrinth.Downloads;
 import dev.moon.hotwire.redefine.FieldHolders;
@@ -55,6 +56,7 @@ public final class HotwireClient implements ClientModInitializer {
         GameLog.LOGGER.info("[Hotwire] {} loaded; H or /hotwire opens it, and its Report button writes what went wrong"
                 + " to hotwire/reports", LoadedMods.findVersion(ID, "unknown"));
         ClientWarning.register();
+        FreezeDump.start(FabricLoader.getInstance().getGameDir().resolve("hotwire").resolve("logs"));
         NoticeHud.register();
         Downloads.onEveryChange(DownloadNotices::show);
 

@@ -385,7 +385,13 @@ public final class GameReports {
                 Files.isRegularFile(log) ? getTail(read(log)) : "(the game wrote no log)\n"));
 
         Path logs = game.resolve("hotwire").resolve("logs");
-        for (String name : extra.isEmpty() ? List.of(HotwireLog.FILE) : List.of(HotwireLog.FILE, HotwireLog.LAST)) {
+
+        boolean froze = FreezeDump.isRecent(logs.resolve(FreezeDump.FILE));
+        if (froze) {
+            texts.put("hotwire-" + FreezeDump.FILE, read(logs.resolve(FreezeDump.FILE)));
+        }
+        for (String name : extra.isEmpty() && !froze ? List.of(HotwireLog.FILE)
+                : List.of(HotwireLog.FILE, HotwireLog.LAST)) {
             if (Files.isRegularFile(logs.resolve(name))) {
                 texts.put("hotwire-" + name, getTail(read(logs.resolve(name))));
             }
