@@ -3,6 +3,8 @@ package dev.moon.hotwire.fabric.store;
 import dev.moon.hotwire.fabric.CacheLimit;
 import dev.moon.hotwire.fabric.InstalledMods;
 import dev.moon.hotwire.jar.FileHashes;
+import dev.moon.hotwire.jar.ModJarException;
+import dev.moon.hotwire.jar.ModJarReader;
 import dev.moon.hotwire.jar.ModManifest;
 import dev.moon.hotwire.modrinth.Downloads;
 import dev.moon.hotwire.modrinth.ModrinthClient;
@@ -159,7 +161,9 @@ public final class UpdateCheck {
             }
             String id = idByName.getOrDefault(name, name);
             String parent = this.installed.find(id).flatMap(ModManifest::menuParent).orElse(null);
-            if (parent != null && this.installed.find(parent).isPresent()) {
+            if (parent != null && this.installed.find(parent).isPresent()
+                    && !this.installed.find(id).orElseThrow().getRelation(ModManifest.Relation.DEPENDS)
+                    .containsKey(parent)) {
                 id = parent;
                 String running = this.installed.find(id).map(ModManifest::version).orElse("");
                 if (running.isEmpty() || !isNewer(version.number(), running)) {
