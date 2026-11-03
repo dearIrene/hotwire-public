@@ -8,6 +8,7 @@ import java.nio.file.Files;
 import java.nio.file.Path;
 import java.time.Duration;
 import java.time.Instant;
+import java.util.Map;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -36,7 +37,29 @@ public final class FreezeDump {
         }
     }
 
+    private static void watchStacks() {
+        while (!Thread.currentThread().isInterrupted()) {
+            try {
+                Thread.sleep(1_000);
+            } catch (InterruptedException e) {
+                return;
+            }
+            for (Map.Entry<Thread, StackTraceElement[]> thread : Thread.getAllStackTraces().entrySet()) {
+                if (thread.getKey().getName().equals("Render thread")) {
+                    StringBuilder out = new StringBuilder();
+                    for (int at = 0; at < Math.min(14, thread.getValue().length); at++) {
+                        out.append("\n    ").append(thread.getValue()[at]);
+                    }
+                    LOGGER.info("[Hotwire] render thread {}:{}", thread.getKey().getState(), out);
+                }
+            }
+        }
+    }
+
     private static void watch(Path logs) {
+        if (Boolean.getBoolean("hotwire_stack_watch")) {
+            Thread.ofPlatform().name("hotwire-stack-watch").daemon().start(FreezeDump::watchStacks);
+        }
         long frames = GameHold.countFrames();
         long since = System.nanoTime();
         boolean written = false;
