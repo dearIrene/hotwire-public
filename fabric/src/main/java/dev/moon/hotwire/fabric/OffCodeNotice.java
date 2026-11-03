@@ -91,7 +91,8 @@ final class OffCodeNotice {
             } catch (ClassNotFoundException | LinkageError e) {
                 continue;
             }
-            String owner = GameRegistrations.findModOf(type);
+
+            String owner = GameRegistrations.findModOrShipper(type);
             if (mod.equals(owner)) {
                 entered = type;
                 enteredMethod = method.substring(dot + 1);
