@@ -88,7 +88,8 @@ final class PreparedSwitches {
             carriedNow.put(name, now);
         });
         List<String> patching = this.owner.findPatching(configs, rebuilt);
-        LaunchDecisions.Result decided = this.owner.decisions.of(patching, atLaunch, on::contains);
+
+        LaunchDecisions.Result decided = this.owner.decisions.of(patching, carriedNow, on::contains);
         SwitchTimes.mark("marks and decisions");
         ClassRebuilder.PreparedRebuild mixed = this.owner.rebuilder.prepare(originals, current, classes,
                 decided.configs(),
