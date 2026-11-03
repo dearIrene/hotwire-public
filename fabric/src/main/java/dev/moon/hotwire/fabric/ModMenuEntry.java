@@ -6,9 +6,6 @@ import com.terraformersmc.modmenu.api.ModMenuApi;
 public final class ModMenuEntry implements ModMenuApi {
     @Override
     public ConfigScreenFactory<?> getModConfigScreenFactory() {
-        return parent -> {
-            HotwireEngine engine = HotwireClient.findEngine();
-            return engine == null ? parent : engine.getScreens().makeScreen(parent);
-        };
+        return parent -> HotwireClient.getEngine().getScreens().makeScreen(parent);
     }
 }
