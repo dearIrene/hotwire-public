@@ -1,5 +1,6 @@
 package dev.moon.hotwire.fabric.registration;
 
+import com.mojang.brigadier.CommandDispatcher;
 import dev.moon.hotwire.registration.RegistrationJournal;
 import dev.moon.hotwire.switching.ModSwitcher;
 import java.lang.ref.WeakReference;
@@ -17,14 +18,18 @@ import java.util.concurrent.TimeoutException;
 import java.util.function.Consumer;
 import java.util.function.Function;
 import java.util.function.Predicate;
+import net.fabricmc.fabric.api.client.command.v2.ClientCommandRegistrationCallback;
+import net.fabricmc.fabric.api.client.command.v2.FabricClientCommandSource;
 import net.fabricmc.fabric.api.client.event.lifecycle.v1.ClientLifecycleEvents;
 import net.fabricmc.fabric.api.client.networking.v1.ClientPlayConnectionEvents;
 import net.fabricmc.fabric.api.client.networking.v1.ClientPlayNetworking;
 import net.fabricmc.fabric.api.event.lifecycle.v1.ServerLifecycleEvents;
 import net.fabricmc.fabric.api.networking.v1.ServerPlayConnectionEvents;
 import net.fabricmc.fabric.api.networking.v1.ServerPlayNetworking;
+import net.fabricmc.fabric.impl.command.client.ClientCommandInternals;
 import net.minecraft.client.Minecraft;
 import net.minecraft.client.multiplayer.ClientPacketListener;
+import net.minecraft.commands.CommandBuildContext;
 import net.minecraft.server.MinecraftServer;
 import net.minecraft.server.level.ServerPlayer;
 import org.jspecify.annotations.Nullable;
@@ -126,16 +131,29 @@ public final class ModLifecycle {
             }, "server");
         }
 
-        if (!last.ofClient() || !listensTo(id, journal, ClientPlayConnectionEvents.JOIN)) {
+        if (!last.ofClient() || !listensTo(id, journal, ClientPlayConnectionEvents.JOIN,
+                ClientCommandRegistrationCallback.EVENT)) {
             return ran;
         }
         onThread(work -> GameHold.onGameBeforeNextFrame(work, client), () -> {
             ClientPacketListener connection = client.getConnection();
-            if (connection != null) {
-                callEach(id, journal, ClientPlayConnectionEvents.JOIN, ran, listener ->
-                        ((ClientPlayConnectionEvents.Join) listener).onPlayReady(connection,
-                                ClientPlayNetworking.getSender(), client));
+            if (connection == null) {
+                return;
             }
+            CommandDispatcher<FabricClientCommandSource> commands = ClientCommandInternals.getActiveDispatcher();
+            if (commands != null) {
+                CommandBuildContext context = CommandBuildContext.simple(connection.registryAccess(),
+                        connection.enabledFeatures());
+                int already = ran.size();
+                callEach(id, journal, ClientCommandRegistrationCallback.EVENT, ran, listener ->
+                        ((ClientCommandRegistrationCallback) listener).register(commands, context));
+                if (ran.size() > already) {
+                    CommandRegistration.resendCommands(true);
+                }
+            }
+            callEach(id, journal, ClientPlayConnectionEvents.JOIN, ran, listener ->
+                    ((ClientPlayConnectionEvents.Join) listener).onPlayReady(connection,
+                            ClientPlayNetworking.getSender(), client));
         }, "client");
         return ran;
     }
