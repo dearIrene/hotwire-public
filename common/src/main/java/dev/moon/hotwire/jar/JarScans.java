@@ -28,7 +28,7 @@ import org.objectweb.asm.ClassReader;
 import org.objectweb.asm.ClassWriter;
 
 public final class JarScans {
-    private static final String KEYS = "jar scans 1";
+    private static final String KEYS = "jar scans 2";
     private static final String SCANNER = "dev/moon/hotwire/jar/";
 
     private final CacheStore store;

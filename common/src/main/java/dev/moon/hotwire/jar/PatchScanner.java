@@ -44,7 +44,6 @@ final class PatchScanner {
     private static final Set<String> KNOWN_INJECTORS = Set.of(INJECTORS + "Inject;", INJECTORS + "ModifyArg;",
             INJECTORS + "ModifyArgs;", INJECTORS + "ModifyVariable;", INJECTORS + "ModifyConstant;",
             INJECTORS + "Redirect;");
-    private static final String OVERWRITE = "Lorg/spongepowered/asm/mixin/Overwrite;";
     private static final List<String> MIXIN_ARRAYS = List.of("mixins", "client", "server");
     private static final int METHOD_ENTRY = 10;
     private static final int INTERFACE_METHOD_ENTRY = 11;
@@ -413,8 +412,8 @@ final class PatchScanner {
                     @Override
                     public @Nullable AnnotationVisitor visitAnnotation(String annotation, boolean visible) {
                         opens[0] |= OPENERS.contains(annotation);
-                        beyondCallbacks[0] |= (annotation.startsWith(INJECTORS)
-                                && !KNOWN_INJECTORS.contains(annotation)) || annotation.equals(OVERWRITE);
+                        beyondCallbacks[0] |= annotation.startsWith(INJECTORS)
+                                && !KNOWN_INJECTORS.contains(annotation);
                         return null;
                     }
                 };

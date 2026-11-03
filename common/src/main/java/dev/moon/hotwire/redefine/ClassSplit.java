@@ -334,7 +334,7 @@ public final class ClassSplit {
         ReflectionBridge.rewrite(side);
 
         if (HandlerGuards.ENABLED) {
-            HandlerSites.makeSites(running.name, out);
+            HandlerSites.makeSites(running.name, out, false);
         }
 
         List<String> missing = SelfCalls.findMissing(out, mixedOf);

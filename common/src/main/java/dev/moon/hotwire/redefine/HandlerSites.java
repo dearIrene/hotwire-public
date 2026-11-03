@@ -13,6 +13,7 @@ import org.objectweb.asm.Opcodes;
 import org.objectweb.asm.Type;
 import org.objectweb.asm.tree.AbstractInsnNode;
 import org.objectweb.asm.tree.ClassNode;
+import org.objectweb.asm.tree.FieldInsnNode;
 import org.objectweb.asm.tree.InvokeDynamicInsnNode;
 import org.objectweb.asm.tree.MethodInsnNode;
 import org.objectweb.asm.tree.MethodNode;
@@ -25,7 +26,7 @@ final class HandlerSites {
     private HandlerSites() {
     }
 
-    public static boolean makeSites(String internalName, ClassNode node) {
+    public static boolean makeSites(String internalName, ClassNode node, boolean atLoad) {
         if ((node.version & 0xFFFF) < Opcodes.V1_7) {
             return false;
         }
@@ -44,9 +45,6 @@ final class HandlerSites {
         }
 
         HandlerGuards.STAGED_PRESENT.put(internalName, Set.copyOf(merged));
-        if (mixinOfHandler.isEmpty()) {
-            return false;
-        }
         Set<String> guarded = new HashSet<>();
 
         ClassNode[] original = new ClassNode[1];
@@ -62,6 +60,12 @@ final class HandlerSites {
             }
             return original[0];
         };
+        if (!merged.isEmpty()) {
+            OverwriteSites.make(internalName, node, mixinOfHandler, shipped, guarded, atLoad);
+        }
+        if (mixinOfHandler.isEmpty()) {
+            return stage(internalName, guarded);
+        }
         NullArguments nulls = new NullArguments(internalName);
         for (MethodNode method : node.methods) {
             for (AbstractInsnNode insn : method.instructions.toArray()) {
@@ -81,12 +85,17 @@ final class HandlerSites {
                     continue;
                 }
                 if (method.name.equals("<init>")) {
+                    String gameField = findGameFieldSet(node, call, shipped.get());
+                    if (gameField != null) {
+                        HandlerGuards.markUnflippable(internalName, mixin, "handler in a constructor that sets "
+                                + gameField);
+                        continue;
+                    }
                     if (!HandlerGuards.UNFLIPPABLE.contains(mixin)) {
-                        LOGGER.info("[Hotwire] {}'s constructor calls a handler of {}: it is rebuilt, not flipped",
+                        LOGGER.info("[Hotwire] {}'s constructor calls a handler of {}: its on rebuilds, its off flips",
                                 internalName, mixin);
                     }
                     HandlerGuards.markUnflippable(internalName, mixin, HandlerGuards.IN_CONSTRUCTOR);
-                    continue;
                 }
                 boolean isStatic = call.getOpcode() == Opcodes.INVOKESTATIC;
                 int how = isStatic ? HandlerGuards.STATIC : call.getOpcode() == Opcodes.INVOKESPECIAL
@@ -154,6 +163,30 @@ final class HandlerSites {
                 guarded.add(mixin);
             }
         }
+        return stage(internalName, guarded);
+    }
+
+    private static @Nullable String findGameFieldSet(ClassNode node, MethodInsnNode call,
+            @Nullable ClassNode shipped) {
+        if (shipped == null) {
+            return null;
+        }
+        for (MethodNode handler : node.methods) {
+            if (!handler.name.equals(call.name) || !handler.desc.equals(call.desc)) {
+                continue;
+            }
+            for (AbstractInsnNode insn : handler.instructions) {
+                if (insn instanceof FieldInsnNode field && (field.getOpcode() == Opcodes.PUTFIELD
+                        || field.getOpcode() == Opcodes.PUTSTATIC) && field.owner.equals(node.name)
+                        && shipped.fields.stream().anyMatch(own -> own.name.equals(field.name))) {
+                    return field.name;
+                }
+            }
+        }
+        return null;
+    }
+
+    private static boolean stage(String internalName, Set<String> guarded) {
         if (guarded.isEmpty()) {
             return false;
         }

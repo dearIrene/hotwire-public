@@ -69,9 +69,14 @@ public final class HandlerGuards {
                     String.class, int.class, int.class, String.class, String.class, String.class)
                     .toMethodDescriptorString(), false);
 
+    static final Handle BOOTSTRAP_OVERWRITE = new Handle(Opcodes.H_INVOKESTATIC,
+            HandlerGuards.class.getName().replace('.', '/'), "bootstrapOverwrite",
+            MethodType.methodType(CallSite.class, MethodHandles.Lookup.class, String.class, MethodType.class,
+                    String.class, int.class, String.class).toMethodDescriptorString(), false);
+
     static volatile Function<String, byte @Nullable []> originals = name -> null;
 
-    private record Guard(MethodHandle handler, MethodHandle standIn) {
+    private record Guard(MethodHandle handler, MethodHandle standIn, boolean ofChunks) {
     }
 
     private static final Map<String, Map<MutableCallSite, Guard>> GUARDS = new HashMap<>();
@@ -150,8 +155,10 @@ public final class HandlerGuards {
         Set<String> behaving = new HashSet<>();
         for (MethodNode method : node.methods) {
             String mixin = findMerged(method);
+
             if (mixin != null && method.name.indexOf('$') < 0 && !method.name.startsWith("<")
-                    && (method.access & Opcodes.ACC_SYNTHETIC) == 0 && !isPlainAccess(method)) {
+                    && (method.access & Opcodes.ACC_SYNTHETIC) == 0 && !isPlainAccess(method)
+                    && !OverwriteSites.isTrampoline(method)) {
                 behaving.add(mixin);
             }
         }
@@ -208,7 +215,7 @@ public final class HandlerGuards {
         Set<String> checked = new HashSet<>();
         byte[] shipped = null;
         for (MethodNode method : node.methods) {
-            if (findMerged(method) != null
+            if (findMerged(method) != null || method.name.contains(OverwriteSites.BODY)
                     || ((method.access & Opcodes.ACC_SYNTHETIC) != 0 && method.name.startsWith("lambda$"))) {
                 continue;
             }
@@ -255,25 +262,15 @@ public final class HandlerGuards {
         return CHUNK_FLIPS.get();
     }
 
-    private static boolean isOfChunks(String mixin) {
+    private static boolean isOfChunks(String mixin, String host) {
         String simple = mixin.substring(Math.max(mixin.lastIndexOf('/'), mixin.lastIndexOf('.')) + 1)
                 .toLowerCase(Locale.ROOT);
-        if (containsAny(simple, CHUNK_MIXINS)) {
-            return true;
-        }
-        for (Map.Entry<String, Set<String>> host : GUARDED.entrySet()) {
-            if (host.getValue().contains(mixin)) {
-                String name = host.getKey().toLowerCase(Locale.ROOT);
-                if (containsAny(name, CHUNK_HOSTS)) {
-                    return true;
-                }
-            }
-        }
-        return false;
+        return containsAny(simple, CHUNK_MIXINS)
+                || containsAny(host.replace('.', '/').toLowerCase(Locale.ROOT), CHUNK_HOSTS);
     }
 
     public static boolean isSite(Handle bootstrap) {
-        return bootstrap.getOwner().equals(BOOTSTRAP.getOwner()) && bootstrap.getName().equals(BOOTSTRAP.getName());
+        return bootstrap.getOwner().equals(BOOTSTRAP.getOwner()) && bootstrap.getName().startsWith("bootstrap");
     }
 
     public static boolean isWritten(String internalName) {
@@ -335,7 +332,7 @@ public final class HandlerGuards {
         }
         ClassNode node = new ClassNode();
         new ClassReader(bytes).accept(node, 0);
-        boolean made = HandlerSites.makeSites(internalName, node);
+        boolean made = HandlerSites.makeSites(internalName, node, true);
         noteBehaving(internalName, node);
         notePutIn(internalName, node);
         commitStaged(internalName);
@@ -386,6 +383,25 @@ public final class HandlerGuards {
                         || method.name.startsWith("redirect$"))) {
                     handlers.put(method.name + method.desc, mixin);
                 }
+            }
+        }
+
+        ClassNode shipped = null;
+        for (MethodNode method : node.methods) {
+            String mixin = findMerged(method);
+            if (mixin == null || isHandlerName(method.name) || method.name.startsWith("<")) {
+                continue;
+            }
+            if (shipped == null) {
+                byte[] bytes0 = originals.apply(internalName);
+                if (bytes0 == null) {
+                    break;
+                }
+                shipped = new ClassNode();
+                new ClassReader(bytes0).accept(shipped, ClassReader.SKIP_DEBUG | ClassReader.SKIP_FRAMES);
+            }
+            if (OverwriteSites.isPlainOverwrite(method, shipped)) {
+                markUnflippable(internalName, mixin, "an overwrite in a rebuilt class");
             }
         }
         for (MethodNode method : node.methods) {
@@ -468,6 +484,14 @@ public final class HandlerGuards {
                 isStatic == STATIC ? 0 : 1, new RedirectStandIns.Target(opcode, owner, target, desc)));
     }
 
+    public static CallSite bootstrapOverwrite(MethodHandles.Lookup caller, String name, MethodType type, String mixin,
+            int isStatic, String was) throws ReflectiveOperationException {
+        Class<?> owner = caller.lookupClass();
+        return link(caller, name, type, mixin, isStatic, () -> was.isEmpty() ? MethodHandles.empty(type)
+                : isStatic == STATIC ? caller.findStatic(owner, was, type)
+                : caller.findSpecial(owner, was, type.dropParameterTypes(0, 1), owner));
+    }
+
     private interface StandInCall {
         MethodHandle make() throws ReflectiveOperationException;
     }
@@ -489,7 +513,8 @@ public final class HandlerGuards {
         }
         synchronized (LOCK) {
             MutableCallSite site = new MutableCallSite(OFF.contains(mixin) ? standIn : handler);
-            GUARDS.computeIfAbsent(mixin, m -> new WeakHashMap<>()).put(site, new Guard(handler, standIn));
+            GUARDS.computeIfAbsent(mixin, m -> new WeakHashMap<>()).put(site, new Guard(handler, standIn,
+                    isOfChunks(mixin, owner.getName())));
             return site;
         }
     }
@@ -502,12 +527,11 @@ public final class HandlerGuards {
                 if (off ? !OFF.add(mixin) : !OFF.remove(mixin)) {
                     continue;
                 }
-                Map<MutableCallSite, Guard> guards = GUARDS.getOrDefault(mixin, Map.of());
-                guards.forEach((site, guard) -> {
-                    site.setTarget(off ? guard.standIn() : guard.handler());
-                    changed.add(site);
-                });
-                chunks |= !guards.isEmpty() && isOfChunks(mixin);
+                for (Map.Entry<MutableCallSite, Guard> guard : GUARDS.getOrDefault(mixin, Map.of()).entrySet()) {
+                    guard.getKey().setTarget(off ? guard.getValue().standIn() : guard.getValue().handler());
+                    changed.add(guard.getKey());
+                    chunks |= guard.getValue().ofChunks();
+                }
             }
         }
         if (!changed.isEmpty()) {
