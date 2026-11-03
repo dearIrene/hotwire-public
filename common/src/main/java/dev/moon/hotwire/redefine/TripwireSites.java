@@ -15,9 +15,15 @@ import org.objectweb.asm.ClassReader;
 import org.objectweb.asm.ClassWriter;
 import org.objectweb.asm.Handle;
 import org.objectweb.asm.Opcodes;
+import org.objectweb.asm.Type;
 import org.objectweb.asm.tree.AbstractInsnNode;
 import org.objectweb.asm.tree.ClassNode;
+import org.objectweb.asm.tree.FrameNode;
+import org.objectweb.asm.tree.InsnList;
+import org.objectweb.asm.tree.InsnNode;
 import org.objectweb.asm.tree.InvokeDynamicInsnNode;
+import org.objectweb.asm.tree.JumpInsnNode;
+import org.objectweb.asm.tree.LabelNode;
 import org.objectweb.asm.tree.MethodNode;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -65,7 +71,11 @@ public final class TripwireSites {
                 armed = true;
                 continue;
             }
-            method.instructions.insert(new InvokeDynamicInsnNode("hit", "()V", BOOTSTRAP, mod));
+            if (isGated(method)) {
+                method.instructions.insert(makeGate(method, mod));
+            } else {
+                method.instructions.insert(new InvokeDynamicInsnNode("hit", "()V", BOOTSTRAP, mod));
+            }
             armed = true;
             inserted = true;
         }
@@ -86,10 +96,66 @@ public final class TripwireSites {
         return writer.toByteArray();
     }
 
+    private static final Set<String> NEVER_GATED = Set.of("<init>", "<clinit>", "equals", "hashCode", "toString",
+            "compareTo", "finalize");
+
+    private static boolean isGated(MethodNode method) {
+        int sort = Type.getReturnType(method.desc).getSort();
+        return !NEVER_GATED.contains(method.name) && sort != Type.OBJECT && sort != Type.ARRAY;
+    }
+
+    private static InsnList makeGate(MethodNode method, String mod) {
+        InsnList gate = new InsnList();
+        LabelNode go = new LabelNode();
+        gate.add(new InvokeDynamicInsnNode("gate", "()Z", BOOTSTRAP, mod));
+        gate.add(new JumpInsnNode(Opcodes.IFEQ, go));
+        Type returned = Type.getReturnType(method.desc);
+        switch (returned.getSort()) {
+            case Type.VOID -> gate.add(new InsnNode(Opcodes.RETURN));
+            case Type.LONG -> {
+                gate.add(new InsnNode(Opcodes.LCONST_0));
+                gate.add(new InsnNode(Opcodes.LRETURN));
+            }
+            case Type.FLOAT -> {
+                gate.add(new InsnNode(Opcodes.FCONST_0));
+                gate.add(new InsnNode(Opcodes.FRETURN));
+            }
+            case Type.DOUBLE -> {
+                gate.add(new InsnNode(Opcodes.DCONST_0));
+                gate.add(new InsnNode(Opcodes.DRETURN));
+            }
+            case Type.OBJECT, Type.ARRAY -> {
+                gate.add(new InsnNode(Opcodes.ACONST_NULL));
+                gate.add(new InsnNode(Opcodes.ARETURN));
+            }
+            default -> {
+                gate.add(new InsnNode(Opcodes.ICONST_0));
+                gate.add(new InsnNode(Opcodes.IRETURN));
+            }
+        }
+        gate.add(go);
+        if (!startsWithFrame(method)) {
+            gate.add(new FrameNode(Opcodes.F_SAME, 0, null, 0, null));
+        }
+        return gate;
+    }
+
+    private static boolean startsWithFrame(MethodNode method) {
+        for (AbstractInsnNode insn = method.instructions.getFirst(); insn != null; insn = insn.getNext()) {
+            if (insn instanceof FrameNode) {
+                return true;
+            }
+            if (insn.getOpcode() >= 0) {
+                return false;
+            }
+        }
+        return false;
+    }
+
     private static boolean hasSite(MethodNode method) {
         for (AbstractInsnNode insn = method.instructions.getFirst(); insn != null; insn = insn.getNext()) {
             if (insn instanceof InvokeDynamicInsnNode site) {
-                return site.name.equals("hit") && site.bsm.equals(BOOTSTRAP);
+                return (site.name.equals("hit") || site.name.equals("gate")) && site.bsm.equals(BOOTSTRAP);
             }
             if (insn.getOpcode() >= 0) {
                 return false;
@@ -130,11 +196,14 @@ public final class TripwireSites {
 
     private static final Map<String, Watch> WATCHES = new ConcurrentHashMap<>();
     private static final MethodHandle PROBE;
+    private static final MethodHandle GATE;
 
     static {
         try {
             PROBE = MethodHandles.lookup().findStatic(TripwireSites.class, "probe",
                     MethodType.methodType(void.class, Watch.class));
+            GATE = MethodHandles.lookup().findStatic(TripwireSites.class, "isSkipped",
+                    MethodType.methodType(boolean.class, Watch.class));
         } catch (ReflectiveOperationException e) {
             throw new ExceptionInInitializerError(e);
         }
@@ -151,8 +220,13 @@ public final class TripwireSites {
         }
     }
 
+    @SuppressWarnings("UnusedMethod")
+    private static boolean isSkipped(Watch watch) {
+        return watch.off && Tripwire.hitOrSkip(watch.mod);
+    }
+
     public static CallSite bootstrap(MethodHandles.Lookup caller, String name, MethodType type, String mod) {
-        return new ConstantCallSite(PROBE.bindTo(findWatch(mod)));
+        return new ConstantCallSite((name.equals("gate") ? GATE : PROBE).bindTo(findWatch(mod)));
     }
 
     public static int setOff(String mod, boolean off) {

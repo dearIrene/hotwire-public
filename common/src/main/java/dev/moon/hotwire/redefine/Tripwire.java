@@ -124,12 +124,16 @@ public final class Tripwire {
     }
 
     public static void hit(String mod) {
+        hitOrSkip(mod);
+    }
+
+    public static boolean hitOrSkip(String mod) {
         if (EXPECTED.get().contains(mod) || IN_HIT.get() || HOTWIRE_WORK.get()) {
-            return;
+            return false;
         }
         IN_HIT.set(true);
         try {
-            hitOnce(mod);
+            return hitOnce(mod);
         } finally {
             IN_HIT.set(false);
         }
@@ -137,11 +141,11 @@ public final class Tripwire {
 
     private static final Set<String> SAID_WHOSE = ConcurrentHashMap.newKeySet();
 
-    private static void hitOnce(String mod) {
+    private static boolean hitOnce(String mod) {
         CountDownLatch gate = GATES.get(mod);
         if (gate != null) {
             if (paused && onGameThread.getAsBoolean()) {
-                return;
+                return false;
             }
             Whose whose = classify(mod);
             if (SAID_WHOSE.add(mod + "/" + Thread.currentThread().getName())) {
@@ -151,7 +155,7 @@ public final class Tripwire {
 
             if (whose == Whose.OWN && !onGameThread.getAsBoolean()) {
                 waitUntilOn(mod, gate);
-                return;
+                return false;
             }
             if (whose == Whose.OTHERS && !paused) {
                 LOGGER.info("[Hotwire] {} is still called from {} by {}, so its threads are not held: {}", mod,
@@ -162,7 +166,9 @@ public final class Tripwire {
         AtomicLong calls = CALLS.get(mod);
         if (calls != null) {
             count(mod, calls);
+            return true;
         }
+        return false;
     }
 
     static boolean holdCaller() {
