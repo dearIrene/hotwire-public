@@ -195,6 +195,8 @@ public final class SwitchRunner {
 
         List<String> wired = plan.isRefused() ? List.of() : plan.order();
 
+        OffModCommands.markGoingOff(id -> wired.contains(id) || !this.switcher.isOn(id));
+
         Map<String, List<String>> content = WorldContent.find(wired);
         SwitchTimes.mark("plan: content");
 

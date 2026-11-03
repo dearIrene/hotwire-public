@@ -125,6 +125,10 @@ public final class OffModCommands {
         goingOff = id -> false;
     }
 
+    public static void markGoingOff(Predicate<String> off) {
+        goingOff = off;
+    }
+
     public static synchronized void takeOut(Predicate<String> off) {
         goingOff = off;
         for (boolean client : List.of(false, true)) {
