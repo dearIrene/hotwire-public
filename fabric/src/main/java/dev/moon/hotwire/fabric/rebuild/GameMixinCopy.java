@@ -47,8 +47,10 @@ public final class GameMixinCopy {
                     if (FailedAddJars.isHiding(internal)) {
                         return null;
                     }
-                    byte[] bytes = originalOf.apply(internal);
-                    return FailedAddJars.removeHiddenInterfaces(bytes != null ? bytes : mixin.findMadeClass(internal));
+
+                    byte[] made = mixin.findMadeClass(internal);
+                    byte[] bytes = made != null ? made : originalOf.apply(internal);
+                    return FailedAddJars.removeHiddenInterfaces(bytes);
                 },
                 FabricLoader.getInstance().getEnvironmentType().name(), decorations);
         copy.foldInto(new ExtensionFolder(findLaunchedExtensions()));
