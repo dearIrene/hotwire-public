@@ -64,12 +64,14 @@ public final class LoaderModList {
         FabricLoaderImpl loader = FabricLoaderImpl.INSTANCE;
         LoaderModMetadata metadata = parse(jar, loader);
         ModContainerImpl container = makeContainer(jar, metadata);
-        List<ModContainerImpl> mods = MODS.get(loader, List.class);
+
+        List<ModContainerImpl> mods = new ArrayList<>(MODS.get(loader, List.class));
         Map<String, ModContainerImpl> byId = MOD_MAP.get(loader, Map.class);
         EntrypointStorage entrypoints = ENTRYPOINT_STORAGE.get(loader, EntrypointStorage.class);
         Map<String, LanguageAdapter> adapters = ADAPTERS.get(loader, Map.class);
         synchronized (loader) {
             mods.add(container);
+            MODS.set(loader, mods);
             byId.put(metadata.getId(), container);
 
             metadata.getProvides().forEach(provided -> byId.putIfAbsent(provided, container));
@@ -109,7 +111,8 @@ public final class LoaderModList {
         FabricLoaderImpl loader = FabricLoaderImpl.INSTANCE;
         LoaderModMetadata metadata = parse(jar, loader);
         ModContainerImpl container = makeContainer(jar, metadata);
-        List<ModContainerImpl> mods = MODS.get(loader, List.class);
+
+        List<ModContainerImpl> mods = new ArrayList<>(MODS.get(loader, List.class));
         Map<String, ModContainerImpl> byId = MOD_MAP.get(loader, Map.class);
         EntrypointStorage entrypoints = ENTRYPOINT_STORAGE.get(loader, EntrypointStorage.class);
         Map<String, LanguageAdapter> adapters = ADAPTERS.get(loader, Map.class);
@@ -120,6 +123,7 @@ public final class LoaderModList {
                 mods.remove(old);
             }
             mods.add(container);
+            MODS.set(loader, mods);
             byId.put(id, container);
             for (String key : metadata.getEntrypointKeys()) {
                 for (EntrypointMetadata entrypoint : metadata.getEntrypoints(key)) {
@@ -178,7 +182,8 @@ public final class LoaderModList {
     @SuppressWarnings("unchecked")
     public static void hide(String id) {
         FabricLoaderImpl loader = FabricLoaderImpl.INSTANCE;
-        List<ModContainerImpl> mods = MODS.get(loader, List.class);
+
+        List<ModContainerImpl> mods = new ArrayList<>(MODS.get(loader, List.class));
         Map<String, ModContainerImpl> byId = MOD_MAP.get(loader, Map.class);
         EntrypointStorage storage = ENTRYPOINT_STORAGE.get(loader, EntrypointStorage.class);
         Map<String, List<Object>> entryMap = ENTRY_MAP.get(storage, Map.class);
@@ -206,6 +211,7 @@ public final class LoaderModList {
                 }
             });
             mods.remove(container);
+            MODS.set(loader, mods);
             byId.remove(id);
             HIDDEN.put(id, new HiddenMod(container, removed));
         }
@@ -293,7 +299,8 @@ public final class LoaderModList {
     @SuppressWarnings("unchecked")
     public static void show(String id) {
         FabricLoaderImpl loader = FabricLoaderImpl.INSTANCE;
-        List<ModContainerImpl> mods = MODS.get(loader, List.class);
+
+        List<ModContainerImpl> mods = new ArrayList<>(MODS.get(loader, List.class));
         Map<String, ModContainerImpl> byId = MOD_MAP.get(loader, Map.class);
         EntrypointStorage storage = ENTRYPOINT_STORAGE.get(loader, EntrypointStorage.class);
         Map<String, List<Object>> entryMap = ENTRY_MAP.get(storage, Map.class);
@@ -304,6 +311,7 @@ public final class LoaderModList {
             }
             mods.add(hidden.container());
             sortAs(mods, MODS_ORDER);
+            MODS.set(loader, mods);
             byId.put(id, hidden.container());
             hidden.entries().forEach((key, entries) -> {
                 List<Object> all = entryMap.computeIfAbsent(key, k -> new ArrayList<>());

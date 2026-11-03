@@ -32,6 +32,10 @@ public final class PrivateField {
         return type.cast(value);
     }
 
+    public void set(Object owner, Object value) {
+        this.handle.set(owner, value);
+    }
+
     public String getName() {
         return this.name;
     }
