@@ -192,12 +192,23 @@ public final class HandlerGuards {
         return all;
     }
 
+    public static List<String> findPutInAt(String internalName, String mod) {
+        List<String> owners = new ArrayList<>();
+        for (String owner : PUT_IN.getOrDefault(internalName, Set.of())) {
+            if (mod.equals(TripwireSites.findModOfClass(owner))) {
+                owners.add(owner.substring(owner.lastIndexOf('/') + 1));
+            }
+        }
+        return owners;
+    }
+
     static void notePutIn(String internalName, ClassNode node) {
         Set<String> owners = new HashSet<>();
         Set<String> checked = new HashSet<>();
         byte[] shipped = null;
         for (MethodNode method : node.methods) {
-            if (findMerged(method) != null) {
+            if (findMerged(method) != null
+                    || ((method.access & Opcodes.ACC_SYNTHETIC) != 0 && method.name.startsWith("lambda$"))) {
                 continue;
             }
             for (AbstractInsnNode insn : method.instructions) {

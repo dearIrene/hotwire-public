@@ -110,7 +110,7 @@ final class GuardFlips {
                             }
                         });
                         if (HandlerGuards.findDirectModsAt(target).contains(id)) {
-                            whys.add("code of its own called straight");
+                            whys.add("code of its own called straight " + HandlerGuards.findPutInAt(target, id));
                         }
                         HandlerGuards.findBehavingAt(target).stream()
                                 .filter(mixin -> mixins.owns().contains(mixin.replace('.', '/')))
