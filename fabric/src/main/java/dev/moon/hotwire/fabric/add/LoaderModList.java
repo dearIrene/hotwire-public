@@ -31,8 +31,11 @@ import net.fabricmc.loader.impl.metadata.ModMetadataParser;
 import net.fabricmc.loader.impl.metadata.ParseMetadataException;
 import net.fabricmc.loader.impl.metadata.VersionOverrides;
 import org.jspecify.annotations.Nullable;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
 public final class LoaderModList {
+    private static final Logger LOGGER = LoggerFactory.getLogger(LoaderModList.class);
     private static final PrivateField MODS = PrivateField.of(FabricLoaderImpl.class, "mods");
     private static final PrivateField MOD_MAP = PrivateField.of(FabricLoaderImpl.class, "modMap");
     private static final PrivateField ENTRYPOINT_STORAGE = PrivateField.of(FabricLoaderImpl.class, "entrypointStorage");
@@ -102,9 +105,13 @@ public final class LoaderModList {
     @SuppressWarnings("unchecked")
     public static void replace(String id, Path jar) {
         FabricLoaderImpl loader = FabricLoaderImpl.INSTANCE;
-        ModContainerImpl container = makeContainer(jar, parse(jar, loader));
+        LoaderModMetadata metadata = parse(jar, loader);
+        ModContainerImpl container = makeContainer(jar, metadata);
         List<ModContainerImpl> mods = MODS.get(loader, List.class);
         Map<String, ModContainerImpl> byId = MOD_MAP.get(loader, Map.class);
+        EntrypointStorage entrypoints = ENTRYPOINT_STORAGE.get(loader, EntrypointStorage.class);
+        Map<String, LanguageAdapter> adapters = ADAPTERS.get(loader, Map.class);
+        Map<String, List<Object>> entryMap = ENTRY_MAP.get(entrypoints, Map.class);
         synchronized (loader) {
             ModContainerImpl old = byId.get(id);
             if (old != null) {
@@ -112,6 +119,39 @@ public final class LoaderModList {
             }
             mods.add(container);
             byId.put(id, container);
+            for (String key : metadata.getEntrypointKeys()) {
+                for (EntrypointMetadata entrypoint : metadata.getEntrypoints(key)) {
+                    if (hasEntry(entryMap.getOrDefault(key, List.of()), id, entrypoint.getValue())) {
+                        continue;
+                    }
+                    try {
+                        entrypoints.add(container, key, entrypoint, adapters);
+                    } catch (Exception e) {
+                        LOGGER.warn("[Hotwire] the loader could not take the new {} entrypoint {} of {}", key,
+                                entrypoint.getValue(), id, e);
+                    }
+                }
+            }
+        }
+    }
+
+    private static boolean hasEntry(List<Object> entries, String id, String value) {
+        for (Object entry : entries) {
+            ModContainerImpl of = findContainerOf(entry);
+            if (of != null && of.getMetadata().getId().equals(id) && value.equals(findValueOf(entry))) {
+                return true;
+            }
+        }
+        return false;
+    }
+
+    private static @Nullable String findValueOf(Object entry) {
+        try {
+            Field value = entry.getClass().getDeclaredField("value");
+            value.setAccessible(true);
+            return String.valueOf(value.get(entry));
+        } catch (ReflectiveOperationException e) {
+            return null;
         }
     }
 
@@ -153,7 +193,8 @@ public final class LoaderModList {
             entryMap.forEach((key, entries) -> {
                 List<Object> mine = new ArrayList<>();
                 for (Object entry : entries) {
-                    if (container.equals(findContainerOf(entry))) {
+                    ModContainerImpl of = findContainerOf(entry);
+                    if (of != null && of.getMetadata().getId().equals(container.getMetadata().getId())) {
                         mine.add(entry);
                     }
                 }

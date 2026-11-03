@@ -192,7 +192,8 @@ public final class ModUpdater {
         }
         String installed = this.engine.getGraph().find(manifest.id()).map(ModManifest::version).orElse("");
         JarIntake.Kind kind = JarIntake.classify(manifest, Map.of(manifest.id(), installed), this.getVersionOrder());
-        if (kind == JarIntake.Kind.SAME_VERSION) {
+
+        if (kind == JarIntake.Kind.SAME_VERSION && hasSameBytes(running, jar)) {
             return new UpdatePreview.SameVersion(manifest.name(), installed);
         }
         if (kind == JarIntake.Kind.REFUSED) {
@@ -606,10 +607,26 @@ public final class ModUpdater {
         } catch (IOException | UnsupportedOperationException e) {
             Files.copy(incoming, staged, StandardCopyOption.REPLACE_EXISTING);
         }
+
+        String runningJar = String.valueOf(running.getFileName());
+        String runningSha = FileHashes.findSha256(running);
+        for (UpdateQueue.Entry earlier : this.engine.getQueue().getEntries()) {
+            if (earlier.modId().equals(id) && earlier.stagedSha256().equals(runningSha)) {
+                runningJar = earlier.runningJar();
+                runningSha = earlier.runningSha256();
+            }
+        }
         this.engine.getQueue().add(new UpdateQueue.Entry(id, name, plan.runningVersion(),
-                plan.incomingVersion(), String.valueOf(running.getFileName()), FileHashes.findSha256(running),
-                staged.toAbsolutePath().toString(), FileHashes.findSha256(staged), "",
-                System.currentTimeMillis()));
+                plan.incomingVersion(), runningJar, runningSha, staged.toAbsolutePath().toString(),
+                FileHashes.findSha256(staged), "", System.currentTimeMillis()));
+    }
+
+    private static boolean hasSameBytes(Path running, Path incoming) {
+        try {
+            return FileHashes.findSha256(running).equals(FileHashes.findSha256(incoming));
+        } catch (IOException e) {
+            return false;
+        }
     }
 
     static UpdateMethod getMethodOf(UpdateTier tier) {

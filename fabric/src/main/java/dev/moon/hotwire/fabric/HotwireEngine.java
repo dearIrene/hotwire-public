@@ -17,6 +17,7 @@ import dev.moon.hotwire.fabric.screen.HotwireScreen;
 import dev.moon.hotwire.fabric.screen.ModIcons;
 import dev.moon.hotwire.fabric.store.ModStore;
 import dev.moon.hotwire.fabric.store.UpdateCheck;
+import dev.moon.hotwire.fabric.update.DevFolderWatch;
 import dev.moon.hotwire.fabric.update.UpdateSupport;
 import dev.moon.hotwire.modrinth.Downloads;
 import dev.moon.hotwire.plan.ModGraph;
@@ -91,6 +92,7 @@ public final class HotwireEngine implements ModScreen.Game, AutoCloseable {
     private final PendingChanges pending;
     final ProfileStore profiles;
     private final HotwireSettings settings;
+    private final @Nullable DevFolderWatch devFolder;
     final Tasks tasks = new Tasks(1, Minecraft.getInstance());
     @Nullable ModScreen screen;
 
@@ -120,6 +122,9 @@ public final class HotwireEngine implements ModScreen.Game, AutoCloseable {
         this.updateQueue = queue;
         this.pending = new PendingChanges(queue, folders);
         this.bound = bound;
+
+        this.devFolder = settings.isDeveloperOn() ? new DevFolderWatch(FabricLoader.getInstance().getGameDir()
+                .resolve("hotwire").resolve("dev"), this::updateFromDevFolder) : null;
 
         if (bound instanceof Bound.Ready ready) {
             ready.parts().instrumentation().addTransformer(ready.parts().loadTimeMixer());
@@ -178,8 +183,18 @@ public final class HotwireEngine implements ModScreen.Game, AutoCloseable {
         return this.installed.getGraph().getIds().stream().filter(ModPolicy::isSwitchable).filter(this::isOn).toList();
     }
 
+    private void updateFromDevFolder(Path jar) {
+        JvmParts parts = this.findParts();
+        if (parts != null) {
+            parts.updates().updateAll(List.of(jar));
+        }
+    }
+
     @Override
     public void close() {
+        if (this.devFolder != null) {
+            this.devFolder.close();
+        }
         JvmParts parts = this.findParts();
 
         Set<String> off = parts == null ? Set.of() : parts.runner().getSwitcher().getOff();
