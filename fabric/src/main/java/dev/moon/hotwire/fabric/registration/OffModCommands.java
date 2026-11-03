@@ -27,10 +27,50 @@ public final class OffModCommands {
     private static final int DEPTH = 8;
 
     private record Removal(CommandDispatcher<?> dispatcher, CommandNode<?> parent, CommandNode<?> node,
-            Set<String> mods, boolean client) {
+            Set<String> mods, boolean client) implements TakeoutRecord.Entry {
+        @Override
+        public void restore() {
+            if (this.parent.getChild(this.node.getName()) == null) {
+                addChild(this.parent, this.node);
+            }
+        }
+
+        @Override
+        public String describe() {
+            return "/" + this.node.getName() + " of " + this.mods;
+        }
+
+        @Override
+        public Set<String> getNeeds() {
+            return this.mods;
+        }
+
+        @Override
+        @SuppressWarnings("ReferenceEquality")
+        public boolean isStale() {
+            return this.dispatcher != CommandRegistration.findActiveDispatcher(this.client);
+        }
+
+        @Override
+        public Runnable getAfterBatch() {
+            return this.client ? Resend.CLIENT : Resend.SERVER;
+        }
     }
 
-    private static final List<Removal> REMOVED = new ArrayList<>();
+    private enum Resend implements Runnable {
+        CLIENT(true), SERVER(false);
+
+        private final boolean client;
+
+        Resend(boolean client) {
+            this.client = client;
+        }
+
+        @Override
+        public void run() {
+            CommandRegistration.resendCommands(this.client);
+        }
+    }
     private static volatile @Nullable Supplier<ModGraph> mods;
 
     private static volatile Map<String, Set<String>> dependencies = Map.of();
@@ -118,31 +158,12 @@ public final class OffModCommands {
     }
 
     @SuppressWarnings("ReferenceEquality")
-    public static synchronized void putBack(Predicate<String> on) {
-        List<Boolean> resend = new ArrayList<>();
-        REMOVED.removeIf(removal -> {
-            if (removal.dispatcher() != CommandRegistration.findActiveDispatcher(removal.client())) {
-                return true;
-            }
-            if (!removal.mods().stream().allMatch(on)) {
-                return false;
-            }
-            if (removal.parent().getChild(removal.node().getName()) == null) {
-                addChild(removal.parent(), removal.node());
-                resend.add(removal.client());
-            }
-            return true;
-        });
-        resend.stream().distinct().forEach(CommandRegistration::resendCommands);
-    }
-
-    @SuppressWarnings("ReferenceEquality")
     private static void take(CommandDispatcher<?> dispatcher, CommandNode<?> parent, CommandNode<?> node,
             Set<String> mods, boolean client, Collection<String> removedNames) {
         CommandNodeAccessor from = (CommandNodeAccessor) parent;
         from.hotwire$getChildren().remove(node.getName());
         from.hotwire$getLiterals().remove(node.getName());
-        REMOVED.add(new Removal(dispatcher, parent, node, mods, client));
+        TakeoutRecord.add(mods.iterator().next(), new Removal(dispatcher, parent, node, mods, client));
         removedNames.add((parent == dispatcher.getRoot() ? "/" : "/" + parent.getName() + " ") + node.getName());
     }
 

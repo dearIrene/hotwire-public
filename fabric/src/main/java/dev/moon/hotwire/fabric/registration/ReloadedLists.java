@@ -11,8 +11,6 @@ import java.util.Map;
 import java.util.Set;
 import java.util.TreeMap;
 import java.util.TreeSet;
-import java.util.concurrent.CopyOnWriteArrayList;
-import java.util.function.Predicate;
 import net.minecraft.client.Minecraft;
 import net.minecraft.client.model.geom.ModelLayerLocation;
 import net.minecraft.client.model.geom.ModelLayers;
@@ -30,9 +28,28 @@ public final class ReloadedLists {
     private static final List<String> LAYER_REGISTRIES = List.of(
             "net.fabricmc.fabric.impl.client.rendering.ModelLayerImpl",
             "net.fabricmc.fabric.impl.client.rendering.EntityModelLayerImpl");
-    private static final List<Removal> REMOVED = new CopyOnWriteArrayList<>();
 
-    private record Removal(Object list, Object entry, @Nullable Object value, Set<String> needs) {
+    private record Removal(Object list, Object entry, @Nullable Object value, Set<String> needs)
+            implements TakeoutRecord.Entry {
+        @Override
+        @SuppressWarnings("unchecked")
+        public void restore() {
+            if (this.list instanceof Map<?, ?> map) {
+                ((Map<Object, Object>) map).putIfAbsent(this.entry, this.value);
+            } else if (this.list instanceof Collection<?> elements && !elements.contains(this.entry)) {
+                ((Collection<Object>) elements).add(this.entry);
+            }
+        }
+
+        @Override
+        public String describe() {
+            return "the reloaded entry " + this.entry + " needing " + this.needs;
+        }
+
+        @Override
+        public Set<String> getNeeds() {
+            return this.needs;
+        }
     }
 
     private ReloadedLists() {
@@ -52,7 +69,7 @@ public final class ReloadedLists {
                     needs.add(definer);
                 }
                 if (!needs.isEmpty() && remove(list, entry)) {
-                    REMOVED.add(new Removal(list, entry, value, needs));
+                    TakeoutRecord.add(needs.iterator().next(), new Removal(list, entry, value, needs));
                     needs.forEach(mod -> counts.merge(mod, 1, Integer::sum));
                 }
             }
@@ -71,7 +88,8 @@ public final class ReloadedLists {
                 boolean unmade = entry instanceof ModelLayerLocation ? !defined.contains(entry)
                         : !ReloadedListHolders.canBeMade(value == null ? entry : value, resources);
                 if (unmade && remove(list, entry)) {
-                    REMOVED.add(new Removal(list, entry, value, findNeedsOf(entry, value, off)));
+                    Set<String> needs = findNeedsOf(entry, value, off);
+                    TakeoutRecord.add(needs.iterator().next(), new Removal(list, entry, value, needs));
                     found.add(String.valueOf(entry));
                 }
             }
@@ -81,21 +99,6 @@ public final class ReloadedLists {
                     + " are out until {} are on", found, off);
         }
         return !found.isEmpty();
-    }
-
-    @SuppressWarnings("unchecked")
-    public static void putBack(Predicate<String> isOff) {
-        REMOVED.removeIf(one -> {
-            if (one.needs().stream().anyMatch(isOff)) {
-                return false;
-            }
-            if (one.list() instanceof Map<?, ?> map) {
-                ((Map<Object, Object>) map).putIfAbsent(one.entry(), one.value());
-            } else if (one.list() instanceof Collection<?> elements && !elements.contains(one.entry())) {
-                ((Collection<Object>) elements).add(one.entry());
-            }
-            return true;
-        });
     }
 
     private static Set<String> findNeedsOf(Object entry, @Nullable Object value, Collection<String> off) {

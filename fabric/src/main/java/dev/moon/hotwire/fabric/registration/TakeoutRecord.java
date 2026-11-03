@@ -91,6 +91,22 @@ public final class TakeoutRecord {
                 BY_MOD.put(mod, Collections.synchronizedList(new ArrayList<>(kept.reversed())));
             }
         }
+
+        synchronized (BY_MOD) {
+            for (Map.Entry<String, List<Entry>> rest : BY_MOD.entrySet()) {
+                if (!isOn.test(rest.getKey()) && !mods.contains(rest.getKey())) {
+                    continue;
+                }
+                for (Entry entry : List.copyOf(rest.getValue())) {
+                    if (!entry.getNeeds().isEmpty()
+                            && entry.getNeeds().stream().allMatch(other -> mods.contains(other) || isOn.test(other))
+                            && rest.getValue().remove(entry) && !entry.isStale()) {
+                        due.computeIfAbsent(entry.getWhere(), any -> new ArrayList<>()).add(entry);
+                    }
+                }
+            }
+            BY_MOD.values().removeIf(List::isEmpty);
+        }
         IntegratedServer server = Minecraft.getInstance().getSingleplayerServer();
         due.forEach((where, entries) -> {
             switch (where) {
