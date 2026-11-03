@@ -76,7 +76,9 @@ public final class ReportWriter {
         this.writeRegistrations("Registrations restored", this.report.restored());
         this.writeTimings();
         this.writeOffCheck();
-        this.writeFailures("Failures", this.report.failures());
+        if (!this.report.failures().isEmpty()) {
+            this.writeFailures("Failures", this.report.failures());
+        }
         if (!this.report.faults().isEmpty()) {
             this.writeFailures("Faults", this.report.faults());
         }
@@ -105,8 +107,10 @@ public final class ReportWriter {
         this.writeLine(1, "Java: " + machine.javaVersion());
         this.writeLine(1, "OS: " + machine.os());
         this.writeLine(1, "JVM route: " + machine.jvmRoute());
-        this.writeSection("Settings");
-        new TreeMap<>(machine.settings()).forEach((key, value) -> this.writeLine(1, key + ": " + value));
+        if (!machine.settings().isEmpty()) {
+            this.writeSection("Settings");
+            new TreeMap<>(machine.settings()).forEach((key, value) -> this.writeLine(1, key + ": " + value));
+        }
     }
 
     private void plan() {
@@ -150,11 +154,17 @@ public final class ReportWriter {
     }
 
     private void list(String title, List<String> items) {
+        if (items.isEmpty()) {
+            return;
+        }
         this.writeSection(title + " (" + items.size() + ")");
         items.stream().sorted().forEach(item -> this.writeLine(1, item));
     }
 
     private void writeRegistrations(String title, Map<String, Map<String, Integer>> byMod) {
+        if (byMod.isEmpty()) {
+            return;
+        }
         this.writeSection(title);
         new TreeMap<>(byMod).forEach((mod, kinds) -> {
             StringBuilder counts = new StringBuilder();
@@ -171,7 +181,8 @@ public final class ReportWriter {
 
     private void writeOffCheck() {
         switch (this.report.offCheck()) {
-            case Report.OffCheck.NotRun notRun -> this.writeSection("Off check: not run");
+            case Report.OffCheck.NotRun notRun -> {
+            }
             case Report.OffCheck.AllOff allOff -> this.writeSection("Off check: passed");
             case Report.OffCheck.PartlyOff partly -> {
                 this.writeSection("Off check: partly off");
