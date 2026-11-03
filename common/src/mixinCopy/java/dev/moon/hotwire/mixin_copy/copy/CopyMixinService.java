@@ -9,6 +9,7 @@ import java.lang.reflect.Modifier;
 import java.net.MalformedURLException;
 import java.net.URI;
 import java.net.URL;
+import java.nio.charset.StandardCharsets;
 import java.security.CodeSource;
 import java.security.ProtectionDomain;
 import java.security.cert.Certificate;
@@ -169,6 +170,30 @@ public final class CopyMixinService extends MixinServiceAbstract
 
     static @Nullable Object findLivePlugin(String mixinPackage) {
         return livePlugins.apply(mixinPackage);
+    }
+
+    static byte @Nullable [] findConfigOf(String mixinPackage) {
+        byte[] wanted = ("\"package\":\"" + mixinPackage + "\"").getBytes(StandardCharsets.UTF_8);
+        byte[] spaced = ("\"package\": \"" + mixinPackage + "\"").getBytes(StandardCharsets.UTF_8);
+        for (byte[] bytes : resources.values()) {
+            if (contains(bytes, wanted) || contains(bytes, spaced)) {
+                return bytes;
+            }
+        }
+        return null;
+    }
+
+    private static boolean contains(byte[] bytes, byte[] wanted) {
+        outer:
+        for (int at = 0; at <= bytes.length - wanted.length; at++) {
+            for (int in = 0; in < wanted.length; in++) {
+                if (bytes[at + in] != wanted[in]) {
+                    continue outer;
+                }
+            }
+            return true;
+        }
+        return false;
     }
 
     static void transformLive(Object plugin, String target, ClassNode node, String mixin) {

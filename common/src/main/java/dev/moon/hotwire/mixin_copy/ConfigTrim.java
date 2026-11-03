@@ -20,6 +20,8 @@ public final class ConfigTrim {
 
     public static final String LIVE_PLUGIN = "dev.moon.hotwire.mixin_copy.copy.LivePluginShape";
 
+    public static final String RETAINED_PLUGIN = "dev.moon.hotwire.mixin_copy.copy.RetainedPluginShape";
+
     private ConfigTrim() {
     }
 
@@ -117,6 +119,18 @@ public final class ConfigTrim {
             root.addProperty("plugin", LIVE_PLUGIN);
         } else if (!pluginStays) {
             root.remove("plugin");
+        } else {
+            root.addProperty("hotwirePlugin", root.get("plugin").getAsString());
+            root.addProperty("plugin", RETAINED_PLUGIN);
+            JsonArray decided = new JsonArray();
+            if (!prefix.isEmpty()) {
+                for (String mixin : findInPackage(applied, prefix)) {
+                    if (!listedElsewhere.test(mixin)) {
+                        decided.add(mixin);
+                    }
+                }
+            }
+            root.add("hotwireApplied", decided);
         }
 
         JsonObject injectors = root.has("injectors") && root.get("injectors").isJsonObject()
