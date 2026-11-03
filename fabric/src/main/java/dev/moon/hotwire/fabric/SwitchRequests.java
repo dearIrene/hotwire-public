@@ -21,6 +21,8 @@ import java.util.TreeSet;
 import java.util.concurrent.CompletableFuture;
 import java.util.function.Function;
 import java.util.function.Supplier;
+import net.minecraft.client.Minecraft;
+import net.minecraft.client.server.IntegratedServer;
 import org.jspecify.annotations.Nullable;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -75,6 +77,11 @@ final class SwitchRequests {
         }
         if (this.engine.isWorldLocked()) {
             return this.refuse(Lang.get("hotwire.switch.world_locked"));
+        }
+
+        IntegratedServer server = Minecraft.getInstance().getSingleplayerServer();
+        if (server != null && server.isCurrentlySaving()) {
+            return this.refuse(Lang.get("hotwire.switch.saving"));
         }
         CompletableFuture<SwitchResult> ended = HotwireApiImpl.beginSwitch();
         this.tasks.submit("switch", () -> work.apply(parts.runner()), result -> {

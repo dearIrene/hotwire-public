@@ -11,31 +11,41 @@ public final class ReopenPanel extends Panel {
     static final int LINE = 12;
 
     public record Offer(boolean off, List<String> ids, @Nullable Path jar, String who, String why, boolean leaves,
-            boolean nextStart) {
+            boolean nextStart, boolean backup) {
         public Offer {
             ids = List.copyOf(ids);
         }
 
         public Offer(boolean off, List<String> ids, @Nullable Path jar, String who, String why, boolean leaves) {
-            this(off, ids, jar, who, why, leaves, false);
+            this(off, ids, jar, who, why, leaves, false, false);
         }
 
         public Offer(boolean off, List<String> ids, @Nullable Path jar, String who, String why) {
-            this(off, ids, jar, who, why, false, false);
+            this(off, ids, jar, who, why, false, false, false);
         }
 
         public Offer(boolean off, List<String> ids, String who, String why) {
-            this(off, ids, null, who, why, false, false);
+            this(off, ids, null, who, why, false, false, false);
         }
 
         public static Offer ofNextStart(List<String> ids, String who, String why) {
-            return new Offer(true, ids, null, who, why, false, true);
+            return new Offer(true, ids, null, who, why, false, true, false);
+        }
+
+        Offer withBackup(boolean backup) {
+            return new Offer(this.off, this.ids, this.jar, this.who, this.why, this.leaves, this.nextStart, backup);
+        }
+
+        boolean isReopening() {
+            return !this.leaves && !this.nextStart;
         }
 
         boolean isReopenOnly() {
             return !this.leaves && !this.nextStart && this.jar == null && this.ids.isEmpty();
         }
     }
+
+    private static boolean backupWanted = true;
 
     private final Consumer<Offer> onConfirm;
     private @Nullable Offer offer;
@@ -49,8 +59,10 @@ public final class ReopenPanel extends Panel {
     public void open(Offer offer) {
         this.offer = offer;
         boolean reopenOnly = offer.isReopenOnly();
-        this.setPrimary(Lang.get(findConfirmKey(offer)), () -> this.onConfirm.accept(offer));
+        this.setPrimary(Lang.get(findConfirmKey(offer)),
+                () -> this.onConfirm.accept(offer.withBackup(offer.isReopening() && backupWanted)));
         this.setCancelLabel(Lang.get(reopenOnly ? "hotwire.reopen.later" : "hotwire.button.cancel"));
+        this.change(getBackupLabel(), offer.isReopening() ? this::toggleBackup : null);
         this.setPrimaryWidth(offer.nextStart() ? 150 : 120);
         this.show();
     }
@@ -59,6 +71,15 @@ public final class ReopenPanel extends Panel {
     public void step(float dt) {
         this.size(WIDTH, CONTENT_Y + LINE * this.lineCount + 58);
         super.step(dt);
+    }
+
+    private void toggleBackup() {
+        backupWanted = !backupWanted;
+        this.change(getBackupLabel(), this::toggleBackup);
+    }
+
+    private static String getBackupLabel() {
+        return Lang.get(backupWanted ? "hotwire.reopen.backup_on" : "hotwire.reopen.backup_off");
     }
 
     private static String findConfirmKey(Offer offer) {
@@ -114,6 +135,9 @@ public final class ReopenPanel extends Panel {
         } else {
             MessageLine.addWrapped(canvas, lines, Lang.get(shown.leaves() ? "hotwire.reopen.safe.server"
                     : "hotwire.reopen.safe.world"), Palette.ON, w - 28);
+        }
+        if (shown.isReopening() && backupWanted) {
+            MessageLine.addWrapped(canvas, lines, Lang.get("hotwire.reopen.backup_line"), Palette.DIM, w - 28);
         }
         this.lineCount = lines.size();
         int lineY = y + CONTENT_Y;

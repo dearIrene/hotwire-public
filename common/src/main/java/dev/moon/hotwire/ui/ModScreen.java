@@ -134,6 +134,9 @@ public final class ModScreen implements JarHost {
         default void cancelOffAtNextStart(String id) {
         }
 
+        default void backUpBeforeReopen(boolean backup) {
+        }
+
         default void switchWithReopen(boolean off, List<String> ids) {
         }
 
@@ -262,6 +265,7 @@ public final class ModScreen implements JarHost {
         this.reopenPanel = new ReopenPanel(offer -> {
             this.modScreenButtons.closePanels();
             Path jar = offer.jar();
+            this.game.backUpBeforeReopen(offer.backup());
             if (offer.nextStart()) {
                 this.game.turnOffAtNextStart(offer.ids());
             } else if (jar != null) {

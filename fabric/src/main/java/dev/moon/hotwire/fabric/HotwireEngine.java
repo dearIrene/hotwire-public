@@ -284,6 +284,11 @@ public final class HotwireEngine implements ModScreen.Game, AutoCloseable {
     }
 
     @Override
+    public void backUpBeforeReopen(boolean backup) {
+        WorldReopen.setBackupNext(backup);
+    }
+
+    @Override
     public void switchWithReopen(boolean off, List<String> ids) {
         this.switches.switchWithReopen(this.requireSwitching().runner(), off, ids);
     }

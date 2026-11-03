@@ -37,6 +37,7 @@ import net.minecraft.client.multiplayer.ClientLevel;
 import net.minecraft.client.multiplayer.ClientPacketListener;
 import net.minecraft.client.server.IntegratedServer;
 import net.minecraft.world.level.storage.LevelResource;
+import net.minecraft.world.level.storage.LevelStorageSource;
 import org.jspecify.annotations.Nullable;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -80,6 +81,30 @@ public final class WorldReopen {
         return client.level != null && client.getSingleplayerServer() == null;
     }
 
+    private static volatile boolean backupNext;
+
+    public static void setBackupNext(boolean backup) {
+        backupNext = backup;
+    }
+
+    private static void backUpIfAsked(Minecraft client, String level) throws InterruptedException {
+        if (!backupNext) {
+            return;
+        }
+        backupNext = false;
+        long size;
+        try (LevelStorageSource.LevelStorageAccess access = client.getLevelSource().createAccess(level)) {
+            size = access.makeWorldBackup();
+        } catch (IOException | RuntimeException e) {
+            LOGGER.warn("[Hotwire] the world {} could not be backed up", level, e);
+            ModViews.showNotice("Hotwire", Lang.get("hotwire.reopen.backup_failed", e.getMessage()));
+            openOrSay(client, level);
+            throw new IllegalStateException(Lang.get("hotwire.reopen.backup_failed", e.getMessage()), e);
+        }
+        LOGGER.info("[Hotwire] the world {} was backed up, {} MB", level, size / (1024 * 1024));
+        ModViews.showNotice("Hotwire", Lang.get("hotwire.reopen.backed_up", level));
+    }
+
     public static ModAdder.Result add(Supplier<ModAdder.Result> add) {
         Optional<String> cannot = findRefusal();
         if (cannot.isPresent()) {
@@ -91,6 +116,7 @@ public final class WorldReopen {
             leave(client);
             closedFor.accept(true);
             try {
+                backUpIfAsked(client, level);
                 ModAdder.Result result = add.get();
                 if (result instanceof ModAdder.Result.Failed failed && failed.leftBehind()) {
                     return new ModAdder.Result.Failed(failed.reason() + " The world stays closed until then.",
@@ -124,6 +150,7 @@ public final class WorldReopen {
         leave(client);
         closedFor.accept(true);
         try {
+            backUpIfAsked(client, level);
             T result;
             try {
                 result = add.get();
