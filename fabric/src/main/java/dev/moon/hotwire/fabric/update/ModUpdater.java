@@ -42,6 +42,7 @@ import java.util.concurrent.ConcurrentHashMap;
 import java.util.function.BiFunction;
 import java.util.function.Consumer;
 import java.util.function.Function;
+import java.util.stream.Collectors;
 import java.util.zip.ZipEntry;
 import java.util.zip.ZipFile;
 import net.fabricmc.loader.api.Version;
@@ -212,8 +213,13 @@ public final class ModUpdater {
             return new UpdatePreview.Refused(manifest.name(), whole.refusal());
         }
         List<String> lines = new ArrayList<>();
-        for (CarriedUpdates.Library carried : whole.bundled()) {
-            lines.add(Lang.get("hotwire.update.also", carried.manifest().name(), carried.manifest().version()));
+        if (whole.bundled().size() > 3) {
+            lines.add(Lang.get("hotwire.update.also_many", whole.bundled().size(), whole.bundled().stream()
+                    .map(carried -> carried.manifest().name()).collect(Collectors.joining(", "))));
+        } else {
+            for (CarriedUpdates.Library carried : whole.bundled()) {
+                lines.add(Lang.get("hotwire.update.also", carried.manifest().name(), carried.manifest().version()));
+            }
         }
         lines.addAll(UpdateText.describeLines(whole.plan()));
         LOGGER.info("[Hotwire] the update of {} to {}, in full, planned in {} ms: {}", manifest.name(),

@@ -22,6 +22,7 @@ final class UpdatePanel extends Panel {
     private CompletableFuture<UpdatePreview> reading = new CompletableFuture<>();
     private @Nullable UpdatePreview preview;
     private int lineCount = 1;
+    private int mostLines = MOST_LINES;
 
     private int whenMore;
 
@@ -53,7 +54,10 @@ final class UpdatePanel extends Panel {
             this.onPreviewReady(this.awaitPreview());
         }
         boolean cards = this.preview instanceof UpdatePreview.Ready;
-        this.size(WIDTH, CONTENT_Y + (cards ? 96 + WHEN_H + 11 * this.whenMore : 0) + 12 * this.lineCount + 44);
+        int fixed = CONTENT_Y + (cards ? 96 + WHEN_H + 11 * this.whenMore : 0) + 44;
+
+        this.mostLines = Math.max(2, Math.min(MOST_LINES, (this.getHeight() - 24 - fixed) / 12));
+        this.size(WIDTH, fixed + 12 * this.lineCount);
         super.step(dt);
     }
 
@@ -139,8 +143,8 @@ final class UpdatePanel extends Panel {
             lines.addAll(MessageLine.wrap(canvas, line, w - 28, Integer.MAX_VALUE));
         }
 
-        if (lines.size() > MOST_LINES) {
-            lines = new ArrayList<>(lines.subList(0, MOST_LINES - 1));
+        if (lines.size() > this.mostLines) {
+            lines = new ArrayList<>(lines.subList(0, this.mostLines - 1));
             lines.add(Lang.get("hotwire.panel.more_in_log"));
         }
         this.lineCount = Math.max(1, lines.size());
