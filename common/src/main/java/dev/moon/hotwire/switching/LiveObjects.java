@@ -236,8 +236,12 @@ final class LiveObjects {
             return;
         }
         long began = System.nanoTime();
-        OffWindowObjects.awaitCollection();
+
         ConstructedFields.Unmade unmade = check.get();
+        if (!unmade.lines().isEmpty()) {
+            OffWindowObjects.awaitCollection();
+            unmade = check.get();
+        }
         if (!unmade.lines().isEmpty()) {
             throw makeRefusal("rebuild", unmade);
         }
