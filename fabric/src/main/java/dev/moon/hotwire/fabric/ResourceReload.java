@@ -116,11 +116,12 @@ public final class ResourceReload {
 
                 boolean renderersOnly = !reloadAsked && !hasAny(types, RELOADED);
                 if (reload && !reloadedWhilePaused && !(renderersOnly && reloadedRenderers)) {
-                    if (renderersOnly && !comingOn.isEmpty()) {
+                    if (!reloadAsked && !comingOn.isEmpty()) {
                         reloadedRenderers = true;
+                        reloadedWhilePaused |= !renderersOnly;
                         BackgroundReload.beginAfterHold(() -> {
                             Runnable start = () -> startUnprofiled(() -> track(game.reloadResourcePacks()));
-                            if (!ReloadListeners.runWithoutHeavy(game, start)) {
+                            if (!renderersOnly || !ReloadListeners.runWithoutHeavy(game, start)) {
                                 startWhole(game);
                             }
                         });
