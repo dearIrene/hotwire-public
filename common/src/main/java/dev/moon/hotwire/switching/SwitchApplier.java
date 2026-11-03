@@ -196,7 +196,12 @@ public final class SwitchApplier {
             Runnable rebuildObjects = RebuildSteps.apply(this.rebuilder, prepared, this.health, this.afterRebuild,
                     this.onGameThread, this.objectRebuilder, this.game.isInWorld(), this.catchUps.findHolder(),
                     flipped);
-            whilePaused.run();
+            try {
+                whilePaused.run();
+            } catch (RuntimeException | LinkageError e) {
+                RebuildSteps.revert(this.rebuilder, prepared, this.afterRebuild);
+                throw e;
+            }
             SwitchTimes.mark("paused: takeouts");
             rebuildObjects.run();
             SwitchTimes.mark("rebuild objects");

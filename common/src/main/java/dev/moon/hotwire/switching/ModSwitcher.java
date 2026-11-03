@@ -383,6 +383,8 @@ public final class ModSwitcher {
         }
         try {
             theirs.accept(order);
+        } catch (HoldBudgetException e) {
+            throw e;
         } catch (RuntimeException | LinkageError e) {
             LOGGER.error("[Hotwire] what {} {} could not all be {}", order, goingOff ? "left in others" : "left behind",
                     goingOff ? "taken out" : "put back", e);
@@ -526,6 +528,15 @@ public final class ModSwitcher {
         }
     }
 
+    private static boolean isOverBudget(Throwable thrown) {
+        for (Throwable at = thrown; at != null; at = at.getCause()) {
+            if (at instanceof HoldBudgetException) {
+                return true;
+            }
+        }
+        return false;
+    }
+
     private Result runAlone(SwitchPlan plan, Consumer<List<String>> theirs) {
         if (plan.isRefused()) {
             return new Result.Refused(plan);
@@ -564,6 +575,9 @@ public final class ModSwitcher {
                 whilePaused.run();
             } catch (RebuildException | RuntimeException | LinkageError e) {
                 RebuildException failure = e instanceof RebuildException known ? known
+                        : isOverBudget(e) ? new RebuildException(plan.order() + " took longer than the hold's"
+                        + " budget to take out of what others hold; it stays as it was, and changes with the world"
+                        + " saved and opened again", e, true)
                         : new RebuildException("the switch threw: " + e, e);
 
                 if (failure.isWorldBuilt() && plan.order().size() == 1) {

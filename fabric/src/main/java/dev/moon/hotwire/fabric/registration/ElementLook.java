@@ -1,5 +1,6 @@
 package dev.moon.hotwire.fabric.registration;
 
+import dev.moon.hotwire.switching.HoldBudgetException;
 import java.util.ArrayList;
 import java.util.Collection;
 import java.util.List;
@@ -198,6 +199,9 @@ public final class ElementLook {
     static void stopIfAsked() {
         if (isStopAsked()) {
             throw new CancellationException("a switch began, which the notes serves");
+        }
+        if (GameHold.isOverBudget()) {
+            throw new HoldBudgetException();
         }
     }
 

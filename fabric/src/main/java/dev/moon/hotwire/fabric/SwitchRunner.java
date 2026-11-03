@@ -37,6 +37,7 @@ import dev.moon.hotwire.redefine.RebuildException;
 import dev.moon.hotwire.redefine.Tripwire;
 import dev.moon.hotwire.report.ActionJournal;
 import dev.moon.hotwire.report.Report;
+import dev.moon.hotwire.switching.HoldBudgetException;
 import dev.moon.hotwire.switching.ModSwitcher;
 import dev.moon.hotwire.switching.OffChecker;
 import dev.moon.hotwire.switching.PlayerMessages;
@@ -124,6 +125,8 @@ public final class SwitchRunner {
             }
             long start = System.nanoTime();
             long ran = THREADS.getCurrentThreadCpuTime();
+
+            ElementLook.readBrought(this.fieldReferences);
             ElementLook.findAhead(this.fieldReferences, mods, this.switcher::isOn, true);
             LOGGER.info("[Hotwire] the look ahead for every mod that could go off ({}) took {} ms, {} ms of it running",
                     mods.size(), (System.nanoTime() - start) / 1_000_000,
@@ -319,6 +322,12 @@ public final class SwitchRunner {
             ModelReloadCheck.unwrapModels(ids);
             SwitchTimes.mark("models");
         } catch (RuntimeException | LinkageError e) {
+            if (e instanceof HoldBudgetException budget) {
+                LOGGER.warn("[Hotwire] the hold's budget ran out while {}'s objects were taken out: it is put back"
+                        + " and the switch refused", ids);
+                this.putBackAll(ids);
+                throw budget;
+            }
             LOGGER.error("[Hotwire] what {} left in others could not all be taken out", ids, e);
         }
         ModViews.clearParticlesOf(ids);
@@ -454,9 +463,7 @@ public final class SwitchRunner {
                 GameTasks.onBack(order);
                 TakeoutRecord.restore(order, this.switcher::isOn);
 
-                ReloadedLists.putBack(id -> !order.contains(id) && !this.switcher.isOn(id));
                 WindowCursor.chooseAgainFor(this.switcher.findPatchedBy(order));
-                OffModCommands.putBack(id -> order.contains(id) || this.switcher.isOn(id));
                 this.logging.putBack(order);
 
                 this.wrappers.putBack(order);

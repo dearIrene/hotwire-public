@@ -34,6 +34,10 @@ public final class GameHold {
 
     private static volatile String holder = "";
 
+    private static volatile long parkedSince;
+
+    private static final Duration BUDGET = Duration.ofMillis(Long.getLong("hotwire_hold_budget_millis", 3000));
+
     private final List<CountDownLatch> released = new ArrayList<>();
     private @Nullable CountDownLatch game;
     private @Nullable CountDownLatch server;
@@ -207,6 +211,11 @@ public final class GameHold {
         }
     }
 
+    public static boolean isOverBudget() {
+        long since = parkedSince;
+        return HOLDING.get() && since != 0 && System.nanoTime() - since > BUDGET.toNanos();
+    }
+
     public static GameHold begin(Minecraft client) {
         if (HOLDING.get()) {
             return new GameHold(false);
@@ -218,6 +227,7 @@ public final class GameHold {
         boolean begun = false;
         try {
             hold.pauseThreads(client);
+            parkedSince = System.nanoTime();
             for (Runnable work = AT_NEXT_HOLD.poll(); work != null; work = AT_NEXT_HOLD.poll()) {
                 work.run();
             }
@@ -314,6 +324,8 @@ public final class GameHold {
         if (this.game != null) {
             this.game.countDown();
             PAUSED_GAME_WORK.add(GameHold::unblock);
+
+            parkedSince = 0;
         }
     }
 
@@ -329,6 +341,7 @@ public final class GameHold {
         }
         if (this.owner) {
             HOLDING.set(false);
+            parkedSince = 0;
         }
     }
 
