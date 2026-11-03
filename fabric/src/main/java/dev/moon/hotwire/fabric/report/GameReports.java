@@ -342,6 +342,14 @@ public final class GameReports {
                                 return false;
                             }
                         }).filter(GameReports::namesHotwire).reduce((first, second) -> second);
+
+                Path freeze = game.resolve("hotwire").resolve("logs").resolve(FreezeDump.FILE);
+                if (crash.isEmpty() && Files.isRegularFile(freeze)) {
+                    Instant written = Files.getLastModifiedTime(freeze).toInstant();
+                    if (written.isAfter(last) && written.isBefore(this.began)) {
+                        crash = Optional.of(freeze);
+                    }
+                }
             }
             Files.createDirectories(marker.getParent());
             Files.writeString(marker, this.began.toString());

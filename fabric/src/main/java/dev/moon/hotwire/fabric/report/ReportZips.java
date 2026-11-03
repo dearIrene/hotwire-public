@@ -49,8 +49,11 @@ public final class ReportZips {
     }
 
     public Optional<String> findLastSessionCrash() {
-        return this.reports.findLastSessionCrash().map(crash -> this.write(Lang.get("hotwire.report.file.last_crash"),
-                "The game crashed last session (" + crash.getFileName() + ").", List.of(crash), true, false));
+        return this.reports.findLastSessionCrash().map(crash -> crash.getFileName().toString().equals(FreezeDump.FILE)
+                ? this.write(Lang.get("hotwire.report.file.last_freeze"), "The game froze last session, and its"
+                        + " threads are in " + crash.getFileName() + ".", List.of(), true, false)
+                : this.write(Lang.get("hotwire.report.file.last_crash"),
+                        "The game crashed last session (" + crash.getFileName() + ").", List.of(crash), true, false));
     }
 
     public String writeForCrash(Path crash) {
