@@ -235,14 +235,16 @@ public final class StoreScreen implements JarHost {
         this.width = width;
         this.height = height;
         this.root.resize(width, height);
-        int searchW = Math.max(140, Math.min(260, width / 4));
+
+        boolean narrow = width < 640;
+        int searchW = Math.max(narrow ? 100 : 140, Math.min(260, width / 4));
         this.search.setBounds(24, 12, searchW, 22);
         this.back.setBounds(width - 24 - 90, 12, 90, 22);
 
-        int chipsW = 130;
+        int chipsW = narrow ? 100 : 130;
         this.chips.setBounds(width - 24 - 90 - 10 - chipsW, 12, chipsW, 22);
         int kindsX = 24 + searchW + 10;
-        this.kinds.setBounds(kindsX, 13, Math.max(60, width - 24 - 90 - 20 - chipsW - kindsX), ChoiceBar.HEIGHT);
+        this.kinds.setBounds(kindsX, 13, Math.max(40, width - 24 - 90 - 20 - chipsW - kindsX), ChoiceBar.HEIGHT);
         int hideW = 110;
         this.categories.setBounds(24, TOP, width - 48 - hideW - 8, ChoiceBar.HEIGHT);
         this.hideInstalled.setBounds(width - 24 - hideW, TOP, hideW, ChoiceBar.HEIGHT);
