@@ -53,6 +53,14 @@ public final class SwitchTimes {
         heard = hearer;
     }
 
+    public static synchronized String describeRunning() {
+        if (depth == 0) {
+            return "no switch running";
+        }
+        return "the switch's parts so far: " + String.join(", ", PARTS) + "; in the next for "
+                + (System.nanoTime() - last) / 1_000_000 + " ms";
+    }
+
     public static synchronized void end(String what) {
         if (depth == 0) {
             return;
