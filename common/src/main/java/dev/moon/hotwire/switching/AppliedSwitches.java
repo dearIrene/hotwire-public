@@ -67,6 +67,10 @@ final class AppliedSwitches {
                 } finally {
                     release.run();
                 }
+
+                if (plan != null && !plan.flipped().isEmpty()) {
+                    this.owner.rebuildObjectsOf(plan.flipped());
+                }
             }
         } catch (RebuildException | RuntimeException | LinkageError e) {
             this.owner.duckRide.disarm();

@@ -167,6 +167,10 @@ public final class SwitchApplier {
         this.onGameThread = run;
     }
 
+    void rebuildObjectsOf(Set<String> flipped) {
+        this.objectRebuilder.rebuild(Set.of(), flipped, false);
+    }
+
     public void rebuildObjectsWith(Predicate<Class<?>> rebuiltWhilePaused, GameObjectRebuilder rebuilder) {
         this.rebuiltWhilePaused = rebuiltWhilePaused;
         this.objectRebuilder = rebuilder;
