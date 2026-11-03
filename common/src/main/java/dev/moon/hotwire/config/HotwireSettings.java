@@ -25,6 +25,8 @@ public final class HotwireSettings {
 
     public enum Developer { OFF, ON }
 
+    public enum UpdateChecks { ON, OFF }
+
     static final String IN_WORLD = "in-world";
     static final String OFF_LASTS = "off-lasts";
     public static final String NESTED_JARS = "nested-jars";
@@ -32,6 +34,7 @@ public final class HotwireSettings {
     static final String KEY_ALERT = "key-alert";
     static final String AUTO_FILL = "auto-fill";
     static final String DEVELOPER = "developer";
+    static final String UPDATE_CHECKS = "update-checks";
 
     private static final Logger LOGGER = LoggerFactory.getLogger(HotwireSettings.class);
 
@@ -55,6 +58,9 @@ public final class HotwireSettings {
     private static final List<String> AUTO_FILL_CHOICES = List.of("hotwire.settings.auto_fill.off",
             "hotwire.settings.auto_fill.on");
     private static final List<Developer> DEVELOPER_ORDER = List.of(Developer.OFF, Developer.ON);
+    private static final List<UpdateChecks> UPDATE_CHECKS_ORDER = List.of(UpdateChecks.ON, UpdateChecks.OFF);
+    private static final List<String> UPDATE_CHECKS_CHOICES = List.of("hotwire.settings.update_checks.on",
+            "hotwire.settings.update_checks.off");
     private static final List<String> DEVELOPER_CHOICES = List.of("hotwire.settings.developer.off",
             "hotwire.settings.developer.on");
     private static final List<NestedJars> NESTED_ORDER = List.of(NestedJars.AUTO, NestedJars.ALL, NestedJars.NONE);
@@ -71,6 +77,7 @@ public final class HotwireSettings {
         @Nullable KeyAlert keyAlert = KeyAlert.ON;
         @Nullable AutoFill autoFill = AutoFill.ON;
         @Nullable Developer developer = Developer.OFF;
+        @Nullable UpdateChecks updateChecks = UpdateChecks.ON;
         @Nullable String promptAcceptedFor;
         boolean keyCardShown;
         @Nullable List<String> favorites = List.of();
@@ -84,6 +91,7 @@ public final class HotwireSettings {
     private volatile KeyAlert keyAlert;
     private volatile AutoFill autoFill;
     private volatile Developer developer;
+    private volatile UpdateChecks updateChecks;
     private volatile @Nullable String promptAcceptedFor;
     private volatile boolean keyCardShown;
     private final Set<String> favorites = ConcurrentHashMap.newKeySet();
@@ -103,6 +111,7 @@ public final class HotwireSettings {
         this.autoFill = saved.format < AUTO_FILL_ON_FROM ? AutoFill.ON
                 : checkKnown(saved.autoFill, AutoFill.ON, "autoFill");
         this.developer = checkKnown(saved.developer, Developer.OFF, "developer");
+        this.updateChecks = checkKnown(saved.updateChecks, UpdateChecks.ON, "updateChecks");
         this.promptAcceptedFor = saved.promptAcceptedFor;
         this.keyCardShown = saved.keyCardShown;
         if (saved.favorites != null) {
@@ -146,6 +155,10 @@ public final class HotwireSettings {
         return this.developer == Developer.ON;
     }
 
+    public boolean isUpdateCheckOn() {
+        return this.updateChecks == UpdateChecks.ON;
+    }
+
     public boolean isPromptAccepted(String major) {
         return major.equals(this.promptAcceptedFor);
     }
@@ -187,6 +200,8 @@ public final class HotwireSettings {
                         KEY_ALERT_ORDER.indexOf(this.keyAlert)),
                 new AdvancedOption(AUTO_FILL, Lang.get("hotwire.settings.auto_fill"), read(AUTO_FILL_CHOICES),
                         AUTO_FILL_ORDER.indexOf(this.autoFill)),
+                new AdvancedOption(UPDATE_CHECKS, Lang.get("hotwire.settings.update_checks"),
+                        read(UPDATE_CHECKS_CHOICES), UPDATE_CHECKS_ORDER.indexOf(this.updateChecks)),
                 new AdvancedOption(DEVELOPER, Lang.get("hotwire.settings.developer"), read(DEVELOPER_CHOICES),
                         DEVELOPER_ORDER.indexOf(this.developer), Lang.get("hotwire.settings.developer.tag")));
     }
@@ -204,10 +219,14 @@ public final class HotwireSettings {
         KeyAlert alert = KEY_ALERT.equals(option) ? pick(KEY_ALERT_ORDER, choice, this.keyAlert) : this.keyAlert;
         AutoFill fill = AUTO_FILL.equals(option) ? pick(AUTO_FILL_ORDER, choice, this.autoFill) : this.autoFill;
         Developer dev = DEVELOPER.equals(option) ? pick(DEVELOPER_ORDER, choice, this.developer) : this.developer;
+        UpdateChecks checks = UPDATE_CHECKS.equals(option) ? pick(UPDATE_CHECKS_ORDER, choice, this.updateChecks)
+                : this.updateChecks;
         if (world == this.inWorld && nested == this.nestedJars && lasts == this.offLasts && pause == this.pauseGame
-                && alert == this.keyAlert && fill == this.autoFill && dev == this.developer) {
+                && alert == this.keyAlert && fill == this.autoFill && dev == this.developer
+                && checks == this.updateChecks) {
             return;
         }
+        this.updateChecks = checks;
         this.developer = dev;
         this.autoFill = fill;
         this.pauseGame = pause;
@@ -227,6 +246,7 @@ public final class HotwireSettings {
         saved.keyAlert = this.keyAlert;
         saved.autoFill = this.autoFill;
         saved.developer = this.developer;
+        saved.updateChecks = this.updateChecks;
         saved.promptAcceptedFor = this.promptAcceptedFor;
         saved.keyCardShown = this.keyCardShown;
         saved.favorites = this.favorites.stream().sorted().toList();

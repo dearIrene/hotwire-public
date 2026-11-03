@@ -40,7 +40,9 @@ public final class EngineScreens {
         this.owner.screen = opened;
         this.owner.under = back;
         opened.setUpdates(this.owner.storeJars.getOffers(), this.owner.storeJars.isChecked());
-        this.owner.storeJars.startCheck();
+        if (this.owner.getSettings().isUpdateCheckOn()) {
+            this.owner.storeJars.startCheck();
+        }
         this.owner.selfUpdate.start();
         HotwireScreen made = new HotwireScreen(opened, timer);
         HotwireEngine.JvmParts parts = this.owner.findParts();
