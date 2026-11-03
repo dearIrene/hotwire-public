@@ -228,9 +228,10 @@ public final class HandlerGuards {
                 }
                 String owner = insn instanceof MethodInsnNode call ? call.owner
                         : insn instanceof FieldInsnNode field ? field.owner : null;
+
                 if (owner == null || owner.equals(internalName) || owner.startsWith("java/")
                         || owner.startsWith("net/minecraft/") || owner.startsWith("com/mojang/")
-                        || !checked.add(owner)) {
+                        || owner.contains("/mixinextras/") || !checked.add(owner)) {
                     continue;
                 }
                 if (shipped == null) {
