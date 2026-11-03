@@ -81,6 +81,8 @@ final class CollectionNotes {
 
     private final Map<Object, Note> notes = new MapMaker().weakKeys().makeMap();
 
+    private final Map<String, Set<Class<?>>> staticsReached = new ConcurrentHashMap<>();
+
     private final ReferenceQueue<Object> gone = new ReferenceQueue<>();
 
     private int dead;
@@ -154,8 +156,18 @@ final class CollectionNotes {
         this.inWorld = inWorld;
     }
 
+    List<Class<?>> findStaticsReached(Collection<String> mods) {
+        List<Class<?>> owners = new ArrayList<>();
+        mods.forEach(mod -> owners.addAll(this.staticsReached.getOrDefault(mod, Set.of())));
+        return owners;
+    }
+
     @SuppressWarnings("ReferenceEquality")
     synchronized void begin(Object container, Origin origin) {
+        if (origin.staticsOf() != null && origin.field() != null && origin.field().isStatic()) {
+            this.staticsReached.computeIfAbsent(origin.staticsOf(), any -> ConcurrentHashMap.newKeySet())
+                    .add(origin.field().getDeclaringClass());
+        }
         this.dropCleared();
         Frame outer = this.open.peek();
         if (outer != null && outer.container == container) {

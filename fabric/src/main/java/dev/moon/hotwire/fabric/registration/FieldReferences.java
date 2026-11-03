@@ -157,12 +157,15 @@ public final class FieldReferences {
     }
 
     public void readStaticsForEvery(Collection<String> brought, Collection<String> every) {
-        Map<String, List<Class<?>>> classesOf = this.peekAhead(brought).classesOf();
-        SwitchTimes.mark("look: brought classes");
-        List<Class<?>> statics = new ArrayList<>();
-        for (String mod : brought) {
-            for (String group : List.of(mod, LoadedClasses.NESTED + mod)) {
-                classesOf.getOrDefault(group, List.of()).stream().filter(this::isInitialized).forEach(statics::add);
+        List<Class<?>> statics = this.elements.look.getNotes().findStaticsReached(brought);
+        if (statics.isEmpty()) {
+            Map<String, List<Class<?>>> classesOf = this.peekAhead(brought).classesOf();
+            SwitchTimes.mark("look: brought classes");
+            for (String mod : brought) {
+                for (String group : List.of(mod, LoadedClasses.NESTED + mod)) {
+                    classesOf.getOrDefault(group, List.of()).stream().filter(this::isInitialized)
+                            .forEach(statics::add);
+                }
             }
         }
         this.elements.readAlone(List.copyOf(every), statics, List.of());
