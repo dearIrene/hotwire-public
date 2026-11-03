@@ -293,10 +293,13 @@ public final class HandlerGuards {
         PUT_IN.remove(internalName);
     }
 
+    public static final String IN_CONSTRUCTOR = "handler in a constructor";
+
     static void markUnflippable(String internalName, String mixin, String why) {
         UNFLIPPABLE.add(mixin);
         UNFLIPPABLE_AT.computeIfAbsent(internalName, name -> ConcurrentHashMap.newKeySet()).add(mixin);
-        UNFLIPPABLE_WHY.computeIfAbsent(internalName, name -> new ConcurrentHashMap<>()).put(mixin, why);
+        UNFLIPPABLE_WHY.computeIfAbsent(internalName, name -> new ConcurrentHashMap<>())
+                .merge(mixin, why, (had, more) -> had.contains(more) ? had : had + ", " + more);
     }
 
     public static Map<String, String> findWhyUnflippableAt(String internalName) {

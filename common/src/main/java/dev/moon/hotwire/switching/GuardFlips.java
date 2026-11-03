@@ -92,8 +92,12 @@ final class GuardFlips {
                         here.add(mixin);
                     }
                 }
+
+                boolean off = !onAfter.contains(id);
+                Map<String, String> whyStuck = HandlerGuards.findWhyUnflippableAt(target);
                 boolean stuck = HandlerGuards.findUnflippableAt(target).stream()
-                        .anyMatch(mixin -> mixins.owns().contains(mixin.replace('.', '/')));
+                        .filter(mixin -> mixins.owns().contains(mixin.replace('.', '/')))
+                        .anyMatch(mixin -> !off || !HandlerGuards.IN_CONSTRUCTOR.equals(whyStuck.get(mixin)));
                 boolean present = HandlerGuards.getPresentMixins(target).stream()
                         .anyMatch(mixin -> mixins.owns().contains(mixin.replace('.', '/')));
                 stuck |= HandlerGuards.findDirectModsAt(target).contains(id)

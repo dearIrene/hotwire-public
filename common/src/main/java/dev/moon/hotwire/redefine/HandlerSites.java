@@ -85,7 +85,7 @@ final class HandlerSites {
                         LOGGER.info("[Hotwire] {}'s constructor calls a handler of {}: it is rebuilt, not flipped",
                                 internalName, mixin);
                     }
-                    HandlerGuards.markUnflippable(internalName, mixin, "handler in a constructor");
+                    HandlerGuards.markUnflippable(internalName, mixin, HandlerGuards.IN_CONSTRUCTOR);
                     continue;
                 }
                 boolean isStatic = call.getOpcode() == Opcodes.INVOKESTATIC;

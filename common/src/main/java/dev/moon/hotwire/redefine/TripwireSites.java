@@ -101,7 +101,12 @@ public final class TripwireSites {
 
     private static boolean isGated(MethodNode method) {
         int sort = Type.getReturnType(method.desc).getSort();
-        return !NEVER_GATED.contains(method.name) && sort != Type.OBJECT && sort != Type.ARRAY;
+        return !NEVER_GATED.contains(method.name)
+                && ((sort != Type.OBJECT && sort != Type.ARRAY) || isSuspending(method));
+    }
+
+    private static boolean isSuspending(MethodNode method) {
+        return method.desc.endsWith("Lkotlin/coroutines/Continuation;)Ljava/lang/Object;");
     }
 
     private static InsnList makeGate(MethodNode method, String mod) {
