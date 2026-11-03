@@ -14,6 +14,7 @@ import dev.moon.hotwire.fabric.registration.GameTasks;
 import dev.moon.hotwire.fabric.registration.GeneratedWrappers;
 import dev.moon.hotwire.fabric.registration.GlfwCallbacks;
 import dev.moon.hotwire.fabric.registration.ImageReaders;
+import dev.moon.hotwire.fabric.registration.Ledger;
 import dev.moon.hotwire.fabric.registration.LogAppenders;
 import dev.moon.hotwire.fabric.registration.MixinPlugins;
 import dev.moon.hotwire.fabric.registration.ModSounds;
@@ -21,6 +22,7 @@ import dev.moon.hotwire.fabric.registration.ModelReloadCheck;
 import dev.moon.hotwire.fabric.registration.NetworkHandlers;
 import dev.moon.hotwire.fabric.registration.OffModCommands;
 import dev.moon.hotwire.fabric.registration.OneConfigHuds;
+import dev.moon.hotwire.fabric.registration.OneConfigModCards;
 import dev.moon.hotwire.fabric.registration.RegistryCheck;
 import dev.moon.hotwire.fabric.registration.ReloadedLists;
 import dev.moon.hotwire.fabric.registration.UncaughtHandlers;
@@ -284,6 +286,7 @@ public final class SwitchRunner {
         WindowCursor.chooseAgainFor(this.switcher.findPatchedBy(ids));
         SwitchTimes.mark("removals: cursor");
         OneConfigHuds.takeOut(ids);
+        OneConfigModCards.takeOut(ids);
         SwitchTimes.mark("removals: huds");
         NetworkHandlers.takeOut(ids);
         SwitchTimes.mark("removals: network");
@@ -448,20 +451,14 @@ public final class SwitchRunner {
 
                 this.plugins.putBack(order);
                 this.fieldReferences.putBackElements(order);
-                LogAppenders.putBack(order);
-                ImageReaders.putBack(order);
-                OneConfigHuds.putBack(order);
-                NetworkHandlers.putBack(order);
-                EntityRendererProviders.putBack(order);
+                GameTasks.onBack(order);
+                Ledger.restore(order, this.switcher::isOn);
+
                 ReloadedLists.putBack(id -> !order.contains(id) && !this.switcher.isOn(id));
                 WindowCursor.chooseAgainFor(this.switcher.findPatchedBy(order));
-                GameTasks.putBack(order);
                 OffModCommands.putBack(id -> order.contains(id) || this.switcher.isOn(id));
                 this.logging.putBack(order);
-                WorldWrappers.putBack(order);
-                GlfwCallbacks.putBack(order);
-                UncaughtHandlers.putBack(order);
-                EntityAttachments.putBack(order);
+
                 this.wrappers.putBack(order);
                 SwitchTimes.mark("put back");
                 this.fieldReferences.putBack(order);
