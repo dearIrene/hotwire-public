@@ -62,7 +62,7 @@ final class HandlerSites {
         };
         if (!merged.isEmpty()) {
             OverwriteSites.make(internalName, node, mixinOfHandler, shipped, guarded, atLoad);
-            if (atLoad && Boolean.getBoolean("hotwire_field_sites")) {
+            if (atLoad) {
                 FieldSites.make(internalName, node, merged, shipped, guarded);
             }
         }

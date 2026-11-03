@@ -1,5 +1,6 @@
 package dev.moon.hotwire.redefine;
 
+import dev.moon.hotwire.classfile.ClassHeader;
 import java.lang.invoke.MethodHandle;
 import java.util.ArrayList;
 import java.util.HashMap;
@@ -104,20 +105,31 @@ final class FieldSites {
         }
         Map<String, InsnList> slices = FieldInitializers.findInstanceSlices(internalName, node, added.keySet());
         Set<String> unsited = new HashSet<>();
+        List<String> why = new ArrayList<>();
         Set<String> sitedMixins = new HashSet<>();
         List<String> sited = new ArrayList<>();
         for (Map.Entry<String, String> field : added.entrySet()) {
             InsnList slice = slices.get(field.getKey());
             if (slice == null) {
                 unsited.addAll(merged);
+                why.add(field.getValue() + ": no plain setup");
                 continue;
             }
             if (RetainedInitializers.isPure(slice, internalName, methods)) {
                 continue;
             }
-            String mixin = findMixin(slice, internalName, modOfMixin);
-            if (mixin == null || !moveToMethod(internalName, node, field.getKey(), field.getValue(), slice, mixin)) {
-                unsited.addAll(mixin == null ? merged : Set.of(mixin));
+            String mixin = findDeclaring(field.getKey(), merged);
+            if (mixin == null) {
+                mixin = findMixin(slice, internalName, modOfMixin);
+            }
+            if (mixin == null) {
+                unsited.addAll(merged);
+                why.add(field.getValue() + ": no mixin of the mod");
+                continue;
+            }
+            if (!moveToMethod(internalName, node, field.getKey(), field.getValue(), slice, mixin)) {
+                unsited.add(mixin);
+                why.add(field.getValue() + ": " + lastRefusal);
                 continue;
             }
             guarded.add(mixin);
@@ -129,8 +141,8 @@ final class FieldSites {
             UNSITED.remove(internalName);
         } else {
             UNSITED.put(internalName, Set.copyOf(unsited));
-            LOGGER.info("[Hotwire] {} sets up fields of {} that no site switches: it rebuilds for them", internalName,
-                    unsited);
+            LOGGER.info("[Hotwire] {} sets up fields of {} that no site switches: it rebuilds for them ({})",
+                    internalName, unsited, why);
         }
         if (sitedMixins.isEmpty()) {
             SITED.remove(internalName);
@@ -153,6 +165,30 @@ final class FieldSites {
             }
         }
         return any;
+    }
+
+    private static final Map<String, Set<String>> MIXIN_FIELDS = new ConcurrentHashMap<>();
+
+    private static @Nullable String findDeclaring(String key, Set<String> merged) {
+        for (String mixin : merged) {
+            Set<String> fields = MIXIN_FIELDS.computeIfAbsent(mixin, FieldSites::readFields);
+            if (fields.contains(key)) {
+                return mixin;
+            }
+        }
+        return null;
+    }
+
+    private static Set<String> readFields(String mixin) {
+        byte[] bytes = HandlerGuards.originals.apply(mixin.replace('.', '/'));
+        if (bytes == null) {
+            return Set.of();
+        }
+        Set<String> fields = new HashSet<>();
+        for (ClassHeader.Member field : ClassHeader.of(bytes).fields()) {
+            fields.add(field.name() + field.desc());
+        }
+        return Set.copyOf(fields);
     }
 
     private static @Nullable String findMixin(InsnList slice, String self, Map<String, String> modOfMixin) {
@@ -179,14 +215,18 @@ final class FieldSites {
         return null;
     }
 
+    private static String lastRefusal = "";
+
     @SuppressWarnings("ReferenceEquality")
     private static boolean moveToMethod(String internalName, ClassNode node, String key, String name,
             InsnList slice, String mixin) {
         List<AbstractInsnNode> sliceInsns = realInsns(slice);
+        lastRefusal = "";
 
         for (AbstractInsnNode insn : sliceInsns) {
             if ((insn instanceof VarInsnNode local && (local.var != 0 || local.getOpcode() != Opcodes.ALOAD))
                     || insn instanceof IincInsnNode) {
+                lastRefusal = "the setup uses a local";
                 return false;
             }
         }
@@ -208,11 +248,13 @@ final class FieldSites {
                         start = start.getPrevious();
                     }
                     if (start == null) {
+                        lastRefusal = "the constructor's store does not read as the setup";
                         return false;
                     }
                 }
                 if (!(start instanceof VarInsnNode load) || load.getOpcode() != Opcodes.ALOAD || load.var != 0
                         || !sameOpcodes(start, store, sliceInsns)) {
+                    lastRefusal = "the constructor's store does not read as the setup";
                     return false;
                 }
                 ranges.add(new AbstractInsnNode[] {start, store});
@@ -220,6 +262,7 @@ final class FieldSites {
             }
         }
         if (ranges.isEmpty()) {
+            lastRefusal = "no constructor stores it";
             return false;
         }
         MethodNode setUp = new MethodNode(Opcodes.ACC_PRIVATE | Opcodes.ACC_SYNTHETIC, name + INIT, "()V", null,
