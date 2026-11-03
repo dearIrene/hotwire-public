@@ -193,6 +193,7 @@ public final class ModScreen implements JarHost {
     final List<Panel> panels;
     private final PendingPanel pendingPanel;
     private final ReopenPanel reopenPanel;
+    private final CarriedPanel carriedPanel;
     private final ReportPanel reportPanel;
     final FirstOpenPanel firstOpen;
     private final SelfUpdatePanel selfUpdate;
@@ -274,6 +275,13 @@ public final class ModScreen implements JarHost {
                 this.game.switchWithReopen(offer.off(), offer.ids());
             }
         }, this.modScreenButtons::closePanels);
+        this.carriedPanel = new CarriedPanel(ids -> {
+            this.modScreenButtons.closePanels();
+            this.game.turnOff(ids);
+        }, () -> {
+            this.modScreenButtons.closePanels();
+            this.list.clearWishes();
+        }, game::findIcon, game.getCatalog()::name);
         this.firstOpen = new FirstOpenPanel(game::acceptFirstOpen);
         this.selfUpdate = new SelfUpdatePanel(game::updateHotwireAtNextStart, this.modScreenButtons::closePanels,
                 game::closeGame);
@@ -288,8 +296,8 @@ public final class ModScreen implements JarHost {
         }
 
         this.panels = List.of(this.advancedPanel, this.pendingPanel, this.updatesPanel, this.addPanel,
-                this.updatePanel, this.progress, this.reopenPanel, this.firstOpen, this.selfUpdate, this.reportPanel,
-                this.cacheFillPanel, this.manageCachePanel);
+                this.updatePanel, this.progress, this.reopenPanel, this.carriedPanel, this.firstOpen, this.selfUpdate,
+                this.reportPanel, this.cacheFillPanel, this.manageCachePanel);
         this.panels.forEach(this.root.getModal()::add);
         if (!game.isFirstOpenAccepted() || ModifiedClients.takePromptDue()) {
             this.firstOpen.present();
@@ -504,6 +512,10 @@ public final class ModScreen implements JarHost {
         this.pendingPanel.dismiss();
     }
 
+    public void offerCarried(String id, List<String> carriers) {
+        this.carriedPanel.open(id, carriers);
+    }
+
     public void offerReopen(ReopenPanel.Offer offer) {
         this.reopenPanel.open(offer);
     }
@@ -575,6 +587,11 @@ public final class ModScreen implements JarHost {
             }
             ModScreen.this.list.setWish(mod.id(), !mod.on());
             if (mod.on()) {
+                List<String> carriers = List.copyOf(ModScreen.this.game.getCatalog().getCarriers(mod.id()));
+                if (!carriers.isEmpty()) {
+                    ModScreen.this.carriedPanel.open(mod.id(), carriers);
+                    return;
+                }
                 ModScreen.this.game.turnOff(List.of(mod.id()));
             } else {
                 ModScreen.this.game.turnOn(List.of(mod.id()));

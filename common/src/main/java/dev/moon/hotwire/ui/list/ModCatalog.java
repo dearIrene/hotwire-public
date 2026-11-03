@@ -11,6 +11,10 @@ public interface ModCatalog {
 
     boolean isProtected(String id);
 
+    default Set<String> getCarriers(String id) {
+        return Set.of();
+    }
+
     boolean isLocked(String id);
 
     String name(String id);

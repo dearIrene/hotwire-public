@@ -6,6 +6,7 @@ import dev.moon.hotwire.ui.list.ModCatalog;
 import java.util.Set;
 import java.util.function.BooleanSupplier;
 import java.util.function.Predicate;
+import java.util.stream.Collectors;
 
 final class InstalledModCatalog implements ModCatalog {
     private final InstalledMods installed;
@@ -44,6 +45,11 @@ final class InstalledModCatalog implements ModCatalog {
     @Override
     public boolean isHidden(String id) {
         return ModPolicy.BUILT_IN.contains(id) || !this.installed.isTopLevel(id);
+    }
+
+    @Override
+    public Set<String> getCarriers(String id) {
+        return this.installed.getGraph().getContainers(id).stream().filter(this.on).collect(Collectors.toSet());
     }
 
     @Override
