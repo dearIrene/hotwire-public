@@ -38,7 +38,7 @@ public final class LogAppenders {
         return name.isEmpty() ? config.getRootLogger() : config.getLoggerConfig(name);
     }
 
-    private record Removal(String logger, Appender appender) implements TakenOut.Entry {
+    private record Removal(String logger, Appender appender) implements TakeoutRecord.Entry {
         @Override
         public void restore() {
             findLogger(this.logger).addAppender(this.appender, null, null);
@@ -50,12 +50,12 @@ public final class LogAppenders {
         }
 
         @Override
-        public Runnable afterBatch() {
+        public Runnable getAfterBatch() {
             return Update.ONCE;
         }
     }
 
-    private record FilterRemoval(String logger, Filter filter) implements TakenOut.Entry {
+    private record FilterRemoval(String logger, Filter filter) implements TakeoutRecord.Entry {
         @Override
         public void restore() {
             findLogger(this.logger).addFilter(this.filter);
@@ -67,12 +67,12 @@ public final class LogAppenders {
         }
 
         @Override
-        public Runnable afterBatch() {
+        public Runnable getAfterBatch() {
             return Update.ONCE;
         }
     }
 
-    private record PolicyRemoval(RewriteAppender appender, Object policy) implements TakenOut.Entry {
+    private record PolicyRemoval(RewriteAppender appender, Object policy) implements TakeoutRecord.Entry {
         @Override
         @SuppressWarnings("ReferenceEquality")
         public void restore() {
@@ -92,7 +92,7 @@ public final class LogAppenders {
         }
 
         @Override
-        public Runnable afterBatch() {
+        public Runnable getAfterBatch() {
             return Update.ONCE;
         }
     }
@@ -119,7 +119,7 @@ public final class LogAppenders {
                 String mod = GameRegistrations.findCodeMod(appender.getClass());
                 if (mod != null && mods.contains(mod)) {
                     logger.removeAppender(appender.getName());
-                    TakenOut.add(mod, new Removal(logger.getName(), appender));
+                    TakeoutRecord.add(mod, new Removal(logger.getName(), appender));
                     LOGGER.info("[Hotwire] {}'s log appender {} is taken off {}", mod, appender.getName(),
                             logger.getName().isEmpty() ? "the root logger" : logger.getName());
                 }
@@ -137,7 +137,7 @@ public final class LogAppenders {
             String mod = GameRegistrations.findCodeMod(one.getClass());
             if (mod != null && mods.contains(mod)) {
                 logger.removeFilter(one);
-                TakenOut.add(mod, new FilterRemoval(logger.getName(), one));
+                TakeoutRecord.add(mod, new FilterRemoval(logger.getName(), one));
                 LOGGER.info("[Hotwire] {}'s log filter is taken off {}", mod,
                         logger.getName().isEmpty() ? "the root logger" : logger.getName());
             }
@@ -160,7 +160,7 @@ public final class LogAppenders {
             String mod = GameRegistrations.findCodeMod(policy.getClass());
             if (mod != null && mods.contains(mod)) {
                 FinalWrites.write(slot, appender, UNCHANGED);
-                TakenOut.add(mod, new PolicyRemoval(appender, policy));
+                TakeoutRecord.add(mod, new PolicyRemoval(appender, policy));
                 LOGGER.info("[Hotwire] {}'s rewrite of every log line gives way to lines as they come", mod);
             }
         } catch (ReflectiveOperationException | RuntimeException e) {

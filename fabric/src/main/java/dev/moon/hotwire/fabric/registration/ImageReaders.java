@@ -11,7 +11,7 @@ import org.slf4j.LoggerFactory;
 public final class ImageReaders {
     private static final Logger LOGGER = LoggerFactory.getLogger(ImageReaders.class);
 
-    private record Removal(Object provider, Class<?> category) implements TakenOut.Entry {
+    private record Removal(Object provider, Class<?> category) implements TakeoutRecord.Entry {
         @Override
         public void restore() {
             putInto(IIORegistry.getDefaultInstance(), this.provider, this.category);
@@ -36,7 +36,7 @@ public final class ImageReaders {
                 String mod = GameRegistrations.findCodeMod(provider.getClass());
                 if (mod != null && mods.contains(mod)) {
                     takeOutOf(registry, provider, category);
-                    TakenOut.add(mod, new Removal(provider, category));
+                    TakeoutRecord.add(mod, new Removal(provider, category));
                     LOGGER.info("[Hotwire] {}'s {} is taken out of Java's image registry", mod,
                             provider.getClass().getSimpleName());
                 }

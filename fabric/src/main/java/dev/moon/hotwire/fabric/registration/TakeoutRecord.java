@@ -19,8 +19,8 @@ import org.jspecify.annotations.Nullable;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
-public final class TakenOut {
-    private static final Logger LOGGER = LoggerFactory.getLogger(TakenOut.class);
+public final class TakeoutRecord {
+    private static final Logger LOGGER = LoggerFactory.getLogger(TakeoutRecord.class);
     private static final int WAIT_SECONDS = 5;
 
     public enum Where { ANY, GAME, SERVER, GAME_BEFORE_FRAME }
@@ -30,11 +30,11 @@ public final class TakenOut {
 
         String describe();
 
-        default Where where() {
+        default Where getWhere() {
             return Where.ANY;
         }
 
-        default Set<String> needs() {
+        default Set<String> getNeeds() {
             return Set.of();
         }
 
@@ -42,14 +42,14 @@ public final class TakenOut {
             return false;
         }
 
-        default @Nullable Runnable afterBatch() {
+        default @Nullable Runnable getAfterBatch() {
             return null;
         }
     }
 
     private static final Map<String, List<Entry>> BY_MOD = Collections.synchronizedMap(new LinkedHashMap<>());
 
-    private TakenOut() {
+    private TakeoutRecord() {
     }
 
     public static void add(String mod, Entry entry) {
@@ -62,7 +62,7 @@ public final class TakenOut {
         }
     }
 
-    public static boolean anyMatch(String mod, Predicate<Entry> test) {
+    public static boolean hasAny(String mod, Predicate<Entry> test) {
         List<Entry> entries = BY_MOD.get(mod);
         return entries != null && entries.stream().anyMatch(test);
     }
@@ -81,11 +81,11 @@ public final class TakenOut {
                 if (entry.isStale()) {
                     continue;
                 }
-                if (entry.needs().stream().anyMatch(other -> !mods.contains(other) && !isOn.test(other))) {
+                if (entry.getNeeds().stream().anyMatch(other -> !mods.contains(other) && !isOn.test(other))) {
                     kept.add(entry);
                     continue;
                 }
-                due.computeIfAbsent(entry.where(), any -> new ArrayList<>()).add(entry);
+                due.computeIfAbsent(entry.getWhere(), any -> new ArrayList<>()).add(entry);
             }
             if (!kept.isEmpty()) {
                 BY_MOD.put(mod, Collections.synchronizedList(new ArrayList<>(kept.reversed())));
@@ -114,7 +114,7 @@ public final class TakenOut {
             } catch (RuntimeException | LinkageError e) {
                 LOGGER.warn("[Hotwire] {} could not be put back", entry.describe(), e);
             }
-            Runnable once = entry.afterBatch();
+            Runnable once = entry.getAfterBatch();
             if (once != null) {
                 after.add(once);
             }

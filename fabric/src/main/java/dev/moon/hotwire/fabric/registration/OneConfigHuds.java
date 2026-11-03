@@ -21,7 +21,7 @@ public final class OneConfigHuds {
     private static final int WAIT_SECONDS = 5;
 
     private record Removal(Class<?> manager, List<Map.Entry<Integer, Object>> huds, Map<Object, Object> providers)
-            implements TakenOut.Entry {
+            implements TakeoutRecord.Entry {
         @Override
         public void restore() {
             List<Object> all = findHuds(this.manager);
@@ -39,12 +39,12 @@ public final class OneConfigHuds {
         }
 
         @Override
-        public TakenOut.Where where() {
-            return TakenOut.Where.GAME_BEFORE_FRAME;
+        public TakeoutRecord.Where getWhere() {
+            return TakeoutRecord.Where.GAME_BEFORE_FRAME;
         }
 
         @Override
-        public Runnable afterBatch() {
+        public Runnable getAfterBatch() {
             return Invalidate.ONCE;
         }
     }
@@ -103,7 +103,7 @@ public final class OneConfigHuds {
                 continue;
             }
 
-            TakenOut.add(mod, new Removal(manager, removed, kinds));
+            TakeoutRecord.add(mod, new Removal(manager, removed, kinds));
             for (int i = removed.size() - 1; i >= 0; i--) {
                 huds.remove((int) removed.get(i).getKey());
             }

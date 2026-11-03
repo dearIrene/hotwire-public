@@ -27,7 +27,7 @@ public final class NetworkHandlers {
     private static final @Nullable VarHandle ADDED = findAddedHandle();
 
     private record Removal(Channel channel, String name, ChannelHandler handler, @Nullable String previous,
-            @Nullable String next) implements TakenOut.Entry {
+            @Nullable String next) implements TakeoutRecord.Entry {
         @Override
         public void restore() {
             ChannelPipeline pipeline = this.channel.pipeline();
@@ -75,7 +75,7 @@ public final class NetworkHandlers {
                 } catch (NoSuchElementException closedMeanwhile) {
                     continue;
                 }
-                TakenOut.add(mod, new Removal(channel, names.get(i), handler, i > 0 ? names.get(i - 1) : null,
+                TakeoutRecord.add(mod, new Removal(channel, names.get(i), handler, i > 0 ? names.get(i - 1) : null,
                         i + 1 < names.size() ? names.get(i + 1) : null));
                 LOGGER.info("[Hotwire] {}'s network handler {} is taken out of {}", mod, names.get(i), channel);
             }
@@ -83,7 +83,7 @@ public final class NetworkHandlers {
     }
 
     public static boolean hasLostConnection(String mod) {
-        return TakenOut.anyMatch(mod, one -> one instanceof Removal removal && !removal.channel().isOpen());
+        return TakeoutRecord.hasAny(mod, one -> one instanceof Removal removal && !removal.channel().isOpen());
     }
 
     static List<Channel> findChannels() {

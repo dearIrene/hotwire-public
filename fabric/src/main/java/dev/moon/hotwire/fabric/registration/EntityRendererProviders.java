@@ -14,7 +14,7 @@ public final class EntityRendererProviders {
     private static final EntityRendererProvider<Entity> NOTHING = NoopRenderer::new;
     private static final AtomicBoolean CHANGED = new AtomicBoolean();
 
-    private record Removal(EntityType<?> type, EntityRendererProvider<?> provider) implements TakenOut.Entry {
+    private record Removal(EntityType<?> type, EntityRendererProvider<?> provider) implements TakeoutRecord.Entry {
         @Override
         @SuppressWarnings("ReferenceEquality")
         public void restore() {
@@ -41,7 +41,7 @@ public final class EntityRendererProviders {
             EntityRendererProvider<?> provider = providers.get(type);
             String mod = provider == null ? null : GameRegistrations.findModOf(provider.getClass());
             if (provider != null && mod != null && mods.contains(mod)) {
-                TakenOut.add(mod, new Removal(type, provider));
+                TakeoutRecord.add(mod, new Removal(type, provider));
                 providers.put(type, NOTHING);
                 changed = true;
             }

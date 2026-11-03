@@ -22,7 +22,7 @@ import org.slf4j.LoggerFactory;
 public final class GameTasks {
     private static final Logger LOGGER = LoggerFactory.getLogger(GameTasks.class);
 
-    private record Removal(BlockableEventLoop<?> loop, Runnable task) implements TakenOut.Entry {
+    private record Removal(BlockableEventLoop<?> loop, Runnable task) implements TakeoutRecord.Entry {
         @Override
         public void restore() {
             this.loop.execute(this.task);
@@ -76,7 +76,7 @@ public final class GameTasks {
         }
         synchronized (GameTasks.class) {
             if (WAITING.merge(mod, 1, Integer::sum) <= MOST) {
-                TakenOut.add(mod, new Removal(loop, task));
+                TakeoutRecord.add(mod, new Removal(loop, task));
             }
             if (SAID.add(task.getClass())) {
                 LOGGER.info("[Hotwire] {}'s task {} waits for its on; it holds {}", mod, task.getClass().getName(),
@@ -168,7 +168,7 @@ public final class GameTasks {
                 Runnable task = unwrap(queued);
                 String mod = findOwnerOf(task, findDepthFor(loop));
                 if (mod != null && mods.contains(mod) && pending.remove(queued)) {
-                    TakenOut.add(mod, new Removal(loop, task));
+                    TakeoutRecord.add(mod, new Removal(loop, task));
                     WAITING.merge(mod, 1, Integer::sum);
                 }
             }

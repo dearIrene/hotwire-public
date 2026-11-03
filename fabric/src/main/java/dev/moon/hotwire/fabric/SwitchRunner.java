@@ -24,7 +24,7 @@ import dev.moon.hotwire.fabric.registration.OneConfigHuds;
 import dev.moon.hotwire.fabric.registration.OneConfigModCards;
 import dev.moon.hotwire.fabric.registration.RegistryCheck;
 import dev.moon.hotwire.fabric.registration.ReloadedLists;
-import dev.moon.hotwire.fabric.registration.TakenOut;
+import dev.moon.hotwire.fabric.registration.TakeoutRecord;
 import dev.moon.hotwire.fabric.registration.UncaughtHandlers;
 import dev.moon.hotwire.fabric.registration.WindowCursor;
 import dev.moon.hotwire.fabric.registration.WorldContent;
@@ -452,7 +452,7 @@ public final class SwitchRunner {
                 this.plugins.putBack(order);
                 this.fieldReferences.putBackElements(order);
                 GameTasks.onBack(order);
-                TakenOut.restore(order, this.switcher::isOn);
+                TakeoutRecord.restore(order, this.switcher::isOn);
 
                 ReloadedLists.putBack(id -> !order.contains(id) && !this.switcher.isOn(id));
                 WindowCursor.chooseAgainFor(this.switcher.findPatchedBy(order));
