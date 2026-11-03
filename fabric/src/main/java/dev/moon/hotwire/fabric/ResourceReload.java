@@ -97,6 +97,7 @@ public final class ResourceReload {
         return hasAny(types, RENDERERS) ? Lang.get("hotwire.progress.rebuilding_renderers") : null;
     }
 
+    @SuppressWarnings("FutureReturnValueIgnored")
     static void rebuildRenderers(Collection<String> newlyBuilt, Collection<String> rebuilt, boolean reloadAsked) {
         List<Class<?>> types = findLoaded(newlyBuilt);
         boolean renderers = hasAny(types, RENDERERS);
@@ -115,7 +116,17 @@ public final class ResourceReload {
 
                 boolean renderersOnly = !reloadAsked && !hasAny(types, RELOADED);
                 if (reload && !reloadedWhilePaused && !(renderersOnly && reloadedRenderers)) {
-                    reloadWhilePaused(game, renderersOnly);
+                    if (renderersOnly && !comingOn.isEmpty()) {
+                        reloadedRenderers = true;
+                        BackgroundReload.beginAfterHold(() -> {
+                            Runnable start = () -> startUnprofiled(() -> track(game.reloadResourcePacks()));
+                            if (!ReloadListeners.runWithoutHeavy(game, start)) {
+                                startWhole(game);
+                            }
+                        });
+                    } else {
+                        reloadWhilePaused(game, renderersOnly);
+                    }
                 }
                 if (particles) {
                     game.particleEngine.setLevel(game.level);
