@@ -158,11 +158,21 @@ public final class ResourceReload {
         }
     }
 
+    @SuppressWarnings("FutureReturnValueIgnored")
     static void reloadForRenderers(boolean whole) {
         Minecraft game = Minecraft.getInstance();
+        if (!whole) {
+            reloadedRenderers = true;
+            BackgroundReload.beginAfterHold(() -> {
+                if (!ReloadListeners.runWithoutHeavy(game, () -> startUnprofiled(() -> track(game.reloadResourcePacks())))) {
+                    startWhole(game);
+                }
+            });
+            return;
+        }
         GameHold.onGameAndWait(() -> {
             OngoingReload.await(game);
-            reloadWhilePaused(game, !whole);
+            reloadWhilePaused(game, false);
         });
     }
 
