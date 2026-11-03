@@ -207,8 +207,10 @@ final class ElementTakes {
                 + (value == null ? "null" : value.getClass().getName());
     }
 
+    private static final boolean CHECKING_SKIPS = System.getProperty("hotwire.checkSkips") != null;
+
     static boolean isCheckingSkips() {
-        return System.getProperty("hotwire.checkSkips") != null;
+        return CHECKING_SKIPS;
     }
 
     @SuppressWarnings("ReferenceEquality")

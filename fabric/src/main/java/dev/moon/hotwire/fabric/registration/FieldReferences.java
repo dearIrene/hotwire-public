@@ -10,7 +10,8 @@ import java.lang.instrument.Instrumentation;
 import java.lang.management.ClassLoadingMXBean;
 import java.lang.management.ManagementFactory;
 import java.lang.reflect.Field;
-import java.lang.reflect.Method;
+import java.lang.invoke.MethodHandle;
+import java.lang.invoke.MethodHandles;
 import java.lang.reflect.Modifier;
 import java.util.ArrayList;
 import java.util.Arrays;
@@ -76,7 +77,7 @@ public final class FieldReferences {
     final Lambdas lambdas;
     private final Function<String, Set<String>> handedTo;
     private boolean askedForInitializedCheck;
-    private @Nullable Method initializedCheck;
+    private @Nullable MethodHandle initializedCheck;
     private @Nullable Object unsafe;
 
     public FieldReferences(Instrumentation instrumentation, ClassRebuilder rebuilder,
@@ -360,19 +361,20 @@ public final class FieldReferences {
         }
     }
 
+    @SuppressWarnings("checkstyle:IllegalCatch")
     public boolean isInitialized(Class<?> type) {
-        Method check = this.findShouldBeInitialized();
+        MethodHandle check = this.findShouldBeInitialized();
         if (check == null) {
             return false;
         }
         try {
-            return !(boolean) check.invoke(this.unsafe, type);
-        } catch (ReflectiveOperationException | RuntimeException e) {
+            return !(boolean) check.invokeExact(type);
+        } catch (Throwable e) {
             return false;
         }
     }
 
-    private synchronized @Nullable Method findShouldBeInitialized() {
+    private synchronized @Nullable MethodHandle findShouldBeInitialized() {
         if (!this.askedForInitializedCheck) {
             this.askedForInitializedCheck = true;
             try {
@@ -380,8 +382,10 @@ public final class FieldReferences {
                         Map.of("jdk.internal.misc", Set.of(FieldReferences.class.getModule())), Map.of(), Set.of(),
                         Map.of());
                 Class<?> type = Class.forName("jdk.internal.misc.Unsafe");
+
                 this.unsafe = type.getMethod("getUnsafe").invoke(null);
-                this.initializedCheck = type.getMethod("shouldBeInitialized", Class.class);
+                this.initializedCheck = MethodHandles.lookup().unreflect(type.getMethod("shouldBeInitialized",
+                        Class.class)).bindTo(this.unsafe);
             } catch (ReflectiveOperationException | RuntimeException e) {
                 LOGGER.error("[Hotwire] other mods' registries are not looked into for an off mod's objects: {}",
                         e.toString());
