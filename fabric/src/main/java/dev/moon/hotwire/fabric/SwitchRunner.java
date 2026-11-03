@@ -14,7 +14,6 @@ import dev.moon.hotwire.fabric.registration.GameTasks;
 import dev.moon.hotwire.fabric.registration.GeneratedWrappers;
 import dev.moon.hotwire.fabric.registration.GlfwCallbacks;
 import dev.moon.hotwire.fabric.registration.ImageReaders;
-import dev.moon.hotwire.fabric.registration.Ledger;
 import dev.moon.hotwire.fabric.registration.LogAppenders;
 import dev.moon.hotwire.fabric.registration.MixinPlugins;
 import dev.moon.hotwire.fabric.registration.ModSounds;
@@ -25,6 +24,7 @@ import dev.moon.hotwire.fabric.registration.OneConfigHuds;
 import dev.moon.hotwire.fabric.registration.OneConfigModCards;
 import dev.moon.hotwire.fabric.registration.RegistryCheck;
 import dev.moon.hotwire.fabric.registration.ReloadedLists;
+import dev.moon.hotwire.fabric.registration.TakenOut;
 import dev.moon.hotwire.fabric.registration.UncaughtHandlers;
 import dev.moon.hotwire.fabric.registration.WindowCursor;
 import dev.moon.hotwire.fabric.registration.WorldContent;
@@ -452,7 +452,7 @@ public final class SwitchRunner {
                 this.plugins.putBack(order);
                 this.fieldReferences.putBackElements(order);
                 GameTasks.onBack(order);
-                Ledger.restore(order, this.switcher::isOn);
+                TakenOut.restore(order, this.switcher::isOn);
 
                 ReloadedLists.putBack(id -> !order.contains(id) && !this.switcher.isOn(id));
                 WindowCursor.chooseAgainFor(this.switcher.findPatchedBy(order));

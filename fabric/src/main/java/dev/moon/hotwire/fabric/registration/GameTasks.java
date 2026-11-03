@@ -22,11 +22,26 @@ import org.slf4j.LoggerFactory;
 public final class GameTasks {
     private static final Logger LOGGER = LoggerFactory.getLogger(GameTasks.class);
 
-    private record Removal(BlockableEventLoop<?> loop, Runnable task) {
+    private record Removal(BlockableEventLoop<?> loop, Runnable task) implements TakenOut.Entry {
+        @Override
+        public void restore() {
+            this.loop.execute(this.task);
+        }
+
+        @Override
+        public String describe() {
+            return "the task " + this.task.getClass().getName();
+        }
+
+        @Override
+        @SuppressWarnings("ReferenceEquality")
+        public boolean isStale() {
+            return !(this.loop instanceof Minecraft) && this.loop != Minecraft.getInstance().getSingleplayerServer();
+        }
     }
 
-    private static final Map<String, List<Removal>> REMOVED = new HashMap<>();
     private static final Set<String> MODS_OFF = new HashSet<>();
+    private static final Map<String, Integer> WAITING = new HashMap<>();
     private static final int MOST = 1000;
 
     private static final Set<Class<?>> SAID = new HashSet<>();
@@ -60,12 +75,9 @@ public final class GameTasks {
             return false;
         }
         synchronized (GameTasks.class) {
-            List<Removal> waiting = REMOVED.computeIfAbsent(mod, any -> new ArrayList<>());
-
-            if (waiting.size() >= MOST) {
-                waiting.removeFirst();
+            if (WAITING.merge(mod, 1, Integer::sum) <= MOST) {
+                TakenOut.add(mod, new Removal(loop, task));
             }
-            waiting.add(new Removal(loop, task));
             if (SAID.add(task.getClass())) {
                 LOGGER.info("[Hotwire] {}'s task {} waits for its on; it holds {}", mod, task.getClass().getName(),
                         describeCaptures(task));
@@ -156,31 +168,23 @@ public final class GameTasks {
                 Runnable task = unwrap(queued);
                 String mod = findOwnerOf(task, findDepthFor(loop));
                 if (mod != null && mods.contains(mod) && pending.remove(queued)) {
-                    REMOVED.computeIfAbsent(mod, any -> new ArrayList<>()).add(new Removal(loop, task));
+                    TakenOut.add(mod, new Removal(loop, task));
+                    WAITING.merge(mod, 1, Integer::sum);
                 }
             }
         }
         mods.forEach(mod -> {
-            int removed = REMOVED.getOrDefault(mod, List.of()).size();
+            int removed = WAITING.getOrDefault(mod, 0);
             if (removed > 0) {
                 LOGGER.info("[Hotwire] {} tasks {} had queued on the game's loops wait until its on", removed, mod);
             }
         });
     }
 
-    public static synchronized void forgetServerTasks() {
-        REMOVED.values().forEach(waiting -> waiting.removeIf(one -> !(one.loop() instanceof Minecraft)));
-    }
-
-    public static synchronized void putBack(Collection<String> mods) {
+    public static synchronized void onBack(Collection<String> mods) {
         MODS_OFF.removeAll(mods);
+        mods.forEach(WAITING::remove);
         isAnyOff = !MODS_OFF.isEmpty();
-        for (String mod : mods) {
-            List<Removal> removed = REMOVED.remove(mod);
-            if (removed != null) {
-                removed.forEach(one -> one.loop().execute(one.task()));
-            }
-        }
     }
 
     private static List<BlockableEventLoop<?>> findLoops() {

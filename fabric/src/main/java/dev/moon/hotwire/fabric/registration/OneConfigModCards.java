@@ -16,7 +16,7 @@ public final class OneConfigModCards {
     private static final String REGISTRY = "org.polyfrost.oneconfig.internal.ui.api.ConfigRegistry";
     private static final String CARD = "org.polyfrost.oneconfig.internal.ui.api.ConfigData";
 
-    private record Card(Object registry, Object card, String id) implements Ledger.Entry {
+    private record Card(Object registry, Object card, String id) implements TakenOut.Entry {
         @Override
         public void restore() {
             try {
@@ -33,8 +33,8 @@ public final class OneConfigModCards {
         }
 
         @Override
-        public Ledger.Where where() {
-            return Ledger.Where.GAME_BEFORE_FRAME;
+        public TakenOut.Where where() {
+            return TakenOut.Where.GAME_BEFORE_FRAME;
         }
     }
 
@@ -42,7 +42,7 @@ public final class OneConfigModCards {
     }
 
     public static void takeOut(Collection<String> mods) {
-        Ledger.onGame(() -> takeOutNow(mods), "mod cards taken out");
+        TakenOut.onGame(() -> takeOutNow(mods), "mod cards taken out");
     }
 
     private static void takeOutNow(Collection<String> mods) {
@@ -61,7 +61,7 @@ public final class OneConfigModCards {
                 Object tree = registry.getClass().getMethod("findTree", String.class).invoke(registry, id);
                 String mod = tree == null ? null : findModOf(tree);
                 if (mod != null && mods.contains(mod)) {
-                    Ledger.add(mod, new Card(registry, card, id));
+                    TakenOut.add(mod, new Card(registry, card, id));
                     registry.getClass().getMethod("unregister", String.class).invoke(registry, id);
                     LOGGER.info("[Hotwire] {}'s OneConfig mod card {} is taken out while it is off", mod, id);
                 }

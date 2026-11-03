@@ -4,8 +4,6 @@ import java.util.ArrayList;
 import java.util.Collection;
 import java.util.Iterator;
 import java.util.List;
-import java.util.Map;
-import java.util.concurrent.ConcurrentHashMap;
 import javax.imageio.spi.IIORegistry;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -13,10 +11,17 @@ import org.slf4j.LoggerFactory;
 public final class ImageReaders {
     private static final Logger LOGGER = LoggerFactory.getLogger(ImageReaders.class);
 
-    private record Removal(Object provider, Class<?> category) {
-    }
+    private record Removal(Object provider, Class<?> category) implements TakenOut.Entry {
+        @Override
+        public void restore() {
+            putInto(IIORegistry.getDefaultInstance(), this.provider, this.category);
+        }
 
-    private static final Map<String, List<Removal>> REMOVED = new ConcurrentHashMap<>();
+        @Override
+        public String describe() {
+            return this.provider.getClass().getName() + " in Java's image registry";
+        }
+    }
 
     private ImageReaders() {
     }
@@ -31,21 +36,11 @@ public final class ImageReaders {
                 String mod = GameRegistrations.findCodeMod(provider.getClass());
                 if (mod != null && mods.contains(mod)) {
                     takeOutOf(registry, provider, category);
-                    REMOVED.computeIfAbsent(mod, any -> new ArrayList<>()).add(new Removal(provider, category));
+                    TakenOut.add(mod, new Removal(provider, category));
                     LOGGER.info("[Hotwire] {}'s {} is taken out of Java's image registry", mod,
                             provider.getClass().getSimpleName());
                 }
             }
-        }
-    }
-
-    public static void putBack(Collection<String> mods) {
-        IIORegistry registry = IIORegistry.getDefaultInstance();
-        for (String mod : mods) {
-            for (Removal one : REMOVED.getOrDefault(mod, List.of())) {
-                putInto(registry, one.provider(), one.category());
-            }
-            REMOVED.remove(mod);
         }
     }
 

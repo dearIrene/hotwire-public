@@ -12,7 +12,6 @@ import java.util.HashMap;
 import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
-import java.util.Objects;
 import java.util.Set;
 import java.util.function.Predicate;
 import net.minecraft.client.Minecraft;
@@ -26,14 +25,51 @@ public final class GlfwCallbacks {
     private static final Logger LOGGER = LoggerFactory.getLogger(GlfwCallbacks.class);
     private static final List<Method> SETTERS = findSetters();
 
-    private record WrapperRemoval(Method setter, Object mods, Object inner) {
+    private record WrapperRemoval(Method setter, Object mods, Object inner) implements TakenOut.Entry {
+        @Override
+        @SuppressWarnings("ReferenceEquality")
+        public void restore() {
+            long window = findWindow();
+            if (read(this.setter, window) == this.inner) {
+                set(this.setter, window, this.mods);
+            }
+        }
+
+        @Override
+        public String describe() {
+            return "the window's " + this.setter.getName();
+        }
+
+        @Override
+        public TakenOut.Where where() {
+            return TakenOut.Where.GAME;
+        }
     }
 
-    private record FieldRemoval(FieldSlots.Slot field, Object holder, Object mods, @Nullable Object inner) {
-    }
+    private record FieldRemoval(FieldSlots.Slot field, Object holder, Object mods, @Nullable Object inner)
+            implements TakenOut.Entry {
+        @Override
+        @SuppressWarnings("ReferenceEquality")
+        public void restore() {
+            try {
+                if (this.field.get(this.holder) == this.inner) {
+                    this.field.set(this.holder, this.mods);
+                }
+            } catch (ReflectiveOperationException e) {
+                throw new IllegalStateException(this.field.getName(), e);
+            }
+        }
 
-    private static final Map<String, List<WrapperRemoval>> REMOVED = new HashMap<>();
-    private static final Map<String, List<FieldRemoval>> REMOVED_FROM_FIELDS = new HashMap<>();
+        @Override
+        public String describe() {
+            return this.holder.getClass().getName() + "." + this.field.getName();
+        }
+
+        @Override
+        public TakenOut.Where where() {
+            return TakenOut.Where.GAME;
+        }
+    }
     private static final int BELOW = 3;
     private static volatile @Nullable Instrumentation instrumentation;
 
@@ -73,8 +109,7 @@ public final class GlfwCallbacks {
                 Object inner = findWrapped(current, setter.getParameterTypes()[1], mod, 2);
 
                 if (inner != null && set(setter, window, inner)) {
-                    REMOVED.computeIfAbsent(mod, any -> new ArrayList<>()).add(new WrapperRemoval(setter, current,
-                            inner));
+                    TakenOut.add(mod, new WrapperRemoval(setter, current, inner));
                     LOGGER.info("[Hotwire] the window's {} is {} again instead of {}'s", setter.getName()
                             .replace("glfwSet", "").replace("Callback", " callback"),
                             inner.getClass().getName(), mod);
@@ -153,8 +188,7 @@ public final class GlfwCallbacks {
                     Object inner = findWrapped(java, type, mod, 2);
                     field.set(object, inner);
                     out++;
-                    REMOVED_FROM_FIELDS.computeIfAbsent(mod, any -> new ArrayList<>())
-                            .add(new FieldRemoval(field, object, value, inner));
+                    TakenOut.add(mod, new FieldRemoval(field, object, value, inner));
                     LOGGER.info("[Hotwire] {}.{} of {} holds {} again instead of {}'s", object.getClass().getName(),
                             field.getName(), holder, inner == null ? "nothing" : inner.getClass().getName(), mod);
                 } catch (ReflectiveOperationException | RuntimeException e) {
@@ -162,37 +196,6 @@ public final class GlfwCallbacks {
             }
         }
         return out;
-    }
-
-    @SuppressWarnings("ReferenceEquality")
-    public static synchronized void putBack(Collection<String> mods) {
-        List<WrapperRemoval> back = new ArrayList<>();
-        List<FieldRemoval> fields = new ArrayList<>();
-        mods.forEach(mod -> {
-            back.addAll(Objects.requireNonNullElse(REMOVED.remove(mod), List.of()));
-            fields.addAll(Objects.requireNonNullElse(REMOVED_FROM_FIELDS.remove(mod), List.of()));
-        });
-        if (back.isEmpty() && fields.isEmpty()) {
-            return;
-        }
-        GameHold.onGameAndWait(() -> {
-            long window = findWindow();
-            for (WrapperRemoval one : back) {
-                Object current = read(one.setter(), window);
-                if (current == one.inner()) {
-                    set(one.setter(), window, one.mods());
-                }
-            }
-            for (FieldRemoval one : fields) {
-                try {
-                    if (one.field().get(one.holder()) == one.inner()) {
-                        one.field().set(one.holder(), one.mods());
-                    }
-                } catch (ReflectiveOperationException | RuntimeException e) {
-                    LOGGER.info("[Hotwire] {} took no change: {}", one.field().getName(), e.toString());
-                }
-            }
-        });
     }
 
     private static long findWindow() {

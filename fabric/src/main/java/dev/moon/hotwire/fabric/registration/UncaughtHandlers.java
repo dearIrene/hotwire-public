@@ -2,8 +2,6 @@ package dev.moon.hotwire.fabric.registration;
 
 import dev.moon.hotwire.redefine.FieldSlots;
 import java.util.Collection;
-import java.util.HashMap;
-import java.util.Map;
 import org.jspecify.annotations.Nullable;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -11,10 +9,21 @@ import org.slf4j.LoggerFactory;
 public final class UncaughtHandlers {
     private static final Logger LOGGER = LoggerFactory.getLogger(UncaughtHandlers.class);
 
-    private record Swap(Thread.UncaughtExceptionHandler mods, Thread.@Nullable UncaughtExceptionHandler inner) {
-    }
+    private record Swap(Thread.UncaughtExceptionHandler mods, Thread.@Nullable UncaughtExceptionHandler inner)
+            implements TakenOut.Entry {
+        @Override
+        @SuppressWarnings("ReferenceEquality")
+        public void restore() {
+            if (Thread.getDefaultUncaughtExceptionHandler() == this.inner) {
+                Thread.setDefaultUncaughtExceptionHandler(this.mods);
+            }
+        }
 
-    private static final Map<String, Swap> SWAPPED = new HashMap<>();
+        @Override
+        public String describe() {
+            return "the JVM's handler of uncaught throws, " + this.mods.getClass().getName();
+        }
+    }
 
     private UncaughtHandlers() {
     }
@@ -27,19 +36,9 @@ public final class UncaughtHandlers {
         }
         Thread.UncaughtExceptionHandler inner = findWrapped(current);
         Thread.setDefaultUncaughtExceptionHandler(inner);
-        SWAPPED.put(mod, new Swap(current, inner));
+        TakenOut.add(mod, new Swap(current, inner));
         LOGGER.info("[Hotwire] the JVM's handler of uncaught throws is {} again instead of {}'s",
                 inner == null ? "none" : inner.getClass().getName(), mod);
-    }
-
-    @SuppressWarnings("ReferenceEquality")
-    public static synchronized void putBack(Collection<String> mods) {
-        for (String mod : mods) {
-            Swap swap = SWAPPED.remove(mod);
-            if (swap != null && Thread.getDefaultUncaughtExceptionHandler() == swap.inner()) {
-                Thread.setDefaultUncaughtExceptionHandler(swap.mods());
-            }
-        }
     }
 
     @SuppressWarnings("ReferenceEquality")

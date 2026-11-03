@@ -12,8 +12,6 @@ import java.util.Collection;
 import java.util.List;
 import java.util.Map;
 import java.util.NoSuchElementException;
-import java.util.concurrent.ConcurrentHashMap;
-import java.util.concurrent.CopyOnWriteArrayList;
 import net.minecraft.client.Minecraft;
 import net.minecraft.client.multiplayer.ClientPacketListener;
 import net.minecraft.client.server.IntegratedServer;
@@ -29,10 +27,35 @@ public final class NetworkHandlers {
     private static final @Nullable VarHandle ADDED = findAddedHandle();
 
     private record Removal(Channel channel, String name, ChannelHandler handler, @Nullable String previous,
-            @Nullable String next) {
-    }
+            @Nullable String next) implements TakenOut.Entry {
+        @Override
+        public void restore() {
+            ChannelPipeline pipeline = this.channel.pipeline();
+            if (pipeline.get(this.name) != null) {
+                return;
+            }
+            if (ADDED != null && this.handler instanceof ChannelHandlerAdapter adapter) {
+                ADDED.set(adapter, false);
+            }
+            if (this.previous != null && pipeline.get(this.previous) != null) {
+                pipeline.addAfter(this.previous, this.name, this.handler);
+            } else if (this.next != null && pipeline.get(this.next) != null) {
+                pipeline.addBefore(this.next, this.name, this.handler);
+            } else {
+                pipeline.addLast(this.name, this.handler);
+            }
+        }
 
-    private static final Map<String, List<Removal>> REMOVED = new ConcurrentHashMap<>();
+        @Override
+        public String describe() {
+            return "the network handler " + this.name + " of " + this.channel;
+        }
+
+        @Override
+        public boolean isStale() {
+            return !this.channel.isOpen();
+        }
+    }
 
     private NetworkHandlers() {
     }
@@ -52,47 +75,15 @@ public final class NetworkHandlers {
                 } catch (NoSuchElementException closedMeanwhile) {
                     continue;
                 }
-                REMOVED.computeIfAbsent(mod, any -> new CopyOnWriteArrayList<>()).add(new Removal(channel, names.get(i),
-                        handler, i > 0 ? names.get(i - 1) : null, i + 1 < names.size() ? names.get(i + 1) : null));
+                TakenOut.add(mod, new Removal(channel, names.get(i), handler, i > 0 ? names.get(i - 1) : null,
+                        i + 1 < names.size() ? names.get(i + 1) : null));
                 LOGGER.info("[Hotwire] {}'s network handler {} is taken out of {}", mod, names.get(i), channel);
             }
         }
     }
 
     public static boolean hasLostConnection(String mod) {
-        return REMOVED.getOrDefault(mod, List.of()).stream().anyMatch(one -> !one.channel().isOpen());
-    }
-
-    public static void putBack(Collection<String> mods) {
-        for (String mod : mods) {
-            List<Removal> removed = REMOVED.remove(mod);
-            if (removed == null) {
-                continue;
-            }
-            for (Removal one : removed) {
-                ChannelPipeline pipeline = one.channel().pipeline();
-                if (!one.channel().isOpen() || pipeline.get(one.name()) != null) {
-                    continue;
-                }
-                try {
-                    if (ADDED != null && one.handler() instanceof ChannelHandlerAdapter adapter) {
-                        ADDED.set(adapter, false);
-                    }
-                    String previous = one.previous();
-                    String next = one.next();
-                    if (previous != null && pipeline.get(previous) != null) {
-                        pipeline.addAfter(previous, one.name(), one.handler());
-                    } else if (next != null && pipeline.get(next) != null) {
-                        pipeline.addBefore(next, one.name(), one.handler());
-                    } else {
-                        pipeline.addLast(one.name(), one.handler());
-                    }
-                } catch (RuntimeException e) {
-                    LOGGER.warn("[Hotwire] {}'s network handler {} could not go back into {}", mod, one.name(),
-                            one.channel(), e);
-                }
-            }
-        }
+        return TakenOut.anyMatch(mod, one -> one instanceof Removal removal && !removal.channel().isOpen());
     }
 
     static List<Channel> findChannels() {

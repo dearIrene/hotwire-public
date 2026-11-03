@@ -21,7 +21,7 @@ public final class OneConfigHuds {
     private static final int WAIT_SECONDS = 5;
 
     private record Removal(Class<?> manager, List<Map.Entry<Integer, Object>> huds, Map<Object, Object> providers)
-            implements Ledger.Entry {
+            implements TakenOut.Entry {
         @Override
         public void restore() {
             List<Object> all = findHuds(this.manager);
@@ -39,8 +39,8 @@ public final class OneConfigHuds {
         }
 
         @Override
-        public Ledger.Where where() {
-            return Ledger.Where.GAME_BEFORE_FRAME;
+        public TakenOut.Where where() {
+            return TakenOut.Where.GAME_BEFORE_FRAME;
         }
 
         @Override
@@ -103,7 +103,7 @@ public final class OneConfigHuds {
                 continue;
             }
 
-            Ledger.add(mod, new Removal(manager, removed, kinds));
+            TakenOut.add(mod, new Removal(manager, removed, kinds));
             for (int i = removed.size() - 1; i >= 0; i--) {
                 huds.remove((int) removed.get(i).getKey());
             }

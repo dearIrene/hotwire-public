@@ -4,17 +4,11 @@ import dev.moon.hotwire.redefine.FieldSlots;
 import dev.moon.hotwire.switching.SwitchTimes;
 import java.util.ArrayList;
 import java.util.Collection;
-import java.util.Collections;
 import java.util.HashMap;
-import java.util.IdentityHashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
 import java.util.concurrent.ConcurrentHashMap;
-import java.util.concurrent.Executors;
-import java.util.concurrent.ScheduledExecutorService;
-import java.util.concurrent.ScheduledFuture;
-import java.util.concurrent.TimeUnit;
 import net.minecraft.client.Minecraft;
 import net.minecraft.client.multiplayer.ClientLevel;
 import net.minecraft.client.server.IntegratedServer;
@@ -27,15 +21,34 @@ import org.slf4j.LoggerFactory;
 
 public final class WorldWrappers {
     private static final Logger LOGGER = LoggerFactory.getLogger(WorldWrappers.class);
-    private static final long PRUNE_SECONDS = 30;
 
-    private record UnwrappedField(Entity entity, FieldSlots.Slot field, Object wrapper, Object inner) {
+    private record UnwrappedField(Entity entity, FieldSlots.Slot field, Object wrapper, Object inner)
+            implements TakenOut.Entry {
+        @Override
+        @SuppressWarnings("ReferenceEquality")
+        public void restore() {
+            if (read(this.field, this.entity) == this.inner) {
+                write(this.field, this.entity, this.wrapper);
+            }
+        }
+
+        @Override
+        public String describe() {
+            return this.entity.getClass().getName() + "." + this.field.getName() + "'s wrapper";
+        }
+
+        @Override
+        public TakenOut.Where where() {
+            return this.entity.level() instanceof ServerLevel ? TakenOut.Where.SERVER : TakenOut.Where.GAME;
+        }
+
+        @Override
+        public boolean isStale() {
+            return this.entity.isRemoved() || !isOpen(this.entity.level());
+        }
     }
 
-    private static final Map<String, List<UnwrappedField>> REMOVED = new HashMap<>();
-    private static final ScheduledExecutorService PRUNER = Executors.newSingleThreadScheduledExecutor(
-            Thread.ofPlatform().name("hotwire-world-wrappers").daemon().factory());
-    private static @Nullable ScheduledFuture<?> pruning;
+    private static final Map<String, Integer> COUNTS = new HashMap<>();
 
     private WorldWrappers() {
     }
@@ -50,16 +63,11 @@ public final class WorldWrappers {
             GameHold.onServerAndWait(server, () -> lookedThrough[1] = unwrap(findServerEntities(server), mods,
                     fieldsOf));
         }
-        mods.forEach(mod -> {
-            int count = REMOVED.getOrDefault(mod, List.of()).size();
-            if (count > 0) {
-                LOGGER.info("[Hotwire] {} entities hold the game's own objects again instead of {}'s wrappers", count,
-                        mod);
-            }
-        });
+        COUNTS.forEach((mod, count) -> LOGGER.info(
+                "[Hotwire] {} entities hold the game's own objects again instead of {}'s wrappers", count, mod));
+        COUNTS.clear();
         LOGGER.info("[Hotwire] {} client and {} server entities were looked through for {}'s wrappers",
                 lookedThrough[0], lookedThrough[1], mods);
-        prunePeriodically();
     }
 
     private static int unwrap(List<Entity> entities, Collection<String> mods,
@@ -78,35 +86,12 @@ public final class WorldWrappers {
                             describeFields(value));
                 }
                 if (inner != null && write(field, entity, inner)) {
-                    REMOVED.computeIfAbsent(mod, any -> new ArrayList<>())
-                            .add(new UnwrappedField(entity, field, value, inner));
+                    TakenOut.add(mod, new UnwrappedField(entity, field, value, inner));
+                    COUNTS.merge(mod, 1, Integer::sum);
                 }
             }
         }
         return entities.size();
-    }
-
-    public static synchronized void putBack(Collection<String> mods) {
-        List<UnwrappedField> back = new ArrayList<>();
-        mods.forEach(mod -> back.addAll(REMOVED.getOrDefault(mod, List.of())));
-        mods.forEach(REMOVED::remove);
-        IntegratedServer server = Minecraft.getInstance().getSingleplayerServer();
-        GameHold.onGameAndWait(() -> rewrap(back, false, server));
-        if (server != null) {
-            GameHold.onServerAndWait(server, () -> rewrap(back, true, server));
-        }
-        prunePeriodically();
-    }
-
-    @SuppressWarnings("ReferenceEquality")
-    private static void rewrap(List<UnwrappedField> back, boolean onServer, @Nullable IntegratedServer server) {
-        for (UnwrappedField one : back) {
-            boolean serverSide = server != null && one.entity().level() instanceof ServerLevel;
-            if (serverSide == onServer && !one.entity().isRemoved()
-                    && read(one.field(), one.entity()) == one.inner()) {
-                write(one.field(), one.entity(), one.wrapper());
-            }
-        }
     }
 
     static List<Entity> findClientEntities() {
@@ -200,29 +185,20 @@ public final class WorldWrappers {
         }
     }
 
-    private static void prunePeriodically() {
-        boolean holding = REMOVED.values().stream().anyMatch(list -> !list.isEmpty());
-        if (holding && pruning == null) {
-            pruning = PRUNER.scheduleWithFixedDelay(WorldWrappers::prune, PRUNE_SECONDS, PRUNE_SECONDS,
-                    TimeUnit.SECONDS);
-        } else if (!holding && pruning != null) {
-            pruning.cancel(false);
-            pruning = null;
-        }
-    }
-
     @SuppressWarnings("ReferenceEquality")
-    private static synchronized void prune() {
-        Set<Level> open = Collections.newSetFromMap(new IdentityHashMap<>());
+    private static boolean isOpen(Level level) {
         Minecraft client = Minecraft.getInstance();
-        if (client.level != null) {
-            open.add(client.level);
+        if (client.level == level) {
+            return true;
         }
         IntegratedServer server = client.getSingleplayerServer();
         if (server != null) {
-            server.getAllLevels().forEach(open::add);
+            for (Level each : server.getAllLevels()) {
+                if (each == level) {
+                    return true;
+                }
+            }
         }
-        REMOVED.values().forEach(list -> list.removeIf(one -> !open.contains(one.entity().level())));
-        prunePeriodically();
+        return false;
     }
 }

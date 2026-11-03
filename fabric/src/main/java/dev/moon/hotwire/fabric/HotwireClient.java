@@ -1,8 +1,8 @@
 package dev.moon.hotwire.fabric;
 
-import dev.moon.hotwire.fabric.registration.GameTasks;
 import dev.moon.hotwire.fabric.registration.OffModClose;
 import dev.moon.hotwire.fabric.registration.OffModCommands;
+import dev.moon.hotwire.fabric.registration.TakenOut;
 import dev.moon.hotwire.fabric.report.FreezeDump;
 import dev.moon.hotwire.fabric.report.HotwireLog;
 import dev.moon.hotwire.modrinth.Downloads;
@@ -98,7 +98,7 @@ public final class HotwireClient implements ClientModInitializer {
         ClientPlayConnectionEvents.DISCONNECT.register((handler, client) -> {
             ActionJournal.get().note(ActionJournal.Action.LEAVE, "", findPlaceOf(handler.getConnection()));
             LOGGER.info("[Hotwire] the world's connection closed", new Throwable("closed here"));
-            GameTasks.forgetServerTasks();
+            TakenOut.dropStale();
 
             client.execute(() -> {
                 HotwireEngine started = engine;
