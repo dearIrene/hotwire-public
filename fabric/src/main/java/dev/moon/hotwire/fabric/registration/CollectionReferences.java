@@ -447,12 +447,24 @@ final class CollectionReferences implements FixedLists.Walk {
         }
     }
 
+    private static final int DEEPEST = 64;
+    private int depth;
+
     private void collect(Object value) {
         ElementLook.stopIfAsked();
-        if (this.owners.findOwnerAmong(value) != null || GameRegistrations.isOfOffMod(value.getClass())) {
+        if (this.owners.findOwnerAmong(value) != null || GameRegistrations.isOfOffMod(value.getClass())
+                || this.depth >= DEEPEST) {
             return;
         }
+        this.depth++;
+        try {
+            this.collectWithin(value);
+        } finally {
+            this.depth--;
+        }
+    }
 
+    private void collectWithin(Object value) {
         CollectionNotes notes = ElementLook.isLooking() ? this.look.getNotes() : null;
         if (notes != null && !NO_PRINTS && !this.staticsAlone && notes.isUnchanged(value)) {
             return;
