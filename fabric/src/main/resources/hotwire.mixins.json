@@ -25,6 +25,8 @@
     "core.core.MappedRegistryAccessor",
     "core.core.MappedRegistryMixin",
     "core.core.component.InitializerEntryMixin",
+    "core.fabric.resource.pack.ModPackResourcesUtilMixin",
+    "core.fabric.resource.loader.ModResourcePackUtilMixin",
     "core.server.packs.resources.MultiPackResourceManagerMixin",
     "features.compat.oneconfig.event.OneConfigEventMixin",
     "core.network.PacketEncodingMixin",

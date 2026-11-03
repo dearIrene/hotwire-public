@@ -13,12 +13,14 @@ import java.util.Collections;
 import java.util.Comparator;
 import java.util.HashMap;
 import java.util.IdentityHashMap;
+import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
 import java.util.zip.ZipEntry;
 import java.util.zip.ZipFile;
 import net.fabricmc.loader.api.LanguageAdapter;
+import net.fabricmc.loader.api.ModContainer;
 import net.fabricmc.loader.impl.FabricLoaderImpl;
 import net.fabricmc.loader.impl.ModContainerImpl;
 import net.fabricmc.loader.impl.discovery.ModCandidateImpl;
@@ -264,6 +266,14 @@ public final class LoaderModList {
         hide(id);
         synchronized (HIDDEN) {
             HIDDEN.remove(id);
+        }
+    }
+
+    static Map<String, ModContainer> getHiddenContainers() {
+        synchronized (FabricLoaderImpl.INSTANCE) {
+            Map<String, ModContainer> out = new LinkedHashMap<>();
+            HIDDEN.forEach((id, hidden) -> out.put(id, hidden.container()));
+            return out;
         }
     }
 
