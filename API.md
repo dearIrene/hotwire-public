@@ -78,7 +78,7 @@ api.getStoreCategories(StoreKind.MOD);
 api.findStoreProject(query, "zoomify").thenAccept(project -> {});
 ```
 
-You can browse other versions and loaders (fabric, quilt, forge or neoforge) with `query.withBrowsing("1.20.1", "forge")` and `findStoreGameVersions()`, those can only be downloaded though.
+You can browse other versions and loaders (fabric, quilt, forge or neoforge) with `query.withBrowsing("1.20.1", "forge")` and `findStoreGameVersions()`, those can only be saved though.
 
 Adding a mod is always the player's call, so ask for it and draw what you get back:
 
@@ -96,7 +96,7 @@ The store's other buttons:
 
 ```java
 api.queueForNextStart("zoomify", "");
-api.saveToDownloads(query, "zoomify", "");   // into .minecraft/hotwire/downloads (Downloading straight to Downloads made windows scream for some users)
+api.saveToDownloads(query, "zoomify", "");   // into .minecraft/hotwire/downloads
 api.openDownloads();                          // opens that folder
 api.fetchPack(StoreKind.SHADER, "complementary-reimagined", "");
 api.findPackState(StoreKind.SHADER, id);
@@ -104,11 +104,82 @@ api.togglePack(StoreKind.SHADER, id);
 api.getStoreDownloads();   // read it every frame
 ```
 
-You only get to add mods from Modrinth so no links or files.
+To add a jar the player picked, use `planChange` below.
+
+## Changing many mods at once
+
+Turning mods off and on, updating them and adding them all go through one call. Everything you ask for is judged together, so two mods that only work at each other's new versions can update as a pair, and mods coming on are judged with the others already off.
+
+```java
+api.planChange(new ChangeRequest(
+        List.of("zoomify"),            // turn off
+        List.of("sodium-extra"),       // turn on
+        List.of("sodium", "lithium"),  // update to the newest on Modrinth
+        List.of("iris"),               // add from Modrinth, id or slug
+        List.of(pickedJar)             // jars the player picked, an update if the mod is installed, else an add
+)).thenAccept(plan -> {
+    plan.getLines();               // show every line as it is
+    plan.canApply();
+    plan.getReason();              // why, so you can pick your buttons
+    plan.needsReopen();
+    plan.accept();                 // when the player presses, tells you how it went like a switch does
+    plan.canWaitForNextStart();
+    plan.acceptAtNextStart();      // adds and updates only
+    plan.cancel();
+});
+```
+
+Nothing changes until the plan is accepted, but updates and adds are downloaded for it. Always let the player decide.
+
+The reasons are:
+
+- `NONE`, nothing stands in the way
+- `NOT_READY`, Hotwire is starting or can't change classes on this Java
+- `NEEDS_MOD`, a mod is missing or too old and nothing you asked for brings it
+- `NEEDS_RESTART`, some of it only happens at the next start
+- `NEEDS_REOPEN`, the world gets saved and opened again around it
+- `WORLD_LOCKED`, the world is locked against switching
+- `REFUSED`, a mod can't change or couldn't be fetched, the lines say why
+
+These futures don't fail. A plan that can't go says why in its lines, and the rest is in Hotwire's log.
+
+## Updates
+
+```java
+api.checkUpdates().thenAccept(found -> {
+    found.updates();   // id, name, installed version and new version of each
+    found.failure();   // why it couldn't ask Modrinth, empty when it could
+});
+```
+
+If `failure()` isn't empty then you don't know if there are updates, so don't tell the player there are none.
+
+Hotwire itself:
+
+```java
+api.findNewerHotwire();   // the version, empty when there's none
+api.updateHotwire();      // fetched and queued for the next start
+```
+
+## Waiting for the next start
+
+```java
+api.getPendingTasks();             // what Pending tasks lists
+api.cancelPendingTask("zoomify");  // false if it couldn't
+api.isAddedThisSession("zoomify");
+```
+
+## Icons
+
+```java
+api.findIcon("zoomify");   // the icon file's bytes from the mod's jar, empty when it has none
+```
 
 ## Following along
 
 ```java
+api.getStatus();        // starting, ready, busy or unavailable, with progress and why, read it every frame
+api.awaitIdle();        // completes once nothing is switching, adding or updating
 api.isSwitching();      // whether a switch is running, whoever asked for it
 api.getProgress();      // for a progress bar, read it every frame
 api.addListener(result -> refreshMyList());   // fires after any switch, yours or the player's
