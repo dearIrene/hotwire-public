@@ -94,6 +94,11 @@ final class HandlerSites {
                                 + gameField);
                         continue;
                     }
+
+                    if (!call.name.startsWith("handler$")) {
+                        HandlerGuards.markUnflippable(internalName, mixin, "a value changed in a constructor");
+                        continue;
+                    }
                     if (!HandlerGuards.UNFLIPPABLE.contains(mixin)) {
                         LOGGER.info("[Hotwire] {}'s constructor calls a handler of {}: its on rebuilds, its off flips",
                                 internalName, mixin);
