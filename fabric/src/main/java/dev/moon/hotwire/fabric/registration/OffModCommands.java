@@ -115,7 +115,18 @@ public final class OffModCommands {
         }
     }
 
+    private static volatile Predicate<String> goingOff = id -> false;
+
+    public static boolean isGoingOff(String mod) {
+        return goingOff.test(mod);
+    }
+
+    public static void onWatched() {
+        goingOff = id -> false;
+    }
+
     public static synchronized void takeOut(Predicate<String> off) {
+        goingOff = off;
         for (boolean client : List.of(false, true)) {
             CommandDispatcher<?> dispatcher = CommandRegistration.findActiveDispatcher(client);
             if (dispatcher == null) {

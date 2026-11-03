@@ -33,7 +33,7 @@ public final class CommandRecorder {
         CallerOwner.Owner caller = RecorderSupport.findOwner();
         String owner = findOwner(findModsRun(node), caller == null ? null : caller.mod());
 
-        if (owner != null && !Tripwire.isWatched(owner)) {
+        if (owner != null && !Tripwire.isWatched(owner) && !OffModCommands.isGoingOff(owner)) {
             CommandDispatcher<?> client = ClientCommandInternals.getActiveDispatcher();
             RecorderSupport.recordAs(owner, node, new CommandRegistration(root, node.getName(), owner,
                     client != null && client.getRoot() == root));

@@ -306,6 +306,7 @@ public final class SwitchRunner {
         ids.forEach(Tripwire::watch);
 
         this.tripwire.watchNow(ids);
+        OffModCommands.onWatched();
         Tripwire.pause(true);
         SwitchTimes.mark("tripwire");
         try {
