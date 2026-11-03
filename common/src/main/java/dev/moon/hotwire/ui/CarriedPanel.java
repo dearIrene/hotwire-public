@@ -12,11 +12,11 @@ public final class CarriedPanel extends Panel {
 
     private final Function<String, Canvas.@Nullable Image> icons;
     private final Function<String, String> names;
-    private @Nullable String carrier;
+    private @Nullable String container;
     private List<String> ids = List.of();
 
-    public CarriedPanel(Consumer<List<String>> onConfirm, Runnable onCancel, Function<String, Canvas.@Nullable Image> icons,
-            Function<String, String> names) {
+    public CarriedPanel(Consumer<List<String>> onConfirm, Runnable onCancel,
+            Function<String, Canvas.@Nullable Image> icons, Function<String, String> names) {
         super(Lang.get("hotwire.carried.no"), onCancel);
         this.icons = icons;
         this.names = names;
@@ -24,9 +24,9 @@ public final class CarriedPanel extends Panel {
         this.setPrimaryWidth(110);
     }
 
-    public void open(String id, List<String> carriers) {
-        this.carrier = carriers.getFirst();
-        List<String> all = new ArrayList<>(carriers);
+    public void open(String id, List<String> containers) {
+        this.container = containers.getFirst();
+        List<String> all = new ArrayList<>(containers);
         all.addFirst(id);
         this.ids = List.copyOf(all);
         this.show();
@@ -40,7 +40,7 @@ public final class CarriedPanel extends Panel {
 
     @Override
     protected void drawContent(Canvas canvas, float alpha, int x, int y, int w, int h) {
-        String shown = this.carrier;
+        String shown = this.container;
         if (shown == null) {
             return;
         }

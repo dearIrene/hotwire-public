@@ -48,7 +48,7 @@ final class InstalledModCatalog implements ModCatalog {
     }
 
     @Override
-    public Set<String> getCarriers(String id) {
+    public Set<String> getContainersOf(String id) {
         return this.installed.getGraph().getContainers(id).stream().filter(this.on).collect(Collectors.toSet());
     }
 

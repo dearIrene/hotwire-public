@@ -512,8 +512,8 @@ public final class ModScreen implements JarHost {
         this.pendingPanel.dismiss();
     }
 
-    public void offerCarried(String id, List<String> carriers) {
-        this.carriedPanel.open(id, carriers);
+    public void offerCarried(String id, List<String> containers) {
+        this.carriedPanel.open(id, containers);
     }
 
     public void offerReopen(ReopenPanel.Offer offer) {
@@ -587,9 +587,9 @@ public final class ModScreen implements JarHost {
             }
             ModScreen.this.list.setWish(mod.id(), !mod.on());
             if (mod.on()) {
-                List<String> carriers = List.copyOf(ModScreen.this.game.getCatalog().getCarriers(mod.id()));
-                if (!carriers.isEmpty()) {
-                    ModScreen.this.carriedPanel.open(mod.id(), carriers);
+                List<String> containers = List.copyOf(ModScreen.this.game.getCatalog().getContainersOf(mod.id()));
+                if (!containers.isEmpty()) {
+                    ModScreen.this.carriedPanel.open(mod.id(), containers);
                     return;
                 }
                 ModScreen.this.game.turnOff(List.of(mod.id()));

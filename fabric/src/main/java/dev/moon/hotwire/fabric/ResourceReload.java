@@ -164,7 +164,8 @@ public final class ResourceReload {
         if (!whole) {
             reloadedRenderers = true;
             BackgroundReload.beginAfterHold(() -> {
-                if (!ReloadListeners.runWithoutHeavy(game, () -> startUnprofiled(() -> track(game.reloadResourcePacks())))) {
+                Runnable start = () -> startUnprofiled(() -> track(game.reloadResourcePacks()));
+                if (!ReloadListeners.runWithoutHeavy(game, start)) {
                     startWhole(game);
                 }
             });
