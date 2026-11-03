@@ -82,9 +82,10 @@ public abstract interface dev.moon.hotwire.api.HotwireApi
   public abstract void dev.moon.hotwire.api.HotwireApi.updateHotwire()
   public static dev.moon.hotwire.api.HotwireApi dev.moon.hotwire.api.HotwireApi.getInstance()
 public final dev.moon.hotwire.api.ModState
+  public boolean dev.moon.hotwire.api.ModState.offSinceStart()
   public boolean dev.moon.hotwire.api.ModState.on()
   public boolean dev.moon.hotwire.api.ModState.switchable()
-  public dev.moon.hotwire.api.ModState(java.lang.String,java.lang.String,java.lang.String,boolean,boolean,java.lang.String)
+  public dev.moon.hotwire.api.ModState(java.lang.String,java.lang.String,java.lang.String,boolean,boolean,boolean,java.lang.String)
   public final boolean dev.moon.hotwire.api.ModState.equals(java.lang.Object)
   public final int dev.moon.hotwire.api.ModState.hashCode()
   public final java.lang.String dev.moon.hotwire.api.ModState.toString()
@@ -93,7 +94,7 @@ public final dev.moon.hotwire.api.ModState
   public java.lang.String dev.moon.hotwire.api.ModState.name()
   public java.lang.String dev.moon.hotwire.api.ModState.version()
 public final dev.moon.hotwire.api.ModUpdate
-  public dev.moon.hotwire.api.ModUpdate(java.lang.String,java.lang.String,java.lang.String,java.lang.String)
+  public dev.moon.hotwire.api.ModUpdate(java.lang.String,java.lang.String,java.lang.String,java.lang.String,java.lang.String)
   public final boolean dev.moon.hotwire.api.ModUpdate.equals(java.lang.Object)
   public final int dev.moon.hotwire.api.ModUpdate.hashCode()
   public final java.lang.String dev.moon.hotwire.api.ModUpdate.toString()
@@ -101,6 +102,7 @@ public final dev.moon.hotwire.api.ModUpdate
   public java.lang.String dev.moon.hotwire.api.ModUpdate.installedVersion()
   public java.lang.String dev.moon.hotwire.api.ModUpdate.name()
   public java.lang.String dev.moon.hotwire.api.ModUpdate.newVersion()
+  public java.lang.String dev.moon.hotwire.api.ModUpdate.projectId()
 public final dev.moon.hotwire.api.ModUpdates
   public dev.moon.hotwire.api.ModUpdates(java.util.List<dev.moon.hotwire.api.ModUpdate>,java.lang.String)
   public final boolean dev.moon.hotwire.api.ModUpdates.equals(java.lang.Object)

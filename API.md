@@ -108,7 +108,7 @@ To add a jar the player picked, use `planChange` below.
 
 ## Changing many mods at once
 
-Turning mods off and on, updating them and adding them all go through one call. Everything you ask for is judged together, so two mods that only work at each other's new versions can update as a pair, and mods coming on are judged with the others already off.
+Turning mods off and on, updating them and adding them all go through one call. Everything you ask for is judged together, so two mods that only work at each other's new versions can update as a pair, and mods coming on are judged with the others already off. Ask for one of a pair and the plan pulls the other in when it has to, and says so in its lines. A mod kept off since an earlier launch (`offSinceStart` in `getMods()`) comes back from its jar when you turn it on.
 
 ```java
 api.planChange(new ChangeRequest(
@@ -147,7 +147,7 @@ These futures don't fail. A plan that can't go says why in its lines, and the re
 
 ```java
 api.checkUpdates().thenAccept(found -> {
-    found.updates();   // id, name, installed version and new version of each
+    found.updates();   // id, name, installed version, new version and Modrinth project id of each
     found.failure();   // why it couldn't ask Modrinth, empty when it could
 });
 ```

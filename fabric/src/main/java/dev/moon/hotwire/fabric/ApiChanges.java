@@ -8,6 +8,7 @@ import dev.moon.hotwire.api.PendingTask;
 import dev.moon.hotwire.api.SwitchPreview;
 import dev.moon.hotwire.api.SwitchResult;
 import dev.moon.hotwire.fabric.add.ModAdder;
+import dev.moon.hotwire.fabric.store.UpdateCheck;
 import dev.moon.hotwire.fabric.update.ModUpdater;
 import dev.moon.hotwire.jar.JarLookup;
 import dev.moon.hotwire.jar.ModManifest;
@@ -54,8 +55,9 @@ final class ApiChanges {
         }
         Thread.ofPlatform().name("hotwire-api-updates").daemon().start(() -> {
             try {
-                made.complete(new ModUpdates(engine.storeJars.getCheck().findNow().stream().map(offer -> new ModUpdate(
-                        offer.id(), offer.name(), offer.installedVersion(), offer.newVersion())).toList(), ""));
+                made.complete(new ModUpdates(engine.storeJars.getCheck().findNow().stream()
+                        .map(offer -> new ModUpdate(offer.id(), offer.name(), offer.installedVersion(),
+                                offer.newVersion(), offer.projectId())).toList(), ""));
             } catch (IOException | RuntimeException e) {
                 LOGGER.warn("[Hotwire] the API's update check failed", e);
                 made.complete(new ModUpdates(List.of(), Lang.get("hotwire.api.plan_failed", e.toString())));
@@ -102,7 +104,12 @@ final class ApiChanges {
 
         if (!request.on().isEmpty()) {
             HotwireEngine.JvmParts parts = engine.findJvmParts().orElseThrow();
-            SwitchPlan on = parts.runner().getSwitcher().planOnAfter(request.on(), goingOff);
+            List<String> back = request.on().stream().filter(engine.getDisabled()::isDisabledSinceStart).toList();
+            if (!back.isEmpty()) {
+                lines.add(Lang.get("hotwire.api.back_from_jar", PlayerMessages.joinNames(back, engine::nameOfMod)));
+            }
+            List<String> rest = request.on().stream().filter(id -> !back.contains(id)).toList();
+            SwitchPlan on = parts.runner().getSwitcher().planOnAfter(rest, goingOff);
             List<String> both = on.order().stream().filter(goingOff::contains).toList();
             String self = CallerBlocks.findRefusal(on, request.on(), callers, engine::nameOfMod);
             if (on.isRefused()) {
@@ -133,17 +140,37 @@ final class ApiChanges {
             adding.addAll(StoreApiAdd.fetchJars(project).join());
         }
         if (!request.update().isEmpty() || !jars.isEmpty()) {
-            for (UpdateOffer offer : engine.storeJars.getCheck().findNow()) {
-                if (request.update().contains(offer.id())) {
-                    jars.addAll(engine.storeJars.getCheck().fetchWithNeeds(offer, said -> { }));
+            UpdateCheck check = engine.storeJars.getCheck();
+            List<UpdateOffer> all = check.findNow();
+            List<UpdateOffer> picked = all.stream().filter(offer -> request.update().contains(offer.id())).toList();
+
+            List<UpdateOffer> together = new ArrayList<>(check.orderByNeeds(picked, all));
+            List<Path> every = new ArrayList<>(jars);
+            every.addAll(fetchAll(check, together));
+            List<ModUpdater.SortResult> results = engine.getChanges().previewUpdates(every);
+            if (results.stream().anyMatch(ModUpdater.SortResult.Refused.class::isInstance)) {
+                List<UpdateOffer> more = findDependentsWithUpdates(engine, together, all);
+                if (!more.isEmpty()) {
+                    together.addAll(more);
+                    together = new ArrayList<>(check.orderByNeeds(together, all));
+                    every = new ArrayList<>(jars);
+                    every.addAll(fetchAll(check, together));
+                    results = engine.getChanges().previewUpdates(every);
                 }
             }
+            for (UpdateOffer offer : together) {
+                if (!picked.contains(offer)) {
+                    lines.add(Lang.get("hotwire.api.update_with", offer.name()));
+                }
+            }
+            jars.clear();
+            jars.addAll(every);
             if (jars.isEmpty() && !request.update().isEmpty()) {
                 lines.add(Lang.get("hotwire.api.no_update"));
                 can = false;
                 reason = ChangePlan.Reason.REFUSED;
             }
-            for (ModUpdater.SortResult sorted : engine.getChanges().previewUpdates(jars)) {
+            for (ModUpdater.SortResult sorted : results) {
                 switch (sorted) {
                     case ModUpdater.SortResult.Refused refused -> {
                         lines.add(describe(refused.result()));
@@ -248,6 +275,26 @@ final class ApiChanges {
             LOGGER.warn("[Hotwire] the icon of {} could not be read", id, e);
             return Optional.empty();
         }
+    }
+
+    private static List<Path> fetchAll(UpdateCheck check, List<UpdateOffer> offers) throws IOException {
+        List<Path> jars = new ArrayList<>();
+        for (UpdateOffer offer : offers) {
+            jars.addAll(check.fetchWithNeeds(offer, said -> { }));
+        }
+        return jars;
+    }
+
+    private static List<UpdateOffer> findDependentsWithUpdates(HotwireEngine engine, List<UpdateOffer> picked,
+            List<UpdateOffer> all) {
+        List<UpdateOffer> more = new ArrayList<>();
+        for (UpdateOffer offer : picked) {
+            for (String dependent : engine.getGraph().getDependents(offer.id())) {
+                all.stream().filter(other -> other.id().equals(dependent) && !picked.contains(other)
+                        && !more.contains(other)).forEach(more::add);
+            }
+        }
+        return more;
     }
 
     private static String describe(ModUpdater.Result result) {

@@ -31,6 +31,7 @@ import dev.moon.hotwire.ui.Progress;
 import dev.moon.hotwire.ui.PromptScreen;
 import java.lang.reflect.Method;
 import java.nio.file.Path;
+import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.Collection;
 import java.util.HashMap;
@@ -190,7 +191,8 @@ public final class HotwireApiImpl implements HotwireApi {
         return engine.getMods().stream().map(mod -> {
             String blocked = CallerBlocks.describeRow(mod.id(), ModPolicy.isSwitchable(mod.id()), callers, neededBy,
                     engine::nameOfMod);
-            return new ModState(mod.id(), mod.name(), mod.version(), mod.on(), blocked.isEmpty(), blocked);
+            return new ModState(mod.id(), mod.name(), mod.version(), mod.on(),
+                    engine.getDisabled().isDisabledSinceStart(mod.id()), blocked.isEmpty(), blocked);
         }).toList();
     }
 
@@ -481,7 +483,10 @@ public final class HotwireApiImpl implements HotwireApi {
             return new SwitchPreview(false, List.of(), Lang.get("hotwire.switch.world_locked"));
         }
         ModSwitcher switcher = parts.runner().getSwitcher();
-        SwitchPlan plan = off ? switcher.planOff(ids) : switcher.planOn(ids);
+
+        List<String> back = off ? List.of() : ids.stream().filter(engine.getDisabled()::isDisabledSinceStart).toList();
+        List<String> rest = ids.stream().filter(id -> !back.contains(id)).toList();
+        SwitchPlan plan = off ? switcher.planOff(ids) : switcher.planOn(rest);
         if (plan.isRefused()) {
             return new SwitchPreview(false, List.of(), PlayerMessages.describe(new ModSwitcher.Result.Refused(plan),
                     engine::nameOfMod));
@@ -490,12 +495,17 @@ public final class HotwireApiImpl implements HotwireApi {
         if (self != null) {
             return new SwitchPreview(false, List.of(), self);
         }
-        if (plan.order().isEmpty()) {
+        if (plan.order().isEmpty() && back.isEmpty()) {
             return new SwitchPreview(true, List.of(), Lang.get(off ? "hotwire.switch.already_off"
                     : "hotwire.switch.already_on"));
         }
-        return new SwitchPreview(true, plan.order(), Lang.get(off ? "hotwire.switch.preview_off"
-                : "hotwire.switch.preview_on", PlayerMessages.joinNames(plan.order(), engine::nameOfMod)));
+        List<String> all = new ArrayList<>(back);
+        all.addAll(plan.order());
+        String said = back.isEmpty() ? "" : Lang.get("hotwire.api.back_from_jar",
+                PlayerMessages.joinNames(back, engine::nameOfMod)) + " ";
+        return new SwitchPreview(true, List.copyOf(all), (said + (plan.order().isEmpty() ? ""
+                : Lang.get(off ? "hotwire.switch.preview_off" : "hotwire.switch.preview_on",
+                        PlayerMessages.joinNames(plan.order(), engine::nameOfMod)))).strip());
     }
 
     @SuppressWarnings("FutureReturnValueIgnored")
