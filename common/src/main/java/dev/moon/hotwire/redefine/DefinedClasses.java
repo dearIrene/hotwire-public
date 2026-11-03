@@ -99,6 +99,10 @@ final class DefinedClasses {
         }
     }
 
+    boolean has(String name) {
+        return this.places.containsKey(name);
+    }
+
     synchronized byte @Nullable [] find(String name) {
         Long place = this.places.get(name);
         if (place == null) {

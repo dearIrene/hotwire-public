@@ -23,7 +23,7 @@ public final class LoadedClassBytes {
 
     private final Instrumentation instrumentation;
 
-    private final Map<Class<?>, byte[]> knownBytes = Collections.synchronizedMap(new WeakHashMap<>());
+    private final DefinedClasses knownBytes = new DefinedClasses();
 
     private final Map<Class<?>, String> unreadable = Collections.synchronizedMap(new WeakHashMap<>());
 
@@ -63,13 +63,13 @@ public final class LoadedClassBytes {
     }
 
     void remember(Class<?> type, byte[] bytes) {
-        this.knownBytes.put(type, bytes);
+        this.knownBytes.put(type.getName().replace('.', '/'), bytes);
         HandlerGuards.forget(type.getName().replace('.', '/'));
         TripwireSites.forget(type.getName().replace('.', '/'));
     }
 
     void rememberAll(Map<Class<?>, byte[]> classes) {
-        this.knownBytes.putAll(classes);
+        classes.forEach((type, bytes) -> this.knownBytes.put(type.getName().replace('.', '/'), bytes));
         classes.keySet().forEach(type -> {
             HandlerGuards.forget(type.getName().replace('.', '/'));
             TripwireSites.forget(type.getName().replace('.', '/'));
@@ -77,7 +77,7 @@ public final class LoadedClassBytes {
     }
 
     public byte @Nullable [] findKnown(Class<?> type) {
-        return this.knownBytes.get(type);
+        return this.knownBytes.find(type.getName().replace('.', '/'));
     }
 
     public Map<String, byte[]> readCurrent(Collection<Class<?>> types) throws RebuildException {
@@ -89,7 +89,7 @@ public final class LoadedClassBytes {
         List<Class<?>> rest = new ArrayList<>();
         Map<String, byte[]> above = new LinkedHashMap<>();
         for (Class<?> type : types) {
-            byte[] bytes = this.knownBytes.get(type) == null ? readAboveGame(type) : null;
+            byte[] bytes = this.knownBytes.has(type.getName().replace('.', '/')) ? null : readAboveGame(type);
             if (bytes == null) {
                 rest.add(type);
             } else {
@@ -141,14 +141,14 @@ public final class LoadedClassBytes {
         Map<String, String> refused = new LinkedHashMap<>();
         for (Class<?> type : types) {
             String name = type.getName().replace('.', '/');
-            byte[] known = this.knownBytes.get(type);
+            byte[] known = this.knownBytes.find(name);
             if (known == null) {
                 boolean asLoaded = this.loadedAs.remove(name);
                 Integer loader = this.definedInGame.remove(name);
                 boolean inGame = loader != null && loader == System.identityHashCode(type.getClassLoader());
                 known = asLoaded || inGame ? this.definedAs.find(name) : null;
-                if (known != null) {
-                    this.knownBytes.putIfAbsent(type, known);
+                if (known != null && !this.knownBytes.has(name)) {
+                    this.knownBytes.put(name, known);
                 }
             }
             String why = this.unreadable.get(type);
@@ -183,8 +183,8 @@ public final class LoadedClassBytes {
 
         for (String name : byName.keySet()) {
             byte[] bytes = current.get(name);
-            if (bytes != null) {
-                this.knownBytes.putIfAbsent(byName.get(name), bytes);
+            if (bytes != null && !this.knownBytes.has(name)) {
+                this.knownBytes.put(name, bytes);
             }
         }
         if (!byName.isEmpty()) {

@@ -61,9 +61,9 @@ public final class ClassRebuilder {
     private final Map<Class<?>, Set<String>> atLaunch = Collections.synchronizedMap(new WeakHashMap<>());
     private final Map<String, Set<String>> launchAtLoad = new ConcurrentHashMap<>();
 
-    private final Map<String, byte[]> launch = new ConcurrentHashMap<>();
+    private final DefinedClasses launch = new DefinedClasses();
 
-    private final Map<String, byte[]> firstDefined = new ConcurrentHashMap<>();
+    private final DefinedClasses firstDefined = new DefinedClasses();
 
     private volatile boolean toLaunch;
     private volatile boolean launchChanged;
@@ -84,7 +84,7 @@ public final class ClassRebuilder {
     }
 
     public byte @Nullable [] findLaunchBytes(String internalName) {
-        return this.launch.get(internalName);
+        return this.launch.find(internalName);
     }
 
     public void launchChanged() {
@@ -221,7 +221,7 @@ public final class ClassRebuilder {
         Map<String, byte[]> mixed = new LinkedHashMap<>();
         Set<String> toMix = new LinkedHashSet<>();
         for (String name : byName.keySet()) {
-            byte[] launched = this.toLaunch ? this.launch.get(name) : null;
+            byte[] launched = this.toLaunch ? this.launch.find(name) : null;
             byte[] running = current.get(name);
             if (launched != null && running != null
                     && BatchShapes.findConstructors(launched, null)
@@ -278,8 +278,8 @@ public final class ClassRebuilder {
             byte[] running = current.get(name);
             if (bytes != null && running != null) {
                 long began = System.nanoTime();
-                byte[] withInitializers = RetainedInitializers.retain(bytes,
-                        this.launch.computeIfAbsent(name, key -> running), originals.get(entry.getValue()));
+                byte[] withInitializers = RetainedInitializers.retain(bytes, this.launchOf(name, running),
+                        originals.get(entry.getValue()));
                 long retainedBy = System.nanoTime();
                 OffWindowReplay.Addition added = OffWindowReplay.add(name, withInitializers, running,
                         originals.get(entry.getValue()), this.hooks.hasReplayedHandlers(entry.getValue()));
@@ -287,8 +287,9 @@ public final class ClassRebuilder {
                     replayed.put(name, added.getFields());
                 }
                 long replayedBy = System.nanoTime();
+                byte[] defined = this.firstDefined.find(name);
                 InitHookReplay.Addition hooks = InitHookReplay.add(name, added.getBytes(), running,
-                        this.firstDefined.getOrDefault(name, this.launch.get(name)), this.mixedNow.get(name),
+                        defined != null ? defined : this.launchOf(name, running), this.mixedNow.get(name),
                         originals.get(entry.getValue()));
                 if (hooks.findDue() != null) {
                     hooked.put(name, hooks.findDue());
@@ -345,7 +346,7 @@ public final class ClassRebuilder {
                             now = now != null ? now : this.findRunning(read);
                             return now != null ? now : this.bytesOf.apply(read);
                         }, batchDucks, batchMoved, addedElsewhere);
-                byte[] launched = this.launch.get(name);
+                byte[] launched = this.launch.find(name);
                 split = launched == null ? split : StaleFields.reset(launched,
                         Objects.requireNonNull(mixed.get(name)), split);
                 split = StaleFields.markRestarted(this.mixedNow.get(name), Objects.requireNonNull(mixed.get(name)),
@@ -584,13 +585,26 @@ public final class ClassRebuilder {
     }
 
     public byte @Nullable [] launchBytes(String internal) {
-        return this.launch.get(internal);
+        return this.launch.find(internal);
+    }
+
+    private byte[] launchOf(String internal, byte[] running) {
+        if (!this.launch.has(internal)) {
+            this.launch.put(internal, running);
+            return running;
+        }
+        byte[] stored = this.launch.find(internal);
+        return stored != null ? stored : running;
     }
 
     public byte[] prepareForLoad(String internal, byte[] mixed, byte[] launchMix, byte[] original) {
-        this.launch.putIfAbsent(internal, launchMix);
+        if (!this.launch.has(internal)) {
+            this.launch.put(internal, launchMix);
+        }
         byte[] prepared = RetainedInitializers.retain(mixed, launchMix, original);
-        this.firstDefined.putIfAbsent(internal, prepared);
+        if (!this.firstDefined.has(internal)) {
+            this.firstDefined.put(internal, prepared);
+        }
         OffWindowObjects.markRecording(internal, OffWindowReplay.isRecording(prepared));
         return prepared;
     }
