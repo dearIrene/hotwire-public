@@ -124,11 +124,14 @@ public final class CacheFillPanel extends Panel {
         lineY += BAR_H + 6;
         String left = now.millisLeft() < 0 || now.isFull() ? ""
                 : Lang.get("hotwire.cache.fill_left", CacheFill.describeMillis(now.millisLeft()));
-        String status = now.isFull() ? Lang.get("hotwire.cache.fill_full", CacheFill.describeBytes(now.savedBytes()))
+
+        String status = now.isFull() ? Lang.get("hotwire.cache.fill_full", CacheFill.describeBytes(now.folderBytes()))
                 : Lang.get("hotwire.cache.fill_progress", Math.round(part * 100), left,
                         CacheFill.describeBytes(now.savedBytes()));
         canvas.drawText(canvas.clip(status, w - 28), x + 14, lineY, Colors.fade(Palette.DIM, alpha));
-        canvas.drawText(canvas.clip(estimate, w - 28), x + 14, lineY + LINE, Colors.fade(Palette.DIM, alpha));
+        if (!now.isFull()) {
+            canvas.drawText(canvas.clip(estimate, w - 28), x + 14, lineY + LINE, Colors.fade(Palette.DIM, alpha));
+        }
     }
 
     static void markButton(Button button, BottomBar bar, @Nullable CacheFill now) {
