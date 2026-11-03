@@ -110,9 +110,11 @@ public final class FieldSlots {
             VarHandle write = Modifier.isFinal(this.modifiers) ? null
                     : this.field != null ? this.handle : this.findHandle();
             if (write == null) {
-                Field reflected = this.field;
-                if (reflected == null) {
-                    throw new IllegalAccessException(this.owner.getName() + "." + this.name + " cannot be set");
+                Field reflected;
+                try {
+                    reflected = this.asField();
+                } catch (NoSuchFieldException | RuntimeException e) {
+                    throw new IllegalAccessException(this.owner.getName() + "." + this.name + " cannot be set: " + e);
                 }
                 reflected.set(holder, value);
                 return;
