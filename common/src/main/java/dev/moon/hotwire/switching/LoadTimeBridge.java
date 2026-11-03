@@ -32,6 +32,8 @@ final class LoadTimeBridge implements ClassFileTransformer {
 
     private final Predicate<String> differs;
     private final BiFunction<String, byte[], byte @Nullable []> mix;
+    private final BiFunction<String, byte[], byte @Nullable []> mixWithoutOff;
+    private final Predicate<String> stuckForOff;
     private final DefinitionWatcher defined;
 
     interface DefinitionWatcher {
@@ -41,9 +43,12 @@ final class LoadTimeBridge implements ClassFileTransformer {
     private static final ThreadLocal<Set<String>> MIXING = ThreadLocal.withInitial(HashSet::new);
 
     LoadTimeBridge(Predicate<String> differs, BiFunction<String, byte[], byte @Nullable []> mix,
+            BiFunction<String, byte[], byte @Nullable []> mixWithoutOff, Predicate<String> stuckForOff,
             DefinitionWatcher defined) {
         this.differs = differs;
         this.mix = mix;
+        this.mixWithoutOff = mixWithoutOff;
+        this.stuckForOff = stuckForOff;
         this.defined = defined;
     }
 
@@ -87,6 +92,11 @@ final class LoadTimeBridge implements ClassFileTransformer {
             return mixed;
         }
         byte[] guarded = HandlerGuards.ENABLED ? HandlerGuards.rewrite(className, base) : null;
+        if (guarded != null && mixed != null && this.stuckForOff.test(className)) {
+            mixed = this.mixWithoutOff.apply(className, bytes);
+            base = Relocations.remap(mixed == null ? bytes : mixed);
+            guarded = HandlerGuards.rewrite(className, base);
+        }
         if (guarded != null) {
             base = guarded;
             mixed = guarded;

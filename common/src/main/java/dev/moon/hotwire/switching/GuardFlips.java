@@ -11,6 +11,7 @@ import java.util.Set;
 import java.util.TreeMap;
 import java.util.TreeSet;
 import java.util.concurrent.ConcurrentHashMap;
+import java.util.function.BiPredicate;
 import org.jspecify.annotations.Nullable;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -21,12 +22,16 @@ final class GuardFlips {
     private final Map<String, ModMixins> mods;
     private final SwitchApplier.Game game;
     private final Set<String> onAtLaunch;
+
+    private final BiPredicate<String, String> mixedWith;
     private final Set<String> flipped = ConcurrentHashMap.newKeySet();
 
-    GuardFlips(Map<String, ModMixins> mods, SwitchApplier.Game game, Set<String> onAtLaunch) {
+    GuardFlips(Map<String, ModMixins> mods, SwitchApplier.Game game, Set<String> onAtLaunch,
+            BiPredicate<String, String> mixedWith) {
         this.mods = mods;
         this.game = game;
         this.onAtLaunch = onAtLaunch;
+        this.mixedWith = mixedWith;
     }
 
     boolean isFlipped(String id) {
@@ -126,7 +131,7 @@ final class GuardFlips {
                                 : mixins.rebuildOnly().contains(target) ? "fields set up or an injector unknown"
                                 : !HandlerGuards.isWritten(target) ? "not written as it loaded" : "mixins not in it");
                     }
-                } else if (!present && onAfter.contains(id)) {
+                } else if (!present && onAfter.contains(id) && !this.mixedWith.test(target, id)) {
                     rebuild.add(target);
                     if (said) {
                         why.put(target, "loaded or rebuilt without them");

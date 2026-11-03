@@ -217,7 +217,8 @@ public final class SwitchApplier {
         this.game = game;
         this.mods = new ConcurrentSkipListMap<>(mods);
         this.carriedMixins = new CarriedMixins(this.mods, game);
-        this.guardFlips = new GuardFlips(this.mods, game, this.onAtLaunch);
+        this.guardFlips = new GuardFlips(this.mods, game, this.onAtLaunch,
+                (target, mod) -> rebuilder.isMixedWith(target, mod, this.onAtLaunch.contains(mod)));
         this.mods.forEach((id, mixins) -> mixins.configs()
                 .forEach(config -> this.ownerOfConfig.putIfAbsent(config, id)));
         this.onAtLaunch.addAll(onAtLaunch);
@@ -551,7 +552,12 @@ public final class SwitchApplier {
 
     Map<String, byte[]> decideAsLaunched(List<String> configs, String className, Set<String> launch)
             throws RebuildException {
-        return this.decisions.of(configs, Map.of(className, launch), this::isOn).configs();
+        return this.decideAsLaunched(configs, className, launch, this::isOn);
+    }
+
+    Map<String, byte[]> decideAsLaunched(List<String> configs, String className, Set<String> launch,
+            Predicate<String> on) throws RebuildException {
+        return this.decisions.of(configs, Map.of(className, launch), on).configs();
     }
 
     Set<String> getPatchedNames() {

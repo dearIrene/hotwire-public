@@ -61,6 +61,8 @@ public final class ClassRebuilder {
     private final Map<Class<?>, Set<String>> atLaunch = Collections.synchronizedMap(new WeakHashMap<>());
     private final Map<String, Set<String>> launchAtLoad = new ConcurrentHashMap<>();
 
+    private final Map<String, Set<String>> loadedWith = new ConcurrentHashMap<>();
+
     private final DefinedClasses launch = new DefinedClasses();
 
     private final DefinedClasses firstDefined = new DefinedClasses();
@@ -574,6 +576,18 @@ public final class ClassRebuilder {
 
     public void rememberLaunch(String internalName, Set<String> applied) {
         this.launchAtLoad.put(internalName, Set.copyOf(applied));
+    }
+
+    public void rememberLoadedWith(String internalName, Set<String> mods) {
+        this.loadedWith.put(internalName, Set.copyOf(mods));
+    }
+
+    public boolean isMixedWith(String internalName, String mod, boolean onAtLaunch) {
+        Set<String> with = this.loadedWith.get(internalName);
+        if (with != null) {
+            return with.contains(mod);
+        }
+        return onAtLaunch && this.findMixedNow(internalName) == null;
     }
 
     public Class<?>[] getLoadedClasses() {

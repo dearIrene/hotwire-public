@@ -4,11 +4,14 @@ import dev.moon.hotwire.mixin_copy.AppliedMixins;
 import dev.moon.hotwire.redefine.ClassRebuilder;
 import dev.moon.hotwire.redefine.FieldHolders;
 import dev.moon.hotwire.redefine.ForeignFields;
+import dev.moon.hotwire.redefine.HandlerGuards;
 import dev.moon.hotwire.redefine.RebuildException;
 import java.lang.instrument.ClassFileTransformer;
+import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
+import java.util.TreeSet;
 import org.jspecify.annotations.Nullable;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -33,7 +36,9 @@ final class LoadTimeMixer {
 
     ClassFileTransformer makeTransformer() {
         ClassRebuilder rebuilder = this.applier.getRebuilder();
-        return new LoadTimeBridge(this.applier::isMixedAsItLoads, this::mixAsItLoads, (name, bytes, inGame) -> {
+        return new LoadTimeBridge(this.applier::isMixedAsItLoads, (name, bytes) -> this.mixAsItLoads(name, bytes, true),
+                (name, bytes) -> this.mixAsItLoads(name, bytes, false), this::isStuckForOff,
+                (name, bytes, inGame) -> {
             if ((name.startsWith("net/minecraft/") || name.startsWith("com/mojang/"))
                     && this.applier.getPatchedNames().contains(name)) {
                 rebuilder.getLoadedBytes().onLoaded(name, bytes);
@@ -45,11 +50,11 @@ final class LoadTimeMixer {
         });
     }
 
-    private byte @Nullable [] mixAsItLoads(String className, byte[] loaded) {
+    private byte @Nullable [] mixAsItLoads(String className, byte[] loaded, boolean includeOff) {
         String outer = LOADING.get();
         LOADING.set(className);
         try {
-            byte[] mixed = this.mixLoading(className, loaded);
+            byte[] mixed = this.mixLoading(className, loaded, includeOff);
             if (mixed != null) {
                 LOGGER.info("[Hotwire] {} mixed as it loaded", className);
             }
@@ -60,8 +65,43 @@ final class LoadTimeMixer {
         }
     }
 
-    private byte @Nullable [] mixLoading(String className, byte[] loaded) {
+    private static final ThreadLocal<Set<String>> INCLUDED_OFF = ThreadLocal.withInitial(HashSet::new);
+
+    private Set<String> findOffToInclude(String className) {
+        Set<String> included = new TreeSet<>();
+        for (String id : this.applier.onAtLaunch) {
+            ModMixins mixins = this.applier.mods.get(id);
+            if (this.applier.isOn(id) || mixins == null || !mixins.targets().contains(className)
+                    || mixins.rebuildOnly().contains(className)) {
+                continue;
+            }
+            included.add(id);
+        }
+        return included;
+    }
+
+    private boolean isStuckForOff(String className) {
+        Set<String> included = INCLUDED_OFF.get();
+        if (included.isEmpty()) {
+            return false;
+        }
+        for (String mixin : HandlerGuards.findUnflippableAt(className)) {
+            String owned = mixin.replace('.', '/');
+            for (String id : included) {
+                ModMixins mixins = this.applier.mods.get(id);
+                if (mixins != null && mixins.owns().contains(owned)) {
+                    LOGGER.info("[Hotwire] {} is mixed again without {}: {} cannot flip in it", className, included,
+                            mixin);
+                    return true;
+                }
+            }
+        }
+        return false;
+    }
+
+    private byte @Nullable [] mixLoading(String className, byte[] loaded, boolean includeOff) {
         ClassRebuilder rebuilder = this.applier.getRebuilder();
+        INCLUDED_OFF.get().clear();
         String lateConfig = this.applier.findLateConfig(className);
         if (lateConfig != null) {
             try {
@@ -79,13 +119,20 @@ final class LoadTimeMixer {
                     + " the loader gave no bytes of it from before Mixin", className);
             return null;
         }
-        List<String> configs = this.applier.findPatchingNow(className);
+        Set<String> includedOff = includeOff ? this.findOffToInclude(className) : Set.of();
+        INCLUDED_OFF.get().addAll(includedOff);
+        Set<String> asOn = new HashSet<>(this.applier.onMods);
+        asOn.addAll(includedOff);
+        List<String> configs = includedOff.isEmpty() ? this.applier.findPatchingNow(className)
+                : this.applier.findPatching(this.applier.getConfigsOf(asOn), Set.of(className));
         try {
             Set<String> launch = AppliedMixins.of(loaded, original);
             rebuilder.rememberLaunch(className, launch);
-            Map<String, byte[]> decided = this.applier.decideAsLaunched(configs, className, launch);
-            return rebuilder.prepareForLoad(className, rebuilder.mixForLoad(className, original, decided,
-                    configs, this.applier::isOn), loaded, original);
+            Map<String, byte[]> decided = this.applier.decideAsLaunched(configs, className, launch, asOn::contains);
+            byte[] prepared = rebuilder.prepareForLoad(className, rebuilder.mixForLoad(className, original, decided,
+                    configs, asOn::contains), loaded, original);
+            rebuilder.rememberLoadedWith(className, asOn);
+            return prepared;
         } catch (RebuildException e) {
             LOGGER.error("[Hotwire] {} loaded with the game's own mix, which may still hold a switched mod's patches",
                     className, e);
