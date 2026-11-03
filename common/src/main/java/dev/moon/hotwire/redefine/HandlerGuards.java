@@ -93,8 +93,9 @@ public final class HandlerGuards {
     private static final AtomicLong CHUNK_FLIPS = new AtomicLong();
     private static final List<String> CHUNK_HOSTS = List.of("chunk", "renderer/block/", "color/block/", "/model/",
             "terrain", "/mesh");
+
     private static final List<String> CHUNK_MIXINS = List.of("chunk", "blockmodel", "bakedmodel", "blockrender",
-            "blockcolor", "quad", "mesh", "terrain", "fluidrender", "section", "blockstatemodel");
+            "blockcolor", "quad", "mesh", "terrain", "fluidrender", "section", "blockstatemodel", "light");
     private static final Object LOCK = new Object();
 
     static volatile Set<String> neverSwitched = Set.of();
