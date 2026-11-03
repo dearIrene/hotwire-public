@@ -147,7 +147,9 @@ public final class FieldReferences {
     }
 
     public void takeOutElementsAgain(Collection<String> mods, Predicate<String> on) {
-        this.removeElements(mods, on, this.findLoaded(mods), Map.of(), false);
+        LoadedClasses scan = this.findLoaded(mods);
+        SwitchTimes.mark("look: classes");
+        this.removeElements(mods, on, scan, Map.of(), false);
     }
 
     public void finishEveryLook() {
@@ -155,7 +157,8 @@ public final class FieldReferences {
     }
 
     public void readStaticsForEvery(Collection<String> brought, Collection<String> every) {
-        Map<String, List<Class<?>>> classesOf = this.findLoaded(brought).classesOf();
+        Map<String, List<Class<?>>> classesOf = this.peekAhead(brought).classesOf();
+        SwitchTimes.mark("look: brought classes");
         List<Class<?>> statics = new ArrayList<>();
         for (String mod : brought) {
             for (String group : List.of(mod, LoadedClasses.NESTED + mod)) {
@@ -200,14 +203,27 @@ public final class FieldReferences {
     public void readAhead(Collection<String> mods, Predicate<String> on) {
         this.loadedChecks.readAhead(mods, this.lambdas.open(), getOthers(mods, on));
         long[] counts = countLoads();
-        this.scanAhead = new EarlyScan(Set.copyOf(mods), this.findLoaded(mods), counts[0], counts[1]);
+
+        Set<String> read = new HashSet<>(mods);
+        read.addAll(ElementLook.getBrought());
+        this.scanAhead = new EarlyScan(Set.copyOf(read), this.findLoaded(read), counts[0], counts[1]);
+    }
+
+    private LoadedClasses peekAhead(Collection<String> mods) {
+        EarlyScan ahead = this.scanAhead;
+        long[] counts = countLoads();
+        if (ahead != null && ahead.mods().containsAll(mods) && ahead.loaded() == counts[0]
+                && ahead.unloaded() == counts[1]) {
+            return ahead.scan();
+        }
+        return this.findLoaded(mods);
     }
 
     private LoadedClasses findLoadedAhead(Collection<String> mods) {
         EarlyScan ahead = this.scanAhead;
         this.scanAhead = null;
         long[] counts = countLoads();
-        if (ahead != null && ahead.mods().equals(Set.copyOf(mods)) && ahead.loaded() == counts[0]
+        if (ahead != null && ahead.mods().containsAll(mods) && ahead.loaded() == counts[0]
                 && ahead.unloaded() == counts[1]) {
             return ahead.scan();
         }

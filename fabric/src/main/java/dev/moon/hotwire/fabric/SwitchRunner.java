@@ -210,9 +210,11 @@ public final class SwitchRunner {
             this.switcher.showBegun(plan);
 
             ElementLook.findAhead(this.fieldReferences, wired, this.switcher::isOn);
+            SwitchTimes.mark("look: notes");
             ElementLook.readBrought(this.fieldReferences);
+            SwitchTimes.mark("look: brought");
             ElementLook.readHandlers(this.fieldReferences, wired);
-            SwitchTimes.mark("look ahead");
+            SwitchTimes.mark("look: handlers");
         }
 
         ModSwitcher.Result result;

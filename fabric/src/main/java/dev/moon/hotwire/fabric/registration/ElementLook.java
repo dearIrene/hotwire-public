@@ -210,6 +210,10 @@ public final class ElementLook {
         BROUGHT.addAll(mods);
     }
 
+    static List<String> getBrought() {
+        return List.copyOf(BROUGHT);
+    }
+
     private static boolean isFreshForEvery(List<String> asked) {
         return asked.stream().noneMatch(STALE::contains) && lookedForEvery.containsAll(asked)
                 && System.nanoTime() - lookedEveryAt < FRESH_NANOS;

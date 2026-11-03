@@ -284,7 +284,7 @@ final class CollectionReferences implements FixedLists.Walk {
         }
         if (!this.handlersAlone.isEmpty()) {
             HandlerMap.readAll(this.look.getNotes(), this.handlersAlone, map -> {
-                if (this.seen.add(map)) {
+                if (this.seen.add(map) && (notes == null || !notes.isUnchanged(map))) {
                     this.readingStaticsOf = this.look.getNotes().findOrigin(map).staticsOf();
                     this.collect(map);
                 }
