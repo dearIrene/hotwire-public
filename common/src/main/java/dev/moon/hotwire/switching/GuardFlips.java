@@ -102,6 +102,22 @@ final class GuardFlips {
                 if (stuck || replaced.contains(target) || mixins.rebuildOnly().contains(target)
                         || !HandlerGuards.isWritten(target) || (!present && !here.isEmpty())) {
                     rebuild.add(target);
+                    if (said && stuck) {
+                        List<String> whys = new ArrayList<>();
+                        HandlerGuards.findWhyUnflippableAt(target).forEach((mixin, reason) -> {
+                            if (mixins.owns().contains(mixin.replace('.', '/'))) {
+                                whys.add(mixin.substring(mixin.lastIndexOf('.') + 1) + ": " + reason);
+                            }
+                        });
+                        if (HandlerGuards.findDirectModsAt(target).contains(id)) {
+                            whys.add("code of its own called straight");
+                        }
+                        HandlerGuards.findBehavingAt(target).stream()
+                                .filter(mixin -> mixins.owns().contains(mixin.replace('.', '/')))
+                                .forEach(mixin -> whys.add(mixin.substring(mixin.lastIndexOf('.') + 1)
+                                        + ": methods of its own the game calls"));
+                        LOGGER.info("[Hotwire] {} cannot flip in {}: {}", id, target, whys);
+                    }
                     if (said) {
                         why.put(target, stuck ? "sites that cannot flip" : replaced.contains(target) ? "replaced"
                                 : mixins.rebuildOnly().contains(target) ? "an overwrite or fields set up"

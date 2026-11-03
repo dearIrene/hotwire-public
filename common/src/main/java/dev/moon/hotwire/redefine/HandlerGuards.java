@@ -58,6 +58,7 @@ public final class HandlerGuards {
     static final Set<String> UNFLIPPABLE = ConcurrentHashMap.newKeySet();
 
     private static final Map<String, Set<String>> UNFLIPPABLE_AT = new ConcurrentHashMap<>();
+    private static final Map<String, Map<String, String>> UNFLIPPABLE_WHY = new ConcurrentHashMap<>();
     static final Handle BOOTSTRAP = new Handle(Opcodes.H_INVOKESTATIC,
             HandlerGuards.class.getName().replace('.', '/'), "bootstrap",
             MethodType.methodType(CallSite.class, MethodHandles.Lookup.class, String.class, MethodType.class,
@@ -82,6 +83,8 @@ public final class HandlerGuards {
     private static final Map<String, Set<String>> PRESENT = new ConcurrentHashMap<>();
     static final Map<String, Set<String>> STAGED_PRESENT = new ConcurrentHashMap<>();
     private static final Map<String, Set<String>> DIRECT_MODS = new ConcurrentHashMap<>();
+
+    private static final Map<String, Set<String>> PUT_IN = new ConcurrentHashMap<>();
 
     private static final Map<String, Set<String>> BEHAVING = new ConcurrentHashMap<>();
 
@@ -174,7 +177,53 @@ public final class HandlerGuards {
     }
 
     public static Set<String> findDirectModsAt(String internalName) {
-        return DIRECT_MODS.getOrDefault(internalName, Set.of());
+        Set<String> direct = DIRECT_MODS.getOrDefault(internalName, Set.of());
+        Set<String> putIn = PUT_IN.get(internalName);
+        if (putIn == null) {
+            return direct;
+        }
+        Set<String> all = new HashSet<>(direct);
+        for (String owner : putIn) {
+            String mod = TripwireSites.findModOfClass(owner);
+            if (mod != null) {
+                all.add(mod);
+            }
+        }
+        return all;
+    }
+
+    static void notePutIn(String internalName, ClassNode node) {
+        Set<String> owners = new HashSet<>();
+        Set<String> checked = new HashSet<>();
+        byte[] shipped = null;
+        for (MethodNode method : node.methods) {
+            if (findMerged(method) != null) {
+                continue;
+            }
+            for (AbstractInsnNode insn : method.instructions) {
+                String owner = insn instanceof MethodInsnNode call ? call.owner
+                        : insn instanceof FieldInsnNode field ? field.owner : null;
+                if (owner == null || owner.equals(internalName) || owner.startsWith("java/")
+                        || owner.startsWith("net/minecraft/") || owner.startsWith("com/mojang/")
+                        || !checked.add(owner)) {
+                    continue;
+                }
+                if (shipped == null) {
+                    shipped = originals.apply(internalName);
+                    if (shipped == null) {
+                        return;
+                    }
+                }
+                if (!ClassBytes.mentions(shipped, owner)) {
+                    owners.add(owner);
+                }
+            }
+        }
+        if (owners.isEmpty()) {
+            PUT_IN.remove(internalName);
+        } else {
+            PUT_IN.put(internalName, Set.copyOf(owners));
+        }
     }
 
     public static long getFlips() {
@@ -230,11 +279,17 @@ public final class HandlerGuards {
     public static void forget(String internalName) {
         GUARDED.remove(internalName);
         PRESENT.remove(internalName);
+        PUT_IN.remove(internalName);
     }
 
-    static void markUnflippable(String internalName, String mixin) {
+    static void markUnflippable(String internalName, String mixin, String why) {
         UNFLIPPABLE.add(mixin);
         UNFLIPPABLE_AT.computeIfAbsent(internalName, name -> ConcurrentHashMap.newKeySet()).add(mixin);
+        UNFLIPPABLE_WHY.computeIfAbsent(internalName, name -> new ConcurrentHashMap<>()).put(mixin, why);
+    }
+
+    public static Map<String, String> findWhyUnflippableAt(String internalName) {
+        return UNFLIPPABLE_WHY.getOrDefault(internalName, Map.of());
     }
 
     public static Set<String> findUnflippableAt(String internalName) {
@@ -267,6 +322,7 @@ public final class HandlerGuards {
         new ClassReader(bytes).accept(node, 0);
         boolean made = HandlerSites.makeSites(internalName, node);
         noteBehaving(internalName, node);
+        notePutIn(internalName, node);
         commitStaged(internalName);
         return made ? DuckBridge.write(node, 0) : null;
     }
@@ -327,7 +383,7 @@ public final class HandlerGuards {
                         && isHandlerName(site.name)) {
                     for (Map.Entry<String, String> handler : handlers.entrySet()) {
                         if (handler.getKey().startsWith(site.name + "(")) {
-                            markUnflippable(internalName, handler.getValue());
+                            markUnflippable(internalName, handler.getValue(), "handler linked straight");
                         }
                     }
                     noteDirect(internalName, site.name);
@@ -337,13 +393,14 @@ public final class HandlerGuards {
                         continue;
                     }
                     if (direct != null) {
-                        markUnflippable(internalName, direct);
+                        markUnflippable(internalName, direct, "handler called straight");
                     }
                     noteDirect(internalName, call.name);
                 }
             }
         }
         noteBehaving(internalName, node);
+        notePutIn(internalName, node);
         PRESENT.put(internalName, Set.copyOf(present));
         if (guarded.isEmpty()) {
             GUARDED.remove(internalName);
@@ -412,7 +469,7 @@ public final class HandlerGuards {
         } catch (ReflectiveOperationException | RuntimeException e) {
             LOGGER.warn("[Hotwire] {}.{} {} has no stand-in and is called direct: {}", owner.getName(), name, type,
                     e.toString());
-            markUnflippable(owner.getName().replace('.', '/'), mixin);
+            markUnflippable(owner.getName().replace('.', '/'), mixin, "stand-in failed to link");
             return new ConstantCallSite(handler);
         }
         synchronized (LOCK) {

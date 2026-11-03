@@ -77,7 +77,7 @@ final class HandlerSites {
                     continue;
                 }
                 if (method.name.equals("<clinit>")) {
-                    HandlerGuards.markUnflippable(internalName, mixin);
+                    HandlerGuards.markUnflippable(internalName, mixin, "handler in the class's setup");
                     continue;
                 }
                 if (method.name.equals("<init>")) {
@@ -85,7 +85,7 @@ final class HandlerSites {
                         LOGGER.info("[Hotwire] {}'s constructor calls a handler of {}: it is rebuilt, not flipped",
                                 internalName, mixin);
                     }
-                    HandlerGuards.markUnflippable(internalName, mixin);
+                    HandlerGuards.markUnflippable(internalName, mixin, "handler in a constructor");
                     continue;
                 }
                 boolean isStatic = call.getOpcode() == Opcodes.INVOKESTATIC;
@@ -132,7 +132,7 @@ final class HandlerSites {
                             LOGGER.info("[Hotwire] {}.{} runs its operation inside itself and what it wraps is not"
                                     + " told: {} is rebuilt, not flipped", internalName, call.name, mixin);
                         }
-                        HandlerGuards.markUnflippable(internalName, mixin);
+                        HandlerGuards.markUnflippable(internalName, mixin, "operation inside the wrapper");
                         continue;
                     }
                     method.instructions.set(call,
@@ -146,7 +146,7 @@ final class HandlerSites {
                         LOGGER.info("[Hotwire] {}.{} has no stand-in{}: {} is rebuilt, not flipped", internalName,
                                 call.name, why, mixin);
                     }
-                    HandlerGuards.markUnflippable(internalName, mixin);
+                    HandlerGuards.markUnflippable(internalName, mixin, "no stand-in" + why);
                     continue;
                 }
                 method.instructions.set(call, new InvokeDynamicInsnNode(call.name, desc, HandlerGuards.BOOTSTRAP, mixin,
