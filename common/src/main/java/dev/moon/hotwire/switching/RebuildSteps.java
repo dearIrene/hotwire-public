@@ -3,6 +3,7 @@ package dev.moon.hotwire.switching;
 import dev.moon.hotwire.redefine.ClassRebuilder;
 import dev.moon.hotwire.redefine.OffWindowObjects;
 import dev.moon.hotwire.redefine.RebuildException;
+import dev.moon.hotwire.redefine.Tripwire;
 import java.util.ArrayList;
 import java.util.HashSet;
 import java.util.List;
@@ -60,10 +61,12 @@ final class RebuildSteps {
         };
         if (catchUpLater == null) {
             notSetUp = LiveObjects.replay(prepared, onGameThread);
+            Tripwire.releaseComingOn();
             rebuilder.startStatics();
         } else {
             catchUpLater.accept(() -> {
                 int later = LiveObjects.replay(prepared, onGameThread);
+                Tripwire.releaseComingOn();
                 rebuilder.startStatics();
                 rebuildObjects.run();
                 return later;

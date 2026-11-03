@@ -313,6 +313,16 @@ public final class Tripwire {
         });
     }
 
+    private static volatile Set<String> comingOn = Set.of();
+
+    public static void noteComingOn(Collection<String> mods) {
+        comingOn = Set.copyOf(mods);
+    }
+
+    public static void releaseComingOn() {
+        release(comingOn);
+    }
+
     public static void release(Collection<String> mods) {
         for (String mod : mods) {
             CountDownLatch gate = GATES.remove(mod);

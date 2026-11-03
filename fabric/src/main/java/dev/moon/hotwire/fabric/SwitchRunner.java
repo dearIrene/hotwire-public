@@ -348,6 +348,7 @@ public final class SwitchRunner {
         ElementLook.giveWay();
         SwitchTimes.mark("look gave way");
         Tripwire.pause(true);
+        Tripwire.noteComingOn(ids);
         try {
             SwitchPlan coming = this.switcher.planOn(ids);
             SwitchTimes.mark("plan");
@@ -405,6 +406,7 @@ public final class SwitchRunner {
             }
             return this.checkAndReport(result);
         } finally {
+            Tripwire.noteComingOn(List.of());
             Tripwire.pause(false);
         }
     }
