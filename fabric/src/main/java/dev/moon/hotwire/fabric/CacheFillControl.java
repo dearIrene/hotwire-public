@@ -1,5 +1,6 @@
 package dev.moon.hotwire.fabric;
 
+import com.google.common.base.Splitter;
 import dev.moon.hotwire.redefine.CachedMixes;
 import dev.moon.hotwire.report.ActionJournal;
 import dev.moon.hotwire.switching.SwitchCacheFiller;
@@ -101,18 +102,32 @@ final class CacheFillControl implements CacheHost {
         return this.versions;
     }
 
+    private static long parseVersion(String version) {
+        long score = 0;
+        for (String part : Splitter.on('.').split(version)) {
+            score = score * 1000 + (part.isEmpty() ? 0 : Integer.parseInt(part));
+        }
+        return score;
+    }
+
     private List<CacheVersion> readVersions() {
         Path here = EngineStart.findCacheFolder();
         List<CacheVersion> found = new ArrayList<>();
         try (Stream<Path> folders = Files.list(here.getParent())) {
             for (Path folder : folders.filter(Files::isDirectory).toList()) {
                 String version = folder.getFileName().toString();
+
+                if (!version.matches("[0-9][0-9.]*[0-9]")) {
+                    continue;
+                }
                 found.add(new CacheVersion(version, measure(folder), folder.equals(here), this.busy.contains(version)));
             }
         } catch (IOException e) {
             return List.of();
         }
-        found.sort(Comparator.comparing(CacheVersion::current).thenComparing(CacheVersion::version).reversed());
+
+        found.sort(Comparator.comparing(CacheVersion::current).reversed()
+                .thenComparing(Comparator.comparingLong((CacheVersion one) -> parseVersion(one.version())).reversed()));
         return List.copyOf(found);
     }
 
