@@ -24,7 +24,6 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 public final class InstalledMods {
-    private final Set<String> runningFromCopy = new HashSet<>();
     private static final Logger LOGGER = LoggerFactory.getLogger(InstalledMods.class);
     private ModGraph graph;
     private final List<ModJar> jars;
@@ -102,12 +101,7 @@ public final class InstalledMods {
 
     synchronized SortedSet<String> getTopLevel() {
         SortedSet<String> rows = new TreeSet<>(this.topLevel);
-        rows.removeAll(this.runningFromCopy);
         return rows;
-    }
-
-    public synchronized void onRunningFromCopy(String id) {
-        this.runningFromCopy.add(id);
     }
 
     public synchronized Map<String, Path> getJarsByTopLevel() {

@@ -208,10 +208,6 @@ final class UpdateBatch {
                     if (part.reopenFixes()) {
                         this.updater.tryAfterWorld(jars.get(inPlaceAt.get(i)));
                     }
-
-                    if (modNamed || (part.isRestartOnly() && !ownNamed)) {
-                        this.updater.getCopies().refuseCopies(planned.manifest().id());
-                    }
                 }
             }
         }
