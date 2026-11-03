@@ -86,6 +86,7 @@ final class CollectionReferences implements FixedLists.Walk {
             HandedSearch handed) {
         ElementTakes.Answers ready = this.prepared != null && this.preparedFor.equals(mods) ? this.prepared : null;
         this.prepared = null;
+        this.owners = new ElementOwners(List.of(), Set.of());
         List<Runnable> ahead = ready != null ? List.of() : this.look.open(mods);
         try {
             if (ready != null) {

@@ -521,6 +521,8 @@ public final class ModSwitcher {
             }
         } finally {
             this.waiting = null;
+
+            this.applier.rebuilder.forgetLastApply();
         }
     }
 

@@ -531,6 +531,10 @@ public final class ClassRebuilder {
                 (installed - start) / 1_000_000, (redefined - installed) / 1_000_000, (end - redefined) / 1_000_000);
     }
 
+    public void forgetLastApply() {
+        this.lastApplied = null;
+    }
+
     @SuppressWarnings("ReferenceEquality")
     public void revert(PreparedRebuild prepared) throws RebuildException {
         this.staticsToStart.clear();

@@ -45,6 +45,8 @@ public final class CrashGuard {
     private static volatile Function<String, @Nullable String> mixinOwner = name -> null;
     private static final List<String> CAUGHT = new CopyOnWriteArrayList<>();
 
+    private static final int MOST_CAUGHT = 200;
+
     private CrashGuard() {
     }
 
@@ -58,6 +60,9 @@ public final class CrashGuard {
             String name = installed.nameOf(caught.mod());
             LOGGER.error("[Hotwire] {} threw at {} ({}); Hotwire keeps the game going and turns it off", name,
                     caught.site(), caught.mod(), caught.thrown());
+            if (CAUGHT.size() >= MOST_CAUGHT) {
+                CAUGHT.remove(0);
+            }
             CAUGHT.add(caught.mod() + " at " + caught.site() + ": " + caught.thrown());
             SwitchRunner switching = runner.get();
             if (switching == null) {

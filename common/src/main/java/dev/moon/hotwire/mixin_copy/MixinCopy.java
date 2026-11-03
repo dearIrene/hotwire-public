@@ -110,7 +110,8 @@ public final class MixinCopy implements AutoCloseable {
 
     private final List<Copy> reusable = new ArrayList<>();
     private int generation;
-    private static final int MAX_REUSABLE = 3;
+
+    private static final int MAX_REUSABLE = 1;
 
     public MixinCopy(List<Path> mixinJars, ClassLoader live, List<String> sharedPackages, String sessionId,
             Function<String, byte @Nullable []> more, String side, Decorations decorations) {
