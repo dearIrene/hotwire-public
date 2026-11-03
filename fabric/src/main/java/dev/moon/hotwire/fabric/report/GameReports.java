@@ -375,6 +375,14 @@ public final class GameReports {
                 || text.contains("from mod hotwire");
     }
 
+    private boolean isFromLastSession(Path file) {
+        try {
+            return Files.getLastModifiedTime(file).toInstant().isBefore(this.began);
+        } catch (IOException e) {
+            return false;
+        }
+    }
+
     Path writeBundle(String title, String why, List<TidyLog.Mod> mods, List<Path> extra, String environment)
             throws IOException {
         synchronized (this.bundling) {
@@ -398,8 +406,9 @@ public final class GameReports {
         if (froze) {
             texts.put("hotwire-" + FreezeDump.FILE, read(logs.resolve(FreezeDump.FILE)));
         }
-        for (String name : extra.isEmpty() && !froze ? List.of(HotwireLog.FILE)
-                : List.of(HotwireLog.FILE, HotwireLog.LAST)) {
+
+        boolean lastSession = froze || extra.stream().anyMatch(this::isFromLastSession);
+        for (String name : lastSession ? List.of(HotwireLog.FILE, HotwireLog.LAST) : List.of(HotwireLog.FILE)) {
             if (Files.isRegularFile(logs.resolve(name))) {
                 texts.put("hotwire-" + name, getTail(read(logs.resolve(name))));
             }
@@ -408,8 +417,8 @@ public final class GameReports {
             texts.put("hotwire-" + HotwireClient.STARTUP, read(logs.resolve(HotwireClient.STARTUP)));
         }
         ActionJournal.get().flush();
-        for (String name : extra.isEmpty() ? List.of(ActionJournal.FILE)
-                : List.of(ActionJournal.FILE, ActionJournal.LAST)) {
+        for (String name : lastSession ? List.of(ActionJournal.FILE, ActionJournal.LAST)
+                : List.of(ActionJournal.FILE)) {
             if (Files.isRegularFile(logs.resolve(name))) {
                 texts.put("hotwire-" + name, read(logs.resolve(name)));
             }
