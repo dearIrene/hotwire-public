@@ -2,6 +2,7 @@ package dev.moon.hotwire.fabric.update;
 
 import dev.moon.hotwire.fabric.ModPolicy;
 import dev.moon.hotwire.fabric.ResourceReload;
+import dev.moon.hotwire.fabric.add.AddAssets;
 import dev.moon.hotwire.fabric.add.LoaderModList;
 import dev.moon.hotwire.jar.JarLookup;
 import dev.moon.hotwire.jar.ModJar;
@@ -245,6 +246,9 @@ final class LiveUpdates {
             runAfterReplace(String.join(", ", jars.keySet()), "Hotwire's own list of mods",
                     () -> this.engine.onUpdated(jars));
             SwitchTimes.mark("update: learn");
+            Map<String, Path> paths = new LinkedHashMap<>();
+            jars.forEach((id, jar) -> paths.put(id, jar.jar()));
+            AddAssets.reloadForUpdated(paths);
             List<ModUpdater.Result> results = new ArrayList<>();
             for (int i = 0; i < ready.size(); i++) {
                 Ready one = ready.get(i);
