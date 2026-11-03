@@ -98,6 +98,8 @@ final class GuardFlips {
                     }
                 }
 
+                own.addAll(here);
+
                 Map<String, String> whyStuck = HandlerGuards.findWhyUnflippableAt(target);
                 boolean stuck = HandlerGuards.findUnflippableAt(target).stream()
                         .filter(mixin -> mixins.owns().contains(mixin.replace('.', '/')))
@@ -139,7 +141,6 @@ final class GuardFlips {
                         why.put(target, "loaded or rebuilt without them");
                     }
                 } else {
-                    own.addAll(here);
                     if (!here.isEmpty()) {
                         flipped.add(target);
                     }
