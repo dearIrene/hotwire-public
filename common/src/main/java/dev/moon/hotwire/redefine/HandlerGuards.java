@@ -22,6 +22,7 @@ import org.jspecify.annotations.Nullable;
 import org.objectweb.asm.ClassReader;
 import org.objectweb.asm.Handle;
 import org.objectweb.asm.Opcodes;
+import org.objectweb.asm.Type;
 import org.objectweb.asm.tree.AbstractInsnNode;
 import org.objectweb.asm.tree.AnnotationNode;
 import org.objectweb.asm.tree.ClassNode;
@@ -220,6 +221,11 @@ public final class HandlerGuards {
                 continue;
             }
             for (AbstractInsnNode insn : method.instructions) {
+                if (insn instanceof MethodInsnNode gated && !gated.name.equals("<init>")
+                        && Type.getReturnType(gated.desc).getSort() != Type.OBJECT
+                        && Type.getReturnType(gated.desc).getSort() != Type.ARRAY) {
+                    continue;
+                }
                 String owner = insn instanceof MethodInsnNode call ? call.owner
                         : insn instanceof FieldInsnNode field ? field.owner : null;
                 if (owner == null || owner.equals(internalName) || owner.startsWith("java/")
