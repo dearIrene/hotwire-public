@@ -1,5 +1,6 @@
 package dev.moon.hotwire.fabric.registration;
 
+import dev.moon.hotwire.fabric.ModPolicy;
 import dev.moon.hotwire.redefine.FieldSlots;
 import dev.moon.hotwire.redefine.Tripwire;
 import dev.moon.hotwire.registration.ModNames;
@@ -88,6 +89,13 @@ final class ElementOwners {
         }
 
         if (isGameObject(item)) {
+            return null;
+        }
+
+        String madeBy = ValueOwners.isLambda(item) ? GameRegistrations.findModOrShipper(item.getClass().getNestHost())
+                : null;
+        if (madeBy != null && !this.modSet.contains(madeBy) && ModPolicy.isSwitchable(madeBy)
+                && ValueOwners.findForwardedTo(item) == null) {
             return null;
         }
         String owner = this.findOwnerAmong(item);
