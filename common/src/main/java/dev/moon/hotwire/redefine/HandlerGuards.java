@@ -225,6 +225,7 @@ public final class HandlerGuards {
         byte[] shipped = null;
         for (MethodNode method : node.methods) {
             if (findMerged(method) != null || method.name.contains(OverwriteSites.BODY)
+                    || method.name.endsWith(FieldSites.INIT)
                     || ((method.access & Opcodes.ACC_SYNTHETIC) != 0 && method.name.contains("lambda$"))) {
                 continue;
             }
