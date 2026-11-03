@@ -47,11 +47,6 @@ final class InstalledModCatalog implements ModCatalog {
     }
 
     @Override
-    public boolean isInstalledByThePlayer(String id) {
-        return this.installed.isTopLevel(id);
-    }
-
-    @Override
     public boolean isProtected(String id) {
         return ModPolicy.isGuarded(id);
     }

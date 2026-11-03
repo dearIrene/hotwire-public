@@ -193,8 +193,7 @@ public final class ModListModel {
     public List<String> filterRelevant(List<String> all) {
         List<String> out = new ArrayList<>();
         for (String id : all) {
-            if (!this.catalog.isHidden(id)
-                    && (this.showLibraries || !this.catalog.isLibrary(id) || this.catalog.isInstalledByThePlayer(id))) {
+            if (!this.catalog.isHidden(id) && (this.showLibraries || !this.catalog.isLibrary(id))) {
                 out.add(id);
             }
         }

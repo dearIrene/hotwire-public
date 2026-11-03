@@ -9,8 +9,6 @@ public interface ModCatalog {
 
     boolean isHidden(String id);
 
-    boolean isInstalledByThePlayer(String id);
-
     boolean isProtected(String id);
 
     boolean isLocked(String id);
