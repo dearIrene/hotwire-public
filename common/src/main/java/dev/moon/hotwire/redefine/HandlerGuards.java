@@ -70,6 +70,10 @@ public final class HandlerGuards {
                     String.class, int.class, int.class, String.class, String.class, String.class)
                     .toMethodDescriptorString(), false);
 
+    static final Handle BOOTSTRAP_FIELD = new Handle(Opcodes.H_INVOKESTATIC,
+            HandlerGuards.class.getName().replace('.', '/'), "bootstrapField",
+            MethodType.methodType(CallSite.class, MethodHandles.Lookup.class, String.class, MethodType.class,
+                    String.class).toMethodDescriptorString(), false);
     static final Handle BOOTSTRAP_OVERWRITE = new Handle(Opcodes.H_INVOKESTATIC,
             HandlerGuards.class.getName().replace('.', '/'), "bootstrapOverwrite",
             MethodType.methodType(CallSite.class, MethodHandles.Lookup.class, String.class, MethodType.class,
@@ -137,6 +141,10 @@ public final class HandlerGuards {
         if (mod != null) {
             DIRECT_MODS.computeIfAbsent(internalName, name -> ConcurrentHashMap.newKeySet()).add(mod);
         }
+    }
+
+    public static boolean isFieldSitedFor(String internalName, Set<String> owns) {
+        return FieldSites.isSitedFor(internalName, owns);
     }
 
     public static Set<String> findBehavingAt(String internalName) {
@@ -491,6 +499,16 @@ public final class HandlerGuards {
                 isStatic == STATIC ? 0 : 1, new RedirectStandIns.Target(opcode, owner, target, desc)));
     }
 
+    public static CallSite bootstrapField(MethodHandles.Lookup caller, String name, MethodType type, String mixin)
+            throws ReflectiveOperationException {
+        Class<?> owner = caller.lookupClass();
+        String className = owner.getName().replace('.', '/');
+        FieldSites.note(mixin, className, caller.findSpecial(owner, name, MethodType.methodType(void.class), owner));
+        return link(caller, name, type, mixin, OWN, () -> MethodHandles.insertArguments(MethodHandles.lookup()
+                .findStatic(OffWindowObjects.class, "onMade", MethodType.methodType(void.class, Object.class,
+                        String.class)), 1, className).asType(type));
+    }
+
     public static CallSite bootstrapOverwrite(MethodHandles.Lookup caller, String name, MethodType type, String mixin,
             int isStatic, String was) throws ReflectiveOperationException {
         Class<?> owner = caller.lookupClass();
@@ -547,6 +565,9 @@ public final class HandlerGuards {
         }
         if (chunks) {
             CHUNK_FLIPS.incrementAndGet();
+        }
+        if (!off) {
+            FieldSites.replay(mixins);
         }
         LOGGER.info("[Hotwire] {} handler sites of {} mixins now call {}", changed.size(), mixins.size(),
                 off ? "their stand-ins" : "their handlers");

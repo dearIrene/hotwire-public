@@ -116,7 +116,7 @@ final class RetainedInitializers {
         return null;
     }
 
-    private static boolean isPure(InsnList slice, String self, Set<String> methods) {
+    static boolean isPure(InsnList slice, String self, Set<String> methods) {
         for (AbstractInsnNode insn : slice) {
             if (insn instanceof MethodInsnNode own && own.owner.equals(self)
                     && !methods.contains(own.name + own.desc)) {

@@ -79,6 +79,7 @@ final class PatchScanner {
         Set<String> asks = new TreeSet<>();
         boolean callbacksOnly = true;
         Set<String> rebuildOnly = new TreeSet<>();
+        Set<String> fieldsSetUp = new TreeSet<>();
         for (MixinConfigRef ref : manifest.mixinConfigs()) {
             byte[] config = reader.read(ref.config());
             if (config == null) {
@@ -102,6 +103,9 @@ final class PatchScanner {
                 if (!read.callbacksOnly()) {
                     rebuildOnly.addAll(read.targets());
                 }
+                if (read.fieldsSetUp()) {
+                    fieldsSetUp.addAll(read.targets());
+                }
                 patches.addAll(read.targets());
                 configTargets.addAll(read.targets());
                 (read.hook() ? hooked : tied).addAll(read.targets());
@@ -120,6 +124,9 @@ final class PatchScanner {
                         callbacksOnly &= added.callbacksOnly();
                         if (!added.callbacksOnly()) {
                             rebuildOnly.addAll(added.targets());
+                        }
+                        if (added.fieldsSetUp()) {
+                            fieldsSetUp.addAll(added.targets());
                         }
                         configTargets.addAll(added.targets());
                         collectNamedIfInTheGame(added, bytes, named);
@@ -194,7 +201,7 @@ final class PatchScanner {
             }
         }
         return new ModPatches(owns, patches, hooked, missing, byConfig, calls, asks, callbacksOnly, rebuildOnly,
-                CalledNames.of(calledNames));
+                CalledNames.of(calledNames), fieldsSetUp);
     }
 
     private static void collectCalledNames(byte[] bytes, Set<String> into) {
@@ -378,7 +385,7 @@ final class PatchScanner {
         return out;
     }
 
-    private record Mixin(Set<String> targets, boolean hook, boolean callbacksOnly) {
+    private record Mixin(Set<String> targets, boolean hook, boolean callbacksOnly, boolean fieldsSetUp) {
     }
 
     private static Mixin read(byte[] bytes, String mixin, Refmap refmap) {
@@ -419,10 +426,9 @@ final class PatchScanner {
                 };
             }
         }, ClassReader.SKIP_CODE | ClassReader.SKIP_DEBUG | ClassReader.SKIP_FRAMES);
-        if (ownInstanceField[0] && !beyondCallbacks[0]) {
-            beyondCallbacks[0] = setsOwnField(reader, mixin);
-        }
-        return new Mixin(targets, pseudo[0] && reader.getInterfaces().length == 0 && !opens[0], !beyondCallbacks[0]);
+        boolean fieldsSetUp = ownInstanceField[0] && setsOwnField(reader, mixin);
+        return new Mixin(targets, pseudo[0] && reader.getInterfaces().length == 0 && !opens[0], !beyondCallbacks[0],
+                fieldsSetUp);
     }
 
     private static boolean setsOwnField(ClassReader reader, String mixin) {

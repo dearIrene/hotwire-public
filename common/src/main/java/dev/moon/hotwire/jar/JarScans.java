@@ -28,7 +28,7 @@ import org.objectweb.asm.ClassReader;
 import org.objectweb.asm.ClassWriter;
 
 public final class JarScans {
-    private static final String KEYS = "jar scans 2";
+    private static final String KEYS = "jar scans 3";
     private static final String SCANNER = "dev/moon/hotwire/jar/";
 
     private final CacheStore store;
@@ -102,6 +102,7 @@ public final class JarScans {
         out.writeBoolean(patches.callbacksOnly());
         writeAll(out, patches.rebuildOnly());
         patches.calledNames().writeTo(out);
+        writeAll(out, patches.fieldsSetUp());
         out.writeInt(scanned.nested().size());
         for (Scan nested : scanned.nested()) {
             writeJar(out, nested);
@@ -129,8 +130,10 @@ public final class JarScans {
         boolean callbacksOnly = in.readBoolean();
         List<String> rebuildOnly = readAll(in);
         CalledNames calledNames = CalledNames.readFrom(in);
+        List<String> fieldsSetUp = readAll(in);
         ModPatches patches = new ModPatches(Set.copyOf(owns), Set.copyOf(patched), Set.copyOf(hookOnly), missing,
-                byConfig, Set.copyOf(calls), Set.copyOf(asks), callbacksOnly, Set.copyOf(rebuildOnly), calledNames);
+                byConfig, Set.copyOf(calls), Set.copyOf(asks), callbacksOnly, Set.copyOf(rebuildOnly), calledNames,
+                Set.copyOf(fieldsSetUp));
         List<ModJar> nested = new ArrayList<>();
         for (int count = in.readInt(); count > 0; count--) {
             nested.add(readJar(in));

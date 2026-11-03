@@ -72,7 +72,7 @@ final class LoadTimeMixer {
         for (String id : this.applier.onAtLaunch) {
             ModMixins mixins = this.applier.mods.get(id);
             if (this.applier.isOn(id) || mixins == null || !mixins.targets().contains(className)
-                    || mixins.rebuildOnly().contains(className)) {
+                    || mixins.rebuildOnly().contains(className) || mixins.fieldsSetUp().contains(className)) {
                 continue;
             }
             included.add(id);

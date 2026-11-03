@@ -107,6 +107,8 @@ final class GuardFlips {
                 stuck |= HandlerGuards.findDirectModsAt(target).contains(id)
                         || HandlerGuards.findBehavingAt(target).stream()
                                 .anyMatch(mixin -> mixins.owns().contains(mixin.replace('.', '/')));
+
+                stuck |= mixins.fieldsSetUp().contains(target) && !HandlerGuards.isFieldSitedFor(target, mixins.owns());
                 if (stuck || replaced.contains(target) || mixins.rebuildOnly().contains(target)
                         || !HandlerGuards.isWritten(target) || (!present && !here.isEmpty())) {
                     rebuild.add(target);
