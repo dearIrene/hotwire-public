@@ -180,7 +180,15 @@ public final class GameReports {
     }
 
     public static void logCrashDecision(CrashSection.Detail trace) {
-        LOGGER.error("[Hotwire] ======== {}: {} ========", trace.name(), trace.value());
+        if (CrashSection.isCleared(trace.value())) {
+            LOGGER.error("[Hotwire] {}: {}", trace.name(), trace.value());
+            return;
+        }
+        String bar = "=".repeat(100);
+        LOGGER.error("[Hotwire] {}", bar);
+        LOGGER.error("[Hotwire] If you are reading this, Hotwire caused this crash.");
+        LOGGER.error("[Hotwire] {}: {}", trace.name(), trace.value());
+        LOGGER.error("[Hotwire] {}", bar);
     }
 
     public static CrashSection.Detail describeTrace(Collection<String> frames, Collection<String> messages) {

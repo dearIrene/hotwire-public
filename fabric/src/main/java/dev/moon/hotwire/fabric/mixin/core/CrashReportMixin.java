@@ -45,6 +45,10 @@ public abstract class CrashReportMixin {
         }
         CrashSection.Detail trace = this.describeTrace();
         this.getSystemReport().setDetail(CrashSection.TITLE + ": " + trace.name(), trace.value());
+
+        if (!CrashSection.isCleared(trace.value())) {
+            this.getSystemReport().setDetail("!!! If you are reading this, Hotwire caused this crash", trace.value());
+        }
     }
 
     private CrashSection.Detail describeTrace() {
