@@ -399,6 +399,14 @@ public final class ModUpdater {
             public UpdateMethod method() {
                 return getMethodOf(this.whole.plan().tier());
             }
+
+            public UpdatePlan plan() {
+                return this.whole.plan();
+            }
+
+            public @Nullable String refusal() {
+                return this.whole.refusal();
+            }
         }
     }
 
