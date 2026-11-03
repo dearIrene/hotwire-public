@@ -3,6 +3,7 @@ package dev.moon.hotwire.fabric.update;
 import dev.moon.hotwire.fabric.ModPolicy;
 import dev.moon.hotwire.fabric.ResourceReload;
 import dev.moon.hotwire.fabric.add.AddAssets;
+import dev.moon.hotwire.fabric.add.LaunchSteps;
 import dev.moon.hotwire.fabric.add.LoaderModList;
 import dev.moon.hotwire.fabric.registration.GameRegistrations;
 import dev.moon.hotwire.jar.JarLookup;
@@ -307,6 +308,17 @@ final class LiveUpdates {
             started.append(runAddedEntrypoints(carried.manifest().id(), carried.plan()));
         }
         SwitchTimes.mark("update: entrypoints");
+
+        try {
+            Minecraft.getInstance().submit(() -> LaunchSteps.run("the update of " + manifest.id(),
+                    LaunchSteps.afterStart(List.of(manifest.id()), this.engine.getClasses()::findLoaded,
+                            new LinkedHashMap<>()),
+                    Set.of("host lists", "entrypoint lists", "client-started listeners"))).get(10, TimeUnit.SECONDS);
+        } catch (InterruptedException e) {
+            Thread.currentThread().interrupt();
+        } catch (ExecutionException | TimeoutException e) {
+            LOGGER.warn("[Hotwire] {}'s launch steps did not run after its update", manifest.id(), e);
+        }
         LOGGER.info("[Hotwire] {} is {} now: {} classes rebuilt, {} served as they load, {} new",
                 manifest.id(), manifest.version(), applied.rebuilt().size(), applied.notLoaded().size(),
                 one.plan().actions().stream().filter(action -> action.kind() == ClassAction.Kind.DEFINE).count());

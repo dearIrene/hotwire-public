@@ -1,15 +1,13 @@
 package dev.moon.hotwire.fabric.add;
 
 import dev.moon.hotwire.fabric.registration.GameHold;
-import dev.moon.hotwire.fabric.registration.GameRegistrations;
-import dev.moon.hotwire.fabric.registration.ModLifecycle;
-import dev.moon.hotwire.fabric.registration.OffModCommands;
 import dev.moon.hotwire.fabric.screen.HoldFrame;
 import dev.moon.hotwire.jar.ModManifest;
 import java.util.ArrayList;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.Set;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.CountDownLatch;
 import java.util.function.Consumer;
@@ -94,14 +92,8 @@ final class AddStart {
                 grew.addAll(registries.getGrown());
             }
             if (failed == null) {
-                HostLists.join(ids);
-                EntrypointLists.join(ids, findLoaded);
-                OffModCommands.rebuildClientCommands();
-
                 Map<String, List<String>> setUp = new LinkedHashMap<>();
-                for (String id : ids) {
-                    setUp.put(id, ModLifecycle.runSetup(id, GameRegistrations.getJournal(), Minecraft.getInstance()));
-                }
+                LaunchSteps.run("the add of " + ids, LaunchSteps.afterStart(ids, findLoaded, setUp), Set.of());
                 started.complete(setUp);
             } else {
                 started.completeExceptionally(failed);
