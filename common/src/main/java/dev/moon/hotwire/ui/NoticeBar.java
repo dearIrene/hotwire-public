@@ -2,6 +2,7 @@ package dev.moon.hotwire.ui;
 
 import java.util.ArrayList;
 import java.util.List;
+import java.util.Objects;
 import org.jspecify.annotations.Nullable;
 
 final class NoticeBar extends Element {
@@ -50,10 +51,20 @@ final class NoticeBar extends Element {
 
     private final List<Card> cards = new ArrayList<>();
 
+    private @Nullable Runnable onDownload;
+
     private @Nullable Notice lastSaid;
 
     boolean isEmpty() {
         return this.cards.isEmpty();
+    }
+
+    void openDownloadsWith(Runnable open) {
+        this.onDownload = open;
+    }
+
+    private boolean opensDownloads(Card card) {
+        return this.onDownload != null && card.notice.job() > 0 && card.notice.isUnderWay();
     }
 
     @Override
@@ -137,6 +148,10 @@ final class NoticeBar extends Element {
     @Override
     protected boolean onClick(double px, double py, int button) {
         for (Card card : this.cards) {
+            if (!card.leaving && this.isOn(card, px, py) && this.opensDownloads(card)) {
+                Objects.requireNonNull(this.onDownload).run();
+                return true;
+            }
             if (!card.leaving && this.isOn(card, px, py)) {
                 card.leaving = true;
                 card.dismissed = true;
@@ -198,7 +213,7 @@ final class NoticeBar extends Element {
             canvas.fill(x, y, x + 3, y + h, Colors.fade(kind, a));
             int textX = x + 3 + PAD;
             int room = w - 3 - PAD * 3;
-            if (hover > 0.01f) {
+            if (hover > 0.01f && !this.opensDownloads(card)) {
                 canvas.drawText(CROSS, x + w - PAD - canvas.measureText(CROSS), y + 5,
                         Colors.fade(Colors.mix(Palette.FAINT, Palette.TEXT, hover), a * hover));
             }
@@ -209,7 +224,9 @@ final class NoticeBar extends Element {
             }
             lineY += 3;
             for (String line : detailLines) {
-                canvas.drawText(canvas.clip(line, room), textX, lineY, Colors.fade(Palette.DIM, a));
+                String said = hover > 0.5f && this.opensDownloads(card) ? Lang.get("hotwire.notice.download_manage")
+                        : line;
+                canvas.drawText(canvas.clip(said, room), textX, lineY, Colors.fade(Palette.DIM, a));
                 lineY += LINE;
             }
             if (notice.isUnderWay()) {

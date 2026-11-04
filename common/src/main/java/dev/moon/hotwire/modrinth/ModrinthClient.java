@@ -312,7 +312,12 @@ public final class ModrinthClient {
             Files.copy(copy, part, StandardCopyOption.REPLACE_EXISTING);
         } else {
             long began = System.nanoTime();
-            this.transport.fetchTo(version.url(), version.size(), version.sha512(), part, onBytes);
+            try {
+                this.transport.fetchTo(version.url(), version.size(), version.sha512(), part, onBytes);
+            } catch (Downloads.DownloadStopped e) {
+                Files.deleteIfExists(part);
+                throw e;
+            }
             LOGGER.info("[Hotwire] {} was downloaded: {} KB in {} ms", version.fileName(),
                     Files.size(part) / 1024, (System.nanoTime() - began) / 1_000_000);
         }

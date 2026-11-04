@@ -61,6 +61,7 @@ final class UpdatesPanel extends Panel {
     private final Consumer<List<UpdateOffer>> onUpdateAll;
     private final Function<String, Canvas.@Nullable Image> icons;
     private final Supplier<List<Downloads.Job>> jobs;
+    private final Runnable onCheck;
 
     private boolean running;
     private final Map<String, Downloads.Job> seen = new HashMap<>();
@@ -92,6 +93,7 @@ final class UpdatesPanel extends Panel {
         this.onUpdateAll = onUpdateAll;
         this.icons = icons;
         this.jobs = jobs;
+        this.onCheck = onCheck;
         this.change(Lang.get("hotwire.updates.check"), onCheck);
     }
 
@@ -138,12 +140,22 @@ final class UpdatesPanel extends Panel {
         this.lastDone = 0;
         this.sinceSpeed = 0;
         this.speed = 0;
+        this.change(Lang.get("hotwire.updates.pause"), this::togglePause);
         this.updatePrimary();
+    }
+
+    private void togglePause() {
+        if (Downloads.isAnyPaused()) {
+            Downloads.resumeAll();
+        } else {
+            Downloads.pauseAll();
+        }
     }
 
     void endRun() {
         this.running = false;
         DownloadNotices.setQuiet(false);
+        this.change(Lang.get("hotwire.updates.check"), this.onCheck);
         this.summaryStale = true;
         this.updatePrimary();
     }
@@ -168,6 +180,11 @@ final class UpdatesPanel extends Panel {
         this.summaryStale = true;
         List<UpdateOffer> picked = this.findPicked();
         boolean any = !this.offers.isEmpty();
+        if (this.running) {
+            this.setPrimary(Lang.get("hotwire.updates.stop"), Downloads::stopAll);
+            this.setPrimaryActive(true);
+            return;
+        }
         String label = picked.size() == this.offers.size() && picked.size() > 1 ? Lang.get("hotwire.updates.all")
                 : Lang.get("hotwire.updates.picked", picked.size());
         this.setPrimary(any ? label : null, () -> {
@@ -222,6 +239,8 @@ final class UpdatesPanel extends Panel {
         this.scroll.step(dt);
         if (this.running) {
             DownloadNotices.setQuiet(this.open());
+            this.setChangeLabel(Lang.get(Downloads.isAnyPaused() ? "hotwire.updates.resume"
+                    : "hotwire.updates.pause"));
             this.followRun(dt);
         }
         super.step(dt);
@@ -446,6 +465,7 @@ final class UpdatesPanel extends Panel {
         }
         if (job != null && progressed > 0) {
             int percent = job.state() == Downloads.State.DONE ? -2 : job.state() == Downloads.State.FAILED ? -3
+                    : job.state() == Downloads.State.PAUSED ? -4 : job.state() == Downloads.State.STOPPED ? -5
                     : (int) (job.getFraction() * 100);
             if (row.jobPercent != percent) {
                 row.jobPercent = percent;
@@ -474,6 +494,8 @@ final class UpdatesPanel extends Panel {
         return switch (job.state()) {
             case DONE -> TICK;
             case FAILED -> Lang.get("hotwire.updates.row_failed");
+            case PAUSED -> Lang.get("hotwire.updates.row_paused");
+            case STOPPED -> Lang.get("hotwire.updates.row_stopped");
             case WAITING, GETTING -> Math.round(job.getFraction() * 100) + "%  " + CacheFill.describeBytes(job.done());
         };
     }

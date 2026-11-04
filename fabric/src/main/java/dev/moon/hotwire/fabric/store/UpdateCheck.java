@@ -301,6 +301,8 @@ public final class UpdateCheck {
                 List.of(), offer.changelog());
         try {
             return this.write(version);
+        } catch (Downloads.DownloadStopped e) {
+            throw e;
         } catch (IOException e) {
             LOGGER.info("[Hotwire] {} was not at {}; asking Modrinth where it is", offer.fileName(), offer.url());
             return this.write(this.client.findVersion(offer.versionId()));
@@ -322,7 +324,7 @@ public final class UpdateCheck {
         try {
             Files.createDirectories(this.folder);
             Path jar = this.folder.resolve(version.fileName().replaceAll("[^A-Za-z0-9._+ -]", "_"));
-            this.client.fetchTo(version, jar, done -> told.advance(job, done));
+            this.client.fetchTo(version, jar, told.feedOf(job));
             told.end(job, true);
             return jar;
         } catch (IOException | RuntimeException e) {

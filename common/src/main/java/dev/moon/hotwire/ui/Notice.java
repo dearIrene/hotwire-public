@@ -1,6 +1,7 @@
 package dev.moon.hotwire.ui;
 
-public record Notice(Kind kind, String title, String detail, String key, float progress, float restSeconds) {
+public record Notice(Kind kind, String title, String detail, String key, float progress, float restSeconds, int job,
+        boolean paused) {
     static final float REST = 4.5f;
 
     public enum Kind {
@@ -17,6 +18,10 @@ public record Notice(Kind kind, String title, String detail, String key, float p
         }
     }
 
+    public Notice(Kind kind, String title, String detail, String key, float progress, float restSeconds) {
+        this(kind, title, detail, key, progress, restSeconds, 0, false);
+    }
+
     public Notice(Kind kind, String title, String detail, String key) {
         this(kind, title, detail, key, -1, 0);
     }
@@ -26,7 +31,7 @@ public record Notice(Kind kind, String title, String detail, String key, float p
     }
 
     public Notice makeResting(float seconds) {
-        return new Notice(this.kind, this.title, this.detail, this.key, this.progress, seconds);
+        return new Notice(this.kind, this.title, this.detail, this.key, this.progress, seconds, this.job, this.paused);
     }
 
     public static Notice ofDone(String title, String detail) {
@@ -47,6 +52,11 @@ public record Notice(Kind kind, String title, String detail, String key, float p
 
     public static Notice ofProgress(String title, String detail, String key, float progress) {
         return new Notice(Kind.ON, title, detail, key, Math.max(0, Math.min(1, progress)));
+    }
+
+    static Notice ofDownload(String title, String detail, String key, float progress, int job, boolean paused) {
+        return new Notice(paused ? Kind.ASK : Kind.ON, title, detail, key, Math.max(0, Math.min(1, progress)), 0, job,
+                paused);
     }
 
     float findRest() {

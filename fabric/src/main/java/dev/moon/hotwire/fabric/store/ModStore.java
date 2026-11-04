@@ -151,6 +151,9 @@ public final class ModStore {
             List<Path> jars = this.fetchAll(all);
             List<String> projects = all.stream().map(ModrinthClient.Version::projectId).toList();
             client.execute(() -> onJars.accept(jars, projects));
+        } catch (Downloads.DownloadStopped e) {
+            LOGGER.info("[Hotwire] the download of {} was stopped", title);
+            client.execute(() -> onFailure.accept(""));
         } catch (IOException e) {
             LOGGER.info("[Hotwire] the store could not get {}: {}", title, e.toString());
             client.execute(() -> onFailure.accept(Lang.get("hotwire.store.download_failed", title,
@@ -210,9 +213,18 @@ public final class ModStore {
     private List<Path> fetchAll(List<ModrinthClient.Version> versions) throws IOException {
         Downloads downloads = this.model.getDownloads();
         List<Callable<Path>> fetches = new ArrayList<>();
+        List<Integer> jobs = new ArrayList<>();
         for (ModrinthClient.Version version : versions) {
             int job = downloads.begin(version.fileName(), version.size());
-            fetches.add(() -> this.fetchJar(version, job));
+            jobs.add(job);
+            fetches.add(() -> {
+                try {
+                    return this.fetchJar(version, job);
+                } catch (Downloads.DownloadStopped e) {
+                    jobs.forEach(Downloads::stop);
+                    throw e;
+                }
+            });
         }
         return runAtOnce(fetches);
     }
@@ -223,7 +235,7 @@ public final class ModStore {
         try {
             Files.createDirectories(this.downloads);
             Path jar = this.downloads.resolve(version.fileName().replaceAll("[^A-Za-z0-9._+ -]", "_"));
-            this.model.getClient().fetchTo(version, jar, done -> downloads.advance(job, done));
+            this.model.getClient().fetchTo(version, jar, downloads.feedOf(job));
             downloads.end(job, true);
             return jar;
         } catch (IOException | RuntimeException e) {

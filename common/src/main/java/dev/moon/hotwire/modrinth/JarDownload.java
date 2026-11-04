@@ -32,6 +32,8 @@ final class JarDownload {
     private static final int TRIES = 7;
     private static final Duration STALL = Duration.ofSeconds(15);
 
+    private static final long LOOK_MILLIS = 200;
+
     private static final Semaphore CONNECTIONS = new Semaphore(8);
 
     private final HttpClient http;
@@ -78,6 +80,7 @@ final class JarDownload {
                 reached = at.get();
                 tried = 0;
             }
+            awaitGo(onBytes);
             try {
                 if (tried > 0) {
                     Thread.sleep(1000L << (tried - 1));
@@ -92,6 +95,10 @@ final class JarDownload {
                 last = new IOException(url + " stopped at byte " + at.get() + " of " + size);
             } catch (IOException e) {
                 last = e;
+
+                if (isHeld(onBytes)) {
+                    tried = -1;
+                }
             } finally {
                 CONNECTIONS.release();
             }
@@ -115,12 +122,16 @@ final class JarDownload {
         try {
             while (true) {
                 try {
-                    HttpResponse<Long> response = pending.get(1, TimeUnit.SECONDS);
+                    HttpResponse<Long> response = pending.get(LOOK_MILLIS, TimeUnit.MILLISECONDS);
                     if (response.body() < 0) {
                         throw new IOException("Modrinth answered " + response.statusCode() + " for " + url);
                     }
                     return;
                 } catch (TimeoutException e) {
+                    if (isHeld(onBytes)) {
+                        pending.cancel(true);
+                        throw new IOException("held at byte " + at.get(), e);
+                    }
                     if (System.nanoTime() - heard.get() > STALL.toNanos()) {
                         pending.cancel(true);
                         throw new IOException("nothing of " + url + " arrived for " + STALL.toSeconds()
@@ -135,6 +146,16 @@ final class JarDownload {
             Thread.currentThread().interrupt();
             throw new IOException("interrupted", e);
         }
+    }
+
+    private static void awaitGo(LongConsumer onBytes) throws IOException {
+        if (onBytes instanceof Downloads.Feed feed) {
+            feed.awaitGo();
+        }
+    }
+
+    private static boolean isHeld(LongConsumer onBytes) {
+        return onBytes instanceof Downloads.Feed feed && feed.isHeld();
     }
 
     private static final class IntoFile implements HttpResponse.BodySubscriber<Long> {

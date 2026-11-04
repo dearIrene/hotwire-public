@@ -9,6 +9,20 @@ public final class Root {
     private final Element menus = new Element();
     private final Element modal = new Element();
     private final FrameClock clock = new FrameClock();
+
+    private final DownloadsPanel downloads = new DownloadsPanel(this::closeDownloads);
+
+    public Root() {
+        this.modal.add(this.downloads);
+    }
+
+    public void openDownloads() {
+        this.downloads.present();
+    }
+
+    private void closeDownloads() {
+        this.downloads.dismiss();
+    }
     private List<Element> hoverPath = List.of();
     private @Nullable Element pressed;
     private @Nullable Element focus;
@@ -29,6 +43,7 @@ public final class Root {
         this.base.setBounds(0, 0, width, height);
         this.menus.setBounds(0, 0, width, height);
         this.modal.setBounds(0, 0, width, height);
+        this.downloads.setBounds(0, 0, width, height);
         this.menus.getChildren().stream().filter(Element::open).forEach(Element::dismiss);
     }
 
@@ -154,6 +169,16 @@ public final class Root {
             }
         }
         return false;
+    }
+
+    public List<String> describePanels() {
+        List<String> found = new ArrayList<>();
+        for (Element element : this.getModal().getChildren()) {
+            if (element instanceof Panel panel && panel.isVisible()) {
+                found.add(panel.getClass().getSimpleName() + " open=" + panel.open() + " reading=" + panel.isReading());
+            }
+        }
+        return found;
     }
 
     public boolean pressOpenPanel() {
