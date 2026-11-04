@@ -1,5 +1,6 @@
 package dev.moon.hotwire.fabric.registration;
 
+import dev.moon.hotwire.fabric.ModViews;
 import java.lang.reflect.Field;
 import java.lang.reflect.Method;
 import java.util.ArrayList;
@@ -19,6 +20,7 @@ public final class OneConfigHuds {
     private static final Logger LOGGER = LoggerFactory.getLogger(OneConfigHuds.class);
     private static final String MANAGER = "org.polyfrost.oneconfig.api.hud.v1.HudManager";
     private static final int WAIT_SECONDS = 5;
+    private static final String EDITOR = "org.polyfrost.oneconfig.internal.ui.compose.impls.HudEditorUIScreen";
 
     private record Removal(Class<?> manager, List<Map.Entry<Integer, Object>> huds, Map<Object, Object> providers)
             implements TakeoutRecord.Entry {
@@ -55,6 +57,7 @@ public final class OneConfigHuds {
         @Override
         public void run() {
             invalidate(Objects.requireNonNull(findManager()));
+            dropEditorScene();
         }
     }
 
@@ -86,6 +89,7 @@ public final class OneConfigHuds {
         Class<?> manager = Objects.requireNonNull(findManager());
         List<Object> huds = findHuds(manager);
         Map<Object, Object> providers = findProviders(manager);
+        boolean changed = false;
         for (String mod : mods) {
             List<Map.Entry<Integer, Object>> removed = new ArrayList<>();
             for (int at = 0; at < huds.size(); at++) {
@@ -109,8 +113,12 @@ public final class OneConfigHuds {
             }
             kinds.keySet().forEach(providers::remove);
             LOGGER.info("[Hotwire] {}'s {} OneConfig HUDs are taken out while it is off", mod, removed.size());
+            changed = true;
         }
         invalidate(manager);
+        if (changed) {
+            dropEditorScene();
+        }
     }
 
     private static boolean isOfMod(Object hud, String mod) {
@@ -178,10 +186,14 @@ public final class OneConfigHuds {
             Method setRevision = manager.getDeclaredMethod("setRevision", int.class);
             setRevision.setAccessible(true);
             setRevision.invoke(instance, (int) manager.getMethod("getRevision").invoke(instance) + 1);
-            Object instances = manager.getMethod("getInstancesRevision").invoke(instance);
             Class<?> state = Class.forName("androidx.compose.runtime.MutableIntState", false, manager.getClassLoader());
-            state.getMethod("setIntValue", int.class).invoke(instances, (int) state.getMethod("getIntValue")
-                    .invoke(instances) + 1);
+            for (Method getter : manager.getMethods()) {
+                if (getter.getName().equals("getInstancesRevision")) {
+                    Object counter = getter.invoke(instance);
+                    state.getMethod("setIntValue", int.class).invoke(counter, (int) state.getMethod("getIntValue")
+                            .invoke(counter) + 1);
+                }
+            }
             Method notify = manager.getDeclaredMethod("notifyRegistrationChanged");
             notify.setAccessible(true);
             notify.invoke(instance);
@@ -191,6 +203,25 @@ public final class OneConfigHuds {
             LOGGER.debug("[Hotwire] this OneConfig's HUD editor has no revision counters to move");
         } catch (ReflectiveOperationException | RuntimeException e) {
             LOGGER.warn("[Hotwire] OneConfig's HUD editor could not be told of the change", e);
+        }
+    }
+
+    @SuppressWarnings("ReferenceEquality")
+    private static void dropEditorScene() {
+        try {
+            Class<?> editor = Class.forName(EDITOR, false, OneConfigHuds.class.getClassLoader());
+            Field instance = editor.getDeclaredField("instance");
+            instance.setAccessible(true);
+            Object screen = instance.get(null);
+            if (screen == null || screen == ModViews.openScreen()) {
+                return;
+            }
+            Method dispose = editor.getSuperclass().getDeclaredMethod("disposeScene");
+            dispose.setAccessible(true);
+            dispose.invoke(screen);
+            LOGGER.info("[Hotwire] OneConfig's HUD editor makes its scene again for the HUD kinds as they are now");
+        } catch (ReflectiveOperationException | RuntimeException | LinkageError e) {
+            LOGGER.debug("[Hotwire] this OneConfig's HUD editor keeps no scene to drop: {}", e.toString());
         }
     }
 }
