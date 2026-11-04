@@ -25,6 +25,10 @@ public final class ModJarReader {
     private ModJarReader() {
     }
 
+    public static java.util.Set<String> readMixinTargets(byte[] bytes) {
+        return PatchScanner.readTargets(bytes);
+    }
+
     public static ModJar read(Path jar) throws ModJarException {
         return read(jar, null);
     }

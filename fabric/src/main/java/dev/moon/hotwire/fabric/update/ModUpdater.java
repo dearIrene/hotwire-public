@@ -54,6 +54,7 @@ import org.slf4j.LoggerFactory;
 public final class ModUpdater {
     private final UpdatePlans updatePlans = new UpdatePlans(this);
     private final UpdateClashes updateClashes = new UpdateClashes(this);
+    private final UpdateCopies updateCopies = new UpdateCopies(this);
     public sealed interface Result {
         record Updated(String id, String name, UpdatePlan plan, ApplyResult applied, String stay) implements Result {
         }
@@ -343,6 +344,10 @@ public final class ModUpdater {
         return this.updatePlans;
     }
 
+    UpdateCopies getCopies() {
+        return this.updateCopies;
+    }
+
     UpdateClashes getClashes() {
         return this.updateClashes;
     }
@@ -358,6 +363,7 @@ public final class ModUpdater {
         SwitchTimes.begin();
         try {
             this.wideners.clear();
+            this.updateCopies.forgetBatch();
             return new UpdateBatch(this, this.live).run(jars, alone, instead);
         } finally {
             this.plans.clear();

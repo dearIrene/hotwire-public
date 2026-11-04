@@ -388,6 +388,10 @@ final class PatchScanner {
     private record Mixin(Set<String> targets, boolean hook, boolean callbacksOnly, boolean fieldsSetUp) {
     }
 
+    static Set<String> readTargets(byte[] bytes) {
+        return read(bytes, "", Refmap.NONE).targets();
+    }
+
     private static Mixin read(byte[] bytes, String mixin, Refmap refmap) {
         Set<String> targets = new TreeSet<>();
         boolean[] pseudo = {false};

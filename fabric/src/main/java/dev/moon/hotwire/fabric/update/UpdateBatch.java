@@ -3,12 +3,15 @@ package dev.moon.hotwire.fabric.update;
 import dev.moon.hotwire.concurrent.Parallel;
 import dev.moon.hotwire.fabric.ModPolicy;
 import dev.moon.hotwire.jar.ModManifest;
+import dev.moon.hotwire.jar.ModJarReader;
 import dev.moon.hotwire.redefine.RebuildException;
 import dev.moon.hotwire.switching.ModMixins;
 import dev.moon.hotwire.switching.SwitchTimes;
 import dev.moon.hotwire.ui.UpdateMethod;
 import dev.moon.hotwire.update.JarLinks;
+import dev.moon.hotwire.update.UpdatePlan;
 import java.io.IOException;
+import java.io.InputStream;
 import java.nio.file.Path;
 import java.util.ArrayList;
 import java.util.Collections;
@@ -22,6 +25,8 @@ import java.util.TreeSet;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.function.BiFunction;
 import java.util.function.Function;
+import java.util.zip.ZipEntry;
+import java.util.zip.ZipFile;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -199,14 +204,22 @@ final class UpdateBatch {
             boolean modNamed = inPlace.stream().anyMatch(planned -> isNamed(planned, blamed));
             boolean ownNamed = inPlace.stream().anyMatch(planned -> !Collections.disjoint(blamed,
                     findOwnClasses(planned)));
+
+            boolean changedNamed = !ownNamed && inPlace.stream().anyMatch(planned -> !Collections.disjoint(blamed,
+                    this.findChangedTargets(planned)));
             for (int i = 0; i < inPlace.size(); i++) {
                 ModUpdater.SortResult.Planned planned = inPlace.get(i);
                 Set<String> named = ownNamed ? findOwnClasses(planned)
+                        : changedNamed ? this.findChangedTargets(planned)
                         : ModMixins.of(planned.read(), ModPolicy.getSide()).targets();
                 if (modNamed ? isNamed(planned, blamed) : !Collections.disjoint(blamed, named)) {
                     atFault.add(i);
                     if (part.reopenFixes()) {
                         this.updater.tryAfterWorld(jars.get(inPlaceAt.get(i)));
+                    }
+
+                    if (modNamed || (part.isRestartOnly() && !ownNamed)) {
+                        this.updater.getCopies().refuseCopies(planned.manifest().id());
                     }
                 }
             }
@@ -226,6 +239,33 @@ final class UpdateBatch {
         }
         LOGGER.info("[Hotwire] the updates in place could not go in together; {} go on", inPlace.size());
         return !atFault.isEmpty();
+    }
+
+    private final Map<Path, Set<String>> changedTargets = new HashMap<>();
+
+    private Set<String> findChangedTargets(ModUpdater.SortResult.Planned planned) {
+        return this.changedTargets.computeIfAbsent(planned.jar(), jar -> {
+            Set<String> targets = new HashSet<>();
+            addChangedTargets(jar, planned.whole().plan(), targets);
+            planned.whole().bundled().forEach(carried -> addChangedTargets(carried.incoming(), carried.plan(),
+                    targets));
+            return targets;
+        });
+    }
+
+    private static void addChangedTargets(Path jar, UpdatePlan plan, Set<String> into) {
+        try (ZipFile zip = new ZipFile(jar.toFile())) {
+            for (UpdatePlan.ClassAction action : plan.actions()) {
+                ZipEntry entry = zip.getEntry(action.className() + ".class");
+                if (entry != null) {
+                    try (InputStream in = zip.getInputStream(entry)) {
+                        into.addAll(ModJarReader.readMixinTargets(in.readAllBytes()));
+                    }
+                }
+            }
+        } catch (IOException e) {
+            LOGGER.info("[Hotwire] {} could not be read through: {}", jar.getFileName(), e.toString());
+        }
     }
 
     private static boolean isNamed(ModUpdater.SortResult.Planned planned, Set<String> blamed) {
