@@ -255,7 +255,7 @@ final class LiveObjects {
         }
 
         if (!prepared.replayed().isEmpty()) {
-            OffWindowObjects.awaitCollection();
+            OffWindowObjects.pruneAll();
         }
         SwitchTimes.mark("replay: collection");
         AtomicInteger failed = new AtomicInteger();
