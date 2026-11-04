@@ -95,12 +95,27 @@ import net.fabricmc.loader.api.FabricLoader;
 import net.fabricmc.loader.api.ModContainer;
 import net.fabricmc.loader.impl.metadata.LoaderModMetadata;
 import net.minecraft.client.Minecraft;
+import net.minecraft.client.multiplayer.ClientLevel;
+import net.minecraft.server.MinecraftServer;
+import net.minecraft.server.level.ServerLevel;
 import net.minecraft.server.packs.resources.SimpleReloadInstance;
+import net.minecraft.world.entity.Entity;
 import org.jspecify.annotations.Nullable;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 final class EngineStart {
+    @SuppressWarnings("ReferenceEquality")
+    private static boolean isOfClosedWorld(Object made) {
+        return switch (made) {
+            case MinecraftServer server -> server.isStopped();
+            case ServerLevel level -> level.getServer().isStopped();
+            case ClientLevel level -> level != Minecraft.getInstance().level;
+            case Entity entity -> entity.level() != null && isOfClosedWorld(entity.level());
+            default -> false;
+        };
+    }
+
     private static final Logger LOGGER = LoggerFactory.getLogger(EngineStart.class);
     private static volatile @Nullable Path cacheFolder;
     private static final StackWalker STACK = StackWalker.getInstance();
@@ -288,6 +303,7 @@ final class EngineStart {
                 mixin::getGeneratedBy);
         InitHookReplay.writeStaticsWith(fieldReferences::writeStatic);
         HandlerGuards.replayWith(GameHold::onGameAndWait);
+        OffWindowObjects.setRetired(EngineStart::isOfClosedWorld);
         StaticCopies.readClassesWith(instrumentation);
         ReplacedStatics.swapWith(replaced -> {
             LiveConnections.swap(replaced);

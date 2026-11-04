@@ -12,6 +12,7 @@ import java.util.Set;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.TimeUnit;
 import java.util.function.BooleanSupplier;
+import java.util.function.Predicate;
 import org.jspecify.annotations.Nullable;
 
 public final class OffWindowObjects {
@@ -21,6 +22,7 @@ public final class OffWindowObjects {
     private static final Set<String> RECORDING = ConcurrentHashMap.newKeySet();
 
     private static volatile BooleanSupplier reloading = () -> false;
+    private static volatile Predicate<Object> isRetired = made -> false;
 
     private static final long COLLECTION_WAIT_NANOS = TimeUnit.SECONDS.toNanos(2);
 
@@ -47,9 +49,18 @@ public final class OffWindowObjects {
 
         void prune() {
             this.purge();
-            this.live.removeIf(reference -> reference.refersTo(null));
-            this.reloaded.removeIf(reference -> reference.refersTo(null));
+            this.live.removeIf(OffWindowObjects::isGone);
+            this.reloaded.removeIf(OffWindowObjects::isGone);
         }
+    }
+
+    public static void setRetired(Predicate<Object> retired) {
+        isRetired = retired;
+    }
+
+    private static boolean isGone(Reference<Object> reference) {
+        Object made = reference.get();
+        return made == null || isRetired.test(made);
     }
 
     public static void setReloading(BooleanSupplier now) {
