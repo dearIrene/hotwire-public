@@ -13,6 +13,9 @@ import java.util.IdentityHashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
+import java.util.concurrent.ExecutionException;
+import java.util.concurrent.TimeUnit;
+import java.util.concurrent.TimeoutException;
 import net.minecraft.client.Minecraft;
 import net.minecraft.client.multiplayer.ClientPacketListener;
 import net.minecraft.client.server.IntegratedServer;
@@ -89,6 +92,35 @@ public final class LiveConnections {
         LOGGER.info("[Hotwire] {} of the open connections' copies of statics made again took the new ones ({} objects"
                 + " in {} ms)", swapped, seen.size(), (System.nanoTime() - began) / 1_000_000);
     }
+
+    public static void drain() {
+        List<Object> roots = new ArrayList<>();
+        Minecraft game = Minecraft.getInstance();
+        ClientPacketListener listener = game.getConnection();
+        if (listener != null) {
+            roots.add(listener.getConnection());
+        }
+        IntegratedServer server = game.getSingleplayerServer();
+        if (server != null && server.getConnection() != null) {
+            roots.addAll(server.getConnection().getConnections());
+        }
+        for (Object connection : roots) {
+            Channel channel = findChannel(connection);
+            if (channel == null || !channel.isOpen() || channel.eventLoop().inEventLoop()) {
+                continue;
+            }
+            try {
+                channel.eventLoop().submit(channel::flush).get(DRAIN_WAIT_MILLIS, TimeUnit.MILLISECONDS);
+            } catch (InterruptedException e) {
+                Thread.currentThread().interrupt();
+                return;
+            } catch (ExecutionException | TimeoutException e) {
+                LOGGER.info("[Hotwire] a connection's queue was not drained before the hold: {}", e.toString());
+            }
+        }
+    }
+
+    private static final long DRAIN_WAIT_MILLIS = 500;
 
     private static @Nullable Channel findChannel(Object connection) {
         for (FieldSlots.Slot slot : Fields.getReferenceFields(connection.getClass(), false)) {

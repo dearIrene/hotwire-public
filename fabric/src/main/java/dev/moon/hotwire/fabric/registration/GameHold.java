@@ -219,17 +219,18 @@ public final class GameHold {
 
     public static boolean isOverBudget() {
         long since = parkedSince;
-        return HOLDING.get() && !unbudgeted && since != 0 && System.nanoTime() - since > BUDGET.toNanos();
+        return HOLDING.get() && !UNBUDGETED.get() && since != 0 && System.nanoTime() - since > BUDGET.toNanos();
     }
 
-    private static volatile boolean unbudgeted;
+    private static final ThreadLocal<Boolean> UNBUDGETED = ThreadLocal.withInitial(() -> false);
 
     public static <T> T runUnbudgeted(Supplier<T> work) {
-        unbudgeted = true;
+        boolean before = UNBUDGETED.get();
+        UNBUDGETED.set(true);
         try {
             return work.get();
         } finally {
-            unbudgeted = false;
+            UNBUDGETED.set(before);
         }
     }
 
@@ -245,6 +246,7 @@ public final class GameHold {
         boolean begun = false;
         try {
             hold.pauseThreads(client);
+            LiveConnections.drain();
             parkedSince = System.nanoTime();
             for (Runnable work = AT_NEXT_HOLD.poll(); work != null; work = AT_NEXT_HOLD.poll()) {
                 work.run();
