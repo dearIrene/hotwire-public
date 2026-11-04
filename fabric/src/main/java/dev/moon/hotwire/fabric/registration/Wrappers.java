@@ -42,6 +42,10 @@ final class Wrappers {
     private @Nullable String reachedMod;
     private boolean isOfTwo;
 
+    void forgetObjects() {
+        this.barren.clear();
+    }
+
     private Set<String> targets = Set.of();
     private List<String> targetsFor = List.of();
 

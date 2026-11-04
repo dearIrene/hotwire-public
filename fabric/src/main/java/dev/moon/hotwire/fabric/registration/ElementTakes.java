@@ -49,6 +49,72 @@ final class ElementTakes {
         };
     }
 
+    interface ElementTake<C> {
+        void take(C container, Object element, String owner);
+    }
+
+    static <C> Consumer<String> makeWeak(C container, Object element, ElementTake<C> take) {
+        WeakReference<Object> held = new WeakReference<>(element);
+        return makeWeak(container, (now, owner) -> {
+            Object one = held.get();
+            if (one != null) {
+                take.take(now, one, owner);
+            }
+        });
+    }
+
+    static Supplier<@Nullable String> askWeak(Object element, Function<Object, @Nullable String> asked) {
+        WeakReference<Object> held = new WeakReference<>(element);
+        return () -> {
+            Object one = held.get();
+            return one == null ? null : asked.apply(one);
+        };
+    }
+
+    interface EntryTake<C> {
+        void take(C container, Object key, Object value, String owner);
+    }
+
+    interface EntryAsk {
+        @Nullable String ask(@Nullable Object key, @Nullable Object value);
+    }
+
+    private static @Nullable WeakReference<Object> hold(@Nullable Object one) {
+        return one == null ? null : new WeakReference<>(one);
+    }
+
+    private static boolean isGone(@Nullable WeakReference<Object> held) {
+        return held != null && held.refersTo(null);
+    }
+
+    private static @Nullable Object read(@Nullable WeakReference<Object> held) {
+        return held == null ? null : held.get();
+    }
+
+    @SuppressWarnings("NullAway")
+    static <C> Consumer<String> makeWeakEntry(C container, @Nullable Object key, @Nullable Object value,
+            EntryTake<C> take) {
+        WeakReference<Object> heldKey = hold(key);
+        WeakReference<Object> heldValue = hold(value);
+        return makeWeak(container, (now, owner) -> {
+            Object oneKey = read(heldKey);
+            Object oneValue = read(heldValue);
+            if (!isGone(heldKey) && !isGone(heldValue)) {
+                take.take(now, oneKey, oneValue, owner);
+            }
+        });
+    }
+
+    static Supplier<@Nullable String> askWeakEntry(@Nullable Object key, @Nullable Object value, EntryAsk asked) {
+        WeakReference<Object> heldKey = hold(key);
+        WeakReference<Object> heldValue = hold(value);
+        return () -> {
+            Object oneKey = read(heldKey);
+            Object oneValue = read(heldValue);
+            return isGone(heldKey) || isGone(heldValue) ? null : asked.ask(oneKey, oneValue);
+        };
+    }
+
     interface TwoStepTake {
         void askAhead();
     }

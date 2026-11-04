@@ -17,6 +17,10 @@ final class TakeCandidates {
 
     private @Nullable CandidateReach reach;
 
+    void forgetObjects() {
+        this.reach = null;
+    }
+
     private static final boolean VERIFY = Boolean.parseBoolean(System.getProperty("hotwire.verifyCandidates"));
     private int differed;
 
