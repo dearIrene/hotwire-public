@@ -310,7 +310,6 @@ public final class ModSwitcher {
             SwitchPlan.Reason why = plan.why().get(id);
             String cause = switch (why) {
                 case SwitchPlan.Reason.DependsOn on -> on.mod();
-                case SwitchPlan.Reason.PatchesClassOf patch -> patch.mod();
                 case SwitchPlan.Reason.NestedIn nested -> nested.container();
                 case SwitchPlan.Reason.Ships ships -> ships.nested();
                 case null, default -> null;
@@ -478,8 +477,6 @@ public final class ModSwitcher {
                 case SwitchPlan.Reason.Asked asked -> Lang.get("hotwire.progress.why.asked");
                 case SwitchPlan.Reason.DependsOn depends -> Lang.get("hotwire.progress.why.depends",
                         this.nameOf(depends.mod()));
-                case SwitchPlan.Reason.PatchesClassOf patches -> Lang.get("hotwire.progress.why.patches",
-                        this.nameOf(patches.mod()));
                 case SwitchPlan.Reason.NestedIn nested -> Lang.get("hotwire.progress.why.nested",
                         this.nameOf(nested.container()));
                 case SwitchPlan.Reason.Ships ships -> Lang.get("hotwire.progress.why.ships",

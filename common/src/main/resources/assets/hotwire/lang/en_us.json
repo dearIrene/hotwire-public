@@ -286,7 +286,6 @@
   "hotwire.progress.finishing_mods": "Finishing %s mods",
   "hotwire.progress.why.asked": "you picked it",
   "hotwire.progress.why.depends": "needs %s",
-  "hotwire.progress.why.patches": "changes %s's code",
   "hotwire.progress.why.nested": "inside %s's jar",
   "hotwire.progress.why.ships": "carries %s",
   "hotwire.progress.why.needed_by": "needed by %s",

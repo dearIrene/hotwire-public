@@ -130,8 +130,6 @@ public final class ReportWriter {
         return switch (reason) {
             case Reason.Asked asked -> "asked for";
             case Reason.DependsOn depends -> "depends on " + this.report.nameOf(depends.mod());
-            case Reason.PatchesClassOf patches -> "patches " + patches.className() + " of "
-                    + this.report.nameOf(patches.mod());
             case Reason.NestedIn nested -> "nested in " + this.report.nameOf(nested.container());
             case Reason.Ships ships -> "ships " + this.report.nameOf(ships.nested()) + " in its own jar";
             case Reason.NeededBy needed -> "needed by " + this.report.nameOf(needed.mod());

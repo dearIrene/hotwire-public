@@ -33,9 +33,6 @@ public record SwitchPlan(Direction direction, List<String> order, Map<String, Re
         record DependsOn(String mod) implements Reason {
         }
 
-        record PatchesClassOf(String mod, String className) implements Reason {
-        }
-
         record NestedIn(String container) implements Reason {
         }
 

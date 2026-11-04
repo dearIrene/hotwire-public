@@ -91,10 +91,7 @@ public final class SwitchPlanner {
                 for (String container : this.graph.getContainers(leavingMod)) {
                     grew |= this.join(leaving, alreadyOff, container, new Reason.Ships(leavingMod));
                 }
-                for (Map.Entry<String, String> patcher : this.graph.getPatchersOf(leavingMod).entrySet()) {
-                    grew |= this.join(leaving, alreadyOff, patcher.getKey(),
-                            new Reason.PatchesClassOf(leavingMod, patcher.getValue()));
-                }
+
                 for (String child : this.graph.getChildrenOf(leavingMod)) {
                     if (alreadyOff.contains(child) || leaving.containsKey(child)) {
                         continue;
