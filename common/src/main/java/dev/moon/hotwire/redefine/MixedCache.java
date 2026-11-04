@@ -117,6 +117,9 @@ final class MixedCache {
     static final Map<byte[], CacheKey> SHAPES = Collections.synchronizedMap(new WeakHashMap<>());
 
     private static final @Nullable String KEY_DUMP = System.getProperty("hotwire.cacheKeyDump");
+    private final AtomicLong missedNoEntry = new AtomicLong();
+    private final AtomicLong missedReads = new AtomicLong();
+    private final AtomicLong missedPack = new AtomicLong();
 
     private static synchronized void dumpKey(String line) {
         try {
@@ -173,17 +176,20 @@ final class MixedCache {
         }
         byte[] listed = this.store.get(key, null);
         if (listed == null) {
+            this.missedNoEntry.incrementAndGet();
             return null;
         }
         try (DataInputStream in = new DataInputStream(new ByteArrayInputStream(listed))) {
             CacheKey reads = new CacheKey(in.readLong(), in.readLong());
             if (!this.isHolding(reads)) {
+                this.missedReads.incrementAndGet();
                 return null;
             }
             List<CacheKey> used = new ArrayList<>();
             used.add(key);
             ClassPacks.Read read = this.packs.get(new CacheKey(in.readLong(), in.readLong()), original, used);
             if (read == null) {
+                this.missedPack.incrementAndGet();
                 return null;
             }
             byte[] mixed = read.bytes();
@@ -242,6 +248,7 @@ final class MixedCache {
             for (int count = in.readInt(); count > 0; count--) {
                 String name = in.readUTF();
                 if (this.hashOf(name, this.copy.findReadable(name)) != in.readLong()) {
+                    LOGGER.info("[Hotwire] the switch cache's saved read of {} no longer holds", name);
                     return false;
                 }
             }
@@ -397,7 +404,8 @@ final class MixedCache {
     }
 
     String describe() {
-        return this.store.describe();
+        return this.store.describe() + ", missed by no entry " + this.missedNoEntry + ", by reads " + this.missedReads
+                + ", by pack " + this.missedPack;
     }
 
     CacheStore getStore() {
