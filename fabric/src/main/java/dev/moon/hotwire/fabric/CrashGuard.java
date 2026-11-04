@@ -1,6 +1,7 @@
 package dev.moon.hotwire.fabric;
 
 import dev.moon.hotwire.concurrent.Tasks;
+import dev.moon.hotwire.fabric.registration.GameHold;
 import dev.moon.hotwire.fabric.add.WorldReopen;
 import dev.moon.hotwire.fabric.registration.GameRegistrations;
 import dev.moon.hotwire.redefine.HandlerGuards;
@@ -117,7 +118,7 @@ public final class CrashGuard {
         ActionJournal.Entry journal = ActionJournal.get().begin(ActionJournal.Action.CRASH_OFF, mod);
         SwitchRunner.CheckedResult result;
         try {
-            result = off.get();
+            result = GameHold.runUnbudgeted(off);
         } catch (RuntimeException e) {
             journal.endThrown();
             throw e;
