@@ -24,6 +24,7 @@ import java.util.Set;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.CopyOnWriteArrayList;
+import java.util.concurrent.TimeUnit;
 import java.util.function.BiConsumer;
 import java.util.function.BiFunction;
 import java.util.function.Function;
@@ -152,7 +153,13 @@ public final class CrashGuard {
 
     public static void onSwitched(Collection<String> ids) {
         SWITCHED.addAll(ids);
+        lastSwitched = List.copyOf(ids);
+        lastSwitchedAt = System.nanoTime();
     }
+
+    private static volatile List<String> lastSwitched = List.of();
+    private static volatile long lastSwitchedAt;
+    private static final long AFTER_SWITCH_NANOS = TimeUnit.SECONDS.toNanos(30);
 
     static void setMixinOwners(Function<String, @Nullable String> owner) {
         mixinOwner = owner;
@@ -176,7 +183,16 @@ public final class CrashGuard {
             }
         }
         CallerOwner.Owner owner = GameRegistrations.findOwnerOf(frames);
-        return owner == null ? null : owner.mod();
+        if (owner != null) {
+            return owner.mod();
+        }
+        List<String> recent = lastSwitched;
+        if (!recent.isEmpty() && System.nanoTime() - lastSwitchedAt < AFTER_SWITCH_NANOS) {
+            LOGGER.warn("[Hotwire] the game's own code threw within 30 s of {}'s switch, with no mod in the trace:"
+                    + " taken as that switch's", recent);
+            return recent.getFirst();
+        }
+        return null;
     }
 
     private static List<StackTraceElement> findFramesAbove(Throwable thrown) {

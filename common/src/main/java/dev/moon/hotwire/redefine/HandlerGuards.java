@@ -546,10 +546,10 @@ public final class HandlerGuards {
         try {
             standIn = standIns.make();
         } catch (ReflectiveOperationException | RuntimeException e) {
-            LOGGER.warn("[Hotwire] {}.{} {} has no stand-in and is called direct: {}", owner.getName(), name, type,
-                    e.toString());
+            LOGGER.warn("[Hotwire] {}.{} {} has no stand-in and answers nothing while off: {}", owner.getName(),
+                    name, type, e.toString());
             markUnflippable(owner.getName().replace('.', '/'), mixin, "stand-in failed to link");
-            return new ConstantCallSite(handler);
+            standIn = MethodHandles.empty(type);
         }
         synchronized (LOCK) {
             MutableCallSite site = new MutableCallSite(OFF.contains(mixin) ? standIn : handler);
