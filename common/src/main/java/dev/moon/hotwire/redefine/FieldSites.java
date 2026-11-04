@@ -338,6 +338,19 @@ final class FieldSites {
         INITS.computeIfAbsent(mixin, any -> new ArrayList<>()).add(new Init(className, setUp));
     }
 
+    private static boolean hasOtherOff(String className, String mixin) {
+        for (Map.Entry<String, List<Init>> entry : INITS.entrySet()) {
+            if (!entry.getKey().equals(mixin) && HandlerGuards.isOff(entry.getKey())) {
+                for (Init init : entry.getValue()) {
+                    if (init.className().equals(className)) {
+                        return true;
+                    }
+                }
+            }
+        }
+        return false;
+    }
+
     static void replay(Set<String> mixins) {
         for (String mixin : mixins) {
             for (Init init : INITS.getOrDefault(mixin, List.of())) {
@@ -356,7 +369,10 @@ final class FieldSites {
                 if (!made.isEmpty()) {
                     LOGGER.info("[Hotwire] {} objects of {} made while {} was off were given its setup, {} failed",
                             made.size(), init.className(), mixin, failed);
-                    OffWindowObjects.forget(init.className());
+
+                    if (!hasOtherOff(init.className(), mixin)) {
+                        OffWindowObjects.forget(init.className());
+                    }
                 }
             }
         }

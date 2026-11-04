@@ -97,7 +97,7 @@ public final class TripwireSites {
     }
 
     private static final Set<String> NEVER_GATED = Set.of("<init>", "<clinit>", "equals", "hashCode", "toString",
-            "compareTo", "finalize");
+            "compareTo", "compare", "finalize");
 
     private static boolean isGated(MethodNode method) {
         int sort = Type.getReturnType(method.desc).getSort();

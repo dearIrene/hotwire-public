@@ -1,7 +1,10 @@
 package dev.moon.hotwire.fabric.rebuild;
 
+import dev.moon.hotwire.redefine.Tripwire;
 import dev.moon.hotwire.fabric.add.LivePlugins;
 import dev.moon.hotwire.jvm.PrivateField;
+import java.util.concurrent.ConcurrentHashMap;
+import java.util.Map;
 import java.util.List;
 import java.util.Objects;
 import org.jspecify.annotations.Nullable;
@@ -30,12 +33,25 @@ public final class LivePluginShapes {
         if (!(plugin instanceof IMixinConfigPlugin live)) {
             return null;
         }
+
+        String question = config + ' ' + target + ' ' + mixin;
+        Boolean kept = ANSWERED.get(question);
+        if (kept != null) {
+            return kept;
+        }
+        if (Tripwire.isOfOffMod(live.getClass())) {
+            return null;
+        }
         try {
-            return live.shouldApplyMixin(target, mixin);
+            Boolean answer = live.shouldApplyMixin(target, mixin);
+            ANSWERED.put(question, answer);
+            return answer;
         } catch (RuntimeException | LinkageError e) {
             return null;
         }
     }
+
+    private static final Map<String, Boolean> ANSWERED = new ConcurrentHashMap<>();
 
     public static @Nullable Object findByPackage(String mixinPackage) {
         String wanted = trim(mixinPackage);
