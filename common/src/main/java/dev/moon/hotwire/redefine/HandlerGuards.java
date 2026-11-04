@@ -64,6 +64,11 @@ public final class HandlerGuards {
             HandlerGuards.class.getName().replace('.', '/'), "bootstrap",
             MethodType.methodType(CallSite.class, MethodHandles.Lookup.class, String.class, MethodType.class,
                     String.class, int.class, int.class, int.class).toMethodDescriptorString(), false);
+
+    static final Handle BOOTSTRAP_CONSTRUCTOR = new Handle(Opcodes.H_INVOKESTATIC,
+            HandlerGuards.class.getName().replace('.', '/'), "bootstrapConstructor",
+            MethodType.methodType(CallSite.class, MethodHandles.Lookup.class, String.class, MethodType.class,
+                    String.class, int.class).toMethodDescriptorString(), false);
     static final Handle BOOTSTRAP_REDIRECT = new Handle(Opcodes.H_INVOKESTATIC,
             HandlerGuards.class.getName().replace('.', '/'), "bootstrapRedirect",
             MethodType.methodType(CallSite.class, MethodHandles.Lookup.class, String.class, MethodType.class,
@@ -494,6 +499,15 @@ public final class HandlerGuards {
                 () -> HandlerStandIns.make(caller, type, kind, index, isStatic == STATIC ? 0 : 1));
     }
 
+    public static CallSite bootstrapConstructor(MethodHandles.Lookup caller, String name, MethodType type,
+            String mixin, int isStatic) throws ReflectiveOperationException {
+        Class<?> owner = caller.lookupClass();
+        MethodHandle handler = isStatic == VIRTUAL ? caller.findVirtual(owner, name, type.dropParameterTypes(0, 1))
+                : caller.findSpecial(owner, name, type.dropParameterTypes(0, 1), owner);
+        return link(caller, name, type, mixin, isStatic,
+                () -> SkippedConstructorCalls.makeStandIn(mixin, handler, type));
+    }
+
     public static CallSite bootstrapRedirect(MethodHandles.Lookup caller, String name, MethodType type, String mixin,
             int isStatic, int opcode, String owner, String target, String desc) throws ReflectiveOperationException {
         return link(caller, name, type, mixin, isStatic, () -> RedirectStandIns.makeStandIn(caller, type,
@@ -569,6 +583,7 @@ public final class HandlerGuards {
         }
         if (!off) {
             FieldSites.replay(mixins);
+            SkippedConstructorCalls.replay(mixins);
         }
         LOGGER.info("[Hotwire] {} handler sites of {} mixins now call {}", changed.size(), mixins.size(),
                 off ? "their stand-ins" : "their handlers");

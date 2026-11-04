@@ -166,8 +166,10 @@ final class HandlerSites {
                     HandlerGuards.markUnflippable(internalName, mixin, "no stand-in" + why);
                     continue;
                 }
-                method.instructions.set(call, new InvokeDynamicInsnNode(call.name, desc, HandlerGuards.BOOTSTRAP, mixin,
-                        how, kind, index.getAsInt() + (isStatic ? 0 : 1)));
+                method.instructions.set(call, method.name.equals("<init>") && !isStatic
+                        ? new InvokeDynamicInsnNode(call.name, desc, HandlerGuards.BOOTSTRAP_CONSTRUCTOR, mixin, how)
+                        : new InvokeDynamicInsnNode(call.name, desc, HandlerGuards.BOOTSTRAP, mixin, how, kind,
+                                index.getAsInt() + (isStatic ? 0 : 1)));
                 guarded.add(mixin);
             }
         }
