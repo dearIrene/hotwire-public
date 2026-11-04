@@ -1,7 +1,5 @@
 package dev.moon.hotwire.redefine;
 
-import java.lang.management.GarbageCollectorMXBean;
-import java.lang.management.ManagementFactory;
 import java.lang.ref.Reference;
 import java.lang.ref.ReferenceQueue;
 import java.lang.ref.WeakReference;
@@ -10,7 +8,6 @@ import java.util.List;
 import java.util.Map;
 import java.util.Set;
 import java.util.concurrent.ConcurrentHashMap;
-import java.util.concurrent.TimeUnit;
 import java.util.function.BooleanSupplier;
 import org.jspecify.annotations.Nullable;
 
@@ -19,10 +16,6 @@ public final class OffWindowObjects {
     private static final Map<String, ClassRecord> MADE = new ConcurrentHashMap<>();
 
     private static final Set<String> RECORDING = ConcurrentHashMap.newKeySet();
-    private static final long COLLECTION_WAIT_NANOS = TimeUnit.SECONDS.toNanos(2);
-
-    @SuppressWarnings("unused")
-    private static volatile @Nullable Object sink;
 
     private static volatile BooleanSupplier reloading = () -> false;
 
@@ -139,28 +132,6 @@ public final class OffWindowObjects {
     }
 
     public static void awaitCollection() {
-        boolean anyLive = false;
-        for (ClassRecord of : MADE.values()) {
-            anyLive |= !of.live.isEmpty();
-        }
-        if (!anyLive) {
-            return;
-        }
-        long before = countCollections();
-        System.gc();
-        long deadline = System.nanoTime() + COLLECTION_WAIT_NANOS;
-        while (countCollections() == before && System.nanoTime() < deadline) {
-            sink = new byte[1 << 20];
-        }
-        sink = null;
         MADE.values().forEach(ClassRecord::prune);
-    }
-
-    private static long countCollections() {
-        long count = 0;
-        for (GarbageCollectorMXBean collector : ManagementFactory.getGarbageCollectorMXBeans()) {
-            count += Math.max(0, collector.getCollectionCount());
-        }
-        return count;
     }
 }
