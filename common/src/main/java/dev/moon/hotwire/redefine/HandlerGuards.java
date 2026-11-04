@@ -17,6 +17,7 @@ import java.util.Set;
 import java.util.WeakHashMap;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.atomic.AtomicLong;
+import java.util.function.Consumer;
 import java.util.function.Function;
 import org.jspecify.annotations.Nullable;
 import org.objectweb.asm.ClassReader;
@@ -582,13 +583,21 @@ public final class HandlerGuards {
             CHUNK_FLIPS.incrementAndGet();
         }
         if (!off) {
-            FieldSites.replay(mixins);
-            SkippedConstructorCalls.replay(mixins);
+            onGameThread.accept(() -> {
+                FieldSites.replay(mixins);
+                SkippedConstructorCalls.replay(mixins);
+            });
         }
         LOGGER.info("[Hotwire] {} handler sites of {} mixins now call {}", changed.size(), mixins.size(),
                 off ? "their stand-ins" : "their handlers");
         return changed.size();
     }
+
+    public static void replayWith(Consumer<Runnable> gameThread) {
+        onGameThread = gameThread;
+    }
+
+    private static volatile Consumer<Runnable> onGameThread = Runnable::run;
 
     public static boolean isOff(String mixin) {
         synchronized (LOCK) {

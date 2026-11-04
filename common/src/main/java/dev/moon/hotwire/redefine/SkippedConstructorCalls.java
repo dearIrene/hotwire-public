@@ -5,6 +5,7 @@ import java.lang.invoke.MethodHandles;
 import java.lang.invoke.MethodType;
 import java.lang.ref.WeakReference;
 import java.util.ArrayList;
+import java.util.Arrays;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
@@ -17,6 +18,7 @@ final class SkippedConstructorCalls {
     private static final Logger LOGGER = LoggerFactory.getLogger(SkippedConstructorCalls.class);
 
     private static final int CAP = 1 << 17;
+    private static final int PURGE_EVERY = 1 << 12;
     private static final MethodHandle RECORD;
     private static final Map<String, List<Call>> CALLS = new ConcurrentHashMap<>();
 
@@ -32,8 +34,7 @@ final class SkippedConstructorCalls {
     private SkippedConstructorCalls() {
     }
 
-    private record Call(MethodHandle handler, WeakReference<Object> object,
-            List<@Nullable WeakReference<Object>> arguments) {
+    private record Call(MethodHandle handler, WeakReference<Object> object, List<@Nullable Object> arguments) {
     }
 
     static MethodHandle makeStandIn(String mixin, MethodHandle handler, MethodType type) {
@@ -48,10 +49,11 @@ final class SkippedConstructorCalls {
             if (calls.size() >= CAP) {
                 return;
             }
-            List<@Nullable WeakReference<Object>> rest = new ArrayList<>(arguments.length - 1);
-            for (int at = 1; at < arguments.length; at++) {
-                rest.add(arguments[at] == null ? null : new WeakReference<>(arguments[at]));
+
+            if (calls.size() % PURGE_EVERY == PURGE_EVERY - 1) {
+                calls.removeIf(call -> call.object().refersTo(null));
             }
+            List<@Nullable Object> rest = new ArrayList<>(Arrays.asList(arguments).subList(1, arguments.length));
             calls.add(new Call(handler, new WeakReference<>(arguments[0]), rest));
         }
     }
@@ -72,16 +74,7 @@ final class SkippedConstructorCalls {
                     }
                     List<@Nullable Object> arguments = new ArrayList<>(call.arguments().size() + 1);
                     arguments.add(object);
-                    boolean gone = false;
-                    for (WeakReference<Object> argument : call.arguments()) {
-                        Object value = argument == null ? null : argument.get();
-                        gone |= argument != null && value == null;
-                        arguments.add(value);
-                    }
-                    if (gone) {
-                        failed++;
-                        continue;
-                    }
+                    arguments.addAll(call.arguments());
                     try {
                         call.handler().invokeWithArguments(arguments);
                         run++;

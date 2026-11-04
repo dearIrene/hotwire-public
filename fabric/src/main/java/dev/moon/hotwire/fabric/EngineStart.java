@@ -287,6 +287,7 @@ final class EngineStart {
                         .map(jar -> jar.patches().patches()).orElse(Set.of()), mod -> findHandedTo(mod, installed),
                 mixin::getGeneratedBy);
         InitHookReplay.writeStaticsWith(fieldReferences::writeStatic);
+        HandlerGuards.replayWith(GameHold::onGameAndWait);
         StaticCopies.readClassesWith(instrumentation);
         ReplacedStatics.swapWith(replaced -> {
             LiveConnections.swap(replaced);
