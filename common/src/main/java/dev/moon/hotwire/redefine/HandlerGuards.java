@@ -561,6 +561,9 @@ public final class HandlerGuards {
     }
 
     public static int setOff(Set<String> mixins, boolean off) {
+        if (mixins.isEmpty()) {
+            return 0;
+        }
         List<MutableCallSite> changed = new ArrayList<>();
         boolean chunks = false;
         synchronized (LOCK) {

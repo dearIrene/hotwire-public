@@ -169,11 +169,14 @@ final class GuardFlips {
     }
 
     int setSites(Plan plan, Set<String> onAfter) {
-        int sites = 0;
-        for (Map.Entry<String, Set<String>> flip : plan.flips().entrySet()) {
-            sites += HandlerGuards.setOff(flip.getValue(), !onAfter.contains(flip.getKey()));
-        }
-        return sites;
+        return setAll(plan, onAfter, true);
+    }
+
+    private static int setAll(Plan plan, Set<String> onAfter, boolean asPlanned) {
+        Set<String> off = new LinkedHashSet<>();
+        Set<String> on = new LinkedHashSet<>();
+        plan.flips().forEach((id, mixins) -> (onAfter.contains(id) == asPlanned ? on : off).addAll(mixins));
+        return HandlerGuards.setOff(off, true) + HandlerGuards.setOff(on, false);
     }
 
     final class Sites {
@@ -210,9 +213,7 @@ final class GuardFlips {
     }
 
     void restoreSites(Plan plan, Set<String> onAfter) {
-        for (Map.Entry<String, Set<String>> flip : plan.flips().entrySet()) {
-            HandlerGuards.setOff(flip.getValue(), onAfter.contains(flip.getKey()));
-        }
+        setAll(plan, onAfter, false);
     }
 
     SwitchApplier.ApplyResult flip(Plan plan, Set<String> switched, Set<String> onAfter, Runnable release,
