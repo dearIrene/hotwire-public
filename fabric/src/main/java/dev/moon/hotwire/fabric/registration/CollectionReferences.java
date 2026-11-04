@@ -358,7 +358,8 @@ final class CollectionReferences implements FixedLists.Walk {
                     this.readStatic(field, value, game);
                 }
             }
-            if (notes != null) {
+
+            if (notes != null && every) {
                 notes.markStaticsRead(owner);
             }
             this.report.time(ownerBegan, owner.getName());
@@ -578,8 +579,9 @@ final class CollectionReferences implements FixedLists.Walk {
 
     private void collectWithin(Object value) {
         CollectionNotes notes = ElementLook.isLooking() ? this.look.getNotes() : null;
-        if (notes != null && !NO_PRINTS && !this.staticsAlone && notes.isReadBy(value, this.reader)
-                && notes.isUnchanged(value)) {
+
+        if (notes != null && !NO_PRINTS && !this.staticsAlone && !notes.isBeingRead(value)
+                && notes.isReadBy(value, this.reader) && notes.isUnchanged(value)) {
             return;
         }
         this.readChanging(value, this::collectOnce);

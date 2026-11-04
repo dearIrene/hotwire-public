@@ -209,6 +209,12 @@ final class CollectionNotes {
     }
 
     @SuppressWarnings("ReferenceEquality")
+    synchronized boolean isBeingRead(Object container) {
+        Frame top = this.open.peek();
+        return top != null && top.container == container;
+    }
+
+    @SuppressWarnings("ReferenceEquality")
     synchronized void end(Object container, boolean completed) {
         Frame frame = this.open.peek();
         if (frame == null || frame.container != container) {
@@ -234,7 +240,8 @@ final class CollectionNotes {
         } else {
             note.readByEvery |= this.every;
             long now = this.printing && note.readByEvery ? Fingerprints.of(container) : Fingerprints.UNKNOWN;
-            note.print = now == frame.print ? now : Fingerprints.UNKNOWN;
+
+            note.print = now != frame.print || (!this.every && now != note.print) ? Fingerprints.UNKNOWN : now;
             if (frame.now.isEmpty() && !isCollection(container)) {
                 this.remove(container, note);
                 return;
