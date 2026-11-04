@@ -17,6 +17,7 @@ import java.util.Map;
 import java.util.NoSuchElementException;
 import java.util.Objects;
 import java.util.Set;
+import java.util.concurrent.ConcurrentHashMap;
 import java.util.function.Function;
 import java.util.function.Predicate;
 import java.util.stream.Stream;
@@ -61,10 +62,14 @@ final class LoadedCheckAnswers {
     private volatile Set<String> everyFor = Set.of();
     private volatile @Nullable CheckSites every;
 
+    private Set<Class<?>> everyRead = Set.of();
+
     void readForEvery(Collection<String> mods, @Nullable ConstantPools pools) {
         if (pools != null && !mods.isEmpty()) {
-            this.every = this.find(mods, pools, type -> true);
+            Set<Class<?>> read = ConcurrentHashMap.newKeySet();
+            this.every = this.find(mods, pools, read::add);
             this.everyFor = Set.copyOf(mods);
+            this.everyRead = read;
         }
     }
 
@@ -85,7 +90,7 @@ final class LoadedCheckAnswers {
         if (read != null && this.aheadFor.equals(Set.copyOf(mods))) {
             found = read;
         } else if (all != null && this.everyFor.containsAll(mods)) {
-            found = all;
+            found = this.catchUp(all, pools);
         } else {
             found = this.find(mods, pools, others);
         }
@@ -111,6 +116,27 @@ final class LoadedCheckAnswers {
             LOGGER.info("[Hotwire] what {} worked out from whether {} is there now agrees with its {}: {}",
                     changed.size(), mods, off ? "off" : "on", changed);
         }
+    }
+
+    private CheckSites catchUp(CheckSites all, ConstantPools pools) {
+        Set<Class<?>> read = this.everyRead;
+        Set<Class<?>> loadedSince = ConcurrentHashMap.newKeySet();
+        CheckSites more = this.find(this.everyFor, pools, type -> !read.contains(type) && loadedSince.add(type));
+        if (loadedSince.isEmpty()) {
+            return all;
+        }
+        read.addAll(loadedSince);
+        Map<String, List<FoundAsk>> asks = new HashMap<>(all.asks());
+        more.asks().forEach((mod, found) -> asks.merge(mod, found, (had, added) -> {
+            List<FoundAsk> both = new ArrayList<>(had);
+            both.addAll(added);
+            return both;
+        }));
+        List<Class<?>> lookers = new ArrayList<>(all.lookers());
+        lookers.addAll(more.lookers());
+        CheckSites merged = new CheckSites(asks, lookers);
+        this.every = merged;
+        return merged;
     }
 
     private CheckSites find(Collection<String> mods, ConstantPools pools, Predicate<Class<?>> others) {
