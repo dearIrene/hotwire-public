@@ -28,8 +28,12 @@ final class ElementTakes {
     private ElementTakes() {
     }
 
-    record NotedTake(Supplier<@Nullable String> whose, Consumer<String> take, @Nullable Set<String> candidates)
-            implements Runnable {
+    record NotedTake(Supplier<@Nullable String> whose, Consumer<String> take, @Nullable Set<String> candidates,
+            @Nullable Set<String> calledThrough) implements Runnable {
+        NotedTake(Supplier<@Nullable String> whose, Consumer<String> take, @Nullable Set<String> candidates) {
+            this(whose, take, candidates, null);
+        }
+
         @Override
         public void run() {
             String now = this.whose.get();
@@ -191,10 +195,16 @@ final class ElementTakes {
         Set<String> unchangedKinds = new TreeSet<>();
         @Nullable RuntimeException first = null;
         IdentityHashMap<Object, long[]> spent = new IdentityHashMap<>();
+
+        Set<Object> fixed = Collections.newSetFromMap(new IdentityHashMap<>());
         long began = System.nanoTime();
         for (int at = 0; at < prepared.takes().size(); at++) {
             Runnable take = prepared.takes().get(at);
             Object container = prepared.containers().get(at);
+            if (fixed.contains(container)) {
+                unchanged++;
+                continue;
+            }
             String owner = prepared.owners().get(at);
             long before = System.nanoTime();
             try {
@@ -212,6 +222,9 @@ final class ElementTakes {
                 }
             } catch (UnsupportedOperationException | IllegalStateException e) {
                 unchanged++;
+                if (e instanceof UnsupportedOperationException) {
+                    fixed.add(container);
+                }
                 StackTraceElement top = e.getStackTrace().length == 0 ? null : e.getStackTrace()[0];
                 unchangedKinds.add(top == null ? e.toString() : top.getClassName());
             } catch (RuntimeException e) {

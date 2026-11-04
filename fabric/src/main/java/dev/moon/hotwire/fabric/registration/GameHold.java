@@ -38,7 +38,7 @@ public final class GameHold {
 
     private static volatile long parkedSince;
 
-    private static final Duration BUDGET = Duration.ofMillis(Long.getLong("hotwire_hold_budget_millis", 3000));
+    private static final Duration BUDGET = Duration.ofMillis(Long.getLong("hotwire_hold_budget_millis", 30_000));
 
     private final List<CountDownLatch> released = new ArrayList<>();
     private @Nullable CountDownLatch game;

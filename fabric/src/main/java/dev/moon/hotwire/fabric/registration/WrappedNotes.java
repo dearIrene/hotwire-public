@@ -18,8 +18,9 @@ final class WrappedNotes {
 
     void noteWrappedInside(Object holder, int steps) {
         CollectionNotes notes = ElementLook.isLooking() ? this.owner.look.getNotes() : null;
+        Set<String> was = this.owner.enter(holder);
         if (notes != null) {
-            notes.begin(holder, CollectionNotes.Origin.of(this.owner.readingStaticsOf));
+            notes.begin(holder, CollectionNotes.Origin.of(this.owner.readingStaticsOf), this.owner.getReader());
             notes.markWrapped(holder, steps);
         }
         try {
@@ -28,6 +29,7 @@ final class WrappedNotes {
             if (notes != null) {
                 notes.end(holder, true);
             }
+            this.owner.leave(was);
         }
     }
 
@@ -45,7 +47,7 @@ final class WrappedNotes {
                 continue;
             }
             String mod = GameRegistrations.findModOrShipper(value.getClass());
-            if (mod == null && steps > 1 && !Wrappers.isOfAnotherMod(value.getClass()) && this.owner.seen.add(value)) {
+            if (mod == null && steps > 1 && !Wrappers.isOfAnotherMod(value.getClass()) && this.owner.visit(value)) {
                 this.noteWrappedInside(value, steps - 1);
                 continue;
             }
@@ -88,7 +90,7 @@ final class WrappedNotes {
         for (FieldSlots.Slot field : Fields.getReferenceFields(type, false)) {
             Object captured = CollectionParts.read(field, item);
             if (captured != null && captured.getClass().getName().startsWith("net.minecraft.")
-                    && this.owner.seen.add(captured)) {
+                    && this.owner.visit(captured)) {
                 this.owner.lookInto(captured);
             }
         }

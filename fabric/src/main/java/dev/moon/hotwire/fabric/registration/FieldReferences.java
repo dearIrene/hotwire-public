@@ -47,8 +47,6 @@ public final class FieldReferences {
 
     private static final Logger LOGGER = LoggerFactory.getLogger(FieldReferences.class);
 
-    private static final int MOST_TAKES_IN_HOLD = 100_000;
-
     record Replacement(FieldSlots.Slot field, @Nullable Object holder, Object modsValue, Object put) {
     }
 
@@ -149,6 +147,10 @@ public final class FieldReferences {
         }
     }
 
+    public void takeRevealedBy(Collection<String> mods) {
+        this.elements.takeRevealed(mods);
+    }
+
     public void takeOutElementsAgain(Collection<String> mods, Predicate<String> on) {
         LoadedClasses scan = this.findLoaded(mods);
         SwitchTimes.mark("look: classes");
@@ -172,16 +174,6 @@ public final class FieldReferences {
             }
         }
         this.elements.readAlone(List.copyOf(every), statics, List.of());
-    }
-
-    public boolean isOverHoldBudget(Collection<String> mods) {
-        if (Minecraft.getInstance().level == null || !this.elements.look.isReadyFor(mods)
-                || !this.elements.prepare(List.copyOf(mods)) || this.elements.countPlanned() <= MOST_TAKES_IN_HOLD) {
-            return false;
-        }
-        LOGGER.info("[Hotwire] {} noted takes for {} are more than a hold removes in its budget: refused ahead",
-                this.elements.countPlanned(), mods);
-        return true;
     }
 
     public void forgetClosedWorld() {
@@ -270,7 +262,7 @@ public final class FieldReferences {
         }
 
         boolean answered = !every && this.elements.look.isReadyFor(mods)
-                && (this.elements.isPreparedFor(mods) || this.elements.prepare(List.copyOf(mods)));
+                && this.elements.prepare(List.copyOf(mods));
         SwitchTimes.mark("takes answered");
         Set<String> targets = new HashSet<>();
         mods.forEach(mod -> targets.addAll(this.mixinTargets.apply(mod)));

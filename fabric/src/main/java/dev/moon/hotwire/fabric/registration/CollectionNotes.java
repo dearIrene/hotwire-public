@@ -2,6 +2,7 @@ package dev.moon.hotwire.fabric.registration;
 
 import com.google.common.collect.MapMaker;
 import dev.moon.hotwire.redefine.FieldSlots;
+import dev.moon.hotwire.redefine.Tripwire;
 import dev.moon.hotwire.registration.Fingerprints;
 import java.lang.ref.Reference;
 import java.lang.ref.ReferenceQueue;
@@ -18,6 +19,7 @@ import java.util.List;
 import java.util.Map;
 import java.util.Set;
 import java.util.concurrent.ConcurrentHashMap;
+import java.util.function.Predicate;
 import org.jspecify.annotations.Nullable;
 
 final class CollectionNotes {
@@ -32,10 +34,11 @@ final class CollectionNotes {
         private final long print;
         private final Origin origin;
         private final boolean ofWorld;
+        private final Set<String> readers;
         private int wrapped;
 
         private Frame(Object container, @Nullable Note note, List<Runnable> before, List<Runnable> now, boolean fresh,
-                long print, Origin origin, boolean ofWorld) {
+                long print, Origin origin, boolean ofWorld, Set<String> readers) {
             this.container = container;
             this.note = note;
             this.before = before;
@@ -44,6 +47,7 @@ final class CollectionNotes {
             this.print = print;
             this.origin = origin;
             this.ofWorld = ofWorld;
+            this.readers = readers;
         }
     }
 
@@ -66,6 +70,8 @@ final class CollectionNotes {
         private boolean filed = true;
 
         private boolean readByEvery;
+
+        private Set<String> readers = TakeReach.NOBODY;
 
         private int wrapped;
 
@@ -163,7 +169,7 @@ final class CollectionNotes {
     }
 
     @SuppressWarnings("ReferenceEquality")
-    synchronized void begin(Object container, Origin origin) {
+    synchronized void begin(Object container, Origin origin, Set<String> readers) {
         if (origin.staticsOf() != null && origin.field() != null && origin.field().isStatic()) {
             this.staticsReached.computeIfAbsent(origin.staticsOf(), any -> ConcurrentHashMap.newKeySet())
                     .add(origin.field().getDeclaringClass());
@@ -195,10 +201,11 @@ final class CollectionNotes {
             note.takes = left;
             note.origin = origin;
             note.ofWorld |= this.inWorld;
+            note.readers = TakeReach.union(note.readers, readers);
         }
         long print = this.printed == container ? this.printedAs : Fingerprints.of(container);
         this.printed = null;
-        this.open.push(new Frame(container, note, before, left, fresh, print, origin, this.inWorld));
+        this.open.push(new Frame(container, note, before, left, fresh, print, origin, this.inWorld, readers));
     }
 
     @SuppressWarnings("ReferenceEquality")
@@ -219,6 +226,7 @@ final class CollectionNotes {
             note = new Note(container, frame.origin, this.gone);
             note.ofWorld = frame.ofWorld;
             note.wrapped = frame.wrapped;
+            note.readers = frame.readers;
             this.notes.put(container, note);
         }
         if (!completed) {
@@ -268,6 +276,11 @@ final class CollectionNotes {
     synchronized List<Runnable> findTakesFor(Collection<String> mods, boolean all, List<Object> containers) {
         this.dropCleared();
         List<Runnable> found = new ArrayList<>();
+        Predicate<String> off = mod -> mods.contains(mod) || Tripwire.isWatched(mod);
+
+        IdentityHashMap<Set<String>, Boolean> unread = new IdentityHashMap<>();
+        IdentityHashMap<Set<String>, Boolean> uncalled = new IdentityHashMap<>();
+        this.lastLeft = 0;
         for (Note note : this.order) {
             Object container = note.findFiled();
             if (container == null) {
@@ -275,22 +288,71 @@ final class CollectionNotes {
             }
             Set<String> under = note.under;
             if (all || under == null || under.contains(ANY) || !Collections.disjoint(under, mods)) {
-                addFor(found, containers, container, note.takes, mods, all);
+                boolean reachable = all || !unread.computeIfAbsent(note.readers,
+                        readers -> TakeReach.isAllOff(readers, off));
+                this.addFor(found, containers, container, note.takes, mods, all, reachable, uncalled, off);
             }
         }
-        addFor(found, containers, NOWHERE, this.nowhere, mods, all);
+        this.addFor(found, containers, NOWHERE, this.nowhere, mods, all, true, uncalled, off);
         return found;
     }
 
-    private static void addFor(List<Runnable> found, List<Object> containers, Object container, List<Runnable> takes,
-            Collection<String> mods, boolean all) {
+    private void addFor(List<Runnable> found, List<Object> containers, Object container, List<Runnable> takes,
+            Collection<String> mods, boolean all, boolean reachable, IdentityHashMap<Set<String>, Boolean> uncalled,
+            Predicate<String> off) {
         for (Runnable take : takes) {
             if (all || !(take instanceof ElementTakes.NotedTake filed) || filed.candidates() == null
                     || !Collections.disjoint(filed.candidates(), mods)) {
+                if (!reachable && take instanceof ElementTakes.NotedTake filed && filed.calledThrough() != null
+                        && uncalled.computeIfAbsent(filed.calledThrough(),
+                                one -> TakeReach.isCallableOnlyByOff(one, off))) {
+                    this.lastLeft++;
+                    continue;
+                }
                 found.add(take);
                 containers.add(container);
             }
         }
+    }
+
+    private int lastLeft;
+
+    synchronized int countLastLeft() {
+        return this.lastLeft;
+    }
+
+    synchronized List<Runnable> findTakesRevealed(Collection<String> coming, List<Object> containers) {
+        this.dropCleared();
+        Predicate<String> before = mod -> coming.contains(mod) || Tripwire.isWatched(mod);
+        Predicate<String> after = mod -> !coming.contains(mod) && Tripwire.isWatched(mod);
+        List<Runnable> found = new ArrayList<>();
+        for (Note note : this.order) {
+            Object container = note.findFiled();
+            if (container == null || note.takes.isEmpty() || !TakeReach.isAllOff(note.readers, before)) {
+                continue;
+            }
+            boolean stillUnread = TakeReach.isAllOff(note.readers, after);
+            for (Runnable take : note.takes) {
+                if (take instanceof ElementTakes.NotedTake filed && filed.calledThrough() != null
+                        && TakeReach.isCallableOnlyByOff(filed.calledThrough(), before)
+                        && !(stillUnread && TakeReach.isCallableOnlyByOff(filed.calledThrough(), after))
+                        && (filed.candidates() == null || filed.candidates().stream().anyMatch(after))) {
+                    found.add(take);
+                    containers.add(container);
+                }
+            }
+        }
+        return found;
+    }
+
+    synchronized Set<String> findReaders(Object container) {
+        Note note = this.notes.get(container);
+        return note == null || note.readers.isEmpty() ? TakeReach.GAME : note.readers;
+    }
+
+    synchronized boolean isReadBy(Object container, Set<String> readers) {
+        Note note = this.notes.get(container);
+        return note != null && !note.readers.isEmpty() && note.readers.equals(TakeReach.union(note.readers, readers));
     }
 
     synchronized List<Object> findContainers() {
@@ -318,29 +380,6 @@ final class CollectionNotes {
         }
         this.lastForAnyHold = forAnyHold;
         return found;
-    }
-
-    synchronized String countByOrigin(List<Object> containers, Collection<String> mods) {
-        int going = 0;
-        int staying = 0;
-        int game = 0;
-        Map<String, Integer> byMod = new HashMap<>();
-        for (Object container : containers) {
-            Note note = this.notes.get(container);
-            String of = note == null ? null : note.origin.staticsOf();
-            if (of == null) {
-                game++;
-            } else if (mods.contains(of)) {
-                going++;
-                byMod.merge(of, 1, Integer::sum);
-            } else {
-                staying++;
-            }
-        }
-        List<Map.Entry<String, Integer>> top = new ArrayList<>(byMod.entrySet());
-        top.sort(Map.Entry.<String, Integer>comparingByValue().reversed());
-        return going + " going too " + top.subList(0, Math.min(8, top.size())) + ", " + staying + " staying, " + game
-                + " the game's";
     }
 
     synchronized void forgetPrint(@Nullable Object container) {

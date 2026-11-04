@@ -60,6 +60,7 @@ public final class ModSwitcher {
 
     private final Object rebuilding = new Object();
 
+    private final Set<Set<String>> reopenedFamilies = ConcurrentHashMap.newKeySet();
     private final Set<Set<String>> worldBound = ConcurrentHashMap.newKeySet();
     private volatile boolean switched;
 
@@ -187,6 +188,14 @@ public final class ModSwitcher {
             }
             return ModSwitcher.this.dryRun(plan, offs) instanceof Result.Failed failed ? failed.cause() : null;
         }
+    }
+
+    public void noteFamilyReopened(Collection<String> family) {
+        this.reopenedFamilies.add(Set.copyOf(family));
+    }
+
+    public boolean isOnForReopen(Collection<String> family) {
+        return family.size() > 1 && this.applier.isInWorld() && this.reopenedFamilies.contains(Set.copyOf(family));
     }
 
     public void reopenToTurnOnWith(Predicate<String> tookFrom) {
@@ -512,7 +521,9 @@ public final class ModSwitcher {
     private Result run(SwitchPlan plan, Consumer<List<String>> theirs) {
         this.switched = true;
         this.switches.incrementAndGet();
-        if (ReopenChecks.touchesWorldBound(this.worldBound, plan.order()) && this.applier.isInWorld()) {
+        if ((ReopenChecks.touchesWorldBound(this.worldBound, plan.order())
+                || (plan.direction() == SwitchPlan.Direction.ON && this.isOnForReopen(plan.order())))
+                && this.applier.isInWorld()) {
             return this.runAlone(plan, theirs);
         }
         this.waiting = plan;
@@ -554,7 +565,8 @@ public final class ModSwitcher {
         try {
             this.progress.step(1, plan.order().isEmpty() ? "" : this.nameOf(plan.order().getFirst()));
             Set<String> onAfter = this.onAfter(plan, goingOff);
-            if (ReopenChecks.touchesWorldBound(this.worldBound, plan.order()) && this.applier.isInWorld()) {
+            if ((ReopenChecks.touchesWorldBound(this.worldBound, plan.order())
+                    || (!goingOff && this.isOnForReopen(plan.order()))) && this.applier.isInWorld()) {
                 throw RebuildException.ofWorldBuilt(plan.order() + " changed how this world's objects are built when"
                         + " it last switched: they are the world's, so it changes with the world saved and opened"
                         + " again", new IllegalStateException(String.valueOf(plan.order())));
@@ -590,6 +602,8 @@ public final class ModSwitcher {
 
                 if (failure.isWorldBuilt() && plan.order().size() == 1) {
                     this.worldBound.add(Set.copyOf(plan.order()));
+                } else if (failure.isWorldBuilt() && !goingOff) {
+                    this.noteFamilyReopened(plan.order());
                 }
                 if (stopped.get()) {
                     this.withGamePaused(() -> plan.order().forEach(this.registrations::restore));

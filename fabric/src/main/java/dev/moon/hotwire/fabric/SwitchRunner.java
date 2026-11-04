@@ -250,13 +250,6 @@ public final class SwitchRunner {
         ModelReloadCheck.readAheadUnlessStanding(wired);
         ResourceReload.onGoingOff(wired);
         try {
-            if (this.fieldReferences.isOverHoldBudget(wired)) {
-                this.switcher.hideProgress();
-                return new CheckedResult(new ModSwitcher.Result.Failed(plan, new RebuildException(plan.order()
-                        + " took longer than the hold's budget to take out of what others hold; it stays as it was,"
-                        + " and changes with the world saved and opened again", new IllegalStateException(
-                        String.valueOf(wired)), true)), new Report.OffCheck.NotRun(), List.of());
-            }
             result = this.switcher.turnOff(ids, order -> {
                 out.set(order);
                 GameHold hold = GameHold.begin(Minecraft.getInstance());
@@ -399,7 +392,8 @@ public final class SwitchRunner {
 
             ElementLook.markChanged(coming.order());
             AtomicBoolean putBack = new AtomicBoolean();
-            if (!coming.isRefused()) {
+            boolean toReopen = !coming.isRefused() && this.switcher.isOnForReopen(coming.order());
+            if (!coming.isRefused() && !toReopen) {
                 this.tripwire.offerDisarm(coming.order());
                 SwitchTimes.mark("disarm");
                 this.beforeOn.accept(coming.order());
@@ -436,7 +430,7 @@ public final class SwitchRunner {
                     this.looking.execute(() -> ElementLook.findAhead(this.fieldReferences, coming.order(),
                             this.switcher::isOn));
                 }
-            } else if (!coming.isRefused()) {
+            } else if (!coming.isRefused() && !toReopen) {
                 List<String> stillOff = coming.order().stream().filter(id -> !this.switcher.isOn(id)).toList();
                 if (allBack.get()) {
                     GameHold.runUnbudgeted(() -> {
@@ -497,6 +491,7 @@ public final class SwitchRunner {
 
                 this.plugins.putBack(order);
                 this.fieldReferences.putBackElements(order);
+                this.fieldReferences.takeRevealedBy(order);
                 GameTasks.onBack(order);
                 TakeoutRecord.restore(order, this.switcher::isOn);
 
