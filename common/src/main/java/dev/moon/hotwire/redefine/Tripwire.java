@@ -257,13 +257,18 @@ public final class Tripwire {
     }
 
     public static void runAsHotwire(Runnable work) {
-        boolean before = HOTWIRE_WORK.get();
-        HOTWIRE_WORK.set(true);
+        boolean before = markHotwireWork(true);
         try {
             work.run();
         } finally {
-            HOTWIRE_WORK.set(before);
+            markHotwireWork(before);
         }
+    }
+
+    public static boolean markHotwireWork(boolean on) {
+        boolean before = HOTWIRE_WORK.get();
+        HOTWIRE_WORK.set(on);
+        return before;
     }
 
     public static void pause(boolean pause) {
@@ -483,6 +488,10 @@ public final class Tripwire {
 
     public static boolean isWatched(String mod) {
         return CALLS.containsKey(mod);
+    }
+
+    public static @Nullable String findOwner(Class<?> type) {
+        return owner.apply(type);
     }
 
     public static boolean isOfOffMod(Class<?> type) {

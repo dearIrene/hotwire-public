@@ -1,5 +1,6 @@
 package dev.moon.hotwire.fabric.registration;
 
+import dev.moon.hotwire.redefine.Tripwire;
 import dev.moon.hotwire.fabric.ModViews;
 import dev.moon.hotwire.fabric.screen.HoldFrame;
 import java.time.Duration;
@@ -18,6 +19,7 @@ import java.util.concurrent.TimeUnit;
 import java.util.concurrent.TimeoutException;
 import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.concurrent.atomic.AtomicLong;
+import java.util.function.Supplier;
 import java.util.function.BooleanSupplier;
 import net.minecraft.client.Minecraft;
 import net.minecraft.server.MinecraftServer;
@@ -42,6 +44,8 @@ public final class GameHold {
     private @Nullable CountDownLatch game;
     private @Nullable CountDownLatch server;
     private final boolean owner;
+
+    private boolean hotwireWorkBefore;
 
     private GameHold(boolean owner) {
         this.owner = owner;
@@ -204,16 +208,29 @@ public final class GameHold {
             return;
         }
         HOLDING.set(true);
+        boolean before = Tripwire.markHotwireWork(true);
         try {
             work.run();
         } finally {
             HOLDING.set(false);
+            Tripwire.markHotwireWork(before);
         }
     }
 
     public static boolean isOverBudget() {
         long since = parkedSince;
-        return HOLDING.get() && since != 0 && System.nanoTime() - since > BUDGET.toNanos();
+        return HOLDING.get() && !unbudgeted && since != 0 && System.nanoTime() - since > BUDGET.toNanos();
+    }
+
+    private static volatile boolean unbudgeted;
+
+    public static <T> T runUnbudgeted(Supplier<T> work) {
+        unbudgeted = true;
+        try {
+            return work.get();
+        } finally {
+            unbudgeted = false;
+        }
     }
 
     public static GameHold begin(Minecraft client) {
@@ -223,6 +240,7 @@ public final class GameHold {
         HOLDING.set(true);
         holder = Thread.currentThread().getName();
         GameHold hold = new GameHold(true);
+        hold.hotwireWorkBefore = Tripwire.markHotwireWork(true);
 
         boolean begun = false;
         try {
@@ -342,6 +360,7 @@ public final class GameHold {
         if (this.owner) {
             HOLDING.set(false);
             parkedSince = 0;
+            Tripwire.markHotwireWork(this.hotwireWorkBefore);
         }
     }
 

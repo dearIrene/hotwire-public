@@ -16,6 +16,7 @@ import java.util.LinkedHashMap;
 import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Map;
+import java.util.Objects;
 import java.util.Set;
 import java.util.function.Supplier;
 import java.util.regex.Pattern;
@@ -237,11 +238,16 @@ final class ChangedStatics {
                 if (!changed && old != null) {
                     continue;
                 }
+
+                if (!InitHookReplay.isGameClass(type.getName().replace('.', '/')) && old != null
+                        && Objects.equals(Tripwire.findOwner(old.getClass()), Tripwire.findOwner(type))) {
+                    continue;
+                }
                 MethodHandle making = side.findStatic(side.lookupClass(), (changed ? PREFIX : FRESH_PREFIX)
                         + entry.getKey(), MethodType.methodType(field.getType()));
                 Object made = MethodHandleProxies.asInterfaceInstance(Supplier.class, making).get();
                 copyElements(old, made);
-                if (takeStateOf(field, old, made)) {
+                if (takeStateOf(field, old, made, replaced)) {
                     LOGGER.info("[Hotwire] {}.{} ({}) took in place what the setup the mods give it now made, so what"
                             + " holds it sees it too", type.getName(), entry.getKey(), old.getClass().getName());
                     continue;
@@ -276,8 +282,8 @@ final class ChangedStatics {
     }
 
     @SuppressWarnings("ReferenceEquality")
-    private static boolean takeStateOf(Field holder, @Nullable Object old, @Nullable Object made)
-            throws IllegalAccessException {
+    private static boolean takeStateOf(Field holder, @Nullable Object old, @Nullable Object made,
+            IdentityHashMap<Object, Object> replaced) throws IllegalAccessException {
         if (old == null || made == null || old == made || old.getClass() != made.getClass()
                 || old.getClass().isArray() || old.getClass().isHidden()) {
             return false;
@@ -302,7 +308,13 @@ final class ChangedStatics {
         }
         ReplacedStatics.noteInPlace(holder, old, before);
         for (Field field : fields) {
-            FinalWrites.write(field, old, field.get(made));
+            Object was = before.get(field);
+            Object now = field.get(made);
+            FinalWrites.write(field, old, now);
+
+            if (was != null && now != null && was != now && Tripwire.isOfOffMod(was.getClass())) {
+                replaced.put(was, now);
+            }
         }
         return true;
     }

@@ -203,9 +203,7 @@ public final class InitHookReplay {
         Map<String, String> recomputed = new LinkedHashMap<>(values.isEmpty() ? Map.of()
                 : ChangedStatics.add(now, values));
         ClassNode runs = RetainedInitializers.read(running);
-        if (isGameClass(name)) {
-            recomputed.putAll(ChangedStatics.addSwitched(now, runs));
-        }
+        recomputed.putAll(ChangedStatics.addSwitched(now, runs));
         if (original != null) {
             recomputed.putAll(ChangedStatics.addMadeFresh(now, RetainedInitializers.read(original), runs));
         }
@@ -234,7 +232,7 @@ public final class InitHookReplay {
                 lateObjectKeys, lateClassKeys));
     }
 
-    private static boolean isGameClass(String name) {
+    static boolean isGameClass(String name) {
         return name.startsWith("net/minecraft/") || name.startsWith("com/mojang/");
     }
 
@@ -242,8 +240,7 @@ public final class InitHookReplay {
         ClassNode now = new ClassNode();
         new ClassReader(mixed).accept(now, 0);
         ClassNode runs = RetainedInitializers.read(running);
-        Map<String, String> recomputed = new LinkedHashMap<>(isGameClass(now.name)
-                ? ChangedStatics.addSwitched(now, runs) : Map.of());
+        Map<String, String> recomputed = new LinkedHashMap<>(ChangedStatics.addSwitched(now, runs));
         if (original != null && ChangedStatics.hasAddedObjectStatics(mixed, original, running)) {
             recomputed.putAll(ChangedStatics.addMadeFresh(now, RetainedInitializers.read(original), runs));
         }
