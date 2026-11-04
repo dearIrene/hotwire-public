@@ -52,8 +52,12 @@ final class FinalReaders {
                 try {
                     instrumentation.retransformClasses(reader);
                 } catch (UnmodifiableClassException | RuntimeException | LinkageError again) {
-                    LOGGER.warn("[Hotwire] {} keeps the old value of a static it reads compiled in: {}",
-                            reader.getName(), again.toString());
+                    if (again instanceof ClassFormatError && reader.isRecord()) {
+                        LOGGER.info("[Hotwire] the JVM cannot read {} back: {}", reader.getName(), again.toString());
+                    } else {
+                        LOGGER.warn("[Hotwire] {} keeps the old value of a static it reads compiled in: {}",
+                                reader.getName(), again.toString());
+                    }
                 }
             }
         }
