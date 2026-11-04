@@ -5,6 +5,7 @@ import java.util.ArrayList;
 import java.util.Collection;
 import java.util.HashSet;
 import java.util.LinkedHashMap;
+import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
@@ -153,6 +154,16 @@ final class GuardFlips {
             why.forEach((target, reason) -> byWhy.computeIfAbsent(reason, any -> new ArrayList<>()).add(target));
             byWhy.forEach((reason, targets) -> LOGGER.info("[Hotwire] {} rebuilds {} classes for {}: {}", switched,
                     targets.size(), reason, targets.stream().limit(6).toList()));
+        }
+
+        for (String id : switched) {
+            ModMixins mixins = this.mods.get(id);
+            if (mixins != null && onAfter.contains(id)) {
+                Set<String> own = flips.computeIfAbsent(id, any -> new LinkedHashSet<>());
+                for (String mixin : mixins.owns()) {
+                    own.add(mixin.replace('/', '.'));
+                }
+            }
         }
         return new Plan(flips, rebuild, flipped);
     }
