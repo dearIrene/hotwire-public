@@ -15,6 +15,7 @@ import java.util.IdentityHashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
+import java.util.function.Predicate;
 import net.minecraft.client.Minecraft;
 import net.minecraft.server.MinecraftServer;
 import net.minecraft.world.entity.Entity;
@@ -43,27 +44,38 @@ public final class StaticCopies {
             return;
         }
         long began = System.nanoTime();
+        Class<?>[] types = LoadedClassList.of(reader);
+
+        int swapped = walk(types, replaced, NETWORK_STEPS, name -> name.startsWith("net.minecraft.network."));
+        swapped += walk(types, replaced, STEPS, StaticCopies::isWalked);
+        LOGGER.info("[Hotwire] {} copies of statics made again took the new ones ({} ms)", swapped,
+                (System.nanoTime() - began) / 1_000_000);
+    }
+
+    private static final int NETWORK_STEPS = 8;
+
+    private static int walk(Class<?>[] types, IdentityHashMap<Object, Object> replaced, int steps,
+            Predicate<String> walked) {
         Set<Object> seen = Collections.newSetFromMap(new IdentityHashMap<>());
         Deque<Object> step = new ArrayDeque<>();
         int swapped = 0;
-        int walked = 0;
-        for (Class<?> type : LoadedClassList.of(reader)) {
-            if (type.isArray() || type.isPrimitive() || !isWalked(type.getName())) {
+        int count = 0;
+        for (Class<?> type : types) {
+            if (type.isArray() || type.isPrimitive() || !walked.test(type.getName())) {
                 continue;
             }
             swapped += swapFields(type, null, replaced, step);
-            drawHoldFrame(++walked);
+            drawHoldFrame(++count);
         }
-        for (int depth = 0; depth < STEPS && !step.isEmpty() && seen.size() < MOST; depth++) {
+        for (int depth = 0; depth < steps && !step.isEmpty() && seen.size() < MOST; depth++) {
             Deque<Object> next = new ArrayDeque<>();
             while (!step.isEmpty() && seen.size() < MOST) {
                 swapped += swapIn(step.poll(), replaced, seen, next);
-                drawHoldFrame(++walked);
+                drawHoldFrame(++count);
             }
             step = next;
         }
-        LOGGER.info("[Hotwire] {} copies of statics made again took the new ones ({} objects in {} ms)", swapped,
-                seen.size(), (System.nanoTime() - began) / 1_000_000);
+        return swapped;
     }
 
     static void drawHoldFrame(int walked) {
