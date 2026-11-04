@@ -187,6 +187,7 @@ public final class SwitchApplier {
 
     void applyWhilePaused(ClassRebuilder.PreparedRebuild prepared, Runnable beforeChange, Runnable whilePaused,
             Set<String> flipped) throws RebuildException {
+        LiveObjects.checkWhilePaused(prepared);
         this.objectRebuilder.announce(prepared.newlyBuilt(), !prepared.pausedReloads().isEmpty());
         Runnable release = this.redefinitionHold.get();
         SwitchTimes.mark("pause game");
