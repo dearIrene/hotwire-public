@@ -1,5 +1,6 @@
 package dev.moon.hotwire.fabric.registration;
 
+import com.google.common.collect.MapMaker;
 import dev.moon.hotwire.redefine.FieldSlots;
 import java.util.ArrayList;
 import java.util.Collections;
@@ -35,13 +36,34 @@ final class FixedLists {
     private FixedLists() {
     }
 
+    private static final Map<List<?>, List<?>> ROOTS = new MapMaker().weakKeys().makeMap();
+
+    private static List<?> findRoot(List<?> list) {
+        List<?> found = ROOTS.get(list);
+        return found == null ? list : found;
+    }
+
+    @SuppressWarnings({"unchecked", "ReferenceEquality"})
+    static List<Object> makeHeld(List<Object> elements, List<?> first) {
+        boolean same = elements.size() == first.size();
+        for (int index = 0; same && index < elements.size(); index++) {
+            same = elements.get(index) == first.get(index);
+        }
+        if (same) {
+            return (List<Object>) first;
+        }
+        List<Object> copy = Collections.unmodifiableList(elements);
+        ROOTS.put(copy, first);
+        return copy;
+    }
+
     private static boolean isPlainList(List<?> list) {
         String name = list.getClass().getName();
         return name.startsWith("java.util.") || name.startsWith("com.google.common.collect.")
                 || name.startsWith("kotlin.collections.");
     }
 
-    private record Plan(List<Object> retained, Map<String, List<Removal>> out) {
+    private record Plan(List<Object> retained, Map<String, List<Removal>> out, List<?> first) {
     }
 
     private static final class NotedList implements ElementTakes.TwoStepTake, Consumer<String> {
@@ -109,17 +131,17 @@ final class FixedLists {
             String mod = item == null ? null : walk.getOwners().findOwnerOf(item, walk.isInSmall());
             if (mod != null) {
                 out.computeIfAbsent(mod, any -> new ArrayList<>())
-                        .add(new Removal.InFixedValue(entries, key, index, item));
+                        .add(new Removal.InFixedValue(entries, key, index, item, findRoot(now)));
             } else {
                 retained.add(item);
             }
         }
         walk.setInSmall(outer);
-        return out.isEmpty() ? null : new Plan(retained, out);
+        return out.isEmpty() ? null : new Plan(retained, out, findRoot(now));
     }
 
     private static void writeValue(Walk walk, Map<Object, Object> entries, Object key, Plan plan) {
-        entries.put(key, Collections.unmodifiableList(plan.retained()));
+        entries.put(key, makeHeld(plan.retained(), plan.first()));
         plan.out().forEach((mod, removed) -> walk.getRemovalsOf(mod).addAll(removed));
     }
 
@@ -143,7 +165,7 @@ final class FixedLists {
             String mod = item == null ? null : walk.getOwners().findOwnerOf(item, walk.isInSmall());
             if (mod != null) {
                 out.computeIfAbsent(mod, any -> new ArrayList<>())
-                        .add(new Removal.InFixedList(field, holder, index, item, walk.getWriter()));
+                        .add(new Removal.InFixedList(field, holder, index, item, walk.getWriter(), findRoot(now)));
             } else {
                 retained.add(item);
             }
@@ -152,12 +174,12 @@ final class FixedLists {
         if (retained.isEmpty() && now.stream().allMatch(item -> item instanceof Enum<?>)) {
             return null;
         }
-        return out.isEmpty() ? null : new Plan(retained, out);
+        return out.isEmpty() ? null : new Plan(retained, out, findRoot(now));
     }
 
     private static void writeField(Walk walk, FieldSlots.Slot field, @Nullable Object holder, Plan plan) {
         try {
-            walk.getWriter().write(field, holder, Collections.unmodifiableList(plan.retained()));
+            walk.getWriter().write(field, holder, makeHeld(plan.retained(), plan.first()));
             plan.out().forEach((mod, removed) -> walk.getRemovalsOf(mod).addAll(removed));
         } catch (IllegalAccessException e) {
             LOGGER.warn("[Hotwire] {} keeps {}'s elements: {}", field, plan.out().keySet(), e.toString());

@@ -3,7 +3,6 @@ package dev.moon.hotwire.fabric.registration;
 import dev.moon.hotwire.redefine.FieldSlots;
 import java.util.ArrayList;
 import java.util.Collection;
-import java.util.Collections;
 import java.util.List;
 import java.util.Map;
 import org.jspecify.annotations.Nullable;
@@ -102,7 +101,7 @@ sealed interface Removal {
     }
 
     record InFixedList(FieldSlots.Slot field, @Nullable Object holder, int index, Object element,
-            StaticRecomputer.Writer writer) implements Removal {
+            StaticRecomputer.Writer writer, List<?> first) implements Removal {
         @Override
         public @Nullable Object container() {
             return read(this.field, this.holder);
@@ -116,7 +115,7 @@ sealed interface Removal {
             List<Object> back = new ArrayList<>(now);
             back.add(Math.min(this.index, back.size()), this.element);
             try {
-                this.writer.write(this.field, this.holder, Collections.unmodifiableList(back));
+                this.writer.write(this.field, this.holder, FixedLists.makeHeld(back, this.first));
             } catch (IllegalAccessException e) {
                 LoggerFactory.getLogger(Removal.class).warn("[Hotwire] {} could not be given its element back",
                         this.field, e);
@@ -130,7 +129,8 @@ sealed interface Removal {
         }
     }
 
-    record InFixedValue(Map<Object, Object> map, Object key, int index, Object element) implements Removal {
+    record InFixedValue(Map<Object, Object> map, Object key, int index, Object element, List<?> first)
+            implements Removal {
         @Override
         public Object container() {
             return this.map;
@@ -143,7 +143,7 @@ sealed interface Removal {
             }
             List<Object> back = new ArrayList<>(now);
             back.add(Math.min(this.index, back.size()), this.element);
-            this.map.put(this.key, Collections.unmodifiableList(back));
+            this.map.put(this.key, FixedLists.makeHeld(back, this.first));
         }
 
         @Override
