@@ -21,10 +21,13 @@ import java.util.List;
 import java.util.Map;
 import java.util.Set;
 import java.util.concurrent.Callable;
+import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.ExecutionException;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
 import java.util.concurrent.Future;
+import java.util.concurrent.TimeUnit;
+import java.util.concurrent.TimeoutException;
 import java.util.function.BiConsumer;
 import java.util.function.Consumer;
 import java.util.function.Function;
@@ -86,35 +89,58 @@ public final class ModStore {
     public void checkInstalled() {
         Map<String, Path> jars = this.installed.getJarsByTopLevel();
         this.model.run(() -> {
-            Map<String, String> hashByName = FileHashes.findSha512ByName(jars.values());
-            if (hashByName.isEmpty()) {
-                return;
-            }
-            Map<String, String> idByName = new HashMap<>();
-            jars.forEach((id, jar) -> idByName.put(String.valueOf(jar.getFileName()), id));
             try {
-                Map<String, ModrinthClient.Version> newest = this.model.getClient().findNewest(hashByName);
-                Set<String> projects = new HashSet<>();
-                Map<String, String> mods = new HashMap<>();
-                Map<String, ModrinthClient.Version> updates = new HashMap<>();
-                newest.forEach((name, version) -> {
-                    projects.add(version.projectId());
-                    String id = idByName.get(name);
-                    if (id != null) {
-                        mods.put(version.projectId(), id);
-                    }
-                    if (!version.sha512().equalsIgnoreCase(hashByName.get(name))) {
-                        updates.put(version.projectId(), version);
-                    }
-                });
-                LOGGER.info("[Hotwire] the store knows {} of {} mods; {} have a newer version", projects.size(),
-                        hashByName.size(), updates.size());
-                this.modByProject = Map.copyOf(mods);
-                this.model.setInstalled(projects, updates);
-            } catch (IOException | RuntimeException e) {
-                LOGGER.info("[Hotwire] the store could not check the installed mods: {}", e.toString());
+                this.askInstalled(jars);
+            } finally {
+                this.installedKnown.complete(null);
             }
         });
+    }
+
+    private final CompletableFuture<Void> installedKnown = new CompletableFuture<>();
+
+    public void awaitInstalledKnown() {
+        try {
+            this.installedKnown.get(INSTALLED_WAIT_SECONDS, TimeUnit.SECONDS);
+        } catch (InterruptedException e) {
+            Thread.currentThread().interrupt();
+        } catch (ExecutionException | TimeoutException e) {
+            LOGGER.info("[Hotwire] the store's search goes on without the check of the installed mods: {}",
+                    e.toString());
+        }
+    }
+
+    private static final int INSTALLED_WAIT_SECONDS = 15;
+
+    private void askInstalled(Map<String, Path> jars) {
+        Map<String, String> hashByName = FileHashes.findSha512ByName(jars.values());
+        if (hashByName.isEmpty()) {
+            return;
+        }
+        Map<String, String> idByName = new HashMap<>();
+        jars.forEach((id, jar) -> idByName.put(String.valueOf(jar.getFileName()), id));
+        try {
+            Map<String, ModrinthClient.Version> newest = this.model.getClient().findNewest(hashByName);
+            Set<String> projects = new HashSet<>();
+            Map<String, String> mods = new HashMap<>();
+            Map<String, ModrinthClient.Version> updates = new HashMap<>();
+            newest.forEach((name, version) -> {
+                projects.add(version.projectId());
+                String id = idByName.get(name);
+                if (id != null) {
+                    mods.put(version.projectId(), id);
+                }
+                if (!version.sha512().equalsIgnoreCase(hashByName.get(name))) {
+                    updates.put(version.projectId(), version);
+                }
+            });
+            LOGGER.info("[Hotwire] the store knows {} of {} mods; {} have a newer version", projects.size(),
+                    hashByName.size(), updates.size());
+            this.modByProject = Map.copyOf(mods);
+            this.model.setInstalled(projects, updates);
+        } catch (IOException | RuntimeException e) {
+            LOGGER.info("[Hotwire] the store could not check the installed mods: {}", e.toString());
+        }
     }
 
     public void fetch(String projectId, String versionId, String title, BiConsumer<List<Path>, List<String>> onJars,

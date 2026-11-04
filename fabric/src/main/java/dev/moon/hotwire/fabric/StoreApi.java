@@ -107,6 +107,9 @@ final class StoreApi {
     static CompletableFuture<StorePage> search(StoreQuery query) {
         return ask(() -> {
             ModStore store = findStore();
+            if (store != null) {
+                store.awaitInstalledKnown();
+            }
             CachedAsks asks = findAsks(store);
             ModrinthClient.Search found = askBrowsing(query, made -> asks == null
                     ? made.search(toKind(query.kind()), query.words(), query.category(), Math.max(0, query.offset()),
@@ -115,7 +118,8 @@ final class StoreApi {
             StoreModel model = store == null ? null : store.getModel();
             return new StorePage(found.hits().stream().map(hit -> new StoreMod(hit.projectId(), hit.slug(),
                     hit.title(), hit.description(), hit.author(), hit.downloads(), hit.iconUrl(), hit.categories(),
-                    model != null && model.isInstalledProject(hit.projectId()),
+                    model != null && (model.isInstalledProject(hit.projectId())
+                            || model.isInstalledProject(hit.slug())),
                     model != null && model.getUpdates().containsKey(hit.projectId()))).toList(), found.total());
         });
     }
