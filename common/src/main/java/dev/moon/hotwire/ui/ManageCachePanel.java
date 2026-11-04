@@ -160,7 +160,9 @@ final class ManageCachePanel extends Panel {
 
     @Override
     public void step(float dt) {
-        this.showRows(this.findRows());
+        if (this.isVisible()) {
+            this.showRows(this.findRows());
+        }
         this.size(WIDTH, ROWS_Y + this.getRowsHeight() + LimitRow.HEIGHT + 46);
         this.confirming = Math.max(0, this.confirming - dt);
         this.setPrimaryLabel(Lang.get(this.askedAll && this.confirming > 0 ? "hotwire.cache.clear_sure"

@@ -16,6 +16,7 @@ import java.util.Comparator;
 import java.util.List;
 import java.util.Set;
 import java.util.concurrent.ConcurrentHashMap;
+import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.function.Supplier;
 import java.util.stream.Stream;
 import net.minecraft.client.Minecraft;
@@ -37,6 +38,7 @@ final class CacheFillControl implements CacheHost {
 
     private volatile List<CacheVersion> versions = List.of();
     private volatile long versionsAt;
+    private final AtomicBoolean readingVersions = new AtomicBoolean();
     private final Set<String> busy = ConcurrentHashMap.newKeySet();
     private final Supplier<StoreCacheView> store;
 
@@ -94,10 +96,16 @@ final class CacheFillControl implements CacheHost {
 
     @Override
     public List<CacheVersion> getCacheVersions() {
-        long now = System.nanoTime();
-        if (this.versionsAt == 0 || now - this.versionsAt > VERSIONS_READ_NANOS) {
-            this.versions = this.readVersions();
-            this.versionsAt = now;
+        if ((this.versionsAt == 0 || System.nanoTime() - this.versionsAt > VERSIONS_READ_NANOS)
+                && this.readingVersions.compareAndSet(false, true)) {
+            Thread.ofPlatform().name("hotwire-cache-sizes").daemon().start(() -> {
+                try {
+                    this.versions = this.readVersions();
+                    this.versionsAt = System.nanoTime();
+                } finally {
+                    this.readingVersions.set(false);
+                }
+            });
         }
         return this.versions;
     }
