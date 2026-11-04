@@ -174,6 +174,12 @@ final class CollectionReferences implements FixedLists.Walk {
         return ready[0];
     }
 
+    private int planned;
+
+    int countPlanned() {
+        return this.planned;
+    }
+
     private boolean prepareNow(List<String> mods) {
         this.prepared = null;
         if (ElementLook.isLooking()) {
@@ -188,6 +194,7 @@ final class CollectionReferences implements FixedLists.Walk {
         ElementTakes.Answers made = ElementTakes.prepare(ahead, mods, this.look.takeContainersOfTakes());
         this.prepared = made;
         this.preparedFor = List.copyOf(mods);
+        this.planned = ahead.size();
         LOGGER.info("[Hotwire] {} of {} noted takes answered for {} ahead of the hold in {} ms",
                 made.takes().size(), ahead.size(), mods, (System.nanoTime() - began) / 1_000_000);
         return true;
@@ -265,7 +272,9 @@ final class CollectionReferences implements FixedLists.Walk {
         for (Class<?> owner : ordered) {
             ElementLook.stopIfAsked();
 
-            if (notes != null && every && notes.hasReadStatics(owner)) {
+            String ownerMod = GameRegistrations.findModOf(owner);
+            if (notes != null && notes.hasReadStatics(owner)
+                    && (every || ownerMod == null || !mods.contains(ownerMod))) {
                 skipped++;
                 continue;
             }
