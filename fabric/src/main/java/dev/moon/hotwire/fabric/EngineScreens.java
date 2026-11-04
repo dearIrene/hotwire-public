@@ -31,10 +31,14 @@ public final class EngineScreens {
     }
 
     public Screen makeScreen(@Nullable Screen back) {
+        ScreenOpenTimer timer = new ScreenOpenTimer();
+        return new HotwireScreen(() -> this.buildScreen(back, timer), timer);
+    }
+
+    private ModScreen buildScreen(@Nullable Screen back, ScreenOpenTimer timer) {
         for (String remaining : SwapAtClose.getUnfinished(this.owner.updateQueue)) {
             this.owner.showMessage(remaining, true);
         }
-        ScreenOpenTimer timer = new ScreenOpenTimer();
         ModScreen opened = new ModScreen(this.owner, this.owner.profiles);
         timer.onBuilt();
         this.owner.screen = opened;
@@ -44,13 +48,12 @@ public final class EngineScreens {
             this.owner.storeJars.startCheck();
         }
         this.owner.selfUpdate.start();
-        HotwireScreen made = new HotwireScreen(opened, timer);
         HotwireEngine.JvmParts parts = this.owner.findParts();
         if (parts != null) {
             Fields.preloadStatics(parts.instrumentation());
             parts.runner().lookAheadForAll(this.owner.findSwitchableOn());
         }
-        return made;
+        return opened;
     }
 
     CompletableFuture<Path> writeReportZip(String title, String why) {
