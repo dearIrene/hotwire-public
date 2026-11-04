@@ -4,17 +4,21 @@ import java.lang.instrument.ClassDefinition;
 import java.lang.instrument.Instrumentation;
 import java.lang.instrument.UnmodifiableClassException;
 import java.util.ArrayList;
+import java.util.Collections;
 import java.util.HashSet;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
+import java.util.WeakHashMap;
 import org.jspecify.annotations.Nullable;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 public interface BatchRider {
     Logger LOGGER = LoggerFactory.getLogger(BatchRider.class);
+
+    Set<Class<?>> UNLINKABLE = Collections.synchronizedSet(Collections.newSetFromMap(new WeakHashMap<>()));
 
     Map<Class<?>, byte[]> take(Set<Class<?>> rebuilt);
 
@@ -54,6 +58,7 @@ public interface BatchRider {
         }
         Map<Class<?>, byte[]> riding = new LinkedHashMap<>(rider.take(rebuilt));
         riding.keySet().removeAll(rebuilt);
+        riding.keySet().removeAll(UNLINKABLE);
         return riding;
     }
 
@@ -74,6 +79,7 @@ public interface BatchRider {
                 | InternalError e) {
             LOGGER.info("[Hotwire] the JVM refused the switch's classes with {} riding along ({}); they go alone",
                     riding.size(), e.toString());
+            noteUnlinkable(riding.keySet());
             if (!definitions.isEmpty()) {
                 instrumentation.redefineClasses(definitions.toArray(ClassDefinition[]::new));
             }
@@ -82,6 +88,18 @@ public interface BatchRider {
         }
         loaded.rememberAll(riding);
         end(rider, riding, true, false);
+    }
+
+    private static void noteUnlinkable(Set<Class<?>> types) {
+        for (Class<?> type : types) {
+            try {
+                LOGGER.debug("[Hotwire] {} links, with {} methods", type.getName(), type.getDeclaredMethods().length);
+            } catch (LinkageError e) {
+                UNLINKABLE.add(type);
+                LOGGER.info("[Hotwire] {} cannot link, and rides with no switch again: {}", type.getName(),
+                        e.toString());
+            }
+        }
     }
 
     static void end(@Nullable BatchRider rider, Map<Class<?>, byte[]> riding, boolean took, boolean left) {

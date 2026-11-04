@@ -234,20 +234,18 @@ public final class TripwireSites {
         return new ConstantCallSite((name.equals("gate") ? GATE : PROBE).bindTo(findWatch(mod)));
     }
 
-    public static int setOff(String mod, boolean off) {
+    public static void setOff(String mod, boolean off) {
         Watch watch = findWatch(mod);
         if (watch.off == off) {
-            return 0;
+            return;
         }
         watch.off = off;
-        int classes = countArmed(mod);
-        LOGGER.info("[Hotwire] {} is watched by sites in {} classes: {}", mod, classes, off ? "on" : "off");
+
         if (LOGGER.isDebugEnabled()) {
             LOGGER.debug("[Hotwire] the watch of {} was set by {}", mod, StackWalker.getInstance().walk(frames ->
                     frames.skip(1).map(frame -> frame.getClassName() + "." + frame.getMethodName()).limit(4)
                             .collect(Collectors.joining(" < "))));
         }
-        return classes;
     }
 
     static boolean isLetGo(List<String> frames) {

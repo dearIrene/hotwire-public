@@ -4,6 +4,7 @@ import java.lang.reflect.Field;
 import java.util.ArrayList;
 import java.util.Collection;
 import java.util.HashMap;
+import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
@@ -36,30 +37,29 @@ public final class MixinPlugins {
 
     public synchronized void takeOut(Collection<String> mods) {
         mods.forEach(this::removeExtensions);
-        for (String mod : mods) {
-            if (this.removed.containsKey(mod)) {
+        Set<String> left = new HashSet<>(mods);
+        left.removeAll(this.removed.keySet());
+        if (left.isEmpty()) {
+            return;
+        }
+
+        for (Object config : this.configs.get()) {
+            Object handle = read(config, "plugin");
+            if (handle == null) {
                 continue;
             }
-            List<SwappedPlugin> mine = new ArrayList<>();
-            for (Object config : this.configs.get()) {
-                Object handle = read(config, "plugin");
-                if (handle == null) {
-                    continue;
-                }
-                Field field = findField(handle.getClass(), "plugin");
-                Object plugin = field == null ? null : get(field, handle);
-                if (field != null && plugin instanceof IMixinConfigPlugin own
-                        && mod.equals(GameRegistrations.findModOf(own.getClass()))) {
+            Field field = findField(handle.getClass(), "plugin");
+            if (field != null && get(field, handle) instanceof IMixinConfigPlugin own) {
+                String mod = GameRegistrations.findModOf(own.getClass());
+                if (mod != null && left.contains(mod)) {
                     try {
                         field.set(handle, new EmptyPlugin());
-                        mine.add(new SwappedPlugin(handle, field, own));
+                        this.removed.computeIfAbsent(mod, any -> new ArrayList<>())
+                                .add(new SwappedPlugin(handle, field, own));
                     } catch (ReflectiveOperationException | RuntimeException e) {
                         LOGGER.warn("[Hotwire] {}'s Mixin plugin stays in the game's Mixin: {}", mod, e.toString());
                     }
                 }
-            }
-            if (!mine.isEmpty()) {
-                this.removed.put(mod, mine);
             }
         }
     }
