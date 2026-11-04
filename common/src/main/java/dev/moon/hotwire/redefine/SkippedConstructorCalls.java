@@ -14,7 +14,7 @@ import org.jspecify.annotations.Nullable;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
-final class SkippedConstructorCalls {
+public final class SkippedConstructorCalls {
     private static final Logger LOGGER = LoggerFactory.getLogger(SkippedConstructorCalls.class);
 
     private static final int CAP = 1 << 17;
@@ -56,6 +56,27 @@ final class SkippedConstructorCalls {
             List<@Nullable Object> rest = new ArrayList<>(Arrays.asList(arguments).subList(1, arguments.length));
             calls.add(new Call(handler, new WeakReference<>(arguments[0]), rest));
         }
+    }
+
+    public static void dropClosedWorlds() {
+        CALLS.values().forEach(calls -> {
+            synchronized (calls) {
+                calls.removeIf(SkippedConstructorCalls::isOfClosedWorld);
+            }
+        });
+    }
+
+    private static boolean isOfClosedWorld(Call call) {
+        Object object = call.object().get();
+        if (object == null || OffWindowObjects.isOfClosedWorld(object)) {
+            return true;
+        }
+        for (Object argument : call.arguments()) {
+            if (argument != null && OffWindowObjects.isOfClosedWorld(argument)) {
+                return true;
+            }
+        }
+        return false;
     }
 
     static void replay(Set<String> mixins) {

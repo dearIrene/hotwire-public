@@ -8,6 +8,7 @@ import dev.moon.hotwire.fabric.report.HotwireLog;
 import dev.moon.hotwire.modrinth.Downloads;
 import dev.moon.hotwire.redefine.FieldHolders;
 import dev.moon.hotwire.redefine.InitHookRuns;
+import dev.moon.hotwire.redefine.SkippedConstructorCalls;
 import dev.moon.hotwire.redefine.Tripwire;
 import dev.moon.hotwire.report.ActionJournal;
 import dev.moon.hotwire.report.GameLog;
@@ -92,7 +93,10 @@ public final class HotwireClient implements ClientModInitializer {
                 ""));
         ClientPlayConnectionEvents.JOIN.register((handler, sender, client) -> {
             ActionJournal.get().note(ActionJournal.Action.JOIN, "", findPlaceOf(handler.getConnection()));
-            client.execute(HotwireClient::onJoined);
+            client.execute(() -> {
+                SkippedConstructorCalls.dropClosedWorlds();
+                onJoined();
+            });
         });
 
         ClientPlayConnectionEvents.DISCONNECT.register((handler, client) -> {

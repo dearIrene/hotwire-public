@@ -58,6 +58,10 @@ public final class OffWindowObjects {
         isRetired = retired;
     }
 
+    public static boolean isOfClosedWorld(Object made) {
+        return isRetired.test(made);
+    }
+
     private static boolean isGone(Reference<Object> reference) {
         Object made = reference.get();
         return made == null || isRetired.test(made);
