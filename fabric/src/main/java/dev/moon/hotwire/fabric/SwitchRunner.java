@@ -420,10 +420,16 @@ public final class SwitchRunner {
             } else if (!coming.isRefused()) {
                 List<String> stillOff = coming.order().stream().filter(id -> !this.switcher.isOn(id)).toList();
                 if (allBack.get()) {
-                    this.takeOutAgain(stillOff);
+                    GameHold.runUnbudgeted(() -> {
+                        this.takeOutAgain(stillOff);
+                        return null;
+                    });
                 } else {
                     if (putBack.get()) {
-                        this.fieldReferences.takeOutElementsAgain(stillOff, this.switcher::isOn);
+                        GameHold.runUnbudgeted(() -> {
+                            this.fieldReferences.takeOutElementsAgain(stillOff, this.switcher::isOn);
+                            return null;
+                        });
                     }
                     this.plugins.takeOut(stillOff);
                     stillOff.forEach(LoaderModList::hide);
