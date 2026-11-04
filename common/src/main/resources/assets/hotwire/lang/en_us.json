@@ -462,6 +462,7 @@
   "hotwire.add.later.library": "It bundles a newer version of a library the game already loaded, so it can only be added when the game starts.",
   "hotwire.add.by": "By %s",
   "hotwire.add.also_adds": "Also adds %s from inside it",
+  "hotwire.add.also_adds_many": "Also adds %s mods from inside it",
   "hotwire.add.patches_none": "Changes no game code",
   "hotwire.add.patches": "Changes %s game classes",
   "hotwire.add.opens": "Widens access to %s parts of the game's classes as they load",

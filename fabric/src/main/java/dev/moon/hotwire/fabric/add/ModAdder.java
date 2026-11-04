@@ -114,6 +114,7 @@ public final class ModAdder {
     private final Map<Path, ModJar> readsAhead = new ConcurrentHashMap<>();
     private boolean savingReads;
 
+    private static final int MOST_NESTED_NAMED = 3;
     private static final Logger LOGGER = LoggerFactory.getLogger(ModAdder.class);
 
     private static final Duration ENTRYPOINT_WAIT = Duration.ofSeconds(90);
@@ -207,7 +208,9 @@ public final class ModAdder {
         }
         List<String> nested = parts.stream().filter(part -> !part.manifest().id().equals(manifest.id()))
                 .map(part -> part.manifest().name()).toList();
-        if (!nested.isEmpty()) {
+        if (nested.size() > MOST_NESTED_NAMED) {
+            lines.add(Lang.get("hotwire.add.also_adds_many", nested.size()));
+        } else if (!nested.isEmpty()) {
             lines.add(Lang.get("hotwire.add.also_adds", String.join(", ", nested)));
         }
         int patched = parts.stream().mapToInt(part -> part.patches().patches().size()).sum();

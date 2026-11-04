@@ -163,23 +163,29 @@ public final class ModStore {
 
     private List<ModrinthClient.Version> findNeeded(ModrinthClient.Version version, Set<String> seen)
             throws IOException {
-        List<Callable<ModrinthClient.Version>> asks = new ArrayList<>();
+        List<Callable<List<ModrinthClient.Version>>> asks = new ArrayList<>();
         for (String needed : version.requiredProjects()) {
             if (!seen.contains(needed) && !this.model.isInstalledProject(needed)) {
                 asks.add(() -> {
+                    if (this.model.isInstalledProject(this.model.getClient().findProject(needed).slug())) {
+                        return List.of();
+                    }
                     List<ModrinthClient.Version> versions = this.model.getClient()
                             .findVersions(ModrinthClient.Kind.MOD, needed);
-                    if (versions.isEmpty()) {
-                        throw new IOException(Lang.get("hotwire.store.needs_no_version",
-                                this.model.getClient().findProject(needed).title()));
+                    if (!versions.isEmpty()) {
+                        return versions.subList(0, 1);
                     }
-                    return versions.getFirst();
+                    if (!this.model.getClient().isForThisLoader(needed)) {
+                        return List.of();
+                    }
+                    throw new IOException(Lang.get("hotwire.store.needs_no_version",
+                            this.model.getClient().findProject(needed).title()));
                 });
             }
         }
         List<ModrinthClient.Version> out = new ArrayList<>();
 
-        for (ModrinthClient.Version newest : runAtOnce(asks)) {
+        for (ModrinthClient.Version newest : runAtOnce(asks).stream().flatMap(List::stream).toList()) {
             if (seen.contains(newest.projectId())) {
                 continue;
             }

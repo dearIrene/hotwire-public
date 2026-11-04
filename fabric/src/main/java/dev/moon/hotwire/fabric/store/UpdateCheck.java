@@ -272,6 +272,9 @@ public final class UpdateCheck {
         }
         List<ModrinthClient.Version> versions = this.client.findVersions(ModrinthClient.Kind.MOD, projectId);
         if (versions.isEmpty()) {
+            if (!this.client.isForThisLoader(projectId)) {
+                return;
+            }
             throw new IOException(Lang.get("hotwire.store.needs_no_version", project.title()));
         }
         ModrinthClient.Version newest = versions.getFirst();

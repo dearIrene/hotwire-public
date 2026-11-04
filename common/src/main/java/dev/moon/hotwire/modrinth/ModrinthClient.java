@@ -218,6 +218,12 @@ public final class ModrinthClient {
                 readNumber(root, "downloads"), readNumber(root, "followers"), readText(root, "icon_url"));
     }
 
+    public boolean isForThisLoader(String projectId) throws IOException {
+        JsonObject root = JsonParser.parseString(this.transport.get(API + "/project/" + encode(projectId)))
+                .getAsJsonObject();
+        return readStrings(root.get("loaders")).contains(this.browseLoader);
+    }
+
     public List<Version> findVersions(Kind kind, String projectId) throws IOException {
         JsonArray loaders = new JsonArray();
         this.findLoaders(kind).forEach(loaders::add);
