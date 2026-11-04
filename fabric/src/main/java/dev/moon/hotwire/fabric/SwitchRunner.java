@@ -2,6 +2,7 @@ package dev.moon.hotwire.fabric;
 
 import dev.moon.hotwire.fabric.add.LoaderModList;
 import dev.moon.hotwire.fabric.rebuild.TransformerChain;
+import dev.moon.hotwire.fabric.rebuild.LivePluginShapes;
 import dev.moon.hotwire.fabric.registration.AsyncLogging;
 import dev.moon.hotwire.fabric.registration.ElementLook;
 import dev.moon.hotwire.fabric.registration.EntityAttachments;
@@ -192,6 +193,8 @@ public final class SwitchRunner {
 
         SwitchPlan plan = this.switcher.planOff(ids);
         SwitchTimes.mark("plan: order");
+        LivePluginShapes.rememberAnswers(plan.order());
+        SwitchTimes.mark("plan: plugin answers");
 
         List<String> wired = plan.isRefused() ? List.of() : plan.order();
 
@@ -276,7 +279,7 @@ public final class SwitchRunner {
     }
 
     private void takeOut(List<String> ids) {
-        ids.forEach(LoaderModList::hide);
+        LoaderModList.hide(ids);
         this.plugins.takeOut(ids);
         if (this.chain != null) {
             this.chain.passBy(ids);
@@ -424,7 +427,7 @@ public final class SwitchRunner {
                         });
                     }
                     this.plugins.takeOut(stillOff);
-                    stillOff.forEach(LoaderModList::hide);
+                    LoaderModList.hide(stillOff);
                 }
             }
             SwitchTimes.mark("taken out again");

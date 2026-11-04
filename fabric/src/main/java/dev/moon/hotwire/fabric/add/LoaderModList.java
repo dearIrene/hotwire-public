@@ -16,6 +16,7 @@ import java.util.IdentityHashMap;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.Objects;
 import java.util.Set;
 import java.util.zip.ZipEntry;
 import java.util.zip.ZipFile;
@@ -180,7 +181,7 @@ public final class LoaderModList {
     private static final Map<String, List<Object>> ENTRIES_ORDER = new HashMap<>();
 
     @SuppressWarnings("unchecked")
-    public static void hide(String id) {
+    public static void hide(Collection<String> ids) {
         FabricLoaderImpl loader = FabricLoaderImpl.INSTANCE;
 
         List<ModContainerImpl> mods = new ArrayList<>(MODS.get(loader, List.class));
@@ -188,32 +189,43 @@ public final class LoaderModList {
         EntrypointStorage storage = ENTRYPOINT_STORAGE.get(loader, EntrypointStorage.class);
         Map<String, List<Object>> entryMap = ENTRY_MAP.get(storage, Map.class);
         synchronized (loader) {
-            ModContainerImpl container = byId.get(id);
-            if (container == null || HIDDEN.containsKey(id)) {
+            Map<String, String> asked = new HashMap<>();
+            for (String id : ids) {
+                ModContainerImpl container = byId.get(id);
+                if (container != null && !HIDDEN.containsKey(id)) {
+                    asked.put(container.getMetadata().getId(), id);
+                }
+            }
+            if (asked.isEmpty()) {
                 return;
             }
             if (MODS_ORDER.isEmpty()) {
                 MODS_ORDER.addAll(mods);
             }
             entryMap.forEach((key, entries) -> ENTRIES_ORDER.putIfAbsent(key, List.copyOf(entries)));
-            Map<String, List<Object>> removed = new HashMap<>();
+
+            Map<String, Map<String, List<Object>>> removed = new HashMap<>();
             entryMap.forEach((key, entries) -> {
                 List<Object> mine = new ArrayList<>();
                 for (Object entry : entries) {
                     ModContainerImpl of = findContainerOf(entry);
-                    if (of != null && of.getMetadata().getId().equals(container.getMetadata().getId())) {
+                    String id = of == null ? null : asked.get(of.getMetadata().getId());
+                    if (id != null) {
                         mine.add(entry);
+                        removed.computeIfAbsent(id, any -> new HashMap<>())
+                                .computeIfAbsent(key, any -> new ArrayList<>()).add(entry);
                     }
                 }
                 if (!mine.isEmpty()) {
                     entries.removeAll(mine);
-                    removed.put(key, mine);
                 }
             });
-            mods.remove(container);
+            asked.values().forEach(id -> {
+                ModContainerImpl container = Objects.requireNonNull(byId.remove(id));
+                mods.remove(container);
+                HIDDEN.put(id, new HiddenMod(container, removed.getOrDefault(id, new HashMap<>())));
+            });
             MODS.set(loader, mods);
-            byId.remove(id);
-            HIDDEN.put(id, new HiddenMod(container, removed));
         }
     }
 
@@ -269,7 +281,7 @@ public final class LoaderModList {
     }
 
     public static void unregister(String id) {
-        hide(id);
+        hide(List.of(id));
         synchronized (HIDDEN) {
             HIDDEN.remove(id);
         }
