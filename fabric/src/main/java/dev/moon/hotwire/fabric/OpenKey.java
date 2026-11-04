@@ -36,22 +36,35 @@ public final class OpenKey {
     private static final Identifier CATEGORY = Identifier.fromNamespaceAndPath(HotwireClient.ID,
             HotwireClient.ID);
     private static @Nullable KeyMapping key;
+
+    private static @Nullable KeyMapping storeKey;
     private static @Nullable Class<?> homeScreen;
     private static Runnable open = () -> { };
+    private static Runnable openStore = () -> { };
 
     private OpenKey() {
     }
 
-    static void register(Runnable opener) {
-        KeyMapping made = make();
+    static void register(Runnable opener, Runnable storeOpener) {
+        //? if >=1.21.10 {
+        KeyMapping.Category category = KeyMapping.Category.register(CATEGORY);
+        //?} else {
+        /*String category = "key.category." + CATEGORY.toLanguageKey();
+        *///?}
+        KeyMapping made = make("key.hotwire.open", InputConstants.KEY_H, category);
+        KeyMapping store = make("key.hotwire.store", InputConstants.UNKNOWN.getValue(), category);
         //? if >=26.1 {
         KeyMappingHelper.registerKeyMapping(made);
+        KeyMappingHelper.registerKeyMapping(store);
         //?} else {
         /*KeyBindingHelper.registerKeyBinding(made);
+        KeyBindingHelper.registerKeyBinding(store);
         *///?}
         ScreenEvents.BEFORE_INIT.register((game, screen, width, height) -> onScreenShown(screen));
         open = opener;
+        openStore = storeOpener;
         key = made;
+        storeKey = store;
     }
 
     @SuppressWarnings("ReferenceEquality")
@@ -108,13 +121,20 @@ public final class OpenKey {
 
     public static boolean openAtScreen(Predicate<KeyMapping> pressed, boolean shift) {
         KeyMapping made = key;
+        KeyMapping store = storeKey;
         Minecraft minecraft = Minecraft.getInstance();
         Screen shown = ModViews.openScreen();
-        if (made == null || minecraft.level != null || shown == null
+        if (made == null || store == null || minecraft.level != null || shown == null
                 || !(shown instanceof TitleScreen || shown.getClass() == homeScreen) || shown instanceof HotwireScreen
                 || shown instanceof ChooserGameScreen || shown instanceof StoreGameScreen
-                || shown.getFocused() instanceof EditBox || shown.getFocused() instanceof MultiLineEditBox
-                || !pressed.test(made)) {
+                || shown.getFocused() instanceof EditBox || shown.getFocused() instanceof MultiLineEditBox) {
+            return false;
+        }
+        if (pressed.test(store)) {
+            openStore.run();
+            return true;
+        }
+        if (!pressed.test(made)) {
             return false;
         }
         HotwireClient.openFromScreen(shift);
@@ -133,13 +153,19 @@ public final class OpenKey {
         if (made != null && made.consumeClick()) {
             open.run();
         }
+        KeyMapping store = storeKey;
+        if (store != null && store.consumeClick()) {
+            openStore.run();
+        }
     }
 
-    private static KeyMapping make() {
-        //? if >=1.21.10 {
-        return new KeyMapping("key.hotwire.open", InputConstants.KEY_H, KeyMapping.Category.register(CATEGORY));
-        //?} else {
-        /*return new KeyMapping("key.hotwire.open", InputConstants.KEY_H, "key.category." + CATEGORY.toLanguageKey());
-        *///?}
+    //? if >=1.21.10 {
+    private static KeyMapping make(String name, int defaultKey, KeyMapping.Category category) {
+        return new KeyMapping(name, defaultKey, category);
     }
+    //?} else {
+    /*private static KeyMapping make(String name, int defaultKey, String category) {
+        return new KeyMapping(name, defaultKey, category);
+    }
+    *///?}
 }

@@ -214,6 +214,10 @@ public final class ElementLook {
         BROUGHT.addAll(mods);
     }
 
+    static boolean isStale(String mod) {
+        return STALE.contains(mod);
+    }
+
     static List<String> getBrought() {
         return List.copyOf(BROUGHT);
     }

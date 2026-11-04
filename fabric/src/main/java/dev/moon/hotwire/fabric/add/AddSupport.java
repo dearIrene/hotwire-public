@@ -1,6 +1,7 @@
 package dev.moon.hotwire.fabric.add;
 
 import dev.moon.hotwire.classfile.ClassHeader;
+import dev.moon.hotwire.fabric.registration.ElementLook;
 import dev.moon.hotwire.fabric.InstalledMods;
 import dev.moon.hotwire.fabric.ModPolicy;
 import dev.moon.hotwire.fabric.rebuild.GameClasses;
@@ -174,6 +175,7 @@ public final class AddSupport implements ModAdder.Engine {
         endJournal(journal, result);
         this.reports.onAdded(result, String.valueOf(jar.getFileName()), (System.nanoTime() - start) / 1_000_000);
         if (result instanceof ModAdder.Result.Added added) {
+            ElementLook.markChanged(added.ids());
             try {
                 this.installed.onAdded(jar, ModJarReader.read(jar), added.ids());
             } catch (ModJarException e) {
