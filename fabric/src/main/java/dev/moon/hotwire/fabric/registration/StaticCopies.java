@@ -46,30 +46,33 @@ public final class StaticCopies {
         long began = System.nanoTime();
         Class<?>[] types = LoadedClassList.of(reader);
 
-        int swapped = walk(types, replaced, NETWORK_STEPS, name -> name.startsWith("net.minecraft.network."));
-        swapped += walk(types, replaced, STEPS, StaticCopies::isWalked);
-        LOGGER.info("[Hotwire] {} copies of statics made again took the new ones ({} ms)", swapped,
-                (System.nanoTime() - began) / 1_000_000);
+        Set<Object> seen = Collections.newSetFromMap(new IdentityHashMap<>());
+        Predicate<String> ofNetwork = name -> name.startsWith("net.minecraft.network.");
+        int swapped = walk(types, replaced, NETWORK_STEPS, ofNetwork, seen);
+        long network = System.nanoTime();
+        swapped += walk(types, replaced, STEPS, ofNetwork.negate().and(StaticCopies::isWalked), seen);
+        LOGGER.info("[Hotwire] {} copies of statics made again took the new ones ({} ms, {} of it the network's)",
+                swapped, (System.nanoTime() - began) / 1_000_000, (network - began) / 1_000_000);
     }
 
     private static final int NETWORK_STEPS = 8;
 
     private static int walk(Class<?>[] types, IdentityHashMap<Object, Object> replaced, int steps,
-            Predicate<String> walked) {
-        Set<Object> seen = Collections.newSetFromMap(new IdentityHashMap<>());
+            Predicate<String> walked, Set<Object> seen) {
+        int most = seen.size() + MOST;
         Deque<Object> step = new ArrayDeque<>();
         int swapped = 0;
         int count = 0;
         for (Class<?> type : types) {
-            if (type.isArray() || type.isPrimitive() || !walked.test(type.getName())) {
+            if (type.isArray() || type.isPrimitive() || type.isHidden() || !walked.test(type.getName())) {
                 continue;
             }
             swapped += swapFields(type, null, replaced, step);
             drawHoldFrame(++count);
         }
-        for (int depth = 0; depth < steps && !step.isEmpty() && seen.size() < MOST; depth++) {
+        for (int depth = 0; depth < steps && !step.isEmpty() && seen.size() < most; depth++) {
             Deque<Object> next = new ArrayDeque<>();
-            while (!step.isEmpty() && seen.size() < MOST) {
+            while (!step.isEmpty() && seen.size() < most) {
                 swapped += swapIn(step.poll(), replaced, seen, next);
                 drawHoldFrame(++count);
             }
