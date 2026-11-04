@@ -35,6 +35,7 @@ import org.objectweb.asm.Type;
 final class PatchScanner {
     private static final String MIXIN = "Lorg/spongepowered/asm/mixin/Mixin;";
     private static final String PSEUDO = "Lorg/spongepowered/asm/mixin/Pseudo;";
+    private static final String OVERWRITE = "Lorg/spongepowered/asm/mixin/Overwrite;";
 
     private static final Set<String> OPENERS = Set.of("Lorg/spongepowered/asm/mixin/gen/Accessor;",
             "Lorg/spongepowered/asm/mixin/gen/Invoker;");
@@ -80,6 +81,7 @@ final class PatchScanner {
         boolean callbacksOnly = true;
         Set<String> rebuildOnly = new TreeSet<>();
         Set<String> fieldsSetUp = new TreeSet<>();
+        Map<String, Set<String>> overwrites = new LinkedHashMap<>();
         for (MixinConfigRef ref : manifest.mixinConfigs()) {
             byte[] config = reader.read(ref.config());
             if (config == null) {
@@ -106,6 +108,7 @@ final class PatchScanner {
                 if (read.fieldsSetUp()) {
                     fieldsSetUp.addAll(read.targets());
                 }
+                addOverwrites(read, mixin, overwrites);
                 patches.addAll(read.targets());
                 configTargets.addAll(read.targets());
                 (read.hook() ? hooked : tied).addAll(read.targets());
@@ -128,6 +131,7 @@ final class PatchScanner {
                         if (added.fieldsSetUp()) {
                             fieldsSetUp.addAll(added.targets());
                         }
+                        addOverwrites(added, name, overwrites);
                         configTargets.addAll(added.targets());
                         collectNamedIfInTheGame(added, bytes, named);
                         collectModIds(bytes, asks);
@@ -201,7 +205,16 @@ final class PatchScanner {
             }
         }
         return new ModPatches(owns, patches, hooked, missing, byConfig, calls, asks, callbacksOnly, rebuildOnly,
-                CalledNames.of(calledNames), fieldsSetUp);
+                CalledNames.of(calledNames), fieldsSetUp, overwrites);
+    }
+
+    private static void addOverwrites(Mixin read, String mixin, Map<String, Set<String>> into) {
+        for (String target : read.targets()) {
+            for (String method : read.overwrites()) {
+                into.computeIfAbsent(target.replace('.', '/') + '.' + method, any -> new TreeSet<>())
+                        .add(mixin.replace('/', '.'));
+            }
+        }
     }
 
     private static void collectCalledNames(byte[] bytes, Set<String> into) {
@@ -385,7 +398,8 @@ final class PatchScanner {
         return out;
     }
 
-    private record Mixin(Set<String> targets, boolean hook, boolean callbacksOnly, boolean fieldsSetUp) {
+    private record Mixin(Set<String> targets, boolean hook, boolean callbacksOnly, boolean fieldsSetUp,
+            Set<String> overwrites) {
     }
 
     static Set<String> readTargets(byte[] bytes) {
@@ -398,6 +412,7 @@ final class PatchScanner {
         boolean[] opens = {false};
         boolean[] beyondCallbacks = {false};
         boolean[] ownInstanceField = {false};
+        Set<String> overwrites = new TreeSet<>();
         ClassReader reader = new ClassReader(bytes);
         reader.accept(new ClassVisitor(Opcodes.ASM9) {
             @Override
@@ -423,6 +438,9 @@ final class PatchScanner {
                     @Override
                     public @Nullable AnnotationVisitor visitAnnotation(String annotation, boolean visible) {
                         opens[0] |= OPENERS.contains(annotation);
+                        if (OVERWRITE.equals(annotation)) {
+                            overwrites.add(name + descriptor);
+                        }
                         beyondCallbacks[0] |= annotation.startsWith(INJECTORS)
                                 && !KNOWN_INJECTORS.contains(annotation);
                         return null;
@@ -432,7 +450,7 @@ final class PatchScanner {
         }, ClassReader.SKIP_CODE | ClassReader.SKIP_DEBUG | ClassReader.SKIP_FRAMES);
         boolean fieldsSetUp = ownInstanceField[0] && setsOwnField(reader, mixin);
         return new Mixin(targets, pseudo[0] && reader.getInterfaces().length == 0 && !opens[0], !beyondCallbacks[0],
-                fieldsSetUp);
+                fieldsSetUp, overwrites);
     }
 
     private static boolean setsOwnField(ClassReader reader, String mixin) {

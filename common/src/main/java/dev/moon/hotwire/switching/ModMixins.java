@@ -10,13 +10,20 @@ import java.util.Map;
 import java.util.Set;
 
 public record ModMixins(List<String> configs, Map<String, Set<String>> targetsOf, Set<String> owns,
-        boolean callbacksOnly, Set<String> rebuildOnly, CalledNames calledNames, Set<String> fieldsSetUp) {
+        boolean callbacksOnly, Set<String> rebuildOnly, CalledNames calledNames, Set<String> fieldsSetUp,
+        Map<String, Set<String>> overwrites) {
     public ModMixins {
         rebuildOnly = Set.copyOf(rebuildOnly);
         fieldsSetUp = Set.copyOf(fieldsSetUp);
         configs = List.copyOf(configs);
         targetsOf = Map.copyOf(targetsOf);
         owns = Set.copyOf(owns);
+        overwrites = Map.copyOf(overwrites);
+    }
+
+    public ModMixins(List<String> configs, Map<String, Set<String>> targetsOf, Set<String> owns,
+            boolean callbacksOnly, Set<String> rebuildOnly, CalledNames calledNames, Set<String> fieldsSetUp) {
+        this(configs, targetsOf, owns, callbacksOnly, rebuildOnly, calledNames, fieldsSetUp, Map.of());
     }
 
     public ModMixins(List<String> configs, Map<String, Set<String>> targetsOf, Set<String> owns) {
@@ -46,7 +53,8 @@ public record ModMixins(List<String> configs, Map<String, Set<String>> targetsOf
             }
         }
         return new ModMixins(configs, jar.patches().byConfig(), jar.patches().owns(), jar.patches().callbacksOnly(),
-                jar.patches().rebuildOnly(), jar.patches().calledNames(), jar.patches().fieldsSetUp());
+                jar.patches().rebuildOnly(), jar.patches().calledNames(), jar.patches().fieldsSetUp(),
+                jar.patches().overwrites());
     }
 
     public Set<String> targets() {

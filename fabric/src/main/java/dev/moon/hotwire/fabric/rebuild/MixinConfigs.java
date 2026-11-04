@@ -85,7 +85,7 @@ public final class MixinConfigs {
                     config.getTargets().forEach(target -> patched.add(target.replace('.', '/')));
                     targets.put(config.getName(), patched);
                     all.put(mod.getKey(), new ModMixins(configs, targets, before.owns(), before.callbacksOnly(),
-                            before.rebuildOnly(), before.calledNames()));
+                            before.rebuildOnly(), before.calledNames(), before.fieldsSetUp(), before.overwrites()));
                     LOGGER.info("[Hotwire] {} is {}'s: it holds the mixins of {}", config.getName(), mod.getKey(),
                             config.getMixinPackage());
                     break;
@@ -112,7 +112,7 @@ public final class MixinConfigs {
             }
         }
         return grown ? new ModMixins(mod.configs(), targets, mod.owns(), mod.callbacksOnly(),
-                mod.rebuildOnly(), mod.calledNames()) : mod;
+                mod.rebuildOnly(), mod.calledNames(), mod.fieldsSetUp(), mod.overwrites()) : mod;
     }
 
     private static boolean hasClassUnder(ModMixins mod, String prefix) {

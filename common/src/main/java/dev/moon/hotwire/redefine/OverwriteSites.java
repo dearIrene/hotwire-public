@@ -61,6 +61,11 @@ final class OverwriteSites {
                 HandlerGuards.markUnflippable(internalName, mixin, "an overwrite " + other + " injects into");
                 continue;
             }
+            String under = findOtherOverwrite(internalName, method, mixin);
+            if (under != null) {
+                HandlerGuards.markUnflippable(internalName, mixin, "an overwrite with " + under + "'s under it");
+                continue;
+            }
             added.add(copy(method, method.name + BODY, isStatic));
             added.add(copy(was, method.name + WAS, isStatic));
             writeTrampoline(internalName, method, mixin, isStatic, method.name + WAS);
@@ -108,6 +113,15 @@ final class OverwriteSites {
                 if (of != null && !of.equals(mixin)) {
                     return of;
                 }
+            }
+        }
+        return null;
+    }
+
+    private static @Nullable String findOtherOverwrite(String internalName, MethodNode method, String mixin) {
+        for (String other : HandlerGuards.overwriters.apply(internalName + '.' + method.name + method.desc)) {
+            if (!other.equals(mixin)) {
+                return other;
             }
         }
         return null;

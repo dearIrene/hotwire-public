@@ -238,6 +238,7 @@ final class EngineStart {
                 new ClassRebuilder(instrumentation, GameMixinCopy.create(mixin, MixinConfigs.readDecorations(
                         mixins, mixin), classes::findOriginalBytes)),
                 classes, mixins, mixins.keySet(), MixinConfigs.findUnowned(mixin.getConfigs(), mixins));
+        HandlerGuards.readOverwritersWith(applier.getCarriedMixins()::findOverwriters);
         laps.endLap("applier and Mixin copy");
         applier.getRebuilder().resolveArgsWith(mixin::getArgsClassFor);
         laps.endLap("args classes");

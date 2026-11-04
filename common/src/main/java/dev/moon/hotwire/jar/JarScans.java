@@ -103,6 +103,11 @@ public final class JarScans {
         writeAll(out, patches.rebuildOnly());
         patches.calledNames().writeTo(out);
         writeAll(out, patches.fieldsSetUp());
+        out.writeInt(patches.overwrites().size());
+        for (Map.Entry<String, Set<String>> method : patches.overwrites().entrySet()) {
+            out.writeUTF(method.getKey());
+            writeAll(out, method.getValue());
+        }
         out.writeInt(scanned.nested().size());
         for (Scan nested : scanned.nested()) {
             writeJar(out, nested);
@@ -131,9 +136,13 @@ public final class JarScans {
         List<String> rebuildOnly = readAll(in);
         CalledNames calledNames = CalledNames.readFrom(in);
         List<String> fieldsSetUp = readAll(in);
+        Map<String, Set<String>> overwrites = new LinkedHashMap<>();
+        for (int count = in.readInt(); count > 0; count--) {
+            overwrites.put(in.readUTF(), Set.copyOf(readAll(in)));
+        }
         ModPatches patches = new ModPatches(Set.copyOf(owns), Set.copyOf(patched), Set.copyOf(hookOnly), missing,
                 byConfig, Set.copyOf(calls), Set.copyOf(asks), callbacksOnly, Set.copyOf(rebuildOnly), calledNames,
-                Set.copyOf(fieldsSetUp));
+                Set.copyOf(fieldsSetUp), overwrites);
         List<ModJar> nested = new ArrayList<>();
         for (int count = in.readInt(); count > 0; count--) {
             nested.add(readJar(in));

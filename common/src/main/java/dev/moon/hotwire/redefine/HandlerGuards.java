@@ -87,6 +87,8 @@ public final class HandlerGuards {
 
     static volatile Function<String, byte @Nullable []> originals = name -> null;
 
+    static volatile Function<String, Set<String>> overwriters = method -> Set.of();
+
     private record Guard(MethodHandle handler, MethodHandle standIn, boolean ofChunks) {
     }
 
@@ -125,6 +127,10 @@ public final class HandlerGuards {
 
     public static void readOriginalsWith(Function<String, byte @Nullable []> reader) {
         originals = reader;
+    }
+
+    public static void readOverwritersWith(Function<String, Set<String>> reader) {
+        overwriters = reader;
     }
 
     public static boolean isGuarded(String internalName) {

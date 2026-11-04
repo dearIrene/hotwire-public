@@ -36,6 +36,7 @@ public final class CarriedMixins {
 
     private volatile @Nullable Map<String, String> shipping;
     private final Map<String, List<Map.Entry<String, Integer>>> nearest = new ConcurrentHashMap<>();
+    private volatile @Nullable Map<String, Set<String>> overwriters;
 
     CarriedMixins(Map<String, ModMixins> mods, SwitchApplier.Game game) {
         this.mods = mods;
@@ -230,8 +231,21 @@ public final class CarriedMixins {
         return known.get(internalName);
     }
 
+    public Set<String> findOverwriters(String method) {
+        Map<String, Set<String>> known = this.overwriters;
+        if (known == null) {
+            Map<String, Set<String>> made = new HashMap<>();
+            this.mods.values().forEach(mod -> mod.overwrites().forEach((name, mixins) ->
+                    made.computeIfAbsent(name, any -> new HashSet<>()).addAll(mixins)));
+            known = Map.copyOf(made);
+            this.overwriters = known;
+        }
+        return known.getOrDefault(method, Set.of());
+    }
+
     void forget() {
         this.shipping = null;
+        this.overwriters = null;
         this.nearest.clear();
     }
 
