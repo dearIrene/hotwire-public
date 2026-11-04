@@ -39,7 +39,8 @@ public final class LivePluginShapes {
         if (kept != null) {
             return kept;
         }
-        if (Tripwire.isOfOffMod(live.getClass())) {
+
+        if (Tripwire.isOfOffMod(live.getClass()) || (found != null && !isListed(found, mixin))) {
             return null;
         }
         try {
@@ -75,6 +76,15 @@ public final class LivePluginShapes {
             }
         }
         return null;
+    }
+
+    private static boolean isListed(IMixinConfig config, String mixin) {
+        for (Object one : PrivateField.of(config.getClass(), "mixins").get(config, List.class)) {
+            if (one instanceof IMixinInfo info && info.getClassName().equals(mixin)) {
+                return true;
+            }
+        }
+        return false;
     }
 
     private static @Nullable IMixinConfig findConfig(String name) {
