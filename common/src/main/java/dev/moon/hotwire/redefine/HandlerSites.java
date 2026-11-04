@@ -6,6 +6,7 @@ import java.util.HashSet;
 import java.util.Map;
 import java.util.OptionalInt;
 import java.util.Set;
+import java.util.TreeSet;
 import java.util.function.Supplier;
 import org.jspecify.annotations.Nullable;
 import org.objectweb.asm.ClassReader;
@@ -123,10 +124,12 @@ final class HandlerSites {
                         why = " (" + RedirectStandIns.explainMiss(before, node, method, call.desc) + ")";
                     }
                     if (target != null) {
-                        method.instructions.set(call,
-                                new InvokeDynamicInsnNode(call.name, desc, HandlerGuards.BOOTSTRAP_REDIRECT,
-                                mixin, how, target.opcode(), target.owner(), target.name(),
-                                target.desc()));
+                        String kept = findKept(node, call, before);
+                        method.instructions.set(call, kept.isEmpty()
+                                ? new InvokeDynamicInsnNode(call.name, desc, HandlerGuards.BOOTSTRAP_REDIRECT,
+                                mixin, how, target.opcode(), target.owner(), target.name(), target.desc())
+                                : new InvokeDynamicInsnNode(call.name, desc, HandlerGuards.BOOTSTRAP_REDIRECT_FORGETTING,
+                                mixin, how, target.opcode(), target.owner(), target.name(), target.desc(), kept));
                         guarded.add(mixin);
                         continue;
                     }
@@ -174,6 +177,31 @@ final class HandlerSites {
             }
         }
         return stage(internalName, guarded);
+    }
+
+    private static String findKept(ClassNode node, MethodInsnNode call, @Nullable ClassNode shipped) {
+        if (shipped == null || call.getOpcode() == Opcodes.INVOKESTATIC) {
+            return "";
+        }
+        Set<String> kept = new TreeSet<>();
+        Set<String> constructed = new HashSet<>();
+        for (MethodNode method : node.methods) {
+            boolean handler = method.name.equals(call.name) && method.desc.equals(call.desc);
+            for (AbstractInsnNode insn : method.instructions) {
+                if (insn instanceof FieldInsnNode field && field.getOpcode() == Opcodes.PUTFIELD
+                        && field.owner.equals(node.name)) {
+                    String named = field.name + " " + field.desc;
+                    if (method.name.equals("<init>")) {
+                        constructed.add(named);
+                    } else if (handler && Type.getType(field.desc).getSort() < Type.ARRAY
+                            && shipped.fields.stream().noneMatch(own -> own.name.equals(field.name))) {
+                        kept.add(named);
+                    }
+                }
+            }
+        }
+        kept.removeAll(constructed);
+        return String.join(";", kept);
     }
 
     private static @Nullable String findGameFieldSet(ClassNode node, MethodInsnNode call,

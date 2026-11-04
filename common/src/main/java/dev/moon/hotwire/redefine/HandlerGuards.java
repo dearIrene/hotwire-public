@@ -76,6 +76,12 @@ public final class HandlerGuards {
                     String.class, int.class, int.class, String.class, String.class, String.class)
                     .toMethodDescriptorString(), false);
 
+    static final Handle BOOTSTRAP_REDIRECT_FORGETTING = new Handle(Opcodes.H_INVOKESTATIC,
+            HandlerGuards.class.getName().replace('.', '/'), "bootstrapRedirectForgetting",
+            MethodType.methodType(CallSite.class, MethodHandles.Lookup.class, String.class, MethodType.class,
+                    String.class, int.class, int.class, String.class, String.class, String.class, String.class)
+                    .toMethodDescriptorString(), false);
+
     static final Handle BOOTSTRAP_FIELD = new Handle(Opcodes.H_INVOKESTATIC,
             HandlerGuards.class.getName().replace('.', '/'), "bootstrapField",
             MethodType.methodType(CallSite.class, MethodHandles.Lookup.class, String.class, MethodType.class,
@@ -519,6 +525,28 @@ public final class HandlerGuards {
             int isStatic, int opcode, String owner, String target, String desc) throws ReflectiveOperationException {
         return link(caller, name, type, mixin, isStatic, () -> RedirectStandIns.makeStandIn(caller, type,
                 isStatic == STATIC ? 0 : 1, new RedirectStandIns.Target(opcode, owner, target, desc)));
+    }
+
+    public static CallSite bootstrapRedirectForgetting(MethodHandles.Lookup caller, String name, MethodType type,
+            String mixin, int isStatic, int opcode, String owner, String target, String desc, String kept)
+            throws ReflectiveOperationException {
+        return link(caller, name, type, mixin, isStatic, () -> {
+            MethodHandle standIn = RedirectStandIns.makeStandIn(caller, type, 1,
+                    new RedirectStandIns.Target(opcode, owner, target, desc));
+            for (String field : kept.split(";", -1)) {
+                int space = field.indexOf(' ');
+                Class<?> number = MethodType.fromMethodDescriptorString("()" + field.substring(space + 1), null)
+                        .returnType();
+                try {
+                    MethodHandle set = caller.findSetter(caller.lookupClass(), field.substring(0, space), number);
+                    standIn = MethodHandles.foldArguments(standIn,
+                            MethodHandles.collectArguments(set, 1, MethodHandles.zero(number)));
+                } catch (NoSuchFieldException | IllegalAccessException e) {
+                    LOGGER.debug("[Hotwire] {} keeps {} through its off: {}", mixin, field, e.toString());
+                }
+            }
+            return standIn;
+        });
     }
 
     public static CallSite bootstrapField(MethodHandles.Lookup caller, String name, MethodType type, String mixin)
