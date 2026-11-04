@@ -25,7 +25,7 @@ public final class ReplacedStatics {
     private static volatile Consumer<IdentityHashMap<Object, Object>> swap = replaced -> { };
 
     private record Change(Field field, Object old, Object made, Map<Field, Object> state,
-            InitHookReplay.StaticWriter writer, Set<String> mods) {
+            IdentityHashMap<Object, Object> parts, InitHookReplay.StaticWriter writer, Set<String> mods) {
     }
 
     private static final List<Change> CHANGES = new ArrayList<>();
@@ -51,12 +51,13 @@ public final class ReplacedStatics {
     }
 
     static synchronized void noteWritten(Field field, Object old, Object made, InitHookReplay.StaticWriter writer) {
-        note(new Change(field, old, made, Map.of(), writer, goingOff));
+        note(new Change(field, old, made, Map.of(), new IdentityHashMap<>(), writer, goingOff));
     }
 
-    static synchronized void noteInPlace(Field field, Object holder, Map<Field, Object> before) {
+    static synchronized void noteInPlace(Field field, Object holder, Map<Field, Object> before,
+            IdentityHashMap<Object, Object> parts) {
         Map<Field, Object> fields = Collections.unmodifiableMap(new LinkedHashMap<>(before));
-        note(new Change(field, holder, holder, fields, (one, value) -> { }, goingOff));
+        note(new Change(field, holder, holder, fields, new IdentityHashMap<>(parts), (one, value) -> { }, goingOff));
     }
 
     private static void note(Change change) {
@@ -87,6 +88,8 @@ public final class ReplacedStatics {
                     for (Map.Entry<Field, Object> part : change.state().entrySet()) {
                         FinalWrites.write(part.getKey(), change.old(), part.getValue());
                     }
+
+                    change.parts().forEach((was, part) -> back.put(part, was));
                 } else {
                     change.writer().write(change.field(), change.old());
                     back.put(change.made(), change.old());

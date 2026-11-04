@@ -134,6 +134,21 @@ final class ChangedStatics {
         if (stored.isEmpty()) {
             return recomputed;
         }
+
+        Map<String, InsnList> slicesOfHas = FieldInitializers.findStaticSlices(has.name, has, stored);
+        stored.removeIf(key -> {
+            InsnList slice = slicesOfHas.get(key);
+            if (slice == null) {
+                return true;
+            }
+            for (AbstractInsnNode insn : slice) {
+                if (insn instanceof MethodInsnNode call && call.owner.equals(has.name)
+                        && only.contains(call.name + call.desc)) {
+                    return false;
+                }
+            }
+            return true;
+        });
         FieldInitializers.findStaticSlices(now.name, now, stored).forEach((field, slice) -> {
             AbstractInsnNode store = slice.getLast();
             if (!(store instanceof FieldInsnNode put) || put.getOpcode() != Opcodes.PUTSTATIC) {
@@ -306,7 +321,7 @@ final class ChangedStatics {
         for (Field field : fields) {
             before.put(field, field.get(old));
         }
-        ReplacedStatics.noteInPlace(holder, old, before);
+        IdentityHashMap<Object, Object> parts = new IdentityHashMap<>();
         for (Field field : fields) {
             Object was = before.get(field);
             Object now = field.get(made);
@@ -314,8 +329,10 @@ final class ChangedStatics {
 
             if (was != null && now != null && was != now && Tripwire.isOfOffMod(was.getClass())) {
                 replaced.put(was, now);
+                parts.put(was, now);
             }
         }
+        ReplacedStatics.noteInPlace(holder, old, before, parts);
         return true;
     }
 
