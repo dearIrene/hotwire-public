@@ -2,17 +2,22 @@ package dev.moon.hotwire.fabric.rebuild;
 
 import dev.moon.hotwire.redefine.Tripwire;
 import dev.moon.hotwire.fabric.add.LivePlugins;
+import dev.moon.hotwire.fabric.registration.GameRegistrations;
 import dev.moon.hotwire.jvm.PrivateField;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.Map;
+import java.util.Collection;
 import java.util.List;
 import java.util.Objects;
 import org.jspecify.annotations.Nullable;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 import org.spongepowered.asm.mixin.extensibility.IMixinConfig;
 import org.spongepowered.asm.mixin.extensibility.IMixinConfigPlugin;
 import org.spongepowered.asm.mixin.extensibility.IMixinInfo;
 
 public final class LivePluginShapes {
+    private static final Logger LOGGER = LoggerFactory.getLogger(LivePluginShapes.class);
     private static volatile @Nullable MixinInternals mixin;
 
     private LivePluginShapes() {
@@ -53,6 +58,34 @@ public final class LivePluginShapes {
     }
 
     private static final Map<String, Boolean> ANSWERED = new ConcurrentHashMap<>();
+
+    public static void rememberAnswers(Collection<String> mods) {
+        for (Object config : findConfigs()) {
+            IMixinConfigPlugin plugin = config instanceof IMixinConfig one ? one.getPlugin() : null;
+            String owner = plugin == null ? null : GameRegistrations.findModOf(plugin.getClass());
+
+            if (plugin != null && owner != null && config instanceof IMixinConfig live
+                    && !Tripwire.isOfOffMod(plugin.getClass()) && mods.contains(owner)) {
+                for (Object listed : PrivateField.of(config.getClass(), "mixins").get(config, List.class)) {
+                    if (listed instanceof IMixinInfo info) {
+                        info.getTargetClasses().forEach(target -> remember(live.getName(), plugin,
+                                target.replace('/', '.'), info.getClassName()));
+                    }
+                }
+            }
+        }
+    }
+
+    private static void remember(String config, IMixinConfigPlugin plugin, String target, String mixin) {
+        String question = config + ' ' + target + ' ' + mixin;
+        if (!ANSWERED.containsKey(question)) {
+            try {
+                ANSWERED.put(question, plugin.shouldApplyMixin(target, mixin));
+            } catch (RuntimeException | LinkageError e) {
+                LOGGER.debug("[Hotwire] {} gave no answer for {}: {}", config, mixin, e.toString());
+            }
+        }
+    }
 
     public static @Nullable Object findByPackage(String mixinPackage) {
         String wanted = trim(mixinPackage);
