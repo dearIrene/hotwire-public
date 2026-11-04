@@ -179,6 +179,14 @@ public final class GameClasses implements SwitchApplier.Game {
             ClientPacketListener.class, MultiPlayerGameMode.class, Entity.class);
 
     @Override
+    public boolean isKnownAlive(Class<?> type) {
+        Minecraft client = Minecraft.getInstance();
+        return type.isInstance(client.getSingleplayerServer()) || type.isInstance(client.level)
+                || type.isInstance(client.particleEngine) || type.isInstance(client.levelRenderer)
+                || type.isInstance(client.gameRenderer) || type.isInstance(client.player);
+    }
+
+    @Override
     public boolean isWorldObject(Class<?> type) {
         for (Class<?> root : WORLD_OBJECTS) {
             if (root.isAssignableFrom(type)) {

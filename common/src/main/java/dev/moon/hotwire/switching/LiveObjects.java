@@ -49,9 +49,9 @@ final class LiveObjects {
         AHEAD.set(ahead);
     }
 
-    static Predicate<Class<?>> makeAliveCheck(Supplier<Class<?>[]> loaded) {
+    static Predicate<Class<?>> makeAliveCheck(Supplier<Class<?>[]> loaded, Predicate<Class<?>> knownAlive) {
         boolean ahead = AHEAD.get();
-        return type -> ahead || HeapCensus.hasObjectsOf(type, loaded);
+        return type -> ahead || knownAlive.test(type) || HeapCensus.hasObjectsOf(type, loaded);
     }
 
     static ClassRebuilder.PreparedRebuild check(ClassRebuilder.PreparedRebuild prepared, Map<String, byte[]> current,
@@ -60,7 +60,7 @@ final class LiveObjects {
             throws RebuildException {
         StopPoint.check();
 
-        Predicate<Class<?>> alive = makeAliveCheck(rebuilder::getLoadedClasses);
+        Predicate<Class<?>> alive = makeAliveCheck(rebuilder::getLoadedClasses, game::isKnownAlive);
         Map<Class<?>, InitHookReplay.Due> hooked = findHooked(prepared);
         hooked.keySet().removeIf(recomputed);
 
