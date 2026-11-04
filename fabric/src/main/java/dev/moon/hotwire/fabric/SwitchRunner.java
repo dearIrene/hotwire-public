@@ -236,12 +236,14 @@ public final class SwitchRunner {
         if (!plan.isRefused()) {
             this.switcher.showBegun(plan);
 
-            ElementLook.findAhead(this.fieldReferences, wired, this.switcher::isOn);
-            SwitchTimes.mark("look: notes");
-            ElementLook.readBrought(this.fieldReferences);
-            SwitchTimes.mark("look: brought");
-            ElementLook.readHandlers(this.fieldReferences, wired);
-            SwitchTimes.mark("look: handlers");
+            ElementLook.asSwitch(() -> {
+                ElementLook.findAhead(this.fieldReferences, wired, this.switcher::isOn);
+                SwitchTimes.mark("look: notes");
+                ElementLook.readBrought(this.fieldReferences);
+                SwitchTimes.mark("look: brought");
+                ElementLook.readHandlers(this.fieldReferences, wired);
+                SwitchTimes.mark("look: handlers");
+            });
         }
 
         ModSwitcher.Result result;

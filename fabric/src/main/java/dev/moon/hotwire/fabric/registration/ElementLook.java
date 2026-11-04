@@ -52,15 +52,36 @@ public final class ElementLook {
 
     private static volatile boolean stopAsked;
 
+    private static volatile @Nullable Thread switching;
+    private static volatile Set<String> lookingFor = Set.of();
+
     private final CollectionNotes notes = new CollectionNotes();
 
     public static void findAhead(FieldReferences references, Collection<String> mods, Predicate<String> on) {
         findAhead(references, mods, on, false);
     }
 
+    public static void asSwitch(Runnable looks) {
+        switching = Thread.currentThread();
+        try {
+            looks.run();
+        } finally {
+            switching = null;
+        }
+    }
+
+    @SuppressWarnings("ReferenceEquality")
+    private static boolean isSwitchLooking() {
+        Thread running = switching;
+        return running != null && running != Thread.currentThread();
+    }
+
     @SuppressWarnings({"ThreadPriorityCheck", "ReferenceEquality"})
     public static void findAhead(FieldReferences references, Collection<String> mods, Predicate<String> on,
             boolean every) {
+        if (isSwitchLooking()) {
+            return;
+        }
         List<String> asked = List.copyOf(mods);
         if (every ? isFreshForEvery(asked) : stands(asked)) {
             if (!every) {
@@ -74,7 +95,11 @@ public final class ElementLook {
         }
         Thread running = looking;
         if (!every && running != null && running != Thread.currentThread()) {
-            stopLooking();
+            if (lookingFor.equals(Set.copyOf(asked))) {
+                running.setPriority(Thread.NORM_PRIORITY);
+            } else {
+                stopLooking();
+            }
         }
         synchronized (ONE_LOOK) {
             if (every ? isFreshForEvery(asked) : stands(asked)) {
@@ -84,6 +109,7 @@ public final class ElementLook {
             Thread self = Thread.currentThread();
             int priority = self.getPriority();
             looking = self;
+            lookingFor = every ? Set.of() : Set.copyOf(asked);
             runningMode = every ? Mode.LOOK_EVERY : Mode.LOOK;
             MODE.set(runningMode);
             try {
@@ -111,6 +137,7 @@ public final class ElementLook {
                 MODE.remove();
                 runningMode = Mode.HOLD;
                 looking = null;
+                lookingFor = Set.of();
                 self.setPriority(priority);
             }
         }
@@ -140,7 +167,7 @@ public final class ElementLook {
     @SuppressWarnings("ThreadPriorityCheck")
     public static void readBrought(FieldReferences references) {
         List<String> brought = List.copyOf(BROUGHT);
-        if (brought.isEmpty() || lookedForEvery.isEmpty()) {
+        if (brought.isEmpty() || lookedForEvery.isEmpty() || isSwitchLooking()) {
             return;
         }
         stopLooking();
