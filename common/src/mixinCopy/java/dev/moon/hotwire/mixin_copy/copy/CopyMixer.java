@@ -3,6 +3,8 @@ package dev.moon.hotwire.mixin_copy.copy;
 import java.io.InputStream;
 import java.lang.reflect.Field;
 import java.lang.reflect.InvocationTargetException;
+import java.lang.reflect.Method;
+import java.lang.reflect.Proxy;
 import java.nio.charset.StandardCharsets;
 import java.util.Arrays;
 import java.util.LinkedHashMap;
@@ -41,12 +43,14 @@ public final class CopyMixer implements Function<Object[], Object[]> {
             "gg.essential.lib.mixinextras.MixinExtrasBootstrap");
 
     private boolean booted;
+    private @Nullable ClassLoader live;
 
     @Override
     @SuppressWarnings("unchecked")
 
     public Object[] apply(Object[] request) {
         List<String> targets = (List<String>) request[0];
+        this.live = (ClassLoader) request[5];
         List<String> configs = (List<String>) request[3];
         String sessionId = (String) request[4];
         Map<String, String> modIds = (Map<String, String>) request[10];
@@ -88,6 +92,7 @@ public final class CopyMixer implements Function<Object[], Object[]> {
             for (String extension : EXTENSIONS) {
                 bootExtension(extension);
             }
+            bridgeCancellers(this.live);
             this.booted = true;
         }
 
@@ -325,6 +330,34 @@ public final class CopyMixer implements Function<Object[], Object[]> {
             }
         }
         return best;
+    }
+
+    @SuppressWarnings("ReferenceEquality")
+    private static void bridgeCancellers(@Nullable ClassLoader game) {
+        ClassLoader own = CopyMixer.class.getClassLoader();
+        try {
+            Class<?> canceller = Class.forName("com.bawnorton.mixinsquared.api.MixinCanceller", true, own);
+            Class<?> registrar = Class.forName("com.bawnorton.mixinsquared.canceller.MixinCancellerRegistrar", true,
+                    own);
+            if (game == null) {
+                return;
+            }
+            Method ask = Class.forName("dev.moon.hotwire.fabric.rebuild.LiveCancellers", true, game)
+                    .getMethod("shouldCancel", List.class, String.class);
+            Object bridge = Proxy.newProxyInstance(own, new Class<?>[] {canceller}, (proxy, method, args) ->
+                    switch (method.getName()) {
+                        case "shouldCancel" -> ask.invoke(null, args[0], args[1]);
+                        case "hashCode" -> System.identityHashCode(proxy);
+                        case "equals" -> args[0] == proxy;
+                        default -> "the game's cancellers";
+                    });
+            registrar.getMethod("register", canceller).invoke(null, bridge);
+        } catch (ClassNotFoundException absent) {
+            return;
+        } catch (ReflectiveOperationException e) {
+            throw new IllegalStateException("MixinSquared's cancellers could not be reached from Mixin's copy: " + e,
+                    e);
+        }
     }
 
     private static void bootExtension(String bootstrap) {
