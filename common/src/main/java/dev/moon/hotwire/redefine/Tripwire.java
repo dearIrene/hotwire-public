@@ -95,6 +95,8 @@ public final class Tripwire {
     private static final ThreadLocal<@Nullable String> SENDING = new ThreadLocal<>();
     private static final Map<String, AtomicLong> CALLS = new ConcurrentHashMap<>();
     private static final Map<String, List<String>> FIRST = new ConcurrentHashMap<>();
+
+    private static final Set<String> RAN = ConcurrentHashMap.newKeySet();
     private static final Map<String, List<String>> FIRST_LOAD = new ConcurrentHashMap<>();
     private static final Map<String, Map<String, WeakReference<Thread>>> LOADERS = new ConcurrentHashMap<>();
 
@@ -124,16 +126,20 @@ public final class Tripwire {
     }
 
     public static void hit(String mod) {
-        hitOrSkip(mod);
+        hitOrSkip(mod, true);
     }
 
     public static boolean hitOrSkip(String mod) {
+        return hitOrSkip(mod, false);
+    }
+
+    private static boolean hitOrSkip(String mod, boolean runs) {
         if (EXPECTED.get().contains(mod) || IN_HIT.get() || HOTWIRE_WORK.get()) {
             return false;
         }
         IN_HIT.set(true);
         try {
-            return hitOnce(mod);
+            return hitOnce(mod, runs);
         } finally {
             IN_HIT.set(false);
         }
@@ -141,7 +147,7 @@ public final class Tripwire {
 
     private static final Set<String> SAID_WHOSE = ConcurrentHashMap.newKeySet();
 
-    private static boolean hitOnce(String mod) {
+    private static boolean hitOnce(String mod, boolean runs) {
         CountDownLatch gate = GATES.get(mod);
         if (gate != null) {
             if (paused && onGameThread.getAsBoolean()) {
@@ -165,7 +171,7 @@ public final class Tripwire {
         }
         AtomicLong calls = CALLS.get(mod);
         if (calls != null) {
-            count(mod, calls);
+            count(mod, calls, runs);
             return true;
         }
         return false;
@@ -228,15 +234,17 @@ public final class Tripwire {
     static void onCounted(String mod) {
         AtomicLong calls = CALLS.get(mod);
         if (calls != null) {
-            count(mod, calls);
+            count(mod, calls, true);
         }
     }
 
-    private static void count(String mod, AtomicLong calls) {
+    private static void count(String mod, AtomicLong calls, boolean runs) {
         if (paused) {
             return;
         }
-        if (calls.getAndIncrement() == 0) {
+        long before = calls.getAndIncrement();
+        boolean firstRun = runs && RAN.add(mod);
+        if (before == 0 || firstRun) {
             List<String> frames = new ArrayList<>();
 
             Set<String> seen = new HashSet<>();
@@ -248,7 +256,12 @@ public final class Tripwire {
                 }
             }
             if (TripwireSites.isLetGo(frames)) {
-                calls.set(0);
+                if (before == 0) {
+                    calls.set(0);
+                }
+                if (firstRun) {
+                    RAN.remove(mod);
+                }
                 return;
             }
             FIRST.put(mod, List.copyOf(frames));
@@ -486,6 +499,10 @@ public final class Tripwire {
         return new Hits(calls == null ? 0 : calls.get(), first == null ? List.of() : first, countWaiting(mod));
     }
 
+    public static boolean hasRun(String mod) {
+        return RAN.contains(mod);
+    }
+
     public static List<String> findWatched() {
         return List.copyOf(CALLS.keySet());
     }
@@ -581,6 +598,7 @@ public final class Tripwire {
 
     public static void watch(String mod) {
         FIRST.remove(mod);
+        RAN.remove(mod);
         FIRST_LOAD.remove(mod);
         LOADERS.remove(mod);
         CALLS.put(mod, new AtomicLong());
@@ -594,6 +612,7 @@ public final class Tripwire {
 
     public static Hits unwatch(String mod) {
         AtomicLong calls = CALLS.remove(mod);
+        RAN.remove(mod);
         List<String> first = FIRST.remove(mod);
         return new Hits(calls == null ? 0 : calls.get(), first == null ? List.of() : first, countWaiting(mod));
     }

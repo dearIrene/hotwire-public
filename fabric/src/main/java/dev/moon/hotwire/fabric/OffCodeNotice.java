@@ -48,7 +48,13 @@ final class OffCodeNotice {
             return;
         }
         List<String> first = Tripwire.peek(mod).first();
-        LOGGER.warn("[Hotwire] {} is off, yet its code ran: {}", mod, String.join(" < ", first));
+        boolean ran = Tripwire.hasRun(mod);
+        if (ran) {
+            LOGGER.warn("[Hotwire] {} is off, yet its code ran: {}", mod, String.join(" < ", first));
+        } else {
+            LOGGER.info("[Hotwire] {} is off and was called all the same, and answered with nothing: {}", mod,
+                    String.join(" < ", first));
+        }
 
         String user = findUser(engine, installed, mod, first);
         SeenUses seen = ModPolicy.getSeenUses();
@@ -56,8 +62,13 @@ final class OffCodeNotice {
             if (seen.add(user, mod)) {
                 LOGGER.info("[Hotwire] {} runs {}'s code by its own hand: from now on it goes off with it", user, mod);
             }
-            engine.showMessage(Lang.get("hotwire.off_code.used_by", installed.nameOf(mod), installed.nameOf(user)),
-                    true);
+            if (ran) {
+                engine.showMessage(Lang.get("hotwire.off_code.used_by", installed.nameOf(mod), installed.nameOf(user)),
+                        true);
+            }
+            return;
+        }
+        if (!ran) {
             return;
         }
         ModScreen current = engine.findScreen();
