@@ -213,6 +213,14 @@ public final class SwitchRunner {
             this.tripwire.armEarly(wired, this.switcher.findPatchedBy(wired));
         }
         SwitchTimes.mark("plan");
+        if (!plan.isRefused() && Minecraft.getInstance().level != null) {
+            ModSwitcher.Result dry = this.switcher.dryRun(ids, true);
+            if (dry instanceof ModSwitcher.Result.Failed failed && failed.cause().reopenFixes()) {
+                this.tripwire.unwire(wired);
+                return new CheckedResult(failed, new Report.OffCheck.NotRun(), List.of());
+            }
+            SwitchTimes.mark("plan: dry run");
+        }
         if (!plan.isRefused()) {
             this.switcher.showBegun(plan);
 

@@ -1,5 +1,6 @@
 package dev.moon.hotwire.fabric.registration;
 
+import dev.moon.hotwire.switching.HoldBudgetException;
 import dev.moon.hotwire.fabric.add.LoaderModList;
 import dev.moon.hotwire.fabric.mixin.core.world.item.CreativeModeTabsAccessor;
 import dev.moon.hotwire.jvm.LoadedClassList;
@@ -46,6 +47,8 @@ public final class FieldReferences {
     private static final long REFRESH_DELAY_MILLIS = 200;
 
     private static final Logger LOGGER = LoggerFactory.getLogger(FieldReferences.class);
+
+    private static final int MOST_TAKES_IN_HOLD = 100_000;
 
     record Replacement(FieldSlots.Slot field, @Nullable Object holder, Object modsValue, Object put) {
     }
@@ -256,6 +259,12 @@ public final class FieldReferences {
         boolean answered = !every && this.elements.look.isReadyFor(mods)
                 && this.elements.prepare(List.copyOf(mods));
         SwitchTimes.mark("takes answered");
+
+        if (answered && this.elements.countPlanned() > MOST_TAKES_IN_HOLD && Minecraft.getInstance().level != null) {
+            LOGGER.info("[Hotwire] {} noted takes for {} are more than a hold removes in its budget: refused ahead",
+                    this.elements.countPlanned(), mods);
+            throw new HoldBudgetException();
+        }
         Set<String> targets = new HashSet<>();
         mods.forEach(mod -> targets.addAll(this.mixinTargets.apply(mod)));
 
