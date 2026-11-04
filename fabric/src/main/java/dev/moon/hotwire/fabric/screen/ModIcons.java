@@ -1,6 +1,7 @@
 package dev.moon.hotwire.fabric.screen;
 
 import com.mojang.blaze3d.platform.NativeImage;
+import dev.moon.hotwire.fabric.add.LoaderModList;
 import dev.moon.hotwire.fabric.InstalledMods;
 import dev.moon.hotwire.jar.JarLookup;
 import dev.moon.hotwire.jar.ModJarException;
@@ -17,6 +18,7 @@ import java.nio.file.Files;
 import java.nio.file.Path;
 import java.util.Collection;
 import java.util.HashMap;
+import java.util.List;
 import java.util.Locale;
 import java.util.Map;
 import java.util.Optional;
@@ -26,6 +28,9 @@ import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.LinkedBlockingQueue;
 import java.util.concurrent.ThreadPoolExecutor;
 import java.util.concurrent.TimeUnit;
+import java.util.stream.Stream;
+import java.util.zip.ZipEntry;
+import java.util.zip.ZipFile;
 import net.fabricmc.loader.api.FabricLoader;
 import net.fabricmc.loader.api.ModContainer;
 import net.minecraft.client.Minecraft;
@@ -244,12 +249,22 @@ public final class ModIcons implements AutoCloseable {
         try {
             Path jar = source.jar();
             Optional<byte[]> bytes = jar == null ? fromGame(source) : fromJar(jar, source.path());
+            String path = source.path();
             if (bytes.isEmpty()) {
-                return Optional.empty();
+                Optional<String> only = jar == null ? findOnlyImageInGame(source.id()) : findOnlyImageInJar(jar,
+                        source.id());
+                if (only.isEmpty()) {
+                    return Optional.empty();
+                }
+                path = only.get();
+                bytes = jar == null ? fromGame(new Source(source.id(), null, path)) : fromJar(jar, path);
+                if (bytes.isEmpty()) {
+                    return Optional.empty();
+                }
             }
             String name = (jar == null ? "" : "jar-" + Integer.toHexString(jar.hashCode()) + "-")
                     + source.id().toLowerCase(Locale.ROOT).replaceAll("[^a-z0-9_.-]", "_");
-            return makeIcon(name, source.path(), bytes.get(), IconPixels.LIST_BOX);
+            return makeIcon(name, path, bytes.get(), IconPixels.LIST_BOX);
         } catch (IOException | RuntimeException e) {
             LOGGER.info("[Hotwire] {}'s icon {} could not be read: {}", source.id(), source.path(), e.toString());
             return Optional.empty();
@@ -271,13 +286,55 @@ public final class ModIcons implements AutoCloseable {
     }
 
     private static Optional<byte[]> fromGame(Source source) throws IOException {
-        Optional<ModContainer> container = FabricLoader.getInstance().getModContainer(source.id());
+        Optional<ModContainer> container = findContainer(source.id());
         if (container.isEmpty()) {
             return Optional.empty();
         }
         String declared = container.get().getMetadata().getIconPath(Integer.MAX_VALUE).orElse(source.path());
         Optional<Path> file = container.get().findPath(declared).filter(Files::isRegularFile);
         return file.isEmpty() ? Optional.empty() : Optional.of(Files.readAllBytes(file.get()));
+    }
+
+    private static boolean isImage(String name) {
+        String low = name.toLowerCase(Locale.ROOT);
+        return low.endsWith(".png") || low.endsWith(".svg") || low.endsWith(".webp");
+    }
+
+    private static Optional<String> pickOnly(List<String> images) {
+        if (images.size() == 1) {
+            return Optional.of(images.getFirst());
+        }
+        List<String> named = images.stream().filter(path -> {
+            String file = path.substring(path.lastIndexOf('/') + 1).toLowerCase(Locale.ROOT);
+            return file.contains("icon") || file.contains("logo");
+        }).toList();
+        return named.size() == 1 ? Optional.of(named.getFirst()) : Optional.empty();
+    }
+
+    private static Optional<ModContainer> findContainer(String id) {
+        Optional<ModContainer> listed = FabricLoader.getInstance().getModContainer(id);
+        return listed.isPresent() ? listed : Optional.ofNullable(LoaderModList.getHiddenContainers().get(id));
+    }
+
+    private static Optional<String> findOnlyImageInGame(String id) throws IOException {
+        Optional<ModContainer> container = findContainer(id);
+        String folder = "assets/" + id;
+        Optional<Path> found = container.flatMap(one -> one.findPath(folder)).filter(Files::isDirectory);
+        if (found.isEmpty()) {
+            return Optional.empty();
+        }
+        try (Stream<Path> files = Files.list(found.get())) {
+            return pickOnly(files.map(file -> file.getFileName().toString()).filter(ModIcons::isImage)
+                    .map(name -> folder + "/" + name).toList());
+        }
+    }
+
+    private static Optional<String> findOnlyImageInJar(Path jar, String id) throws IOException {
+        String folder = "assets/" + id + "/";
+        try (ZipFile zip = new ZipFile(jar.toFile())) {
+            return pickOnly(zip.stream().map(ZipEntry::getName).filter(name -> name.startsWith(folder)
+                    && name.indexOf('/', folder.length()) < 0 && isImage(name)).toList());
+        }
     }
 
     private static Optional<byte[]> fromJar(Path jar, String path) throws IOException {

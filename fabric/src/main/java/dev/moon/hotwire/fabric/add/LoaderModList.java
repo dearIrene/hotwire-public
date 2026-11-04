@@ -287,7 +287,7 @@ public final class LoaderModList {
         }
     }
 
-    static Map<String, ModContainer> getHiddenContainers() {
+    public static Map<String, ModContainer> getHiddenContainers() {
         synchronized (FabricLoaderImpl.INSTANCE) {
             Map<String, ModContainer> out = new LinkedHashMap<>();
             HIDDEN.forEach((id, hidden) -> out.put(id, hidden.container()));
