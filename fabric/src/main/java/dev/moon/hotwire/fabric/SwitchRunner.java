@@ -427,6 +427,7 @@ public final class SwitchRunner {
                     stillOff.forEach(LoaderModList::hide);
                 }
             }
+            SwitchTimes.mark("taken out again");
             return this.checkAndReport(result);
         } finally {
             Tripwire.noteComingOn(List.of());
@@ -524,6 +525,7 @@ public final class SwitchRunner {
             }
         }
         RegistryCheck.checkAfter(Set.copyOf(result.plan().order()));
+        SwitchTimes.mark("registry check");
         List<Report.Failure> faults = SwitchFaults.take();
         this.reports.reportSwitch(result, this.switcher.getOff(), check, off ? byKind : Map.of(),
                 off ? Map.of() : byKind, faults);

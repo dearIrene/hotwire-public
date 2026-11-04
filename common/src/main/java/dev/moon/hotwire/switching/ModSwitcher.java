@@ -555,12 +555,15 @@ public final class ModSwitcher {
                         + " again", new IllegalStateException(String.valueOf(plan.order())));
             }
             this.reopenChecks.checkReopenFirst(plan, onAfter);
-            if (goingOff) {
+
+            AtomicBoolean stopped = new AtomicBoolean();
+            Runnable beforeHold = !goingOff ? () -> { } : () -> {
+                stopped.set(true);
                 this.tickEach(plan.order(), this.lifecycle::onStopping);
                 SwitchTimes.mark("stop listeners");
                 this.withGamePaused(() -> this.tickEach(plan.order(), this.registrations::remove));
                 SwitchTimes.mark("registrations out");
-            }
+            };
             SwitchApplier.ApplyResult applied;
             AtomicBoolean ran = new AtomicBoolean();
             try {
@@ -571,7 +574,7 @@ public final class ModSwitcher {
                         this.runRegistrations(theirs, plan.order(), goingOff);
                     }
                 };
-                applied = this.applier.apply(Set.copyOf(plan.order()), onAfter, whilePaused);
+                applied = this.applier.apply(Set.copyOf(plan.order()), onAfter, beforeHold, whilePaused);
                 whilePaused.run();
             } catch (RebuildException | RuntimeException | LinkageError e) {
                 RebuildException failure = e instanceof RebuildException known ? known
@@ -583,10 +586,10 @@ public final class ModSwitcher {
                 if (failure.isWorldBuilt() && plan.order().size() == 1) {
                     this.worldBound.add(Set.copyOf(plan.order()));
                 }
-                if (goingOff) {
+                if (stopped.get()) {
                     this.withGamePaused(() -> plan.order().forEach(this.registrations::restore));
                     plan.order().forEach(this.lifecycle::onStarted);
-                } else if (ran.get()) {
+                } else if (!goingOff && ran.get()) {
                     plan.order().forEach(this.lifecycle::onStopping);
                     this.withGamePaused(() -> plan.order().forEach(this.registrations::remove));
                 }

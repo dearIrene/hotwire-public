@@ -105,7 +105,10 @@ final class PreparedSwitches {
                     new IllegalStateException(String.join(", ", lost)),
                             this.owner.carriedMixins.findOwnersOf(lost, on));
         }
-        ClassRebuilder.PreparedRebuild prepared = LiveObjects.check(mixed, current, this.owner.rebuiltWhilePaused,
+
+        ClassRebuilder.PreparedRebuild prepared;
+        try {
+            prepared = LiveObjects.check(mixed, current, this.owner.rebuiltWhilePaused,
                 this.owner.game,
                 this.owner::findOriginal, this.owner.rebuilder, what, mixin -> {
                     String owner = this.owner.carriedMixins.findModMaking(mixin, id -> true);
@@ -114,7 +117,9 @@ final class PreparedSwitches {
                     String shipping = this.owner.carriedMixins.findModShipping(type);
                     return shipping != null && !on.contains(shipping);
                 });
-        SwitchTimes.mark("live objects");
+        } finally {
+            SwitchTimes.mark("live objects");
+        }
         return prepared;
     }
 

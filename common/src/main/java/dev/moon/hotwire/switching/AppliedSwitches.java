@@ -21,7 +21,7 @@ final class AppliedSwitches {
         this.owner = owner;
     }
 
-    SwitchApplier.ApplyResult applyNow(Set<String> switched, Set<String> onAfter,
+    SwitchApplier.ApplyResult applyNow(Set<String> switched, Set<String> onAfter, Runnable beforeHold,
             Runnable inPause) throws RebuildException {
         ReplacedStatics.beginSwitch(switched, onAfter);
         Runnable whilePaused = () -> {
@@ -40,6 +40,7 @@ final class AppliedSwitches {
                 this.owner.onAtLaunch, this.owner.game);
         if (plan != null && plan.isSitesAlone()) {
             try {
+                beforeHold.run();
                 return this.owner.guardFlips.flip(plan, switched, onAfter, this.owner.redefinitionHold.get(),
                         whilePaused);
             } catch (RuntimeException | LinkageError e) {
@@ -54,6 +55,7 @@ final class AppliedSwitches {
             this.owner.onlyRebuild = plan == null ? null : plan.rebuild();
             dryRun = this.owner.dryRun(switched, onAfter, true);
             SwitchTimes.mark("mixins retained");
+            beforeHold.run();
             ClassRebuilder.PreparedRebuild prepared = dryRun.prepared();
 
             Runnable beforeChange = Collections.disjoint(switched, onAfter) ? sites::set : () -> { };

@@ -338,12 +338,13 @@ public final class SwitchApplier {
     }
 
     public ApplyResult apply(Set<String> switched, Set<String> onAfter) throws RebuildException {
-        return this.apply(switched, onAfter, () -> { });
+        return this.apply(switched, onAfter, () -> { }, () -> { });
     }
 
-    public ApplyResult apply(Set<String> switched, Set<String> onAfter, Runnable inPause) throws RebuildException {
+    public ApplyResult apply(Set<String> switched, Set<String> onAfter, Runnable beforeHold, Runnable inPause)
+            throws RebuildException {
         try {
-            return this.appliedSwitches.applyNow(switched, onAfter, inPause);
+            return this.appliedSwitches.applyNow(switched, onAfter, beforeHold, inPause);
         } finally {
             HeapCensus.forget();
         }
