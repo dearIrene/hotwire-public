@@ -65,7 +65,10 @@ public final class Progress {
         }
     }
 
-    public record Entry(String name, String why) {
+    public record Entry(String name, String why, String id) {
+        public Entry(String name, String why) {
+            this(name, why, "");
+        }
     }
 
     private volatile Snapshot now = new Snapshot(0, "", List.of(), 0, "", 0, 0, false, false, false, 0, 0,

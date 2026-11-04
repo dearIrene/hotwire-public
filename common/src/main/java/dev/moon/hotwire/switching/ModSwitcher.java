@@ -456,6 +456,11 @@ public final class ModSwitcher {
         this.progress.count(Lang.get("hotwire.progress.looking"), 0, 0);
     }
 
+    public List<Progress.Entry> previewOff(Collection<String> asked) {
+        SwitchPlan plan = this.planOff(asked);
+        return plan.isRefused() ? List.of() : this.makeQueue(plan);
+    }
+
     private List<Progress.Entry> makeQueue(SwitchPlan plan) {
         List<Progress.Entry> queue = new ArrayList<>();
         for (String id : plan.order()) {
@@ -472,7 +477,7 @@ public final class ModSwitcher {
                         this.nameOf(ships.nested()));
                 case SwitchPlan.Reason.NeededBy needed -> Lang.get("hotwire.progress.why.needed_by",
                         this.nameOf(needed.mod()));
-            }));
+            }, id));
         }
         return queue;
     }

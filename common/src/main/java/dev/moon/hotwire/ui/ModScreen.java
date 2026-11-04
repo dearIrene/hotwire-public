@@ -42,6 +42,10 @@ public final class ModScreen implements JarHost {
 
         void turnOff(List<String> ids);
 
+        default List<Progress.Entry> previewOff(List<String> ids) {
+            return List.of();
+        }
+
         void turnOn(List<String> ids);
 
         default void prepareAhead(List<String> ids, boolean off) {
@@ -193,6 +197,7 @@ public final class ModScreen implements JarHost {
     final List<Panel> panels;
     private final PendingPanel pendingPanel;
     private final ReopenPanel reopenPanel;
+    private final AlsoOffPanel alsoOffPanel;
     private final CarriedPanel carriedPanel;
     private final ReportPanel reportPanel;
     final FirstOpenPanel firstOpen;
@@ -256,6 +261,7 @@ public final class ModScreen implements JarHost {
         }, game::updateAllFromStore, this.modScreenButtons::closePanels, game::findIcon, game::checkForUpdates,
                 game::findUpdateDownloads);
         this.progress = new ProgressPanel(game.getProgress());
+        this.progress.showIconsFrom(game::findIcon);
         this.addPanel = new AddPanel(this::confirmAdd, game::addMod, this.modScreenButtons::closePanels);
         this.updatePanel = new UpdatePanel(this::confirmUpdate, game::updateMod, this.modScreenButtons::closePanels);
         this.advancedPanel = new AdvancedPanel(this::chooseAdvanced, this.modScreenButtons::closePanels);
@@ -275,9 +281,13 @@ public final class ModScreen implements JarHost {
                 this.game.switchWithReopen(offer.off(), offer.ids());
             }
         }, this.modScreenButtons::closePanels);
+        this.alsoOffPanel = new AlsoOffPanel(game::turnOff, () -> {
+            this.modScreenButtons.closePanels();
+            this.list.clearWishes();
+        }, this.progress);
         this.carriedPanel = new CarriedPanel(ids -> {
             this.modScreenButtons.closePanels();
-            this.game.turnOff(ids);
+            this.turnOffAsking(ids);
         }, () -> {
             this.modScreenButtons.closePanels();
             this.list.clearWishes();
@@ -296,9 +306,11 @@ public final class ModScreen implements JarHost {
         }
 
         this.panels = List.of(this.advancedPanel, this.pendingPanel, this.updatesPanel, this.addPanel,
-                this.updatePanel, this.progress, this.reopenPanel, this.carriedPanel, this.firstOpen, this.selfUpdate,
+                this.updatePanel, this.progress, this.reopenPanel, this.carriedPanel, this.alsoOffPanel, this.firstOpen,
+                this.selfUpdate,
                 this.reportPanel, this.cacheFillPanel, this.manageCachePanel);
         this.panels.forEach(this.root.getModal()::add);
+        this.message.openDownloadsWith(this.root::openDownloads);
         if (!game.isFirstOpenAccepted() || ModifiedClients.takePromptDue()) {
             this.firstOpen.present();
         }
@@ -310,7 +322,9 @@ public final class ModScreen implements JarHost {
     }
 
     public void showCrashReport(String where) {
-        this.reportPanel.open(Lang.get("hotwire.report.crash_title"), where, Lang.get("hotwire.report.crash_blame"));
+        boolean froze = where.contains(Lang.get("hotwire.report.file.last_freeze"));
+        this.reportPanel.open(Lang.get(froze ? "hotwire.report.freeze_title" : "hotwire.report.crash_title"), where,
+                Lang.get("hotwire.report.crash_blame"));
     }
 
     public void showFailureReport(String failed, String where) {
@@ -512,6 +526,15 @@ public final class ModScreen implements JarHost {
         this.pendingPanel.dismiss();
     }
 
+    public void turnOffAsking(List<String> ids) {
+        List<Progress.Entry> queue = this.game.previewOff(ids);
+        if (queue.size() > ids.size()) {
+            this.alsoOffPanel.open(ids, queue);
+        } else {
+            this.game.turnOff(ids);
+        }
+    }
+
     public void offerCarried(String id, List<String> containers) {
         this.carriedPanel.open(id, containers);
     }
@@ -592,7 +615,7 @@ public final class ModScreen implements JarHost {
                     ModScreen.this.carriedPanel.open(mod.id(), containers);
                     return;
                 }
-                ModScreen.this.game.turnOff(List.of(mod.id()));
+                ModScreen.this.turnOffAsking(List.of(mod.id()));
             } else {
                 ModScreen.this.game.turnOn(List.of(mod.id()));
             }

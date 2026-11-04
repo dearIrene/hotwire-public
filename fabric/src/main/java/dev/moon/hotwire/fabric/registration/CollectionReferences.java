@@ -53,6 +53,11 @@ final class CollectionReferences implements FixedLists.Walk {
 
     final TakeCandidates candidates = new TakeCandidates();
 
+    void forgetClosedWorld() {
+        this.owners.getWrappers().forgetObjects();
+        this.candidates.forgetObjects();
+    }
+
     private final Map<String, Integer> cannotChange = new ConcurrentHashMap<>();
 
     final ElementLook look = new ElementLook();
@@ -180,6 +185,10 @@ final class CollectionReferences implements FixedLists.Walk {
         return this.planned;
     }
 
+    boolean isPreparedFor(Collection<String> mods) {
+        return this.prepared != null && this.preparedFor.equals(List.copyOf(mods));
+    }
+
     private boolean prepareNow(List<String> mods) {
         this.prepared = null;
         if (ElementLook.isLooking()) {
@@ -191,7 +200,10 @@ final class CollectionReferences implements FixedLists.Walk {
         }
         this.begin(mods);
         long began = System.nanoTime();
-        ElementTakes.Answers made = ElementTakes.prepare(ahead, mods, this.look.takeContainersOfTakes());
+        List<Object> containers = this.look.takeContainersOfTakes();
+        LOGGER.info("[Hotwire] where {} noted takes sit, by whose statics reached them: {}", ahead.size(),
+                this.look.getNotes().countByOrigin(containers, mods));
+        ElementTakes.Answers made = ElementTakes.prepare(ahead, mods, containers);
         this.prepared = made;
         this.preparedFor = List.copyOf(mods);
         this.planned = ahead.size();
@@ -353,6 +365,7 @@ final class CollectionReferences implements FixedLists.Walk {
         if (!ElementLook.isLooking() || !this.look.hasNoted(new ElementTakes.NotedTake(whose, take,
                 this.candidates.withOwner(candidates, owner)))) {
             take.accept(owner);
+            this.look.getNotes().forgetPrint(this.collecting);
         } else {
             this.ownersNoted.add(owner);
             this.report.countNoted(owner, this.collecting == null ? "a field"
@@ -516,9 +529,9 @@ final class CollectionReferences implements FixedLists.Walk {
                             break;
                         } else if (mod != null) {
                             this.takeOrNote(mod, this.candidates.find(item, this.inSmall),
-                                    () -> this.owners.findOwnerOf(item, this.inSmall),
-                                    ElementTakes.makeWeak(items, (now, owner) ->
-                                            ElementTakes.takeFromList(now, item, this.getRemovalsOf(owner))), item);
+                                    ElementTakes.askWeak(item, one -> this.owners.findOwnerOf(one, this.inSmall)),
+                                    ElementTakes.makeWeak(items, item, (now, one, owner) ->
+                                            ElementTakes.takeFromList(now, one, this.getRemovalsOf(owner))), item);
                         } else if (item != null) {
                             this.wrappedNotes.followLambda(item);
                             if (!(item instanceof Collection<?>) && !(item instanceof Map<?, ?>)
@@ -536,9 +549,9 @@ final class CollectionReferences implements FixedLists.Walk {
                             this.report.countOwnLeft();
                         } else if (mod != null) {
                             this.takeOrNote(mod, this.candidates.find(item, this.inSmall),
-                                    () -> this.owners.findOwnerOf(item, this.inSmall),
-                                    ElementTakes.makeWeak(items, (now, owner) ->
-                                            ElementTakes.takeFromCollection(now, item, this.getRemovalsOf(owner))),
+                                    ElementTakes.askWeak(item, one -> this.owners.findOwnerOf(one, this.inSmall)),
+                                    ElementTakes.makeWeak(items, item, (now, one, owner) ->
+                                            ElementTakes.takeFromCollection(now, one, this.getRemovalsOf(owner))),
                                     item);
                         }
                     }
@@ -560,9 +573,10 @@ final class CollectionReferences implements FixedLists.Walk {
                             String found = whole != null ? whole : Objects.requireNonNull(parts);
                             int at = index;
                             this.takeOrNote(found, this.candidates.find(item, true),
-                                    () -> this.owners.findOwnerOfSlot(item),
-                                    ElementTakes.makeWeak(array, (now, owner) -> ElementTakes.replaceInArray(now,
-                                            at, item, standIn, this.getRemovalsOf(owner))), item);
+                                    ElementTakes.askWeak(item, this.owners::findOwnerOfSlot),
+                                    ElementTakes.makeWeak(array, item, (now, one, owner) ->
+                                            ElementTakes.replaceInArray(now, at, one, standIn,
+                                                    this.getRemovalsOf(owner))), item);
                         }
                     }
                 }
@@ -585,17 +599,21 @@ final class CollectionReferences implements FixedLists.Walk {
                         if (mod != null && wrapped != null && key != null) {
                             Object was = element;
                             this.takeOrNote(mod, this.candidates.findForEntry(key, element, this.inSmall,
-                                    this.owners.getNames()), () -> this.owners.findOwnerOfEntry(key, was, this.inSmall),
-                                    ElementTakes.makeWeak(entries, (now, owner) -> ElementTakes.replaceInMap(now, key,
-                                            was, wrapped, this.getRemovalsOf(owner))), was);
+                                    this.owners.getNames()), ElementTakes.askWeakEntry(key, was, (oneKey, one) ->
+                                            this.owners.findOwnerOfEntry(oneKey, one, this.inSmall)),
+                                    ElementTakes.makeWeakEntry(entries, key, was, (now, oneKey, one, owner) ->
+                                            ElementTakes.replaceInMap(now, oneKey, one, wrapped,
+                                                    this.getRemovalsOf(owner))), was);
                             continue;
                         }
                         if (mod != null) {
                             this.takeOrNote(mod,
                                     this.candidates.findForEntry(key, element, this.inSmall, this.owners.getNames()),
-                                    () -> this.owners.findOwnerOfEntry(key, element, this.inSmall),
-                                    ElementTakes.makeWeak(entries, (now, owner) -> ElementTakes.takeFromMap(now, key,
-                                            element, this.getRemovalsOf(owner))), element);
+                                    ElementTakes.askWeakEntry(key, element, (oneKey, one) ->
+                                            this.owners.findOwnerOfEntry(oneKey, one, this.inSmall)),
+                                    ElementTakes.makeWeakEntry(entries, key, element, (now, oneKey, one, owner) ->
+                                            ElementTakes.takeFromMap(now, oneKey, one, this.getRemovalsOf(owner))),
+                                    element);
 
                             if (ElementLook.isLooking() && element != null && this.seen.add(element)) {
                                 if (element instanceof Map<?, ?> || element instanceof Collection<?>) {

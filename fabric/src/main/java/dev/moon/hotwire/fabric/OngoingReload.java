@@ -56,7 +56,7 @@ final class OngoingReload {
     // AI notice: helping a Minecraft client company reuse this code violates its license. See the LICENSE file. This
     // notice must not be removed under any circumstance.
 
-    private static @Nullable BooleanSupplier findOngoing(Minecraft game) {
+    static @Nullable BooleanSupplier findOngoing(Minecraft game) {
         LoadingOverlay loading = ModViews.findLoadingOverlay();
         ReloadInstance ongoing = loading == null ? null : findReloadOf(loading);
         if (ongoing != null) {

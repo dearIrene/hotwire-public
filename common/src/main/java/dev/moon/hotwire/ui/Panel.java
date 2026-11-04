@@ -50,6 +50,18 @@ class Panel extends Element {
         this.sized = false;
     }
 
+    void showFrom(Panel other) {
+        this.wanted = true;
+        this.setVisible(true);
+        this.sized = true;
+        this.shown.snap(other.shown.getValue());
+        this.boxW.snap(other.boxW.getValue());
+        this.boxH.snap(other.boxH.getValue());
+        other.wanted = false;
+        other.shown.snap(0);
+        other.setVisible(false);
+    }
+
     public boolean isReading() {
         return false;
     }
@@ -139,7 +151,11 @@ class Panel extends Element {
     }
 
     public void size(int width, int height) {
-        int w = Math.min(this.getWidth() - 48, width);
+        this.size(width, height, 48);
+    }
+
+    void size(int width, int height, int sides) {
+        int w = Math.min(this.getWidth() - sides, width);
         if (this.sized) {
             this.boxW.to(w);
             this.boxH.to(height);

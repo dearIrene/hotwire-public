@@ -1,6 +1,8 @@
 package dev.moon.hotwire.fabric.registration;
 
 import dev.moon.hotwire.switching.HoldBudgetException;
+import java.lang.management.ClassLoadingMXBean;
+import java.lang.management.ManagementFactory;
 import java.util.ArrayList;
 import java.util.Collection;
 import java.util.List;
@@ -8,6 +10,7 @@ import java.util.Set;
 import java.util.concurrent.CancellationException;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.function.Predicate;
+import net.minecraft.client.Minecraft;
 import org.jspecify.annotations.Nullable;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -16,6 +19,8 @@ public final class ElementLook {
     private static final Logger LOGGER = LoggerFactory.getLogger(ElementLook.class);
 
     private static final long FRESH_NANOS = 15_000_000_000L;
+    private static final ClassLoadingMXBean LOADING = ManagementFactory.getClassLoadingMXBean();
+    private static final int CLASSES_THAT_MATTER = 1024;
 
     enum Mode {
         HOLD, LOOK, LOOK_EVERY, SETUP;
@@ -33,6 +38,9 @@ public final class ElementLook {
 
     private static volatile List<String> lookedForEvery = List.of();
     private static volatile long lookedEveryAt;
+
+    private static volatile long lookedEveryClasses;
+    private static volatile int lookedEveryWorld;
 
     private static volatile Set<String> lookedAlone = Set.of();
 
@@ -90,6 +98,8 @@ public final class ElementLook {
                 if (every) {
                     lookedForEvery = asked;
                     lookedEveryAt = System.nanoTime();
+                    lookedEveryClasses = LOADING.getTotalLoadedClassCount();
+                    lookedEveryWorld = findWorldNumber();
                     references.finishEveryLook();
                     BROUGHT.clear();
                 } else {
@@ -224,7 +234,16 @@ public final class ElementLook {
 
     private static boolean isFreshForEvery(List<String> asked) {
         return asked.stream().noneMatch(STALE::contains) && lookedForEvery.containsAll(asked)
-                && System.nanoTime() - lookedEveryAt < FRESH_NANOS;
+                && (System.nanoTime() - lookedEveryAt < FRESH_NANOS || isGameAsLooked());
+    }
+
+    private static boolean isGameAsLooked() {
+        return lookedEveryWorld == findWorldNumber()
+                && LOADING.getTotalLoadedClassCount() - lookedEveryClasses < CLASSES_THAT_MATTER;
+    }
+
+    private static int findWorldNumber() {
+        return System.identityHashCode(Minecraft.getInstance().level);
     }
 
     public static void giveWay() {

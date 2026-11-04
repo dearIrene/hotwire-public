@@ -218,6 +218,9 @@ public final class ResourceReload {
         comingOn = List.copyOf(mods);
     }
 
+    private static final int QUIET_LOOKS = 5;
+    private static final long QUIET_LOOK_MILLIS = 50;
+
     private static volatile CompletableFuture<?> lastReload = CompletableFuture.completedFuture(null);
 
     static CompletableFuture<?> getLastReload() {
@@ -236,14 +239,19 @@ public final class ResourceReload {
         }
         long until = System.nanoTime() + WAIT.toNanos();
         try {
-            lastReload.get(WAIT.toMillis(), TimeUnit.MILLISECONDS);
+            int nothingRunning = 0;
+            while (!lastReload.isDone() && System.nanoTime() < until && nothingRunning < QUIET_LOOKS) {
+                nothingRunning = ModViews.openOverlay() == null && !BackgroundReload.isBusy()
+                        && OngoingReload.findOngoing(game) == null ? nothingRunning + 1 : 0;
+                Thread.sleep(QUIET_LOOK_MILLIS);
+            }
 
             while ((ModViews.openOverlay() != null || BackgroundReload.isBusy()) && System.nanoTime() < until) {
                 Thread.sleep(20);
             }
         } catch (InterruptedException e) {
             Thread.currentThread().interrupt();
-        } catch (ExecutionException | TimeoutException | RuntimeException e) {
+        } catch (RuntimeException e) {
             LOGGER.info("[Hotwire] the reload under way did not end well; the off goes on: {}", e.toString());
         }
     }

@@ -1,5 +1,6 @@
 package dev.moon.hotwire.fabric.registration;
 
+import dev.moon.hotwire.jvm.LoadedClassList;
 import dev.moon.hotwire.redefine.FieldSlots;
 import dev.moon.hotwire.report.StartTimes;
 import java.lang.instrument.Instrumentation;
@@ -75,7 +76,7 @@ public final class Fields {
             StartTimes.Job job = StartTimes.begin("statics preload, own thread");
             try {
                 ClassLoader game = Fields.class.getClassLoader();
-                for (Class<?> type : instrumentation.getAllLoadedClasses()) {
+                for (Class<?> type : LoadedClassList.of(instrumentation)) {
                     if (Objects.equals(type.getClassLoader(), game) && !type.isHidden() && !type.isArray()
                             && !GameRegistrations.isOfOffMod(type)) {
                         getReferenceFields(type, true);

@@ -8,6 +8,8 @@ import dev.moon.hotwire.switching.SwitchApplier;
 import java.io.IOException;
 import java.io.InputStream;
 import java.lang.ref.SoftReference;
+import java.lang.reflect.Field;
+import java.lang.reflect.Modifier;
 import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.List;
@@ -177,6 +179,25 @@ public final class GameClasses implements SwitchApplier.Game {
 
     private static final List<Class<?>> WORLD_ROOTS = List.of(Level.class, MinecraftServer.class,
             ClientPacketListener.class, MultiPlayerGameMode.class, Entity.class);
+
+    @Override
+    public boolean isMadeOnce(Class<?> type) {
+        Minecraft client = Minecraft.getInstance();
+        for (Field field : Minecraft.class.getDeclaredFields()) {
+            if (Modifier.isFinal(field.getModifiers()) && !Modifier.isStatic(field.getModifiers())
+                    && !field.getType().isPrimitive() && field.getType().isAssignableFrom(type)
+                    && field.getType() != Object.class) {
+                try {
+                    field.setAccessible(true);
+                    if (type.isInstance(field.get(client))) {
+                        return true;
+                    }
+                } catch (ReflectiveOperationException | RuntimeException e) {
+                }
+            }
+        }
+        return false;
+    }
 
     @Override
     public boolean isKnownAlive(Class<?> type) {

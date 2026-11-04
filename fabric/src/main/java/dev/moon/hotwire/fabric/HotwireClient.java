@@ -132,6 +132,7 @@ public final class HotwireClient implements ClientModInitializer {
         FieldHolders.retryCatchUps();
         HotwireEngine started = engine;
         if (started != null) {
+            started.onWorldOpened();
             OpenKey.tellConflicts(started.getSettings());
             OffModCommands.readOffFrom(id -> !started.isOn(id) || Tripwire.isWatched(id));
             InWorldWork.lookAheadSoon(started);

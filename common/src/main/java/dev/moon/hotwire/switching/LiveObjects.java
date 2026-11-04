@@ -150,7 +150,8 @@ final class LiveObjects {
                 continue;
             }
             List<String> fills = HandlerSetups.find(running, originalOf.apply(name), offMixin, offClass);
-            if (!fills.isEmpty() && (game.isWorldObject(type) || alive.test(type))) {
+
+            if (!fills.isEmpty() && !game.isMadeOnce(type) && (game.isWorldObject(type) || alive.test(type))) {
                 worldFills.add(type.getSimpleName() + " " + fills);
             }
         }

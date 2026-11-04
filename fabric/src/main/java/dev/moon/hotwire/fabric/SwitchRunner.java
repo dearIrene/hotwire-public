@@ -56,6 +56,7 @@ import java.util.Set;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
 import java.util.concurrent.atomic.AtomicBoolean;
+import java.util.concurrent.atomic.AtomicInteger;
 import java.util.concurrent.atomic.AtomicReference;
 import java.util.function.Consumer;
 import net.minecraft.client.Minecraft;
@@ -71,6 +72,8 @@ public final class SwitchRunner {
 
     private static final ThreadMXBean THREADS = ManagementFactory.getThreadMXBean();
 
+    private final AtomicInteger worldsOpened = new AtomicInteger();
+    private int worldsForgotten;
     private final ModSwitcher switcher;
     private final OffChecker offChecker;
     private final GameReports reports;
@@ -119,8 +122,22 @@ public final class SwitchRunner {
         return this.switcher;
     }
 
+    void onWorldOpened() {
+        this.worldsOpened.incrementAndGet();
+        this.looking.execute(this::forgetClosedWorld);
+    }
+
+    private void forgetClosedWorld() {
+        int opened = this.worldsOpened.get();
+        if (opened != this.worldsForgotten && !this.switcher.isBusy()) {
+            this.worldsForgotten = opened;
+            this.fieldReferences.forgetClosedWorld();
+        }
+    }
+
     public void lookAheadForAll(List<String> mods) {
         this.looking.execute(() -> {
+            this.forgetClosedWorld();
             if (!isLookingAhead() || this.switcher.isBusy() || mods.isEmpty()) {
                 return;
             }
@@ -233,6 +250,13 @@ public final class SwitchRunner {
         ModelReloadCheck.readAheadUnlessStanding(wired);
         ResourceReload.onGoingOff(wired);
         try {
+            if (this.fieldReferences.isOverHoldBudget(wired)) {
+                this.switcher.hideProgress();
+                return new CheckedResult(new ModSwitcher.Result.Failed(plan, new RebuildException(plan.order()
+                        + " took longer than the hold's budget to take out of what others hold; it stays as it was,"
+                        + " and changes with the world saved and opened again", new IllegalStateException(
+                        String.valueOf(wired)), true)), new Report.OffCheck.NotRun(), List.of());
+            }
             result = this.switcher.turnOff(ids, order -> {
                 out.set(order);
                 GameHold hold = GameHold.begin(Minecraft.getInstance());

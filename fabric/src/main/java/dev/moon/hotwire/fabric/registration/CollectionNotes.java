@@ -320,6 +320,36 @@ final class CollectionNotes {
         return found;
     }
 
+    synchronized String countByOrigin(List<Object> containers, Collection<String> mods) {
+        int going = 0;
+        int staying = 0;
+        int game = 0;
+        Map<String, Integer> byMod = new HashMap<>();
+        for (Object container : containers) {
+            Note note = this.notes.get(container);
+            String of = note == null ? null : note.origin.staticsOf();
+            if (of == null) {
+                game++;
+            } else if (mods.contains(of)) {
+                going++;
+                byMod.merge(of, 1, Integer::sum);
+            } else {
+                staying++;
+            }
+        }
+        List<Map.Entry<String, Integer>> top = new ArrayList<>(byMod.entrySet());
+        top.sort(Map.Entry.<String, Integer>comparingByValue().reversed());
+        return going + " going too " + top.subList(0, Math.min(8, top.size())) + ", " + staying + " staying, " + game
+                + " the game's";
+    }
+
+    synchronized void forgetPrint(@Nullable Object container) {
+        Note note = container == null ? null : this.notes.get(container);
+        if (note != null) {
+            note.print = Fingerprints.UNKNOWN;
+        }
+    }
+
     synchronized boolean isUnchanged(Object container) {
         Note note = this.notes.get(container);
         if (note == null || note.print == Fingerprints.UNKNOWN) {

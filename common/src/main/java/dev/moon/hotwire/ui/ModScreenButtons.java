@@ -79,7 +79,7 @@ final class ModScreenButtons {
         if (on) {
             this.owner.game.turnOn(ids);
         } else {
-            this.owner.game.turnOff(ids);
+            this.owner.turnOffAsking(ids);
         }
     }
 

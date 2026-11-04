@@ -1,6 +1,5 @@
 package dev.moon.hotwire.fabric.registration;
 
-import dev.moon.hotwire.switching.HoldBudgetException;
 import dev.moon.hotwire.fabric.add.LoaderModList;
 import dev.moon.hotwire.fabric.mixin.core.world.item.CreativeModeTabsAccessor;
 import dev.moon.hotwire.jvm.LoadedClassList;
@@ -175,6 +174,20 @@ public final class FieldReferences {
         this.elements.readAlone(List.copyOf(every), statics, List.of());
     }
 
+    public boolean isOverHoldBudget(Collection<String> mods) {
+        if (Minecraft.getInstance().level == null || !this.elements.look.isReadyFor(mods)
+                || !this.elements.prepare(List.copyOf(mods)) || this.elements.countPlanned() <= MOST_TAKES_IN_HOLD) {
+            return false;
+        }
+        LOGGER.info("[Hotwire] {} noted takes for {} are more than a hold removes in its budget: refused ahead",
+                this.elements.countPlanned(), mods);
+        return true;
+    }
+
+    public void forgetClosedWorld() {
+        this.elements.forgetClosedWorld();
+    }
+
     public void readHandlerMaps(Collection<String> mods) {
         List<String> asked = List.copyOf(mods);
         this.elements.readAlone(asked, List.of(), asked);
@@ -257,14 +270,8 @@ public final class FieldReferences {
         }
 
         boolean answered = !every && this.elements.look.isReadyFor(mods)
-                && this.elements.prepare(List.copyOf(mods));
+                && (this.elements.isPreparedFor(mods) || this.elements.prepare(List.copyOf(mods)));
         SwitchTimes.mark("takes answered");
-
-        if (answered && this.elements.countPlanned() > MOST_TAKES_IN_HOLD && Minecraft.getInstance().level != null) {
-            LOGGER.info("[Hotwire] {} noted takes for {} are more than a hold removes in its budget: refused ahead",
-                    this.elements.countPlanned(), mods);
-            throw new HoldBudgetException();
-        }
         Set<String> targets = new HashSet<>();
         mods.forEach(mod -> targets.addAll(this.mixinTargets.apply(mod)));
 

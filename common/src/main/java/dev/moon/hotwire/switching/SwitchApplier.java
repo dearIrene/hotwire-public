@@ -58,6 +58,10 @@ public final class SwitchApplier {
             return false;
         }
 
+        default boolean isMadeOnce(Class<?> type) {
+            return false;
+        }
+
         default boolean isKnownAlive(Class<?> type) {
             return false;
         }

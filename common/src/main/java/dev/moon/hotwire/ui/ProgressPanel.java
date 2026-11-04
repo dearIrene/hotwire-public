@@ -2,22 +2,31 @@ package dev.moon.hotwire.ui;
 
 import java.util.ArrayList;
 import java.util.List;
+import java.util.function.Function;
+import org.jspecify.annotations.Nullable;
 
 final class ProgressPanel extends Panel {
     private static final float HOLD = 0.4f;
     private static final int OFF_GAP = 3;
     private static final int EMPTY = Colors.mix(Palette.PANEL_EDGE, Palette.ON, 0.3f);
-    private static final int SIDE_W = 176;
-    private static final int CARD = 18;
-    private static final int CARD_GROWS = 12;
-    private static final int CARD_GAP = 3;
-    private static final int CARDS_SHOWN = 6;
-    private static final int MORE_LINE = 11;
+    static final int MAIN_W = 408;
+
+    static final int LISTED_SIDES = 16;
+
+    static final int SIDE_W = 208;
+    private static final int ICON_SMALL = 12;
+    private static final int ICON_GROWS = 10;
+    static final int CARD = 18;
+    static final int CARD_GROWS = 12;
+    static final int CARD_GAP = 3;
+    static final int CARDS_SHOWN = 6;
+    static final int MORE_LINE = 11;
     private static final String TICK = "\u2713";
 
     private static final int CLOSED_LINES = 26;
 
     private final Progress progress;
+    private Function<String, Canvas.@Nullable Image> icons = id -> null;
     private final EasedValue bar = EasedValue.ofSpeed(8);
     private final EasedValue stepTick = EasedValue.ofSpeed(9);
     private final EasedValue stepsTick = EasedValue.ofSpeed(9);
@@ -42,11 +51,31 @@ final class ProgressPanel extends Panel {
     private final EasedValue scroll = EasedValue.ofSpeed(8);
     private int queueRun = -1;
 
+    private @Nullable Panel arrivingFrom;
+    private int arrivingFirst;
+    private boolean carryCards;
+
+    private final EasedValue leftIn = EasedValue.ofSpeed(9);
+
     public ProgressPanel(Progress progress) {
         super(null);
         this.progress = progress;
 
         this.setLineY(-1);
+        this.leftIn.snap(1);
+    }
+
+    void showIconsFrom(Function<String, Canvas.@Nullable Image> found) {
+        this.icons = found;
+    }
+
+    Function<String, Canvas.@Nullable Image> getIcons() {
+        return this.icons;
+    }
+
+    void expectFrom(@Nullable Panel from, int first) {
+        this.arrivingFrom = from;
+        this.arrivingFirst = first;
     }
 
     private record Heading(float target, String headline, String note, String subject, String rightCell) {
@@ -60,7 +89,15 @@ final class ProgressPanel extends Panel {
             if (!this.open() || now.run() != this.run) {
                 this.run = now.run();
                 this.forget();
-                this.show();
+                Panel from = this.arrivingFrom;
+                if (from == null) {
+                    this.show();
+                } else {
+                    this.arrivingFrom = null;
+                    this.showFrom(from);
+                    this.carryCards = true;
+                    this.leftIn.snap(0);
+                }
             }
         } else {
             this.holdLeft -= delta;
@@ -75,6 +112,8 @@ final class ProgressPanel extends Panel {
     }
 
     private void ease(Progress.Snapshot now, float delta) {
+        this.leftIn.to(1);
+        this.leftIn.step(delta);
         this.heading = this.getHeading(now, delta);
         this.tail = getTail(now);
         this.bar.to(this.heading.target());
@@ -86,8 +125,8 @@ final class ProgressPanel extends Panel {
         }
         this.easeLifts(now, delta);
         int closed = this.progress.isWorldClosed() ? CLOSED_LINES : 0;
-        this.size(Math.max(408, this.widestSeen + 48) + (listed ? SIDE_W + 14 : 0),
-                Math.max(91 + closed, listed ? this.getQueueHeight(now) + 24 : 0));
+        this.size(Math.max(MAIN_W, this.widestSeen + 48) + (listed ? SIDE_W + 14 : 0),
+                Math.max(91 + closed, listed ? this.getQueueHeight(now) + 24 : 0), listed ? LISTED_SIDES : 48);
         String subject = this.heading.subject();
         if (subject.isBlank()) {
             this.offX = 0;
@@ -133,7 +172,9 @@ final class ProgressPanel extends Panel {
         this.widestSeen = this.measureWidest(canvas, heading, this.tail);
         boolean listed = now.queue().size() > 1;
         int main = listed ? w - SIDE_W - 14 : w;
-        this.drawTheName(canvas, heading, now, x, y, alpha);
+        float queueAlpha = alpha;
+        alpha *= this.leftIn.getValue();
+        this.drawTheName(canvas, heading, now, x, y, main, alpha);
         String percent = Math.round(this.bar.getValue() * 100) + "%";
         String right = heading.rightCell().isBlank() ? percent : heading.rightCell() + "   " + percent;
         canvas.drawText(right, x + main - 14 - canvas.measureText(right), y + 16, Colors.fade(Palette.DIM, alpha));
@@ -154,8 +195,8 @@ final class ProgressPanel extends Panel {
                     Colors.fade(Palette.ACCENT, alpha));
         }
         if (listed) {
-            canvas.fill(x + main, y + 12, x + main + 1, y + h - 12, Colors.fade(Palette.HAIRLINE, alpha));
-            this.drawQueue(canvas, now, x + main + 8, y + 12, SIDE_W - 2, alpha);
+            canvas.fill(x + main, y + 12, x + main + 1, y + h - 12, Colors.fade(Palette.HAIRLINE, queueAlpha));
+            this.drawQueue(canvas, now, x + main + 8, y + 12, SIDE_W - 2, queueAlpha);
         }
     }
 
@@ -207,9 +248,13 @@ final class ProgressPanel extends Panel {
             this.queueRun = now.run();
             this.focus.clear();
             for (int i = 0; i < count; i++) {
-                this.focus.add(EasedValue.ofSpeed(9));
+                EasedValue card = EasedValue.ofSpeed(9);
+
+                card.snap(this.carryCards ? 1 : 0);
+                this.focus.add(card);
             }
-            this.scroll.snap(0);
+            this.scroll.snap(this.carryCards ? this.arrivingFirst : 0);
+            this.carryCards = false;
         }
         int current = this.getCurrent(now);
         for (int i = 0; i < count; i++) {
@@ -246,27 +291,41 @@ final class ProgressPanel extends Panel {
         for (int i = first; i < last; i++) {
             float grown = this.focus.get(i).getValue();
             int h = CARD + Math.round(CARD_GROWS * grown);
-            boolean done = i < current;
-            int edge = Colors.mix(Palette.PANEL_EDGE, Palette.ACCENT, grown);
-            canvas.fill(x, at, x + w, at + h, Colors.fade(edge, alpha));
-            canvas.fill(x + 1, at + 1, x + w - 1, at + h - 1, Colors.fade(Palette.PANEL, alpha));
-            Progress.Entry entry = queue.get(i);
-            int ink = done ? Palette.FAINT : Colors.mix(Palette.DIM, Palette.TEXT, grown);
-            int textX = x + 8;
-            if (done) {
-                canvas.drawText(TICK, textX, at + 5, Colors.fade(Palette.ON, alpha));
-                textX += canvas.measureText(TICK) + 5;
-            }
-            canvas.drawText(canvas.clip(entry.name(), x + w - 8 - textX), textX, at + 5, Colors.fade(ink, alpha));
-            if (grown > 0.3f && !entry.why().isEmpty()) {
-                canvas.drawText(canvas.clip(entry.why(), w - 16), x + 8, at + 17,
-                        Colors.fade(Palette.DIM, alpha * Math.min(1, (grown - 0.3f) * 2)));
-            }
+            drawCard(canvas, queue.get(i), this.icons, x, at, w, h, grown, i < current, alpha);
             at += h + CARD_GAP;
         }
         if (last < queue.size()) {
             canvas.drawText(Lang.get("hotwire.progress.more", queue.size() - last), x + 6, at,
                     Colors.fade(Palette.FAINT, alpha));
+        }
+    }
+
+    static void drawCard(Canvas canvas, Progress.Entry entry, Function<String, Canvas.@Nullable Image> icons, int x,
+            int at, int w, int h, float grown, boolean done, float alpha) {
+        int edge = Colors.mix(Palette.PANEL_EDGE, Palette.ACCENT, grown);
+        canvas.fill(x, at, x + w, at + h, Colors.fade(edge, alpha));
+        canvas.fill(x + 1, at + 1, x + w - 1, at + h - 1, Colors.fade(Palette.PANEL, alpha));
+        int ink = done ? Palette.FAINT : Colors.mix(Palette.DIM, Palette.TEXT, grown);
+        int textX = x + 8;
+        if (!entry.id().isEmpty()) {
+            int size = ICON_SMALL + Math.round(ICON_GROWS * grown);
+            int iconY = at + (h - size) / 2;
+            float iconAlpha = done ? alpha * 0.5f : alpha;
+            Canvas.Image icon = icons.apply(entry.id());
+            if (icon == null || !canvas.drawImage(icon, x + 4, iconY, size, size, iconAlpha)) {
+                canvas.fill(x + 4, iconY, x + 4 + size, iconY + size, Colors.fade(Palette.PANEL_EDGE, iconAlpha));
+            }
+            textX = x + 4 + size + 5;
+        }
+        int linesX = textX;
+        if (done) {
+            canvas.drawText(TICK, textX, at + 5, Colors.fade(Palette.ON, alpha));
+            textX += canvas.measureText(TICK) + 5;
+        }
+        canvas.drawText(canvas.clip(entry.name(), x + w - 8 - textX), textX, at + 5, Colors.fade(ink, alpha));
+        if (grown > 0.3f && !entry.why().isEmpty()) {
+            canvas.drawText(canvas.clip(entry.why(), x + w - 6 - linesX), linesX, at + 17,
+                    Colors.fade(Palette.DIM, alpha * Math.min(1, (grown - 0.3f) * 2)));
         }
     }
 
@@ -314,13 +373,14 @@ final class ProgressPanel extends Panel {
         return Lang.get(now.goingOff() ? "hotwire.screen.off" : "hotwire.screen.on");
     }
 
-    private void drawTheName(Canvas canvas, Heading heading, Progress.Snapshot now, int x, int y, float alpha) {
+    private void drawTheName(Canvas canvas, Heading heading, Progress.Snapshot now, int x, int y, int main,
+            float alpha) {
         String subject = heading.subject();
         int textX = x + 14;
         int textY = y + 16;
         String widestRight = heading.rightCell().isBlank() ? "100%" : Lang.get("hotwire.progress.of", now.mods(),
                 now.mods()) + "   100%";
-        int textCap = this.getBoxWidth() - 28 - canvas.measureText(widestRight) - 12;
+        int textCap = main - 28 - canvas.measureText(widestRight) - 12;
         int ink = Colors.fade(Palette.TEXT, alpha);
         if (subject.isBlank()) {
             String alone = now.mods() > 1 && heading.rightCell().isEmpty()
@@ -375,7 +435,8 @@ final class ProgressPanel extends Panel {
         String count = counted ? this.lineDone.getRounded() + "/" + this.lineTotal : "";
         int countCell = counted ? canvas.measureText(this.lineTotal + "/" + this.lineTotal) : 0;
         int gap = counted ? 7 : 0;
-        String words = canvas.clip(this.line, Math.max(20, width - countCell - gap));
+
+        String words = canvas.clip(this.line, Math.max(20, Math.round(width / 1.25f) - countCell - gap));
         int rowW = countCell + gap + canvas.measureText(words);
         int rowX = left + Math.max(0, (width - rowW) / 2);
         canvas.pushScale(1.25f + (1 - this.lineShown) * 0.45f, rowX + rowW / 2f, rowY + 4f);

@@ -47,7 +47,6 @@ public final class StoreScreen implements JarHost {
     private final StoreGrid grid;
     private final Button back;
     private final NoticeBar message = new NoticeBar();
-    private final DownloadStrip downloads;
     private final StoreDetail detail;
     private final AddPanel addPanel;
     private final UpdatePanel updatePanel;
@@ -103,16 +102,17 @@ public final class StoreScreen implements JarHost {
                     false);
         });
         this.detail = new StoreDetail(model, icons, adds, game::openLink, this::closeDetail);
-        this.downloads = new DownloadStrip(model.getDownloads());
         this.addPanel = new AddPanel(this::confirmAdd, hotwire::addMod, this::closePanels);
         this.updatePanel = new UpdatePanel(this::confirmUpdate, hotwire::updateMod, this::closePanels);
         this.progress = new ProgressPanel(hotwire.getProgress());
+        this.progress.showIconsFrom(hotwire::findIcon);
         for (Panel panel : List.of(this.detail, this.addPanel, this.updatePanel, this.progress)) {
             this.root.getModal().add(panel);
+        this.message.openDownloadsWith(this.root::openDownloads);
         }
         this.back = new Button(Lang.get("hotwire.store.back"), false, game::onBack);
         Element base = this.root.getBase();
-        for (Element part : List.of(this.grid, this.downloads, this.search, this.kinds,
+        for (Element part : List.of(this.grid, this.search, this.kinds,
                 this.categories, this.hideInstalled, this.chips, this.back, this.message)) {
             base.add(part);
         }
@@ -252,7 +252,6 @@ public final class StoreScreen implements JarHost {
                 height - TOP - ChoiceBar.HEIGHT - 22 - MESSAGE_ROOM);
 
         this.message.setBounds(0, 0, width, height + 22);
-        this.downloads.setBounds(0, 0, width, height + 22);
         for (Element whole : List.of(this.detail, this.addPanel, this.updatePanel, this.progress)) {
             whole.setBounds(0, 0, width, height);
         }
