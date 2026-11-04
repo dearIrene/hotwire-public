@@ -26,6 +26,7 @@
     "core.core.MappedRegistryMixin",
     "core.core.component.InitializerEntryMixin",
     "core.client.renderer.feature.FeatureRendererMapMixin",
+    "core.client.renderer.feature.PreparedFrameMixin",
     "core.fabric.resource.pack.ModPackResourcesUtilMixin",
     "core.fabric.resource.loader.ModResourcePackUtilMixin",
     "core.server.packs.resources.MultiPackResourceManagerMixin",
