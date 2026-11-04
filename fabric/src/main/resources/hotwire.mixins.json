@@ -46,6 +46,7 @@
     "core.blaze3d.opengl.GlCommandEncoderAccessor",
     "core.client.KeyboardHandlerMixin",
     "core.client.multiplayer.ClientPacketListenerMixin",
+    "core.client.multiplayer.LevelLoadTrackerMixin",
     "core.client.server.IntegratedServerMixin",
     "core.client.gui.GuiNoticeMixin",
     "core.client.gui.screens.TitleScreenMixin",

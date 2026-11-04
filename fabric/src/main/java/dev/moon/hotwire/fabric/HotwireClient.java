@@ -1,5 +1,6 @@
 package dev.moon.hotwire.fabric;
 
+import dev.moon.hotwire.fabric.add.LoadStatusViews;
 import dev.moon.hotwire.fabric.registration.OffModClose;
 import dev.moon.hotwire.fabric.registration.OffModCommands;
 import dev.moon.hotwire.fabric.registration.TakeoutRecord;
@@ -89,6 +90,9 @@ public final class HotwireClient implements ClientModInitializer {
 
         InitHookRuns.catchUpLaterWhile(() -> Minecraft.getInstance().level == null);
 
+        //? if >=26.1 {
+        ServerLifecycleEvents.SERVER_STOPPED.register(server -> LoadStatusViews.letGo());
+        //?}
         ServerLifecycleEvents.SERVER_STARTING.register(server -> ActionJournal.get().note(ActionJournal.Action.OPEN,
                 ""));
         ClientPlayConnectionEvents.JOIN.register((handler, sender, client) -> {
