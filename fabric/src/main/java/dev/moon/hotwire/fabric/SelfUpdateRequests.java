@@ -1,6 +1,7 @@
 package dev.moon.hotwire.fabric;
 
 import dev.moon.hotwire.fabric.store.SelfUpdate;
+import dev.moon.hotwire.modrinth.Downloads;
 import dev.moon.hotwire.modrinth.ModrinthClient;
 import dev.moon.hotwire.ui.Lang;
 import dev.moon.hotwire.ui.ModScreen;
@@ -89,8 +90,10 @@ final class SelfUpdateRequests {
                     }
                 });
             } catch (IOException e) {
-                Minecraft.getInstance().execute(() -> this.say.accept(
-                        Lang.get("hotwire.store.download_failed", "Hotwire", e.getMessage()), true));
+                if (!(e instanceof Downloads.DownloadStopped)) {
+                    Minecraft.getInstance().execute(() -> this.say.accept(
+                            Lang.get("hotwire.store.download_failed", "Hotwire", e.getMessage()), true));
+                }
             }
         });
     }

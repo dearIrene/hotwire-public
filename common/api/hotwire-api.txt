@@ -47,7 +47,10 @@ public abstract interface dev.moon.hotwire.api.HotwireApi
   public abstract boolean dev.moon.hotwire.api.HotwireApi.isAddedThisSession(java.lang.String)
   public abstract boolean dev.moon.hotwire.api.HotwireApi.isReady()
   public abstract boolean dev.moon.hotwire.api.HotwireApi.isSwitching()
+  public abstract boolean dev.moon.hotwire.api.HotwireApi.pauseDownload(int)
+  public abstract boolean dev.moon.hotwire.api.HotwireApi.resumeDownload(int)
   public abstract boolean dev.moon.hotwire.api.HotwireApi.showPrompt()
+  public abstract boolean dev.moon.hotwire.api.HotwireApi.stopDownload(int)
   public abstract dev.moon.hotwire.api.ApiStatus dev.moon.hotwire.api.HotwireApi.getStatus()
   public abstract dev.moon.hotwire.api.OpeningPrompt dev.moon.hotwire.api.HotwireApi.findOpeningPrompt()
   public abstract dev.moon.hotwire.api.StorePackState dev.moon.hotwire.api.HotwireApi.findPackState(dev.moon.hotwire.api.StoreKind,java.lang.String)
@@ -142,13 +145,25 @@ public final dev.moon.hotwire.api.StoreCategory
 public final dev.moon.hotwire.api.StoreDownload
   public boolean dev.moon.hotwire.api.StoreDownload.ok()
   public boolean dev.moon.hotwire.api.StoreDownload.over()
-  public dev.moon.hotwire.api.StoreDownload(java.lang.String,long,long,boolean,boolean)
+  public dev.moon.hotwire.api.StoreDownload$State dev.moon.hotwire.api.StoreDownload.state()
+  public dev.moon.hotwire.api.StoreDownload(java.lang.String,long,long,boolean,boolean,int,dev.moon.hotwire.api.StoreDownload$State)
+  public double dev.moon.hotwire.api.StoreDownload.fraction()
   public final boolean dev.moon.hotwire.api.StoreDownload.equals(java.lang.Object)
   public final int dev.moon.hotwire.api.StoreDownload.hashCode()
   public final java.lang.String dev.moon.hotwire.api.StoreDownload.toString()
+  public int dev.moon.hotwire.api.StoreDownload.id()
   public java.lang.String dev.moon.hotwire.api.StoreDownload.name()
   public long dev.moon.hotwire.api.StoreDownload.done()
   public long dev.moon.hotwire.api.StoreDownload.total()
+public static final dev.moon.hotwire.api.StoreDownload$State
+  public static dev.moon.hotwire.api.StoreDownload$State dev.moon.hotwire.api.StoreDownload$State.valueOf(java.lang.String)
+  public static dev.moon.hotwire.api.StoreDownload$State[] dev.moon.hotwire.api.StoreDownload$State.values()
+  public static final dev.moon.hotwire.api.StoreDownload$State dev.moon.hotwire.api.StoreDownload$State.DONE
+  public static final dev.moon.hotwire.api.StoreDownload$State dev.moon.hotwire.api.StoreDownload$State.FAILED
+  public static final dev.moon.hotwire.api.StoreDownload$State dev.moon.hotwire.api.StoreDownload$State.GETTING
+  public static final dev.moon.hotwire.api.StoreDownload$State dev.moon.hotwire.api.StoreDownload$State.PAUSED
+  public static final dev.moon.hotwire.api.StoreDownload$State dev.moon.hotwire.api.StoreDownload$State.STOPPED
+  public static final dev.moon.hotwire.api.StoreDownload$State dev.moon.hotwire.api.StoreDownload$State.WAITING
 public final dev.moon.hotwire.api.StoreKind
   public static dev.moon.hotwire.api.StoreKind dev.moon.hotwire.api.StoreKind.valueOf(java.lang.String)
   public static dev.moon.hotwire.api.StoreKind[] dev.moon.hotwire.api.StoreKind.values()

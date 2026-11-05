@@ -85,5 +85,11 @@ public interface HotwireApi {
 
     List<StoreDownload> getStoreDownloads();
 
+    boolean pauseDownload(int id);
+
+    boolean resumeDownload(int id);
+
+    boolean stopDownload(int id);
+
     CompletableFuture<Path> writeReport(String why);
 }

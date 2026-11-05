@@ -40,6 +40,8 @@ final class StoreApi {
     private static final int PAGE = 20;
 
     private static final Executor ASK = run -> Thread.ofVirtual().name("hotwire-api-store").start(run);
+
+    private static final Downloads SAVES = new Downloads();
     private static final Object BROWSING = new Object();
     private static volatile @Nullable ModrinthClient client;
 
@@ -157,12 +159,9 @@ final class StoreApi {
     }
 
     static List<StoreDownload> getDownloads() {
-        ModStore store = findStoreIfMade();
-        if (store == null) {
-            return List.of();
-        }
-        return store.getModel().getDownloads().snapshot().stream().map(job -> new StoreDownload(job.name(),
-                job.done(), job.total(), job.isOver(), job.state() == Downloads.State.DONE)).toList();
+        return Downloads.snapshotAll().stream().map(job -> new StoreDownload(job.name(), job.done(), job.total(),
+                job.isOver(), job.state() == Downloads.State.DONE, job.id(),
+                StoreDownload.State.valueOf(job.state().name()))).toList();
     }
 
     static StorePackState findPackState(StoreKind kind, String projectId) {
@@ -231,8 +230,8 @@ final class StoreApi {
                     .filter(one -> versionId.isEmpty() || one.id().equals(versionId)).findFirst()
                     .orElseThrow(() -> new IOException(Lang.get("hotwire.store.no_version", idOrSlug)));
             Files.createDirectories(folder);
-            Files.write(folder.resolve(version.fileName().replaceAll("[^A-Za-z0-9._+ -]", "_")),
-                    getClient().fetch(version));
+            getClient().fetchTo(version, folder.resolve(version.fileName().replaceAll("[^A-Za-z0-9._+ -]", "_")),
+                    SAVES);
             return new SwitchResult(SwitchResult.Kind.DONE, List.of(), Lang.get("hotwire.store.saved", idOrSlug,
                     folder));
         }).exceptionally(failure -> new SwitchResult(SwitchResult.Kind.FAILED, List.of(),

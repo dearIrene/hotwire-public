@@ -102,7 +102,12 @@ api.fetchPack(StoreKind.SHADER, "complementary-reimagined", "");
 api.findPackState(StoreKind.SHADER, id);
 api.togglePack(StoreKind.SHADER, id);
 api.getStoreDownloads();   // read it every frame
+api.pauseDownload(download.id());
+api.resumeDownload(download.id());
+api.stopDownload(download.id());
 ```
+
+`getStoreDownloads` has every download going: mods, updates, packs and Hotwire's own update. Each one has a `name()`, a `fraction()` for your bar and a `state()`. Pausing lets go of the connection and keeps what came, resuming goes on from there, and stopping throws away what came.
 
 To add a jar the player picked, use `planChange` below.
 

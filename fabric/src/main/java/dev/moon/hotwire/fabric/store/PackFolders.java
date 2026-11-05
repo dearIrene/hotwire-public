@@ -1,7 +1,7 @@
 package dev.moon.hotwire.fabric.store;
 
-import dev.moon.hotwire.config.AtomicFiles;
 import dev.moon.hotwire.jar.FileHashes;
+import dev.moon.hotwire.modrinth.Downloads;
 import dev.moon.hotwire.modrinth.ModrinthClient;
 import dev.moon.hotwire.modrinth.StoreModel;
 import dev.moon.hotwire.ui.Lang;
@@ -29,6 +29,7 @@ public final class PackFolders implements StoreModel.Packs {
     private static final Logger LOGGER = LoggerFactory.getLogger(PackFolders.class);
 
     private final ModrinthClient client;
+    private final Downloads downloads;
 
     private final BiConsumer<String, Boolean> say;
 
@@ -37,8 +38,9 @@ public final class PackFolders implements StoreModel.Packs {
     private final Set<Path> read = ConcurrentHashMap.newKeySet();
     private final Set<String> downloading = ConcurrentHashMap.newKeySet();
 
-    public PackFolders(ModrinthClient client, BiConsumer<String, Boolean> say) {
+    public PackFolders(ModrinthClient client, Downloads downloads, BiConsumer<String, Boolean> say) {
         this.client = client;
+        this.downloads = downloads;
         this.say = say;
         for (ModrinthClient.Kind kind : ModrinthClient.Kind.values()) {
             this.files.put(kind, new ConcurrentHashMap<>());
@@ -124,12 +126,13 @@ public final class PackFolders implements StoreModel.Packs {
                 ModrinthClient.Version version = this.client.findVersions(kind, projectId).stream()
                         .filter(one -> versionId.isEmpty() || one.id().equals(versionId)).findFirst()
                         .orElseThrow(() -> new IOException(Lang.get("hotwire.store.no_version", title)));
-                byte[] bytes = this.client.fetch(version);
                 String name = version.fileName().replaceAll("[^A-Za-z0-9._+ ()-]", "_");
                 Files.createDirectories(folder);
-                AtomicFiles.write(folder.resolve(name), bytes);
+                this.client.fetchTo(version, folder.resolve(name), this.downloads);
                 this.findFiles(kind).put(projectId, name);
                 game.execute(() -> this.say.accept(Lang.get("hotwire.store.pack.downloaded", title), false));
+            } catch (Downloads.DownloadStopped e) {
+                LOGGER.info("[Hotwire] the download of {} was stopped", title);
             } catch (IOException | RuntimeException e) {
                 LOGGER.info("[Hotwire] the store could not get {}: {}", title, e.toString());
                 game.execute(() -> this.say.accept(Lang.get("hotwire.store.download_failed", title,

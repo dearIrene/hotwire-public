@@ -21,6 +21,7 @@ import dev.moon.hotwire.api.SwitchProgress;
 import dev.moon.hotwire.api.SwitchResult;
 import dev.moon.hotwire.fabric.registration.GameRegistrations;
 import dev.moon.hotwire.fabric.screen.PromptGameScreen;
+import dev.moon.hotwire.modrinth.Downloads;
 import dev.moon.hotwire.plan.SwitchPlan;
 import dev.moon.hotwire.switching.CallerBlocks;
 import dev.moon.hotwire.switching.ModSwitcher;
@@ -54,7 +55,7 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 public final class HotwireApiImpl implements HotwireApi {
-    private static final int REVISION = 6;
+    private static final int REVISION = 7;
     private static final StackWalker STACK = StackWalker.getInstance(StackWalker.Option.RETAIN_CLASS_REFERENCE);
     private static final Logger LOGGER = LoggerFactory.getLogger(HotwireApiImpl.class);
 
@@ -348,6 +349,21 @@ public final class HotwireApiImpl implements HotwireApi {
     @Override
     public List<StoreDownload> getStoreDownloads() {
         return StoreApi.getDownloads();
+    }
+
+    @Override
+    public boolean pauseDownload(int id) {
+        return Downloads.pause(id);
+    }
+
+    @Override
+    public boolean resumeDownload(int id) {
+        return Downloads.resume(id);
+    }
+
+    @Override
+    public boolean stopDownload(int id) {
+        return Downloads.stop(id);
     }
 
     @Override

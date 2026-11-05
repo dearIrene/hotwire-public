@@ -2,8 +2,10 @@ package dev.moon.hotwire.modrinth;
 
 import java.io.IOException;
 import java.util.ArrayList;
+import java.util.Comparator;
 import java.util.List;
 import java.util.Map;
+import java.util.Set;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.atomic.AtomicInteger;
 import java.util.function.Consumer;
@@ -41,6 +43,8 @@ public final class Downloads {
 
     private static final AtomicInteger NEXT = new AtomicInteger();
     private static final Map<Integer, Control> CONTROLS = new ConcurrentHashMap<>();
+
+    private static final Set<Downloads> QUEUES = ConcurrentHashMap.newKeySet();
 
     private final class Control implements Feed {
         private final int id;
@@ -86,25 +90,28 @@ public final class Downloads {
         }
     }
 
-    public static void pause(int id) {
+    public static boolean pause(int id) {
         Control control = CONTROLS.get(id);
         if (control != null) {
             control.pause(true);
         }
+        return control != null;
     }
 
-    public static void resume(int id) {
+    public static boolean resume(int id) {
         Control control = CONTROLS.get(id);
         if (control != null) {
             control.pause(false);
         }
+        return control != null;
     }
 
-    public static void stop(int id) {
+    public static boolean stop(int id) {
         Control control = CONTROLS.get(id);
         if (control != null) {
             control.stopped = true;
         }
+        return control != null;
     }
 
     public static void pauseAll() {
@@ -151,6 +158,7 @@ public final class Downloads {
     }
 
     public synchronized int begin(String name, long total) {
+        QUEUES.add(this);
         int id = NEXT.incrementAndGet();
         Job job = new Job(id, name, 0, total, State.WAITING, 0);
         this.jobs.add(job);
@@ -212,6 +220,11 @@ public final class Downloads {
         if (told != null) {
             told.accept(job);
         }
+    }
+
+    public static List<Job> snapshotAll() {
+        return QUEUES.stream().flatMap(queue -> queue.snapshot().stream())
+                .sorted(Comparator.comparingInt(Job::id)).toList();
     }
 
     public synchronized List<Job> snapshot() {

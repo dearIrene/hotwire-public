@@ -45,7 +45,8 @@ final class StoreScreens {
         if (made == null) {
             made = new ModStore(this.installed, this.icons::of);
             made.checkInstalled();
-            PackFolders packs = new PackFolders(made.getModel().getClient(), this.engine::showMessage);
+            PackFolders packs = new PackFolders(made.getModel().getClient(), made.getModel().getDownloads(),
+                    this.engine::showMessage);
             made.getModel().setPacks(packs);
             this.packs = packs;
             this.store = made;

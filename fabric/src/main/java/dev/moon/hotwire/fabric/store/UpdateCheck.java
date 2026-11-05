@@ -321,18 +321,9 @@ public final class UpdateCheck {
     }
 
     private Path write(ModrinthClient.Version version) throws IOException {
-        Downloads told = this.downloads;
-        int job = told.begin(version.fileName(), version.size());
-        told.start(job);
-        try {
-            Files.createDirectories(this.folder);
-            Path jar = this.folder.resolve(version.fileName().replaceAll("[^A-Za-z0-9._+ -]", "_"));
-            this.client.fetchTo(version, jar, told.feedOf(job));
-            told.end(job, true);
-            return jar;
-        } catch (IOException | RuntimeException e) {
-            told.end(job, false);
-            throw e;
-        }
+        Files.createDirectories(this.folder);
+        Path jar = this.folder.resolve(version.fileName().replaceAll("[^A-Za-z0-9._+ -]", "_"));
+        this.client.fetchTo(version, jar, this.downloads);
+        return jar;
     }
 }

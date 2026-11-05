@@ -287,26 +287,6 @@ public final class ModrinthClient {
         return out;
     }
 
-    public byte[] fetch(Version version) throws IOException {
-        return this.fetch(version, done -> { });
-    }
-
-    public byte[] fetch(Version version, LongConsumer onBytes) throws IOException {
-        Path copy = this.local.find(version.fileName(), version.size(), version.sha512());
-        if (copy != null) {
-            return Files.readAllBytes(copy);
-        }
-        long began = System.nanoTime();
-        byte[] bytes = this.transport.fetchBytes(version.url(), onBytes);
-        LOGGER.info("[Hotwire] {} was downloaded: {} KB in {} ms", version.fileName(), bytes.length / 1024,
-                (System.nanoTime() - began) / 1_000_000);
-        String hash = hashOf(bytes);
-        if (!hash.equalsIgnoreCase(version.sha512())) {
-            throw new IOException("the download of " + version.fileName() + " does not match Modrinth's hash");
-        }
-        return bytes;
-    }
-
     public void fetchTo(Version version, Path target, LongConsumer onBytes) throws IOException {
         if (LocalJars.isSameJar(target, version.size(), version.sha512())) {
             return;
@@ -328,6 +308,18 @@ public final class ModrinthClient {
                     Files.size(part) / 1024, (System.nanoTime() - began) / 1_000_000);
         }
         AtomicFiles.moveInto(part, target);
+    }
+
+    public void fetchTo(Version version, Path target, Downloads queue) throws IOException {
+        int job = queue.begin(version.fileName(), version.size());
+        queue.start(job);
+        try {
+            this.fetchTo(version, target, queue.feedOf(job));
+            queue.end(job, true);
+        } catch (IOException | RuntimeException e) {
+            queue.end(job, false);
+            throw e;
+        }
     }
 
     static String hashOf(Path file) throws IOException {

@@ -1,7 +1,7 @@
 package dev.moon.hotwire.fabric.store;
 
-import dev.moon.hotwire.config.AtomicFiles;
 import dev.moon.hotwire.fabric.LoadedMods;
+import dev.moon.hotwire.modrinth.Downloads;
 import dev.moon.hotwire.modrinth.ModrinthClient;
 import dev.moon.hotwire.update.UrgentUpdate;
 import java.io.IOException;
@@ -22,6 +22,7 @@ public final class SelfUpdate {
     private static final Logger LOGGER = LoggerFactory.getLogger(SelfUpdate.class);
 
     private final ModrinthClient client = ModStore.makeClient();
+    private final Downloads downloads = new Downloads();
     private final Path folder = FabricLoader.getInstance().getGameDir().resolve("hotwire").resolve("store");
     private volatile ModrinthClient.@Nullable Version newer;
     private boolean started;
@@ -73,10 +74,9 @@ public final class SelfUpdate {
     }
 
     public Path fetch(ModrinthClient.Version version) throws IOException {
-        byte[] bytes = this.client.fetch(version);
         Files.createDirectories(this.folder);
         Path jar = this.folder.resolve(version.fileName().replaceAll("[^A-Za-z0-9._+ -]", "_"));
-        AtomicFiles.write(jar, bytes);
+        this.client.fetchTo(version, jar, this.downloads);
         return jar;
     }
 }
