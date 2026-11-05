@@ -173,7 +173,9 @@ public final class ModGraph {
     List<String> getDependencies(String id) {
         List<String> out = new ArrayList<>(this.find(id).map(mod -> mod.getRelation(Relation.DEPENDS).keySet().stream()
                 .map(this::resolve).toList()).orElse(List.of()));
-        out.addAll(this.calls.getOrDefault(id, new TreeSet<>()));
+
+        this.calls.getOrDefault(id, new TreeSet<>()).stream().filter(other -> this.needsByCode(id, other))
+                .forEach(out::add);
         return out;
     }
 
