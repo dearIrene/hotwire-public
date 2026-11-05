@@ -1,7 +1,7 @@
 package dev.moon.hotwire.plan;
 
-import dev.moon.hotwire.jar.ModManifest;
 import dev.moon.hotwire.jar.ModManifest.Relation;
+import dev.moon.hotwire.jar.ModManifest;
 import dev.moon.hotwire.plan.SwitchPlan.Direction;
 import dev.moon.hotwire.plan.SwitchPlan.EnabledNestedMod;
 import dev.moon.hotwire.plan.SwitchPlan.Reason;
@@ -9,6 +9,7 @@ import dev.moon.hotwire.plan.SwitchPlan.Refusal;
 import java.util.ArrayList;
 import java.util.Collection;
 import java.util.Collections;
+import java.util.HashSet;
 import java.util.LinkedHashMap;
 import java.util.LinkedHashSet;
 import java.util.List;
@@ -116,13 +117,17 @@ public final class SwitchPlanner {
     }
 
     private void tellWhyAskedGo(Map<String, Reason> leaving) {
-        for (Map.Entry<String, Reason> entry : leaving.entrySet()) {
-            if (!(entry.getValue() instanceof Reason.Asked)) {
-                continue;
+        Set<String> asked = new HashSet<>();
+        leaving.forEach((mod, reason) -> {
+            if (reason instanceof Reason.Asked) {
+                asked.add(mod);
             }
-            for (String other : leaving.keySet()) {
-                if (!other.equals(entry.getKey()) && this.graph.getDependents(other).contains(entry.getKey())) {
-                    entry.setValue(new Reason.DependsOn(other));
+        });
+        for (String mod : asked) {
+            for (String other : asked) {
+                if (!other.equals(mod) && this.graph.getDependents(other).contains(mod)
+                        && !this.graph.getDependents(mod).contains(other)) {
+                    leaving.put(mod, new Reason.DependsOn(other));
                     break;
                 }
             }
