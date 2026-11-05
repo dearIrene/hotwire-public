@@ -1,5 +1,6 @@
 package dev.moon.hotwire.fabric.registration;
 
+import dev.moon.hotwire.fabric.dev.DevMod;
 import dev.moon.hotwire.jar.JarPaths;
 import java.net.URI;
 import java.net.URISyntaxException;
@@ -68,6 +69,13 @@ public final class ModOfClass {
     };
 
     public ModOfClass(FabricLoader loader, Predicate<String> nestedOwned) {
+        for (DevMod dev : DevMod.find()) {
+            for (Path folder : dev.folders()) {
+                for (Path key : JarPaths.findKeysOf(folder)) {
+                    this.byJar.putIfAbsent(key, dev.id());
+                }
+            }
+        }
         for (ModContainer mod : loader.getAllMods()) {
             if (mod.getOrigin().getKind() == ModOrigin.Kind.PATH) {
                 for (Path path : mod.getOrigin().getPaths()) {

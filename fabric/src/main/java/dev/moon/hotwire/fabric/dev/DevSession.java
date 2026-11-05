@@ -7,6 +7,7 @@ import dev.moon.hotwire.dev.DevHost;
 import dev.moon.hotwire.dev.DevModView;
 import dev.moon.hotwire.dev.DevState;
 import dev.moon.hotwire.fabric.update.ModUpdater;
+import dev.moon.hotwire.redefine.ClassRebuilder;
 import dev.moon.hotwire.ui.Lang;
 import dev.moon.hotwire.ui.Notice;
 import dev.moon.hotwire.ui.Notices;
@@ -19,21 +20,26 @@ import java.nio.file.Path;
 import java.util.ArrayDeque;
 import java.util.ArrayList;
 import java.util.Deque;
+import java.util.HashSet;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Locale;
 import java.util.Map;
+import java.util.Set;
 import java.util.SortedSet;
 import java.util.TreeSet;
 import java.util.concurrent.ConcurrentHashMap;
+import java.util.concurrent.TimeUnit;
 import org.jspecify.annotations.Nullable;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 public final class DevSession implements DevHost, AutoCloseable {
     private static final Logger LOGGER = LoggerFactory.getLogger(DevSession.class);
-    private static final int KEPT_EVENTS = 40;
-    private static final int KEPT_CRASHES = 20;
+    private static final int MOST_EVENTS = 40;
+    private static final int MOST_CRASHES = 20;
+
+    private static final long REMOVAL_SETTLE_MILLIS = 2000;
     private static final int LISTED = 6;
     private static volatile @Nullable DevSession current;
 
@@ -52,6 +58,8 @@ public final class DevSession implements DevHost, AutoCloseable {
         @Nullable String restart(String id);
 
         boolean isEveryReloadShown();
+
+        List<Class<?>> findLoaded(Set<String> names);
     }
 
     private static final class Mod {
@@ -59,7 +67,9 @@ public final class DevSession implements DevHost, AutoCloseable {
         DevBuild running;
         int runningNumber;
         long builtAt = System.currentTimeMillis();
-        int taken;
+        int builds;
+
+        long goneSince;
         volatile DevState state = DevState.UP_TO_DATE;
         volatile String line = "";
         final Deque<DevEvent> events = new ArrayDeque<>();
@@ -115,7 +125,40 @@ public final class DevSession implements DevHost, AutoCloseable {
         return STARTS.containsKey(id);
     }
 
-    public static void onCrash(String id, String what, String where) {
+    private static volatile boolean fullRedefinition;
+
+    public static boolean takesShapes(String id) {
+        return fullRedefinition && isDevMod(id);
+    }
+
+    public static void useFullRedefinition(boolean full) {
+        fullRedefinition = full;
+        if (full) {
+            ClassRebuilder.setWholeClasses(name -> {
+                String binary = name.replace('/', '.');
+                for (Start start : STARTS.values()) {
+                    if (start.build().hasClass(binary)) {
+                        return true;
+                    }
+                }
+                DevSession session = current;
+                return session != null && session.isOwnClass(binary);
+            });
+        }
+    }
+
+    private boolean isOwnClass(String binary) {
+        for (Mod mod : this.mods.values()) {
+            synchronized (mod) {
+                if (mod.running.hasClass(binary)) {
+                    return true;
+                }
+            }
+        }
+        return false;
+    }
+
+    public static void onCrash(String id, Throwable thrown, String what, String where) {
         DevSession session = current;
         Mod mod = session == null ? null : session.mods.get(id);
         if (mod == null) {
@@ -125,11 +168,11 @@ public final class DevSession implements DevHost, AutoCloseable {
         boolean first;
         synchronized (mod) {
             String key = what + " @ " + where;
-            DevCrash before = mod.crashes.get(key);
+            DevCrash before = mod.crashes.remove(key);
             first = before == null;
             mod.crashes.put(key, before == null ? new DevCrash(what, where, 1, now, now)
                     : new DevCrash(what, where, before.count() + 1, before.firstAt(), now));
-            while (mod.crashes.size() > KEPT_CRASHES) {
+            while (mod.crashes.size() > MOST_CRASHES) {
                 mod.crashes.remove(mod.crashes.keySet().iterator().next());
             }
             if (first) {
@@ -138,7 +181,10 @@ public final class DevSession implements DevHost, AutoCloseable {
             }
         }
         if (first) {
-            Notices.show(Notice.ofBad(Lang.get("hotwire.dev.crash", mod.mod.name()), where));
+            LOGGER.error("[Hotwire] {} threw at {}; the game keeps going, so fix it and build again", id, where,
+                    thrown);
+            Notices.show(Notice.ofBad(Lang.get("hotwire.dev.crash", mod.mod.name()),
+                    Lang.get("hotwire.dev.crash.at", what, where)));
         }
     }
 
@@ -161,7 +207,7 @@ public final class DevSession implements DevHost, AutoCloseable {
 
     private void take(Mod mod) {
         synchronized (mod) {
-            int number = mod.taken + 1;
+            int number = mod.builds + 1;
             Path jar = this.folder.resolve(mod.mod.id()).resolve("build-" + number + ".jar");
             DevBuild built;
             try {
@@ -171,6 +217,17 @@ public final class DevSession implements DevHost, AutoCloseable {
                 return;
             }
             DevBuild.Diff diff = mod.running.diff(built);
+            long now = System.currentTimeMillis();
+            if (diff.removedClasses().isEmpty()) {
+                mod.goneSince = 0;
+            } else if (mod.goneSince == 0 || now - mod.goneSince < REMOVAL_SETTLE_MILLIS) {
+                if (mod.goneSince == 0) {
+                    mod.goneSince = now;
+                }
+                deleteQuietly(jar);
+                this.watch.lookAgain(mod.mod, TimeUnit.MILLISECONDS.toNanos(REMOVAL_SETTLE_MILLIS));
+                return;
+            }
             if (diff.isEmpty()) {
                 deleteQuietly(jar);
                 if (mod.state == DevState.WAITING) {
@@ -178,7 +235,7 @@ public final class DevSession implements DevHost, AutoCloseable {
                 }
                 return;
             }
-            mod.taken = number;
+            mod.builds = number;
             mod.state = DevState.LOADING;
             mod.line = Lang.get("hotwire.dev.loading");
             long began = System.nanoTime();
@@ -190,8 +247,13 @@ public final class DevSession implements DevHost, AutoCloseable {
                     if (diff.hasClasses()) {
                         List<String> lines = new ArrayList<>(list(diff.changedClasses()));
                         lines.addAll(list(diff.addedClasses()));
-                        this.tell(mod, DevEvent.Kind.IN, Lang.get("hotwire.dev.in", mod.mod.name()),
-                                Lang.get("hotwire.dev.took", describeClasses(diff), findSeconds(began)), lines);
+                        ConfigRefresh.Result configs = this.refreshConfigs(diff, built);
+                        configs.refreshed().forEach(name -> lines.add(Lang.get("hotwire.dev.config.refreshed", name)));
+                        configs.waiting().forEach(name -> lines.add(Lang.get("hotwire.dev.config.waiting", name)));
+                        String detail = configs.waiting().isEmpty()
+                                ? Lang.get("hotwire.dev.took", describeClasses(diff), findSeconds(began))
+                                : Lang.get("hotwire.dev.config.waiting", configs.waiting().getFirst());
+                        this.tell(mod, DevEvent.Kind.IN, Lang.get("hotwire.dev.in", mod.mod.name()), detail, lines);
                     } else {
                         this.tell(mod, DevEvent.Kind.ASSETS, Lang.get("hotwire.dev.assets", mod.mod.name()),
                                 Lang.get("hotwire.dev.took", describeFiles(diff), findSeconds(began)),
@@ -209,6 +271,13 @@ public final class DevSession implements DevHost, AutoCloseable {
                 this.fail(mod, List.of(describePreview(preview)));
             }
         }
+    }
+
+    private ConfigRefresh.Result refreshConfigs(DevBuild.Diff diff, DevBuild built) {
+        Set<String> names = new HashSet<>();
+        diff.changedClasses().forEach(entry -> names.add(entry.substring(0, entry.length() - ".class".length())
+                .replace('/', '.')));
+        return ConfigRefresh.refresh(this.engine.findLoaded(names), built::readClass);
     }
 
     private void accept(Mod mod, DevBuild built, int number) {
@@ -255,7 +324,7 @@ public final class DevSession implements DevHost, AutoCloseable {
     private static void add(Mod mod, DevEvent event) {
         synchronized (mod) {
             mod.events.addFirst(event);
-            while (mod.events.size() > KEPT_EVENTS) {
+            while (mod.events.size() > MOST_EVENTS) {
                 mod.events.removeLast();
             }
         }
@@ -374,6 +443,36 @@ public final class DevSession implements DevHost, AutoCloseable {
     public void close() throws IOException {
         current = null;
         this.watch.close();
+    }
+
+    public static void watchLeftWorld(Object world) {
+        DevSession session = current;
+        if (session != null) {
+            WorldLeaks.watch(world, session::findLoadedClasses, session::onLeak);
+        }
+    }
+
+    private Map<String, List<Class<?>>> findLoadedClasses() {
+        Map<String, List<Class<?>>> loaded = new LinkedHashMap<>();
+        for (Mod mod : this.mods.values()) {
+            Set<String> names;
+            synchronized (mod) {
+                names = mod.running.getClassNames();
+            }
+            loaded.put(mod.mod.id(), this.engine.findLoaded(names));
+        }
+        return loaded;
+    }
+
+    private void onLeak(WorldLeaks.Holder holder) {
+        Mod mod = this.mods.get(holder.mod());
+        if (mod == null) {
+            return;
+        }
+        String title = Lang.get("hotwire.dev.leak", mod.mod.name());
+        add(mod, new DevEvent(System.currentTimeMillis(), DevEvent.Kind.LEAK, title,
+                List.of(holder.path(), Lang.get("hotwire.dev.leak.fix"))));
+        Notices.show(Notice.ofBad(title, holder.path()));
     }
 
     public static SortedSet<String> findIds() {

@@ -1,8 +1,9 @@
 package dev.moon.hotwire.fabric;
 
 import dev.moon.hotwire.concurrent.Tasks;
-import dev.moon.hotwire.fabric.registration.GameHold;
 import dev.moon.hotwire.fabric.add.WorldReopen;
+import dev.moon.hotwire.fabric.dev.DevSession;
+import dev.moon.hotwire.fabric.registration.GameHold;
 import dev.moon.hotwire.fabric.registration.GameRegistrations;
 import dev.moon.hotwire.redefine.HandlerGuards;
 import dev.moon.hotwire.registration.CallerOwner;
@@ -29,6 +30,7 @@ import java.util.function.BiConsumer;
 import java.util.function.BiFunction;
 import java.util.function.BooleanSupplier;
 import java.util.function.Function;
+import java.util.function.Predicate;
 import java.util.function.Supplier;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
@@ -57,7 +59,7 @@ public final class CrashGuard {
 
     static void install(InstalledMods installed, Tasks tasks, Supplier<@Nullable SwitchRunner> runner,
             BiConsumer<String, Boolean> say, BiFunction<String, String, String> writeReport,
-            BooleanSupplier antiCrash) {
+            BooleanSupplier antiCrash, Predicate<String> inDevelopment) {
         CrashPolicy[] made = new CrashPolicy[1];
         made[0] = new CrashPolicy(CrashGuard::findModBehind, id -> isTouched(installed, id)
                 || antiCrash.getAsBoolean(), caught -> {
@@ -106,7 +108,8 @@ public final class CrashGuard {
                         finish(made[0], caught.mod(), name, reported.result(), why, installed,
                                 byAntiCrash ? (line, bad) -> { } : say, writeReport, byAntiCrash);
                     }));
-        });
+        }, inDevelopment, caught -> DevSession.onCrash(caught.mod(), caught.thrown(), findWhat(caught.thrown()),
+                findWhere(caught.thrown(), caught.mod())));
         policy = made[0];
     }
 
@@ -158,6 +161,59 @@ public final class CrashGuard {
                 name, PlayerMessages.describe(result, installed::nameOf), where);
         say.accept(line, true);
         ModViews.showNotice(Lang.get("hotwire.crash.title"), line);
+    }
+
+    static String findWhat(Throwable thrown) {
+        Throwable inner = findInnermost(thrown);
+        String message = inner.getMessage();
+        return inner.getClass().getSimpleName() + (message == null || message.isBlank() ? "" : ": " + message);
+    }
+
+    static String findWhere(Throwable thrown, String mod) {
+        Throwable inner = findInnermost(thrown);
+        ClassLoader game = CrashGuard.class.getClassLoader();
+        for (StackTraceElement element : findFramesAbove(inner)) {
+            Class<?> type;
+            try {
+                type = Class.forName(element.getClassName(), false, game);
+            } catch (ClassNotFoundException | LinkageError e) {
+                continue;
+            }
+            if (mod.equals(GameRegistrations.findModOf(type))) {
+                return element.getFileName() + ":" + element.getLineNumber() + " in " + element.getMethodName();
+            }
+            String mixin = findMixinOf(type, element.getMethodName(), mod);
+            if (mixin != null) {
+                return mixin.substring(mixin.lastIndexOf('.') + 1) + ".java:" + element.getLineNumber() + " in "
+                        + type.getSimpleName();
+            }
+        }
+        StackTraceElement[] frames = inner.getStackTrace();
+        return frames.length == 0 ? "" : frames[0].toString();
+    }
+
+    private static Throwable findInnermost(Throwable thrown) {
+        Throwable inner = thrown;
+        for (int depth = 0; inner.getCause() != null && depth < 32; depth++) {
+            inner = inner.getCause();
+        }
+        return inner;
+    }
+
+    private static @Nullable String findMixinOf(Class<?> type, String method, String mod) {
+        Method[] methods;
+        try {
+            methods = type.getDeclaredMethods();
+        } catch (LinkageError e) {
+            return null;
+        }
+        for (Method declared : methods) {
+            String mixin = declared.getName().equals(method) ? findMergedFrom(declared) : null;
+            if (mixin != null && mod.equals(mixinOwner.apply(mixin.replace('.', '/')))) {
+                return mixin;
+            }
+        }
+        return null;
     }
 
     static void onBackOn(Collection<String> ids) {

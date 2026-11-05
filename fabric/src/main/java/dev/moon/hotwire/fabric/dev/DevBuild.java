@@ -5,15 +5,19 @@ import java.io.OutputStream;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.util.HashMap;
+import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
+import java.util.Set;
 import java.util.SortedSet;
 import java.util.TreeMap;
 import java.util.TreeSet;
 import java.util.stream.Stream;
 import java.util.zip.CRC32;
 import java.util.zip.ZipEntry;
+import java.util.zip.ZipFile;
 import java.util.zip.ZipOutputStream;
+import org.jspecify.annotations.Nullable;
 
 final class DevBuild {
     record Diff(SortedSet<String> changedClasses, SortedSet<String> addedClasses, SortedSet<String> removedClasses,
@@ -38,6 +42,29 @@ final class DevBuild {
 
     Path getJar() {
         return this.jar;
+    }
+
+    byte @Nullable [] readClass(String binary) {
+        try (ZipFile zip = new ZipFile(this.jar.toFile())) {
+            ZipEntry entry = zip.getEntry(binary.replace('.', '/') + ".class");
+            return entry == null ? null : zip.getInputStream(entry).readAllBytes();
+        } catch (IOException e) {
+            return null;
+        }
+    }
+
+    boolean hasClass(String binary) {
+        return this.sums.containsKey(binary.replace('.', '/') + ".class");
+    }
+
+    Set<String> getClassNames() {
+        Set<String> names = new HashSet<>();
+        for (String entry : this.sums.keySet()) {
+            if (entry.endsWith(".class") && !entry.endsWith("module-info.class")) {
+                names.add(entry.substring(0, entry.length() - ".class".length()).replace('/', '.'));
+            }
+        }
+        return names;
     }
 
     static DevBuild take(List<Path> folders, Path jar) throws IOException {

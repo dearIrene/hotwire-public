@@ -1,0 +1,51 @@
+package dev.moon.hotwire.fabric.screen;
+
+import dev.moon.hotwire.ui.DevWindow;
+import dev.moon.hotwire.ui.Root;
+//? if >=26.1 {
+import net.minecraft.client.gui.GuiGraphicsExtractor;
+//?} else {
+/*import net.minecraft.client.gui.GuiGraphics;
+*///?}
+
+public final class DevGameScreen extends RootScreen {
+    private final Root root = new Root();
+    private final DevWindow window;
+
+    public DevGameScreen(DevWindow window) {
+        super("Hotwire developer");
+        this.window = window;
+        this.root.getBase().add(window);
+    }
+
+    @Override
+    protected Root getRoot() {
+        return this.root;
+    }
+
+    @Override
+    protected void onResized(int width, int height) {
+        this.root.resize(width, height);
+        this.window.setScreen(width, height);
+    }
+
+    @Override
+    protected void drawFrame(GuiCanvas canvas, long nowNanos, int mouseX, int mouseY) {
+        this.root.drawFrame(canvas, nowNanos, mouseX, mouseY);
+    }
+
+    @Override
+    public boolean isPauseScreen() {
+        return false;
+    }
+
+    //? if >=26.1 {
+    @Override
+    public void extractBackground(GuiGraphicsExtractor graphics, int mouseX, int mouseY, float partialTick) {
+    }
+    //?} else {
+    /*@Override
+    public void renderBackground(GuiGraphics graphics, int mouseX, int mouseY, float partialTick) {
+    }
+    *///?}
+}

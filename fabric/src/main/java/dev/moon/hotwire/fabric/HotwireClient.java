@@ -3,6 +3,7 @@ package dev.moon.hotwire.fabric;
 //? if >=26.1 {
 import dev.moon.hotwire.fabric.add.LoadStatusViews;
 //?}
+import dev.moon.hotwire.fabric.dev.DevSession;
 import dev.moon.hotwire.fabric.registration.OffModClose;
 import dev.moon.hotwire.fabric.registration.OffModCommands;
 import dev.moon.hotwire.fabric.registration.TakeoutRecord;
@@ -82,7 +83,8 @@ public final class HotwireClient implements ClientModInitializer {
             }
         });
 
-        OpenKey.register(HotwireClient::openSoonFromKey, () -> ModViews.runSoon(() -> getEngine().openStoreNow("")));
+        OpenKey.register(HotwireClient::openSoonFromKey, () -> ModViews.runSoon(() -> getEngine().openStoreNow("")),
+                DevSetups.get().inSetup() ? () -> ModViews.runSoon(() -> getEngine().openDevWindow()) : null);
         OffTooltips.register();
 
         ClientLifecycleEvents.CLIENT_STARTED.register(client -> {
@@ -108,6 +110,11 @@ public final class HotwireClient implements ClientModInitializer {
         ClientPlayConnectionEvents.DISCONNECT.register((handler, client) -> {
             ActionJournal.get().note(ActionJournal.Action.LEAVE, "", findPlaceOf(handler.getConnection()));
             LOGGER.info("[Hotwire] the world's connection closed", new Throwable("closed here"));
+            HotwireEngine leaving = engine;
+            if (client.level != null && leaving != null
+                    && leaving.getSettings().isDevLeaksOn(DevSetups.get().inSetup())) {
+                DevSession.watchLeftWorld(client.level);
+            }
             TakeoutRecord.dropStale();
 
             client.execute(() -> {

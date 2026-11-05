@@ -1,5 +1,6 @@
 package dev.moon.hotwire.fabric.update;
 
+import dev.moon.hotwire.fabric.dev.DevSession;
 import dev.moon.hotwire.jar.JarLookup;
 import dev.moon.hotwire.jar.ModJar;
 import dev.moon.hotwire.jar.ModJarException;
@@ -158,7 +159,7 @@ final class UpdatePlans {
         UpdateContext context = new UpdateContext(this.owner.engine.getStateOf(id), loaded,
                 this.owner.engine.getApplier().getPatchersOf(names, this.owner.engine.on(), id),
                         this.owner.engine.getGraph()
-                .getDependents(id), unmet, this.owner.getVersionOrder());
+                .getDependents(id), unmet, this.owner.getVersionOrder(), DevSession.takesShapes(id));
         return UpdatePlanner.withBlockers(UpdatePlanner.plan(diff, context), waits);
     }
 }

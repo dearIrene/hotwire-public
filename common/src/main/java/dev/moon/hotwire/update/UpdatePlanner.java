@@ -57,12 +57,13 @@ public final class UpdatePlanner {
                 continue;
             }
             boolean loaded = game.loadedClasses().contains(diffed.name());
-            actions.add(new ClassAction(diffed.name(), diffed.change(), chooseAction(diffed, loaded)));
+            actions.add(new ClassAction(diffed.name(), diffed.change(), chooseAction(diffed, loaded,
+                    game.takesShapes())));
             Set<String> patchers = game.patchedBy().getOrDefault(diffed.name(), Set.of());
             if (loaded && diffed.change() != ClassChange.REMOVED && !patchers.isEmpty()) {
                 blockers.add(new UpdateBlocker.PatchedByRunningMod(diffed.name(), patchers));
             }
-            if (loaded && diffed.change() == ClassChange.SHAPE && !diffed.isCarried()) {
+            if (loaded && diffed.change() == ClassChange.SHAPE && !diffed.isCarried() && !game.takesShapes()) {
                 blockers.add(new UpdateBlocker.ShapeNotCarried(diffed.name(), diffed.shape()));
             }
         }
@@ -172,11 +173,12 @@ public final class UpdatePlanner {
                 plan.actions(), plan.notices(), left);
     }
 
-    private static ClassAction.Kind chooseAction(ClassDiff diffed, boolean loaded) {
+    private static ClassAction.Kind chooseAction(ClassDiff diffed, boolean loaded, boolean takesShapes) {
         return switch (diffed.change()) {
             case ADDED -> ClassAction.Kind.DEFINE;
             case REMOVED -> loaded ? ClassAction.Kind.LEAVE_AS_IS : ClassAction.Kind.DROP;
-            case SHAPE -> loaded ? chooseShapeAction(diffed) : ClassAction.Kind.SERVE;
+            case SHAPE -> !loaded ? ClassAction.Kind.SERVE
+                    : takesShapes ? ClassAction.Kind.REDEFINE : chooseShapeAction(diffed);
             case IDENTICAL, CONSTANT_POOL, BODIES -> loaded ? ClassAction.Kind.REDEFINE : ClassAction.Kind.SERVE;
         };
     }

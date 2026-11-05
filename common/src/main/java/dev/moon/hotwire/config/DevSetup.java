@@ -1,6 +1,5 @@
 package dev.moon.hotwire.config;
 
-import com.sun.management.HotSpotDiagnosticMXBean;
 import java.lang.management.ManagementFactory;
 
 public record DevSetup(boolean inSetup, Jvm jvm) {
@@ -27,9 +26,8 @@ public record DevSetup(boolean inSetup, Jvm jvm) {
 
     private static boolean isFlagOn() {
         try {
-            return Boolean.parseBoolean(ManagementFactory.getPlatformMXBean(HotSpotDiagnosticMXBean.class)
-                    .getVMOption(FLAG).getValue());
-        } catch (IllegalArgumentException | UnsupportedOperationException | SecurityException e) {
+            return ManagementFactory.getRuntimeMXBean().getInputArguments().contains("-XX:+" + FLAG);
+        } catch (SecurityException e) {
             return false;
         }
     }

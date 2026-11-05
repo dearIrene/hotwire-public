@@ -9,7 +9,9 @@ import dev.moon.hotwire.switching.PlayerMessages;
 import dev.moon.hotwire.ui.UpdateMethod;
 import dev.moon.hotwire.ui.UpdatePreview;
 import java.nio.file.Path;
+import java.util.ArrayList;
 import java.util.List;
+import java.util.Set;
 import java.util.function.Supplier;
 import org.jspecify.annotations.Nullable;
 
@@ -58,6 +60,21 @@ final class DevEngine implements DevSession.Engine {
         }
         ModSwitcher.Result on = SwitchRunner.runQuietly(() -> found.runner().turnOn(done.plan().order())).result();
         return PlayerMessages.isBad(on) ? PlayerMessages.describe(on, this.installed::nameOf) : null;
+    }
+
+    @Override
+    public List<Class<?>> findLoaded(Set<String> names) {
+        HotwireEngine.JvmParts found = this.parts.get();
+        if (found == null) {
+            return List.of();
+        }
+        List<Class<?>> loaded = new ArrayList<>();
+        for (Class<?> type : found.instrumentation().getAllLoadedClasses()) {
+            if (names.contains(type.getName())) {
+                loaded.add(type);
+            }
+        }
+        return loaded;
     }
 
     @Override

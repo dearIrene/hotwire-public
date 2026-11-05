@@ -32,6 +32,10 @@ public final class HotwireSettings {
 
     public enum DevReload { ON, OFF }
 
+    public enum DevCatch { ON, OFF }
+
+    public enum DevLeaks { ON, OFF }
+
     public enum ReloadPopups { ALL, PROBLEMS }
 
     static final String IN_WORLD = "in-world";
@@ -45,6 +49,8 @@ public final class HotwireSettings {
     static final String ANTI_CRASH = "anti-crash";
     static final String DEV_RELOAD = "dev-reload";
     static final String RELOAD_POPUPS = "reload-popups";
+    static final String DEV_CATCH = "dev-catch";
+    static final String DEV_LEAKS = "dev-leaks";
 
     private static final Logger LOGGER = LoggerFactory.getLogger(HotwireSettings.class);
 
@@ -82,6 +88,12 @@ public final class HotwireSettings {
     private static final List<DevReload> DEV_RELOAD_ORDER = List.of(DevReload.OFF, DevReload.ON);
     private static final List<String> DEV_RELOAD_CHOICES = List.of("hotwire.settings.dev_reload.off",
             "hotwire.settings.dev_reload.on");
+    private static final List<DevCatch> DEV_CATCH_ORDER = List.of(DevCatch.OFF, DevCatch.ON);
+    private static final List<String> DEV_CATCH_CHOICES = List.of("hotwire.settings.dev_catch.off",
+            "hotwire.settings.dev_catch.on");
+    private static final List<DevLeaks> DEV_LEAKS_ORDER = List.of(DevLeaks.OFF, DevLeaks.ON);
+    private static final List<String> DEV_LEAKS_CHOICES = List.of("hotwire.settings.dev_leaks.off",
+            "hotwire.settings.dev_leaks.on");
     private static final List<ReloadPopups> RELOAD_POPUPS_ORDER = List.of(ReloadPopups.ALL, ReloadPopups.PROBLEMS);
     private static final List<String> RELOAD_POPUPS_CHOICES = List.of("hotwire.settings.reload_popups.all",
             "hotwire.settings.reload_popups.problems");
@@ -100,6 +112,8 @@ public final class HotwireSettings {
         @Nullable AntiCrash antiCrash = AntiCrash.OFF;
         @Nullable DevReload devReload = DevReload.ON;
         @Nullable ReloadPopups reloadPopups = ReloadPopups.ALL;
+        @Nullable DevCatch devCatch = DevCatch.ON;
+        @Nullable DevLeaks devLeaks = DevLeaks.ON;
         @Nullable String promptAcceptedFor;
         boolean keyCardShown;
         @Nullable List<String> favorites = List.of();
@@ -117,6 +131,8 @@ public final class HotwireSettings {
     private volatile AntiCrash antiCrash;
     private volatile DevReload devReload;
     private volatile ReloadPopups reloadPopups;
+    private volatile DevCatch devCatch;
+    private volatile DevLeaks devLeaks;
     private volatile @Nullable String promptAcceptedFor;
     private volatile boolean keyCardShown;
     private final Set<String> favorites = ConcurrentHashMap.newKeySet();
@@ -141,6 +157,8 @@ public final class HotwireSettings {
         this.antiCrash = saved.antiCrash == null ? AntiCrash.OFF : saved.antiCrash;
         this.devReload = saved.devReload == null ? DevReload.ON : saved.devReload;
         this.reloadPopups = saved.reloadPopups == null ? ReloadPopups.ALL : saved.reloadPopups;
+        this.devCatch = saved.devCatch == null ? DevCatch.ON : saved.devCatch;
+        this.devLeaks = saved.devLeaks == null ? DevLeaks.ON : saved.devLeaks;
         this.promptAcceptedFor = saved.promptAcceptedFor;
         this.keyCardShown = saved.keyCardShown;
         if (saved.favorites != null) {
@@ -192,6 +210,14 @@ public final class HotwireSettings {
         return inSetup && this.devReload == DevReload.ON;
     }
 
+    public boolean isDevCatchOn(boolean inSetup) {
+        return inSetup && this.devCatch == DevCatch.ON;
+    }
+
+    public boolean isDevLeaksOn(boolean inSetup) {
+        return inSetup && this.devLeaks == DevLeaks.ON;
+    }
+
     public boolean isEveryReloadShown() {
         return this.reloadPopups == ReloadPopups.ALL;
     }
@@ -230,33 +256,37 @@ public final class HotwireSettings {
 
     public List<SettingsSection> getSections(DevSetup dev) {
         return List.of(new SettingsSection(Lang.get("hotwire.settings.section.general"), List.of(
-                        option(PAUSE_GAME, "hotwire.settings.pause", PAUSE_CHOICES, PAUSE_ORDER, this.pauseGame),
-                        option(KEY_ALERT, "hotwire.settings.key_alert", KEY_ALERT_CHOICES, KEY_ALERT_ORDER,
+                        makeOption(PAUSE_GAME, "hotwire.settings.pause", PAUSE_CHOICES, PAUSE_ORDER, this.pauseGame),
+                        makeOption(KEY_ALERT, "hotwire.settings.key_alert", KEY_ALERT_CHOICES, KEY_ALERT_ORDER,
                                 this.keyAlert))),
                 new SettingsSection(Lang.get("hotwire.settings.section.switching"), List.of(
-                        option(OFF_LASTS, "hotwire.settings.off_lasts", OFF_LASTS_CHOICES, OFF_LASTS_ORDER,
+                        makeOption(OFF_LASTS, "hotwire.settings.off_lasts", OFF_LASTS_CHOICES, OFF_LASTS_ORDER,
                                 this.offLasts),
-                        option(IN_WORLD, "hotwire.settings.in_world", IN_WORLD_CHOICES, IN_WORLD_ORDER, this.inWorld),
-                        option(NESTED_JARS, "hotwire.settings.nested", NESTED_CHOICES, NESTED_ORDER,
+                        makeOption(IN_WORLD, "hotwire.settings.in_world", IN_WORLD_CHOICES, IN_WORLD_ORDER,
+                                this.inWorld),
+                        makeOption(NESTED_JARS, "hotwire.settings.nested", NESTED_CHOICES, NESTED_ORDER,
                                 this.nestedJars))),
                 new SettingsSection(Lang.get("hotwire.settings.section.anti_crash"), List.of(
-                        option(ANTI_CRASH, "hotwire.settings.anti_crash", ANTI_CRASH_CHOICES, ANTI_CRASH_ORDER,
+                        makeOption(ANTI_CRASH, "hotwire.settings.anti_crash", ANTI_CRASH_CHOICES, ANTI_CRASH_ORDER,
                                 this.antiCrash))),
                 new SettingsSection(Lang.get("hotwire.settings.section.updates"), List.of(
-                        option(UPDATE_CHECKS, "hotwire.settings.update_checks", UPDATE_CHECKS_CHOICES,
+                        makeOption(UPDATE_CHECKS, "hotwire.settings.update_checks", UPDATE_CHECKS_CHOICES,
                                 UPDATE_CHECKS_ORDER, this.updateChecks),
-                        option(AUTO_FILL, "hotwire.settings.auto_fill", AUTO_FILL_CHOICES, AUTO_FILL_ORDER,
+                        makeOption(AUTO_FILL, "hotwire.settings.auto_fill", AUTO_FILL_CHOICES, AUTO_FILL_ORDER,
                                 this.autoFill))),
-                findDeveloperSection(dev));
+                this.findDeveloperSection(dev));
     }
 
     private SettingsSection findDeveloperSection(DevSetup dev) {
         List<SettingOption> options = List.of(
-                option(DEV_RELOAD, "hotwire.settings.dev_reload", DEV_RELOAD_CHOICES, DEV_RELOAD_ORDER,
+                makeOption(DEV_RELOAD, "hotwire.settings.dev_reload", DEV_RELOAD_CHOICES, DEV_RELOAD_ORDER,
                         this.devReload),
-                option(RELOAD_POPUPS, "hotwire.settings.reload_popups", RELOAD_POPUPS_CHOICES, RELOAD_POPUPS_ORDER,
+                makeOption(DEV_CATCH, "hotwire.settings.dev_catch", DEV_CATCH_CHOICES, DEV_CATCH_ORDER, this.devCatch),
+                makeOption(DEV_LEAKS, "hotwire.settings.dev_leaks", DEV_LEAKS_CHOICES, DEV_LEAKS_ORDER, this.devLeaks),
+                makeOption(RELOAD_POPUPS, "hotwire.settings.reload_popups", RELOAD_POPUPS_CHOICES, RELOAD_POPUPS_ORDER,
                         this.reloadPopups),
-                option(DEVELOPER, "hotwire.settings.developer", DEVELOPER_CHOICES, DEVELOPER_ORDER, this.developer));
+                makeOption(DEVELOPER, "hotwire.settings.developer", DEVELOPER_CHOICES, DEVELOPER_ORDER,
+                        this.developer));
         String title = Lang.get("hotwire.settings.section.developer");
         if (!dev.inSetup()) {
             return new SettingsSection(title, Lang.get("hotwire.settings.developer.not_setup"),
@@ -272,7 +302,7 @@ public final class HotwireSettings {
         };
     }
 
-    private static <E> SettingOption option(String id, String label, List<String> choices, List<E> order, E now) {
+    private static <E> SettingOption makeOption(String id, String label, List<String> choices, List<E> order, E now) {
         return new SettingOption(id, Lang.get(label), read(choices), order.indexOf(now));
     }
 
@@ -295,12 +325,16 @@ public final class HotwireSettings {
         DevReload reload = DEV_RELOAD.equals(option) ? pick(DEV_RELOAD_ORDER, choice, this.devReload) : this.devReload;
         ReloadPopups popups = RELOAD_POPUPS.equals(option) ? pick(RELOAD_POPUPS_ORDER, choice, this.reloadPopups)
                 : this.reloadPopups;
+        DevCatch caught = DEV_CATCH.equals(option) ? pick(DEV_CATCH_ORDER, choice, this.devCatch) : this.devCatch;
+        DevLeaks leaks = DEV_LEAKS.equals(option) ? pick(DEV_LEAKS_ORDER, choice, this.devLeaks) : this.devLeaks;
         if (world == this.inWorld && nested == this.nestedJars && lasts == this.offLasts && pause == this.pauseGame
                 && alert == this.keyAlert && fill == this.autoFill && dev == this.developer
                 && checks == this.updateChecks && crash == this.antiCrash && reload == this.devReload
-                && popups == this.reloadPopups) {
+                && popups == this.reloadPopups && caught == this.devCatch && leaks == this.devLeaks) {
             return;
         }
+        this.devLeaks = leaks;
+        this.devCatch = caught;
         this.antiCrash = crash;
         this.devReload = reload;
         this.reloadPopups = popups;
@@ -328,6 +362,8 @@ public final class HotwireSettings {
         saved.antiCrash = this.antiCrash;
         saved.devReload = this.devReload;
         saved.reloadPopups = this.reloadPopups;
+        saved.devCatch = this.devCatch;
+        saved.devLeaks = this.devLeaks;
         saved.promptAcceptedFor = this.promptAcceptedFor;
         saved.keyCardShown = this.keyCardShown;
         saved.favorites = this.favorites.stream().sorted().toList();

@@ -42,10 +42,13 @@ public final class OpenKey {
     private static Runnable open = () -> { };
     private static Runnable openStore = () -> { };
 
+    private static @Nullable KeyMapping devKey;
+    private static Runnable openDev = () -> { };
+
     private OpenKey() {
     }
 
-    static void register(Runnable opener, Runnable storeOpener) {
+    static void register(Runnable opener, Runnable storeOpener, @Nullable Runnable devOpener) {
         //? if >=1.21.10 {
         KeyMapping.Category category = KeyMapping.Category.register(CATEGORY);
         //?} else {
@@ -53,13 +56,24 @@ public final class OpenKey {
         *///?}
         KeyMapping made = make("key.hotwire.open", InputConstants.KEY_H, category);
         KeyMapping store = make("key.hotwire.store", InputConstants.UNKNOWN.getValue(), category);
+        KeyMapping dev = devOpener == null ? null : make("key.hotwire.developer", InputConstants.KEY_F8, category);
         //? if >=26.1 {
         KeyMappingHelper.registerKeyMapping(made);
         KeyMappingHelper.registerKeyMapping(store);
+        if (dev != null) {
+            KeyMappingHelper.registerKeyMapping(dev);
+        }
         //?} else {
         /*KeyBindingHelper.registerKeyBinding(made);
         KeyBindingHelper.registerKeyBinding(store);
+        if (dev != null) {
+            KeyBindingHelper.registerKeyBinding(dev);
+        }
         *///?}
+        devKey = dev;
+        if (devOpener != null) {
+            openDev = devOpener;
+        }
         ScreenEvents.BEFORE_INIT.register((game, screen, width, height) -> onScreenShown(screen));
         open = opener;
         openStore = storeOpener;
@@ -156,6 +170,10 @@ public final class OpenKey {
         KeyMapping store = storeKey;
         if (store != null && store.consumeClick()) {
             openStore.run();
+        }
+        KeyMapping dev = devKey;
+        if (dev != null && dev.consumeClick()) {
+            openDev.run();
         }
     }
 

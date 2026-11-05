@@ -15,6 +15,7 @@ import dev.moon.hotwire.fabric.registration.ModLifecycle;
 import dev.moon.hotwire.fabric.report.GameEnvironment;
 import dev.moon.hotwire.fabric.report.GameReports;
 import dev.moon.hotwire.fabric.report.ReportZips;
+import dev.moon.hotwire.fabric.screen.DevGameScreen;
 import dev.moon.hotwire.fabric.screen.HotwireScreen;
 import dev.moon.hotwire.fabric.screen.ModIcons;
 import dev.moon.hotwire.fabric.store.ModStore;
@@ -31,11 +32,14 @@ import dev.moon.hotwire.ui.AddMode;
 import dev.moon.hotwire.ui.AddPreview;
 import dev.moon.hotwire.ui.CacheHost;
 import dev.moon.hotwire.ui.Canvas;
+import dev.moon.hotwire.ui.DevWindow;
 import dev.moon.hotwire.ui.JarHost;
 import dev.moon.hotwire.ui.Lang;
 import dev.moon.hotwire.ui.ModScreen;
-import dev.moon.hotwire.ui.SettingsSection;
+import dev.moon.hotwire.ui.Notice;
+import dev.moon.hotwire.ui.Notices;
 import dev.moon.hotwire.ui.Progress;
+import dev.moon.hotwire.ui.SettingsSection;
 import dev.moon.hotwire.ui.StoreCacheView;
 import dev.moon.hotwire.ui.StoreScreen;
 import dev.moon.hotwire.ui.UpdateMethod;
@@ -94,6 +98,8 @@ public final class HotwireEngine implements ModScreen.Game, AutoCloseable {
     final ProfileStore profiles;
     private final HotwireSettings settings;
     private final @Nullable DevSession dev;
+
+    private @Nullable DevWindow devWindow;
     final Tasks tasks = new Tasks(1, Minecraft.getInstance());
     @Nullable ModScreen screen;
 
@@ -124,6 +130,7 @@ public final class HotwireEngine implements ModScreen.Game, AutoCloseable {
         this.pending = new PendingChanges(queue, folders);
         this.bound = bound;
 
+        DevSession.useFullRedefinition(DevSetups.get().isFull());
         this.dev = settings.isDevReloadOn(DevSetups.get().inSetup()) ? DevSession.start(DevSetups.getBuildFolder(),
                 this.tasks, new DevEngine(this::findParts, this::getSwitchRefusal, installed, settings)) : null;
 
@@ -184,6 +191,25 @@ public final class HotwireEngine implements ModScreen.Game, AutoCloseable {
 
     List<String> findSwitchableOn() {
         return this.installed.getGraph().getIds().stream().filter(ModPolicy::isSwitchable).filter(this::isOn).toList();
+    }
+
+    public void openDevWindow() {
+        DevSession session = this.dev;
+        if (session == null) {
+            Notices.show(Notice.ofAsk(Lang.get("hotwire.dev.window.title"), Lang.get("hotwire.dev.window.off")));
+            return;
+        }
+        DevWindow window = this.devWindow;
+        if (window == null) {
+            DevSetup setup = DevSetups.get();
+            window = new DevWindow(session, Lang.get(switch (setup.jvm()) {
+                case FULL -> "hotwire.settings.developer.full";
+                case JETBRAINS_WITHOUT_FLAG -> "hotwire.settings.developer.no_flag";
+                case OTHER -> "hotwire.settings.developer.other_java";
+            }), setup.isFull());
+            this.devWindow = window;
+        }
+        ModViews.show(new DevGameScreen(window));
     }
 
     @Override

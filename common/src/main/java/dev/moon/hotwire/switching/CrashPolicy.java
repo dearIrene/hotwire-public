@@ -22,14 +22,18 @@ public final class CrashPolicy {
     private final Function<Throwable, @Nullable String> ownerOf;
     private final Predicate<String> guarded;
     private final Consumer<Caught> turnOff;
+    private final Predicate<String> inDevelopment;
+    private final Consumer<Caught> onDevThrow;
     private final Map<String, State> states = new ConcurrentHashMap<>();
     private final Set<String> said = ConcurrentHashMap.newKeySet();
 
     public CrashPolicy(Function<Throwable, @Nullable String> ownerOf, Predicate<String> guarded,
-            Consumer<Caught> turnOff) {
+            Consumer<Caught> turnOff, Predicate<String> inDevelopment, Consumer<Caught> onDevThrow) {
         this.ownerOf = ownerOf;
         this.guarded = guarded;
         this.turnOff = turnOff;
+        this.inDevelopment = inDevelopment;
+        this.onDevThrow = onDevThrow;
     }
 
     public boolean handle(Throwable thrown, Site site) {
@@ -37,6 +41,10 @@ public final class CrashPolicy {
             return false;
         }
         String mod = this.ownerOf.apply(thrown);
+        if (mod != null && this.inDevelopment.test(mod)) {
+            this.onDevThrow.accept(new Caught(mod, site, thrown));
+            return true;
+        }
         if (mod == null || !this.guarded.test(mod)) {
             return false;
         }

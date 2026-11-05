@@ -33,6 +33,12 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 public final class ClassRebuilder {
+    private static volatile Predicate<String> wholeClasses = name -> false;
+
+    public static void setWholeClasses(Predicate<String> classes) {
+        wholeClasses = classes;
+    }
+
     private final RebuildMixes rebuildMixes = new RebuildMixes(this);
     private static final Logger LOGGER = LoggerFactory.getLogger(ClassRebuilder.class);
 
@@ -341,7 +347,8 @@ public final class ClassRebuilder {
         Map<String, Object> splitOrFailure = new ConcurrentHashMap<>();
         Parallel.forEach(byName.keySet(), name -> {
             try {
-                ClassSplit.Result split = ClassSplit.split(Objects.requireNonNull(current.get(name)),
+                byte[] against = wholeClasses.test(name) ? mixed.get(name) : current.get(name);
+                ClassSplit.Result split = ClassSplit.split(Objects.requireNonNull(against),
                         Objects.requireNonNull(mixed.get(name)), anyClass, read -> {
                             byte[] now = mixed.get(read);
                             now = now != null ? now : this.mixedNow.get(read);

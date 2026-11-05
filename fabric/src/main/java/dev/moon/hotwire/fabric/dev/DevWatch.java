@@ -12,6 +12,7 @@ import java.nio.file.WatchService;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.TimeUnit;
 import java.util.function.Consumer;
 import java.util.stream.Stream;
@@ -24,7 +25,7 @@ final class DevWatch implements AutoCloseable {
     private static final long QUIET_NANOS = TimeUnit.MILLISECONDS.toNanos(350);
 
     private final Map<WatchKey, DevMod> mods = new HashMap<>();
-    private final Map<DevMod, Long> changedAt = new HashMap<>();
+    private final Map<DevMod, Long> changedAt = new ConcurrentHashMap<>();
     private final Consumer<DevMod> onBuilt;
     private final WatchService watch;
     private final Thread thread;
@@ -77,8 +78,8 @@ final class DevWatch implements AutoCloseable {
                     key = this.watch.poll();
                 }
                 for (Map.Entry<DevMod, Long> entry : Map.copyOf(this.changedAt).entrySet()) {
-                    if (now - entry.getValue() >= QUIET_NANOS) {
-                        this.changedAt.remove(entry.getKey());
+                    if (now - entry.getValue() >= QUIET_NANOS
+                            && this.changedAt.remove(entry.getKey(), entry.getValue())) {
                         this.onBuilt.accept(entry.getKey());
                     }
                 }
@@ -89,6 +90,10 @@ final class DevWatch implements AutoCloseable {
         } catch (IOException e) {
             LOGGER.warn("[Hotwire] the build folders can't be watched anymore", e);
         }
+    }
+
+    void lookAgain(DevMod mod, long delayNanos) {
+        this.changedAt.merge(mod, System.nanoTime() + delayNanos, Math::max);
     }
 
     @Override
