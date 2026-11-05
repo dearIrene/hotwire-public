@@ -66,32 +66,35 @@ public final class JvmAccess {
     }
 
     @SuppressWarnings("unchecked")
-    private static void call(MethodHandle handle, String path, Reason reason) throws JvmAccessException {
+    static void call(MethodHandle handle, String path, Reason reason) throws JvmAccessException {
         Consumer<String> consumer = MethodHandleProxies.asInterfaceInstance(Consumer.class, handle);
         try {
             consumer.accept(path);
         } catch (UndeclaredThrowableException e) {
             throw new JvmAccessException(reason, path, e.getCause());
-        } catch (RuntimeException e) {
+        } catch (RuntimeException | InternalError e) {
             throw new JvmAccessException(reason, path, e);
         }
     }
 
     static String toLoadAgentPath(Path jar, Path workingDirectory, Charset platform) throws JvmAccessException {
-        CharsetEncoder encoder = platform.newEncoder();
+        CharsetEncoder ascii = StandardCharsets.US_ASCII.newEncoder();
         Path absolute = jar.toAbsolutePath().normalize();
-        if (encoder.canEncode(absolute.toString())) {
+        if (ascii.canEncode(absolute.toString())) {
             return absolute.toString();
         }
         try {
             String relative = workingDirectory.toAbsolutePath().normalize().relativize(absolute).toString();
-            if (encoder.canEncode(relative)) {
+            if (ascii.canEncode(relative)) {
                 return relative;
             }
         } catch (IllegalArgumentException e) {
         }
-        throw new JvmAccessException(Reason.PATH_NOT_ENCODABLE, absolute + " cannot be written in " + platform
-                + ", the charset the JDK opens it with, from here or from " + workingDirectory, null);
+        if (StandardCharsets.UTF_8.equals(platform)) {
+            return absolute.toString();
+        }
+        throw new JvmAccessException(Reason.PATH_NOT_ENCODABLE, absolute + " has letters the JDK cannot open in "
+                + platform + ", from here or from " + workingDirectory, null);
     }
 
     static Charset getPlatformCharset() {
