@@ -19,7 +19,8 @@ public record ModManifest(
         List<String> provides,
         List<String> nestedJars,
         Optional<String> menuParent,
-        boolean library) {
+        boolean library,
+        List<String> cardinalComponents) {
     public ModManifest {
         authors = List.copyOf(authors);
         entrypoints = Map.copyOf(entrypoints);
@@ -27,6 +28,7 @@ public record ModManifest(
         relations = Map.copyOf(relations);
         provides = List.copyOf(provides);
         nestedJars = List.copyOf(nestedJars);
+        cardinalComponents = List.copyOf(cardinalComponents);
     }
 
     public Map<String, List<String>> getRelation(Relation relation) {

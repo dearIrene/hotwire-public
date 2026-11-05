@@ -46,7 +46,9 @@ public final class ModManifestParser {
                 asTexts(root.get("provides")),
                 readNestedJars(root),
                 parseMenuParent(root, id),
-                parseBadges(root).contains("library"));
+                parseBadges(root).contains("library"),
+                asObject(root.get("custom")).map(custom -> asTexts(custom.get("cardinal-components")))
+                        .orElse(List.of()));
     }
 
     private static JsonObject parseRoot(byte[] json, String jar) throws ModJarException {

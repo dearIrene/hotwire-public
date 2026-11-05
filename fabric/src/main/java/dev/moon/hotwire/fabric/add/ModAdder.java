@@ -31,8 +31,10 @@ import java.io.InputStream;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.time.Duration;
+import java.util.ArrayDeque;
 import java.util.ArrayList;
 import java.util.Arrays;
+import java.util.Deque;
 import java.util.HashSet;
 import java.util.LinkedHashMap;
 import java.util.LinkedHashSet;
@@ -45,6 +47,7 @@ import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.CopyOnWriteArrayList;
 import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.ExecutionException;
+import java.util.concurrent.ForkJoinPool;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.TimeoutException;
 import java.util.function.Function;
@@ -52,6 +55,7 @@ import java.util.function.IntSupplier;
 import java.util.function.Supplier;
 import java.util.zip.ZipEntry;
 import java.util.zip.ZipFile;
+import net.fabricmc.loader.api.FabricLoader;
 import net.fabricmc.loader.impl.launch.FabricLauncherBase;
 import net.minecraft.client.Minecraft;
 import org.jspecify.annotations.Nullable;
@@ -111,7 +115,16 @@ public final class ModAdder {
     record Part(Path path, ModJar jar) {
     }
 
+    public interface CarriedLibraries {
+        Optional<String> findCarriedRefusal(List<Path> libraries);
+
+        Optional<String> updateCarried(List<Path> libraries);
+    }
+
     private final Map<Path, ModJar> readsAhead = new ConcurrentHashMap<>();
+
+    private final Map<String, List<Path>> setAside = new ConcurrentHashMap<>();
+    private @Nullable CarriedLibraries carriedLibraries;
     private boolean savingReads;
 
     private static final int MOST_NESTED_NAMED = 3;
@@ -120,11 +133,71 @@ public final class ModAdder {
     private static final Duration ENTRYPOINT_WAIT = Duration.ofSeconds(90);
     private static final int FRAMES_BEFORE_SERVER = 2;
     private static final Duration FRAMES_WAIT = Duration.ofSeconds(5);
+    private static final Duration BACKGROUND_WAIT = Duration.ofSeconds(8);
 
     final Engine engine;
 
     public ModAdder(Engine engine) {
         this.engine = engine;
+    }
+
+    public void setCarriedLibraries(CarriedLibraries libraries) {
+        this.carriedLibraries = libraries;
+    }
+
+    private List<Path> findCarriedNewer(SwitchPlan plan) {
+        Map<String, List<String>> wanted = new LinkedHashMap<>();
+        for (SwitchPlan.Refusal refusal : plan.refusals()) {
+            if (refusal instanceof SwitchPlan.Refusal.OldDependency old) {
+                wanted.put(old.dependency(), List.of(old.wanted().split(" or ")));
+            }
+        }
+        List<Path> out = new ArrayList<>();
+        Deque<String> next = new ArrayDeque<>(wanted.keySet());
+        while (!next.isEmpty()) {
+            String id = next.poll();
+            List<String> ranges = wanted.getOrDefault(id, List.of());
+            Path found = this.setAside.getOrDefault(id, List.of()).stream().filter(jar -> this.fits(jar, ranges))
+                    .findFirst().orElse(null);
+            if (found == null) {
+                continue;
+            }
+            out.add(found);
+            try {
+                this.readJar(found).manifest().getRelation(ModManifest.Relation.DEPENDS).forEach((needed, range) -> {
+                    if (this.setAside.containsKey(needed) && !wanted.containsKey(needed)
+                            && !isMetByGame(needed, range)) {
+                        wanted.put(needed, range);
+                        next.add(needed);
+                    }
+                });
+            } catch (ModJarException e) {
+                LOGGER.info("[Hotwire] {} could not be read for what it needs: {}", found.getFileName(), e.toString());
+            }
+        }
+        return out;
+    }
+
+    private boolean fits(Path jar, List<String> ranges) {
+        try {
+            return ModPolicy.satisfies(this.readJar(jar).manifest().version(), ranges);
+        } catch (ModJarException e) {
+            return false;
+        }
+    }
+
+    private static boolean isMetByGame(String id, List<String> ranges) {
+        return FabricLoader.getInstance().getModContainer(id)
+                .map(mod -> ModPolicy.satisfies(mod.getMetadata().getVersion().getFriendlyString(), ranges))
+                .orElse(false);
+    }
+
+    private Optional<String> findLibrariesRefusal(List<Path> libraries) {
+        CarriedLibraries asked = this.carriedLibraries;
+        if (asked == null || libraries.isEmpty()) {
+            return Optional.of("nothing here can update them");
+        }
+        return asked.findCarriedRefusal(libraries);
     }
 
     AddPreview preview(Path jarPath) {
@@ -168,6 +241,7 @@ public final class ModAdder {
         }
 
         Map<String, Part> found = new LinkedHashMap<>();
+        this.setAside.clear();
         try {
             this.collect(jarPath, found);
         } catch (ModJarException | IOException e) {
@@ -177,6 +251,9 @@ public final class ModAdder {
         }
         times.end("nested jars");
         List<ModJar> parts = found.values().stream().map(Part::jar).toList();
+        if (this.isComponentListShut(parts)) {
+            return AddPreview.ofLater(manifest.name(), version, List.of(Lang.get("hotwire.add.later.components")));
+        }
         for (Part part : found.values()) {
             Optional<String> missing = AddDependencies.findMissingRefusal(part.jar());
             if (missing.isPresent()) {
@@ -192,12 +269,18 @@ public final class ModAdder {
         SwitchPlanner planner = this.engine.makePlannerFor(this.engine.makeGraphWith(parts));
         SwitchPlan plan = AddDependencies.planOn(planner, parts, this.engine.getSwitcher().getOff());
         Optional<String> missing = AddDependencies.describe(plan, id -> id);
+        List<Path> libraries = List.of();
         if (missing.isPresent()) {
-            if (AddDependencies.isCarriedNewer(jar, plan)) {
-                LOGGER.info("[Hotwire] {}", missing.get());
+            if (!AddDependencies.isCarriedNewer(jar, plan)) {
+                return makeRefusal(manifest.name(), version, missing.get());
+            }
+
+            libraries = this.findCarriedNewer(plan);
+            Optional<String> cannot = this.findLibrariesRefusal(libraries);
+            if (cannot.isPresent()) {
+                LOGGER.info("[Hotwire] {}: {}", missing.get(), cannot.get());
                 return AddPreview.ofLater(manifest.name(), version, List.of(Lang.get("hotwire.add.later.library")));
             }
-            return makeRefusal(manifest.name(), version, missing.get());
         }
         times.end("plan");
         Set<String> content = this.readContent(jarPath);
@@ -212,6 +295,14 @@ public final class ModAdder {
             lines.add(Lang.get("hotwire.add.also_adds_many", nested.size()));
         } else if (!nested.isEmpty()) {
             lines.add(Lang.get("hotwire.add.also_adds", String.join(", ", nested)));
+        }
+        for (Path library : libraries) {
+            try {
+                ModManifest carried = this.readJar(library).manifest();
+                lines.add(Lang.get("hotwire.update.also", carried.name(), carried.version()));
+            } catch (ModJarException e) {
+                lines.add(Lang.get("hotwire.update.also", library.getFileName(), ""));
+            }
         }
         int patched = parts.stream().mapToInt(part -> part.patches().patches().size()).sum();
         lines.add(patched == 0 ? Lang.get("hotwire.add.patches_none") : Lang.get("hotwire.add.patches", patched));
@@ -233,6 +324,18 @@ public final class ModAdder {
             return AddPreview.reopen(manifest.name(), version, lines);
         }
         return AddPreview.ofReady(manifest.name(), version, lines, List.of());
+    }
+
+    private boolean isComponentListShut(List<ModJar> parts) {
+        return this.engine.isInstalled("cardinal-components-base")
+                && parts.stream().anyMatch(part -> !part.manifest().cardinalComponents().isEmpty());
+    }
+
+    private static void awaitBackgroundWork() throws InterruptedException {
+        long until = System.nanoTime() + BACKGROUND_WAIT.toNanos();
+        while (!ForkJoinPool.commonPool().isQuiescent() && System.nanoTime() < until) {
+            Thread.sleep(50);
+        }
     }
 
     private Set<String> readContent(Path jarPath) {
@@ -319,6 +422,7 @@ public final class ModAdder {
     }
 
     private @Nullable Result findRefusal(List<Path> jarPaths, Map<String, Part> parts) {
+        this.setAside.clear();
         for (Path jarPath : jarPaths) {
             Optional<String> plain = AddFirstLook.findRefusal(jarPath);
             if (plain.isPresent()) {
@@ -343,6 +447,9 @@ public final class ModAdder {
         }
         if (ModPolicy.isStartOnly(askedId)) {
             return new Result.Refused(Lang.get("hotwire.add.later.start_only", name));
+        }
+        if (this.isComponentListShut(parts.values().stream().map(Part::jar).toList())) {
+            return new Result.Refused(Lang.get("hotwire.add.later.components"), true);
         }
         Set<String> content = new LinkedHashSet<>();
         if (this.engine.isInWorld()) {
@@ -379,10 +486,19 @@ public final class ModAdder {
         String name = parts.values().stream().reduce((first, second) -> second).orElseThrow().jar().manifest().name();
         List<ModJar> jars = parts.values().stream().map(Part::jar).toList();
         this.engine.showAddStep(1);
-        ModGraph graph = this.engine.makeGraphWith(jars);
-        SwitchPlanner planner = this.engine.makePlannerFor(graph);
         Set<String> offThen = new HashSet<>(this.engine.getSwitcher().getOff());
         offThen.addAll(leaving);
+        SwitchPlan needs = AddDependencies.planOn(this.engine.makePlannerFor(this.engine.makeGraphWith(jars)), jars,
+                offThen);
+        CarriedLibraries asked = this.carriedLibraries;
+        if (asked != null && AddDependencies.isCarriedNewer(jars.getLast(), needs)) {
+            Optional<String> notIn = asked.updateCarried(this.findCarriedNewer(needs));
+            if (notIn.isPresent()) {
+                return new Result.Refused(notIn.get(), true);
+            }
+        }
+        ModGraph graph = this.engine.makeGraphWith(jars);
+        SwitchPlanner planner = this.engine.makePlannerFor(graph);
         Optional<String> missing = AddDependencies.describe(AddDependencies.planOn(planner, jars, offThen), nameOf);
         if (missing.isPresent()) {
             return new Result.Refused(missing.get());
@@ -484,6 +600,9 @@ public final class ModAdder {
                 SwitchTimes.mark("add: entrypoints");
 
                 GameHold.awaitFrames(FRAMES_BEFORE_SERVER, FRAMES_WAIT);
+                if (clientStarted.values().stream().anyMatch(ran -> !ran.isEmpty())) {
+                    awaitBackgroundWork();
+                }
 
                 for (String id : ids) {
                     List<String> ran = new ArrayList<>(clientStarted.getOrDefault(id, List.of()));
@@ -601,6 +720,8 @@ public final class ModAdder {
         String id = nested.manifest().id();
         if (!this.isPresent(nested) && !into.containsKey(id)) {
             this.collect(written, into);
+        } else {
+            this.setAside.computeIfAbsent(id, any -> new ArrayList<>()).add(written);
         }
     }
 }

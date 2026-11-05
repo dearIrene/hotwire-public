@@ -54,7 +54,7 @@ import org.jspecify.annotations.Nullable;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
-public final class UpdateSupport implements ModUpdater.Engine {
+public final class UpdateSupport implements ModUpdater.Engine, ModAdder.CarriedLibraries {
     private static final Logger LOGGER = LoggerFactory.getLogger(UpdateSupport.class);
     private final InstalledMods installed;
     private final SwitchApplier applier;
@@ -72,6 +72,17 @@ public final class UpdateSupport implements ModUpdater.Engine {
 
     public void setAdder(ModAdder adder) {
         this.adder = adder;
+        adder.setCarriedLibraries(this);
+    }
+
+    @Override
+    public Optional<String> findCarriedRefusal(List<Path> libraries) {
+        return this.updater.findCarriedRefusal(libraries);
+    }
+
+    @Override
+    public Optional<String> updateCarried(List<Path> libraries) {
+        return this.updater.updateCarried(libraries);
     }
 
     @Override

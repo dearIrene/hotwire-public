@@ -120,6 +120,8 @@ public final class UpdateText {
                     new Object[] {getSimpleName(patched.className()), String.join(", ", patched.mods())});
             case UpdateBlocker.MixinConfigChanged config -> say.apply("hotwire.update.blocker.mixin_config",
                     new Object[] {config.config()});
+            case UpdateBlocker.ComponentAdded component -> say.apply("hotwire.update.blocker.component",
+                    new Object[] {component.component()});
             case UpdateBlocker.EntrypointAdded entrypoint -> say.apply("hotwire.update.blocker.entrypoint",
                     new Object[] {entrypoint.key(), entrypoint.value()});
             case UpdateBlocker.NestedJarChanged nested -> say.apply("hotwire.update.blocker.nested",

@@ -44,6 +44,11 @@ public final class UpdatePlanner {
         }
         compareMixinConfigs(was, now, changed, blockers);
         compareEntrypoints(was, now, blockers);
+        for (String component : now.cardinalComponents()) {
+            if (!was.cardinalComponents().contains(component)) {
+                blockers.add(new UpdateBlocker.ComponentAdded(component));
+            }
+        }
         compareNestedJars(was, now, changed, blockers);
 
         List<ClassAction> actions = new ArrayList<>();

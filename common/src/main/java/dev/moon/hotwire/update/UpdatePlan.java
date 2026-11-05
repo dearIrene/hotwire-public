@@ -100,6 +100,7 @@ public record UpdatePlan(String modId, String runningVersion, String incomingVer
                 case PatchedByRunningMod p -> UpdateTier.RESTART_MOD;
                 case MixinConfigChanged m -> UpdateTier.RESTART_MOD;
                 case EntrypointAdded e -> UpdateTier.RESTART_MOD;
+                case ComponentAdded c -> UpdateTier.NEXT_START;
                 case NestedJarChanged n -> UpdateTier.RESTART_MOD;
                 case AccessWidenerChanged a -> UpdateTier.NEXT_START;
                 case BoundByDependents b -> UpdateTier.NEXT_START;
@@ -127,6 +128,9 @@ public record UpdatePlan(String modId, String runningVersion, String incomingVer
         }
 
         record MixinConfigChanged(String config) implements UpdateBlocker {
+        }
+
+        record ComponentAdded(String component) implements UpdateBlocker {
         }
 
         record EntrypointAdded(String key, String value) implements UpdateBlocker {

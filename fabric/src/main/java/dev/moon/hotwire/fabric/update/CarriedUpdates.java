@@ -76,61 +76,75 @@ final class CarriedUpdates {
                 read = ModJarReader.read(written);
                 this.reads.put(written, read);
             }
-            ModManifest manifest = read.manifest();
-            String runs = this.versionOf.apply(manifest.id());
-            Optional<String> rejected = this.rejection.apply(manifest);
-            if (rejected.isPresent()) {
-                LOGGER.info("[Hotwire] the carried {} {} cannot update with it: {}", manifest.id(), manifest.version(),
-                        rejected.get());
+            if (!this.planInto(out, written, read, toAdd, container, leftOut)) {
                 return null;
             }
-            if (runs == null) {
-                toAdd.add(written);
-                continue;
-            }
-            if (this.versions.compare(manifest.version(), runs) <= 0) {
-                continue;
-            }
-            Map<String, byte[]> runningEntries = this.diffs.containsKey(written + " " + runs) ? Map.of("known",
-                    new byte[0]) : this.runningOf.apply(manifest.id());
-            if (runningEntries.isEmpty()) {
-                LOGGER.info("[Hotwire] the carried {} cannot update with it: the running copy cannot be read",
-                        manifest.id());
-                return null;
-            }
-            JarDiff diff = this.diffs.get(written + " " + runs);
-            if (diff == null) {
-                diff = UpdateDiffer.compare(runningEntries, UpdateDiffer.readEntries(written));
-                this.diffs.put(written + " " + runs, diff);
-            }
-            UpdatePlan plan = this.widener.withWidenerChecked(this.planFrom.apply(manifest.id(), diff), read, written);
-            Set<String> deeper = UpdatePlanner.findNestedPaths(plan);
-            if (!deeper.isEmpty()) {
-                List<Library> inner = this.planBundled(written, plan, toAdd, container, leftOut);
-                if (inner == null) {
-                    return null;
-                }
-                out.addAll(inner);
-                plan = UpdatePlanner.withBundledUpdated(plan, deeper);
-            }
-            boolean configs = UpdatePlanner.hasConfigChanged(plan);
-            if (configs) {
-                plan = UpdatePlanner.withConfigsAdopted(plan);
-            }
-            if (plan.tier() != UpdateTier.IN_PLACE) {
-                LOGGER.info("[Hotwire] the carried {} {} -> {} cannot update with it: {}", manifest.id(), runs,
-                        manifest.version(), plan.blockers());
-
-                List<String> ranges = container.getRelation(ModManifest.Relation.DEPENDS).get(manifest.id());
-                if (ranges == null || !this.accepts.test(runs, ranges)) {
-                    return null;
-                }
-                leftOut.add(written);
-                continue;
-            }
-            out.add(new Library(manifest, written, read, plan, configs));
         }
         return out;
+    }
+
+    @Nullable List<Library> planAlone(Path written, ModJar read, List<Path> toAdd, List<Path> leftOut)
+            throws ModJarException {
+        List<Library> out = new ArrayList<>();
+        return this.planInto(out, written, read, toAdd, read.manifest(), leftOut) && !out.isEmpty() ? out : null;
+    }
+
+    private boolean planInto(List<Library> out, Path written, ModJar read, List<Path> toAdd, ModManifest container,
+            List<Path> leftOut) throws ModJarException {
+        ModManifest manifest = read.manifest();
+        String runs = this.versionOf.apply(manifest.id());
+        Optional<String> rejected = this.rejection.apply(manifest);
+        if (rejected.isPresent()) {
+            LOGGER.info("[Hotwire] the carried {} {} cannot update with it: {}", manifest.id(), manifest.version(),
+                    rejected.get());
+            return false;
+        }
+        if (runs == null) {
+            toAdd.add(written);
+            return true;
+        }
+        if (this.versions.compare(manifest.version(), runs) <= 0) {
+            return true;
+        }
+        Map<String, byte[]> runningEntries = this.diffs.containsKey(written + " " + runs) ? Map.of("known",
+                new byte[0]) : this.runningOf.apply(manifest.id());
+        if (runningEntries.isEmpty()) {
+            LOGGER.info("[Hotwire] the carried {} cannot update with it: the running copy cannot be read",
+                    manifest.id());
+            return false;
+        }
+        JarDiff diff = this.diffs.get(written + " " + runs);
+        if (diff == null) {
+            diff = UpdateDiffer.compare(runningEntries, UpdateDiffer.readEntries(written));
+            this.diffs.put(written + " " + runs, diff);
+        }
+        UpdatePlan plan = this.widener.withWidenerChecked(this.planFrom.apply(manifest.id(), diff), read, written);
+        Set<String> deeper = UpdatePlanner.findNestedPaths(plan);
+        if (!deeper.isEmpty()) {
+            List<Library> inner = this.planBundled(written, plan, toAdd, container, leftOut);
+            if (inner == null) {
+                return false;
+            }
+            out.addAll(inner);
+            plan = UpdatePlanner.withBundledUpdated(plan, deeper);
+        }
+        boolean configs = UpdatePlanner.hasConfigChanged(plan);
+        if (configs) {
+            plan = UpdatePlanner.withConfigsAdopted(plan);
+        }
+        if (plan.tier() != UpdateTier.IN_PLACE) {
+            LOGGER.info("[Hotwire] the carried {} {} -> {} cannot update with it: {}", manifest.id(), runs,
+                    manifest.version(), plan.blockers());
+
+            List<String> ranges = container.getRelation(ModManifest.Relation.DEPENDS).get(manifest.id());
+            if (ranges == null || !this.accepts.test(runs, ranges)) {
+                return false;
+            }
+            leftOut.add(written);
+            return true;
+        }
+        out.add(new Library(manifest, written, read, plan, configs));
+        return true;
     }
 
     List<Path> findMissing(Path jar, UpdatePlan plan) throws ModJarException {

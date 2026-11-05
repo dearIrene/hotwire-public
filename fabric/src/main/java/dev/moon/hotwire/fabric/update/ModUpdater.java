@@ -451,6 +451,66 @@ public final class ModUpdater {
         return new SortResult.Planned(manifest, running, jar, read, whole);
     }
 
+    Optional<String> findCarriedRefusal(List<Path> libraries) {
+        return this.planCarried(libraries).stream().filter(SortResult.Refused.class::isInstance)
+                .map(sorted -> ((SortResult.Refused) sorted).result().reason()).findFirst();
+    }
+
+    Optional<String> updateCarried(List<Path> libraries) {
+        List<SortResult.Planned> planned = new ArrayList<>();
+        for (SortResult sorted : this.planCarried(libraries)) {
+            if (sorted instanceof SortResult.Planned one) {
+                planned.add(one);
+            } else if (sorted instanceof SortResult.Refused refused) {
+                return Optional.of(refused.result().reason());
+            }
+        }
+        for (Result result : this.live.apply(planned)) {
+            if (result instanceof Result.Refused refused) {
+                return Optional.of(refused.reason());
+            }
+            if (result instanceof Result.Failed failed) {
+                return Optional.of(failed.reason());
+            }
+        }
+        return Optional.empty();
+    }
+
+    private synchronized List<SortResult> planCarried(List<Path> libraries) {
+        List<SortResult> out = new ArrayList<>();
+        Set<String> own = new HashSet<>();
+        try {
+            Map<String, ModManifest> bringing = new HashMap<>();
+            for (Path library : libraries) {
+                ModJar read = this.plans.read(library);
+                own.add(read.manifest().id());
+                this.updatePlans.readComing(read, bringing);
+            }
+            this.after = bringing;
+            for (Path library : libraries) {
+                ModJar read = this.plans.read(library);
+                List<Path> toAdd = new ArrayList<>();
+                List<Path> leftOut = new ArrayList<>();
+                List<CarriedUpdates.Library> planned = this.carried.planAlone(library, read, toAdd, leftOut);
+                if (planned == null || !leftOut.isEmpty()) {
+                    out.add(new SortResult.Refused(new Result.Refused(read.manifest().name() + " cannot update while"
+                            + " the game runs.")));
+                    continue;
+                }
+                CarriedUpdates.Library self = planned.getLast();
+                List<CarriedUpdates.Library> inside = planned.subList(0, planned.size() - 1).stream()
+                        .filter(carried -> !own.contains(carried.manifest().id())).toList();
+                out.add(new SortResult.Planned(read.manifest(), library, library, read, new Whole(self.plan(), inside,
+                        self.adoptsConfigs(), null, toAdd, leftOut)));
+            }
+        } catch (ModJarException e) {
+            out.add(new SortResult.Refused(new Result.Refused("A library cannot be read: " + e.getMessage())));
+        } finally {
+            this.after = Map.of();
+        }
+        return out;
+    }
+
     Result take(SortResult.Planned planned, UpdateMethod method) {
         if (method == UpdateMethod.IN_PLACE && planned.method() != method) {
             return new Result.Refused("The update of " + planned.manifest().name() + " was planned "

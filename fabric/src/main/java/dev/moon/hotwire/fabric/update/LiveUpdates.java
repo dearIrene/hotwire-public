@@ -323,7 +323,8 @@ final class LiveUpdates {
                 manifest.id(), manifest.version(), applied.rebuilt().size(), applied.notLoaded().size(),
                 one.plan().actions().stream().filter(action -> action.kind() == ClassAction.Kind.DEFINE).count());
         return new ModUpdater.Result.Updated(manifest.id(), manifest.name(), one.plan(), applied,
-                this.stay.queue(manifest, one.planned().running(), incoming, one.plan()) + started);
+                (one.planned().running().equals(incoming) ? ""
+                        : this.stay.queue(manifest, one.planned().running(), incoming, one.plan())) + started);
     }
 
     private static String runAddedEntrypoints(String id, UpdatePlan plan) {
