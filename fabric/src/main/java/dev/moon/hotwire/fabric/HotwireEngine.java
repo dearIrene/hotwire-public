@@ -2,20 +2,17 @@ package dev.moon.hotwire.fabric;
 
 import dev.moon.hotwire.api.SwitchResult;
 import dev.moon.hotwire.concurrent.Tasks;
-import dev.moon.hotwire.config.DevSetup;
 import dev.moon.hotwire.config.HotwireSettings;
 import dev.moon.hotwire.config.ProfileStore;
 import dev.moon.hotwire.fabric.add.AddSupport;
 import dev.moon.hotwire.fabric.add.ModAdder;
 import dev.moon.hotwire.fabric.add.WorldReopen;
-import dev.moon.hotwire.fabric.dev.DevSession;
 import dev.moon.hotwire.fabric.rebuild.GameClasses;
 import dev.moon.hotwire.fabric.registration.GameRegistrations;
 import dev.moon.hotwire.fabric.registration.ModLifecycle;
 import dev.moon.hotwire.fabric.report.GameEnvironment;
 import dev.moon.hotwire.fabric.report.GameReports;
 import dev.moon.hotwire.fabric.report.ReportZips;
-import dev.moon.hotwire.fabric.screen.DevGameScreen;
 import dev.moon.hotwire.fabric.screen.HotwireScreen;
 import dev.moon.hotwire.fabric.screen.ModIcons;
 import dev.moon.hotwire.fabric.store.ModStore;
@@ -32,12 +29,9 @@ import dev.moon.hotwire.ui.AddMode;
 import dev.moon.hotwire.ui.AddPreview;
 import dev.moon.hotwire.ui.CacheHost;
 import dev.moon.hotwire.ui.Canvas;
-import dev.moon.hotwire.ui.DevWindow;
 import dev.moon.hotwire.ui.JarHost;
 import dev.moon.hotwire.ui.Lang;
 import dev.moon.hotwire.ui.ModScreen;
-import dev.moon.hotwire.ui.Notice;
-import dev.moon.hotwire.ui.Notices;
 import dev.moon.hotwire.ui.Progress;
 import dev.moon.hotwire.ui.SettingsSection;
 import dev.moon.hotwire.ui.StoreCacheView;
@@ -97,9 +91,7 @@ public final class HotwireEngine implements ModScreen.Game, AutoCloseable {
     private final PendingChanges pending;
     final ProfileStore profiles;
     private final HotwireSettings settings;
-    private final @Nullable DevSession dev;
-
-    private @Nullable DevWindow devWindow;
+    private final DevMode dev;
     final Tasks tasks = new Tasks(1, Minecraft.getInstance());
     @Nullable ModScreen screen;
 
@@ -129,14 +121,8 @@ public final class HotwireEngine implements ModScreen.Game, AutoCloseable {
         this.updateQueue = queue;
         this.pending = new PendingChanges(queue, folders);
         this.bound = bound;
-
-        DevSession.useFullRedefinition(DevSetups.get().isFull());
-        if (DevSetups.get().inSetup()) {
-            LOGGER.info("[Hotwire] developer mode on {} {}: {}", System.getProperty("java.vendor"),
-                    System.getProperty("java.version"), DevSetups.get().jvm());
-        }
-        this.dev = settings.isDevReloadOn(DevSetups.get().inSetup()) ? DevSession.start(DevSetups.getBuildFolder(),
-                this.tasks, new DevEngine(this::findParts, this::getSwitchRefusal, installed, settings)) : null;
+        this.dev = new DevMode(settings, this.tasks, new DevEngine(this::findParts, this::getSwitchRefusal, installed,
+                settings));
 
         if (bound instanceof Bound.Ready ready) {
             ready.parts().instrumentation().addTransformer(ready.parts().loadTimeMixer());
@@ -198,33 +184,12 @@ public final class HotwireEngine implements ModScreen.Game, AutoCloseable {
     }
 
     public void openDevWindow() {
-        DevSession session = this.dev;
-        if (session == null) {
-            Notices.show(Notice.ofAsk(Lang.get("hotwire.dev.window.title"), Lang.get("hotwire.dev.window.off")));
-            return;
-        }
-        DevWindow window = this.devWindow;
-        if (window == null) {
-            DevSetup setup = DevSetups.get();
-            window = new DevWindow(session, Lang.get(switch (setup.jvm()) {
-                case FULL -> "hotwire.settings.developer.full";
-                case JETBRAINS_WITHOUT_FLAG -> "hotwire.settings.developer.no_flag";
-                case OTHER -> "hotwire.settings.developer.other_java";
-            }), setup.isFull());
-            this.devWindow = window;
-        }
-        ModViews.show(new DevGameScreen(window));
+        this.dev.openWindow();
     }
 
     @Override
     public void close() {
-        if (this.dev != null) {
-            try {
-                this.dev.close();
-            } catch (IOException e) {
-                LOGGER.debug("[Hotwire] the build folders' watch did not close", e);
-            }
-        }
+        this.dev.close();
         JvmParts parts = this.findParts();
 
         Set<String> off = parts == null ? Set.of() : parts.runner().getSwitcher().getOff();
