@@ -49,6 +49,7 @@ final class PatchScanner {
     private static final int METHOD_ENTRY = 10;
     private static final int INTERFACE_METHOD_ENTRY = 11;
     private static final int STRING_ENTRY = 8;
+    private static final int FIELD_ENTRY = 9;
 
     private static final Pattern MOD_ID = Pattern.compile("[a-z][a-z0-9_-]{1,63}");
 
@@ -176,6 +177,7 @@ final class PatchScanner {
             Set<String> refs = new HashSet<>();
             collectNamedClasses(bytes, refs);
             collectModIds(bytes, asks);
+            collectAsksOfFieldsRead(bytes, owns, reader, asks);
             for (String ref : refs) {
                 if (owns.contains(ref)) {
                     if (!read.contains(ref)) {
@@ -251,6 +253,27 @@ final class PatchScanner {
                 String text = reader.readUTF8(offset, buffer);
                 if (text != null && MOD_ID.matcher(text).matches()) {
                     into.add(text);
+                }
+            }
+        }
+    }
+
+    private static void collectAsksOfFieldsRead(byte[] bytes, Set<String> owns, ModJarReader.EntryReader entries,
+            Set<String> into) throws IOException {
+        ClassReader reader;
+        try {
+            reader = new ClassReader(bytes);
+        } catch (RuntimeException e) {
+            return;
+        }
+        char[] buffer = new char[reader.getMaxStringLength()];
+        for (int item = 1; item < reader.getItemCount(); item++) {
+            int offset = reader.getItem(item);
+            if (offset != 0 && bytes[offset - 1] == FIELD_ENTRY) {
+                String owner = reader.readClass(offset, buffer);
+                byte[] holder = owns.contains(owner) ? entries.read(owner + ".class") : null;
+                if (holder != null) {
+                    collectModIds(holder, into);
                 }
             }
         }
