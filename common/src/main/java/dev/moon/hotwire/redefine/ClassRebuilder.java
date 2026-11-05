@@ -351,6 +351,8 @@ public final class ClassRebuilder {
                 byte[] launched = this.launch.find(name);
                 split = launched == null ? split : StaleFields.reset(launched,
                         Objects.requireNonNull(mixed.get(name)), split);
+                split = launched == null ? split : SwappedFields.guard(launched,
+                        Objects.requireNonNull(mixed.get(name)), split);
                 split = StaleFields.markRestarted(this.mixedNow.get(name), Objects.requireNonNull(mixed.get(name)),
                         split);
                 splitOrFailure.put(name, split);

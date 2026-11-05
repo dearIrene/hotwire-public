@@ -62,6 +62,7 @@ final class HandlerSites {
             return original[0];
         };
         if (!merged.isEmpty()) {
+            markFinalWrites(internalName, node, shipped);
             OverwriteSites.make(internalName, node, mixinOfHandler, shipped, guarded, atLoad);
             if (atLoad) {
                 FieldSites.make(internalName, node, merged, shipped, guarded);
@@ -202,6 +203,25 @@ final class HandlerSites {
         }
         kept.removeAll(constructed);
         return String.join(";", kept);
+    }
+
+    private static void markFinalWrites(String internalName, ClassNode node, Supplier<@Nullable ClassNode> shipped) {
+        for (MethodNode method : node.methods) {
+            String mixin = HandlerGuards.isHandlerName(method.name) ? HandlerGuards.findMerged(method) : null;
+            if (mixin == null) {
+                continue;
+            }
+            for (AbstractInsnNode insn : method.instructions) {
+                if (insn instanceof FieldInsnNode store && store.getOpcode() == Opcodes.PUTFIELD
+                        && store.owner.equals(internalName) && store.name.indexOf('$') < 0) {
+                    ClassNode game = shipped.get();
+                    if (game != null && game.fields.stream().anyMatch(own -> own.name.equals(store.name)
+                            && own.desc.equals(store.desc) && (own.access & Opcodes.ACC_FINAL) != 0)) {
+                        HandlerGuards.markUnflippable(internalName, mixin, "writes the game's final " + store.name);
+                    }
+                }
+            }
+        }
     }
 
     private static @Nullable String findGameFieldSet(ClassNode node, MethodInsnNode call,
