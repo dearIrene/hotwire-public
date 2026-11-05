@@ -5,7 +5,6 @@ import dev.moon.hotwire.jar.PluginQuestions;
 import dev.moon.hotwire.redefine.Tripwire;
 import java.io.IOException;
 import java.nio.file.Path;
-import java.util.ArrayList;
 import java.util.Collections;
 import java.util.List;
 import java.util.Map;
@@ -71,19 +70,24 @@ public final class LivePlugins {
             Set<String> mine = new TreeSet<>();
             Set<String> accepted = new TreeSet<>();
             int asked = askAbout(plugin, questions.listed(), questions, mine, accepted);
+
             List<String> more = plugin.getMixins();
             if (more != null) {
-                List<String> added = new ArrayList<>();
-                more.forEach(name -> added.add(questions.pkg() + "." + name));
-                asked += askAbout(plugin, added, questions, mine, accepted);
+                for (String name : more) {
+                    String mixin = questions.pkg() + "." + name;
+                    mine.addAll(questions.targets().getOrDefault(mixin, Set.of()));
+                    if (!questions.listed().contains(mixin)) {
+                        accepted.add(mixin);
+                    }
+                }
             }
             plugin.acceptTargets(Collections.unmodifiableSet(mine), Set.of());
             ANSWERED.put(questions.config(), Set.copyOf(accepted));
             BY_CONFIG.put(questions.config(), plugin);
             BY_PACKAGE.put(questions.pkg().endsWith(".") ? questions.pkg().substring(0, questions.pkg().length() - 1)
                     : questions.pkg(), plugin);
-            LOGGER.info("[Hotwire] {}'s plugin ran in the game as at a launch, asked about {} mixins",
-                    questions.config(), asked);
+            LOGGER.info("[Hotwire] {}'s plugin ran in the game as at a launch, asked about {} mixins and gave {}",
+                    questions.config(), asked, more == null ? 0 : more.size());
         } catch (ReflectiveOperationException | RuntimeException | LinkageError e) {
             LOGGER.warn("[Hotwire] {}'s plugin failed as it ran in the game, so what it sets up for the mod's own code"
                     + " may be missing", questions.config(), e);
