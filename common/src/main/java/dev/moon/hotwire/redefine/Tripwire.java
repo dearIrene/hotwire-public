@@ -45,6 +45,10 @@ public final class Tripwire {
     private static final Logger LOGGER = LoggerFactory.getLogger(Tripwire.class);
     private static final StackWalker WALKER = StackWalker.getInstance(StackWalker.Option.RETAIN_CLASS_REFERENCE);
 
+    private static final Set<String> DISPATCHING = Set.of("dispatch", "dispatchYield", "safeDispatch",
+            "isDispatchNeeded", "safeIsDispatchNeeded");
+    private static final int MOST_FRAMES_TO_DISPATCH = 24;
+
     private static final String POOL_WORKER = ThreadPoolExecutor.class.getName() + "$Worker";
 
     private static final Map<String, CountDownLatch> GATES = new ConcurrentHashMap<>();
@@ -149,6 +153,9 @@ public final class Tripwire {
 
     private static boolean hitOnce(String mod, boolean runs) {
         CountDownLatch gate = GATES.get(mod);
+        if ((gate != null || CALLS.containsKey(mod)) && isCoroutineHandover()) {
+            return false;
+        }
         if (gate != null) {
             if (paused && onGameThread.getAsBoolean()) {
                 return false;
@@ -233,9 +240,16 @@ public final class Tripwire {
 
     static void onCounted(String mod) {
         AtomicLong calls = CALLS.get(mod);
-        if (calls != null) {
+        if (calls != null && !isCoroutineHandover()) {
             count(mod, calls, true);
         }
+    }
+
+    private static boolean isCoroutineHandover() {
+        return !onGameThread.getAsBoolean() && WALKER.walk(frames -> frames.limit(MOST_FRAMES_TO_DISPATCH)
+                .filter(frame -> frame.getClassName().startsWith("kotlinx.coroutines.")
+                        || frame.getClassName().startsWith("kotlin.coroutines."))
+                .findFirst().map(frame -> DISPATCHING.contains(frame.getMethodName())).orElse(false));
     }
 
     private static void count(String mod, AtomicLong calls, boolean runs) {
