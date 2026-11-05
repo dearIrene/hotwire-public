@@ -4,6 +4,7 @@ import dev.moon.hotwire.concurrent.Tasks;
 import dev.moon.hotwire.dev.DevCrash;
 import dev.moon.hotwire.dev.DevEvent;
 import dev.moon.hotwire.dev.DevHost;
+import dev.moon.hotwire.dev.DevMixin;
 import dev.moon.hotwire.dev.DevModView;
 import dev.moon.hotwire.dev.DevState;
 import dev.moon.hotwire.fabric.update.ModUpdater;
@@ -60,6 +61,8 @@ public final class DevSession implements DevHost, AutoCloseable {
         boolean isEveryReloadShown();
 
         List<Class<?>> findLoaded(Set<String> names);
+
+        List<DevMixin> findMixins(String id);
     }
 
     private static final class Mod {
@@ -74,6 +77,8 @@ public final class DevSession implements DevHost, AutoCloseable {
         volatile String line = "";
         final Deque<DevEvent> events = new ArrayDeque<>();
         final Map<String, DevCrash> crashes = new LinkedHashMap<>();
+
+        volatile @Nullable List<DevMixin> mixins;
 
         Mod(DevMod mod, DevBuild running) {
             this.mod = mod;
@@ -281,6 +286,7 @@ public final class DevSession implements DevHost, AutoCloseable {
     }
 
     private void accept(Mod mod, DevBuild built, int number) {
+        mod.mixins = null;
         DevBuild before = mod.running;
         mod.running = built;
         mod.runningNumber = number;
@@ -378,9 +384,14 @@ public final class DevSession implements DevHost, AutoCloseable {
     public List<DevModView> getDevMods() {
         List<DevModView> views = new ArrayList<>();
         for (Mod mod : this.mods.values()) {
+            List<DevMixin> mixins = mod.mixins;
+            if (mixins == null) {
+                mixins = this.engine.findMixins(mod.mod.id());
+                mod.mixins = mixins;
+            }
             synchronized (mod) {
                 views.add(new DevModView(mod.mod.id(), mod.mod.name(), mod.state, mod.line, mod.runningNumber,
-                        mod.builtAt, List.copyOf(mod.events), List.copyOf(mod.crashes.values()).reversed()));
+                        mod.builtAt, List.copyOf(mod.events), List.copyOf(mod.crashes.values()).reversed(), mixins));
             }
         }
         return views;

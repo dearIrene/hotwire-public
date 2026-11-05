@@ -466,14 +466,14 @@
   "hotwire.settings.dev_reload.on.note": "Build your mod and it goes into the running game",
   "hotwire.settings.dev_catch": "Catch your mod's crashes",
   "hotwire.settings.dev_catch.off": "Off",
-  "hotwire.settings.dev_catch.off.note": "When your mod throws the game crashes as it normally would",
+  "hotwire.settings.dev_catch.off.note": "Your mod's crashes close the game as usual",
   "hotwire.settings.dev_catch.on": "On",
-  "hotwire.settings.dev_catch.on.note": "When your mod throws the game keeps going, so you can fix it and build again",
+  "hotwire.settings.dev_catch.on.note": "Your game keeps going when your mod throws",
   "hotwire.settings.dev_leaks": "Watch for leaked worlds",
   "hotwire.settings.dev_leaks.off": "Off",
   "hotwire.settings.dev_leaks.off.note": "Leaving a world does nothing more than usual",
   "hotwire.settings.dev_leaks.on": "On",
-  "hotwire.settings.dev_leaks.on.note": "When you leave a world Hotwire tells you if your mod still holds it, and where",
+  "hotwire.settings.dev_leaks.on.note": "Leaving a world tells you if your mod still holds it",
   "hotwire.settings.reload_popups": "Reload popups",
   "hotwire.settings.reload_popups.all": "All",
   "hotwire.settings.reload_popups.all.note": "You get a popup after every reload telling you what changed",
@@ -733,5 +733,9 @@
   "hotwire.dev.leak": "%s still holds the world you left",
   "hotwire.dev.leak.fix": "Clear it when the world closes and the whole world can go",
   "hotwire.dev.config.refreshed": "%s's options are up to date",
-  "hotwire.dev.config.waiting": "%s has new options that show after a restart, or right away on the JetBrains Runtime"
+  "hotwire.dev.config.waiting": "%s has new options that show after a restart, or right away on the JetBrains Runtime",
+  "hotwire.dev.tab.mixins": "Mixins",
+  "hotwire.dev.window.no_mixins": "Your mod has no mixins",
+  "hotwire.dev.mixin.alone": "Only yours changes it",
+  "hotwire.dev.mixin.also": "Also changed by %s"
 }

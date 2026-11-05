@@ -3,6 +3,7 @@ package dev.moon.hotwire.ui;
 import dev.moon.hotwire.dev.DevCrash;
 import dev.moon.hotwire.dev.DevEvent;
 import dev.moon.hotwire.dev.DevHost;
+import dev.moon.hotwire.dev.DevMixin;
 import dev.moon.hotwire.dev.DevModView;
 import dev.moon.hotwire.dev.DevState;
 import java.time.Instant;
@@ -28,7 +29,7 @@ public final class DevWindow extends Element {
     private static final float REFRESH_SECONDS = 0.25f;
     private static final DateTimeFormatter CLOCK = DateTimeFormatter.ofPattern("HH:mm:ss", Locale.ROOT);
 
-    private enum Tab { OVERVIEW, HISTORY, CRASHES }
+    private enum Tab { OVERVIEW, HISTORY, CRASHES, MIXINS }
 
     private enum Hold { NONE, MOVE, SIZE }
 
@@ -256,6 +257,7 @@ public final class DevWindow extends Element {
                 case OVERVIEW -> this.paintOverview(canvas, mod, x0 + PAD, y, a);
                 case HISTORY -> this.paintHistory(canvas, mod, x0 + PAD, y, a);
                 case CRASHES -> this.paintCrashes(canvas, mod, x0 + PAD, y, a);
+                case MIXINS -> this.paintMixins(canvas, mod, x0 + PAD, y, a);
             };
         }
         this.contentHeight = y - startY + 6;
@@ -360,6 +362,22 @@ public final class DevWindow extends Element {
             canvas.drawText(canvas.clip(crash.where() + "  " + describeAgo(crash.lastAt()), textWidth), x, y,
                     Colors.fade(Palette.DIM, a));
             y += LINE + 5;
+        }
+        return y;
+    }
+
+    private int paintMixins(Canvas canvas, DevModView mod, int x, int y, float a) {
+        if (mod.mixins().isEmpty()) {
+            return this.paintWrapped(canvas, Lang.get("hotwire.dev.window.no_mixins"), x, y, Palette.DIM, a);
+        }
+        int textWidth = this.width - 2 * PAD;
+        for (DevMixin mixin : mod.mixins()) {
+            canvas.drawText(canvas.clip(mixin.target(), textWidth), x, y, Colors.fade(Palette.TEXT, a));
+            y += LINE;
+            String others = mixin.others().isEmpty() ? Lang.get("hotwire.dev.mixin.alone")
+                    : Lang.get("hotwire.dev.mixin.also", String.join(", ", mixin.others()));
+            y = this.paintWrapped(canvas, others, x + 9, y, mixin.others().isEmpty() ? Palette.FAINT : Palette.WARN, a);
+            y += 4;
         }
         return y;
     }

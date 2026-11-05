@@ -1,9 +1,11 @@
 package dev.moon.hotwire.fabric;
 
 import dev.moon.hotwire.config.HotwireSettings;
+import dev.moon.hotwire.dev.DevMixin;
 import dev.moon.hotwire.fabric.dev.DevSession;
 import dev.moon.hotwire.fabric.update.ModUpdater;
 import dev.moon.hotwire.fabric.update.UpdateSupport;
+import dev.moon.hotwire.jar.ModJar;
 import dev.moon.hotwire.switching.ModSwitcher;
 import dev.moon.hotwire.switching.PlayerMessages;
 import dev.moon.hotwire.ui.UpdateMethod;
@@ -12,6 +14,7 @@ import java.nio.file.Path;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Set;
+import java.util.TreeSet;
 import java.util.function.Supplier;
 import org.jspecify.annotations.Nullable;
 
@@ -75,6 +78,26 @@ final class DevEngine implements DevSession.Engine {
             }
         }
         return loaded;
+    }
+
+    @Override
+    public List<DevMixin> findMixins(String id) {
+        List<ModJar> jars = this.installed.getGraphJars();
+        ModJar own = jars.stream().filter(jar -> jar.manifest().id().equals(id)).findFirst().orElse(null);
+        if (own == null) {
+            return List.of();
+        }
+        List<DevMixin> found = new ArrayList<>();
+        for (String target : new TreeSet<>(own.patches().patches())) {
+            List<String> others = new ArrayList<>();
+            for (ModJar jar : jars) {
+                if (!jar.manifest().id().equals(id) && jar.patches().patches().contains(target)) {
+                    others.add(jar.manifest().name());
+                }
+            }
+            found.add(new DevMixin(target.substring(target.lastIndexOf('/') + 1), others));
+        }
+        return found;
     }
 
     @Override
