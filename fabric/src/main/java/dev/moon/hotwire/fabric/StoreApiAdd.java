@@ -98,7 +98,10 @@ final class StoreApiAdd {
                             return;
                         }
                         store.fetch(project.id(), versionId, project.name(),
-                                (jars, projects) -> then.take(engine, project.name(), jars),
+                                (jars, projects) -> {
+                                    engine.storeJars.remember(jars, projects);
+                                    then.take(engine, project.name(), jars);
+                                },
                                 failed -> made.complete(refusal.apply(failed)));
                     });
                 });

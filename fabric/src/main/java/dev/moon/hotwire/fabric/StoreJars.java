@@ -223,6 +223,12 @@ final class StoreJars {
         this.offerNext();
     }
 
+    void remember(List<Path> jars, List<String> projects) {
+        for (int i = 0; i < jars.size(); i++) {
+            this.projects.put(jars.get(i), projects.get(i));
+        }
+    }
+
     List<Downloads.Job> findDownloads() {
         return this.check.getDownloads().snapshot();
     }
