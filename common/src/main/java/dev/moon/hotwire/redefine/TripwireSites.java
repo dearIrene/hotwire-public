@@ -30,7 +30,9 @@ import org.slf4j.LoggerFactory;
 
 public final class TripwireSites {
     private static final Logger LOGGER = LoggerFactory.getLogger(TripwireSites.class);
-    private static final Handle BOOTSTRAP = new Handle(Opcodes.H_INVOKESTATIC,
+    static final String HIT = "hit";
+    static final String GATE_SITE = "gate";
+    static final Handle BOOTSTRAP = new Handle(Opcodes.H_INVOKESTATIC,
             TripwireSites.class.getName().replace('.', '/'), "bootstrap",
             MethodType.methodType(CallSite.class, MethodHandles.Lookup.class, String.class, MethodType.class,
                     String.class).toMethodDescriptorString(), false);
@@ -55,9 +57,23 @@ public final class TripwireSites {
     }
 
     public static byte @Nullable [] arm(String internalName, byte[] classBytes, String mod, boolean relinked) {
-        if (new ClassReader(classBytes).readUnsignedShort(6) < Opcodes.V1_7) {
+        if (((classBytes[6] & 0xFF) << 8 | (classBytes[7] & 0xFF)) < Opcodes.V1_7) {
             return null;
         }
+        if (!relinked) {
+            byte[] spliced = SiteSplice.arm(classBytes, mod);
+            if (spliced != null) {
+                if (spliced.length == 0) {
+                    return null;
+                }
+                ARMED.put(internalName, mod);
+                return spliced;
+            }
+        }
+        return armByRewrite(internalName, classBytes, mod, relinked);
+    }
+
+    static byte @Nullable [] armByRewrite(String internalName, byte[] classBytes, String mod, boolean relinked) {
         ClassNode node = new ClassNode();
         new ClassReader(classBytes).accept(node, 0);
         boolean armed = false;
@@ -74,7 +90,7 @@ public final class TripwireSites {
             if (isGated(method)) {
                 method.instructions.insert(makeGate(method, mod));
             } else {
-                method.instructions.insert(new InvokeDynamicInsnNode("hit", "()V", BOOTSTRAP, mod));
+                method.instructions.insert(new InvokeDynamicInsnNode(HIT, "()V", BOOTSTRAP, mod));
             }
             armed = true;
             inserted = true;
@@ -100,19 +116,22 @@ public final class TripwireSites {
             "compareTo", "compare", "finalize");
 
     private static boolean isGated(MethodNode method) {
-        int sort = Type.getReturnType(method.desc).getSort();
-        return !NEVER_GATED.contains(method.name)
-                && ((sort != Type.OBJECT && sort != Type.ARRAY) || isSuspending(method));
+        return isGated(method.name, method.desc);
     }
 
-    private static boolean isSuspending(MethodNode method) {
-        return method.desc.endsWith("Lkotlin/coroutines/Continuation;)Ljava/lang/Object;");
+    static boolean isGated(String name, String desc) {
+        char returned = desc.charAt(desc.indexOf(')') + 1);
+        return !NEVER_GATED.contains(name) && ((returned != 'L' && returned != '[') || isSuspending(desc));
+    }
+
+    private static boolean isSuspending(String desc) {
+        return desc.endsWith("Lkotlin/coroutines/Continuation;)Ljava/lang/Object;");
     }
 
     private static InsnList makeGate(MethodNode method, String mod) {
         InsnList gate = new InsnList();
         LabelNode go = new LabelNode();
-        gate.add(new InvokeDynamicInsnNode("gate", "()Z", BOOTSTRAP, mod));
+        gate.add(new InvokeDynamicInsnNode(GATE_SITE, "()Z", BOOTSTRAP, mod));
         gate.add(new JumpInsnNode(Opcodes.IFEQ, go));
         Type returned = Type.getReturnType(method.desc);
         switch (returned.getSort()) {
@@ -160,7 +179,7 @@ public final class TripwireSites {
     private static boolean hasSite(MethodNode method) {
         for (AbstractInsnNode insn = method.instructions.getFirst(); insn != null; insn = insn.getNext()) {
             if (insn instanceof InvokeDynamicInsnNode site) {
-                return (site.name.equals("hit") || site.name.equals("gate")) && site.bsm.equals(BOOTSTRAP);
+                return (site.name.equals(HIT) || site.name.equals(GATE_SITE)) && site.bsm.equals(BOOTSTRAP);
             }
             if (insn.getOpcode() >= 0) {
                 return false;
@@ -231,7 +250,7 @@ public final class TripwireSites {
     }
 
     public static CallSite bootstrap(MethodHandles.Lookup caller, String name, MethodType type, String mod) {
-        return new ConstantCallSite((name.equals("gate") ? GATE : PROBE).bindTo(findWatch(mod)));
+        return new ConstantCallSite((name.equals(GATE_SITE) ? GATE : PROBE).bindTo(findWatch(mod)));
     }
 
     public static void setOff(String mod, boolean off) {
