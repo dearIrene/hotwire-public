@@ -41,34 +41,31 @@ public final class ReportZips {
     private @Nullable Path replaceable;
 
     public String write(String title, String why) {
-        return this.write(title, why, List.of(), true, false);
+        return this.write(title, why, List.of(), false);
     }
 
     public String writeAsked(String title, String why) {
-        return this.write(title, why, List.of(), true, true);
+        return this.write(title, why, List.of(), true);
     }
 
     public Optional<String> findLastSessionCrash() {
         return this.reports.findLastSessionCrash().map(crash -> crash.getFileName().toString().equals(FreezeDump.FILE)
                 ? this.write(Lang.get("hotwire.report.file.last_freeze"), "The game froze last session, and its"
-                        + " threads are in " + crash.getFileName() + ".", List.of(), true, false)
+                        + " threads are in " + crash.getFileName() + ".", List.of(), false)
                 : this.write(Lang.get("hotwire.report.file.last_crash"),
-                        "The game crashed last session (" + crash.getFileName() + ").", List.of(crash), true, false));
+                        "The game crashed last session (" + crash.getFileName() + ").", List.of(crash), false));
     }
 
     public String writeForCrash(Path crash) {
         String where = this.write(Lang.get("hotwire.report.file.game_crash"),
-                "The game crashed (" + crash.getFileName() + ").", List.of(), false, false);
+                "The game crashed (" + crash.getFileName() + ").", List.of(), false);
         this.reports.markReported(crash);
         return where;
     }
 
-    private String write(String title, String why, List<Path> extra, boolean open, boolean asked) {
+    private String write(String title, String why, List<Path> extra, boolean asked) {
         try {
             Path zip = this.writeZip(title, why, extra, asked);
-            if (open) {
-                reveal(zip);
-            }
             return Lang.get("hotwire.report.written", FabricLoader.getInstance().getGameDir().relativize(zip));
         } catch (IOException e) {
             LOGGER.warn("[Hotwire] the report could not be written", e);
