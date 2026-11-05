@@ -4,9 +4,9 @@ import dev.moon.hotwire.config.ProfileStore;
 import dev.moon.hotwire.modrinth.Downloads;
 import dev.moon.hotwire.ui.list.ModCatalog;
 import dev.moon.hotwire.ui.list.ModList;
-import dev.moon.hotwire.ui.list.ModListModel;
 import dev.moon.hotwire.ui.list.ModListModel.Show;
 import dev.moon.hotwire.ui.list.ModListModel.Unpick;
+import dev.moon.hotwire.ui.list.ModListModel;
 import dev.moon.hotwire.ui.list.ModStatus;
 import dev.moon.hotwire.update.PendingChange;
 import dev.moon.hotwire.update.UpdateOffer;
@@ -15,6 +15,7 @@ import java.io.IOException;
 import java.nio.file.Path;
 import java.util.ArrayList;
 import java.util.HashMap;
+import java.util.HashSet;
 import java.util.List;
 import java.util.Locale;
 import java.util.Map;
@@ -207,6 +208,8 @@ public final class ModScreen implements JarHost {
     final FirstOpenPanel firstOpen;
     private final SelfUpdatePanel selfUpdate;
     int pendingCount;
+    private List<UpdateOffer> foundOffers = List.of();
+    private boolean offersChecked;
 
     private Set<String> withSettings;
     final List<ModStatus> shown = new ArrayList<>();
@@ -422,6 +425,7 @@ public final class ModScreen implements JarHost {
         this.list.clearWishes();
         this.model.onCatalogChanged();
         this.pendingCount = this.game.getPendingChanges().size();
+        this.showOffers();
         this.withSettings = this.game.getModsWithSettings();
         this.modScreenButtons.refilter();
     }
@@ -501,8 +505,21 @@ public final class ModScreen implements JarHost {
 
     public void setUpdates(List<UpdateOffer> offers, boolean checked) {
         this.showNewerHotwire();
-        this.updatesPanel.setOffers(offers, checked);
-        this.updates.setBadge(offers.size());
+        this.foundOffers = List.copyOf(offers);
+        this.offersChecked = checked;
+        this.showOffers();
+    }
+
+    private void showOffers() {
+        Set<String> queued = new HashSet<>();
+        for (PendingChange change : this.game.getPendingChanges()) {
+            if (change instanceof PendingChange.Update update) {
+                queued.add(update.modId());
+            }
+        }
+        List<UpdateOffer> shown = this.foundOffers.stream().filter(offer -> !queued.contains(offer.id())).toList();
+        this.updatesPanel.setOffers(shown, this.offersChecked);
+        this.updates.setBadge(shown.size());
     }
 
     public void openUpdates() {
@@ -535,6 +552,7 @@ public final class ModScreen implements JarHost {
 
     private void setPending(List<PendingChange> now) {
         this.pendingCount = now.size();
+        this.showOffers();
         this.pendingPanel.setChanges(now);
     }
 
