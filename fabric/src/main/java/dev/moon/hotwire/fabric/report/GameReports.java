@@ -8,6 +8,7 @@ import dev.moon.hotwire.fabric.update.ModUpdater;
 import dev.moon.hotwire.plan.SwitchPlan;
 import dev.moon.hotwire.report.ActionJournal;
 import dev.moon.hotwire.report.CrashSection;
+import dev.moon.hotwire.report.FreezeBlame;
 import dev.moon.hotwire.report.Report;
 import dev.moon.hotwire.report.ReportBundle;
 import dev.moon.hotwire.report.ReportWriter;
@@ -16,6 +17,7 @@ import dev.moon.hotwire.switching.ModSwitcher;
 import dev.moon.hotwire.switching.SwitchApplier;
 import java.io.IOException;
 import java.io.UncheckedIOException;
+import java.lang.management.ManagementFactory;
 import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
 import java.nio.file.Path;
@@ -354,8 +356,14 @@ public final class GameReports {
                 Path freeze = game.resolve("hotwire").resolve("logs").resolve(FreezeDump.FILE);
                 if (crash.isEmpty() && Files.isRegularFile(freeze)) {
                     Instant written = Files.getLastModifiedTime(freeze).toInstant();
-                    if (written.isAfter(last) && written.isBefore(this.began)) {
-                        crash = Optional.of(freeze);
+                    Instant started = Instant.ofEpochMilli(ManagementFactory.getRuntimeMXBean().getStartTime());
+                    if (written.isAfter(last) && written.isBefore(started)) {
+                        Path journal = game.resolve("hotwire").resolve("logs").resolve(ActionJournal.LAST);
+                        if (FreezeBlame.isHotwires(read(freeze), Files.isRegularFile(journal) ? read(journal) : "")) {
+                            crash = Optional.of(freeze);
+                        } else {
+                            LOGGER.info("[Hotwire] the game froze last session with no part of Hotwire's in it");
+                        }
                     }
                 }
             }
@@ -413,6 +421,9 @@ public final class GameReports {
         boolean froze = FreezeDump.isRecent(logs.resolve(FreezeDump.FILE));
         if (froze) {
             texts.put("hotwire-" + FreezeDump.FILE, read(logs.resolve(FreezeDump.FILE)));
+        }
+        if (FreezeDump.isRecent(logs.resolve(FreezeDump.PAUSE_FILE))) {
+            texts.put("hotwire-" + FreezeDump.PAUSE_FILE, read(logs.resolve(FreezeDump.PAUSE_FILE)));
         }
 
         boolean lastSession = froze || extra.stream().anyMatch(this::isFromLastSession);

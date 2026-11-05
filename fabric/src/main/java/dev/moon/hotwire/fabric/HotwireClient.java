@@ -118,6 +118,7 @@ public final class HotwireClient implements ClientModInitializer {
             });
         });
         ClientLifecycleEvents.CLIENT_STOPPING.register(client -> {
+            FreezeDump.stop();
             ActionJournal.get().flush();
             OffModClose.run(client);
             OffModClose.exitWhenStuck();
