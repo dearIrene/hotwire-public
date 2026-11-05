@@ -136,7 +136,7 @@ public final class InitHookReplay {
         Set<String> joins = joining.apply(name);
         Set<String> fresh = findKeys(mixed, name, once);
         if (fresh.isEmpty() && joins.isEmpty()) {
-            return addStaticsOnly(mixed, original, running);
+            return addStaticsOnly(mixed, original, running, previous);
         }
         fresh.removeAll(findKeys(running, name, once));
         if (first != null && !fresh.isEmpty()) {
@@ -153,7 +153,7 @@ public final class InitHookReplay {
             fresh.addAll(again);
         }
         if (fresh.isEmpty()) {
-            return addStaticsOnly(mixed, original, running);
+            return addStaticsOnly(mixed, original, running, previous);
         }
         ClassNode now = new ClassNode();
         new ClassReader(mixed).accept(now, 0);
@@ -203,7 +203,7 @@ public final class InitHookReplay {
         Map<String, String> recomputed = new LinkedHashMap<>(values.isEmpty() ? Map.of()
                 : ChangedStatics.add(now, values));
         ClassNode runs = RetainedInitializers.read(running);
-        recomputed.putAll(ChangedStatics.addSwitched(now, runs));
+        recomputed.putAll(ChangedStatics.addSwitched(now, findLastMix(previous, runs)));
         if (original != null) {
             recomputed.putAll(ChangedStatics.addMadeFresh(now, RetainedInitializers.read(original), runs));
         }
@@ -236,11 +236,17 @@ public final class InitHookReplay {
         return name.startsWith("net/minecraft/") || name.startsWith("com/mojang/");
     }
 
-    private static Addition addStaticsOnly(byte[] mixed, byte @Nullable [] original, byte[] running) {
+    private static ClassNode findLastMix(byte @Nullable [] previous, ClassNode runs) {
+        return previous == null ? runs : RetainedInitializers.read(previous);
+    }
+
+    private static Addition addStaticsOnly(byte[] mixed, byte @Nullable [] original, byte[] running,
+            byte @Nullable [] previous) {
         ClassNode now = new ClassNode();
         new ClassReader(mixed).accept(now, 0);
         ClassNode runs = RetainedInitializers.read(running);
-        Map<String, String> recomputed = new LinkedHashMap<>(ChangedStatics.addSwitched(now, runs));
+        Map<String, String> recomputed = new LinkedHashMap<>(ChangedStatics.addSwitched(now,
+                findLastMix(previous, runs)));
         if (original != null && ChangedStatics.hasAddedObjectStatics(mixed, original, running)) {
             recomputed.putAll(ChangedStatics.addMadeFresh(now, RetainedInitializers.read(original), runs));
         }

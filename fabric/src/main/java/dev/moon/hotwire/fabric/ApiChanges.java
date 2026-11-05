@@ -247,7 +247,7 @@ final class ApiChanges {
         return engine == null ? List.of() : engine.getPendingChanges().stream()
                 .map(change -> new PendingTask(change.modId(), change.name(), switch (change) {
                     case PendingChange.Update update -> PendingTask.Kind.UPDATE;
-                    case PendingChange.Revertable kept -> PendingTask.Kind.REVERTABLE;
+                    case PendingChange.Revertable older -> PendingTask.Kind.REVERTABLE;
                     case PendingChange.Copied copied -> PendingTask.Kind.COPIED;
                     case PendingChange.OffAtStart off -> PendingTask.Kind.OFF_AT_START;
                 })).toList();

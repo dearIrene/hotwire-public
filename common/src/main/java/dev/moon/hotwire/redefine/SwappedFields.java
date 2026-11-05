@@ -13,6 +13,7 @@ import org.objectweb.asm.Opcodes;
 import org.objectweb.asm.tree.AbstractInsnNode;
 import org.objectweb.asm.tree.ClassNode;
 import org.objectweb.asm.tree.FieldInsnNode;
+import org.objectweb.asm.tree.FieldNode;
 import org.objectweb.asm.tree.FrameNode;
 import org.objectweb.asm.tree.InsnList;
 import org.objectweb.asm.tree.InsnNode;
@@ -55,8 +56,11 @@ final class SwappedFields {
         if ((target.version & 0xFFFF) < Opcodes.V1_7) {
             return split;
         }
-        target.fields.stream().filter(field -> (field.access & (Opcodes.ACC_FINAL | Opcodes.ACC_STATIC)) != 0)
-                .forEach(field -> made.remove(field.name + field.desc));
+        for (FieldNode field : target.fields) {
+            if ((field.access & (Opcodes.ACC_FINAL | Opcodes.ACC_STATIC)) != 0) {
+                made.remove(field.name + field.desc);
+            }
+        }
         boolean changed = false;
         for (MethodNode method : target.methods) {
             if (method.name.startsWith("<") || (method.access & (Opcodes.ACC_STATIC | Opcodes.ACC_ABSTRACT
