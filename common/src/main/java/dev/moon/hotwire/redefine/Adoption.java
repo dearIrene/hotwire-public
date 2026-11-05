@@ -56,7 +56,7 @@ public final class Adoption {
     }
 
     public static byte[] rewrite(byte[] bytes, Set<String> adopted) {
-        if (adopted.isEmpty()) {
+        if (adopted.isEmpty() || !namesAny(bytes, adopted)) {
             return bytes;
         }
         ClassNode node = new ClassNode();
@@ -86,6 +86,18 @@ public final class Adoption {
         ClassWriter writer = new ClassWriter(ClassWriter.COMPUTE_MAXS);
         node.accept(writer);
         return writer.toByteArray();
+    }
+
+    private static boolean namesAny(byte[] bytes, Set<String> classes) {
+        ClassReader reader = new ClassReader(bytes);
+        char[] buffer = new char[reader.getMaxStringLength()];
+        for (int i = 1; i < reader.getItemCount(); i++) {
+            int offset = reader.getItem(i);
+            if (offset > 0 && reader.readByte(offset - 1) == 7 && classes.contains(reader.readUTF8(offset, buffer))) {
+                return true;
+            }
+        }
+        return false;
     }
 
     private static MethodNode makeConstructMethod(ClassNode owner, MethodNode init) {
