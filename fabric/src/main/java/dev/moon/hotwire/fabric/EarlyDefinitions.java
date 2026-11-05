@@ -39,7 +39,8 @@ public final class EarlyDefinitions implements PreLaunchEntrypoint {
         HotwireLog.install(FabricLoader.getInstance().getGameDir().resolve("hotwire").resolve("logs"));
 
         if (System.getProperty("hotwire.guards") == null && new HotwireSettings(FabricLoader.getInstance()
-                .getConfigDir().resolve("hotwire/settings.json")).isDeveloperOn()) {
+                .getConfigDir().resolve("hotwire/settings.json")).isRebuildEverySwitch(FabricLoader.getInstance()
+                .isDevelopmentEnvironment())) {
             System.setProperty("hotwire.guards", "false");
         }
         ClassLoader game = EarlyDefinitions.class.getClassLoader();

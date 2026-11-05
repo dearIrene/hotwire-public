@@ -27,6 +27,7 @@ import java.util.concurrent.CopyOnWriteArrayList;
 import java.util.concurrent.TimeUnit;
 import java.util.function.BiConsumer;
 import java.util.function.BiFunction;
+import java.util.function.BooleanSupplier;
 import java.util.function.Function;
 import java.util.function.Supplier;
 import java.util.regex.Matcher;
@@ -55,11 +56,13 @@ public final class CrashGuard {
     @SuppressWarnings("FutureReturnValueIgnored")
 
     static void install(InstalledMods installed, Tasks tasks, Supplier<@Nullable SwitchRunner> runner,
-            BiConsumer<String, Boolean> say, BiFunction<String, String, String> writeReport) {
+            BiConsumer<String, Boolean> say, BiFunction<String, String, String> writeReport,
+            BooleanSupplier antiCrash) {
         CrashPolicy[] made = new CrashPolicy[1];
-        made[0] = new CrashPolicy(CrashGuard::findModBehind, id -> installed.isAddedThisSession(id)
-                || SWITCHED.contains(id), caught -> {
+        made[0] = new CrashPolicy(CrashGuard::findModBehind, id -> isTouched(installed, id)
+                || antiCrash.getAsBoolean(), caught -> {
             String name = installed.nameOf(caught.mod());
+            boolean byAntiCrash = !isTouched(installed, caught.mod());
             LOGGER.error("[Hotwire] {} threw at {} ({}); Hotwire keeps the game going and turns it off", name,
                     caught.site(), caught.mod(), caught.thrown());
             if (CAUGHT.size() >= MOST_CAUGHT) {
@@ -96,10 +99,12 @@ public final class CrashGuard {
                                         }
                                     }),
                                     reopened -> finish(made[0], caught.mod(), name, reopened.result(), why,
-                                            installed, say, writeReport)));
+                                            installed, byAntiCrash ? (line, bad) -> { } : say, writeReport,
+                                            byAntiCrash)));
                             return;
                         }
-                        finish(made[0], caught.mod(), name, reported.result(), why, installed, say, writeReport);
+                        finish(made[0], caught.mod(), name, reported.result(), why, installed,
+                                byAntiCrash ? (line, bad) -> { } : say, writeReport, byAntiCrash);
                     }));
         });
         policy = made[0];
@@ -119,7 +124,7 @@ public final class CrashGuard {
         ActionJournal.Entry journal = ActionJournal.get().begin(ActionJournal.Action.CRASH_OFF, mod);
         SwitchRunner.CheckedResult result;
         try {
-            result = GameHold.runUnbudgeted(off);
+            result = SwitchRunner.runQuietly(() -> GameHold.runUnbudgeted(off));
         } catch (RuntimeException e) {
             journal.endThrown();
             throw e;
@@ -128,16 +133,27 @@ public final class CrashGuard {
         return result;
     }
 
+    private static boolean isTouched(InstalledMods installed, String mod) {
+        return installed.isAddedThisSession(mod) || SWITCHED.contains(mod);
+    }
+
     private static boolean isWorldBuilt(ModSwitcher.Result result) {
         return result instanceof ModSwitcher.Result.Failed failed && failed.cause().isWorldBuilt();
     }
 
     private static void finish(CrashPolicy policy, String mod, String name, ModSwitcher.Result result, String why,
             InstalledMods installed, BiConsumer<String, Boolean> say,
-            BiFunction<String, String, String> writeReport) {
+            BiFunction<String, String, String> writeReport, boolean byAntiCrash) {
         boolean off = !PlayerMessages.isBad(result);
         policy.onOffFinished(mod, off);
         String where = writeReport.apply(Lang.get("hotwire.report.file.mod_crash", name), why);
+        if (byAntiCrash) {
+            LOGGER.info("[Hotwire] Anti-Crash caught {}'s crash; {}", name, off ? "it is off" : "it could not go off");
+            ModViews.showNotice(Lang.get("hotwire.anti_crash.title"), off ? Lang.get("hotwire.anti_crash.caught", name)
+                    : Lang.get("hotwire.anti_crash.not_turned_off", name, PlayerMessages.describe(result,
+                            installed::nameOf)));
+            return;
+        }
         String line = off ? Lang.get("hotwire.crash.turned_off", name, where) : Lang.get("hotwire.crash.not_turned_off",
                 name, PlayerMessages.describe(result, installed::nameOf), where);
         say.accept(line, true);

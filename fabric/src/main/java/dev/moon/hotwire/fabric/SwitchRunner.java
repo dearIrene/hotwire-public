@@ -60,6 +60,7 @@ import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.concurrent.atomic.AtomicInteger;
 import java.util.concurrent.atomic.AtomicReference;
 import java.util.function.Consumer;
+import java.util.function.Supplier;
 import net.minecraft.client.Minecraft;
 import org.jspecify.annotations.Nullable;
 import org.slf4j.Logger;
@@ -280,6 +281,17 @@ public final class SwitchRunner {
             if (result instanceof ModSwitcher.Result.Done done) {
                 this.tripwire.armLater(done.plan().order(), id -> !this.switcher.isOn(id), GameTasks::takeOutAgain);
             }
+        }
+    }
+
+    private static final ThreadLocal<Boolean> QUIET = ThreadLocal.withInitial(() -> false);
+
+    static <T> T runQuietly(Supplier<T> work) {
+        QUIET.set(true);
+        try {
+            return work.get();
+        } finally {
+            QUIET.set(false);
         }
     }
 
@@ -559,7 +571,9 @@ public final class SwitchRunner {
 
         if (result instanceof ModSwitcher.Result.Done done) {
             result = new ModSwitcher.Result.Done(done.plan(), done.applied(), SwitchTimes.getMillisSinceBegin());
-            showTimeNotice((ModSwitcher.Result.Done) result);
+            if (!QUIET.get()) {
+                showTimeNotice((ModSwitcher.Result.Done) result);
+            }
         }
         return new CheckedResult(result, check, faults);
     }

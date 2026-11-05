@@ -1,8 +1,9 @@
 package dev.moon.hotwire.config;
 
 import dev.moon.hotwire.plan.SwitchPlanner.NestedJars;
-import dev.moon.hotwire.ui.AdvancedOption;
 import dev.moon.hotwire.ui.Lang;
+import dev.moon.hotwire.ui.SettingOption;
+import dev.moon.hotwire.ui.SettingsSection;
 import java.io.IOException;
 import java.nio.file.Path;
 import java.util.List;
@@ -27,6 +28,12 @@ public final class HotwireSettings {
 
     public enum UpdateChecks { ON, OFF }
 
+    public enum AntiCrash { OFF, ON }
+
+    public enum DevReload { ON, OFF }
+
+    public enum ReloadPopups { ALL, PROBLEMS }
+
     static final String IN_WORLD = "in-world";
     static final String OFF_LASTS = "off-lasts";
     public static final String NESTED_JARS = "nested-jars";
@@ -35,6 +42,9 @@ public final class HotwireSettings {
     static final String AUTO_FILL = "auto-fill";
     static final String DEVELOPER = "developer";
     static final String UPDATE_CHECKS = "update-checks";
+    static final String ANTI_CRASH = "anti-crash";
+    static final String DEV_RELOAD = "dev-reload";
+    static final String RELOAD_POPUPS = "reload-popups";
 
     private static final Logger LOGGER = LoggerFactory.getLogger(HotwireSettings.class);
 
@@ -66,6 +76,15 @@ public final class HotwireSettings {
     private static final List<NestedJars> NESTED_ORDER = List.of(NestedJars.AUTO, NestedJars.ALL, NestedJars.NONE);
     private static final List<String> NESTED_CHOICES = List.of("hotwire.settings.nested.auto",
             "hotwire.settings.nested.all", "hotwire.settings.nested.none");
+    private static final List<AntiCrash> ANTI_CRASH_ORDER = List.of(AntiCrash.OFF, AntiCrash.ON);
+    private static final List<String> ANTI_CRASH_CHOICES = List.of("hotwire.settings.anti_crash.off",
+            "hotwire.settings.anti_crash.on");
+    private static final List<DevReload> DEV_RELOAD_ORDER = List.of(DevReload.OFF, DevReload.ON);
+    private static final List<String> DEV_RELOAD_CHOICES = List.of("hotwire.settings.dev_reload.off",
+            "hotwire.settings.dev_reload.on");
+    private static final List<ReloadPopups> RELOAD_POPUPS_ORDER = List.of(ReloadPopups.ALL, ReloadPopups.PROBLEMS);
+    private static final List<String> RELOAD_POPUPS_CHOICES = List.of("hotwire.settings.reload_popups.all",
+            "hotwire.settings.reload_popups.problems");
 
     @SuppressWarnings("FieldCanBeFinal")
     private static final class SettingsJson {
@@ -78,6 +97,9 @@ public final class HotwireSettings {
         @Nullable AutoFill autoFill = AutoFill.ON;
         @Nullable Developer developer = Developer.OFF;
         @Nullable UpdateChecks updateChecks = UpdateChecks.ON;
+        @Nullable AntiCrash antiCrash = AntiCrash.OFF;
+        @Nullable DevReload devReload = DevReload.ON;
+        @Nullable ReloadPopups reloadPopups = ReloadPopups.ALL;
         @Nullable String promptAcceptedFor;
         boolean keyCardShown;
         @Nullable List<String> favorites = List.of();
@@ -92,6 +114,9 @@ public final class HotwireSettings {
     private volatile AutoFill autoFill;
     private volatile Developer developer;
     private volatile UpdateChecks updateChecks;
+    private volatile AntiCrash antiCrash;
+    private volatile DevReload devReload;
+    private volatile ReloadPopups reloadPopups;
     private volatile @Nullable String promptAcceptedFor;
     private volatile boolean keyCardShown;
     private final Set<String> favorites = ConcurrentHashMap.newKeySet();
@@ -112,6 +137,10 @@ public final class HotwireSettings {
                 : checkKnown(saved.autoFill, AutoFill.ON, "autoFill");
         this.developer = checkKnown(saved.developer, Developer.OFF, "developer");
         this.updateChecks = checkKnown(saved.updateChecks, UpdateChecks.ON, "updateChecks");
+
+        this.antiCrash = saved.antiCrash == null ? AntiCrash.OFF : saved.antiCrash;
+        this.devReload = saved.devReload == null ? DevReload.ON : saved.devReload;
+        this.reloadPopups = saved.reloadPopups == null ? ReloadPopups.ALL : saved.reloadPopups;
         this.promptAcceptedFor = saved.promptAcceptedFor;
         this.keyCardShown = saved.keyCardShown;
         if (saved.favorites != null) {
@@ -151,8 +180,20 @@ public final class HotwireSettings {
         return this.autoFill == AutoFill.ON;
     }
 
-    public boolean isDeveloperOn() {
-        return this.developer == Developer.ON;
+    public boolean isRebuildEverySwitch(boolean inSetup) {
+        return inSetup && this.developer == Developer.ON;
+    }
+
+    public boolean isAntiCrashOn() {
+        return this.antiCrash == AntiCrash.ON;
+    }
+
+    public boolean isDevReloadOn(boolean inSetup) {
+        return inSetup && this.devReload == DevReload.ON;
+    }
+
+    public boolean isEveryReloadShown() {
+        return this.reloadPopups == ReloadPopups.ALL;
     }
 
     public boolean isUpdateCheckOn() {
@@ -187,27 +228,56 @@ public final class HotwireSettings {
         this.save();
     }
 
-    public List<AdvancedOption> getOptions() {
-        return List.of(new AdvancedOption(OFF_LASTS, Lang.get("hotwire.settings.off_lasts"),
-                read(OFF_LASTS_CHOICES), OFF_LASTS_ORDER.indexOf(this.offLasts)),
-                new AdvancedOption(IN_WORLD, Lang.get("hotwire.settings.in_world"), read(IN_WORLD_CHOICES),
-                        IN_WORLD_ORDER.indexOf(this.inWorld)),
-                new AdvancedOption(NESTED_JARS, Lang.get("hotwire.settings.nested"), read(NESTED_CHOICES),
-                        NESTED_ORDER.indexOf(this.nestedJars)),
-                new AdvancedOption(PAUSE_GAME, Lang.get("hotwire.settings.pause"), read(PAUSE_CHOICES),
-                        PAUSE_ORDER.indexOf(this.pauseGame)),
-                new AdvancedOption(KEY_ALERT, Lang.get("hotwire.settings.key_alert"), read(KEY_ALERT_CHOICES),
-                        KEY_ALERT_ORDER.indexOf(this.keyAlert)),
-                new AdvancedOption(AUTO_FILL, Lang.get("hotwire.settings.auto_fill"), read(AUTO_FILL_CHOICES),
-                        AUTO_FILL_ORDER.indexOf(this.autoFill)),
-                new AdvancedOption(UPDATE_CHECKS, Lang.get("hotwire.settings.update_checks"),
-                        read(UPDATE_CHECKS_CHOICES), UPDATE_CHECKS_ORDER.indexOf(this.updateChecks)),
-                new AdvancedOption(DEVELOPER, Lang.get("hotwire.settings.developer"), read(DEVELOPER_CHOICES),
-                        DEVELOPER_ORDER.indexOf(this.developer), Lang.get("hotwire.settings.developer.tag")));
+    public List<SettingsSection> getSections(DevSetup dev) {
+        return List.of(new SettingsSection(Lang.get("hotwire.settings.section.general"), List.of(
+                        option(PAUSE_GAME, "hotwire.settings.pause", PAUSE_CHOICES, PAUSE_ORDER, this.pauseGame),
+                        option(KEY_ALERT, "hotwire.settings.key_alert", KEY_ALERT_CHOICES, KEY_ALERT_ORDER,
+                                this.keyAlert))),
+                new SettingsSection(Lang.get("hotwire.settings.section.switching"), List.of(
+                        option(OFF_LASTS, "hotwire.settings.off_lasts", OFF_LASTS_CHOICES, OFF_LASTS_ORDER,
+                                this.offLasts),
+                        option(IN_WORLD, "hotwire.settings.in_world", IN_WORLD_CHOICES, IN_WORLD_ORDER, this.inWorld),
+                        option(NESTED_JARS, "hotwire.settings.nested", NESTED_CHOICES, NESTED_ORDER,
+                                this.nestedJars))),
+                new SettingsSection(Lang.get("hotwire.settings.section.anti_crash"), List.of(
+                        option(ANTI_CRASH, "hotwire.settings.anti_crash", ANTI_CRASH_CHOICES, ANTI_CRASH_ORDER,
+                                this.antiCrash))),
+                new SettingsSection(Lang.get("hotwire.settings.section.updates"), List.of(
+                        option(UPDATE_CHECKS, "hotwire.settings.update_checks", UPDATE_CHECKS_CHOICES,
+                                UPDATE_CHECKS_ORDER, this.updateChecks),
+                        option(AUTO_FILL, "hotwire.settings.auto_fill", AUTO_FILL_CHOICES, AUTO_FILL_ORDER,
+                                this.autoFill))),
+                findDeveloperSection(dev));
     }
 
-    private static List<AdvancedOption.Choice> read(List<String> keys) {
-        return keys.stream().map(choice -> new AdvancedOption.Choice(Lang.get(choice), Lang.get(choice + ".note")))
+    private SettingsSection findDeveloperSection(DevSetup dev) {
+        List<SettingOption> options = List.of(
+                option(DEV_RELOAD, "hotwire.settings.dev_reload", DEV_RELOAD_CHOICES, DEV_RELOAD_ORDER,
+                        this.devReload),
+                option(RELOAD_POPUPS, "hotwire.settings.reload_popups", RELOAD_POPUPS_CHOICES, RELOAD_POPUPS_ORDER,
+                        this.reloadPopups),
+                option(DEVELOPER, "hotwire.settings.developer", DEVELOPER_CHOICES, DEVELOPER_ORDER, this.developer));
+        String title = Lang.get("hotwire.settings.section.developer");
+        if (!dev.inSetup()) {
+            return new SettingsSection(title, Lang.get("hotwire.settings.developer.not_setup"),
+                    SettingsSection.Tone.PLAIN, false, options);
+        }
+        return switch (dev.jvm()) {
+            case FULL -> new SettingsSection(title, Lang.get("hotwire.settings.developer.full"),
+                    SettingsSection.Tone.GOOD, true, options);
+            case JETBRAINS_WITHOUT_FLAG -> new SettingsSection(title, Lang.get("hotwire.settings.developer.no_flag"),
+                    SettingsSection.Tone.WARN, true, options);
+            case OTHER -> new SettingsSection(title, Lang.get("hotwire.settings.developer.other_java"),
+                    SettingsSection.Tone.WARN, true, options);
+        };
+    }
+
+    private static <E> SettingOption option(String id, String label, List<String> choices, List<E> order, E now) {
+        return new SettingOption(id, Lang.get(label), read(choices), order.indexOf(now));
+    }
+
+    private static List<SettingOption.Choice> read(List<String> keys) {
+        return keys.stream().map(choice -> new SettingOption.Choice(Lang.get(choice), Lang.get(choice + ".note")))
                 .toList();
     }
 
@@ -221,11 +291,19 @@ public final class HotwireSettings {
         Developer dev = DEVELOPER.equals(option) ? pick(DEVELOPER_ORDER, choice, this.developer) : this.developer;
         UpdateChecks checks = UPDATE_CHECKS.equals(option) ? pick(UPDATE_CHECKS_ORDER, choice, this.updateChecks)
                 : this.updateChecks;
+        AntiCrash crash = ANTI_CRASH.equals(option) ? pick(ANTI_CRASH_ORDER, choice, this.antiCrash) : this.antiCrash;
+        DevReload reload = DEV_RELOAD.equals(option) ? pick(DEV_RELOAD_ORDER, choice, this.devReload) : this.devReload;
+        ReloadPopups popups = RELOAD_POPUPS.equals(option) ? pick(RELOAD_POPUPS_ORDER, choice, this.reloadPopups)
+                : this.reloadPopups;
         if (world == this.inWorld && nested == this.nestedJars && lasts == this.offLasts && pause == this.pauseGame
                 && alert == this.keyAlert && fill == this.autoFill && dev == this.developer
-                && checks == this.updateChecks) {
+                && checks == this.updateChecks && crash == this.antiCrash && reload == this.devReload
+                && popups == this.reloadPopups) {
             return;
         }
+        this.antiCrash = crash;
+        this.devReload = reload;
+        this.reloadPopups = popups;
         this.updateChecks = checks;
         this.developer = dev;
         this.autoFill = fill;
@@ -247,6 +325,9 @@ public final class HotwireSettings {
         saved.autoFill = this.autoFill;
         saved.developer = this.developer;
         saved.updateChecks = this.updateChecks;
+        saved.antiCrash = this.antiCrash;
+        saved.devReload = this.devReload;
+        saved.reloadPopups = this.reloadPopups;
         saved.promptAcceptedFor = this.promptAcceptedFor;
         saved.keyCardShown = this.keyCardShown;
         saved.favorites = this.favorites.stream().sorted().toList();

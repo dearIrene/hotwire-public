@@ -1,6 +1,7 @@
 package dev.moon.hotwire.fabric.update;
 
 import dev.moon.hotwire.fabric.ModPolicy;
+import dev.moon.hotwire.fabric.dev.DevSession;
 import dev.moon.hotwire.jar.FileHashes;
 import dev.moon.hotwire.jar.JarLookup;
 import dev.moon.hotwire.jar.ModJar;
@@ -643,6 +644,9 @@ public final class ModUpdater {
     }
 
     private String queueToStay(ModManifest manifest, Path running, Path incoming, UpdatePlan plan) {
+        if (DevSession.isDevMod(manifest.id())) {
+            return "";
+        }
         try {
             this.queueSwap(manifest, running, incoming, plan);
             return " The new jar takes the old one's place in your mods folder when you close the game; cancel that"

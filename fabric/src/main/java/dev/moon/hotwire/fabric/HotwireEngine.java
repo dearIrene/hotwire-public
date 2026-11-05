@@ -2,11 +2,13 @@ package dev.moon.hotwire.fabric;
 
 import dev.moon.hotwire.api.SwitchResult;
 import dev.moon.hotwire.concurrent.Tasks;
+import dev.moon.hotwire.config.DevSetup;
 import dev.moon.hotwire.config.HotwireSettings;
 import dev.moon.hotwire.config.ProfileStore;
 import dev.moon.hotwire.fabric.add.AddSupport;
 import dev.moon.hotwire.fabric.add.ModAdder;
 import dev.moon.hotwire.fabric.add.WorldReopen;
+import dev.moon.hotwire.fabric.dev.DevSession;
 import dev.moon.hotwire.fabric.rebuild.GameClasses;
 import dev.moon.hotwire.fabric.registration.GameRegistrations;
 import dev.moon.hotwire.fabric.registration.ModLifecycle;
@@ -17,7 +19,6 @@ import dev.moon.hotwire.fabric.screen.HotwireScreen;
 import dev.moon.hotwire.fabric.screen.ModIcons;
 import dev.moon.hotwire.fabric.store.ModStore;
 import dev.moon.hotwire.fabric.store.UpdateCheck;
-import dev.moon.hotwire.fabric.update.DevFolderWatch;
 import dev.moon.hotwire.fabric.update.UpdateSupport;
 import dev.moon.hotwire.modrinth.Downloads;
 import dev.moon.hotwire.plan.ModGraph;
@@ -28,12 +29,12 @@ import dev.moon.hotwire.switching.ModSwitcher;
 import dev.moon.hotwire.switching.PlayerMessages;
 import dev.moon.hotwire.ui.AddMode;
 import dev.moon.hotwire.ui.AddPreview;
-import dev.moon.hotwire.ui.AdvancedOption;
 import dev.moon.hotwire.ui.CacheHost;
 import dev.moon.hotwire.ui.Canvas;
 import dev.moon.hotwire.ui.JarHost;
 import dev.moon.hotwire.ui.Lang;
 import dev.moon.hotwire.ui.ModScreen;
+import dev.moon.hotwire.ui.SettingsSection;
 import dev.moon.hotwire.ui.Progress;
 import dev.moon.hotwire.ui.StoreCacheView;
 import dev.moon.hotwire.ui.StoreScreen;
@@ -92,7 +93,7 @@ public final class HotwireEngine implements ModScreen.Game, AutoCloseable {
     private final PendingChanges pending;
     final ProfileStore profiles;
     private final HotwireSettings settings;
-    private final @Nullable DevFolderWatch devFolder;
+    private final @Nullable DevSession dev;
     final Tasks tasks = new Tasks(1, Minecraft.getInstance());
     @Nullable ModScreen screen;
 
@@ -123,8 +124,8 @@ public final class HotwireEngine implements ModScreen.Game, AutoCloseable {
         this.pending = new PendingChanges(queue, folders);
         this.bound = bound;
 
-        this.devFolder = settings.isDeveloperOn() ? new DevFolderWatch(FabricLoader.getInstance().getGameDir()
-                .resolve("hotwire").resolve("dev"), this::updateFromDevFolder) : null;
+        this.dev = settings.isDevReloadOn(DevSetups.get().inSetup()) ? DevSession.start(DevSetups.getBuildFolder(),
+                this.tasks, new DevEngine(this::findParts, this::getSwitchRefusal, installed, settings)) : null;
 
         if (bound instanceof Bound.Ready ready) {
             ready.parts().instrumentation().addTransformer(ready.parts().loadTimeMixer());
@@ -185,17 +186,14 @@ public final class HotwireEngine implements ModScreen.Game, AutoCloseable {
         return this.installed.getGraph().getIds().stream().filter(ModPolicy::isSwitchable).filter(this::isOn).toList();
     }
 
-    private void updateFromDevFolder(Path jar) {
-        JvmParts parts = this.findParts();
-        if (parts != null) {
-            parts.updates().updateAll(List.of(jar));
-        }
-    }
-
     @Override
     public void close() {
-        if (this.devFolder != null) {
-            this.devFolder.close();
+        if (this.dev != null) {
+            try {
+                this.dev.close();
+            } catch (IOException e) {
+                LOGGER.debug("[Hotwire] the build folders' watch did not close", e);
+            }
         }
         JvmParts parts = this.findParts();
 
@@ -411,12 +409,12 @@ public final class HotwireEngine implements ModScreen.Game, AutoCloseable {
     }
 
     @Override
-    public List<AdvancedOption> getAdvancedOptions() {
-        return this.settings.getOptions();
+    public List<SettingsSection> getSettingsSections() {
+        return this.settings.getSections(DevSetups.get());
     }
 
     @Override
-    public void chooseAdvanced(String option, int choice) {
+    public void chooseSetting(String option, int choice) {
         ActionJournal.Entry journal = ActionJournal.get().begin(ActionJournal.Action.SETTING, option + ":" + choice);
         this.settings.choose(option, choice);
         ModPolicy.setNestedJars(this.settings.getNestedJars());

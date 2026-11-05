@@ -106,11 +106,11 @@ public final class ModScreen implements JarHost {
             return false;
         }
 
-        default List<AdvancedOption> getAdvancedOptions() {
+        default List<SettingsSection> getSettingsSections() {
             return List.of();
         }
 
-        default void chooseAdvanced(String option, int choice) {
+        default void chooseSetting(String option, int choice) {
         }
 
         default CacheHost getCaches() {
@@ -196,7 +196,7 @@ public final class ModScreen implements JarHost {
     final ProgressPanel progress;
     private final AddPanel addPanel;
     private final UpdatePanel updatePanel;
-    private final AdvancedPanel advancedPanel;
+    private final SettingsPanel settingsPanel;
     private final CacheFillPanel cacheFillPanel;
     private final ManageCachePanel manageCachePanel;
     final List<Panel> panels;
@@ -254,7 +254,7 @@ public final class ModScreen implements JarHost {
         this.cacheFillPanel = new CacheFillPanel(caches::getCacheFill, caches::fillCache,
                 this::openManageCache, caches::setCacheLimit, this.modScreenButtons::closePanels);
         this.advanced = new Button(Lang.get("hotwire.screen.advanced"), Lang.get("hotwire.screen.advanced_short"),
-                false, this::openAdvanced);
+                false, this::openSettings);
         this.switchCache = new Button(Lang.get("hotwire.screen.switch_cache"),
                 Lang.get("hotwire.screen.switch_cache_short"), false, this.cacheFillPanel::present);
         this.switchCache.setTint(Palette.GOOD);
@@ -271,7 +271,7 @@ public final class ModScreen implements JarHost {
         this.progress.showIconsFrom(game::findIcon);
         this.addPanel = new AddPanel(this::confirmAdd, game::addMod, this.modScreenButtons::closePanels);
         this.updatePanel = new UpdatePanel(this::confirmUpdate, game::updateMod, this.modScreenButtons::closePanels);
-        this.advancedPanel = new AdvancedPanel(this::chooseAdvanced, this.modScreenButtons::closePanels);
+        this.settingsPanel = new SettingsPanel(this::chooseSetting, this.modScreenButtons::closePanels);
         this.ahead = new AheadRequests(game);
         this.pendingActions = new PendingActions(game, this::showMessage);
         this.pendingPanel = new PendingPanel(this::actOnPending, this::cleanUpEarlier, this::closePending,
@@ -312,7 +312,7 @@ public final class ModScreen implements JarHost {
             base.add(part);
         }
 
-        this.panels = List.of(this.advancedPanel, this.pendingPanel, this.updatesPanel, this.addPanel,
+        this.panels = List.of(this.settingsPanel, this.pendingPanel, this.updatesPanel, this.addPanel,
                 this.updatePanel, this.progress, this.reopenPanel, this.carriedPanel, this.alsoOffPanel, this.firstOpen,
                 this.selfUpdate,
                 this.reportPanel, this.cacheFillPanel, this.manageCachePanel);
@@ -494,13 +494,17 @@ public final class ModScreen implements JarHost {
         this.game.update(jar, method);
     }
 
-    private void openAdvanced() {
-        this.advancedPanel.open(this.game.getAdvancedOptions());
+    public void openSettings() {
+        this.settingsPanel.open(this.game.getSettingsSections());
     }
 
-    private void chooseAdvanced(String option, int choice) {
-        this.game.chooseAdvanced(option, choice);
-        this.advancedPanel.setOptions(this.game.getAdvancedOptions());
+    public void scrollSettingsToEnd() {
+        this.settingsPanel.scrollToEnd();
+    }
+
+    private void chooseSetting(String option, int choice) {
+        this.game.chooseSetting(option, choice);
+        this.settingsPanel.setSections(this.game.getSettingsSections());
     }
 
     public void setUpdates(List<UpdateOffer> offers, boolean checked) {

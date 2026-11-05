@@ -3,6 +3,8 @@ package dev.moon.hotwire.fabric;
 import dev.moon.hotwire.cache.CacheStore;
 import dev.moon.hotwire.config.HotwireSettings;
 import dev.moon.hotwire.fabric.add.AddSupport;
+import dev.moon.hotwire.fabric.dev.DevMod;
+import dev.moon.hotwire.fabric.dev.DevSession;
 import dev.moon.hotwire.fabric.rebuild.ConstantPools;
 import dev.moon.hotwire.fabric.rebuild.ForeignPatches;
 import dev.moon.hotwire.fabric.rebuild.GameClasses;
@@ -186,6 +188,23 @@ final class EngineStart {
                 LOGGER.info("[Hotwire] {} runs from {}, outside the mods folder", id, jar.getFileName());
             } catch (ModJarException e) {
                 LOGGER.warn("[Hotwire] {} runs from {}, which could not be read: {}", id, jar, e.getMessage());
+            }
+        }
+
+        if (DevSetups.get().inSetup()) {
+            for (DevMod mod : DevMod.find()) {
+                if (jarOf.containsKey(mod.id())) {
+                    continue;
+                }
+                try {
+                    Path jar = DevSession.takeStart(mod, DevSetups.getBuildFolder());
+                    jars.add(ModJarReader.read(jar, scans));
+                    topLevel.add(mod.id());
+                    jarOf.put(mod.id(), jar);
+                    LOGGER.info("[Hotwire] {} runs from its build folders {}", mod.id(), mod.folders());
+                } catch (IOException | ModJarException e) {
+                    LOGGER.warn("[Hotwire] {}'s build folders could not be read: {}", mod.id(), e.toString());
+                }
             }
         }
         scans.flush();
@@ -493,7 +512,7 @@ final class EngineStart {
         CrashGuard.install(installed, engine.getTasks(), () -> {
             HotwireEngine.JvmParts parts = started.findParts();
             return parts == null ? null : parts.runner();
-        }, say, started::writeReport);
+        }, say, started::writeReport, () -> started.getSettings().isAntiCrashOn());
         OwnThrowNotice.install(engine.getTasks(), say,
                 why -> started.writeReport(Lang.get("hotwire.report.file.hotwire_error"), why));
         HotwireEngine.JvmParts ready = started.findParts();
