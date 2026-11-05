@@ -10,9 +10,9 @@ import dev.moon.hotwire.api.SwitchResult;
 import dev.moon.hotwire.fabric.add.ModAdder;
 import dev.moon.hotwire.fabric.store.UpdateCheck;
 import dev.moon.hotwire.fabric.update.ModUpdater;
-import dev.moon.hotwire.modrinth.Downloads;
 import dev.moon.hotwire.jar.JarLookup;
 import dev.moon.hotwire.jar.ModManifest;
+import dev.moon.hotwire.modrinth.Downloads;
 import dev.moon.hotwire.plan.SwitchPlan;
 import dev.moon.hotwire.switching.CallerBlocks;
 import dev.moon.hotwire.switching.ModSwitcher;
@@ -21,6 +21,7 @@ import dev.moon.hotwire.ui.AddMode;
 import dev.moon.hotwire.ui.AddPreview;
 import dev.moon.hotwire.ui.Lang;
 import dev.moon.hotwire.ui.UpdateMethod;
+import dev.moon.hotwire.update.PendingChange;
 import dev.moon.hotwire.update.UpdateOffer;
 import java.io.IOException;
 import java.io.InputStream;
@@ -239,6 +240,7 @@ final class ApiChanges {
     static List<PendingTask> findPending() {
         HotwireEngine engine = HotwireClient.findEngine();
         return engine == null ? List.of() : engine.getPendingChanges().stream()
+                .filter(change -> !(change instanceof PendingChange.Revertable))
                 .map(change -> new PendingTask(change.modId(), change.name())).toList();
     }
 
