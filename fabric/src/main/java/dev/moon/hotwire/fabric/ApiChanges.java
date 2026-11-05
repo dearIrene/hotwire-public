@@ -245,8 +245,12 @@ final class ApiChanges {
     static List<PendingTask> findPending() {
         HotwireEngine engine = HotwireClient.findEngine();
         return engine == null ? List.of() : engine.getPendingChanges().stream()
-                .filter(change -> !(change instanceof PendingChange.Revertable))
-                .map(change -> new PendingTask(change.modId(), change.name())).toList();
+                .map(change -> new PendingTask(change.modId(), change.name(), switch (change) {
+                    case PendingChange.Update update -> PendingTask.Kind.UPDATE;
+                    case PendingChange.Revertable kept -> PendingTask.Kind.REVERTABLE;
+                    case PendingChange.Copied copied -> PendingTask.Kind.COPIED;
+                    case PendingChange.OffAtStart off -> PendingTask.Kind.OFF_AT_START;
+                })).toList();
     }
 
     static boolean cancelPending(String modId) {

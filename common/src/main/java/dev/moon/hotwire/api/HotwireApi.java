@@ -43,6 +43,8 @@ public interface HotwireApi {
 
     List<PendingTask> getPendingTasks();
 
+    List<PendingTask> getAllPendingTasks();
+
     boolean cancelPendingTask(String modId);
 
     boolean isAddedThisSession(String id);

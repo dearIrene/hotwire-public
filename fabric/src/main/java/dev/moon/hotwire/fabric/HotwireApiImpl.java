@@ -56,7 +56,7 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 public final class HotwireApiImpl implements HotwireApi {
-    private static final int REVISION = 7;
+    private static final int REVISION = 8;
     private static final StackWalker STACK = StackWalker.getInstance(StackWalker.Option.RETAIN_CLASS_REFERENCE);
     private static final Logger LOGGER = LoggerFactory.getLogger(HotwireApiImpl.class);
 
@@ -116,6 +116,11 @@ public final class HotwireApiImpl implements HotwireApi {
 
     @Override
     public List<PendingTask> getPendingTasks() {
+        return ApiChanges.findPending().stream().filter(task -> task.kind() != PendingTask.Kind.REVERTABLE).toList();
+    }
+
+    @Override
+    public List<PendingTask> getAllPendingTasks() {
         return ApiChanges.findPending();
     }
 
