@@ -68,6 +68,11 @@ public final class CallerOwner {
                 }
                 continue;
             }
+
+            if (frame.method().equals("<clinit>")
+                    && (this.libraries.contains(mod) || this.nestedLibrary.test(frame.type()))) {
+                return new Owner(mod, null);
+            }
             if (!this.libraries.contains(mod) && !this.nestedLibrary.test(frame.type())) {
                 return new Owner(mod, firstLibrary);
             }
