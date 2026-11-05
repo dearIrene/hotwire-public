@@ -353,6 +353,7 @@ final class FieldSites {
 
     static void replay(Set<String> mixins) {
         for (String mixin : mixins) {
+            Set<String> given = new HashSet<>();
             for (Init init : INITS.getOrDefault(mixin, List.of())) {
                 List<Object> made = OffWindowObjects.getLive(init.className());
                 int failed = 0;
@@ -369,10 +370,13 @@ final class FieldSites {
                 if (!made.isEmpty()) {
                     LOGGER.info("[Hotwire] {} objects of {} made while {} was off were given its setup, {} failed",
                             made.size(), init.className(), mixin, failed);
+                    given.add(init.className());
+                }
+            }
 
-                    if (!hasOtherOff(init.className(), mixin)) {
-                        OffWindowObjects.forget(init.className());
-                    }
+            for (String className : given) {
+                if (!hasOtherOff(className, mixin)) {
+                    OffWindowObjects.forget(className);
                 }
             }
         }
