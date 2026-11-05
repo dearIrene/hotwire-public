@@ -87,10 +87,13 @@ api.requestAdd("zoomify", "").thenAccept(add -> {   // "" for the newest, or a v
     add.getTitle();
     add.getLines();       // show every line as it is
     add.needsReopen();
+    add.canAdd();         // false when it can't be added at all, the lines say why
     add.accept();         // tells you how it went like a switch does
     add.cancel();
 });
 ```
+
+Some mods can only go in at the next start. The lines say so and `accept()` queues them. A mod that carries a newer version of a library the game runs updates that library as it goes in, and the lines say that too.
 
 The store's other buttons:
 
@@ -107,7 +110,15 @@ api.resumeDownload(download.id());
 api.stopDownload(download.id());
 ```
 
-`getStoreDownloads` has every download going: mods, updates, packs and Hotwire's own update. Each one has a `name()`, a `fraction()` for your bar and a `state()`. Pausing lets go of the connection and keeps what came, resuming goes on from there, and stopping throws away what came.
+`getStoreDownloads` has every download going: mods, updates, packs and Hotwire's own update, oldest first. One that ended stays in the list for a moment so you can show how it went.
+
+- `name()`, the file
+- `fraction()`, 0 to 1 for your bar. `done()` and `total()` are the bytes, `done()` moves a percent at a time and `total()` is 0 if Modrinth didn't say the size
+- `state()`, one of `WAITING`, `GETTING`, `PAUSED`, `DONE`, `FAILED` or `STOPPED`
+- `over()` and `ok()`, whether it ended and whether it worked
+- `id()`, for the three calls above
+
+Pausing lets go of the connection and keeps what came, resuming goes on from there, and stopping throws away what came. Stopping a mod's download stops the libraries it came with too, the mod is no use without them. All three return false once the download is over. They need revision 7, so check `getRevision()` first.
 
 To add a jar the player picked, use `planChange` below.
 
