@@ -182,8 +182,10 @@ final class StoreApi {
         findProject(new StoreQuery(kind, "", "", 0, "", ""), idOrSlug).thenAccept(found -> found.ifPresent(project -> {
             ModStore store = findStore();
             if (store != null) {
-                Minecraft.getInstance().execute(() -> store.getModel().getPacks().fetch(toKind(kind), project.id(),
-                        versionId, project.name()));
+                Minecraft.getInstance().execute(() -> {
+                    Downloads.quietNext();
+                    store.getModel().getPacks().fetch(toKind(kind), project.id(), versionId, project.name());
+                });
             }
         }));
     }
@@ -230,8 +232,13 @@ final class StoreApi {
                     .filter(one -> versionId.isEmpty() || one.id().equals(versionId)).findFirst()
                     .orElseThrow(() -> new IOException(Lang.get("hotwire.store.no_version", idOrSlug)));
             Files.createDirectories(folder);
-            getClient().fetchTo(version, folder.resolve(version.fileName().replaceAll("[^A-Za-z0-9._+ -]", "_")),
-                    SAVES);
+            Runnable endQuiet = Downloads.beginQuiet();
+            try {
+                getClient().fetchTo(version, folder.resolve(version.fileName().replaceAll("[^A-Za-z0-9._+ -]", "_")),
+                        SAVES);
+            } finally {
+                endQuiet.run();
+            }
             return new SwitchResult(SwitchResult.Kind.DONE, List.of(), Lang.get("hotwire.store.saved", idOrSlug,
                     folder));
         }).exceptionally(failure -> new SwitchResult(SwitchResult.Kind.FAILED, List.of(),

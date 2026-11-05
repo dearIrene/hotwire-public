@@ -7,6 +7,7 @@ import dev.moon.hotwire.api.StoreQuery;
 import dev.moon.hotwire.api.SwitchResult;
 import dev.moon.hotwire.fabric.add.ModAdder;
 import dev.moon.hotwire.fabric.store.ModStore;
+import dev.moon.hotwire.modrinth.Downloads;
 import dev.moon.hotwire.ui.AddMode;
 import dev.moon.hotwire.ui.AddPreview;
 import dev.moon.hotwire.ui.Lang;
@@ -81,6 +82,8 @@ final class StoreApiAdd {
             made.complete(refusal.apply(why == null ? "" : why));
             return;
         }
+        Runnable endQuiet = Downloads.beginQuiet();
+        made.whenComplete((done, failed) -> endQuiet.run());
         StoreApi.findProject(new StoreQuery(StoreKind.MOD, "", "", 0, "", ""), idOrSlug)
                 .whenComplete((found, failure) -> {
                     if (failure != null || found == null || found.isEmpty()) {

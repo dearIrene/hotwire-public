@@ -7,6 +7,7 @@ import java.util.List;
 import java.util.Map;
 import java.util.Set;
 import java.util.concurrent.ConcurrentHashMap;
+import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.concurrent.atomic.AtomicInteger;
 import java.util.function.Consumer;
 import java.util.function.LongConsumer;
@@ -151,15 +152,42 @@ public final class Downloads {
 
     private static volatile @Nullable Consumer<Job> whenChanged;
 
+    private static final AtomicInteger QUIET_CALLS =
+            new AtomicInteger();
+    private static final AtomicInteger QUIET_NEXT =
+            new AtomicInteger();
+    private static final Set<Integer> QUIET_JOBS = ConcurrentHashMap.newKeySet();
+
     private final List<Job> jobs = new ArrayList<>();
 
     public static void onEveryChange(Consumer<Job> told) {
         whenChanged = told;
     }
 
+    public static Runnable beginQuiet() {
+        QUIET_CALLS.incrementAndGet();
+        AtomicBoolean ended = new AtomicBoolean();
+        return () -> {
+            if (ended.compareAndSet(false, true)) {
+                QUIET_CALLS.decrementAndGet();
+            }
+        };
+    }
+
+    public static void quietNext() {
+        QUIET_NEXT.incrementAndGet();
+    }
+
+    private static boolean takeQuiet() {
+        return QUIET_CALLS.get() > 0 || QUIET_NEXT.getAndUpdate(left -> Math.max(0, left - 1)) > 0;
+    }
+
     public synchronized int begin(String name, long total) {
         QUEUES.add(this);
         int id = NEXT.incrementAndGet();
+        if (takeQuiet()) {
+            QUIET_JOBS.add(id);
+        }
         Job job = new Job(id, name, 0, total, State.WAITING, 0);
         this.jobs.add(job);
         CONTROLS.put(id, new Control(id));
@@ -217,7 +245,7 @@ public final class Downloads {
 
     private static void tell(Job job) {
         Consumer<Job> told = whenChanged;
-        if (told != null) {
+        if (told != null && !QUIET_JOBS.contains(job.id())) {
             told.accept(job);
         }
     }

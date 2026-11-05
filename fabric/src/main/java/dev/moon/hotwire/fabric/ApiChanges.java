@@ -10,6 +10,7 @@ import dev.moon.hotwire.api.SwitchResult;
 import dev.moon.hotwire.fabric.add.ModAdder;
 import dev.moon.hotwire.fabric.store.UpdateCheck;
 import dev.moon.hotwire.fabric.update.ModUpdater;
+import dev.moon.hotwire.modrinth.Downloads;
 import dev.moon.hotwire.jar.JarLookup;
 import dev.moon.hotwire.jar.ModManifest;
 import dev.moon.hotwire.plan.SwitchPlan;
@@ -279,8 +280,13 @@ final class ApiChanges {
 
     private static List<Path> fetchAll(UpdateCheck check, List<UpdateOffer> offers) throws IOException {
         List<Path> jars = new ArrayList<>();
-        for (UpdateOffer offer : offers) {
-            jars.addAll(check.fetchWithNeeds(offer, said -> { }));
+        Runnable endQuiet = Downloads.beginQuiet();
+        try {
+            for (UpdateOffer offer : offers) {
+                jars.addAll(check.fetchWithNeeds(offer, said -> { }));
+            }
+        } finally {
+            endQuiet.run();
         }
         return jars;
     }
