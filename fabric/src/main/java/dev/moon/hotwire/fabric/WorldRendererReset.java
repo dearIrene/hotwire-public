@@ -19,7 +19,8 @@ final class WorldRendererReset {
 
     static boolean isHeld(List<Class<?>> types) {
         Minecraft game = Minecraft.getInstance();
-        if (game.level == null || types.isEmpty()) {
+        List<Class<?>> mods = types.stream().filter(type -> !isGame(type)).toList();
+        if (game.level == null || mods.isEmpty()) {
             return false;
         }
         Set<Object> seen = Collections.newSetFromMap(new IdentityHashMap<>());
@@ -30,7 +31,7 @@ final class WorldRendererReset {
                 if (!seen.add(object)) {
                     continue;
                 }
-                for (Class<?> type : types) {
+                for (Class<?> type : mods) {
                     if (type.isInstance(object)) {
                         return true;
                     }
@@ -49,7 +50,8 @@ final class WorldRendererReset {
                     continue;
                 }
                 Object held = read(field, object);
-                if (held != null && !held.getClass().isArray() && !isJdk(held.getClass())) {
+                if (held != null && !held.getClass().isArray() && !isJdk(held.getClass())
+                        && !(held instanceof Minecraft)) {
                     into.add(held);
                 }
             }
@@ -63,6 +65,11 @@ final class WorldRendererReset {
         } catch (ReflectiveOperationException | RuntimeException e) {
             return null;
         }
+    }
+
+    private static boolean isGame(Class<?> type) {
+        String name = type.getName();
+        return name.startsWith("net.minecraft.") || name.startsWith("com.mojang.");
     }
 
     private static boolean isJdk(Class<?> type) {
