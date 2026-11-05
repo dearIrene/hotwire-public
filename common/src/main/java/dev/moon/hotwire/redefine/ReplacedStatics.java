@@ -28,7 +28,11 @@ public final class ReplacedStatics {
             IdentityHashMap<Object, Object> parts, InitHookReplay.StaticWriter writer, Set<String> mods) {
     }
 
+    public record Written(Field field, Object old, Object made, Set<String> mods) {
+    }
+
     private static final List<Change> CHANGES = new ArrayList<>();
+    private static final List<Written> UNFOLLOWED = new ArrayList<>();
 
     private static @Nullable IdentityHashMap<Object, Object> batch;
     private static Set<String> goingOff = Set.of();
@@ -52,6 +56,19 @@ public final class ReplacedStatics {
 
     static synchronized void noteWritten(Field field, Object old, Object made, InitHookReplay.StaticWriter writer) {
         note(new Change(field, old, made, Map.of(), new IdentityHashMap<>(), writer, goingOff));
+        if (!goingOff.isEmpty()) {
+            UNFOLLOWED.add(new Written(field, old, made, goingOff));
+        }
+    }
+
+    public static synchronized List<Written> takeWritten() {
+        List<Written> taken = List.copyOf(UNFOLLOWED);
+        UNFOLLOWED.clear();
+        return taken;
+    }
+
+    public static synchronized void noteFollowed(Field field, Object old, Object made, Set<String> mods) {
+        note(new Change(field, old, made, Map.of(), new IdentityHashMap<>(), InitHookReplay.getStatics(), mods));
     }
 
     static synchronized void noteInPlace(Field field, Object holder, Map<Field, Object> before,

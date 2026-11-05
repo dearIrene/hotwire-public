@@ -5,6 +5,7 @@ import dev.moon.hotwire.fabric.mixin.core.world.item.CreativeModeTabsAccessor;
 import dev.moon.hotwire.jvm.LoadedClassList;
 import dev.moon.hotwire.redefine.ClassRebuilder;
 import dev.moon.hotwire.redefine.FieldSlots;
+import dev.moon.hotwire.redefine.ReplacedStatics;
 import dev.moon.hotwire.switching.SwitchTimes;
 import java.lang.instrument.Instrumentation;
 import java.lang.management.ClassLoadingMXBean;
@@ -107,6 +108,7 @@ public final class FieldReferences {
         this.removeElements(mods, on, scan, planned, false);
         SwitchTimes.mark("field references: elements");
         mods.forEach(mod -> this.recomputeStatics(mod, scan.byName(), getOthers(mods, on)));
+        this.followWrittenStatics(getOthers(mods, on));
         SwitchTimes.mark("field references: statics");
         this.loadedChecks.match(mods, true, this.lambdas.open(), getOthers(mods, on));
         SwitchTimes.mark("field references: loaded checks");
@@ -400,6 +402,38 @@ public final class FieldReferences {
             }
         }
         return this.initializedCheck;
+    }
+
+    private void followWrittenStatics(Predicate<Class<?>> others) {
+        List<ReplacedStatics.Written> written = ReplacedStatics.takeWritten();
+        if (written.isEmpty()) {
+            return;
+        }
+        List<StaticRecomputer.Recomputation> first = new ArrayList<>();
+        Set<String> mods = new HashSet<>();
+        for (ReplacedStatics.Written one : written) {
+            first.add(new StaticRecomputer.Recomputation(FieldSlots.Slot.of(one.field()), null, one.old(), one.made()));
+            mods.addAll(one.mods());
+        }
+        Predicate<Class<?>> initialized = this::isInitialized;
+        StaticRecomputer.Writer writer = this::write;
+        List<StaticRecomputer.Recomputation> made = this.recomputer.recomputeReaders(first, this.lambdas.open(),
+                this.instrumentation, initialized.and(others), writer);
+        for (StaticRecomputer.Recomputation one : made) {
+            try {
+                Field field = one.field().asField();
+                field.setAccessible(true);
+                ReplacedStatics.noteFollowed(field, one.old(), one.made(), Set.copyOf(mods));
+            } catch (NoSuchFieldException | RuntimeException | LinkageError e) {
+                LOGGER.warn("[Hotwire] {} will not go back at the on of {}: {}", one.field().getName(), mods,
+                        e.toString());
+            }
+        }
+        if (!made.isEmpty()) {
+            LOGGER.info("[Hotwire] {} statics made from those made again were made again too: {}", made.size(),
+                    made.stream().map(one -> one.field().getDeclaringClass().getSimpleName() + "."
+                            + one.field().getName()).toList());
+        }
     }
 
     public void writeStatic(Field field, Object value) throws IllegalAccessException {

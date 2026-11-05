@@ -1,6 +1,7 @@
 package dev.moon.hotwire.redefine;
 
 import java.util.ArrayList;
+import java.util.HashSet;
 import java.util.List;
 import java.util.Set;
 import org.objectweb.asm.Handle;
@@ -15,6 +16,27 @@ import org.objectweb.asm.tree.MethodNode;
 
 public final class StaticRecomputation {
     private StaticRecomputation() {
+    }
+
+    public static Set<String> findMethodsHandingOn(byte[] bytes, Set<String> names) {
+        ClassNode node = RetainedInitializers.read(bytes);
+        Set<String> found = new HashSet<>();
+        for (MethodNode method : node.methods) {
+            if ((method.access & Opcodes.ACC_STATIC) == 0 || method.name.startsWith("<")
+                    || method.desc.endsWith(")V")) {
+                continue;
+            }
+            for (AbstractInsnNode insn : method.instructions) {
+                String named = insn instanceof FieldInsnNode field && field.getOpcode() == Opcodes.GETSTATIC
+                        ? field.owner + "." + field.name
+                        : insn instanceof MethodInsnNode call ? call.owner + "." + call.name : null;
+                if (named != null && names.contains(named)) {
+                    found.add(node.name + "." + method.name);
+                    break;
+                }
+            }
+        }
+        return found;
     }
 
     public static List<String> findMadeWith(byte[] launched, String mod) {

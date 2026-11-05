@@ -28,6 +28,9 @@ import org.slf4j.LoggerFactory;
 final class StaticRecomputer {
     private static final Logger LOGGER = LoggerFactory.getLogger(StaticRecomputer.class);
 
+    private static final int MOST_READERS_FOLLOWED = 32;
+    private static final int MOST_STEPS_DOWN = 16;
+
     record Recomputation(FieldSlots.Slot field, @Nullable Object holder, Object old, Object made) {
     }
 
@@ -116,8 +119,10 @@ final class StaticRecomputer {
         List<Recomputation> made = new ArrayList<>();
         List<Recomputation> level = first;
         ClassLoader game = StaticRecomputer.class.getClassLoader();
-        for (int depth = 0; depth < 6 && !level.isEmpty() && pools != null && made.size() < 300; depth++) {
-            Set<String> names = new HashSet<>();
+        Set<String> handing = Set.of();
+        for (int depth = 0; depth < 6 && (!level.isEmpty() || !handing.isEmpty()) && pools != null
+                && made.size() < 300; depth++) {
+            Set<String> names = new HashSet<>(handing);
             level.forEach(one -> names.add(findNameRead(one)));
             List<Class<?>> readers = Arrays.<Class<?>>stream(LoadedClassList.of(instrumentation)).parallel()
                     .filter(type -> Objects.equals(type.getClassLoader(), game) && !type.isHidden()
@@ -132,11 +137,17 @@ final class StaticRecomputer {
             } catch (RebuildException e) {
             }
             List<Recomputation> next = new ArrayList<>();
+            Set<String> handingOn = new HashSet<>();
             for (Class<?> reader : set) {
                 this.recomputeHolders(reader, replaced, writer, next);
+                byte[] bytes = this.rebuilder.getLoadedBytes().findKnown(reader);
+                if (bytes != null && set.size() <= MOST_READERS_FOLLOWED) {
+                    handingOn.addAll(StaticRecomputation.findMethodsHandingOn(bytes, names));
+                }
             }
             made.addAll(next);
             level = next;
+            handing = handingOn;
         }
         return made;
     }
@@ -199,7 +210,7 @@ final class StaticRecomputer {
     private boolean reaches(Object start, String mod, Set<Object> replaced, Set<String> generated) {
         Set<Object> seen = Collections.newSetFromMap(new IdentityHashMap<>());
         List<Object> step = List.of(start);
-        for (int depth = 0; depth < 6 && !step.isEmpty() && seen.size() < 2000; depth++) {
+        for (int depth = 0; depth < MOST_STEPS_DOWN && !step.isEmpty() && seen.size() < 2000; depth++) {
             List<Object> next = new ArrayList<>();
             for (Object one : step) {
                 Class<?> type = one.getClass();
