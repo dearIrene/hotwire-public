@@ -28,11 +28,15 @@ public final class ReplacedStatics {
             IdentityHashMap<Object, Object> parts, InitHookReplay.StaticWriter writer, Set<String> mods) {
     }
 
-    public record Written(Field field, Object old, Object made, Set<String> mods) {
+    public record StaticWrite(Field field, Object old, Object made) {
+    }
+
+    private record Undo(Set<String> mods, List<Runnable> steps) {
     }
 
     private static final List<Change> CHANGES = new ArrayList<>();
-    private static final List<Written> UNFOLLOWED = new ArrayList<>();
+    private static final List<StaticWrite> UNFOLLOWED = new ArrayList<>();
+    private static final List<Undo> UNDOS = new ArrayList<>();
 
     private static @Nullable IdentityHashMap<Object, Object> batch;
     private static Set<String> goingOff = Set.of();
@@ -57,18 +61,18 @@ public final class ReplacedStatics {
     static synchronized void noteWritten(Field field, Object old, Object made, InitHookReplay.StaticWriter writer) {
         note(new Change(field, old, made, Map.of(), new IdentityHashMap<>(), writer, goingOff));
         if (!goingOff.isEmpty()) {
-            UNFOLLOWED.add(new Written(field, old, made, goingOff));
+            UNFOLLOWED.add(new StaticWrite(field, old, made));
         }
     }
 
-    public static synchronized List<Written> takeWritten() {
-        List<Written> taken = List.copyOf(UNFOLLOWED);
+    public static synchronized List<StaticWrite> takeWritten() {
+        List<StaticWrite> written = List.copyOf(UNFOLLOWED);
         UNFOLLOWED.clear();
-        return taken;
+        return written;
     }
 
-    public static synchronized void noteFollowed(Field field, Object old, Object made, Set<String> mods) {
-        note(new Change(field, old, made, Map.of(), new IdentityHashMap<>(), InitHookReplay.getStatics(), mods));
+    public static synchronized void noteUndo(Set<String> mods, List<Runnable> steps) {
+        UNDOS.add(new Undo(Set.copyOf(mods), List.copyOf(steps)));
     }
 
     static synchronized void noteInPlace(Field field, Object holder, Map<Field, Object> before,
@@ -91,6 +95,13 @@ public final class ReplacedStatics {
 
     @SuppressWarnings("ReferenceEquality")
     public static synchronized void putBackFor(Collection<String> onAfter) {
+        UNDOS.removeIf(undo -> {
+            if (!onAfter.containsAll(undo.mods())) {
+                return false;
+            }
+            undo.steps().forEach(Runnable::run);
+            return true;
+        });
         IdentityHashMap<Object, Object> back = new IdentityHashMap<>();
         CHANGES.removeIf(change -> {
             if (!onAfter.containsAll(change.mods())) {

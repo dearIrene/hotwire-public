@@ -13,6 +13,7 @@ import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.Collection;
 import java.util.Collections;
+import java.util.HashMap;
 import java.util.HashSet;
 import java.util.IdentityHashMap;
 import java.util.List;
@@ -30,6 +31,7 @@ final class StaticRecomputer {
 
     private static final int MOST_READERS_FOLLOWED = 32;
     private static final int MOST_STEPS_DOWN = 16;
+    private final Map<Set<String>, Scan> scans = new HashMap<>();
 
     record Recomputation(FieldSlots.Slot field, @Nullable Object holder, Object old, Object made) {
     }
@@ -112,48 +114,60 @@ final class StaticRecomputer {
         return given;
     }
 
-    List<Recomputation> recomputeReaders(List<Recomputation> first, @Nullable ConstantPools pools,
-            Instrumentation instrumentation, Predicate<Class<?>> initialized, Writer writer) {
-        Set<Object> replaced = Collections.newSetFromMap(new IdentityHashMap<>());
-        first.forEach(one -> replaced.add(one.old()));
-        List<Recomputation> made = new ArrayList<>();
-        List<Recomputation> level = first;
-        ClassLoader game = StaticRecomputer.class.getClassLoader();
-        Set<String> handing = Set.of();
-        for (int depth = 0; depth < 6 && (!level.isEmpty() || !handing.isEmpty()) && pools != null
-                && made.size() < 300; depth++) {
-            Set<String> names = new HashSet<>(handing);
-            level.forEach(one -> names.add(findNameRead(one)));
-            List<Class<?>> readers = Arrays.<Class<?>>stream(LoadedClassList.of(instrumentation)).parallel()
-                    .filter(type -> Objects.equals(type.getClassLoader(), game) && !type.isHidden()
-                            && !type.isArray() && pools.getMembers(type).stream()
-                                    .anyMatch(member -> names.contains(member[0] + "." + member[1])))
-                    .toList();
-            List<Class<?>> set = readers.stream().filter(initialized).toList();
-
-            try {
-                LoadedClassBytes bytes = this.rebuilder.getLoadedBytes();
-                bytes.read(set.stream().filter(reader -> bytes.findKnown(reader) == null).toList(), new ArrayList<>());
-            } catch (RebuildException e) {
-            }
-            List<Recomputation> next = new ArrayList<>();
-            Set<String> handingOn = new HashSet<>();
-            for (Class<?> reader : set) {
-                this.recomputeHolders(reader, replaced, writer, next);
-                byte[] bytes = this.rebuilder.getLoadedBytes().findKnown(reader);
-                if (bytes != null && set.size() <= MOST_READERS_FOLLOWED) {
-                    handingOn.addAll(StaticRecomputation.findMethodsHandingOn(bytes, names));
-                }
-            }
-            made.addAll(next);
-            level = next;
-            handing = handingOn;
+    List<Class<?>> findHolders(Set<String> statics, @Nullable ConstantPools pools, Instrumentation instrumentation,
+            Predicate<Class<?>> initialized) {
+        List<Class<?>> holders = new ArrayList<>();
+        if (pools == null) {
+            return holders;
         }
-        return made;
+        ClassLoader game = StaticRecomputer.class.getClassLoader();
+        Set<Class<?>> known = new HashSet<>();
+        Set<String> names = statics;
+        for (int depth = 0; depth < 6 && !names.isEmpty(); depth++) {
+            Set<String> asked = names;
+            Scan scan = this.scans.computeIfAbsent(asked, any -> new Scan());
+            List<Class<?>> unread = Arrays.<Class<?>>stream(LoadedClassList.of(instrumentation))
+                    .filter(type -> Objects.equals(type.getClassLoader(), game) && !type.isHidden()
+                            && !type.isArray() && !scan.looked.contains(type)).toList();
+            List<Class<?>> naming = unread.parallelStream().filter(type -> pools.getMembers(type).stream()
+                    .anyMatch(member -> asked.contains(member[0] + "." + member[1]))).toList();
+            scan.looked.addAll(unread);
+            scan.readers.addAll(naming);
+            if (!naming.isEmpty()) {
+                scan.handing = scan.readers.size() > MOST_READERS_FOLLOWED ? Set.of()
+                        : this.findMethodsHandingOn(scan.readers, asked);
+            }
+            scan.readers.stream().filter(initialized).filter(known::add).forEach(holders::add);
+            names = scan.handing;
+        }
+        return holders;
+    }
+
+    private static final class Scan {
+        private final Set<Class<?>> looked = new HashSet<>();
+        private final List<Class<?>> readers = new ArrayList<>();
+        private Set<String> handing = Set.of();
+    }
+
+    private Set<String> findMethodsHandingOn(List<Class<?>> readers, Set<String> names) {
+        LoadedClassBytes loaded = this.rebuilder.getLoadedBytes();
+        try {
+            loaded.read(readers.stream().filter(reader -> loaded.findKnown(reader) == null).toList(),
+                    new ArrayList<>());
+        } catch (RebuildException e) {
+        }
+        Set<String> handing = new HashSet<>();
+        for (Class<?> reader : readers) {
+            byte[] bytes = loaded.findKnown(reader);
+            if (bytes != null) {
+                handing.addAll(StaticRecomputation.findMethodsHandingOn(bytes, names));
+            }
+        }
+        return handing;
     }
 
     @SuppressWarnings("ReferenceEquality")
-    private static String findNameRead(Recomputation one) {
+    static String findNameRead(Recomputation one) {
         FieldSlots.Slot named = one.field();
         if (one.holder() instanceof Enum<?> constant) {
             for (FieldSlots.Slot field : Fields.getReferenceFields(constant.getDeclaringClass(), true)) {
@@ -166,45 +180,6 @@ final class StaticRecomputer {
             }
         }
         return named.getDeclaringClass().getName().replace('.', '/') + "." + named.getName();
-    }
-
-    private void recomputeHolders(Class<?> reader, Set<Object> replaced, Writer writer, List<Recomputation> next) {
-        String name = reader.getName().replace('.', '/');
-        byte[] bytes = this.rebuilder.getLoadedBytes().findKnown(reader);
-        try {
-            bytes = bytes != null ? bytes : this.rebuilder.getLoadedBytes().readCurrent(List.of(reader)).get(name);
-        } catch (RebuildException e) {
-            return;
-        }
-        if (bytes == null) {
-            return;
-        }
-        for (String key : StaticRecomputation.findStored(bytes)) {
-            FieldSlots.Slot field = Fields.getDeclared(reader).stream()
-                    .filter(one -> key.equals(one.getName() + one.getType().descriptorString())).findFirst()
-                    .orElse(null);
-            if (field == null || Collection.class.isAssignableFrom(field.getType())
-                    || Map.class.isAssignableFrom(field.getType())) {
-                continue;
-            }
-            try {
-                Object old = field.get(null);
-                if (old == null || old instanceof Enum<?> || replaced.contains(old)
-                        || !this.reaches(old, "", replaced, Set.of())) {
-                    continue;
-                }
-                Object now = InitialValues.ofStatic(reader, bytes, field.getName(),
-                        field.getType().descriptorString()).orElse(null);
-                if (now != null) {
-                    writer.write(field, null, now);
-                    next.add(new Recomputation(field, null, old, now));
-                    replaced.add(old);
-                }
-            } catch (ReflectiveOperationException | RuntimeException | LinkageError e) {
-                LOGGER.warn("[Hotwire] {}.{} keeps what it was made from: {}", reader.getName(), field.getName(),
-                        e.toString());
-            }
-        }
     }
 
     private boolean reaches(Object start, String mod, Set<Object> replaced, Set<String> generated) {

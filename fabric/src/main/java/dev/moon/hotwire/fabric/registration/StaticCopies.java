@@ -176,6 +176,10 @@ public final class StaticCopies {
         if (value instanceof Collection<?> || value instanceof Map<?, ?>) {
             return value.getClass().getName().startsWith("java.util.");
         }
+        return isOfWalkedKind(value);
+    }
+
+    static boolean isOfWalkedKind(Object value) {
         return !(value instanceof Level) && !(value instanceof Entity) && !(value instanceof Minecraft)
                 && !(value instanceof MinecraftServer) && !(value instanceof Channel) && !(value instanceof Thread)
                 && !(value instanceof Class<?>) && !(value instanceof ClassLoader)

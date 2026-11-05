@@ -107,8 +107,9 @@ public final class FieldReferences {
         SwitchTimes.mark("field references: planned");
         this.removeElements(mods, on, scan, planned, false);
         SwitchTimes.mark("field references: elements");
-        mods.forEach(mod -> this.recomputeStatics(mod, scan.byName(), getOthers(mods, on)));
-        this.followWrittenStatics(getOthers(mods, on));
+        List<StaticRecomputer.Recomputation> remade = new ArrayList<>();
+        mods.forEach(mod -> remade.addAll(this.recomputeStatics(mod, scan.byName(), getOthers(mods, on))));
+        this.followRemadeStatics(remade, mods, getOthers(mods, on));
         SwitchTimes.mark("field references: statics");
         this.loadedChecks.match(mods, true, this.lambdas.open(), getOthers(mods, on));
         SwitchTimes.mark("field references: loaded checks");
@@ -122,13 +123,12 @@ public final class FieldReferences {
         FinalReaders.refresh(this.instrumentation, this.lambdas.open(), written);
     }
 
-    private void recomputeStatics(String mod, Map<String, Class<?>> loaded, Predicate<Class<?>> others) {
+    private List<StaticRecomputer.Recomputation> recomputeStatics(String mod, Map<String, Class<?>> loaded,
+            Predicate<Class<?>> others) {
         List<Replacement> made = new ArrayList<>();
         StaticRecomputer.Writer writer = this::write;
-        List<StaticRecomputer.Recomputation> recomputed = new ArrayList<>(this.recomputer.recompute(mod,
-                this.mixinTargets.apply(mod), loaded, others, writer));
-        recomputed.addAll(this.recomputer.recomputeReaders(List.copyOf(recomputed), this.lambdas.open(),
-                this.instrumentation, this::isInitialized, writer));
+        List<StaticRecomputer.Recomputation> recomputed = this.recomputer.recompute(mod, this.mixinTargets.apply(mod),
+                loaded, others, writer);
         recomputed.forEach(one -> made.add(new Replacement(one.field(), one.holder(), one.old(), one.made())));
         if (!made.isEmpty()) {
             List<Replacement> all = new ArrayList<>(this.replacements.getOrDefault(mod, List.of()));
@@ -138,6 +138,7 @@ public final class FieldReferences {
                     made.stream().map(one -> one.field().getDeclaringClass().getSimpleName() + "."
                             + one.field().getName()).toList());
         }
+        return recomputed;
     }
 
     public void putBackElements(Collection<String> mods) {
@@ -404,36 +405,30 @@ public final class FieldReferences {
         return this.initializedCheck;
     }
 
-    private void followWrittenStatics(Predicate<Class<?>> others) {
-        List<ReplacedStatics.Written> written = ReplacedStatics.takeWritten();
-        if (written.isEmpty()) {
+    private void followRemadeStatics(List<StaticRecomputer.Recomputation> remade, Collection<String> mods,
+            Predicate<Class<?>> others) {
+        IdentityHashMap<Object, Object> replaced = new IdentityHashMap<>();
+        Set<String> names = new HashSet<>();
+        for (StaticRecomputer.Recomputation one : remade) {
+            replaced.put(one.old(), one.made());
+            names.add(StaticRecomputer.findNameRead(one));
+        }
+        for (ReplacedStatics.StaticWrite one : ReplacedStatics.takeWritten()) {
+            replaced.put(one.old(), one.made());
+            names.add(one.field().getDeclaringClass().getName().replace('.', '/') + "." + one.field().getName());
+        }
+        if (replaced.isEmpty()) {
             return;
         }
-        List<StaticRecomputer.Recomputation> first = new ArrayList<>();
-        Set<String> mods = new HashSet<>();
-        for (ReplacedStatics.Written one : written) {
-            first.add(new StaticRecomputer.Recomputation(FieldSlots.Slot.of(one.field()), null, one.old(), one.made()));
-            mods.addAll(one.mods());
-        }
         Predicate<Class<?>> initialized = this::isInitialized;
-        StaticRecomputer.Writer writer = this::write;
-        List<StaticRecomputer.Recomputation> made = this.recomputer.recomputeReaders(first, this.lambdas.open(),
-                this.instrumentation, initialized.and(others), writer);
-        for (StaticRecomputer.Recomputation one : made) {
-            try {
-                Field field = one.field().asField();
-                field.setAccessible(true);
-                ReplacedStatics.noteFollowed(field, one.old(), one.made(), Set.copyOf(mods));
-            } catch (NoSuchFieldException | RuntimeException | LinkageError e) {
-                LOGGER.warn("[Hotwire] {} will not go back at the on of {}: {}", one.field().getName(), mods,
-                        e.toString());
-            }
+        List<Class<?>> holders = this.recomputer.findHolders(names, this.lambdas.open(), this.instrumentation,
+                initialized.and(others));
+        List<Runnable> undo = DeepCopies.swap(holders, replaced, this::write);
+        if (!undo.isEmpty()) {
+            ReplacedStatics.noteUndo(Set.copyOf(mods), undo);
         }
-        if (!made.isEmpty()) {
-            LOGGER.info("[Hotwire] {} statics made from those made again were made again too: {}", made.size(),
-                    made.stream().map(one -> one.field().getDeclaringClass().getSimpleName() + "."
-                            + one.field().getName()).toList());
-        }
+        LOGGER.info("[Hotwire] {} copies further down of {} statics made again took the new ones, under {} classes",
+                undo.size(), names.size(), holders.size());
     }
 
     public void writeStatic(Field field, Object value) throws IllegalAccessException {
@@ -453,7 +448,9 @@ public final class FieldReferences {
 
     private void write(FieldSlots.Slot field, @Nullable Object holder, @Nullable Object value)
             throws IllegalAccessException {
-        if (!Modifier.isFinal(field.getModifiers()) || (!field.isStatic() && !field.getDeclaringClass().isRecord())) {
+        Class<?> owner = field.getDeclaringClass();
+        if (!Modifier.isFinal(field.getModifiers())
+                || (!field.isStatic() && !owner.isRecord() && !owner.isHidden())) {
             field.set(holder, value);
             return;
         }
@@ -462,7 +459,11 @@ public final class FieldReferences {
         if (unsafe == null) {
             throw new IllegalAccessException("the JDK will not write " + field);
         }
-        this.finalsWritten.add(FinalFields.write(unsafe, field, holder, value));
+        Field written = FinalFields.write(unsafe, field, holder, value);
+
+        if (!owner.isHidden()) {
+            this.finalsWritten.add(written);
+        }
     }
 
     private static Predicate<Class<?>> getOthers(Collection<String> mods, Predicate<String> on) {
