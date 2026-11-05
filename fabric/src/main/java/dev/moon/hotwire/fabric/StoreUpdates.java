@@ -7,6 +7,7 @@ import dev.moon.hotwire.ui.Lang;
 import dev.moon.hotwire.ui.Progress;
 import dev.moon.hotwire.update.UpdateOffer;
 import java.io.IOException;
+import java.io.UncheckedIOException;
 import java.nio.file.Path;
 import java.util.ArrayList;
 import java.util.List;
@@ -17,6 +18,7 @@ import java.util.concurrent.Executors;
 import java.util.concurrent.Future;
 import java.util.function.BiConsumer;
 import java.util.function.Consumer;
+import java.util.function.Function;
 import net.minecraft.client.Minecraft;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -65,7 +67,7 @@ final class StoreUpdates {
         CompletableFuture<Ran> ran = new CompletableFuture<>();
         this.last = ran;
         Thread.ofPlatform().name("hotwire-updates-fetch").daemon().start(() -> {
-            List<List<Path>> fetched = this.fetchAll(offers);
+            List<List<Path>> fetched = this.fetchAll(offers, this::fetch);
             long fetchMillis = (System.nanoTime() - began) / 1_000_000;
             List<Path> jars = new ArrayList<>();
             List<Path> needed = new ArrayList<>();
@@ -105,13 +107,13 @@ final class StoreUpdates {
     }
 
     @SuppressWarnings("FutureReturnValueIgnored")
-    private List<List<Path>> fetchAll(List<UpdateOffer> offers) {
+    List<List<Path>> fetchAll(List<UpdateOffer> offers, Function<UpdateOffer, List<Path>> fetch) {
         ExecutorService pool = Executors.newFixedThreadPool(FETCHES,
                 Thread.ofPlatform().name("hotwire-updates-fetch-", 1).daemon().factory());
         List<Future<List<Path>>> futures = new ArrayList<>();
         for (UpdateOffer offer : offers) {
             futures.add(pool.submit(() -> {
-                List<Path> jars = this.fetch(offer);
+                List<Path> jars = fetch.apply(offer);
                 if (jars.size() == 1) {
                     this.changes.planAhead(jars.getFirst());
                 }
@@ -124,6 +126,9 @@ final class StoreUpdates {
                 try {
                     out.add(future.get());
                 } catch (ExecutionException e) {
+                    if (e.getCause() instanceof UncheckedIOException failed) {
+                        throw failed;
+                    }
                     LOGGER.warn("[Hotwire] an update's fetch failed", e.getCause());
                     out.add(List.of());
                 }

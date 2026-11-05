@@ -25,12 +25,15 @@ import dev.moon.hotwire.update.PendingChange;
 import dev.moon.hotwire.update.UpdateOffer;
 import java.io.IOException;
 import java.io.InputStream;
+import java.io.UncheckedIOException;
 import java.nio.file.Path;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Optional;
+import java.util.Set;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.atomic.AtomicInteger;
+import java.util.stream.Collectors;
 import java.util.zip.ZipEntry;
 import java.util.zip.ZipFile;
 import net.minecraft.client.Minecraft;
@@ -57,7 +60,11 @@ final class ApiChanges {
         }
         Thread.ofPlatform().name("hotwire-api-updates").daemon().start(() -> {
             try {
-                made.complete(new ModUpdates(engine.storeJars.getCheck().findNow().stream()
+                Set<String> queued = engine.getPendingChanges().stream()
+                        .filter(PendingChange.Update.class::isInstance).map(PendingChange::modId)
+                        .collect(Collectors.toSet());
+                made.complete(new ModUpdates(engine.storeJars.getCheck().findRecent().stream()
+                        .filter(offer -> !queued.contains(offer.id()))
                         .map(offer -> new ModUpdate(offer.id(), offer.name(), offer.installedVersion(),
                                 offer.newVersion(), offer.projectId())).toList(), ""));
             } catch (IOException | RuntimeException e) {
@@ -143,12 +150,12 @@ final class ApiChanges {
         }
         if (!request.update().isEmpty() || !jars.isEmpty()) {
             UpdateCheck check = engine.storeJars.getCheck();
-            List<UpdateOffer> all = check.findNow();
+            List<UpdateOffer> all = check.findRecent();
             List<UpdateOffer> picked = all.stream().filter(offer -> request.update().contains(offer.id())).toList();
 
             List<UpdateOffer> together = new ArrayList<>(check.orderByNeeds(picked, all));
             List<Path> every = new ArrayList<>(jars);
-            every.addAll(fetchAll(check, together));
+            every.addAll(fetchAll(engine, check, together));
             List<ModUpdater.SortResult> results = engine.getChanges().previewUpdates(every);
             if (results.stream().anyMatch(ModUpdater.SortResult.Refused.class::isInstance)) {
                 List<UpdateOffer> more = findDependentsWithUpdates(engine, together, all);
@@ -156,7 +163,7 @@ final class ApiChanges {
                     together.addAll(more);
                     together = new ArrayList<>(check.orderByNeeds(together, all));
                     every = new ArrayList<>(jars);
-                    every.addAll(fetchAll(check, together));
+                    every.addAll(fetchAll(engine, check, together));
                     results = engine.getChanges().previewUpdates(every);
                 }
             }
@@ -280,17 +287,19 @@ final class ApiChanges {
         }
     }
 
-    private static List<Path> fetchAll(UpdateCheck check, List<UpdateOffer> offers) throws IOException {
-        List<Path> jars = new ArrayList<>();
+    private static List<Path> fetchAll(HotwireEngine engine, UpdateCheck check, List<UpdateOffer> offers) {
         Runnable endQuiet = Downloads.beginQuiet();
         try {
-            for (UpdateOffer offer : offers) {
-                jars.addAll(check.fetchWithNeeds(offer, said -> { }));
-            }
+            return engine.storeJars.getAll().fetchAll(offers, offer -> {
+                try {
+                    return check.fetchWithNeeds(offer, said -> { });
+                } catch (IOException e) {
+                    throw new UncheckedIOException(e);
+                }
+            }).stream().flatMap(List::stream).toList();
         } finally {
             endQuiet.run();
         }
-        return jars;
     }
 
     private static List<UpdateOffer> findDependentsWithUpdates(HotwireEngine engine, List<UpdateOffer> picked,

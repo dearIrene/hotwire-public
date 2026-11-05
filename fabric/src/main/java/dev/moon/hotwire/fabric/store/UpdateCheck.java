@@ -24,6 +24,7 @@ import java.util.function.Consumer;
 import net.fabricmc.loader.api.FabricLoader;
 import net.fabricmc.loader.api.Version;
 import net.fabricmc.loader.api.VersionParsingException;
+import org.jspecify.annotations.Nullable;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -41,7 +42,12 @@ public final class UpdateCheck {
 
     private final Path memoryFile = CacheLimit.findStoreFolder().resolve("updates-"
             + this.client.getScope().replaceAll("[^A-Za-z0-9.-]", "_") + ".gz");
+    private static final long RECENT_NANOS = 60_000_000_000L;
     private volatile int newlyFound;
+    private volatile @Nullable Found lastFound;
+
+    private record Found(Map<String, Path> jars, long atNanos, List<UpdateOffer> offers) {
+    }
 
     public UpdateCheck(InstalledMods installed) {
         this.installed = installed;
@@ -65,6 +71,15 @@ public final class UpdateCheck {
     }
 
     public List<UpdateOffer> findNow() throws IOException {
+        return this.find();
+    }
+
+    public List<UpdateOffer> findRecent() throws IOException {
+        Found last = this.lastFound;
+        if (last != null && System.nanoTime() - last.atNanos() < RECENT_NANOS
+                && last.jars().equals(this.installed.getJarsByTopLevel())) {
+            return last.offers();
+        }
         return this.find();
     }
 
@@ -103,6 +118,7 @@ public final class UpdateCheck {
         }
         this.newlyFound = fresh;
         memory.write();
+        this.lastFound = new Found(Map.copyOf(jars), System.nanoTime(), List.copyOf(found));
         return found;
     }
 
