@@ -15,6 +15,7 @@ import java.time.Duration;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.Collection;
+import java.util.ConcurrentModificationException;
 import java.util.List;
 import java.util.Set;
 import java.util.concurrent.CompletableFuture;
@@ -53,6 +54,7 @@ import org.slf4j.LoggerFactory;
 
 public final class ResourceReload {
     private static final Logger LOGGER = LoggerFactory.getLogger(ResourceReload.class);
+    private static final int LAYOUT_TRIES = 3;
 
     private static final Set<String> PACKED = ConcurrentHashMap.newKeySet();
 
@@ -449,11 +451,18 @@ public final class ResourceReload {
 
     public static void layOutChat() {
         Minecraft game = Minecraft.getInstance();
-        //? if >=26.2 {
-        game.gui.hud.getChat().rescaleChat();
-        //?} else {
-        /*game.gui.getChat().rescaleChat();
-        *///?}
+        for (int tries = 0; tries < LAYOUT_TRIES; tries++) {
+            try {
+                //? if >=26.2 {
+                game.gui.hud.getChat().rescaleChat();
+                //?} else {
+                /*game.gui.getChat().rescaleChat();
+                *///?}
+                return;
+            } catch (ConcurrentModificationException e) {
+                LOGGER.info("[Hotwire] another thread wrote to the chat as it was laid out");
+            }
+        }
     }
 
     private static void reportFailed(String why, Set<String> chosen) {
