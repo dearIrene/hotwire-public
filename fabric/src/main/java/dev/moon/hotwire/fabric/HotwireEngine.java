@@ -277,7 +277,7 @@ public final class HotwireEngine implements ModScreen.Game, AutoCloseable {
     }
 
     public CompletableFuture<SwitchResult> switchFor(boolean off, List<String> ids) {
-        return this.switches.switchFor(off, ids);
+        return this.switches.switchFor(off, ids, true);
     }
 
     public ModChanges getChanges() {
@@ -382,6 +382,11 @@ public final class HotwireEngine implements ModScreen.Game, AutoCloseable {
         return this.selfUpdate.findNewer();
     }
 
+    @Override
+    public String findHotwireChanges() {
+        return this.selfUpdate.findChanges();
+    }
+
     void showUpdateInChat() {
         this.selfUpdate.showInChat();
     }
@@ -425,13 +430,13 @@ public final class HotwireEngine implements ModScreen.Game, AutoCloseable {
     @Override
     @SuppressWarnings("FutureReturnValueIgnored")
     public void turnOff(List<String> ids) {
-        this.switchFor(true, ids);
+        this.switches.switchFor(true, ids, false);
     }
 
     @Override
     @SuppressWarnings("FutureReturnValueIgnored")
     public void turnOn(List<String> ids) {
-        this.switchFor(false, ids);
+        this.switches.switchFor(false, ids, false);
     }
 
     @Override

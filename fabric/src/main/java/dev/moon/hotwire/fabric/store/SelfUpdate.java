@@ -3,6 +3,7 @@ package dev.moon.hotwire.fabric.store;
 import dev.moon.hotwire.fabric.LoadedMods;
 import dev.moon.hotwire.modrinth.Downloads;
 import dev.moon.hotwire.modrinth.ModrinthClient;
+import dev.moon.hotwire.update.HotwireChanges;
 import dev.moon.hotwire.update.UrgentUpdate;
 import java.io.IOException;
 import java.nio.file.Files;
@@ -25,6 +26,7 @@ public final class SelfUpdate {
     private final Downloads downloads = new Downloads();
     private final Path folder = FabricLoader.getInstance().getGameDir().resolve("hotwire").resolve("store");
     private volatile ModrinthClient.@Nullable Version newer;
+    private volatile String changes = "";
     private boolean started;
 
     public void start(Consumer<ModrinthClient.Version> then, Consumer<Optional<UrgentUpdate>> checked) {
@@ -45,6 +47,7 @@ public final class SelfUpdate {
         try {
             List<ModrinthClient.Version> versions = this.client.findVersions(ModrinthClient.Kind.MOD, PROJECT);
             String running = LoadedMods.findVersion("hotwire", "0");
+            this.changes = HotwireChanges.join(versions, number -> isNewer(number, running));
             checked.accept(Optional.ofNullable(UrgentUpdate.find(versions, number -> isNewer(number, running))));
             if (versions.isEmpty()) {
                 return null;
@@ -71,6 +74,10 @@ public final class SelfUpdate {
 
     public ModrinthClient.@Nullable Version getNewer() {
         return this.newer;
+    }
+
+    public String getChanges() {
+        return this.changes;
     }
 
     public Path fetch(ModrinthClient.Version version) throws IOException {

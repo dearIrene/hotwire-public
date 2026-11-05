@@ -69,20 +69,36 @@ final class MarkdownLines {
 
     private final Canvas canvas;
     private final int width;
+    private final int plain;
+    private final int strong;
     private final List<Line> out = new ArrayList<>();
     private final StringBuilder paragraph = new StringBuilder();
     private final List<List<String>> table = new ArrayList<>();
     private int above;
 
-    private MarkdownLines(Canvas canvas, int width) {
+    private MarkdownLines(Canvas canvas, int width, int plain, int strong) {
         this.canvas = canvas;
         this.width = width;
+        this.plain = plain;
+        this.strong = strong;
     }
 
     static List<Line> of(Canvas canvas, String markdown, int width) {
-        MarkdownLines lines = new MarkdownLines(canvas, width);
+        return read(new MarkdownLines(canvas, width, Palette.TEXT, Palette.TEXT), markdown);
+    }
+
+    static List<Line> ofChangelog(Canvas canvas, String markdown, int width) {
+        return read(new MarkdownLines(canvas, width, Colors.mix(Palette.DIM, Palette.TEXT, 0.45f), Palette.TEXT),
+                markdown);
+    }
+
+    private static List<Line> read(MarkdownLines lines, String markdown) {
         lines.read(clean(markdown));
         return List.copyOf(lines.out);
+    }
+
+    private int findColor(String words) {
+        return words.startsWith("**") || words.startsWith("__") ? this.strong : this.plain;
     }
 
     private static String clean(String markdown) {
@@ -192,10 +208,11 @@ final class MarkdownLines {
                 this.addTitle(title.group(2), title.group(1).length());
             } else if (bullet.matches()) {
                 this.endParagraph();
-                this.wrap(bullet.group(2), findIndent(bullet.group(1)), "• ", Palette.TEXT);
+                this.wrap(bullet.group(2), findIndent(bullet.group(1)), "• ", this.findColor(bullet.group(2)));
             } else if (numbered.matches()) {
                 this.endParagraph();
-                this.wrap(numbered.group(3), findIndent(numbered.group(1)), numbered.group(2) + ". ", Palette.TEXT);
+                this.wrap(numbered.group(3), findIndent(numbered.group(1)), numbered.group(2) + ". ",
+                        this.findColor(numbered.group(3)));
             } else if (quote.matches()) {
                 this.endParagraph();
                 this.wrap(quote.group(1), STEP, "", Palette.DIM);
@@ -259,7 +276,7 @@ final class MarkdownLines {
 
     private void endParagraph() {
         if (!this.paragraph.isEmpty()) {
-            this.wrap(this.paragraph.toString(), 0, "", Palette.TEXT);
+            this.wrap(this.paragraph.toString(), 0, "", this.findColor(this.paragraph.toString()));
             this.paragraph.setLength(0);
         }
     }

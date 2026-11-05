@@ -71,6 +71,10 @@ final class SelfUpdateRequests {
         return newer == null ? "" : newer.number();
     }
 
+    String findChanges() {
+        return this.check.getChanges();
+    }
+
     void updateAtNextStart(List<PendingChange> pending) {
         ModrinthClient.Version newer = this.check.getNewer();
         if (newer == null) {

@@ -26,6 +26,12 @@ public final class PlayerMessages {
                     joinNames(done.plan().order(), nameOf), formatSeconds(done.millis()));
             case ModSwitcher.Result.Refused refused -> describeRefusal(refused.plan().refusals().getFirst(), off,
                     nameOf);
+            case ModSwitcher.Result.Failed failed when failed.cause().reopenFixes() -> Lang.get(off
+                    ? "hotwire.switch.reopen_off" : "hotwire.switch.reopen_on",
+                    joinNames(failed.plan().order(), nameOf));
+            case ModSwitcher.Result.Failed failed when failed.cause().isRestartOnly() -> Lang.get(off
+                    ? "hotwire.switch.next_start_off" : "hotwire.switch.next_start_on",
+                    joinNames(failed.plan().order(), nameOf));
             case ModSwitcher.Result.Failed failed -> Lang.get(off ? "hotwire.switch.failed_off"
                     : "hotwire.switch.failed_on", joinNames(failed.plan().order(), nameOf),
                     String.valueOf(failed.cause().getMessage()).replaceFirst("[.]$", ""));

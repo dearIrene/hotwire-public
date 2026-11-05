@@ -53,35 +53,35 @@ final class SwitchRequests {
         this.say = say;
     }
 
-    CompletableFuture<SwitchResult> switchFor(boolean off, List<String> ids) {
+    CompletableFuture<SwitchResult> switchFor(boolean off, List<String> ids, boolean quiet) {
         List<String> disabledIds = off ? List.of() : ids.stream().filter(this.disabled::isDisabledSinceStart).toList();
         disabledIds.forEach(this.disabled::enableByAdd);
         List<String> rest = ids.stream().filter(id -> !disabledIds.contains(id)).toList();
         if (rest.isEmpty() && !disabledIds.isEmpty()) {
             return CompletableFuture.completedFuture(new SwitchResult(SwitchResult.Kind.DONE, disabledIds, ""));
         }
-        return this.run(runner -> off ? runner.turnOff(rest) : runner.turnOn(rest), off, rest);
+        return this.run(runner -> off ? runner.turnOff(rest) : runner.turnOn(rest), off, rest, quiet);
     }
 
     @SuppressWarnings("FutureReturnValueIgnored")
     void run(Function<SwitchRunner, SwitchRunner.CheckedResult> work) {
-        this.run(work, false, List.of());
+        this.run(work, false, List.of(), false);
     }
 
     @SuppressWarnings("FutureReturnValueIgnored")
     private CompletableFuture<SwitchResult> run(Function<SwitchRunner, SwitchRunner.CheckedResult> work, boolean off,
-            List<String> ids) {
+            List<String> ids, boolean quiet) {
         HotwireEngine.JvmParts parts = this.engine.findJvmParts().orElse(null);
         if (parts == null) {
-            return this.refuse(this.engine.getSwitchRefusal());
+            return this.refuse(this.engine.getSwitchRefusal(), quiet);
         }
         if (this.engine.isWorldLocked()) {
-            return this.refuse(Lang.get("hotwire.switch.world_locked"));
+            return this.refuse(Lang.get("hotwire.switch.world_locked"), quiet);
         }
 
         IntegratedServer server = Minecraft.getInstance().getSingleplayerServer();
         if (server != null && server.isCurrentlySaving()) {
-            return this.refuse(Lang.get("hotwire.switch.saving"));
+            return this.refuse(Lang.get("hotwire.switch.saving"), quiet);
         }
         CompletableFuture<SwitchResult> ended = HotwireApiImpl.beginSwitch();
         this.tasks.submit("switch", () -> work.apply(parts.runner()), result -> {
@@ -96,7 +96,9 @@ final class SwitchRequests {
                 FailureReports.report(this.engine, Lang.get("hotwire.report.file.switch_failed"), said);
             }
             ModScreen current = this.screen.get();
-            if (off && !ids.isEmpty() && result.result() instanceof ModSwitcher.Result.Failed failed
+            if (quiet) {
+                LOGGER.info("[Hotwire] for the mod that asked: {}", said);
+            } else if (off && !ids.isEmpty() && result.result() instanceof ModSwitcher.Result.Failed failed
                     && failed.cause().isRestartOnly() && current != null) {
                 LOGGER.info("[Hotwire] {}", said);
 
@@ -137,8 +139,12 @@ final class SwitchRequests {
         return Lang.get("hotwire.reopen.why.content", listed);
     }
 
-    private CompletableFuture<SwitchResult> refuse(String said) {
-        this.say.show(said, true, "");
+    private CompletableFuture<SwitchResult> refuse(String said, boolean quiet) {
+        if (quiet) {
+            LOGGER.info("[Hotwire] for the mod that asked: {}", said);
+        } else {
+            this.say.show(said, true, "");
+        }
         this.engine.refreshScreen();
         return CompletableFuture.completedFuture(new SwitchResult(SwitchResult.Kind.REFUSED, List.of(), said));
     }

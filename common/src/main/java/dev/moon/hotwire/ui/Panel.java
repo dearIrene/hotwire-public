@@ -116,6 +116,12 @@ class Panel extends Element {
         }
     }
 
+    void setPrimaryFace(int face) {
+        if (this.primary != null) {
+            this.primary.setFace(face);
+        }
+    }
+
     void setPrimaryActive(boolean active) {
         this.primaryActive = active;
     }
@@ -237,7 +243,7 @@ class Panel extends Element {
         int y = this.getBoxY();
         int w = this.getBoxWidth();
         int h = this.getBoxHeight();
-        canvas.fill(x - 1, y - 1, x + w + 1, y + h + 1, Colors.fade(Palette.PANEL_EDGE, s));
+        canvas.fill(x - 1, y - 1, x + w + 1, y + h + 1, Colors.fade(this.findEdge(), s));
         canvas.fill(x, y, x + w, y + h, Colors.fade(Palette.PANEL, s));
         canvas.fill(x, y, x + w, y + 2, Colors.fade(this.refused ? Palette.BAD : Palette.ACCENT, s));
 
@@ -245,6 +251,10 @@ class Panel extends Element {
             canvas.fill(x + 14, y + this.lineY, x + w - 14, y + this.lineY + 2, Colors.fade(Palette.TRACK, s));
         }
         this.drawContent(canvas, s, x, y, w, h);
+    }
+
+    protected int findEdge() {
+        return Palette.PANEL_EDGE;
     }
 
     protected void drawContent(Canvas canvas, float alpha, int x, int y, int w, int h) {

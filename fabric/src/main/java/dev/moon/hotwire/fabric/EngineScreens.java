@@ -85,6 +85,14 @@ public final class EngineScreens {
         }
     }
 
+    public void openOnSelfUpdate(String version, @Nullable String urgent, String changes, int scrolled) {
+        this.owner.open();
+        ModScreen current = this.owner.screen;
+        if (current != null) {
+            current.showSelfUpdate(version, urgent, changes, scrolled);
+        }
+    }
+
     void openOnCrashReport(String where) {
         this.owner.open();
         ModScreen current = this.owner.screen;

@@ -26,11 +26,18 @@ public record UrgentUpdate(String version, String message) {
             return null;
         }
         for (String line : changelog.lines().toList()) {
-            String text = line.strip().replaceFirst("^[-*>#\\s]+", "").replace("**", "").replace("__", "").strip();
-            if (text.regionMatches(true, 0, MARK, 0, MARK.length())) {
-                return text.substring(MARK.length()).strip();
+            if (isMark(line)) {
+                return readWords(line).substring(MARK.length()).strip();
             }
         }
         return null;
+    }
+
+    static boolean isMark(String line) {
+        return readWords(line).regionMatches(true, 0, MARK, 0, MARK.length());
+    }
+
+    private static String readWords(String line) {
+        return line.strip().replaceFirst("^[-*>#\\s]+", "").replace("**", "").replace("__", "").strip();
     }
 }

@@ -155,6 +155,10 @@ public final class ModScreen implements JarHost {
             return "";
         }
 
+        default String findHotwireChanges() {
+            return "";
+        }
+
         default void updateHotwireAtNextStart() {
         }
 
@@ -386,6 +390,7 @@ public final class ModScreen implements JarHost {
     }
 
     public void showNewerHotwire() {
+        this.selfUpdate.setChanges(this.game.findHotwireChanges());
         UrgentUpdate urgent = this.game.findUrgentHotwire();
         if (urgent != null) {
             this.selfUpdate.presentUrgent(urgent.version(), urgent.message());
@@ -395,7 +400,18 @@ public final class ModScreen implements JarHost {
     }
 
     public void showUrgentUpdate(UrgentUpdate urgent) {
+        this.selfUpdate.setChanges(this.game.findHotwireChanges());
         this.selfUpdate.presentUrgent(urgent.version(), urgent.message());
+    }
+
+    public void showSelfUpdate(String version, @Nullable String urgent, String changes, int scrolled) {
+        this.selfUpdate.setChanges(changes);
+        if (urgent != null) {
+            this.selfUpdate.presentUrgent(version, urgent);
+        } else {
+            this.selfUpdate.presentOnce(version);
+        }
+        this.selfUpdate.scrollTo(scrolled);
     }
 
     public void showHotwireUpdateReady(String version) {

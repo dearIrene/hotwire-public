@@ -22,6 +22,8 @@ public final class Button extends Element {
 
     private int tint;
 
+    private int face = Palette.ACCENT;
+
     public Button(String label, boolean primary, Runnable action) {
         this(label, label, primary, action);
     }
@@ -80,6 +82,10 @@ public final class Button extends Element {
         this.tint = tint;
     }
 
+    void setFace(int face) {
+        this.face = face;
+    }
+
     void setBadge(int badge) {
         this.badge = badge;
     }
@@ -114,12 +120,12 @@ public final class Button extends Element {
         boolean lit = this.primary && this.looksActive;
         int edge = this.looksActive ? Palette.PANEL_EDGE : INACTIVE_EDGE;
         if (lit) {
-            edge = Colors.mix(Palette.ACCENT, Palette.TEXT, 0.35f + hot * 0.25f);
+            edge = Colors.mix(this.face, Palette.TEXT, 0.35f + hot * 0.25f);
         } else if (this.tint != 0 && this.looksActive) {
             edge = Colors.mix(this.tint, Palette.PANEL_EDGE, 0.45f - hot * 0.3f);
         }
         canvas.fill(x, y, x + w, y + h, Colors.fade(edge, alpha));
-        int face = lit ? Colors.mix(Palette.ACCENT, Palette.TEXT, hot * 0.15f)
+        int face = lit ? Colors.mix(this.face, Palette.TEXT, hot * 0.15f)
                 : Colors.mix(Palette.PANEL, FACE_HOT, hot);
         canvas.fill(x + 1, y + 1, x + w - 1, y + h - 1, Colors.fade(face, alpha));
         if (lit) {
