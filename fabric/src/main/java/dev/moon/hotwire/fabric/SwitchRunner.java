@@ -23,6 +23,7 @@ import dev.moon.hotwire.fabric.registration.NetworkHandlers;
 import dev.moon.hotwire.fabric.registration.OffModCommands;
 import dev.moon.hotwire.fabric.registration.OneConfigHuds;
 import dev.moon.hotwire.fabric.registration.OneConfigModCards;
+import dev.moon.hotwire.fabric.registration.SodiumSettingsPages;
 import dev.moon.hotwire.fabric.registration.RegistryCheck;
 import dev.moon.hotwire.fabric.registration.ReloadedLists;
 import dev.moon.hotwire.fabric.registration.TakeoutRecord;
@@ -314,6 +315,7 @@ public final class SwitchRunner {
         SwitchTimes.mark("removals: cursor");
         OneConfigHuds.takeOut(ids);
         OneConfigModCards.takeOut(ids);
+        SodiumSettingsPages.takeOut(ids);
         SwitchTimes.mark("removals: huds");
         NetworkHandlers.takeOut(ids);
         SwitchTimes.mark("removals: network");
