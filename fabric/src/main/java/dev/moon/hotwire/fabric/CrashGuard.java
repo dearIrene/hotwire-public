@@ -255,8 +255,12 @@ public final class CrashGuard {
         if (mixin != null) {
             return mixinOwner.apply(mixin.replace('.', '/'));
         }
-        Matcher lambda = MERGED_LAMBDA.matcher(method.getName());
-        return lambda.find() ? lambda.group(1) : HandlerGuards.findModInHandlerName(method.getName());
+        return findMergedModByName(method.getName());
+    }
+
+    public static @Nullable String findMergedModByName(String name) {
+        Matcher lambda = MERGED_LAMBDA.matcher(name);
+        return lambda.find() ? lambda.group(1) : HandlerGuards.findModInHandlerName(name);
     }
 
     public static @Nullable String findMergedMod(Field field) {

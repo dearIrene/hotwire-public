@@ -23,6 +23,7 @@ import dev.moon.hotwire.fabric.registration.GameRegistrations;
 import dev.moon.hotwire.fabric.screen.PromptGameScreen;
 import dev.moon.hotwire.modrinth.Downloads;
 import dev.moon.hotwire.plan.SwitchPlan;
+import dev.moon.hotwire.redefine.HandlerGuards;
 import dev.moon.hotwire.switching.CallerBlocks;
 import dev.moon.hotwire.switching.ModSwitcher;
 import dev.moon.hotwire.switching.PlayerMessages;
@@ -415,21 +416,28 @@ public final class HotwireApiImpl implements HotwireApi {
 
     private static @Nullable String findModOf(StackWalker.StackFrame frame) {
         Class<?> type = frame.getDeclaringClass();
-        if (frame.getMethodName().indexOf('$') >= 0) {
-            try {
-                for (Method method : type.getDeclaredMethods()) {
-                    if (method.getName().equals(frame.getMethodName())
-                            && Arrays.equals(method.getParameterTypes(), frame.getMethodType().parameterArray())) {
-                        String merged = CrashGuard.findMergedMod(method);
-                        if (merged != null) {
-                            return merged;
-                        }
+        String merged = frame.getMethodName().indexOf('$') < 0 ? null : findMergedModOf(type, frame);
+        return merged != null ? merged : GameRegistrations.findModOrShipper(type);
+    }
+
+    private static @Nullable String findMergedModOf(Class<?> type, StackWalker.StackFrame frame) {
+        String internal = type.getName().replace('.', '/');
+        if (HandlerGuards.isWritten(internal) && HandlerGuards.getPresentMixins(internal).isEmpty()) {
+            return CrashGuard.findMergedModByName(frame.getMethodName());
+        }
+        try {
+            for (Method method : type.getDeclaredMethods()) {
+                if (method.getName().equals(frame.getMethodName())
+                        && Arrays.equals(method.getParameterTypes(), frame.getMethodType().parameterArray())) {
+                    String merged = CrashGuard.findMergedMod(method);
+                    if (merged != null) {
+                        return merged;
                     }
                 }
-            } catch (LinkageError e) {
             }
+        } catch (LinkageError e) {
         }
-        return GameRegistrations.findModOrShipper(type);
+        return null;
     }
 
     @Override
