@@ -221,7 +221,11 @@ public final class Tripwire {
 
     private static @Nullable Class<?> findCaller() {
         return WALKER.walk(frames -> frames.map(StackWalker.StackFrame::getDeclaringClass)
-                .filter(type -> !LINKERS.contains(type.getNestHost()) && !isJdk(type)).findFirst()).orElse(null);
+                .filter(type -> !isLinker(type) && !isJdk(type)).findFirst()).orElse(null);
+    }
+
+    private static boolean isLinker(Class<?> type) {
+        return LINKERS.contains(type.getNestHost()) || isLinking(type.getName());
     }
 
     public static boolean isLinking(String className) {
@@ -264,7 +268,7 @@ public final class Tripwire {
             Set<String> seen = new HashSet<>();
             for (StackTraceElement frame : new Throwable().getStackTrace()) {
                 if (frames.size() < FRAMES && !frame.getClassName().equals(Tripwire.class.getName())
-                        && !frame.getClassName().equals(TripwireSites.class.getName())
+                        && !frame.getClassName().startsWith(TripwireSites.class.getName())
                         && seen.add(frame.getClassName() + "#" + frame.getMethodName())) {
                     frames.add(frame.toString());
                 }
@@ -387,7 +391,7 @@ public final class Tripwire {
         Function<Class<?>, @Nullable String> modOf = owner;
         Set<String> libraries = LIBRARIES.getOrDefault(mod, Set.of());
         List<StackWalker.StackFrame> frames = WALKER.walk(stack -> stack
-                .filter(frame -> !LINKERS.contains(frame.getDeclaringClass().getNestHost())).toList());
+                .filter(frame -> !isLinker(frame.getDeclaringClass())).toList());
         int mine = 0;
         boolean unsafe = false;
         boolean library = false;
@@ -478,7 +482,7 @@ public final class Tripwire {
         if (WAITING.computeIfAbsent(mod, any -> ConcurrentHashMap.newKeySet()).add(thread)) {
             LOGGER.info("[Hotwire] {}'s thread {} waits until {} is on, stopped at {}", mod, thread.getName(), mod,
                     WALKER.walk(frames -> frames.filter(frame -> frame.getDeclaringClass() != Tripwire.class
-                            && frame.getDeclaringClass() != TripwireSites.class).limit(6)
+                            && !isLinker(frame.getDeclaringClass())).limit(6)
                             .map(frame -> frame.getClassName() + "." + frame.getMethodName())
                             .collect(Collectors.joining(" < "))));
         }
@@ -599,7 +603,7 @@ public final class Tripwire {
         StackTraceElement[] stack = new Throwable().getStackTrace();
         for (StackTraceElement frame : stack) {
             if (!frame.getClassName().equals(Tripwire.class.getName())
-                        && !frame.getClassName().equals(TripwireSites.class.getName()) && frames.size() < FRAMES / 2) {
+                        && !frame.getClassName().startsWith(TripwireSites.class.getName()) && frames.size() < FRAMES / 2) {
                 frames.add(frame.toString());
             }
         }

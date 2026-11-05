@@ -7,8 +7,9 @@ import org.objectweb.asm.Opcodes;
 
 final class SiteSplice {
     static final byte[] NO_CODE = new byte[0];
-    private static final int HIT_LENGTH = 5;
-    private static final int GATE_LENGTH = 8;
+
+    private static final int HIT_LENGTH = 9;
+    private static final int GATE_LENGTH = 12;
 
     private static final int ALIGN = 4;
     private static final int MOST_CODE = 65_535;
@@ -16,7 +17,7 @@ final class SiteSplice {
     private static final int MOST_GROWTH = 32;
 
     private static final int MOST_POOL_GROWTH = 512;
-    private static final byte[] OWNER = TripwireSites.BOOTSTRAP.getOwner().getBytes(StandardCharsets.ISO_8859_1);
+    private static final byte[] HOLDER_PREFIX = TripwireSites.HOLDER_PREFIX.getBytes(StandardCharsets.ISO_8859_1);
     private static final int WIDE = 196;
     private static final byte[] LENGTHS = makeLengths();
 
@@ -31,15 +32,13 @@ final class SiteSplice {
     private int linesName;
     private int localsName;
     private int localTypesName;
-    private int bootstrapsName;
     private int voidType;
     private int booleanType;
     private boolean holdsSites;
 
+    private int offField;
     private int hitSite;
     private int gateSite;
-    private int bootstrapHandle;
-    private int bootstrapMod;
 
     private int moved;
 
@@ -49,11 +48,6 @@ final class SiteSplice {
     }
 
     static byte @Nullable [] arm(byte[] bytes, String mod) {
-        for (int at = 0; at < mod.length(); at++) {
-            if (mod.charAt(at) == 0 || mod.charAt(at) >= 0x80) {
-                return null;
-            }
-        }
         try {
             return new SiteSplice(bytes, mod).splice();
         } catch (IndexOutOfBoundsException | IllegalStateException e) {
@@ -84,12 +78,10 @@ final class SiteSplice {
         if (!anyHit && !anyGate) {
             return NO_CODE;
         }
-        boolean gateWithoutFrames = anyGate && this.framesName == 0;
-        int bootstraps = this.findAttribute(attributesAt, this.bootstrapsName);
-        this.out = new byte[this.in.length + MOST_POOL_GROWTH + this.mod.length() + methods * MOST_GROWTH];
+        this.out = new byte[this.in.length + MOST_POOL_GROWTH + methods * MOST_GROWTH];
         System.arraycopy(this.in, 0, this.out, 0, poolEnd);
         this.to = poolEnd;
-        int added = this.writePool(bootstraps < 0 ? 0 : this.u2(bootstraps + 6), anyHit, anyGate, gateWithoutFrames);
+        int added = this.writePool(TripwireSites.findHolder(this.mod), anyHit, anyGate);
         if (added > MOST_CODE) {
             return null;
         }
@@ -97,7 +89,7 @@ final class SiteSplice {
         this.out[9] = (byte) added;
         this.copy(poolEnd, methodsAt + 2 - poolEnd);
         this.writeMethods(methodsAt + 2, sites, gates);
-        this.writeAttributes(attributesAt, bootstraps);
+        this.copy(attributesAt, this.in.length - attributesAt);
         return Arrays.copyOf(this.out, this.to);
     }
 
@@ -155,11 +147,6 @@ final class SiteSplice {
                     this.linesName = entry;
                 }
             }
-            case 16 -> {
-                if (this.isText(at, length, "BootstrapMethods")) {
-                    this.bootstrapsName = entry;
-                }
-            }
             case 18 -> {
                 if (this.isText(at, length, "LocalVariableTable")) {
                     this.localsName = entry;
@@ -173,7 +160,8 @@ final class SiteSplice {
             default -> { }
         }
 
-        if (length == OWNER.length && Arrays.equals(this.in, at, at + length, OWNER, 0, length)) {
+        if (length > HOLDER_PREFIX.length
+                && Arrays.equals(this.in, at, at + HOLDER_PREFIX.length, HOLDER_PREFIX, 0, HOLDER_PREFIX.length)) {
             this.holdsSites = true;
         }
     }
@@ -304,80 +292,55 @@ final class SiteSplice {
         return lengths;
     }
 
-    private int findAttribute(int at, int name) {
-        int attributes = this.u2(at);
-        int place = at + 2;
-        for (int attribute = 0; attribute < attributes; attribute++) {
-            if (name != 0 && this.u2(place) == name) {
-                return place;
-            }
-            place += 6 + this.u4(place + 2);
-        }
-        return -1;
-    }
-
-    private int writePool(int bootstrap, boolean anyHit, boolean anyGate, boolean gateWithoutFrames) {
+    private int writePool(String holder, boolean anyHit, boolean anyGate) {
         int next = this.pool.length;
-        this.putText(TripwireSites.BOOTSTRAP.getOwner());
-        int owner = next++;
+        this.putText(holder);
+        int holderName = next++;
         this.put1(7);
-        this.put2(owner);
+        this.put2(holderName);
         int type = next++;
-        this.putText(TripwireSites.BOOTSTRAP.getName());
+        this.putText(TripwireSites.OFF);
         int name = next++;
-        this.putText(TripwireSites.BOOTSTRAP.getDesc());
+        this.putText("Z");
         int desc = next++;
         this.put1(12);
         this.put2(name);
         this.put2(desc);
         int nameAndType = next++;
-        this.put1(10);
+        this.put1(9);
         this.put2(type);
         this.put2(nameAndType);
-        int method = next++;
-        this.put1(15);
-        this.put1(Opcodes.H_INVOKESTATIC);
-        this.put2(method);
-        this.bootstrapHandle = next++;
-        this.putText(this.mod);
-        int modText = next++;
-        this.put1(8);
-        this.put2(modText);
-        this.bootstrapMod = next++;
+        this.offField = next++;
         if (anyHit) {
-            next = this.putSite(next, TripwireSites.HIT, "()V", this.voidType, bootstrap);
+            next = this.putCall(next, type, TripwireSites.HIT, "()V", this.voidType);
             this.hitSite = next - 1;
         }
         if (anyGate) {
-            next = this.putSite(next, TripwireSites.GATE_SITE, "()Z", this.booleanType, bootstrap);
+            next = this.putCall(next, type, TripwireSites.SKIP, "()Z", this.booleanType);
             this.gateSite = next - 1;
         }
-        if (gateWithoutFrames) {
+        if (this.framesName == 0) {
             this.putText("StackMapTable");
             this.framesName = next++;
-        }
-        if (this.bootstrapsName == 0) {
-            this.putText("BootstrapMethods");
-            this.bootstrapsName = next++;
         }
         return next;
     }
 
-    private int putSite(int first, String name, String type, int known, int bootstrap) {
+    private int putCall(int first, int type, String name, String desc, int known) {
         int next = first;
         this.putText(name);
         int nameEntry = next++;
-        int typeEntry = known;
+        int descEntry = known;
         if (known == 0) {
-            this.putText(type);
-            typeEntry = next++;
+            this.putText(desc);
+            descEntry = next++;
         }
         this.put1(12);
         this.put2(nameEntry);
-        this.put2(typeEntry);
+        this.put2(descEntry);
         int nameAndType = next++;
-        this.put1(18);
-        this.put2(bootstrap);
+        this.put1(10);
+        this.put2(type);
         this.put2(nameAndType);
         return next + 1;
     }
@@ -415,7 +378,7 @@ final class SiteSplice {
         int lengthAt = this.to;
         this.to += 4;
         int stack = this.u2(at + 6);
-        this.put2(returned == 0 ? stack : Math.max(stack, returned == 'J' || returned == 'D' ? 2 : 1));
+        this.put2(Math.max(stack, returned == 'J' || returned == 'D' ? 2 : 1));
         this.copy(at + 8, 2);
         this.put4(length + this.moved);
         this.writeSite(returned);
@@ -439,7 +402,7 @@ final class SiteSplice {
         for (int attribute = 0; attribute < attributes; attribute++) {
             int kind = this.u2(place);
             if (kind == this.framesName) {
-                this.writeFrames(place, returned != 0);
+                this.writeFrames(place);
                 framed = true;
             } else if (kind == this.linesName) {
                 this.writeTable(place, 4);
@@ -448,7 +411,7 @@ final class SiteSplice {
             }
             place += 6 + this.u4(place + 2);
         }
-        if (returned != 0 && !framed) {
+        if (!framed) {
             this.put2(this.framesName);
             this.put4(3);
             this.put2(1);
@@ -460,13 +423,17 @@ final class SiteSplice {
     }
 
     private void writeSite(byte returned) {
-        this.put1(Opcodes.INVOKEDYNAMIC);
-        this.put2(returned == 0 ? this.hitSite : this.gateSite);
-        this.put2(0);
+        this.put1(Opcodes.GETSTATIC);
+        this.put2(this.offField);
+        this.put1(Opcodes.IFEQ);
+        this.put2(this.moved - 3);
+        this.put1(Opcodes.INVOKESTATIC);
         if (returned == 0) {
+            this.put2(this.hitSite);
             this.fillNops(this.moved - HIT_LENGTH);
             return;
         }
+        this.put2(this.gateSite);
         int ending = returned == 'V' ? 1 : 2;
         this.fillNops(this.moved - GATE_LENGTH - ending);
         this.put1(Opcodes.IFEQ);
@@ -512,25 +479,23 @@ final class SiteSplice {
         }
     }
 
-    private void writeFrames(int at, boolean gate) {
+    private void writeFrames(int at) {
         this.copy(at, 2);
         int lengthAt = this.to;
         this.to += 4;
         int entries = this.u2(at + 6);
         int place = at + 8;
         if (entries == 0) {
-            this.put2(gate ? 1 : 0);
-            if (gate) {
-                this.put1(this.moved);
-            }
+            this.put2(1);
+            this.put1(this.moved);
         } else {
             int first = this.findDelta(place);
-            boolean ownFrame = gate && first != 0;
+            boolean ownFrame = first != 0;
             this.put2(entries + (ownFrame ? 1 : 0));
             if (ownFrame) {
                 this.put1(this.moved);
             }
-            place = this.writeFrame(place, ownFrame ? first - 1 : first + this.moved);
+            place = this.writeFrame(place, ownFrame ? first - 1 : this.moved);
             for (int entry = 1; entry < entries; entry++) {
                 place = this.writeFrame(place, this.findDelta(place));
             }
@@ -603,37 +568,6 @@ final class SiteSplice {
             return at + 3;
         }
         return at + 1;
-    }
-
-    private void writeAttributes(int at, int bootstraps) {
-        int attributes = this.u2(at);
-        this.put2(bootstraps < 0 ? attributes + 1 : attributes);
-        int place = at + 2;
-        for (int attribute = 0; attribute < attributes; attribute++) {
-            int length = 6 + this.u4(place + 2);
-            if (place == bootstraps) {
-                this.copy(place, 2);
-                this.put4(this.u4(place + 2) + 6);
-                this.put2(this.u2(place + 6) + 1);
-                this.copy(place + 8, length - 8);
-                this.putBootstrap();
-            } else {
-                this.copy(place, length);
-            }
-            place += length;
-        }
-        if (bootstraps < 0) {
-            this.put2(this.bootstrapsName);
-            this.put4(8);
-            this.put2(1);
-            this.putBootstrap();
-        }
-    }
-
-    private void putBootstrap() {
-        this.put2(this.bootstrapHandle);
-        this.put2(1);
-        this.put2(this.bootstrapMod);
     }
 
     private void copy(int at, int length) {
