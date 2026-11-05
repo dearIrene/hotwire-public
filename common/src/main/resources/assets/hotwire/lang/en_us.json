@@ -480,7 +480,7 @@
   "hotwire.settings.reload_popups.problems": "Problems",
   "hotwire.settings.reload_popups.problems.note": "You only get a popup when something couldn't go in",
   "hotwire.settings.developer.not_setup": "These only work when you run the game from your mod's dev setup, so Loom's runClient or your IDE",
-  "hotwire.settings.developer.other_java": "Run the game on the JetBrains Runtime for full reloads, otherwise adding fields or methods to a class has to wait for a restart",
+  "hotwire.settings.developer.other_java": "Run the game on the JetBrains Runtime for full reloads, otherwise a few changes like a new enum value or config option wait for a restart",
   "hotwire.settings.developer.no_flag": "You're on the JetBrains Runtime so add -XX:+AllowEnhancedClassRedefinition to your VM options for full reloads",
   "hotwire.settings.developer.full": "You're on the JetBrains Runtime with full reloads so every change you build goes in",
   "hotwire.anti_crash.title": "Anti-Crash",

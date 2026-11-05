@@ -39,7 +39,7 @@ public final class DevSession implements DevHost, AutoCloseable {
     private static final int MOST_EVENTS = 40;
     private static final int MOST_CRASHES = 20;
 
-    private static final long REMOVAL_SETTLE_MILLIS = 2000;
+    private static final long REMOVAL_WAIT_MILLIS = 2000;
     private static final int LISTED = 6;
     private static volatile @Nullable DevSession current;
 
@@ -220,12 +220,12 @@ public final class DevSession implements DevHost, AutoCloseable {
             long now = System.currentTimeMillis();
             if (diff.removedClasses().isEmpty()) {
                 mod.goneSince = 0;
-            } else if (mod.goneSince == 0 || now - mod.goneSince < REMOVAL_SETTLE_MILLIS) {
+            } else if (mod.goneSince == 0 || now - mod.goneSince < REMOVAL_WAIT_MILLIS) {
                 if (mod.goneSince == 0) {
                     mod.goneSince = now;
                 }
                 deleteQuietly(jar);
-                this.watch.lookAgain(mod.mod, TimeUnit.MILLISECONDS.toNanos(REMOVAL_SETTLE_MILLIS));
+                this.watch.lookAgain(mod.mod, TimeUnit.MILLISECONDS.toNanos(REMOVAL_WAIT_MILLIS));
                 return;
             }
             if (diff.isEmpty()) {

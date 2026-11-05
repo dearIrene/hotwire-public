@@ -25,7 +25,7 @@ public final class WorldLeaks {
 
     private static final int DEPTH = 4;
     private static final int MOST_OBJECTS = 20_000;
-    private static final long SETTLE_MILLIS = 5000;
+    private static final long WAIT_MILLIS = 5000;
 
     public record Holder(String mod, String path) {
     }
@@ -38,7 +38,7 @@ public final class WorldLeaks {
         WeakReference<Object> left = new WeakReference<>(world);
         Thread.ofPlatform().name("hotwire-world-leaks").daemon().start(() -> {
             try {
-                Thread.sleep(SETTLE_MILLIS);
+                Thread.sleep(WAIT_MILLIS);
                 if (left.get() == null) {
                     return;
                 }

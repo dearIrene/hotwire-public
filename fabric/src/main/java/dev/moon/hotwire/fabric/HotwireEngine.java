@@ -131,6 +131,10 @@ public final class HotwireEngine implements ModScreen.Game, AutoCloseable {
         this.bound = bound;
 
         DevSession.useFullRedefinition(DevSetups.get().isFull());
+        if (DevSetups.get().inSetup()) {
+            LOGGER.info("[Hotwire] developer mode on {} {}: {}", System.getProperty("java.vendor"),
+                    System.getProperty("java.version"), DevSetups.get().jvm());
+        }
         this.dev = settings.isDevReloadOn(DevSetups.get().inSetup()) ? DevSession.start(DevSetups.getBuildFolder(),
                 this.tasks, new DevEngine(this::findParts, this::getSwitchRefusal, installed, settings)) : null;
 
