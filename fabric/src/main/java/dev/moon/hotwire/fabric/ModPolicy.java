@@ -77,7 +77,7 @@ public final class ModPolicy {
     }
 
     public static boolean isUpdatedLive(String id) {
-        return isSwitchable(id) || isFabricApi(id) || ALWAYS_ON.contains(id);
+        return isSwitchable(id) || isFabricApi(id);
     }
 
     public static boolean isSwitchable(String id) {
