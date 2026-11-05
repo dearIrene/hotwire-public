@@ -108,13 +108,17 @@ public final class ResourceReload {
         boolean particles = hasAny(types, List.of(Particle.class));
         boolean sounds = hasAny(types, List.of(SoundInstance.class));
         boolean language = hasAny(findLoaded(rebuilt), LANGUAGE);
-        if (!renderers && !screens && !particles && !sounds && !language && !reload) {
+        boolean world = WorldRendererReset.isHeld(types);
+        if (!renderers && !screens && !particles && !sounds && !language && !reload && !world) {
             return;
         }
         Minecraft game = Minecraft.getInstance();
         try {
             GameHold.onGameBeforeNextFrame(() -> {
                 OngoingReload.await(game);
+                if (world) {
+                    WorldRendererReset.run();
+                }
 
                 boolean renderersOnly = !reloadAsked && !hasAny(types, RELOADED);
                 if (reload && !reloadedWhilePaused && !(renderersOnly && reloadedRenderers)) {
@@ -147,6 +151,9 @@ public final class ResourceReload {
             List<String> made = new ArrayList<>();
             if (renderers) {
                 made.add("renderers");
+            }
+            if (world) {
+                made.add("the world's renderer");
             }
             if (screens) {
                 made.add("screens");
