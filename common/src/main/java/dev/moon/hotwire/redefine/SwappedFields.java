@@ -77,6 +77,10 @@ final class SwappedFields {
                 split.ducks(), split.fieldHolder(), split.movedInstance(), split.rehashes());
     }
 
+    static boolean isMadePlainly(ClassNode game, String field) {
+        return findMade(game, Set.of(field)).containsKey(field);
+    }
+
     private static void addWrites(MethodNode method, String owner, Set<String> fields, Set<String> into) {
         for (AbstractInsnNode insn : method.instructions) {
             if (insn instanceof FieldInsnNode store && store.getOpcode() == Opcodes.PUTFIELD

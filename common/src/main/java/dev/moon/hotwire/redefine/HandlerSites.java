@@ -216,7 +216,8 @@ final class HandlerSites {
                         && store.owner.equals(internalName) && store.name.indexOf('$') < 0) {
                     ClassNode game = shipped.get();
                     if (game != null && game.fields.stream().anyMatch(own -> own.name.equals(store.name)
-                            && own.desc.equals(store.desc) && (own.access & Opcodes.ACC_FINAL) != 0)) {
+                            && own.desc.equals(store.desc) && (own.access & Opcodes.ACC_FINAL) != 0)
+                            && SwappedFields.isMadePlainly(game, store.name + store.desc)) {
                         HandlerGuards.markUnflippable(internalName, mixin, "writes the game's final " + store.name);
                     }
                 }
