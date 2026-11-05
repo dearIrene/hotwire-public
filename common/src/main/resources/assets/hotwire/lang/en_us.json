@@ -737,5 +737,7 @@
   "hotwire.dev.tab.mixins": "Mixins",
   "hotwire.dev.window.no_mixins": "Your mod has no mixins",
   "hotwire.dev.mixin.alone": "Only yours changes it",
-  "hotwire.dev.mixin.also": "Also changed by %s"
+  "hotwire.dev.mixin.also": "Also changed by %s",
+  "hotwire.dev.left_over": "Kept running through the off, which a fresh start would not have:",
+  "hotwire.dev.left_over.count": "%s things of your mod kept running through the off, the window lists them"
 }

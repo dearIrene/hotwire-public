@@ -6,6 +6,7 @@ import dev.moon.hotwire.fabric.dev.DevSession;
 import dev.moon.hotwire.fabric.update.ModUpdater;
 import dev.moon.hotwire.fabric.update.UpdateSupport;
 import dev.moon.hotwire.jar.ModJar;
+import dev.moon.hotwire.report.Report;
 import dev.moon.hotwire.switching.ModSwitcher;
 import dev.moon.hotwire.switching.PlayerMessages;
 import dev.moon.hotwire.ui.UpdateMethod;
@@ -52,17 +53,20 @@ final class DevEngine implements DevSession.Engine {
     }
 
     @Override
-    public @Nullable String restart(String id) {
+    public DevSession.Restart restart(String id) {
         HotwireEngine.JvmParts found = this.parts.get();
         if (found == null) {
-            return this.refusal.get();
+            return new DevSession.Restart(this.refusal.get(), List.of());
         }
-        ModSwitcher.Result off = SwitchRunner.runQuietly(() -> found.runner().turnOff(List.of(id))).result();
-        if (!(off instanceof ModSwitcher.Result.Done done)) {
-            return PlayerMessages.describe(off, this.installed::nameOf);
+        SwitchRunner.CheckedResult checked = SwitchRunner.runQuietly(() -> found.runner().turnOff(List.of(id)));
+        if (!(checked.result() instanceof ModSwitcher.Result.Done done)) {
+            return new DevSession.Restart(PlayerMessages.describe(checked.result(), this.installed::nameOf), List.of());
         }
+        List<String> leftOver = checked.check() instanceof Report.OffCheck.PartlyOff partly
+                ? partly.stillLive().getOrDefault(id, List.of()) : List.of();
         ModSwitcher.Result on = SwitchRunner.runQuietly(() -> found.runner().turnOn(done.plan().order())).result();
-        return PlayerMessages.isBad(on) ? PlayerMessages.describe(on, this.installed::nameOf) : null;
+        return new DevSession.Restart(PlayerMessages.isBad(on) ? PlayerMessages.describe(on, this.installed::nameOf)
+                : null, leftOver);
     }
 
     @Override

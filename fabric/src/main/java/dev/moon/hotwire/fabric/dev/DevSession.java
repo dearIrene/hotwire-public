@@ -49,6 +49,12 @@ public final class DevSession implements DevHost, AutoCloseable {
     private record Start(DevMod mod, DevBuild build) {
     }
 
+    public record Restart(@Nullable String failure, List<String> leftOver) {
+        public Restart {
+            leftOver = List.copyOf(leftOver);
+        }
+    }
+
     public interface Engine {
         UpdatePreview preview(Path jar);
 
@@ -56,7 +62,7 @@ public final class DevSession implements DevHost, AutoCloseable {
 
         String describe(ModUpdater.Result result);
 
-        @Nullable String restart(String id);
+        Restart restart(String id);
 
         boolean isEveryReloadShown();
 
@@ -420,14 +426,20 @@ public final class DevSession implements DevHost, AutoCloseable {
             long began = System.nanoTime();
             mod.state = DevState.LOADING;
             mod.line = Lang.get("hotwire.dev.restarting");
-            String why = this.engine.restart(id);
-            if (why != null) {
-                this.fail(mod, List.of(why));
+            Restart done = this.engine.restart(id);
+            if (done.failure() != null) {
+                this.fail(mod, List.of(done.failure()));
             } else {
                 mod.state = DevState.UP_TO_DATE;
                 mod.line = "";
+                List<String> lines = new ArrayList<>();
+                if (!done.leftOver().isEmpty()) {
+                    lines.add(Lang.get("hotwire.dev.left_over"));
+                    lines.addAll(done.leftOver());
+                }
                 this.tell(mod, DevEvent.Kind.RESTARTED, Lang.get("hotwire.dev.restarted", mod.mod.name()),
-                        Lang.get("hotwire.dev.took.only", findSeconds(began)), List.of());
+                        done.leftOver().isEmpty() ? Lang.get("hotwire.dev.took.only", findSeconds(began))
+                                : Lang.get("hotwire.dev.left_over.count", done.leftOver().size()), lines);
             }
             return null;
         });
