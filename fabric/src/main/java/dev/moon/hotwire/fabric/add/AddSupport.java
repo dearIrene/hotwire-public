@@ -16,6 +16,7 @@ import dev.moon.hotwire.jar.ModManifest;
 import dev.moon.hotwire.mixin_copy.MixinCopy;
 import dev.moon.hotwire.plan.ModGraph;
 import dev.moon.hotwire.plan.SwitchPlanner;
+import dev.moon.hotwire.redefine.OpenGameClasses;
 import dev.moon.hotwire.report.ActionJournal;
 import dev.moon.hotwire.report.Report;
 import dev.moon.hotwire.switching.ModSwitcher;
@@ -264,7 +265,8 @@ public final class AddSupport implements ModAdder.Engine {
     public int getModifiers(String internalName) {
         ClassReader reader = new ClassReader(Objects.requireNonNull(this.classes.findOriginalBytes(internalName),
                 internalName));
-        return reader.getAccess() | ("java/lang/Record".equals(reader.getSuperName()) ? Opcodes.ACC_RECORD : 0);
+        int access = reader.getAccess() | ("java/lang/Record".equals(reader.getSuperName()) ? Opcodes.ACC_RECORD : 0);
+        return OpenGameClasses.isOpened(internalName) ? access & ~Opcodes.ACC_FINAL : access;
     }
 
     @Override

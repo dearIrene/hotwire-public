@@ -6,6 +6,7 @@ import dev.moon.hotwire.jvm.JvmAccess;
 import dev.moon.hotwire.jvm.JvmAccessException;
 import dev.moon.hotwire.redefine.HandlerGuards;
 import dev.moon.hotwire.redefine.LoadedClassBytes;
+import dev.moon.hotwire.redefine.OpenGameClasses;
 import dev.moon.hotwire.report.StartTimes;
 import java.io.IOException;
 import java.io.InputStream;
@@ -78,6 +79,8 @@ public final class EarlyDefinitions implements PreLaunchEntrypoint {
                     return made;
                 }
             };
+
+            found.addTransformer(new OpenGameClasses(game));
             found.addTransformer(watcher);
             instrumentation = found;
             early = watcher;
