@@ -11,6 +11,7 @@ import java.util.Deque;
 import java.util.HashMap;
 import java.util.HashSet;
 import java.util.LinkedHashMap;
+import java.util.List;
 import java.util.Map;
 import java.util.Set;
 import java.util.TreeSet;
@@ -52,6 +53,9 @@ public final class ContentScan {
 
     private static final String MIXIN = "Lorg/spongepowered/asm/mixin/Mixin;";
     private static final String REGISTRY = "net/minecraft/core/Registry";
+
+    private static final List<String> NEVER_REGISTER = List.of("java/", "javax/", "kotlin/", "com/google/",
+            "com/mojang/", "net/fabricmc/fabric/api/event/Event", "net/fabricmc/fabric/api/networking/");
 
     private static final ClassVisitor BODIES = new ClassVisitor(Opcodes.ASM9) {
         @Override
@@ -204,7 +208,8 @@ public final class ContentScan {
 
     private static boolean isRegistering(MethodInsnNode call) {
         boolean named = call.name.startsWith("register") || call.name.equals("create");
-        return named && (!call.owner.startsWith("net/minecraft/") || call.owner.equals(REGISTRY));
+        return named && (call.owner.equals(REGISTRY) || (!call.owner.startsWith("net/minecraft/")
+                && NEVER_REGISTER.stream().noneMatch(call.owner::startsWith)));
     }
 
     private static @Nullable String findKindOf(String name, Map<String, String> superOf,
