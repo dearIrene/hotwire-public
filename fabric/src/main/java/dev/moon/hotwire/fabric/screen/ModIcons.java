@@ -241,6 +241,15 @@ public final class ModIcons implements AutoCloseable {
                 }));
     }
 
+    public static Optional<byte[]> readFile(Path jar, String id, Optional<String> declared) throws IOException {
+        Optional<byte[]> file = fromJar(jar, getIconPath(id, declared));
+        if (file.isPresent()) {
+            return file;
+        }
+        Optional<String> only = findOnlyImageInJar(jar, id);
+        return only.isEmpty() ? Optional.empty() : fromJar(jar, only.get());
+    }
+
     public static Optional<Icon> decodeFor(String name, String path, byte[] bytes) {
         return makeIcon(name, path, bytes, IconPixels.STORE_BOX);
     }
@@ -257,7 +266,7 @@ public final class ModIcons implements AutoCloseable {
                     return Optional.empty();
                 }
                 path = only.get();
-                bytes = jar == null ? fromGame(new Source(source.id(), null, path)) : fromJar(jar, path);
+                bytes = jar == null ? fromGameFile(source.id(), path) : fromJar(jar, path);
                 if (bytes.isEmpty()) {
                     return Optional.empty();
                 }
@@ -295,14 +304,25 @@ public final class ModIcons implements AutoCloseable {
         return file.isEmpty() ? Optional.empty() : Optional.of(Files.readAllBytes(file.get()));
     }
 
+    private static Optional<byte[]> fromGameFile(String id, String path) throws IOException {
+        Optional<Path> file = findContainer(id).flatMap(mod -> mod.findPath(path)).filter(Files::isRegularFile);
+        return file.isEmpty() ? Optional.empty() : Optional.of(Files.readAllBytes(file.get()));
+    }
+
     private static boolean isImage(String name) {
         String low = name.toLowerCase(Locale.ROOT);
         return low.endsWith(".png") || low.endsWith(".svg") || low.endsWith(".webp");
     }
 
-    private static Optional<String> pickOnly(List<String> images) {
+    private static Optional<String> pickOnly(List<String> images, String id) {
         if (images.size() == 1) {
             return Optional.of(images.getFirst());
+        }
+        String own = id.toLowerCase(Locale.ROOT) + ".";
+        Optional<String> namedAfter = images.stream().filter(path -> path.substring(path.lastIndexOf('/') + 1)
+                .toLowerCase(Locale.ROOT).startsWith(own)).findFirst();
+        if (namedAfter.isPresent()) {
+            return namedAfter;
         }
         List<String> named = images.stream().filter(path -> {
             String file = path.substring(path.lastIndexOf('/') + 1).toLowerCase(Locale.ROOT);
@@ -325,7 +345,7 @@ public final class ModIcons implements AutoCloseable {
         }
         try (Stream<Path> files = Files.list(found.get())) {
             return pickOnly(files.map(file -> file.getFileName().toString()).filter(ModIcons::isImage)
-                    .map(name -> folder + "/" + name).toList());
+                    .map(name -> folder + "/" + name).toList(), id);
         }
     }
 
@@ -333,7 +353,7 @@ public final class ModIcons implements AutoCloseable {
         String folder = "assets/" + id + "/";
         try (ZipFile zip = new ZipFile(jar.toFile())) {
             return pickOnly(zip.stream().map(ZipEntry::getName).filter(name -> name.startsWith(folder)
-                    && name.indexOf('/', folder.length()) < 0 && isImage(name)).toList());
+                    && name.indexOf('/', folder.length()) < 0 && isImage(name)).toList(), id);
         }
     }
 

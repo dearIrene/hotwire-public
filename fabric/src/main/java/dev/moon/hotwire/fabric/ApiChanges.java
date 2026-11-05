@@ -8,6 +8,7 @@ import dev.moon.hotwire.api.PendingTask;
 import dev.moon.hotwire.api.SwitchPreview;
 import dev.moon.hotwire.api.SwitchResult;
 import dev.moon.hotwire.fabric.add.ModAdder;
+import dev.moon.hotwire.fabric.screen.ModIcons;
 import dev.moon.hotwire.fabric.store.UpdateCheck;
 import dev.moon.hotwire.fabric.update.ModUpdater;
 import dev.moon.hotwire.jar.JarLookup;
@@ -24,7 +25,6 @@ import dev.moon.hotwire.ui.UpdateMethod;
 import dev.moon.hotwire.update.PendingChange;
 import dev.moon.hotwire.update.UpdateOffer;
 import java.io.IOException;
-import java.io.InputStream;
 import java.io.UncheckedIOException;
 import java.nio.file.Path;
 import java.util.ArrayList;
@@ -34,8 +34,6 @@ import java.util.Set;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.atomic.AtomicInteger;
 import java.util.stream.Collectors;
-import java.util.zip.ZipEntry;
-import java.util.zip.ZipFile;
 import net.minecraft.client.Minecraft;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -269,18 +267,11 @@ final class ApiChanges {
         HotwireEngine engine = HotwireClient.findEngine();
         Path jar = engine == null ? null : engine.findJarOf(id);
         ModManifest manifest = jar == null ? null : JarLookup.findManifest(jar);
-        String icon = manifest == null ? null : manifest.icon().orElse(null);
-        if (jar == null || icon == null) {
+        if (jar == null || manifest == null) {
             return Optional.empty();
         }
-        try (ZipFile zip = new ZipFile(jar.toFile())) {
-            ZipEntry entry = zip.getEntry(icon);
-            if (entry == null) {
-                return Optional.empty();
-            }
-            try (InputStream in = zip.getInputStream(entry)) {
-                return Optional.of(in.readAllBytes());
-            }
+        try {
+            return ModIcons.readFile(jar, id, manifest.icon());
         } catch (IOException e) {
             LOGGER.warn("[Hotwire] the icon of {} could not be read", id, e);
             return Optional.empty();
