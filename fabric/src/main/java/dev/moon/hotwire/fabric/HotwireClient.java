@@ -1,6 +1,8 @@
 package dev.moon.hotwire.fabric;
 
+//? if >=26.1 {
 import dev.moon.hotwire.fabric.add.LoadStatusViews;
+//?}
 import dev.moon.hotwire.fabric.registration.OffModClose;
 import dev.moon.hotwire.fabric.registration.OffModCommands;
 import dev.moon.hotwire.fabric.registration.TakeoutRecord;
