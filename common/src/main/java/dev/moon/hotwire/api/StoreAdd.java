@@ -12,6 +12,8 @@ public interface StoreAdd {
 
     boolean canAdd();
 
+    ChangePlan.Reason getReason();
+
     CompletableFuture<SwitchResult> accept();
 
     void cancel();

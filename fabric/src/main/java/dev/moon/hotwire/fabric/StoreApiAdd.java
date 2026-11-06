@@ -1,5 +1,6 @@
 package dev.moon.hotwire.fabric;
 
+import dev.moon.hotwire.api.ChangePlan;
 import dev.moon.hotwire.api.StoreAdd;
 import dev.moon.hotwire.api.StoreKind;
 import dev.moon.hotwire.api.StoreProject;
@@ -7,6 +8,8 @@ import dev.moon.hotwire.api.StoreQuery;
 import dev.moon.hotwire.api.SwitchResult;
 import dev.moon.hotwire.fabric.add.ModAdder;
 import dev.moon.hotwire.fabric.store.ModStore;
+import dev.moon.hotwire.jar.JarLookup;
+import dev.moon.hotwire.jar.ModManifest;
 import dev.moon.hotwire.modrinth.Downloads;
 import dev.moon.hotwire.ui.AddMode;
 import dev.moon.hotwire.ui.AddPreview;
@@ -161,6 +164,37 @@ final class StoreApiAdd {
         public boolean canAdd() {
             return this.engine != null && !this.jars.isEmpty()
                     && this.previews.stream().noneMatch(preview -> preview.mode() == AddMode.REFUSED);
+        }
+
+        @Override
+        public ChangePlan.Reason getReason() {
+            HotwireEngine at = this.engine;
+            if (at == null) {
+                return this.previews.isEmpty() ? ChangePlan.Reason.NOT_READY : ChangePlan.Reason.REFUSED;
+            }
+            if (this.jars.isEmpty()) {
+                return ChangePlan.Reason.REFUSED;
+            }
+            ChangePlan.Reason reason = ChangePlan.Reason.NONE;
+            for (int index = 0; index < this.previews.size(); index++) {
+                switch (this.previews.get(index).mode()) {
+                    case REFUSED -> {
+                        ModManifest manifest = index < this.jars.size() ? JarLookup.findManifest(this.jars.get(index))
+                                : null;
+                        return manifest != null && at.findJarOf(manifest.id()) != null ? ChangePlan.Reason.INSTALLED
+                                : ChangePlan.Reason.REFUSED;
+                    }
+                    case NEXT_START -> reason = ChangePlan.Reason.NEEDS_RESTART;
+                    case SAVE_AND_REOPEN -> {
+                        if (reason == ChangePlan.Reason.NONE) {
+                            reason = ChangePlan.Reason.NEEDS_REOPEN;
+                        }
+                    }
+                    case NOW -> {
+                    }
+                }
+            }
+            return reason;
         }
 
         @Override

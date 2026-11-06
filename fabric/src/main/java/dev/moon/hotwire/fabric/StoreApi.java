@@ -163,7 +163,7 @@ final class StoreApi {
     static List<StoreDownload> getDownloads() {
         return Downloads.snapshotAll().stream().map(job -> new StoreDownload(job.name(), job.done(), job.total(),
                 job.isOver(), job.state() == Downloads.State.DONE, job.id(),
-                StoreDownload.State.valueOf(job.state().name()))).toList();
+                StoreDownload.State.valueOf(job.state().name()), Downloads.findTag(job.id()))).toList();
     }
 
     static StorePackState findPackState(StoreKind kind, String projectId) {
@@ -192,9 +192,14 @@ final class StoreApi {
         }));
     }
 
-    static CompletableFuture<StoreAdd> requestAdd(String idOrSlug, String versionId, @Nullable String asker) {
+    @SuppressWarnings("FutureReturnValueIgnored")
+    static CompletableFuture<StoreAdd> requestAdd(String idOrSlug, String versionId, String tag,
+            @Nullable String asker) {
         LOGGER.info("[Hotwire] {} asked to add {} from Modrinth", asker == null ? "a mod" : asker, idOrSlug);
-        return StoreApiAdd.request(idOrSlug, versionId);
+        Runnable endTag = Downloads.beginTag(tag);
+        CompletableFuture<StoreAdd> made = StoreApiAdd.request(idOrSlug, versionId);
+        made.whenComplete((done, failed) -> endTag.run());
+        return made;
     }
 
     static CompletableFuture<SwitchResult> queueForNextStart(String idOrSlug, String versionId) {

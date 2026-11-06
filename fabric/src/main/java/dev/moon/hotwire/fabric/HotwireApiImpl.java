@@ -4,6 +4,7 @@ import dev.moon.hotwire.api.ApiStatus;
 import dev.moon.hotwire.api.ChangePlan;
 import dev.moon.hotwire.api.ChangeRequest;
 import dev.moon.hotwire.api.HotwireApi;
+import dev.moon.hotwire.api.ModLifecycleListener;
 import dev.moon.hotwire.api.ModState;
 import dev.moon.hotwire.api.ModUpdates;
 import dev.moon.hotwire.api.OpeningPrompt;
@@ -57,7 +58,7 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 public final class HotwireApiImpl implements HotwireApi {
-    private static final int REVISION = 8;
+    private static final int REVISION = 9;
     private static final StackWalker STACK = StackWalker.getInstance(StackWalker.Option.RETAIN_CLASS_REFERENCE);
     private static final Logger LOGGER = LoggerFactory.getLogger(HotwireApiImpl.class);
 
@@ -156,6 +157,18 @@ public final class HotwireApiImpl implements HotwireApi {
     }
 
     @Override
+    public CompletableFuture<SwitchResult> queueHotwireUpdate() {
+        CompletableFuture<SwitchResult> done = new CompletableFuture<>();
+        HotwireEngine engine = HotwireClient.findEngine();
+        if (engine == null) {
+            done.complete(new SwitchResult(SwitchResult.Kind.REFUSED, List.of(), Lang.get("hotwire.api.starting")));
+        } else {
+            Minecraft.getInstance().execute(() -> engine.updateHotwireAtNextStart(done));
+        }
+        return done;
+    }
+
+    @Override
     public CompletableFuture<ModUpdates> checkUpdates() {
         return ApiChanges.checkUpdates();
     }
@@ -200,7 +213,8 @@ public final class HotwireApiImpl implements HotwireApi {
             String blocked = CallerBlocks.describeRow(mod.id(), ModPolicy.isSwitchable(mod.id()), callers, neededBy,
                     engine::nameOfMod);
             return new ModState(mod.id(), mod.name(), mod.version(), mod.on(),
-                    engine.getDisabled().isDisabledSinceStart(mod.id()), blocked.isEmpty(), blocked);
+                    engine.getDisabled().isDisabledSinceStart(mod.id()), blocked.isEmpty(), blocked,
+                    engine.findCopyOf(mod.id()));
         }).toList();
     }
 
@@ -319,7 +333,12 @@ public final class HotwireApiImpl implements HotwireApi {
 
     @Override
     public CompletableFuture<StoreAdd> requestAdd(String idOrSlug, String versionId) {
-        return StoreApi.requestAdd(idOrSlug, versionId, findCallers().findAsker());
+        return StoreApi.requestAdd(idOrSlug, versionId, "", findCallers().findAsker());
+    }
+
+    @Override
+    public CompletableFuture<StoreAdd> requestAdd(String idOrSlug, String versionId, String tag) {
+        return StoreApi.requestAdd(idOrSlug, versionId, tag, findCallers().findAsker());
     }
 
     @Override
@@ -448,6 +467,11 @@ public final class HotwireApiImpl implements HotwireApi {
     @Override
     public void addListener(Consumer<SwitchResult> listener) {
         LISTENERS.add(new Listener(listener, GameRegistrations.findModOrShipper(listener.getClass())));
+    }
+
+    @Override
+    public void addLifecycleListener(ModLifecycleListener listener) {
+        LifecycleListeners.add(listener);
     }
 
     @Override

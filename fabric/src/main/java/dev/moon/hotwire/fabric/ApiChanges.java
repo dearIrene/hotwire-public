@@ -73,9 +73,13 @@ final class ApiChanges {
         return made;
     }
 
+    @SuppressWarnings("FutureReturnValueIgnored")
     static CompletableFuture<ChangePlan> plan(ChangeRequest request, CallerBlocks.Callers callers) {
         CompletableFuture<ChangePlan> made = new CompletableFuture<>();
         LOGGER.info("[Hotwire] {} asked to plan {}", callers.findAsker(), request);
+
+        Runnable endTag = Downloads.beginTag(request.tag());
+        made.whenComplete((done, failed) -> endTag.run());
         Thread.ofPlatform().name("hotwire-api-plan").daemon().start(() -> {
             try {
                 made.complete(work(request, callers));
@@ -197,7 +201,22 @@ final class ApiChanges {
                 }
             }
         }
+
         boolean reopen = false;
+        boolean oneWay = request.off().isEmpty() != request.on().isEmpty();
+        if (can && oneWay && request.update().isEmpty() && request.add().isEmpty() && request.jars().isEmpty()) {
+            HotwireEngine.JvmParts parts = engine.findJvmParts().orElseThrow();
+            boolean off = !request.off().isEmpty();
+            SwitchPlan planned = off ? parts.runner().getSwitcher().planOff(request.off())
+                    : parts.runner().getSwitcher().planOn(request.on());
+            if (parts.runner().getSwitcher().needsReopen(planned)) {
+                reopen = true;
+                lines.add(Lang.get("hotwire.api.switch_reopen"));
+                if (reason == ChangePlan.Reason.NONE) {
+                    reason = ChangePlan.Reason.NEEDS_REOPEN;
+                }
+            }
+        }
         for (Path jar : adding) {
             AddPreview preview = engine.dryRunAdd(jar).join();
             addModes.add(preview.mode());
@@ -227,21 +246,39 @@ final class ApiChanges {
                 List.copyOf(addModes), reopen);
     }
 
-    private static List<String> addAll(HotwireEngine engine, List<Path> jars, List<AddMode> modes) {
-        List<String> bad = new ArrayList<>();
+    private record Made(List<String> bad, List<String> now, List<String> later) {
+        Made() {
+            this(new ArrayList<>(), new ArrayList<>(), new ArrayList<>());
+        }
+    }
+
+    private static Made addAll(HotwireEngine engine, List<Path> jars, List<AddMode> modes) {
+        Made made = new Made();
         for (int at = 0; at < jars.size(); at++) {
             Path jar = jars.get(at);
             AddMode mode = modes.get(at);
             CompletableFuture<ModAdder.Result> added = new CompletableFuture<>();
             Minecraft.getInstance().execute(() -> engine.add(jar, mode, added::complete));
-            ModAdder.Result result = added.join();
-            if (result instanceof ModAdder.Result.Failed failed) {
-                bad.add(failed.reason());
-            } else if (result instanceof ModAdder.Result.Refused refused) {
-                bad.add(refused.reason());
+            switch (added.join()) {
+                case ModAdder.Result.Added one -> made.now().addAll(one.ids());
+                case ModAdder.Result.Queued queued -> made.later().add(queued.id());
+                case ModAdder.Result.Refused refused -> made.bad().add(refused.reason());
+                case ModAdder.Result.Failed failed -> made.bad().add(failed.reason());
             }
         }
-        return bad;
+        return made;
+    }
+
+    private static Made readUpdates(List<ModUpdater.Result> results) {
+        Made made = new Made();
+        for (ModUpdater.Result result : results) {
+            switch (result) {
+                case ModUpdater.Result.Updated updated -> made.now().add(updated.id());
+                case ModUpdater.Result.Queued queued -> made.later().add(queued.id());
+                default -> made.bad().add(describe(result));
+            }
+        }
+        return made;
     }
 
     static List<PendingTask> findPending() {
@@ -339,17 +376,16 @@ final class ApiChanges {
                 return ended;
             }
             Thread.ofPlatform().name("hotwire-api-queue").daemon().start(() -> {
-                List<String> bad = new ArrayList<>();
-                for (Path jar : this.jars) {
-                    ModUpdater.Result queued = engine.getChanges().queueUpdate(jar);
-                    if (!(queued instanceof ModUpdater.Result.Queued)) {
-                        bad.add(describe(queued));
-                    }
-                }
-                bad.addAll(addAll(engine, this.adding, this.adding.stream().map(jar -> AddMode.NEXT_START).toList()));
-                ended.complete(bad.isEmpty()
-                        ? new SwitchResult(SwitchResult.Kind.DONE, List.of(), Lang.get("hotwire.api.change_done"))
-                        : new SwitchResult(SwitchResult.Kind.FAILED, List.of(), String.join(" ", bad)));
+                Made updates = readUpdates(this.jars.stream().map(jar -> engine.getChanges().queueUpdate(jar))
+                        .toList());
+                Made adds = addAll(engine, this.adding, this.adding.stream().map(jar -> AddMode.NEXT_START).toList());
+                List<String> bad = new ArrayList<>(updates.bad());
+                bad.addAll(adds.bad());
+                List<String> later = new ArrayList<>(updates.later());
+                later.addAll(adds.later());
+                ended.complete(new SwitchResult(bad.isEmpty() ? SwitchResult.Kind.DONE : SwitchResult.Kind.FAILED,
+                        List.of(), bad.isEmpty() ? Lang.get("hotwire.api.change_done") : String.join(" ", bad),
+                        List.of(), later));
             });
             return ended;
         }
@@ -391,36 +427,58 @@ final class ApiChanges {
             return ended;
         }
 
+        @SuppressWarnings("FutureReturnValueIgnored")
         private SwitchResult apply() {
-            List<String> done = new ArrayList<>();
+            List<String> switched = new ArrayList<>();
+            List<String> now = new ArrayList<>();
+            List<String> later = new ArrayList<>();
+            HotwireEngine found = HotwireClient.findEngine();
+            if (this.reopen && this.adding.isEmpty() && found != null) {
+                boolean off = !this.request.off().isEmpty();
+                List<String> ids = off ? this.request.off() : this.request.on();
+                CompletableFuture<SwitchResult> made = new CompletableFuture<>();
+                Minecraft.getInstance().execute(() -> found.switchWithReopenFor(off, ids).whenComplete((result,
+                        error) -> {
+                    if (error != null) {
+                        made.complete(new SwitchResult(SwitchResult.Kind.FAILED, List.of(),
+                                Lang.get("hotwire.api.plan_failed", error.toString())));
+                    } else {
+                        made.complete(result);
+                    }
+                }));
+                return made.join();
+            }
             for (boolean off : List.of(true, false)) {
                 List<String> ids = off ? this.request.off() : this.request.on();
                 if (!ids.isEmpty()) {
                     SwitchResult result = HotwireApiImpl.switchFor(off, ids, this.callers).join();
                     if (result.kind() != SwitchResult.Kind.DONE) {
-                        return result;
+                        return new SwitchResult(result.kind(), switched, result.message(), now, later);
                     }
-                    done.addAll(result.switched());
+                    switched.addAll(result.switched());
+                    now.addAll(result.switched());
                 }
             }
             HotwireEngine engine = HotwireClient.findEngine();
             if (!this.jars.isEmpty() && engine != null) {
-                List<String> bad = engine.getChanges().updateAllNow(this.jars).stream()
-                        .filter(made -> !(made instanceof ModUpdater.Result.Updated
-                                || made instanceof ModUpdater.Result.Queued))
-                        .map(ApiChanges::describe).toList();
-                if (!bad.isEmpty()) {
-                    return new SwitchResult(SwitchResult.Kind.FAILED, List.copyOf(done), String.join(" ", bad));
+                Made updates = readUpdates(engine.getChanges().updateAllNow(this.jars));
+                now.addAll(updates.now());
+                later.addAll(updates.later());
+                if (!updates.bad().isEmpty()) {
+                    return new SwitchResult(SwitchResult.Kind.FAILED, switched, String.join(" ", updates.bad()), now,
+                            later);
                 }
-                done.addAll(this.request.update());
             }
             if (engine != null && !this.adding.isEmpty()) {
-                List<String> bad = addAll(engine, this.adding, this.addModes);
-                if (!bad.isEmpty()) {
-                    return new SwitchResult(SwitchResult.Kind.FAILED, List.copyOf(done), String.join(" ", bad));
+                Made adds = addAll(engine, this.adding, this.addModes);
+                now.addAll(adds.now());
+                later.addAll(adds.later());
+                if (!adds.bad().isEmpty()) {
+                    return new SwitchResult(SwitchResult.Kind.FAILED, switched, String.join(" ", adds.bad()), now,
+                            later);
                 }
             }
-            return new SwitchResult(SwitchResult.Kind.DONE, List.copyOf(done), Lang.get("hotwire.api.change_done"));
+            return new SwitchResult(SwitchResult.Kind.DONE, switched, Lang.get("hotwire.api.change_done"), now, later);
         }
 
         @Override

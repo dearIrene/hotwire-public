@@ -25,6 +25,7 @@ public abstract interface dev.moon.hotwire.api.ChangePlan
 public static final dev.moon.hotwire.api.ChangePlan$Reason
   public static dev.moon.hotwire.api.ChangePlan$Reason dev.moon.hotwire.api.ChangePlan$Reason.valueOf(java.lang.String)
   public static dev.moon.hotwire.api.ChangePlan$Reason[] dev.moon.hotwire.api.ChangePlan$Reason.values()
+  public static final dev.moon.hotwire.api.ChangePlan$Reason dev.moon.hotwire.api.ChangePlan$Reason.INSTALLED
   public static final dev.moon.hotwire.api.ChangePlan$Reason dev.moon.hotwire.api.ChangePlan$Reason.NEEDS_MOD
   public static final dev.moon.hotwire.api.ChangePlan$Reason dev.moon.hotwire.api.ChangePlan$Reason.NEEDS_REOPEN
   public static final dev.moon.hotwire.api.ChangePlan$Reason dev.moon.hotwire.api.ChangePlan$Reason.NEEDS_RESTART
@@ -34,9 +35,11 @@ public static final dev.moon.hotwire.api.ChangePlan$Reason
   public static final dev.moon.hotwire.api.ChangePlan$Reason dev.moon.hotwire.api.ChangePlan$Reason.WORLD_LOCKED
 public final dev.moon.hotwire.api.ChangeRequest
   public dev.moon.hotwire.api.ChangeRequest(java.util.List<java.lang.String>,java.util.List<java.lang.String>,java.util.List<java.lang.String>,java.util.List<java.lang.String>,java.util.List<java.nio.file.Path>)
+  public dev.moon.hotwire.api.ChangeRequest(java.util.List<java.lang.String>,java.util.List<java.lang.String>,java.util.List<java.lang.String>,java.util.List<java.lang.String>,java.util.List<java.nio.file.Path>,java.lang.String)
   public final boolean dev.moon.hotwire.api.ChangeRequest.equals(java.lang.Object)
   public final int dev.moon.hotwire.api.ChangeRequest.hashCode()
   public final java.lang.String dev.moon.hotwire.api.ChangeRequest.toString()
+  public java.lang.String dev.moon.hotwire.api.ChangeRequest.tag()
   public java.util.List<java.lang.String> dev.moon.hotwire.api.ChangeRequest.add()
   public java.util.List<java.lang.String> dev.moon.hotwire.api.ChangeRequest.off()
   public java.util.List<java.lang.String> dev.moon.hotwire.api.ChangeRequest.on()
@@ -69,8 +72,10 @@ public abstract interface dev.moon.hotwire.api.HotwireApi
   public abstract java.util.concurrent.CompletableFuture<dev.moon.hotwire.api.ChangePlan> dev.moon.hotwire.api.HotwireApi.planChange(dev.moon.hotwire.api.ChangeRequest)
   public abstract java.util.concurrent.CompletableFuture<dev.moon.hotwire.api.ModUpdates> dev.moon.hotwire.api.HotwireApi.checkUpdates()
   public abstract java.util.concurrent.CompletableFuture<dev.moon.hotwire.api.StoreAdd> dev.moon.hotwire.api.HotwireApi.requestAdd(java.lang.String,java.lang.String)
+  public abstract java.util.concurrent.CompletableFuture<dev.moon.hotwire.api.StoreAdd> dev.moon.hotwire.api.HotwireApi.requestAdd(java.lang.String,java.lang.String,java.lang.String)
   public abstract java.util.concurrent.CompletableFuture<dev.moon.hotwire.api.StorePage> dev.moon.hotwire.api.HotwireApi.searchStore(dev.moon.hotwire.api.StoreQuery)
   public abstract java.util.concurrent.CompletableFuture<dev.moon.hotwire.api.SwitchResult> dev.moon.hotwire.api.HotwireApi.queueForNextStart(java.lang.String,java.lang.String)
+  public abstract java.util.concurrent.CompletableFuture<dev.moon.hotwire.api.SwitchResult> dev.moon.hotwire.api.HotwireApi.queueHotwireUpdate()
   public abstract java.util.concurrent.CompletableFuture<dev.moon.hotwire.api.SwitchResult> dev.moon.hotwire.api.HotwireApi.saveToDownloads(dev.moon.hotwire.api.StoreQuery,java.lang.String,java.lang.String)
   public abstract java.util.concurrent.CompletableFuture<dev.moon.hotwire.api.SwitchResult> dev.moon.hotwire.api.HotwireApi.turnOff(java.util.Collection<java.lang.String>)
   public abstract java.util.concurrent.CompletableFuture<dev.moon.hotwire.api.SwitchResult> dev.moon.hotwire.api.HotwireApi.turnOn(java.util.Collection<java.lang.String>)
@@ -78,6 +83,7 @@ public abstract interface dev.moon.hotwire.api.HotwireApi
   public abstract java.util.concurrent.CompletableFuture<java.nio.file.Path> dev.moon.hotwire.api.HotwireApi.writeReport(java.lang.String)
   public abstract java.util.concurrent.CompletableFuture<java.util.List<java.lang.String>> dev.moon.hotwire.api.HotwireApi.findStoreGameVersions()
   public abstract java.util.concurrent.CompletableFuture<java.util.Optional<dev.moon.hotwire.api.StoreProject>> dev.moon.hotwire.api.HotwireApi.findStoreProject(dev.moon.hotwire.api.StoreQuery,java.lang.String)
+  public abstract void dev.moon.hotwire.api.HotwireApi.addLifecycleListener(dev.moon.hotwire.api.ModLifecycleListener)
   public abstract void dev.moon.hotwire.api.HotwireApi.addListener(java.util.function.Consumer<dev.moon.hotwire.api.SwitchResult>)
   public abstract void dev.moon.hotwire.api.HotwireApi.fetchPack(dev.moon.hotwire.api.StoreKind,java.lang.String,java.lang.String)
   public abstract void dev.moon.hotwire.api.HotwireApi.openDownloads()
@@ -85,15 +91,22 @@ public abstract interface dev.moon.hotwire.api.HotwireApi
   public abstract void dev.moon.hotwire.api.HotwireApi.togglePack(dev.moon.hotwire.api.StoreKind,java.lang.String)
   public abstract void dev.moon.hotwire.api.HotwireApi.updateHotwire()
   public static dev.moon.hotwire.api.HotwireApi dev.moon.hotwire.api.HotwireApi.getInstance()
+public abstract interface dev.moon.hotwire.api.ModLifecycleListener
+  public default void dev.moon.hotwire.api.ModLifecycleListener.afterOn(java.util.List<java.lang.String>)
+  public default void dev.moon.hotwire.api.ModLifecycleListener.afterStart(java.util.List<java.lang.String>,boolean)
+  public default void dev.moon.hotwire.api.ModLifecycleListener.afterUpdate(java.util.List<java.lang.String>)
+  public default void dev.moon.hotwire.api.ModLifecycleListener.beforeOff(java.util.List<java.lang.String>)
+  public default void dev.moon.hotwire.api.ModLifecycleListener.beforeStart(java.util.List<java.lang.String>)
 public final dev.moon.hotwire.api.ModState
   public boolean dev.moon.hotwire.api.ModState.offSinceStart()
   public boolean dev.moon.hotwire.api.ModState.on()
   public boolean dev.moon.hotwire.api.ModState.switchable()
-  public dev.moon.hotwire.api.ModState(java.lang.String,java.lang.String,java.lang.String,boolean,boolean,boolean,java.lang.String)
+  public dev.moon.hotwire.api.ModState(java.lang.String,java.lang.String,java.lang.String,boolean,boolean,boolean,java.lang.String,java.lang.String)
   public final boolean dev.moon.hotwire.api.ModState.equals(java.lang.Object)
   public final int dev.moon.hotwire.api.ModState.hashCode()
   public final java.lang.String dev.moon.hotwire.api.ModState.toString()
   public java.lang.String dev.moon.hotwire.api.ModState.blocked()
+  public java.lang.String dev.moon.hotwire.api.ModState.copyOf()
   public java.lang.String dev.moon.hotwire.api.ModState.id()
   public java.lang.String dev.moon.hotwire.api.ModState.name()
   public java.lang.String dev.moon.hotwire.api.ModState.version()
@@ -140,6 +153,7 @@ public static final dev.moon.hotwire.api.PendingTask$Kind
 public abstract interface dev.moon.hotwire.api.StoreAdd
   public abstract boolean dev.moon.hotwire.api.StoreAdd.canAdd()
   public abstract boolean dev.moon.hotwire.api.StoreAdd.needsReopen()
+  public abstract dev.moon.hotwire.api.ChangePlan$Reason dev.moon.hotwire.api.StoreAdd.getReason()
   public abstract java.lang.String dev.moon.hotwire.api.StoreAdd.getTitle()
   public abstract java.util.List<java.lang.String> dev.moon.hotwire.api.StoreAdd.getLines()
   public abstract java.util.concurrent.CompletableFuture<dev.moon.hotwire.api.SwitchResult> dev.moon.hotwire.api.StoreAdd.accept()
@@ -156,12 +170,14 @@ public final dev.moon.hotwire.api.StoreDownload
   public boolean dev.moon.hotwire.api.StoreDownload.over()
   public dev.moon.hotwire.api.StoreDownload$State dev.moon.hotwire.api.StoreDownload.state()
   public dev.moon.hotwire.api.StoreDownload(java.lang.String,long,long,boolean,boolean,int,dev.moon.hotwire.api.StoreDownload$State)
+  public dev.moon.hotwire.api.StoreDownload(java.lang.String,long,long,boolean,boolean,int,dev.moon.hotwire.api.StoreDownload$State,java.lang.String)
   public double dev.moon.hotwire.api.StoreDownload.fraction()
   public final boolean dev.moon.hotwire.api.StoreDownload.equals(java.lang.Object)
   public final int dev.moon.hotwire.api.StoreDownload.hashCode()
   public final java.lang.String dev.moon.hotwire.api.StoreDownload.toString()
   public int dev.moon.hotwire.api.StoreDownload.id()
   public java.lang.String dev.moon.hotwire.api.StoreDownload.name()
+  public java.lang.String dev.moon.hotwire.api.StoreDownload.tag()
   public long dev.moon.hotwire.api.StoreDownload.done()
   public long dev.moon.hotwire.api.StoreDownload.total()
 public static final dev.moon.hotwire.api.StoreDownload$State
@@ -276,10 +292,13 @@ public final dev.moon.hotwire.api.SwitchProgress
 public final dev.moon.hotwire.api.SwitchResult
   public dev.moon.hotwire.api.SwitchResult$Kind dev.moon.hotwire.api.SwitchResult.kind()
   public dev.moon.hotwire.api.SwitchResult(dev.moon.hotwire.api.SwitchResult$Kind,java.util.List<java.lang.String>,java.lang.String)
+  public dev.moon.hotwire.api.SwitchResult(dev.moon.hotwire.api.SwitchResult$Kind,java.util.List<java.lang.String>,java.lang.String,java.util.List<java.lang.String>,java.util.List<java.lang.String>)
   public final boolean dev.moon.hotwire.api.SwitchResult.equals(java.lang.Object)
   public final int dev.moon.hotwire.api.SwitchResult.hashCode()
   public final java.lang.String dev.moon.hotwire.api.SwitchResult.toString()
   public java.lang.String dev.moon.hotwire.api.SwitchResult.message()
+  public java.util.List<java.lang.String> dev.moon.hotwire.api.SwitchResult.appliedNow()
+  public java.util.List<java.lang.String> dev.moon.hotwire.api.SwitchResult.atNextStart()
   public java.util.List<java.lang.String> dev.moon.hotwire.api.SwitchResult.switched()
 public static final dev.moon.hotwire.api.SwitchResult$Kind
   public static dev.moon.hotwire.api.SwitchResult$Kind dev.moon.hotwire.api.SwitchResult$Kind.valueOf(java.lang.String)

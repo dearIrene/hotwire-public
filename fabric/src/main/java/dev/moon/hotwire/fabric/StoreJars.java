@@ -241,7 +241,8 @@ final class StoreJars {
         }
     }
 
-    void queueForNextStart(List<Path> jars, List<String> projects, List<PendingChange> pending) {
+    List<ModAdder.Result> queueForNextStart(List<Path> jars, List<String> projects, List<PendingChange> pending) {
+        List<ModAdder.Result> results = new ArrayList<>();
         for (int i = 0; i < jars.size(); i++) {
             this.projects.put(jars.get(i), projects.get(i));
             ModAdder.Result queued = this.changes.queueAdd(jars.get(i));
@@ -250,7 +251,9 @@ final class StoreJars {
             if (ok) {
                 this.markQueued(jars.get(i), pending);
             }
+            results.add(queued);
         }
+        return results;
     }
 
     boolean hasQueued() {

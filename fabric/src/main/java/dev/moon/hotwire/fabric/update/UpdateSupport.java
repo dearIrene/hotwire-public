@@ -354,6 +354,7 @@ public final class UpdateSupport implements ModUpdater.Engine, ModAdder.CarriedL
                     : String.valueOf(added);
         }
         offs.forEach(this.installed::onRunningFromCopy);
+        liveIds.forEach((id, live) -> this.installed.onCopyOf(live, id));
 
         for (Path copy : copies) {
             try {

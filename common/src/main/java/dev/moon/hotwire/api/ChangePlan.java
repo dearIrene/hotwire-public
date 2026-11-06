@@ -17,7 +17,9 @@ public interface ChangePlan {
 
         WORLD_LOCKED,
 
-        REFUSED
+        REFUSED,
+
+        INSTALLED
     }
 
     boolean canApply();

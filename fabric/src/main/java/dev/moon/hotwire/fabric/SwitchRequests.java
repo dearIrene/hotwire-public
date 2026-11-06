@@ -194,7 +194,7 @@ final class SwitchRequests {
     }
 
     @SuppressWarnings("FutureReturnValueIgnored")
-    void switchWithReopen(SwitchRunner runner, boolean off, List<String> ids) {
+    CompletableFuture<SwitchResult> switchWithReopen(SwitchRunner runner, boolean off, List<String> ids) {
         CompletableFuture<SwitchResult> ended = HotwireApiImpl.beginSwitch();
         this.tasks.submit("save and switch", () -> {
             try {
@@ -211,6 +211,7 @@ final class SwitchRequests {
             HotwireApiImpl.endSwitch(ended, result.map(done -> HotwireApiImpl.toResult(done.result(), said))
                     .orElse(new SwitchResult(SwitchResult.Kind.DONE, List.of(), said)), this.engine::isOn);
         }).whenComplete((done, error) -> HotwireApiImpl.endIfFailed(ended, error, this.engine::isOn));
+        return ended;
     }
 
     static SwitchRunner.@Nullable CheckedResult runSwitchWithReopen(SwitchRunner runner, boolean off, List<String> ids)

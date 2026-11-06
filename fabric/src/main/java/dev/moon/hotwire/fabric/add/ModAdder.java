@@ -2,6 +2,7 @@ package dev.moon.hotwire.fabric.add;
 
 import dev.moon.hotwire.fabric.BackgroundReload;
 import dev.moon.hotwire.fabric.CrashGuard;
+import dev.moon.hotwire.fabric.LifecycleListeners;
 import dev.moon.hotwire.fabric.ModPolicy;
 import dev.moon.hotwire.fabric.ResourceReload;
 import dev.moon.hotwire.fabric.registration.GameHold;
@@ -569,6 +570,8 @@ public final class ModAdder {
         LateHold hold = new LateHold();
         ResourceReload.awaitAssets(ids);
 
+        LifecycleListeners.beginStarting(ids);
+
         SwitchTimes.begin();
         try {
             List<String> grew = new CopyOnWriteArrayList<>();
@@ -641,6 +644,7 @@ public final class ModAdder {
             parts.values().forEach(part -> FailedAddJars.remove(part.path()));
             return new Result.Added(ids, name, switched);
         } finally {
+            LifecycleListeners.endStarting(ids);
             ResourceReload.endAssetWait();
             SwitchTimes.end("the add of " + ids);
         }

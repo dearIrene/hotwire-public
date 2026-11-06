@@ -97,6 +97,12 @@ public final class ModSwitcher {
         void onStopping(String id);
 
         void onStarted(String id);
+
+        default void beforeSwitch(SwitchPlan plan) {
+        }
+
+        default void afterSwitch(SwitchPlan plan, boolean done, Predicate<String> isOn) {
+        }
     }
 
     private final Lifecycle lifecycle;
@@ -192,6 +198,11 @@ public final class ModSwitcher {
 
     public void noteFamilyReopened(Collection<String> family) {
         this.reopenedFamilies.add(Set.copyOf(family));
+    }
+
+    public boolean needsReopen(SwitchPlan plan) {
+        return !plan.isRefused() && this.applier.isInWorld() && (ReopenChecks.touchesWorldBound(this.worldBound,
+                plan.order()) || (plan.direction() == SwitchPlan.Direction.ON && this.isOnForReopen(plan.order())));
     }
 
     public boolean isOnForReopen(Collection<String> family) {
@@ -514,8 +525,22 @@ public final class ModSwitcher {
         return one.direction() == other.direction() && one.order().equals(other.order());
     }
 
-    @SuppressWarnings("ThreadPriorityCheck")
     private Result run(SwitchPlan plan, Consumer<List<String>> theirs) {
+        if (!plan.isRefused()) {
+            this.lifecycle.beforeSwitch(plan);
+        }
+        boolean done = false;
+        try {
+            Result result = this.runTold(plan, theirs);
+            done = result instanceof Result.Done;
+            return result;
+        } finally {
+            this.lifecycle.afterSwitch(plan, done, this::isOn);
+        }
+    }
+
+    @SuppressWarnings("ThreadPriorityCheck")
+    private Result runTold(SwitchPlan plan, Consumer<List<String>> theirs) {
         this.switched = true;
         this.switches.incrementAndGet();
         if ((ReopenChecks.touchesWorldBound(this.worldBound, plan.order())

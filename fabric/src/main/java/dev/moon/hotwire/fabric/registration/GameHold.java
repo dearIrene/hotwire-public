@@ -126,7 +126,7 @@ public final class GameHold {
         return done;
     }
 
-    static void await(Future<?> done, long seconds, String thread, String what)
+    public static void await(Future<?> done, long seconds, String thread, String what)
             throws InterruptedException, ExecutionException, TimeoutException {
         try {
             done.get(1, TimeUnit.SECONDS);

@@ -299,8 +299,13 @@ public final class HotwireEngine implements ModScreen.Game, AutoCloseable {
     }
 
     @Override
+    @SuppressWarnings("FutureReturnValueIgnored")
     public void switchWithReopen(boolean off, List<String> ids) {
         this.switches.switchWithReopen(this.requireSwitching().runner(), off, ids);
+    }
+
+    CompletableFuture<SwitchResult> switchWithReopenFor(boolean off, List<String> ids) {
+        return this.switches.switchWithReopen(this.requireSwitching().runner(), off, ids);
     }
 
     public SwitchRunner.@Nullable CheckedResult runSwitchWithReopen(boolean off, List<String> ids)
@@ -314,6 +319,10 @@ public final class HotwireEngine implements ModScreen.Game, AutoCloseable {
 
     ModGraph getGraph() {
         return this.installed.getGraph();
+    }
+
+    public @Nullable String findCopyOf(String id) {
+        return this.installed.findCopyOf(id);
     }
 
     public String nameOfMod(String id) {
@@ -386,7 +395,11 @@ public final class HotwireEngine implements ModScreen.Game, AutoCloseable {
 
     @Override
     public void updateHotwireAtNextStart() {
-        this.selfUpdate.updateAtNextStart(this.getPendingChanges());
+        this.selfUpdate.updateAtNextStart(this.getPendingChanges(), null);
+    }
+
+    void updateHotwireAtNextStart(CompletableFuture<SwitchResult> done) {
+        this.selfUpdate.updateAtNextStart(this.getPendingChanges(), done);
     }
 
     private static String getMajorVersion() {

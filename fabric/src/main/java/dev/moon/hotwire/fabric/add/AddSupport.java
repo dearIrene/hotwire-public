@@ -99,7 +99,8 @@ public final class AddSupport implements ModAdder.Engine {
         }
         try {
             ModManifest read = ModJarReader.read(jar).manifest();
-            if (this.isInstalled(read.id())) {
+
+            if (!ModPolicy.isHotwire(read.id()) && this.isInstalled(read.id())) {
                 journal.end(ActionJournal.Outcome.REFUSED, "installed");
                 return new ModAdder.Result.Refused(Lang.get("hotwire.add.queue.installed", read.name()));
             }
@@ -116,7 +117,8 @@ public final class AddSupport implements ModAdder.Engine {
 
     public boolean isInstalledJar(Path jar) {
         try {
-            return this.isInstalled(ModJarReader.read(jar).manifest().id());
+            String id = ModJarReader.read(jar).manifest().id();
+            return !ModPolicy.isHotwire(id) && this.isInstalled(id);
         } catch (ModJarException e) {
             return false;
         }

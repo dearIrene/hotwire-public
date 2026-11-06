@@ -159,6 +159,10 @@ The reasons are:
 
 These futures don't fail. A plan that can't go says why in its lines, and the rest is in Hotwire's log.
 
+What a change did is on its result (revision 9). `appliedNow()` has every mod it changed in the running game, the mods that went along and the adds and updates included, and `atNextStart()` has the ones waiting for the next start. A plan that only switches mods one way and needs the world reopened says so with `needsReopen()`, and `accept()` saves the world and opens it again around the switch, same as Hotwire's screen.
+
+Give the request a tag as its last argument and every download its plan starts carries it in `StoreDownload.tag()`, so you can pause or stop your own and nobody else's. `requestAdd(idOrSlug, versionId, tag)` does the same for an add.
+
 ## Updates
 
 ```java
@@ -175,7 +179,10 @@ Hotwire itself:
 ```java
 api.findNewerHotwire();   // the version, empty when there's none
 api.updateHotwire();      // fetched and queued for the next start
+api.queueHotwireUpdate().thenAccept(result -> { });   // the same, and tells you when it's queued or why not (revision 9)
 ```
+
+When an update can't go in place, Hotwire runs the new version as a copy under an id of its own until the next start. `getMods()` lists the copy with `copyOf()` set to the mod it stands in for, so keep its settings under that id. `copyOf()` is null for every other mod (revision 9).
 
 ## Waiting for the next start
 
@@ -199,8 +206,23 @@ api.awaitIdle();        // completes once nothing is switching, adding or updati
 api.isSwitching();      // whether a switch is running, whoever asked for it
 api.getProgress();      // for a progress bar, read it every frame
 api.addListener(result -> refreshMyList());   // fires after any switch, yours or the player's
+api.addLifecycleListener(listener);           // every off, on, start and update, see below (revision 9)
 api.openScreen();       // opens Hotwire
 ```
+
+A lifecycle listener hears every change from every path, the player's own clicks on Hotwire's screen included:
+
+```java
+api.addLifecycleListener(new ModLifecycleListener() {
+    public void beforeOff(List<String> ids) { }     // still on and safe to call, save their settings here
+    public void afterOn(List<String> ids) { }       // back on with the objects they had
+    public void beforeStart(List<String> ids) { }   // added mods, live copies and mods off since launch
+    public void afterStart(List<String> ids, boolean ok) { }
+    public void afterUpdate(List<String> ids) { }   // new code in place under the same ids
+});
+```
+
+Every call runs on the game thread and Hotwire waits for it, up to 5 seconds. `ids` is the whole change, the mods going along included. A switch that fails after `beforeOff` answers with `afterOn` for the mods that stayed on, so you never get stuck with half your pages taken out. A listener of a mod that's off isn't called.
 
 `isReady()` is false while the game is starting, and stays false on a Java that can't change loaded classes. `getRevision()` goes up when a call is added, check it if you need a newer one.
 

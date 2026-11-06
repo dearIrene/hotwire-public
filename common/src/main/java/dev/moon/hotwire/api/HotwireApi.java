@@ -55,7 +55,11 @@ public interface HotwireApi {
 
     void updateHotwire();
 
+    CompletableFuture<SwitchResult> queueHotwireUpdate();
+
     void addListener(Consumer<SwitchResult> listener);
+
+    void addLifecycleListener(ModLifecycleListener listener);
 
     boolean showPrompt();
 
@@ -72,6 +76,8 @@ public interface HotwireApi {
     CompletableFuture<Optional<StoreProject>> findStoreProject(StoreQuery browsing, String idOrSlug);
 
     CompletableFuture<StoreAdd> requestAdd(String idOrSlug, String versionId);
+
+    CompletableFuture<StoreAdd> requestAdd(String idOrSlug, String versionId, String tag);
 
     CompletableFuture<SwitchResult> queueForNextStart(String idOrSlug, String versionId);
 

@@ -7,6 +7,7 @@ import java.util.List;
 import java.util.Map;
 import java.util.Set;
 import java.util.concurrent.ConcurrentHashMap;
+import java.util.concurrent.CopyOnWriteArrayList;
 import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.concurrent.atomic.AtomicInteger;
 import java.util.function.Consumer;
@@ -158,6 +159,9 @@ public final class Downloads {
             new AtomicInteger();
     private static final Set<Integer> QUIET_JOBS = ConcurrentHashMap.newKeySet();
 
+    private static final List<String> TAGGING = new java.util.concurrent.CopyOnWriteArrayList<>();
+    private static final Map<Integer, String> TAGS = new ConcurrentHashMap<>();
+
     private final List<Job> jobs = new ArrayList<>();
 
     public static void onEveryChange(Consumer<Job> told) {
@@ -174,6 +178,23 @@ public final class Downloads {
         };
     }
 
+    public static Runnable beginTag(String tag) {
+        if (tag.isEmpty()) {
+            return () -> { };
+        }
+        TAGGING.add(tag);
+        AtomicBoolean ended = new AtomicBoolean();
+        return () -> {
+            if (ended.compareAndSet(false, true)) {
+                TAGGING.remove(tag);
+            }
+        };
+    }
+
+    public static String findTag(int id) {
+        return TAGS.getOrDefault(id, "");
+    }
+
     public static void quietNext() {
         QUIET_NEXT.incrementAndGet();
     }
@@ -187,6 +208,9 @@ public final class Downloads {
         int id = NEXT.incrementAndGet();
         if (takeQuiet()) {
             QUIET_JOBS.add(id);
+        }
+        if (!TAGGING.isEmpty()) {
+            TAGS.put(id, TAGGING.getLast());
         }
         Job job = new Job(id, name, 0, total, State.WAITING, 0);
         this.jobs.add(job);
@@ -257,7 +281,14 @@ public final class Downloads {
 
     public synchronized List<Job> snapshot() {
         long now = System.nanoTime();
-        this.jobs.removeIf(job -> job.isOver() && now - job.endedNanos() > SHOWN_AFTER_END_NANOS);
+        this.jobs.removeIf(job -> {
+            boolean gone = job.isOver() && now - job.endedNanos() > SHOWN_AFTER_END_NANOS;
+            if (gone) {
+                TAGS.remove(job.id());
+                QUIET_JOBS.remove(job.id());
+            }
+            return gone;
+        });
         return List.copyOf(this.jobs);
     }
 }

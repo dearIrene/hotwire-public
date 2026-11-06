@@ -1,5 +1,6 @@
 package dev.moon.hotwire.fabric.add;
 
+import dev.moon.hotwire.fabric.LifecycleListeners;
 import dev.moon.hotwire.fabric.registration.GameHold;
 import dev.moon.hotwire.fabric.screen.HoldFrame;
 import dev.moon.hotwire.jar.ModManifest;
@@ -69,6 +70,7 @@ final class AddStart {
                 return;
             }
             Throwable failed = null;
+            LifecycleListeners.beforeStart(ids);
             try {
                 for (Runnable start : starts) {
                     start.run();
@@ -91,6 +93,7 @@ final class AddStart {
                 registries.close();
                 grew.addAll(registries.getGrown());
             }
+            LifecycleListeners.afterStart(ids, failed == null);
             if (failed == null) {
                 Map<String, List<String>> setUp = new LinkedHashMap<>();
                 LaunchSteps.run("the add of " + ids, LaunchSteps.afterStart(ids, findLoaded, setUp), Set.of());

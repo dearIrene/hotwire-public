@@ -1,5 +1,6 @@
 package dev.moon.hotwire.fabric.update;
 
+import dev.moon.hotwire.fabric.LifecycleListeners;
 import dev.moon.hotwire.fabric.ModPolicy;
 import dev.moon.hotwire.fabric.ResourceReload;
 import dev.moon.hotwire.fabric.add.AddAssets;
@@ -319,6 +320,10 @@ final class LiveUpdates {
         } catch (ExecutionException | TimeoutException e) {
             LOGGER.warn("[Hotwire] {}'s launch steps did not run after its update", manifest.id(), e);
         }
+        List<String> updated = new ArrayList<>();
+        updated.add(manifest.id());
+        one.planned().whole().bundled().forEach(carried -> updated.add(carried.manifest().id()));
+        LifecycleListeners.afterUpdate(updated);
         LOGGER.info("[Hotwire] {} is {} now: {} classes rebuilt, {} served as they load, {} new",
                 manifest.id(), manifest.version(), applied.rebuilt().size(), applied.notLoaded().size(),
                 one.plan().actions().stream().filter(action -> action.kind() == ClassAction.Kind.DEFINE).count());

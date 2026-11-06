@@ -1,6 +1,8 @@
 package dev.moon.hotwire.fabric.registration;
 
 import com.mojang.brigadier.CommandDispatcher;
+import dev.moon.hotwire.fabric.LifecycleListeners;
+import dev.moon.hotwire.plan.SwitchPlan;
 import dev.moon.hotwire.registration.RegistrationJournal;
 import dev.moon.hotwire.switching.ModSwitcher;
 import java.lang.ref.WeakReference;
@@ -303,6 +305,22 @@ public final class ModLifecycle {
                 if (!ran.isEmpty()) {
                     LOGGER.info("[Hotwire] {} started through its own listeners: {}", id, ran);
                 }
+            }
+
+            @Override
+            public void beforeSwitch(SwitchPlan plan) {
+                LifecycleListeners.begin();
+                if (plan.direction() == SwitchPlan.Direction.OFF) {
+                    LifecycleListeners.beforeOff(plan.order());
+                }
+            }
+
+            @Override
+            public void afterSwitch(SwitchPlan plan, boolean done, Predicate<String> isOn) {
+                if (done && plan.direction() == SwitchPlan.Direction.ON) {
+                    LifecycleListeners.cameOn(plan.order());
+                }
+                LifecycleListeners.end(isOn);
             }
         };
     }

@@ -185,11 +185,13 @@ public final class SwitchRunner {
         this.switcher.setBusy(true);
         this.reports.onBegun(Report.Operation.OFF, String.join(", ", ids));
         CheckedResult result = null;
+        LifecycleListeners.begin();
         try {
             result = this.runTimedOff(ids);
             this.afterOff.accept(result.result());
             return result;
         } finally {
+            LifecycleListeners.end(this.switcher::isOn);
             this.tripwire.closeRide();
             ResourceReload.forgetPausedReload();
             this.reports.onEnded();
@@ -231,6 +233,8 @@ public final class SwitchRunner {
             return new CheckedResult(new ModSwitcher.Result.Failed(plan, RebuildException.ofRestartOnly(why,
                     new IllegalStateException(why))), new Report.OffCheck.NotRun(), List.of());
         }
+
+        LifecycleListeners.beforeOff(wired);
         if (!wired.isEmpty()) {
             this.tripwire.armEarly(wired, this.switcher.findPatchedBy(wired));
         }
@@ -383,10 +387,12 @@ public final class SwitchRunner {
         this.switcher.setBusy(true);
         this.reports.onBegun(Report.Operation.ON, String.join(", ", ids));
         CheckedResult result = null;
+        LifecycleListeners.begin();
         try {
             result = this.runTimedOn(ids);
             return result;
         } finally {
+            LifecycleListeners.end(this.switcher::isOn);
             this.tripwire.closeRide();
             ResourceReload.endAssetWait();
             this.reports.onEnded();
