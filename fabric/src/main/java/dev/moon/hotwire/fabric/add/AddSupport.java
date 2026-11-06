@@ -64,6 +64,8 @@ public final class AddSupport implements ModAdder.Engine {
     private final Function<List<String>, ModSwitcher.Result> takeOut;
     private final Map<String, PendingChange.Copied> copied = new ConcurrentHashMap<>();
 
+    private final Map<String, Path> copiedFrom = new ConcurrentHashMap<>();
+
     public AddSupport(InstalledMods installed, SwitchApplier applier, ModSwitcher switcher, GameClasses classes,
             GameReports reports, Path gameDir, UpdateFolders folders, UpdateQueue queue, ModIcons icons,
             Function<List<String>, ModSwitcher.Result> takeOut) {
@@ -125,6 +127,8 @@ public final class AddSupport implements ModAdder.Engine {
             Files.copy(jar, target);
             this.copied.put(manifest.id(), new PendingChange.Copied(manifest.id(), manifest.name(),
                     String.valueOf(target.getFileName())));
+            this.copiedFrom.put(manifest.id(), jar.toAbsolutePath());
+            this.installed.onMoved(manifest.id(), target);
             return " Its jar was copied into your mods folder, so it starts with the game too; undo that from Pending"
                     + " tasks.";
         } catch (IOException | ModJarException e) {
@@ -145,6 +149,10 @@ public final class AddSupport implements ModAdder.Engine {
         PendingChange.Copied copy = this.copied.remove(id);
         if (copy != null) {
             Files.deleteIfExists(this.folders.mods().resolve(copy.jar()));
+            Path from = this.copiedFrom.remove(id);
+            if (from != null) {
+                this.installed.onMoved(id, from);
+            }
         }
     }
 

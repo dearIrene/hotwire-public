@@ -185,6 +185,12 @@ public final class InstalledMods {
         this.addedThisSession.addAll(ids);
     }
 
+    public synchronized void onMoved(String id, Path jar) {
+        if (this.jarOf.containsKey(id)) {
+            this.jarOf.put(id, jar);
+        }
+    }
+
     public synchronized void onUpdated(Map<String, Path> paths, Map<String, ModJar> reads) {
         this.jars.removeIf(old -> reads.containsKey(old.manifest().id()));
         this.jars.addAll(reads.values());
