@@ -23,6 +23,14 @@ public final class DevGameScreen extends RootScreen {
         return this.root;
     }
 
+    public Root getRootForTests() {
+        return this.root;
+    }
+
+    public DevWindow getWindow() {
+        return this.window;
+    }
+
     @Override
     protected void onResized(int width, int height) {
         this.root.resize(width, height);

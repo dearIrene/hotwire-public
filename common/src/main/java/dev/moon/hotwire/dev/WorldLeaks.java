@@ -1,4 +1,4 @@
-package dev.moon.hotwire.fabric.dev;
+package dev.moon.hotwire.dev;
 
 import java.lang.ref.WeakReference;
 import java.lang.reflect.Array;

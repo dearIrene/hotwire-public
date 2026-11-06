@@ -1,8 +1,8 @@
 package dev.moon.hotwire.fabric;
 
 import dev.moon.hotwire.fabric.add.LoaderModList;
-import dev.moon.hotwire.fabric.rebuild.TransformerChain;
 import dev.moon.hotwire.fabric.rebuild.LivePluginShapes;
+import dev.moon.hotwire.fabric.rebuild.TransformerChain;
 import dev.moon.hotwire.fabric.registration.AsyncLogging;
 import dev.moon.hotwire.fabric.registration.ElementLook;
 import dev.moon.hotwire.fabric.registration.EntityAttachments;
@@ -23,9 +23,9 @@ import dev.moon.hotwire.fabric.registration.NetworkHandlers;
 import dev.moon.hotwire.fabric.registration.OffModCommands;
 import dev.moon.hotwire.fabric.registration.OneConfigHuds;
 import dev.moon.hotwire.fabric.registration.OneConfigModCards;
-import dev.moon.hotwire.fabric.registration.SodiumSettingsPages;
 import dev.moon.hotwire.fabric.registration.RegistryCheck;
 import dev.moon.hotwire.fabric.registration.ReloadedLists;
+import dev.moon.hotwire.fabric.registration.SodiumSettingsPages;
 import dev.moon.hotwire.fabric.registration.TakeoutRecord;
 import dev.moon.hotwire.fabric.registration.UncaughtHandlers;
 import dev.moon.hotwire.fabric.registration.WindowCursor;
@@ -398,6 +398,7 @@ public final class SwitchRunner {
 
     private CheckedResult runTimedOn(List<String> ids) {
         ResourceReload.awaitIdle();
+        SwitchTimes.mark("off's reload ended");
         ElementLook.giveWay();
         SwitchTimes.mark("look gave way");
         Tripwire.pause(true);

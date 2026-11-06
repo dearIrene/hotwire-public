@@ -75,9 +75,11 @@ final class DevEngine implements DevSession.Engine {
         if (found == null) {
             return List.of();
         }
+
         List<Class<?>> loaded = new ArrayList<>();
-        for (Class<?> type : found.instrumentation().getAllLoadedClasses()) {
-            if (names.contains(type.getName())) {
+        for (String name : names) {
+            Class<?> type = found.classes().findLoaded(name.replace('.', '/'));
+            if (type != null) {
                 loaded.add(type);
             }
         }

@@ -1,15 +1,20 @@
 package dev.moon.hotwire.config;
 
 import java.lang.management.ManagementFactory;
+import javax.management.JMException;
+import javax.management.JMRuntimeException;
+import javax.management.ObjectName;
+import javax.management.openmbean.CompositeData;
 
 public record DevSetup(boolean inSetup, Jvm jvm) {
     public enum Jvm { FULL, JETBRAINS_WITHOUT_FLAG, OTHER }
 
     public static final DevSetup NONE = new DevSetup(false, Jvm.OTHER);
     private static final String FLAG = "AllowEnhancedClassRedefinition";
+    private static final String DIAGNOSTIC = "com.sun.management:type=" + "HotSpot" + "Diagnostic";
 
     public static DevSetup find(boolean inSetup) {
-        return new DevSetup(inSetup, findJvm());
+        return new DevSetup(inSetup, inSetup ? findJvm() : Jvm.OTHER);
     }
 
     public boolean isFull() {
@@ -25,9 +30,14 @@ public record DevSetup(boolean inSetup, Jvm jvm) {
     }
 
     private static boolean isFlagOn() {
+        if (ManagementFactory.getRuntimeMXBean().getInputArguments().contains("-XX:+" + FLAG)) {
+            return true;
+        }
         try {
-            return ManagementFactory.getRuntimeMXBean().getInputArguments().contains("-XX:+" + FLAG);
-        } catch (SecurityException e) {
+            Object option = ManagementFactory.getPlatformMBeanServer().invoke(new ObjectName(DIAGNOSTIC),
+                    "getVMOption", new Object[] {FLAG}, new String[] {String.class.getName()});
+            return option instanceof CompositeData data && "true".equals(String.valueOf(data.get("value")));
+        } catch (JMException | JMRuntimeException | SecurityException e) {
             return false;
         }
     }

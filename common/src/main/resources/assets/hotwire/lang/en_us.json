@@ -724,6 +724,7 @@
   "hotwire.dev.state.waiting": "Paused, a build is waiting",
   "hotwire.dev.button.reload": "Reload now",
   "hotwire.dev.button.restart": "Restart my mod",
+  "hotwire.dev.button.restart.short": "Restart",
   "hotwire.dev.button.pause": "Pause",
   "hotwire.dev.button.resume": "Resume",
   "hotwire.dev.ago.seconds": "%s s ago",
@@ -732,7 +733,6 @@
   "hotwire.dev.leak": "%s still holds the world you left",
   "hotwire.dev.leak.fix": "Clear it when the world closes and the whole world can go",
   "hotwire.dev.config.refreshed": "%s's options are up to date",
-  "hotwire.dev.config.waiting": "%s has new options that show after a restart, or right away on the JetBrains Runtime",
   "hotwire.dev.tab.mixins": "Mixins",
   "hotwire.dev.window.no_mixins": "Your mod has no mixins",
   "hotwire.dev.mixin.alone": "Only yours changes it",
@@ -741,5 +741,8 @@
   "hotwire.dev.left_over.count": "%s things of your mod kept running through the off, the window lists them",
   "hotwire.dev.changed": "Changed %s",
   "hotwire.dev.added": "New %s",
-  "hotwire.dev.window.runtime": "Your Java"
+  "hotwire.dev.window.runtime": "Your Java",
+  "hotwire.dev.half": "%s isn't a whole class file, so the build waits for your next one",
+  "hotwire.dev.start_changed": "%s's start code changed, so what it registers there comes in at the next start",
+  "hotwire.dev.fields_added": "New fields in %s show to config and save libraries after a restart, or right away on the JetBrains Runtime"
 }

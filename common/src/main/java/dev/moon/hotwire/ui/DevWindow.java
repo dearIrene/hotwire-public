@@ -13,25 +13,23 @@ import java.time.format.DateTimeFormatter;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Locale;
+import java.util.function.Consumer;
 import org.jspecify.annotations.Nullable;
 
 public final class DevWindow extends Element {
     private static final int TITLE_H = 22;
     private static final int PAD = 8;
-    private static final int GRIP = 10;
     private static final int LINE = 10;
     private static final int GAP = 4;
     private static final int MIN_W = 260;
     private static final int MIN_H = 170;
-    private static final int MARGIN = 4;
+    private static final int BUTTON = 14;
     private static final int BUTTON_H = 18;
     private static final int CARD = 0xFF1A1427;
     private static final float REFRESH_SECONDS = 0.25f;
     private static final DateTimeFormatter CLOCK = DateTimeFormatter.ofPattern("HH:mm:ss", Locale.ROOT);
 
     private enum Tab { OVERVIEW, HISTORY, CRASHES, MIXINS }
-
-    private enum Hold { NONE, MOVE, SIZE }
 
     private final DevHost host;
     private final String runtime;
@@ -49,29 +47,25 @@ public final class DevWindow extends Element {
     private int modIndex;
     private int crashCount = -1;
     private Tab tab = Tab.OVERVIEW;
-    private Hold hold = Hold.NONE;
-    private double holdX;
-    private double holdY;
-    private int startLeft;
-    private int startTop;
-    private int startWidth;
-    private int startHeight;
-    private int left = 12;
-    private int top = 12;
-    private int width = 300;
-    private int height = 220;
-    private int screenWidth = 854;
-    private int screenHeight = 480;
+    private final WindowFrame frame = new WindowFrame(MIN_W, MIN_H, TITLE_H);
+    private final double @Nullable [] saved;
+    private final Consumer<double[]> onPlaced;
+    private final Runnable onClose;
     private int contentHeight;
 
     @SuppressWarnings("this-escape")
-    public DevWindow(DevHost host, String runtime, boolean fullRuntime) {
+    public DevWindow(DevHost host, String runtime, boolean fullRuntime, double @Nullable [] saved,
+            Consumer<double[]> onPlaced, Runnable onClose) {
         this.host = host;
         this.runtime = runtime;
         this.fullRuntime = fullRuntime;
+        this.saved = saved == null ? null : saved.clone();
+        this.onPlaced = onPlaced;
+        this.onClose = onClose;
         this.tabs = this.add(new ChoiceBar(makeTabs(0), 0, this::pickTab));
         this.reload = this.add(new Button(Lang.get("hotwire.dev.button.reload"), false, () -> this.act(true)));
-        this.restart = this.add(new Button(Lang.get("hotwire.dev.button.restart"), false, () -> this.act(false)));
+        this.restart = this.add(new Button(Lang.get("hotwire.dev.button.restart"),
+                Lang.get("hotwire.dev.button.restart.short"), false, () -> this.act(false)));
         this.pause = this.add(new Button(Lang.get("hotwire.dev.button.pause"), false, () -> host.setWatching(false)));
         this.resume = this.add(new Button(Lang.get("hotwire.dev.button.resume"), false, () -> host.setWatching(true)));
         this.shown.snap(0);
@@ -104,23 +98,17 @@ public final class DevWindow extends Element {
         }
     }
 
+    public int[] getFrameBounds() {
+        return this.frame.getBounds();
+    }
+
     private @Nullable DevModView findMod() {
         return this.mods.isEmpty() ? null : this.mods.get(Math.min(this.modIndex, this.mods.size() - 1));
     }
 
     public void setScreen(int width, int height) {
-        this.screenWidth = width;
-        this.screenHeight = height;
-        this.clampToScreen();
-    }
-
-    private void clampToScreen() {
-        int maxWidth = Math.max(MIN_W, this.screenWidth - 2 * MARGIN);
-        int maxHeight = Math.max(MIN_H, this.screenHeight - 2 * MARGIN);
-        this.width = Math.clamp(this.width, MIN_W, maxWidth);
-        this.height = Math.clamp(this.height, MIN_H, maxHeight);
-        this.left = Math.clamp(this.left, MARGIN, Math.max(MARGIN, this.screenWidth - this.width - MARGIN));
-        this.top = Math.clamp(this.top, MARGIN, Math.max(MARGIN, this.screenHeight - this.height - MARGIN));
+        this.frame.setScreen(width, height, this.saved, Math.clamp(width * 2 / 5, Math.min(MIN_W, width), 340),
+                Math.clamp(height * 3 / 4, Math.min(MIN_H, height), 280), 8, Math.max(0, Math.min(36, height / 8)));
     }
 
     @Override
@@ -138,33 +126,51 @@ public final class DevWindow extends Element {
                 this.tabs.setChoices(makeTabs(crashes));
             }
         }
+        this.frame.step(dt);
+        int left = this.frame.getX();
+        int top = this.frame.getY();
+        int width = this.frame.getWidth();
+        int height = this.frame.getHeight();
         this.scrollTarget = Math.clamp(this.scrollTarget, 0, Math.max(0, this.contentHeight - this.findBodyRoom()));
         this.scroll.to(this.scrollTarget);
         this.scroll.step(dt);
-        this.setBounds(this.left, this.top, this.width, this.height);
-        this.tabs.setBounds(this.left + PAD, this.top + TITLE_H, this.width - 2 * PAD, ChoiceBar.HEIGHT);
+        this.setBounds(left, top, width, height);
+        this.tabs.setBounds(left + PAD, top + TITLE_H, width - 2 * PAD, ChoiceBar.HEIGHT);
         boolean watching = this.host.isWatching();
         boolean overview = this.tab == Tab.OVERVIEW && this.findMod() != null;
-        int buttonsY = this.top + this.height - BUTTON_H - PAD;
-        int buttonW = (this.width - 4 * PAD) / 3;
+        int buttonsY = top + height - BUTTON_H - PAD;
+        int buttonW = (width - 4 * PAD) / 3;
         this.reload.setVisible(overview);
         this.restart.setVisible(overview);
         this.pause.setVisible(overview && watching);
         this.resume.setVisible(overview && !watching);
-        this.reload.setBounds(this.left + PAD, buttonsY, buttonW, BUTTON_H);
-        this.restart.setBounds(this.left + 2 * PAD + buttonW, buttonsY, buttonW, BUTTON_H);
-        this.pause.setBounds(this.left + 3 * PAD + 2 * buttonW, buttonsY, buttonW, BUTTON_H);
-        this.resume.setBounds(this.left + 3 * PAD + 2 * buttonW, buttonsY, buttonW, BUTTON_H);
+        this.reload.setBounds(left + PAD, buttonsY, buttonW, BUTTON_H);
+        this.restart.setBounds(left + 2 * PAD + buttonW, buttonsY, buttonW, BUTTON_H);
+        this.pause.setBounds(left + 3 * PAD + 2 * buttonW, buttonsY, buttonW, BUTTON_H);
+        this.resume.setBounds(left + 3 * PAD + 2 * buttonW, buttonsY, buttonW, BUTTON_H);
         super.step(dt);
     }
 
     private int findBodyTop() {
-        return this.top + TITLE_H + ChoiceBar.HEIGHT + 6;
+        return this.frame.getY() + TITLE_H + ChoiceBar.HEIGHT + 6;
     }
 
     private int findBodyBottom() {
         boolean buttons = this.tab == Tab.OVERVIEW && this.findMod() != null;
-        return this.top + this.height - (buttons ? BUTTON_H + 2 * PAD + 1 : 4);
+        return this.frame.getY() + this.frame.getHeight() - (buttons ? BUTTON_H + 2 * PAD + 1 : 4);
+    }
+
+    private int findCloseX() {
+        return this.frame.getX() + this.frame.getWidth() - PAD - BUTTON;
+    }
+
+    private int findMaximizeX() {
+        return this.findCloseX() - BUTTON - 2;
+    }
+
+    private boolean isOnButton(double px, double py, int x) {
+        int y = this.frame.getY() + 4;
+        return px >= x && px < x + BUTTON && py >= y && py < y + BUTTON;
     }
 
     private int findBodyRoom() {
@@ -176,53 +182,42 @@ public final class DevWindow extends Element {
         if (button != 0) {
             return true;
         }
-        if (px >= this.left + this.width - GRIP && py >= this.top + this.height - GRIP) {
-            this.grab(Hold.SIZE, px, py);
-        } else if (py < this.top + TITLE_H) {
-            if (this.mods.size() > 1 && px < this.left + this.width / 2.0) {
-                this.modIndex = (this.modIndex + 1) % this.mods.size();
-                this.scrollTarget = 0;
-                this.sinceRead = REFRESH_SECONDS;
-            }
-            this.grab(Hold.MOVE, px, py);
+        if (this.isOnButton(px, py, this.findCloseX())) {
+            this.onClose.run();
+            return true;
+        }
+        if (this.isOnButton(px, py, this.findMaximizeX())) {
+            this.frame.toggleMaximized();
+            this.onPlaced.accept(this.frame.save());
+            return true;
+        }
+
+        boolean onName = py < this.frame.getY() + TITLE_H && px < this.frame.getX() + this.frame.getWidth() / 2.0;
+        if (this.mods.size() > 1 && onName && this.frame.findEdges(px, py) == 0) {
+            this.modIndex = (this.modIndex + 1) % this.mods.size();
+            this.scrollTarget = 0;
+            this.sinceRead = REFRESH_SECONDS;
+        }
+        if (this.frame.press(px, py, System.nanoTime()) && !this.frame.isGrabbed()) {
+            this.onPlaced.accept(this.frame.save());
         }
         return true;
     }
 
-    private void grab(Hold kind, double px, double py) {
-        this.hold = kind;
-        this.holdX = px;
-        this.holdY = py;
-        this.startLeft = this.left;
-        this.startTop = this.top;
-        this.startWidth = this.width;
-        this.startHeight = this.height;
-    }
-
     @Override
     protected boolean onDrag(double px, double py, int button) {
-        int dx = (int) Math.round(px - this.holdX);
-        int dy = (int) Math.round(py - this.holdY);
-        switch (this.hold) {
-            case MOVE -> {
-                this.left = this.startLeft + dx;
-                this.top = this.startTop + dy;
-            }
-            case SIZE -> {
-                this.width = this.startWidth + dx;
-                this.height = this.startHeight + dy;
-            }
-            case NONE -> {
-                return false;
-            }
+        if (!this.frame.isGrabbed()) {
+            return false;
         }
-        this.clampToScreen();
+        this.frame.drag(px, py);
         return true;
     }
 
     @Override
     protected boolean onRelease(double px, double py, int button) {
-        this.hold = Hold.NONE;
+        if (this.frame.release()) {
+            this.onPlaced.accept(this.frame.save());
+        }
         return true;
     }
 
@@ -235,18 +230,33 @@ public final class DevWindow extends Element {
     @Override
     protected void paint(Canvas canvas, float alpha) {
         float a = alpha * this.shown.getValue();
-        int x0 = this.left;
-        int y0 = this.top;
-        int x1 = x0 + this.width;
-        int y1 = y0 + this.height;
+        int x0 = this.frame.getX();
+        int y0 = this.frame.getY();
+        int x1 = x0 + this.frame.getWidth();
+        int y1 = y0 + this.frame.getHeight();
+        int[] preview = this.frame.findPreview();
+        if (preview != null) {
+            int px1 = preview[0] + preview[2];
+            int py1 = preview[1] + preview[3];
+            canvas.fill(preview[0], preview[1], px1, py1, Colors.fade(Palette.ACCENT, a * 0.12f));
+            canvas.fill(preview[0], preview[1], px1, preview[1] + 1, Colors.fade(Palette.ACCENT, a * 0.6f));
+            canvas.fill(preview[0], py1 - 1, px1, py1, Colors.fade(Palette.ACCENT, a * 0.6f));
+            canvas.fill(preview[0], preview[1], preview[0] + 1, py1, Colors.fade(Palette.ACCENT, a * 0.6f));
+            canvas.fill(px1 - 1, preview[1], px1, py1, Colors.fade(Palette.ACCENT, a * 0.6f));
+        }
+        Canvas.Cursor cursor = this.frame.findCursor(this.getPointerX(), this.getPointerY(), this.isHovered());
+        if (cursor != null) {
+            canvas.requestCursor(cursor);
+        }
         canvas.fill(x0 - 1, y0 - 1, x1 + 1, y1 + 1, Colors.fade(Palette.PANEL_EDGE, a));
         canvas.fill(x0, y0, x1, y1, Colors.fade(Palette.PANEL, a));
         canvas.fill(x0, y0, x1, y0 + 2, Colors.fade(Palette.ACCENT, a));
         DevModView mod = this.findMod();
         String title = Lang.get("hotwire.dev.window.title");
         canvas.drawText(title, x0 + PAD, y0 + 8, Colors.fade(Palette.TEXT, a));
+        this.paintButtons(canvas, a);
         if (mod != null) {
-            int pillLeft = paintPill(canvas, mod.state(), x1 - PAD, y0 + 5, a);
+            int pillLeft = paintPill(canvas, mod.state(), this.findMaximizeX() - 6, y0 + 5, a);
             String name = this.mods.size() > 1 ? mod.name() + " (" + (this.modIndex + 1) + "/" + this.mods.size() + ")"
                     : mod.name();
             int nameX = x0 + PAD + canvas.measureText(title) + 6;
@@ -259,7 +269,7 @@ public final class DevWindow extends Element {
         int y = bodyTop - Math.round(this.scroll.getValue());
         int startY = y;
         int cardX = x0 + PAD;
-        int cardW = this.width - 2 * PAD;
+        int cardW = this.frame.getWidth() - 2 * PAD;
         if (mod == null) {
             y = paintText(canvas, Lang.get("hotwire.dev.window.no_mods"), cardX, y, cardW, Palette.DIM, a);
         } else {
@@ -285,10 +295,46 @@ public final class DevWindow extends Element {
                     a));
         }
 
-        for (int i = 0; i < 3; i++) {
-            canvas.fill(x1 - 3 - i * 3, y1 - 3, x1 - 2 - i * 3, y1 - 2, Colors.fade(Palette.FAINT, a));
-            canvas.fill(x1 - 3, y1 - 3 - i * 3, x1 - 2, y1 - 2 - i * 3, Colors.fade(Palette.FAINT, a));
+        if (!this.frame.isMaximized()) {
+            for (int i = 0; i < 3; i++) {
+                canvas.fill(x1 - 3 - i * 3, y1 - 3, x1 - 2 - i * 3, y1 - 2, Colors.fade(Palette.FAINT, a));
+                canvas.fill(x1 - 3, y1 - 3 - i * 3, x1 - 2, y1 - 2 - i * 3, Colors.fade(Palette.FAINT, a));
+            }
         }
+    }
+
+    private void paintButtons(Canvas canvas, float a) {
+        int y = this.frame.getY() + 4;
+        boolean over = this.isHovered();
+        int maxX = this.findMaximizeX();
+        int closeX = this.findCloseX();
+        if (over && this.isOnButton(this.getPointerX(), this.getPointerY(), maxX)) {
+            canvas.fill(maxX, y, maxX + BUTTON, y + BUTTON, Colors.fade(0x30B48CFF, a));
+        }
+        boolean onClose = over && this.isOnButton(this.getPointerX(), this.getPointerY(), closeX);
+        if (onClose) {
+            canvas.fill(closeX, y, closeX + BUTTON, y + BUTTON, Colors.fade(Palette.BAD, a * 0.85f));
+        }
+        int ink = Colors.fade(Palette.DIM, a);
+        if (this.frame.isMaximized()) {
+            paintBox(canvas, maxX + 5, y + 3, 6, 6, ink);
+            paintBox(canvas, maxX + 3, y + 5, 6, 6, ink);
+            canvas.fill(maxX + 4, y + 6, maxX + 8, y + 10, Colors.fade(Palette.PANEL, a));
+        } else {
+            paintBox(canvas, maxX + 3, y + 3, 8, 8, ink);
+        }
+        int cross = Colors.fade(onClose ? Palette.TEXT : Palette.DIM, a);
+        for (int i = 0; i < 7; i++) {
+            canvas.fill(closeX + 4 + i, y + 4 + i, closeX + 5 + i, y + 5 + i, cross);
+            canvas.fill(closeX + 10 - i, y + 4 + i, closeX + 11 - i, y + 5 + i, cross);
+        }
+    }
+
+    private static void paintBox(Canvas canvas, int x, int y, int w, int h, int ink) {
+        canvas.fill(x, y, x + w, y + 1, ink);
+        canvas.fill(x, y + h - 1, x + w, y + h, ink);
+        canvas.fill(x, y, x + 1, y + h, ink);
+        canvas.fill(x + w - 1, y, x + w, y + h, ink);
     }
 
     private static int paintPill(Canvas canvas, DevState state, int right, int y, float a) {

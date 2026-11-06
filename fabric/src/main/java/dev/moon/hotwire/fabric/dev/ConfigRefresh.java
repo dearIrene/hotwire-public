@@ -7,29 +7,16 @@ import java.lang.reflect.Method;
 import java.lang.reflect.Modifier;
 import java.util.ArrayList;
 import java.util.List;
-import java.util.function.Function;
 import org.jspecify.annotations.Nullable;
-import org.objectweb.asm.ClassReader;
-import org.objectweb.asm.tree.AnnotationNode;
-import org.objectweb.asm.tree.ClassNode;
-import org.objectweb.asm.tree.FieldNode;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 final class ConfigRefresh {
     private static final Logger LOGGER = LoggerFactory.getLogger(ConfigRefresh.class);
     private static final String YACL_HANDLER = "dev.isxander.yacl3.config.v2.impl.ConfigClassHandlerImpl";
-    private static final String SERIAL_ENTRY = "Ldev/isxander/yacl3/config/v2/api/SerialEntry;";
 
-    record Result(List<String> refreshed, List<String> waiting) {
-    }
-
-    private ConfigRefresh() {
-    }
-
-    static Result refresh(List<Class<?>> changed, Function<String, byte @Nullable []> bytesOf) {
+    static List<String> refresh(List<Class<?>> changed) {
         List<String> refreshed = new ArrayList<>();
-        List<String> waiting = new ArrayList<>();
         for (Class<?> type : changed) {
             for (Field field : type.getDeclaredFields()) {
                 Object handler = Modifier.isStatic(field.getModifiers()) ? read(field) : null;
@@ -37,15 +24,12 @@ final class ConfigRefresh {
                     continue;
                 }
                 Class<?> config = (Class<?>) call(handler, "configClass");
-                if (config == null || !changed.contains(config) || !refreshYacl(handler)) {
-                    continue;
+                if (config != null && changed.contains(config) && refreshYacl(handler)) {
+                    refreshed.add(config.getSimpleName());
                 }
-                Object[] fields = (Object[]) call(handler, "fields");
-                int built = countEntries(bytesOf.apply(config.getName()));
-                (fields != null && fields.length < built ? waiting : refreshed).add(config.getSimpleName());
             }
         }
-        return new Result(refreshed, waiting);
+        return refreshed;
     }
 
     private static boolean refreshYacl(Object handler) {
@@ -90,19 +74,4 @@ final class ConfigRefresh {
         }
     }
 
-    private static int countEntries(byte @Nullable [] bytes) {
-        if (bytes == null) {
-            return 0;
-        }
-        ClassNode node = new ClassNode();
-        new ClassReader(bytes).accept(node, ClassReader.SKIP_CODE);
-        int count = 0;
-        for (FieldNode field : node.fields) {
-            List<AnnotationNode> annotations = field.visibleAnnotations == null ? List.of() : field.visibleAnnotations;
-            if (annotations.stream().anyMatch(annotation -> SERIAL_ENTRY.equals(annotation.desc))) {
-                count++;
-            }
-        }
-        return count;
-    }
 }

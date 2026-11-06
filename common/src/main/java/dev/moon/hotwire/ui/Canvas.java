@@ -31,4 +31,9 @@ public interface Canvas {
 
     interface Image {
     }
+
+    enum Cursor { RESIZE_EW, RESIZE_NS, RESIZE_ALL }
+
+    default void requestCursor(Cursor cursor) {
+    }
 }

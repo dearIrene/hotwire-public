@@ -6,6 +6,7 @@ import dev.moon.hotwire.ui.SettingOption;
 import dev.moon.hotwire.ui.SettingsSection;
 import java.io.IOException;
 import java.nio.file.Path;
+import java.util.Arrays;
 import java.util.List;
 import java.util.Set;
 import java.util.concurrent.ConcurrentHashMap;
@@ -114,6 +115,8 @@ public final class HotwireSettings {
         @Nullable ReloadPopups reloadPopups = ReloadPopups.ALL;
         @Nullable DevCatch devCatch = DevCatch.ON;
         @Nullable DevLeaks devLeaks = DevLeaks.ON;
+
+        @Nullable List<Double> devWindow;
         @Nullable String promptAcceptedFor;
         boolean keyCardShown;
         @Nullable List<String> favorites = List.of();
@@ -133,6 +136,7 @@ public final class HotwireSettings {
     private volatile ReloadPopups reloadPopups;
     private volatile DevCatch devCatch;
     private volatile DevLeaks devLeaks;
+    private volatile double @Nullable [] devWindow;
     private volatile @Nullable String promptAcceptedFor;
     private volatile boolean keyCardShown;
     private final Set<String> favorites = ConcurrentHashMap.newKeySet();
@@ -159,6 +163,8 @@ public final class HotwireSettings {
         this.reloadPopups = saved.reloadPopups == null ? ReloadPopups.ALL : saved.reloadPopups;
         this.devCatch = saved.devCatch == null ? DevCatch.ON : saved.devCatch;
         this.devLeaks = saved.devLeaks == null ? DevLeaks.ON : saved.devLeaks;
+        this.devWindow = saved.devWindow == null || saved.devWindow.size() != 5 ? null
+                : saved.devWindow.stream().mapToDouble(Double::doubleValue).toArray();
         this.promptAcceptedFor = saved.promptAcceptedFor;
         this.keyCardShown = saved.keyCardShown;
         if (saved.favorites != null) {
@@ -212,6 +218,16 @@ public final class HotwireSettings {
 
     public boolean isDevCatchOn(boolean inSetup) {
         return inSetup && this.devCatch == DevCatch.ON;
+    }
+
+    public double @Nullable [] getDevWindow() {
+        double[] at = this.devWindow;
+        return at == null ? null : at.clone();
+    }
+
+    public void setDevWindow(double[] at) {
+        this.devWindow = at.clone();
+        this.save();
     }
 
     public boolean isDevLeaksOn(boolean inSetup) {
@@ -364,6 +380,8 @@ public final class HotwireSettings {
         saved.reloadPopups = this.reloadPopups;
         saved.devCatch = this.devCatch;
         saved.devLeaks = this.devLeaks;
+        double[] window = this.devWindow;
+        saved.devWindow = window == null ? null : Arrays.stream(window).boxed().toList();
         saved.promptAcceptedFor = this.promptAcceptedFor;
         saved.keyCardShown = this.keyCardShown;
         saved.favorites = this.favorites.stream().sorted().toList();

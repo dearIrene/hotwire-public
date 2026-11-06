@@ -1,12 +1,15 @@
 package dev.moon.hotwire.fabric.dev;
 
 import dev.moon.hotwire.concurrent.Tasks;
+import dev.moon.hotwire.dev.BuildNotes;
+import dev.moon.hotwire.dev.DevBuild;
 import dev.moon.hotwire.dev.DevCrash;
 import dev.moon.hotwire.dev.DevEvent;
 import dev.moon.hotwire.dev.DevHost;
 import dev.moon.hotwire.dev.DevMixin;
 import dev.moon.hotwire.dev.DevModView;
 import dev.moon.hotwire.dev.DevState;
+import dev.moon.hotwire.dev.WorldLeaks;
 import dev.moon.hotwire.fabric.update.ModUpdater;
 import dev.moon.hotwire.redefine.ClassRebuilder;
 import dev.moon.hotwire.ui.Lang;
@@ -41,6 +44,9 @@ public final class DevSession implements DevHost, AutoCloseable {
     private static final int MOST_CRASHES = 20;
 
     private static final long REMOVAL_WAIT_MILLIS = 2000;
+
+    private static final long HALF_WAIT_MILLIS = 300;
+    private static final int HALF_TRIES = 10;
     private static final int LISTED = 6;
     private static volatile @Nullable DevSession current;
 
@@ -79,6 +85,10 @@ public final class DevSession implements DevHost, AutoCloseable {
         int builds;
 
         long goneSince;
+
+        int halfTries;
+
+        final Set<String> starts;
         volatile DevState state = DevState.UP_TO_DATE;
         volatile String line = "";
         final Deque<DevEvent> events = new ArrayDeque<>();
@@ -89,6 +99,7 @@ public final class DevSession implements DevHost, AutoCloseable {
         Mod(DevMod mod, DevBuild running) {
             this.mod = mod;
             this.running = running;
+            this.starts = mod.findStartClasses();
         }
     }
 
@@ -112,9 +123,32 @@ public final class DevSession implements DevHost, AutoCloseable {
     }
 
     public static Path takeStart(DevMod mod, Path folder) throws IOException {
-        DevBuild build = DevBuild.take(mod.folders(), folder.resolve(mod.id()).resolve("build-0.jar"));
+        Path jar = folder.resolve(mod.id()).resolve("build-0.jar");
+        deleteBuildsBut(jar, jar.resolveSibling(jar.getFileName() + ".idx"));
+        DevBuild before = DevBuild.readIndex(jar);
+        DevBuild build = DevBuild.take(mod.folders(), jar, before);
+        if (build != before) {
+            build.writeIndex();
+        }
         STARTS.put(mod.id(), new Start(mod, build));
         return build.getJar();
+    }
+
+    private static void deleteBuildsBut(Path... staying) {
+        Path parent = staying[0].getParent();
+        if (parent == null || !Files.isDirectory(parent)) {
+            return;
+        }
+        Set<Path> stays = Set.of(staying);
+        try (DirectoryStream<Path> builds = Files.newDirectoryStream(parent, "build-*")) {
+            for (Path build : builds) {
+                if (!stays.contains(build)) {
+                    deleteQuietly(build);
+                }
+            }
+        } catch (IOException e) {
+            LOGGER.debug("[Hotwire] the builds in {} could not be listed", parent, e);
+        }
     }
 
     public static @Nullable DevSession start(Path folder, Tasks tasks, Engine engine) {
@@ -222,9 +256,13 @@ public final class DevSession implements DevHost, AutoCloseable {
             Path jar = this.folder.resolve(mod.mod.id()).resolve("build-" + number + ".jar");
             DevBuild built;
             try {
-                built = DevBuild.take(mod.mod.folders(), jar);
+                built = DevBuild.take(mod.mod.folders(), jar, mod.running);
             } catch (IOException e) {
                 this.fail(mod, List.of(String.valueOf(e.getMessage())));
+                return;
+            }
+
+            if (built == mod.running) {
                 return;
             }
             DevBuild.Diff diff = mod.running.diff(built);
@@ -246,6 +284,24 @@ public final class DevSession implements DevHost, AutoCloseable {
                 }
                 return;
             }
+
+            Map<String, byte[]> classes = built.readEntries(combine(diff.changedClasses(), diff.addedClasses()));
+            String half = classes.entrySet().stream().filter(entry -> !BuildNotes.isWhole(entry.getValue()))
+                    .map(Map.Entry::getKey).findFirst().orElse(null);
+            if (half != null && mod.halfTries++ < HALF_TRIES) {
+                deleteQuietly(jar);
+                this.watch.lookAgain(mod.mod, TimeUnit.MILLISECONDS.toNanos(HALF_WAIT_MILLIS));
+                return;
+            }
+            mod.halfTries = 0;
+            if (half != null) {
+                deleteQuietly(jar);
+                this.fail(mod, List.of(Lang.get("hotwire.dev.half", half)));
+                return;
+            }
+            DevBuild before = mod.running;
+
+            Map<String, byte[]> was = before.readEntries(diff.changedClasses());
             mod.builds = number;
             mod.state = DevState.LOADING;
             mod.line = Lang.get("hotwire.dev.loading");
@@ -263,12 +319,10 @@ public final class DevSession implements DevHost, AutoCloseable {
                         if (!diff.addedClasses().isEmpty()) {
                             lines.add(Lang.get("hotwire.dev.added", String.join(", ", list(diff.addedClasses()))));
                         }
-                        ConfigRefresh.Result configs = this.refreshConfigs(diff, built);
-                        configs.refreshed().forEach(name -> lines.add(Lang.get("hotwire.dev.config.refreshed", name)));
-                        configs.waiting().forEach(name -> lines.add(Lang.get("hotwire.dev.config.waiting", name)));
-                        String detail = configs.waiting().isEmpty()
-                                ? Lang.get("hotwire.dev.took", describeClasses(diff), findSeconds(began))
-                                : Lang.get("hotwire.dev.config.waiting", configs.waiting().getFirst());
+                        List<String> notes = this.findNotes(mod, diff, was, classes);
+                        lines.addAll(notes);
+                        String detail = notes.isEmpty() ? Lang.get("hotwire.dev.took", describeClasses(diff),
+                                findSeconds(began)) : notes.getFirst();
                         this.tell(mod, DevEvent.Kind.IN, Lang.get("hotwire.dev.in", mod.mod.name()), detail, lines);
                     } else {
                         this.tell(mod, DevEvent.Kind.ASSETS, Lang.get("hotwire.dev.assets", mod.mod.name()),
@@ -289,11 +343,31 @@ public final class DevSession implements DevHost, AutoCloseable {
         }
     }
 
-    private ConfigRefresh.Result refreshConfigs(DevBuild.Diff diff, DevBuild built) {
+    private List<String> findNotes(Mod mod, DevBuild.Diff diff, Map<String, byte[]> was, Map<String, byte[]> after) {
+        List<String> notes = new ArrayList<>();
         Set<String> names = new HashSet<>();
-        diff.changedClasses().forEach(entry -> names.add(entry.substring(0, entry.length() - ".class".length())
-                .replace('/', '.')));
-        return ConfigRefresh.refresh(this.engine.findLoaded(names), built::readClass);
+        for (String entry : diff.changedClasses()) {
+            String binary = entry.substring(0, entry.length() - ".class".length()).replace('/', '.');
+            String simple = binary.substring(binary.lastIndexOf('.') + 1);
+            names.add(binary);
+            if (mod.starts.contains(binary) && BuildNotes.isStartChanged(was.get(entry), after.get(entry))) {
+                notes.add(Lang.get("hotwire.dev.start_changed", simple));
+            }
+            if (!fullRedefinition && !BuildNotes.findAddedFields(was.get(entry), after.get(entry)).isEmpty()) {
+                notes.add(Lang.get("hotwire.dev.fields_added", simple));
+            }
+        }
+        if (fullRedefinition) {
+            ConfigRefresh.refresh(this.engine.findLoaded(names)).forEach(name -> notes.add(
+                    Lang.get("hotwire.dev.config.refreshed", name)));
+        }
+        return notes;
+    }
+
+    private static SortedSet<String> combine(SortedSet<String> a, SortedSet<String> b) {
+        SortedSet<String> both = new TreeSet<>(a);
+        both.addAll(b);
+        return both;
     }
 
     private void accept(Mod mod, DevBuild built, int number) {
@@ -305,15 +379,8 @@ public final class DevSession implements DevHost, AutoCloseable {
         mod.state = DevState.UP_TO_DATE;
         mod.line = "";
 
-        try (DirectoryStream<Path> jars = Files.newDirectoryStream(built.getJar().getParent(), "build-*.jar")) {
-            for (Path jar : jars) {
-                if (!jar.equals(built.getJar())) {
-                    deleteQuietly(jar);
-                }
-            }
-        } catch (IOException e) {
-            LOGGER.debug("[Hotwire] the builds before {} could not be listed", built.getJar(), e);
-        }
+        Path start = built.getJar().resolveSibling("build-0.jar");
+        deleteBuildsBut(built.getJar(), start, start.resolveSibling("build-0.jar.idx"));
         LOGGER.info("[Hotwire] {} runs build {} now (was {})", mod.mod.id(), built.getJar().getFileName(),
                 before.getJar().getFileName());
     }

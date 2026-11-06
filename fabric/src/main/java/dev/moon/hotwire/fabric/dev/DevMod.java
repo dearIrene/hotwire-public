@@ -7,16 +7,33 @@ import java.nio.file.Files;
 import java.nio.file.Path;
 import java.util.ArrayList;
 import java.util.HashSet;
+import java.util.LinkedHashMap;
 import java.util.LinkedHashSet;
 import java.util.List;
+import java.util.Map;
 import java.util.Set;
 import net.fabricmc.loader.api.FabricLoader;
 import net.fabricmc.loader.api.ModContainer;
+import net.fabricmc.loader.api.entrypoint.EntrypointContainer;
 import net.fabricmc.loader.api.metadata.ModOrigin;
+import org.jspecify.annotations.Nullable;
 
 public record DevMod(String id, String name, List<Path> folders) {
     public DevMod {
         folders = List.copyOf(folders);
+    }
+
+    Set<String> findStartClasses() {
+        Set<String> starts = new HashSet<>();
+        for (String key : List.of("main", "client")) {
+            for (EntrypointContainer<Object> entry : FabricLoader.getInstance().getEntrypointContainers(key,
+                    Object.class)) {
+                if (entry.getProvider().getMetadata().getId().equals(this.id)) {
+                    starts.add(entry.getEntrypoint().getClass().getName());
+                }
+            }
+        }
+        return starts;
     }
 
     private static final List<DevMod> FOUND = findAll();
@@ -26,11 +43,12 @@ public record DevMod(String id, String name, List<Path> folders) {
     }
 
     private static List<DevMod> findAll() {
-        List<DevMod> found = new ArrayList<>();
-        Set<Path> others = new HashSet<>();
+        Set<Path> owned = new HashSet<>();
         for (ModContainer mod : FabricLoader.getInstance().getAllMods()) {
-            mod.getRootPaths().stream().filter(DevMod::isFolder).map(DevMod::normalize).forEach(others::add);
+            mod.getRootPaths().stream().filter(DevMod::isFolder).map(DevMod::normalize).forEach(owned::add);
         }
+        Map<String, ModContainer> containers = new LinkedHashMap<>();
+        Map<String, Set<Path>> folders = new LinkedHashMap<>();
         for (ModContainer mod : FabricLoader.getInstance().getAllMods()) {
             ModOrigin origin = mod.getOrigin();
             String id = mod.getMetadata().getId();
@@ -39,31 +57,67 @@ public record DevMod(String id, String name, List<Path> folders) {
                     || origin.getPaths().isEmpty() || !origin.getPaths().stream().allMatch(DevMod::isFolder)) {
                 continue;
             }
-            Set<Path> folders = new LinkedHashSet<>();
-            mod.getRootPaths().stream().filter(DevMod::isFolder).map(DevMod::normalize).forEach(folders::add);
-            origin.getPaths().forEach(path -> folders.addAll(findClassFolders(normalize(path), others)));
-            found.add(new DevMod(id, mod.getMetadata().getName(), List.copyOf(folders)));
+            containers.put(id, mod);
+            Set<Path> own = new LinkedHashSet<>();
+            mod.getRootPaths().stream().filter(DevMod::isFolder).map(DevMod::normalize).forEach(own::add);
+            folders.put(id, own);
         }
+
+        for (Path loose : findLooseFolders(owned)) {
+            String best = null;
+            int bestDepth = -1;
+            for (Map.Entry<String, ModContainer> entry : containers.entrySet()) {
+                for (Path origin : entry.getValue().getOrigin().getPaths()) {
+                    Path normal = normalize(origin);
+                    Path project = findProject(normal);
+                    int depth = findCommonDepth(normal, loose);
+                    if (project != null && loose.startsWith(project) && depth > bestDepth) {
+                        best = entry.getKey();
+                        bestDepth = depth;
+                    }
+                }
+            }
+            if (best != null) {
+                folders.get(best).add(loose);
+            }
+        }
+        List<DevMod> found = new ArrayList<>();
+        containers.forEach((id, mod) -> found.add(new DevMod(id, mod.getMetadata().getName(),
+                List.copyOf(folders.get(id)))));
         return List.copyOf(found);
     }
 
-    private static List<Path> findClassFolders(Path origin, Set<Path> others) {
-        Path parent = origin.getParent();
-        Path build = parent == null ? null : parent.getParent();
-        if (build == null) {
-            return List.of();
-        }
-        List<Path> found = new ArrayList<>();
+    private static List<Path> findLooseFolders(Set<Path> owned) {
+        List<Path> loose = new ArrayList<>();
         for (String entry : System.getProperty("java.class.path", "").split(File.pathSeparator, -1)) {
             if (entry.isBlank()) {
                 continue;
             }
             Path path = normalize(Path.of(entry));
-            if (path.startsWith(build) && !others.contains(path) && Files.isDirectory(path)) {
-                found.add(path);
+            if (!owned.contains(path) && Files.isDirectory(path)) {
+                loose.add(path);
             }
         }
-        return found;
+        return loose;
+    }
+
+    private static @Nullable Path findProject(Path origin) {
+        Path at = origin.getParent();
+        for (int up = 0; at != null && up < 8; up++, at = at.getParent()) {
+            if (Files.isRegularFile(at.resolve("settings.gradle.kts"))
+                    || Files.isRegularFile(at.resolve("settings.gradle"))) {
+                return at;
+            }
+        }
+        return null;
+    }
+
+    private static int findCommonDepth(Path a, Path b) {
+        int depth = 0;
+        while (depth < a.getNameCount() && depth < b.getNameCount() && a.getName(depth).equals(b.getName(depth))) {
+            depth++;
+        }
+        return depth;
     }
 
     private static Path normalize(Path path) {

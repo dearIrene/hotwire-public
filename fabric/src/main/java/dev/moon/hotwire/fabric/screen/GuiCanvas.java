@@ -1,5 +1,8 @@
 package dev.moon.hotwire.fabric.screen;
 
+//? if >=1.21.9 {
+import com.mojang.blaze3d.platform.cursor.CursorTypes;
+//?}
 //? if <1.21.2 {
 /*import com.mojang.blaze3d.systems.RenderSystem;
 *///?}
@@ -44,6 +47,17 @@ public final class GuiCanvas implements Canvas {
         this.graphics = graphics;
         this.font = font;
     }
+
+    //? if >=1.21.9 {
+    @Override
+    public void requestCursor(Cursor cursor) {
+        this.graphics.requestCursor(switch (cursor) {
+            case RESIZE_EW -> CursorTypes.RESIZE_EW;
+            case RESIZE_NS -> CursorTypes.RESIZE_NS;
+            case RESIZE_ALL -> CursorTypes.RESIZE_ALL;
+        });
+    }
+    //?}
 
     @Override
     public void fill(int x0, int y0, int x1, int y1, int argb) {

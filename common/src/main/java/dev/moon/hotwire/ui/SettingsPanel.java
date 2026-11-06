@@ -4,6 +4,7 @@ import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.OptionalInt;
 import java.util.function.ObjIntConsumer;
 import org.jspecify.annotations.Nullable;
 
@@ -33,7 +34,7 @@ final class SettingsPanel extends Panel {
     private boolean measured;
 
     private int navWidth = NAV_MIN;
-    private int hoveredSection = -1;
+    private OptionalInt hoveredSection = OptionalInt.empty();
 
     private record Card(SettingOption option, List<String> label, List<String> lines, int y, int height,
             int barWidth) {
@@ -197,21 +198,21 @@ final class SettingsPanel extends Panel {
         return this.measured && this.shownSection < this.layouts.size() ? this.layouts.get(this.shownSection) : null;
     }
 
-    private int findSectionAt(double px, double py) {
+    private OptionalInt findSectionAt(double px, double py) {
         int navX = this.getBoxX() + 14;
         int navY = this.getBoxY() + BODY_Y;
         if (px < navX || px >= navX + this.navWidth || py < navY) {
-            return -1;
+            return OptionalInt.empty();
         }
         int index = (int) ((py - navY) / NAV_ROW);
-        return index < this.sections.size() ? index : -1;
+        return index < this.sections.size() ? OptionalInt.of(index) : OptionalInt.empty();
     }
 
     @Override
     protected boolean onClick(double px, double py, int button) {
-        int section = this.findSectionAt(px, py);
-        if (button == 0 && section >= 0) {
-            this.showSection(section);
+        OptionalInt section = this.findSectionAt(px, py);
+        if (button == 0 && section.isPresent()) {
+            this.showSection(section.getAsInt());
         }
         return true;
     }
@@ -303,7 +304,7 @@ final class SettingsPanel extends Panel {
         canvas.fill(x, markY, x + 2, markY + NAV_ROW - 2, Colors.fade(Palette.ACCENT, alpha));
         for (int i = 0; i < this.sections.size(); i++) {
             SettingsSection section = this.sections.get(i);
-            int ink = i == this.shownSection || i == this.hoveredSection ? Palette.TEXT
+            int ink = i == this.shownSection || this.hoveredSection.equals(OptionalInt.of(i)) ? Palette.TEXT
                     : section.enabled() ? Palette.DIM : Palette.FAINT;
             canvas.drawText(canvas.clip(section.title(), this.navWidth - 14), x + 8, y + i * NAV_ROW + 4,
                     Colors.fade(ink, alpha));

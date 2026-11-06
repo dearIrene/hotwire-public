@@ -17,9 +17,11 @@ import org.slf4j.LoggerFactory;
 final class DevMode implements AutoCloseable {
     private static final Logger LOGGER = LoggerFactory.getLogger(DevMode.class);
     private final @Nullable DevSession session;
+    private final HotwireSettings settings;
     private @Nullable DevWindow window;
 
     DevMode(HotwireSettings settings, Tasks tasks, DevSession.Engine engine) {
+        this.settings = settings;
         DevSetup setup = DevSetups.get();
         DevSession.useFullRedefinition(setup.isFull());
         if (setup.inSetup()) {
@@ -43,7 +45,7 @@ final class DevMode implements AutoCloseable {
                 case FULL -> "hotwire.settings.developer.full";
                 case JETBRAINS_WITHOUT_FLAG -> "hotwire.settings.developer.no_flag";
                 case OTHER -> "hotwire.settings.developer.other_java";
-            }), setup.isFull());
+            }), setup.isFull(), this.settings.getDevWindow(), this.settings::setDevWindow, () -> ModViews.show(null));
             this.window = shown;
         }
         ModViews.show(new DevGameScreen(shown));
