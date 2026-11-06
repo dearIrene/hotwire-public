@@ -16,6 +16,7 @@ import java.util.List;
 import java.util.Map;
 import java.util.Set;
 import java.util.concurrent.ConcurrentHashMap;
+import java.util.function.Function;
 import net.fabricmc.loader.api.FabricLoader;
 import net.minecraft.client.Minecraft;
 import net.minecraft.client.multiplayer.ClientPacketListener;
@@ -96,6 +97,12 @@ public final class GameClasses implements SwitchApplier.Game {
         return false;
     }
 
+    private static volatile Function<String, byte @Nullable []> fallback = name -> null;
+
+    public static void setOriginalsFallback(Function<String, byte @Nullable []> reader) {
+        fallback = reader;
+    }
+
     public void forgetOriginalBytes() {
         this.originals.clear();
     }
@@ -106,6 +113,9 @@ public final class GameClasses implements SwitchApplier.Game {
         byte[] bytes = retained == null ? null : retained.get();
         if (bytes == null) {
             bytes = this.knot.findPreMixinBytes(internalName, this.findLoaded(internalName));
+            if (bytes == null) {
+                bytes = fallback.apply(internalName);
+            }
             if (bytes != null) {
                 this.originals.put(internalName, new SoftReference<>(bytes));
             }
@@ -118,6 +128,9 @@ public final class GameClasses implements SwitchApplier.Game {
         byte[] bytes = retained == null ? null : retained.get();
         if (bytes == null) {
             bytes = this.knot.findPreMixinBytes(internalName, this.findLoaded(internalName));
+        }
+        if (bytes == null) {
+            bytes = fallback.apply(internalName);
         }
         return FailedAddJars.removeHiddenInterfaces(bytes);
     }

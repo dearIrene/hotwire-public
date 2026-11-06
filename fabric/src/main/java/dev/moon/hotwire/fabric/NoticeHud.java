@@ -1,5 +1,6 @@
 package dev.moon.hotwire.fabric;
 
+import dev.moon.hotwire.fabric.screen.DevGameScreen;
 import dev.moon.hotwire.fabric.screen.GuiCanvas;
 import dev.moon.hotwire.fabric.screen.HotwireScreen;
 import dev.moon.hotwire.fabric.screen.StoreGameScreen;
@@ -37,7 +38,7 @@ public final class NoticeHud {
     private static void draw(GuiCanvas canvas) {
         Minecraft minecraft = Minecraft.getInstance();
         Screen screen = ModViews.openScreen();
-        if (screen instanceof HotwireScreen || screen instanceof StoreGameScreen) {
+        if (screen instanceof HotwireScreen || screen instanceof StoreGameScreen || screen instanceof DevGameScreen) {
             if (Notices.getShowing().isEmpty()) {
                 minecraft.execute(NoticeHud::takeOut);
             }

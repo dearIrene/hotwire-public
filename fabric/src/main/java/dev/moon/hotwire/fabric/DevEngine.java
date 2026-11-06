@@ -11,9 +11,13 @@ import dev.moon.hotwire.switching.ModSwitcher;
 import dev.moon.hotwire.switching.PlayerMessages;
 import dev.moon.hotwire.ui.UpdateMethod;
 import dev.moon.hotwire.ui.UpdatePreview;
+import java.lang.instrument.ClassDefinition;
+import java.lang.instrument.UnmodifiableClassException;
 import java.nio.file.Path;
 import java.util.ArrayList;
+import java.util.HashMap;
 import java.util.List;
+import java.util.Map;
 import java.util.Set;
 import java.util.TreeSet;
 import java.util.function.Supplier;
@@ -104,6 +108,47 @@ final class DevEngine implements DevSession.Engine {
             found.add(new DevMixin(target.substring(target.lastIndexOf('/') + 1), others));
         }
         return found;
+    }
+
+    @Override
+    @SuppressWarnings("ReferenceEquality")
+    public List<String> redefineElsewhere(Map<String, byte[]> classes) {
+        HotwireEngine.JvmParts found = this.parts.get();
+        if (found == null) {
+            return List.of();
+        }
+
+        ClassLoader modLoader = DevEngine.class.getClassLoader();
+        List<ClassDefinition> definitions = new ArrayList<>();
+        Map<String, byte[]> unknown = new HashMap<>();
+        classes.forEach((entry, bytes) -> {
+            String internal = entry.substring(0, entry.length() - ".class".length());
+            Class<?> type = found.classes().findLoaded(internal);
+            if (type == null) {
+                unknown.put(internal.replace('/', '.'), bytes);
+            } else if (type.getClassLoader() != modLoader && type.getClassLoader() != null) {
+                definitions.add(new ClassDefinition(type, bytes));
+            }
+        });
+
+        if (!unknown.isEmpty()) {
+            for (Class<?> type : found.instrumentation().getAllLoadedClasses()) {
+                byte[] bytes = unknown.get(type.getName());
+                if (bytes != null && type.getClassLoader() != modLoader && type.getClassLoader() != null) {
+                    definitions.add(new ClassDefinition(type, bytes));
+                }
+            }
+        }
+        if (definitions.isEmpty()) {
+            return List.of();
+        }
+        try {
+            found.instrumentation().redefineClasses(definitions.toArray(ClassDefinition[]::new));
+            return List.of();
+        } catch (ClassNotFoundException | UnmodifiableClassException | UnsupportedOperationException
+                | LinkageError e) {
+            return definitions.stream().map(definition -> definition.getDefinitionClass().getSimpleName()).toList();
+        }
     }
 
     @Override

@@ -3,6 +3,7 @@ package dev.moon.hotwire.dev;
 import dev.moon.hotwire.config.AtomicFiles;
 import java.io.BufferedOutputStream;
 import java.io.IOException;
+import java.io.InputStream;
 import java.io.OutputStream;
 import java.nio.charset.StandardCharsets;
 import java.nio.file.FileVisitResult;
@@ -12,6 +13,8 @@ import java.nio.file.SimpleFileVisitor;
 import java.nio.file.attribute.BasicFileAttributes;
 import java.util.ArrayList;
 import java.util.Collection;
+import java.util.Collections;
+import java.util.HashMap;
 import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
@@ -41,7 +44,7 @@ public final class DevBuild {
     private record FileSum(long size, long modified, long crc) {
     }
 
-    private record FileOnDisk(Path file, long size, long modified) {
+    private record FileOnDisk(Path file, long size, long modified, @Nullable String entry) {
     }
 
     private static final String INDEX = ".idx";
@@ -98,19 +101,20 @@ public final class DevBuild {
         return names;
     }
 
-    public static DevBuild take(List<Path> folders, Path jar, @Nullable DevBuild previous) throws IOException {
-        Map<String, FileOnDisk> found = find(folders);
+    public static DevBuild take(List<Path> sources, Path jar, @Nullable DevBuild previous) throws IOException {
+        Map<String, FileOnDisk> found = find(sources);
         if (previous != null && previous.isSame(found)) {
             return previous;
         }
         Files.createDirectories(jar.getParent());
         Path part = jar.resolveSibling(jar.getFileName() + ".part");
         Map<String, FileSum> files = new TreeMap<>();
+        Map<Path, ZipFile> opened = new HashMap<>();
         try (OutputStream out = new BufferedOutputStream(Files.newOutputStream(part), 1 << 16);
                 ZipOutputStream zip = new ZipOutputStream(out)) {
             for (Map.Entry<String, FileOnDisk> entry : found.entrySet()) {
                 FileOnDisk file = entry.getValue();
-                byte[] bytes = Files.readAllBytes(file.file());
+                byte[] bytes = read(file, opened);
                 FileSum before = previous == null ? null : previous.files.get(entry.getKey());
                 long crc = before != null && before.size() == bytes.length && before.modified() == file.modified()
                         ? before.crc() : findCrc(bytes);
@@ -125,9 +129,32 @@ public final class DevBuild {
                 zip.closeEntry();
                 files.put(entry.getKey(), new FileSum(bytes.length, file.modified(), crc));
             }
+        } finally {
+            for (ZipFile open : opened.values()) {
+                open.close();
+            }
         }
         AtomicFiles.moveInto(part, jar);
         return new DevBuild(jar, files);
+    }
+
+    private static byte[] read(FileOnDisk file, Map<Path, ZipFile> opened) throws IOException {
+        String name = file.entry();
+        if (name == null) {
+            return Files.readAllBytes(file.file());
+        }
+        ZipFile zip = opened.get(file.file());
+        if (zip == null) {
+            zip = new ZipFile(file.file().toFile());
+            opened.put(file.file(), zip);
+        }
+        ZipEntry entry = zip.getEntry(name);
+        if (entry == null) {
+            throw new IOException(file.file() + " lost " + name + " while it was read");
+        }
+        try (InputStream in = zip.getInputStream(entry)) {
+            return in.readAllBytes();
+        }
     }
 
     private static long findCrc(byte[] bytes) {
@@ -136,9 +163,13 @@ public final class DevBuild {
         return crc.getValue();
     }
 
-    private static Map<String, FileOnDisk> find(List<Path> folders) throws IOException {
+    private static Map<String, FileOnDisk> find(List<Path> sources) throws IOException {
         Map<String, FileOnDisk> found = new TreeMap<>();
-        for (Path folder : folders) {
+        for (Path folder : sources) {
+            if (Files.isRegularFile(folder)) {
+                findInJar(folder, found);
+                continue;
+            }
             if (!Files.isDirectory(folder)) {
                 continue;
             }
@@ -146,14 +177,27 @@ public final class DevBuild {
                 @Override
                 public FileVisitResult visitFile(Path file, BasicFileAttributes attributes) {
                     if (attributes.isRegularFile()) {
+                        long modified = attributes.lastModifiedTime().toMillis();
                         found.putIfAbsent(folder.relativize(file).toString().replace('\\', '/'),
-                                new FileOnDisk(file, attributes.size(), attributes.lastModifiedTime().toMillis()));
+                                new FileOnDisk(file, attributes.size(), modified, null));
                     }
                     return FileVisitResult.CONTINUE;
                 }
             });
         }
         return found;
+    }
+
+    private static void findInJar(Path jar, Map<String, FileOnDisk> found) throws IOException {
+        long modified = Files.getLastModifiedTime(jar).toMillis();
+        try (ZipFile zip = new ZipFile(jar.toFile())) {
+            for (ZipEntry entry : Collections.list(zip.entries())) {
+                if (!entry.isDirectory()) {
+                    String name = entry.getName();
+                    found.putIfAbsent(name, new FileOnDisk(jar, entry.getSize(), modified, name));
+                }
+            }
+        }
     }
 
     private boolean isSame(Map<String, FileOnDisk> found) {

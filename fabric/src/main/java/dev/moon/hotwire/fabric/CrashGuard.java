@@ -108,8 +108,12 @@ public final class CrashGuard {
                         finish(made[0], caught.mod(), name, reported.result(), why, installed,
                                 byAntiCrash ? (line, bad) -> { } : say, writeReport, byAntiCrash);
                     }));
-        }, inDevelopment, caught -> DevSession.onCrash(caught.mod(), caught.thrown(), findWhat(caught.thrown()),
-                findWhere(caught.thrown(), caught.mod())));
+        }, inDevelopment, caught -> {
+            Place place = findPlace(caught.thrown(), caught.mod());
+            DevSession.onCrash(caught.mod(), caught.thrown(), findWhat(caught.thrown()),
+                    place == null ? findWhere(caught.thrown(), caught.mod()) : place.words(),
+                    place == null ? "" : place.source(), place == null ? 0 : place.line());
+        });
         policy = made[0];
     }
 
@@ -170,6 +174,18 @@ public final class CrashGuard {
     }
 
     static String findWhere(Throwable thrown, String mod) {
+        Place place = findPlace(thrown, mod);
+        if (place != null) {
+            return place.words();
+        }
+        StackTraceElement[] frames = findInnermost(thrown).getStackTrace();
+        return frames.length == 0 ? "" : frames[0].toString();
+    }
+
+    record Place(String source, int line, String words) {
+    }
+
+    private static @Nullable Place findPlace(Throwable thrown, String mod) {
         Throwable inner = findInnermost(thrown);
         ClassLoader game = CrashGuard.class.getClassLoader();
         for (StackTraceElement element : findFramesAbove(inner)) {
@@ -180,16 +196,16 @@ public final class CrashGuard {
                 continue;
             }
             if (mod.equals(GameRegistrations.findModOf(type))) {
-                return element.getFileName() + ":" + element.getLineNumber() + " in " + element.getMethodName();
+                return new Place(element.getClassName(), element.getLineNumber(), element.getFileName() + ":"
+                        + element.getLineNumber() + " in " + element.getMethodName());
             }
             String mixin = findMixinOf(type, element.getMethodName(), mod);
             if (mixin != null) {
-                return mixin.substring(mixin.lastIndexOf('.') + 1) + ".java:" + element.getLineNumber() + " in "
-                        + type.getSimpleName();
+                return new Place(mixin, element.getLineNumber(), mixin.substring(mixin.lastIndexOf('.') + 1)
+                        + ".java:" + element.getLineNumber() + " in " + type.getSimpleName());
             }
         }
-        StackTraceElement[] frames = inner.getStackTrace();
-        return frames.length == 0 ? "" : frames[0].toString();
+        return null;
     }
 
     private static Throwable findInnermost(Throwable thrown) {
@@ -270,7 +286,7 @@ public final class CrashGuard {
     private static List<StackTraceElement> findFramesAbove(Throwable thrown) {
         StackTraceElement[] frames = thrown.getStackTrace();
         for (int at = 0; at < frames.length; at++) {
-            if (frames[at].getMethodName().startsWith("hotwire$catch")) {
+            if (frames[at].getMethodName().contains("hotwire$catch")) {
                 return Arrays.asList(frames).subList(0, at);
             }
         }

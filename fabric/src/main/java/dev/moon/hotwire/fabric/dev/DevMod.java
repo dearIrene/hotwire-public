@@ -46,6 +46,9 @@ public record DevMod(String id, String name, List<Path> folders) {
         Set<Path> owned = new HashSet<>();
         for (ModContainer mod : FabricLoader.getInstance().getAllMods()) {
             mod.getRootPaths().stream().filter(DevMod::isFolder).map(DevMod::normalize).forEach(owned::add);
+            if (mod.getOrigin().getKind() == ModOrigin.Kind.PATH) {
+                mod.getOrigin().getPaths().stream().map(DevMod::normalize).forEach(owned::add);
+            }
         }
         Map<String, ModContainer> containers = new LinkedHashMap<>();
         Map<String, Set<Path>> folders = new LinkedHashMap<>();
@@ -63,7 +66,7 @@ public record DevMod(String id, String name, List<Path> folders) {
             folders.put(id, own);
         }
 
-        for (Path loose : findLooseFolders(owned)) {
+        for (Path loose : findLoose(owned)) {
             String best = null;
             int bestDepth = -1;
             for (Map.Entry<String, ModContainer> entry : containers.entrySet()) {
@@ -87,21 +90,22 @@ public record DevMod(String id, String name, List<Path> folders) {
         return List.copyOf(found);
     }
 
-    private static List<Path> findLooseFolders(Set<Path> owned) {
+    private static List<Path> findLoose(Set<Path> owned) {
         List<Path> loose = new ArrayList<>();
         for (String entry : System.getProperty("java.class.path", "").split(File.pathSeparator, -1)) {
             if (entry.isBlank()) {
                 continue;
             }
             Path path = normalize(Path.of(entry));
-            if (!owned.contains(path) && Files.isDirectory(path)) {
+            boolean jar = path.toString().endsWith(".jar") && Files.isRegularFile(path);
+            if (!owned.contains(path) && (jar || Files.isDirectory(path))) {
                 loose.add(path);
             }
         }
         return loose;
     }
 
-    private static @Nullable Path findProject(Path origin) {
+    static @Nullable Path findProject(Path origin) {
         Path at = origin.getParent();
         for (int up = 0; at != null && up < 8; up++, at = at.getParent()) {
             if (Files.isRegularFile(at.resolve("settings.gradle.kts"))

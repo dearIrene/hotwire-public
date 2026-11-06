@@ -19,12 +19,17 @@ public final class CrashPolicy {
 
     private enum State { TURNING_OFF, OFF_REFUSED }
 
+    private record DevThrow(String type, StackTraceElement top, String mod) {
+    }
+
     private final Function<Throwable, @Nullable String> ownerOf;
     private final Predicate<String> guarded;
     private final Consumer<Caught> turnOff;
     private final Predicate<String> inDevelopment;
     private final Consumer<Caught> onDevThrow;
     private final Map<String, State> states = new ConcurrentHashMap<>();
+    private volatile @Nullable DevThrow lastDevThrow;
+    private volatile boolean toldFrameless;
     private final Set<String> said = ConcurrentHashMap.newKeySet();
 
     public CrashPolicy(Function<Throwable, @Nullable String> ownerOf, Predicate<String> guarded,
@@ -40,7 +45,7 @@ public final class CrashPolicy {
         if (isJvmFailure(thrown)) {
             return false;
         }
-        String mod = this.ownerOf.apply(thrown);
+        String mod = this.findOwner(thrown);
         if (mod != null && this.inDevelopment.test(mod)) {
             this.onDevThrow.accept(new Caught(mod, site, thrown));
             return true;
@@ -63,6 +68,29 @@ public final class CrashPolicy {
             LOGGER.warn("[Hotwire] {}'s throw was dropped, as its off is under way or done: {}", mod, where);
         }
         return true;
+    }
+
+    private @Nullable String findOwner(Throwable thrown) {
+        Throwable inner = thrown;
+        for (int depth = 0; inner.getCause() != null && depth < 32; depth++) {
+            inner = inner.getCause();
+        }
+        StackTraceElement[] frames = inner.getStackTrace();
+        DevThrow last = this.lastDevThrow;
+        if (last != null && last.type().equals(inner.getClass().getName())
+                && (frames.length == 0 || last.top().equals(frames[0])) && this.inDevelopment.test(last.mod())) {
+            if (frames.length == 0 && !this.toldFrameless) {
+                this.toldFrameless = true;
+                LOGGER.info("[Hotwire] a {} with no frames, as the JIT throws a repeated one, taken as {}'s at {}",
+                        last.type(), last.mod(), last.top());
+            }
+            return last.mod();
+        }
+        String mod = this.ownerOf.apply(thrown);
+        if (mod != null && frames.length > 0 && this.inDevelopment.test(mod)) {
+            this.lastDevThrow = new DevThrow(inner.getClass().getName(), frames[0], mod);
+        }
+        return mod;
     }
 
     public void onOffFinished(String mod, boolean off) {

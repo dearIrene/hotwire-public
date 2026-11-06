@@ -1,6 +1,7 @@
 package dev.moon.hotwire.fabric.screen;
 
 import dev.moon.hotwire.ui.DevWindow;
+import dev.moon.hotwire.ui.NoticeLayer;
 import dev.moon.hotwire.ui.Root;
 //? if >=26.1 {
 import net.minecraft.client.gui.GuiGraphicsExtractor;
@@ -11,6 +12,8 @@ import net.minecraft.client.gui.GuiGraphicsExtractor;
 public final class DevGameScreen extends RootScreen {
     private final Root root = new Root();
     private final DevWindow window;
+
+    private final NoticeLayer notices = new NoticeLayer();
 
     public DevGameScreen(DevWindow window) {
         super("Hotwire developer");
@@ -40,6 +43,7 @@ public final class DevGameScreen extends RootScreen {
     @Override
     protected void drawFrame(GuiCanvas canvas, long nowNanos, int mouseX, int mouseY) {
         this.root.drawFrame(canvas, nowNanos, mouseX, mouseY);
+        this.notices.draw(canvas, this.width, this.height, nowNanos);
     }
 
     @Override

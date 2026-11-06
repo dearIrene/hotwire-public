@@ -44,7 +44,7 @@ public final class Notices {
         }
     }
 
-    static synchronized boolean replace(Notice notice) {
+    public static synchronized boolean replace(Notice notice) {
         int at = indexOf(showing, notice.key());
         if (at < 0) {
             return false;

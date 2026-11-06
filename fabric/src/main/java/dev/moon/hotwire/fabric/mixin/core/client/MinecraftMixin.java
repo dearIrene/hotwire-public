@@ -90,8 +90,16 @@ public abstract class MinecraftMixin {
         GameHold.releaseForCrash();
     }
 
-    @Inject(method = "tick", at = @At("TAIL"))
-    private void hotwire$runTickEnd(CallbackInfo ci) {
+    @WrapOperation(method = "runTick", at = @At(value = "INVOKE", target = "Lnet/minecraft/client/Minecraft;tick()V"))
+    @SuppressWarnings("checkstyle:IllegalCatch")
+    private void hotwire$catchTickThrow(Minecraft game, Operation<Void> original) {
+        try {
+            original.call(game);
+        } catch (RuntimeException | Error e) {
+            if (!CrashGuard.handle(e, CrashPolicy.Site.FRAME)) {
+                throw e;
+            }
+        }
         TickEnd.runDue();
         BackgroundReload.tick();
     }

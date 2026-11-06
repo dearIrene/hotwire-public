@@ -1,4 +1,4 @@
 package dev.moon.hotwire.dev;
 
-public record DevCrash(String what, String where, int count, long firstAt, long lastAt) {
+public record DevCrash(String what, String where, int count, long firstAt, long lastAt, String source, int line) {
 }

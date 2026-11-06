@@ -9,7 +9,9 @@ import dev.moon.hotwire.dev.DevHost;
 import dev.moon.hotwire.dev.DevMixin;
 import dev.moon.hotwire.dev.DevModView;
 import dev.moon.hotwire.dev.DevState;
+import dev.moon.hotwire.dev.IdeOpener;
 import dev.moon.hotwire.dev.WorldLeaks;
+import dev.moon.hotwire.fabric.rebuild.GameClasses;
 import dev.moon.hotwire.fabric.update.ModUpdater;
 import dev.moon.hotwire.redefine.ClassRebuilder;
 import dev.moon.hotwire.ui.Lang;
@@ -31,9 +33,11 @@ import java.util.Locale;
 import java.util.Map;
 import java.util.Set;
 import java.util.SortedSet;
+import java.util.TreeMap;
 import java.util.TreeSet;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.TimeUnit;
+import net.minecraft.client.Minecraft;
 import org.jspecify.annotations.Nullable;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -42,6 +46,8 @@ public final class DevSession implements DevHost, AutoCloseable {
     private static final Logger LOGGER = LoggerFactory.getLogger(DevSession.class);
     private static final int MOST_EVENTS = 40;
     private static final int MOST_CRASHES = 20;
+
+    private static final float CRASH_REST_SECONDS = 10;
 
     private static final long REMOVAL_WAIT_MILLIS = 2000;
 
@@ -75,13 +81,19 @@ public final class DevSession implements DevHost, AutoCloseable {
         List<Class<?>> findLoaded(Set<String> names);
 
         List<DevMixin> findMixins(String id);
+
+        List<String> redefineElsewhere(Map<String, byte[]> classes);
     }
 
     private static final class Mod {
         final DevMod mod;
-        DevBuild running;
-        int runningNumber;
-        long builtAt = System.currentTimeMillis();
+
+        final Object taking = new Object();
+        volatile DevBuild running;
+        volatile int runningNumber;
+        volatile long builtAt = System.currentTimeMillis();
+
+        volatile boolean crashTold;
         int builds;
 
         long goneSince;
@@ -158,12 +170,28 @@ public final class DevSession implements DevHost, AutoCloseable {
         try {
             DevSession session = new DevSession(folder, tasks, engine);
             current = session;
+            GameClasses.setOriginalsFallback(DevSession::readRunningClass);
             LOGGER.info("[Hotwire] developer mode watches the build folders of {}", STARTS.keySet());
             return session;
         } catch (IOException e) {
             LOGGER.warn("[Hotwire] developer mode could not watch the build folders", e);
             return null;
         }
+    }
+
+    private static byte @Nullable [] readRunningClass(String internal) {
+        DevSession session = current;
+        if (session == null) {
+            return null;
+        }
+        String binary = internal.replace('/', '.');
+        for (Mod mod : session.mods.values()) {
+            DevBuild running = mod.running;
+            if (running.hasClass(binary)) {
+                return running.readClass(binary);
+            }
+        }
+        return null;
     }
 
     public static boolean isDevMod(String id) {
@@ -194,16 +222,14 @@ public final class DevSession implements DevHost, AutoCloseable {
 
     private boolean isOwnClass(String binary) {
         for (Mod mod : this.mods.values()) {
-            synchronized (mod) {
-                if (mod.running.hasClass(binary)) {
-                    return true;
-                }
+            if (mod.running.hasClass(binary)) {
+                return true;
             }
         }
         return false;
     }
 
-    public static void onCrash(String id, Throwable thrown, String what, String where) {
+    public static void onCrash(String id, Throwable thrown, String what, String where, String source, int line) {
         DevSession session = current;
         Mod mod = session == null ? null : session.mods.get(id);
         if (mod == null) {
@@ -211,25 +237,37 @@ public final class DevSession implements DevHost, AutoCloseable {
         }
         long now = System.currentTimeMillis();
         boolean first;
+        String kind;
+        String place;
         synchronized (mod) {
-            String key = what + " @ " + where;
+            DevCrash like = where.isEmpty() ? findLike(mod, what) : null;
+            kind = like == null ? what : like.what();
+            place = like == null ? where : like.where();
+            String file = like == null ? source : like.source();
+            int at = like == null ? line : like.line();
+            String key = kind + " @ " + place;
             DevCrash before = mod.crashes.remove(key);
             first = before == null;
-            mod.crashes.put(key, before == null ? new DevCrash(what, where, 1, now, now)
-                    : new DevCrash(what, where, before.count() + 1, before.firstAt(), now));
+            mod.crashes.put(key, before == null ? new DevCrash(kind, place, 1, now, now, file, at)
+                    : new DevCrash(kind, place, before.count() + 1, before.firstAt(), now, file, at));
             while (mod.crashes.size() > MOST_CRASHES) {
                 mod.crashes.remove(mod.crashes.keySet().iterator().next());
             }
             if (first) {
                 add(mod, new DevEvent(now, DevEvent.Kind.CRASH, Lang.get("hotwire.dev.crash", mod.mod.name()),
-                        List.of(what, where)));
+                        List.of(kind, place)));
             }
         }
         if (first) {
-            LOGGER.error("[Hotwire] {} threw at {}; the game keeps going, so fix it and build again", id, where,
+            LOGGER.error("[Hotwire] {} threw at {}; the game keeps going, so fix it and build again", id, place,
                     thrown);
-            Notices.show(Notice.ofBad(Lang.get("hotwire.dev.crash", mod.mod.name()),
-                    Lang.get("hotwire.dev.crash.at", what, where)));
+        }
+        Notice card = findCrashCard(mod, Lang.get("hotwire.dev.crash.at", kind, place));
+        if (mod.crashTold) {
+            Notices.replace(card);
+        } else {
+            mod.crashTold = true;
+            Notices.show(card);
         }
     }
 
@@ -251,13 +289,19 @@ public final class DevSession implements DevHost, AutoCloseable {
     }
 
     private void take(Mod mod) {
-        synchronized (mod) {
+        synchronized (mod.taking) {
             int number = mod.builds + 1;
             Path jar = this.folder.resolve(mod.mod.id()).resolve("build-" + number + ".jar");
             DevBuild built;
             try {
                 built = DevBuild.take(mod.mod.folders(), jar, mod.running);
             } catch (IOException e) {
+                deleteQuietly(jar);
+                if (mod.halfTries++ < HALF_TRIES) {
+                    this.watch.lookAgain(mod.mod, TimeUnit.MILLISECONDS.toNanos(HALF_WAIT_MILLIS));
+                    return;
+                }
+                mod.halfTries = 0;
                 this.fail(mod, List.of(String.valueOf(e.getMessage())));
                 return;
             }
@@ -308,6 +352,7 @@ public final class DevSession implements DevHost, AutoCloseable {
             long began = System.nanoTime();
             UpdatePreview preview = this.engine.preview(jar);
             if (preview instanceof UpdatePreview.Ready ready && ready.method() == UpdateMethod.IN_PLACE) {
+                clearCrashCard(mod);
                 ModUpdater.Result result = this.engine.updateInPlace(jar);
                 if (result instanceof ModUpdater.Result.Updated) {
                     this.accept(mod, built, number);
@@ -345,6 +390,9 @@ public final class DevSession implements DevHost, AutoCloseable {
 
     private List<String> findNotes(Mod mod, DevBuild.Diff diff, Map<String, byte[]> was, Map<String, byte[]> after) {
         List<String> notes = new ArrayList<>();
+        Map<String, byte[]> changed = new TreeMap<>(after);
+        changed.keySet().retainAll(diff.changedClasses());
+        this.engine.redefineElsewhere(changed).forEach(name -> notes.add(Lang.get("hotwire.dev.elsewhere", name)));
         Set<String> names = new HashSet<>();
         for (String entry : diff.changedClasses()) {
             String binary = entry.substring(0, entry.length() - ".class".length()).replace('/', '.');
@@ -383,6 +431,24 @@ public final class DevSession implements DevHost, AutoCloseable {
         deleteBuildsBut(built.getJar(), start, start.resolveSibling("build-0.jar.idx"));
         LOGGER.info("[Hotwire] {} runs build {} now (was {})", mod.mod.id(), built.getJar().getFileName(),
                 before.getJar().getFileName());
+    }
+
+    private static @Nullable DevCrash findLike(Mod mod, String what) {
+        for (DevCrash seen : List.copyOf(mod.crashes.values()).reversed()) {
+            if (seen.what().equals(what) || seen.what().startsWith(what + ":")) {
+                return seen;
+            }
+        }
+        return null;
+    }
+
+    private static Notice findCrashCard(Mod mod, String detail) {
+        return Notice.ofBad(Lang.get("hotwire.dev.crash", mod.mod.name()), detail).makeResting(CRASH_REST_SECONDS);
+    }
+
+    private static void clearCrashCard(Mod mod) {
+        mod.crashTold = false;
+        Notices.drop(findCrashCard(mod, ""));
     }
 
     private void fail(Mod mod, List<String> why) {
@@ -495,23 +561,62 @@ public final class DevSession implements DevHost, AutoCloseable {
             return;
         }
         this.tasks.submit("restarting " + id, () -> {
-            long began = System.nanoTime();
-            mod.state = DevState.LOADING;
-            mod.line = Lang.get("hotwire.dev.restarting");
-            Restart done = this.engine.restart(id);
-            if (done.failure() != null) {
-                this.fail(mod, List.of(done.failure()));
-            } else {
-                mod.state = DevState.UP_TO_DATE;
-                mod.line = "";
-                List<String> lines = new ArrayList<>();
-                if (!done.leftOver().isEmpty()) {
-                    lines.add(Lang.get("hotwire.dev.left_over"));
-                    lines.addAll(done.leftOver());
+            synchronized (mod.taking) {
+                long began = System.nanoTime();
+                mod.state = DevState.LOADING;
+                mod.line = Lang.get("hotwire.dev.restarting");
+                clearCrashCard(mod);
+                Restart done = this.engine.restart(id);
+                if (done.failure() != null) {
+                    this.fail(mod, List.of(done.failure()));
+                } else {
+                    mod.state = DevState.UP_TO_DATE;
+                    mod.line = "";
+                    List<String> lines = new ArrayList<>();
+                    if (!done.leftOver().isEmpty()) {
+                        lines.add(Lang.get("hotwire.dev.left_over"));
+                        lines.addAll(done.leftOver());
+                    }
+                    this.tell(mod, DevEvent.Kind.RESTARTED, Lang.get("hotwire.dev.restarted", mod.mod.name()),
+                            done.leftOver().isEmpty() ? Lang.get("hotwire.dev.took.only", findSeconds(began))
+                                    : Lang.get("hotwire.dev.left_over.count", done.leftOver().size()), lines);
                 }
-                this.tell(mod, DevEvent.Kind.RESTARTED, Lang.get("hotwire.dev.restarted", mod.mod.name()),
-                        done.leftOver().isEmpty() ? Lang.get("hotwire.dev.took.only", findSeconds(began))
-                                : Lang.get("hotwire.dev.left_over.count", done.leftOver().size()), lines);
+            }
+            return null;
+        });
+    }
+
+    @Override
+    @SuppressWarnings("FutureReturnValueIgnored")
+    public void openSource(String id, DevCrash crash) {
+        Mod mod = this.mods.get(id);
+        if (mod == null || crash.source().isEmpty()) {
+            return;
+        }
+        this.tasks.submit("opening " + crash.where(), () -> {
+            List<Path> projects = new ArrayList<>();
+            for (Path folder : mod.mod.folders()) {
+                Path project = DevMod.findProject(folder);
+                if (project != null && !projects.contains(project)) {
+                    projects.add(project);
+                }
+            }
+            Path file;
+            try {
+                file = IdeOpener.findSource(projects, crash.source());
+            } catch (IOException e) {
+                LOGGER.debug("[Hotwire] the project could not be searched for {}", crash.source(), e);
+                file = null;
+            }
+            if (file == null) {
+                Notices.show(Notice.ofBad(Lang.get("hotwire.dev.no_source", crash.where()), ""));
+            } else if (IdeOpener.open(file, crash.line())) {
+                Notices.show(Notice.ofDone(Lang.get("hotwire.dev.opened", crash.where()), ""));
+            } else {
+                String place = file + ":" + crash.line();
+                Minecraft game = Minecraft.getInstance();
+                game.execute(() -> game.keyboardHandler.setClipboard(place));
+                Notices.show(Notice.ofOn(Lang.get("hotwire.dev.copied"), place));
             }
             return null;
         });
@@ -550,10 +655,7 @@ public final class DevSession implements DevHost, AutoCloseable {
     private Map<String, List<Class<?>>> findLoadedClasses() {
         Map<String, List<Class<?>>> loaded = new LinkedHashMap<>();
         for (Mod mod : this.mods.values()) {
-            Set<String> names;
-            synchronized (mod) {
-                names = mod.running.getClassNames();
-            }
+            Set<String> names = mod.running.getClassNames();
             loaded.put(mod.mod.id(), this.engine.findLoaded(names));
         }
         return loaded;

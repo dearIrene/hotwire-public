@@ -11,8 +11,10 @@ import java.nio.file.WatchEvent;
 import java.nio.file.WatchKey;
 import java.nio.file.WatchService;
 import java.util.HashMap;
+import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
+import java.util.Set;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.TimeUnit;
 import java.util.function.Consumer;
@@ -27,6 +29,8 @@ final class DevWatch implements AutoCloseable {
     private static final long GONE_CHECK_NANOS = TimeUnit.MILLISECONDS.toNanos(500);
 
     private final Map<WatchKey, DevMod> mods = new HashMap<>();
+
+    private final Map<WatchKey, Set<Path>> jarFolders = new HashMap<>();
     private final Map<Path, DevMod> roots = new HashMap<>();
     private final Map<Path, DevMod> gone = new HashMap<>();
 
@@ -40,9 +44,13 @@ final class DevWatch implements AutoCloseable {
         this.onBuilt = onBuilt;
         this.watch = FileSystems.getDefault().newWatchService();
         for (DevMod mod : watched) {
-            for (Path folder : mod.folders()) {
-                this.roots.put(folder, mod);
-                this.registerAll(folder, mod);
+            for (Path source : mod.folders()) {
+                if (Files.isRegularFile(source)) {
+                    this.registerJar(source, mod);
+                    continue;
+                }
+                this.roots.put(source, mod);
+                this.registerAll(source, mod);
             }
         }
         this.thread = Thread.ofPlatform().name("hotwire-dev-watch").daemon().unstarted(this::run);
@@ -64,6 +72,21 @@ final class DevWatch implements AutoCloseable {
             }
         } catch (IOException | UncheckedIOException e) {
             LOGGER.debug("[Hotwire] {} changed while it was walked", folder, e);
+        }
+    }
+
+    private void registerJar(Path jar, DevMod mod) {
+        Path folder = jar.getParent();
+        if (folder == null) {
+            return;
+        }
+        try {
+            WatchKey key = folder.register(this.watch, StandardWatchEventKinds.ENTRY_CREATE,
+                    StandardWatchEventKinds.ENTRY_MODIFY, StandardWatchEventKinds.ENTRY_DELETE);
+            this.mods.put(key, mod);
+            this.jarFolders.computeIfAbsent(key, ignored -> new HashSet<>()).add(jar.getFileName());
+        } catch (IOException e) {
+            LOGGER.debug("[Hotwire] {}'s folder can't be watched", jar, e);
         }
     }
 
@@ -109,6 +132,21 @@ final class DevWatch implements AutoCloseable {
 
     private void read(WatchKey key, long now) {
         DevMod mod = this.mods.get(key);
+        Set<Path> jars = this.jarFolders.get(key);
+        if (mod != null && jars != null) {
+            boolean ours = false;
+            for (WatchEvent<?> event : key.pollEvents()) {
+                ours |= event.context() instanceof Path name && jars.contains(name);
+            }
+            if (ours) {
+                this.due.put(mod, now + QUIET_NANOS);
+            }
+            if (!key.reset()) {
+                this.mods.remove(key);
+                this.jarFolders.remove(key);
+            }
+            return;
+        }
         if (mod != null) {
             for (WatchEvent<?> event : key.pollEvents()) {
                 if (StandardWatchEventKinds.ENTRY_CREATE.equals(event.kind()) && event.context() instanceof Path name

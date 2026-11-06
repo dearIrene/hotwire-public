@@ -12,4 +12,6 @@ public interface DevHost {
     boolean isWatching();
 
     void setWatching(boolean watching);
+
+    void openSource(String id, DevCrash crash);
 }

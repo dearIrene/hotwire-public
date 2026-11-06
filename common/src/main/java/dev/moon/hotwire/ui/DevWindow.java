@@ -46,6 +46,11 @@ public final class DevWindow extends Element {
     private List<DevModView> mods = List.of();
     private int modIndex;
     private int crashCount = -1;
+
+    private final List<CrashRow> crashRows = new ArrayList<>();
+
+    private record CrashRow(int top, int bottom, DevCrash crash) {
+    }
     private Tab tab = Tab.OVERVIEW;
     private final WindowFrame frame = new WindowFrame(MIN_W, MIN_H, TITLE_H);
     private final double @Nullable [] saved;
@@ -66,8 +71,10 @@ public final class DevWindow extends Element {
         this.reload = this.add(new Button(Lang.get("hotwire.dev.button.reload"), false, () -> this.act(true)));
         this.restart = this.add(new Button(Lang.get("hotwire.dev.button.restart"),
                 Lang.get("hotwire.dev.button.restart.short"), false, () -> this.act(false)));
-        this.pause = this.add(new Button(Lang.get("hotwire.dev.button.pause"), false, () -> host.setWatching(false)));
-        this.resume = this.add(new Button(Lang.get("hotwire.dev.button.resume"), false, () -> host.setWatching(true)));
+        this.pause = this.add(new Button(Lang.get("hotwire.dev.button.pause"),
+                Lang.get("hotwire.dev.button.pause.short"), false, () -> host.setWatching(false)));
+        this.resume = this.add(new Button(Lang.get("hotwire.dev.button.resume"),
+                Lang.get("hotwire.dev.button.resume.short"), false, () -> host.setWatching(true)));
         this.shown.snap(0);
     }
 
@@ -191,6 +198,15 @@ public final class DevWindow extends Element {
             this.onPlaced.accept(this.frame.save());
             return true;
         }
+        DevModView shown = this.findMod();
+        if (shown != null && py >= this.findBodyTop() && py < this.findBodyBottom()) {
+            for (CrashRow row : this.crashRows) {
+                if (py >= row.top() && py < row.bottom() && !row.crash().source().isEmpty()) {
+                    this.host.openSource(shown.id(), row.crash());
+                    return true;
+                }
+            }
+        }
 
         boolean onName = py < this.frame.getY() + TITLE_H && px < this.frame.getX() + this.frame.getWidth() / 2.0;
         if (this.mods.size() > 1 && onName && this.frame.findEdges(px, py) == 0) {
@@ -268,6 +284,7 @@ public final class DevWindow extends Element {
         canvas.pushClip(x0 + 1, bodyTop, x1 - 1, bodyBottom);
         int y = bodyTop - Math.round(this.scroll.getValue());
         int startY = y;
+        this.crashRows.clear();
         int cardX = x0 + PAD;
         int cardW = this.frame.getWidth() - 2 * PAD;
         if (mod == null) {
@@ -276,7 +293,7 @@ public final class DevWindow extends Element {
             y = switch (this.tab) {
                 case OVERVIEW -> this.paintOverview(canvas, mod, cardX, y, cardW, a);
                 case HISTORY -> paintHistory(canvas, mod, cardX, y, cardW, a);
-                case CRASHES -> paintCrashes(canvas, mod, cardX, y, cardW, a);
+                case CRASHES -> this.paintCrashes(canvas, mod, cardX, y, cardW, a);
                 case MIXINS -> paintMixins(canvas, mod, cardX, y, cardW, a);
             };
         }
@@ -393,12 +410,12 @@ public final class DevWindow extends Element {
         }
         if (!mod.crashes().isEmpty()) {
             DevCrash crash = mod.crashes().getFirst();
-            y = paintCard(canvas, x, y, w, Palette.BAD, crash.what(), describeAgo(crash.lastAt()),
-                    List.of(crash.where()), Palette.DIM, a);
+            y = this.paintCrash(canvas, crash, describeAgo(crash.lastAt()), x, y, w, a);
         }
-        int runtimeColor = this.fullRuntime ? Palette.GOOD : Palette.OFF_TINT;
+
+        int runtimeColor = this.fullRuntime ? Palette.GOOD : Palette.ACCENT;
         return paintCard(canvas, x, y, w, runtimeColor, Lang.get("hotwire.dev.window.runtime"), "",
-                List.of(this.runtime), runtimeColor, a);
+                List.of(this.runtime), Palette.DIM, a);
     }
 
     private static int paintHistory(Canvas canvas, DevModView mod, int x, int y, int w, float a) {
@@ -413,16 +430,24 @@ public final class DevWindow extends Element {
         return y;
     }
 
-    private static int paintCrashes(Canvas canvas, DevModView mod, int x, int y, int w, float a) {
+    private int paintCrashes(Canvas canvas, DevModView mod, int x, int y, int w, float a) {
         if (mod.crashes().isEmpty()) {
             return paintText(canvas, Lang.get("hotwire.dev.window.no_crashes"), x, y, w, Palette.DIM, a);
         }
         for (DevCrash crash : mod.crashes()) {
             String when = crash.count() == 1 ? describeAgo(crash.lastAt())
                     : "x" + crash.count() + ", " + describeAgo(crash.lastAt());
-            y = paintCard(canvas, x, y, w, Palette.BAD, crash.what(), when, List.of(crash.where()), Palette.DIM, a);
+            y = this.paintCrash(canvas, crash, when, x, y, w, a);
         }
         return y;
+    }
+
+    private int paintCrash(Canvas canvas, DevCrash crash, String when, int x, int y, int w, float a) {
+        List<String> lines = crash.source().isEmpty() ? List.of(crash.where())
+                : List.of(crash.where(), Lang.get("hotwire.dev.crash.open"));
+        int bottom = paintCard(canvas, x, y, w, Palette.BAD, crash.what(), when, lines, Palette.DIM, a);
+        this.crashRows.add(new CrashRow(y, bottom, crash));
+        return bottom;
     }
 
     private static int paintMixins(Canvas canvas, DevModView mod, int x, int y, int w, float a) {
