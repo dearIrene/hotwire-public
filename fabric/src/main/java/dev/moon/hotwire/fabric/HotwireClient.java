@@ -21,6 +21,7 @@ import dev.moon.hotwire.ui.DownloadNotices;
 import dev.moon.hotwire.ui.Lang;
 import java.io.IOException;
 import java.io.UncheckedIOException;
+import java.nio.file.Files;
 import java.nio.file.Path;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.Executor;
@@ -65,6 +66,14 @@ public final class HotwireClient implements ClientModInitializer {
         NoticeHud.register();
         Downloads.onEveryChange(DownloadNotices::show);
 
+        Lang.useEnglishFrom(() -> FabricLoader.getInstance().getModContainer(ID)
+                .flatMap(mod -> mod.findPath("assets/hotwire/lang/en_us.json")).map(path -> {
+                    try {
+                        return Files.newInputStream(path);
+                    } catch (IOException e) {
+                        return null;
+                    }
+                }).orElse(null));
         Lang.useTranslator((key, values) -> {
             Language language = Language.getInstance();
             return language.has(key) ? Lang.fill(language.getOrDefault(key), values) : null;

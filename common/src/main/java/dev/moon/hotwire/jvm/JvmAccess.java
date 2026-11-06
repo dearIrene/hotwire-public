@@ -2,6 +2,7 @@ package dev.moon.hotwire.jvm;
 
 import dev.moon.hotwire.jvm.JvmAccessException.Reason;
 import java.io.IOException;
+import java.io.IOException;
 import java.lang.instrument.Instrumentation;
 import java.lang.invoke.MethodHandle;
 import java.lang.invoke.MethodHandleProxies;
@@ -24,6 +25,41 @@ public final class JvmAccess {
     static final String AGENT = AgentMain.class.getName();
 
     private JvmAccess() {
+    }
+
+    public static synchronized Instrumentation getInstrumentation(@Nullable Path jar, Path spare)
+            throws JvmAccessException {
+        JvmAccessException first = null;
+        if (jar != null) {
+            try {
+                return getInstrumentation(jar);
+            } catch (JvmAccessException e) {
+                if (e.getReason() != Reason.NOT_AN_AGENT_JAR && e.getReason() != Reason.AGENT_DID_NOT_START
+                        && e.getReason() != Reason.PATH_NOT_ENCODABLE) {
+                    throw e;
+                }
+                first = e;
+            }
+        }
+        Path own;
+        try {
+            own = AgentJar.write(spare);
+        } catch (IOException | RuntimeException e) {
+            JvmAccessException failed = new JvmAccessException(Reason.NOT_AN_AGENT_JAR,
+                    "the agent's own jar could not be written into " + spare, e);
+            if (first != null) {
+                failed.addSuppressed(first);
+            }
+            throw failed;
+        }
+        try {
+            return getInstrumentation(own);
+        } catch (JvmAccessException e) {
+            if (first != null) {
+                e.addSuppressed(first);
+            }
+            throw e;
+        }
     }
 
     public static synchronized Instrumentation getInstrumentation(Path jar) throws JvmAccessException {

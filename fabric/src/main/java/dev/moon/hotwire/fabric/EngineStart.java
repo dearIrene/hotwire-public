@@ -77,8 +77,11 @@ import dev.moon.hotwire.ui.Progress;
 import dev.moon.hotwire.update.UpdateFolders;
 import dev.moon.hotwire.update.UpdateQueue;
 import java.io.IOException;
+import java.io.PrintWriter;
+import java.io.StringWriter;
 import java.lang.instrument.ClassFileTransformer;
 import java.lang.instrument.Instrumentation;
+import java.nio.file.FileSystems;
 import java.nio.file.Files;
 import java.nio.file.InvalidPathException;
 import java.nio.file.Path;
@@ -225,7 +228,8 @@ final class EngineStart {
     static HotwireEngine.JvmParts bind(InstalledMods installed, Progress progress, GameReports reports,
             UpdateFolders folders, UpdateQueue queue, Path gameDir, ModIcons icons) throws JvmAccessException {
         StartTimes.Laps laps = StartTimes.startLaps("engine bind: ");
-        Instrumentation instrumentation = JvmAccess.getInstrumentation(findHotwireJar());
+        Instrumentation instrumentation = JvmAccess.getInstrumentation(findHotwireJarIfKnown(),
+                gameDir.resolve("hotwire").resolve("agent"));
         JarChannels.open(instrumentation);
         GlfwCallbacks.useInstrumentation(instrumentation);
         LOGGER.info("[Hotwire] {} open jars read on through an interrupt", JarChannels.makeUninterruptible());
@@ -312,6 +316,7 @@ final class EngineStart {
         ModSwitcher switcher = new ModSwitcher(installed.getGraph(), ModPolicy.makePlannerFor(installed.getGraph()),
                 applier, progress, GameRegistrations.getJournal(),
                 ModLifecycle.makeLifecycle(GameRegistrations.getJournal(), Minecraft.getInstance()));
+        LifecycleListeners.setIsOn(switcher::isOn);
         laps.endLap("off checker, seen uses, switcher");
         ModTripwire tripwire = new ModTripwire(instrumentation, applier.getRebuilder(), classes::findLoaded);
         applier.addRider(tripwire.getRide());
@@ -370,6 +375,27 @@ final class EngineStart {
         }
         return new ForeignPatches(instrumentation, chain, pools, HotwireEngine.class.getClassLoader(),
                 installed.getGraphJars())::findClassesFor;
+    }
+
+    private static void writeStartFailure(Path gameDir, Throwable failure) {
+        StringWriter trace = new StringWriter();
+        failure.printStackTrace(new PrintWriter(trace));
+        try {
+            Path logs = gameDir.resolve("hotwire").resolve("logs");
+            Files.createDirectories(logs);
+            Files.writeString(logs.resolve("start-failure.txt"), trace.toString());
+        } catch (IOException | RuntimeException e) {
+            LOGGER.warn("[Hotwire] the start's failure could not be written down", e);
+        }
+    }
+
+    private static @Nullable Path findHotwireJarIfKnown() {
+        try {
+            Path jar = findHotwireJar();
+            return jar.getFileSystem().equals(FileSystems.getDefault()) ? jar : null;
+        } catch (JvmAccessException | RuntimeException e) {
+            return null;
+        }
     }
 
     static Path findHotwireJar() throws JvmAccessException {
@@ -496,10 +522,11 @@ final class EngineStart {
                 parts.runner().getSwitcher().getFiller().fillChanged();
             }
             laps.endLap("switch cache");
-        } catch (JvmAccessException | IllegalStateException e) {
+        } catch (JvmAccessException | IllegalStateException | LinkageError e) {
             LOGGER.error("[Hotwire] Switching mods is not possible in this game: {}", e.getMessage(), e);
+            writeStartFailure(gameDir, e);
             engine = new HotwireEngine(installed, progress, reports, folders, queue, settings, icons,
-                    new HotwireEngine.Bound.Refused(Lang.get("hotwire.switch.no_instrument", e.getMessage())));
+                    new HotwireEngine.Bound.Refused(Lang.get("hotwire.switch.no_instrument")));
         }
         engine.cleanUpdateFolders();
         laps.endLap("clean the update folders");
