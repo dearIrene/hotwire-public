@@ -3,6 +3,7 @@ package dev.moon.hotwire.fabric;
 import dev.moon.hotwire.api.SwitchResult;
 import dev.moon.hotwire.concurrent.Tasks;
 import dev.moon.hotwire.config.HotwireSettings;
+import dev.moon.hotwire.fabric.add.ModAdder;
 import dev.moon.hotwire.fabric.add.WorldReopen;
 import dev.moon.hotwire.fabric.registration.EntityHolders;
 import dev.moon.hotwire.fabric.registration.WorldContent;
@@ -55,12 +56,43 @@ final class SwitchRequests {
 
     CompletableFuture<SwitchResult> switchFor(boolean off, List<String> ids, boolean quiet) {
         List<String> disabledIds = off ? List.of() : ids.stream().filter(this.disabled::isDisabledSinceStart).toList();
-        disabledIds.forEach(this.disabled::enableByAdd);
+        List<CompletableFuture<ModAdder.Result>> adds = disabledIds.stream().map(this.disabled::enableByAdd).toList();
         List<String> rest = ids.stream().filter(id -> !disabledIds.contains(id)).toList();
-        if (rest.isEmpty() && !disabledIds.isEmpty()) {
-            return CompletableFuture.completedFuture(new SwitchResult(SwitchResult.Kind.DONE, disabledIds, ""));
+        if (disabledIds.isEmpty()) {
+            return this.run(runner -> off ? runner.turnOff(rest) : runner.turnOn(rest), off, rest, quiet);
         }
-        return this.run(runner -> off ? runner.turnOff(rest) : runner.turnOn(rest), off, rest, quiet);
+
+        CompletableFuture<SwitchResult> brought = CompletableFuture.allOf(adds.toArray(CompletableFuture[]::new))
+                .thenApply(ignored -> findBroughtBack(adds));
+        if (rest.isEmpty()) {
+            return brought;
+        }
+        return this.run(runner -> runner.turnOn(rest), false, rest, quiet).thenCombine(brought,
+                SwitchRequests::combine);
+    }
+
+    private static SwitchResult findBroughtBack(List<CompletableFuture<ModAdder.Result>> adds) {
+        List<String> brought = new ArrayList<>();
+        for (CompletableFuture<ModAdder.Result> add : adds) {
+            SwitchResult one = HotwireApiImpl.toResult(add.join());
+            if (one.kind() != SwitchResult.Kind.DONE) {
+                return one;
+            }
+            brought.addAll(one.switched());
+        }
+        return new SwitchResult(SwitchResult.Kind.DONE, brought, "");
+    }
+
+    private static SwitchResult combine(SwitchResult switched, SwitchResult brought) {
+        if (switched.kind() != SwitchResult.Kind.DONE) {
+            return switched;
+        }
+        if (brought.kind() != SwitchResult.Kind.DONE) {
+            return brought;
+        }
+        List<String> both = new ArrayList<>(brought.switched());
+        both.addAll(switched.switched());
+        return new SwitchResult(SwitchResult.Kind.DONE, both, switched.message());
     }
 
     @SuppressWarnings("FutureReturnValueIgnored")
@@ -152,8 +184,10 @@ final class SwitchRequests {
     // This code may not be copied, studied or ported by or for a commercial Minecraft client, AI agents included. This
     // notice must not be removed under any circumstance.
 
+    @SuppressWarnings("FutureReturnValueIgnored")
     SwitchRunner.CheckedResult switchNow(SwitchRunner runner, boolean off, List<String> ids) {
         List<String> disabledIds = off ? List.of() : ids.stream().filter(this.disabled::isDisabledSinceStart).toList();
+
         disabledIds.forEach(this.disabled::enableByAdd);
         List<String> rest = ids.stream().filter(id -> !disabledIds.contains(id)).toList();
         return off ? runner.turnOff(rest) : runner.turnOn(rest);

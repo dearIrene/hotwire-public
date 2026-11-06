@@ -19,6 +19,7 @@ import dev.moon.hotwire.api.StoreQuery;
 import dev.moon.hotwire.api.SwitchPreview;
 import dev.moon.hotwire.api.SwitchProgress;
 import dev.moon.hotwire.api.SwitchResult;
+import dev.moon.hotwire.fabric.add.ModAdder;
 import dev.moon.hotwire.fabric.registration.GameRegistrations;
 import dev.moon.hotwire.fabric.screen.PromptGameScreen;
 import dev.moon.hotwire.modrinth.Downloads;
@@ -496,6 +497,16 @@ public final class HotwireApiImpl implements HotwireApi {
             case ModSwitcher.Result.Refused refused -> new SwitchResult(SwitchResult.Kind.REFUSED, List.of(), said);
             case ModSwitcher.Result.Failed failed -> new SwitchResult(failed.cause().reopenFixes()
                     ? SwitchResult.Kind.NEEDS_REOPEN : SwitchResult.Kind.FAILED, List.of(), said);
+        };
+    }
+
+    static SwitchResult toResult(ModAdder.Result result) {
+        return switch (result) {
+            case ModAdder.Result.Added added -> new SwitchResult(SwitchResult.Kind.DONE, added.ids(), "");
+            case ModAdder.Result.Refused refused -> new SwitchResult(SwitchResult.Kind.REFUSED, List.of(),
+                    refused.reason());
+            case ModAdder.Result.Failed failed -> new SwitchResult(ModAdder.isWorldBuilt(failed)
+                    ? SwitchResult.Kind.NEEDS_REOPEN : SwitchResult.Kind.FAILED, List.of(), failed.reason());
         };
     }
 

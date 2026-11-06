@@ -141,14 +141,17 @@ final class DisabledMods {
         }
     }
 
-    void enableByAdd(String id) {
+    CompletableFuture<ModAdder.Result> enableByAdd(String id) {
         this.awaitRenames();
+        CompletableFuture<ModAdder.Result> ended = new CompletableFuture<>();
         Path disabledJar = this.installed.findJarOf(id);
         if (disabledJar == null) {
-            return;
+            ended.complete(new ModAdder.Result.Refused(Lang.get("hotwire.switch.not_installed", id)));
+            return ended;
         }
         this.adder.add(disabledJar, result -> {
             if (!(result instanceof ModAdder.Result.Added)) {
+                ended.complete(result);
                 return;
             }
             try {
@@ -160,7 +163,9 @@ final class DisabledMods {
                 this.say.accept(Lang.get("hotwire.switch.brought_back_failed", this.installed.nameOf(id),
                         e.getMessage()), true);
             }
+            ended.complete(result);
         });
+        return ended;
     }
 
     void disableAfter(ModSwitcher.Result result) {
