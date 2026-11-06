@@ -96,6 +96,8 @@ import java.util.concurrent.ForkJoinPool;
 import java.util.function.BiConsumer;
 import java.util.function.BiFunction;
 import java.util.stream.Collectors;
+import java.util.stream.Stream;
+import java.util.zip.ZipFile;
 import net.fabricmc.loader.api.FabricLoader;
 import net.fabricmc.loader.api.ModContainer;
 import net.fabricmc.loader.impl.metadata.LoaderModMetadata;
@@ -389,6 +391,36 @@ final class EngineStart {
         }
     }
 
+    private static boolean isLunar() {
+        try {
+            Class.forName("com.moonsworth.lunar.genesis.Genesis", false, ClassLoader.getSystemClassLoader());
+            return true;
+        } catch (ClassNotFoundException | LinkageError e) {
+            return false;
+        }
+    }
+
+    private static @Nullable Path findSwapperJar(UpdateFolders folders) {
+        Path known = findHotwireJarIfKnown();
+        if (known != null && Files.isRegularFile(known)) {
+            return known;
+        }
+        try (Stream<Path> jars = Files.list(folders.mods())) {
+            return jars.filter(jar -> jar.getFileName().toString().startsWith("hotwire-")
+                    && jar.getFileName().toString().endsWith(".jar") && hasSwapper(jar)).findFirst().orElse(null);
+        } catch (IOException e) {
+            return null;
+        }
+    }
+
+    private static boolean hasSwapper(Path jar) {
+        try (ZipFile zip = new ZipFile(jar.toFile())) {
+            return zip.getEntry("dev/moon/hotwire/update/JarSwapper.class") != null;
+        } catch (IOException e) {
+            return false;
+        }
+    }
+
     private static @Nullable Path findHotwireJarIfKnown() {
         try {
             Path jar = findHotwireJar();
@@ -526,7 +558,13 @@ final class EngineStart {
             LOGGER.error("[Hotwire] Switching mods is not possible in this game: {}", e.getMessage(), e);
             writeStartFailure(gameDir, e);
             engine = new HotwireEngine(installed, progress, reports, folders, queue, settings, icons,
-                    new HotwireEngine.Bound.Refused(Lang.get("hotwire.switch.no_instrument")));
+                    new HotwireEngine.Bound.Refused(Lang.get(isLunar() ? "hotwire.switch.lunar"
+                            : "hotwire.switch.no_instrument")));
+
+            Path hotwire = findSwapperJar(folders);
+            if (hotwire != null) {
+                new SwapAtClose(queue, folders, hotwire).arm();
+            }
         }
         engine.cleanUpdateFolders();
         laps.endLap("clean the update folders");

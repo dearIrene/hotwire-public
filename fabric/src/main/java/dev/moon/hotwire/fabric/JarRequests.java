@@ -116,7 +116,13 @@ final class JarRequests {
     void update(Path jar, UpdateMethod method) {
         HotwireEngine.JvmParts parts = this.engine.findJvmParts().orElse(null);
         if (parts == null) {
-            this.engine.showMessage(this.engine.getSwitchRefusal(), true);
+            ModAdder.Result queued = this.changes.queueAdd(jar);
+            boolean ok = queued instanceof ModAdder.Result.Queued;
+            this.engine.showMessage(ModAdder.describe(queued), !ok);
+            if (ok) {
+                this.storeJars.markInstalled(jar);
+            }
+            this.engine.refreshScreen();
             return;
         }
         this.tasks.submit("update", () -> parts.updates().update(jar, method), result -> {

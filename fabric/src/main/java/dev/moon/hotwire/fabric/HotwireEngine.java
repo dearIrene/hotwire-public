@@ -128,7 +128,8 @@ public final class HotwireEngine implements ModScreen.Game, AutoCloseable {
             ready.parts().instrumentation().addTransformer(ready.parts().loadTimeMixer());
             EarlyDefinitions.stop();
         }
-        this.changes = new ModChanges(this.findParts(), this.getSwitchRefusal(), installed, this.tasks);
+        this.changes = new ModChanges(this.findParts(), this.getSwitchRefusal(), installed, this.tasks,
+                new NextStartQueue(installed, queue, folders));
         this.storeJars = new StoreJars(installed, this.changes, this::findHost, () -> this.screen,
                 this::getStore, this::showMessage, progress, this::refreshScreen);
         this.stores = new StoreScreens(this, installed, this.storeJars, icons);

@@ -27,11 +27,19 @@ public final class ModChanges {
     private final InstalledMods installed;
     private final Tasks tasks;
 
-    ModChanges(HotwireEngine.@Nullable JvmParts parts, String refusal, InstalledMods installed, Tasks tasks) {
+    private final NextStartQueue later;
+
+    ModChanges(HotwireEngine.@Nullable JvmParts parts, String refusal, InstalledMods installed, Tasks tasks,
+            NextStartQueue later) {
         this.parts = parts;
         this.refusal = refusal;
         this.installed = installed;
         this.tasks = tasks;
+        this.later = later;
+    }
+
+    boolean isNextStartOnly() {
+        return this.parts == null;
     }
 
     public ModAdder.Result addNow(Path jar) {
@@ -57,7 +65,7 @@ public final class ModChanges {
     public ModAdder.Result queueAdd(Path jar) {
         HotwireEngine.JvmParts ready = this.parts;
         if (ready == null) {
-            return new ModAdder.Result.Refused(this.refusal);
+            return this.later.queue(jar);
         }
         if (!ready.adds().isInstalledJar(jar)) {
             return ready.adds().queue(jar);
@@ -144,15 +152,13 @@ public final class ModChanges {
 
     public UpdatePreview previewUpdate(Path jar) {
         HotwireEngine.JvmParts ready = this.parts;
-        return ready == null ? new UpdatePreview.Unreadable(String.valueOf(jar.getFileName()))
-                : ready.updates().preview(jar);
+        return ready == null ? this.later.previewUpdate(jar) : ready.updates().preview(jar);
     }
 
     CompletableFuture<AddPreview> dryRunAdd(Path jar) {
         HotwireEngine.JvmParts ready = this.parts;
         if (ready == null) {
-            return CompletableFuture.completedFuture(AddPreview.ofRefusal(String.valueOf(jar.getFileName()),
-                    this.refusal));
+            return CompletableFuture.completedFuture(this.later.previewAdd(jar));
         }
         long asked = System.nanoTime();
         return this.tasks.submit("dry-run add", () -> {
@@ -165,7 +171,7 @@ public final class ModChanges {
     CompletableFuture<UpdatePreview> dryRunUpdate(Path jar) {
         HotwireEngine.JvmParts ready = this.parts;
         if (ready == null) {
-            return CompletableFuture.completedFuture(new UpdatePreview.Unreadable(String.valueOf(jar.getFileName())));
+            return CompletableFuture.completedFuture(this.later.previewUpdate(jar));
         }
         return this.tasks.submit("dry-run update", () -> ready.updates().preview(jar));
     }

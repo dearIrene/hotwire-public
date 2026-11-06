@@ -14,13 +14,13 @@ import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 import org.jspecify.annotations.Nullable;
 
-final class AddFirstLook {
+public final class AddFirstLook {
     private static final Pattern VERSION = Pattern.compile("\\d+\\.\\d+(?:\\.\\d+)?");
 
     private AddFirstLook() {
     }
 
-    static Optional<String> findRefusal(Path file) {
+    public static Optional<String> findRefusal(Path file) {
         String name = String.valueOf(file.getFileName()).replaceFirst("(?i)\\.(jar|zip)$", "");
         JarKind kind = JarKind.of(file);
         @Nullable String other = switch (kind) {
