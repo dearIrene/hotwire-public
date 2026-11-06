@@ -65,6 +65,10 @@ public final class DevWindow extends Element {
 
     private final List<CrashRow> crashRows = new ArrayList<>();
 
+    private boolean mcpInstalled;
+    private Runnable getMcp = () -> { };
+    private int @Nullable [] mcpRow;
+
     private final List<BuildRow> buildRows = new ArrayList<>();
 
     private record BuildRow(int top, int bottom, int build) {
@@ -423,6 +427,11 @@ public final class DevWindow extends Element {
         }
         DevModView shown = this.findMod();
         if (shown != null && py >= this.findBodyTop() && py < this.findBodyBottom()) {
+            int[] mcp = this.mcpRow;
+            if (this.tab == Tab.OVERVIEW && !this.picker.isOpen() && mcp != null && py >= mcp[0] && py < mcp[1]) {
+                this.getMcp.run();
+                return true;
+            }
             for (CrashRow row : this.crashRows) {
                 if (py >= row.top() && py < row.bottom() && !row.crash().source().isEmpty()) {
                     this.host.openSource(shown.id(), row.crash());
@@ -524,6 +533,7 @@ public final class DevWindow extends Element {
         int y = bodyTop - Math.round(this.scroll.getValue());
         int startY = y;
         this.crashRows.clear();
+        this.mcpRow = null;
         this.buildRows.clear();
         int cardX = x0 + PAD;
         int cardW = this.frame.getWidth() - 2 * PAD;
@@ -656,8 +666,21 @@ public final class DevWindow extends Element {
             y = this.paintCrash(canvas, crash, describeAgo(crash.lastAt()), x, y, w, a);
         }
         int runtimeColor = this.fullRuntime ? Palette.GOOD : Palette.OFF_TINT;
-        return paintCard(canvas, x, y, w, runtimeColor, Lang.get("hotwire.dev.window.runtime"), "",
+        y = paintCard(canvas, x, y, w, runtimeColor, Lang.get("hotwire.dev.window.runtime"), "",
                 List.of(this.runtime), runtimeColor, a);
+
+        int top = y;
+        y = this.mcpInstalled ? paintCard(canvas, x, y, w, Palette.ACCENT_SOFT, Lang.get("hotwire.dev.mcp.on"), "",
+                List.of(Lang.get("hotwire.dev.mcp.on.line")), Palette.DIM, a)
+                : paintCard(canvas, x, y, w, Palette.ACCENT, Lang.get("hotwire.dev.mcp.get"), "",
+                        List.of(Lang.get("hotwire.dev.mcp.get.line")), Palette.DIM, a);
+        this.mcpRow = this.mcpInstalled ? null : new int[] {top, y};
+        return y;
+    }
+
+    public void setMcp(boolean installed, Runnable getIt) {
+        this.mcpInstalled = installed;
+        this.getMcp = getIt;
     }
 
     private int paintHistory(Canvas canvas, DevModView mod, int x, int y, int w, float a) {

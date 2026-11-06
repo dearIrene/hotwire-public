@@ -5,11 +5,13 @@ import dev.moon.hotwire.config.DevSetup;
 import dev.moon.hotwire.config.HotwireSettings;
 import dev.moon.hotwire.fabric.dev.DevSession;
 import dev.moon.hotwire.fabric.screen.DevGameScreen;
+import dev.moon.hotwire.fabric.screen.WebLinks;
 import dev.moon.hotwire.ui.DevWindow;
 import dev.moon.hotwire.ui.Lang;
 import dev.moon.hotwire.ui.Notice;
 import dev.moon.hotwire.ui.Notices;
 import java.io.IOException;
+import net.fabricmc.loader.api.FabricLoader;
 import org.jspecify.annotations.Nullable;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -47,6 +49,8 @@ final class DevMode implements AutoCloseable {
                 case OTHER -> "hotwire.settings.developer.other_java";
             }), setup.isFull(), this.settings.getDevWindow(), this.settings::setDevWindow,
                     this.settings.getDevScale(), this.settings::setDevScale, () -> ModViews.show(null));
+            shown.setMcp(FabricLoader.getInstance().isModLoaded("hotwire-mcp"),
+                    () -> WebLinks.open("https://github.com/moonshee/hotwire/releases"));
             this.window = shown;
         }
         ModViews.show(new DevGameScreen(shown));
