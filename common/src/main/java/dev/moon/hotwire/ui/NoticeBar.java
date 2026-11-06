@@ -17,6 +17,8 @@ final class NoticeBar extends Element {
     private static final int GAP = 6;
     private static final int EDGE = 10;
 
+    private int topInset;
+
     private static final int DRIFT = 28;
     private static final String CROSS = "×";
 
@@ -97,12 +99,12 @@ final class NoticeBar extends Element {
             Notice notice = showing.get(i);
             Card same = this.findShowing(notice.key());
             if (same == null) {
-                this.cards.add(0, new Card(notice, EDGE, Notices.markSeen(notice.key())));
+                this.cards.add(0, new Card(notice, EDGE + this.topInset, Notices.markSeen(notice.key())));
             } else if (!same.notice.equals(notice)) {
                 same.notice = notice;
             }
         }
-        int at = EDGE;
+        int at = EDGE + this.topInset;
         for (Card card : this.cards) {
             if (!card.leaving && Notices.indexOf(showing, card.notice.key()) < 0) {
                 card.leaving = true;
@@ -170,6 +172,10 @@ final class NoticeBar extends Element {
         int x = this.findX(card);
         int y = Math.round(card.top.getValue());
         return px >= x && px < x + card.width && py >= y && py < y + card.getHeight();
+    }
+
+    void setTopInset(int inset) {
+        this.topInset = Math.max(0, inset);
     }
 
     private int findX(Card card) {

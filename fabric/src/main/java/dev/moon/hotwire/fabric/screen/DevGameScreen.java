@@ -43,7 +43,7 @@ public final class DevGameScreen extends RootScreen {
     @Override
     protected void drawFrame(GuiCanvas canvas, long nowNanos, int mouseX, int mouseY) {
         this.root.drawFrame(canvas, nowNanos, mouseX, mouseY);
-        this.notices.draw(canvas, this.width, this.height, nowNanos);
+        this.notices.draw(canvas, this.width, this.height, this.window.findCardsTop(this.width), nowNanos);
     }
 
     @Override

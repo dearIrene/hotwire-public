@@ -7,12 +7,17 @@ public final class NoticeLayer {
     private long drawnAt = -1;
 
     public void draw(Canvas canvas, int width, int height, long nowNanos) {
+        this.draw(canvas, width, height, 0, nowNanos);
+    }
+
+    public void draw(Canvas canvas, int width, int height, int topInset, long nowNanos) {
         if (this.drawnAt >= 0 && nowNanos - this.drawnAt > AWAY_NANOS) {
             this.clock = new FrameClock();
         }
         this.drawnAt = nowNanos;
         float dt = this.clock.tick(nowNanos);
         this.bar.setBounds(0, 0, width, height);
+        this.bar.setTopInset(topInset);
         this.bar.step(dt);
         this.bar.draw(canvas, 1);
     }

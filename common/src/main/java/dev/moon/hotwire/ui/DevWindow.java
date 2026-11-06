@@ -18,6 +18,9 @@ import org.jspecify.annotations.Nullable;
 
 public final class DevWindow extends Element {
     private static final int TITLE_H = 22;
+
+    private static final int CARDS_WIDTH = 220;
+    private static final int CARDS_REACH = 60;
     private static final int PAD = 8;
     private static final int LINE = 10;
     private static final int GAP = 4;
@@ -103,6 +106,12 @@ public final class DevWindow extends Element {
                 this.host.restartMod(mod.id());
             }
         }
+    }
+
+    public int findCardsTop(int screenWidth) {
+        boolean underCards = this.frame.getY() < CARDS_REACH && this.frame.getX() + this.frame.getWidth() > screenWidth
+                - CARDS_WIDTH;
+        return underCards ? this.frame.getY() + TITLE_H : 0;
     }
 
     public int[] getFrameBounds() {
