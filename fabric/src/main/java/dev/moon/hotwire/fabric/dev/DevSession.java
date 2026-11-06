@@ -3,6 +3,7 @@ package dev.moon.hotwire.fabric.dev;
 import dev.moon.hotwire.concurrent.Tasks;
 import dev.moon.hotwire.dev.BuildMerge;
 import dev.moon.hotwire.dev.BuildNotes;
+import dev.moon.hotwire.dev.DevBridge;
 import dev.moon.hotwire.dev.DevBuild;
 import dev.moon.hotwire.dev.DevBuildInfo;
 import dev.moon.hotwire.dev.DevClassChange;
@@ -10,6 +11,7 @@ import dev.moon.hotwire.dev.DevCrash;
 import dev.moon.hotwire.dev.DevDelta;
 import dev.moon.hotwire.dev.DevEvent;
 import dev.moon.hotwire.dev.DevHost;
+import dev.moon.hotwire.dev.DevLink;
 import dev.moon.hotwire.dev.DevMixin;
 import dev.moon.hotwire.dev.DevModView;
 import dev.moon.hotwire.dev.DevState;
@@ -45,6 +47,7 @@ import java.util.TreeMap;
 import java.util.TreeSet;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.TimeUnit;
+import net.fabricmc.loader.api.FabricLoader;
 import org.jspecify.annotations.Nullable;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -200,6 +203,18 @@ public final class DevSession implements DevHost, AutoCloseable {
         try {
             DevSession session = new DevSession(folder, tasks, engine);
             current = session;
+
+            List<Path> projects = new ArrayList<>();
+            for (Start start : STARTS.values()) {
+                for (Path built : start.mod().folders()) {
+                    Path project = DevMod.findProject(built);
+                    if (project != null && !projects.contains(project)) {
+                        projects.add(project);
+                    }
+                }
+            }
+            Path log = FabricLoader.getInstance().getGameDir().resolve("logs").resolve("latest.log");
+            DevLink.set(new DevBridge(session, () -> log, projects));
             GameClasses.setOriginalsFallback(DevSession::readRunningClass);
             LOGGER.info("[Hotwire] developer mode watches the build folders of {}", STARTS.keySet());
             return session;
@@ -1109,6 +1124,7 @@ public final class DevSession implements DevHost, AutoCloseable {
     @Override
     public void close() throws IOException {
         current = null;
+        DevLink.set(null);
         this.watch.close();
     }
 

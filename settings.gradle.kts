@@ -15,6 +15,7 @@ plugins {
 rootProject.name = "hotwire"
 
 include("common")
+include("mcp")
 
 stonecutter {
     create("fabric") {
