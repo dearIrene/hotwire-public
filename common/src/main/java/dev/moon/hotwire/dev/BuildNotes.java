@@ -3,6 +3,7 @@ package dev.moon.hotwire.dev;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Set;
+import java.util.SortedSet;
 import java.util.TreeSet;
 import org.jspecify.annotations.Nullable;
 import org.objectweb.asm.ClassReader;
@@ -68,6 +69,40 @@ public final class BuildNotes {
             }
         }
         return false;
+    }
+
+    public static SortedSet<String> findChangedMethods(byte @Nullable [] before, byte @Nullable [] after) {
+        SortedSet<String> changed = new TreeSet<>();
+        ClassNode was = read(before);
+        ClassNode now = read(after);
+        if (was == null || now == null) {
+            return changed;
+        }
+        for (MethodNode method : now.methods) {
+            if (!readCode(method).equals(readCode(find(was, method))) || find(was, method) == null) {
+                changed.add(describe(method.name));
+            }
+        }
+        for (MethodNode method : was.methods) {
+            if (find(now, method) == null) {
+                changed.add(describe(method.name));
+            }
+        }
+        return changed;
+    }
+
+    private static String describe(String name) {
+        if (name.equals("<init>")) {
+            return "constructor";
+        }
+        if (name.equals("<clinit>")) {
+            return "static setup";
+        }
+
+        if (name.startsWith("lambda$") && name.lastIndexOf('$') > "lambda$".length()) {
+            return "lambda in " + name.substring("lambda$".length(), name.lastIndexOf('$'));
+        }
+        return name;
     }
 
     private static @Nullable MethodNode find(ClassNode node, MethodNode like) {

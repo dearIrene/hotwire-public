@@ -13,7 +13,7 @@ public interface DevHost {
 
     void setWatching(boolean watching);
 
-    void rollBack(String id);
+    void rollBack(String id, int build);
 
     void openSource(String id, DevCrash crash);
 }

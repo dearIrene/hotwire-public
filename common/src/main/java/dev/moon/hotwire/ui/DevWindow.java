@@ -56,6 +56,11 @@ public final class DevWindow extends Element {
 
     private final List<CrashRow> crashRows = new ArrayList<>();
 
+    private final List<BuildRow> buildRows = new ArrayList<>();
+
+    private record BuildRow(int top, int bottom, int build) {
+    }
+
     private record CrashRow(int top, int bottom, DevCrash crash) {
     }
     private Tab tab = Tab.OVERVIEW;
@@ -82,12 +87,13 @@ public final class DevWindow extends Element {
         this.onScale = onScale;
         this.onClose = onClose;
         this.tabs = this.add(new ChoiceBar(makeTabs(0), 0, this::pickTab));
-        this.reload = this.add(new Button(Lang.get("hotwire.dev.button.reload"), false, () -> this.act(true)));
+        this.reload = this.add(new Button(Lang.get("hotwire.dev.button.reload"),
+                Lang.get("hotwire.dev.button.reload.short"), false, () -> this.act(true)));
         this.back = this.add(new Button(Lang.get("hotwire.dev.button.back"), Lang.get("hotwire.dev.button.back.short"),
                 false, () -> {
                     DevModView mod = this.findMod();
-                    if (mod != null) {
-                        this.host.rollBack(mod.id());
+                    if (mod != null && !mod.keptBuilds().isEmpty()) {
+                        this.host.rollBack(mod.id(), mod.keptBuilds().getFirst());
                     }
                 }));
         this.restart = this.add(new Button(Lang.get("hotwire.dev.button.restart"),
@@ -145,13 +151,27 @@ public final class DevWindow extends Element {
         return Math.min(this.scale == 0 ? this.gameScale : this.scale, this.mostScale);
     }
 
+    public int @Nullable [] findBuildRowForTests(int build) {
+        for (BuildRow row : this.buildRows) {
+            if (row.build() == build) {
+                return new int[] {row.top(), row.bottom()};
+            }
+        }
+        return null;
+    }
+
+    public void showTabForTests(int index) {
+        this.tabs.setChosen(index);
+        this.pickTab(index);
+    }
+
     public boolean pressRollBackForTests() {
         if (!this.back.isVisible()) {
             return false;
         }
         DevModView mod = this.findMod();
-        if (mod != null) {
-            this.host.rollBack(mod.id());
+        if (mod != null && !mod.keptBuilds().isEmpty()) {
+            this.host.rollBack(mod.id(), mod.keptBuilds().getFirst());
         }
         return true;
     }
@@ -245,7 +265,12 @@ public final class DevWindow extends Element {
         DevModView shown = this.findMod();
         boolean overview = this.tab == Tab.OVERVIEW && shown != null;
 
-        boolean backing = overview && shown != null && shown.previousBuild() >= 0;
+        boolean backing = overview && shown != null && !shown.keptBuilds().isEmpty();
+        if (backing && shown != null) {
+            int to = shown.keptBuilds().getFirst();
+            this.back.label(to == 0 ? Lang.get("hotwire.dev.button.back.start")
+                    : Lang.get("hotwire.dev.button.back", to), Lang.get("hotwire.dev.button.back.short"));
+        }
         int count = backing ? 4 : 3;
         int buttonsY = top + height - BUTTON_H - PAD;
         int buttonW = (width - (count + 1) * PAD) / count;
@@ -314,6 +339,12 @@ public final class DevWindow extends Element {
                     return true;
                 }
             }
+            for (BuildRow row : this.buildRows) {
+                if (py >= row.top() && py < row.bottom()) {
+                    this.host.rollBack(shown.id(), row.build());
+                    return true;
+                }
+            }
         }
 
         boolean onName = py < this.frame.getY() + TITLE_H && px < this.frame.getX() + this.frame.getWidth() / 2.0;
@@ -354,6 +385,10 @@ public final class DevWindow extends Element {
     @Override
     protected void paint(Canvas canvas, float alpha) {
         float a = alpha * this.shown.getValue();
+
+        for (Button button : List.of(this.reload, this.restart, this.back, this.pause, this.resume)) {
+            button.useShortForm(button.measure(canvas, false) > button.getWidth());
+        }
         int x0 = this.frame.getX();
         int y0 = this.frame.getY();
         int x1 = x0 + this.frame.getWidth();
@@ -394,6 +429,7 @@ public final class DevWindow extends Element {
         int y = bodyTop - Math.round(this.scroll.getValue());
         int startY = y;
         this.crashRows.clear();
+        this.buildRows.clear();
         int cardX = x0 + PAD;
         int cardW = this.frame.getWidth() - 2 * PAD;
         if (mod == null) {
@@ -401,7 +437,7 @@ public final class DevWindow extends Element {
         } else {
             y = switch (this.tab) {
                 case OVERVIEW -> this.paintOverview(canvas, mod, cardX, y, cardW, a);
-                case HISTORY -> paintHistory(canvas, mod, cardX, y, cardW, a);
+                case HISTORY -> this.paintHistory(canvas, mod, cardX, y, cardW, a);
                 case CRASHES -> this.paintCrashes(canvas, mod, cardX, y, cardW, a);
                 case MIXINS -> paintMixins(canvas, mod, cardX, y, cardW, a);
             };
@@ -526,14 +562,27 @@ public final class DevWindow extends Element {
                 List.of(this.runtime), runtimeColor, a);
     }
 
-    private static int paintHistory(Canvas canvas, DevModView mod, int x, int y, int w, float a) {
+    private int paintHistory(Canvas canvas, DevModView mod, int x, int y, int w, float a) {
         if (mod.events().isEmpty()) {
             return paintText(canvas, Lang.get("hotwire.dev.window.no_history"), x, y, w, Palette.DIM, a);
         }
+        boolean runningTold = false;
         for (DevEvent event : mod.events()) {
             String clock = LocalTime.ofInstant(Instant.ofEpochMilli(event.at()), ZoneId.systemDefault()).format(CLOCK);
-            y = paintCard(canvas, x, y, w, findColor(event.kind()), event.title(), clock, event.lines(), Palette.DIM,
-                    a);
+            List<String> lines = new ArrayList<>(event.lines());
+            boolean kept = event.build() >= 0 && mod.keptBuilds().contains(event.build());
+            if (event.build() >= 0 && event.build() == mod.runningBuild() && !runningTold) {
+                runningTold = true;
+                lines.add(Lang.get("hotwire.dev.build.running", event.build()));
+            } else if (kept) {
+                lines.add(Lang.get("hotwire.dev.build.back", event.build()));
+            }
+            int bottom = paintCard(canvas, x, y, w, findColor(event.kind()), event.title(), clock, lines,
+                    Palette.DIM, a);
+            if (kept && !lines.isEmpty() && lines.getLast().equals(Lang.get("hotwire.dev.build.back", event.build()))) {
+                this.buildRows.add(new BuildRow(y, bottom, event.build()));
+            }
+            y = bottom;
         }
         return y;
     }

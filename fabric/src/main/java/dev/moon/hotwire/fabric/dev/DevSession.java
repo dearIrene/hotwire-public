@@ -46,6 +46,13 @@ public final class DevSession implements DevHost, AutoCloseable {
     private static final int MOST_EVENTS = 40;
     private static final int MOST_CRASHES = 20;
 
+    private static final int KEPT_BUILDS = 5;
+
+    private record Kept(int number, DevBuild build) {
+    }
+
+    private static final int METHOD_LINES = 4;
+
     private static final float CRASH_REST_SECONDS = 10;
 
     private static final long REMOVAL_WAIT_MILLIS = 2000;
@@ -90,8 +97,7 @@ public final class DevSession implements DevHost, AutoCloseable {
         volatile DevBuild running;
         volatile int runningNumber;
 
-        volatile @Nullable DevBuild previous;
-        volatile int previousNumber;
+        final Deque<Kept> kept = new ArrayDeque<>();
         volatile long builtAt = System.currentTimeMillis();
 
         volatile boolean crashTold;
@@ -367,9 +373,19 @@ public final class DevSession implements DevHost, AutoCloseable {
                     this.accept(mod, built, number);
                     if (diff.hasClasses()) {
                         List<String> lines = new ArrayList<>();
-                        if (!diff.changedClasses().isEmpty()) {
-                            lines.add(Lang.get("hotwire.dev.changed",
-                                    String.join(", ", BuildWords.list(diff.changedClasses()))));
+
+                        SortedSet<String> unnamed = new TreeSet<>(diff.changedClasses());
+                        for (String entry : diff.changedClasses()) {
+                            SortedSet<String> methods = BuildNotes.findChangedMethods(was.get(entry),
+                                    classes.get(entry));
+                            if (!methods.isEmpty() && lines.size() < METHOD_LINES) {
+                                String simple = entry.substring(entry.lastIndexOf('/') + 1, entry.length() - 6);
+                                lines.add(Lang.get("hotwire.dev.methods", simple, String.join(", ", methods)));
+                                unnamed.remove(entry);
+                            }
+                        }
+                        if (!unnamed.isEmpty()) {
+                            lines.add(Lang.get("hotwire.dev.changed", String.join(", ", BuildWords.list(unnamed))));
                         }
                         if (!diff.addedClasses().isEmpty()) {
                             lines.add(Lang.get("hotwire.dev.added",
@@ -434,8 +450,15 @@ public final class DevSession implements DevHost, AutoCloseable {
     private void accept(Mod mod, DevBuild built, int number) {
         mod.mixins = null;
         DevBuild before = mod.running;
-        mod.previous = before;
-        mod.previousNumber = mod.runningNumber;
+        List<Path> keep = new ArrayList<>();
+        synchronized (mod) {
+            mod.kept.removeIf(kept -> kept.number() == number || kept.number() == mod.runningNumber);
+            mod.kept.addFirst(new Kept(mod.runningNumber, before));
+            while (mod.kept.size() > KEPT_BUILDS) {
+                mod.kept.removeLast();
+            }
+            mod.kept.forEach(kept -> keep.add(kept.build().getJar()));
+        }
         mod.running = built;
         mod.runningNumber = number;
         mod.builtAt = System.currentTimeMillis();
@@ -443,7 +466,10 @@ public final class DevSession implements DevHost, AutoCloseable {
         mod.line = "";
 
         Path start = built.getJar().resolveSibling("build-0.jar");
-        deleteBuildsBut(built.getJar(), before.getJar(), start, start.resolveSibling("build-0.jar.idx"));
+        keep.add(built.getJar());
+        keep.add(start);
+        keep.add(start.resolveSibling("build-0.jar.idx"));
+        deleteBuildsBut(keep.toArray(Path[]::new));
         LOGGER.info("[Hotwire] {} runs build {} now (was {})", mod.mod.id(), built.getJar().getFileName(),
                 before.getJar().getFileName());
     }
@@ -473,7 +499,8 @@ public final class DevSession implements DevHost, AutoCloseable {
     }
 
     private void tell(Mod mod, DevEvent.Kind kind, String title, String detail, List<String> lines) {
-        add(mod, new DevEvent(System.currentTimeMillis(), kind, title, lines));
+        boolean in = kind == DevEvent.Kind.IN || kind == DevEvent.Kind.ASSETS;
+        add(mod, new DevEvent(System.currentTimeMillis(), kind, title, lines, in ? mod.runningNumber : -1));
         LOGGER.info("[Hotwire] {}: {} {}", mod.mod.id(), title, detail);
         boolean problem = kind == DevEvent.Kind.FAILED || kind == DevEvent.Kind.NEEDS_RESTART;
         if (problem || this.engine.isEveryReloadShown()) {
@@ -513,10 +540,9 @@ public final class DevSession implements DevHost, AutoCloseable {
                 mod.mixins = mixins;
             }
             synchronized (mod) {
-                DevBuild back = mod.previous;
                 views.add(new DevModView(mod.mod.id(), mod.mod.name(), mod.state, mod.line, mod.runningNumber,
                         mod.builtAt, List.copyOf(mod.events), List.copyOf(mod.crashes.values()).reversed(), mixins,
-                        back == null ? -1 : mod.previousNumber));
+                        mod.kept.stream().map(Kept::number).toList()));
             }
         }
         return views;
@@ -569,18 +595,22 @@ public final class DevSession implements DevHost, AutoCloseable {
 
     @Override
     @SuppressWarnings("FutureReturnValueIgnored")
-    public void rollBack(String id) {
+    public void rollBack(String id, int build) {
         Mod mod = this.mods.get(id);
         if (mod == null) {
             return;
         }
-        this.tasks.submit("rolling " + id + " back", () -> {
+        this.tasks.submit("rolling " + id + " back to build " + build, () -> {
             synchronized (mod.taking) {
-                DevBuild back = mod.previous;
-                if (back == null) {
+                Kept to;
+                synchronized (mod) {
+                    to = mod.kept.stream().filter(kept -> kept.number() == build).findFirst().orElse(null);
+                }
+                if (to == null) {
                     return null;
                 }
-                int number = mod.previousNumber;
+                DevBuild back = to.build();
+                int number = to.number();
                 long began = System.nanoTime();
                 mod.state = DevState.LOADING;
                 mod.line = Lang.get("hotwire.dev.loading");
@@ -588,7 +618,6 @@ public final class DevSession implements DevHost, AutoCloseable {
                 ModUpdater.Result result = this.engine.updateInPlace(back.getJar());
                 if (result instanceof ModUpdater.Result.Updated) {
                     this.accept(mod, back, number);
-                    mod.previous = null;
                     String title = number == 0 ? Lang.get("hotwire.dev.rolled_back.start", mod.mod.name())
                             : Lang.get("hotwire.dev.rolled_back", mod.mod.name(), number);
                     this.tell(mod, DevEvent.Kind.IN, title, Lang.get("hotwire.dev.took.only",
