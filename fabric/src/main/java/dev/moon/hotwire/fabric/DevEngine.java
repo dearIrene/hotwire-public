@@ -157,6 +157,11 @@ final class DevEngine implements DevSession.Engine {
     }
 
     @Override
+    public boolean isAutoRollBackOn() {
+        return this.settings.isAutoRollBackOn();
+    }
+
+    @Override
     public int getKeptBuilds() {
         return this.settings.getKeptBuilds();
     }

@@ -19,7 +19,7 @@ final class SourceOpener {
     private SourceOpener() {
     }
 
-    static void open(DevMod mod, DevCrash crash) {
+    static void open(DevMod mod, String type, int line, String label) {
         List<Path> projects = new ArrayList<>();
         for (Path folder : mod.folders()) {
             Path project = DevMod.findProject(folder);
@@ -29,17 +29,17 @@ final class SourceOpener {
         }
         Path file;
         try {
-            file = IdeOpener.findSource(projects, crash.source());
+            file = IdeOpener.findSource(projects, type);
         } catch (IOException e) {
-            LOGGER.debug("[Hotwire] the project could not be searched for {}", crash.source(), e);
+            LOGGER.debug("[Hotwire] the project could not be searched for {}", type, e);
             file = null;
         }
         if (file == null) {
-            Notices.show(Notice.ofBad(Lang.get("hotwire.dev.no_source", crash.where()), ""));
-        } else if (IdeOpener.open(file, crash.line())) {
-            Notices.show(Notice.ofDone(Lang.get("hotwire.dev.opened", crash.where()), ""));
+            Notices.show(Notice.ofBad(Lang.get("hotwire.dev.no_source", label), ""));
+        } else if (IdeOpener.open(file, line)) {
+            Notices.show(Notice.ofDone(Lang.get("hotwire.dev.opened", label), ""));
         } else {
-            String place = file + ":" + crash.line();
+            String place = file + ":" + line;
             Minecraft game = Minecraft.getInstance();
             game.execute(() -> game.keyboardHandler.setClipboard(place));
             Notices.show(Notice.ofOn(Lang.get("hotwire.dev.copied"), place));

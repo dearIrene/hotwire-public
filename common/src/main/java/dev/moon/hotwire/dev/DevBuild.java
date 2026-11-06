@@ -138,6 +138,63 @@ public final class DevBuild {
         return new DevBuild(jar, files);
     }
 
+    public boolean hasEntry(String name) {
+        return this.files.containsKey(name);
+    }
+
+    public static DevBuild combine(DevBuild start, Map<String, DevBuild> from, Set<String> gone, Path jar)
+            throws IOException {
+        Map<String, DevBuild> sources = new TreeMap<>();
+        for (String name : start.files.keySet()) {
+            sources.put(name, start);
+        }
+        sources.putAll(from);
+        sources.keySet().removeAll(gone);
+        Files.createDirectories(jar.getParent());
+        Path part = jar.resolveSibling(jar.getFileName() + ".part");
+        Map<String, FileSum> files = new TreeMap<>();
+        Map<Path, ZipFile> opened = new HashMap<>();
+        try (OutputStream out = new BufferedOutputStream(Files.newOutputStream(part), 1 << 16);
+                ZipOutputStream zip = new ZipOutputStream(out)) {
+            for (Map.Entry<String, DevBuild> source : sources.entrySet()) {
+                String name = source.getKey();
+                DevBuild build = source.getValue();
+                FileSum sum = build.files.get(name);
+                ZipFile in = opened.get(build.jar);
+                if (in == null) {
+                    in = new ZipFile(build.jar.toFile());
+                    opened.put(build.jar, in);
+                }
+                ZipEntry entry = in.getEntry(name);
+                if (sum == null || entry == null) {
+                    throw new IOException(build.jar.getFileName() + " has no " + name);
+                }
+                byte[] bytes;
+                try (InputStream read = in.getInputStream(entry)) {
+                    bytes = read.readAllBytes();
+                }
+                ZipEntry zipped = new ZipEntry(name);
+                zipped.setMethod(ZipEntry.STORED);
+                zipped.setSize(bytes.length);
+                zipped.setCompressedSize(bytes.length);
+                zipped.setCrc(sum.crc());
+                zip.putNextEntry(zipped);
+                zip.write(bytes);
+                zip.closeEntry();
+                files.put(name, sum);
+            }
+        } catch (IOException e) {
+            Files.deleteIfExists(part);
+            throw e;
+        } finally {
+            for (ZipFile open : opened.values()) {
+                open.close();
+            }
+        }
+        AtomicFiles.moveInto(part, jar);
+        return new DevBuild(jar, files);
+    }
+
     private static byte[] read(FileOnDisk file, Map<Path, ZipFile> opened) throws IOException {
         String name = file.entry();
         if (name == null) {

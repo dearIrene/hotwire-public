@@ -23,12 +23,6 @@ import org.jspecify.annotations.Nullable;
 public final class DevWindow extends Element {
     private static final int TITLE_H = 22;
 
-    private static final int LANE = 9;
-
-    private static final int ROW_H = 18;
-    private static final int SIDE_BY_SIDE = 330;
-    private static final int INDENT = 8;
-
     private static final int STEPPER_W = 44;
 
     private static final int CARDS_WIDTH = 220;
@@ -58,10 +52,11 @@ public final class DevWindow extends Element {
     private final Button pause;
     private final Button resume;
 
-    private boolean picking;
-    private int picked = -1;
+    private final BuildPicker picker;
     private final Button confirm;
+    private final Button merge;
     private final Button cancel;
+    private final TextField naming;
     private float scrollTarget;
     private float sinceRead = REFRESH_SECONDS;
     private List<DevModView> mods = List.of();
@@ -105,9 +100,18 @@ public final class DevWindow extends Element {
                 Lang.get("hotwire.dev.button.reload.short"), false, () -> this.act(true)));
         this.back = this.add(new Button(Lang.get("hotwire.dev.button.back"), Lang.get("hotwire.dev.button.back.short"),
                 false, () -> this.openPicker(-1)));
+        this.picker = new BuildPicker(host);
         this.confirm = this.add(new Button(Lang.get("hotwire.dev.button.back"),
-                Lang.get("hotwire.dev.button.back.short"), true, this::confirmPick));
-        this.cancel = this.add(new Button(Lang.get("hotwire.dev.button.cancel"), false, () -> this.picking = false));
+                Lang.get("hotwire.dev.button.back.short"), true, () -> this.picker.confirm(this.findMod())));
+        this.merge = this.add(new Button(Lang.get("hotwire.dev.button.merge"), false, this.picker::startMerge));
+        this.cancel = this.add(new Button(Lang.get("hotwire.dev.button.cancel"), false, this.picker::cancel));
+        this.naming = this.add(new TextField(Lang.get("hotwire.dev.name_hint"), text -> { },
+                () -> {
+                    this.picker.finishNaming(this.findMod());
+                    this.sinceRead = REFRESH_SECONDS;
+                }, this.picker::cancel));
+        this.naming.setVisible(false);
+        this.picker.setNamingField(this.naming);
         this.restart = this.add(new Button(Lang.get("hotwire.dev.button.restart"),
                 Lang.get("hotwire.dev.button.restart.short"), false, () -> this.act(false)));
         this.pause = this.add(new Button(Lang.get("hotwire.dev.button.pause"),
@@ -132,24 +136,15 @@ public final class DevWindow extends Element {
         if (mod == null || mod.keptBuilds().isEmpty()) {
             return;
         }
-        this.picked = mod.keptBuilds().contains(build) ? build : mod.keptBuilds().getFirst();
-        this.picking = true;
+        this.picker.open(mod, build);
 
         this.tabs.setChosen(0);
         this.tab = Tab.OVERVIEW;
         this.scrollTarget = 0;
     }
 
-    private void confirmPick() {
-        DevModView mod = this.findMod();
-        if (mod != null && this.picking && mod.keptBuilds().contains(this.picked)) {
-            this.host.rollBack(mod.id(), this.picked);
-        }
-        this.picking = false;
-    }
-
     private void pickTab(int index) {
-        this.picking = false;
+        this.picker.close();
         this.tab = Tab.values()[index];
         this.scrollTarget = 0;
         this.scroll.snap(0);
@@ -207,10 +202,51 @@ public final class DevWindow extends Element {
         return true;
     }
 
+    public String describePickerForTests() {
+        return "open " + this.picker.isOpen() + ", build " + this.picker.getPicked();
+    }
+
     public boolean confirmPickForTests() {
-        boolean open = this.picking;
-        this.confirmPick();
+        boolean open = this.picker.isOpen();
+        this.picker.confirm(this.findMod());
         return open;
+    }
+
+    public boolean startMergeForTests() {
+        boolean open = this.picker.isOpen();
+        if (open) {
+            this.picker.startMerge();
+        }
+        return open;
+    }
+
+    public void pressBuildForTests(int build) {
+        this.picker.pressRowForTests(build);
+    }
+
+    public void pinForTests() {
+        DevModView mod = this.findMod();
+        if (mod != null && this.picker.isOpen()) {
+            this.picker.pin(mod);
+        }
+    }
+
+    public void nameForTests(String name) {
+        DevModView mod = this.findMod();
+        if (mod != null && this.picker.isOpen()) {
+            this.host.rename(mod.id(), this.picker.getPicked(), name);
+        }
+    }
+
+    public void cancelPickForTests() {
+        this.picker.cancel();
+    }
+
+    public void copyForTests() {
+        DevModView mod = this.findMod();
+        if (mod != null && this.picker.isOpen()) {
+            this.picker.copy(mod);
+        }
     }
 
     public int[] getStepperBounds() {
@@ -301,10 +337,10 @@ public final class DevWindow extends Element {
         boolean watching = this.host.isWatching();
         DevModView shown = this.findMod();
         boolean overview = this.tab == Tab.OVERVIEW && shown != null;
-        if (this.picking && (shown == null || !shown.keptBuilds().contains(this.picked))) {
-            this.picking = false;
-        }
-        boolean picker = overview && this.picking;
+        this.picker.update(shown, dt);
+        boolean picker = overview && this.picker.isOpen();
+        boolean naming = picker && this.picker.isNaming();
+        boolean merging = picker && this.picker.isMerging();
 
         boolean backing = overview && !picker && shown != null && !shown.keptBuilds().isEmpty();
         int count = backing ? 4 : 3;
@@ -315,16 +351,23 @@ public final class DevWindow extends Element {
         this.back.setVisible(backing);
         this.pause.setVisible(overview && !picker && watching);
         this.resume.setVisible(overview && !picker && !watching);
-        this.confirm.setVisible(picker);
-        this.cancel.setVisible(picker);
-        if (picker) {
-            this.confirm.label(this.picked == 0 ? Lang.get("hotwire.dev.button.confirm_back.start")
-                    : Lang.get("hotwire.dev.button.confirm_back", this.picked),
-                    Lang.get("hotwire.dev.button.back.short"));
-            this.confirm.setActive(shown != null && this.picked != shown.runningBuild());
-            int half = (width - 3 * PAD) / 2;
-            this.confirm.setBounds(left + PAD, buttonsY, half, BUTTON_H);
-            this.cancel.setBounds(left + 2 * PAD + half, buttonsY, half, BUTTON_H);
+        this.confirm.setVisible(picker && !naming);
+        this.merge.setVisible(picker && !naming && !merging);
+        this.cancel.setVisible(picker && !naming);
+        this.naming.setVisible(naming);
+        if (naming) {
+            this.naming.setBounds(left + PAD, buttonsY + 2, width - 2 * PAD, BUTTON_H - 4);
+        } else if (picker) {
+            this.confirm.label(this.picker.findConfirmLabel(shown), this.picker.findConfirmShort());
+            this.confirm.setActive(this.picker.isConfirmActive(shown));
+
+            int room = width - (merging ? 3 : 4) * PAD;
+            int first = merging ? room * 3 / 5 : room * 2 / 5;
+            int rest = merging ? room - first : (room - first) / 2;
+            this.confirm.setBounds(left + PAD, buttonsY, first, BUTTON_H);
+            this.merge.setBounds(left + 2 * PAD + first, buttonsY, rest, BUTTON_H);
+            this.cancel.setBounds(left + (merging ? 2 : 3) * PAD + first + (merging ? 0 : rest), buttonsY,
+                    merging ? rest : room - first - rest, BUTTON_H);
         }
         this.reload.setBounds(left + PAD, buttonsY, buttonW, BUTTON_H);
         this.restart.setBounds(left + 2 * PAD + buttonW, buttonsY, buttonW, BUTTON_H);
@@ -386,13 +429,13 @@ public final class DevWindow extends Element {
                     return true;
                 }
             }
+            if (this.tab == Tab.OVERVIEW && this.picker.isOpen() && this.picker.click(px, py)) {
+                this.sinceRead = REFRESH_SECONDS;
+                return true;
+            }
             for (BuildRow row : this.buildRows) {
                 if (py >= row.top() && py < row.bottom()) {
-                    if (this.picking) {
-                        this.picked = row.build();
-                    } else {
-                        this.openPicker(row.build());
-                    }
+                    this.openPicker(row.build());
                     return true;
                 }
             }
@@ -438,7 +481,7 @@ public final class DevWindow extends Element {
         float a = alpha * this.shown.getValue();
 
         for (Button button : List.of(this.reload, this.restart, this.back, this.pause, this.resume,
-                this.confirm, this.cancel)) {
+                this.confirm, this.merge, this.cancel)) {
             button.useShortForm(button.measure(canvas, false) > button.getWidth());
         }
         int x0 = this.frame.getX();
@@ -488,7 +531,9 @@ public final class DevWindow extends Element {
             y = paintText(canvas, Lang.get("hotwire.dev.window.no_mods"), cardX, y, cardW, Palette.DIM, a);
         } else {
             y = switch (this.tab) {
-                case OVERVIEW -> this.picking ? this.paintPicker(canvas, mod, cardX, y, cardW, a)
+                case OVERVIEW -> this.picker.isOpen() ? this.picker.paint(canvas, mod, cardX, y, cardW, a,
+                        this.getPointerX(), this.getPointerY(), this.isHovered() && this.getPointerY() >= bodyTop
+                        && this.getPointerY() < bodyBottom)
                         : this.paintOverview(canvas, mod, cardX, y, cardW, a);
                 case HISTORY -> this.paintHistory(canvas, mod, cardX, y, cardW, a);
                 case CRASHES -> this.paintCrashes(canvas, mod, cardX, y, cardW, a);
@@ -615,156 +660,6 @@ public final class DevWindow extends Element {
                 List.of(this.runtime), runtimeColor, a);
     }
 
-    private int paintPicker(Canvas canvas, DevModView mod, int x, int y, int w, float a) {
-        y = paintText(canvas, Lang.get("hotwire.dev.pick.title", mod.runningBuild()), x, y, w, Palette.DIM, a);
-
-        List<Integer> builds = new ArrayList<>(mod.keptBuilds());
-        builds.add(mod.runningBuild());
-        builds.sort(Comparator.reverseOrder());
-        List<TreeRow> tree = BuildTree.lay(builds, mod.parents());
-        int widest = 1;
-        for (TreeRow row : tree) {
-            widest = Math.max(widest, row.width());
-        }
-        int graphW = widest * LANE + 4;
-
-        boolean side = w >= SIDE_BY_SIDE;
-        int listW = side ? Math.clamp(w * 2 / 5, 120, 220) : w;
-        int top = y;
-        int[] tops = new int[builds.size()];
-        int[] bottoms = new int[builds.size()];
-        for (int at = 0; at < builds.size(); at++) {
-            int build = builds.get(at);
-            boolean running = build == mod.runningBuild();
-            boolean chosen = build == this.picked;
-            tops[at] = y;
-            bottoms[at] = y + ROW_H;
-            if (chosen) {
-                canvas.fill(x + graphW - 2, y, x + listW, y + ROW_H - 2, Colors.fade(Palette.PANEL_EDGE, a));
-                canvas.fill(x + graphW - 2, y, x + graphW - 1, y + ROW_H - 2, Colors.fade(Palette.ACCENT, a));
-            }
-            String name = build == 0 ? Lang.get("hotwire.dev.pick.start.short") : Lang.get("hotwire.dev.pick.build",
-                    build);
-            String tag = running ? Lang.get("hotwire.dev.pick.runs") : build > mod.runningBuild()
-                    ? Lang.get("hotwire.dev.pick.newer.short") : "";
-            int tagW = tag.isEmpty() ? 0 : canvas.measureText(tag) + 6;
-            canvas.drawText(canvas.clip(name, Math.max(1, listW - graphW - tagW - 4)), x + graphW + 4, y + 5,
-                    Colors.fade(chosen ? Palette.TEXT : Palette.DIM, a));
-            if (!tag.isEmpty()) {
-                canvas.drawText(tag, x + listW - tagW, y + 5, Colors.fade(running ? Palette.GOOD : Palette.FAINT, a));
-            }
-            this.buildRows.add(new BuildRow(y, y + ROW_H, build));
-            y += ROW_H;
-        }
-        this.paintTree(canvas, tree, builds, mod.runningBuild(), x, tops, bottoms, a);
-        int listBottom = y;
-        int reportX = side ? x + listW + PAD : x;
-        int reportY = side ? top : listBottom + PAD;
-        int reportW = side ? w - listW - PAD : w;
-        int reportBottom = this.paintReport(canvas, mod, this.picked, reportX, reportY, reportW, a);
-        return Math.max(listBottom, reportBottom) + 4;
-    }
-
-    private int paintReport(Canvas canvas, DevModView mod, int build, int x, int y, int w, float a) {
-        List<ReportLine> lines = new ArrayList<>();
-        lines.add(new ReportLine(build == 0 ? Lang.get("hotwire.dev.pick.start") : Lang.get("hotwire.dev.pick.build",
-                build), Palette.TEXT, 0));
-        if (build == mod.runningBuild()) {
-            lines.add(new ReportLine(Lang.get("hotwire.dev.report.running"), Palette.GOOD, 0));
-        } else if (build > mod.runningBuild()) {
-            lines.add(new ReportLine(Lang.get("hotwire.dev.pick.newer"), Palette.FAINT, 0));
-        }
-        DevBuildInfo info = mod.infos().get(build);
-        if (info == null) {
-            lines.add(new ReportLine(Lang.get(build == 0 ? "hotwire.dev.report.first" : "hotwire.dev.report.none"),
-                    Palette.DIM, 0));
-        } else {
-            String clock = LocalTime.ofInstant(Instant.ofEpochMilli(info.at()), ZoneId.systemDefault()).format(CLOCK);
-            lines.add(new ReportLine(Lang.get("hotwire.dev.report.made", info.madeOn(), clock), Palette.DIM, 0));
-            if (!info.classes().isEmpty()) {
-                lines.add(new ReportLine(Lang.get("hotwire.dev.report.classes"), Palette.ACCENT_SOFT, 0));
-                for (DevClassChange change : info.classes()) {
-                    lines.add(new ReportLine(change.name(), Palette.TEXT, 1));
-                    addMethods(lines, "hotwire.dev.report.changed", change.changed());
-                    addMethods(lines, "hotwire.dev.report.added", change.added());
-                    addMethods(lines, "hotwire.dev.report.removed", change.removed());
-                    if (change.changed().isEmpty() && change.added().isEmpty() && change.removed().isEmpty()) {
-                        lines.add(new ReportLine(Lang.get("hotwire.dev.report.fields"), Palette.DIM, 2));
-                    }
-                }
-            }
-            addList(lines, "hotwire.dev.report.new_classes", info.addedClasses());
-            addList(lines, "hotwire.dev.report.gone_classes", info.removedClasses());
-            addList(lines, "hotwire.dev.report.files", info.files());
-            if (!info.notes().isEmpty()) {
-                lines.add(new ReportLine(Lang.get("hotwire.dev.report.notes"), Palette.ACCENT_SOFT, 0));
-                for (String note : info.notes()) {
-                    lines.add(new ReportLine(note, Palette.WARN, 1));
-                }
-            }
-        }
-        int height = 6;
-        for (ReportLine line : lines) {
-            height += wrap(canvas, line.text(), Math.max(1, w - 2 * PAD - line.indent() * INDENT)).size() * LINE + 2;
-        }
-        canvas.fill(x, y, x + w, y + height + 4, Colors.fade(Palette.PANEL_EDGE, a * 0.6f));
-        int at = y + 6;
-        for (ReportLine line : lines) {
-            int lineX = x + PAD + line.indent() * INDENT;
-            for (String part : wrap(canvas, line.text(), Math.max(1, w - 2 * PAD - line.indent() * INDENT))) {
-                canvas.drawText(part, lineX, at, Colors.fade(line.color(), a));
-                at += LINE;
-            }
-            at += 2;
-        }
-        return y + height + 4;
-    }
-
-    private record ReportLine(String text, int color, int indent) {
-    }
-
-    private static void addMethods(List<ReportLine> lines, String key, List<String> methods) {
-        if (!methods.isEmpty()) {
-            lines.add(new ReportLine(Lang.get(key, String.join(", ", methods)), Palette.DIM, 2));
-        }
-    }
-
-    private static void addList(List<ReportLine> lines, String key, List<String> names) {
-        if (!names.isEmpty()) {
-            lines.add(new ReportLine(Lang.get(key, String.join(", ", names)), Palette.DIM, 0));
-        }
-    }
-
-    private void paintTree(Canvas canvas, List<TreeRow> tree, List<Integer> builds, int running, int x, int[] tops,
-            int[] bottoms, float a) {
-        int line = Colors.fade(Palette.DIM, a * 0.55f);
-        for (int at = 0; at < tree.size(); at++) {
-            TreeRow row = tree.get(at);
-            int top = tops[at];
-            int bottom = bottoms[at];
-            int dotY = top + 6;
-            int dotX = x + row.column() * LANE + 2;
-            for (int passing : row.passing()) {
-                int lx = x + passing * LANE + 4;
-                canvas.fill(lx, top, lx + 1, bottom, line);
-            }
-            if (row.fromAbove()) {
-                canvas.fill(dotX + 2, top, dotX + 3, dotY, line);
-            }
-            if (row.goesOn()) {
-                canvas.fill(dotX + 2, dotY, dotX + 3, bottom, line);
-            }
-            for (int joined : row.joined()) {
-                int lx = x + joined * LANE + 4;
-                canvas.fill(lx, top, lx + 1, dotY + 2, line);
-                canvas.fill(Math.min(lx, dotX + 2), dotY + 2, Math.max(lx + 1, dotX + 3), dotY + 3, line);
-            }
-            int build = builds.get(at);
-            int dot = build == running ? Palette.GOOD : build == this.picked ? Palette.ACCENT : Palette.DIM;
-            canvas.fill(dotX, dotY, dotX + 5, dotY + 5, Colors.fade(dot, a));
-        }
-    }
-
     private int paintHistory(Canvas canvas, DevModView mod, int x, int y, int w, float a) {
         if (mod.events().isEmpty()) {
             return paintText(canvas, Lang.get("hotwire.dev.window.no_history"), x, y, w, Palette.DIM, a);
@@ -832,7 +727,7 @@ public final class DevWindow extends Element {
         return y + 8;
     }
 
-    private static List<String> wrap(Canvas canvas, String text, int width) {
+    static List<String> wrap(Canvas canvas, String text, int width) {
         List<String> lines = new ArrayList<>();
         StringBuilder line = new StringBuilder();
         for (String word : text.split(" ", -1)) {
@@ -865,6 +760,7 @@ public final class DevWindow extends Element {
     private static int findColor(DevEvent.Kind kind) {
         return switch (kind) {
             case IN, RESTARTED, ASSETS -> Palette.GOOD;
+            case MERGED -> Palette.ACCENT_SOFT;
             case NEEDS_RESTART -> Palette.ON;
             case FAILED, CRASH, LEAK -> Palette.BAD;
         };

@@ -1,7 +1,9 @@
 package dev.moon.hotwire.dev;
 
 import java.util.ArrayList;
+import java.util.HashMap;
 import java.util.List;
+import java.util.Map;
 import java.util.Set;
 import java.util.SortedSet;
 import java.util.TreeSet;
@@ -15,6 +17,7 @@ import org.objectweb.asm.tree.IincInsnNode;
 import org.objectweb.asm.tree.IntInsnNode;
 import org.objectweb.asm.tree.InvokeDynamicInsnNode;
 import org.objectweb.asm.tree.LdcInsnNode;
+import org.objectweb.asm.tree.LineNumberNode;
 import org.objectweb.asm.tree.MethodInsnNode;
 import org.objectweb.asm.tree.MethodNode;
 import org.objectweb.asm.tree.TypeInsnNode;
@@ -79,22 +82,28 @@ public final class BuildNotes {
         return all;
     }
 
-    public record MethodChanges(SortedSet<String> changed, SortedSet<String> added, SortedSet<String> removed) {
+    public record MethodChanges(SortedSet<String> changed, SortedSet<String> added, SortedSet<String> removed,
+            @Nullable String file, Map<String, int[]> lines) {
     }
 
     public static MethodChanges findMethodChanges(byte @Nullable [] before, byte @Nullable [] after) {
-        MethodChanges found = new MethodChanges(new TreeSet<>(), new TreeSet<>(), new TreeSet<>());
         ClassNode was = read(before);
         ClassNode now = read(after);
+        MethodChanges found = new MethodChanges(new TreeSet<>(), new TreeSet<>(), new TreeSet<>(),
+                now == null ? null : now.sourceFile, new HashMap<>());
         if (was == null || now == null) {
             return found;
         }
         for (MethodNode method : now.methods) {
             MethodNode old = find(was, method);
-            if (old == null) {
-                found.added().add(describe(method.name));
-            } else if (!readCode(method).equals(readCode(old))) {
-                found.changed().add(describe(method.name));
+            boolean added = old == null;
+            if (added || !readCode(method).equals(readCode(old))) {
+                (added ? found.added() : found.changed()).add(describe(method.name));
+                int[] span = findLines(method);
+                if (span != null) {
+                    found.lines().merge(describe(method.name), span, (a, b) -> new int[] {Math.min(a[0], b[0]),
+                        Math.max(a[1], b[1])});
+                }
             }
         }
         for (MethodNode method : was.methods) {
@@ -161,12 +170,40 @@ public final class BuildNotes {
         return instructions;
     }
 
+    public static Map<String, List<Integer>> findMethodLines(byte @Nullable [] bytes) {
+        Map<String, List<Integer>> lines = new HashMap<>();
+        ClassNode node = read(bytes);
+        if (node == null) {
+            return lines;
+        }
+        for (MethodNode method : node.methods) {
+            int[] span = findLines(method);
+            if (span != null) {
+                lines.merge(describe(method.name), List.of(span[0], span[1]), (x, y) -> List.of(
+                        Math.min(x.get(0), y.get(0)), Math.max(x.get(1), y.get(1))));
+            }
+        }
+        return lines;
+    }
+
+    private static int @Nullable [] findLines(MethodNode method) {
+        int first = Integer.MAX_VALUE;
+        int last = -1;
+        for (AbstractInsnNode insn = method.instructions.getFirst(); insn != null; insn = insn.getNext()) {
+            if (insn instanceof LineNumberNode line) {
+                first = Math.min(first, line.line);
+                last = Math.max(last, line.line);
+            }
+        }
+        return last < 0 ? null : new int[] {first, last};
+    }
+
     private static @Nullable ClassNode read(byte @Nullable [] bytes) {
         if (!isWhole(bytes)) {
             return null;
         }
         ClassNode node = new ClassNode();
-        new ClassReader(bytes).accept(node, ClassReader.SKIP_DEBUG | ClassReader.SKIP_FRAMES);
+        new ClassReader(bytes).accept(node, ClassReader.SKIP_FRAMES);
         return node;
     }
 }
