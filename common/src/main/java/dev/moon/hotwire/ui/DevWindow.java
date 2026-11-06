@@ -45,6 +45,7 @@ public final class DevWindow extends Element {
     private final ChoiceBar tabs;
     private final Button reload;
     private final Button restart;
+    private final Button back;
     private final Button pause;
     private final Button resume;
     private float scrollTarget;
@@ -82,6 +83,13 @@ public final class DevWindow extends Element {
         this.onClose = onClose;
         this.tabs = this.add(new ChoiceBar(makeTabs(0), 0, this::pickTab));
         this.reload = this.add(new Button(Lang.get("hotwire.dev.button.reload"), false, () -> this.act(true)));
+        this.back = this.add(new Button(Lang.get("hotwire.dev.button.back"), Lang.get("hotwire.dev.button.back.short"),
+                false, () -> {
+                    DevModView mod = this.findMod();
+                    if (mod != null) {
+                        this.host.rollBack(mod.id());
+                    }
+                }));
         this.restart = this.add(new Button(Lang.get("hotwire.dev.button.restart"),
                 Lang.get("hotwire.dev.button.restart.short"), false, () -> this.act(false)));
         this.pause = this.add(new Button(Lang.get("hotwire.dev.button.pause"),
@@ -135,6 +143,17 @@ public final class DevWindow extends Element {
 
     private int findShownScale() {
         return Math.min(this.scale == 0 ? this.gameScale : this.scale, this.mostScale);
+    }
+
+    public boolean pressRollBackForTests() {
+        if (!this.back.isVisible()) {
+            return false;
+        }
+        DevModView mod = this.findMod();
+        if (mod != null) {
+            this.host.rollBack(mod.id());
+        }
+        return true;
     }
 
     public int[] getStepperBounds() {
@@ -223,17 +242,24 @@ public final class DevWindow extends Element {
         this.setBounds(left, top, width, height);
         this.tabs.setBounds(left + PAD, top + TITLE_H, width - 2 * PAD, ChoiceBar.HEIGHT);
         boolean watching = this.host.isWatching();
-        boolean overview = this.tab == Tab.OVERVIEW && this.findMod() != null;
+        DevModView shown = this.findMod();
+        boolean overview = this.tab == Tab.OVERVIEW && shown != null;
+
+        boolean backing = overview && shown != null && shown.previousBuild() >= 0;
+        int count = backing ? 4 : 3;
         int buttonsY = top + height - BUTTON_H - PAD;
-        int buttonW = (width - 4 * PAD) / 3;
+        int buttonW = (width - (count + 1) * PAD) / count;
         this.reload.setVisible(overview);
         this.restart.setVisible(overview);
+        this.back.setVisible(backing);
         this.pause.setVisible(overview && watching);
         this.resume.setVisible(overview && !watching);
         this.reload.setBounds(left + PAD, buttonsY, buttonW, BUTTON_H);
         this.restart.setBounds(left + 2 * PAD + buttonW, buttonsY, buttonW, BUTTON_H);
-        this.pause.setBounds(left + 3 * PAD + 2 * buttonW, buttonsY, buttonW, BUTTON_H);
-        this.resume.setBounds(left + 3 * PAD + 2 * buttonW, buttonsY, buttonW, BUTTON_H);
+        this.back.setBounds(left + 3 * PAD + 2 * buttonW, buttonsY, buttonW, BUTTON_H);
+        int last = left + count * PAD + (count - 1) * buttonW;
+        this.pause.setBounds(last, buttonsY, buttonW, BUTTON_H);
+        this.resume.setBounds(last, buttonsY, buttonW, BUTTON_H);
         super.step(dt);
     }
 
@@ -495,10 +521,9 @@ public final class DevWindow extends Element {
             DevCrash crash = mod.crashes().getFirst();
             y = this.paintCrash(canvas, crash, describeAgo(crash.lastAt()), x, y, w, a);
         }
-
-        int runtimeColor = this.fullRuntime ? Palette.GOOD : Palette.ACCENT;
+        int runtimeColor = this.fullRuntime ? Palette.GOOD : Palette.OFF_TINT;
         return paintCard(canvas, x, y, w, runtimeColor, Lang.get("hotwire.dev.window.runtime"), "",
-                List.of(this.runtime), Palette.DIM, a);
+                List.of(this.runtime), runtimeColor, a);
     }
 
     private static int paintHistory(Canvas canvas, DevModView mod, int x, int y, int w, float a) {

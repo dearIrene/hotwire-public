@@ -25,6 +25,7 @@ import java.nio.file.Files;
 import java.nio.file.Path;
 import java.util.ArrayDeque;
 import java.util.ArrayList;
+import java.util.Arrays;
 import java.util.Deque;
 import java.util.HashSet;
 import java.util.LinkedHashMap;
@@ -88,6 +89,9 @@ public final class DevSession implements DevHost, AutoCloseable {
         final Object taking = new Object();
         volatile DevBuild running;
         volatile int runningNumber;
+
+        volatile @Nullable DevBuild previous;
+        volatile int previousNumber;
         volatile long builtAt = System.currentTimeMillis();
 
         volatile boolean crashTold;
@@ -148,7 +152,8 @@ public final class DevSession implements DevHost, AutoCloseable {
         if (parent == null || !Files.isDirectory(parent)) {
             return;
         }
-        Set<Path> stays = Set.of(staying);
+
+        Set<Path> stays = Set.copyOf(Arrays.asList(staying));
         try (DirectoryStream<Path> builds = Files.newDirectoryStream(parent, "build-*")) {
             for (Path build : builds) {
                 if (!stays.contains(build)) {
@@ -363,20 +368,24 @@ public final class DevSession implements DevHost, AutoCloseable {
                     if (diff.hasClasses()) {
                         List<String> lines = new ArrayList<>();
                         if (!diff.changedClasses().isEmpty()) {
-                            lines.add(Lang.get("hotwire.dev.changed", String.join(", ", BuildWords.list(diff.changedClasses()))));
+                            lines.add(Lang.get("hotwire.dev.changed",
+                                    String.join(", ", BuildWords.list(diff.changedClasses()))));
                         }
                         if (!diff.addedClasses().isEmpty()) {
-                            lines.add(Lang.get("hotwire.dev.added", String.join(", ", BuildWords.list(diff.addedClasses()))));
+                            lines.add(Lang.get("hotwire.dev.added",
+                                    String.join(", ", BuildWords.list(diff.addedClasses()))));
                         }
                         List<String> notes = this.findNotes(mod, diff, was, classes);
                         lines.addAll(notes);
-                        String detail = notes.isEmpty() ? Lang.get("hotwire.dev.took", BuildWords.describeClasses(diff),
-                                BuildWords.findSeconds(began)) : notes.getFirst();
+                        String detail = notes.isEmpty() ? Lang.get("hotwire.dev.took",
+                                BuildWords.describeClasses(diff), BuildWords.findSeconds(began)) : notes.getFirst();
                         this.tell(mod, DevEvent.Kind.IN, Lang.get("hotwire.dev.in", mod.mod.name()), detail, lines);
                     } else {
                         this.tell(mod, DevEvent.Kind.ASSETS, Lang.get("hotwire.dev.assets", mod.mod.name()),
-                                Lang.get("hotwire.dev.took", BuildWords.describeFiles(diff), BuildWords.findSeconds(began)),
-                                List.of(Lang.get("hotwire.dev.changed", String.join(", ", BuildWords.list(diff.changedFiles())))));
+                                Lang.get("hotwire.dev.took", BuildWords.describeFiles(diff),
+                                        BuildWords.findSeconds(began)),
+                                List.of(Lang.get("hotwire.dev.changed",
+                                        String.join(", ", BuildWords.list(diff.changedFiles())))));
                     }
                 } else {
                     this.fail(mod, List.of(this.engine.describe(result)));
@@ -425,6 +434,8 @@ public final class DevSession implements DevHost, AutoCloseable {
     private void accept(Mod mod, DevBuild built, int number) {
         mod.mixins = null;
         DevBuild before = mod.running;
+        mod.previous = before;
+        mod.previousNumber = mod.runningNumber;
         mod.running = built;
         mod.runningNumber = number;
         mod.builtAt = System.currentTimeMillis();
@@ -432,7 +443,7 @@ public final class DevSession implements DevHost, AutoCloseable {
         mod.line = "";
 
         Path start = built.getJar().resolveSibling("build-0.jar");
-        deleteBuildsBut(built.getJar(), start, start.resolveSibling("build-0.jar.idx"));
+        deleteBuildsBut(built.getJar(), before.getJar(), start, start.resolveSibling("build-0.jar.idx"));
         LOGGER.info("[Hotwire] {} runs build {} now (was {})", mod.mod.id(), built.getJar().getFileName(),
                 before.getJar().getFileName());
     }
@@ -502,8 +513,10 @@ public final class DevSession implements DevHost, AutoCloseable {
                 mod.mixins = mixins;
             }
             synchronized (mod) {
+                DevBuild back = mod.previous;
                 views.add(new DevModView(mod.mod.id(), mod.mod.name(), mod.state, mod.line, mod.runningNumber,
-                        mod.builtAt, List.copyOf(mod.events), List.copyOf(mod.crashes.values()).reversed(), mixins));
+                        mod.builtAt, List.copyOf(mod.events), List.copyOf(mod.crashes.values()).reversed(), mixins,
+                        back == null ? -1 : mod.previousNumber));
             }
         }
         return views;
@@ -548,6 +561,40 @@ public final class DevSession implements DevHost, AutoCloseable {
                     this.tell(mod, DevEvent.Kind.RESTARTED, Lang.get("hotwire.dev.restarted", mod.mod.name()),
                             done.leftOver().isEmpty() ? Lang.get("hotwire.dev.took.only", BuildWords.findSeconds(began))
                                     : Lang.get("hotwire.dev.left_over.count", done.leftOver().size()), lines);
+                }
+            }
+            return null;
+        });
+    }
+
+    @Override
+    @SuppressWarnings("FutureReturnValueIgnored")
+    public void rollBack(String id) {
+        Mod mod = this.mods.get(id);
+        if (mod == null) {
+            return;
+        }
+        this.tasks.submit("rolling " + id + " back", () -> {
+            synchronized (mod.taking) {
+                DevBuild back = mod.previous;
+                if (back == null) {
+                    return null;
+                }
+                int number = mod.previousNumber;
+                long began = System.nanoTime();
+                mod.state = DevState.LOADING;
+                mod.line = Lang.get("hotwire.dev.loading");
+                clearCrashCard(mod);
+                ModUpdater.Result result = this.engine.updateInPlace(back.getJar());
+                if (result instanceof ModUpdater.Result.Updated) {
+                    this.accept(mod, back, number);
+                    mod.previous = null;
+                    String title = number == 0 ? Lang.get("hotwire.dev.rolled_back.start", mod.mod.name())
+                            : Lang.get("hotwire.dev.rolled_back", mod.mod.name(), number);
+                    this.tell(mod, DevEvent.Kind.IN, title, Lang.get("hotwire.dev.took.only",
+                            BuildWords.findSeconds(began)), List.of());
+                } else {
+                    this.fail(mod, List.of(this.engine.describe(result)));
                 }
             }
             return null;
