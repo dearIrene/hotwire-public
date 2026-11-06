@@ -1,6 +1,5 @@
 package dev.moon.hotwire.fabric.dev;
 
-import dev.moon.hotwire.dev.DevCrash;
 import dev.moon.hotwire.dev.IdeOpener;
 import dev.moon.hotwire.ui.Lang;
 import dev.moon.hotwire.ui.Notice;

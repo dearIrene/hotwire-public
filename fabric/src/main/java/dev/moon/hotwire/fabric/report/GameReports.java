@@ -247,6 +247,7 @@ public final class GameReports {
                         added.switched() instanceof ModSwitcher.Result.Failed failed
                                 ? Report.Failure.of("switch on", null, failed.cause()) : null);
             }
+            case ModAdder.Result.Queued queued -> null;
             case ModAdder.Result.Refused refused -> null;
             case ModAdder.Result.Failed failed -> Report.of(Report.Operation.ADD, this.machine, Map.of(), List.of(jar),
                     new SwitchApplier.ApplyResult(List.of(), List.of(), List.of()),

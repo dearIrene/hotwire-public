@@ -11,6 +11,7 @@ import dev.moon.hotwire.api.StoreProject;
 import dev.moon.hotwire.api.StoreQuery;
 import dev.moon.hotwire.api.StoreVersion;
 import dev.moon.hotwire.api.SwitchResult;
+import dev.moon.hotwire.fabric.add.ModAdder;
 import dev.moon.hotwire.fabric.screen.WebLinks;
 import dev.moon.hotwire.fabric.store.ModStore;
 import dev.moon.hotwire.modrinth.CachedAsks;
@@ -24,6 +25,7 @@ import java.io.IOException;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.nio.file.StandardCopyOption;
+import java.util.ArrayList;
 import java.util.List;
 import java.util.Optional;
 import java.util.concurrent.CompletableFuture;
@@ -197,7 +199,13 @@ final class StoreApi {
 
     static CompletableFuture<SwitchResult> queueForNextStart(String idOrSlug, String versionId) {
         return StoreApiAdd.fetchThen(idOrSlug, versionId, (engine, name, jars) -> {
-            jars.forEach(jar -> engine.add(jar, AddMode.NEXT_START, result -> { }));
+            List<ModAdder.Result> results = new ArrayList<>();
+            jars.forEach(jar -> engine.add(jar, AddMode.NEXT_START, results::add));
+            for (ModAdder.Result result : results) {
+                if (!(result instanceof ModAdder.Result.Queued)) {
+                    return HotwireApiImpl.toResult(result);
+                }
+            }
             return new SwitchResult(SwitchResult.Kind.DONE, List.of(), Lang.get("hotwire.api.add.next_start", name));
         });
     }

@@ -292,6 +292,26 @@ public final class ModrinthClient {
             return;
         }
 
+        synchronized (findLock(target)) {
+            if (!LocalJars.isSameJar(target, version.size(), version.sha512())) {
+                this.fetchAlone(version, target, onBytes);
+            }
+        }
+    }
+
+    private static final Object[] FETCHING = new Object[32];
+
+    static {
+        for (int at = 0; at < FETCHING.length; at++) {
+            FETCHING[at] = new Object();
+        }
+    }
+
+    private static Object findLock(Path target) {
+        return FETCHING[Math.floorMod(target.toAbsolutePath().normalize().hashCode(), FETCHING.length)];
+    }
+
+    private void fetchAlone(Version version, Path target, LongConsumer onBytes) throws IOException {
         Path part = target.resolveSibling(target.getFileName() + ".part");
         Path copy = this.local.find(version.fileName(), version.size(), version.sha512());
         if (copy != null) {

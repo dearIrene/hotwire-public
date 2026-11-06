@@ -50,8 +50,14 @@ final class JarRequests {
     @SuppressWarnings("FutureReturnValueIgnored")
     void add(Path jar, AddMode mode, Consumer<ModAdder.Result> then) {
         if (mode == AddMode.NEXT_START) {
-            this.engine.showMessage(this.changes.queueAdd(jar), false);
-            this.storeJars.markQueued(jar, this.engine.getPendingChanges());
+            ModAdder.Result queued = this.changes.queueAdd(jar);
+            boolean ok = queued instanceof ModAdder.Result.Queued;
+            this.engine.showMessage(ModAdder.describe(queued), !ok);
+            if (ok) {
+                this.storeJars.markQueued(jar, this.engine.getPendingChanges());
+            }
+            then.accept(queued);
+            this.engine.refreshScreen();
             return;
         }
         this.progress.beginAdding(String.valueOf(jar.getFileName()).replaceFirst("(?i)\\.jar$", ""));
@@ -94,6 +100,7 @@ final class JarRequests {
             } else {
                 this.engine.showMessage(switch (result) {
                     case ModAdder.Result.Added added -> added.name() + " is in." + this.changes.copyIntoMods(jar);
+                    case ModAdder.Result.Queued queued -> queued.message();
                     case ModAdder.Result.Refused refused -> refused.reason();
                     case ModAdder.Result.Failed failed -> failed.reason();
                 }, !(result instanceof ModAdder.Result.Added));

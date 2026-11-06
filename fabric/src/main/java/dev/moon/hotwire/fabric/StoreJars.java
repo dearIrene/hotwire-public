@@ -1,5 +1,6 @@
 package dev.moon.hotwire.fabric;
 
+import dev.moon.hotwire.fabric.add.ModAdder;
 import dev.moon.hotwire.fabric.store.ModStore;
 import dev.moon.hotwire.fabric.store.UpdateCheck;
 import dev.moon.hotwire.fabric.update.ModUpdater;
@@ -243,8 +244,12 @@ final class StoreJars {
     void queueForNextStart(List<Path> jars, List<String> projects, List<PendingChange> pending) {
         for (int i = 0; i < jars.size(); i++) {
             this.projects.put(jars.get(i), projects.get(i));
-            this.say.accept(this.changes.queueAdd(jars.get(i)), false);
-            this.markQueued(jars.get(i), pending);
+            ModAdder.Result queued = this.changes.queueAdd(jars.get(i));
+            boolean ok = queued instanceof ModAdder.Result.Queued;
+            this.say.accept(ModAdder.describe(queued), !ok);
+            if (ok) {
+                this.markQueued(jars.get(i), pending);
+            }
         }
     }
 

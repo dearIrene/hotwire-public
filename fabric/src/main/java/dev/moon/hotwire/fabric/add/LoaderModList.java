@@ -3,6 +3,7 @@ package dev.moon.hotwire.fabric.add;
 import dev.moon.hotwire.jvm.PrivateField;
 import java.io.IOException;
 import java.io.InputStream;
+import java.lang.reflect.Constructor;
 import java.lang.reflect.Field;
 import java.lang.reflect.Method;
 import java.lang.reflect.Modifier;
@@ -119,11 +120,20 @@ public final class LoaderModList {
         Map<String, LanguageAdapter> adapters = ADAPTERS.get(loader, Map.class);
         Map<String, List<Object>> entryMap = ENTRY_MAP.get(entrypoints, Map.class);
         synchronized (loader) {
-            ModContainerImpl old = byId.get(id);
-            if (old != null) {
-                mods.remove(old);
+            HiddenMod hidden = HIDDEN.get(id);
+            if (hidden != null) {
+                HIDDEN.put(id, new HiddenMod(container, findHiddenEntries(hidden, container, metadata, adapters)));
+                swapOrder(hidden.container(), container);
+                return;
             }
-            mods.add(container);
+            ModContainerImpl old = byId.get(id);
+            int at = old == null ? -1 : mods.indexOf(old);
+            if (old != null && at >= 0) {
+                mods.set(at, container);
+                swapOrder(old, container);
+            } else {
+                mods.add(container);
+            }
             MODS.set(loader, mods);
             byId.put(id, container);
             for (String key : metadata.getEntrypointKeys()) {
@@ -139,6 +149,47 @@ public final class LoaderModList {
                     }
                 }
             }
+        }
+    }
+
+    @SuppressWarnings("unchecked")
+    private static Map<String, List<Object>> findHiddenEntries(HiddenMod hidden, ModContainerImpl container,
+            LoaderModMetadata metadata, Map<String, LanguageAdapter> adapters) {
+        Map<String, List<Object>> entries = new HashMap<>();
+        hidden.entries().forEach((key, list) -> entries.put(key, new ArrayList<>(list)));
+        EntrypointStorage aside;
+        try {
+            Constructor<EntrypointStorage> make = EntrypointStorage.class.getDeclaredConstructor();
+            make.setAccessible(true);
+            aside = make.newInstance();
+        } catch (ReflectiveOperationException e) {
+            LOGGER.warn("[Hotwire] the new entrypoints of {} wait for its next start: {}", metadata.getId(),
+                    e.toString());
+            return entries;
+        }
+        String id = metadata.getId();
+        for (String key : metadata.getEntrypointKeys()) {
+            for (EntrypointMetadata entrypoint : metadata.getEntrypoints(key)) {
+                if (hasEntry(entries.getOrDefault(key, List.of()), id, entrypoint.getValue())) {
+                    continue;
+                }
+                try {
+                    aside.add(container, key, entrypoint, adapters);
+                } catch (Exception e) {
+                    LOGGER.warn("[Hotwire] the loader could not take the new {} entrypoint {} of {}", key,
+                            entrypoint.getValue(), id, e);
+                }
+            }
+        }
+        ENTRY_MAP.get(aside, Map.class).forEach((key, made) -> entries.computeIfAbsent((String) key,
+                any -> new ArrayList<>()).addAll((List<Object>) made));
+        return entries;
+    }
+
+    private static void swapOrder(ModContainerImpl old, ModContainerImpl now) {
+        int at = MODS_ORDER.indexOf(old);
+        if (at >= 0) {
+            MODS_ORDER.set(at, now);
         }
     }
 

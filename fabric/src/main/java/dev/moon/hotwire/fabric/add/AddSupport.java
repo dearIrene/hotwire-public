@@ -23,6 +23,7 @@ import dev.moon.hotwire.switching.ModSwitcher;
 import dev.moon.hotwire.switching.SwitchApplier;
 import dev.moon.hotwire.ui.AddMode;
 import dev.moon.hotwire.ui.AddPreview;
+import dev.moon.hotwire.ui.Lang;
 import dev.moon.hotwire.update.PendingChange;
 import dev.moon.hotwire.update.UpdateFolders;
 import dev.moon.hotwire.update.UpdateQueue;
@@ -87,23 +88,37 @@ public final class AddSupport implements ModAdder.Engine {
         return preview.mode() == AddMode.REFUSED ? preview : preview.withIcon(this.icons.ofJar(jar));
     }
 
-    public String queue(Path jar) {
+    public ModAdder.Result queue(Path jar) {
         ActionJournal.Entry journal = ActionJournal.get().begin(ActionJournal.Action.LATER_ADD,
                 String.valueOf(jar.getFileName()));
 
         Optional<String> plain = AddFirstLook.findRefusal(jar);
         if (plain.isPresent()) {
             journal.end(ActionJournal.Outcome.REFUSED);
-            return plain.get();
+            return new ModAdder.Result.Refused(plain.get());
         }
         try {
+            ModManifest read = ModJarReader.read(jar).manifest();
+            if (this.isInstalled(read.id())) {
+                journal.end(ActionJournal.Outcome.REFUSED, "installed");
+                return new ModAdder.Result.Refused(Lang.get("hotwire.add.queue.installed", read.name()));
+            }
             ModManifest manifest = this.queueJar(jar);
             journal.end(ActionJournal.Outcome.QUEUED, manifest.id());
-            return manifest.name() + " " + manifest.version() + " is queued as a pending task: it goes into your"
-                    + " mods folder when you close the game. Cancel it any time from Pending tasks.";
+            return new ModAdder.Result.Queued(manifest.id(), manifest.name(), manifest.name() + " "
+                    + manifest.version() + " is queued as a pending task: it goes into your mods folder when you close"
+                    + " the game. Cancel it any time from Pending tasks.");
         } catch (ModJarException | IOException e) {
             journal.end(ActionJournal.Outcome.FAILED, e.getClass().getSimpleName());
-            return jar.getFileName() + " could not be queued: " + e.getMessage();
+            return new ModAdder.Result.Failed(jar.getFileName() + " could not be queued: " + e.getMessage(), e);
+        }
+    }
+
+    public boolean isInstalledJar(Path jar) {
+        try {
+            return this.isInstalled(ModJarReader.read(jar).manifest().id());
+        } catch (ModJarException e) {
+            return false;
         }
     }
 
@@ -198,6 +213,7 @@ public final class AddSupport implements ModAdder.Engine {
         switch (result) {
             case ModAdder.Result.Added added -> journal.end(added.switched() instanceof ModSwitcher.Result.Done
                     ? ActionJournal.Outcome.DONE : ActionJournal.Outcome.FAILED, "as " + String.join("+", added.ids()));
+            case ModAdder.Result.Queued queued -> journal.end(ActionJournal.Outcome.QUEUED, queued.id());
             case ModAdder.Result.Refused refused -> journal.end(ActionJournal.Outcome.REFUSED,
                     refused.restartOnly() ? "restart" : "");
             case ModAdder.Result.Failed failed when ModAdder.isWorldBuilt(result) -> journal.end(

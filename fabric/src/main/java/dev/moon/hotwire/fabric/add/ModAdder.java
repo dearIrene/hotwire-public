@@ -68,6 +68,9 @@ public final class ModAdder {
         record Added(List<String> ids, String name, ModSwitcher.Result switched) implements Result {
         }
 
+        record Queued(String id, String name, String message) implements Result {
+        }
+
         record Refused(String reason, boolean restartOnly) implements Result {
             public Refused(String reason) {
                 this(reason, false);
@@ -79,6 +82,15 @@ public final class ModAdder {
                 this(reason, cause, false);
             }
         }
+    }
+
+    public static String describe(Result result) {
+        return switch (result) {
+            case Result.Added added -> added.name() + " is in.";
+            case Result.Queued queued -> queued.message();
+            case Result.Refused refused -> refused.reason();
+            case Result.Failed failed -> failed.reason();
+        };
     }
 
     interface Engine extends WidenerUses.GameAccess {

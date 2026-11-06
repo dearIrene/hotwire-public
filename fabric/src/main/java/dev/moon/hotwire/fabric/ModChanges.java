@@ -5,6 +5,7 @@ import dev.moon.hotwire.fabric.add.AddSupport;
 import dev.moon.hotwire.fabric.add.ModAdder;
 import dev.moon.hotwire.fabric.add.WorldReopen;
 import dev.moon.hotwire.fabric.update.ModUpdater;
+import dev.moon.hotwire.fabric.update.UpdateSupport;
 import dev.moon.hotwire.jar.ModJarException;
 import dev.moon.hotwire.report.ActionJournal;
 import dev.moon.hotwire.ui.AddPreview;
@@ -53,9 +54,23 @@ public final class ModChanges {
         return result;
     }
 
-    public String queueAdd(Path jar) {
+    public ModAdder.Result queueAdd(Path jar) {
         HotwireEngine.JvmParts ready = this.parts;
-        return ready == null ? this.refusal : ready.adds().queue(jar);
+        if (ready == null) {
+            return new ModAdder.Result.Refused(this.refusal);
+        }
+        if (!ready.adds().isInstalledJar(jar)) {
+            return ready.adds().queue(jar);
+        }
+        ModUpdater.Result update = ready.updates().queueForNextStart(jar);
+        return switch (update) {
+            case ModUpdater.Result.Queued queued -> new ModAdder.Result.Queued(queued.id(), queued.name(),
+                    UpdateSupport.describe(update));
+            case ModUpdater.Result.Updated updated -> new ModAdder.Result.Queued(updated.id(), updated.name(),
+                    UpdateSupport.describe(update));
+            case ModUpdater.Result.Refused refused -> new ModAdder.Result.Refused(refused.reason());
+            case ModUpdater.Result.Failed failed -> new ModAdder.Result.Failed(failed.reason(), failed.cause());
+        };
     }
 
     public boolean setsUpOnJoin(Path jar) {

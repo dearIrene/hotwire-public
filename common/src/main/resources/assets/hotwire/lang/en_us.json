@@ -356,6 +356,7 @@
   "hotwire.api.add.not_found": "Modrinth has no mod called %s for this version.",
   "hotwire.api.add.done": "Added %s.",
   "hotwire.api.add.next_start": "%s goes in at your next start.",
+  "hotwire.add.queue.installed": "%s is installed already, so it is not queued again.",
   "hotwire.api.add.browsing": "Hotwire's store is looking at another version, set it back to add mods.",
   "hotwire.switch.saving": "The world is saving right now. Try again in a moment.",
   "hotwire.switch.world_locked": "In-world switching is off in Advanced! Leave the world, then switch.",

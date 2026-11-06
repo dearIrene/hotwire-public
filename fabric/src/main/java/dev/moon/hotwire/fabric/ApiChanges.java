@@ -237,6 +237,8 @@ final class ApiChanges {
             ModAdder.Result result = added.join();
             if (result instanceof ModAdder.Result.Failed failed) {
                 bad.add(failed.reason());
+            } else if (result instanceof ModAdder.Result.Refused refused) {
+                bad.add(refused.reason());
             }
         }
         return bad;

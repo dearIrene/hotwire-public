@@ -194,6 +194,7 @@ final class StoreApiAdd {
                         added.addAll(one.ids());
                         this.addFrom(at, index + 1, added, ended);
                     }
+                    case ModAdder.Result.Queued queued -> this.addFrom(at, index + 1, added, ended);
                     case ModAdder.Result.Refused refused -> ended.complete(new SwitchResult(
                             SwitchResult.Kind.REFUSED, List.copyOf(added), refused.reason()));
                     case ModAdder.Result.Failed failed -> ended.complete(new SwitchResult(

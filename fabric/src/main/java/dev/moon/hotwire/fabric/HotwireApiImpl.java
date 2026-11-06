@@ -249,14 +249,13 @@ public final class HotwireApiImpl implements HotwireApi {
 
     @Override
     public @Nullable OpeningPrompt findOpeningPrompt() {
-        HotwireEngine engine = HotwireClient.findEngine();
-        if (engine == null || engine.isFirstOpenAccepted()) {
-            return null;
-        }
-
         String asker = findCallers().findAsker();
         if (asker != null) {
             PROMPTED.add(asker);
+        }
+        HotwireEngine engine = HotwireClient.findEngine();
+        if (engine == null || engine.isFirstOpenAccepted()) {
+            return null;
         }
         return new OpeningPrompt() {
             @Override
@@ -503,6 +502,8 @@ public final class HotwireApiImpl implements HotwireApi {
     static SwitchResult toResult(ModAdder.Result result) {
         return switch (result) {
             case ModAdder.Result.Added added -> new SwitchResult(SwitchResult.Kind.DONE, added.ids(), "");
+            case ModAdder.Result.Queued queued -> new SwitchResult(SwitchResult.Kind.DONE, List.of(),
+                    queued.message());
             case ModAdder.Result.Refused refused -> new SwitchResult(SwitchResult.Kind.REFUSED, List.of(),
                     refused.reason());
             case ModAdder.Result.Failed failed -> new SwitchResult(ModAdder.isWorldBuilt(failed)
