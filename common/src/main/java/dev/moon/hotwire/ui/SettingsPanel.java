@@ -1,42 +1,45 @@
 package dev.moon.hotwire.ui;
 
 import java.util.ArrayList;
+import java.util.HashMap;
 import java.util.List;
+import java.util.Map;
 import java.util.function.ObjIntConsumer;
+import org.jspecify.annotations.Nullable;
 
 final class SettingsPanel extends Panel {
-    static final int WIDTH = 440;
-    static final int PITCH = 36;
-    static final int CHOICE_W = 64;
-    private static final int HEADING = 18;
-    private static final int NOTE = 12;
-    private static final int SECTION_GAP = 10;
-
-    private static final int ROWS_Y = 46;
+    static final int WIDTH = 500;
+    private static final int NAV_MIN = 70;
+    private static final int NAV_ROW = 18;
+    private static final int BODY_Y = 46;
     private static final int FOOT = 40;
-    private final EasedValue scroll = EasedValue.ofSpeed(12);
-    private float scrollTarget;
+    private static final int PAD = 8;
+    private static final int LINE = 10;
+    private static final int GAP = 4;
+    private static final int CARD = 0xFF1A1427;
+    private static final int NAV_CHOSEN = 0x26FF7CC3;
+
     private final ObjIntConsumer<String> onChoose;
-    private final List<Item> items = new ArrayList<>();
-    private final List<Block> blocks = new ArrayList<>();
-    private int rowsHeight;
+    private List<SettingsSection> sections = List.of();
+    private final Map<String, ChoiceBar> bars = new HashMap<>();
+    private int shownSection;
+    private final EasedValue fade = EasedValue.ofSpeed(10);
+    private final EasedValue mark = EasedValue.ofSpeed(18);
+    private final EasedValue scroll = EasedValue.ofSpeed(14);
+    private float scrollTarget;
 
-    private boolean laidOut;
+    private final List<Layout> layouts = new ArrayList<>();
+    private int bodyHeight;
+    private boolean measured;
 
-    private record Block(SettingsSection section, List<List<Button>> buttons) {
+    private int navWidth = NAV_MIN;
+    private int hoveredSection = -1;
+
+    private record Card(SettingOption option, List<String> label, List<String> lines, int y, int height,
+            int barWidth) {
     }
 
-    private sealed interface Item permits Heading, NoteLine, Row {
-        int y();
-    }
-
-    private record Heading(String title, int y) implements Item {
-    }
-
-    private record NoteLine(String text, SettingsSection.Tone tone, int y) implements Item {
-    }
-
-    private record Row(SettingOption option, boolean enabled, List<Button> buttons, int y) implements Item {
+    private record Layout(List<String> note, int noteHeight, List<Card> cards, int height) {
     }
 
     SettingsPanel(ObjIntConsumer<String> onChoose, Runnable onDone) {
@@ -45,62 +48,83 @@ final class SettingsPanel extends Panel {
     }
 
     void open(List<SettingsSection> sections) {
+        this.shownSection = 0;
         this.scrollTarget = 0;
         this.scroll.snap(0);
+        this.fade.snap(1);
         this.setSections(sections);
         this.show();
     }
 
     void setSections(List<SettingsSection> sections) {
-        this.blocks.forEach(block -> block.buttons().forEach(row -> row.forEach(this::remove)));
-        this.blocks.clear();
+        Map<String, ChoiceBar> made = new HashMap<>();
         for (SettingsSection section : sections) {
-            List<List<Button>> rows = new ArrayList<>();
             for (SettingOption option : section.options()) {
-                List<Button> buttons = new ArrayList<>();
-                for (int i = 0; i < option.choices().size(); i++) {
-                    int choice = i;
-                    Button button = this.add(new Button(option.choices().get(i).label(), i == option.chosen(),
-                            () -> this.onChoose.accept(option.id(), choice)));
-                    button.setVisible(false);
-                    buttons.add(button);
+                ChoiceBar bar = this.bars.remove(option.id());
+                if (bar == null) {
+                    bar = this.add(new ChoiceBar(option.choices().stream().map(c -> ChoiceBar.Choice.of(c.label()))
+                            .toList(), option.chosen(), choice -> this.onChoose.accept(option.id(), choice)));
+                } else {
+                    bar.setChosen(option.chosen());
                 }
-                rows.add(buttons);
-            }
-            this.blocks.add(new Block(section, rows));
-        }
-        this.items.clear();
-        this.laidOut = false;
-    }
-
-    void scrollToEnd() {
-        this.scrollTarget = Float.MAX_VALUE;
-    }
-
-    private void layOut(Canvas canvas) {
-        int y = 0;
-        int noteWidth = WIDTH - 28;
-        for (Block block : this.blocks) {
-            SettingsSection section = block.section();
-            if (y > 0) {
-                y += SECTION_GAP;
-            }
-            this.items.add(new Heading(section.title(), y));
-            y += HEADING;
-            for (String line : wrap(canvas, section.note(), noteWidth)) {
-                this.items.add(new NoteLine(line, section.tone(), y));
-                y += NOTE;
-            }
-            if (!section.note().isEmpty()) {
-                y += 4;
-            }
-            for (int i = 0; i < section.options().size(); i++) {
-                this.items.add(new Row(section.options().get(i), section.enabled(), block.buttons().get(i), y));
-                y += PITCH;
+                bar.setEnabled(section.enabled());
+                bar.setVisible(false);
+                made.put(option.id(), bar);
             }
         }
-        this.rowsHeight = y;
-        this.laidOut = true;
+        this.bars.values().forEach(this::remove);
+        this.bars.clear();
+        this.bars.putAll(made);
+        this.sections = List.copyOf(sections);
+        this.shownSection = Math.min(this.shownSection, Math.max(0, sections.size() - 1));
+        this.measured = false;
+    }
+
+    void showLastSection() {
+        this.showSection(this.sections.size() - 1);
+    }
+
+    private void showSection(int index) {
+        if (index < 0 || index >= this.sections.size() || index == this.shownSection) {
+            return;
+        }
+        this.shownSection = index;
+        this.scrollTarget = 0;
+        this.scroll.snap(0);
+        this.fade.snap(0);
+    }
+
+    private void measure(Canvas canvas, int boxWidth) {
+        int names = 0;
+        for (SettingsSection section : this.sections) {
+            names = Math.max(names, canvas.measureText(section.title()));
+        }
+        this.navWidth = Math.clamp(names + 18, NAV_MIN, Math.max(NAV_MIN, boxWidth / 3));
+        int contentWidth = boxWidth - 14 - this.navWidth - 16 - 14;
+        this.layouts.clear();
+        int tallest = this.sections.size() * NAV_ROW;
+        for (SettingsSection section : this.sections) {
+            List<String> note = section.note().isEmpty() ? List.of()
+                    : wrap(canvas, section.note(), contentWidth - 2 * PAD - 2);
+            int noteHeight = note.isEmpty() ? 0 : note.size() * LINE + 12 + GAP;
+            int y = noteHeight;
+            List<Card> cards = new ArrayList<>();
+            for (SettingOption option : section.options()) {
+                ChoiceBar bar = this.bars.get(option.id());
+                int barWidth = bar == null ? 0 : Math.min(contentWidth / 2, bar.measure(canvas));
+                int textWidth = contentWidth - 2 * PAD - barWidth - 10;
+                List<String> label = wrap(canvas, option.label(), textWidth);
+                List<String> lines = wrap(canvas, option.choices().get(option.chosen()).explains(), textWidth);
+                int text = (label.size() + lines.size()) * LINE + 1;
+                int height = Math.max(ChoiceBar.HEIGHT + 2 * PAD, text + 2 * PAD);
+                cards.add(new Card(option, label, lines, y, height, barWidth));
+                y += height + GAP;
+            }
+            this.layouts.add(new Layout(note, noteHeight, cards, y));
+            tallest = Math.max(tallest, y);
+        }
+        this.bodyHeight = tallest;
+        this.measured = true;
     }
 
     private static List<String> wrap(Canvas canvas, String text, int width) {
@@ -124,88 +148,198 @@ final class SettingsPanel extends Panel {
         return lines;
     }
 
-    @Override
-    public void step(float dt) {
-        this.size(WIDTH, Math.min(this.getHeight() - 24, CONTENT_Y + this.rowsHeight + FOOT));
-        int room = this.getBoxHeight() - ROWS_Y - FOOT + 10;
-
-        if (this.laidOut) {
-            this.scrollTarget = Math.max(0, Math.min(this.scrollTarget, Math.max(0, this.rowsHeight - room)));
-            this.scroll.to(this.scrollTarget);
-        }
-        this.scroll.step(dt);
-        super.step(dt);
-        int x = this.getBoxX();
-        int w = this.getBoxWidth();
-        float s = this.getBoxShown();
-        int top = this.getBoxY() + ROWS_Y - 4;
-        int bottom = this.getBoxY() + this.getBoxHeight() - FOOT + 6;
-        for (Item item : this.items) {
-            if (!(item instanceof Row row)) {
-                continue;
-            }
-            int rowY = this.getBoxY() + ROWS_Y + row.y() - Math.round(this.scroll.getValue());
-            boolean seen = rowY - 2 >= top && rowY + 18 <= bottom;
-            int bx = x + w - 14 - row.buttons().size() * (CHOICE_W + 4) + 4;
-            for (Button button : row.buttons()) {
-                button.setBounds(bx, rowY - 2, CHOICE_W, 20);
-                button.setVisible(seen);
-                boolean live = row.enabled() && this.open() && s > 0.9f && seen;
-                button.setActive(live, row.enabled());
-                bx += CHOICE_W + 4;
-            }
-        }
+    private int findRoom() {
+        return this.getBoxHeight() - BODY_Y - FOOT;
     }
 
     @Override
-    protected boolean onScroll(double amount) {
-        this.scrollTarget -= (float) amount * PITCH;
+    public void step(float dt) {
+        if (this.measured) {
+            this.size(WIDTH, Math.min(this.getHeight() - 24, BODY_Y + this.bodyHeight + FOOT + 4));
+        }
+        Layout layout = this.findLayout();
+        int room = this.findRoom();
+        if (layout != null) {
+            this.scrollTarget = Math.clamp(this.scrollTarget, 0, Math.max(0, layout.height() - room));
+        }
+        this.scroll.to(this.scrollTarget);
+        this.scroll.step(dt);
+        this.fade.to(1);
+        this.fade.step(dt);
+        this.mark.to(this.shownSection * NAV_ROW);
+        this.mark.step(dt);
+        this.hoveredSection = this.findSectionAt(this.getPointerX(), this.getPointerY());
+        super.step(dt);
+        this.placeBars(layout, room);
+    }
+
+    private void placeBars(@Nullable Layout layout, int room) {
+        this.bars.values().forEach(bar -> bar.setVisible(false));
+        if (layout == null || !this.measured) {
+            return;
+        }
+        int contentRight = this.getBoxX() + this.getBoxWidth() - 14;
+        int top = this.getBoxY() + BODY_Y;
+        int shift = Math.round(this.scroll.getValue());
+        for (Card card : layout.cards()) {
+            ChoiceBar bar = this.bars.get(card.option().id());
+            int cardTop = card.y() - shift;
+            if (bar == null || cardTop < 0 || cardTop + card.height() > room) {
+                continue;
+            }
+            bar.setBounds(contentRight - PAD - card.barWidth(), top + cardTop + (card.height() - ChoiceBar.HEIGHT) / 2,
+                    card.barWidth(), ChoiceBar.HEIGHT);
+            bar.setVisible(true);
+        }
+    }
+
+    private @Nullable Layout findLayout() {
+        return this.measured && this.shownSection < this.layouts.size() ? this.layouts.get(this.shownSection) : null;
+    }
+
+    private int findSectionAt(double px, double py) {
+        int navX = this.getBoxX() + 14;
+        int navY = this.getBoxY() + BODY_Y;
+        if (px < navX || px >= navX + this.navWidth || py < navY) {
+            return -1;
+        }
+        int index = (int) ((py - navY) / NAV_ROW);
+        return index < this.sections.size() ? index : -1;
+    }
+
+    @Override
+    protected boolean onClick(double px, double py, int button) {
+        int section = this.findSectionAt(px, py);
+        if (button == 0 && section >= 0) {
+            this.showSection(section);
+        }
         return true;
     }
 
     @Override
-    protected void drawContent(Canvas canvas, float alpha, int x, int y, int w, int h) {
-        if (!this.laidOut) {
-            this.layOut(canvas);
+    protected boolean onScroll(double amount) {
+        Layout layout = this.findLayout();
+        if (layout == null) {
+            return true;
         }
-        canvas.drawText(Lang.get("hotwire.screen.advanced"), x + 14, y + 16, Colors.fade(Palette.TEXT, alpha));
-        canvas.pushClip(x, y + ROWS_Y - 4, x + w, y + h - FOOT + 6);
-        int shift = Math.round(this.scroll.getValue());
-        for (Item item : this.items) {
-            int rowY = y + ROWS_Y + item.y() - shift;
-            switch (item) {
-                case Heading heading -> {
-                    canvas.drawText(heading.title(), x + 14, rowY, Colors.fade(Palette.ACCENT, alpha));
-                    int lineX = x + 14 + canvas.measureText(heading.title()) + 8;
-                    canvas.fill(lineX, rowY + 4, x + w - 14, rowY + 5, Colors.fade(Palette.PANEL_EDGE, alpha));
+        List<Integer> stops = new ArrayList<>();
+        stops.add(0);
+        layout.cards().forEach(card -> stops.add(card.y()));
+        for (int step = 0; step < Math.max(1, Math.round(Math.abs(amount))); step++) {
+            float at = this.scrollTarget;
+            for (int stop : amount < 0 ? stops : stops.reversed()) {
+                if (amount < 0 ? stop > at + 1 : stop < at - 1) {
+                    this.scrollTarget = stop;
+                    break;
                 }
-                case NoteLine note -> canvas.drawText(note.text(), x + 14, rowY, Colors.fade(switch (note.tone()) {
-                    case WARN -> Palette.OFF_TINT;
-                    case GOOD -> Palette.GOOD;
-                    case PLAIN -> Palette.DIM;
-                }, alpha));
-                case Row row -> this.drawRow(canvas, row, alpha, x, rowY, w);
             }
         }
-        canvas.popClip();
+        return true;
+    }
 
-        int top = y + ROWS_Y - 4;
-        int track = h - ROWS_Y - FOOT + 10;
-        if (this.rowsHeight > track) {
-            int thumb = Math.max(12, track * track / this.rowsHeight);
-            int offset = Math.round((track - thumb) * this.scroll.getValue() / (this.rowsHeight - track));
-            canvas.fill(x + w - 9, top + offset, x + w - 6, top + offset + thumb, Colors.fade(Palette.PANEL_EDGE,
+    @Override
+    protected void layOut() {
+        this.measured = false;
+    }
+
+    @Override
+    protected void drawContent(Canvas canvas, float alpha, int x, int y, int w, int h) {
+        int contentX = x + 14 + this.navWidth + 16;
+        int contentW = x + w - 14 - contentX;
+
+        if (!this.measured) {
+            this.measure(canvas, Math.min(WIDTH, this.getWidth() - 48));
+        }
+        if (contentW <= 2 * PAD) {
+            return;
+        }
+        canvas.drawText(Lang.get("hotwire.screen.advanced"), x + 14, y + 16, Colors.fade(Palette.TEXT, alpha));
+        this.drawNav(canvas, alpha, x + 14, y + BODY_Y);
+        canvas.fill(contentX - 9, y + BODY_Y, contentX - 8, y + h - FOOT, Colors.fade(Palette.PANEL_EDGE, alpha));
+        Layout layout = this.findLayout();
+        if (layout == null) {
+            return;
+        }
+        SettingsSection section = this.sections.get(this.shownSection);
+        float shown = alpha * this.fade.getValue();
+        float faded = section.enabled() ? shown : shown * 0.45f;
+        int slide = Math.round((1 - this.fade.getValue()) * 6);
+        int top = y + BODY_Y;
+        int bottom = y + h - FOOT;
+        canvas.pushClip(contentX, top, contentX + contentW, bottom);
+        int at = top - Math.round(this.scroll.getValue()) + slide;
+        if (!layout.note().isEmpty()) {
+            this.drawStrip(canvas, section.tone(), layout.note(), contentX, at, contentW, shown);
+        }
+        for (Card card : layout.cards()) {
+            this.drawCard(canvas, card, contentX, at + card.y(), contentW, faded);
+        }
+        canvas.popClip();
+        int room = bottom - top;
+        fadeEdges(canvas, contentX, top, contentX + contentW, bottom, this.scroll.getValue() > 1,
+                this.scroll.getValue() < layout.height() - room - 1, alpha);
+        if (layout.height() > room) {
+            int thumb = Math.max(12, room * room / layout.height());
+            int offset = Math.round((room - thumb) * this.scroll.getValue() / (layout.height() - room));
+            canvas.fill(x + w - 9, top + offset, x + w - 7, top + offset + thumb, Colors.fade(Palette.PANEL_EDGE,
                     alpha));
         }
     }
 
-    private void drawRow(Canvas canvas, Row row, float alpha, int x, int rowY, int w) {
-        SettingOption option = row.option();
-        int room = w - 28 - option.choices().size() * (CHOICE_W + 4) - 4;
-        String explains = option.choices().get(option.chosen()).explains();
-        canvas.drawText(canvas.clip(option.label(), room), x + 14, rowY,
-                Colors.fade(row.enabled() ? Palette.TEXT : Palette.FAINT, alpha));
-        canvas.drawText(canvas.clip(explains, w - 28), x + 14, rowY + 20,
-                Colors.fade(row.enabled() ? Palette.DIM : Palette.FAINT, alpha));
+    static void fadeEdges(Canvas canvas, int x0, int top, int x1, int bottom, boolean above, boolean below,
+            float alpha) {
+        int clear = Palette.PANEL & 0x00FFFFFF;
+        if (above) {
+            canvas.fillDown(x0, top, x1, top + 10, Colors.fade(Palette.PANEL, alpha), clear);
+        }
+        if (below) {
+            canvas.fillDown(x0, bottom - 14, x1, bottom, clear, Colors.fade(Palette.PANEL, alpha));
+        }
+    }
+
+    private void drawNav(Canvas canvas, float alpha, int x, int y) {
+        int markY = y + Math.round(this.mark.getValue());
+        canvas.fill(x, markY, x + this.navWidth, markY + NAV_ROW - 2, Colors.fade(NAV_CHOSEN, alpha));
+        canvas.fill(x, markY, x + 2, markY + NAV_ROW - 2, Colors.fade(Palette.ACCENT, alpha));
+        for (int i = 0; i < this.sections.size(); i++) {
+            SettingsSection section = this.sections.get(i);
+            int ink = i == this.shownSection || i == this.hoveredSection ? Palette.TEXT
+                    : section.enabled() ? Palette.DIM : Palette.FAINT;
+            canvas.drawText(canvas.clip(section.title(), this.navWidth - 14), x + 8, y + i * NAV_ROW + 4,
+                    Colors.fade(ink, alpha));
+        }
+    }
+
+    private void drawStrip(Canvas canvas, SettingsSection.Tone tone, List<String> lines, int x, int y, int w,
+            float alpha) {
+        int ink = switch (tone) {
+            case WARN -> Palette.OFF_TINT;
+            case GOOD -> Palette.GOOD;
+            case PLAIN -> Palette.ACCENT_SOFT;
+        };
+        int height = lines.size() * LINE + 12;
+        canvas.fill(x, y, x + w, y + height, Colors.fade(ink, alpha * 0.12f));
+        canvas.fill(x, y, x + 2, y + height, Colors.fade(ink, alpha));
+        int lineY = y + 6;
+        for (String line : lines) {
+            canvas.drawText(line, x + PAD, lineY, Colors.fade(tone == SettingsSection.Tone.PLAIN ? Palette.TEXT : ink,
+                    alpha));
+            lineY += LINE;
+        }
+    }
+
+    private void drawCard(Canvas canvas, Card card, int x, int y, int w, float alpha) {
+        canvas.fill(x, y, x + w, y + card.height(), Colors.fade(Palette.PANEL_EDGE, alpha));
+        canvas.fill(x + 1, y + 1, x + w - 1, y + card.height() - 1, Colors.fade(CARD, alpha));
+        int lineY = y + (card.height() - ((card.label().size() + card.lines().size()) * LINE + 1)) / 2;
+        for (String line : card.label()) {
+            canvas.drawText(line, x + PAD, lineY, Colors.fade(Palette.TEXT, alpha));
+            lineY += LINE;
+        }
+        lineY += 1;
+        for (String line : card.lines()) {
+            canvas.drawText(line, x + PAD, lineY, Colors.fade(Palette.DIM, alpha));
+            lineY += LINE;
+        }
     }
 }

@@ -499,7 +499,7 @@ public final class ModScreen implements JarHost {
     }
 
     public void scrollSettingsToEnd() {
-        this.settingsPanel.scrollToEnd();
+        this.settingsPanel.showLastSection();
     }
 
     private void chooseSetting(String option, int choice) {

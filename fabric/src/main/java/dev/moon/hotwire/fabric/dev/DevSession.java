@@ -256,8 +256,13 @@ public final class DevSession implements DevHost, AutoCloseable {
                 if (result instanceof ModUpdater.Result.Updated) {
                     this.accept(mod, built, number);
                     if (diff.hasClasses()) {
-                        List<String> lines = new ArrayList<>(list(diff.changedClasses()));
-                        lines.addAll(list(diff.addedClasses()));
+                        List<String> lines = new ArrayList<>();
+                        if (!diff.changedClasses().isEmpty()) {
+                            lines.add(Lang.get("hotwire.dev.changed", String.join(", ", list(diff.changedClasses()))));
+                        }
+                        if (!diff.addedClasses().isEmpty()) {
+                            lines.add(Lang.get("hotwire.dev.added", String.join(", ", list(diff.addedClasses()))));
+                        }
                         ConfigRefresh.Result configs = this.refreshConfigs(diff, built);
                         configs.refreshed().forEach(name -> lines.add(Lang.get("hotwire.dev.config.refreshed", name)));
                         configs.waiting().forEach(name -> lines.add(Lang.get("hotwire.dev.config.waiting", name)));
@@ -268,7 +273,7 @@ public final class DevSession implements DevHost, AutoCloseable {
                     } else {
                         this.tell(mod, DevEvent.Kind.ASSETS, Lang.get("hotwire.dev.assets", mod.mod.name()),
                                 Lang.get("hotwire.dev.took", describeFiles(diff), findSeconds(began)),
-                                list(diff.changedFiles()));
+                                List.of(Lang.get("hotwire.dev.changed", String.join(", ", list(diff.changedFiles())))));
                     }
                 } else {
                     this.fail(mod, List.of(this.engine.describe(result)));

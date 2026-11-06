@@ -44,11 +44,17 @@ final class ChoiceBar extends Element {
     private int overflow;
     private int lastChosen = -1;
 
+    private boolean enabled = true;
+
     ChoiceBar(List<Choice> choices, int chosen, IntConsumer onPick) {
         this.choices = List.copyOf(choices);
         this.chosen = chosen;
         this.onPick = onPick;
         this.hover = makeHover(choices.size());
+    }
+
+    void setEnabled(boolean enabled) {
+        this.enabled = enabled;
     }
 
     private static EasedValue[] makeHover(int count) {
@@ -127,7 +133,8 @@ final class ChoiceBar extends Element {
     }
 
     @Override
-    protected void paint(Canvas canvas, float alpha) {
+    protected void paint(Canvas canvas, float shown) {
+        float alpha = this.enabled ? shown : shown * 0.4f;
         int x = this.getX();
         int y = this.getY();
         int w = this.getWidth();
@@ -252,7 +259,7 @@ final class ChoiceBar extends Element {
     @Override
     protected boolean onClick(double px, double py, int button) {
         OptionalInt at = this.findChoiceAt(px);
-        if (button != 0 || at.isEmpty()) {
+        if (button != 0 || at.isEmpty() || !this.enabled) {
             return false;
         }
         this.chosen = at.getAsInt();

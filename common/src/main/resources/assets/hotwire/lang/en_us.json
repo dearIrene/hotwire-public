@@ -711,8 +711,7 @@
   "hotwire.dev.window.off": "Developer mode works when you run the game from your mod's dev setup with Reload when you build on",
   "hotwire.dev.window.no_mods": "No mod here runs from its build folders",
   "hotwire.dev.window.started_with": "Running the build the game started with",
-  "hotwire.dev.window.build": "Build %s, made %s",
-  "hotwire.dev.window.last": "Last",
+  "hotwire.dev.window.build": "Running build %s, made %s",
   "hotwire.dev.window.no_history": "Nothing yet. Build your mod and what happens shows up here",
   "hotwire.dev.window.no_crashes": "Nothing has thrown",
   "hotwire.dev.tab.overview": "Overview",
@@ -739,5 +738,8 @@
   "hotwire.dev.mixin.alone": "Only yours changes it",
   "hotwire.dev.mixin.also": "Also changed by %s",
   "hotwire.dev.left_over": "Kept running through the off, which a fresh start would not have:",
-  "hotwire.dev.left_over.count": "%s things of your mod kept running through the off, the window lists them"
+  "hotwire.dev.left_over.count": "%s things of your mod kept running through the off, the window lists them",
+  "hotwire.dev.changed": "Changed %s",
+  "hotwire.dev.added": "New %s",
+  "hotwire.dev.window.runtime": "Your Java"
 }
