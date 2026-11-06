@@ -282,6 +282,8 @@ public final class GameClasses implements SwitchApplier.Game {
     public static Set<String> getStartupMethods(String internalName) {
         return switch (internalName) {
             case "com/mojang/blaze3d/systems/RenderSystem" -> Set.of("initRenderer");
+
+            case "net/minecraft/client/main/Main" -> Set.of("main");
             //? if >=26.1 {
             case "net/minecraft/client/Minecraft" -> Set.of("onResourceLoadFinished", "onGameLoadFinished",
                     "buildInitialScreens");
