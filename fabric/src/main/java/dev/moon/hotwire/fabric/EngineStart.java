@@ -77,8 +77,6 @@ import dev.moon.hotwire.ui.Progress;
 import dev.moon.hotwire.update.UpdateFolders;
 import dev.moon.hotwire.update.UpdateQueue;
 import java.io.IOException;
-import java.io.PrintWriter;
-import java.io.StringWriter;
 import java.lang.instrument.ClassFileTransformer;
 import java.lang.instrument.Instrumentation;
 import java.nio.file.FileSystems;
@@ -379,9 +377,23 @@ final class EngineStart {
                 installed.getGraphJars())::findClassesFor;
     }
 
+    private static void describeTrace(Throwable thrown, StringBuilder out, String prefix) {
+        out.append(prefix).append(thrown).append('\n');
+        for (StackTraceElement frame : thrown.getStackTrace()) {
+            out.append("\tat ").append(frame).append('\n');
+        }
+        for (Throwable suppressed : thrown.getSuppressed()) {
+            describeTrace(suppressed, out, "Suppressed: ");
+        }
+        Throwable cause = thrown.getCause();
+        if (cause != null) {
+            describeTrace(cause, out, "Caused by: ");
+        }
+    }
+
     private static void writeStartFailure(Path gameDir, Throwable failure) {
-        StringWriter trace = new StringWriter();
-        failure.printStackTrace(new PrintWriter(trace));
+        StringBuilder trace = new StringBuilder();
+        describeTrace(failure, trace, "");
         try {
             Path logs = gameDir.resolve("hotwire").resolve("logs");
             Files.createDirectories(logs);

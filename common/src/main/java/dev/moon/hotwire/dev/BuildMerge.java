@@ -19,7 +19,7 @@ public final class BuildMerge {
     }
 
     public record Refusal(Kind kind, int build) {
-        public enum Kind { TOO_FEW, START, NOT_KEPT, NO_RECORD, BASE_GONE }
+        public enum Kind { TOO_FEW, START, NOT_SAVED, NO_RECORD, BASE_GONE }
     }
 
     public record Conflict(String entry, List<Integer> builds, int winner, List<Integer> dropped) {
@@ -29,15 +29,15 @@ public final class BuildMerge {
         }
     }
 
-    public record LeftOut(int build, List<Integer> skipped, SortedSet<String> entries) {
-        public LeftOut {
+    public record BuildGap(int build, List<Integer> skipped, SortedSet<String> entries) {
+        public BuildGap {
             skipped = List.copyOf(skipped);
             entries = new TreeSet<>(entries);
         }
     }
 
     public record Plan(List<Integer> builds, int base, int tip, Map<String, Integer> sources, Set<String> gone,
-            List<Conflict> conflicts, List<LeftOut> leftOut, Set<Integer> removed, int parent, DevDelta delta,
+            List<Conflict> conflicts, List<BuildGap> leftOut, Set<Integer> removed, int parent, DevDelta delta,
             @Nullable Refusal refusal) {
         public Plan {
             builds = List.copyOf(builds);
@@ -59,7 +59,7 @@ public final class BuildMerge {
     }
 
     public static Plan plan(Collection<Integer> chosen, Map<Integer, Integer> parents, Map<Integer, DevDelta> deltas,
-            Set<Integer> kept, int running, Set<Integer> pinned) {
+            Set<Integer> readable, int running, Set<Integer> pinned) {
         List<Integer> builds = new ArrayList<>(new TreeSet<>(chosen));
         if (builds.size() < 2) {
             return Plan.refuse(builds, Refusal.Kind.TOO_FEW, -1);
@@ -68,15 +68,16 @@ public final class BuildMerge {
             return Plan.refuse(builds, Refusal.Kind.START, 0);
         }
         for (int build : builds) {
-            if (!kept.contains(build)) {
-                return Plan.refuse(builds, Refusal.Kind.NOT_KEPT, build);
+            if (!readable.contains(build)) {
+                return Plan.refuse(builds, Refusal.Kind.NOT_SAVED, build);
             }
         }
-        int base = findBase(builds, parents);
+        Integer found = findBase(builds, parents);
         Set<Integer> picked = new HashSet<>(builds);
-        if (base < 0 || (!picked.contains(base) && !kept.contains(base))) {
-            return Plan.refuse(builds, Refusal.Kind.BASE_GONE, base);
+        if (found == null || (!picked.contains(found) && !readable.contains(found))) {
+            return Plan.refuse(builds, Refusal.Kind.BASE_GONE, found == null ? -1 : found);
         }
+        int base = found;
         for (int build : builds) {
             if (build != base && !deltas.containsKey(build)) {
                 return Plan.refuse(builds, Refusal.Kind.NO_RECORD, build);
@@ -122,7 +123,7 @@ public final class BuildMerge {
                 conflicts.add(new Conflict(entry.getKey(), wrote, winner, dropped));
             }
         }
-        List<LeftOut> leftOut = new ArrayList<>();
+        List<BuildGap> leftOut = new ArrayList<>();
         for (int build : builds) {
             if (build == base) {
                 continue;
@@ -145,7 +146,7 @@ public final class BuildMerge {
                 }
             }
             missing.removeAll(writers.keySet());
-            leftOut.add(new LeftOut(build, skipped, missing));
+            leftOut.add(new BuildGap(build, skipped, missing));
         }
         Set<Integer> removed = new TreeSet<>(picked);
         removed.remove(tip);
@@ -160,7 +161,7 @@ public final class BuildMerge {
                 new DevDelta(sources.keySet(), gone), null);
     }
 
-    private static int findBase(List<Integer> builds, Map<Integer, Integer> parents) {
+    private static @Nullable Integer findBase(List<Integer> builds, Map<Integer, Integer> parents) {
         List<Integer> first = findLine(builds.getFirst(), parents);
         List<Set<Integer>> others = new ArrayList<>();
         for (int build : builds.subList(1, builds.size())) {
@@ -171,7 +172,7 @@ public final class BuildMerge {
                 return candidate;
             }
         }
-        return -1;
+        return null;
     }
 
     private static List<Integer> findLine(int build, Map<Integer, Integer> parents) {
@@ -203,7 +204,7 @@ public final class BuildMerge {
         return true;
     }
 
-    public static DevBuildInfo compose(DevBuildInfo a, DevBuildInfo b, int number, int madeOn, long at,
+    public static DevBuildInfo combine(DevBuildInfo a, DevBuildInfo b, int number, int madeOn, long at,
             List<Integer> merged, Map<String, Map<String, List<Integer>>> linesNow) {
         Map<String, DevClassChange> changed = new LinkedHashMap<>();
         Set<String> added = new TreeSet<>(a.addedClasses());
@@ -229,7 +230,7 @@ public final class BuildMerge {
                 continue;
             }
             DevClassChange before = changed.get(change.name());
-            changed.put(change.name(), before == null ? change : composeMethods(before, change,
+            changed.put(change.name(), before == null ? change : combineMethods(before, change,
                     linesNow.getOrDefault(change.type(), change.lines())));
         }
         Set<String> files = new TreeSet<>(a.files());
@@ -244,7 +245,7 @@ public final class BuildMerge {
 
     private enum Was { CHANGED, ADDED, REMOVED }
 
-    private static DevClassChange composeMethods(DevClassChange a, DevClassChange b, Map<String, List<Integer>> lines) {
+    private static DevClassChange combineMethods(DevClassChange a, DevClassChange b, Map<String, List<Integer>> lines) {
         Map<String, Was> first = findWas(a);
         Map<String, Was> then = findWas(b);
         Map<String, Was> both = new TreeMap<>(first);
@@ -269,16 +270,20 @@ public final class BuildMerge {
         List<String> changed = new ArrayList<>();
         List<String> added = new ArrayList<>();
         List<String> removed = new ArrayList<>();
-        Map<String, List<Integer>> kept = new HashMap<>();
+        Map<String, List<Integer>> spans = new HashMap<>();
         both.forEach((name, was) -> {
-            (was == Was.CHANGED ? changed : was == Was.ADDED ? added : removed).add(name);
+            switch (was) {
+                case CHANGED -> changed.add(name);
+                case ADDED -> added.add(name);
+                case REMOVED -> removed.add(name);
+            }
             List<Integer> span = lines.get(name);
             if (span != null && was != Was.REMOVED) {
-                kept.put(name, span);
+                spans.put(name, span);
             }
         });
         return new DevClassChange(b.name(), b.type().isEmpty() ? a.type() : b.type(),
-                b.file().isEmpty() ? a.file() : b.file(), changed, added, removed, kept);
+                b.file().isEmpty() ? a.file() : b.file(), changed, added, removed, spans);
     }
 
     private static Map<String, Was> findWas(DevClassChange change) {

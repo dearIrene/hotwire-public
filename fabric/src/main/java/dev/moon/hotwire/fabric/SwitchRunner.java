@@ -234,7 +234,7 @@ public final class SwitchRunner {
                     new IllegalStateException(why))), new Report.OffCheck.NotRun(), List.of());
         }
 
-        LifecycleListeners.beforeOff(wired);
+        LifecycleListeners.prepareOff(wired);
         if (!wired.isEmpty()) {
             this.tripwire.armEarly(wired, this.switcher.findPatchedBy(wired));
         }

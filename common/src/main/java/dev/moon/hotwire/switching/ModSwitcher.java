@@ -98,10 +98,10 @@ public final class ModSwitcher {
 
         void onStarted(String id);
 
-        default void beforeSwitch(SwitchPlan plan) {
+        default void prepareSwitch(SwitchPlan plan) {
         }
 
-        default void afterSwitch(SwitchPlan plan, boolean done, Predicate<String> isOn) {
+        default void finishSwitch(SwitchPlan plan, boolean done, Predicate<String> isOn) {
         }
     }
 
@@ -527,7 +527,7 @@ public final class ModSwitcher {
 
     private Result run(SwitchPlan plan, Consumer<List<String>> theirs) {
         if (!plan.isRefused()) {
-            this.lifecycle.beforeSwitch(plan);
+            this.lifecycle.prepareSwitch(plan);
         }
         boolean done = false;
         try {
@@ -535,7 +535,7 @@ public final class ModSwitcher {
             done = result instanceof Result.Done;
             return result;
         } finally {
-            this.lifecycle.afterSwitch(plan, done, this::isOn);
+            this.lifecycle.finishSwitch(plan, done, this::isOn);
         }
     }
 

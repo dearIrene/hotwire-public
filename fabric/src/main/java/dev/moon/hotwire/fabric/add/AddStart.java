@@ -70,7 +70,7 @@ final class AddStart {
                 return;
             }
             Throwable failed = null;
-            LifecycleListeners.beforeStart(ids);
+            LifecycleListeners.prepareStart(ids);
             try {
                 for (Runnable start : starts) {
                     start.run();
@@ -93,7 +93,7 @@ final class AddStart {
                 registries.close();
                 grew.addAll(registries.getGrown());
             }
-            LifecycleListeners.afterStart(ids, failed == null);
+            LifecycleListeners.finishStart(ids, failed == null);
             if (failed == null) {
                 Map<String, List<String>> setUp = new LinkedHashMap<>();
                 LaunchSteps.run("the add of " + ids, LaunchSteps.afterStart(ids, findLoaded, setUp), Set.of());

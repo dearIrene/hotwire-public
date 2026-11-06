@@ -64,11 +64,11 @@ public final class LifecycleListeners {
             }
         }
         if (!back.isEmpty()) {
-            tell("afterOn", listener -> listener.afterOn(List.copyOf(back)));
+            tell("afterOn", listener -> listener.finishOn(List.copyOf(back)));
         }
     }
 
-    public static void beforeOff(List<String> order) {
+    public static void prepareOff(List<String> order) {
         List<String> fresh = new ArrayList<>();
         for (String id : order) {
             if (!STARTING.contains(id) && TOLD_OFF.add(id)) {
@@ -76,11 +76,11 @@ public final class LifecycleListeners {
             }
         }
         if (!fresh.isEmpty()) {
-            tell("beforeOff", listener -> listener.beforeOff(List.copyOf(fresh)));
+            tell("beforeOff", listener -> listener.prepareOff(List.copyOf(fresh)));
         }
     }
 
-    public static void cameOn(List<String> order) {
+    public static void markOn(List<String> order) {
         CAME_ON.addAll(order);
     }
 
@@ -94,21 +94,21 @@ public final class LifecycleListeners {
         ids.forEach(CAME_ON::remove);
     }
 
-    public static void beforeStart(List<String> ids) {
+    public static void prepareStart(List<String> ids) {
         if (!ids.isEmpty()) {
-            tell("beforeStart", listener -> listener.beforeStart(List.copyOf(ids)));
+            tell("beforeStart", listener -> listener.prepareStart(List.copyOf(ids)));
         }
     }
 
-    public static void afterStart(List<String> ids, boolean ok) {
+    public static void finishStart(List<String> ids, boolean ok) {
         if (!ids.isEmpty()) {
-            tell("afterStart", listener -> listener.afterStart(List.copyOf(ids), ok));
+            tell("afterStart", listener -> listener.finishStart(List.copyOf(ids), ok));
         }
     }
 
-    public static void afterUpdate(List<String> ids) {
+    public static void finishUpdate(List<String> ids) {
         if (!ids.isEmpty()) {
-            tell("afterUpdate", listener -> listener.afterUpdate(List.copyOf(ids)));
+            tell("afterUpdate", listener -> listener.finishUpdate(List.copyOf(ids)));
         }
     }
 

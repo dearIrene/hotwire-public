@@ -29,19 +29,19 @@ public final class MergeWords {
         return switch (refusal.kind()) {
             case TOO_FEW -> Lang.get("hotwire.dev.merge.too_few");
             case START -> Lang.get("hotwire.dev.merge.start");
-            case NOT_KEPT -> Lang.get("hotwire.dev.merge.not_kept", refusal.build());
+            case NOT_SAVED -> Lang.get("hotwire.dev.merge.not_kept", refusal.build());
             case NO_RECORD -> Lang.get("hotwire.dev.merge.no_record", refusal.build());
             case BASE_GONE -> Lang.get("hotwire.dev.merge.base_gone", refusal.build());
         };
     }
 
-    public static String shorten(String entry) {
+    public static String trimEntry(String entry) {
         return entry.substring(entry.lastIndexOf('/') + 1);
     }
 
     static String describeEntry(DevBuildInfo info, String entry) {
         if (!entry.endsWith(".class")) {
-            return info.files().contains(shorten(entry)) ? Lang.get("hotwire.dev.merge.file_changed")
+            return info.files().contains(trimEntry(entry)) ? Lang.get("hotwire.dev.merge.file_changed")
                     : Lang.get("hotwire.dev.merge.file_gone");
         }
         String type = entry.substring(0, entry.length() - ".class".length()).replace('/', '.');

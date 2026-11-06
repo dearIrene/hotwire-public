@@ -308,17 +308,17 @@ public final class ModLifecycle {
             }
 
             @Override
-            public void beforeSwitch(SwitchPlan plan) {
+            public void prepareSwitch(SwitchPlan plan) {
                 LifecycleListeners.begin();
                 if (plan.direction() == SwitchPlan.Direction.OFF) {
-                    LifecycleListeners.beforeOff(plan.order());
+                    LifecycleListeners.prepareOff(plan.order());
                 }
             }
 
             @Override
-            public void afterSwitch(SwitchPlan plan, boolean done, Predicate<String> isOn) {
+            public void finishSwitch(SwitchPlan plan, boolean done, Predicate<String> isOn) {
                 if (done && plan.direction() == SwitchPlan.Direction.ON) {
-                    LifecycleListeners.cameOn(plan.order());
+                    LifecycleListeners.markOn(plan.order());
                 }
                 LifecycleListeners.end(isOn);
             }

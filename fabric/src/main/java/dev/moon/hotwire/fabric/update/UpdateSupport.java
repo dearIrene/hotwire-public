@@ -112,12 +112,8 @@ public final class UpdateSupport implements ModUpdater.Engine, ModAdder.CarriedL
         if (adds == null) {
             return Optional.of("nothing can be added yet");
         }
-        return switch (adds.add(library, this.installed::nameOf)) {
-            case ModAdder.Result.Added added -> Optional.empty();
-            case ModAdder.Result.Queued queued -> Optional.of(queued.message());
-            case ModAdder.Result.Refused refused -> Optional.of(refused.reason());
-            case ModAdder.Result.Failed failed -> Optional.of(failed.reason());
-        };
+        ModAdder.Result added = adds.add(library, this.installed::nameOf);
+        return added instanceof ModAdder.Result.Added ? Optional.empty() : Optional.of(ModAdder.describe(added));
     }
 
     @Override

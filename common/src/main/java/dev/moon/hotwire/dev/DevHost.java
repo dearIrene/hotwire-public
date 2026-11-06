@@ -13,11 +13,11 @@ public interface DevHost {
 
     void setWatching(boolean watching);
 
-    void rollBack(String id, int build);
+    void revertTo(String id, int build);
 
     void merge(String id, List<Integer> builds, boolean anyway);
 
-    void duplicate(String id, int build);
+    void copyBuild(String id, int build);
 
     void pin(String id, int build, boolean pinned);
 

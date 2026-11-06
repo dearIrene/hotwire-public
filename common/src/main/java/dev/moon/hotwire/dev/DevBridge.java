@@ -26,7 +26,7 @@ public final class DevBridge implements Function<String, String> {
     private static final long POLL_MILLIS = 150;
     private static final long CHANGE_WAIT_MILLIS = 60_000;
 
-    private static final long SETTLE_MILLIS = 2_000;
+    private static final long FIRST_THROWS_MILLIS = 2_000;
     private static final int MOST_LOG_LINES = 500;
     private static final int LOG_TAIL_BYTES = 512 * 1024;
 
@@ -71,13 +71,13 @@ public final class DevBridge implements Function<String, String> {
             case "build_report" -> this.findReport(this.findMod(args), getInt(args, "build"));
             case "wait_for_build" -> this.waitForBuild(this.findMod(args), args.has("timeout_seconds")
                     ? Math.clamp(args.get("timeout_seconds").getAsLong(), 1, 600) : 120);
-            case "roll_back" -> this.rollBack(this.findMod(args), getInt(args, "build"));
+            case "roll_back" -> this.revertTo(this.findMod(args), getInt(args, "build"));
             case "merge_preview" -> this.previewMerge(this.findMod(args), getInts(args, "builds"));
-            case "merge" -> this.merge(this.findMod(args), getInts(args, "builds"), getBool(args, "confirm"),
-                    getBool(args, "anyway"));
+            case "merge" -> this.merge(this.findMod(args), getInts(args, "builds"), isTrue(args, "confirm"),
+                    isTrue(args, "anyway"));
             case "pin" -> {
                 DevModView mod = this.findMod(args);
-                this.host.pin(mod.id(), getInt(args, "build"), !args.has("pinned") || getBool(args, "pinned"));
+                this.host.pin(mod.id(), getInt(args, "build"), !args.has("pinned") || isTrue(args, "pinned"));
                 yield this.findBuilds(this.findMod(args));
             }
             case "rename" -> {
@@ -94,16 +94,16 @@ public final class DevBridge implements Function<String, String> {
             case "reload_now" -> {
                 DevModView mod = this.findMod(args);
                 this.host.reloadNow(mod.id());
-                yield ok("asked for " + mod.name() + "'s newest build; wait_for_build tells how it went");
+                yield makeOk("asked for " + mod.name() + "'s newest build; wait_for_build tells how it went");
             }
             case "restart_mod" -> {
                 DevModView mod = this.findMod(args);
                 this.host.restartMod(mod.id());
-                yield ok("restarting " + mod.name() + "; wait_for_build tells how it went");
+                yield makeOk("restarting " + mod.name() + "; wait_for_build tells how it went");
             }
             case "set_watching" -> {
-                this.host.setWatching(getBool(args, "on"));
-                yield ok("watching builds: " + this.host.isWatching());
+                this.host.setWatching(isTrue(args, "on"));
+                yield makeOk("watching builds: " + this.host.isWatching());
             }
             case "game_log" -> this.readLog(args.has("lines") ? Math.clamp(args.get("lines").getAsInt(), 1,
                     MOST_LOG_LINES) : 80, args.has("contains") ? args.get("contains").getAsString() : "");
@@ -142,7 +142,7 @@ public final class DevBridge implements Function<String, String> {
             one.addProperty("state", mod.state().name());
             one.addProperty("line", mod.line());
             one.addProperty("running_build", mod.runningBuild());
-            one.addProperty("kept_builds", mod.keptBuilds().size());
+            one.addProperty("kept_builds", mod.savedBuilds().size());
             one.addProperty("crashes", mod.crashes().size());
             mods.add(one);
         }
@@ -154,7 +154,7 @@ public final class DevBridge implements Function<String, String> {
         JsonObject out = new JsonObject();
         out.addProperty("running_build", mod.runningBuild());
         JsonArray builds = new JsonArray();
-        List<Integer> all = new ArrayList<>(mod.keptBuilds());
+        List<Integer> all = new ArrayList<>(mod.savedBuilds());
         if (!all.contains(mod.runningBuild())) {
             all.add(mod.runningBuild());
         }
@@ -185,7 +185,7 @@ public final class DevBridge implements Function<String, String> {
     }
 
     private JsonElement findReport(DevModView mod, int build) {
-        if (build != mod.runningBuild() && !mod.keptBuilds().contains(build)) {
+        if (build != mod.runningBuild() && !mod.savedBuilds().contains(build)) {
             return fail("build " + build + " is not kept; builds lists those that are");
         }
         JsonObject out = new JsonObject();
@@ -235,7 +235,7 @@ public final class DevBridge implements Function<String, String> {
                     DevEvent.Kind.ASSETS, DevEvent.Kind.NEEDS_RESTART, DevEvent.Kind.FAILED));
             if (now != null && event != null) {
                 if (event.kind() == DevEvent.Kind.IN || event.kind() == DevEvent.Kind.ASSETS) {
-                    Thread.sleep(SETTLE_MILLIS);
+                    Thread.sleep(FIRST_THROWS_MILLIS);
                     now = this.findById(mod.id());
                 }
                 JsonObject out = describe(event);
@@ -256,15 +256,15 @@ public final class DevBridge implements Function<String, String> {
         return out;
     }
 
-    private JsonElement rollBack(DevModView mod, int build) throws InterruptedException {
+    private JsonElement revertTo(DevModView mod, int build) throws InterruptedException {
         if (build == mod.runningBuild()) {
             return fail("build " + build + " runs already");
         }
-        if (!mod.keptBuilds().contains(build)) {
+        if (!mod.savedBuilds().contains(build)) {
             return fail("build " + build + " is not kept; builds lists those that are");
         }
         long since = this.clock.getAsLong();
-        this.host.rollBack(mod.id(), build);
+        this.host.revertTo(mod.id(), build);
         return this.awaitChange(mod.id(), since, Set.of(DevEvent.Kind.IN, DevEvent.Kind.FAILED));
     }
 
@@ -293,7 +293,7 @@ public final class DevBridge implements Function<String, String> {
         }
         out.add("conflicts", conflicts);
         JsonArray left = new JsonArray();
-        for (BuildMerge.LeftOut one : plan.leftOut()) {
+        for (BuildMerge.BuildGap one : plan.leftOut()) {
             JsonObject entry = new JsonObject();
             entry.addProperty("build", one.build());
             entry.add("made_on_left_out", GSON.toJsonTree(one.skipped()));
@@ -327,18 +327,18 @@ public final class DevBridge implements Function<String, String> {
     }
 
     private static BuildMerge.Plan planMerge(DevModView mod, List<Integer> builds) {
-        Set<Integer> there = new HashSet<>(mod.keptBuilds());
+        Set<Integer> there = new HashSet<>(mod.savedBuilds());
         there.add(mod.runningBuild());
         there.add(0);
         return BuildMerge.plan(builds, mod.parents(), mod.deltas(), there, mod.runningBuild(), mod.pinned());
     }
 
     private JsonElement copy(DevModView mod, int build) throws InterruptedException {
-        if (build == 0 || (build != mod.runningBuild() && !mod.keptBuilds().contains(build))) {
+        if (build == 0 || (build != mod.runningBuild() && !mod.savedBuilds().contains(build))) {
             return fail("build " + build + " cannot be copied");
         }
         long since = this.clock.getAsLong();
-        this.host.duplicate(mod.id(), build);
+        this.host.copyBuild(mod.id(), build);
         return this.awaitChange(mod.id(), since, Set.of(DevEvent.Kind.MERGED, DevEvent.Kind.FAILED));
     }
 
@@ -451,7 +451,7 @@ public final class DevBridge implements Function<String, String> {
         return out;
     }
 
-    private static JsonObject ok(String said) {
+    private static JsonObject makeOk(String said) {
         JsonObject out = new JsonObject();
         out.addProperty("ok", said);
         return out;
@@ -470,7 +470,7 @@ public final class DevBridge implements Function<String, String> {
         return args.get(name).getAsInt();
     }
 
-    private static boolean getBool(JsonObject args, String name) {
+    private static boolean isTrue(JsonObject args, String name) {
         return args.has(name) && args.get(name).getAsBoolean();
     }
 

@@ -246,14 +246,14 @@ final class ApiChanges {
                 List.copyOf(addModes), reopen);
     }
 
-    private record Made(List<String> bad, List<String> now, List<String> later) {
-        Made() {
+    private record ChangeOutcome(List<String> bad, List<String> now, List<String> later) {
+        ChangeOutcome() {
             this(new ArrayList<>(), new ArrayList<>(), new ArrayList<>());
         }
     }
 
-    private static Made addAll(HotwireEngine engine, List<Path> jars, List<AddMode> modes) {
-        Made made = new Made();
+    private static ChangeOutcome addAll(HotwireEngine engine, List<Path> jars, List<AddMode> modes) {
+        ChangeOutcome made = new ChangeOutcome();
         for (int at = 0; at < jars.size(); at++) {
             Path jar = jars.get(at);
             AddMode mode = modes.get(at);
@@ -269,8 +269,8 @@ final class ApiChanges {
         return made;
     }
 
-    private static Made readUpdates(List<ModUpdater.Result> results) {
-        Made made = new Made();
+    private static ChangeOutcome readUpdates(List<ModUpdater.Result> results) {
+        ChangeOutcome made = new ChangeOutcome();
         for (ModUpdater.Result result : results) {
             switch (result) {
                 case ModUpdater.Result.Updated updated -> made.now().add(updated.id());
@@ -376,9 +376,10 @@ final class ApiChanges {
                 return ended;
             }
             Thread.ofPlatform().name("hotwire-api-queue").daemon().start(() -> {
-                Made updates = readUpdates(this.jars.stream().map(jar -> engine.getChanges().queueUpdate(jar))
+                ChangeOutcome updates = readUpdates(this.jars.stream().map(jar -> engine.getChanges().queueUpdate(jar))
                         .toList());
-                Made adds = addAll(engine, this.adding, this.adding.stream().map(jar -> AddMode.NEXT_START).toList());
+                ChangeOutcome adds = addAll(engine, this.adding, this.adding.stream().map(jar -> AddMode.NEXT_START)
+                        .toList());
                 List<String> bad = new ArrayList<>(updates.bad());
                 bad.addAll(adds.bad());
                 List<String> later = new ArrayList<>(updates.later());
@@ -461,7 +462,7 @@ final class ApiChanges {
             }
             HotwireEngine engine = HotwireClient.findEngine();
             if (!this.jars.isEmpty() && engine != null) {
-                Made updates = readUpdates(engine.getChanges().updateAllNow(this.jars));
+                ChangeOutcome updates = readUpdates(engine.getChanges().updateAllNow(this.jars));
                 now.addAll(updates.now());
                 later.addAll(updates.later());
                 if (!updates.bad().isEmpty()) {
@@ -470,7 +471,7 @@ final class ApiChanges {
                 }
             }
             if (engine != null && !this.adding.isEmpty()) {
-                Made adds = addAll(engine, this.adding, this.addModes);
+                ChangeOutcome adds = addAll(engine, this.adding, this.addModes);
                 now.addAll(adds.now());
                 later.addAll(adds.later());
                 if (!adds.bad().isEmpty()) {

@@ -162,7 +162,7 @@ final class DevEngine implements DevSession.Engine {
     }
 
     @Override
-    public int getKeptBuilds() {
-        return this.settings.getKeptBuilds();
+    public int getSavedBuilds() {
+        return this.settings.getSavedBuilds();
     }
 }

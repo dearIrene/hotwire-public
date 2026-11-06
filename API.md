@@ -214,15 +214,15 @@ A lifecycle listener hears every change from every path, the player's own clicks
 
 ```java
 api.addLifecycleListener(new ModLifecycleListener() {
-    public void beforeOff(List<String> ids) { }     // still on and safe to call, save their settings here
-    public void afterOn(List<String> ids) { }       // back on with the objects they had
-    public void beforeStart(List<String> ids) { }   // added mods, live copies and mods off since launch
-    public void afterStart(List<String> ids, boolean ok) { }
-    public void afterUpdate(List<String> ids) { }   // new code in place under the same ids
+    public void prepareOff(List<String> ids) { }     // still on and safe to call, save their settings here
+    public void finishOn(List<String> ids) { }       // back on with the objects they had
+    public void prepareStart(List<String> ids) { }   // added mods, live copies and mods off since launch
+    public void finishStart(List<String> ids, boolean ok) { }
+    public void finishUpdate(List<String> ids) { }   // new code in place under the same ids
 });
 ```
 
-Every call runs on the game thread and Hotwire waits for it, up to 5 seconds. `ids` is the whole change, the mods going along included. A switch that fails after `beforeOff` answers with `afterOn` for the mods that stayed on, so you never get stuck with half your pages taken out. A listener of a mod that's off isn't called.
+Every call runs on the game thread and Hotwire waits for it, up to 5 seconds. `ids` is the whole change, the mods going along included. A switch that fails after `prepareOff` answers with `finishOn` for the mods that stayed on, so you never get stuck with half your pages taken out. A listener of a mod that's off isn't called.
 
 `isReady()` is false while the game is starting, and stays false on a Java that can't change loaded classes. `getRevision()` goes up when a call is added, check it if you need a newer one.
 

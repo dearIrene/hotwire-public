@@ -323,7 +323,7 @@ final class LiveUpdates {
         List<String> updated = new ArrayList<>();
         updated.add(manifest.id());
         one.planned().whole().bundled().forEach(carried -> updated.add(carried.manifest().id()));
-        LifecycleListeners.afterUpdate(updated);
+        LifecycleListeners.finishUpdate(updated);
         LOGGER.info("[Hotwire] {} is {} now: {} classes rebuilt, {} served as they load, {} new",
                 manifest.id(), manifest.version(), applied.rebuilt().size(), applied.notLoaded().size(),
                 one.plan().actions().stream().filter(action -> action.kind() == ClassAction.Kind.DEFINE).count());

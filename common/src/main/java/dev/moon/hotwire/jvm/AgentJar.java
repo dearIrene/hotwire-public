@@ -45,14 +45,14 @@ final class AgentJar {
                 "java/lang/Object", null);
         writer.visitField(Opcodes.ACC_PRIVATE | Opcodes.ACC_STATIC | Opcodes.ACC_VOLATILE, "instrumentation",
                 INSTRUMENTATION, null, null).visitEnd();
-        MethodVisitor keep = writer.visitMethod(Opcodes.ACC_PUBLIC | Opcodes.ACC_STATIC, "agentmain",
+        MethodVisitor store = writer.visitMethod(Opcodes.ACC_PUBLIC | Opcodes.ACC_STATIC, "agentmain",
                 "(Ljava/lang/String;" + INSTRUMENTATION + ")V", null, null);
-        keep.visitCode();
-        keep.visitVarInsn(Opcodes.ALOAD, 1);
-        keep.visitFieldInsn(Opcodes.PUTSTATIC, AGENT, "instrumentation", INSTRUMENTATION);
-        keep.visitInsn(Opcodes.RETURN);
-        keep.visitMaxs(0, 0);
-        keep.visitEnd();
+        store.visitCode();
+        store.visitVarInsn(Opcodes.ALOAD, 1);
+        store.visitFieldInsn(Opcodes.PUTSTATIC, AGENT, "instrumentation", INSTRUMENTATION);
+        store.visitInsn(Opcodes.RETURN);
+        store.visitMaxs(0, 0);
+        store.visitEnd();
         MethodVisitor give = writer.visitMethod(Opcodes.ACC_PUBLIC | Opcodes.ACC_STATIC, "getInstrumentation",
                 "()" + INSTRUMENTATION, null, null);
         give.visitCode();
