@@ -5,6 +5,7 @@ import java.util.concurrent.CompletionException;
 import java.util.concurrent.Executor;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
+import java.util.concurrent.RejectedExecutionException;
 import java.util.function.BiConsumer;
 import java.util.function.Consumer;
 import java.util.function.Supplier;
@@ -32,7 +33,13 @@ public final class Tasks implements AutoCloseable {
     }
 
     public <T> CompletableFuture<T> submit(String name, Supplier<T> work) {
-        return CompletableFuture.supplyAsync(work, this.workers).whenComplete((result, error) -> {
+        CompletableFuture<T> started;
+        try {
+            started = CompletableFuture.supplyAsync(work, this.workers);
+        } catch (RejectedExecutionException e) {
+            return CompletableFuture.failedFuture(e);
+        }
+        return started.whenComplete((result, error) -> {
             if (error != null) {
                 this.onFailure.accept(name, error instanceof CompletionException wrapped && wrapped.getCause() != null
                         ? wrapped.getCause() : error);

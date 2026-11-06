@@ -21,6 +21,7 @@ import dev.moon.hotwire.ui.UpdateMethod;
 import dev.moon.hotwire.ui.UpdatePreview;
 import java.io.IOException;
 import java.nio.file.DirectoryStream;
+import java.nio.file.FileSystemException;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.util.ArrayDeque;
@@ -239,6 +240,7 @@ public final class DevSession implements DevHost, AutoCloseable {
         boolean first;
         String kind;
         String place;
+        int count;
         synchronized (mod) {
             DevCrash like = where.isEmpty() ? findLike(mod, what) : null;
             kind = like == null ? what : like.what();
@@ -248,6 +250,7 @@ public final class DevSession implements DevHost, AutoCloseable {
             String key = kind + " @ " + place;
             DevCrash before = mod.crashes.remove(key);
             first = before == null;
+            count = before == null ? 1 : before.count() + 1;
             mod.crashes.put(key, before == null ? new DevCrash(kind, place, 1, now, now, file, at)
                     : new DevCrash(kind, place, before.count() + 1, before.firstAt(), now, file, at));
             while (mod.crashes.size() > MOST_CRASHES) {
@@ -262,7 +265,9 @@ public final class DevSession implements DevHost, AutoCloseable {
             LOGGER.error("[Hotwire] {} threw at {}; the game keeps going, so fix it and build again", id, place,
                     thrown);
         }
-        Notice card = findCrashCard(mod, Lang.get("hotwire.dev.crash.at", kind, place));
+
+        Notice card = findCrashCard(mod, count == 1 ? Lang.get("hotwire.dev.crash.at", kind, place)
+                : Lang.get("hotwire.dev.crash.times", kind, place, count));
         if (mod.crashTold) {
             Notices.replace(card);
         } else {
@@ -302,7 +307,10 @@ public final class DevSession implements DevHost, AutoCloseable {
                     return;
                 }
                 mod.halfTries = 0;
-                this.fail(mod, List.of(String.valueOf(e.getMessage())));
+
+                String file = e instanceof FileSystemException locked && locked.getFile() != null
+                        ? String.valueOf(Path.of(locked.getFile()).getFileName()) : String.valueOf(e.getMessage());
+                this.fail(mod, List.of(Lang.get("hotwire.dev.unreadable_file", file)));
                 return;
             }
 
