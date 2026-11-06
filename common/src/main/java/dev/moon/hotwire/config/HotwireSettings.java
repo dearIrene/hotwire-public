@@ -37,6 +37,20 @@ public final class HotwireSettings {
 
     public enum DevLeaks { ON, OFF }
 
+    public enum DevKept {
+        FIVE(5), TEN(10), FIFTEEN(15), TWENTY(20), TWENTY_FIVE(25);
+
+        private final int count;
+
+        DevKept(int count) {
+            this.count = count;
+        }
+
+        public int getCount() {
+            return this.count;
+        }
+    }
+
     public enum ReloadPopups { ALL, PROBLEMS }
 
     static final String IN_WORLD = "in-world";
@@ -52,6 +66,7 @@ public final class HotwireSettings {
     static final String RELOAD_POPUPS = "reload-popups";
     static final String DEV_CATCH = "dev-catch";
     static final String DEV_LEAKS = "dev-leaks";
+    static final String DEV_KEPT = "dev-kept";
 
     private static final Logger LOGGER = LoggerFactory.getLogger(HotwireSettings.class);
 
@@ -95,6 +110,10 @@ public final class HotwireSettings {
     private static final List<DevLeaks> DEV_LEAKS_ORDER = List.of(DevLeaks.OFF, DevLeaks.ON);
     private static final List<String> DEV_LEAKS_CHOICES = List.of("hotwire.settings.dev_leaks.off",
             "hotwire.settings.dev_leaks.on");
+    private static final List<DevKept> DEV_KEPT_ORDER = List.of(DevKept.values());
+    private static final List<String> DEV_KEPT_CHOICES = List.of("hotwire.settings.dev_kept.5",
+            "hotwire.settings.dev_kept.10", "hotwire.settings.dev_kept.15", "hotwire.settings.dev_kept.20",
+            "hotwire.settings.dev_kept.25");
     private static final List<ReloadPopups> RELOAD_POPUPS_ORDER = List.of(ReloadPopups.ALL, ReloadPopups.PROBLEMS);
     private static final List<String> RELOAD_POPUPS_CHOICES = List.of("hotwire.settings.reload_popups.all",
             "hotwire.settings.reload_popups.problems");
@@ -115,6 +134,7 @@ public final class HotwireSettings {
         @Nullable ReloadPopups reloadPopups = ReloadPopups.ALL;
         @Nullable DevCatch devCatch = DevCatch.ON;
         @Nullable DevLeaks devLeaks = DevLeaks.ON;
+        @Nullable DevKept devKept = DevKept.TEN;
 
         @Nullable List<Double> devWindow;
 
@@ -138,6 +158,7 @@ public final class HotwireSettings {
     private volatile ReloadPopups reloadPopups;
     private volatile DevCatch devCatch;
     private volatile DevLeaks devLeaks;
+    private volatile DevKept devKept;
     private volatile double @Nullable [] devWindow;
     private volatile int devScale;
     private volatile @Nullable String promptAcceptedFor;
@@ -166,6 +187,7 @@ public final class HotwireSettings {
         this.reloadPopups = saved.reloadPopups == null ? ReloadPopups.ALL : saved.reloadPopups;
         this.devCatch = saved.devCatch == null ? DevCatch.ON : saved.devCatch;
         this.devLeaks = saved.devLeaks == null ? DevLeaks.ON : saved.devLeaks;
+        this.devKept = saved.devKept == null ? DevKept.TEN : saved.devKept;
         this.devWindow = saved.devWindow == null || saved.devWindow.size() != 5 ? null
                 : saved.devWindow.stream().mapToDouble(Double::doubleValue).toArray();
         this.promptAcceptedFor = saved.promptAcceptedFor;
@@ -243,6 +265,10 @@ public final class HotwireSettings {
         this.save();
     }
 
+    public int getKeptBuilds() {
+        return this.devKept.getCount();
+    }
+
     public boolean isDevLeaksOn(boolean inSetup) {
         return inSetup && this.devLeaks == DevLeaks.ON;
     }
@@ -312,6 +338,7 @@ public final class HotwireSettings {
                         this.devReload),
                 makeOption(DEV_CATCH, "hotwire.settings.dev_catch", DEV_CATCH_CHOICES, DEV_CATCH_ORDER, this.devCatch),
                 makeOption(DEV_LEAKS, "hotwire.settings.dev_leaks", DEV_LEAKS_CHOICES, DEV_LEAKS_ORDER, this.devLeaks),
+                makeOption(DEV_KEPT, "hotwire.settings.dev_kept", DEV_KEPT_CHOICES, DEV_KEPT_ORDER, this.devKept),
                 makeOption(RELOAD_POPUPS, "hotwire.settings.reload_popups", RELOAD_POPUPS_CHOICES, RELOAD_POPUPS_ORDER,
                         this.reloadPopups),
                 makeOption(DEVELOPER, "hotwire.settings.developer", DEVELOPER_CHOICES, DEVELOPER_ORDER,
@@ -356,13 +383,16 @@ public final class HotwireSettings {
                 : this.reloadPopups;
         DevCatch caught = DEV_CATCH.equals(option) ? pick(DEV_CATCH_ORDER, choice, this.devCatch) : this.devCatch;
         DevLeaks leaks = DEV_LEAKS.equals(option) ? pick(DEV_LEAKS_ORDER, choice, this.devLeaks) : this.devLeaks;
+        DevKept kept = DEV_KEPT.equals(option) ? pick(DEV_KEPT_ORDER, choice, this.devKept) : this.devKept;
         if (world == this.inWorld && nested == this.nestedJars && lasts == this.offLasts && pause == this.pauseGame
                 && alert == this.keyAlert && fill == this.autoFill && dev == this.developer
                 && checks == this.updateChecks && crash == this.antiCrash && reload == this.devReload
-                && popups == this.reloadPopups && caught == this.devCatch && leaks == this.devLeaks) {
+                && popups == this.reloadPopups && caught == this.devCatch && leaks == this.devLeaks
+                && kept == this.devKept) {
             return;
         }
         this.devLeaks = leaks;
+        this.devKept = kept;
         this.devCatch = caught;
         this.antiCrash = crash;
         this.devReload = reload;
@@ -393,6 +423,7 @@ public final class HotwireSettings {
         saved.reloadPopups = this.reloadPopups;
         saved.devCatch = this.devCatch;
         saved.devLeaks = this.devLeaks;
+        saved.devKept = this.devKept;
         double[] window = this.devWindow;
         saved.devWindow = window == null ? null : Arrays.stream(window).boxed().toList();
         saved.devScale = this.devScale == 0 ? null : this.devScale;

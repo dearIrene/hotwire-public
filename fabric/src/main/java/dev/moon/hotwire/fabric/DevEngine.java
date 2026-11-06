@@ -155,4 +155,9 @@ final class DevEngine implements DevSession.Engine {
     public boolean isEveryReloadShown() {
         return this.settings.isEveryReloadShown();
     }
+
+    @Override
+    public int getKeptBuilds() {
+        return this.settings.getKeptBuilds();
+    }
 }

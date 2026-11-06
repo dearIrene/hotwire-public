@@ -72,23 +72,43 @@ public final class BuildNotes {
     }
 
     public static SortedSet<String> findChangedMethods(byte @Nullable [] before, byte @Nullable [] after) {
-        SortedSet<String> changed = new TreeSet<>();
+        MethodChanges found = findMethodChanges(before, after);
+        SortedSet<String> all = new TreeSet<>(found.changed());
+        all.addAll(found.added());
+        all.addAll(found.removed());
+        return all;
+    }
+
+    public record MethodChanges(SortedSet<String> changed, SortedSet<String> added, SortedSet<String> removed) {
+    }
+
+    public static MethodChanges findMethodChanges(byte @Nullable [] before, byte @Nullable [] after) {
+        MethodChanges found = new MethodChanges(new TreeSet<>(), new TreeSet<>(), new TreeSet<>());
         ClassNode was = read(before);
         ClassNode now = read(after);
         if (was == null || now == null) {
-            return changed;
+            return found;
         }
         for (MethodNode method : now.methods) {
-            if (!readCode(method).equals(readCode(find(was, method))) || find(was, method) == null) {
-                changed.add(describe(method.name));
+            MethodNode old = find(was, method);
+            if (old == null) {
+                found.added().add(describe(method.name));
+            } else if (!readCode(method).equals(readCode(old))) {
+                found.changed().add(describe(method.name));
             }
         }
         for (MethodNode method : was.methods) {
             if (find(now, method) == null) {
-                changed.add(describe(method.name));
+                found.removed().add(describe(method.name));
             }
         }
-        return changed;
+
+        Set<String> both = new TreeSet<>(found.added());
+        both.retainAll(found.removed());
+        found.added().removeAll(both);
+        found.removed().removeAll(both);
+        found.changed().addAll(both);
+        return found;
     }
 
     private static String describe(String name) {
