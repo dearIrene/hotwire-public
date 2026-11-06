@@ -9,7 +9,6 @@ import dev.moon.hotwire.dev.DevHost;
 import dev.moon.hotwire.dev.DevMixin;
 import dev.moon.hotwire.dev.DevModView;
 import dev.moon.hotwire.dev.DevState;
-import dev.moon.hotwire.dev.IdeOpener;
 import dev.moon.hotwire.dev.WorldLeaks;
 import dev.moon.hotwire.fabric.rebuild.GameClasses;
 import dev.moon.hotwire.fabric.update.ModUpdater;
@@ -30,7 +29,6 @@ import java.util.Deque;
 import java.util.HashSet;
 import java.util.LinkedHashMap;
 import java.util.List;
-import java.util.Locale;
 import java.util.Map;
 import java.util.Set;
 import java.util.SortedSet;
@@ -38,7 +36,6 @@ import java.util.TreeMap;
 import java.util.TreeSet;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.TimeUnit;
-import net.minecraft.client.Minecraft;
 import org.jspecify.annotations.Nullable;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -54,7 +51,6 @@ public final class DevSession implements DevHost, AutoCloseable {
 
     private static final long HALF_WAIT_MILLIS = 300;
     private static final int HALF_TRIES = 10;
-    private static final int LISTED = 6;
     private static volatile @Nullable DevSession current;
 
     private static final Map<String, Start> STARTS = new ConcurrentHashMap<>();
@@ -367,20 +363,20 @@ public final class DevSession implements DevHost, AutoCloseable {
                     if (diff.hasClasses()) {
                         List<String> lines = new ArrayList<>();
                         if (!diff.changedClasses().isEmpty()) {
-                            lines.add(Lang.get("hotwire.dev.changed", String.join(", ", list(diff.changedClasses()))));
+                            lines.add(Lang.get("hotwire.dev.changed", String.join(", ", BuildWords.list(diff.changedClasses()))));
                         }
                         if (!diff.addedClasses().isEmpty()) {
-                            lines.add(Lang.get("hotwire.dev.added", String.join(", ", list(diff.addedClasses()))));
+                            lines.add(Lang.get("hotwire.dev.added", String.join(", ", BuildWords.list(diff.addedClasses()))));
                         }
                         List<String> notes = this.findNotes(mod, diff, was, classes);
                         lines.addAll(notes);
-                        String detail = notes.isEmpty() ? Lang.get("hotwire.dev.took", describeClasses(diff),
-                                findSeconds(began)) : notes.getFirst();
+                        String detail = notes.isEmpty() ? Lang.get("hotwire.dev.took", BuildWords.describeClasses(diff),
+                                BuildWords.findSeconds(began)) : notes.getFirst();
                         this.tell(mod, DevEvent.Kind.IN, Lang.get("hotwire.dev.in", mod.mod.name()), detail, lines);
                     } else {
                         this.tell(mod, DevEvent.Kind.ASSETS, Lang.get("hotwire.dev.assets", mod.mod.name()),
-                                Lang.get("hotwire.dev.took", describeFiles(diff), findSeconds(began)),
-                                List.of(Lang.get("hotwire.dev.changed", String.join(", ", list(diff.changedFiles())))));
+                                Lang.get("hotwire.dev.took", BuildWords.describeFiles(diff), BuildWords.findSeconds(began)),
+                                List.of(Lang.get("hotwire.dev.changed", String.join(", ", BuildWords.list(diff.changedFiles())))));
                     }
                 } else {
                     this.fail(mod, List.of(this.engine.describe(result)));
@@ -391,7 +387,7 @@ public final class DevSession implements DevHost, AutoCloseable {
                 this.tell(mod, DevEvent.Kind.NEEDS_RESTART, Lang.get("hotwire.dev.needs_restart", mod.mod.name()),
                         ready.lines().isEmpty() ? "" : ready.lines().getFirst(), ready.lines());
             } else {
-                this.fail(mod, List.of(describePreview(preview)));
+                this.fail(mod, List.of(BuildWords.describePreview(preview)));
             }
         }
     }
@@ -488,42 +484,6 @@ public final class DevSession implements DevHost, AutoCloseable {
         }
     }
 
-    private static List<String> list(SortedSet<String> names) {
-        List<String> shown = new ArrayList<>();
-        for (String name : names) {
-            if (shown.size() == LISTED) {
-                shown.add(Lang.get("hotwire.dev.and_more", names.size() - LISTED));
-                break;
-            }
-            String plain = name.endsWith(".class") ? name.substring(0, name.length() - ".class".length()) : name;
-            shown.add(plain.substring(plain.lastIndexOf('/') + 1));
-        }
-        return shown;
-    }
-
-    private static String describeClasses(DevBuild.Diff diff) {
-        int count = diff.changedClasses().size() + diff.addedClasses().size() + diff.removedClasses().size();
-        return count == 1 ? Lang.get("hotwire.dev.class.one") : Lang.get("hotwire.dev.class.many", count);
-    }
-
-    private static String describeFiles(DevBuild.Diff diff) {
-        int count = diff.changedFiles().size();
-        return count == 1 ? Lang.get("hotwire.dev.file.one") : Lang.get("hotwire.dev.file.many", count);
-    }
-
-    private static String findSeconds(long began) {
-        return String.format(Locale.ROOT, "%.1f s", (System.nanoTime() - began) / 1e9);
-    }
-
-    private static String describePreview(UpdatePreview preview) {
-        return switch (preview) {
-            case UpdatePreview.Refused refused -> refused.reason();
-            case UpdatePreview.SameVersion same -> Lang.get("hotwire.dev.same");
-            case UpdatePreview.Unreadable unreadable -> Lang.get("hotwire.dev.unreadable");
-            case UpdatePreview.Ready ready -> String.join(" ", ready.lines());
-        };
-    }
-
     private static void deleteQuietly(Path file) {
         try {
             Files.deleteIfExists(file);
@@ -586,7 +546,7 @@ public final class DevSession implements DevHost, AutoCloseable {
                         lines.addAll(done.leftOver());
                     }
                     this.tell(mod, DevEvent.Kind.RESTARTED, Lang.get("hotwire.dev.restarted", mod.mod.name()),
-                            done.leftOver().isEmpty() ? Lang.get("hotwire.dev.took.only", findSeconds(began))
+                            done.leftOver().isEmpty() ? Lang.get("hotwire.dev.took.only", BuildWords.findSeconds(began))
                                     : Lang.get("hotwire.dev.left_over.count", done.leftOver().size()), lines);
                 }
             }
@@ -602,30 +562,7 @@ public final class DevSession implements DevHost, AutoCloseable {
             return;
         }
         this.tasks.submit("opening " + crash.where(), () -> {
-            List<Path> projects = new ArrayList<>();
-            for (Path folder : mod.mod.folders()) {
-                Path project = DevMod.findProject(folder);
-                if (project != null && !projects.contains(project)) {
-                    projects.add(project);
-                }
-            }
-            Path file;
-            try {
-                file = IdeOpener.findSource(projects, crash.source());
-            } catch (IOException e) {
-                LOGGER.debug("[Hotwire] the project could not be searched for {}", crash.source(), e);
-                file = null;
-            }
-            if (file == null) {
-                Notices.show(Notice.ofBad(Lang.get("hotwire.dev.no_source", crash.where()), ""));
-            } else if (IdeOpener.open(file, crash.line())) {
-                Notices.show(Notice.ofDone(Lang.get("hotwire.dev.opened", crash.where()), ""));
-            } else {
-                String place = file + ":" + crash.line();
-                Minecraft game = Minecraft.getInstance();
-                game.execute(() -> game.keyboardHandler.setClipboard(place));
-                Notices.show(Notice.ofOn(Lang.get("hotwire.dev.copied"), place));
-            }
+            SourceOpener.open(mod.mod, crash);
             return null;
         });
     }

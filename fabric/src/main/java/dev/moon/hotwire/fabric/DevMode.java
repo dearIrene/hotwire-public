@@ -45,7 +45,8 @@ final class DevMode implements AutoCloseable {
                 case FULL -> "hotwire.settings.developer.full";
                 case JETBRAINS_WITHOUT_FLAG -> "hotwire.settings.developer.no_flag";
                 case OTHER -> "hotwire.settings.developer.other_java";
-            }), setup.isFull(), this.settings.getDevWindow(), this.settings::setDevWindow, () -> ModViews.show(null));
+            }), setup.isFull(), this.settings.getDevWindow(), this.settings::setDevWindow,
+                    this.settings.getDevScale(), this.settings::setDevScale, () -> ModViews.show(null));
             this.window = shown;
         }
         ModViews.show(new DevGameScreen(shown));

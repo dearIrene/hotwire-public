@@ -117,6 +117,8 @@ public final class HotwireSettings {
         @Nullable DevLeaks devLeaks = DevLeaks.ON;
 
         @Nullable List<Double> devWindow;
+
+        @Nullable Integer devScale;
         @Nullable String promptAcceptedFor;
         boolean keyCardShown;
         @Nullable List<String> favorites = List.of();
@@ -137,6 +139,7 @@ public final class HotwireSettings {
     private volatile DevCatch devCatch;
     private volatile DevLeaks devLeaks;
     private volatile double @Nullable [] devWindow;
+    private volatile int devScale;
     private volatile @Nullable String promptAcceptedFor;
     private volatile boolean keyCardShown;
     private final Set<String> favorites = ConcurrentHashMap.newKeySet();
@@ -166,6 +169,7 @@ public final class HotwireSettings {
         this.devWindow = saved.devWindow == null || saved.devWindow.size() != 5 ? null
                 : saved.devWindow.stream().mapToDouble(Double::doubleValue).toArray();
         this.promptAcceptedFor = saved.promptAcceptedFor;
+        this.devScale = saved.devScale == null ? 0 : Math.max(0, saved.devScale);
         this.keyCardShown = saved.keyCardShown;
         if (saved.favorites != null) {
             this.favorites.addAll(saved.favorites);
@@ -227,6 +231,15 @@ public final class HotwireSettings {
 
     public void setDevWindow(double[] at) {
         this.devWindow = at.clone();
+        this.save();
+    }
+
+    public int getDevScale() {
+        return this.devScale;
+    }
+
+    public void setDevScale(int scale) {
+        this.devScale = Math.max(0, scale);
         this.save();
     }
 
@@ -382,6 +395,7 @@ public final class HotwireSettings {
         saved.devLeaks = this.devLeaks;
         double[] window = this.devWindow;
         saved.devWindow = window == null ? null : Arrays.stream(window).boxed().toList();
+        saved.devScale = this.devScale == 0 ? null : this.devScale;
         saved.promptAcceptedFor = this.promptAcceptedFor;
         saved.keyCardShown = this.keyCardShown;
         saved.favorites = this.favorites.stream().sorted().toList();

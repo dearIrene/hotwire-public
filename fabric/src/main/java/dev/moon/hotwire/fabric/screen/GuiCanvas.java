@@ -8,6 +8,9 @@ import com.mojang.blaze3d.platform.cursor.CursorTypes;
 *///?}
 import dev.moon.hotwire.ui.Canvas;
 import dev.moon.hotwire.ui.Colors;
+//? if <1.21.6 {
+/*import java.util.Arrays;
+*///?}
 import java.util.HashMap;
 import java.util.Map;
 import net.minecraft.client.Minecraft;
@@ -37,6 +40,14 @@ public final class GuiCanvas implements Canvas {
     /*private final GuiGraphics graphics;
     *///?}
     private final Font font;
+    //? if >=1.21.6 {
+    //?} else {
+    /*// The scales pushed so far as one: x times scale plus shift. Before 1.21.6 the scissor takes no pose, so a clip
+    private float scale = 1;
+    private float shiftX;
+    private float shiftY;
+    private float[] scales = new float[0];
+    *///?}
     private long making;
 
     //? if >=26.1 {
@@ -165,7 +176,12 @@ public final class GuiCanvas implements Canvas {
 
     @Override
     public void pushClip(int x0, int y0, int x1, int y1) {
+        //? if >=1.21.6 {
         this.graphics.enableScissor(x0, y0, x1, y1);
+        //?} else {
+        /*this.graphics.enableScissor(Math.round(x0 * this.scale + this.shiftX), Math.round(y0 * this.scale
+                + this.shiftY), Math.round(x1 * this.scale + this.shiftX), Math.round(y1 * this.scale + this.shiftY));
+        *///?}
     }
 
     @Override
@@ -185,6 +201,14 @@ public final class GuiCanvas implements Canvas {
         this.graphics.pose().translate(centerX, centerY, 0);
         this.graphics.pose().scale(scale, scale, 1);
         this.graphics.pose().translate(-centerX, -centerY, 0);
+        float[] pushed = Arrays.copyOf(this.scales, this.scales.length + 3);
+        pushed[pushed.length - 3] = this.scale;
+        pushed[pushed.length - 2] = this.shiftX;
+        pushed[pushed.length - 1] = this.shiftY;
+        this.scales = pushed;
+        this.shiftX += this.scale * centerX * (1 - scale);
+        this.shiftY += this.scale * centerY * (1 - scale);
+        this.scale *= scale;
         *///?}
     }
 
@@ -210,6 +234,12 @@ public final class GuiCanvas implements Canvas {
         this.graphics.pose().popMatrix();
         //?} else {
         /*this.graphics.pose().popPose();
+        if (this.scales.length >= 3) {
+            this.scale = this.scales[this.scales.length - 3];
+            this.shiftX = this.scales[this.scales.length - 2];
+            this.shiftY = this.scales[this.scales.length - 1];
+            this.scales = Arrays.copyOf(this.scales, this.scales.length - 3);
+        }
         *///?}
     }
 }

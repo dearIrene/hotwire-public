@@ -52,6 +52,10 @@ public abstract class RootScreen extends Screen {
 
     protected abstract void onResized(int width, int height);
 
+    protected double toRoot(double screenUnits) {
+        return screenUnits;
+    }
+
     protected boolean onKeyLeft(int key, int modifiers) {
         return false;
     }
@@ -106,7 +110,8 @@ public abstract class RootScreen extends Screen {
 
     @Override
     public boolean mouseScrolled(double x, double y, double scrollX, double scrollY) {
-        return this.getRoot().scroll(x, y, scrollY) || super.mouseScrolled(x, y, scrollX, scrollY);
+        return this.getRoot().scroll(this.toRoot(x), this.toRoot(y), scrollY)
+                || super.mouseScrolled(x, y, scrollX, scrollY);
     }
 
     //? if >=1.21.9 {
@@ -129,19 +134,20 @@ public abstract class RootScreen extends Screen {
 
     @Override
     public boolean mouseClicked(MouseButtonEvent event, boolean doubled) {
-        return this.getRoot().click(event.x(), event.y(), toButton(event.button()), toModifiers(event))
+        return this.getRoot().click(this.toRoot(event.x()), this.toRoot(event.y()), toButton(event.button()),
+                toModifiers(event))
                 || super.mouseClicked(event, doubled);
     }
 
     @Override
     public boolean mouseDragged(MouseButtonEvent event, double dragX, double dragY) {
-        return this.getRoot().drag(event.x(), event.y(), toButton(event.button()))
+        return this.getRoot().drag(this.toRoot(event.x()), this.toRoot(event.y()), toButton(event.button()))
                 || super.mouseDragged(event, dragX, dragY);
     }
 
     @Override
     public boolean mouseReleased(MouseButtonEvent event) {
-        return this.getRoot().release(event.x(), event.y(), toButton(event.button()))
+        return this.getRoot().release(this.toRoot(event.x()), this.toRoot(event.y()), toButton(event.button()))
                 || super.mouseReleased(event);
     }
 
@@ -161,17 +167,20 @@ public abstract class RootScreen extends Screen {
     /*@Override
     public boolean mouseClicked(double x, double y, int button) {
         int modifiers = (hasShiftDown() ? 1 : 0) | (hasControlDown() ? 2 : 0);
-        return this.getRoot().click(x, y, button, modifiers) || super.mouseClicked(x, y, button);
+        return this.getRoot().click(this.toRoot(x), this.toRoot(y), button, modifiers)
+                || super.mouseClicked(x, y, button);
     }
 
     @Override
     public boolean mouseDragged(double x, double y, int button, double dragX, double dragY) {
-        return this.getRoot().drag(x, y, button) || super.mouseDragged(x, y, button, dragX, dragY);
+        return this.getRoot().drag(this.toRoot(x), this.toRoot(y), button)
+                || super.mouseDragged(x, y, button, dragX, dragY);
     }
 
     @Override
     public boolean mouseReleased(double x, double y, int button) {
-        return this.getRoot().release(x, y, button) || super.mouseReleased(x, y, button);
+        return this.getRoot().release(this.toRoot(x), this.toRoot(y), button)
+                || super.mouseReleased(x, y, button);
     }
 
     @Override

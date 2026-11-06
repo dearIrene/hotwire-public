@@ -14,10 +14,13 @@ import java.util.ArrayList;
 import java.util.List;
 import java.util.Locale;
 import java.util.function.Consumer;
+import java.util.function.IntConsumer;
 import org.jspecify.annotations.Nullable;
 
 public final class DevWindow extends Element {
     private static final int TITLE_H = 22;
+
+    private static final int STEPPER_W = 44;
 
     private static final int CARDS_WIDTH = 220;
     private static final int CARDS_REACH = 60;
@@ -58,17 +61,24 @@ public final class DevWindow extends Element {
     private final WindowFrame frame = new WindowFrame(MIN_W, MIN_H, TITLE_H);
     private final double @Nullable [] saved;
     private final Consumer<double[]> onPlaced;
+
+    private int scale;
+    private final IntConsumer onScale;
+    private int gameScale = 1;
+    private int mostScale = 1;
     private final Runnable onClose;
     private int contentHeight;
 
     @SuppressWarnings("this-escape")
     public DevWindow(DevHost host, String runtime, boolean fullRuntime, double @Nullable [] saved,
-            Consumer<double[]> onPlaced, Runnable onClose) {
+            Consumer<double[]> onPlaced, int scale, IntConsumer onScale, Runnable onClose) {
         this.host = host;
         this.runtime = runtime;
         this.fullRuntime = fullRuntime;
         this.saved = saved == null ? null : saved.clone();
         this.onPlaced = onPlaced;
+        this.scale = Math.max(0, scale);
+        this.onScale = onScale;
         this.onClose = onClose;
         this.tabs = this.add(new ChoiceBar(makeTabs(0), 0, this::pickTab));
         this.reload = this.add(new Button(Lang.get("hotwire.dev.button.reload"), false, () -> this.act(true)));
@@ -112,6 +122,66 @@ public final class DevWindow extends Element {
         boolean underCards = this.frame.getY() < CARDS_REACH && this.frame.getX() + this.frame.getWidth() > screenWidth
                 - CARDS_WIDTH;
         return underCards ? this.frame.getY() + TITLE_H : 0;
+    }
+
+    public int getScale() {
+        return this.scale;
+    }
+
+    public void setScaleRange(int game, int most) {
+        this.gameScale = Math.max(1, game);
+        this.mostScale = Math.max(1, most);
+    }
+
+    private int findShownScale() {
+        return Math.min(this.scale == 0 ? this.gameScale : this.scale, this.mostScale);
+    }
+
+    public int[] getStepperBounds() {
+        return new int[] {this.findStepperX(), this.frame.getY() + 4, STEPPER_W, BUTTON};
+    }
+
+    private int findStepperX() {
+        return this.findMaximizeX() - 6 - STEPPER_W;
+    }
+
+    private boolean pressStepper(double px, double py) {
+        int x = this.findStepperX();
+        int y = this.frame.getY() + 4;
+        if (py < y || py >= y + BUTTON || px < x || px >= x + STEPPER_W) {
+            return false;
+        }
+        int step = px < x + BUTTON ? -1 : px >= x + STEPPER_W - BUTTON ? 1 : 0;
+        int next = Math.clamp(this.findShownScale() + step, 1, this.mostScale);
+        if (step != 0 && next != this.findShownScale()) {
+            this.scale = next;
+            this.onScale.accept(next);
+        }
+        return true;
+    }
+
+    private void paintStepper(Canvas canvas, float a) {
+        int x = this.findStepperX();
+        int y = this.frame.getY() + 4;
+        boolean over = this.isHovered();
+        double px = this.getPointerX();
+        double py = this.getPointerY();
+        boolean onRow = over && py >= y && py < y + BUTTON;
+        canvas.fill(x, y, x + STEPPER_W, y + BUTTON, Colors.fade(Palette.PANEL_EDGE, a));
+        if (onRow && px >= x && px < x + BUTTON) {
+            canvas.fill(x, y, x + BUTTON, y + BUTTON, Colors.fade(0x30B48CFF, a));
+        }
+        int plusX = x + STEPPER_W - BUTTON;
+        if (onRow && px >= plusX && px < plusX + BUTTON) {
+            canvas.fill(plusX, y, plusX + BUTTON, y + BUTTON, Colors.fade(0x30B48CFF, a));
+        }
+        int ink = Colors.fade(Palette.DIM, a);
+        canvas.fill(x + 4, y + 7, x + 10, y + 8, ink);
+        canvas.fill(plusX + 4, y + 7, plusX + 10, y + 8, ink);
+        canvas.fill(plusX + 7, y + 4, plusX + 8, y + 11, ink);
+        String label = this.findShownScale() + "x";
+        canvas.drawText(label, x + (STEPPER_W - canvas.measureText(label)) / 2, y + 4,
+                Colors.fade(this.scale == 0 ? Palette.DIM : Palette.TEXT, a));
     }
 
     public int[] getFrameBounds() {
@@ -207,6 +277,9 @@ public final class DevWindow extends Element {
             this.onPlaced.accept(this.frame.save());
             return true;
         }
+        if (this.pressStepper(px, py)) {
+            return true;
+        }
         DevModView shown = this.findMod();
         if (shown != null && py >= this.findBodyTop() && py < this.findBodyBottom()) {
             for (CrashRow row : this.crashRows) {
@@ -280,8 +353,9 @@ public final class DevWindow extends Element {
         String title = Lang.get("hotwire.dev.window.title");
         canvas.drawText(title, x0 + PAD, y0 + 8, Colors.fade(Palette.TEXT, a));
         this.paintButtons(canvas, a);
+        this.paintStepper(canvas, a);
         if (mod != null) {
-            int pillLeft = paintPill(canvas, mod.state(), this.findMaximizeX() - 6, y0 + 5, a);
+            int pillLeft = paintPill(canvas, mod.state(), this.findStepperX() - 6, y0 + 5, a);
             String name = this.mods.size() > 1 ? mod.name() + " (" + (this.modIndex + 1) + "/" + this.mods.size() + ")"
                     : mod.name();
             int nameX = x0 + PAD + canvas.measureText(title) + 6;
