@@ -566,16 +566,16 @@ final class CollectionReferences implements FixedLists.Walk {
                 containers.add(one.getValue().container());
             }
         });
-        this.look.getNotes().keepPrintsThrough(containers, () -> {
-            for (Map.Entry<String, Removal> one : back) {
-                try {
-                    one.getValue().restore();
-                } catch (RuntimeException e) {
-                    LOGGER.warn("[Hotwire] one of {}'s objects could not go back into {}", one.getKey(),
-                            one.getValue().describe(), e);
-                }
+        for (Map.Entry<String, Removal> one : back) {
+            try {
+                one.getValue().restore();
+            } catch (RuntimeException e) {
+                LOGGER.warn("[Hotwire] one of {}'s objects could not go back into {}", one.getKey(),
+                        one.getValue().describe(), e);
             }
-        });
+        }
+
+        containers.forEach(this.look.getNotes()::forgetPrint);
     }
 
     void lookInto(Object holder) {
