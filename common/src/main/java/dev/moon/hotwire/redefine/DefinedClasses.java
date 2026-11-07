@@ -20,6 +20,7 @@ final class DefinedClasses {
 
     private final Map<String, Long> places = new ConcurrentHashMap<>();
     private @Nullable RandomAccessFile file;
+    private @Nullable Path path;
     private boolean closed;
 
     private final byte[] block = new byte[BLOCK];
@@ -79,12 +80,32 @@ final class DefinedClasses {
         if (into == null) {
             Path folder = Path.of(System.getProperty("java.io.tmpdir"));
             deleteLeftBehind(folder);
-            Path path = Files.createTempFile(folder, PREFIX, ".bin");
-            path.toFile().deleteOnExit();
-            into = new RandomAccessFile(path.toFile(), "rw");
+            Path made = Files.createTempFile(folder, PREFIX, ".bin");
+            made.toFile().deleteOnExit();
+            into = new RandomAccessFile(made.toFile(), "rw");
             this.file = into;
+            this.path = made;
         }
         return into;
+    }
+
+    synchronized void close() {
+        this.closed = true;
+        this.places.clear();
+        RandomAccessFile into = this.file;
+        Path made = this.path;
+        this.file = null;
+        this.path = null;
+        try {
+            if (into != null) {
+                into.close();
+            }
+            if (made != null) {
+                Files.deleteIfExists(made);
+            }
+        } catch (IOException e) {
+            LOGGER.info("[Hotwire] the classes' file stays until the next start: {}", e.toString());
+        }
     }
 
     private static void deleteLeftBehind(Path folder) {

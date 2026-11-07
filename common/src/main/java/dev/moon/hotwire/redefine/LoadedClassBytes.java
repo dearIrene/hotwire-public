@@ -49,6 +49,10 @@ public final class LoadedClassBytes {
         this.definedInGame.remove(internal);
     }
 
+    public static void closeDefined() {
+        DEFINED.close();
+    }
+
     public static void recordDefinedInGame(String internal, byte[] bytes, ClassLoader loader) {
         DEFINED.put(internal, bytes);
         IN_GAME.put(internal, System.identityHashCode(loader));

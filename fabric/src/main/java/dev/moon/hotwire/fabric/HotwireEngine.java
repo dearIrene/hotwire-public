@@ -20,6 +20,7 @@ import dev.moon.hotwire.fabric.store.UpdateCheck;
 import dev.moon.hotwire.fabric.update.UpdateSupport;
 import dev.moon.hotwire.modrinth.Downloads;
 import dev.moon.hotwire.plan.ModGraph;
+import dev.moon.hotwire.redefine.LoadedClassBytes;
 import dev.moon.hotwire.redefine.Tripwire;
 import dev.moon.hotwire.report.ActionJournal;
 import dev.moon.hotwire.report.GameLog;
@@ -204,6 +205,7 @@ public final class HotwireEngine implements ModScreen.Game, AutoCloseable {
         }
         this.tasks.close();
         this.icons.close();
+        LoadedClassBytes.closeDefined();
     }
 
     JvmParts requireSwitching() {
