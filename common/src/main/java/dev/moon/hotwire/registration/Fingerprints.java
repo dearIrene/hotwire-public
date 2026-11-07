@@ -3,6 +3,8 @@ package dev.moon.hotwire.registration;
 import java.util.Collection;
 import java.util.List;
 import java.util.Map;
+import java.util.Set;
+import org.jspecify.annotations.Nullable;
 
 public final class Fingerprints {
     public static final long UNKNOWN = Long.MIN_VALUE;
@@ -35,42 +37,49 @@ public final class Fingerprints {
             }
             long print = items.size();
             for (Object item : items) {
-                print += item instanceof Map.Entry<?, ?> entry ? mix(System.identityHashCode(entry.getKey()) * 31L
-                        + System.identityHashCode(entry.getValue())) : mix(System.identityHashCode(item));
+                print += item instanceof Map.Entry<?, ?> entry ? mix(identity(entry.getKey()) * 31L
+                        + identity(entry.getValue())) : mix(identity(item));
             }
             return print;
         }
         if (container instanceof Object[] array) {
             long print = array.length;
             for (Object item : array) {
-                print = print * 31 + System.identityHashCode(item);
+                print = print * 31 + identity(item);
             }
             return print;
         }
         if (container instanceof List<?> list) {
             long print = list.size();
             for (Object item : list) {
-                print = print * 31 + System.identityHashCode(item);
+                print = print * 31 + identity(item);
             }
             return print;
         }
         if (container instanceof Collection<?> items) {
             long print = items.size();
             for (Object item : items) {
-                print += mix(System.identityHashCode(item));
+                print += mix(identity(item));
             }
             return print;
         }
         if (container instanceof Map<?, ?> map) {
             long print = map.size();
             for (Map.Entry<?, ?> entry : map.entrySet()) {
-                print += mix(System.identityHashCode(entry.getKey()) * 31L
-                        + System.identityHashCode(entry.getValue()));
+                print += mix(identity(entry.getKey()) * 31L
+                        + identity(entry.getValue()));
             }
             return print;
         }
         return UNKNOWN;
     }
+
+    private static int identity(@Nullable Object item) {
+        return item != null && BOXED.contains(item.getClass()) ? item.hashCode() : System.identityHashCode(item);
+    }
+
+    private static final Set<Class<?>> BOXED = Set.of(Integer.class, Long.class, Short.class, Byte.class,
+            Character.class, Boolean.class, Float.class, Double.class);
 
     private static long mix(long value) {
         long mixed = value * 0x9E3779B97F4A7C15L;
