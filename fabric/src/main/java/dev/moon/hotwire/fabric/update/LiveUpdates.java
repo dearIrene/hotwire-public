@@ -6,6 +6,7 @@ import dev.moon.hotwire.fabric.ResourceReload;
 import dev.moon.hotwire.fabric.add.AddAssets;
 import dev.moon.hotwire.fabric.add.LaunchSteps;
 import dev.moon.hotwire.fabric.add.LoaderModList;
+import dev.moon.hotwire.fabric.add.OpenOneConfig;
 import dev.moon.hotwire.fabric.registration.GameRegistrations;
 import dev.moon.hotwire.jar.JarLookup;
 import dev.moon.hotwire.jar.ModJar;
@@ -19,9 +20,9 @@ import dev.moon.hotwire.switching.ModMixins;
 import dev.moon.hotwire.switching.SwitchApplier;
 import dev.moon.hotwire.switching.SwitchTimes;
 import dev.moon.hotwire.update.UpdateDiffer;
-import dev.moon.hotwire.update.UpdatePlan;
 import dev.moon.hotwire.update.UpdatePlan.ClassAction;
 import dev.moon.hotwire.update.UpdatePlan.UpdateNotice;
+import dev.moon.hotwire.update.UpdatePlan;
 import java.nio.file.Path;
 import java.util.ArrayDeque;
 import java.util.ArrayList;
@@ -349,18 +350,27 @@ final class LiveUpdates {
             collectAdded(id, "client", ClientModInitializer.class, ClientModInitializer::onInitializeClient, added,
                     starts);
         }
+
         if (starts.isEmpty()) {
-            LOGGER.info("[Hotwire] {}'s new entrypoints {} are not in the loader's list; not run", id, added);
-            return "";
+            LOGGER.info("[Hotwire] {}'s new entrypoints {} are none Hotwire runs itself", id, added);
         }
         CompletableFuture<String> ran = new CompletableFuture<>();
         Minecraft.getInstance().execute(() -> {
+            List<String> ids = List.of(id);
+            boolean ok = false;
+            OpenOneConfig configs = OpenOneConfig.open();
+            LifecycleListeners.prepareStart(ids);
             try {
                 starts.forEach(Runnable::run);
+                configs.markStarted();
+                ok = true;
                 ran.complete("");
             } catch (RuntimeException | LinkageError e) {
                 LOGGER.warn("[Hotwire] {}'s new entrypoint threw", id, e);
                 ran.complete(" Its new start-up code threw " + e + "; the rest of the update stands.");
+            } finally {
+                configs.close();
+                LifecycleListeners.finishStart(ids, ok);
             }
         });
         try {

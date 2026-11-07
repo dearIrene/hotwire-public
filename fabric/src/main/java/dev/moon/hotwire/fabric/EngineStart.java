@@ -34,6 +34,7 @@ import dev.moon.hotwire.fabric.registration.ModLifecycle;
 import dev.moon.hotwire.fabric.registration.ModLocks;
 import dev.moon.hotwire.fabric.registration.NetworkHandlers;
 import dev.moon.hotwire.fabric.registration.OffModCommands;
+import dev.moon.hotwire.fabric.registration.OneConfigSaves;
 import dev.moon.hotwire.fabric.registration.QuietThreads;
 import dev.moon.hotwire.fabric.registration.RegistryEntries;
 import dev.moon.hotwire.fabric.registration.RegistryHolders;
@@ -324,6 +325,8 @@ final class EngineStart {
                 applier, progress, GameRegistrations.getJournal(),
                 ModLifecycle.makeLifecycle(GameRegistrations.getJournal(), Minecraft.getInstance()));
         LifecycleListeners.setIsOn(switcher::isOn);
+
+        LifecycleListeners.add(new OneConfigSaves(LifecycleListeners::isListening));
         laps.endLap("off checker, seen uses, switcher");
         ModTripwire tripwire = new ModTripwire(instrumentation, applier.getRebuilder(), classes::findLoaded);
         applier.addRider(tripwire.getRide());

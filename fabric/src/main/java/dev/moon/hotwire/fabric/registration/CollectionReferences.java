@@ -218,6 +218,17 @@ final class CollectionReferences implements FixedLists.Walk {
         return found;
     }
 
+    private static final String ONECONFIG_NODE = "org.polyfrost.oneconfig.api.config.v1.Node";
+
+    private static boolean isOneConfigNode(Class<?> type) {
+        for (Class<?> at = type.getSuperclass(); at != null; at = at.getSuperclass()) {
+            if (at.getName().equals(ONECONFIG_NODE)) {
+                return true;
+            }
+        }
+        return false;
+    }
+
     synchronized void takeRevealed(Collection<String> coming) {
         Tripwire.runAsHotwire(() -> {
             List<String> stillOff = Tripwire.findWatched().stream().filter(mod -> !coming.contains(mod)).toList();
@@ -621,6 +632,10 @@ final class CollectionReferences implements FixedLists.Walk {
             return;
         }
 
+        if (isOneConfigNode(holder.getClass())) {
+            return;
+        }
+
         if (Proxy.isProxyClass(holder.getClass())) {
             Object handler = Proxy.getInvocationHandler(holder);
             if (this.visit(handler)) {
@@ -640,7 +655,8 @@ final class CollectionReferences implements FixedLists.Walk {
                         && field.getType().isAssignableFrom(List.class)) {
                     FixedLists.removeFromField(this, field, holder);
                 }
-            } else if (value != null && Wrappers.isLookedInto(value) && this.visit(value)) {
+            } else if (value != null && Wrappers.isLookedInto(value) && !isOneConfigNode(value.getClass())
+                    && this.visit(value)) {
                 Set<String> was = this.enter(value);
                 try {
                     this.noteHolder(value);

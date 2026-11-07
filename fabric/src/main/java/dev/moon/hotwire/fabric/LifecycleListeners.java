@@ -38,6 +38,10 @@ public final class LifecycleListeners {
         LISTENERS.add(new Listener(listener, GameRegistrations.findModOrShipper(listener.getClass())));
     }
 
+    public static boolean isListening(@Nullable String mod) {
+        return mod != null && LISTENERS.stream().anyMatch(one -> mod.equals(one.mod()));
+    }
+
     static void setIsOn(Predicate<String> on) {
         isOn = on;
     }

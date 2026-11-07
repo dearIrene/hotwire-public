@@ -80,7 +80,7 @@ public final class OneConfigModCards {
         }
     }
 
-    private static @Nullable String findModOf(Object tree) throws ReflectiveOperationException {
+    static @Nullable String findModOf(Object tree) throws ReflectiveOperationException {
         Map<?, ?> nodes = (Map<?, ?>) read(tree, "org.polyfrost.oneconfig.api.config.v1.Tree", "theMap");
         if (nodes == null) {
             return null;

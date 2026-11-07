@@ -58,7 +58,7 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 public final class HotwireApiImpl implements HotwireApi {
-    private static final int REVISION = 9;
+    private static final int REVISION = 10;
     private static final StackWalker STACK = StackWalker.getInstance(StackWalker.Option.RETAIN_CLASS_REFERENCE);
     private static final Logger LOGGER = LoggerFactory.getLogger(HotwireApiImpl.class);
 
@@ -435,7 +435,24 @@ public final class HotwireApiImpl implements HotwireApi {
                 mods.add(mod);
             }
         }
-        return new CallerBlocks.Callers(List.copyOf(mods), hotwire || !mods.isEmpty());
+        return new CallerBlocks.Callers(putAskerFirst(List.copyOf(mods)), hotwire || !mods.isEmpty());
+    }
+
+    private static List<String> putAskerFirst(List<String> mods) {
+        HotwireEngine engine = HotwireClient.findEngine();
+        if (engine == null || mods.size() < 2) {
+            return mods;
+        }
+        for (String one : mods) {
+            boolean usedByAnother = mods.stream()
+                    .anyMatch(other -> !other.equals(one) && engine.getGraph().getUses(other).contains(one));
+            if (!usedByAnother) {
+                List<String> ordered = new ArrayList<>(List.of(one));
+                mods.stream().filter(other -> !other.equals(one)).forEach(ordered::add);
+                return ordered;
+            }
+        }
+        return mods;
     }
 
     private static @Nullable String findModOf(StackWalker.StackFrame frame) {

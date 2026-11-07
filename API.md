@@ -216,7 +216,7 @@ A lifecycle listener hears every change from every path, the player's own clicks
 api.addLifecycleListener(new ModLifecycleListener() {
     public void prepareOff(List<String> ids) { }     // still on and safe to call, save their settings here
     public void finishOn(List<String> ids) { }       // back on with the objects they had
-    public void prepareStart(List<String> ids) { }   // added mods, live copies and mods off since launch
+    public void prepareStart(List<String> ids) { }   // added mods, live copies, mods off since launch, and new entrypoints of an update
     public void finishStart(List<String> ids, boolean ok) { }
     public void finishUpdate(List<String> ids) { }   // new code in place under the same ids
 });

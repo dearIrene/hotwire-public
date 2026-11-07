@@ -1,5 +1,7 @@
 package dev.moon.hotwire.fabric.add;
 
+import dev.moon.hotwire.fabric.LifecycleListeners;
+import dev.moon.hotwire.fabric.registration.GameRegistrations;
 import java.lang.reflect.Field;
 import java.lang.reflect.InaccessibleObjectException;
 import java.util.Queue;
@@ -7,7 +9,7 @@ import org.jspecify.annotations.Nullable;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
-final class OpenOneConfig implements AutoCloseable {
+public final class OpenOneConfig implements AutoCloseable {
     private static final Logger LOGGER = LoggerFactory.getLogger(OpenOneConfig.class);
     private static final String MANAGER = "org.polyfrost.oneconfig.api.config.v1.ConfigManager";
 
@@ -18,9 +20,13 @@ final class OpenOneConfig implements AutoCloseable {
         this.manager = manager;
     }
 
-    static OpenOneConfig open() {
+    public static OpenOneConfig open() {
         try {
             Class<?> manager = Class.forName(MANAGER, true, OpenOneConfig.class.getClassLoader());
+
+            if (LifecycleListeners.isListening(GameRegistrations.findModOrShipper(manager))) {
+                return new OpenOneConfig(null);
+            }
             Field initialized = findInitialized(manager);
             if (!initialized.getBoolean(null)) {
                 return new OpenOneConfig(null);
@@ -36,7 +42,7 @@ final class OpenOneConfig implements AutoCloseable {
         }
     }
 
-    void markStarted() {
+    public void markStarted() {
         this.started = true;
     }
 
