@@ -50,6 +50,7 @@ import dev.moon.hotwire.ui.Notice;
 import dev.moon.hotwire.ui.Notices;
 import java.lang.management.ManagementFactory;
 import java.lang.management.ThreadMXBean;
+import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Locale;
@@ -138,6 +139,18 @@ public final class SwitchRunner {
             this.worldsForgotten = opened;
             this.fieldReferences.forgetClosedWorld();
         }
+    }
+
+    String benchLook(int times, long gapMillis) throws InterruptedException {
+        List<Long> took = new ArrayList<>();
+        for (int at = 0; at < times; at++) {
+            long began = System.nanoTime();
+            ElementLook.findAheadForOff(this.fieldReferences, List.of(), this.switcher::isOn);
+            took.add((System.nanoTime() - began) / 1_000_000);
+            Thread.sleep(gapMillis);
+        }
+        List<Long> sorted = took.stream().sorted().toList();
+        return took + ", median " + sorted.get(sorted.size() / 2) + " ms";
     }
 
     public void lookAheadForAll() {

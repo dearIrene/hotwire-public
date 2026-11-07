@@ -288,6 +288,10 @@ public final class HotwireEngine implements ModScreen.Game, AutoCloseable {
         return this.switches.switchNow(this.requireSwitching().runner(), off, ids);
     }
 
+    public String benchLook(int times, long gapMillis) throws InterruptedException {
+        return this.requireSwitching().runner().benchLook(times, gapMillis);
+    }
+
     Optional<JvmParts> findJvmParts() {
         return Optional.ofNullable(this.findParts());
     }
