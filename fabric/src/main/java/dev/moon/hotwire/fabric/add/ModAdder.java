@@ -20,6 +20,7 @@ import dev.moon.hotwire.plan.SwitchPlan;
 import dev.moon.hotwire.plan.SwitchPlanner;
 import dev.moon.hotwire.redefine.InitHookRuns;
 import dev.moon.hotwire.redefine.RebuildException;
+import dev.moon.hotwire.report.StageTimes;
 import dev.moon.hotwire.switching.ModMixins;
 import dev.moon.hotwire.switching.ModSwitcher;
 import dev.moon.hotwire.switching.PlayerMessages;
@@ -64,7 +65,7 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 public final class ModAdder {
-    private final AddWideners addWideners = new AddWideners(this);
+    private final AddWideners addWideners;
     public sealed interface Result {
         record Added(List<String> ids, String name, ModSwitcher.Result switched) implements Result {
         }
@@ -152,6 +153,7 @@ public final class ModAdder {
 
     public ModAdder(Engine engine) {
         this.engine = engine;
+        this.addWideners = new AddWideners(engine);
     }
 
     public void setCarriedLibraries(CarriedLibraries libraries) {

@@ -269,7 +269,7 @@ final class DevBuildEdits {
                     MergeWords.list(List.copyOf(new TreeSet<>(plan.removed())))));
         }
         String title = Lang.get("hotwire.dev.merged", MergeWords.list(plan.builds()), number);
-        DevSession.add(mod, new DevEvent(System.currentTimeMillis(), DevEvent.Kind.MERGED, title, lines, number));
+        mod.addEvent(new DevEvent(System.currentTimeMillis(), DevEvent.Kind.MERGED, title, lines, number));
         LOGGER.info("[Hotwire] {}: merged builds {} into build {}", mod.mod.id(), plan.builds(), number);
     }
 
@@ -314,7 +314,7 @@ final class DevBuildEdits {
 
     private void tellMergeFailed(SessionMod mod, String why) {
         String title = Lang.get("hotwire.dev.merge.failed", mod.mod.name());
-        DevSession.add(mod, new DevEvent(System.currentTimeMillis(), DevEvent.Kind.FAILED, title, List.of(why)));
+        mod.addEvent(new DevEvent(System.currentTimeMillis(), DevEvent.Kind.FAILED, title, List.of(why)));
         LOGGER.info("[Hotwire] {}: {} {}", mod.mod.id(), title, why);
         Notices.show(Notice.ofBad(title, why));
     }
@@ -368,7 +368,7 @@ final class DevBuildEdits {
             mod.names.put(number, Lang.get("hotwire.dev.copy.name", name == null
                     ? Lang.get("hotwire.dev.pick.build", build) : name));
         }
-        DevSession.add(mod, new DevEvent(System.currentTimeMillis(), DevEvent.Kind.MERGED,
+        mod.addEvent(new DevEvent(System.currentTimeMillis(), DevEvent.Kind.MERGED,
                 Lang.get("hotwire.dev.copied_build", build, number), List.of(), number));
     }
 

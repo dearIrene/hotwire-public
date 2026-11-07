@@ -24,7 +24,7 @@ public final class SodiumSettingsPages {
     private static final String MANAGER = ROOT + "client.config.ConfigManager";
     private static final AtomicBoolean BUILD_DUE = new AtomicBoolean();
 
-    private record PagesOut(String mod) implements TakeoutRecord.Entry {
+    private record PagesOut(String mod) implements OffRemovals.Entry {
         @Override
         public void restore() {
             if (BUILD_DUE.compareAndSet(false, true)) {
@@ -41,8 +41,8 @@ public final class SodiumSettingsPages {
         }
 
         @Override
-        public TakeoutRecord.Where getWhere() {
-            return TakeoutRecord.Where.GAME_BEFORE_FRAME;
+        public OffRemovals.Where getWhere() {
+            return OffRemovals.Where.GAME_BEFORE_FRAME;
         }
     }
 
@@ -50,7 +50,7 @@ public final class SodiumSettingsPages {
     }
 
     public static void takeOut(Collection<String> mods) {
-        TakeoutRecord.onGame(() -> takeOutNow(mods), "settings pages left out");
+        OffRemovals.onGame(() -> takeOutNow(mods), "settings pages left out");
     }
 
     private static void takeOutNow(Collection<String> mods) {
@@ -71,7 +71,7 @@ public final class SodiumSettingsPages {
             return;
         }
         if (!theirs.isEmpty() && buildAgain(Set.copyOf(mods))) {
-            theirs.forEach(mod -> TakeoutRecord.add(mod, new PagesOut(mod)));
+            theirs.forEach(mod -> OffRemovals.add(mod, new PagesOut(mod)));
             LOGGER.info("[Hotwire] Sodium's settings were built again without {}", theirs);
         }
     }

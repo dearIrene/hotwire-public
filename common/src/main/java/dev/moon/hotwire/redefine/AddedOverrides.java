@@ -1,6 +1,7 @@
 package dev.moon.hotwire.redefine;
 
 import dev.moon.hotwire.classfile.ClassHeader;
+import dev.moon.hotwire.classfile.ClassNodes;
 import java.lang.invoke.CallSite;
 import java.lang.invoke.MethodHandle;
 import java.lang.invoke.MethodHandles;
@@ -19,7 +20,6 @@ import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.atomic.AtomicInteger;
 import java.util.function.Function;
 import org.jspecify.annotations.Nullable;
-import org.objectweb.asm.ClassReader;
 import org.objectweb.asm.ClassWriter;
 import org.objectweb.asm.Handle;
 import org.objectweb.asm.Opcodes;
@@ -65,14 +65,11 @@ public final class AddedOverrides {
     };
     private static final Set<Site> SITES = Collections.synchronizedSet(Collections.newSetFromMap(new WeakHashMap<>()));
     private static final MethodHandle CHOOSE;
-    private static final MethodHandle IS_CLASS;
 
     static {
         try {
             MethodHandles.Lookup lookup = MethodHandles.lookup();
             CHOOSE = lookup.findVirtual(Site.class, "choose", MethodType.methodType(MethodHandle.class, Object.class));
-            IS_CLASS = lookup.findStatic(AddedOverrides.class, "isClass",
-                    MethodType.methodType(boolean.class, Class.class, Object.class));
         } catch (ReflectiveOperationException e) {
             throw new ExceptionInInitializerError(e);
         }
@@ -106,9 +103,7 @@ public final class AddedOverrides {
             MethodHandle answer = found == null ? this.own : MethodHandles.explicitCastArguments(found, this.type());
             synchronized (this) {
                 if (GENERATION.get() == before && this.met.size() < REMEMBERED && this.met.add(type)) {
-                    MethodHandle test = MethodHandles.dropArguments(IS_CLASS.bindTo(type).asType(
-                            MethodType.methodType(boolean.class, this.type().parameterType(0))), 1,
-                            this.type().parameterList().subList(1, this.type().parameterCount()));
+                    MethodHandle test = ExactClass.makeTest(type, this.type());
                     this.setTarget(MethodHandles.guardWithTest(test, answer, this.getTarget()));
                 }
             }
@@ -197,8 +192,7 @@ public final class AddedOverrides {
         if (methods.isEmpty()) {
             return mixed;
         }
-        ClassNode node = new ClassNode();
-        new ClassReader(mixed).accept(node, 0);
+        ClassNode node = ClassNodes.read(mixed, 0);
 
         for (MethodNode method : node.methods.toArray(MethodNode[]::new)) {
             if (methods.contains(method.name + method.desc) && (method.access & (NEVER_OVERRIDES | Opcodes.ACC_NATIVE
@@ -259,11 +253,6 @@ public final class AddedOverrides {
                 body, type).dynamicInvoker());
         SITES.add(site);
         return site;
-    }
-
-    @SuppressWarnings("unused")
-    private static boolean isClass(Class<?> type, Object receiver) {
-        return receiver.getClass() == type;
     }
 
     static @Nullable MethodHandle find(Class<?> type, String key) {

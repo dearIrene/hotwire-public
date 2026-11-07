@@ -1,5 +1,6 @@
 package dev.moon.hotwire.redefine;
 
+import dev.moon.hotwire.classfile.ClassNodes;
 import dev.moon.hotwire.concurrent.Parallel;
 import java.util.ArrayDeque;
 import java.util.ArrayList;
@@ -156,9 +157,7 @@ public final class ConstructedFields {
     }
 
     private static ClassNode read(byte[] classBytes) {
-        ClassNode node = new ClassNode();
-        new ClassReader(classBytes).accept(node, ClassReader.SKIP_FRAMES);
-        return node;
+        return ClassNodes.read(classBytes, ClassReader.SKIP_FRAMES);
     }
 
     public static Set<String> of(byte[] classBytes) {

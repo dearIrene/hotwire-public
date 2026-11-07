@@ -19,8 +19,8 @@ import org.jspecify.annotations.Nullable;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
-public final class TakeoutRecord {
-    private static final Logger LOGGER = LoggerFactory.getLogger(TakeoutRecord.class);
+public final class OffRemovals {
+    private static final Logger LOGGER = LoggerFactory.getLogger(OffRemovals.class);
     private static final int WAIT_SECONDS = 5;
 
     public enum Where { ANY, GAME, SERVER, GAME_BEFORE_FRAME }
@@ -49,7 +49,7 @@ public final class TakeoutRecord {
 
     private static final Map<String, List<Entry>> BY_MOD = Collections.synchronizedMap(new LinkedHashMap<>());
 
-    private TakeoutRecord() {
+    private OffRemovals() {
     }
 
     public static void add(String mod, Entry entry) {

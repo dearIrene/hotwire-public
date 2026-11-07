@@ -275,8 +275,8 @@ final class SiteSplice {
         }
         Arrays.fill(lengths, Opcodes.ILOAD, Opcodes.ALOAD + 1, (byte) 2);
         Arrays.fill(lengths, Opcodes.ISTORE, Opcodes.ASTORE + 1, (byte) 2);
-        for (int op : new int[] {Opcodes.SIPUSH, 19, 20, Opcodes.IINC, Opcodes.NEW, Opcodes.ANEWARRAY, Opcodes.CHECKCAST,
-                Opcodes.INSTANCEOF, Opcodes.IFNULL, Opcodes.IFNONNULL}) {
+        for (int op : new int[] {Opcodes.SIPUSH, 19, 20, Opcodes.IINC, Opcodes.NEW, Opcodes.ANEWARRAY,
+                Opcodes.CHECKCAST, Opcodes.INSTANCEOF, Opcodes.IFNULL, Opcodes.IFNONNULL}) {
             lengths[op] = 3;
         }
         Arrays.fill(lengths, Opcodes.IFEQ, Opcodes.JSR + 1, (byte) 3);

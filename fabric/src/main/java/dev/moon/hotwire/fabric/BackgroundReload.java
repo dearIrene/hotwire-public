@@ -9,9 +9,6 @@ import java.util.function.Consumer;
 import net.minecraft.client.Minecraft;
 import net.minecraft.client.gui.screens.LoadingOverlay;
 import net.minecraft.server.packs.resources.ReloadInstance;
-import net.minecraft.server.packs.resources.ReloadableResourceManager;
-import org.apache.logging.log4j.Level;
-import org.apache.logging.log4j.core.config.Configurator;
 import org.jspecify.annotations.Nullable;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -54,17 +51,7 @@ public final class BackgroundReload {
     }
 
     private static boolean begin(Runnable begin) {
-        if (Boolean.parseBoolean(System.getProperty("hotwire.profileReload"))) {
-            String manager = ReloadableResourceManager.class.getName();
-            Configurator.setLevel(manager, Level.DEBUG);
-            try {
-                begin.run();
-            } finally {
-                Configurator.setLevel(manager, Level.INFO);
-            }
-        } else {
-            begin.run();
-        }
+        begin.run();
         LoadingOverlay overlay = ModViews.findLoadingOverlay();
         ReloadInstance reload = overlay == null ? null : OngoingReload.findReloadOf(overlay);
         Consumer<Optional<Throwable>> onFinish = overlay == null ? null : findOnFinish(overlay);

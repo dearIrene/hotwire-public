@@ -23,7 +23,7 @@ public final class OneConfigHuds {
     private static final String EDITOR = "org.polyfrost.oneconfig.internal.ui.compose.impls.HudEditorUIScreen";
 
     private record Removal(Class<?> manager, List<Map.Entry<Integer, Object>> huds, Map<Object, Object> providers)
-            implements TakeoutRecord.Entry {
+            implements OffRemovals.Entry {
         @Override
         public void restore() {
             List<Object> all = findHuds(this.manager);
@@ -41,8 +41,8 @@ public final class OneConfigHuds {
         }
 
         @Override
-        public TakeoutRecord.Where getWhere() {
-            return TakeoutRecord.Where.GAME_BEFORE_FRAME;
+        public OffRemovals.Where getWhere() {
+            return OffRemovals.Where.GAME_BEFORE_FRAME;
         }
 
         @Override
@@ -107,7 +107,7 @@ public final class OneConfigHuds {
                 continue;
             }
 
-            TakeoutRecord.add(mod, new Removal(manager, removed, kinds));
+            OffRemovals.add(mod, new Removal(manager, removed, kinds));
             for (int i = removed.size() - 1; i >= 0; i--) {
                 huds.remove((int) removed.get(i).getKey());
             }

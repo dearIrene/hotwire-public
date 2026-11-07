@@ -1,5 +1,6 @@
 package dev.moon.hotwire.redefine;
 
+import dev.moon.hotwire.classfile.ClassNodes;
 import java.io.IOException;
 import java.io.InputStream;
 import java.util.Locale;
@@ -38,8 +39,7 @@ final class FrameLocks {
             if (in == null) {
                 return false;
             }
-            ClassNode node = new ClassNode();
-            new ClassReader(in).accept(node, ClassReader.SKIP_DEBUG | ClassReader.SKIP_FRAMES);
+            ClassNode node = ClassNodes.read(in.readAllBytes(), ClassReader.SKIP_DEBUG | ClassReader.SKIP_FRAMES);
             for (MethodNode method : node.methods) {
                 if (method.name.equals(name) && method.desc.equals(descriptor)) {
                     return (method.access & Opcodes.ACC_SYNCHRONIZED) == 0 && !takesLock(method);

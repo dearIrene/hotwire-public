@@ -1,14 +1,14 @@
 package dev.moon.hotwire.fabric.rebuild;
 
-import dev.moon.hotwire.redefine.Tripwire;
 import dev.moon.hotwire.fabric.add.LivePlugins;
 import dev.moon.hotwire.fabric.registration.GameRegistrations;
 import dev.moon.hotwire.jvm.PrivateField;
-import java.util.concurrent.ConcurrentHashMap;
-import java.util.Map;
+import dev.moon.hotwire.redefine.Tripwire;
 import java.util.Collection;
 import java.util.List;
+import java.util.Map;
 import java.util.Objects;
+import java.util.concurrent.ConcurrentHashMap;
 import org.jspecify.annotations.Nullable;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;

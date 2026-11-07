@@ -1,6 +1,7 @@
 package dev.moon.hotwire.fabric.mixin.core;
 
 import dev.moon.hotwire.fabric.report.GameReports;
+import dev.moon.hotwire.report.Causes;
 import dev.moon.hotwire.report.CrashSection;
 import java.nio.file.Path;
 import java.util.ArrayList;
@@ -54,8 +55,7 @@ public abstract class CrashReportMixin {
     private CrashSection.Detail describeTrace() {
         Set<String> frames = new LinkedHashSet<>();
         List<String> messages = new ArrayList<>();
-        int depth = 0;
-        for (Throwable at = this.getException(); at != null && depth < 32; at = at.getCause(), depth++) {
+        for (Throwable at : Causes.list(this.getException())) {
             for (StackTraceElement frame : at.getStackTrace()) {
                 frames.add(frame.getClassName());
             }

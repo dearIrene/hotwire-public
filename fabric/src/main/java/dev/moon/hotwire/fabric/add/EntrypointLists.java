@@ -1,5 +1,7 @@
 package dev.moon.hotwire.fabric.add;
 
+import dev.moon.hotwire.classfile.ClassNodes;
+import dev.moon.hotwire.redefine.ClassBytes;
 import dev.moon.hotwire.redefine.FinalWrites;
 import java.io.IOException;
 import java.io.InputStream;
@@ -87,9 +89,8 @@ final class EntrypointLists {
                 try (Stream<Path> files = Files.walk(root)) {
                     files.filter(file -> file.toString().endsWith(".class")).forEach(file -> {
                         byte[] bytes = read(file);
-                        if (bytes != null && contains(bytes, named)) {
-                            ClassNode node = new ClassNode();
-                            new ClassReader(bytes).accept(node, ClassReader.SKIP_DEBUG | ClassReader.SKIP_FRAMES);
+                        if (bytes != null && ClassBytes.mentions(bytes, named)) {
+                            ClassNode node = ClassNodes.read(bytes, ClassReader.SKIP_DEBUG | ClassReader.SKIP_FRAMES);
                             List<String> fields = findFilled(node, key);
                             if (!fields.isEmpty()) {
                                 filled.put(node.name, fields);
@@ -163,18 +164,5 @@ final class EntrypointLists {
         } catch (IOException e) {
             return null;
         }
-    }
-
-    private static boolean contains(byte[] bytes, byte[] part) {
-        outer:
-        for (int at = 0; at <= bytes.length - part.length; at++) {
-            for (int i = 0; i < part.length; i++) {
-                if (bytes[at + i] != part[i]) {
-                    continue outer;
-                }
-            }
-            return true;
-        }
-        return false;
     }
 }

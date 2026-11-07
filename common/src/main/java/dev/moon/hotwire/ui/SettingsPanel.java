@@ -106,7 +106,7 @@ final class SettingsPanel extends Panel {
         int tallest = this.sections.size() * NAV_ROW;
         for (SettingsSection section : this.sections) {
             List<String> note = section.note().isEmpty() ? List.of()
-                    : wrap(canvas, section.note(), contentWidth - 2 * PAD - 2);
+                    : DevCards.wrap(canvas, section.note(), contentWidth - 2 * PAD - 2);
             int noteHeight = note.isEmpty() ? 0 : note.size() * LINE + 12 + GAP;
             int y = noteHeight;
             List<Card> cards = new ArrayList<>();
@@ -114,8 +114,8 @@ final class SettingsPanel extends Panel {
                 ChoiceBar bar = this.bars.get(option.id());
                 int barWidth = bar == null ? 0 : Math.min(contentWidth / 2, bar.measure(canvas));
                 int textWidth = contentWidth - 2 * PAD - barWidth - 10;
-                List<String> label = wrap(canvas, option.label(), textWidth);
-                List<String> lines = wrap(canvas, option.choices().get(option.chosen()).explains(), textWidth);
+                List<String> label = DevCards.wrap(canvas, option.label(), textWidth);
+                List<String> lines = DevCards.wrap(canvas, option.choices().get(option.chosen()).explains(), textWidth);
                 int text = (label.size() + lines.size()) * LINE + 1;
                 int height = Math.max(ChoiceBar.HEIGHT + 2 * PAD, text + 2 * PAD);
                 cards.add(new Card(option, label, lines, y, height, barWidth));
@@ -126,27 +126,6 @@ final class SettingsPanel extends Panel {
         }
         this.bodyHeight = tallest;
         this.measured = true;
-    }
-
-    private static List<String> wrap(Canvas canvas, String text, int width) {
-        List<String> lines = new ArrayList<>();
-        StringBuilder line = new StringBuilder();
-        for (String word : text.split(" ", -1)) {
-            if (word.isEmpty()) {
-                continue;
-            }
-            String tried = line.isEmpty() ? word : line + " " + word;
-            if (!line.isEmpty() && canvas.measureText(tried) > width) {
-                lines.add(line.toString());
-                line = new StringBuilder(word);
-            } else {
-                line = new StringBuilder(tried);
-            }
-        }
-        if (!line.isEmpty()) {
-            lines.add(line.toString());
-        }
-        return lines;
     }
 
     private int findRoom() {

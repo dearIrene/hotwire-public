@@ -1,5 +1,6 @@
 package dev.moon.hotwire.redefine;
 
+import dev.moon.hotwire.classfile.ClassNodes;
 import java.lang.invoke.MethodHandle;
 import java.lang.invoke.MethodHandles;
 import java.lang.invoke.MethodType;
@@ -88,8 +89,7 @@ public final class ShutOverrides {
         }
         Map<String, Shut> overridden = new HashMap<>();
         own.forEach(shut -> overridden.put(shut.method(), shut));
-        ClassNode node = new ClassNode();
-        new ClassReader(classBytes).accept(node, 0);
+        ClassNode node = ClassNodes.read(classBytes, 0);
         for (MethodNode method : node.methods) {
             if (overridden.containsKey(method.name + method.desc)) {
                 method.name = RENAMED + method.name;
@@ -121,8 +121,7 @@ public final class ShutOverrides {
         if (methods.isEmpty()) {
             return mixed;
         }
-        ClassNode node = new ClassNode();
-        new ClassReader(mixed).accept(node, ClassReader.EXPAND_FRAMES);
+        ClassNode node = ClassNodes.read(mixed, ClassReader.EXPAND_FRAMES);
         for (String shut : methods) {
             MethodNode method = findMethod(node, shut);
             if (method == null || (method.access & (Opcodes.ACC_ABSTRACT | Opcodes.ACC_STATIC)) != 0) {

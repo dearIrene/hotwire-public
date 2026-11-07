@@ -19,10 +19,10 @@ import org.slf4j.LoggerFactory;
 
 final class AddWideners {
     private static final Logger LOGGER = LoggerFactory.getLogger(AddWideners.class);
-    private final ModAdder owner;
+    private final ModAdder.Engine engine;
 
-    AddWideners(ModAdder owner) {
-        this.owner = owner;
+    AddWideners(ModAdder.Engine engine) {
+        this.engine = engine;
     }
 
     Optional<String> findWidenerRefusal(ModJar part, @Nullable Path path) {
@@ -40,18 +40,18 @@ final class AddWideners {
         } catch (IllegalArgumentException e) {
             return Optional.of(Objects.requireNonNull(e.getMessage()));
         }
-        List<AccessWidenerText.Clause> loaded = widener.getClausesOnLoadedClasses(this.owner.engine::isLoaded);
+        List<AccessWidenerText.Clause> loaded = widener.getClausesOnLoadedClasses(this.engine::isLoaded);
         if (loaded.isEmpty()) {
             return Optional.empty();
         }
-        List<AccessWidenerText.Clause> unbridgeable = WidenerUses.findUnbridgeable(loaded, this.owner.engine)
+        List<AccessWidenerText.Clause> unbridgeable = WidenerUses.findUnbridgeable(loaded, this.engine)
                 .stream().filter(clause -> path == null || !WidenerUses.JUDGED_BY_USE.contains(clause.kind())).toList();
         if (!unbridgeable.isEmpty()) {
             return Optional.of(AccessWidenerText.describeRefusal(name, unbridgeable.get(0)));
         }
         JarUseReader.JarClasses jar = JarUseReader.readJar(path);
-        for (WidenerUses.Use use : JarUseReader.findUsesOf(jar, loaded, this.owner.engine)) {
-            if (!use.isFixable() && !JarUseReader.isMovable(use, jar, this.owner.engine, false)) {
+        for (WidenerUses.Use use : JarUseReader.findUsesOf(jar, loaded, this.engine)) {
+            if (!use.isFixable() && !JarUseReader.isMovable(use, jar, this.engine, false)) {
                 return Optional.of(name + " cannot be added: " + use.describe() + ", and the game has loaded that"
                         + " class already, so its access cannot change.");
             }
@@ -65,17 +65,17 @@ final class AddWideners {
         } catch (IllegalArgumentException e) {
             return Optional.of(Objects.requireNonNull(e.getMessage()));
         }
-        List<AccessWidenerText.Clause> loaded = widener.getClausesOnLoadedClasses(this.owner.engine::isLoaded);
+        List<AccessWidenerText.Clause> loaded = widener.getClausesOnLoadedClasses(this.engine::isLoaded);
         if (loaded.isEmpty()) {
             return Optional.empty();
         }
-        List<AccessWidenerText.Clause> unbridgeable = WidenerUses.findUnbridgeable(loaded, this.owner.engine)
+        List<AccessWidenerText.Clause> unbridgeable = WidenerUses.findUnbridgeable(loaded, this.engine)
                 .stream().filter(clause -> !WidenerUses.JUDGED_BY_USE.contains(clause.kind())).toList();
         if (!unbridgeable.isEmpty()) {
             return Optional.of(AccessWidenerText.describeRefusal(name, unbridgeable.get(0)));
         }
         JarUseReader.JarClasses jar = JarUseReader.readJar(path);
-        for (WidenerUses.Use use : JarUseReader.findUsesOf(jar, loaded, this.owner.engine)) {
+        for (WidenerUses.Use use : JarUseReader.findUsesOf(jar, loaded, this.engine)) {
             if (!use.isFixable()) {
                 return Optional.of(name + " cannot be updated while it runs: " + use.describe() + ", and the game"
                         + " has loaded that class already, so its access cannot change.");
@@ -85,13 +85,13 @@ final class AddWideners {
     }
 
     void openOfUpdate(AccessWidenerText widener, ModJar part) {
-        LoaderClassTweaker.apply(widener, part.manifest().name(), this.owner.engine::isLoaded);
-        List<AccessWidenerText.Clause> loaded = widener.getClausesOnLoadedClasses(this.owner.engine::isLoaded);
-        WidenerUses.Openings openings = WidenerUses.findOpenings(loaded, this.owner.engine);
+        LoaderClassTweaker.apply(widener, part.manifest().name(), this.engine::isLoaded);
+        List<AccessWidenerText.Clause> loaded = widener.getClausesOnLoadedClasses(this.engine::isLoaded);
+        WidenerUses.Openings openings = WidenerUses.findOpenings(loaded, this.engine);
         if (!openings.isEmpty()) {
             Linker.open(openings);
             for (String opened : openings.classes()) {
-                Class<?> type = this.owner.engine.findLoaded(opened);
+                Class<?> type = this.engine.findLoaded(opened);
                 if (type != null) {
                     AccessBridge.open(type);
                 }
@@ -103,15 +103,15 @@ final class AddWideners {
 
     void openLoaded(ModJar part, @Nullable Path path) {
         part.accessWidener().ifPresent(widener -> {
-            List<AccessWidenerText.Clause> loaded = widener.getClausesOnLoadedClasses(this.owner.engine::isLoaded);
+            List<AccessWidenerText.Clause> loaded = widener.getClausesOnLoadedClasses(this.engine::isLoaded);
 
             JarUseReader.JarClasses jar = JarUseReader.readJar(path);
 
             Map<String, String> moves = new LinkedHashMap<>();
             Map<String, String> adopted = new LinkedHashMap<>();
-            for (WidenerUses.Use use : JarUseReader.findUsesOf(jar, loaded, this.owner.engine)) {
+            for (WidenerUses.Use use : JarUseReader.findUsesOf(jar, loaded, this.engine)) {
                 if (jar != null && !moves.containsKey(use.inClass())
-                        && JarUseReader.isMovable(use, jar, this.owner.engine, true)) {
+                        && JarUseReader.isMovable(use, jar, this.engine, true)) {
                     String target = Relocations.findTarget(use.inClass(), use.owner());
                     moves.put(use.inClass(), target);
                     Relocations.register(use.inClass(), target, jar.classes());
@@ -134,13 +134,13 @@ final class AddWideners {
                 Map<String, byte[]> generated = new LinkedHashMap<>();
                 moves.forEach((moved, target) -> generated.put(target, Relocations.remap(
                         Objects.requireNonNull(Objects.requireNonNull(jar).classes().get(moved)))));
-                this.owner.engine.getApplier().getRebuilder().getHooks().onGenerated(generated);
+                this.engine.getApplier().getRebuilder().getHooks().onGenerated(generated);
             }
-            WidenerUses.Openings openings = WidenerUses.findOpenings(loaded, this.owner.engine);
+            WidenerUses.Openings openings = WidenerUses.findOpenings(loaded, this.engine);
             if (!openings.isEmpty()) {
                 Linker.open(openings);
                 for (String opened : openings.classes()) {
-                    Class<?> type = this.owner.engine.findLoaded(opened);
+                    Class<?> type = this.engine.findLoaded(opened);
                     if (type != null) {
                         AccessBridge.open(type);
                     }

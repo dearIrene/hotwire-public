@@ -1,12 +1,12 @@
 package dev.moon.hotwire.redefine;
 
+import dev.moon.hotwire.classfile.ClassNodes;
 import java.util.ArrayList;
 import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
 import org.jspecify.annotations.Nullable;
-import org.objectweb.asm.ClassReader;
 import org.objectweb.asm.ClassWriter;
 import org.objectweb.asm.Opcodes;
 import org.objectweb.asm.Type;
@@ -161,8 +161,6 @@ final class RetainedInitializers {
     }
 
     static ClassNode read(byte[] bytes) {
-        ClassNode node = new ClassNode();
-        new ClassReader(bytes).accept(node, 0);
-        return node;
+        return ClassNodes.read(bytes, 0);
     }
 }

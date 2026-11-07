@@ -1,5 +1,6 @@
 package dev.moon.hotwire.fabric.update;
 
+import dev.moon.hotwire.classfile.ClassNodes;
 import dev.moon.hotwire.fabric.ModPolicy;
 import dev.moon.hotwire.jar.JarLookup;
 import dev.moon.hotwire.jar.ModManifest;
@@ -35,7 +36,7 @@ import org.slf4j.LoggerFactory;
 
 final class UpdateCopies {
     private static final Logger LOGGER = LoggerFactory.getLogger(UpdateCopies.class);
-    private final ModUpdater owner;
+    private final ModUpdater.Engine engine;
     private final Set<String> refusedCopies = ConcurrentHashMap.newKeySet();
     private final Map<Path, Map<String, String>> carriedGoing = new ConcurrentHashMap<>();
     private final Map<Path, Set<String>> carriedWithState = new ConcurrentHashMap<>();
@@ -52,8 +53,8 @@ final class UpdateCopies {
         this.patchersOf.clear();
     }
 
-    UpdateCopies(ModUpdater owner) {
-        this.owner = owner;
+    UpdateCopies(ModUpdater.Engine engine) {
+        this.engine = engine;
     }
 
     List<Set<String>> findRestartGroups(Collection<String> waiting, Map<String, Path> given,
@@ -69,10 +70,10 @@ final class UpdateCopies {
             while (!open.isEmpty()) {
                 String at = open.remove();
 
-                if (!this.owner.engine.getApplier().patchesLiveBackend(at) && group.add(at)) {
-                    open.addAll(this.owner.engine.getGraph().getDependents(at));
+                if (!this.engine.getApplier().patchesLiveBackend(at) && group.add(at)) {
+                    open.addAll(this.engine.getGraph().getDependents(at));
                     this.findCarriedWithState(at, given)
-                            .forEach(carried -> open.addAll(this.owner.engine.getGraph().getDependents(carried)));
+                            .forEach(carried -> open.addAll(this.engine.getGraph().getDependents(carried)));
                     open.addAll(this.findPatchersOf(at, given));
                     open.addAll(this.findWaitingNeeded(at, waiting, given));
                     open.addAll(leavingWith.apply(at));
@@ -106,7 +107,7 @@ final class UpdateCopies {
                 continue;
             }
             ModManifest manifest = JarLookup.findManifest(jar);
-            if (manifest == null || this.owner.engine.findRunningJarOf(id) == null) {
+            if (manifest == null || this.engine.findRunningJarOf(id) == null) {
                 return id + " is not a mod the game runs";
             }
             if (!ModPolicy.isSwitchable(id)) {
@@ -127,14 +128,14 @@ final class UpdateCopies {
             String id = entry.getKey();
             for (Map.Entry<String, List<String>> wants : entry.getValue().getRelation(ModManifest.Relation.DEPENDS)
                     .entrySet()) {
-                String version = coming.getOrDefault(wants.getKey(), this.owner.engine.findVersionOf(wants.getKey()));
-                if (version != null && !this.owner.engine.satisfies(version, wants.getValue())) {
+                String version = coming.getOrDefault(wants.getKey(), this.engine.findVersionOf(wants.getKey()));
+                if (version != null && !this.engine.satisfies(version, wants.getValue())) {
                     return id + " needs " + wants.getKey() + " " + String.join(" or ", wants.getValue())
                             + ", and it would find " + version;
                 }
             }
-            String runs = this.owner.engine.findVersionOf(id);
-            if (runs != null && this.owner.getVersionOrder().compare(entry.getValue().version(), runs) < 0) {
+            String runs = this.engine.findVersionOf(id);
+            if (runs != null && ModUpdater.VERSION_ORDER.compare(entry.getValue().version(), runs) < 0) {
                 return id + " " + entry.getValue().version() + " is older than what runs";
             }
             Set<String> patching = new TreeSet<>(this.findPatchersOf(id, given));
@@ -157,7 +158,7 @@ final class UpdateCopies {
         Set<String> left = new LinkedHashSet<>(group);
         while (!left.isEmpty()) {
             String next = left.stream().filter(id -> left.stream().noneMatch(other -> !other.equals(id)
-                    && this.owner.engine.getGraph().getDependents(other).contains(id)))
+                    && this.engine.getGraph().getDependents(other).contains(id)))
                     .findFirst().orElse(left.iterator().next());
             left.remove(next);
             order.add(next);
@@ -180,9 +181,9 @@ final class UpdateCopies {
         while (grew) {
             grew = false;
             for (String id : carried) {
-                if (!offs.contains(id) && this.owner.engine.findVersionOf(id) != null && ModPolicy.isSwitchable(id)
-                        && offs.containsAll(this.owner.engine.getGraph().getDependents(id))
-                        && offs.containsAll(this.owner.engine.getGraph().getContainers(id))) {
+                if (!offs.contains(id) && this.engine.findVersionOf(id) != null && ModPolicy.isSwitchable(id)
+                        && offs.containsAll(this.engine.getGraph().getDependents(id))
+                        && offs.containsAll(this.engine.getGraph().getContainers(id))) {
                     offs.add(id);
                     grew = true;
                 }
@@ -195,8 +196,8 @@ final class UpdateCopies {
         if (!ModPolicy.isSwitchable(id)) {
             return false;
         }
-        String runs = this.owner.engine.findVersionOf(id);
-        return runs == null || !this.owner.engine.satisfies(runs, List.of(">=" + version));
+        String runs = this.engine.findVersionOf(id);
+        return runs == null || !this.engine.satisfies(runs, List.of(">=" + version));
     }
 
     boolean patchesNamed(Set<String> group, String refusal) {
@@ -206,7 +207,7 @@ final class UpdateCopies {
             named.add(slashed.group());
         }
         Set<String> patching = new HashSet<>();
-        this.owner.engine.getApplier().getPatchersOf(named, this.owner.engine.on(),
+        this.engine.getApplier().getPatchersOf(named, this.engine.on(),
                 "").values().forEach(patching::addAll);
         return !Collections.disjoint(patching, group);
     }
@@ -217,7 +218,7 @@ final class UpdateCopies {
 
     @Nullable Path findJarOf(String id, Map<String, Path> given) {
         Path jar = given.get(id);
-        return jar != null ? jar : this.owner.engine.findRunningJarOf(id);
+        return jar != null ? jar : this.engine.findRunningJarOf(id);
     }
 
     Set<String> findCarriedWithState(String id, Map<String, Path> given) {
@@ -245,7 +246,7 @@ final class UpdateCopies {
                 Set<String> targets = MixinClassInfo.read(bytes).targets();
                 if (!targets.isEmpty() && hasDefaultMethod(bytes)) {
                     for (String target : targets) {
-                        Class<?> loaded = this.owner.engine.getClasses().findLoaded(target);
+                        Class<?> loaded = this.engine.getClasses().findLoaded(target);
                         if (loaded != null && loaded.isInterface()) {
                             return target;
                         }
@@ -259,8 +260,8 @@ final class UpdateCopies {
     }
 
     static boolean hasDefaultMethod(byte[] mixin) {
-        ClassNode node = new ClassNode();
-        new ClassReader(mixin).accept(node, ClassReader.SKIP_CODE | ClassReader.SKIP_DEBUG | ClassReader.SKIP_FRAMES);
+        ClassNode node = ClassNodes.read(mixin,
+                ClassReader.SKIP_CODE | ClassReader.SKIP_DEBUG | ClassReader.SKIP_FRAMES);
         for (MethodNode method : node.methods) {
             boolean shut = (method.access & (Opcodes.ACC_ABSTRACT | Opcodes.ACC_STATIC | Opcodes.ACC_PRIVATE)) != 0;
             if (!shut && !method.name.startsWith("<")
@@ -280,10 +281,10 @@ final class UpdateCopies {
         }
         Set<String> needed = new TreeSet<>();
         manifest.getRelation(ModManifest.Relation.DEPENDS).forEach((mod, ranges) -> {
-            String runs = this.owner.engine.findVersionOf(mod);
-            if (runs == null || !this.owner.engine.satisfies(runs, ranges)) {
+            String runs = this.engine.findVersionOf(mod);
+            if (runs == null || !this.engine.satisfies(runs, ranges)) {
                 for (String other : waiting) {
-                    if (other.equals(this.owner.engine.getGraph().resolve(mod))
+                    if (other.equals(this.engine.getGraph().resolve(mod))
                             || this.findCarriedGoing(other, given).containsKey(mod)) {
                         needed.add(other);
                     }
@@ -301,7 +302,7 @@ final class UpdateCopies {
         return this.patchersOf.computeIfAbsent(id, any -> {
             try {
                 Set<String> patching = new TreeSet<>();
-                this.owner.engine.getApplier().getPatchersOf(JarLinks.readClassNames(jar), this.owner.engine.on(),
+                this.engine.getApplier().getPatchersOf(JarLinks.readClassNames(jar), this.engine.on(),
                         id).values()
                         .forEach(patching::addAll);
 

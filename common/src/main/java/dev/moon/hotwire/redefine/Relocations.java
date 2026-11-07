@@ -1,5 +1,6 @@
 package dev.moon.hotwire.redefine;
 
+import dev.moon.hotwire.classfile.ClassNodes;
 import java.nio.charset.StandardCharsets;
 import java.util.LinkedHashSet;
 import java.util.Map;
@@ -205,8 +206,6 @@ public final class Relocations {
     }
 
     private static ClassNode read(byte[] bytes) {
-        ClassNode node = new ClassNode();
-        new ClassReader(bytes).accept(node, ClassReader.SKIP_DEBUG | ClassReader.SKIP_FRAMES);
-        return node;
+        return ClassNodes.read(bytes, ClassReader.SKIP_DEBUG | ClassReader.SKIP_FRAMES);
     }
 }

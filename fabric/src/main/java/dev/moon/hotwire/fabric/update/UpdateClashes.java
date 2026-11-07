@@ -22,14 +22,14 @@ import org.slf4j.LoggerFactory;
 
 final class UpdateClashes {
     private static final Logger LOGGER = LoggerFactory.getLogger(UpdateClashes.class);
-    private final ModUpdater owner;
+    private final ModUpdater.Engine engine;
 
-    UpdateClashes(ModUpdater owner) {
-        this.owner = owner;
+    UpdateClashes(ModUpdater.Engine engine) {
+        this.engine = engine;
     }
 
     JarLinks.GameClassReader makeGameClassReader() {
-        return new JarLinks.GameClassReader(this.owner.engine.getApplier().getRebuilder().copy()::findReadable);
+        return new JarLinks.GameClassReader(this.engine.getApplier().getRebuilder().copy()::findReadable);
     }
 
     static Set<String> findEntrypointsFor(ModManifest manifest, Set<String> waitingIds) {
@@ -49,10 +49,10 @@ final class UpdateClashes {
 
     @Nullable String findUnmetRange(ModManifest manifest, Map<String, ModManifest> comingIn) {
         for (Map.Entry<String, List<String>> wants : manifest.getRelation(ModManifest.Relation.DEPENDS).entrySet()) {
-            String resolved = this.owner.engine.getGraph().resolve(wants.getKey());
+            String resolved = this.engine.getGraph().resolve(wants.getKey());
             ModManifest coming = comingIn.get(resolved);
-            String version = coming != null ? coming.version() : this.owner.engine.findVersionOf(wants.getKey());
-            if (version != null && !this.owner.engine.satisfies(version, wants.getValue())) {
+            String version = coming != null ? coming.version() : this.engine.findVersionOf(wants.getKey());
+            if (version != null && !this.engine.satisfies(version, wants.getValue())) {
                 return "it needs " + wants.getKey() + " " + String.join(" or ", wants.getValue()) + ", and this batch"
                         + " leaves " + version;
             }
@@ -109,10 +109,10 @@ final class UpdateClashes {
     }
 
     @Nullable String findLacking(List<String> methods, Set<String> goingIn, Set<String> patched) {
-        Class<?>[] loaded = this.owner.engine.getApplier().getRebuilder().getLoadedClasses();
+        Class<?>[] loaded = this.engine.getApplier().getRebuilder().getLoadedClasses();
         for (String method : methods) {
             String[] parts = method.split(" ", -1);
-            Class<?> owner = this.owner.engine.getClasses().findLoaded(parts[0]);
+            Class<?> owner = this.engine.getClasses().findLoaded(parts[0]);
             if (owner == null) {
                 continue;
             }

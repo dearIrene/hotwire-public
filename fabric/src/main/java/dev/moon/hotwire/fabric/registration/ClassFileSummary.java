@@ -1,5 +1,6 @@
 package dev.moon.hotwire.fabric.registration;
 
+import dev.moon.hotwire.classfile.ClassNodes;
 import java.util.HashSet;
 import java.util.Set;
 import org.jspecify.annotations.Nullable;
@@ -19,8 +20,7 @@ final class ClassFileSummary {
     }
 
     static boolean isOnlyReadTestedForNull(byte[] bytes, String name, String descriptor) {
-        ClassNode node = new ClassNode();
-        new ClassReader(bytes).accept(node, ClassReader.SKIP_DEBUG | ClassReader.SKIP_FRAMES);
+        ClassNode node = ClassNodes.read(bytes, ClassReader.SKIP_DEBUG | ClassReader.SKIP_FRAMES);
         for (MethodNode method : node.methods) {
             for (AbstractInsnNode at = method.instructions.getFirst(); at != null; at = at.getNext()) {
                 if (at instanceof FieldInsnNode read && read.getOpcode() == Opcodes.GETSTATIC
@@ -40,8 +40,7 @@ final class ClassFileSummary {
     }
 
     static boolean isSetAgainLater(byte[] original, String name, String descriptor, boolean isStatic) {
-        ClassNode node = new ClassNode();
-        new ClassReader(original).accept(node, ClassReader.SKIP_DEBUG | ClassReader.SKIP_FRAMES);
+        ClassNode node = ClassNodes.read(original, ClassReader.SKIP_DEBUG | ClassReader.SKIP_FRAMES);
         int store = isStatic ? Opcodes.PUTSTATIC : Opcodes.PUTFIELD;
         String initializer = isStatic ? "<clinit>" : "<init>";
         for (MethodNode method : node.methods) {

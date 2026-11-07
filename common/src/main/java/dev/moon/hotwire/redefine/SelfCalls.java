@@ -1,5 +1,6 @@
 package dev.moon.hotwire.redefine;
 
+import dev.moon.hotwire.classfile.ClassNodes;
 import java.util.HashSet;
 import java.util.LinkedHashSet;
 import java.util.List;
@@ -55,8 +56,7 @@ final class SelfCalls {
             if (bytes == null) {
                 return true;
             }
-            ClassNode node = new ClassNode();
-            new ClassReader(bytes).accept(node, ClassReader.SKIP_CODE);
+            ClassNode node = ClassNodes.read(bytes, ClassReader.SKIP_CODE);
             for (MethodNode method : node.methods) {
                 if ((method.name + method.desc).equals(member)) {
                     return true;

@@ -7,8 +7,4 @@ public record DevDelta(Set<String> put, Set<String> gone) {
         put = Set.copyOf(put);
         gone = Set.copyOf(gone);
     }
-
-    public boolean touches(String entry) {
-        return this.put.contains(entry) || this.gone.contains(entry);
-    }
 }

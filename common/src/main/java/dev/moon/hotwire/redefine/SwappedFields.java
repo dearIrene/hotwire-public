@@ -1,6 +1,7 @@
 package dev.moon.hotwire.redefine;
 
 import dev.moon.hotwire.classfile.ClassHeader;
+import dev.moon.hotwire.classfile.ClassNodes;
 import java.util.HashMap;
 import java.util.HashSet;
 import java.util.Map;
@@ -44,14 +45,12 @@ final class SwappedFields {
         if (swapped.isEmpty()) {
             return split;
         }
-        ClassNode mix = new ClassNode();
-        new ClassReader(mixed).accept(mix, ClassReader.SKIP_DEBUG | ClassReader.SKIP_FRAMES);
+        ClassNode mix = ClassNodes.read(mixed, ClassReader.SKIP_DEBUG | ClassReader.SKIP_FRAMES);
         Map<String, String> made = findMade(mix, swapped);
         if (made.isEmpty()) {
             return split;
         }
-        ClassNode target = new ClassNode();
-        new ClassReader(split.target()).accept(target, 0);
+        ClassNode target = ClassNodes.read(split.target(), 0);
 
         if ((target.version & 0xFFFF) < Opcodes.V1_7) {
             return split;

@@ -17,6 +17,7 @@ import dev.moon.hotwire.ui.Canvas;
 import dev.moon.hotwire.ui.Lang;
 import dev.moon.hotwire.ui.UpdateMethod;
 import dev.moon.hotwire.ui.UpdatePreview;
+import dev.moon.hotwire.update.JarDiff;
 import dev.moon.hotwire.update.JarIntake;
 import dev.moon.hotwire.update.UpdateContext;
 import dev.moon.hotwire.update.UpdateDiffer;
@@ -39,6 +40,8 @@ import java.util.Map;
 import java.util.Objects;
 import java.util.Optional;
 import java.util.Set;
+import java.util.TreeMap;
+import java.util.TreeSet;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.function.BiFunction;
 import java.util.function.Consumer;
@@ -53,9 +56,8 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 public final class ModUpdater {
-    private final UpdatePlans updatePlans = new UpdatePlans(this);
-    private final UpdateClashes updateClashes = new UpdateClashes(this);
-    private final UpdateCopies updateCopies = new UpdateCopies(this);
+    private final UpdateClashes updateClashes;
+    private final UpdateCopies updateCopies;
     public sealed interface Result {
         record Updated(String id, String name, UpdatePlan plan, ApplyResult applied, String stay) implements Result {
         }
@@ -100,26 +102,26 @@ public final class ModUpdater {
 
         Map<String, byte[]> readRunningOf(String id);
 
-        default Optional<String> findWidenerRefusal(ModJar read, Path jar) {
-            return Optional.of("the access widener changed");
-        }
+        Optional<String> findWidenerRefusal(ModJar read, Path jar);
 
-        default Optional<String> findAccessRefusal(List<String> lines, ModJar read, Path jar) {
-            return Optional.of("its new flags open what a running class keeps shut");
-        }
+        Optional<String> findAccessRefusal(List<String> lines, ModJar read, Path jar);
 
-        default void openAccess(List<String> lines, ModJar read) {
-        }
+        void openAccess(List<String> lines, ModJar read);
 
-        default Optional<String> addCarried(Path library) {
-            return Optional.of("the game does not have it");
-        }
+        Optional<String> addCarried(Path library);
 
-        default void openWidener(ModJar read) {
-        }
+        void openWidener(ModJar read);
     }
 
     private static final Logger LOGGER = LoggerFactory.getLogger(ModUpdater.class);
+
+    static final Comparator<String> VERSION_ORDER = (left, right) -> {
+        try {
+            return Version.parse(left).compareTo(Version.parse(right));
+        } catch (VersionParsingException e) {
+            return left.compareTo(right);
+        }
+    };
 
     final Engine engine;
 
@@ -127,16 +129,18 @@ public final class ModUpdater {
     private final LiveUpdates live;
     private final PlanCache plans = new PlanCache();
 
-    final Map<String, Optional<String>> wideners = new ConcurrentHashMap<>();
+    private final Map<String, Optional<String>> wideners = new ConcurrentHashMap<>();
     private final Set<Path> afterWorld = ConcurrentHashMap.newKeySet();
 
     public ModUpdater(Engine engine) {
         this.engine = engine;
+        this.updateClashes = new UpdateClashes(engine);
+        this.updateCopies = new UpdateCopies(engine);
         this.idChanged = new IdChangedUpdate(engine, this::queueSwap);
         this.live = new LiveUpdates(engine, this::queueToStay);
         this.carried = new CarriedUpdates(engine::findVersionOf, engine::readRunningOf, engine::getStagingFolder,
-                this.updatePlans::findRejection, this.getVersionOrder(), this.updatePlans::planFrom,
-                        this.updatePlans::withWidenerChecked,
+                this::findRejection, VERSION_ORDER, this::planFrom,
+                        this::withWidenerChecked,
                 engine::satisfies);
     }
 
@@ -192,7 +196,7 @@ public final class ModUpdater {
             return this.idChanged.preview(manifest, replaced, fileName, jar);
         }
         String installed = this.engine.getGraph().find(manifest.id()).map(ModManifest::version).orElse("");
-        JarIntake.Kind kind = JarIntake.classify(manifest, Map.of(manifest.id(), installed), this.getVersionOrder());
+        JarIntake.Kind kind = JarIntake.classify(manifest, Map.of(manifest.id(), installed), VERSION_ORDER);
 
         if (kind == JarIntake.Kind.SAME_VERSION && hasSameBytes(running, jar)) {
             return new UpdatePreview.SameVersion(manifest.name(), installed);
@@ -200,7 +204,7 @@ public final class ModUpdater {
         if (kind == JarIntake.Kind.REFUSED) {
             return new UpdatePreview.Unreadable(fileName);
         }
-        Optional<String> rejected = this.updatePlans.findRejection(manifest);
+        Optional<String> rejected = this.findRejection(manifest);
         if (rejected.isPresent()) {
             return new UpdatePreview.Refused(manifest.name(), rejected.get());
         }
@@ -294,8 +298,8 @@ public final class ModUpdater {
             String runs = this.engine.findVersionOf(nested.id());
             if (runs == null) {
                 out.accept(nested.id() + "\t" + id + "\tNEW\t\t");
-            } else if (this.getVersionOrder().compare(nested.version(), runs) > 0) {
-                this.describePlan(nested.id(), id, this.updatePlans.planFrom(nested.id(), UpdateDiffer.compare(
+            } else if (VERSION_ORDER.compare(nested.version(), runs) > 0) {
+                this.describePlan(nested.id(), id, this.planFrom(nested.id(), UpdateDiffer.compare(
                         this.engine.readRunningOf(nested.id()), UpdateDiffer.readEntries(written))), written, out);
             }
         }
@@ -311,7 +315,7 @@ public final class ModUpdater {
         if (running == null) {
             return null;
         }
-        Optional<String> rejected = this.updatePlans.findRejection(manifest);
+        Optional<String> rejected = this.findRejection(manifest);
         if (rejected.isPresent()) {
             LOGGER.info("[Hotwire] sweep: {} rejected: {}", manifest.id(), rejected.get());
             return null;
@@ -339,10 +343,6 @@ public final class ModUpdater {
 
     Path findJarToRun(Path picked) {
         return this.unwrap(picked);
-    }
-
-    UpdatePlans getPlans() {
-        return this.updatePlans;
     }
 
     UpdateCopies getCopies() {
@@ -432,7 +432,7 @@ public final class ModUpdater {
             }
             return new SortResult.IdChanged(manifest, replaced, jar);
         }
-        Optional<String> rejected = this.updatePlans.findRejection(manifest, brought);
+        Optional<String> rejected = this.findRejection(manifest, brought);
         if (rejected.isPresent()) {
             return new SortResult.Refused(new Result.Refused(rejected.get()));
         }
@@ -485,7 +485,7 @@ public final class ModUpdater {
             for (Path library : libraries) {
                 ModJar read = this.plans.read(library);
                 own.add(read.manifest().id());
-                this.updatePlans.readComing(read, bringing);
+                this.readComing(read, bringing);
             }
             this.after = bringing;
             for (Path library : libraries) {
@@ -523,7 +523,7 @@ public final class ModUpdater {
                 Result queued = this.queue(planned.manifest(), planned.running(), planned.jar(),
                         planned.whole().plan());
                 if (queued instanceof Result.Queued) {
-                    this.updatePlans.findComing(planned.read()).forEach((id, coming) -> this.queuedCarried.put(id,
+                    this.findComing(planned.read()).forEach((id, coming) -> this.queuedCarried.put(id,
                             coming.version()));
                 }
                 yield queued;
@@ -547,7 +547,7 @@ public final class ModUpdater {
 
     Map<String, ModManifest> findComingOf(Path picked) {
         try {
-            return this.updatePlans.findComing(this.plans.read(this.unwrap(picked)));
+            return this.findComing(this.plans.read(this.unwrap(picked)));
         } catch (ModJarException e) {
             return Map.of();
         }
@@ -564,7 +564,7 @@ public final class ModUpdater {
         }
     }
 
-    Map<String, ModManifest> after = Map.of();
+    private Map<String, ModManifest> after = Map.of();
     final CarriedUpdates carried;
     Map<String, String> queued = Map.of();
 
@@ -575,7 +575,7 @@ public final class ModUpdater {
     private synchronized Whole planWhole(String id, Path running, Path incoming, ModJar read,
             Map<String, ModManifest> brought, Map<String, String> waiting) throws ModJarException {
         Map<String, ModManifest> bringing = new HashMap<>(brought);
-        bringing.putAll(this.updatePlans.readComing(read, new HashMap<>()));
+        bringing.putAll(this.readComing(read, new HashMap<>()));
         this.after = bringing;
         Map<String, String> queuedNow = new HashMap<>();
         this.engine.getQueue().getEntries().forEach(entry -> queuedNow.put(entry.modId(), entry.toVersion()));
@@ -590,7 +590,7 @@ public final class ModUpdater {
             }
 
             Map.Entry<String, List<String>> first = unmet.entrySet().iterator().next();
-            String have = this.updatePlans.findVersionAfter(first.getKey());
+            String have = this.findVersionAfter(first.getKey());
             ModManifest coming = this.after.get(id);
             String name = coming == null ? id : coming.name() + " " + coming.version();
             return new Whole(whole.plan(), List.of(), false, name + " needs " + first.getKey() + " "
@@ -610,7 +610,7 @@ public final class ModUpdater {
     private Whole planWithCarried(String id, Path running, Path incoming) throws ModJarException {
         UpdatePlan own = this.plan(id, running, incoming);
         SwitchTimes.mark("plan: own");
-        UpdatePlan plan = this.updatePlans.withWidenerChecked(own, this.plans.read(incoming), incoming);
+        UpdatePlan plan = this.withWidenerChecked(own, this.plans.read(incoming), incoming);
         SwitchTimes.mark("plan: openings");
         Set<String> paths = UpdatePlanner.findNestedPaths(plan);
         List<Path> toAdd = new ArrayList<>();
@@ -630,7 +630,7 @@ public final class ModUpdater {
     }
 
     UpdatePlan plan(String id, Path running, Path incoming) throws ModJarException {
-        return this.updatePlans.planFrom(id, this.plans.compare(running, incoming));
+        return this.planFrom(id, this.plans.compare(running, incoming));
     }
 
     Result queue(ModManifest manifest, Path running, Path incoming, UpdatePlan plan) {
@@ -701,14 +701,134 @@ public final class ModUpdater {
         };
     }
 
-    Comparator<String> getVersionOrder() {
-        return (left, right) -> {
+    Optional<String> findRejection(ModManifest incoming, Map<String, ModManifest> brought) {
+        synchronized (this) {
+            this.after = brought;
             try {
-                return Version.parse(left).compareTo(Version.parse(right));
-            } catch (VersionParsingException e) {
-                return left.compareTo(right);
+                return this.findRejection(incoming);
+            } finally {
+                this.after = Map.of();
             }
-        };
+        }
     }
 
+    Optional<String> findRejection(ModManifest incoming) {
+        ModGraph graph = this.engine.getGraph();
+        Set<String> ids = new TreeSet<>(graph.getIds());
+        ids.addAll(this.after.keySet());
+        for (String id : ids) {
+            ModManifest other = this.after.containsKey(id) ? this.after.get(id)
+                    : graph.find(id).orElse(null);
+            if (other == null || id.equals(incoming.id())) {
+                continue;
+            }
+            for (Map.Entry<String, List<String>> wants : other.getRelation(ModManifest.Relation.DEPENDS).entrySet()) {
+                if (graph.resolve(wants.getKey()).equals(incoming.id()) && !wants.getValue().isEmpty()
+                        && !this.engine.satisfies(incoming.version(), wants.getValue())) {
+                    return Optional.of(other.name() + " needs " + incoming.name() + " "
+                            + String.join(" or ", wants.getValue()) + ", and this is " + incoming.version()
+                            + ". Update " + other.name() + " first, or keep " + incoming.name() + " as it is.");
+                }
+            }
+            for (Map.Entry<String, List<String>> breaks : other.getRelation(ModManifest.Relation.BREAKS).entrySet()) {
+                if (graph.resolve(breaks.getKey()).equals(incoming.id())
+                        && this.engine.satisfies(incoming.version(), breaks.getValue())) {
+                    return Optional.of(other.name() + " does not work with " + incoming.name() + " "
+                            + incoming.version() + ". Update " + other.name() + " first, or keep "
+                            + incoming.name() + " as it is.");
+                }
+            }
+        }
+        return Optional.empty();
+    }
+
+    Map<String, ModManifest> findComing(ModJar jar) {
+        return this.readComing(jar, new HashMap<>());
+    }
+
+    Map<String, ModManifest> readComing(ModJar jar, Map<String, ModManifest> into) {
+        ModManifest manifest = jar.manifest();
+        String runs = this.engine.findVersionOf(manifest.id());
+        if (runs == null || VERSION_ORDER.compare(manifest.version(), runs) > 0) {
+            into.putIfAbsent(manifest.id(), manifest);
+        }
+        jar.nested().forEach(nested -> this.readComing(nested, into));
+        return into;
+    }
+
+    @Nullable String findVersionAfter(String id) {
+        String resolved = this.engine.getGraph().resolve(id);
+        ModManifest coming = this.after.get(resolved);
+        if (coming != null) {
+            return coming.version();
+        }
+        String waiting = this.queued.get(resolved);
+        return waiting != null ? waiting : this.engine.findVersionOf(id);
+    }
+
+    boolean isMetNow(String id, List<String> ranges) {
+        ModManifest coming = this.after.get(this.engine.getGraph().resolve(id));
+        String now = coming != null ? coming.version() : this.engine.findVersionOf(id);
+        return now != null && this.engine.satisfies(now, ranges);
+    }
+
+    UpdatePlan withWidenerChecked(UpdatePlan plan, ModJar read, Path jar) {
+        Optional<String> refusal = Optional.empty();
+        for (UpdatePlan.UpdateNotice notice : plan.notices()) {
+            if (refusal.isEmpty() && notice instanceof UpdatePlan.UpdateNotice.WidenerOpens) {
+                refusal = this.wideners.computeIfAbsent(jar + " widener",
+                        any -> this.engine.findWidenerRefusal(read, jar));
+            } else if (refusal.isEmpty() && notice instanceof UpdatePlan.UpdateNotice.AccessOpens access) {
+                refusal = this.wideners.computeIfAbsent(jar + " flags",
+                        any -> this.engine.findAccessRefusal(access.lines(), read, jar));
+            }
+        }
+        if (refusal.isEmpty()) {
+            return plan;
+        }
+        LOGGER.info("[Hotwire] {}'s new widener cannot go in: {}", plan.modId(), refusal.get());
+        return UpdatePlanner.withBlockers(plan, List.of(new UpdatePlan.UpdateBlocker.AccessWidenerChanged()));
+    }
+
+    public List<Path> findCarriedToAdd(Path picked) {
+        List<Path> out = new ArrayList<>();
+        Path jar = this.unwrap(picked);
+        ModManifest manifest = JarLookup.findManifest(jar);
+        Path running = manifest == null ? null : this.engine.findRunningJarOf(manifest.id());
+        if (manifest == null || running == null) {
+            return out;
+        }
+        try {
+            out.addAll(this.carried.findMissing(jar, this.plan(manifest.id(), running, jar)));
+        } catch (ModJarException e) {
+            LOGGER.info("[Hotwire] {}'s carried libraries could not be read: {}", picked.getFileName(), e.getMessage());
+        }
+        return out;
+    }
+
+    UpdatePlan planFrom(String id, JarDiff diff) {
+        Set<String> names = new HashSet<>();
+        diff.classes().forEach(diffed -> names.add(diffed.name()));
+        Set<String> loaded = new HashSet<>();
+        for (String name : names) {
+            if (this.engine.getClasses().findLoaded(name) != null) {
+                loaded.add(name);
+            }
+        }
+        Map<String, List<String>> unmet = new TreeMap<>();
+        List<UpdatePlan.UpdateBlocker> waits = new ArrayList<>();
+        diff.incoming().getRelation(ModManifest.Relation.DEPENDS).forEach((mod, ranges) -> {
+            String have = this.findVersionAfter(mod);
+            if (have == null || !this.engine.satisfies(have, ranges)) {
+                unmet.put(mod, ranges);
+            } else if (!this.isMetNow(mod, ranges)) {
+                waits.add(new UpdatePlan.UpdateBlocker.DependencyQueued(mod, have));
+            }
+        });
+        UpdateContext context = new UpdateContext(this.engine.getStateOf(id), loaded,
+                this.engine.getApplier().getPatchersOf(names, this.engine.on(), id),
+                        this.engine.getGraph()
+                .getDependents(id), unmet, VERSION_ORDER, DevSession.takesShapes(id));
+        return UpdatePlanner.withBlockers(UpdatePlanner.plan(diff, context), waits);
+    }
 }

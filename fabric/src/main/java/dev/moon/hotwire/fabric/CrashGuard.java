@@ -8,6 +8,7 @@ import dev.moon.hotwire.fabric.registration.GameRegistrations;
 import dev.moon.hotwire.redefine.HandlerGuards;
 import dev.moon.hotwire.registration.CallerOwner;
 import dev.moon.hotwire.report.ActionJournal;
+import dev.moon.hotwire.report.Causes;
 import dev.moon.hotwire.report.Report;
 import dev.moon.hotwire.switching.CrashPolicy;
 import dev.moon.hotwire.switching.ModSwitcher;
@@ -168,7 +169,7 @@ public final class CrashGuard {
     }
 
     static String findWhat(Throwable thrown) {
-        Throwable inner = findInnermost(thrown);
+        Throwable inner = Causes.findInnermost(thrown);
         String message = inner.getMessage();
         return inner.getClass().getSimpleName() + (message == null || message.isBlank() ? "" : ": " + message);
     }
@@ -178,7 +179,7 @@ public final class CrashGuard {
         if (place != null) {
             return place.words();
         }
-        StackTraceElement[] frames = findInnermost(thrown).getStackTrace();
+        StackTraceElement[] frames = Causes.findInnermost(thrown).getStackTrace();
         return frames.length == 0 ? "" : frames[0].toString();
     }
 
@@ -186,7 +187,7 @@ public final class CrashGuard {
     }
 
     private static @Nullable Place findPlace(Throwable thrown, String mod) {
-        Throwable inner = findInnermost(thrown);
+        Throwable inner = Causes.findInnermost(thrown);
         ClassLoader game = CrashGuard.class.getClassLoader();
         for (StackTraceElement element : findFramesAbove(inner)) {
             Class<?> type;
@@ -206,14 +207,6 @@ public final class CrashGuard {
             }
         }
         return null;
-    }
-
-    private static Throwable findInnermost(Throwable thrown) {
-        Throwable inner = thrown;
-        for (int depth = 0; inner.getCause() != null && depth < 32; depth++) {
-            inner = inner.getCause();
-        }
-        return inner;
     }
 
     private static @Nullable String findMixinOf(Class<?> type, String method, String mod) {
@@ -260,8 +253,10 @@ public final class CrashGuard {
         }
         List<CallerOwner.Frame> frames = new ArrayList<>();
         ClassLoader game = CrashGuard.class.getClassLoader();
-        int depth = 0;
-        for (Throwable at = thrown; at != null && frames.size() < FRAMES && depth < 32; at = at.getCause(), depth++) {
+        for (Throwable at : Causes.list(thrown)) {
+            if (frames.size() >= FRAMES) {
+                break;
+            }
             for (StackTraceElement element : findFramesAbove(at)) {
                 try {
                     frames.add(new CallerOwner.Frame(Class.forName(element.getClassName(), false, game),
@@ -294,10 +289,7 @@ public final class CrashGuard {
     }
 
     private static @Nullable String findMergedOwner(Throwable thrown) {
-        List<Throwable> chain = new ArrayList<>();
-        for (Throwable at = thrown; at != null && chain.size() < 32; at = at.getCause()) {
-            chain.addFirst(at);
-        }
+        List<Throwable> chain = Causes.list(thrown).reversed();
 
         for (Throwable at : chain) {
             String mod = findMergedOwnerOf(at);

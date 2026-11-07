@@ -4,6 +4,8 @@ import dev.moon.hotwire.concurrent.Parallel;
 import dev.moon.hotwire.jvm.LoadedClassList;
 import dev.moon.hotwire.mixin_copy.AppliedMixins;
 import dev.moon.hotwire.mixin_copy.MixinCopy;
+import dev.moon.hotwire.mixin_copy.MixinCopyException;
+import dev.moon.hotwire.report.StageTimes;
 import java.lang.instrument.ClassDefinition;
 import java.lang.instrument.Instrumentation;
 import java.lang.instrument.UnmodifiableClassException;
@@ -23,7 +25,6 @@ import java.util.Set;
 import java.util.TreeSet;
 import java.util.WeakHashMap;
 import java.util.concurrent.ConcurrentHashMap;
-import java.util.concurrent.atomic.LongAdder;
 import java.util.function.BooleanSupplier;
 import java.util.function.Function;
 import java.util.function.Predicate;
@@ -39,10 +40,7 @@ public final class ClassRebuilder {
         wholeClasses = classes;
     }
 
-    private final RebuildMixes rebuildMixes = new RebuildMixes(this);
     private static final Logger LOGGER = LoggerFactory.getLogger(ClassRebuilder.class);
-
-    private static final int REDEFINE_CHUNK = Integer.getInteger("hotwire.redefine_chunk", Integer.MAX_VALUE);
 
     private static final Duration SLOW_SPLIT = Duration.ofSeconds(1);
 
@@ -50,7 +48,7 @@ public final class ClassRebuilder {
 
     final Instrumentation instrumentation;
     private final MixinCopy copy;
-    final LoadedClassBytes loadedBytes;
+    private final LoadedClassBytes loadedBytes;
 
     private final Map<Class<?>, Set<String>> carrying = Collections.synchronizedMap(new WeakHashMap<>());
 
@@ -77,7 +75,7 @@ public final class ClassRebuilder {
     private volatile boolean launchChanged;
     private final RebuildCache ahead = new RebuildCache();
 
-    final CachedMixes mixes;
+    private final CachedMixes mixes;
 
     public void stopWhen(BooleanSupplier stop) {
         STOP.set(stop);
@@ -103,7 +101,6 @@ public final class ClassRebuilder {
     private static final ThreadLocal<Boolean> MIX_ONLY = ThreadLocal.withInitial(() -> false);
 
     private final Set<String> constructorsChanged = ConcurrentHashMap.newKeySet();
-    private static final String MIX_SAVED = "the mix was saved for the switch cache";
 
     public Set<String> takeConstructorsChanged() {
         Set<String> changed = Set.copyOf(this.constructorsChanged);
@@ -113,10 +110,6 @@ public final class ClassRebuilder {
 
     public static void mixOnly(boolean only) {
         MIX_ONLY.set(only);
-    }
-
-    public static boolean isMixSaved(RebuildException e) {
-        return MIX_SAVED.equals(e.getMessage());
     }
 
     private volatile Function<Collection<String>, Map<String, byte[]>> runningOf = names -> Map.of();
@@ -142,13 +135,13 @@ public final class ClassRebuilder {
         StoredArguments.readParentsWith(bytesOf);
     }
 
-    volatile Function<String, @Nullable String> argsClassOf = shape -> null;
+    private volatile Function<String, @Nullable String> argsClassOf = shape -> null;
 
     public void resolveArgsWith(Function<String, @Nullable String> argsClassOf) {
         this.argsClassOf = argsClassOf;
     }
 
-    final RebuildHooks hooks = new RebuildHooks();
+    private final RebuildHooks hooks = new RebuildHooks();
 
     private volatile @Nullable BatchRider rider;
 
@@ -212,7 +205,7 @@ public final class ClassRebuilder {
             Map<String, byte[]> classes,
             Map<String, byte[]> resources, List<String> on, Predicate<String> mods) throws RebuildException {
         RebuildCache.Inputs inputs = new RebuildCache.Inputs(originals, current, classes, resources, on, this.toLaunch,
-                RebuildMixes.findMadeWithout(originals.keySet()), MixinCopy.findClassPathChanges());
+                OffWindowObjects.findMadeWithout(originals.keySet()), MixinCopy.findClassPathChanges());
         PreparedRebuild cached = this.ahead.find(inputs);
         if (cached != null) {
             LOGGER.info("[Hotwire] the rebuild of {} classes was worked out ahead", originals.size());
@@ -225,10 +218,44 @@ public final class ClassRebuilder {
             byName.put(name, type);
             readable.put(name, bytes);
         });
-        long start = System.nanoTime();
+        StageTimes mixing = new StageTimes();
+        Map<String, byte[]> mixed = this.mixAll(byName.keySet(), current, readable, resources, on, mods, mixing);
+        Function<String, byte @Nullable []> anyClass = read -> {
+            byte[] handed = readable.get(read);
+            return handed != null ? handed : this.bytesOf.apply(read);
+        };
+        AddedOverrides.learn(current, mixed, anyClass);
+        mixing.end("overrides");
+        Map<String, Set<String>> replayed = new ConcurrentHashMap<>();
+        Map<String, InitHookReplay.Due> hooked = new ConcurrentHashMap<>();
+        mixed.putAll(this.addCatchUps(byName, originals, current, mixed, mods, replayed, hooked));
+        mixing.end("catch-ups");
+        if (mixing.getMillis() > SLOW_SPLIT.toMillis()) {
+            LOGGER.info("[Hotwire] the mix of {} classes took {}", byName.size(), mixing);
+        }
+        StopPoint.check();
+        StageTimes splitting = new StageTimes();
+        Map<String, Set<String>> carried = new HashMap<>();
+        mixed.forEach((name, bytes) -> carried.put(name, AppliedMixins.of(bytes, readable.get(name))));
+        splitting.end("marks");
+        Map<Class<?>, ClassSplit.Result> splits = this.splitAll(byName, current, mixed, anyClass, splitting);
+        Set<String> newlyBuilt = findNewlyBuilt(splits, originals, current);
+        splitting.end("constructors");
+        if (splitting.getMillis() > SLOW_SPLIT.toMillis()) {
+            LOGGER.info("[Hotwire] the split of {} classes took {}", byName.size(), splitting);
+        }
+        PreparedRebuild prepared = new PreparedRebuild(splits, carried, mixing.getMillis(), splitting.getMillis(),
+                newlyBuilt, replayed, current, null, Set.of(), hooked, mixed);
+        this.ahead.store(inputs, prepared);
+        return prepared;
+    }
+
+    private Map<String, byte[]> mixAll(Set<String> names, Map<String, byte[]> current, Map<String, byte[]> readable,
+            Map<String, byte[]> resources, List<String> on, Predicate<String> mods, StageTimes times)
+            throws RebuildException {
         Map<String, byte[]> mixed = new LinkedHashMap<>();
         Set<String> toMix = new LinkedHashSet<>();
-        for (String name : byName.keySet()) {
+        for (String name : names) {
             byte[] launched = this.toLaunch ? this.launch.find(name) : null;
             byte[] running = current.get(name);
             if (launched != null && running != null
@@ -239,10 +266,9 @@ public final class ClassRebuilder {
                 toMix.add(name);
             }
         }
-        long shapedAt = System.nanoTime();
+        times.end("constructors");
         if (!toMix.isEmpty()) {
-            Map<String,
-                    byte[]> copied = this.rebuildMixes.mix(toMix, RunningAbove.add(toMix, readable, this.mixedNow::get,
+            Map<String, byte[]> copied = this.mixParts(toMix, RunningAbove.add(toMix, readable, this.mixedNow::get,
                     this.runningOf, this.bytesOf), resources, on, mods, STOP.get());
             copied.forEach(RebuildEvidence::dumpCopy);
             mixed.putAll(copied);
@@ -255,9 +281,9 @@ public final class ClassRebuilder {
                     this.constructorsChanged.add(name);
                 }
             });
-            throw new RebuildException(MIX_SAVED, new IllegalStateException(String.valueOf(toMix.size())));
+            throw RebuildException.ofMixSaved(toMix.size());
         }
-        long copiedAt = System.nanoTime();
+        times.end("copy");
 
         Map<String, byte[]> matched = new ConcurrentHashMap<>();
         Parallel.forEach(mixed.entrySet(), entry -> {
@@ -268,68 +294,44 @@ public final class ClassRebuilder {
             }
         });
         mixed.putAll(matched);
-        long namedAt = System.nanoTime();
-        Function<String, byte @Nullable []> anyClass = read -> {
-            byte[] handed = readable.get(read);
-            return handed != null ? handed : this.bytesOf.apply(read);
-        };
-        AddedOverrides.learn(current, mixed, anyClass);
+        times.end("names");
+        return mixed;
+    }
 
-        Map<String, Set<String>> replayed = new ConcurrentHashMap<>();
-        Map<String, InitHookReplay.Due> hooked = new ConcurrentHashMap<>();
+    private Map<String, byte[]> addCatchUps(Map<String, Class<?>> byName, Map<Class<?>, byte[]> originals,
+            Map<String, byte[]> current, Map<String, byte[]> mixed, Predicate<String> mods,
+            Map<String, Set<String>> replayed, Map<String, InitHookReplay.Due> hooked) {
         Map<String, byte[]> retained = new ConcurrentHashMap<>();
-        long retainedAt = System.nanoTime();
-        LongAdder[] spent = {new LongAdder(), new LongAdder(), new LongAdder(), new LongAdder()};
         Parallel.forEach(byName.entrySet(), entry -> {
             String name = entry.getKey();
             byte[] bytes = mixed.get(name);
             byte[] running = current.get(name);
-            if (bytes != null && running != null) {
-                long began = System.nanoTime();
-                byte[] withInitializers = RetainedInitializers.retain(bytes, this.launchOf(name, running),
-                        originals.get(entry.getValue()));
-                long retainedBy = System.nanoTime();
-                OffWindowReplay.Addition added = OffWindowReplay.add(name, withInitializers, running,
-                        originals.get(entry.getValue()), this.hooks.hasReplayedHandlers(entry.getValue()));
-                if (!added.getFields().isEmpty()) {
-                    replayed.put(name, added.getFields());
-                }
-                long replayedBy = System.nanoTime();
-                byte[] defined = this.firstDefined.find(name);
-                InitHookReplay.Addition hooks = InitHookReplay.add(name, added.getBytes(), running,
-                        defined != null ? defined : this.launchOf(name, running), this.mixedNow.get(name),
-                        originals.get(entry.getValue()));
-                if (hooks.findDue() != null) {
-                    hooked.put(name, hooks.findDue());
-                }
-                long hookedBy = System.nanoTime();
-                byte[] dispatched = AddedOverrides.addDispatch(name, running,
-                        ShutOverrides.addDispatch(name, hooks.getBytes(), mods));
-                retained.put(name, Relocations.remap(dispatched));
-                spent[0].add(retainedBy - began);
-                spent[1].add(replayedBy - retainedBy);
-                spent[2].add(hookedBy - replayedBy);
-                spent[3].add(System.nanoTime() - hookedBy);
+            if (bytes == null || running == null) {
+                return;
             }
+            byte[] original = originals.get(entry.getValue());
+            byte[] withInitializers = RetainedInitializers.retain(bytes, this.launchOf(name, running), original);
+            OffWindowReplay.Addition added = OffWindowReplay.add(name, withInitializers, running, original,
+                    this.hooks.hasReplayedHandlers(entry.getValue()));
+            if (!added.getFields().isEmpty()) {
+                replayed.put(name, added.getFields());
+            }
+            byte[] defined = this.firstDefined.find(name);
+            InitHookReplay.Addition caught = InitHookReplay.add(name, added.getBytes(), running,
+                    defined != null ? defined : this.launchOf(name, running), this.mixedNow.get(name), original);
+            if (caught.findDue() != null) {
+                hooked.put(name, caught.findDue());
+            }
+            byte[] dispatched = AddedOverrides.addDispatch(name, running,
+                    ShutOverrides.addDispatch(name, caught.getBytes(), mods));
+            retained.put(name, Relocations.remap(dispatched));
         });
-        mixed.putAll(retained);
-        long mixedAt = System.nanoTime();
-        if (mixedAt - start > SLOW_SPLIT.toNanos()) {
-            LOGGER.info("[Hotwire] the mix of {} classes took {} ms: constructors {}, copy {}, names {}, overrides {},"
-                    + " catch-ups {}", byName.size(), (mixedAt - start) / 1_000_000, (shapedAt - start) / 1_000_000,
-                    (copiedAt - shapedAt) / 1_000_000, (namedAt - copiedAt) / 1_000_000,
-                    (retainedAt - namedAt) / 1_000_000, (mixedAt - retainedAt) / 1_000_000);
-        }
-        if (mixedAt - retainedAt > SLOW_SPLIT.toNanos()) {
-            LOGGER.info("[Hotwire] the catch-ups of {} classes took {} ms (summed over the cores: initializers {},"
-                    + " off-window replay {}, hooks {}, dispatch and moves {})", byName.size(),
-                    (mixedAt - retainedAt) / 1_000_000, spent[0].sum() / 1_000_000, spent[1].sum() / 1_000_000,
-                    spent[2].sum() / 1_000_000, spent[3].sum() / 1_000_000);
-        }
-        StopPoint.check();
-        Map<String, Set<String>> carried = new HashMap<>();
-        mixed.forEach((name, bytes) -> carried.put(name, AppliedMixins.of(bytes, readable.get(name))));
-        long marked = System.nanoTime();
+        return retained;
+    }
+
+    private Map<Class<?>, ClassSplit.Result> splitAll(Map<String, Class<?>> byName, Map<String, byte[]> current,
+            Map<String, byte[]> mixed, Function<String, byte @Nullable []> anyClass, StageTimes times)
+            throws RebuildException {
         Set<String> batchDucks = BatchShapes.findDucksGained(current, mixed, anyClass);
         if (!batchDucks.isEmpty()) {
             LOGGER.info("[Hotwire] the classes rebuilt gain the interfaces {}", batchDucks);
@@ -343,7 +345,7 @@ public final class ClassRebuilder {
             fields.addAll(FieldHolders.findAddedFields(name));
             return fields.isEmpty() ? Set.of() : Set.copyOf(fields);
         });
-        long shaped = System.nanoTime();
+        times.end("shapes");
         Map<String, Object> splitOrFailure = new ConcurrentHashMap<>();
         Parallel.forEach(byName.keySet(), name -> {
             try {
@@ -371,7 +373,7 @@ public final class ClassRebuilder {
                 splitOrFailure.put(name, e);
             }
         });
-        long splitDone = System.nanoTime();
+        times.end("classes");
         Map<Class<?>, ClassSplit.Result> splits = new LinkedHashMap<>();
         for (Map.Entry<String, Class<?>> entry : byName.entrySet()) {
             Object split = splitOrFailure.get(entry.getKey());
@@ -381,7 +383,11 @@ public final class ClassRebuilder {
             }
             splits.put(entry.getValue(), (ClassSplit.Result) Objects.requireNonNull(split));
         }
+        return splits;
+    }
 
+    private static Set<String> findNewlyBuilt(Map<Class<?>, ClassSplit.Result> splits, Map<Class<?>, byte[]> originals,
+            Map<String, byte[]> current) {
         Set<String> newlyBuilt = new TreeSet<>();
         List<String> numbersAlone = new ArrayList<>();
         splits.forEach((type, split) -> {
@@ -407,20 +413,22 @@ public final class ClassRebuilder {
             LOGGER.info("[Hotwire] {} classes' constructors differ in Mixin's numbers alone, and are built as before:"
                     + " {}", numbersAlone.size(), numbersAlone.subList(0, Math.min(8, numbersAlone.size())));
         }
-        long end = System.nanoTime();
-        if (end - mixedAt > SLOW_SPLIT.toNanos()) {
-            LOGGER.info("[Hotwire] the split of {} classes took {} ms: marks {}, shapes {}, classes {},"
-                    + " constructors {}", byName.size(), (end - mixedAt) / 1_000_000, (marked - mixedAt) / 1_000_000,
-                    (shaped - marked) / 1_000_000, (splitDone - shaped) / 1_000_000, (end - splitDone) / 1_000_000);
-        }
-        PreparedRebuild prepared = new PreparedRebuild(splits, carried, (mixedAt - start) / 1_000_000,
-                (end - mixedAt) / 1_000_000, newlyBuilt, replayed, current, null, Set.of(), hooked, mixed);
-        this.ahead.store(inputs, prepared);
-        return prepared;
+        return newlyBuilt;
     }
 
     public void redefine(Map<Class<?>, byte[]> classes) throws RebuildException {
-        this.rebuildMixes.redefine(classes);
+        ClassDefinition[] definitions = new ClassDefinition[classes.size()];
+        int at = 0;
+        for (Map.Entry<Class<?>, byte[]> entry : classes.entrySet()) {
+            definitions[at++] = new ClassDefinition(entry.getKey(), entry.getValue());
+        }
+        try {
+            this.instrumentation.redefineClasses(definitions);
+        } catch (ClassNotFoundException | UnmodifiableClassException | RuntimeException | LinkageError
+                | InternalError e) {
+            throw new RebuildException("could not redefine " + classes.keySet() + ": " + e, e);
+        }
+        this.loadedBytes.rememberAll(classes);
     }
 
     public void startStatics() {
@@ -463,15 +471,8 @@ public final class ClassRebuilder {
             installed = System.nanoTime();
             riding = BatchRider.takeFrom(this.rider, prepared.splits().keySet());
 
-            for (int from = 0; from < definitions.size() || (from == 0 && !riding.isEmpty());
-                    from += REDEFINE_CHUNK) {
-                int to = Math.min(definitions.size(), from + REDEFINE_CHUNK);
-                boolean last = to >= definitions.size();
-                BatchRider.redefineWith(this.instrumentation, this.loadedBytes, this.rider,
-                        definitions.subList(from, to), last ? riding : Map.of());
-                if (last) {
-                    break;
-                }
+            if (!definitions.isEmpty() || !riding.isEmpty()) {
+                BatchRider.redefineWith(this.instrumentation, this.loadedBytes, this.rider, definitions, riding);
             }
             redefined = System.nanoTime();
             Linker.endBatch(prepared.splits().keySet());
@@ -511,7 +512,7 @@ public final class ClassRebuilder {
                 named = BatchVerifier.findNamed(made.keySet(), problems);
             }
             LOGGER.warn("[Hotwire] Redefining {} failed and nothing changed", prepared.splits().keySet(), e);
-            throw RebuildException.ofJvmRefused("could not redefine " + prepared.splits().keySet() + ": " + why, e)
+            throw new RebuildException("could not redefine " + prepared.splits().keySet() + ": " + why, e)
                     .withBlamed(named);
         }
         Set<Class<?>> redefinedTypes = new HashSet<>();
@@ -560,7 +561,7 @@ public final class ClassRebuilder {
         Map<Class<?>, byte[]> back = new LinkedHashMap<>();
         prepared.splits().keySet().forEach(type -> back.put(type,
                 Objects.requireNonNull(prepared.before().get(type.getName().replace('.', '/')), type.getName())));
-        this.rebuildMixes.redefine(back);
+        this.redefine(back);
         last.carried().forEach((type, carried) -> {
             if (carried == null) {
                 this.carrying.remove(type);
@@ -634,10 +635,43 @@ public final class ClassRebuilder {
 
     public byte[] mixForLoad(String internal, byte[] original, Map<String, byte[]> resources, List<String> configs,
             Predicate<String> mods) throws RebuildException {
-        byte[] mixed = this.rebuildMixes.mix(Set.of(internal), Map.of(internal, original), resources, configs, mods,
+        byte[] mixed = this.mixParts(Set.of(internal), Map.of(internal, original), resources, configs, mods,
                 () -> false)
                 .get(internal);
         return Objects.requireNonNull(mixed, internal);
     }
 
+    private Map<String, byte[]> mixParts(Set<String> targets, Map<String, byte[]> classes,
+            Map<String, byte[]> resources, List<String> configs, Predicate<String> mods, BooleanSupplier stop)
+            throws RebuildException {
+        try {
+            List<MixinCopy.MixResult> parts = this.mixes.mix(targets, classes, resources, configs, stop);
+            if (stop.getAsBoolean()) {
+                throw new RebuildException("the rebuild worked out ahead gave way to a switch",
+                        new IllegalStateException(String.valueOf(targets.size())));
+            }
+
+            Map<String, byte[]> mixed = new LinkedHashMap<>();
+            for (MixinCopy.MixResult part : parts) {
+                Map<String, String> argsNames = new HashMap<>();
+                part.argsShapes().forEach((name, shape) -> {
+                    String running = this.argsClassOf.apply(shape);
+                    if (running != null) {
+                        argsNames.put(name, running);
+                    }
+                });
+                if (!part.generated().isEmpty()) {
+                    this.hooks.onGenerated(part.generated());
+                }
+                SyntheticArgs.rename(part.classes(), argsNames)
+                        .forEach((name, bytes) -> mixed.put(name,
+                                GeneratedNames.matchReferences(bytes, this::findRunning, Linker::getMovedOf)));
+            }
+            targets.forEach(target -> mixed.computeIfPresent(target,
+                    (name, bytes) -> this.hooks.applyAfterMixin(name, bytes, mods)));
+            return mixed;
+        } catch (MixinCopyException e) {
+            throw new RebuildException(e.getMessage(), e);
+        }
+    }
 }

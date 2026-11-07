@@ -30,7 +30,7 @@ public final class ReloadedLists {
             "net.fabricmc.fabric.impl.client.rendering.EntityModelLayerImpl");
 
     private record Removal(Object list, Object entry, @Nullable Object value, Set<String> needs)
-            implements TakeoutRecord.Entry {
+            implements OffRemovals.Entry {
         @Override
         @SuppressWarnings("unchecked")
         public void restore() {
@@ -69,7 +69,7 @@ public final class ReloadedLists {
                     needs.add(definer);
                 }
                 if (!needs.isEmpty() && remove(list, entry)) {
-                    TakeoutRecord.add(needs.iterator().next(), new Removal(list, entry, value, needs));
+                    OffRemovals.add(needs.iterator().next(), new Removal(list, entry, value, needs));
                     needs.forEach(mod -> counts.merge(mod, 1, Integer::sum));
                 }
             }
@@ -89,7 +89,7 @@ public final class ReloadedLists {
                         : !ReloadedListHolders.canBeMade(value == null ? entry : value, resources);
                 if (unmade && remove(list, entry)) {
                     Set<String> needs = findNeedsOf(entry, value, off);
-                    TakeoutRecord.add(needs.iterator().next(), new Removal(list, entry, value, needs));
+                    OffRemovals.add(needs.iterator().next(), new Removal(list, entry, value, needs));
                     found.add(String.valueOf(entry));
                 }
             }

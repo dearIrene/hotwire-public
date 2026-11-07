@@ -23,7 +23,7 @@ public final class WorldWrappers {
     private static final Logger LOGGER = LoggerFactory.getLogger(WorldWrappers.class);
 
     private record UnwrappedField(Entity entity, FieldSlots.Slot field, Object wrapper, Object inner)
-            implements TakeoutRecord.Entry {
+            implements OffRemovals.Entry {
         @Override
         @SuppressWarnings("ReferenceEquality")
         public void restore() {
@@ -38,8 +38,8 @@ public final class WorldWrappers {
         }
 
         @Override
-        public TakeoutRecord.Where getWhere() {
-            return this.entity.level() instanceof ServerLevel ? TakeoutRecord.Where.SERVER : TakeoutRecord.Where.GAME;
+        public OffRemovals.Where getWhere() {
+            return this.entity.level() instanceof ServerLevel ? OffRemovals.Where.SERVER : OffRemovals.Where.GAME;
         }
 
         @Override
@@ -86,7 +86,7 @@ public final class WorldWrappers {
                             describeFields(value));
                 }
                 if (inner != null && write(field, entity, inner)) {
-                    TakeoutRecord.add(mod, new UnwrappedField(entity, field, value, inner));
+                    OffRemovals.add(mod, new UnwrappedField(entity, field, value, inner));
                     COUNTS.merge(mod, 1, Integer::sum);
                 }
             }

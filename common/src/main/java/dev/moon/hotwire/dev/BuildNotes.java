@@ -1,5 +1,6 @@
 package dev.moon.hotwire.dev;
 
+import dev.moon.hotwire.classfile.ClassNodes;
 import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.List;
@@ -202,8 +203,6 @@ public final class BuildNotes {
         if (!isWhole(bytes)) {
             return null;
         }
-        ClassNode node = new ClassNode();
-        new ClassReader(bytes).accept(node, ClassReader.SKIP_FRAMES);
-        return node;
+        return ClassNodes.read(bytes, ClassReader.SKIP_FRAMES);
     }
 }

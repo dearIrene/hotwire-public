@@ -116,10 +116,6 @@ public final class ModList extends Element {
         }
     }
 
-    public boolean isGrid() {
-        return this.grid;
-    }
-
     int getListTop() {
         return this.top;
     }

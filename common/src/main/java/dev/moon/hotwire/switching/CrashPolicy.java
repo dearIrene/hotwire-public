@@ -1,5 +1,6 @@
 package dev.moon.hotwire.switching;
 
+import dev.moon.hotwire.report.Causes;
 import java.util.Map;
 import java.util.Set;
 import java.util.concurrent.ConcurrentHashMap;
@@ -71,10 +72,7 @@ public final class CrashPolicy {
     }
 
     private @Nullable String findOwner(Throwable thrown) {
-        Throwable inner = thrown;
-        for (int depth = 0; inner.getCause() != null && depth < 32; depth++) {
-            inner = inner.getCause();
-        }
+        Throwable inner = Causes.findInnermost(thrown);
         StackTraceElement[] frames = inner.getStackTrace();
         DevThrow last = this.lastDevThrow;
         if (last != null && last.type().equals(inner.getClass().getName())
@@ -102,12 +100,6 @@ public final class CrashPolicy {
     }
 
     private static boolean isJvmFailure(Throwable thrown) {
-        int depth = 0;
-        for (Throwable at = thrown; at != null && depth < 32; at = at.getCause(), depth++) {
-            if (at instanceof VirtualMachineError) {
-                return true;
-            }
-        }
-        return false;
+        return Causes.hasCause(thrown, VirtualMachineError.class);
     }
 }

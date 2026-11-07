@@ -46,7 +46,7 @@ final class DevCrashes {
                 mod.crashes.remove(mod.crashes.keySet().iterator().next());
             }
             if (first) {
-                DevSession.add(mod, new DevEvent(now, DevEvent.Kind.CRASH, Lang.get("hotwire.dev.crash",
+                mod.addEvent(new DevEvent(now, DevEvent.Kind.CRASH, Lang.get("hotwire.dev.crash",
                         mod.mod.name()),
                         List.of(kind, place)));
             }

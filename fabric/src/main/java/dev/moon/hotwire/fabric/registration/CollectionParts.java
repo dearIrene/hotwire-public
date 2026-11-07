@@ -99,7 +99,7 @@ final class CollectionParts {
                 return;
             } catch (LinkageError e) {
                 if (UNREADABLE.add(value.getClass().getName())) {
-                    LOGGER.info("[Hotwire] {} cannot be read ({}); the takeout passes it by",
+                    LOGGER.info("[Hotwire] {} cannot be read ({}); the removal passes it by",
                             value.getClass().getName(), e.toString());
                 }
                 return;
@@ -114,7 +114,7 @@ final class CollectionParts {
                     return;
                 }
                 if (attempt == CHANGED_READS) {
-                    LOGGER.warn("[Hotwire] {} changed under the takeout {} times; what it holds of {} stays",
+                    LOGGER.warn("[Hotwire] {} changed under the removal {} times; what it holds of {} stays",
                             value.getClass().getName(), CHANGED_READS, mods);
                     return;
                 }

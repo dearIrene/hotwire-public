@@ -27,7 +27,7 @@ public final class OffModCommands {
     private static final int DEPTH = 8;
 
     private record Removal(CommandDispatcher<?> dispatcher, CommandNode<?> parent, CommandNode<?> node,
-            Set<String> mods, boolean client) implements TakeoutRecord.Entry {
+            Set<String> mods, boolean client) implements OffRemovals.Entry {
         @Override
         public void restore() {
             if (this.parent.getChild(this.node.getName()) == null) {
@@ -178,7 +178,7 @@ public final class OffModCommands {
         CommandNodeAccessor from = (CommandNodeAccessor) parent;
         from.hotwire$getChildren().remove(node.getName());
         from.hotwire$getLiterals().remove(node.getName());
-        TakeoutRecord.add(mods.iterator().next(), new Removal(dispatcher, parent, node, mods, client));
+        OffRemovals.add(mods.iterator().next(), new Removal(dispatcher, parent, node, mods, client));
         removedNames.add((parent == dispatcher.getRoot() ? "/" : "/" + parent.getName() + " ") + node.getName());
     }
 

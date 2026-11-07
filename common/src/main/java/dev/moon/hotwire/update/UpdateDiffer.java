@@ -1,5 +1,6 @@
 package dev.moon.hotwire.update;
 
+import dev.moon.hotwire.classfile.ClassNodes;
 import dev.moon.hotwire.jar.ModJarException;
 import dev.moon.hotwire.jar.ModJarReader;
 import dev.moon.hotwire.jar.ModManifest;
@@ -213,9 +214,7 @@ public final class UpdateDiffer {
     }
 
     private static ClassNode read(byte[] bytes) {
-        ClassNode node = new ClassNode();
-        new ClassReader(bytes).accept(node, 0);
-        return node;
+        return ClassNodes.read(bytes, 0);
     }
 
     private static boolean isClass(String path) {

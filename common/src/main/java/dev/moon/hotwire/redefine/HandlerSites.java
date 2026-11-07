@@ -129,8 +129,9 @@ final class HandlerSites {
                         method.instructions.set(call, kept.isEmpty()
                                 ? new InvokeDynamicInsnNode(call.name, desc, HandlerGuards.BOOTSTRAP_REDIRECT,
                                 mixin, how, target.opcode(), target.owner(), target.name(), target.desc())
-                                : new InvokeDynamicInsnNode(call.name, desc, HandlerGuards.BOOTSTRAP_REDIRECT_FORGETTING,
-                                mixin, how, target.opcode(), target.owner(), target.name(), target.desc(), kept));
+                                : new InvokeDynamicInsnNode(call.name, desc,
+                                HandlerGuards.BOOTSTRAP_REDIRECT_FORGETTING, mixin, how, target.opcode(),
+                                target.owner(), target.name(), target.desc(), kept));
                         guarded.add(mixin);
                         continue;
                     }

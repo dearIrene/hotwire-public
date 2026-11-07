@@ -42,7 +42,6 @@ import org.slf4j.LoggerFactory;
 
 public final class DevSession implements DevHost, AutoCloseable {
     private static final Logger LOGGER = LoggerFactory.getLogger(DevSession.class);
-    private static final int MOST_EVENTS = 40;
 
     private static final int METHOD_LINES = 4;
 
@@ -383,7 +382,7 @@ public final class DevSession implements DevHost, AutoCloseable {
 
     private void tell(SessionMod mod, DevEvent.Kind kind, String title, String detail, List<String> lines) {
         boolean in = kind == DevEvent.Kind.IN || kind == DevEvent.Kind.ASSETS;
-        add(mod, new DevEvent(System.currentTimeMillis(), kind, title, lines, in ? mod.runningNumber : -1));
+        mod.addEvent(new DevEvent(System.currentTimeMillis(), kind, title, lines, in ? mod.runningNumber : -1));
         LOGGER.info("[Hotwire] {}: {} {}", mod.mod.id(), title, detail);
         boolean problem = kind == DevEvent.Kind.FAILED || kind == DevEvent.Kind.NEEDS_RESTART;
         if (problem || this.engine.isEveryReloadShown()) {
@@ -393,15 +392,6 @@ public final class DevSession implements DevHost, AutoCloseable {
                 case ASSETS -> Notice.ofOn(title, detail);
                 default -> Notice.ofDone(title, detail);
             });
-        }
-    }
-
-    static void add(SessionMod mod, DevEvent event) {
-        synchronized (mod) {
-            mod.events.addFirst(event);
-            while (mod.events.size() > MOST_EVENTS) {
-                mod.events.removeLast();
-            }
         }
     }
 
@@ -646,7 +636,7 @@ public final class DevSession implements DevHost, AutoCloseable {
             return;
         }
         String title = Lang.get("hotwire.dev.leak", mod.mod.name());
-        add(mod, new DevEvent(System.currentTimeMillis(), DevEvent.Kind.LEAK, title,
+        mod.addEvent(new DevEvent(System.currentTimeMillis(), DevEvent.Kind.LEAK, title,
                 List.of(holder.path(), Lang.get("hotwire.dev.leak.fix"))));
         Notices.show(Notice.ofBad(title, holder.path()));
     }

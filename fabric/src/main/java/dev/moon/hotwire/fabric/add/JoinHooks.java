@@ -1,5 +1,6 @@
 package dev.moon.hotwire.fabric.add;
 
+import dev.moon.hotwire.redefine.ClassBytes;
 import java.io.ByteArrayInputStream;
 import java.io.IOException;
 import java.io.InputStream;
@@ -40,7 +41,7 @@ final class JoinHooks {
             String name = entry.getName();
             if (name.endsWith(".class")) {
                 byte[] bytes = zip.readAllBytes();
-                if (contains(bytes, MIXIN) && targetsJoin(bytes)) {
+                if (ClassBytes.mentions(bytes, MIXIN) && targetsJoin(bytes)) {
                     return true;
                 }
             } else if (depth > 0 && name.endsWith(".jar")
@@ -88,18 +89,5 @@ final class JoinHooks {
         String name = target.contains(";") ? target.substring(target.lastIndexOf(';') + 1) : target;
         int open = name.indexOf('(');
         return JOIN_METHODS.contains(open < 0 ? name : name.substring(0, open));
-    }
-
-    private static boolean contains(byte[] bytes, byte[] part) {
-        outer:
-        for (int at = 0; at <= bytes.length - part.length; at++) {
-            for (int i = 0; i < part.length; i++) {
-                if (bytes[at + i] != part[i]) {
-                    continue outer;
-                }
-            }
-            return true;
-        }
-        return false;
     }
 }

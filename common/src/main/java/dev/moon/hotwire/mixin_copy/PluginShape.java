@@ -1,5 +1,6 @@
 package dev.moon.hotwire.mixin_copy;
 
+import dev.moon.hotwire.classfile.ClassNodes;
 import java.util.Set;
 import java.util.function.Function;
 import org.jspecify.annotations.Nullable;
@@ -30,8 +31,7 @@ public final class PluginShape {
             if (bytes == null) {
                 return false;
             }
-            ClassNode node = new ClassNode();
-            new ClassReader(bytes).accept(node, ClassReader.SKIP_DEBUG | ClassReader.SKIP_FRAMES);
+            ClassNode node = ClassNodes.read(bytes, ClassReader.SKIP_DEBUG | ClassReader.SKIP_FRAMES);
             for (MethodNode method : node.methods) {
                 if ((method.name.equals("preApply") || method.name.equals("postApply"))
                         && method.desc.contains(CLASS_NODE) && readsClass(method)) {
@@ -55,8 +55,7 @@ public final class PluginShape {
             if (bytes == null) {
                 return false;
             }
-            ClassNode node = new ClassNode();
-            new ClassReader(bytes).accept(node, ClassReader.SKIP_DEBUG | ClassReader.SKIP_FRAMES);
+            ClassNode node = ClassNodes.read(bytes, ClassReader.SKIP_DEBUG | ClassReader.SKIP_FRAMES);
             for (MethodNode method : node.methods) {
                 boolean shapes = method.desc.contains(CLASS_NODE) && readsClass(method);
                 if (isRegisteringWithMixin(method) || (shapes && method.name.equals("postApply"))) {

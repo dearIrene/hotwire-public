@@ -1,5 +1,6 @@
 package dev.moon.hotwire.redefine;
 
+import dev.moon.hotwire.classfile.ClassNodes;
 import java.util.Map;
 import java.util.Set;
 import org.jspecify.annotations.Nullable;
@@ -79,8 +80,8 @@ final class HandlerReplay {
         int slot = 1;
         for (int index = 0; index < arguments.length - 1; index++) {
             Type type = arguments[index];
-            if (!reads(handler, slot)) {
-                insns.add(makeDefault(type));
+            if (!ClassNodes.isSlotRead(handler, slot)) {
+                insns.add(ClassNodes.makeDefault(type));
             } else {
                 SourceValue given = frame.getStack(frame.getStackSize() - arguments.length + index);
                 Integer local = ArgumentInitializers.findLocal(given);
@@ -103,25 +104,5 @@ final class HandlerReplay {
         insns.add(new MethodInsnNode(Opcodes.INVOKESPECIAL, CALLBACK, "<init>", "(Ljava/lang/String;Z)V", false));
         insns.add(new MethodInsnNode(call.getOpcode(), call.owner, call.name, call.desc, call.itf));
         return insns;
-    }
-
-    private static boolean reads(MethodNode handler, int slot) {
-        for (AbstractInsnNode insn : handler.instructions) {
-            if (insn instanceof VarInsnNode load && load.var == slot && load.getOpcode() >= Opcodes.ILOAD
-                    && load.getOpcode() <= Opcodes.ALOAD) {
-                return true;
-            }
-        }
-        return false;
-    }
-
-    private static AbstractInsnNode makeDefault(Type type) {
-        return switch (type.getSort()) {
-            case Type.LONG -> new InsnNode(Opcodes.LCONST_0);
-            case Type.FLOAT -> new InsnNode(Opcodes.FCONST_0);
-            case Type.DOUBLE -> new InsnNode(Opcodes.DCONST_0);
-            case Type.OBJECT, Type.ARRAY -> new InsnNode(Opcodes.ACONST_NULL);
-            default -> new InsnNode(Opcodes.ICONST_0);
-        };
     }
 }

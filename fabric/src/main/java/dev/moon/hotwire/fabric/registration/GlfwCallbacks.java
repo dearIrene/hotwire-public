@@ -25,7 +25,7 @@ public final class GlfwCallbacks {
     private static final Logger LOGGER = LoggerFactory.getLogger(GlfwCallbacks.class);
     private static final List<Method> SETTERS = findSetters();
 
-    private record WrapperRemoval(Method setter, Object mods, Object inner) implements TakeoutRecord.Entry {
+    private record WrapperRemoval(Method setter, Object mods, Object inner) implements OffRemovals.Entry {
         @Override
         @SuppressWarnings("ReferenceEquality")
         public void restore() {
@@ -41,13 +41,13 @@ public final class GlfwCallbacks {
         }
 
         @Override
-        public TakeoutRecord.Where getWhere() {
-            return TakeoutRecord.Where.GAME;
+        public OffRemovals.Where getWhere() {
+            return OffRemovals.Where.GAME;
         }
     }
 
     private record FieldRemoval(FieldSlots.Slot field, Object holder, Object mods, @Nullable Object inner)
-            implements TakeoutRecord.Entry {
+            implements OffRemovals.Entry {
         @Override
         @SuppressWarnings("ReferenceEquality")
         public void restore() {
@@ -66,8 +66,8 @@ public final class GlfwCallbacks {
         }
 
         @Override
-        public TakeoutRecord.Where getWhere() {
-            return TakeoutRecord.Where.GAME;
+        public OffRemovals.Where getWhere() {
+            return OffRemovals.Where.GAME;
         }
     }
     private static final int BELOW = 3;
@@ -109,7 +109,7 @@ public final class GlfwCallbacks {
                 Object inner = findWrapped(current, setter.getParameterTypes()[1], mod, 2);
 
                 if (inner != null && set(setter, window, inner)) {
-                    TakeoutRecord.add(mod, new WrapperRemoval(setter, current, inner));
+                    OffRemovals.add(mod, new WrapperRemoval(setter, current, inner));
                     LOGGER.info("[Hotwire] the window's {} is {} again instead of {}'s", setter.getName()
                             .replace("glfwSet", "").replace("Callback", " callback"),
                             inner.getClass().getName(), mod);
@@ -188,7 +188,7 @@ public final class GlfwCallbacks {
                     Object inner = findWrapped(java, type, mod, 2);
                     field.set(object, inner);
                     out++;
-                    TakeoutRecord.add(mod, new FieldRemoval(field, object, value, inner));
+                    OffRemovals.add(mod, new FieldRemoval(field, object, value, inner));
                     LOGGER.info("[Hotwire] {}.{} of {} holds {} again instead of {}'s", object.getClass().getName(),
                             field.getName(), holder, inner == null ? "nothing" : inner.getClass().getName(), mod);
                 } catch (ReflectiveOperationException | RuntimeException e) {

@@ -38,10 +38,6 @@ public final class ModChanges {
         this.later = later;
     }
 
-    boolean isNextStartOnly() {
-        return this.parts == null;
-    }
-
     public ModAdder.Result addNow(Path jar) {
         HotwireEngine.JvmParts ready = this.parts;
         return ready == null ? new ModAdder.Result.Refused(this.refusal)

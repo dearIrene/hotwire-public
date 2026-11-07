@@ -1,5 +1,6 @@
 package dev.moon.hotwire.update;
 
+import dev.moon.hotwire.classfile.ClassNodes;
 import dev.moon.hotwire.update.JarDiff.ClassChange;
 import dev.moon.hotwire.update.JarDiff.ClassDiff;
 import dev.moon.hotwire.update.JarDiff.ShapeChange;
@@ -79,8 +80,7 @@ final class ConstructorUses {
             if (parent == null || !incoming.containsKey(parent + ".class")) {
                 continue;
             }
-            ClassNode node = new ClassNode();
-            new ClassReader(entry.getValue()).accept(node, ClassReader.SKIP_DEBUG | ClassReader.SKIP_FRAMES);
+            ClassNode node = ClassNodes.read(entry.getValue(), ClassReader.SKIP_DEBUG | ClassReader.SKIP_FRAMES);
             for (MethodNode method : node.methods) {
                 if (method.name.equals("<init>")) {
                     String called = findParentCall(node, method);
@@ -254,8 +254,6 @@ final class ConstructorUses {
     }
 
     private static ClassNode read(byte[] bytes) {
-        ClassNode node = new ClassNode();
-        new ClassReader(bytes).accept(node, ClassReader.SKIP_CODE);
-        return node;
+        return ClassNodes.read(bytes, ClassReader.SKIP_CODE);
     }
 }

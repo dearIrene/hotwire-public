@@ -50,10 +50,6 @@ public record Notice(Kind kind, String title, String detail, String key, float p
         return new Notice(Kind.ASK, title, detail, title);
     }
 
-    public static Notice ofProgress(String title, String detail, String key, float progress) {
-        return new Notice(Kind.ON, title, detail, key, Math.max(0, Math.min(1, progress)));
-    }
-
     static Notice ofDownload(String title, String detail, String key, float progress, int job, boolean paused) {
         return new Notice(paused ? Kind.ASK : Kind.ON, title, detail, key, Math.max(0, Math.min(1, progress)), 0, job,
                 paused);

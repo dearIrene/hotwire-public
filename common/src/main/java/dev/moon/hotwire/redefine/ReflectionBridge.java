@@ -1,5 +1,6 @@
 package dev.moon.hotwire.redefine;
 
+import dev.moon.hotwire.classfile.ClassNodes;
 import java.util.Map;
 import java.util.Set;
 import org.objectweb.asm.ClassReader;
@@ -65,8 +66,7 @@ public final class ReflectionBridge {
         if (!names(classBytes)) {
             return classBytes;
         }
-        ClassNode node = new ClassNode();
-        new ClassReader(classBytes).accept(node, 0);
+        ClassNode node = ClassNodes.read(classBytes, 0);
 
         if (!rewrite(node)) {
             return classBytes;

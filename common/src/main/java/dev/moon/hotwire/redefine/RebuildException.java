@@ -12,7 +12,7 @@ public final class RebuildException extends Exception {
     private static final long serialVersionUID = 1L;
 
     private final boolean reopenFixes;
-    private final boolean jvmRefused;
+    private final boolean mixSaved;
     private final boolean worldBuilt;
     private final boolean restartOnly;
     private final transient Set<String> losing;
@@ -28,23 +28,24 @@ public final class RebuildException extends Exception {
         this(message, cause, reopenFixes, false, false, false);
     }
 
-    private RebuildException(@Nullable String message, Throwable cause, boolean reopenFixes, boolean jvmRefused,
+    private RebuildException(@Nullable String message, Throwable cause, boolean reopenFixes, boolean mixSaved,
             boolean worldBuilt, boolean restartOnly) {
-        this(message, cause, reopenFixes, jvmRefused, worldBuilt, restartOnly, Set.of());
+        this(message, cause, reopenFixes, mixSaved, worldBuilt, restartOnly, Set.of());
     }
 
-    private RebuildException(@Nullable String message, Throwable cause, boolean reopenFixes, boolean jvmRefused,
+    private RebuildException(@Nullable String message, Throwable cause, boolean reopenFixes, boolean mixSaved,
             boolean worldBuilt, boolean restartOnly, Set<String> losing) {
         super(message, cause);
         this.losing = Set.copyOf(losing);
         this.reopenFixes = reopenFixes;
-        this.jvmRefused = jvmRefused;
+        this.mixSaved = mixSaved;
         this.worldBuilt = worldBuilt;
         this.restartOnly = restartOnly;
     }
 
-    static RebuildException ofJvmRefused(String message, Throwable cause) {
-        return new RebuildException(message, cause, false, true, false, false);
+    static RebuildException ofMixSaved(int classes) {
+        return new RebuildException("the mix was saved for the switch cache",
+                new IllegalStateException(String.valueOf(classes)), false, true, false, false);
     }
 
     public static RebuildException ofWorldBuilt(String message, Throwable cause) {
@@ -103,8 +104,8 @@ public final class RebuildException extends Exception {
         return this.reopenFixes;
     }
 
-    public boolean isJvmRefused() {
-        return this.jvmRefused;
+    public boolean isMixSaved() {
+        return this.mixSaved;
     }
 
     public boolean isWorldBuilt() {

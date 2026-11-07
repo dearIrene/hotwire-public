@@ -2,6 +2,7 @@ package dev.moon.hotwire.redefine;
 
 import dev.moon.hotwire.cache.CacheKey;
 import dev.moon.hotwire.cache.CacheStore;
+import dev.moon.hotwire.classfile.ClassNodes;
 import java.io.ByteArrayInputStream;
 import java.io.ByteArrayOutputStream;
 import java.io.DataInputStream;
@@ -14,7 +15,6 @@ import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 import org.jspecify.annotations.Nullable;
-import org.objectweb.asm.ClassReader;
 import org.objectweb.asm.ClassWriter;
 import org.objectweb.asm.tree.ClassNode;
 import org.objectweb.asm.tree.FieldNode;
@@ -212,8 +212,7 @@ final class ClassPacks {
     }
 
     private static @Nullable ClassNode read(byte[] bytes) {
-        ClassNode node = new ClassNode();
-        new ClassReader(bytes).accept(node, 0);
+        ClassNode node = ClassNodes.read(bytes, 0);
         return hasRawAttributes(node) ? null : node;
     }
 

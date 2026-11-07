@@ -83,7 +83,6 @@ public final class SwitchCacheFiller {
     private final AtomicLong nanos = new AtomicLong();
 
     private volatile BooleanSupplier playing = () -> false;
-    private volatile boolean sampleOnly;
 
     private volatile boolean healing;
 
@@ -108,14 +107,8 @@ public final class SwitchCacheFiller {
         this.applier = applier;
     }
 
-    public void fillSample() {
-        this.sampleOnly = true;
-        this.start();
-    }
-
     public void fillChanged() {
         this.healing = true;
-        this.sampleOnly = false;
         this.start();
     }
 
@@ -128,7 +121,6 @@ public final class SwitchCacheFiller {
         this.filledBytes = -1;
         this.healing = false;
         this.asked = false;
-        this.sampleOnly = false;
         this.joining = true;
         this.start();
     }
@@ -142,7 +134,6 @@ public final class SwitchCacheFiller {
         this.healing = false;
         this.joining = false;
         this.asked = true;
-        this.sampleOnly = false;
         this.paused = false;
         this.start();
     }
@@ -172,7 +163,7 @@ public final class SwitchCacheFiller {
 
     public Fill getFill() {
         Thread running = this.thread;
-        boolean alive = running != null && running.isAlive() && !this.paused && !this.sampleOnly && !this.healing
+        boolean alive = running != null && running.isAlive() && !this.paused && !this.healing
                 && !this.joining;
         return new Fill(alive, this.done.get(), this.steps.size(), this.classesDone.get(), this.classes,
                 this.bytesDone.get(), this.bytes, this.nanos.get() / 1_000_000,
@@ -245,7 +236,7 @@ public final class SwitchCacheFiller {
         int mixed = 0;
         List<Step> planned = this.steps;
         for (Step step : planned.subList(this.done.get(), planned.size())) {
-            if (current != this.run.get() || (this.sampleOnly && this.done.get() >= this.sample)) {
+            if (current != this.run.get()) {
                 break;
             }
             long before = this.nanos.get();
@@ -493,7 +484,7 @@ public final class SwitchCacheFiller {
                 try {
                     SwitchPlan plan = this.host.isOn(id) ? this.host.planOff(id) : null;
                     RebuildException cause = plan == null || plan.isRefused() ? null : this.host.tryOff(plan);
-                    if (plan != null && cause != null && ClassRebuilder.isMixSaved(cause)) {
+                    if (plan != null && cause != null && cause.isMixSaved()) {
                         Set<String> after = new HashSet<>(this.host.findOnNow());
                         plan.order().forEach(after::remove);
                         return this.applier.findMixedBy(Set.copyOf(plan.order()), after).size();
@@ -526,7 +517,7 @@ public final class SwitchCacheFiller {
                 ClassRebuilder.mixOnly(true);
                 try {
                     cause = this.host.tryOffAll(step.mods(), step.parts());
-                    if (cause != null && ClassRebuilder.isMixSaved(cause)) {
+                    if (cause != null && cause.isMixSaved()) {
                         return step.classes();
                     }
                 } finally {
@@ -564,7 +555,7 @@ public final class SwitchCacheFiller {
                     this.applier.dryRunMixing(mods, this.host.findOnNow(), only);
                     return 0;
                 } catch (RebuildException e) {
-                    if (ClassRebuilder.isMixSaved(e)) {
+                    if (e.isMixSaved()) {
                         this.applier.getRebuilder().takeConstructorsChanged();
                         return only.size();
                     }

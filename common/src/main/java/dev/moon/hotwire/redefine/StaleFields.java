@@ -1,6 +1,7 @@
 package dev.moon.hotwire.redefine;
 
 import dev.moon.hotwire.classfile.ClassHeader;
+import dev.moon.hotwire.classfile.ClassNodes;
 import java.util.ArrayList;
 import java.util.HashSet;
 import java.util.LinkedHashMap;
@@ -8,15 +9,14 @@ import java.util.List;
 import java.util.Map;
 import java.util.Set;
 import org.jspecify.annotations.Nullable;
-import org.objectweb.asm.ClassReader;
 import org.objectweb.asm.ClassWriter;
 import org.objectweb.asm.Opcodes;
+import org.objectweb.asm.Type;
 import org.objectweb.asm.tree.AbstractInsnNode;
 import org.objectweb.asm.tree.ClassNode;
 import org.objectweb.asm.tree.FieldInsnNode;
 import org.objectweb.asm.tree.FieldNode;
 import org.objectweb.asm.tree.InsnList;
-import org.objectweb.asm.tree.InsnNode;
 import org.objectweb.asm.tree.IntInsnNode;
 import org.objectweb.asm.tree.LdcInsnNode;
 import org.objectweb.asm.tree.MethodInsnNode;
@@ -56,8 +56,7 @@ final class StaleFields {
         if (resets.isEmpty()) {
             return split;
         }
-        ClassNode target = new ClassNode();
-        new ClassReader(split.target()).accept(target, 0);
+        ClassNode target = ClassNodes.read(split.target(), 0);
         Set<String> declared = new HashSet<>();
         target.fields.forEach(field -> declared.add(field.name + field.desc));
         boolean changed = false;
@@ -115,8 +114,7 @@ final class StaleFields {
         if (records.isEmpty()) {
             return split;
         }
-        ClassNode holder = new ClassNode();
-        new ClassReader(holderBytes).accept(holder, 0);
+        ClassNode holder = ClassNodes.read(holderBytes, 0);
         for (FieldNode field : holder.fields) {
             if (records.contains(field.name + field.desc)) {
                 field.visitAnnotation(RESTARTED, false);
@@ -223,7 +221,7 @@ final class StaleFields {
                 start = value;
             }
         }
-        return start != null ? start : makeDefault(field.desc);
+        return start != null ? start : ClassNodes.makeDefault(Type.getType(field.desc));
     }
 
     private static @Nullable AbstractInsnNode findPrevious(AbstractInsnNode insn) {
@@ -248,15 +246,5 @@ final class StaleFields {
             return first.cst.equals(second.cst);
         }
         return !(one instanceof IntInsnNode first) || first.operand == ((IntInsnNode) other).operand;
-    }
-
-    private static AbstractInsnNode makeDefault(String descriptor) {
-        return new InsnNode(switch (descriptor.charAt(0)) {
-            case 'J' -> Opcodes.LCONST_0;
-            case 'F' -> Opcodes.FCONST_0;
-            case 'D' -> Opcodes.DCONST_0;
-            case 'L', '[' -> Opcodes.ACONST_NULL;
-            default -> Opcodes.ICONST_0;
-        });
     }
 }

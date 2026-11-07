@@ -1,8 +1,8 @@
 package dev.moon.hotwire.fabric.screen;
 
 import com.mojang.blaze3d.platform.NativeImage;
-import dev.moon.hotwire.fabric.add.LoaderModList;
 import dev.moon.hotwire.fabric.InstalledMods;
+import dev.moon.hotwire.fabric.add.LoaderModList;
 import dev.moon.hotwire.jar.JarLookup;
 import dev.moon.hotwire.jar.ModJarException;
 import dev.moon.hotwire.jar.ModJarReader;

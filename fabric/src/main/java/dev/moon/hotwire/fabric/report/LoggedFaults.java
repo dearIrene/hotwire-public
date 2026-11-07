@@ -1,5 +1,6 @@
 package dev.moon.hotwire.fabric.report;
 
+import dev.moon.hotwire.report.Causes;
 import java.util.function.BiConsumer;
 import org.apache.logging.log4j.Level;
 import org.apache.logging.log4j.LogManager;
@@ -85,8 +86,7 @@ public final class LoggedFaults extends AbstractFilter {
     }
 
     public static @Nullable String findOwnFrame(Throwable thrown) {
-        int depth = 0;
-        for (Throwable at = thrown; at != null && depth < 16; at = at.getCause(), depth++) {
+        for (Throwable at : Causes.list(thrown)) {
             for (StackTraceElement frame : at.getStackTrace()) {
                 String type = frame.getClassName();
                 if (type.startsWith("java.") || type.startsWith("jdk.") || type.startsWith("sun.")) {

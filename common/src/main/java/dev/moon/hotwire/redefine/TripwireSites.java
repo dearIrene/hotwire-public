@@ -1,5 +1,6 @@
 package dev.moon.hotwire.redefine;
 
+import dev.moon.hotwire.classfile.ClassNodes;
 import java.lang.invoke.MethodHandles;
 import java.lang.invoke.VarHandle;
 import java.util.List;
@@ -71,8 +72,7 @@ public final class TripwireSites {
     }
 
     static byte @Nullable [] armByRewrite(String internalName, byte[] classBytes, String mod, boolean relinked) {
-        ClassNode node = new ClassNode();
-        new ClassReader(classBytes).accept(node, 0);
+        ClassNode node = ClassNodes.read(classBytes, 0);
         String holder = findHolder(mod);
         boolean armed = false;
         boolean inserted = false;

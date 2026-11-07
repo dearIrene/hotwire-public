@@ -233,7 +233,7 @@ final class GuardFlips {
             sites = this.setSites(plan, onAfter);
             SwitchTimes.mark("flip sites");
             whilePaused.run();
-            SwitchTimes.mark("paused: takeouts");
+            SwitchTimes.mark("paused: removals");
         } finally {
             release.run();
             LOGGER.info("[Hotwire] the game was paused {} ms", (System.nanoTime() - pausedAt) / 1_000_000);

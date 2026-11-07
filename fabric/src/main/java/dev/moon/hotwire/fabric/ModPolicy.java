@@ -21,7 +21,7 @@ import net.fabricmc.loader.api.metadata.version.VersionPredicate;
 import org.jspecify.annotations.Nullable;
 
 public final class ModPolicy {
-    static final Set<String> BUILT_IN = Set.of("minecraft", "java", "fabricloader", "mixinextras");
+    public static final Set<String> BUILT_IN = Set.of("minecraft", "java", "fabricloader", "mixinextras");
 
     private static final String MODULE_MARK = "fabric-api:module-lifecycle";
 
@@ -62,6 +62,10 @@ public final class ModPolicy {
             container = container.get().getContainingMod();
         }
         return false;
+    }
+
+    public static boolean isBuiltIn(String id) {
+        return BUILT_IN.contains(id);
     }
 
     public static boolean isHotwire(String id) {

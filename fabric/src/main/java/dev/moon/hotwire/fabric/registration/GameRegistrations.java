@@ -1,5 +1,6 @@
 package dev.moon.hotwire.fabric.registration;
 
+import dev.moon.hotwire.fabric.HotwireClient;
 import dev.moon.hotwire.fabric.ModPolicy;
 import dev.moon.hotwire.redefine.Tripwire;
 import dev.moon.hotwire.registration.CallerOwner;
@@ -138,8 +139,7 @@ public final class GameRegistrations {
     }
 
     static boolean isLibrary(String owner) {
-        return !isSwitchable(owner) && !owner.equals("fabricloader") && !owner.equals("minecraft")
-                && !owner.equals("java") && !owner.equals("hotwire") && !owner.startsWith("hotwire-");
+        return !isSwitchable(owner) && !ModPolicy.isBuiltIn(owner) && !ModPolicy.isHotwire(owner);
     }
 
     public static boolean isSwitchable(@Nullable String mod) {
@@ -175,7 +175,8 @@ public final class GameRegistrations {
     }
 
     private static Set<String> findNeverSwitched(FabricLoader loader) {
-        Set<String> ids = new HashSet<>(Set.of("hotwire", "minecraft", "java", "fabricloader", "mixinextras"));
+        Set<String> ids = new HashSet<>(ModPolicy.BUILT_IN);
+        ids.add(HotwireClient.ID);
         for (ModContainer mod : loader.getAllMods()) {
             String id = mod.getMetadata().getId();
             if (ModPolicy.isFabricApi(id) || ModPolicy.isNeverTouched(id)) {

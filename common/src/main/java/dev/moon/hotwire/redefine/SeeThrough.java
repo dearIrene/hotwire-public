@@ -1,11 +1,11 @@
 package dev.moon.hotwire.redefine;
 
+import dev.moon.hotwire.classfile.ClassNodes;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Set;
 import java.util.function.Function;
 import org.jspecify.annotations.Nullable;
-import org.objectweb.asm.ClassReader;
 import org.objectweb.asm.ClassWriter;
 import org.objectweb.asm.Opcodes;
 import org.objectweb.asm.Type;
@@ -23,8 +23,7 @@ public final class SeeThrough {
     }
 
     public static byte @Nullable [] of(byte[] running, Function<String, Set<String>> methodsOf) {
-        ClassNode node = new ClassNode();
-        new ClassReader(running).accept(node, 0);
+        ClassNode node = ClassNodes.read(running, 0);
         List<FieldNode> wraps = new ArrayList<>();
         for (FieldNode field : node.fields) {
             Type type = Type.getType(field.desc);

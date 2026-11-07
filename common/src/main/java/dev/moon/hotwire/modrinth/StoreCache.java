@@ -66,10 +66,6 @@ public final class StoreCache {
         this.limitBytes = limitBytes;
     }
 
-    public Path getFolder() {
-        return this.folder;
-    }
-
     public long getLimitBytes() {
         return this.limitBytes;
     }

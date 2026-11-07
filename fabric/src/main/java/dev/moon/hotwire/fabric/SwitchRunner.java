@@ -21,12 +21,12 @@ import dev.moon.hotwire.fabric.registration.ModSounds;
 import dev.moon.hotwire.fabric.registration.ModelReloadCheck;
 import dev.moon.hotwire.fabric.registration.NetworkHandlers;
 import dev.moon.hotwire.fabric.registration.OffModCommands;
+import dev.moon.hotwire.fabric.registration.OffRemovals;
 import dev.moon.hotwire.fabric.registration.OneConfigHuds;
 import dev.moon.hotwire.fabric.registration.OneConfigModCards;
 import dev.moon.hotwire.fabric.registration.RegistryCheck;
 import dev.moon.hotwire.fabric.registration.ReloadedLists;
 import dev.moon.hotwire.fabric.registration.SodiumSettingsPages;
-import dev.moon.hotwire.fabric.registration.TakeoutRecord;
 import dev.moon.hotwire.fabric.registration.UncaughtHandlers;
 import dev.moon.hotwire.fabric.registration.WindowCursor;
 import dev.moon.hotwire.fabric.registration.WorldContent;
@@ -140,7 +140,7 @@ public final class SwitchRunner {
     public void lookAheadForAll(List<String> mods) {
         this.looking.execute(() -> {
             this.forgetClosedWorld();
-            if (!isLookingAhead() || this.switcher.isBusy() || mods.isEmpty()) {
+            if (this.switcher.isBusy() || mods.isEmpty()) {
                 return;
             }
             long start = System.nanoTime();
@@ -155,7 +155,7 @@ public final class SwitchRunner {
     }
 
     void prepareLookFor(List<String> mods) {
-        if (!isLookingAhead() || mods.isEmpty()) {
+        if (mods.isEmpty()) {
             return;
         }
         long start = System.nanoTime();
@@ -163,10 +163,6 @@ public final class SwitchRunner {
         ElementLook.prepareAhead(this.fieldReferences, mods, this.switcher::isOn);
         LOGGER.info("[Hotwire] the look's warm-up for {} mods took {} ms, {} ms of it running", mods.size(),
                 (System.nanoTime() - start) / 1_000_000, (THREADS.getCurrentThreadCpuTime() - ran) / 1_000_000);
-    }
-
-    private static boolean isLookingAhead() {
-        return Boolean.parseBoolean(System.getProperty("hotwire.lookAhead", "true"));
     }
 
     public void setAfterOff(Consumer<ModSwitcher.Result> afterOff) {
@@ -178,25 +174,40 @@ public final class SwitchRunner {
     }
 
     CheckedResult turnOff(List<String> ids) {
-        LOGGER.info("[Hotwire] turning off {}", ids);
-        ActionJournal.Entry journal = ActionJournal.get().begin(ActionJournal.Action.OFF, ids);
+        return this.runSwitch(ids, true);
+    }
+
+    CheckedResult turnOn(List<String> ids) {
+        return this.runSwitch(ids, false);
+    }
+
+    private CheckedResult runSwitch(List<String> ids, boolean off) {
+        LOGGER.info("[Hotwire] turning {} {}", off ? "off" : "on", ids);
+        ActionJournal.Entry journal = ActionJournal.get().begin(off ? ActionJournal.Action.OFF
+                : ActionJournal.Action.ON, ids);
         SwitchTimes.begin();
         RegistryCheck.takeKeysOnce();
         this.switcher.setBusy(true);
-        this.reports.onBegun(Report.Operation.OFF, String.join(", ", ids));
+        this.reports.onBegun(off ? Report.Operation.OFF : Report.Operation.ON, String.join(", ", ids));
         CheckedResult result = null;
         LifecycleListeners.begin();
         try {
-            result = this.runTimedOff(ids);
-            this.afterOff.accept(result.result());
+            result = off ? this.runTimedOff(ids) : this.runTimedOn(ids);
+            if (off) {
+                this.afterOff.accept(result.result());
+            }
             return result;
         } finally {
             LifecycleListeners.end(this.switcher::isOn);
             this.tripwire.closeRide();
-            ResourceReload.forgetPausedReload();
+            if (off) {
+                ResourceReload.forgetPausedReload();
+            } else {
+                ResourceReload.endAssetWait();
+            }
             this.reports.onEnded();
             this.switcher.setBusy(false);
-            SwitchTimes.end("the off of " + ids);
+            SwitchTimes.end((off ? "the off of " : "the on of ") + ids);
             endJournal(journal, result);
         }
     }
@@ -379,29 +390,6 @@ public final class SwitchRunner {
         }
     }
 
-    CheckedResult turnOn(List<String> ids) {
-        LOGGER.info("[Hotwire] turning on {}", ids);
-        ActionJournal.Entry journal = ActionJournal.get().begin(ActionJournal.Action.ON, ids);
-        SwitchTimes.begin();
-        RegistryCheck.takeKeysOnce();
-        this.switcher.setBusy(true);
-        this.reports.onBegun(Report.Operation.ON, String.join(", ", ids));
-        CheckedResult result = null;
-        LifecycleListeners.begin();
-        try {
-            result = this.runTimedOn(ids);
-            return result;
-        } finally {
-            LifecycleListeners.end(this.switcher::isOn);
-            this.tripwire.closeRide();
-            ResourceReload.endAssetWait();
-            this.reports.onEnded();
-            this.switcher.setBusy(false);
-            SwitchTimes.end("the on of " + ids);
-            endJournal(journal, result);
-        }
-    }
-
     private CheckedResult runTimedOn(List<String> ids) {
         ResourceReload.awaitIdle();
         SwitchTimes.mark("off's reload ended");
@@ -449,10 +437,8 @@ public final class SwitchRunner {
             if (result instanceof ModSwitcher.Result.Done) {
                 CrashGuard.onBackOn(coming.order());
 
-                if (isLookingAhead()) {
-                    this.looking.execute(() -> ElementLook.findAhead(this.fieldReferences, coming.order(),
-                            this.switcher::isOn));
-                }
+                this.looking.execute(() -> ElementLook.findAhead(this.fieldReferences, coming.order(),
+                        this.switcher::isOn));
             } else if (!coming.isRefused() && !toReopen) {
                 List<String> stillOff = coming.order().stream().filter(id -> !this.switcher.isOn(id)).toList();
                 if (allBack.get()) {
@@ -516,7 +502,7 @@ public final class SwitchRunner {
                 this.fieldReferences.putBackElements(order);
                 this.fieldReferences.takeRevealedBy(order);
                 GameTasks.onBack(order);
-                TakeoutRecord.restore(order, this.switcher::isOn);
+                OffRemovals.restore(order, this.switcher::isOn);
 
                 WindowCursor.chooseAgainFor(this.switcher.findPatchedBy(order));
                 this.logging.putBack(order);

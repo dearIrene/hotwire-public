@@ -1,6 +1,7 @@
 package dev.moon.hotwire.fabric.registration;
 
 import com.google.common.collect.MapMaker;
+import dev.moon.hotwire.classfile.ClassNodes;
 import dev.moon.hotwire.redefine.FieldSlots;
 import java.io.IOException;
 import java.io.InputStream;
@@ -129,9 +130,7 @@ final class LazyFields {
             if (in == null) {
                 return null;
             }
-            ClassNode node = new ClassNode();
-            new ClassReader(in).accept(node, ClassReader.SKIP_DEBUG | ClassReader.SKIP_FRAMES);
-            return node;
+            return ClassNodes.read(in.readAllBytes(), ClassReader.SKIP_DEBUG | ClassReader.SKIP_FRAMES);
         } catch (IOException | RuntimeException e) {
             return null;
         }

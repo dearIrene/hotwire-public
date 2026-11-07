@@ -47,6 +47,7 @@ final class SessionMod {
     final Set<String> starts;
     volatile DevState state = DevState.UP_TO_DATE;
     volatile String line = "";
+    private static final int MOST_EVENTS = 40;
     final Deque<DevEvent> events = new ArrayDeque<>();
     final Map<String, DevCrash> crashes = new LinkedHashMap<>();
 
@@ -56,5 +57,12 @@ final class SessionMod {
         this.mod = mod;
         this.running = running;
         this.starts = mod.findStartClasses();
+    }
+
+    synchronized void addEvent(DevEvent event) {
+        this.events.addFirst(event);
+        while (this.events.size() > MOST_EVENTS) {
+            this.events.removeLast();
+        }
     }
 }

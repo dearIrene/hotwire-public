@@ -102,11 +102,12 @@ final class LoadTimeMixer {
     private byte @Nullable [] mixLoading(String className, byte[] loaded, boolean includeOff) {
         ClassRebuilder rebuilder = this.applier.getRebuilder();
         INCLUDED_OFF.get().clear();
-        String lateConfig = this.applier.findLateConfig(className);
+        SwitchApplier.OnState on = this.applier.getOnState();
+        String lateConfig = on.late().get(className);
         if (lateConfig != null) {
             try {
                 return rebuilder.mixForLoad(className, loaded, ConfigReads.findLateConfig(lateConfig, className,
-                        this.applier.getGame()), List.of(lateConfig), this.applier::isOn);
+                        this.applier.getGame()), List.of(lateConfig), on.mods()::contains);
             } catch (RebuildException e) {
                 LOGGER.error("[Hotwire] {} of {} loaded as its jar has it; a static accessor in it throws when called",
                         className, lateConfig, e);
@@ -121,10 +122,10 @@ final class LoadTimeMixer {
         }
         Set<String> includedOff = includeOff ? this.findOffToInclude(className) : Set.of();
         INCLUDED_OFF.get().addAll(includedOff);
-        Set<String> asOn = new HashSet<>(this.applier.onMods);
+        Set<String> asOn = new HashSet<>(on.mods());
         asOn.addAll(includedOff);
-        List<String> configs = includedOff.isEmpty() ? this.applier.findPatchingNow(className)
-                : this.applier.findPatching(this.applier.getConfigsOf(asOn), Set.of(className));
+        List<String> configs = this.applier.findPatching(includedOff.isEmpty() ? on.configs()
+                : this.applier.getConfigsOf(asOn), Set.of(className));
         try {
             Set<String> launch = AppliedMixins.of(loaded, original);
             rebuilder.rememberLaunch(className, launch);

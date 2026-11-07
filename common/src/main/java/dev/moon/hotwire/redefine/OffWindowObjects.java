@@ -9,6 +9,7 @@ import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
+import java.util.TreeSet;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.TimeUnit;
 import java.util.function.BooleanSupplier;
@@ -182,5 +183,16 @@ public final class OffWindowObjects {
             count += Math.max(0, collector.getCollectionCount());
         }
         return count;
+    }
+
+    static Set<String> findMadeWithout(Set<Class<?>> types) {
+        Set<String> names = new TreeSet<>();
+        for (Class<?> type : types) {
+            String name = type.getName().replace('.', '/');
+            if (OffWindowObjects.countAlive(name) > 0) {
+                names.add(name);
+            }
+        }
+        return names;
     }
 }

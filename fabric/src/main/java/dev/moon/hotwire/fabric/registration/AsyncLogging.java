@@ -1,5 +1,6 @@
 package dev.moon.hotwire.fabric.registration;
 
+import dev.moon.hotwire.classfile.ClassNodes;
 import dev.moon.hotwire.redefine.ClassRebuilder;
 import dev.moon.hotwire.redefine.RebuildException;
 import java.io.FilterOutputStream;
@@ -25,7 +26,6 @@ import org.apache.logging.log4j.core.filter.CompositeFilter;
 import org.apache.logging.log4j.core.filter.Filterable;
 import org.apache.logging.log4j.core.jmx.RingBufferAdmin;
 import org.jspecify.annotations.Nullable;
-import org.objectweb.asm.ClassReader;
 import org.objectweb.asm.ClassWriter;
 import org.objectweb.asm.Opcodes;
 import org.objectweb.asm.Type;
@@ -144,8 +144,7 @@ public final class AsyncLogging {
     }
 
     private static byte @Nullable [] rewriteSynchronous(byte[] running) {
-        ClassNode node = new ClassNode();
-        new ClassReader(running).accept(node, 0);
+        ClassNode node = ClassNodes.read(running, 0);
         int replaced = 0;
         for (MethodNode method : node.methods) {
             String shape = method.name + method.desc;

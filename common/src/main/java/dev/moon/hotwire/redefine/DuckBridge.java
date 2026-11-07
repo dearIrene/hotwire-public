@@ -1,5 +1,6 @@
 package dev.moon.hotwire.redefine;
 
+import dev.moon.hotwire.classfile.ClassNodes;
 import java.util.Set;
 import org.objectweb.asm.ClassReader;
 import org.objectweb.asm.ClassWriter;
@@ -94,8 +95,7 @@ public final class DuckBridge {
         if (!names(classBytes, ducks, moved)) {
             return classBytes;
         }
-        ClassNode node = new ClassNode();
-        new ClassReader(classBytes).accept(node, 0);
+        ClassNode node = ClassNodes.read(classBytes, 0);
         if (ducks.contains(node.name)) {
             return rewriteDuck(node, ducks, moved);
         }
@@ -111,8 +111,7 @@ public final class DuckBridge {
         if (!names(classBytes, ducks)) {
             return classBytes;
         }
-        ClassNode node = new ClassNode();
-        new ClassReader(classBytes).accept(node, 0);
+        ClassNode node = ClassNodes.read(classBytes, 0);
         if (!raiseForInvokeDynamic(node)) {
             return classBytes;
         }

@@ -28,24 +28,17 @@ final class DevCards {
         }
         int ink = Colors.fade(Palette.DIM, a);
         if (maximized) {
-            paintBox(canvas, maxX + 5, y + 3, 6, 6, ink);
-            paintBox(canvas, maxX + 3, y + 5, 6, 6, ink);
+            CodeBlock.paintFrame(canvas, maxX + 5, y + 3, 6, 6, ink);
+            CodeBlock.paintFrame(canvas, maxX + 3, y + 5, 6, 6, ink);
             canvas.fill(maxX + 4, y + 6, maxX + 8, y + 10, Colors.fade(Palette.PANEL, a));
         } else {
-            paintBox(canvas, maxX + 3, y + 3, 8, 8, ink);
+            CodeBlock.paintFrame(canvas, maxX + 3, y + 3, 8, 8, ink);
         }
         int cross = Colors.fade(onClose ? Palette.TEXT : Palette.DIM, a);
         for (int i = 0; i < 7; i++) {
             canvas.fill(closeX + 4 + i, y + 4 + i, closeX + 5 + i, y + 5 + i, cross);
             canvas.fill(closeX + 10 - i, y + 4 + i, closeX + 11 - i, y + 5 + i, cross);
         }
-    }
-
-    static void paintBox(Canvas canvas, int x, int y, int w, int h, int ink) {
-        canvas.fill(x, y, x + w, y + 1, ink);
-        canvas.fill(x, y + h - 1, x + w, y + h, ink);
-        canvas.fill(x, y, x + 1, y + h, ink);
-        canvas.fill(x + w - 1, y, x + w, y + h, ink);
     }
 
     static int paintPill(Canvas canvas, DevState state, int right, int y, float a) {

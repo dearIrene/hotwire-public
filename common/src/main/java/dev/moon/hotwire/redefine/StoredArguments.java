@@ -1,6 +1,7 @@
 package dev.moon.hotwire.redefine;
 
 import dev.moon.hotwire.classfile.ClassHeader;
+import dev.moon.hotwire.classfile.ClassNodes;
 import java.util.HashMap;
 import java.util.HashSet;
 import java.util.Map;
@@ -96,8 +97,7 @@ final class StoredArguments {
                 if (bytes == null) {
                     return null;
                 }
-                ClassNode parent = new ClassNode();
-                new ClassReader(bytes).accept(parent, ClassReader.SKIP_DEBUG | ClassReader.SKIP_FRAMES);
+                ClassNode parent = ClassNodes.read(bytes, ClassReader.SKIP_DEBUG | ClassReader.SKIP_FRAMES);
                 MethodNode constructor = ArgumentInitializers.findMethod(parent, "<init>", call.desc);
                 FieldInsnNode stored = constructor == null ? null
                         : findStoredField(parent, constructor, slots[index], type, findFinals(bytes));

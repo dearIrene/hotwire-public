@@ -1,5 +1,6 @@
 package dev.moon.hotwire.mixin_copy;
 
+import dev.moon.hotwire.classfile.ClassNodes;
 import java.util.Arrays;
 import java.util.HashSet;
 import java.util.List;
@@ -20,8 +21,7 @@ public final class AppliedMixins {
     }
 
     public static Set<String> of(byte[] classBytes, byte @Nullable [] original) {
-        ClassNode node = new ClassNode();
-        new ClassReader(classBytes).accept(node, ClassReader.SKIP_CODE);
+        ClassNode node = ClassNodes.read(classBytes, ClassReader.SKIP_CODE);
         Set<String> mixins = new HashSet<>();
         Set<String> own = new HashSet<>();
         if (original != null) {

@@ -1,7 +1,7 @@
 package dev.moon.hotwire.redefine;
 
+import dev.moon.hotwire.classfile.ClassNodes;
 import java.lang.invoke.CallSite;
-import java.lang.invoke.ConstantCallSite;
 import java.lang.invoke.MethodHandle;
 import java.lang.invoke.MethodHandles;
 import java.lang.invoke.MethodType;
@@ -111,8 +111,6 @@ public final class HandlerGuards {
     private static final Map<String, Set<String>> PUT_IN = new ConcurrentHashMap<>();
 
     private static final Map<String, Set<String>> BEHAVING = new ConcurrentHashMap<>();
-
-    private static final AtomicLong FLIPS = new AtomicLong();
 
     private static final AtomicLong CHUNK_FLIPS = new AtomicLong();
     private static final List<String> CHUNK_HOSTS = List.of("chunk", "renderer/block/", "color/block/", "/model/",
@@ -279,10 +277,6 @@ public final class HandlerGuards {
         }
     }
 
-    public static long getFlips() {
-        return FLIPS.get();
-    }
-
     private static boolean containsAny(String name, List<String> parts) {
         for (String part : parts) {
             if (name.contains(part)) {
@@ -364,8 +358,7 @@ public final class HandlerGuards {
             commitStaged(internalName);
             return null;
         }
-        ClassNode node = new ClassNode();
-        new ClassReader(bytes).accept(node, 0);
+        ClassNode node = ClassNodes.read(bytes, 0);
         boolean made = HandlerSites.makeSites(internalName, node, true);
         noteBehaving(internalName, node);
         notePutIn(internalName, node);
@@ -377,8 +370,7 @@ public final class HandlerGuards {
         if (sidecar.length == 0) {
             return;
         }
-        ClassNode node = new ClassNode();
-        new ClassReader(sidecar).accept(node, ClassReader.SKIP_FRAMES);
+        ClassNode node = ClassNodes.read(sidecar, ClassReader.SKIP_FRAMES);
         Set<String> behaving = new HashSet<>(findBehavingAt(internalName));
         behaving.addAll(findBehaving(node));
         if (!behaving.isEmpty()) {
@@ -403,8 +395,7 @@ public final class HandlerGuards {
         DIRECT_MODS.remove(internalName);
         STAGED.remove(internalName);
         STAGED_PRESENT.remove(internalName);
-        ClassNode node = new ClassNode();
-        new ClassReader(bytes).accept(node, ClassReader.SKIP_FRAMES);
+        ClassNode node = ClassNodes.read(bytes, ClassReader.SKIP_FRAMES);
         Set<String> present = new HashSet<>();
         Set<String> guarded = new HashSet<>();
         Map<String, String> handlers = new HashMap<>();
@@ -613,7 +604,6 @@ public final class HandlerGuards {
             }
         }
         if (!changed.isEmpty()) {
-            FLIPS.incrementAndGet();
             MutableCallSite.syncAll(changed.toArray(MutableCallSite[]::new));
         }
         if (chunks) {

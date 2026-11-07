@@ -257,11 +257,11 @@ final class ElementTakes {
                     millis);
         }
         if (first != null) {
-            LOGGER.error("[Hotwire] {} of {} noted takeouts failed; the rest were done", failed,
+            LOGGER.error("[Hotwire] {} of {} noted removals failed; the rest were done", failed,
                     prepared.takes().size(), first);
         }
         if (unchanged > 0) {
-            LOGGER.info("[Hotwire] {} noted takeouts for {} met collections that cannot change: {}", unchanged, mods,
+            LOGGER.info("[Hotwire] {} noted removals for {} met collections that cannot change: {}", unchanged, mods,
                     unchangedKinds);
         }
     }

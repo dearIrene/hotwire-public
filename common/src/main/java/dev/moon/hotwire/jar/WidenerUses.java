@@ -1,5 +1,6 @@
 package dev.moon.hotwire.jar;
 
+import dev.moon.hotwire.classfile.ClassNodes;
 import java.lang.reflect.Modifier;
 import java.util.ArrayList;
 import java.util.HashMap;
@@ -215,8 +216,7 @@ public final class WidenerUses {
         }
         Map<String, ClassNode> nodes = new HashMap<>();
         for (byte[] bytes : classes.values()) {
-            ClassNode node = new ClassNode();
-            new ClassReader(bytes).accept(node, ClassReader.SKIP_DEBUG | ClassReader.SKIP_FRAMES);
+            ClassNode node = ClassNodes.read(bytes, ClassReader.SKIP_DEBUG | ClassReader.SKIP_FRAMES);
             nodes.put(node.name, node);
         }
         for (ClassNode node : nodes.values()) {
@@ -284,8 +284,7 @@ public final class WidenerUses {
         List<ClassNode> nodes = new ArrayList<>();
         Set<String> namedElsewhere = new HashSet<>();
         for (byte[] bytes : classes.values()) {
-            ClassNode node = new ClassNode();
-            new ClassReader(bytes).accept(node, 0);
+            ClassNode node = ClassNodes.read(bytes, 0);
             nodes.add(node);
             for (MethodNode method : node.methods) {
                 for (AbstractInsnNode insn : method.instructions) {

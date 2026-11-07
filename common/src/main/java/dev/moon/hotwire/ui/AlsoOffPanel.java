@@ -90,7 +90,8 @@ public final class AlsoOffPanel extends Panel {
             this.first = Math.max(0, Math.min(this.first, this.taken.size() - this.shown));
             int cards = this.shown * (CARD_H + ProgressPanel.CARD_GAP) - ProgressPanel.CARD_GAP;
 
-            this.size(WIDTH, Math.max(LEAST_HEIGHT, TOP + cards + this.findMoreLines() + FOOT), ProgressPanel.LISTED_SIDES);
+            this.size(WIDTH, Math.max(LEAST_HEIGHT, TOP + cards + this.findMoreLines() + FOOT),
+                    ProgressPanel.LISTED_SIDES);
         }
         if (this.confirmed && this.open()) {
             this.waited += dt;

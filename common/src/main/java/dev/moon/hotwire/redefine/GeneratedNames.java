@@ -1,5 +1,6 @@
 package dev.moon.hotwire.redefine;
 
+import dev.moon.hotwire.classfile.ClassNodes;
 import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.HashSet;
@@ -361,8 +362,6 @@ final class GeneratedNames {
     }
 
     private static ClassNode read(byte[] bytes) {
-        ClassNode node = new ClassNode();
-        new ClassReader(bytes).accept(node, ClassReader.SKIP_CODE);
-        return node;
+        return ClassNodes.read(bytes, ClassReader.SKIP_CODE);
     }
 }

@@ -1,5 +1,6 @@
 package dev.moon.hotwire.redefine;
 
+import dev.moon.hotwire.classfile.ClassNodes;
 import java.lang.invoke.CallSite;
 import java.lang.invoke.ConstantCallSite;
 import java.lang.invoke.MethodHandle;
@@ -59,8 +60,7 @@ public final class Adoption {
         if (adopted.isEmpty() || !namesAny(bytes, adopted)) {
             return bytes;
         }
-        ClassNode node = new ClassNode();
-        new ClassReader(bytes).accept(node, ClassReader.EXPAND_FRAMES);
+        ClassNode node = ClassNodes.read(bytes, ClassReader.EXPAND_FRAMES);
         boolean changed = false;
         if (adopted.contains(node.name)) {
             for (FieldNode field : node.fields) {
@@ -435,13 +435,6 @@ public final class Adoption {
                 types.set(i, Opcodes.NULL);
             }
         }
-    }
-
-    public static CallSite bootstrapOwn(MethodHandles.Lookup caller, String name, MethodType type)
-            throws ReflectiveOperationException {
-        Class<?> made = type.returnType();
-        return new ConstantCallSite(MethodHandles.privateLookupIn(made, MethodHandles.lookup()).findConstructor(made,
-                type.changeReturnType(void.class)));
     }
 
     public static CallSite bootstrapAdded(MethodHandles.Lookup caller, String name, MethodType type)

@@ -2,8 +2,8 @@ package dev.moon.hotwire.fabric.update;
 
 import dev.moon.hotwire.concurrent.Parallel;
 import dev.moon.hotwire.fabric.ModPolicy;
-import dev.moon.hotwire.jar.ModManifest;
 import dev.moon.hotwire.jar.ModJarReader;
+import dev.moon.hotwire.jar.ModManifest;
 import dev.moon.hotwire.redefine.RebuildException;
 import dev.moon.hotwire.switching.ModMixins;
 import dev.moon.hotwire.switching.SwitchTimes;
@@ -81,7 +81,7 @@ final class UpdateBatch {
                         claimed.addAll(ids);
                         inPlace.add(planned);
                         inPlaceAt.add(i);
-                        brought.putAll(this.updater.getPlans().findComing(planned.read()));
+                        brought.putAll(this.updater.findComing(planned.read()));
                     } else {
                         later.add(i);
                     }
@@ -157,7 +157,7 @@ final class UpdateBatch {
             inPlace.forEach(planned -> planned.whole().leftOut().forEach(jar -> this.addClassesOf(jar, suspects)));
             suspects.removeAll(goingIn);
             Map<String, ModManifest> comingIn = new HashMap<>();
-            inPlace.forEach(planned -> comingIn.putAll(this.updater.getPlans().findComing(planned.read())));
+            inPlace.forEach(planned -> comingIn.putAll(this.updater.findComing(planned.read())));
             for (int i = inPlace.size() - 1; i >= 0; i--) {
                 ModUpdater.SortResult.Planned planned = inPlace.get(i);
                 String clash = this.updater.getClashes().findClash(planned, suspects, this.named, running, goingIn,

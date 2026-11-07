@@ -20,14 +20,11 @@ final class MovedSites {
     private static final int REMEMBERED = 4;
     private static final Set<Site> SITES = Collections.synchronizedSet(Collections.newSetFromMap(new WeakHashMap<>()));
     private static final MethodHandle FIND;
-    private static final MethodHandle IS_CLASS;
 
     static {
         try {
             MethodHandles.Lookup lookup = MethodHandles.lookup();
             FIND = lookup.findVirtual(Site.class, "find", MethodType.methodType(Object.class, Object[].class));
-            IS_CLASS = lookup.findStatic(MovedSites.class, "isClass",
-                    MethodType.methodType(boolean.class, Class.class, Object.class));
         } catch (ReflectiveOperationException e) {
             throw new ExceptionInInitializerError(e);
         }
@@ -76,9 +73,7 @@ final class MovedSites {
                 if (this.resets == before) {
                     this.met.put(receiver, spread);
                     if (this.remembered < REMEMBERED) {
-                        MethodHandle test = MethodHandles.dropArguments(IS_CLASS.bindTo(receiver).asType(
-                                MethodType.methodType(boolean.class, this.type().parameterType(0))), 1,
-                                this.type().parameterList().subList(1, this.type().parameterCount()));
+                        MethodHandle test = ExactClass.makeTest(receiver, this.type());
                         this.setTarget(MethodHandles.guardWithTest(test, answer, this.getTarget()));
                         this.remembered++;
                     }
@@ -128,11 +123,6 @@ final class MovedSites {
         if (!sites.isEmpty()) {
             MutableCallSite.syncAll(sites.toArray(MutableCallSite[]::new));
         }
-    }
-
-    @SuppressWarnings("unused")
-    private static boolean isClass(Class<?> type, Object receiver) {
-        return receiver.getClass() == type;
     }
 
     static @Nullable MethodHandle findOwnFinal(MethodHandles.Lookup caller, String owner, String method,

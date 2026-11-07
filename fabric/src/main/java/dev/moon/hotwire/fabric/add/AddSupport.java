@@ -1,11 +1,11 @@
 package dev.moon.hotwire.fabric.add;
 
 import dev.moon.hotwire.classfile.ClassHeader;
-import dev.moon.hotwire.fabric.registration.ElementLook;
 import dev.moon.hotwire.fabric.InstalledMods;
 import dev.moon.hotwire.fabric.ModPolicy;
 import dev.moon.hotwire.fabric.rebuild.GameClasses;
 import dev.moon.hotwire.fabric.rebuild.MixinConfigs;
+import dev.moon.hotwire.fabric.registration.ElementLook;
 import dev.moon.hotwire.fabric.report.GameReports;
 import dev.moon.hotwire.fabric.screen.ModIcons;
 import dev.moon.hotwire.jar.FileHashes;

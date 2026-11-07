@@ -1,5 +1,6 @@
 package dev.moon.hotwire.redefine;
 
+import dev.moon.hotwire.classfile.ClassNodes;
 import java.lang.invoke.MethodType;
 import java.lang.management.LockInfo;
 import java.lang.management.ManagementFactory;
@@ -603,7 +604,8 @@ public final class Tripwire {
         StackTraceElement[] stack = new Throwable().getStackTrace();
         for (StackTraceElement frame : stack) {
             if (!frame.getClassName().equals(Tripwire.class.getName())
-                        && !frame.getClassName().startsWith(TripwireSites.class.getName()) && frames.size() < FRAMES / 2) {
+                        && !frame.getClassName().startsWith(TripwireSites.class.getName())
+                        && frames.size() < FRAMES / 2) {
                 frames.add(frame.toString());
             }
         }
@@ -636,8 +638,7 @@ public final class Tripwire {
     }
 
     public static byte @Nullable [] arm(byte[] classBytes, String mod) {
-        ClassNode node = new ClassNode();
-        new ClassReader(classBytes).accept(node, 0);
+        ClassNode node = ClassNodes.read(classBytes, 0);
         boolean armed = false;
         for (MethodNode method : node.methods) {
             if ((method.access & (Opcodes.ACC_ABSTRACT | Opcodes.ACC_NATIVE)) != 0 || method.instructions.size() == 0) {

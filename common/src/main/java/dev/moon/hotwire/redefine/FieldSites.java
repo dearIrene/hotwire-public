@@ -51,24 +51,6 @@ final class FieldSites {
         if (merged.isEmpty() || original == null) {
             return;
         }
-        String dumpFor = System.getProperty("hotwire_field_sites_dump");
-        if (dumpFor != null && internalName.equals(dumpFor)) {
-            try {
-                org.objectweb.asm.ClassWriter writer = new org.objectweb.asm.ClassWriter(0);
-                node.accept(writer);
-                java.nio.file.Path file = java.nio.file.Path.of("hotwire", "dump", internalName.replace('/', '.') + ".fs.class");
-                java.nio.file.Files.createDirectories(file.getParent());
-                java.nio.file.Files.write(file, writer.toByteArray());
-                byte[] shippedBytes = HandlerGuards.originals.apply(internalName);
-                if (shippedBytes != null) {
-                    java.nio.file.Files.write(file.resolveSibling(internalName.replace('/', '.') + ".shipped.class"), shippedBytes);
-                }
-                LOGGER.info("[Hotwire] field sites wrote {} and skip it", file);
-            } catch (java.io.IOException e) {
-                LOGGER.warn("[Hotwire] field sites could not write {}", internalName, e);
-            }
-            return;
-        }
         Set<String> own = new HashSet<>();
         original.fields.forEach(field -> own.add(field.name + field.desc));
 

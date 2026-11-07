@@ -10,7 +10,7 @@ public final class UncaughtHandlers {
     private static final Logger LOGGER = LoggerFactory.getLogger(UncaughtHandlers.class);
 
     private record Swap(Thread.UncaughtExceptionHandler mods, Thread.@Nullable UncaughtExceptionHandler inner)
-            implements TakeoutRecord.Entry {
+            implements OffRemovals.Entry {
         @Override
         @SuppressWarnings("ReferenceEquality")
         public void restore() {
@@ -36,7 +36,7 @@ public final class UncaughtHandlers {
         }
         Thread.UncaughtExceptionHandler inner = findWrapped(current);
         Thread.setDefaultUncaughtExceptionHandler(inner);
-        TakeoutRecord.add(mod, new Swap(current, inner));
+        OffRemovals.add(mod, new Swap(current, inner));
         LOGGER.info("[Hotwire] the JVM's handler of uncaught throws is {} again instead of {}'s",
                 inner == null ? "none" : inner.getClass().getName(), mod);
     }

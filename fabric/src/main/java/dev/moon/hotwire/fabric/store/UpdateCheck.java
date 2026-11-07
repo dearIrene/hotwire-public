@@ -2,6 +2,7 @@ package dev.moon.hotwire.fabric.store;
 
 import dev.moon.hotwire.fabric.CacheLimit;
 import dev.moon.hotwire.fabric.InstalledMods;
+import dev.moon.hotwire.fabric.ModPolicy;
 import dev.moon.hotwire.jar.FileHashes;
 import dev.moon.hotwire.jar.ModManifest;
 import dev.moon.hotwire.modrinth.Downloads;
@@ -223,8 +224,7 @@ public final class UpdateCheck {
     }
 
     public List<Path> fetchById(String id, List<UpdateOffer> offers, Consumer<String> saying) throws IOException {
-        boolean ofTheGame = id.equals("fabricloader") || id.equals("minecraft") || id.equals("java");
-        if (ofTheGame) {
+        if (ModPolicy.isBuiltIn(id)) {
             return List.of();
         }
 

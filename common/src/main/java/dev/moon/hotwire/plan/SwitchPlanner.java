@@ -1,7 +1,7 @@
 package dev.moon.hotwire.plan;
 
-import dev.moon.hotwire.jar.ModManifest.Relation;
 import dev.moon.hotwire.jar.ModManifest;
+import dev.moon.hotwire.jar.ModManifest.Relation;
 import dev.moon.hotwire.plan.SwitchPlan.Direction;
 import dev.moon.hotwire.plan.SwitchPlan.EnabledNestedMod;
 import dev.moon.hotwire.plan.SwitchPlan.Reason;

@@ -1,5 +1,6 @@
 package dev.moon.hotwire.redefine;
 
+import dev.moon.hotwire.classfile.ClassNodes;
 import java.lang.invoke.MethodHandles;
 import java.util.ArrayList;
 import java.util.HashSet;
@@ -53,8 +54,7 @@ final class BatchVerifier {
     static List<String> findProblems(Map<Class<?>, byte[]> classes) {
         List<String> problems = new ArrayList<>();
         classes.forEach((type, bytes) -> {
-            ClassNode node = new ClassNode();
-            new ClassReader(bytes).accept(node, ClassReader.SKIP_DEBUG);
+            ClassNode node = ClassNodes.read(bytes, ClassReader.SKIP_DEBUG);
             Type superType = node.superName == null ? null : Type.getObjectType(node.superName);
             List<Type> interfaces = new ArrayList<>(node.interfaces.size());
             for (String face : node.interfaces) {

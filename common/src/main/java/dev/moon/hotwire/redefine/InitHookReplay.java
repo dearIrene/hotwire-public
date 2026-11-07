@@ -1,5 +1,6 @@
 package dev.moon.hotwire.redefine;
 
+import dev.moon.hotwire.classfile.ClassNodes;
 import java.lang.reflect.Field;
 import java.util.ArrayList;
 import java.util.Comparator;
@@ -155,8 +156,7 @@ public final class InitHookReplay {
         if (fresh.isEmpty()) {
             return addStaticsOnly(mixed, original, running, previous);
         }
-        ClassNode now = new ClassNode();
-        new ClassReader(mixed).accept(now, 0);
+        ClassNode now = ClassNodes.read(mixed, 0);
 
         Set<String> finals = StoredArguments.findFinals(running);
         InsnList onObjects = new InsnList();
@@ -242,8 +242,7 @@ public final class InitHookReplay {
 
     private static Addition addStaticsOnly(byte[] mixed, byte @Nullable [] original, byte[] running,
             byte @Nullable [] previous) {
-        ClassNode now = new ClassNode();
-        new ClassReader(mixed).accept(now, 0);
+        ClassNode now = ClassNodes.read(mixed, 0);
         ClassNode runs = RetainedInitializers.read(running);
         Map<String, String> recomputed = new LinkedHashMap<>(ChangedStatics.addSwitched(now,
                 findLastMix(previous, runs)));
@@ -366,7 +365,7 @@ public final class InitHookReplay {
         Map<Integer, FieldInsnNode> storedArguments = moment != null && moment.name.equals("<init>")
                 ? StoredArguments.findStoredArguments(node, moment, finals) : Map.of();
         for (int index = 0; index < arguments.length; index++) {
-            boolean read = reads(handler, slot);
+            boolean read = ClassNodes.isSlotRead(handler, slot);
             FieldInsnNode capturedField = index > callback && captured != null
                     ? storedArguments.get(captured[index - callback - 1]) : null;
             FieldInsnNode stored = read && index < callback && moment != null && moment.name.equals("<init>")
@@ -380,7 +379,7 @@ public final class InitHookReplay {
                 loads.add(new MethodInsnNode(Opcodes.INVOKESPECIAL, type, "<init>", "(Ljava/lang/String;Z)V",
                         false));
             } else if (!read) {
-                loads.add(makeDefault(arguments[index]));
+                loads.add(ClassNodes.makeDefault(arguments[index]));
             } else if (stored != null) {
                 loads.add(new VarInsnNode(Opcodes.ALOAD, 0));
                 loads.add(new FieldInsnNode(Opcodes.GETFIELD, stored.owner, stored.name, stored.desc));
@@ -465,25 +464,5 @@ public final class InitHookReplay {
         method.instructions.add(body);
         method.instructions.add(new InsnNode(Opcodes.RETURN));
         return method;
-    }
-
-    private static boolean reads(MethodNode handler, int slot) {
-        for (AbstractInsnNode insn : handler.instructions) {
-            if (insn instanceof VarInsnNode load && load.var == slot && load.getOpcode() >= Opcodes.ILOAD
-                    && load.getOpcode() <= Opcodes.ALOAD) {
-                return true;
-            }
-        }
-        return false;
-    }
-
-    private static AbstractInsnNode makeDefault(Type type) {
-        return switch (type.getSort()) {
-            case Type.LONG -> new InsnNode(Opcodes.LCONST_0);
-            case Type.FLOAT -> new InsnNode(Opcodes.FCONST_0);
-            case Type.DOUBLE -> new InsnNode(Opcodes.DCONST_0);
-            case Type.OBJECT, Type.ARRAY -> new InsnNode(Opcodes.ACONST_NULL);
-            default -> new InsnNode(Opcodes.ICONST_0);
-        };
     }
 }

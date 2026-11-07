@@ -1,5 +1,6 @@
 package dev.moon.hotwire.redefine;
 
+import dev.moon.hotwire.classfile.ClassNodes;
 import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.HashSet;
@@ -49,9 +50,7 @@ final class PrefixSlices {
     private static ClassNode expand(ClassNode mixed) {
         ClassWriter writer = new ClassWriter(ClassWriter.COMPUTE_MAXS);
         mixed.accept(writer);
-        ClassNode expanded = new ClassNode();
-        new ClassReader(writer.toByteArray()).accept(expanded, ClassReader.EXPAND_FRAMES);
-        return expanded;
+        return ClassNodes.read(writer.toByteArray(), ClassReader.EXPAND_FRAMES);
     }
 
     private static AbstractInsnNode findStart(MethodNode method, FieldInsnNode store) {

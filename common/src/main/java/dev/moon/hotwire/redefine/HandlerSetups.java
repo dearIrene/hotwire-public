@@ -1,6 +1,7 @@
 package dev.moon.hotwire.redefine;
 
 import dev.moon.hotwire.classfile.ClassHeader;
+import dev.moon.hotwire.classfile.ClassNodes;
 import java.util.HashMap;
 import java.util.HashSet;
 import java.util.LinkedHashSet;
@@ -33,8 +34,7 @@ public final class HandlerSetups {
                 gameFields.add(field.name() + field.desc());
             }
         }
-        ClassNode node = new ClassNode();
-        new ClassReader(running).accept(node, ClassReader.SKIP_DEBUG | ClassReader.SKIP_FRAMES);
+        ClassNode node = ClassNodes.read(running, ClassReader.SKIP_DEBUG | ClassReader.SKIP_FRAMES);
         Map<String, String> handlers = new HashMap<>();
         Map<String, MethodNode> byKey = new HashMap<>();
         for (MethodNode method : node.methods) {

@@ -1,5 +1,6 @@
 package dev.moon.hotwire.redefine;
 
+import dev.moon.hotwire.classfile.ClassNodes;
 import dev.moon.hotwire.jar.WidenerUses;
 import java.lang.invoke.MethodHandles;
 import java.nio.charset.StandardCharsets;
@@ -142,8 +143,7 @@ public final class AccessBridge {
         if (!names(classBytes, openings)) {
             return eraseCallSites(classBytes, openings);
         }
-        ClassNode node = new ClassNode();
-        new ClassReader(classBytes).accept(node, 0);
+        ClassNode node = ClassNodes.read(classBytes, 0);
         if (openings.classes().contains(node.name) || !DuckBridge.raiseForInvokeDynamic(node)) {
             return classBytes;
         }
@@ -309,8 +309,7 @@ public final class AccessBridge {
         if (!mentionsAny(classBytes, openings.classes())) {
             return classBytes;
         }
-        ClassNode node = new ClassNode();
-        new ClassReader(classBytes).accept(node, ClassReader.EXPAND_FRAMES);
+        ClassNode node = ClassNodes.read(classBytes, ClassReader.EXPAND_FRAMES);
         Map<String, String> bodies = new HashMap<>();
         Map<String, String> fields = new HashMap<>();
         boolean changed = false;

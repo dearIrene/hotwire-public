@@ -356,8 +356,8 @@ final class EngineStart {
         AddSupport adds = new AddSupport(installed, applier, switcher, classes, reports, gameDir, folders, queue,
                 icons, ids -> runner.turnOff(ids).result());
         UpdateSupport updates = new UpdateSupport(installed, applier, switcher, classes, folders, queue, reports,
-                icons);
-        updates.setAdder(adds.getAdder());
+                icons, adds.getAdder());
+        adds.getAdder().setCarriedLibraries(updates);
         laps.endLap("runner, adds, updates");
         return new HotwireEngine.JvmParts(runner, adds, updates, instrumentation, loadTimeMixer, classes);
     }

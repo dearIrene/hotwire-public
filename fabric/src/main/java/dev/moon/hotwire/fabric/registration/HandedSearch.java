@@ -1,5 +1,6 @@
 package dev.moon.hotwire.fabric.registration;
 
+import dev.moon.hotwire.fabric.ModPolicy;
 import dev.moon.hotwire.redefine.FieldSlots;
 import java.util.ArrayDeque;
 import java.util.ArrayList;
@@ -21,7 +22,7 @@ record HandedSearch(Set<Object> handed, Set<String> consumers, Collection<Class<
 
     private static final int LARGEST = 100_000;
 
-    private static final Set<String> NOT_CONSUMERS = Set.of("fabricloader", "minecraft", "java", "mixinextras");
+    private static final Set<String> NOT_CONSUMERS = ModPolicy.BUILT_IN;
 
     HandedSearch {
         Set<Object> same = Collections.newSetFromMap(new IdentityHashMap<>());

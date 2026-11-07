@@ -3,6 +3,7 @@ package dev.moon.hotwire.fabric;
 import com.mojang.blaze3d.systems.RenderSystem;
 import dev.moon.hotwire.fabric.screen.HotwireScreen;
 import dev.moon.hotwire.fabric.screen.StoreGameScreen;
+import dev.moon.hotwire.report.Causes;
 import dev.moon.hotwire.ui.Lang;
 //? if >=26.2 {
 import com.mojang.renderpearl.api.textures.GpuTextureView;
@@ -27,7 +28,7 @@ public final class FrameRecovery {
         if (!(screen instanceof HotwireScreen) && !(screen instanceof StoreGameScreen)) {
             return false;
         }
-        for (Throwable at = thrown; at != null; at = at.getCause()) {
+        for (Throwable at : Causes.list(thrown)) {
             for (StackTraceElement frame : at.getStackTrace()) {
                 if (frame.getClassName().startsWith("dev.moon.hotwire.ui.")) {
                     ModViews.show(null);

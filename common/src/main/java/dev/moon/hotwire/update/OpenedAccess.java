@@ -1,5 +1,6 @@
 package dev.moon.hotwire.update;
 
+import dev.moon.hotwire.classfile.ClassNodes;
 import dev.moon.hotwire.update.JarDiff.ClassChange;
 import dev.moon.hotwire.update.JarDiff.ClassDiff;
 import dev.moon.hotwire.update.JarDiff.ShapeChange;
@@ -47,9 +48,7 @@ final class OpenedAccess {
     }
 
     private static ClassNode read(byte[] bytes) {
-        ClassNode node = new ClassNode();
-        new ClassReader(bytes).accept(node, ClassReader.SKIP_DEBUG | ClassReader.SKIP_FRAMES);
-        return node;
+        return ClassNodes.read(bytes, ClassReader.SKIP_DEBUG | ClassReader.SKIP_FRAMES);
     }
 
     private static void addFlagged(ClassNode was, ClassNode now, Set<String> lines) {

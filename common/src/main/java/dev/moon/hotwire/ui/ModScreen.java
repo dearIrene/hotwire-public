@@ -4,9 +4,9 @@ import dev.moon.hotwire.config.ProfileStore;
 import dev.moon.hotwire.modrinth.Downloads;
 import dev.moon.hotwire.ui.list.ModCatalog;
 import dev.moon.hotwire.ui.list.ModList;
+import dev.moon.hotwire.ui.list.ModListModel;
 import dev.moon.hotwire.ui.list.ModListModel.Show;
 import dev.moon.hotwire.ui.list.ModListModel.Unpick;
-import dev.moon.hotwire.ui.list.ModListModel;
 import dev.moon.hotwire.ui.list.ModStatus;
 import dev.moon.hotwire.update.PendingChange;
 import dev.moon.hotwire.update.UpdateOffer;
@@ -19,13 +19,12 @@ import java.util.HashSet;
 import java.util.List;
 import java.util.Locale;
 import java.util.Map;
+import java.util.Objects;
 import java.util.Set;
 import java.util.concurrent.CompletableFuture;
 import org.jspecify.annotations.Nullable;
 
 public final class ModScreen implements JarHost {
-    private final ModScreenButtons modScreenButtons = new ModScreenButtons(this);
-
     public interface Game {
         List<ModStatus> getMods();
 
@@ -191,7 +190,7 @@ public final class ModScreen implements JarHost {
     final Button updates;
     private final UpdatesPanel updatesPanel;
     final Button advanced;
-    final Button switchCache;
+    private final Button switchCache;
     private final Button done;
     final ProgressPanel progress;
     private final AddPanel addPanel;
@@ -199,30 +198,30 @@ public final class ModScreen implements JarHost {
     private final SettingsPanel settingsPanel;
     private final CacheFillPanel cacheFillPanel;
     private final ManageCachePanel manageCachePanel;
-    final List<Panel> panels;
+    private final List<Panel> panels;
     private final PendingPanel pendingPanel;
     private final ReopenPanel reopenPanel;
     private final AlsoOffPanel alsoOffPanel;
     private final CarriedPanel carriedPanel;
     private final ReportPanel reportPanel;
-    final FirstOpenPanel firstOpen;
+    private final FirstOpenPanel firstOpen;
     private final SelfUpdatePanel selfUpdate;
-    int pendingCount;
+    private int pendingCount;
     private List<UpdateOffer> foundOffers = List.of();
     private boolean offersChecked;
 
     private Set<String> withSettings;
     final List<ModStatus> shown = new ArrayList<>();
-    final Map<String, String> childOf = new HashMap<>();
+    private final Map<String, String> childOf = new HashMap<>();
 
-    static final int COMPACT_BELOW = 330;
+    private static final int COMPACT_BELOW = 330;
 
-    static final List<Show> SHOWS = List.of(Show.ALL, Show.ON, Show.OFF, Show.SELECTED);
+    private static final List<Show> SHOWS = List.of(Show.ALL, Show.ON, Show.OFF, Show.SELECTED);
 
     private int width;
     private int height;
     final BottomBar bar;
-    String toggleLabel = "";
+    private String toggleLabel = "";
     private final AheadRequests ahead;
     private final PendingActions pendingActions;
 
@@ -231,16 +230,16 @@ public final class ModScreen implements JarHost {
         this.model = new ModListModel(game.getCatalog());
         this.list = new ModList(new ListSource(), game.getBadges(), this.model, game.getCatalog(), game::findIcon,
                 new Gestures());
-        this.search = new TextField(Lang.get("hotwire.screen.search"), this.modScreenButtons::onSearched, () -> { },
+        this.search = new TextField(Lang.get("hotwire.screen.search"), this::onSearched, () -> { },
                 game::onDone);
-        this.show = new ChoiceBar(ModScreenButtons.getShowChoices(0), 0, this::showPicked);
+        this.show = new ChoiceBar(getShowChoices(0), 0, this::showPicked);
         this.layoutBar = new ChoiceBar(List.of(ChoiceBar.Choice.ofGlyph(ChoiceBar.Glyph.ROWS),
                 ChoiceBar.Choice.ofGlyph(ChoiceBar.Glyph.GRID)), 0, index -> this.list.setGrid(index == 1));
         this.libraries = new Button(Lang.get("hotwire.screen.show_libraries"), false, this::toggleLibraries);
         this.profiles = new ProfileMenu(profiles, new ProfileHost(this, game, this.model), this.root, this.search,
                 this.show);
         this.toggle = new Button(Lang.get("hotwire.screen.turn_off"), Lang.get("hotwire.screen.off"), false,
-                this.modScreenButtons::switchPicked);
+                this::switchPicked);
         this.add = new Button(Lang.get("hotwire.screen.add"), Lang.get("hotwire.screen.add_short"), false,
                 game::addMod);
         this.report = new Button(Lang.get("hotwire.screen.report"), Lang.get("hotwire.screen.report_short"), false,
@@ -250,9 +249,9 @@ public final class ModScreen implements JarHost {
         CacheHost caches = game.getCaches();
         this.manageCachePanel = new ManageCachePanel(caches::getCacheVersions, caches::clearCache,
                 () -> LimitRow.findMegabytes(caches.getCacheFill()), caches::setCacheLimit, caches.getStoreCache(),
-                this.modScreenButtons::closePanels);
+                this::closePanels);
         this.cacheFillPanel = new CacheFillPanel(caches::getCacheFill, caches::fillCache,
-                this::openManageCache, caches::setCacheLimit, this.modScreenButtons::closePanels);
+                this::openManageCache, caches::setCacheLimit, this::closePanels);
         this.advanced = new Button(Lang.get("hotwire.screen.advanced"), Lang.get("hotwire.screen.advanced_short"),
                 false, this::openSettings);
         this.switchCache = new Button(Lang.get("hotwire.screen.switch_cache"),
@@ -263,21 +262,21 @@ public final class ModScreen implements JarHost {
         this.bar = new BottomBar(List.of(this.toggle, this.add, this.updates, this.report, this.pending,
                 this.switchCache, this.advanced), this.done);
         this.updatesPanel = new UpdatesPanel(offer -> {
-            this.modScreenButtons.closePanels();
+            this.closePanels();
             game.updateFromStore(offer);
-        }, game::updateAllFromStore, this.modScreenButtons::closePanels, game::findIcon, game::checkForUpdates,
+        }, game::updateAllFromStore, this::closePanels, game::findIcon, game::checkForUpdates,
                 game::findUpdateDownloads);
         this.progress = new ProgressPanel(game.getProgress());
         this.progress.showIconsFrom(game::findIcon);
-        this.addPanel = new AddPanel(this::confirmAdd, game::addMod, this.modScreenButtons::closePanels);
-        this.updatePanel = new UpdatePanel(this::confirmUpdate, game::updateMod, this.modScreenButtons::closePanels);
-        this.settingsPanel = new SettingsPanel(this::chooseSetting, this.modScreenButtons::closePanels);
+        this.addPanel = new AddPanel(this::confirmAdd, game::addMod, this::closePanels);
+        this.updatePanel = new UpdatePanel(this::confirmUpdate, game::updateMod, this::closePanels);
+        this.settingsPanel = new SettingsPanel(this::chooseSetting, this::closePanels);
         this.ahead = new AheadRequests(game);
         this.pendingActions = new PendingActions(game, this::showMessage);
         this.pendingPanel = new PendingPanel(this::actOnPending, this::cleanUpEarlier, this::closePending,
                 game::findIcon);
         this.reopenPanel = new ReopenPanel(offer -> {
-            this.modScreenButtons.closePanels();
+            this.closePanels();
             Path jar = offer.jar();
             this.game.backUpBeforeReopen(offer.backup());
             if (offer.nextStart()) {
@@ -287,22 +286,22 @@ public final class ModScreen implements JarHost {
             } else {
                 this.game.switchWithReopen(offer.off(), offer.ids());
             }
-        }, this.modScreenButtons::closePanels);
+        }, this::closePanels);
         this.alsoOffPanel = new AlsoOffPanel(game::turnOff, () -> {
-            this.modScreenButtons.closePanels();
+            this.closePanels();
             this.list.clearWishes();
         }, this.progress);
         this.carriedPanel = new CarriedPanel(ids -> {
-            this.modScreenButtons.closePanels();
+            this.closePanels();
             this.turnOffAsking(ids);
         }, () -> {
-            this.modScreenButtons.closePanels();
+            this.closePanels();
             this.list.clearWishes();
         }, game::findIcon, game.getCatalog()::name);
         this.firstOpen = new FirstOpenPanel(game::acceptFirstOpen);
-        this.selfUpdate = new SelfUpdatePanel(game::updateHotwireAtNextStart, this.modScreenButtons::closePanels,
+        this.selfUpdate = new SelfUpdatePanel(game::updateHotwireAtNextStart, this::closePanels,
                 game::closeGame);
-        this.reportPanel = new ReportPanel(game::showReportFile, this.modScreenButtons::closePanels);
+        this.reportPanel = new ReportPanel(game::showReportFile, this::closePanels);
         Element base = this.root.getBase();
 
         for (Element part : List.of(this.header, this.note, this.list, this.search,
@@ -325,7 +324,7 @@ public final class ModScreen implements JarHost {
         this.root.focus(this.search);
         this.pendingCount = game.getPendingChanges().size();
         this.withSettings = game.getModsWithSettings();
-        this.modScreenButtons.refilter();
+        this.refilter();
     }
 
     public void showCrashReport(String where) {
@@ -374,7 +373,7 @@ public final class ModScreen implements JarHost {
     }
 
     public void drawFrame(Canvas canvas, long nowNanos, double mouseX, double mouseY) {
-        this.modScreenButtons.refreshButtons();
+        this.refreshButtons();
         this.ahead.askForPointer(this.list.findPointedAt(), nowNanos, this.isIdle());
         this.bar.layIfStale(canvas, this.width, this.height);
         Set<String> picked = this.model.getPicked();
@@ -427,7 +426,7 @@ public final class ModScreen implements JarHost {
         this.pendingCount = this.game.getPendingChanges().size();
         this.showOffers();
         this.withSettings = this.game.getModsWithSettings();
-        this.modScreenButtons.refilter();
+        this.refilter();
     }
 
     public boolean pressSettings(String id) {
@@ -485,12 +484,12 @@ public final class ModScreen implements JarHost {
     }
 
     private void confirmAdd(Path jar, AddMode mode) {
-        this.modScreenButtons.closePanels();
+        this.closePanels();
         this.game.add(jar, mode);
     }
 
     private void confirmUpdate(Path jar, UpdateMethod method) {
-        this.modScreenButtons.closePanels();
+        this.closePanels();
         this.game.update(jar, method);
     }
 
@@ -597,20 +596,16 @@ public final class ModScreen implements JarHost {
     private void showPicked(int index) {
         this.model.setShowing(SHOWS.get(index));
         this.list.scrollToTop();
-        this.modScreenButtons.refilter();
+        this.refilter();
     }
 
     private void toggleLibraries() {
         this.model.setShowingLibraries(!this.model.isShowingLibraries());
-        this.modScreenButtons.refilter();
+        this.refilter();
     }
 
     boolean isNaming() {
         return this.profiles.isNaming();
-    }
-
-    void refilter() {
-        this.modScreenButtons.refilter();
     }
 
     private final class ListSource implements ModList.Source {
@@ -663,7 +658,7 @@ public final class ModScreen implements JarHost {
         public void toggleFavorite(String id) {
             ModCatalog catalog = ModScreen.this.game.getCatalog();
             catalog.setFavorite(id, !catalog.isFavorite(id));
-            ModScreen.this.modScreenButtons.refilter();
+            ModScreen.this.refilter();
         }
 
         @Override
@@ -674,9 +669,9 @@ public final class ModScreen implements JarHost {
             }
             boolean took = ModScreen.this.model.pick(id);
             if (took) {
-                ModScreen.this.modScreenButtons.refilter();
-                ModScreen.this.ahead.askForPicks(ModScreen.this.modScreenButtons.getPickedThatAre(true),
-                        ModScreen.this.modScreenButtons.getPickedThatAre(false), ModScreen.this.isIdle());
+                ModScreen.this.refilter();
+                ModScreen.this.ahead.askForPicks(ModScreen.this.getPickedThatAre(true),
+                        ModScreen.this.getPickedThatAre(false), ModScreen.this.isIdle());
             }
             return took;
         }
@@ -689,7 +684,7 @@ public final class ModScreen implements JarHost {
                         + ModScreen.this.game.getCatalog().name(needed.owner()) + " is, because it needs it.", false);
                 return false;
             }
-            ModScreen.this.modScreenButtons.refilter();
+            ModScreen.this.refilter();
             return true;
         }
 
@@ -703,12 +698,128 @@ public final class ModScreen implements JarHost {
                 }
                 ModScreen.this.model.pick(ModScreen.this.shown.get(at).id());
             }
-            ModScreen.this.modScreenButtons.refilter();
+            ModScreen.this.refilter();
         }
 
         @Override
         public void openSettings(String id) {
             ModScreen.this.openSettings(id);
         }
+    }
+
+    void closePanels() {
+        this.panels.stream().filter(panel -> panel != this.progress && panel != this.firstOpen)
+                .forEach(Panel::dismiss);
+    }
+
+    List<String> getPickedThatAre(boolean on) {
+        List<String> out = new ArrayList<>();
+        for (String id : this.model.getPicked()) {
+            if (this.game.getCatalog().isOn(id) == on) {
+                out.add(id);
+            }
+        }
+        return out;
+    }
+
+    void refreshButtons() {
+        boolean idle = this.isIdle();
+        int off = this.getPickedThatAre(true).size();
+        int on = this.getPickedThatAre(false).size();
+        String label;
+        String shortLabel;
+        if (off > 0 && on > 0) {
+            label = Lang.get("hotwire.screen.switch_count", off + on);
+            shortLabel = label;
+        } else if (on > 0) {
+            label = Lang.get("hotwire.screen.turn_on_count", on);
+            shortLabel = Lang.get("hotwire.screen.on_count", on);
+        } else {
+            label = off > 0 ? Lang.get("hotwire.screen.turn_off_count", off) : Lang.get("hotwire.screen.turn_off");
+            shortLabel = off > 0 ? Lang.get("hotwire.screen.off_count", off) : Lang.get("hotwire.screen.off");
+        }
+        if (!label.equals(this.toggleLabel)) {
+            this.toggleLabel = label;
+            this.toggle.label(label, shortLabel);
+            this.toggle.setPrimary(on > 0 && off == 0);
+            this.bar.markStale();
+        }
+        this.pending.setBadge(this.pendingCount);
+        CacheFillPanel.markButton(this.switchCache, this.bar, this.game.getCaches().getCacheFill());
+        this.toggle.setActive(idle && off + on > 0);
+        this.add.setActive(idle && this.game.canAdd());
+        this.report.setActive(idle);
+        this.pending.setActive(idle);
+        this.updates.setActive(idle && this.game.canUpdate());
+        this.advanced.setActive(idle);
+    }
+
+    void switchPicked() {
+        this.switchPicked(false);
+        this.switchPicked(true);
+    }
+
+    void switchPicked(boolean on) {
+        List<String> ids = this.getPickedThatAre(!on);
+        if (ids.isEmpty()) {
+            return;
+        }
+        for (String id : ids) {
+            this.list.setWish(id, on);
+        }
+        this.model.clear();
+        if (on) {
+            this.game.turnOn(ids);
+        } else {
+            this.turnOffAsking(ids);
+        }
+    }
+
+    void onSearched(String text) {
+        if (this.model.setFilter(text)) {
+            this.list.scrollToTop();
+            this.refilter();
+        }
+    }
+
+    void refilter() {
+        Map<String, ModStatus> byId = new HashMap<>();
+        List<String> all = new ArrayList<>();
+        for (ModStatus mod : this.game.getMods()) {
+            byId.put(mod.id(), mod);
+            all.add(mod.id());
+        }
+        List<String> relevant = this.model.filterRelevant(all);
+        int on = (int) relevant.stream().filter(id -> this.game.getCatalog().isOn(id)).count();
+        this.header.setCounts(on, relevant.size());
+        List<String> grouped = this.model.group(this.model.applyFilter(relevant));
+        this.shown.clear();
+        this.childOf.clear();
+        for (String id : grouped) {
+            this.shown.add(Objects.requireNonNull(byId.get(id)));
+            String owner = this.model.findGroupedUnder(id);
+            if (owner != null) {
+                this.childOf.put(id, owner);
+            }
+        }
+        this.list.onChanged();
+        this.profiles.refresh(relevant, this.game.getCatalog()::isOn);
+        this.refreshShowMenu();
+    }
+
+    void refreshShowMenu() {
+        this.show.setChoices(getShowChoices(this.model.getPicked().size()));
+        this.show.setChosen(ModScreen.SHOWS.indexOf(this.model.getShowing()));
+
+        this.libraries.setPrimary(this.model.isShowingLibraries());
+    }
+
+    static List<ChoiceBar.Choice> getShowChoices(int picked) {
+        List<ChoiceBar.Choice> choices = new ArrayList<>();
+        for (Show choice : ModScreen.SHOWS) {
+            choices.add(new ChoiceBar.Choice(choice.getLabel(), choice == Show.SELECTED && picked > 0
+                    ? String.valueOf(picked) : null, ChoiceBar.Glyph.NONE));
+        }
+        return choices;
     }
 }

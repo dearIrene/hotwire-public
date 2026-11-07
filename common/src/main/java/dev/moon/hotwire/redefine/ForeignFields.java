@@ -1,5 +1,6 @@
 package dev.moon.hotwire.redefine;
 
+import dev.moon.hotwire.classfile.ClassNodes;
 import java.util.Set;
 import java.util.function.Function;
 import org.objectweb.asm.ClassReader;
@@ -23,8 +24,7 @@ public final class ForeignFields {
     }
 
     public static byte[] rewrite(byte[] bytes, Function<String, Set<String>> addedElsewhere) {
-        ClassNode node = new ClassNode();
-        new ClassReader(bytes).accept(node, 0);
+        ClassNode node = ClassNodes.read(bytes, 0);
         boolean changed = false;
         for (MethodNode method : node.methods) {
             for (AbstractInsnNode insn : method.instructions.toArray()) {

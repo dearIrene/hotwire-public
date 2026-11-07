@@ -1,5 +1,6 @@
 package dev.moon.hotwire.mixin_copy;
 
+import dev.moon.hotwire.redefine.ClassBytes;
 import java.nio.charset.StandardCharsets;
 import java.util.Collections;
 import java.util.List;
@@ -55,7 +56,7 @@ public final class ExtensionFolder {
     }
 
     private byte[] foldAfresh(byte[] bytes) {
-        if (!mentionsMark(bytes)) {
+        if (!ClassBytes.mentions(bytes, MARK_BYTES)) {
             return bytes;
         }
         boolean[] names = {false};
@@ -76,18 +77,5 @@ public final class ExtensionFolder {
         ClassWriter writer = new ClassWriter(0);
         new ClassReader(bytes).accept(new ClassRemapper(writer, toGame), 0);
         return names[0] ? writer.toByteArray() : bytes;
-    }
-
-    private static boolean mentionsMark(byte[] bytes) {
-        outer:
-        for (int at = 0; at + MARK_BYTES.length <= bytes.length; at++) {
-            for (int in = 0; in < MARK_BYTES.length; in++) {
-                if (bytes[at + in] != MARK_BYTES[in]) {
-                    continue outer;
-                }
-            }
-            return true;
-        }
-        return false;
     }
 }

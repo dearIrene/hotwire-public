@@ -40,7 +40,6 @@ final class DuckCalls {
     private static final int REMEMBERED = 4;
     private static final Set<Site> SITES = Collections.synchronizedSet(Collections.newSetFromMap(new WeakHashMap<>()));
     private static final MethodHandle LEARN;
-    private static final MethodHandle IS_CLASS;
 
     static {
         try {
@@ -48,8 +47,6 @@ final class DuckCalls {
             INVOKE = lookup.findStatic(DuckCalls.class, "invoke", MethodType.methodType(Object.class,
                     String.class, String.class, String.class, String.class, Object.class, Object[].class));
             LEARN = lookup.findVirtual(Site.class, "learn", MethodType.methodType(Object.class, Object[].class));
-            IS_CLASS = lookup.findStatic(DuckCalls.class, "isClass",
-                    MethodType.methodType(boolean.class, Class.class, Object.class));
         } catch (ReflectiveOperationException e) {
             throw new ExceptionInInitializerError(e);
         }
@@ -111,9 +108,7 @@ final class DuckCalls {
                 MethodHandle answer = room ? this.direct.apply(type) : null;
                 if (answer != null) {
                     MethodType site = this.type();
-                    MethodHandle test = MethodHandles.dropArguments(IS_CLASS.bindTo(type).asType(
-                            MethodType.methodType(boolean.class, site.parameterType(0))), 1,
-                            site.parameterList().subList(1, site.parameterCount()));
+                    MethodHandle test = ExactClass.makeTest(type, site);
                     synchronized (this) {
                         if (this.resets == before && this.remembered < REMEMBERED) {
                             this.setTarget(MethodHandles.guardWithTest(test, answer, this.getTarget()));
@@ -130,11 +125,6 @@ final class DuckCalls {
             this.resets++;
             this.setTarget(this.asking);
         }
-    }
-
-    @SuppressWarnings("unused")
-    private static boolean isClass(Class<?> type, @Nullable Object receiver) {
-        return receiver != null && receiver.getClass() == type;
     }
 
     static @Nullable MethodHandle findDirect(String duck, String method, String descriptor, Class<?> receiver,

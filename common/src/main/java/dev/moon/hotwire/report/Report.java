@@ -4,12 +4,9 @@ import dev.moon.hotwire.plan.SwitchPlan;
 import dev.moon.hotwire.switching.ModSwitcher;
 import dev.moon.hotwire.switching.SwitchApplier;
 import java.util.ArrayList;
-import java.util.Collections;
 import java.util.HashMap;
-import java.util.IdentityHashMap;
 import java.util.List;
 import java.util.Map;
-import java.util.Set;
 import org.jspecify.annotations.Nullable;
 
 public record Report(Operation operation, Machine machine, Map<String, String> names, SwitchPlan plan,
@@ -79,8 +76,7 @@ public record Report(Operation operation, Machine machine, Map<String, String> n
 
         public static Failure of(String step, @Nullable String mod, Throwable thrown) {
             List<Cause> causes = new ArrayList<>();
-            Set<Throwable> seen = Collections.newSetFromMap(new IdentityHashMap<>());
-            for (Throwable at = thrown; at != null && seen.add(at); at = at.getCause()) {
+            for (Throwable at : Causes.list(thrown)) {
                 List<String> frames = new ArrayList<>();
                 for (StackTraceElement frame : at.getStackTrace()) {
                     frames.add(frame.toString());

@@ -48,7 +48,7 @@ public final class CachedMixes {
     }
 
     public void cacheIn(CacheStore store, PluginAnswers answers) {
-        this.cache = new MixedCache(store, this.copy, answers::ask);
+        this.cache = new MixedCache(store, this.copy, answers);
     }
 
     public interface PluginAnswers {

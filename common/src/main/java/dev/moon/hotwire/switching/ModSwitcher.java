@@ -6,10 +6,12 @@ import dev.moon.hotwire.plan.SwitchPlan;
 import dev.moon.hotwire.plan.SwitchPlanner;
 import dev.moon.hotwire.redefine.RebuildException;
 import dev.moon.hotwire.registration.RegistrationJournal;
+import dev.moon.hotwire.report.Causes;
 import dev.moon.hotwire.ui.Lang;
 import dev.moon.hotwire.ui.Progress;
 import java.util.ArrayList;
 import java.util.Collection;
+import java.util.Collections;
 import java.util.HashMap;
 import java.util.HashSet;
 import java.util.LinkedHashSet;
@@ -31,7 +33,6 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 public final class ModSwitcher {
-    private final ReopenChecks reopenChecks = new ReopenChecks(this);
     private static final Logger LOGGER = LoggerFactory.getLogger(ModSwitcher.class);
 
     public sealed interface Result {
@@ -61,6 +62,7 @@ public final class ModSwitcher {
     private final Object rebuilding = new Object();
 
     private final Set<Set<String>> reopenedFamilies = ConcurrentHashMap.newKeySet();
+
     private final Set<Set<String>> worldBound = ConcurrentHashMap.newKeySet();
     private volatile boolean switched;
 
@@ -106,9 +108,9 @@ public final class ModSwitcher {
     }
 
     private final Lifecycle lifecycle;
-    volatile Predicate<String> reopenToTurnOn = id -> false;
-    final WorldCalls calledByWorld = new WorldCalls();
-    volatile Function<Set<String>, Set<String>> inRegistries = mods -> Set.of();
+    private volatile Predicate<String> reopenToTurnOn = id -> false;
+    private final WorldCalls calledByWorld = new WorldCalls();
+    private volatile Function<Set<String>, Set<String>> inRegistries = mods -> Set.of();
 
     final AtomicInteger switches = new AtomicInteger();
 
@@ -201,8 +203,12 @@ public final class ModSwitcher {
     }
 
     public boolean needsReopen(SwitchPlan plan) {
-        return !plan.isRefused() && this.applier.isInWorld() && (ReopenChecks.touchesWorldBound(this.worldBound,
-                plan.order()) || (plan.direction() == SwitchPlan.Direction.ON && this.isOnForReopen(plan.order())));
+        return !plan.isRefused() && this.isWorldBound(plan);
+    }
+
+    private boolean isWorldBound(SwitchPlan plan) {
+        return this.applier.isInWorld() && (touchesWorldBound(this.worldBound, plan.order())
+                || (plan.direction() == SwitchPlan.Direction.ON && this.isOnForReopen(plan.order())));
     }
 
     public boolean isOnForReopen(Collection<String> family) {
@@ -543,9 +549,7 @@ public final class ModSwitcher {
     private Result runTold(SwitchPlan plan, Consumer<List<String>> theirs) {
         this.switched = true;
         this.switches.incrementAndGet();
-        if ((ReopenChecks.touchesWorldBound(this.worldBound, plan.order())
-                || (plan.direction() == SwitchPlan.Direction.ON && this.isOnForReopen(plan.order())))
-                && this.applier.isInWorld()) {
+        if (this.isWorldBound(plan)) {
             return this.runAlone(plan, theirs);
         }
         this.waiting = plan;
@@ -562,17 +566,12 @@ public final class ModSwitcher {
         } finally {
             this.waiting = null;
 
-            this.applier.rebuilder.forgetLastApply();
+            this.applier.getRebuilder().forgetLastApply();
         }
     }
 
     private static boolean isOverBudget(Throwable thrown) {
-        for (Throwable at = thrown; at != null; at = at.getCause()) {
-            if (at instanceof HoldBudgetException) {
-                return true;
-            }
-        }
-        return false;
+        return Causes.hasCause(thrown, HoldBudgetException.class);
     }
 
     private Result runAlone(SwitchPlan plan, Consumer<List<String>> theirs) {
@@ -587,13 +586,12 @@ public final class ModSwitcher {
         try {
             this.progress.step(1, plan.order().isEmpty() ? "" : this.nameOf(plan.order().getFirst()));
             Set<String> onAfter = this.onAfter(plan, goingOff);
-            if ((ReopenChecks.touchesWorldBound(this.worldBound, plan.order())
-                    || (!goingOff && this.isOnForReopen(plan.order()))) && this.applier.isInWorld()) {
+            if (this.isWorldBound(plan)) {
                 throw RebuildException.ofWorldBuilt(plan.order() + " changed how this world's objects are built when"
                         + " it last switched: they are the world's, so it changes with the world saved and opened"
                         + " again", new IllegalStateException(String.valueOf(plan.order())));
             }
-            this.reopenChecks.checkReopenFirst(plan, onAfter);
+            this.checkReopenFirst(plan, onAfter);
 
             AtomicBoolean stopped = new AtomicBoolean();
             Runnable beforeHold = !goingOff ? () -> { } : () -> {
@@ -675,5 +673,34 @@ public final class ModSwitcher {
         } finally {
             release.run();
         }
+    }
+
+    static boolean touchesWorldBound(Set<Set<String>> worldBound, List<String> order) {
+        for (Set<String> bound : worldBound) {
+            if (!Collections.disjoint(bound, order)) {
+                return true;
+            }
+        }
+        return false;
+    }
+
+    private void checkReopenFirst(SwitchPlan plan, Set<String> onAfter) throws RebuildException {
+        Set<String> switched = Set.copyOf(plan.order());
+        try {
+            LiveObjects.reopenFirst(switched, onAfter, this.reopenToTurnOn, this.applier.getGame());
+            LiveObjects.reopenFirstOff(switched, onAfter, () -> this.calledByWorld.find(this.switches.get(),
+                    switched, onAfter), this.applier.getGame());
+            Set<String> going = new HashSet<>(switched);
+            going.removeAll(onAfter);
+            Set<String> holding = going.isEmpty() ? Set.of() : this.inRegistries.apply(going);
+            if (!holding.isEmpty()) {
+                throw RebuildException.ofRestartOnly(holding + " keep objects of theirs inside the game's registries,"
+                        + " which hold the game's own data: only a restart takes them out",
+                        new IllegalStateException(String.valueOf(holding)));
+            }
+        } catch (RuntimeException | LinkageError e) {
+            throw new RebuildException("the switch threw: " + e, e);
+        }
+        SwitchTimes.mark("reopen check");
     }
 }
