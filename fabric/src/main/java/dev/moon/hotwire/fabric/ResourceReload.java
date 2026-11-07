@@ -258,6 +258,10 @@ public final class ResourceReload {
             while ((ModViews.openOverlay() != null || BackgroundReload.isBusy()) && System.nanoTime() < until) {
                 Thread.sleep(20);
             }
+            if (System.nanoTime() >= until) {
+                LOGGER.warn("[Hotwire] the wait for the reload under way ran out: the game's {}, overlay {}, here {}",
+                        lastReload.isDone() ? "done" : "under way", ModViews.openOverlay(), BackgroundReload.describe());
+            }
         } catch (InterruptedException e) {
             Thread.currentThread().interrupt();
         } catch (RuntimeException e) {

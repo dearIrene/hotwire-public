@@ -20,6 +20,7 @@ public final class BackgroundReload {
     }
 
     private static volatile @Nullable ReloadRun running;
+    private static final long LONGEST_BEFORE_CLOSE = 30_000_000_000L;
 
     private static volatile @Nullable Runnable due;
 
@@ -30,6 +31,26 @@ public final class BackgroundReload {
 
     public static boolean isBusy() {
         return running != null || due != null;
+    }
+
+    public static void finishBeforeTasksDrop(Minecraft game) {
+        ReloadRun now = running;
+        if (now == null || now.reload().isDone()) {
+            return;
+        }
+        long began = System.nanoTime();
+        long until = began + LONGEST_BEFORE_CLOSE;
+        game.managedBlock(() -> now.reload().isDone() || System.nanoTime() > until);
+        finishIfDone();
+        LOGGER.info("[Hotwire] the world's close waited {} ms for the reload with the game drawing to end{}",
+                (System.nanoTime() - began) / 1_000_000, now.reload().isDone() ? "" : ", which did not");
+    }
+
+    static String describe() {
+        ReloadRun now = running;
+        String run = now == null ? "none running" : "one running " + (System.nanoTime() - now.began()) / 1_000_000
+                + " ms, done " + now.reload().isDone() + ", at " + now.reload().getActualProgress();
+        return run + (due != null ? ", one due" : ", none due");
     }
 
     static void beginAfterHold(Runnable begin) {
