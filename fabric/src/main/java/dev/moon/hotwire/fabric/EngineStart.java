@@ -246,7 +246,13 @@ final class EngineStart {
             Set<String> fixed = new HashSet<>();
             mixins.keySet().stream().filter(id -> !ModPolicy.isSwitchable(id)).forEach(fixed::add);
             fixed.add("hotwire");
-            HandlerGuards.leaveHandlersOf(fixed);
+            Set<String> fixedMixins = new HashSet<>();
+            mixins.forEach((id, mod) -> {
+                if (fixed.contains(id)) {
+                    mod.owns().forEach(name -> fixedMixins.add(name.replace('/', '.')));
+                }
+            });
+            HandlerGuards.leaveHandlersOf(fixed, fixedMixins);
             mixins.forEach((id, mod) -> {
                 if (ModPolicy.isSwitchable(id)) {
                     TripwireSites.registerClasses(id, mod.owns().stream()

@@ -122,11 +122,18 @@ public final class HandlerGuards {
 
     static volatile Set<String> neverSwitched = Set.of();
 
+    private static volatile Set<String> neverSwitchedMixins = Set.of();
+
     private HandlerGuards() {
     }
 
-    public static void leaveHandlersOf(Set<String> mods) {
+    public static void leaveHandlersOf(Set<String> mods, Set<String> mixins) {
         neverSwitched = Set.copyOf(mods);
+        neverSwitchedMixins = Set.copyOf(mixins);
+    }
+
+    static boolean isNeverSwitched(String mixin) {
+        return neverSwitchedMixins.contains(mixin);
     }
 
     public static void readOriginalsWith(Function<String, byte @Nullable []> reader) {

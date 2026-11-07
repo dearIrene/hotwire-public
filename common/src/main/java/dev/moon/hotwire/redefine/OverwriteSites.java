@@ -38,7 +38,7 @@ final class OverwriteSites {
         for (MethodNode method : List.copyOf(node.methods)) {
             String mixin = HandlerGuards.findMerged(method);
             if (mixin == null || method.name.startsWith("<") || HandlerGuards.isHandlerName(method.name)
-                    || (method.access & NOT_A_BODY) != 0) {
+                    || (method.access & NOT_A_BODY) != 0 || HandlerGuards.isNeverSwitched(mixin)) {
                 continue;
             }
             ClassNode before = shipped.get();
