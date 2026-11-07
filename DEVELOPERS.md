@@ -1,45 +1,82 @@
 # Hotwire for mod developers
 
-If you're working on a mod you can have the game pick up your new build while it's running so you don't relaunch
-every time you change something.
-
-This is revision 1 and it's temporary, it works on any Java but a class that changes shape still needs a restart.
-Revision 2 is built on JBR (the JetBrains Runtime, the one IntelliJ runs your game on) where shape changes reload
-too, so if you launch from the IDE you'll get the whole thing.
-
-> Revision 2 is still being worked on
+Run your game from your mod's dev setup with Hotwire in it and every build you make goes into the running game. You
+don't relaunch, you don't copy jars anywhere, you build and it's in.
 
 ## Setting it up
 
-Put Hotwire in the mods folder of the game you test in, open Hotwire in the game and turn on Developer under
-Advanced. Then make your build put the jar into `hotwire/dev` in the game folder, with gradle that's
+Put the Hotwire jar in your run folder's mods folder (`run/mods` with Loom) and start the game like you always do,
+with `runClient` or your IDE's run button. Hotwire sees which mod runs from your build folders and watches them.
 
-```groovy
-tasks.register('devDrop', Copy) {
-    from tasks.jar
-    into "C:/path/to/.minecraft/hotwire/dev"
+Then build the way you normally would, `gradlew classes` or the IDE's Build, and a popup tells you when it's in. That
+usually takes a second or two after the build finishes.
+
+## What goes in
+
+On any Java, changes inside methods go in, and so do new fields, methods and classes, mixins included, along with
+textures, models and language files. A few changes need the class rebuilt from scratch, like a new enum value or a new
+superclass, and those wait for a restart. The popup says so when it happens, and it also tells you when
+
+- your `onInitialize` changed, since it already ran at launch and what it registers comes in at the next start
+- a class gained annotated fields (config and save libraries read those by reflection, and on plain Java they see
+  them after a restart)
+
+On the JetBrains Runtime everything goes in, YACL configs pick up their new options too. With Loom that's
+
+```kotlin
+tasks.named<JavaExec>("runClient") {
+    javaLauncher.set(javaToolchains.launcherFor {
+        languageVersion.set(JavaLanguageVersion.of(25))
+        vendor.set(JvmVendorSpec.JETBRAINS)
+    })
+    jvmArgs("-XX:+AllowEnhancedClassRedefinition")
 }
-tasks.jar.finalizedBy 'devDrop'
 ```
 
-and from then on `gradlew jar` reloads your mod in the game.
+and if you run from IntelliJ you can pick its bundled runtime and add the flag to your VM options.
 
-## What you'll see
+## When your mod crashes
 
-The log tells you what happened
+If your mod throws while the game runs, the game keeps going. You get a popup with what threw and where, as your own
+file and line (a mixin's too, not the class it went into), and the full trace in your log. The popup stays up and
+counts while your mod keeps throwing. Fix it, build, and it goes in.
 
-- `N classes took new code` means it worked and your mod is running the new code with everything it had still there
-- `new entrypoints run` means you added an entrypoint and it got run, the ones from launch don't run again so nothing
-  registers twice
-- `class X changed shape` means the JVM won't take that one while the game runs (a new superclass, a new enum constant,
-  a changed record or a mixin into a class that's already loaded) so that jar waits for the next start
+Click a crash in the developer window and IntelliJ opens that line. With no IDE open, the place is copied instead.
 
-Dropping the same jar again does nothing and a jar with the same version but different bytes still counts.
+## The developer window
 
-## Good to know
+Press F8 in game. It shows where your mod stands, what each build did, the crashes it caught and how often, where your
+mixins meet other mods', and has buttons to reload, restart your mod (turned off and on again, so its setup runs like
+at a start) or pause reloads while you're in the middle of something.
 
-- Anything you read with `getResource` still comes from the first jar of the session, textures and models and
-  language files are reloaded though so those are new
-- The jar you dropped last goes into your mods folder when you close the game so the next start has it too, you
-  can cancel that from Pending tasks
-- If the log ever says `<your mod> is off, yet its code ran` that's a Hotwire bug so send the report
+It handles like a window on Windows. Drag it by the title, size it from any edge or corner, double-click the title to
+maximize it, or drag it to the left, right or top edge of the screen to snap it there. It opens where you left it, even
+after a restart.
+
+The − and + in its title set its own size, apart from the game's GUI scale.
+
+## Leaked worlds
+
+When you leave a world Hotwire checks whether one of your mod's statics still holds it, and if one does it tells you
+which, like `MyMod.lastWorld`. A world that's held stays in memory with everything in it, so clear it when the
+world closes.
+
+## Coding agents
+
+Theres a Hotwire MCP mod in our GitHub releases, put it in your run's mods folder next to Hotwire (or add it as `modRuntimeOnly`) and start the game like you always do. It writes a `.mcp.json` into your project, keeps it out of git, and a coding agent that reads `.mcp.json` picks it up the next time you open the project there, say yes once and that's the setup.
+
+Then just ask your agent for a change. It builds, calls `wait_for_build` and gets back what went in, if it needs a restart and any crash with the file and line, so it can fix its own mistakes while your game keeps running. It can also see your builds and their reports, roll back, merge, pin, read your crashes, mixins and history, reload or restart your mod and read the game log, everything the developer window does.
+
+It only listens on your own machine and needs the token in `config/hotwire-mcp.json`. The game log has the server's address if you'd rather add it yourself.
+
+## Settings
+
+All of this is under Settings, Developer, and each part can be turned off
+
+- Reload when you build
+- Catch your mod's crashes
+- Watch for leaked worlds
+- Reload popups (every reload, or only the ones with a problem)
+- Rebuild every switch
+
+The Developer section only works when you run the game from a dev setup, so players never see it do anything.
