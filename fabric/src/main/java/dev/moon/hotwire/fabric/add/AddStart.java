@@ -96,7 +96,7 @@ final class AddStart {
             LifecycleListeners.finishStart(ids, failed == null);
             if (failed == null) {
                 Map<String, List<String>> setUp = new LinkedHashMap<>();
-                LaunchSteps.run("the add of " + ids, LaunchSteps.afterStart(ids, findLoaded, setUp), Set.of());
+                LaunchSteps.run("the add of " + ids, LaunchSteps.planAfterStart(ids, findLoaded, setUp), Set.of());
                 started.complete(setUp);
             } else {
                 started.completeExceptionally(failed);

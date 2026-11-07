@@ -96,7 +96,7 @@ final class JarDownload {
             } catch (IOException e) {
                 last = e;
 
-                if (isHeld(onBytes)) {
+                if (isPaused(onBytes)) {
                     tried = -1;
                 }
             } finally {
@@ -128,7 +128,7 @@ final class JarDownload {
                     }
                     return;
                 } catch (TimeoutException e) {
-                    if (isHeld(onBytes)) {
+                    if (isPaused(onBytes)) {
                         pending.cancel(true);
                         throw new IOException("held at byte " + at.get(), e);
                     }
@@ -154,8 +154,8 @@ final class JarDownload {
         }
     }
 
-    private static boolean isHeld(LongConsumer onBytes) {
-        return onBytes instanceof Downloads.Feed feed && feed.isHeld();
+    private static boolean isPaused(LongConsumer onBytes) {
+        return onBytes instanceof Downloads.Feed feed && feed.isPaused();
     }
 
     private static final class IntoFile implements HttpResponse.BodySubscriber<Long> {

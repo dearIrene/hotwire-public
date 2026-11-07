@@ -202,7 +202,7 @@ final class FieldSites {
     @SuppressWarnings("ReferenceEquality")
     private static boolean moveToMethod(String internalName, ClassNode node, String key, String name,
             InsnList slice, String mixin) {
-        List<AbstractInsnNode> sliceInsns = realInsns(slice);
+        List<AbstractInsnNode> sliceInsns = findRealInsns(slice);
         lastRefusal = "";
 
         for (AbstractInsnNode insn : sliceInsns) {
@@ -235,7 +235,7 @@ final class FieldSites {
                     }
                 }
                 if (!(start instanceof VarInsnNode load) || load.getOpcode() != Opcodes.ALOAD || load.var != 0
-                        || !sameOpcodes(start, store, sliceInsns)) {
+                        || !hasSameOpcodes(start, store, sliceInsns)) {
                     lastRefusal = "the constructor's store does not read as the setup";
                     return false;
                 }
@@ -284,7 +284,7 @@ final class FieldSites {
         return true;
     }
 
-    private static List<AbstractInsnNode> realInsns(InsnList list) {
+    private static List<AbstractInsnNode> findRealInsns(InsnList list) {
         List<AbstractInsnNode> real = new ArrayList<>();
         for (AbstractInsnNode insn : list) {
             if (isReal(insn)) {
@@ -299,7 +299,7 @@ final class FieldSites {
     }
 
     @SuppressWarnings("ReferenceEquality")
-    private static boolean sameOpcodes(AbstractInsnNode start, AbstractInsnNode end, List<AbstractInsnNode> slice) {
+    private static boolean hasSameOpcodes(AbstractInsnNode start, AbstractInsnNode end, List<AbstractInsnNode> slice) {
         int at = 0;
         for (AbstractInsnNode insn = start; insn != null; insn = insn.getNext()) {
             if (!isReal(insn)) {

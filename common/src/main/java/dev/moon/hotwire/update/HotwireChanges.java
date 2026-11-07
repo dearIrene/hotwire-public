@@ -22,7 +22,7 @@ public final class HotwireChanges {
         for (ModrinthClient.Version version : versions) {
             String number = stripBuild(version.number());
             if (numbers.size() < MOST_VERSIONS && newer.test(version.number()) && seen.add(number)) {
-                String text = withoutMark(version.changelog());
+                String text = stripMark(version.changelog());
                 if (!text.isBlank()) {
                     numbers.add(number);
                     texts.add(text);
@@ -39,7 +39,7 @@ public final class HotwireChanges {
         return all.toString().strip();
     }
 
-    private static String withoutMark(@Nullable String changelog) {
+    private static String stripMark(@Nullable String changelog) {
         return changelog == null ? "" : changelog.lines().filter(line -> !UrgentUpdate.isMark(line))
                 .collect(Collectors.joining("\n")).strip();
     }

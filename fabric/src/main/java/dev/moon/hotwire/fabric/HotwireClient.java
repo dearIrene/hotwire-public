@@ -104,7 +104,7 @@ public final class HotwireClient implements ClientModInitializer {
         InitHookRuns.catchUpLaterWhile(() -> Minecraft.getInstance().level == null);
 
         //? if >=26.1 {
-        ServerLifecycleEvents.SERVER_STOPPED.register(server -> LoadStatusViews.letGo());
+        ServerLifecycleEvents.SERVER_STOPPED.register(server -> LoadStatusViews.release());
         //?}
         ServerLifecycleEvents.SERVER_STARTING.register(server -> ActionJournal.get().note(ActionJournal.Action.OPEN,
                 ""));

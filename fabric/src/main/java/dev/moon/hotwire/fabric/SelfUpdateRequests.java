@@ -109,7 +109,7 @@ final class SelfUpdateRequests {
                     }
                 });
             } catch (IOException e) {
-                if (!(e instanceof Downloads.DownloadStopped)) {
+                if (!(e instanceof Downloads.DownloadStop)) {
                     Minecraft.getInstance().execute(() -> this.say.accept(
                             Lang.get("hotwire.store.download_failed", "Hotwire", e.getMessage()), true));
                 }

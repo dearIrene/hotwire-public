@@ -1,7 +1,7 @@
 package dev.moon.hotwire.fabric.mixin.core.fabric.resource.loader;
 
 //? if <1.21.11 {
-/*import dev.moon.hotwire.fabric.add.KeptPacks;
+/*import dev.moon.hotwire.fabric.add.HiddenPacks;
 import java.util.List;
 import net.fabricmc.fabric.api.resource.ModResourcePack;
 import net.minecraft.server.packs.PackType;
@@ -18,9 +18,9 @@ import org.spongepowered.asm.mixin.Pseudo;
 public abstract class ModResourcePackUtilMixin {
     //? if <1.21.11 {
     /*@Inject(method = "appendModResourcePacks", at = @At("TAIL"))
-    private static void hotwire$keepHiddenPacks(List<ModResourcePack> packs, PackType type,
+    private static void hotwire$addHiddenPacks(List<ModResourcePack> packs, PackType type,
             @Nullable String subPath, CallbackInfo ci) {
-        KeptPacks.addHidden(type, subPath, packs);
+        HiddenPacks.addHidden(type, subPath, packs);
     }
     *///?}
 }

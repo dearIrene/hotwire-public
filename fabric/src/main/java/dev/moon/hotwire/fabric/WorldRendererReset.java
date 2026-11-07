@@ -17,7 +17,7 @@ final class WorldRendererReset {
     private WorldRendererReset() {
     }
 
-    static boolean isHeld(List<Class<?>> types) {
+    static boolean holdsAny(List<Class<?>> types) {
         Minecraft game = Minecraft.getInstance();
         List<Class<?>> mods = types.stream().filter(type -> !isGame(type)).toList();
         if (game.level == null || mods.isEmpty()) {
@@ -49,10 +49,10 @@ final class WorldRendererReset {
                 if (Modifier.isStatic(field.getModifiers()) || field.getType().isPrimitive()) {
                     continue;
                 }
-                Object held = read(field, object);
-                if (held != null && !held.getClass().isArray() && !isJdk(held.getClass())
-                        && !(held instanceof Minecraft)) {
-                    into.add(held);
+                Object inField = read(field, object);
+                if (inField != null && !inField.getClass().isArray() && !isJdk(inField.getClass())
+                        && !(inField instanceof Minecraft)) {
+                    into.add(inField);
                 }
             }
         }

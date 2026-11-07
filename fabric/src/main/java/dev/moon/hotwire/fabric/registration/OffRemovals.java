@@ -76,19 +76,19 @@ public final class OffRemovals {
             if (entries == null) {
                 continue;
             }
-            List<Entry> kept = new ArrayList<>();
+            List<Entry> remaining = new ArrayList<>();
             for (Entry entry : entries.reversed()) {
                 if (entry.isStale()) {
                     continue;
                 }
                 if (entry.getNeeds().stream().anyMatch(other -> !mods.contains(other) && !isOn.test(other))) {
-                    kept.add(entry);
+                    remaining.add(entry);
                     continue;
                 }
                 due.computeIfAbsent(entry.getWhere(), any -> new ArrayList<>()).add(entry);
             }
-            if (!kept.isEmpty()) {
-                BY_MOD.put(mod, Collections.synchronizedList(new ArrayList<>(kept.reversed())));
+            if (!remaining.isEmpty()) {
+                BY_MOD.put(mod, Collections.synchronizedList(new ArrayList<>(remaining.reversed())));
             }
         }
 

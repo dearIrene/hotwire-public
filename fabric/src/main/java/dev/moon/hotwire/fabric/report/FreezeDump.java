@@ -37,10 +37,10 @@ public final class FreezeDump {
 
     public static synchronized void stop() {
         closing = true;
-        cameBack();
+        endFreeze();
     }
 
-    private static synchronized void cameBack() {
+    private static synchronized void endFreeze() {
         if (!dumped || folder == null) {
             return;
         }
@@ -72,7 +72,7 @@ public final class FreezeDump {
                 if (now != frames) {
                     frames = now;
                     since = System.nanoTime();
-                    cameBack();
+                    endFreeze();
                 } else if ((System.nanoTime() - since) / 1_000_000 >= FROZEN_AFTER_MS) {
                     write(logs.resolve(FILE));
                 }

@@ -49,7 +49,7 @@ final class OverwriteSites {
             MethodNode was = findShipped(before, method);
             boolean isStatic = (method.access & Opcodes.ACC_STATIC) != 0;
             if (was == null) {
-                if (answersNeutrally(method)) {
+                if (isNeutralAnswer(method)) {
                     added.add(copy(method, method.name + BODY, isStatic));
                     writeTrampoline(internalName, method, mixin, isStatic, NOTHING);
                     guarded.add(mixin);
@@ -91,7 +91,7 @@ final class OverwriteSites {
         return false;
     }
 
-    private static boolean answersNeutrally(MethodNode method) {
+    private static boolean isNeutralAnswer(MethodNode method) {
         int sort = Type.getReturnType(method.desc).getSort();
         return sort != Type.OBJECT && sort != Type.ARRAY && !NEVER_NEUTRAL.contains(method.name);
     }

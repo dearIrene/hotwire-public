@@ -185,7 +185,7 @@ final class StoreApi {
             ModStore store = findStore();
             if (store != null) {
                 Minecraft.getInstance().execute(() -> {
-                    Downloads.quietNext();
+                    Downloads.markNextQuiet();
                     store.getModel().getPacks().fetch(toKind(kind), project.id(), versionId, project.name());
                 });
             }

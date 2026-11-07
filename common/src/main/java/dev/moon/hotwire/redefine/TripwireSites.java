@@ -59,13 +59,13 @@ public final class TripwireSites {
             return null;
         }
         if (!relinked) {
-            byte[] spliced = SiteSplice.arm(classBytes, mod);
-            if (spliced != null) {
-                if (spliced.length == 0) {
+            byte[] withSites = SiteWriter.arm(classBytes, mod);
+            if (withSites != null) {
+                if (withSites.length == 0) {
                     return null;
                 }
                 ARMED.put(internalName, mod);
-                return spliced;
+                return withSites;
             }
         }
         return armByRewrite(internalName, classBytes, mod, relinked);

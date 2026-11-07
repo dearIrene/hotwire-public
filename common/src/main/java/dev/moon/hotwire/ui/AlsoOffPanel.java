@@ -23,7 +23,7 @@ public final class AlsoOffPanel extends Panel {
     private final ProgressPanel next;
     private List<String> ids = List.of();
     private String title = "";
-    private List<Progress.Entry> taken = List.of();
+    private List<Progress.Entry> listed = List.of();
     private List<Map.Entry<String, Integer>> reasons = List.of();
     private int first;
     private int shown = 1;
@@ -51,7 +51,7 @@ public final class AlsoOffPanel extends Panel {
                 counts.merge(entry.why(), 1, Integer::sum);
             }
         }
-        this.taken = List.copyOf(others);
+        this.listed = List.copyOf(others);
         List<Map.Entry<String, Integer>> sorted = new ArrayList<>(counts.entrySet());
         sorted.sort(Map.Entry.<String, Integer>comparingByValue().reversed());
         this.reasons = List.copyOf(sorted);
@@ -78,7 +78,7 @@ public final class AlsoOffPanel extends Panel {
 
     private int findMoreLines() {
         return (this.first > 0 ? ProgressPanel.MORE_LINE : 0)
-                + (this.first + this.shown < this.taken.size() ? ProgressPanel.MORE_LINE : 0);
+                + (this.first + this.shown < this.listed.size() ? ProgressPanel.MORE_LINE : 0);
     }
 
     @Override
@@ -86,8 +86,8 @@ public final class AlsoOffPanel extends Panel {
         if (this.isVisible()) {
             int room = this.getHeight() - MOST_HEIGHT_MARGIN - TOP - FOOT - ProgressPanel.MORE_LINE * 2;
             int fits = Math.max(1, (room + ProgressPanel.CARD_GAP) / (CARD_H + ProgressPanel.CARD_GAP));
-            this.shown = Math.min(Math.min(ProgressPanel.CARDS_SHOWN, fits), Math.max(1, this.taken.size()));
-            this.first = Math.max(0, Math.min(this.first, this.taken.size() - this.shown));
+            this.shown = Math.min(Math.min(ProgressPanel.CARDS_SHOWN, fits), Math.max(1, this.listed.size()));
+            this.first = Math.max(0, Math.min(this.first, this.listed.size() - this.shown));
             int cards = this.shown * (CARD_H + ProgressPanel.CARD_GAP) - ProgressPanel.CARD_GAP;
 
             this.size(WIDTH, Math.max(LEAST_HEIGHT, TOP + cards + this.findMoreLines() + FOOT),
@@ -105,14 +105,14 @@ public final class AlsoOffPanel extends Panel {
 
     @Override
     protected boolean onScroll(double amount) {
-        int most = Math.max(0, this.taken.size() - this.shown);
+        int most = Math.max(0, this.listed.size() - this.shown);
         this.first = Math.max(0, Math.min(most, this.first + (amount > 0 ? -1 : 1)));
         return true;
     }
 
     @Override
     protected void drawContent(Canvas canvas, float alpha, int x, int y, int w, int h) {
-        if (this.taken.isEmpty()) {
+        if (this.listed.isEmpty()) {
             return;
         }
         int main = w - ProgressPanel.SIDE_W - 14;
@@ -168,13 +168,13 @@ public final class AlsoOffPanel extends Panel {
                     Colors.fade(Palette.FAINT, alpha));
             at += ProgressPanel.MORE_LINE;
         }
-        int last = Math.min(this.taken.size(), this.first + this.shown);
+        int last = Math.min(this.listed.size(), this.first + this.shown);
         for (int i = this.first; i < last; i++) {
-            ProgressPanel.drawCard(canvas, this.taken.get(i), this.next.getIcons(), x, at, w, CARD_H, 1, false, alpha);
+            ProgressPanel.drawCard(canvas, this.listed.get(i), this.next.getIcons(), x, at, w, CARD_H, 1, false, alpha);
             at += CARD_H + ProgressPanel.CARD_GAP;
         }
-        if (last < this.taken.size()) {
-            canvas.drawText(Lang.get("hotwire.progress.more", this.taken.size() - last), x + 6, at,
+        if (last < this.listed.size()) {
+            canvas.drawText(Lang.get("hotwire.progress.more", this.listed.size() - last), x + 6, at,
                     Colors.fade(Palette.FAINT, alpha));
         }
     }

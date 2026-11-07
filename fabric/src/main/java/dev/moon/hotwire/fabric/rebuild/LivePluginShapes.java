@@ -40,9 +40,9 @@ public final class LivePluginShapes {
         }
 
         String question = config + ' ' + target + ' ' + mixin;
-        Boolean kept = ANSWERED.get(question);
-        if (kept != null) {
-            return kept;
+        Boolean known = ANSWERED.get(question);
+        if (known != null) {
+            return known;
         }
 
         if (Tripwire.isOfOffMod(live.getClass()) || (found != null && !isListed(found, mixin))) {

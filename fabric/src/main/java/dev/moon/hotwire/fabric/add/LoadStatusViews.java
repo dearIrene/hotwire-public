@@ -20,9 +20,9 @@ public final class LoadStatusViews {
     }
 
     @SuppressWarnings("NullAway")
-    public static void letGo() {
-        WeakReference<LevelLoadTracker> held = last;
-        LevelLoadTracker tracker = held == null ? null : held.get();
+    public static void release() {
+        WeakReference<LevelLoadTracker> shownTracker = last;
+        LevelLoadTracker tracker = shownTracker == null ? null : shownTracker.get();
         if (tracker != null) {
             tracker.setServerChunkStatusView(null);
         }

@@ -58,9 +58,9 @@ final class ElementTakes {
     }
 
     static <C> Consumer<String> makeWeak(C container, Object element, ElementTake<C> take) {
-        WeakReference<Object> held = new WeakReference<>(element);
+        WeakReference<Object> elementRef = new WeakReference<>(element);
         return makeWeak(container, (now, owner) -> {
-            Object one = held.get();
+            Object one = elementRef.get();
             if (one != null) {
                 take.take(now, one, owner);
             }
@@ -68,9 +68,9 @@ final class ElementTakes {
     }
 
     static Supplier<@Nullable String> askWeak(Object element, Function<Object, @Nullable String> asked) {
-        WeakReference<Object> held = new WeakReference<>(element);
+        WeakReference<Object> elementRef = new WeakReference<>(element);
         return () -> {
-            Object one = held.get();
+            Object one = elementRef.get();
             return one == null ? null : asked.apply(one);
         };
     }
@@ -87,35 +87,35 @@ final class ElementTakes {
         return one == null ? null : new WeakReference<>(one);
     }
 
-    private static boolean isGone(@Nullable WeakReference<Object> held) {
-        return held != null && held.refersTo(null);
+    private static boolean isGone(@Nullable WeakReference<Object> elementRef) {
+        return elementRef != null && elementRef.refersTo(null);
     }
 
-    private static @Nullable Object read(@Nullable WeakReference<Object> held) {
-        return held == null ? null : held.get();
+    private static @Nullable Object read(@Nullable WeakReference<Object> elementRef) {
+        return elementRef == null ? null : elementRef.get();
     }
 
     @SuppressWarnings("NullAway")
     static <C> Consumer<String> makeWeakEntry(C container, @Nullable Object key, @Nullable Object value,
             EntryTake<C> take) {
-        WeakReference<Object> heldKey = hold(key);
-        WeakReference<Object> heldValue = hold(value);
+        WeakReference<Object> keyRef = hold(key);
+        WeakReference<Object> valueRef = hold(value);
         return makeWeak(container, (now, owner) -> {
-            Object oneKey = read(heldKey);
-            Object oneValue = read(heldValue);
-            if (!isGone(heldKey) && !isGone(heldValue)) {
+            Object oneKey = read(keyRef);
+            Object oneValue = read(valueRef);
+            if (!isGone(keyRef) && !isGone(valueRef)) {
                 take.take(now, oneKey, oneValue, owner);
             }
         });
     }
 
     static Supplier<@Nullable String> askWeakEntry(@Nullable Object key, @Nullable Object value, EntryAsk asked) {
-        WeakReference<Object> heldKey = hold(key);
-        WeakReference<Object> heldValue = hold(value);
+        WeakReference<Object> keyRef = hold(key);
+        WeakReference<Object> valueRef = hold(value);
         return () -> {
-            Object oneKey = read(heldKey);
-            Object oneValue = read(heldValue);
-            return isGone(heldKey) || isGone(heldValue) ? null : asked.ask(oneKey, oneValue);
+            Object oneKey = read(keyRef);
+            Object oneValue = read(valueRef);
+            return isGone(keyRef) || isGone(valueRef) ? null : asked.ask(oneKey, oneValue);
         };
     }
 

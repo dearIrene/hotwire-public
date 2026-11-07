@@ -10,7 +10,7 @@ import java.util.Set;
 public final class DownloadNotices {
     private static final int ROOM = 3;
 
-    private static final int HELD = 1000;
+    private static final int PAUSE_MARK = 1000;
 
     private static final Map<Integer, Integer> HOLDING = new HashMap<>();
     private static final Set<Integer> GONE = new HashSet<>();
@@ -60,7 +60,7 @@ public final class DownloadNotices {
 
     private static void showGetting(Downloads.Job job, String key) {
         boolean paused = job.state() == Downloads.State.PAUSED;
-        int percent = (int) (job.getFraction() * 100) + (paused ? HELD : 0);
+        int percent = (int) (job.getFraction() * 100) + (paused ? PAUSE_MARK : 0);
         Integer last = HOLDING.get(job.id());
         if ((last != null && last == percent) || GONE.contains(job.id())) {
             return;

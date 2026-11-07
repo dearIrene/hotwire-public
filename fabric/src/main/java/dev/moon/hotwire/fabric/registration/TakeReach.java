@@ -52,7 +52,7 @@ final class TakeReach {
     }
 
     @SuppressWarnings("ReferenceEquality")
-    static Set<String> union(Set<String> one, Set<String> other) {
+    static Set<String> join(Set<String> one, Set<String> other) {
         if (one == other || one == GAME) {
             return one;
         }
@@ -86,7 +86,7 @@ final class TakeReach {
     static @Nullable Set<String> findCalledThrough(@Nullable Object key, @Nullable Object value) {
         Set<String> ofKey = findCalledThrough(key);
         Set<String> ofValue = findCalledThrough(value);
-        return ofKey == null || ofValue == null ? null : union(ofKey, ofValue);
+        return ofKey == null || ofValue == null ? null : join(ofKey, ofValue);
     }
 
     private static boolean addModsOfTypes(@Nullable Class<?> type, Set<String> mods) {

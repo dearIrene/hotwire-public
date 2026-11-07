@@ -312,7 +312,7 @@ final class LiveUpdates {
 
         try {
             Minecraft.getInstance().submit(() -> LaunchSteps.run("the update of " + manifest.id(),
-                    LaunchSteps.afterStart(List.of(manifest.id()), this.engine.getClasses()::findLoaded,
+                    LaunchSteps.planAfterStart(List.of(manifest.id()), this.engine.getClasses()::findLoaded,
                             new LinkedHashMap<>()),
                     Set.of("host lists", "entrypoint lists", "client-started listeners"))).get(10, TimeUnit.SECONDS);
         } catch (InterruptedException e) {

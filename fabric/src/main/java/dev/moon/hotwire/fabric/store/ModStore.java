@@ -177,7 +177,7 @@ public final class ModStore {
             List<Path> jars = this.fetchAll(all);
             List<String> projects = all.stream().map(ModrinthClient.Version::projectId).toList();
             client.execute(() -> onJars.accept(jars, projects));
-        } catch (Downloads.DownloadStopped e) {
+        } catch (Downloads.DownloadStop e) {
             LOGGER.info("[Hotwire] the download of {} was stopped", title);
             client.execute(() -> onFailure.accept(""));
         } catch (IOException e) {
@@ -252,7 +252,7 @@ public final class ModStore {
             fetches.add(() -> {
                 try {
                     return this.fetchJar(version, job);
-                } catch (Downloads.DownloadStopped e) {
+                } catch (Downloads.DownloadStop e) {
                     jobs.forEach(Downloads::stop);
                     throw e;
                 }
@@ -267,7 +267,7 @@ public final class ModStore {
         try {
             Files.createDirectories(this.downloads);
             Path jar = this.downloads.resolve(version.fileName().replaceAll("[^A-Za-z0-9._+ -]", "_"));
-            this.model.getClient().fetchTo(version, jar, downloads.feedOf(job));
+            this.model.getClient().fetchTo(version, jar, downloads.findFeed(job));
             downloads.end(job, true);
             return jar;
         } catch (IOException | RuntimeException e) {

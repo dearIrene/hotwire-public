@@ -22,7 +22,7 @@ public final class LaunchSteps {
     private LaunchSteps() {
     }
 
-    public static List<Step> afterStart(List<String> ids, Function<String, @Nullable Class<?>> findLoaded,
+    public static List<Step> planAfterStart(List<String> ids, Function<String, @Nullable Class<?>> findLoaded,
             Map<String, List<String>> setUp) {
         return List.of(
                 new Step("host lists", () -> HostLists.join(ids)),

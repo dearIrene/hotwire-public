@@ -36,7 +36,7 @@ public final class GameHold {
 
     private static volatile String holder = "";
 
-    private static volatile long parkedSince;
+    private static volatile long pausedSince;
 
     private static final Duration BUDGET = Duration.ofMillis(Long.getLong("hotwire_hold_budget_millis", 30_000));
 
@@ -218,7 +218,7 @@ public final class GameHold {
     }
 
     public static boolean isOverBudget() {
-        long since = parkedSince;
+        long since = pausedSince;
         return HOLDING.get() && !UNBUDGETED.get() && since != 0 && System.nanoTime() - since > BUDGET.toNanos();
     }
 
@@ -247,7 +247,7 @@ public final class GameHold {
         try {
             hold.pauseThreads(client);
             LiveConnections.drain();
-            parkedSince = System.nanoTime();
+            pausedSince = System.nanoTime();
             for (Runnable work = AT_NEXT_HOLD.poll(); work != null; work = AT_NEXT_HOLD.poll()) {
                 work.run();
             }
@@ -345,7 +345,7 @@ public final class GameHold {
             this.game.countDown();
             PAUSED_GAME_WORK.add(GameHold::unblock);
 
-            parkedSince = 0;
+            pausedSince = 0;
         }
     }
 
@@ -361,7 +361,7 @@ public final class GameHold {
         }
         if (this.owner) {
             HOLDING.set(false);
-            parkedSince = 0;
+            pausedSince = 0;
             Tripwire.markHotwireWork(this.hotwireWorkBefore);
         }
     }

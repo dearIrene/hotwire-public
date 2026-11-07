@@ -44,7 +44,7 @@ final class FixedLists {
     }
 
     @SuppressWarnings({"unchecked", "ReferenceEquality"})
-    static List<Object> makeHeld(List<Object> elements, List<?> first) {
+    static List<Object> findHolderList(List<Object> elements, List<?> first) {
         boolean same = elements.size() == first.size();
         for (int index = 0; same && index < elements.size(); index++) {
             same = elements.get(index) == first.get(index);
@@ -141,7 +141,7 @@ final class FixedLists {
     }
 
     private static void writeValue(Walk walk, Map<Object, Object> entries, Object key, Plan plan) {
-        entries.put(key, makeHeld(plan.retained(), plan.first()));
+        entries.put(key, findHolderList(plan.retained(), plan.first()));
         plan.out().forEach((mod, removed) -> walk.getRemovalsOf(mod).addAll(removed));
     }
 
@@ -179,7 +179,7 @@ final class FixedLists {
 
     private static void writeField(Walk walk, FieldSlots.Slot field, @Nullable Object holder, Plan plan) {
         try {
-            walk.getWriter().write(field, holder, makeHeld(plan.retained(), plan.first()));
+            walk.getWriter().write(field, holder, findHolderList(plan.retained(), plan.first()));
             plan.out().forEach((mod, removed) -> walk.getRemovalsOf(mod).addAll(removed));
         } catch (IllegalAccessException e) {
             LOGGER.warn("[Hotwire] {} keeps {}'s elements: {}", field, plan.out().keySet(), e.toString());

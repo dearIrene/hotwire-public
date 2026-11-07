@@ -27,12 +27,12 @@ import net.fabricmc.fabric.impl.resource.pack.ModNioPackResources;
 import net.fabricmc.fabric.impl.resource.loader.ModNioResourcePack;
 *///?}
 
-public final class KeptPacks {
-    private static final Logger LOGGER = LoggerFactory.getLogger(KeptPacks.class);
+public final class HiddenPacks {
+    private static final Logger LOGGER = LoggerFactory.getLogger(HiddenPacks.class);
 
     private static final Map<String, Boolean> OWN_ALONE = new ConcurrentHashMap<>();
 
-    private KeptPacks() {
+    private HiddenPacks() {
     }
 
     @SuppressWarnings("unchecked")

@@ -27,10 +27,10 @@ public final class Downloads {
         STOPPED
     }
 
-    public static final class DownloadStopped extends IOException {
+    public static final class DownloadStop extends IOException {
         private static final long serialVersionUID = 1L;
 
-        DownloadStopped() {
+        DownloadStop() {
             super("the download was stopped");
         }
     }
@@ -38,7 +38,7 @@ public final class Downloads {
     public interface Feed extends LongConsumer {
         void awaitGo() throws IOException;
 
-        boolean isHeld();
+        boolean isPaused();
     }
 
     private static final long PAUSE_LOOK_MILLIS = 100;
@@ -63,7 +63,7 @@ public final class Downloads {
         }
 
         @Override
-        public boolean isHeld() {
+        public boolean isPaused() {
             return this.paused || this.stopped;
         }
 
@@ -78,7 +78,7 @@ public final class Downloads {
                 throw new IOException("interrupted", e);
             }
             if (this.stopped) {
-                throw new DownloadStopped();
+                throw new DownloadStop();
             }
         }
 
@@ -136,7 +136,7 @@ public final class Downloads {
         return CONTROLS.values().stream().map(Control::find).toList();
     }
 
-    public Feed feedOf(int id) {
+    public Feed findFeed(int id) {
         Control control = CONTROLS.get(id);
         return control != null ? control : new Control(id);
     }
@@ -195,7 +195,7 @@ public final class Downloads {
         return TAGS.getOrDefault(id, "");
     }
 
-    public static void quietNext() {
+    public static void markNextQuiet() {
         QUIET_NEXT.incrementAndGet();
     }
 

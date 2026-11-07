@@ -115,7 +115,7 @@ sealed interface Removal {
             List<Object> back = new ArrayList<>(now);
             back.add(Math.min(this.index, back.size()), this.element);
             try {
-                this.writer.write(this.field, this.holder, FixedLists.makeHeld(back, this.first));
+                this.writer.write(this.field, this.holder, FixedLists.findHolderList(back, this.first));
             } catch (IllegalAccessException e) {
                 LoggerFactory.getLogger(Removal.class).warn("[Hotwire] {} could not be given its element back",
                         this.field, e);
@@ -143,7 +143,7 @@ sealed interface Removal {
             }
             List<Object> back = new ArrayList<>(now);
             back.add(Math.min(this.index, back.size()), this.element);
-            this.map.put(this.key, FixedLists.makeHeld(back, this.first));
+            this.map.put(this.key, FixedLists.findHolderList(back, this.first));
         }
 
         @Override

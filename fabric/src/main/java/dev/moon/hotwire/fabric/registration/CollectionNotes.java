@@ -201,7 +201,7 @@ final class CollectionNotes {
             note.takes = left;
             note.origin = origin;
             note.ofWorld |= this.inWorld;
-            note.readers = TakeReach.union(note.readers, readers);
+            note.readers = TakeReach.join(note.readers, readers);
         }
         long print = this.printed == container ? this.printedAs : Fingerprints.of(container);
         this.printed = null;
@@ -359,7 +359,7 @@ final class CollectionNotes {
 
     synchronized boolean isReadBy(Object container, Set<String> readers) {
         Note note = this.notes.get(container);
-        return note != null && !note.readers.isEmpty() && note.readers.equals(TakeReach.union(note.readers, readers));
+        return note != null && !note.readers.isEmpty() && note.readers.equals(TakeReach.join(note.readers, readers));
     }
 
     synchronized List<Object> findContainers() {

@@ -131,7 +131,7 @@ public final class PackFolders implements StoreModel.Packs {
                 this.client.fetchTo(version, folder.resolve(name), this.downloads);
                 this.findFiles(kind).put(projectId, name);
                 game.execute(() -> this.say.accept(Lang.get("hotwire.store.pack.downloaded", title), false));
-            } catch (Downloads.DownloadStopped e) {
+            } catch (Downloads.DownloadStop e) {
                 LOGGER.info("[Hotwire] the download of {} was stopped", title);
             } catch (IOException | RuntimeException e) {
                 LOGGER.info("[Hotwire] the store could not get {}: {}", title, e.toString());

@@ -107,9 +107,9 @@ public final class FieldReferences {
         SwitchTimes.mark("field references: planned");
         this.removeElements(mods, on, scan, planned, false);
         SwitchTimes.mark("field references: elements");
-        List<StaticRecomputer.Recomputation> remade = new ArrayList<>();
-        mods.forEach(mod -> remade.addAll(this.recomputeStatics(mod, scan.byName(), getOthers(mods, on))));
-        this.followRemadeStatics(remade, mods, getOthers(mods, on));
+        List<StaticRecomputer.Recomputation> recomputations = new ArrayList<>();
+        mods.forEach(mod -> recomputations.addAll(this.recomputeStatics(mod, scan.byName(), getOthers(mods, on))));
+        this.followRecomputedStatics(recomputations, mods, getOthers(mods, on));
         SwitchTimes.mark("field references: statics");
         this.loadedChecks.match(mods, true, this.lambdas.open(), getOthers(mods, on));
         SwitchTimes.mark("field references: loaded checks");
@@ -405,11 +405,11 @@ public final class FieldReferences {
         return this.initializedCheck;
     }
 
-    private void followRemadeStatics(List<StaticRecomputer.Recomputation> remade, Collection<String> mods,
+    private void followRecomputedStatics(List<StaticRecomputer.Recomputation> recomputations, Collection<String> mods,
             Predicate<Class<?>> others) {
         IdentityHashMap<Object, Object> replaced = new IdentityHashMap<>();
         Set<String> names = new HashSet<>();
-        for (StaticRecomputer.Recomputation one : remade) {
+        for (StaticRecomputer.Recomputation one : recomputations) {
             replaced.put(one.old(), one.made());
             names.add(StaticRecomputer.findNameRead(one));
         }

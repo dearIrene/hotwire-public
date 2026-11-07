@@ -519,12 +519,12 @@ public final class HandlerGuards {
     }
 
     public static CallSite bootstrapRedirectForgetting(MethodHandles.Lookup caller, String name, MethodType type,
-            String mixin, int isStatic, int opcode, String owner, String target, String desc, String kept)
+            String mixin, int isStatic, int opcode, String owner, String target, String desc, String unset)
             throws ReflectiveOperationException {
         return link(caller, name, type, mixin, isStatic, () -> {
             MethodHandle standIn = RedirectStandIns.makeStandIn(caller, type, 1,
                     new RedirectStandIns.Target(opcode, owner, target, desc));
-            for (String field : kept.split(";", -1)) {
+            for (String field : unset.split(";", -1)) {
                 int space = field.indexOf(' ');
                 Class<?> number = MethodType.fromMethodDescriptorString("()" + field.substring(space + 1), null)
                         .returnType();

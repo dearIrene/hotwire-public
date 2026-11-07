@@ -45,9 +45,9 @@ public final class UpdateCheck {
             + this.client.getScope().replaceAll("[^A-Za-z0-9.-]", "_") + ".gz");
     private static final long RECENT_NANOS = 60_000_000_000L;
     private volatile int newlyFound;
-    private volatile @Nullable Found lastFound;
+    private volatile @Nullable OfferMatch lastFound;
 
-    private record Found(Map<String, Path> jars, long atNanos, List<UpdateOffer> offers) {
+    private record OfferMatch(Map<String, Path> jars, long atNanos, List<UpdateOffer> offers) {
     }
 
     public UpdateCheck(InstalledMods installed) {
@@ -76,7 +76,7 @@ public final class UpdateCheck {
     }
 
     public List<UpdateOffer> findRecent() throws IOException {
-        Found last = this.lastFound;
+        OfferMatch last = this.lastFound;
         if (last != null && System.nanoTime() - last.atNanos() < RECENT_NANOS
                 && last.jars().equals(this.installed.getJarsByTopLevel())) {
             return last.offers();
@@ -119,7 +119,7 @@ public final class UpdateCheck {
         }
         this.newlyFound = fresh;
         memory.write();
-        this.lastFound = new Found(Map.copyOf(jars), System.nanoTime(), List.copyOf(found));
+        this.lastFound = new OfferMatch(Map.copyOf(jars), System.nanoTime(), List.copyOf(found));
         return found;
     }
 
@@ -320,7 +320,7 @@ public final class UpdateCheck {
                 List.of(), offer.changelog());
         try {
             return this.write(version);
-        } catch (Downloads.DownloadStopped e) {
+        } catch (Downloads.DownloadStop e) {
             throw e;
         } catch (IOException e) {
             LOGGER.info("[Hotwire] {} was not at {}; asking Modrinth where it is", offer.fileName(), offer.url());

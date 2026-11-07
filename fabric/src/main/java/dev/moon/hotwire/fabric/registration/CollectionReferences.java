@@ -127,11 +127,11 @@ final class CollectionReferences implements FixedLists.Walk {
             this.look.drop();
             throw e;
         } finally {
-            this.endTakeout(mods);
+            this.endRemoval(mods);
         }
     }
 
-    private void endTakeout(List<String> mods) {
+    private void endRemoval(List<String> mods) {
         this.mine.forEach((mod, out) -> {
             out.forEach(Removal::resetHolder);
             if (!out.isEmpty()) {
@@ -158,7 +158,7 @@ final class CollectionReferences implements FixedLists.Walk {
             this.seen.put(value, this.reader);
             return true;
         }
-        Set<String> now = TakeReach.union(before, this.reader);
+        Set<String> now = TakeReach.join(before, this.reader);
         if (now.equals(before)) {
             return false;
         }
@@ -198,7 +198,7 @@ final class CollectionReferences implements FixedLists.Walk {
             try {
                 this.takeAll(ElementTakes.prepare(revealed, stillOff, containers), stillOff);
             } finally {
-                this.endTakeout(stillOff);
+                this.endRemoval(stillOff);
             }
         });
     }

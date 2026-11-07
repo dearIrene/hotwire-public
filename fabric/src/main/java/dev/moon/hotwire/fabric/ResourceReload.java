@@ -108,7 +108,7 @@ public final class ResourceReload {
         boolean particles = hasAny(types, List.of(Particle.class));
         boolean sounds = hasAny(types, List.of(SoundInstance.class));
         boolean language = hasAny(findLoaded(rebuilt), LANGUAGE);
-        boolean world = WorldRendererReset.isHeld(types);
+        boolean world = WorldRendererReset.holdsAny(types);
         if (!renderers && !screens && !particles && !sounds && !language && !reload && !world) {
             return;
         }

@@ -15,6 +15,7 @@ import org.objectweb.asm.Type;
 import org.objectweb.asm.tree.AbstractInsnNode;
 import org.objectweb.asm.tree.ClassNode;
 import org.objectweb.asm.tree.FieldInsnNode;
+import org.objectweb.asm.tree.FieldNode;
 import org.objectweb.asm.tree.InvokeDynamicInsnNode;
 import org.objectweb.asm.tree.MethodInsnNode;
 import org.objectweb.asm.tree.MethodNode;
@@ -69,7 +70,7 @@ final class HandlerSites {
             }
         }
         if (mixinOfHandler.isEmpty()) {
-            return stage(internalName, guarded);
+            return markStaged(internalName, guarded);
         }
         NullArguments nulls = new NullArguments(internalName);
         for (MethodNode method : node.methods) {
@@ -125,13 +126,13 @@ final class HandlerSites {
                         why = " (" + RedirectStandIns.explainMiss(before, node, method, call.desc) + ")";
                     }
                     if (target != null) {
-                        String kept = findKept(node, call, before);
-                        method.instructions.set(call, kept.isEmpty()
+                        String unset = findUnset(node, call, before);
+                        method.instructions.set(call, unset.isEmpty()
                                 ? new InvokeDynamicInsnNode(call.name, desc, HandlerGuards.BOOTSTRAP_REDIRECT,
                                 mixin, how, target.opcode(), target.owner(), target.name(), target.desc())
                                 : new InvokeDynamicInsnNode(call.name, desc,
                                 HandlerGuards.BOOTSTRAP_REDIRECT_FORGETTING, mixin, how, target.opcode(),
-                                target.owner(), target.name(), target.desc(), kept));
+                                target.owner(), target.name(), target.desc(), unset));
                         guarded.add(mixin);
                         continue;
                     }
@@ -178,14 +179,14 @@ final class HandlerSites {
                 guarded.add(mixin);
             }
         }
-        return stage(internalName, guarded);
+        return markStaged(internalName, guarded);
     }
 
-    private static String findKept(ClassNode node, MethodInsnNode call, @Nullable ClassNode shipped) {
+    private static String findUnset(ClassNode node, MethodInsnNode call, @Nullable ClassNode shipped) {
         if (shipped == null || call.getOpcode() == Opcodes.INVOKESTATIC) {
             return "";
         }
-        Set<String> kept = new TreeSet<>();
+        Set<String> unset = new TreeSet<>();
         Set<String> constructed = new HashSet<>();
         for (MethodNode method : node.methods) {
             boolean handler = method.name.equals(call.name) && method.desc.equals(call.desc);
@@ -196,14 +197,14 @@ final class HandlerSites {
                     if (method.name.equals("<init>")) {
                         constructed.add(named);
                     } else if (handler && Type.getType(field.desc).getSort() < Type.ARRAY
-                            && shipped.fields.stream().noneMatch(own -> own.name.equals(field.name))) {
-                        kept.add(named);
+                            && !hasField(shipped, field.name)) {
+                        unset.add(named);
                     }
                 }
             }
         }
-        kept.removeAll(constructed);
-        return String.join(";", kept);
+        unset.removeAll(constructed);
+        return String.join(";", unset);
     }
 
     private static void markFinalWrites(String internalName, ClassNode node, Supplier<@Nullable ClassNode> shipped) {
@@ -216,8 +217,7 @@ final class HandlerSites {
                 if (insn instanceof FieldInsnNode store && store.getOpcode() == Opcodes.PUTFIELD
                         && store.owner.equals(internalName) && store.name.indexOf('$') < 0) {
                     ClassNode game = shipped.get();
-                    if (game != null && game.fields.stream().anyMatch(own -> own.name.equals(store.name)
-                            && own.desc.equals(store.desc) && (own.access & Opcodes.ACC_FINAL) != 0)
+                    if (game != null && hasFinalField(game, store.name, store.desc)
                             && SwappedFields.isMadePlainly(game, store.name + store.desc)) {
                         HandlerGuards.markUnflippable(internalName, mixin, "writes the game's final " + store.name);
                     }
@@ -238,7 +238,7 @@ final class HandlerSites {
             for (AbstractInsnNode insn : handler.instructions) {
                 if (insn instanceof FieldInsnNode field && (field.getOpcode() == Opcodes.PUTFIELD
                         || field.getOpcode() == Opcodes.PUTSTATIC) && field.owner.equals(node.name)
-                        && shipped.fields.stream().anyMatch(own -> own.name.equals(field.name))) {
+                        && hasField(shipped, field.name)) {
                     return field.name;
                 }
             }
@@ -246,11 +246,29 @@ final class HandlerSites {
         return null;
     }
 
-    private static boolean stage(String internalName, Set<String> guarded) {
+    private static boolean markStaged(String internalName, Set<String> guarded) {
         if (guarded.isEmpty()) {
             return false;
         }
         HandlerGuards.STAGED.put(internalName, Set.copyOf(guarded));
         return true;
+    }
+
+    private static boolean hasField(ClassNode node, String name) {
+        for (FieldNode own : node.fields) {
+            if (own.name.equals(name)) {
+                return true;
+            }
+        }
+        return false;
+    }
+
+    private static boolean hasFinalField(ClassNode node, String name, String desc) {
+        for (FieldNode own : node.fields) {
+            if (own.name.equals(name) && own.desc.equals(desc) && (own.access & Opcodes.ACC_FINAL) != 0) {
+                return true;
+            }
+        }
+        return false;
     }
 }

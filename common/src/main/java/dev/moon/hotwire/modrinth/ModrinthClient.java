@@ -320,7 +320,7 @@ public final class ModrinthClient {
             long began = System.nanoTime();
             try {
                 this.transport.fetchTo(version.url(), version.size(), version.sha512(), part, onBytes);
-            } catch (Downloads.DownloadStopped e) {
+            } catch (Downloads.DownloadStop e) {
                 Files.deleteIfExists(part);
                 throw e;
             }
@@ -334,7 +334,7 @@ public final class ModrinthClient {
         int job = queue.begin(version.fileName(), version.size());
         queue.start(job);
         try {
-            this.fetchTo(version, target, queue.feedOf(job));
+            this.fetchTo(version, target, queue.findFeed(job));
             queue.end(job, true);
         } catch (IOException | RuntimeException e) {
             queue.end(job, false);
