@@ -37,10 +37,12 @@ import java.util.Optional;
 import java.util.Set;
 import java.util.TreeSet;
 import java.util.concurrent.CompletableFuture;
+import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.ExecutionException;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.TimeoutException;
 import java.util.function.Consumer;
+import java.util.function.Predicate;
 import net.fabricmc.api.ClientModInitializer;
 import net.fabricmc.api.ModInitializer;
 import net.fabricmc.loader.api.FabricLoader;
@@ -51,7 +53,7 @@ import net.minecraft.client.Minecraft;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
-final class LiveUpdates {
+public final class LiveUpdates {
     private static final Logger LOGGER = LoggerFactory.getLogger(LiveUpdates.class);
 
     interface Stay {
@@ -343,6 +345,31 @@ final class LiveUpdates {
         if (added.isEmpty()) {
             return "";
         }
+
+        if (LoaderModList.isHidden(id)) {
+            WAITING.merge(id, Set.copyOf(added), (was, more) -> {
+                Set<String> all = new HashSet<>(was);
+                all.addAll(more);
+                return Set.copyOf(all);
+            });
+            LOGGER.info("[Hotwire] {}'s new entrypoints {} run when it comes back on", id, added);
+            return "";
+        }
+        return runStart(id, added);
+    }
+
+    private static final Map<String, Set<String>> WAITING = new ConcurrentHashMap<>();
+
+    public static void runWaitingEntrypoints(Predicate<String> on) {
+        for (String id : List.copyOf(WAITING.keySet())) {
+            Set<String> added = on.test(id) ? WAITING.remove(id) : null;
+            if (added != null) {
+                runStart(id, added);
+            }
+        }
+    }
+
+    private static String runStart(String id, Set<String> added) {
         List<Runnable> starts = new ArrayList<>();
         collectAdded(id, "preLaunch", PreLaunchEntrypoint.class, PreLaunchEntrypoint::onPreLaunch, added, starts);
         collectAdded(id, "main", ModInitializer.class, ModInitializer::onInitialize, added, starts);

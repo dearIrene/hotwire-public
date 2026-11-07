@@ -33,6 +33,7 @@ import dev.moon.hotwire.fabric.registration.WorldContent;
 import dev.moon.hotwire.fabric.registration.WorldWrappers;
 import dev.moon.hotwire.fabric.report.GameReports;
 import dev.moon.hotwire.fabric.report.SwitchFaults;
+import dev.moon.hotwire.fabric.update.LiveUpdates;
 import dev.moon.hotwire.plan.SwitchPlan;
 import dev.moon.hotwire.redefine.HandlerGuards;
 import dev.moon.hotwire.redefine.RebuildException;
@@ -195,6 +196,10 @@ public final class SwitchRunner {
             return result;
         } finally {
             LifecycleListeners.end(this.switcher::isOn);
+
+            if (!off && result != null) {
+                LiveUpdates.runWaitingEntrypoints(this.switcher::isOn);
+            }
             this.tripwire.closeRide();
             if (off) {
                 ResourceReload.forgetPausedReload();
