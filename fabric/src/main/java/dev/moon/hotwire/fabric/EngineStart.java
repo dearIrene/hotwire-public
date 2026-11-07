@@ -18,6 +18,7 @@ import dev.moon.hotwire.fabric.rebuild.MixinInternals;
 import dev.moon.hotwire.fabric.rebuild.TransformerChain;
 import dev.moon.hotwire.fabric.registration.AsyncLogging;
 import dev.moon.hotwire.fabric.registration.ConnectionLambdas;
+import dev.moon.hotwire.fabric.registration.ElementLook;
 import dev.moon.hotwire.fabric.registration.EventInvokers;
 import dev.moon.hotwire.fabric.registration.FieldReferences;
 import dev.moon.hotwire.fabric.registration.Fields;
@@ -546,7 +547,8 @@ final class EngineStart {
                     new HotwireEngine.Bound.Ready(parts));
             laps.endLap("make the engine");
             HotwireEngine made = engine;
-            parts.runner().getSwitcher().prepareLookWith(() -> parts.runner().prepareLookFor(made.findSwitchableOn()));
+            ElementLook.useMods(made::findSwitchable);
+            parts.runner().getSwitcher().prepareLookWith(() -> parts.runner().prepareLook());
             new SwapAtClose(queue, folders, findHotwireJar()).arm();
             QuietThreads.install();
             laps.endLap("look, swap at close, quiet threads");

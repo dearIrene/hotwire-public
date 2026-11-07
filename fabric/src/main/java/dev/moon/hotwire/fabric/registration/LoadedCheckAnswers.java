@@ -65,12 +65,18 @@ final class LoadedCheckAnswers {
     private Set<Class<?>> everyRead = Set.of();
 
     void readForEvery(Collection<String> mods, @Nullable ConstantPools pools) {
-        if (pools != null && !mods.isEmpty()) {
-            Set<Class<?>> read = ConcurrentHashMap.newKeySet();
-            this.every = this.find(mods, pools, read::add);
-            this.everyFor = Set.copyOf(mods);
-            this.everyRead = read;
+        if (pools == null || mods.isEmpty()) {
+            return;
         }
+        CheckSites all = this.every;
+        if (all != null && this.everyFor.containsAll(mods)) {
+            this.catchUp(all, pools);
+            return;
+        }
+        Set<Class<?>> read = ConcurrentHashMap.newKeySet();
+        this.every = this.find(mods, pools, read::add);
+        this.everyFor = Set.copyOf(mods);
+        this.everyRead = read;
     }
 
     void readAhead(Collection<String> mods, @Nullable ConstantPools pools, Predicate<Class<?>> others) {
@@ -118,10 +124,22 @@ final class LoadedCheckAnswers {
         }
     }
 
+    void catchUpWith(List<Class<?>> arrived, @Nullable ConstantPools pools) {
+        CheckSites all = this.every;
+        if (pools != null && all != null && !arrived.isEmpty()) {
+            this.catchUp(all, pools, arrived.toArray(Class<?>[]::new));
+        }
+    }
+
     private CheckSites catchUp(CheckSites all, ConstantPools pools) {
+        return this.catchUp(all, pools, LoadedClassList.of(this.instrumentation));
+    }
+
+    private CheckSites catchUp(CheckSites all, ConstantPools pools, Class<?>[] among) {
         Set<Class<?>> read = this.everyRead;
         Set<Class<?>> loadedSince = ConcurrentHashMap.newKeySet();
-        CheckSites more = this.find(this.everyFor, pools, type -> !read.contains(type) && loadedSince.add(type));
+        CheckSites more = this.find(this.everyFor, pools, among,
+                type -> !read.contains(type) && loadedSince.add(type));
         if (loadedSince.isEmpty()) {
             return all;
         }
@@ -140,9 +158,14 @@ final class LoadedCheckAnswers {
     }
 
     private CheckSites find(Collection<String> mods, ConstantPools pools, Predicate<Class<?>> others) {
+        return this.find(mods, pools, LoadedClassList.of(this.instrumentation), others);
+    }
+
+    private CheckSites find(Collection<String> mods, ConstantPools pools, Class<?>[] among,
+            Predicate<Class<?>> others) {
         ClassLoader game = LoadedCheckAnswers.class.getClassLoader();
 
-        Stream<Class<?>> loaded = Arrays.stream(LoadedClassList.of(this.instrumentation));
+        Stream<Class<?>> loaded = Arrays.stream(among);
         List<Class<?>> candidates = (ElementLook.isLooking() ? loaded : loaded.parallel())
                 .peek(type -> ElementLook.stopIfAsked())
                 .filter(type -> Objects.equals(type.getClassLoader(), game) && !type.isHidden() && !type.isArray()

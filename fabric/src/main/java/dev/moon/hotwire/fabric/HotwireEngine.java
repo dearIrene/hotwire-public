@@ -181,6 +181,10 @@ public final class HotwireEngine implements ModScreen.Game, AutoCloseable {
         this.storeJars.updateAll(offers);
     }
 
+    List<String> findSwitchable() {
+        return this.installed.getGraph().getIds().stream().filter(ModPolicy::isSwitchable).toList();
+    }
+
     List<String> findSwitchableOn() {
         return this.installed.getGraph().getIds().stream().filter(ModPolicy::isSwitchable).filter(this::isOn).toList();
     }

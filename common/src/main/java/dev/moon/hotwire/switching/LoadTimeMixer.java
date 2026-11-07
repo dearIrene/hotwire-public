@@ -1,6 +1,7 @@
 package dev.moon.hotwire.switching;
 
 import dev.moon.hotwire.mixin_copy.AppliedMixins;
+import dev.moon.hotwire.redefine.ClassArrivals;
 import dev.moon.hotwire.redefine.ClassRebuilder;
 import dev.moon.hotwire.redefine.FieldHolders;
 import dev.moon.hotwire.redefine.ForeignFields;
@@ -39,6 +40,9 @@ final class LoadTimeMixer {
         return new LoadTimeBridge(this.applier::isMixedAsItLoads, (name, bytes) -> this.mixAsItLoads(name, bytes, true),
                 (name, bytes) -> this.mixAsItLoads(name, bytes, false), this::isStuckForOff,
                 (name, bytes, inGame) -> {
+            if (inGame != null) {
+                ClassArrivals.note(name, inGame);
+            }
             if ((name.startsWith("net/minecraft/") || name.startsWith("com/mojang/"))
                     && this.applier.getPatchedNames().contains(name)) {
                 rebuilder.getLoadedBytes().onLoaded(name, bytes);

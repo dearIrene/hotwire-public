@@ -14,11 +14,16 @@ final class RegisteredContent {
     private RegisteredContent() {
     }
 
-    static synchronized Set<Object> find() {
+    static long findSizes() {
         long size = BuiltInRegistries.REGISTRY.size();
         for (Registry<?> registry : BuiltInRegistries.REGISTRY) {
             size = size * 31 + registry.size();
         }
+        return size;
+    }
+
+    static synchronized Set<Object> find() {
+        long size = findSizes();
         if (size == foundAt) {
             return found;
         }

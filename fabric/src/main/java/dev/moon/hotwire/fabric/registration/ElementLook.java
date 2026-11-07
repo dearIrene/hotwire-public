@@ -5,11 +5,13 @@ import java.lang.management.ClassLoadingMXBean;
 import java.lang.management.ManagementFactory;
 import java.util.ArrayList;
 import java.util.Collection;
+import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Set;
 import java.util.concurrent.CancellationException;
-import java.util.concurrent.ConcurrentHashMap;
+import java.util.function.BooleanSupplier;
 import java.util.function.Predicate;
+import java.util.function.Supplier;
 import net.minecraft.client.Minecraft;
 import org.jspecify.annotations.Nullable;
 import org.slf4j.Logger;
@@ -23,7 +25,7 @@ public final class ElementLook {
     private static final int CLASSES_THAT_MATTER = 1024;
 
     enum Mode {
-        HOLD, LOOK, LOOK_EVERY, SETUP;
+        HOLD, LOOK_EVERY, SETUP;
 
         boolean isLook() {
             return this != HOLD;
@@ -32,173 +34,144 @@ public final class ElementLook {
 
     private static final ThreadLocal<Mode> MODE = ThreadLocal.withInitial(() -> Mode.HOLD);
 
+    private static final boolean CHECK = Boolean.parseBoolean(System.getProperty("hotwire.checkLook"));
+    private static final ThreadLocal<Boolean> WHOLE = ThreadLocal.withInitial(() -> false);
+
+    private static final boolean NO_LOOK = Boolean.parseBoolean(System.getProperty("hotwire.noLook"));
+
     private static volatile Mode runningMode = Mode.HOLD;
 
     private static final Object ONE_LOOK = new Object();
+
+    private static volatile Supplier<List<String>> everyMod = List::of;
+    private static final int NO_WORLD = Integer.MIN_VALUE;
 
     private static volatile List<String> lookedForEvery = List.of();
     private static volatile long lookedEveryAt;
 
     private static volatile long lookedEveryClasses;
-    private static volatile int lookedEveryWorld;
-
-    private static volatile Set<String> lookedAlone = Set.of();
-
-    private static final Set<String> STALE = ConcurrentHashMap.newKeySet();
-
-    private static final Set<String> BROUGHT = ConcurrentHashMap.newKeySet();
+    private static volatile int lookedEveryWorld = NO_WORLD;
 
     private static volatile @Nullable Thread looking;
 
     private static volatile boolean stopAsked;
 
-    private static volatile @Nullable Thread switching;
-    private static volatile Set<String> lookingFor = Set.of();
+    private static volatile BooleanSupplier switchUnderWay = () -> false;
+
+    private static final ThreadLocal<Boolean> NEW_WORLD = ThreadLocal.withInitial(() -> true);
 
     private final CollectionNotes notes = new CollectionNotes();
 
-    public static void findAhead(FieldReferences references, Collection<String> mods, Predicate<String> on) {
-        findAhead(references, mods, on, false);
+    public static void useMods(Supplier<List<String>> mods) {
+        everyMod = mods;
     }
 
-    public static void asSwitch(Runnable looks) {
-        switching = Thread.currentThread();
-        try {
-            looks.run();
-        } finally {
-            switching = null;
+    public static void watchSwitches(BooleanSupplier busy) {
+        switchUnderWay = busy;
+    }
+
+    public static void findAheadForOff(FieldReferences references, Collection<String> mods, Predicate<String> on) {
+        if (!NO_LOOK) {
+            look(references, findEvery(mods), on, false);
         }
     }
 
-    @SuppressWarnings("ReferenceEquality")
-    private static boolean isSwitchLooking() {
-        Thread running = switching;
-        return running != null && running != Thread.currentThread();
+    public static void findAhead(FieldReferences references, Collection<String> mods, Predicate<String> on) {
+        if (!NO_LOOK && !switchUnderWay.getAsBoolean()) {
+            look(references, findEvery(mods), on, false);
+        }
+    }
+
+    public static void findAheadForAll(FieldReferences references, Predicate<String> on) {
+        if (!switchUnderWay.getAsBoolean()) {
+            look(references, findEvery(List.of()), on, true);
+        }
+    }
+
+    private static List<String> findEvery(Collection<String> also) {
+        Set<String> all = new LinkedHashSet<>(everyMod.get());
+        all.addAll(also);
+        return List.copyOf(all);
     }
 
     @SuppressWarnings({"ThreadPriorityCheck", "ReferenceEquality"})
-    public static void findAhead(FieldReferences references, Collection<String> mods, Predicate<String> on,
-            boolean every) {
-        if (isSwitchLooking()) {
+    private static void look(FieldReferences references, List<String> asked, Predicate<String> on,
+            boolean background) {
+        if (background && isFreshForEvery(asked)) {
             return;
         }
-        List<String> asked = List.copyOf(mods);
-        if (every ? isFreshForEvery(asked) : stands(asked)) {
-            if (!every) {
-                stopLooking();
-            }
-            return;
-        }
-
         if (runningMode == Mode.SETUP) {
             stopLooking();
         }
         Thread running = looking;
-        if (!every && running != null && running != Thread.currentThread()) {
-            if (lookingFor.equals(Set.copyOf(asked))) {
-                running.setPriority(Thread.NORM_PRIORITY);
-            } else {
-                stopLooking();
-            }
+        if (!background && running != null && running != Thread.currentThread()) {
+            running.setPriority(Thread.NORM_PRIORITY);
         }
         synchronized (ONE_LOOK) {
-            if (every ? isFreshForEvery(asked) : stands(asked)) {
+            if (background && isFreshForEvery(asked)) {
                 return;
             }
-            lookedAlone = Set.of();
             Thread self = Thread.currentThread();
             int priority = self.getPriority();
             looking = self;
-            lookingFor = every ? Set.of() : Set.copyOf(asked);
-            runningMode = every ? Mode.LOOK_EVERY : Mode.LOOK;
-            MODE.set(runningMode);
+            runningMode = Mode.LOOK_EVERY;
+            MODE.set(Mode.LOOK_EVERY);
+
+            int world = findWorldNumber();
+            boolean whole = WHOLE.get() || world != lookedEveryWorld;
+            NEW_WORLD.set(whole);
             try {
                 GameHold.runUnheld(() -> {
-                    if (every) {
-                        references.lookForEvery(mods, on);
-                    } else {
-                        references.takeOutElementsAgain(mods, on);
+                    if (whole || !references.refreshEvery(asked, on)) {
+                        NEW_WORLD.set(true);
+                        references.lookForEvery(asked, on);
                     }
                 });
-                STALE.removeAll(asked);
-                if (every) {
-                    lookedForEvery = asked;
-                    lookedEveryAt = System.nanoTime();
-                    lookedEveryClasses = LOADING.getTotalLoadedClassCount();
-                    lookedEveryWorld = findWorldNumber();
-                    references.finishEveryLook();
-                    BROUGHT.clear();
-                } else {
-                    lookedAlone = Set.copyOf(asked);
-                }
+                lookedForEvery = asked;
+                lookedEveryAt = System.nanoTime();
+                lookedEveryClasses = LOADING.getTotalLoadedClassCount();
+                lookedEveryWorld = world;
+                references.finishEveryLook();
             } catch (RuntimeException | LinkageError e) {
-                LOGGER.info("[Hotwire] the look ahead for {} ended early: {}", mods, e.toString());
+                LOGGER.info("[Hotwire] the look ahead for {} mods ended early: {}", asked.size(), e.toString());
             } finally {
+                NEW_WORLD.remove();
                 MODE.remove();
                 runningMode = Mode.HOLD;
                 looking = null;
-                lookingFor = Set.of();
                 self.setPriority(priority);
             }
         }
     }
 
-    public static void readHandlers(FieldReferences references, Collection<String> mods) {
-        if (mods.isEmpty() || !stands(List.copyOf(mods))) {
+    public static void checkAfterOff(FieldReferences references, List<String> mods, Predicate<String> on) {
+        if (!CHECK || mods.isEmpty()) {
             return;
         }
-        stopLooking();
-        synchronized (ONE_LOOK) {
-            looking = Thread.currentThread();
-            runningMode = Mode.LOOK;
-            MODE.set(Mode.LOOK);
-            try {
-                GameHold.runUnheld(() -> references.readHandlerMaps(mods));
-            } catch (RuntimeException | LinkageError e) {
-                LOGGER.info("[Hotwire] the handlers of {} were not read again: {}", mods, e.toString());
-            } finally {
-                MODE.remove();
-                runningMode = Mode.HOLD;
-                looking = null;
-            }
+        WHOLE.set(true);
+        try {
+            look(references, findEvery(List.of()), on, false);
+        } finally {
+            WHOLE.remove();
         }
+        LOGGER.info("[Hotwire] check: after the off of {}, a whole read found still in place: {}", mods,
+                references.describeTakesFor(mods));
     }
 
-    @SuppressWarnings("ThreadPriorityCheck")
-    public static void readBrought(FieldReferences references) {
-        List<String> brought = List.copyOf(BROUGHT);
-        if (brought.isEmpty() || lookedForEvery.isEmpty() || isSwitchLooking()) {
-            return;
-        }
-        stopLooking();
+    public static void prepareAhead(FieldReferences references, Predicate<String> on) {
+        List<String> every = findEvery(List.of());
         synchronized (ONE_LOOK) {
-            long began = System.nanoTime();
-            looking = Thread.currentThread();
-            runningMode = Mode.LOOK;
-            MODE.set(Mode.LOOK);
-            try {
-                GameHold.runUnheld(() -> references.readStaticsForEvery(brought, lookedForEvery));
-                BROUGHT.removeAll(brought);
-                LOGGER.info("[Hotwire] the statics of {} were read for every mod in {} ms", brought,
-                        (System.nanoTime() - began) / 1_000_000);
-            } catch (RuntimeException | LinkageError e) {
-                LOGGER.info("[Hotwire] the statics of {} were not read for every mod: {}", brought, e.toString());
-            } finally {
-                MODE.remove();
-                runningMode = Mode.HOLD;
-                looking = null;
-            }
-        }
-    }
-
-    public static void prepareAhead(FieldReferences references, Collection<String> mods, Predicate<String> on) {
-        synchronized (ONE_LOOK) {
-            lookedAlone = Set.of();
             looking = Thread.currentThread();
             runningMode = Mode.SETUP;
             MODE.set(Mode.SETUP);
+            int world = findWorldNumber();
             try {
-                GameHold.runUnheld(() -> references.lookForEvery(mods, on));
+                GameHold.runUnheld(() -> references.lookForEvery(every, on));
+                lookedForEvery = every;
+                lookedEveryAt = System.nanoTime();
+                lookedEveryClasses = LOADING.getTotalLoadedClassCount();
+                lookedEveryWorld = world;
+                references.finishEveryLook();
             } catch (RuntimeException | LinkageError e) {
                 LOGGER.info("[Hotwire] the look's warm-up ended early: {}", e.toString());
             } finally {
@@ -242,25 +215,8 @@ public final class ElementLook {
         }
     }
 
-    static boolean hasLookedForEvery() {
-        return !lookedForEvery.isEmpty();
-    }
-
-    public static void markChanged(Collection<String> mods) {
-        STALE.addAll(mods);
-        BROUGHT.addAll(mods);
-    }
-
-    static boolean isStale(String mod) {
-        return STALE.contains(mod);
-    }
-
-    static List<String> getBrought() {
-        return List.copyOf(BROUGHT);
-    }
-
     private static boolean isFreshForEvery(List<String> asked) {
-        return asked.stream().noneMatch(STALE::contains) && lookedForEvery.containsAll(asked)
+        return lookedForEvery.containsAll(asked)
                 && (System.nanoTime() - lookedEveryAt < FRESH_NANOS || isGameAsLooked());
     }
 
@@ -278,8 +234,7 @@ public final class ElementLook {
     }
 
     private static boolean stands(List<String> asked) {
-        return (lookedForEvery.containsAll(asked) || lookedAlone.equals(Set.copyOf(asked)))
-                && asked.stream().noneMatch(STALE::contains);
+        return lookedForEvery.containsAll(asked);
     }
 
     CollectionNotes getNotes() {
@@ -297,7 +252,8 @@ public final class ElementLook {
     @Nullable List<Runnable> open(List<String> walked) {
         Mode mode = MODE.get();
         if (mode.isLook()) {
-            this.notes.startLook(mode == Mode.LOOK ? walked : null, mode != Mode.SETUP);
+            this.notes.startLook(NEW_WORLD.get(), GameRegistrations.findOwnersVersion() * 31
+                    + Set.copyOf(walked).hashCode(), WHOLE.get());
             return null;
         }
         if (this.isReadyFor(walked)) {
@@ -306,7 +262,7 @@ public final class ElementLook {
         }
         LOGGER.info("[Hotwire] a walk for {} looks for itself: the notes holds {} takes in {} collections, {}",
                 walked, this.notes.countTakes(), this.notes.countContainers(), lookedForEvery.isEmpty()
-                        ? "no look for every mod has ended" : "changed since: " + STALE);
+                        ? "no look for every mod has ended" : "the last look was not for them");
         return null;
     }
 
@@ -318,7 +274,7 @@ public final class ElementLook {
     }
 
     boolean isReadyFor(Collection<String> walked) {
-        return !isLooking() && stands(List.copyOf(walked));
+        return !NO_LOOK && !isLooking() && stands(List.copyOf(walked));
     }
 
     boolean hasNoted(Runnable work) {

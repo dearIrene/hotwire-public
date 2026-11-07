@@ -12,7 +12,6 @@ import java.util.ArrayList;
 import java.util.Collection;
 import java.util.Collections;
 import java.util.Deque;
-import java.util.HashMap;
 import java.util.HashSet;
 import java.util.IdentityHashMap;
 import java.util.List;
@@ -66,10 +65,7 @@ final class CollectionNotes {
         private @Nullable Set<String> under;
         private long print = Fingerprints.UNKNOWN;
         private boolean ofWorld;
-        private boolean readAgain;
         private boolean filed = true;
-
-        private boolean readByEvery;
 
         private Set<String> readers = TakeReach.NOBODY;
 
@@ -87,8 +83,6 @@ final class CollectionNotes {
 
     private final Map<Object, Note> notes = new MapMaker().weakKeys().makeMap();
 
-    private final Map<String, Set<Class<?>>> staticsReached = new ConcurrentHashMap<>();
-
     private final ReferenceQueue<Object> gone = new ReferenceQueue<>();
 
     private int dead;
@@ -98,33 +92,41 @@ final class CollectionNotes {
 
     private static final String ANY = "";
 
-    private final Set<Class<?>> staticsRead = Collections.newSetFromMap(new MapMaker().weakKeys().makeMap());
+    private final Map<Class<?>, Long> staticsPrints = new MapMaker().weakKeys().makeMap();
 
-    private @Nullable Collection<String> lookingFor;
-    private boolean every;
+    private final Map<Object, Holder> holders = new MapMaker().weakKeys().makeMap();
+
+    record Holder(@Nullable String staticsOf, Set<String> readers, long print, boolean ofWorld) {
+    }
 
     private List<Object> toRead = List.of();
     private final Deque<Frame> open = new ArrayDeque<>();
 
     private boolean inWorld;
-    private int lastForAnyHold;
     private int leftUnchanged;
-    private boolean printing;
 
-    private final Map<String, Set<Object>> restored = new HashMap<>();
+    private long printedUnder = Long.MIN_VALUE;
+
+    private boolean whole;
 
     private @Nullable Object printed;
     private long printedAs = Fingerprints.UNKNOWN;
 
-    synchronized void startLook(@Nullable Collection<String> mods, boolean printing) {
+    synchronized void startLook(boolean newWorld, long owners) {
+        this.startLook(newWorld, owners, false);
+    }
+
+    synchronized void startLook(boolean newWorld, long owners, boolean whole) {
+        this.whole = whole;
         this.dropCleared();
         this.printed = null;
         this.leftUnchanged = 0;
-        this.printing = printing;
-        this.lookingFor = mods == null ? null : List.copyOf(mods);
-        this.every = mods == null;
         this.dropLook();
-        if (this.every) {
+        if (owners != this.printedUnder) {
+            this.notes.values().forEach(note -> note.print = Fingerprints.UNKNOWN);
+            this.printedUnder = owners;
+        }
+        if (newWorld) {
             for (Note note : this.order) {
                 Object container = note.findFiled();
                 if (container != null && note.ofWorld) {
@@ -133,13 +135,11 @@ final class CollectionNotes {
             }
             this.order.removeIf(note -> note.findFiled() == null);
             this.dead = 0;
-            this.nowhere = new ArrayList<>();
-        }
-        this.toRead = this.every ? this.listContainers() : List.of();
-    }
 
-    synchronized boolean isForEvery() {
-        return this.every;
+            this.holders.values().removeIf(Holder::ofWorld);
+        }
+        this.nowhere = new ArrayList<>();
+        this.toRead = this.listContainers();
     }
 
     synchronized void dropLook() {
@@ -162,18 +162,12 @@ final class CollectionNotes {
         this.inWorld = inWorld;
     }
 
-    List<Class<?>> findStaticsReached(Collection<String> mods) {
-        List<Class<?>> owners = new ArrayList<>();
-        mods.forEach(mod -> owners.addAll(this.staticsReached.getOrDefault(mod, Set.of())));
-        return owners;
+    synchronized boolean isInWorld() {
+        return this.inWorld;
     }
 
     @SuppressWarnings("ReferenceEquality")
     synchronized void begin(Object container, Origin origin, Set<String> readers) {
-        if (origin.staticsOf() != null && origin.field() != null && origin.field().isStatic()) {
-            this.staticsReached.computeIfAbsent(origin.staticsOf(), any -> ConcurrentHashMap.newKeySet())
-                    .add(origin.field().getDeclaringClass());
-        }
         this.dropCleared();
         Frame outer = this.open.peek();
         if (outer != null && outer.container == container) {
@@ -188,24 +182,23 @@ final class CollectionNotes {
             this.notes.put(container, note);
         }
         List<Runnable> before = note == null ? List.of() : note.takes;
-        List<Runnable> left = new ArrayList<>();
-        if (this.lookingFor != null) {
-            for (Runnable take : before) {
-                if (take instanceof ElementTakes.NotedTake filed && filed.candidates() != null
-                        && Collections.disjoint(filed.candidates(), this.lookingFor)) {
-                    left.add(take);
-                }
+        List<Runnable> now = new ArrayList<>();
+
+        for (Runnable take : before) {
+            if (take instanceof ElementTakes.NotedTake filed && filed.candidates() != null
+                    && !filed.candidates().isEmpty() && filed.candidates().stream().allMatch(Tripwire::isWatched)) {
+                now.add(take);
             }
         }
         if (note != null) {
-            note.takes = left;
+            note.takes = now;
             note.origin = origin;
             note.ofWorld |= this.inWorld;
             note.readers = TakeReach.join(note.readers, readers);
         }
         long print = this.printed == container ? this.printedAs : Fingerprints.of(container);
         this.printed = null;
-        this.open.push(new Frame(container, note, before, left, fresh, print, origin, this.inWorld, readers));
+        this.open.push(new Frame(container, note, before, now, fresh, print, origin, this.inWorld, readers));
     }
 
     @SuppressWarnings("ReferenceEquality")
@@ -238,10 +231,8 @@ final class CollectionNotes {
         if (!completed) {
             note.takes = frame.before;
         } else {
-            note.readByEvery |= this.every;
-            long now = this.printing && note.readByEvery ? Fingerprints.of(container) : Fingerprints.UNKNOWN;
-
-            note.print = now != frame.print || (!this.every && now != note.print) ? Fingerprints.UNKNOWN : now;
+            long now = Fingerprints.of(container);
+            note.print = now == frame.print ? now : Fingerprints.UNKNOWN;
             if (frame.now.isEmpty() && !isCollection(container)) {
                 this.remove(container, note);
                 return;
@@ -362,32 +353,27 @@ final class CollectionNotes {
         return note != null && !note.readers.isEmpty() && note.readers.equals(TakeReach.join(note.readers, readers));
     }
 
-    synchronized List<Object> findContainers() {
-        return this.toRead;
-    }
-
-    synchronized List<Object> findContainersUnder(Collection<String> mods) {
-        if (mods.stream().allMatch(this.restored::containsKey)) {
-            Set<Object> back = Collections.newSetFromMap(new IdentityHashMap<>());
-            mods.forEach(mod -> back.addAll(this.restored.remove(mod)));
-            this.lastForAnyHold = 0;
-            return new ArrayList<>(back);
-        }
-        List<Object> found = new ArrayList<>();
-        int forAnyHold = 0;
-        for (Note note : this.order) {
-            Object container = note.findFiled();
-            Set<String> under = note.under;
-            if (container != null && under != null && (under.contains(ANY) || !Collections.disjoint(under, mods))) {
-                found.add(container);
-                if (Collections.disjoint(under, mods)) {
-                    forAnyHold++;
-                }
+    synchronized List<Object> findChanged() {
+        List<Object> changed = new ArrayList<>();
+        int at = 0;
+        for (Object container : this.toRead) {
+            if ((++at & STOP_EVERY) == 0) {
+                ElementLook.stopIfAsked();
+            }
+            Note note = this.notes.get(container);
+            if (note == null || GameRegistrations.isOfOffMod(container.getClass())) {
+                continue;
+            }
+            if (!this.whole && note.print != Fingerprints.UNKNOWN && note.print == Fingerprints.of(container)) {
+                this.leftUnchanged++;
+            } else {
+                changed.add(container);
             }
         }
-        this.lastForAnyHold = forAnyHold;
-        return found;
+        return changed;
     }
+
+    private static final int STOP_EVERY = 4095;
 
     synchronized void forgetPrint(@Nullable Object container) {
         Note note = container == null ? null : this.notes.get(container);
@@ -398,7 +384,7 @@ final class CollectionNotes {
 
     synchronized boolean isUnchanged(Object container) {
         Note note = this.notes.get(container);
-        if (note == null || note.print == Fingerprints.UNKNOWN) {
+        if (this.whole || note == null || note.print == Fingerprints.UNKNOWN) {
             return false;
         }
         long now = Fingerprints.of(container);
@@ -415,49 +401,39 @@ final class CollectionNotes {
         return this.leftUnchanged;
     }
 
-    synchronized boolean isReadAgain(Object container) {
-        Note note = this.notes.get(container);
-        return note != null && note.readAgain;
-    }
-
-    synchronized void markReadAgain(Object container) {
-        Note note = this.notes.get(container);
-        if (note != null) {
-            note.readAgain = true;
+    void keepPrintsThrough(Collection<Object> containers, Runnable change) {
+        Set<Object> current = Collections.newSetFromMap(new IdentityHashMap<>());
+        synchronized (this) {
+            for (Object container : containers) {
+                Note note = this.notes.get(container);
+                if (note != null && note.print != Fingerprints.UNKNOWN && note.print == Fingerprints.of(container)) {
+                    current.add(container);
+                }
+            }
         }
-    }
-
-    synchronized void forgetChanged(Collection<Object> containers) {
-        for (Object container : containers) {
-            Note note = this.notes.get(container);
-            if (note != null) {
-                note.readAgain = false;
-                note.print = Fingerprints.UNKNOWN;
+        try {
+            change.run();
+        } finally {
+            synchronized (this) {
+                for (Object container : containers) {
+                    Note note = this.notes.get(container);
+                    if (note != null) {
+                        note.print = current.contains(container) ? Fingerprints.of(container) : Fingerprints.UNKNOWN;
+                    }
+                }
             }
         }
     }
 
     synchronized void finishEvery() {
         this.toRead = List.of();
-        this.order.forEach(note -> note.readAgain = false);
-    }
-
-    synchronized void noteRestored(String mod, @Nullable Object container) {
-        if (container != null) {
-            this.restored.computeIfAbsent(mod, any -> Collections.newSetFromMap(new MapMaker().weakKeys().makeMap()))
-                    .add(container);
-        }
-    }
-
-    synchronized int countLastForAnyHold() {
-        return this.lastForAnyHold;
     }
 
     private List<Object> listContainers() {
         List<Object> found = new ArrayList<>();
         for (Note note : this.order) {
             Object container = note.findFiled();
-            if (container != null && !note.ofWorld) {
+            if (container != null) {
                 found.add(container);
             }
         }
@@ -480,17 +456,51 @@ final class CollectionNotes {
         return note == null ? 0 : note.wrapped;
     }
 
+    synchronized boolean isOfWorld(Object container) {
+        Note note = this.notes.get(container);
+        return note != null && note.ofWorld;
+    }
+
     synchronized Origin findOrigin(Object container) {
         Note note = this.notes.get(container);
         return note == null ? Origin.NONE : note.origin;
     }
 
-    synchronized boolean hasReadStatics(Class<?> owner) {
-        return this.staticsRead.contains(owner);
+    synchronized boolean isStaticsUnchanged(Class<?> owner, long print) {
+        Long read = this.staticsPrints.get(owner);
+        return !this.whole && read != null && read == print && print != Fingerprints.UNKNOWN;
     }
 
-    synchronized void markStaticsRead(Class<?> owner) {
-        this.staticsRead.add(owner);
+    synchronized void noteStatics(Class<?> owner, long print) {
+        this.staticsPrints.put(owner, print);
+    }
+
+    synchronized void forgetFieldsOf(Object holder) {
+        if (holder instanceof Class<?> owner) {
+            this.staticsPrints.remove(owner);
+            return;
+        }
+        Holder read = this.holders.get(holder);
+        if (read != null) {
+            this.holders.put(holder, new Holder(read.staticsOf(), read.readers(), Fingerprints.UNKNOWN, read.ofWorld()));
+        }
+    }
+
+    synchronized List<Class<?>> findStaticsRead() {
+        return List.copyOf(this.staticsPrints.keySet());
+    }
+
+    synchronized boolean isHolderUnchanged(Object holder, long print) {
+        Holder read = this.holders.get(holder);
+        return !this.whole && read != null && read.print() == print && print != Fingerprints.UNKNOWN;
+    }
+
+    synchronized void noteHolder(Object holder, Holder read) {
+        this.holders.put(holder, read);
+    }
+
+    synchronized List<Map.Entry<Object, Holder>> findHolders() {
+        return List.copyOf(this.holders.entrySet());
     }
 
     synchronized int countTakes() {

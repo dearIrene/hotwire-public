@@ -17,7 +17,7 @@ final class InWorldWork {
         CompletableFuture.delayedExecutor(LOOK_DELAY.toSeconds(), TimeUnit.SECONDS).execute(() -> {
             HotwireEngine.JvmParts parts = engine.findParts();
             if (parts != null && Minecraft.getInstance().level != null) {
-                parts.runner().lookAheadForAll(engine.findSwitchableOn());
+                parts.runner().lookAheadForAll();
             }
         });
     }

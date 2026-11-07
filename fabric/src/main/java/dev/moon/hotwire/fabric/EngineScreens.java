@@ -51,7 +51,7 @@ public final class EngineScreens {
         HotwireEngine.JvmParts parts = this.owner.findParts();
         if (parts != null) {
             Fields.preloadStatics(parts.instrumentation());
-            parts.runner().lookAheadForAll(this.owner.findSwitchableOn());
+            parts.runner().lookAheadForAll();
         }
         return opened;
     }

@@ -1,8 +1,10 @@
 package dev.moon.hotwire.fabric.registration;
 
+import com.google.common.collect.MapMaker;
 import dev.moon.hotwire.fabric.add.LoaderModList;
 import dev.moon.hotwire.fabric.mixin.core.world.item.CreativeModeTabsAccessor;
 import dev.moon.hotwire.jvm.LoadedClassList;
+import dev.moon.hotwire.redefine.ClassArrivals;
 import dev.moon.hotwire.redefine.ClassRebuilder;
 import dev.moon.hotwire.redefine.FieldSlots;
 import dev.moon.hotwire.redefine.ReplacedStatics;
@@ -21,6 +23,7 @@ import java.util.Collections;
 import java.util.HashMap;
 import java.util.HashSet;
 import java.util.IdentityHashMap;
+import java.util.Iterator;
 import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Map;
@@ -155,7 +158,7 @@ public final class FieldReferences {
     }
 
     public void takeOutElementsAgain(Collection<String> mods, Predicate<String> on) {
-        LoadedClasses scan = this.findLoaded(mods);
+        LoadedClasses scan = this.peekAhead(mods);
         SwitchTimes.mark("look: classes");
         this.removeElements(mods, on, scan, Map.of(), false);
     }
@@ -164,36 +167,54 @@ public final class FieldReferences {
         this.elements.look.getNotes().finishEvery();
     }
 
-    public void readStaticsForEvery(Collection<String> brought, Collection<String> every) {
-        List<Class<?>> statics = this.elements.look.getNotes().findStaticsReached(brought);
-        if (statics.isEmpty()) {
-            Map<String, List<Class<?>>> classesOf = this.peekAhead(brought).classesOf();
-            SwitchTimes.mark("look: brought classes");
-            for (String mod : brought) {
-                for (String group : List.of(mod, LoadedClasses.NESTED + mod)) {
-                    classesOf.getOrDefault(group, List.of()).stream().filter(this::isInitialized)
-                            .forEach(statics::add);
-                }
-            }
-        }
-        this.elements.readAlone(List.copyOf(every), statics, List.of());
+    public String describeTakesFor(Collection<String> mods) {
+        return this.elements.describeTakesFor(List.copyOf(mods));
     }
 
     public void forgetClosedWorld() {
         this.elements.forgetClosedWorld();
     }
 
-    public void readHandlerMaps(Collection<String> mods) {
-        List<String> asked = List.copyOf(mods);
-        this.elements.readAlone(asked, List.of(), asked);
-    }
-
     public void lookForEvery(Collection<String> mods, Predicate<String> on) {
+        ClassArrivals.listen();
         this.loadedChecks.readForEvery(mods, this.lambdas.open());
         ElementLook.stopIfAsked();
         LoadedClasses scan = this.findLoaded(mods);
         ElementLook.stopIfAsked();
         this.removeElements(mods, on, scan, Map.of(), true);
+    }
+
+    public boolean refreshEvery(Collection<String> mods, Predicate<String> on) {
+        List<Class<?>> arrived = ClassArrivals.take();
+        if (arrived == null) {
+            return false;
+        }
+        this.loadedChecks.catchUpWith(arrived, this.lambdas.open());
+        List<Class<?>> statics = new ArrayList<>();
+        for (Class<?> owner : this.elements.look.getNotes().findStaticsRead()) {
+            if (CollectionReferences.canMove(owner) && isStaying(owner, on)) {
+                statics.add(owner);
+            }
+        }
+        this.notSetUp.addAll(arrived);
+        for (Iterator<Class<?>> each = this.notSetUp.iterator(); each.hasNext();) {
+            Class<?> owner = each.next();
+            if (this.isInitialized(owner)) {
+                each.remove();
+                if (isStaying(owner, on)) {
+                    statics.add(owner);
+                }
+            }
+        }
+        this.elements.takeOut(List.copyOf(mods), List.of(), statics, HandedSearch.NONE);
+        return true;
+    }
+
+    private final Set<Class<?>> notSetUp = Collections.newSetFromMap(new MapMaker().weakKeys().makeMap());
+
+    private static boolean isStaying(Class<?> owner, Predicate<String> on) {
+        String mod = GameRegistrations.findModOf(owner);
+        return mod == null || !GameRegistrations.isSwitchable(mod) || on.test(mod);
     }
 
     private LoadedClasses findLoaded(Collection<String> mods) {
@@ -218,10 +239,7 @@ public final class FieldReferences {
     public void readAhead(Collection<String> mods, Predicate<String> on) {
         this.loadedChecks.readAhead(mods, this.lambdas.open(), getOthers(mods, on));
         long[] counts = countLoads();
-
-        Set<String> read = new HashSet<>(mods);
-        read.addAll(ElementLook.getBrought());
-        this.scanAhead = new EarlyScan(Set.copyOf(read), this.findLoaded(read), counts[0], counts[1]);
+        this.scanAhead = new EarlyScan(Set.copyOf(mods), this.findLoaded(mods), counts[0], counts[1]);
     }
 
     private LoadedClasses peekAhead(Collection<String> mods) {
@@ -231,7 +249,9 @@ public final class FieldReferences {
                 && ahead.unloaded() == counts[1]) {
             return ahead.scan();
         }
-        return this.findLoaded(mods);
+        EarlyScan made = new EarlyScan(Set.copyOf(mods), this.findLoaded(mods), counts[0], counts[1]);
+        this.scanAhead = made;
+        return made.scan();
     }
 
     private LoadedClasses findLoadedAhead(Collection<String> mods) {
@@ -279,21 +299,7 @@ public final class FieldReferences {
                 this.elements.takeOut(List.copyOf(mods), entities, Set.of(), HandedSearch.NONE);
                 return;
             }
-            Object game = Minecraft.getInstance();
-
-            List<Object> near = new ArrayList<>(List.of(game));
-            near.addAll(findGameObjectsBelow(game, 1));
-            List<Object> deep = findGameObjectsBelow(game, TARGETS_DEPTH);
-            List<Object> holders = new ArrayList<>(near);
-            holders.addAll(entities);
-            deep.stream().filter(one -> SuperclassNames.containsAny(one.getClass(), targets)).forEach(holders::add);
-
-            List<Object> patched = holders.stream()
-                    .filter(one -> SuperclassNames.containsAny(one.getClass(), targets)).toList();
-            patched.forEach(one -> holders.addAll(findGameObjectsBelow(one, 1)));
-
-            patched.forEach(one -> holders.addAll(Fields.findInCollectionsOf(one,
-                    type -> type.getName().startsWith("net.minecraft."))));
+            List<Object> holders = findHolders(entities, targets);
             Set<Class<?>> statics = new LinkedHashSet<>();
 
             targets.stream().map(name -> loaded.get(name.replace('.', '/'))).filter(Objects::nonNull).filter(others)
@@ -308,12 +314,7 @@ public final class FieldReferences {
             Set<String> listed = new HashSet<>();
             Function<String, List<Class<?>>> initializedOf = group -> initialized.computeIfAbsent(group,
                     key -> classesOf.getOrDefault(key, List.of()).stream().filter(this::isInitialized).toList());
-
-            boolean again = !every && ElementLook.isLooking() && ElementLook.hasLookedForEvery();
             for (String mod : mods) {
-                if (again && !ElementLook.isStale(mod)) {
-                    continue;
-                }
                 Set<String> names = used.getOrDefault(mod, Set.of());
                 names.stream().map(loaded::get).filter(Objects::nonNull).filter(others).forEach(statics::add);
 
@@ -337,12 +338,29 @@ public final class FieldReferences {
             Set<String> consumers = HandedSearch.findConsumers(handed);
             List<Class<?>> consumerClasses = new ArrayList<>();
             consumers.forEach(consumer -> consumerClasses.addAll(initializedOf.apply(consumer)));
-            this.elements.takeOut(List.copyOf(mods), again ? List.of() : holders.stream()
-                    .filter(one -> others.test(one.getClass())).toList(), statics,
-                    new HandedSearch(handed, consumers, consumerClasses));
+            HandedSearch search = new HandedSearch(handed, consumers, consumerClasses);
+            this.elements.takeOut(List.copyOf(mods), holders.stream()
+                    .filter(one -> others.test(one.getClass())).toList(), statics, search);
         } finally {
             hold.release();
         }
+    }
+
+    private static List<Object> findHolders(List<Object> entities, Set<String> targets) {
+        Object game = Minecraft.getInstance();
+        List<Object> holders = new ArrayList<>(List.of(game));
+        holders.addAll(findGameObjectsBelow(game, 1));
+        holders.addAll(entities);
+        findGameObjectsBelow(game, TARGETS_DEPTH).stream()
+                .filter(one -> SuperclassNames.containsAny(one.getClass(), targets)).forEach(holders::add);
+
+        List<Object> patched = holders.stream()
+                .filter(one -> SuperclassNames.containsAny(one.getClass(), targets)).toList();
+        patched.forEach(one -> holders.addAll(findGameObjectsBelow(one, 1)));
+
+        patched.forEach(one -> holders.addAll(Fields.findInCollectionsOf(one,
+                type -> type.getName().startsWith("net.minecraft."))));
+        return holders;
     }
 
     private Set<String> findTalksTo(String mod, Set<String> names, Map<String, Class<?>> loaded,
@@ -449,6 +467,8 @@ public final class FieldReferences {
     private void write(FieldSlots.Slot field, @Nullable Object holder, @Nullable Object value)
             throws IllegalAccessException {
         Class<?> owner = field.getDeclaringClass();
+
+        this.elements.look.getNotes().forgetFieldsOf(holder == null ? owner : holder);
         if (!Modifier.isFinal(field.getModifiers())
                 || (!field.isStatic() && !owner.isRecord() && !owner.isHidden())) {
             field.set(holder, value);

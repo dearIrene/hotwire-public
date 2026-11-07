@@ -106,6 +106,8 @@ public final class SwitchRunner {
         this.wrappers = wrappers;
         this.plugins = plugins;
         this.chain = chain;
+
+        ElementLook.watchSwitches(switcher::isBusy);
         switcher.readAheadWith(order -> {
             fieldReferences.readAhead(order, switcher::isOn);
             tripwire.readAhead(order);
@@ -137,32 +139,26 @@ public final class SwitchRunner {
         }
     }
 
-    public void lookAheadForAll(List<String> mods) {
+    public void lookAheadForAll() {
         this.looking.execute(() -> {
             this.forgetClosedWorld();
-            if (this.switcher.isBusy() || mods.isEmpty()) {
+            if (this.switcher.isBusy()) {
                 return;
             }
             long start = System.nanoTime();
             long ran = THREADS.getCurrentThreadCpuTime();
-
-            ElementLook.readBrought(this.fieldReferences);
-            ElementLook.findAhead(this.fieldReferences, mods, this.switcher::isOn, true);
-            LOGGER.info("[Hotwire] the look ahead for every mod that could go off ({}) took {} ms, {} ms of it running",
-                    mods.size(), (System.nanoTime() - start) / 1_000_000,
-                    (THREADS.getCurrentThreadCpuTime() - ran) / 1_000_000);
+            ElementLook.findAheadForAll(this.fieldReferences, this.switcher::isOn);
+            LOGGER.info("[Hotwire] the look ahead for every mod took {} ms, {} ms of it running",
+                    (System.nanoTime() - start) / 1_000_000, (THREADS.getCurrentThreadCpuTime() - ran) / 1_000_000);
         });
     }
 
-    void prepareLookFor(List<String> mods) {
-        if (mods.isEmpty()) {
-            return;
-        }
+    void prepareLook() {
         long start = System.nanoTime();
         long ran = THREADS.getCurrentThreadCpuTime();
-        ElementLook.prepareAhead(this.fieldReferences, mods, this.switcher::isOn);
-        LOGGER.info("[Hotwire] the look's warm-up for {} mods took {} ms, {} ms of it running", mods.size(),
-                (System.nanoTime() - start) / 1_000_000, (THREADS.getCurrentThreadCpuTime() - ran) / 1_000_000);
+        ElementLook.prepareAhead(this.fieldReferences, this.switcher::isOn);
+        LOGGER.info("[Hotwire] the look's warm-up took {} ms, {} ms of it running", (System.nanoTime() - start)
+                / 1_000_000, (THREADS.getCurrentThreadCpuTime() - ran) / 1_000_000);
     }
 
     public void setAfterOff(Consumer<ModSwitcher.Result> afterOff) {
@@ -253,14 +249,8 @@ public final class SwitchRunner {
         if (!plan.isRefused()) {
             this.switcher.showBegun(plan);
 
-            ElementLook.asSwitch(() -> {
-                ElementLook.findAhead(this.fieldReferences, wired, this.switcher::isOn);
-                SwitchTimes.mark("look: notes");
-                ElementLook.readBrought(this.fieldReferences);
-                SwitchTimes.mark("look: brought");
-                ElementLook.readHandlers(this.fieldReferences, wired);
-                SwitchTimes.mark("look: handlers");
-            });
+            ElementLook.findAheadForOff(this.fieldReferences, wired, this.switcher::isOn);
+            SwitchTimes.mark("look: notes");
         }
 
         ModSwitcher.Result result;
@@ -289,6 +279,9 @@ public final class SwitchRunner {
                 this.back(order);
             }
             this.tripwire.unwire(wired);
+        }
+        if (result instanceof ModSwitcher.Result.Done) {
+            ElementLook.checkAfterOff(this.fieldReferences, wired, this.switcher::isOn);
         }
         try {
             return this.checkAndReport(result);
@@ -400,8 +393,6 @@ public final class SwitchRunner {
         try {
             SwitchPlan coming = this.switcher.planOn(ids);
             SwitchTimes.mark("plan");
-
-            ElementLook.markChanged(coming.order());
             AtomicBoolean putBack = new AtomicBoolean();
             boolean toReopen = !coming.isRefused() && this.switcher.isOnForReopen(coming.order());
             if (!coming.isRefused() && !toReopen) {
@@ -436,9 +427,6 @@ public final class SwitchRunner {
             }
             if (result instanceof ModSwitcher.Result.Done) {
                 CrashGuard.onBackOn(coming.order());
-
-                this.looking.execute(() -> ElementLook.findAhead(this.fieldReferences, coming.order(),
-                        this.switcher::isOn));
             } else if (!coming.isRefused() && !toReopen) {
                 List<String> stillOff = coming.order().stream().filter(id -> !this.switcher.isOn(id)).toList();
                 if (allBack.get()) {

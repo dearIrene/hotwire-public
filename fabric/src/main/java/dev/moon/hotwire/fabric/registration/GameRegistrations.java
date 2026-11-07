@@ -53,6 +53,11 @@ public final class GameRegistrations {
         }
     }
 
+    static long findOwnersVersion() {
+        ModOfClass classes = modOfClass;
+        return (classes == null ? 0 : classes.countLearned()) * 31L + RegisteredContent.findSizes();
+    }
+
     public static @Nullable String findShippedBy(Class<?> type) {
         ModOfClass classes = modOfClass;
         return classes == null ? null : classes.findShippedBy(type);

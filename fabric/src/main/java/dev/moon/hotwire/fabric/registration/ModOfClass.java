@@ -29,6 +29,10 @@ public final class ModOfClass {
 
     private final AtomicInteger learned = new AtomicInteger();
 
+    int countLearned() {
+        return this.learned.get();
+    }
+
     private final ClassValue<Answer> answers = new ClassValue<>() {
         @Override
         protected Answer computeValue(Class<?> type) {
