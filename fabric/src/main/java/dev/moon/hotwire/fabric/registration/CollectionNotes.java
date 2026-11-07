@@ -71,6 +71,8 @@ final class CollectionNotes {
 
         private int wrapped;
 
+        private int unchangedIn;
+
         private Note(Object container, Origin origin, ReferenceQueue<Object> gone) {
             super(container, gone);
             this.origin = origin;
@@ -99,7 +101,7 @@ final class CollectionNotes {
     record Holder(@Nullable String staticsOf, Set<String> readers, long print, boolean ofWorld) {
     }
 
-    private List<Object> toRead = List.of();
+    private List<Note> toRead = List.of();
     private final Deque<Frame> open = new ArrayDeque<>();
 
     private boolean inWorld;
@@ -116,7 +118,10 @@ final class CollectionNotes {
         this.startLook(newWorld, owners, false);
     }
 
+    private int looks;
+
     synchronized void startLook(boolean newWorld, long owners, boolean whole) {
+        this.looks++;
         this.whole = whole;
         this.dropCleared();
         this.printed = null;
@@ -139,7 +144,7 @@ final class CollectionNotes {
             this.holders.values().removeIf(Holder::ofWorld);
         }
         this.nowhere = new ArrayList<>();
-        this.toRead = this.listContainers();
+        this.toRead = List.copyOf(this.order);
     }
 
     synchronized void dropLook() {
@@ -184,9 +189,10 @@ final class CollectionNotes {
         List<Runnable> before = note == null ? List.of() : note.takes;
         List<Runnable> now = new ArrayList<>();
 
-        for (Runnable take : before) {
-            if (take instanceof ElementTakes.NotedTake filed && filed.candidates() != null
-                    && !filed.candidates().isEmpty() && filed.candidates().stream().allMatch(Tripwire::isWatched)) {
+        boolean anyOff = !before.isEmpty() && !Tripwire.findWatched().isEmpty();
+        for (Runnable take : anyOff ? before : List.<Runnable>of()) {
+            if (take instanceof ElementTakes.NotedTake filed && (filed.candidates() == null
+                    || filed.candidates().stream().anyMatch(Tripwire::isWatched))) {
                 now.add(take);
             }
         }
@@ -356,21 +362,41 @@ final class CollectionNotes {
     synchronized List<Object> findChanged() {
         List<Object> changed = new ArrayList<>();
         int at = 0;
-        for (Object container : this.toRead) {
+
+        for (Note note : this.toRead) {
             if ((++at & STOP_EVERY) == 0) {
                 ElementLook.stopIfAsked();
             }
-            Note note = this.notes.get(container);
-            if (note == null || GameRegistrations.isOfOffMod(container.getClass())) {
+            Object container = note.findFiled();
+            if (container == null || GameRegistrations.isOfOffMod(container.getClass())) {
                 continue;
             }
-            if (!this.whole && note.print != Fingerprints.UNKNOWN && note.print == Fingerprints.of(container)) {
+            if (!this.whole && note.print != Fingerprints.UNKNOWN && (isImmutable(container.getClass())
+                    || note.print == Fingerprints.of(container))) {
                 this.leftUnchanged++;
+                note.unchangedIn = this.looks;
             } else {
                 changed.add(container);
             }
         }
         return changed;
+    }
+
+    static boolean isImmutable(Class<?> type) {
+        String name = type.getName();
+        return name.startsWith(JDK_IMMUTABLE) || name.startsWith(JDK_EMPTY) || name.startsWith(JDK_SINGLETON)
+                || (name.startsWith("com.google.common.collect.") && (name.contains("Immutable")
+                        || name.startsWith("com.google.common.collect.Singleton")))
+                || name.startsWith("kotlin.collections.Empty");
+    }
+
+    private static final String JDK_IMMUTABLE = familyOf(List.of().getClass());
+    private static final String JDK_EMPTY = familyOf(Collections.emptyList().getClass()) + "Empty";
+    private static final String JDK_SINGLETON = familyOf(Collections.singletonList(0).getClass()) + "Singleton";
+
+    private static String familyOf(Class<?> type) {
+        String name = type.getName();
+        return name.substring(0, name.indexOf('$') + 1);
     }
 
     private static final int STOP_EVERY = 4095;
@@ -386,6 +412,9 @@ final class CollectionNotes {
         Note note = this.notes.get(container);
         if (this.whole || note == null || note.print == Fingerprints.UNKNOWN) {
             return false;
+        }
+        if (isImmutable(container.getClass()) || note.unchangedIn == this.looks) {
+            return true;
         }
         long now = Fingerprints.of(container);
         if (now != note.print) {
@@ -429,17 +458,6 @@ final class CollectionNotes {
         this.toRead = List.of();
     }
 
-    private List<Object> listContainers() {
-        List<Object> found = new ArrayList<>();
-        for (Note note : this.order) {
-            Object container = note.findFiled();
-            if (container != null) {
-                found.add(container);
-            }
-        }
-        return found;
-    }
-
     @SuppressWarnings("ReferenceEquality")
     synchronized void markWrapped(Object container, int steps) {
         Frame frame = this.open.peek();
@@ -481,18 +499,21 @@ final class CollectionNotes {
             return;
         }
         Holder read = this.holders.get(holder);
-        if (read != null) {
-            this.holders.put(holder, new Holder(read.staticsOf(), read.readers(), Fingerprints.UNKNOWN, read.ofWorld()));
-        }
+
+        this.holders.put(holder, read == null ? new Holder(null, TakeReach.GAME, Fingerprints.UNKNOWN, false)
+                : new Holder(read.staticsOf(), read.readers(), Fingerprints.UNKNOWN, read.ofWorld()));
+    }
+
+    synchronized void forgetHolder(Object holder) {
+        this.holders.remove(holder);
     }
 
     synchronized List<Class<?>> findStaticsRead() {
         return List.copyOf(this.staticsPrints.keySet());
     }
 
-    synchronized boolean isHolderUnchanged(Object holder, long print) {
-        Holder read = this.holders.get(holder);
-        return !this.whole && read != null && read.print() == print && print != Fingerprints.UNKNOWN;
+    synchronized boolean isWhole() {
+        return this.whole;
     }
 
     synchronized void noteHolder(Object holder, Holder read) {

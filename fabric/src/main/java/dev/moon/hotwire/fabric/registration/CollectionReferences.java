@@ -453,10 +453,13 @@ final class CollectionReferences implements FixedLists.Walk {
             }
         }
         int moved = 0;
+
+        boolean whole = notes.isWhole();
         for (Map.Entry<Object, CollectionNotes.Holder> one : notes.findHolders()) {
             ElementLook.stopIfAsked();
             Object holder = one.getKey();
-            if (notes.isHolderUnchanged(holder, printFields(holder))) {
+            long was = one.getValue().print();
+            if (!whole && was != Fingerprints.UNKNOWN && was == printFields(holder)) {
                 continue;
             }
             this.reader = one.getValue().readers();
@@ -566,16 +569,17 @@ final class CollectionReferences implements FixedLists.Walk {
                 containers.add(one.getValue().container());
             }
         });
-        for (Map.Entry<String, Removal> one : back) {
-            try {
-                one.getValue().restore();
-            } catch (RuntimeException e) {
-                LOGGER.warn("[Hotwire] one of {}'s objects could not go back into {}", one.getKey(),
-                        one.getValue().describe(), e);
-            }
-        }
 
-        containers.forEach(this.look.getNotes()::forgetPrint);
+        this.look.getNotes().keepPrintsThrough(containers, () -> {
+            for (Map.Entry<String, Removal> one : back) {
+                try {
+                    one.getValue().restore();
+                } catch (RuntimeException e) {
+                    LOGGER.warn("[Hotwire] one of {}'s objects could not go back into {}", one.getKey(),
+                            one.getValue().describe(), e);
+                }
+            }
+        });
     }
 
     void lookInto(Object holder) {
@@ -588,10 +592,15 @@ final class CollectionReferences implements FixedLists.Walk {
     }
 
     private void noteHolder(Object holder) {
-        if (ElementLook.isLooking()) {
-            this.look.getNotes().noteHolder(holder, new CollectionNotes.Holder(this.readingStaticsOf, this.reader,
-                    printFields(holder), this.look.getNotes().isInWorld()));
+        if (!ElementLook.isLooking()) {
+            return;
         }
+        if (MOVING_FIELDS.get(holder.getClass()).isEmpty()) {
+            this.look.getNotes().forgetHolder(holder);
+            return;
+        }
+        this.look.getNotes().noteHolder(holder, new CollectionNotes.Holder(this.readingStaticsOf, this.reader,
+                printFields(holder), this.look.getNotes().isInWorld()));
     }
 
     static long printFields(Object holder) {

@@ -487,9 +487,10 @@ public final class FieldReferences {
     }
 
     private static Predicate<Class<?>> getOthers(Collection<String> mods, Predicate<String> on) {
+        Set<String> going = Set.copyOf(mods);
         return owner -> {
             String ownerMod = GameRegistrations.findModOf(owner);
-            return !owner.getName().startsWith("java.") && (ownerMod == null || (!mods.contains(ownerMod)
+            return !owner.getName().startsWith("java.") && (ownerMod == null || (!going.contains(ownerMod)
                     && (!GameRegistrations.isSwitchable(ownerMod) || on.test(ownerMod))));
         };
     }

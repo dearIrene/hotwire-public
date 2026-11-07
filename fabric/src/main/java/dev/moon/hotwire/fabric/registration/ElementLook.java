@@ -118,12 +118,12 @@ public final class ElementLook {
             MODE.set(Mode.LOOK_EVERY);
 
             int world = findWorldNumber();
-            boolean whole = WHOLE.get() || world != lookedEveryWorld;
-            NEW_WORLD.set(whole);
+            boolean newWorld = world != lookedEveryWorld;
+            boolean whole = WHOLE.get() || newWorld;
+            NEW_WORLD.set(newWorld);
             try {
                 GameHold.runUnheld(() -> {
                     if (whole || !references.refreshEvery(asked, on)) {
-                        NEW_WORLD.set(true);
                         references.lookForEvery(asked, on);
                     }
                 });
@@ -268,8 +268,7 @@ public final class ElementLook {
 
     void close() {
         if (isLooking()) {
-            LOGGER.info("[Hotwire] the notes holds {} takes in {} collections", this.notes.countTakes(),
-                    this.notes.countContainers());
+            LOGGER.info("[Hotwire] the notes holds {} collections", this.notes.countContainers());
         }
     }
 

@@ -33,6 +33,8 @@ record LoadedClasses(Map<String, Class<?>> byName, Map<String, Set<String>> used
     static LoadedClasses scan(Instrumentation instrumentation, Collection<String> mods,
             Function<String, Set<String>> usedBy) {
         Class<?>[] all = LoadedClassList.of(instrumentation);
+
+        Set<String> wanted = Set.copyOf(mods);
         Map<String, Class<?>> loaded = HashMap.newHashMap(all.length);
         Map<String, Set<String>> used = new HashMap<>();
         Map<String, List<Class<?>>> classesOf = new HashMap<>();
@@ -45,7 +47,7 @@ record LoadedClasses(Map<String, Class<?>> byName, Map<String, Set<String>> used
             if (kind.group() != null) {
                 classesOf.computeIfAbsent(kind.group(), any -> new ArrayList<>()).add(type);
             }
-            if (kind.mod() != null && mods.contains(kind.mod())) {
+            if (kind.mod() != null && wanted.contains(kind.mod())) {
                 used.computeIfAbsent(kind.mod(), any -> new HashSet<>()).addAll(usedBy.apply(kind.internal()));
             }
         }
