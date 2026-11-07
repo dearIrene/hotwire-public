@@ -108,7 +108,8 @@ public final class ModLifecycle {
         MinecraftServer server = client.getSingleplayerServer();
         LastStop before = LAST_STOPS.remove(id);
         LastStop last = before != null && before.isOf(server) ? before : EVERYTHING;
-        if (server != null && !server.isStopped() && listensTo(id, journal, ServerLifecycleEvents.SERVER_STARTING,
+
+        if (server != null && server.isRunning() && listensTo(id, journal, ServerLifecycleEvents.SERVER_STARTING,
                 ServerLifecycleEvents.SERVER_STARTED, ServerPlayConnectionEvents.JOIN,
                 ArchitecturyEventRegistration.findLifecycleEvent("SERVER_STARTING"),
                 ArchitecturyEventRegistration.findLifecycleEvent("SERVER_STARTED"))) {
