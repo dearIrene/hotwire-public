@@ -590,18 +590,7 @@ final class EngineStart {
             HotwireEngine.JvmParts parts = started.findParts();
             return parts == null ? null : parts.runner();
         }, say, started::writeReport, () -> started.getSettings().isAntiCrashOn(),
-                id -> DevSession.isDevMod(id) && started.getSettings().isDevCatchOn(DevSetups.get().inSetup()),
-                new CrashGuard.CrashOffs() {
-                    @Override
-                    public void keepOff(ModSwitcher.Result done) {
-                        started.getDisabled().keepOff(done);
-                    }
-
-                    @Override
-                    public void offAtNextStart(String mod, String name) {
-                        started.getDisabled().turnOffAtNextStart(List.of(mod), name);
-                    }
-                });
+                id -> DevSession.isDevMod(id) && started.getSettings().isDevCatchOn(DevSetups.get().inSetup()));
         OwnThrowNotice.install(engine.getTasks(), say,
                 why -> started.writeReport(Lang.get("hotwire.report.file.hotwire_error"), why));
         HotwireEngine.JvmParts ready = started.findParts();
