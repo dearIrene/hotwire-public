@@ -6,6 +6,7 @@ import dev.moon.hotwire.redefine.Tripwire;
 import dev.moon.hotwire.registration.ModNames;
 import java.lang.reflect.Member;
 import java.lang.reflect.Proxy;
+import java.util.Arrays;
 import java.util.HashSet;
 import java.util.List;
 import java.util.Set;
@@ -181,6 +182,10 @@ final class ElementOwners {
         return mod != null ? mod : Wrappers.findNamed(key, element, this.names);
     }
 
+    boolean isAmong(String mod) {
+        return this.modSet.contains(mod);
+    }
+
     boolean isStayingModsType(@Nullable Object key) {
         String mod = key instanceof Class<?> type ? GameRegistrations.findModOf(type) : null;
         return mod != null && !this.modSet.contains(mod);
@@ -189,7 +194,7 @@ final class ElementOwners {
     @Nullable String findWholeOwnerOfSlot(Object item) {
         String whole = this.findOwnerAmong(item);
         if (whole == null && ValueOwners.isLambda(item)) {
-            whole = this.mods.stream().filter(mod -> ValueOwners.forwardsTo(mod, item)).findFirst().orElse(null);
+            whole = Wrappers.findFirstAmong(ValueOwners.findForwardedToAll(item), this.mods);
         }
         return whole;
     }
@@ -221,12 +226,11 @@ final class ElementOwners {
         boolean any = first instanceof Class<?> || first.getClass().isHidden();
         String ofClass = any ? null : GameRegistrations.findModOf(first.getClass());
         String ofId = any ? null : ValueOwners.findIdOwner(first);
-        for (String mod : this.mods) {
-            if ((any || mod.equals(ofClass) || mod.equals(ofId)) && Wrappers.isWhollyOf(mod, item)) {
-                return mod;
-            }
+        Set<String> wholly = Wrappers.findWhollyOfAll(item);
+        if (!any) {
+            wholly.retainAll(Arrays.asList(ofClass, ofId));
         }
-        return null;
+        return Wrappers.findFirstAmong(wholly, this.mods);
     }
 
     @Nullable String findModNamespaceOf(@Nullable Object key, @Nullable Object value) {

@@ -369,8 +369,13 @@ final class CollectionReferences implements FixedLists.Walk {
             notes.setInWorld(false);
         }
         this.report.time(handedBegan, "what was handed to " + handed.consumers());
-        List<Class<?>> ordered = new ArrayList<>(statics);
-        ordered.sort(Comparator.comparing(owner -> GameRegistrations.findModOf(owner) != null));
+
+        List<Class<?>> ordered = new ArrayList<>(statics.size());
+        List<Class<?>> ofMods = new ArrayList<>();
+        for (Class<?> owner : statics) {
+            (GameRegistrations.findModOf(owner) == null ? ordered : ofMods).add(owner);
+        }
+        ordered.addAll(ofMods);
         int unchanged = 0;
         for (Class<?> owner : ordered) {
             ElementLook.stopIfAsked();
@@ -874,7 +879,7 @@ final class CollectionReferences implements FixedLists.Walk {
                 this.noteWrappedInside(value, steps - 1);
                 continue;
             }
-            if (mod == null || !this.mods.contains(mod)) {
+            if (mod == null || !this.owners.isAmong(mod)) {
                 continue;
             }
             Object inner = ElementTakes.findWrappedValue(value, mod);

@@ -8,6 +8,7 @@ import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.Collection;
 import java.util.Collections;
+import java.util.HashMap;
 import java.util.HashSet;
 import java.util.IdentityHashMap;
 import java.util.List;
@@ -321,7 +322,40 @@ final class Wrappers {
 
     private boolean isOfTheMods(Class<?> type) {
         String mod = GameRegistrations.findModOf(type);
-        return mod != null && this.mods.contains(mod);
+        return mod != null && findRanks(this.mods).containsKey(mod);
+    }
+
+    private record Ranked(List<String> mods, Map<String, Integer> ranks) {
+    }
+
+    private static volatile Ranked ranked = new Ranked(List.of(), Map.of());
+
+    @SuppressWarnings("ReferenceEquality")
+    static Map<String, Integer> findRanks(List<String> mods) {
+        Ranked now = ranked;
+        if (now.mods() != mods) {
+            Map<String, Integer> ranks = new HashMap<>();
+            for (int at = 0; at < mods.size(); at++) {
+                ranks.putIfAbsent(mods.get(at), at);
+            }
+            now = new Ranked(mods, ranks);
+            ranked = now;
+        }
+        return now.ranks();
+    }
+
+    static @Nullable String findFirstAmong(Set<String> found, List<String> mods) {
+        Map<String, Integer> ranks = findRanks(mods);
+        String first = null;
+        int at = Integer.MAX_VALUE;
+        for (String mod : found) {
+            Integer rank = ranks.get(mod);
+            if (rank != null && rank < at) {
+                first = mod;
+                at = rank;
+            }
+        }
+        return first;
     }
 
     static @Nullable String findNamed(@Nullable Object key, @Nullable Object value, ModNames names) {
@@ -386,12 +420,9 @@ final class Wrappers {
         return null;
     }
 
-    static boolean isWhollyOf(String mod, Object item) {
+    static Set<String> findWhollyOfAll(Object item) {
         List<FieldSlots.Slot> parts = Fields.getRecordParts(item.getClass());
-        if (parts.isEmpty()) {
-            return false;
-        }
-        int mods = 0;
+        Set<String> common = null;
         try {
             for (FieldSlots.Slot field : parts) {
                 if (field.getType().isPrimitive()) {
@@ -401,15 +432,22 @@ final class Wrappers {
                 if (part == null || ValueOwners.isPlain(part)) {
                     continue;
                 }
-                if (!ValueOwners.isOwnedBy(mod, part) && !ValueOwners.forwardsTo(mod, part)) {
-                    return false;
+                Set<String> owners = new HashSet<>();
+                ValueOwners.addOwners(part, owners);
+                owners.addAll(ValueOwners.findForwardedToAll(part));
+                if (common == null) {
+                    common = owners;
+                } else {
+                    common.retainAll(owners);
                 }
-                mods++;
+                if (common.isEmpty()) {
+                    return new HashSet<>();
+                }
             }
         } catch (ReflectiveOperationException | RuntimeException | LinkageError e) {
-            return false;
+            return new HashSet<>();
         }
-        return mods > 0;
+        return common == null ? new HashSet<>() : common;
     }
 
     static List<Map.Entry<Object, Object>> copyEntries(Map<Object, Object> map) {
@@ -495,22 +533,25 @@ final class Wrappers {
     }
 
     static @Nullable String findThereFor(Object value, List<String> mods) {
+        Map<String, Integer> ranks = findRanks(mods);
         Class<?> type = value instanceof Class<?> named ? named : value.getClass();
         String owner = GameRegistrations.findModOf(type);
-        if (owner != null && mods.contains(owner)) {
+        if (owner != null && ranks.containsKey(owner)) {
             return owner;
         }
         String id = ValueOwners.findIdOwner(value);
-        if (id != null && mods.contains(id)) {
+        if (id != null && ranks.containsKey(id)) {
             return id;
         }
-        for (String mod : type.isHidden() ? mods : List.<String>of()) {
-            if (ValueOwners.isOwnedBy(mod, value)
-                    || (ValueOwners.isLambda(value) && ValueOwners.forwardsTo(mod, value))) {
-                return mod;
-            }
+        if (!type.isHidden()) {
+            return null;
         }
-        return null;
+        Set<String> found = new HashSet<>();
+        ValueOwners.addOwners(value, found);
+        if (ValueOwners.isLambda(value)) {
+            found.addAll(ValueOwners.findForwardedToAll(value));
+        }
+        return findFirstAmong(found, mods);
     }
 
     String describe() {

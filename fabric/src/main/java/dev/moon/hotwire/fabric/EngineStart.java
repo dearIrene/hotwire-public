@@ -562,6 +562,9 @@ final class EngineStart {
                 if (known == null) {
                     known = loadedBytes.findAsLoaded(internal);
                 }
+                if (known == null) {
+                    known = loadedBytes.findDefinedInGame(type);
+                }
                 return known != null ? known : parts.classes().readOriginalBytes(internal);
             });
             Fields.preloadStatics(parts.instrumentation());

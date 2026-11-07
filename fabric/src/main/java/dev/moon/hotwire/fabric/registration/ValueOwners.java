@@ -1,6 +1,8 @@
 package dev.moon.hotwire.fabric.registration;
 
 import dev.moon.hotwire.redefine.FieldSlots;
+import java.util.HashSet;
+import java.util.Set;
 import java.util.function.Function;
 import net.minecraft.resources.Identifier;
 import net.minecraft.resources.ResourceKey;
@@ -138,6 +140,80 @@ final class ValueOwners {
         Class<?> type = value instanceof Class<?> named ? named : value.getClass();
         return isOwnedClass(mod, type) || mod.equals(findIdOwner(value))
                 || (!(value instanceof Class<?>) && type.isHidden() && hasOwnedCapture(mod, value));
+    }
+
+    static void addOwners(Object value, Set<String> into) {
+        Class<?> type = value instanceof Class<?> named ? named : value.getClass();
+        addOwnedClass(type, into);
+        String id = findIdOwner(value);
+        if (id != null) {
+            into.add(id);
+        }
+        if (!(value instanceof Class<?>) && type.isHidden()) {
+            addCapturedOwners(value, into);
+        }
+    }
+
+    static Set<String> findForwardedToAll(Object item) {
+        Class<?> type = item.getClass();
+        if (!type.isHidden() || !type.getName().contains("$$Lambda")) {
+            return Set.of();
+        }
+        Set<String> common = null;
+        try {
+            for (FieldSlots.Slot field : Fields.getReferenceFields(type, false)) {
+                Object part = field.get(item);
+                if (part == null || isPlain(part) || isGame(part)) {
+                    continue;
+                }
+                Set<String> owners = new HashSet<>();
+                addOwners(part, owners);
+                if (common == null) {
+                    common = owners;
+                } else {
+                    common.retainAll(owners);
+                }
+                if (common.isEmpty()) {
+                    return Set.of();
+                }
+            }
+        } catch (ReflectiveOperationException | RuntimeException e) {
+            return Set.of();
+        }
+        if (common == null) {
+            return Set.of();
+        }
+        Set<String> own = new HashSet<>();
+        addOwnedClass(type, own);
+        common.removeAll(own);
+        return common;
+    }
+
+    private static void addOwnedClass(Class<?> type, Set<String> into) {
+        String mod = GameRegistrations.findModOf(type);
+        if (mod != null) {
+            into.add(mod);
+        }
+        String made = type.isHidden() ? lambdaOwner.apply(type) : null;
+        if (made != null) {
+            into.add(made);
+        }
+    }
+
+    @SuppressWarnings("ReferenceEquality")
+    private static void addCapturedOwners(Object lambda, Set<String> into) {
+        for (FieldSlots.Slot field : Fields.getDeclared(lambda.getClass())) {
+            if (field.isStatic() || field.getType().isPrimitive()) {
+                continue;
+            }
+            try {
+                Object captured = field.get(lambda);
+                if (captured != null && captured != lambda) {
+                    addOwnedClass(captured.getClass(), into);
+                }
+            } catch (ReflectiveOperationException | RuntimeException e) {
+            }
+        }
     }
 
     private static boolean isOwnedClass(String mod, Class<?> type) {
