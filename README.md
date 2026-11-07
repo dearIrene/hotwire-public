@@ -140,6 +140,12 @@ If your mod switches mods you must show the prompt first. If you don’t then Ho
 
 The whole API is in [API.md](API.md).
 
+## Developer mode
+
+Mod developers can have every build go straight into the running game, no restarts.
+
+Everything about it is in [DEVELOPERS.md](DEVELOPERS.md).
+
 <details>
 <summary><h2>Tested mods</h2></summary>
 
