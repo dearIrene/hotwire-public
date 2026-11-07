@@ -69,6 +69,13 @@ public abstract class MinecraftMixin {
         }
     }
 
+    @Inject(method = "delayCrash", at = @At("HEAD"), cancellable = true)
+    private void hotwire$catchDelayedCrash(CrashReport report, CallbackInfo ci) {
+        if (CrashGuard.handle(report.getException(), CrashPolicy.Site.FRAME)) {
+            ci.cancel();
+        }
+    }
+
     @Inject(method = "emergencySaveAndCrash", at = @At("HEAD"))
     private void hotwire$markGoingDown(CrashReport report, CallbackInfo ci) {
         CrashReports.markGoingDown();

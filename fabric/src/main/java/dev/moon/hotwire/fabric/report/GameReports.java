@@ -193,6 +193,11 @@ public final class GameReports {
         LOGGER.error("[Hotwire] {}", bar);
     }
 
+    public static boolean isRebuilt(String binaryName) {
+        GameReports reports = current;
+        return reports != null && reports.rebuiltBy.containsKey(binaryName.replace('.', '/'));
+    }
+
     public static CrashSection.Detail describeTrace(Collection<String> frames, Collection<String> messages) {
         GameReports reports = current;
         if (reports == null) {

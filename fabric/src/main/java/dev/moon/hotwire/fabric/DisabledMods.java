@@ -48,6 +48,8 @@ final class DisabledMods {
 
     DisabledMods(InstalledMods installed, Supplier<HotwireEngine.@Nullable JvmParts> parts, HotwireSettings settings,
             Path modsFolder, BiConsumer<String, Boolean> say, Adder adder) {
+        Runtime.getRuntime().addShutdownHook(Thread.ofPlatform().name("hotwire-offs-at-close").unstarted(
+                this::makeOffsAtStart));
         this.installed = installed;
         this.parts = parts;
         this.settings = settings;
@@ -63,6 +65,10 @@ final class DisabledMods {
     void close() {
         this.awaitRenames();
         this.renaming.shutdown();
+        this.makeOffsAtStart();
+    }
+
+    private synchronized void makeOffsAtStart() {
         for (PendingChange.OffAtStart off : this.offAtStart) {
             for (String id : off.ids()) {
                 Path jar = this.installed.findJarOf(id);
@@ -78,6 +84,7 @@ final class DisabledMods {
                 }
             }
         }
+        this.offAtStart.clear();
     }
 
     void turnOffAtNextStart(List<String> order, String who) {
@@ -169,8 +176,13 @@ final class DisabledMods {
     }
 
     void disableAfter(ModSwitcher.Result result) {
-        if (!(result instanceof ModSwitcher.Result.Done done)
-                || this.settings.getOffLasts() != HotwireSettings.OffLasts.UNTIL_ON) {
+        if (this.settings.getOffLasts() == HotwireSettings.OffLasts.UNTIL_ON) {
+            this.keepOff(result);
+        }
+    }
+
+    void keepOff(ModSwitcher.Result result) {
+        if (!(result instanceof ModSwitcher.Result.Done done)) {
             return;
         }
         Path mods = this.modsFolder.toAbsolutePath().normalize();

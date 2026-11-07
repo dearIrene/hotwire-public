@@ -5,6 +5,7 @@ import dev.moon.hotwire.fabric.add.WorldReopen;
 import dev.moon.hotwire.fabric.dev.DevSession;
 import dev.moon.hotwire.fabric.registration.GameHold;
 import dev.moon.hotwire.fabric.registration.GameRegistrations;
+import dev.moon.hotwire.fabric.report.GameReports;
 import dev.moon.hotwire.redefine.HandlerGuards;
 import dev.moon.hotwire.registration.CallerOwner;
 import dev.moon.hotwire.report.ActionJournal;
@@ -60,10 +61,10 @@ public final class CrashGuard {
 
     static void install(InstalledMods installed, Tasks tasks, Supplier<@Nullable SwitchRunner> runner,
             BiConsumer<String, Boolean> say, BiFunction<String, String, String> writeReport,
-            BooleanSupplier antiCrash, Predicate<String> inDevelopment) {
+            BooleanSupplier antiCrash, Predicate<String> inDevelopment, CrashOffs offs) {
         CrashPolicy[] made = new CrashPolicy[1];
-        made[0] = new CrashPolicy(CrashGuard::findModBehind, id -> isTouched(installed, id)
-                || antiCrash.getAsBoolean(), caught -> {
+        made[0] = new CrashPolicy(CrashGuard::findModBehind, id -> canLeave(id)
+                && (isTouched(installed, id) || antiCrash.getAsBoolean()), caught -> {
             String name = installed.nameOf(caught.mod());
             boolean byAntiCrash = !isTouched(installed, caught.mod());
             LOGGER.error("[Hotwire] {} threw at {} ({}); Hotwire keeps the game going and turns it off", name,
@@ -102,12 +103,11 @@ public final class CrashGuard {
                                         }
                                     }),
                                     reopened -> finish(made[0], caught.mod(), name, reopened.result(), why,
-                                            installed, byAntiCrash ? (line, bad) -> { } : say, writeReport,
-                                            byAntiCrash)));
+                                            installed, say, writeReport, byAntiCrash, offs)));
                             return;
                         }
-                        finish(made[0], caught.mod(), name, reported.result(), why, installed,
-                                byAntiCrash ? (line, bad) -> { } : say, writeReport, byAntiCrash);
+                        finish(made[0], caught.mod(), name, reported.result(), why, installed, say,
+                                writeReport, byAntiCrash, offs);
                     }));
         }, inDevelopment, caught -> {
             Place place = findPlace(caught.thrown(), caught.mod());
@@ -151,21 +151,40 @@ public final class CrashGuard {
 
     private static void finish(CrashPolicy policy, String mod, String name, ModSwitcher.Result result, String why,
             InstalledMods installed, BiConsumer<String, Boolean> say,
-            BiFunction<String, String, String> writeReport, boolean byAntiCrash) {
+            BiFunction<String, String, String> writeReport, boolean byAntiCrash, CrashOffs offs) {
         boolean off = !PlayerMessages.isBad(result);
         policy.onOffFinished(mod, off);
         String where = writeReport.apply(Lang.get("hotwire.report.file.mod_crash", name), why);
-        if (byAntiCrash) {
-            LOGGER.info("[Hotwire] Anti-Crash caught {}'s crash; {}", name, off ? "it is off" : "it could not go off");
-            ModViews.showNotice(Lang.get("hotwire.anti_crash.title"), off ? Lang.get("hotwire.anti_crash.caught", name)
-                    : Lang.get("hotwire.anti_crash.not_turned_off", name, PlayerMessages.describe(result,
-                            installed::nameOf)));
-            return;
+        boolean atNextStart = !off && result instanceof ModSwitcher.Result.Failed failed
+                && failed.cause().isRestartOnly();
+        if (off) {
+            offs.keepOff(result);
+        } else if (atNextStart) {
+            offs.offAtNextStart(mod, name);
         }
-        String line = off ? Lang.get("hotwire.crash.turned_off", name, where) : Lang.get("hotwire.crash.not_turned_off",
-                name, PlayerMessages.describe(result, installed::nameOf), where);
+        String title = Lang.get(byAntiCrash ? "hotwire.anti_crash.title" : "hotwire.crash.title");
+        String line;
+        if (off) {
+            line = byAntiCrash ? Lang.get("hotwire.anti_crash.caught", name)
+                    : Lang.get("hotwire.crash.turned_off", name, where);
+        } else if (atNextStart) {
+            line = Lang.get("hotwire.crash.next_start", name);
+        } else {
+            line = byAntiCrash ? Lang.get("hotwire.anti_crash.not_turned_off", name,
+                    PlayerMessages.describe(result, installed::nameOf))
+                    : Lang.get("hotwire.crash.not_turned_off", name, PlayerMessages.describe(result,
+                            installed::nameOf), where);
+        }
+        LOGGER.info("[Hotwire] the crash net caught {}'s crash; {}", name, off ? "it is off and stays off"
+                : atNextStart ? "it is off from the next start" : "it could not go off");
         say.accept(line, true);
-        ModViews.showNotice(Lang.get("hotwire.crash.title"), line);
+        ModViews.showNotice(title, line);
+    }
+
+    interface CrashOffs {
+        void keepOff(ModSwitcher.Result done);
+
+        void offAtNextStart(String mod, String name);
     }
 
     static String findWhat(Throwable thrown) {
@@ -266,16 +285,53 @@ public final class CrashGuard {
             }
         }
         CallerOwner.Owner owner = GameRegistrations.findOwnerOf(frames);
+        if (owner != null && !canLeave(owner.mod())) {
+            String caller = findSwitchableCaller(frames);
+            if (caller != null) {
+                LOGGER.info("[Hotwire] {} threw, and it cannot be turned off; {} called it and is taken as the cause",
+                        owner.mod(), caller);
+                return caller;
+            }
+        }
         if (owner != null) {
             return owner.mod();
         }
         List<String> recent = lastSwitched;
-        if (!recent.isEmpty() && System.nanoTime() - lastSwitchedAt < AFTER_SWITCH_NANOS) {
-            LOGGER.warn("[Hotwire] the game's own code threw within 30 s of {}'s switch, with no mod in the trace:"
-                    + " taken as that switch's", recent);
+        if (!recent.isEmpty() && System.nanoTime() - lastSwitchedAt < AFTER_SWITCH_NANOS
+                && frames.stream().anyMatch(frame -> GameReports.isRebuilt(frame.type().getName()))) {
+            LOGGER.warn("[Hotwire] the game's own code threw within 30 s of {}'s switch, through a class a switch"
+                    + " redefined and with no mod in the trace: taken as that switch's", recent);
             return recent.getFirst();
         }
         return null;
+    }
+
+    private static @Nullable String findSwitchableCaller(List<CallerOwner.Frame> frames) {
+        for (CallerOwner.Frame frame : frames) {
+            String mod = GameRegistrations.findModOf(frame.type());
+            if (canLeave(mod)) {
+                return mod;
+            }
+            Method[] methods;
+            try {
+                methods = frame.type().getDeclaredMethods();
+            } catch (LinkageError e) {
+                continue;
+            }
+            for (Method method : methods) {
+                if (method.getName().equals(frame.method())) {
+                    String merged = findMergedMod(method);
+                    if (canLeave(merged)) {
+                        return merged;
+                    }
+                }
+            }
+        }
+        return null;
+    }
+
+    private static boolean canLeave(@Nullable String mod) {
+        return mod != null && GameRegistrations.isSwitchable(mod) && ModPolicy.isSwitchable(mod);
     }
 
     private static List<StackTraceElement> findFramesAbove(Throwable thrown) {

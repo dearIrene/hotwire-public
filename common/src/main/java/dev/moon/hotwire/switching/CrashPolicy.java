@@ -33,6 +33,8 @@ public final class CrashPolicy {
     private volatile boolean toldFrameless;
     private final Set<String> said = ConcurrentHashMap.newKeySet();
 
+    private static final int MOST_SAID = 200;
+
     public CrashPolicy(Function<Throwable, @Nullable String> ownerOf, Predicate<String> guarded,
             Consumer<Caught> turnOff, Predicate<String> inDevelopment, Consumer<Caught> onDevThrow) {
         this.ownerOf = ownerOf;
@@ -65,7 +67,7 @@ public final class CrashPolicy {
 
         StackTraceElement[] frames = thrown.getStackTrace();
         String where = mod + " at " + site + ": " + thrown + (frames.length == 0 ? "" : " < " + frames[0]);
-        if (this.said.add(where)) {
+        if (this.said.size() < MOST_SAID && this.said.add(where)) {
             LOGGER.warn("[Hotwire] {}'s throw was dropped, as its off is under way or done: {}", mod, where);
         }
         return true;
@@ -100,6 +102,7 @@ public final class CrashPolicy {
     }
 
     private static boolean isJvmFailure(Throwable thrown) {
-        return Causes.hasCause(thrown, VirtualMachineError.class);
+        return Causes.list(thrown).stream().anyMatch(cause -> cause instanceof VirtualMachineError
+                && !(cause instanceof StackOverflowError));
     }
 }

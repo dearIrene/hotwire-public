@@ -1,6 +1,7 @@
 package dev.moon.hotwire.fabric.mixin.core.fabric.client.rendering.hud;
 
 //? if >=1.21.6 {
+import dev.moon.hotwire.fabric.GuardedHudElement;
 import dev.moon.hotwire.fabric.registration.HudElementAddition;
 import dev.moon.hotwire.fabric.registration.HudElementRecorder;
 import java.util.function.Function;
@@ -10,6 +11,7 @@ import net.minecraft.resources.Identifier;
 //? if >=1.21.6 {
 import org.spongepowered.asm.mixin.injection.At;
 import org.spongepowered.asm.mixin.injection.Inject;
+import org.spongepowered.asm.mixin.injection.ModifyVariable;
 import org.spongepowered.asm.mixin.injection.callback.CallbackInfo;
 //?}
 import org.spongepowered.asm.mixin.Mixin;
@@ -19,6 +21,12 @@ import org.spongepowered.asm.mixin.Pseudo;
 @Mixin(targets = "net.fabricmc.fabric.impl.client.rendering.hud.HudElementRegistryImpl", remap = false)
 public abstract class HudElementRegistryImplMixin {
     //? if >=1.21.11 {
+    @ModifyVariable(method = {"addFirst", "addLast", "attachElementBefore", "attachElementAfter"}, at = @At("HEAD"),
+            argsOnly = true)
+    private static HudElement hotwire$guard(HudElement element) {
+        return GuardedHudElement.wrap(element);
+    }
+
     @Inject(method = "addFirst", at = @At("TAIL"))
     private static void hotwire$onAddedFirst(Identifier id, HudElement element, CallbackInfo ci) {
         HudElementRecorder.onAdded(HudElementAddition.Placement.FIRST, null, id, element);
@@ -54,7 +62,14 @@ public abstract class HudElementRegistryImplMixin {
         }
     }
     //?} else if >=1.21.6 {
-    /*@Inject(method = "addFirst", at = @At("TAIL"))
+    /*// Each element added goes in guarded, so its throw costs it alone (GuardedHudElement).
+    @ModifyVariable(method = {"addFirst", "addLast", "attachElementBefore", "attachElementAfter"}, at = @At("HEAD"),
+            argsOnly = true)
+    private static HudElement hotwire$guard(HudElement element) {
+        return GuardedHudElement.wrap(element);
+    }
+
+    @Inject(method = "addFirst", at = @At("TAIL"))
     private static void hotwire$onAddedFirst(ResourceLocation id, HudElement element, CallbackInfo ci) {
         HudElementRecorder.onAdded(HudElementAddition.Placement.FIRST, null, id, element);
     }
