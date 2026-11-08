@@ -453,7 +453,8 @@ final class CollectionReferences implements FixedLists.Walk {
             }
             long ownerBegan = System.nanoTime();
             boolean game = owner.getName().startsWith("net.minecraft.") || owner.getName().startsWith("com.mojang.");
-            this.readingStaticsOf = GameRegistrations.findModOf(owner);
+
+            this.readingStaticsOf = GameRegistrations.findModOrShipper(owner);
             this.reader = notes == null ? TakeReach.GAME : TakeReach.findReaders(owner, TakeReach.GAME);
             for (FieldSlots.Slot field : Fields.getReferenceFields(owner, true)) {
                 Object value = CollectionParts.read(field, null);
@@ -615,8 +616,7 @@ final class CollectionReferences implements FixedLists.Walk {
 
     private boolean isOwnPlain(String mod, Object item) {
         return !this.inSmall && mod.equals(this.readingStaticsOf) && Fields.getRecordParts(item.getClass()).isEmpty()
-                && !ValueOwners.isLambda(item) && GameRegistrations.findModOf(item.getClass()) != null
-                && mod.equals(GameRegistrations.findModOf(item.getClass()));
+                && !ValueOwners.isLambda(item) && mod.equals(GameRegistrations.findModOrShipper(item.getClass()));
     }
 
     @Override
