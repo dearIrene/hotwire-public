@@ -109,7 +109,8 @@ final class CollectionReferences implements FixedLists.Walk {
                 this.look.close();
             } else {
                 this.begin(mods);
-                this.takeAll(ElementTakes.prepare(ahead, mods, this.look.takeContainersOfTakes()), mods);
+                this.takeAll(ElementTakes.prepare(ahead, mods, this.look.takeContainersOfTakes(),
+                        this.look.getNotes()::findPrint), mods);
                 this.takeWrappedIn(holders);
             }
         } catch (RuntimeException | LinkageError e) {
@@ -281,7 +282,8 @@ final class CollectionReferences implements FixedLists.Walk {
             LOGGER.info("[Hotwire] {} coming on can reach {} objects of mods still off", coming, revealed.size());
             this.begin(stillOff);
             try {
-                this.takeAll(ElementTakes.prepare(revealed, stillOff, containers), stillOff);
+                this.takeAll(ElementTakes.prepare(revealed, stillOff, containers, this.look.getNotes()::findPrint),
+                        stillOff);
             } finally {
                 this.endRemoval(stillOff);
             }
@@ -352,7 +354,7 @@ final class CollectionReferences implements FixedLists.Walk {
         this.begin(mods);
         long began = System.nanoTime();
         List<Object> containers = this.look.takeContainersOfTakes();
-        ElementTakes.Answers made = ElementTakes.prepare(ahead, mods, containers);
+        ElementTakes.Answers made = ElementTakes.prepare(ahead, mods, containers, this.look.getNotes()::findPrint);
         this.prepared = made;
         this.lastAnswered = ElementLook.isChecking() ? made : null;
         this.preparedFor = List.copyOf(mods);

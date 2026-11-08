@@ -358,6 +358,11 @@ final class CollectionNotes {
         return note == null || note.readers.isEmpty() ? TakeReach.GAME : note.readers;
     }
 
+    synchronized long findPrint(Object container) {
+        Note note = this.notes.get(container);
+        return note == null ? Fingerprints.UNKNOWN : note.print;
+    }
+
     synchronized boolean hasNote(Object container) {
         return this.notes.containsKey(container);
     }

@@ -12,10 +12,12 @@ import java.util.List;
 import java.util.Map;
 import java.util.Set;
 import java.util.TreeSet;
+import java.util.concurrent.ConcurrentHashMap;
 import java.util.function.BiConsumer;
 import java.util.function.Consumer;
 import java.util.function.Function;
 import java.util.function.Supplier;
+import java.util.function.ToLongFunction;
 import net.minecraft.client.Minecraft;
 import org.jspecify.annotations.Nullable;
 import org.slf4j.Logger;
@@ -124,7 +126,7 @@ final class ElementTakes {
     }
 
     record Answers(List<Runnable> takes, List<Object> containers, List<@Nullable String> owners,
-            IdentityHashMap<Object, Long> prints) {
+            IdentityHashMap<Object, Long> prints, Set<Object> movedSinceLook) {
     }
 
     private static final Object NOWHERE = new Object();
@@ -145,7 +147,9 @@ final class ElementTakes {
     }
 
     @SuppressWarnings("ReferenceEquality")
-    static Answers prepare(List<Runnable> noted, Collection<String> mods, List<Object> containers) {
+
+    static Answers prepare(List<Runnable> noted, Collection<String> mods, List<Object> containers,
+            ToLongFunction<Object> lookPrints) {
         List<Runnable> takes = new ArrayList<>();
         List<Object> where = new ArrayList<>();
         List<@Nullable String> owners = new ArrayList<>();
@@ -179,11 +183,20 @@ final class ElementTakes {
                 prints.computeIfAbsent(container, Fingerprints::of);
             }
         }
-        return new Answers(takes, where, owners, prints);
+
+        Set<Object> moved = Collections.newSetFromMap(new IdentityHashMap<>());
+        prints.forEach((container, print) -> {
+            long looked = lookPrints.applyAsLong(container);
+            if (looked != Fingerprints.UNKNOWN && looked != print) {
+                moved.add(container);
+            }
+        });
+        return new Answers(takes, where, owners, prints, moved);
     }
 
     static Set<Object> applyPrepared(Answers prepared, Collection<String> mods, Function<Object, String> reachedFrom) {
         IdentityHashMap<Object, Boolean> changed = new IdentityHashMap<>();
+        prepared.movedSinceLook().forEach(container -> changed.put(container, true));
         prepared.prints().forEach((container, print) -> {
             if (Fingerprints.of(container) != print) {
                 changed.put(container, true);
@@ -238,8 +251,12 @@ final class ElementTakes {
             sum[2] = Math.max(sum[2], took);
         }
         if (askedAgain > 0 || !changed.isEmpty()) {
-            LOGGER.info("[Hotwire] {} collections changed between the asks and the hold; {} takes asked again",
-                    changed.size(), askedAgain);
+            LOGGER.info("[Hotwire] {} collections changed since the look ({} before the asks) and are read again in the"
+                    + " hold; {} takes asked again", changed.size(), prepared.movedSinceLook().size(), askedAgain);
+        }
+        if (!NOT_FOUND.isEmpty()) {
+            LOGGER.info("[Hotwire] takes whose list no longer held their element, by its class: {}", NOT_FOUND);
+            NOT_FOUND.clear();
         }
         if ((System.nanoTime() - began) / 1_000_000 >= SLOW_MILLIS) {
             LOGGER.info("[Hotwire] the noted takes spent the most time in {}", spent.entrySet().stream()
@@ -304,7 +321,10 @@ final class ElementTakes {
                 return;
             }
         }
+        NOT_FOUND.merge(item.getClass().getName(), 1, Integer::sum);
     }
+
+    private static final Map<String, Integer> NOT_FOUND = new ConcurrentHashMap<>();
 
     static void changeOnItsThread(Object container, Runnable change) {
         if (GuavaCaches.isCache(container) && !Minecraft.getInstance().isSameThread()) {
