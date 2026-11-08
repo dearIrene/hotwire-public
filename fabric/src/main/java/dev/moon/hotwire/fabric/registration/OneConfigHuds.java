@@ -1,6 +1,7 @@
 package dev.moon.hotwire.fabric.registration;
 
 import dev.moon.hotwire.fabric.ModViews;
+import dev.moon.hotwire.redefine.Tripwire;
 import java.lang.reflect.Field;
 import java.lang.reflect.Method;
 import java.util.ArrayList;
@@ -99,7 +100,7 @@ public final class OneConfigHuds {
             }
             Map<Object, Object> kinds = new LinkedHashMap<>();
             providers.forEach((kind, provider) -> {
-                if (mod.equals(GameRegistrations.findModOf(provider.getClass()))) {
+                if (isOfMod(provider, mod)) {
                     kinds.put(kind, provider);
                 }
             });
@@ -125,6 +126,8 @@ public final class OneConfigHuds {
         if (mod.equals(GameRegistrations.findModOf(hud.getClass()))) {
             return true;
         }
+
+        boolean before = Tripwire.markHotwireWork(true);
         try {
             Method wrapperOf = hud.getClass().getMethod("getWrapper");
             wrapperOf.setAccessible(true);
@@ -134,6 +137,8 @@ public final class OneConfigHuds {
             return mod.equals(modOf.invoke(wrapper));
         } catch (ReflectiveOperationException | RuntimeException e) {
             return false;
+        } finally {
+            Tripwire.markHotwireWork(before);
         }
     }
 
