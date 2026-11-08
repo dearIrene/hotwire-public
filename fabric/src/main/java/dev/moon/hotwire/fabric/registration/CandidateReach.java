@@ -14,7 +14,7 @@ import org.jspecify.annotations.Nullable;
 final class CandidateReach {
     private static final BitSet NONE = new BitSet();
 
-    private final IdentityHashMap<Object, BitSet[]> reached = new IdentityHashMap<>();
+    private final IdentityHashMap<Object, BitSet[]> reached;
     private final IdentityHashMap<Class<?>, Kind> kinds = new IdentityHashMap<>();
     private final Map<String, Integer> numbers = new HashMap<>();
     private final List<String> mods = new ArrayList<>();
@@ -25,14 +25,36 @@ final class CandidateReach {
     private long asked;
     private long computed;
 
+    private final Map<String, long[]> readFor = new HashMap<>();
+
+    CandidateReach(int expected) {
+        this.reached = new IdentityHashMap<>(expected);
+    }
+
+    int countReached() {
+        return this.reached.size();
+    }
+
     Set<String> find(Object item) {
         this.asked++;
-        return this.named.computeIfAbsent(this.reach(item, Wrappers.DEPTH), this::toNames);
+        int before = this.reached.size();
+        Set<String> found = this.named.computeIfAbsent(this.reach(item, Wrappers.DEPTH), this::toNames);
+        long[] counts = this.readFor.computeIfAbsent(item.getClass().getName(), any -> new long[2]);
+        counts[0]++;
+        counts[1] += this.reached.size() - before;
+        return found;
     }
 
     String describe() {
+        List<Map.Entry<String, long[]>> most = new ArrayList<>(this.readFor.entrySet());
+        most.sort((a, b) -> Long.compare(b.getValue()[1], a.getValue()[1]));
+        List<String> top = new ArrayList<>();
+        for (Map.Entry<String, long[]> one : most.subList(0, Math.min(6, most.size()))) {
+            top.add(one.getKey() + " " + one.getValue()[0] + " reading " + one.getValue()[1]);
+        }
         return this.reached.size() + " objects read into for " + this.asked + " elements, " + this.computed
-                + " worked out, " + (this.singles.size() + this.shared.size()) + " answers";
+                + " worked out, " + (this.singles.size() + this.shared.size()) + " answers; the most read for "
+                + top;
     }
 
     private BitSet reach(@Nullable Object value, int left) {

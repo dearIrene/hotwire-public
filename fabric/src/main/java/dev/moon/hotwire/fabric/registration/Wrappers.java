@@ -151,9 +151,12 @@ final class Wrappers {
         }
     }
 
+    static boolean isAsked(Class<?> type) {
+        return isOfAnotherMod(type) && !Fields.getReferenceFields(type, false).isEmpty();
+    }
+
     @Nullable String find(Object item, List<String> mods) {
-        if (!this.askedOf.computeIfAbsent(item.getClass(), type -> isOfAnotherMod(type)
-                && !Fields.getReferenceFields(type, false).isEmpty())) {
+        if (!this.askedOf.computeIfAbsent(item.getClass(), Wrappers::isAsked)) {
             return null;
         }
         this.open.clear();

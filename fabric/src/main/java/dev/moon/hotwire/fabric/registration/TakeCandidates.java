@@ -17,6 +17,8 @@ final class TakeCandidates {
 
     private @Nullable CandidateReach reach;
 
+    private int lastReached;
+
     void forgetObjects() {
         this.reach = null;
     }
@@ -30,7 +32,7 @@ final class TakeCandidates {
         }
         Class<?> type = element instanceof Class<?> named ? named : element.getClass();
         Set<String> all = new HashSet<>(ReflectedOwners.findAllOwnersOf(type));
-        if (deep) {
+        if (deep && !(element instanceof Class<?>) && Wrappers.isAsked(type)) {
             CandidateReach walk = this.reach;
             if (walk != null) {
                 Set<String> reached = walk.find(element);
@@ -59,7 +61,7 @@ final class TakeCandidates {
     }
 
     void beginWalk() {
-        this.reach = new CandidateReach();
+        this.reach = new CandidateReach(this.lastReached);
         this.differed = 0;
     }
 
@@ -67,6 +69,7 @@ final class TakeCandidates {
         CandidateReach walk = this.reach;
         this.reach = null;
         if (walk != null) {
+            this.lastReached = walk.countReached();
             LOGGER.info("[Hotwire] the walk's candidates: {}{}", walk.describe(),
                     VERIFY ? ", " + this.differed + " differed from a walk of each" : "");
         }
@@ -77,7 +80,7 @@ final class TakeCandidates {
 
         if (walked != null && !walked.equals(reached) && this.differed++ < 5) {
             LOGGER.warn("[Hotwire] candidates of a {} differ: {} once, {} afresh, {} walked",
-                    element.getClass().getName(), reached, new CandidateReach().find(element), walked);
+                    element.getClass().getName(), reached, new CandidateReach(0).find(element), walked);
         }
     }
 
