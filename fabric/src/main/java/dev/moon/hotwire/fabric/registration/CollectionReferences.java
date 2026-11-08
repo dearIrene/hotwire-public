@@ -4,7 +4,6 @@ import dev.moon.hotwire.redefine.FieldSlots;
 import dev.moon.hotwire.redefine.Tripwire;
 import dev.moon.hotwire.registration.Fingerprints;
 import java.lang.ref.WeakReference;
-import java.lang.reflect.Modifier;
 import java.lang.reflect.Proxy;
 import java.util.ArrayList;
 import java.util.Arrays;
@@ -185,12 +184,12 @@ final class CollectionReferences implements FixedLists.Walk {
                 Object container = containers.get(at);
                 if (takes.get(at) instanceof ElementTakes.NotedTake noted && noted.whose().get() != null
                         && this.holdsOwned(container) && this.checkReport.isOnlyThroughNotes(container)) {
-                    this.onlyThroughNotes.merge(container.getClass().getSimpleName() + " of " + sizeOf(container)
+                    this.onlyThroughNotes.merge(container.getClass().getSimpleName() + " of " + describeSize(container)
                             + " from " + this.look.getNotes().findOrigin(container).staticsOf(), 1, Integer::sum);
                 } else if (takes.get(at) instanceof ElementTakes.NotedTake noted && noted.whose().get() != null
                         && this.holdsOwned(container)) {
                     CollectionNotes.Origin origin = this.look.getNotes().findOrigin(container);
-                    found.merge(container.getClass().getSimpleName() + " of " + sizeOf(container) + " from "
+                    found.merge(container.getClass().getSimpleName() + " of " + describeSize(container) + " from "
                             + origin.staticsOf() + (origin.field() == null ? "" : " " + origin.field()
                             .getDeclaringClass().getName() + "." + origin.field().getName())
                             + (this.look.getNotes().isOfWorld(container) ? " (world)" : "")
@@ -475,12 +474,16 @@ final class CollectionReferences implements FixedLists.Walk {
     }
 
     @SuppressWarnings("checkstyle:IllegalCatch")
-    private static int sizeOf(Object container) {
+    private static String describeSize(Object container) {
         try {
-            return container instanceof Collection<?> all ? all.size() : container instanceof Map<?, ?> map
-                    ? map.size() : container instanceof Object[] array ? array.length : -1;
+            return switch (container) {
+                case Collection<?> all -> String.valueOf(all.size());
+                case Map<?, ?> map -> String.valueOf(map.size());
+                case Object[] array -> String.valueOf(array.length);
+                default -> "?";
+            };
         } catch (RuntimeException e) {
-            return -1;
+            return "?";
         }
     }
 
@@ -523,7 +526,7 @@ final class CollectionReferences implements FixedLists.Walk {
                 cost[1] += took;
                 if (took > longest) {
                     longest = took;
-                    longestRead = container.getClass().getSimpleName() + " of " + sizeOf(container)
+                    longestRead = container.getClass().getSimpleName() + " of " + describeSize(container)
                             + (origin.field() == null ? "" : " in " + origin.field().getDeclaringClass().getName() + "."
                             + origin.field().getName()) + " (" + took / 1_000_000 + " ms)";
                 }
@@ -533,7 +536,8 @@ final class CollectionReferences implements FixedLists.Walk {
         int moved = 0;
 
         boolean whole = notes.isWhole();
-        for (Map.Entry<Object, CollectionNotes.Holder> one : notes.findHolders()) {
+        List<Map.Entry<Object, CollectionNotes.Holder>> holders = notes.findHolders();
+        for (Map.Entry<Object, CollectionNotes.Holder> one : holders) {
             ElementLook.stopIfAsked();
             Object holder = one.getKey();
             long was = one.getValue().print();
@@ -558,10 +562,10 @@ final class CollectionReferences implements FixedLists.Walk {
         }
         long ended = System.nanoTime();
         LOGGER.info("[Hotwire] the look read {} collections of the notes again in {} ms ({} passed as unchanged), {}"
-                + " objects whose fields moved, and passed the statics of {} classes unchanged; prints {} ms, reads"
-                + " again {} ms, holders {} ms; the reads again took longest over {}, and the longest one was {}",
-                again,
-                (ended - began) / 1_000_000, notes.countLeftUnchanged(), moved, staticsUnchanged,
+                + " objects whose fields moved (of {} watched), and passed the statics of {} classes unchanged; prints"
+                + " {} ms, reads again {} ms, holders {} ms; the reads again took longest over {}, and the longest one"
+                + " was {}", again,
+                (ended - began) / 1_000_000, notes.countLeftUnchanged(), moved, holders.size(), staticsUnchanged,
                 (printed - began) / 1_000_000, (readAgain - printed) / 1_000_000, (ended - readAgain) / 1_000_000,
                 describeLongest(spent), longestRead);
     }
@@ -692,7 +696,7 @@ final class CollectionReferences implements FixedLists.Walk {
         if (!ElementLook.isLooking()) {
             return;
         }
-        if (findMoving(holder.getClass(), false).isEmpty()) {
+        if (Fields.getMovingFields(holder.getClass(), false).isEmpty()) {
             this.look.getNotes().forgetHolder(holder);
             return;
         }
@@ -701,7 +705,7 @@ final class CollectionReferences implements FixedLists.Walk {
     }
 
     private void noteHolderInside(Object holder) {
-        if (!ElementLook.isLooking() || findMoving(holder.getClass(), false).isEmpty()) {
+        if (!ElementLook.isLooking() || Fields.getMovingFields(holder.getClass(), false).isEmpty()) {
             return;
         }
         this.look.getNotes().noteHolderInside(holder, new CollectionNotes.Holder(this.readingStaticsOf, this.reader,
@@ -710,7 +714,7 @@ final class CollectionReferences implements FixedLists.Walk {
 
     static long printFields(Object holder) {
         boolean statics = holder instanceof Class<?>;
-        List<FieldSlots.Slot> fields = findMoving(statics ? (Class<?>) holder : holder.getClass(), statics);
+        List<FieldSlots.Slot> fields = Fields.getMovingFields(statics ? (Class<?>) holder : holder.getClass(), statics);
         long print = fields.size();
         for (FieldSlots.Slot field : fields) {
             print = Fingerprints.addInOrder(print, CollectionParts.read(field, statics ? null : holder));
@@ -719,31 +723,7 @@ final class CollectionReferences implements FixedLists.Walk {
     }
 
     static boolean canMove(Class<?> owner) {
-        return !findMoving(owner, true).isEmpty();
-    }
-
-    private record PrintFieldList(List<FieldSlots.Slot> from, List<FieldSlots.Slot> moving) {
-    }
-
-    private static final ClassValue<PrintFieldList[]> PRINT_FIELDS = new ClassValue<>() {
-        @Override
-        protected PrintFieldList[] computeValue(Class<?> type) {
-            return new PrintFieldList[2];
-        }
-    };
-
-    @SuppressWarnings("ReferenceEquality")
-    static List<FieldSlots.Slot> findMoving(Class<?> type, boolean statics) {
-        List<FieldSlots.Slot> all = Fields.getReferenceFields(type, statics);
-        PrintFieldList[] slots = PRINT_FIELDS.get(type);
-        int at = statics ? 1 : 0;
-        PrintFieldList known = slots[at];
-        if (known == null || known.from() != all) {
-            known = new PrintFieldList(all, all.stream()
-                    .filter(field -> !Modifier.isFinal(field.getModifiers())).toList());
-            slots[at] = known;
-        }
-        return known.moving();
+        return !Fields.getMovingFields(owner, true).isEmpty();
     }
 
     private void lookIntoFields(Object holder) {

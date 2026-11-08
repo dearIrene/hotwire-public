@@ -6,6 +6,7 @@ import dev.moon.hotwire.report.StartTimes;
 import java.lang.instrument.Instrumentation;
 import java.lang.reflect.Field;
 import java.lang.reflect.InaccessibleObjectException;
+import java.lang.reflect.Modifier;
 import java.lang.reflect.RecordComponent;
 import java.util.ArrayList;
 import java.util.Collection;
@@ -26,11 +27,12 @@ public final class Fields {
 
     private static final class FieldCache {
         private volatile FieldSlots.@Nullable Read read;
-        private volatile @Nullable Holding statics;
-        private volatile @Nullable Holding instances;
+        private volatile @Nullable ReferenceFieldList statics;
+        private volatile @Nullable ReferenceFieldList instances;
     }
 
-    private record Holding(List<FieldSlots.Slot> slots, List<FieldSlots.Read> from, boolean settled) {
+    private record ReferenceFieldList(List<FieldSlots.Slot> slots, List<FieldSlots.Slot> moving,
+            List<FieldSlots.Read> from, boolean complete) {
     }
 
     private static final ClassValue<FieldCache> CACHES = new ClassValue<>() {
@@ -157,9 +159,17 @@ public final class Fields {
     }
 
     static List<FieldSlots.Slot> getReferenceFields(Class<?> owner, boolean statics) {
+        return findList(owner, statics).slots();
+    }
+
+    static List<FieldSlots.Slot> getMovingFields(Class<?> owner, boolean statics) {
+        return findList(owner, statics).moving();
+    }
+
+    private static ReferenceFieldList findList(Class<?> owner, boolean statics) {
         FieldCache cache = CACHES.get(owner);
-        Holding holding = statics ? cache.statics : cache.instances;
-        if (holding == null || (!holding.settled() && !isCurrent(owner, statics, holding.from()))) {
+        ReferenceFieldList holding = statics ? cache.statics : cache.instances;
+        if (holding == null || (!holding.complete() && !isCurrent(owner, statics, holding.from()))) {
             holding = findHolding(owner, statics);
             if (statics) {
                 cache.statics = holding;
@@ -167,7 +177,7 @@ public final class Fields {
                 cache.instances = holding;
             }
         }
-        return holding.slots();
+        return holding;
     }
 
     @SuppressWarnings("ReferenceEquality")
@@ -197,22 +207,28 @@ public final class Fields {
         cache.read = null;
     }
 
-    private static Holding findHolding(Class<?> owner, boolean statics) {
+    private static ReferenceFieldList findHolding(Class<?> owner, boolean statics) {
         List<FieldSlots.Slot> out = new ArrayList<>();
         List<FieldSlots.Read> from = new ArrayList<>();
-        boolean settled = true;
+        boolean complete = true;
         for (Class<?> at = owner; at != null && !at.getName().startsWith("java."); at = statics ? null
                 : at.getSuperclass()) {
             refresh(at);
             FieldSlots.Read read = readOf(at);
             from.add(read);
-            settled &= read.unloaded().isEmpty();
+            complete &= read.unloaded().isEmpty();
             for (FieldSlots.Slot field : read.slots()) {
                 if (field.isStatic() == statics && !field.getType().isPrimitive()) {
                     out.add(field);
                 }
             }
         }
-        return new Holding(List.copyOf(out), List.copyOf(from), settled);
+        List<FieldSlots.Slot> moving = new ArrayList<>();
+        for (FieldSlots.Slot field : out) {
+            if (!Modifier.isFinal(field.getModifiers())) {
+                moving.add(field);
+            }
+        }
+        return new ReferenceFieldList(List.copyOf(out), List.copyOf(moving), List.copyOf(from), complete);
     }
 }

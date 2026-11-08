@@ -113,7 +113,7 @@ final class CheckReport {
             String moved = was.print() == CollectionReferences.printFields(at) ? "" : ", moved";
             return field + " (watched" + moved + (was.through() ? ", read through)" : ", inside)");
         }
-        if (CollectionReferences.findMoving(at.getClass(), false).isEmpty()) {
+        if (Fields.getMovingFields(at.getClass(), false).isEmpty()) {
             return field + " (all final)";
         }
         return field + " (unwatched" + this.describeLooks(at) + ")";

@@ -36,37 +36,37 @@ public final class Fingerprints {
             }
             long print = items.size();
             for (Object item : items) {
-                print += item instanceof Map.Entry<?, ?> entry ? mix(identity(entry.getKey()) * 31L
-                        + identity(entry.getValue())) : mix(identity(item));
+                print += item instanceof Map.Entry<?, ?> entry ? mix(findPrint(entry.getKey()) * 31L
+                        + findPrint(entry.getValue())) : mix(findPrint(item));
             }
             return print;
         }
         if (container instanceof Object[] array) {
             long print = array.length;
             for (Object item : array) {
-                print = print * 31 + identity(item);
+                print = print * 31 + findPrint(item);
             }
             return print;
         }
         if (container instanceof List<?> list) {
             long print = list.size();
             for (Object item : list) {
-                print = print * 31 + identity(item);
+                print = print * 31 + findPrint(item);
             }
             return print;
         }
         if (container instanceof Collection<?> items) {
             long print = items.size();
             for (Object item : items) {
-                print += mix(identity(item));
+                print += mix(findPrint(item));
             }
             return print;
         }
         if (container instanceof Map<?, ?> map) {
             long print = map.size();
             for (Map.Entry<?, ?> entry : map.entrySet()) {
-                print += mix(identity(entry.getKey()) * 31L
-                        + identity(entry.getValue()));
+                print += mix(findPrint(entry.getKey()) * 31L
+                        + findPrint(entry.getValue()));
             }
             return print;
         }
@@ -74,10 +74,10 @@ public final class Fingerprints {
     }
 
     public static long addInOrder(long print, @Nullable Object value) {
-        return print * 31 + identity(value);
+        return print * 31 + findPrint(value);
     }
 
-    private static int identity(@Nullable Object item) {
+    private static int findPrint(@Nullable Object item) {
         if (item == null) {
             return 0;
         }

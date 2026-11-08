@@ -26,6 +26,8 @@ final class ReflectedOwners {
 
     private static volatile Map<Class<?>, String> answers = new ConcurrentHashMap<>();
 
+    private static volatile Map<Class<?>, Set<String>> allAnswers = new ConcurrentHashMap<>();
+
     private static final ClassValue<Set<String>> NAMED = new ClassValue<>() {
         @Override
         protected Set<String> computeValue(Class<?> type) {
@@ -50,6 +52,7 @@ final class ReflectedOwners {
     static void useNames(Map<String, String> names) {
         modOfName = Map.copyOf(names);
         answers = new ConcurrentHashMap<>();
+        allAnswers = new ConcurrentHashMap<>();
     }
 
     static @Nullable String findOwnerOf(Class<?> type) {
@@ -61,20 +64,24 @@ final class ReflectedOwners {
     }
 
     static Set<String> findAllOwnersOf(Class<?> type) {
-        if (modOfName.isEmpty() || type.isArray() || type.isPrimitive() || !Wrappers.isOfAnotherMod(type)) {
+        if (modOfName.isEmpty() || type.isArray() || type.isPrimitive()) {
+            return Set.of();
+        }
+        return allAnswers.computeIfAbsent(type, ReflectedOwners::findAllAfresh);
+    }
+
+    private static Set<String> findAllAfresh(Class<?> type) {
+        if (!Wrappers.isOfAnotherMod(type) || !namesAnyInUse(type)) {
             return Set.of();
         }
         Set<String> mods = new HashSet<>();
-        if (!namesAnyInUse(type)) {
-            return mods;
-        }
         for (String name : NAMED.get(type)) {
             String mod = modOfName.get(name);
             if (mod != null) {
                 mods.add(mod);
             }
         }
-        return mods;
+        return Set.copyOf(mods);
     }
 
     private static String findAfresh(Class<?> type) {
