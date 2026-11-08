@@ -182,7 +182,7 @@ final class ElementTakes {
         return new Answers(takes, where, owners, prints);
     }
 
-    static void applyPrepared(Answers prepared, Collection<String> mods, Function<Object, String> reachedFrom) {
+    static Set<Object> applyPrepared(Answers prepared, Collection<String> mods, Function<Object, String> reachedFrom) {
         IdentityHashMap<Object, Boolean> changed = new IdentityHashMap<>();
         prepared.prints().forEach((container, print) -> {
             if (Fingerprints.of(container) != print) {
@@ -264,6 +264,9 @@ final class ElementTakes {
             LOGGER.info("[Hotwire] {} noted removals for {} met collections that cannot change: {}", unchanged, mods,
                     unchangedKinds);
         }
+        Set<Object> moved = Collections.newSetFromMap(new IdentityHashMap<>());
+        moved.addAll(changed.keySet());
+        return moved;
     }
 
     private static String describe(Object container) {

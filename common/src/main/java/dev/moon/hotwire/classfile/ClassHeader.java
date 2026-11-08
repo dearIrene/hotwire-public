@@ -22,7 +22,7 @@ public record ClassHeader(String name, @Nullable String superName, List<String> 
         methods = List.copyOf(methods);
     }
 
-    public record Member(String name, String desc, int access) {
+    public record Member(String name, String desc, int access, boolean plainOnly) {
         public Member {
             name = name.intern();
             desc = desc.intern();
@@ -82,14 +82,14 @@ public record ClassHeader(String name, @Nullable String superName, List<String> 
             @Override
             public @Nullable FieldVisitor visitField(int access, String name, String descriptor,
                     @Nullable String signature, @Nullable Object value) {
-                fields.add(new Member(name, descriptor, access));
+                fields.add(new Member(name, descriptor, access, PlainTypes.holdsPlainOnly(descriptor, signature)));
                 return null;
             }
 
             @Override
             public @Nullable MethodVisitor visitMethod(int access, String name, String descriptor,
                     @Nullable String signature, String @Nullable [] exceptions) {
-                methods.add(new Member(name, descriptor, access));
+                methods.add(new Member(name, descriptor, access, false));
                 return null;
             }
         }, ClassReader.SKIP_CODE | ClassReader.SKIP_DEBUG | ClassReader.SKIP_FRAMES);

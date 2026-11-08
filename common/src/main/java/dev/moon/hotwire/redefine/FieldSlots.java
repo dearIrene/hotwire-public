@@ -7,6 +7,7 @@ import java.lang.reflect.Field;
 import java.lang.reflect.InaccessibleObjectException;
 import java.lang.reflect.Modifier;
 import java.util.ArrayList;
+import java.util.HashSet;
 import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Objects;
@@ -40,27 +41,35 @@ public final class FieldSlots {
         private final Class<?> type;
         private final int modifiers;
 
+        private final boolean plainOnly;
+
         public static Slot of(Field field) {
-            return new Slot(field);
+            return new Slot(field, false);
         }
 
-        private Slot(Field field) {
+        private Slot(Field field, boolean plainOnly) {
             this.field = field;
             this.owner = field.getDeclaringClass();
             this.name = field.getName();
             this.type = field.getType();
             this.modifiers = field.getModifiers();
             this.lookup = null;
+            this.plainOnly = plainOnly;
         }
 
         private Slot(Class<?> owner, String name, Class<?> type, int modifiers, @Nullable VarHandle handle,
-                MethodHandles.@Nullable Lookup lookup) {
+                MethodHandles.@Nullable Lookup lookup, boolean plainOnly) {
             this.handle = handle;
             this.lookup = lookup;
             this.owner = owner;
             this.name = name;
             this.type = type;
             this.modifiers = modifiers;
+            this.plainOnly = plainOnly;
+        }
+
+        public boolean isPlainOnly() {
+            return this.plainOnly;
         }
 
         public String getName() {
@@ -176,14 +185,20 @@ public final class FieldSlots {
         }
     }
 
-    private record Entry(int access, String name, String descriptor) {
+    private record Entry(int access, String name, String descriptor, boolean plainOnly) {
     }
 
     public static Read read(Class<?> type, byte @Nullable [] bytes, Predicate<String> loaded) {
         if (bytes == null) {
-            return new Read(readByReflection(type), Set.of());
+            return new Read(readByReflection(type, Set.of()), Set.of());
         }
         List<Entry> declared = listFields(bytes);
+        Set<String> plain = new HashSet<>();
+        for (Entry field : declared) {
+            if (field.plainOnly()) {
+                plain.add(field.name());
+            }
+        }
         Set<String> unloaded = new LinkedHashSet<>();
         for (Entry field : declared) {
             String binary = findClassName(field.descriptor());
@@ -192,7 +207,7 @@ public final class FieldSlots {
             }
         }
         if (unloaded.isEmpty()) {
-            return new Read(readByReflection(type), Set.of());
+            return new Read(readByReflection(type, plain), Set.of());
         }
         List<Slot> slots = new ArrayList<>();
         MethodHandles.Lookup lookup;
@@ -216,20 +231,21 @@ public final class FieldSlots {
                     lookup.findStaticGetter(type, field.name(), fieldType);
                 }
                 VarHandle handle = isStatic ? null : lookup.findVarHandle(type, field.name(), fieldType);
-                slots.add(new Slot(type, field.name(), fieldType, field.access(), handle, isStatic ? lookup : null));
+                slots.add(new Slot(type, field.name(), fieldType, field.access(), handle, isStatic ? lookup : null,
+                        field.plainOnly()));
             } catch (ReflectiveOperationException | SecurityException e) {
             }
         }
         return new Read(slots, unloaded);
     }
 
-    private static List<Slot> readByReflection(Class<?> type) {
+    private static List<Slot> readByReflection(Class<?> type, Set<String> plain) {
         List<Slot> out = new ArrayList<>();
         try {
             for (Field field : type.getDeclaredFields()) {
                 try {
                     field.setAccessible(true);
-                    out.add(new Slot(field));
+                    out.add(new Slot(field, plain.contains(field.getName())));
                 } catch (InaccessibleObjectException | SecurityException e) {
                 }
             }
@@ -240,7 +256,8 @@ public final class FieldSlots {
 
     private static List<Entry> listFields(byte[] bytes) {
         List<Entry> out = new ArrayList<>();
-        ClassHeader.of(bytes).fields().forEach(field -> out.add(new Entry(field.access(), field.name(), field.desc())));
+        ClassHeader.of(bytes).fields().forEach(field -> out.add(new Entry(field.access(), field.name(), field.desc(),
+                field.plainOnly())));
         return out;
     }
 

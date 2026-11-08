@@ -3,7 +3,6 @@ package dev.moon.hotwire.registration;
 import java.util.Collection;
 import java.util.List;
 import java.util.Map;
-import java.util.Set;
 import org.jspecify.annotations.Nullable;
 
 public final class Fingerprints {
@@ -74,12 +73,19 @@ public final class Fingerprints {
         return UNKNOWN;
     }
 
-    private static int identity(@Nullable Object item) {
-        return item != null && BOXED.contains(item.getClass()) ? item.hashCode() : System.identityHashCode(item);
+    public static long addInOrder(long print, @Nullable Object value) {
+        return print * 31 + identity(value);
     }
 
-    private static final Set<Class<?>> BOXED = Set.of(Integer.class, Long.class, Short.class, Byte.class,
-            Character.class, Boolean.class, Float.class, Double.class);
+    private static int identity(@Nullable Object item) {
+        if (item == null) {
+            return 0;
+        }
+        Class<?> type = item.getClass();
+        return type == Integer.class || type == Long.class || type == Boolean.class || type == Double.class
+                || type == Float.class || type == Short.class || type == Byte.class || type == Character.class
+                ? item.hashCode() : System.identityHashCode(item);
+    }
 
     private static long mix(long value) {
         long mixed = value * 0x9E3779B97F4A7C15L;

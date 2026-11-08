@@ -292,6 +292,10 @@ final class CollectionReferences implements FixedLists.Walk {
     private static final int WRAPPED_BELOW = 3;
 
     private void readStatic(FieldSlots.Slot field, Object value, boolean game) {
+        if (field.isPlainOnly() && (value instanceof Collection<?> || value instanceof Map<?, ?>
+                || value instanceof Object[])) {
+            return;
+        }
         CollectionNotes notes = ElementLook.isLooking() ? this.look.getNotes() : null;
 
         if (notes != null && !NO_PRINTS && notes.isReadBy(value, this.reader) && notes.isUnchanged(value)) {
@@ -368,8 +372,13 @@ final class CollectionReferences implements FixedLists.Walk {
     }
 
     private void takeAll(ElementTakes.Answers answers, List<String> mods) {
-        this.look.getNotes().notePrintsAfter(answers.prints().keySet(),
-                () -> ElementTakes.applyPrepared(answers, mods, this::describeOrigin));
+        this.look.getNotes().notePrintsAfter(answers.prints().keySet(), () -> {
+            for (Object changed : ElementTakes.applyPrepared(answers, mods, this::describeOrigin)) {
+                if (this.visit(changed)) {
+                    this.collect(changed);
+                }
+            }
+        });
     }
 
     private String describeOrigin(Object container) {
@@ -482,6 +491,8 @@ final class CollectionReferences implements FixedLists.Walk {
         long printed = System.nanoTime();
 
         Map<String, long[]> spent = new HashMap<>();
+        long longest = 0;
+        String longestRead = "none";
         for (Object container : changed) {
             ElementLook.stopIfAsked();
             if (this.seen.containsKey(container)) {
@@ -505,10 +516,17 @@ final class CollectionReferences implements FixedLists.Walk {
                 }
             } finally {
                 this.checkReport.leave();
+                long took = System.nanoTime() - readBegan;
                 long[] cost = spent.computeIfAbsent(container.getClass().getSimpleName() + " of "
                         + (notes.isOfWorld(container) ? "the world" : origin.staticsOf()), any -> new long[2]);
                 cost[0]++;
-                cost[1] += System.nanoTime() - readBegan;
+                cost[1] += took;
+                if (took > longest) {
+                    longest = took;
+                    longestRead = container.getClass().getSimpleName() + " of " + sizeOf(container)
+                            + (origin.field() == null ? "" : " in " + origin.field().getDeclaringClass().getName() + "."
+                            + origin.field().getName()) + " (" + took / 1_000_000 + " ms)";
+                }
             }
         }
         long readAgain = System.nanoTime();
@@ -541,10 +559,11 @@ final class CollectionReferences implements FixedLists.Walk {
         long ended = System.nanoTime();
         LOGGER.info("[Hotwire] the look read {} collections of the notes again in {} ms ({} passed as unchanged), {}"
                 + " objects whose fields moved, and passed the statics of {} classes unchanged; prints {} ms, reads"
-                + " again {} ms, holders {} ms; the reads again took longest over {}", again,
+                + " again {} ms, holders {} ms; the reads again took longest over {}, and the longest one was {}",
+                again,
                 (ended - began) / 1_000_000, notes.countLeftUnchanged(), moved, staticsUnchanged,
                 (printed - began) / 1_000_000, (readAgain - printed) / 1_000_000, (ended - readAgain) / 1_000_000,
-                describeLongest(spent));
+                describeLongest(spent), longestRead);
     }
 
     private static String describeLongest(Map<String, long[]> spent) {
@@ -692,11 +711,11 @@ final class CollectionReferences implements FixedLists.Walk {
     static long printFields(Object holder) {
         boolean statics = holder instanceof Class<?>;
         List<FieldSlots.Slot> fields = findMoving(statics ? (Class<?>) holder : holder.getClass(), statics);
-        List<@Nullable Object> values = new ArrayList<>(fields.size());
+        long print = fields.size();
         for (FieldSlots.Slot field : fields) {
-            values.add(CollectionParts.read(field, statics ? null : holder));
+            print = Fingerprints.addInOrder(print, CollectionParts.read(field, statics ? null : holder));
         }
-        return Fingerprints.of(values);
+        return print;
     }
 
     static boolean canMove(Class<?> owner) {
@@ -747,7 +766,7 @@ final class CollectionReferences implements FixedLists.Walk {
         for (FieldSlots.Slot field : Fields.getReferenceFields(holder.getClass(), false)) {
             Object value = CollectionParts.read(field, holder);
             if ((value instanceof Collection<?> || value instanceof Map<?, ?> || value instanceof Object[])
-                    && this.visit(value)) {
+                    && !field.isPlainOnly() && this.visit(value)) {
                 LazyFields.noteHolder(value, holder);
                 this.collect(value);
 
@@ -764,7 +783,7 @@ final class CollectionReferences implements FixedLists.Walk {
                     for (FieldSlots.Slot inner : Fields.getReferenceFields(value.getClass(), false)) {
                         Object innerValue = CollectionParts.read(inner, value);
                         if ((innerValue instanceof Collection<?> || innerValue instanceof Map<?, ?>
-                                || innerValue instanceof Object[]) && this.visit(innerValue)) {
+                                || innerValue instanceof Object[]) && !inner.isPlainOnly() && this.visit(innerValue)) {
                             this.collect(innerValue);
                         }
                     }
@@ -781,8 +800,8 @@ final class CollectionReferences implements FixedLists.Walk {
 
     private void collect(Object value) {
         ElementLook.stopIfAsked();
-        if (this.owners.findOwnerAmong(value) != null || GameRegistrations.isOfOffMod(value.getClass())
-                || this.depth >= DEEPEST) {
+        if (CollectionParts.holdsPrimitivesOnly(value) || this.owners.findOwnerAmong(value) != null
+                || GameRegistrations.isOfOffMod(value.getClass()) || this.depth >= DEEPEST) {
             return;
         }
         this.depth++;

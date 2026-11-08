@@ -1,6 +1,7 @@
 package dev.moon.hotwire.fabric.registration;
 
 import com.google.common.collect.ImmutableCollection;
+import dev.moon.hotwire.classfile.PlainTypes;
 import dev.moon.hotwire.redefine.FieldSlots;
 import java.lang.ref.WeakReference;
 import java.lang.reflect.Constructor;
@@ -40,6 +41,17 @@ final class CollectionParts {
                     || ImmutableCollection.class.isAssignableFrom(type);
         }
     };
+
+    private static final ClassValue<Boolean> PRIMITIVE_ONLY = new ClassValue<>() {
+        @Override
+        protected Boolean computeValue(Class<?> type) {
+            return PlainTypes.isPrimitiveCollection(type.getName());
+        }
+    };
+
+    static boolean holdsPrimitivesOnly(Object container) {
+        return PRIMITIVE_ONLY.get(container.getClass());
+    }
 
     static boolean isFixedSize(List<?> list) {
         if (REFUSES.get(list.getClass())) {
