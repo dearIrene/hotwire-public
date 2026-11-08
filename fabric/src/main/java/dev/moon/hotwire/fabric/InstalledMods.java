@@ -1,5 +1,6 @@
 package dev.moon.hotwire.fabric;
 
+import dev.moon.hotwire.fabric.registration.GameRegistrations;
 import dev.moon.hotwire.jar.JarPaths;
 import dev.moon.hotwire.jar.ModJar;
 import dev.moon.hotwire.jar.ModManifest;
@@ -53,7 +54,7 @@ public final class InstalledMods {
                 }
             }
         }
-        this.graph = new ModGraph(this.jars, InstalledMods::isOfGame, LoadedMods::findVersion);
+        this.graph = tell(new ModGraph(this.jars, InstalledMods::isOfGame, LoadedMods::findVersion));
         this.graph.getIds().forEach(id -> {
             List<String> called = this.graph.getCalls(id).stream().filter(ModPolicy::isSwitchable)
                     .filter(this.graph::isInstalledOnItsOwn).toList();
@@ -67,6 +68,11 @@ public final class InstalledMods {
                         + " they go off", id, called.stream().filter(other -> !needed.contains(other)).toList());
             }
         });
+    }
+
+    private static ModGraph tell(ModGraph made) {
+        GameRegistrations.useShared(made.findSharedNested());
+        return made;
     }
 
     private static final Map<String, Boolean> OF_GAME = new ConcurrentHashMap<>();
@@ -148,7 +154,7 @@ public final class InstalledMods {
             this.jars.remove(jar);
             this.disabled.put(id, jar);
         });
-        this.graph = new ModGraph(this.jars, InstalledMods::isOfGame, LoadedMods::findVersion);
+        this.graph = tell(new ModGraph(this.jars, InstalledMods::isOfGame, LoadedMods::findVersion));
         this.jarOf.put(id, renamed);
     }
 
@@ -156,7 +162,7 @@ public final class InstalledMods {
         ModJar back = this.disabled.remove(id);
         if (back != null) {
             this.jars.add(back);
-            this.graph = new ModGraph(this.jars, InstalledMods::isOfGame, LoadedMods::findVersion);
+            this.graph = tell(new ModGraph(this.jars, InstalledMods::isOfGame, LoadedMods::findVersion));
         }
         this.jarOf.put(id, jar);
     }
@@ -188,7 +194,7 @@ public final class InstalledMods {
                 this.nestedAdded.add(nested);
             }
         }
-        this.graph = new ModGraph(this.jars, InstalledMods::isOfGame, LoadedMods::findVersion);
+        this.graph = tell(new ModGraph(this.jars, InstalledMods::isOfGame, LoadedMods::findVersion));
         this.topLevel.add(read.manifest().id());
         this.jarOf.put(read.manifest().id(), jar);
         this.addedThisSession.addAll(ids);
@@ -205,7 +211,7 @@ public final class InstalledMods {
         this.jars.addAll(reads.values());
         this.jarOf.putAll(paths);
         this.updatedThisSession.addAll(reads.keySet());
-        this.graph = new ModGraph(this.jars, InstalledMods::isOfGame, LoadedMods::findVersion);
+        this.graph = tell(new ModGraph(this.jars, InstalledMods::isOfGame, LoadedMods::findVersion));
     }
 
     public synchronized boolean isAddedThisSession(String id) {

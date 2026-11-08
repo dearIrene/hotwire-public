@@ -24,6 +24,8 @@ public final class GameRegistrations {
     private static volatile Set<String> never = Set.of();
     private static volatile Set<String> alone = Set.of();
 
+    private static volatile Set<String> shared = Set.of();
+
     private GameRegistrations() {
     }
 
@@ -83,7 +85,12 @@ public final class GameRegistrations {
 
     private static @Nullable String findOwnNested(Class<?> type) {
         String nested = findNestedModOf(type);
-        return nested != null && isSwitchable(nested) && alone.contains(nested) ? nested : null;
+        return nested != null && isSwitchable(nested) && (alone.contains(nested) || shared.contains(nested)) ? nested
+                : null;
+    }
+
+    public static void useShared(Set<String> ids) {
+        shared = Set.copyOf(ids);
     }
 
     private static Set<String> findRunAlone(FabricLoader loader) {

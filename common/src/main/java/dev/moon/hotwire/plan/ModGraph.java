@@ -10,6 +10,7 @@ import java.util.Collection;
 import java.util.Collections;
 import java.util.Deque;
 import java.util.HashMap;
+import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;
@@ -205,6 +206,32 @@ public final class ModGraph {
 
     public boolean isInstalledOnItsOwn(String id) {
         return this.installed.contains(id);
+    }
+
+    public SortedSet<String> findSharedNested() {
+        SortedSet<String> shared = new TreeSet<>();
+        for (String id : this.getContainers.keySet()) {
+            if (!this.installed.contains(id) && this.findTopContainers(id).size() > 1) {
+                shared.add(id);
+            }
+        }
+        return shared;
+    }
+
+    private Set<String> findTopContainers(String id) {
+        Set<String> tops = new TreeSet<>();
+        Set<String> seen = new HashSet<>();
+        Deque<String> next = new ArrayDeque<>(this.getContainers(id));
+        while (!next.isEmpty()) {
+            String one = next.poll();
+            if (seen.add(one)) {
+                if (this.installed.contains(one)) {
+                    tops.add(one);
+                }
+                next.addAll(this.getContainers(one));
+            }
+        }
+        return tops;
     }
 
     SortedSet<String> getChildrenOf(String container) {
