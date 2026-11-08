@@ -864,7 +864,8 @@ final class CollectionReferences implements FixedLists.Walk {
                             String found = whole != null ? whole : Objects.requireNonNull(parts);
                             int at = index;
                             this.takeOrNote(found, this.candidates.find(item, true),
-                                    ElementTakes.askWeak(item, this.owners::findOwnerOfSlot),
+
+                                    ElementTakes.askWeak(item, one -> this.owners.findOwnerOfSlot(one)),
                                     ElementTakes.makeWeak(array, item, (now, one, owner) ->
                                             ElementTakes.replaceInArray(now, at, one, standIn,
                                                     this.getRemovalsOf(owner))), item,
