@@ -536,6 +536,8 @@ final class CollectionReferences implements FixedLists.Walk {
                 } else if (!(container instanceof Collection<?>) && !(container instanceof Map<?, ?>)
                         && !(container instanceof Object[]) && notes.findWrapped(container) > 0) {
                     this.noteWrappedInside(container, notes.findWrapped(container));
+                } else if (notes.isLookedInto(container)) {
+                    this.lookIntoNow(container);
                 } else {
                     this.collect(container);
                 }
@@ -578,7 +580,7 @@ final class CollectionReferences implements FixedLists.Walk {
                 notes.setInWorld(one.getValue().ofWorld());
                 this.checkReport.enter(CheckReport.NOTES);
                 try {
-                    this.lookInto(holder);
+                    this.lookIntoNow(holder);
                 } finally {
                     this.checkReport.leave();
                     notes.setInWorld(false);
@@ -729,13 +731,43 @@ final class CollectionReferences implements FixedLists.Walk {
     }
 
     void lookInto(Object holder) {
+        if (this.isWatchedAsRead(holder)) {
+            this.readThrough.add(holder);
+            return;
+        }
+        this.lookIntoNow(holder);
+    }
+
+    @SuppressWarnings("ReferenceEquality")
+    private boolean isWatchedAsRead(Object holder) {
+        if (!ElementLook.isLooking() || NO_PRINTS || CollectionParts.isGameObject(holder)) {
+            return false;
+        }
+        CollectionNotes notes = this.look.getNotes();
+        CollectionNotes.Holder was = notes.isWhole() ? null : notes.findHolder(holder);
+        return was != null && was.through() && was.print() != Fingerprints.UNKNOWN
+                && TakeReach.join(was.readers(), this.reader) == was.readers() && was.print() == printFields(holder);
+    }
+
+    void lookIntoNow(Object holder) {
         this.readThrough.add(holder);
         Set<String> was = this.enter(holder);
+        CollectionNotes notes = ElementLook.isLooking() && !CollectionParts.isGameObject(holder) ? this.look.getNotes()
+                : null;
+        if (notes != null) {
+            notes.begin(holder, CollectionNotes.Origin.of(this.readingStaticsOf), this.reader);
+            notes.markLookedInto(holder);
+        }
+        boolean completed = false;
         this.checkReport.enter(holder);
         try {
             this.lookIntoFields(holder);
+            completed = true;
         } finally {
             this.checkReport.leave();
+            if (notes != null) {
+                notes.end(holder, completed);
+            }
             this.reader = was;
         }
     }

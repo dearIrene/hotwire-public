@@ -217,6 +217,7 @@ public final class ElementLook {
             MODE.set(Mode.SETUP);
             int world = findWorldNumber();
             try {
+                modelSets = findModelSets();
                 GameHold.runUnheld(() -> references.lookForEvery(every, on));
                 lookedForEvery = every;
                 lookedEveryAt = System.nanoTime();

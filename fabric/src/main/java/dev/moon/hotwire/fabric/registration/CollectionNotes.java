@@ -36,6 +36,7 @@ final class CollectionNotes {
         private final boolean ofWorld;
         private final Set<String> readers;
         private int wrapped;
+        private boolean lookedInto;
 
         private Frame(Object container, @Nullable Note note, List<Runnable> before, List<Runnable> now, boolean fresh,
                 long print, Origin origin, boolean ofWorld, Set<String> readers) {
@@ -71,6 +72,8 @@ final class CollectionNotes {
         private Set<String> readers = TakeReach.NOBODY;
 
         private int wrapped;
+
+        private boolean lookedInto;
 
         private int unchangedIn;
 
@@ -232,6 +235,7 @@ final class CollectionNotes {
             note = new Note(container, frame.origin, this.gone);
             note.ofWorld = frame.ofWorld;
             note.wrapped = frame.wrapped;
+            note.lookedInto = frame.lookedInto;
             note.readers = frame.readers;
             this.notes.put(container, note);
         }
@@ -469,6 +473,26 @@ final class CollectionNotes {
 
     synchronized void finishEvery() {
         this.toRead = List.of();
+    }
+
+    @SuppressWarnings("ReferenceEquality")
+    synchronized void markLookedInto(Object container) {
+        Frame frame = this.open.peek();
+        Note note = frame != null && frame.container == container ? frame.note : this.notes.get(container);
+        if (note != null) {
+            note.lookedInto = true;
+        } else if (frame != null && frame.container == container) {
+            frame.lookedInto = true;
+        }
+    }
+
+    synchronized boolean isLookedInto(Object container) {
+        Note note = this.notes.get(container);
+        return note != null && note.lookedInto;
+    }
+
+    synchronized @Nullable Holder findHolder(Object holder) {
+        return this.holders.get(holder);
     }
 
     @SuppressWarnings("ReferenceEquality")
