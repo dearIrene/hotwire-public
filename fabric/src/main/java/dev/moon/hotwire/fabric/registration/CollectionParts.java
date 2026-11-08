@@ -5,6 +5,7 @@ import dev.moon.hotwire.classfile.PlainTypes;
 import dev.moon.hotwire.redefine.FieldSlots;
 import java.lang.ref.WeakReference;
 import java.lang.reflect.Constructor;
+import java.util.Arrays;
 import java.util.Collection;
 import java.util.Collections;
 import java.util.ConcurrentModificationException;
@@ -33,11 +34,14 @@ final class CollectionParts {
 
     private static final String JDK_IMMUTABLE = List.of().getClass().getNestHost().getName() + "$";
     private static final String JDK_UNMODIFIABLE = Collections.class.getName() + "$Unmodifiable";
+    private static final Set<String> JDK_FIXED = Set.of(Collections.singletonList(0).getClass().getName(),
+            Collections.nCopies(1, 0).getClass().getName(), Arrays.asList(0).getClass().getName(),
+            Collections.emptyList().getClass().getName());
     private static final ClassValue<Boolean> REFUSES = new ClassValue<>() {
         @Override
         protected Boolean computeValue(Class<?> type) {
             String name = type.getName();
-            return name.startsWith(JDK_IMMUTABLE) || name.startsWith(JDK_UNMODIFIABLE)
+            return name.startsWith(JDK_IMMUTABLE) || name.startsWith(JDK_UNMODIFIABLE) || JDK_FIXED.contains(name)
                     || ImmutableCollection.class.isAssignableFrom(type);
         }
     };
