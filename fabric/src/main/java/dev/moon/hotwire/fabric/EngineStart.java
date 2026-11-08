@@ -346,6 +346,7 @@ final class EngineStart {
         });
         FinalWrites.writeWith(fieldReferences::writeFinal);
         FieldSlots.readStaticsWhen(fieldReferences::isInitialized);
+        FieldSlots.readByPlaceWith(instrumentation);
         laps.endLap("field references, statics");
         switcher.reopenToTurnOnWith(mod -> fieldReferences.hasRemovedFrom(mod)
                 || NetworkHandlers.hasLostConnection(mod));

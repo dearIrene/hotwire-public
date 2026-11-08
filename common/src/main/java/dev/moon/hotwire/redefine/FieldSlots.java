@@ -1,6 +1,8 @@
 package dev.moon.hotwire.redefine;
 
 import dev.moon.hotwire.classfile.ClassHeader;
+import java.lang.instrument.Instrumentation;
+import java.lang.invoke.MethodHandle;
 import java.lang.invoke.MethodHandles;
 import java.lang.invoke.VarHandle;
 import java.lang.reflect.Field;
@@ -10,6 +12,7 @@ import java.util.ArrayList;
 import java.util.HashSet;
 import java.util.LinkedHashSet;
 import java.util.List;
+import java.util.Map;
 import java.util.Objects;
 import java.util.Set;
 import java.util.function.Predicate;
@@ -25,8 +28,89 @@ public final class FieldSlots {
 
     private static volatile Predicate<Class<?>> setUp = type -> true;
 
+    private static volatile @Nullable Instrumentation opener;
+
     public static void readStaticsWhen(Predicate<Class<?>> isSetUp) {
         setUp = isSetUp;
+    }
+
+    public static void readByPlaceWith(Instrumentation instrumentation) {
+        opener = instrumentation;
+    }
+
+    static boolean readsByPlace() {
+        return Places.GET != null;
+    }
+
+    private static final class Places {
+        private static final @Nullable MethodHandle GET;
+        private static final @Nullable MethodHandle GET_VOLATILE;
+        private static final @Nullable MethodHandle FIND;
+
+        static {
+            MethodHandle get = null;
+            MethodHandle getVolatile = null;
+            MethodHandle find = null;
+            Instrumentation open = opener;
+            try {
+                if (open != null) {
+                    open.redefineModule(Object.class.getModule(), Set.of(), Map.of("jdk.internal.misc",
+                            Set.of(FieldSlots.class.getModule())), Map.of(), Set.of(), Map.of());
+                    Class<?> type = Class.forName("jdk.internal.misc.Unsafe");
+                    Object unsafe = type.getMethod("getUnsafe").invoke(null);
+                    MethodHandles.Lookup lookup = MethodHandles.lookup();
+                    get = lookup.unreflect(type.getMethod("getReference", Object.class, long.class)).bindTo(unsafe);
+                    getVolatile = lookup.unreflect(type.getMethod("getReferenceVolatile", Object.class, long.class))
+                            .bindTo(unsafe);
+                    find = lookup.unreflect(type.getMethod("objectFieldOffset", Field.class)).bindTo(unsafe);
+                }
+            } catch (ReflectiveOperationException | RuntimeException | LinkageError e) {
+                get = null;
+                getVolatile = null;
+                find = null;
+            }
+            GET = get;
+            GET_VOLATILE = getVolatile;
+            FIND = find;
+        }
+
+        private Places() {
+        }
+
+        @SuppressWarnings("checkstyle:IllegalCatch")
+        static long find(Field field) {
+            MethodHandle find = FIND;
+            if (find == null) {
+                return Slot.NO_PLACE;
+            }
+            try {
+                return (long) find.invokeExact(field);
+            } catch (Throwable e) {
+                return Slot.NO_PLACE;
+            }
+        }
+
+        @SuppressWarnings("checkstyle:IllegalCatch")
+        static @Nullable Object read(Object holder, long place, boolean ordered) throws IllegalAccessException {
+            try {
+                if (ordered) {
+                    MethodHandle get = GET_VOLATILE;
+                    if (get == null) {
+                        throw new IllegalAccessException("no reads by place");
+                    }
+                    return (Object) get.invokeExact(holder, place);
+                }
+                MethodHandle get = GET;
+                if (get == null) {
+                    throw new IllegalAccessException("no reads by place");
+                }
+                return (Object) get.invokeExact(holder, place);
+            } catch (IllegalAccessException e) {
+                throw e;
+            } catch (Throwable e) {
+                throw new IllegalAccessException(e.toString());
+            }
+        }
     }
 
     public static final class Slot {
@@ -42,6 +126,10 @@ public final class FieldSlots {
         private final int modifiers;
 
         private final boolean plainOnly;
+
+        private volatile long place = UNASKED;
+        private static final long UNASKED = -2;
+        static final long NO_PLACE = -1;
 
         public static Slot of(Field field) {
             return new Slot(field, false);
@@ -93,6 +181,16 @@ public final class FieldSlots {
         }
 
         public @Nullable Object get(@Nullable Object holder) throws IllegalAccessException {
+            if (holder != null) {
+                long at = this.place;
+                if (at == UNASKED) {
+                    at = this.findPlace();
+                }
+
+                if (at >= 0 && this.owner.isInstance(holder)) {
+                    return Places.read(holder, at, Modifier.isVolatile(this.modifiers));
+                }
+            }
             if (holder == null && this.isStatic() && !setUp.test(this.owner)) {
                 return null;
             }
@@ -142,6 +240,17 @@ public final class FieldSlots {
             } catch (RuntimeException | LinkageError e) {
                 throw new IllegalAccessException(this.owner.getName() + "." + this.name + ": " + e);
             }
+        }
+
+        private long findPlace() {
+            if (opener == null) {
+                return UNASKED;
+            }
+            Field reflected = this.field;
+            long at = reflected == null || this.isStatic() || this.type.isPrimitive() ? NO_PLACE
+                    : Places.find(reflected);
+            this.place = at;
+            return at;
         }
 
         private @Nullable VarHandle findHandle() {
