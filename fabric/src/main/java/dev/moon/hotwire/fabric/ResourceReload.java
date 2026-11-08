@@ -74,8 +74,6 @@ public final class ResourceReload {
     static final Duration WAIT = Duration.ofMinutes(2);
     private static final Duration PAUSED_WAIT = Duration.ofSeconds(30);
 
-    private static final Duration HANDED_ON = Duration.ofSeconds(2);
-
     private static final List<Class<?>> RENDERERS = List.of(EntityRenderer.class, BlockEntityRenderer.class,
             EntityModel.class);
 
@@ -115,7 +113,7 @@ public final class ResourceReload {
         Minecraft game = Minecraft.getInstance();
         try {
             GameHold.onGameBeforeNextFrame(() -> {
-                OngoingReload.await(game);
+                OngoingReload.awaitBegun(game);
                 if (world) {
                     WorldRendererReset.run();
                 }
@@ -126,7 +124,7 @@ public final class ResourceReload {
                         reloadedRenderers = true;
                         reloadedWhilePaused |= !renderersOnly;
                         BackgroundReload.beginAfterHold(() -> {
-                            Runnable start = () -> startUnprofiled(() -> track(game.reloadResourcePacks()));
+                            Runnable start = () -> startUnprofiled(() -> game.reloadResourcePacks());
                             if (!renderersOnly || !ReloadListeners.runWithoutHeavy(game, start)) {
                                 startWhole(game);
                             }
@@ -185,7 +183,7 @@ public final class ResourceReload {
         if (!whole) {
             reloadedRenderers = true;
             BackgroundReload.beginAfterHold(() -> {
-                Runnable start = () -> startUnprofiled(() -> track(game.reloadResourcePacks()));
+                Runnable start = () -> startUnprofiled(() -> game.reloadResourcePacks());
                 if (!ReloadListeners.runWithoutHeavy(game, start)) {
                     startWhole(game);
                 }
@@ -193,7 +191,7 @@ public final class ResourceReload {
             return;
         }
         GameHold.onGameAndWait(() -> {
-            OngoingReload.await(game);
+            OngoingReload.awaitBegun(game);
             reloadWhilePaused(game, false);
         });
     }
@@ -204,7 +202,7 @@ public final class ResourceReload {
             LOGGER.info("[Hotwire] {}: the reload that made the game's objects again brought them", why);
             return;
         }
-        if (OngoingReload.await(game)) {
+        if (OngoingReload.awaitBegun(game)) {
             LOGGER.info("[Hotwire] {}: a reload already under way brought them", why);
             return;
         }
@@ -227,45 +225,10 @@ public final class ResourceReload {
         comingOn = List.copyOf(mods);
     }
 
-    private static final int QUIET_LOOKS = 5;
-    private static final long QUIET_LOOK_MILLIS = 50;
-
-    private static volatile CompletableFuture<?> lastReload = CompletableFuture.completedFuture(null);
-
-    static CompletableFuture<?> getLastReload() {
-        return lastReload;
-    }
-
-    private static <T> CompletableFuture<T> track(CompletableFuture<T> reload) {
-        lastReload = reload;
-        return reload;
-    }
-
     static void awaitIdle() {
         Minecraft game = Minecraft.getInstance();
-        if (game.isSameThread()) {
-            return;
-        }
-        long until = System.nanoTime() + WAIT.toNanos();
-        try {
-            int nothingRunning = 0;
-            while (!lastReload.isDone() && System.nanoTime() < until && nothingRunning < QUIET_LOOKS) {
-                nothingRunning = ModViews.openOverlay() == null && !BackgroundReload.isBusy()
-                        && OngoingReload.findOngoing(game) == null ? nothingRunning + 1 : 0;
-                Thread.sleep(QUIET_LOOK_MILLIS);
-            }
-
-            while ((ModViews.openOverlay() != null || BackgroundReload.isBusy()) && System.nanoTime() < until) {
-                Thread.sleep(20);
-            }
-            if (System.nanoTime() >= until) {
-                LOGGER.warn("[Hotwire] the wait for the reload under way ran out: the game's {}, overlay {}, here {}",
-                        lastReload.isDone() ? "done" : "under way", ModViews.openOverlay(), BackgroundReload.describe());
-            }
-        } catch (InterruptedException e) {
-            Thread.currentThread().interrupt();
-        } catch (RuntimeException e) {
-            LOGGER.info("[Hotwire] the reload under way did not end well; the off goes on: {}", e.toString());
+        if (!game.isSameThread()) {
+            OngoingReload.awaitIdle(game);
         }
     }
 
@@ -277,7 +240,7 @@ public final class ResourceReload {
     private static void startWhole(Minecraft game) {
         List<String> switched = new ArrayList<>(comingOn);
         switched.addAll(goingOff);
-        Runnable start = () -> startUnprofiled(() -> track(game.reloadResourcePacks()));
+        Runnable start = () -> startUnprofiled(() -> game.reloadResourcePacks());
         if (ModSoundFiles.isAnyIn(switched) || !ReloadListeners.runWithout(game, SoundManager.class, start)) {
             start.run();
         }
@@ -307,28 +270,26 @@ public final class ResourceReload {
         packsAtPause = getAvailablePacks();
         noteOwnersAtPause();
 
-        LoadingOverlay shown = ModViews.findLoadingOverlay();
-        ReloadInstance last = shown == null ? null : OngoingReload.findReloadOf(shown);
-        if (last != null && last.isDone()) {
-            ModViews.closeOverlay();
-        }
+        OngoingReload.clearDoneOverlay();
 
         if (comingOn.isEmpty()) {
             reloadedWhilePaused = true;
             BackgroundReload.beginAfterHold(() -> startWhole(game));
             return;
         }
-        boolean isWhole = !renderersOnly || !ReloadListeners.runWithoutHeavy(game,
-                () -> startUnprofiled(() -> track(game.reloadResourcePacks())));
-        if (isWhole) {
-            startWhole(game);
-        }
-        LoadingOverlay loading = ModViews.findLoadingOverlay();
-        ReloadInstance reload = loading == null ? null : OngoingReload.findReloadOf(loading);
-        if (reload == null) {
-            LOGGER.warn("[Hotwire] the resource reload has no loading overlay to wait on; it runs with the game");
+        OngoingReload.Run run = OngoingReload.begin(() -> {
+            if (!renderersOnly || !ReloadListeners.runWithoutHeavy(game,
+                    () -> startUnprofiled(() -> game.reloadResourcePacks()))) {
+                startWhole(game);
+            }
+        });
+        if (run == null) {
+            LOGGER.warn("[Hotwire] the game put the resource reload off behind its loading overlay; it runs with the"
+                    + " game");
             return;
         }
+        boolean isWhole = !run.partial;
+        ReloadInstance reload = run.reload;
         awaitWhilePaused(game, reload);
         if (reload.isDone() && ReloadFailures.findFailure(reload) != null) {
             reload = runAgainWhilePaused(game, reload);
@@ -531,7 +492,7 @@ public final class ResourceReload {
 
     @SuppressWarnings("FutureReturnValueIgnored")
     public static void startAgain(Minecraft game) {
-        startUnprofiled(() -> track(game.reloadResourcePacks()));
+        startUnprofiled(() -> game.reloadResourcePacks());
     }
 
     public static void awaitAssets(List<String> mods) {
@@ -557,18 +518,18 @@ public final class ResourceReload {
     }
 
     static void run(String why, Collection<String> closing) {
-        if (OngoingReload.await(Minecraft.getInstance())) {
+        Minecraft game = Minecraft.getInstance();
+        if (OngoingReload.awaitIdle(game)) {
             LOGGER.info("[Hotwire] {}: a reload already under way brought them", why);
             return;
         }
         LOGGER.info("[Hotwire] {}; the game reloads its resources", why);
-        Minecraft game = Minecraft.getInstance();
         Set<String> chosen = getChosenPacks();
         try {
             CompletableFuture<Void> begun = new CompletableFuture<>();
             CompletableFuture<Void> reload = CompletableFuture.completedFuture(game).thenComposeAsync(on -> {
                 List<CompletableFuture<Void>> started = new ArrayList<>();
-                Tripwire.expect(closing, () -> started.add(track(on.reloadResourcePacks())));
+                Tripwire.expect(closing, () -> started.add(on.reloadResourcePacks()));
                 begun.complete(null);
                 return started.getFirst();
             }, game);
@@ -579,10 +540,7 @@ public final class ResourceReload {
                 Thread.sleep(50);
             }
 
-            long handedOn = System.nanoTime() + HANDED_ON.toNanos();
-            while (!reload.isDone() && System.nanoTime() < handedOn) {
-                Thread.sleep(20);
-            }
+            OngoingReload.awaitIdle(game);
             if (!reload.isDone()) {
                 reportFailed(why, chosen);
                 return;

@@ -239,6 +239,7 @@ public final class SwitchRunner {
 
     private CheckedResult runTimedOff(List<String> ids) {
         ResourceReload.awaitIdle();
+        SwitchTimes.mark("reloads under way");
 
         SwitchPlan plan = this.switcher.planOff(ids);
         SwitchTimes.mark("plan: order");

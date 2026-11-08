@@ -11,6 +11,7 @@ import dev.moon.hotwire.fabric.RenderPassEnd;
 import dev.moon.hotwire.fabric.ResourceReload;
 //?}
 import dev.moon.hotwire.fabric.BackgroundReload;
+import dev.moon.hotwire.fabric.OngoingReload;
 import dev.moon.hotwire.fabric.add.TickEnd;
 import dev.moon.hotwire.fabric.registration.GameHold;
 import dev.moon.hotwire.redefine.StartArguments;
@@ -109,5 +110,6 @@ public abstract class MinecraftMixin {
         }
         TickEnd.runDue();
         BackgroundReload.tick();
+        OngoingReload.tick();
     }
 }

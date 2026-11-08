@@ -43,6 +43,8 @@
     "core.server.TickTaskAccessor"
   ],
   "client": [
+    "core.client.MinecraftAccessor",
+    "core.client.ReloadableResourceManagerMixin",
     "core.blaze3d.systems.CommandEncoderAccessor",
     "core.blaze3d.opengl.GlCommandEncoderAccessor",
     "core.client.KeyboardHandlerMixin",

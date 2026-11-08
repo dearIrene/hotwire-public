@@ -32,7 +32,8 @@ final class ReloadListeners {
     }
 
     static boolean runWithoutHeavy(Minecraft game, Runnable reload) {
-        return runDropping(game, one -> BESIDE_RENDERERS.stream().anyMatch(type -> type.isInstance(one)), reload);
+        return runDropping(game, one -> BESIDE_RENDERERS.stream().anyMatch(type -> type.isInstance(one)),
+                () -> OngoingReload.runPartial(reload));
     }
 
     static boolean runWithout(Minecraft game, Class<?> type, Runnable reload) {

@@ -1,13 +1,10 @@
 package dev.moon.hotwire.fabric;
 
-import dev.moon.hotwire.fabric.registration.Fields;
-import dev.moon.hotwire.redefine.FieldSlots;
 import java.util.List;
 import java.util.Optional;
 import java.util.concurrent.CopyOnWriteArrayList;
 import java.util.function.Consumer;
 import net.minecraft.client.Minecraft;
-import net.minecraft.client.gui.screens.LoadingOverlay;
 import net.minecraft.server.packs.resources.ReloadInstance;
 import org.jspecify.annotations.Nullable;
 import org.slf4j.Logger;
@@ -71,16 +68,28 @@ public final class BackgroundReload {
         waiting.forEach(Runnable::run);
     }
 
+    static boolean isDue() {
+        return due != null;
+    }
+
+    @SuppressWarnings("ReferenceEquality")
+    static void letGo(ReloadInstance reload) {
+        ReloadRun now = running;
+        if (now != null && now.reload() == reload) {
+            running = null;
+        }
+    }
+
     private static boolean begin(Runnable begin) {
-        begin.run();
-        LoadingOverlay overlay = ModViews.findLoadingOverlay();
-        ReloadInstance reload = overlay == null ? null : OngoingReload.findReloadOf(overlay);
-        Consumer<Optional<Throwable>> onFinish = overlay == null ? null : findOnFinish(overlay);
-        if (reload == null || onFinish == null) {
+        OngoingReload.clearDoneOverlay();
+        OngoingReload.Run run = OngoingReload.begin(begin);
+        Consumer<Optional<Throwable>> onFinish = run == null ? null : run.onFinish;
+        if (run == null || onFinish == null) {
             return false;
         }
+        run.adopted = true;
         ModViews.closeOverlay();
-        running = new ReloadRun(reload, onFinish, System.nanoTime());
+        running = new ReloadRun(run.reload, onFinish, System.nanoTime());
         return true;
     }
 
@@ -89,10 +98,14 @@ public final class BackgroundReload {
         Runnable begin = due;
         if (begin != null && running == null) {
             due = null;
-            if (!begin(begin)) {
-                LOGGER.info("[Hotwire] the whole reload after the switch runs under its loading screen");
-                Minecraft game = Minecraft.getInstance();
-                ResourceReload.getLastReload().whenComplete((done, thrown) -> game.execute(BackgroundReload::runAfter));
+            try {
+                if (!begin(begin)) {
+                    LOGGER.info("[Hotwire] the whole reload after the switch runs under its loading screen");
+                    Minecraft game = Minecraft.getInstance();
+                    OngoingReload.whenIdle(game).thenRunAsync(BackgroundReload::runAfter, game);
+                }
+            } finally {
+                OngoingReload.signal();
             }
         }
         finishIfDone();
@@ -114,19 +127,5 @@ public final class BackgroundReload {
         LOGGER.info("[Hotwire] the resources were reloaded with the game drawing in {} ms",
                 (System.nanoTime() - now.began()) / 1_000_000);
         runAfter();
-    }
-
-    @SuppressWarnings("unchecked")
-    private static @Nullable Consumer<Optional<Throwable>> findOnFinish(LoadingOverlay overlay) {
-        for (FieldSlots.Slot field : Fields.getDeclared(LoadingOverlay.class)) {
-            if (Consumer.class.isAssignableFrom(field.getType())) {
-                try {
-                    return (Consumer<Optional<Throwable>>) field.get(overlay);
-                } catch (IllegalAccessException e) {
-                    return null;
-                }
-            }
-        }
-        return null;
     }
 }
