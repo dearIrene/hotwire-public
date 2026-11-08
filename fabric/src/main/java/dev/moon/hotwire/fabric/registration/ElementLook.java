@@ -1,10 +1,12 @@
 package dev.moon.hotwire.fabric.registration;
 
+import dev.moon.hotwire.redefine.FieldSlots;
 import dev.moon.hotwire.switching.HoldBudgetException;
 import java.lang.management.ClassLoadingMXBean;
 import java.lang.management.ManagementFactory;
 import java.util.ArrayList;
 import java.util.Collection;
+import java.util.Collections;
 import java.util.IdentityHashMap;
 import java.util.LinkedHashSet;
 import java.util.List;
@@ -46,7 +48,22 @@ public final class ElementLook {
     private static final boolean NO_LOOK = Boolean.parseBoolean(System.getProperty("hotwire.noLook"));
 
     static boolean isLeftToModelWrappers(Object holder) {
-        return !WHOLE.get() && holder instanceof ModelManager;
+        return !WHOLE.get() && (holder instanceof ModelManager || modelSets.contains(holder));
+    }
+
+    private static volatile Set<Object> modelSets = Set.of();
+
+    private static Set<Object> findModelSets() {
+        Object manager = Minecraft.getInstance().getModelManager();
+        Set<Object> sets = Collections.newSetFromMap(new IdentityHashMap<>());
+        for (FieldSlots.Slot field : Fields.getReferenceFields(manager.getClass(), false)) {
+            Object value = CollectionParts.read(field, manager);
+            if (value != null && value.getClass().getName().startsWith("net.minecraft.")
+                    && value.getClass().getSimpleName().contains("Model")) {
+                sets.add(value);
+            }
+        }
+        return sets;
     }
 
     private static volatile Mode runningMode = Mode.HOLD;
@@ -132,6 +149,7 @@ public final class ElementLook {
             boolean whole = WHOLE.get() || newWorld;
             NEW_WORLD.set(newWorld);
             boolean traced = CHECK && !WHOLE.get();
+            modelSets = findModelSets();
             if (traced) {
                 references.traceLook(true);
             }
