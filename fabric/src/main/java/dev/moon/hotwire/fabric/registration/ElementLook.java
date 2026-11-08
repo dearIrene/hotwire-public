@@ -292,6 +292,10 @@ public final class ElementLook {
     void close() {
         if (isLooking()) {
             LOGGER.info("[Hotwire] the notes holds {} collections", this.notes.countContainers());
+            if (NEW_WORLD.get()) {
+                LOGGER.info("[Hotwire] the notes' collections by where they sit, the most elements first: {}",
+                        this.notes.describeKinds(12));
+            }
         }
     }
 

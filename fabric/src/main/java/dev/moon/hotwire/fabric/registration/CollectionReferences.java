@@ -291,8 +291,8 @@ final class CollectionReferences implements FixedLists.Walk {
     private static final int WRAPPED_BELOW = 3;
 
     private void readStatic(FieldSlots.Slot field, Object value, boolean game) {
-        if (field.isPlainOnly() && (value instanceof Collection<?> || value instanceof Map<?, ?>
-                || value instanceof Object[])) {
+        if ((field.isPlainOnly() && (value instanceof Collection<?> || value instanceof Map<?, ?>
+                || value instanceof Object[])) || CollectionParts.holdsNoTake(value)) {
             return;
         }
         CollectionNotes notes = ElementLook.isLooking() ? this.look.getNotes() : null;
@@ -716,8 +716,9 @@ final class CollectionReferences implements FixedLists.Walk {
         boolean statics = holder instanceof Class<?>;
         List<FieldSlots.Slot> fields = Fields.getMovingFields(statics ? (Class<?>) holder : holder.getClass(), statics);
         long print = fields.size();
-        for (FieldSlots.Slot field : fields) {
-            print = Fingerprints.addInOrder(print, CollectionParts.read(field, statics ? null : holder));
+
+        for (int at = 0; at < fields.size(); at++) {
+            print = Fingerprints.addInOrder(print, CollectionParts.read(fields.get(at), statics ? null : holder));
         }
         return print;
     }
@@ -780,7 +781,8 @@ final class CollectionReferences implements FixedLists.Walk {
 
     private void collect(Object value) {
         ElementLook.stopIfAsked();
-        if (CollectionParts.holdsPrimitivesOnly(value) || this.owners.findOwnerAmong(value) != null
+        if (CollectionParts.holdsPrimitivesOnly(value) || CollectionParts.holdsNoTake(value)
+                || this.owners.findOwnerAmong(value) != null
                 || GameRegistrations.isOfOffMod(value.getClass()) || this.depth >= DEEPEST) {
             return;
         }
@@ -797,9 +799,14 @@ final class CollectionReferences implements FixedLists.Walk {
     private void collectWithin(Object value) {
         CollectionNotes notes = ElementLook.isLooking() ? this.look.getNotes() : null;
 
-        if (notes != null && !NO_PRINTS && !notes.isBeingRead(value) && notes.isReadBy(value, this.reader)
-                && notes.isUnchanged(value)) {
-            return;
+        if (notes != null && !NO_PRINTS && !notes.isBeingRead(value)) {
+            if (!notes.isReadBy(value, this.reader)) {
+                this.report.countRead(notes.hasNote(value) ? "a new reader" : "no note", value);
+            } else if (!notes.isUnchanged(value)) {
+                this.report.countRead("a moved print", value);
+            } else {
+                return;
+            }
         }
         this.readChanging(value, this::collectOnce);
     }
@@ -990,8 +997,9 @@ final class CollectionReferences implements FixedLists.Walk {
             } catch (ReflectiveOperationException | RuntimeException e) {
                 continue;
             }
+
             if (value == null || ValueOwners.isPlain(value) || value instanceof Collection<?>
-                    || value instanceof Map<?, ?>) {
+                    || value instanceof Map<?, ?> || value.getClass().isArray()) {
                 continue;
             }
             String mod = GameRegistrations.findModOrShipper(value.getClass());

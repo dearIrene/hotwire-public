@@ -37,6 +37,10 @@ public final class PlainTypes {
                 && !simple.contains("Object") && !simple.contains("Reference");
     }
 
+    public static boolean isPlainValue(Class<?> type) {
+        return PLAIN.contains(type.getName().replace('.', '/'));
+    }
+
     public static boolean holdsPlainOnly(String desc, @Nullable String signature) {
         if (signature == null) {
             Type type = Type.getType(desc);

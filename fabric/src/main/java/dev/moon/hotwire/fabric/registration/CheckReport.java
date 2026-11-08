@@ -114,7 +114,7 @@ final class CheckReport {
             return field + " (watched" + moved + (was.through() ? ", read through)" : ", inside)");
         }
         if (Fields.getMovingFields(at.getClass(), false).isEmpty()) {
-            return field + " (all final)";
+            return field + " (no field that moves)";
         }
         return field + " (unwatched" + this.describeLooks(at) + ")";
     }

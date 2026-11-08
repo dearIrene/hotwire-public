@@ -1,5 +1,6 @@
 package dev.moon.hotwire.fabric.registration;
 
+import dev.moon.hotwire.classfile.PlainTypes;
 import dev.moon.hotwire.jvm.LoadedClassList;
 import dev.moon.hotwire.redefine.FieldSlots;
 import dev.moon.hotwire.report.StartTimes;
@@ -223,9 +224,11 @@ public final class Fields {
                 }
             }
         }
+
         List<FieldSlots.Slot> moving = new ArrayList<>();
         for (FieldSlots.Slot field : out) {
-            if (!Modifier.isFinal(field.getModifiers())) {
+            if (!Modifier.isFinal(field.getModifiers()) && !field.isPlainOnly()
+                    && !PlainTypes.isPlainValue(field.getType())) {
                 moving.add(field);
             }
         }

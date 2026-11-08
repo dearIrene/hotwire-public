@@ -12,6 +12,7 @@ import java.util.ArrayList;
 import java.util.Collection;
 import java.util.Collections;
 import java.util.Deque;
+import java.util.HashMap;
 import java.util.HashSet;
 import java.util.IdentityHashMap;
 import java.util.List;
@@ -357,6 +358,10 @@ final class CollectionNotes {
         return note == null || note.readers.isEmpty() ? TakeReach.GAME : note.readers;
     }
 
+    synchronized boolean hasNote(Object container) {
+        return this.notes.containsKey(container);
+    }
+
     synchronized boolean isReadBy(Object container, Set<String> readers) {
         Note note = this.notes.get(container);
         return note != null && !note.readers.isEmpty() && note.readers.equals(TakeReach.join(note.readers, readers));
@@ -560,6 +565,40 @@ final class CollectionNotes {
 
     synchronized int countContainers() {
         return this.notes.size();
+    }
+
+    synchronized String describeKinds(int most) {
+        Map<String, long[]> kinds = new HashMap<>();
+        for (Note note : this.order) {
+            Object container = note.findFiled();
+            if (container != null) {
+                long[] kind = kinds.computeIfAbsent(container.getClass().getName() + " of "
+                        + (note.ofWorld ? "the world" : note.origin.staticsOf()), any -> new long[2]);
+                kind[0]++;
+                kind[1] += countElements(container);
+            }
+        }
+        List<Map.Entry<String, long[]>> sorted = new ArrayList<>(kinds.entrySet());
+        sorted.sort((a, b) -> Long.compare(b.getValue()[1], a.getValue()[1]));
+        List<String> top = new ArrayList<>();
+        for (Map.Entry<String, long[]> kind : sorted.subList(0, Math.min(most, sorted.size()))) {
+            top.add(kind.getKey() + " " + kind.getValue()[0] + " holding " + kind.getValue()[1]);
+        }
+        return top.toString();
+    }
+
+    @SuppressWarnings("checkstyle:IllegalCatch")
+    private static int countElements(Object container) {
+        try {
+            return switch (container) {
+                case Collection<?> all -> all.size();
+                case Map<?, ?> map -> map.size();
+                case Object[] array -> array.length;
+                default -> 0;
+            };
+        } catch (RuntimeException e) {
+            return 0;
+        }
     }
 
     private void remove(Object container, Note note) {

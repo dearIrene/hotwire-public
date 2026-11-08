@@ -53,6 +53,19 @@ final class CollectionParts {
         return PRIMITIVE_ONLY.get(container.getClass());
     }
 
+    private static final ClassValue<Boolean> HOLDS_NO_TAKE = new ClassValue<>() {
+        @Override
+        protected Boolean computeValue(Class<?> type) {
+            Class<?> slot = type.getComponentType();
+            return slot != null && !slot.isPrimitive() && !slot.isInterface() && slot != Object.class
+                    && slot != Record.class && !slot.isRecord();
+        }
+    };
+
+    static boolean holdsNoTake(Object container) {
+        return container instanceof Object[] && HOLDS_NO_TAKE.get(container.getClass());
+    }
+
     static boolean isFixedSize(List<?> list) {
         if (REFUSES.get(list.getClass())) {
             return true;
