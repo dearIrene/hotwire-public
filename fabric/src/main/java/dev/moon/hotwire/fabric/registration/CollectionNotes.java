@@ -393,11 +393,11 @@ final class CollectionNotes {
                 || name.startsWith("kotlin.collections.Empty");
     }
 
-    private static final String JDK_IMMUTABLE = familyOf(List.of().getClass());
-    private static final String JDK_EMPTY = familyOf(Collections.emptyList().getClass()) + "Empty";
-    private static final String JDK_SINGLETON = familyOf(Collections.singletonList(0).getClass()) + "Singleton";
+    private static final String JDK_IMMUTABLE = findFamily(List.of().getClass());
+    private static final String JDK_EMPTY = findFamily(Collections.emptyList().getClass()) + "Empty";
+    private static final String JDK_SINGLETON = findFamily(Collections.singletonList(0).getClass()) + "Singleton";
 
-    private static String familyOf(Class<?> type) {
+    private static String findFamily(Class<?> type) {
         String name = type.getName();
         return name.substring(0, name.indexOf('$') + 1);
     }
@@ -433,7 +433,7 @@ final class CollectionNotes {
         return this.leftUnchanged;
     }
 
-    void keepPrintsThrough(Collection<Object> containers, Runnable change) {
+    void notePrintsAfter(Collection<Object> containers, Runnable change) {
         Set<Object> current = Collections.newSetFromMap(new IdentityHashMap<>());
         synchronized (this) {
             for (Object container : containers) {

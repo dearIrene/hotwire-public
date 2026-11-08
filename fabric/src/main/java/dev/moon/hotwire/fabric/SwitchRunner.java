@@ -143,7 +143,7 @@ public final class SwitchRunner {
         }
     }
 
-    String benchLook(int times, long gapMillis) throws InterruptedException {
+    String measureLooks(int times, long gapMillis) throws InterruptedException {
         List<Long> took = new ArrayList<>();
         for (int at = 0; at < times; at++) {
             long began = System.nanoTime();
