@@ -18,8 +18,6 @@ final class WalkReport {
 
     private final Map<String, Integer> notedBy = new HashMap<>();
 
-    private final Map<String, Integer> notedIn = new HashMap<>();
-
     private int ownLeft;
 
     private int filed;
@@ -44,12 +42,6 @@ final class WalkReport {
         this.ownLeft++;
     }
 
-    private final Map<String, Integer> readFor = new HashMap<>();
-
-    void countRead(String why, Object container) {
-        this.readFor.merge(why + " " + container.getClass().getSimpleName(), 1, Integer::sum);
-    }
-
     void count(boolean filed) {
         if (filed) {
             this.filed++;
@@ -58,9 +50,8 @@ final class WalkReport {
         }
     }
 
-    void countNoted(String owner, String where) {
+    void countNoted(String owner) {
         this.notedBy.merge(owner, 1, Integer::sum);
-        this.notedIn.merge(owner + " in " + where, 1, Integer::sum);
     }
 
     int countTakes() {
@@ -75,15 +66,9 @@ final class WalkReport {
                     .map(entry -> entry.getKey() + " " + entry.getValue()).toList();
             LOGGER.info("[Hotwire] the look noted {} takes, most of them of {}", this.notedBy.values().stream()
                     .mapToInt(Integer::intValue).sum(), most);
-            LOGGER.info("[Hotwire] where the most notes sit: {}", this.notedIn.entrySet().stream()
-                    .sorted(Map.Entry.<String, Integer>comparingByValue().reversed()).limit(SLOWEST_NAMED)
-                    .map(entry -> entry.getKey() + " " + entry.getValue()).toList());
             LOGGER.info("[Hotwire] {} of each mod's own objects in its own lists were left where they are; {} takes"
                     + " were filed under the mods they could be, {} any hold asks", this.ownLeft, this.filed,
                     this.unfiled);
-            LOGGER.info("[Hotwire] the look read collections for: {}", this.readFor.entrySet().stream()
-                    .sorted(Map.Entry.<String, Integer>comparingByValue().reversed()).limit(SLOWEST_NAMED)
-                    .map(entry -> entry.getKey() + " " + entry.getValue()).toList());
             List<String> widest = candidates.takeWidest(SLOWEST_NAMED);
             if (!widest.isEmpty()) {
                 LOGGER.info("[Hotwire] takes filed under 50 mods or more, by their element's class: {}", widest);

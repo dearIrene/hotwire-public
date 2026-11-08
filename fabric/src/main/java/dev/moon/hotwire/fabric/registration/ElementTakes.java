@@ -12,7 +12,6 @@ import java.util.List;
 import java.util.Map;
 import java.util.Set;
 import java.util.TreeSet;
-import java.util.concurrent.ConcurrentHashMap;
 import java.util.function.BiConsumer;
 import java.util.function.Consumer;
 import java.util.function.Function;
@@ -254,10 +253,6 @@ final class ElementTakes {
             LOGGER.info("[Hotwire] {} collections changed since the look ({} before the asks) and are read again in the"
                     + " hold; {} takes asked again", changed.size(), prepared.movedSinceLook().size(), askedAgain);
         }
-        if (!NOT_FOUND.isEmpty()) {
-            LOGGER.info("[Hotwire] takes whose list no longer held their element, by its class: {}", NOT_FOUND);
-            NOT_FOUND.clear();
-        }
         if ((System.nanoTime() - began) / 1_000_000 >= SLOW_MILLIS) {
             LOGGER.info("[Hotwire] the noted takes spent the most time in {}", spent.entrySet().stream()
                     .sorted(Comparator.comparingLong((Map.Entry<Object, long[]> entry) -> entry.getValue()[0])
@@ -321,10 +316,7 @@ final class ElementTakes {
                 return;
             }
         }
-        NOT_FOUND.merge(item.getClass().getName(), 1, Integer::sum);
     }
-
-    private static final Map<String, Integer> NOT_FOUND = new ConcurrentHashMap<>();
 
     static void changeOnItsThread(Object container, Runnable change) {
         if (GuavaCaches.isCache(container) && !Minecraft.getInstance().isSameThread()) {

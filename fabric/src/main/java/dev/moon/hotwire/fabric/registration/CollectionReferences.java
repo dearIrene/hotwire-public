@@ -514,10 +514,6 @@ final class CollectionReferences implements FixedLists.Walk {
         int again = 0;
         List<Object> changed = notes.findChanged();
         long printed = System.nanoTime();
-
-        Map<String, long[]> spent = new HashMap<>();
-        long longest = 0;
-        String longestRead = "none";
         for (Object container : changed) {
             ElementLook.stopIfAsked();
             if (this.seen.containsKey(container)) {
@@ -526,7 +522,6 @@ final class CollectionReferences implements FixedLists.Walk {
             this.reader = notes.findReaders(container);
             this.seen.put(container, this.reader);
             again++;
-            long readBegan = System.nanoTime();
             CollectionNotes.Origin origin = notes.findOrigin(container);
             this.readingStaticsOf = origin.staticsOf();
             this.checkReport.enter(CheckReport.NOTES);
@@ -543,23 +538,10 @@ final class CollectionReferences implements FixedLists.Walk {
                 }
             } finally {
                 this.checkReport.leave();
-                long took = System.nanoTime() - readBegan;
-                long[] cost = spent.computeIfAbsent(container.getClass().getSimpleName() + " of "
-                        + (notes.isOfWorld(container) ? "the world" : origin.staticsOf()), any -> new long[2]);
-                cost[0]++;
-                cost[1] += took;
-                if (took > longest) {
-                    longest = took;
-                    longestRead = container.getClass().getSimpleName() + " of " + describeSize(container)
-                            + (origin.field() == null ? "" : " in " + origin.field().getDeclaringClass().getName() + "."
-                            + origin.field().getName()) + " (" + took / 1_000_000 + " ms)";
-                }
             }
         }
         long readAgain = System.nanoTime();
         int moved = 0;
-
-        Map<String, Integer> movedKinds = new HashMap<>();
 
         boolean whole = notes.isWhole();
         List<Map.Entry<Object, CollectionNotes.Holder>> holders = notes.findHolders();
@@ -576,7 +558,6 @@ final class CollectionReferences implements FixedLists.Walk {
             boolean firstVisit = this.visit(holder);
             if (firstVisit || (one.getValue().through() && !this.readThrough.contains(holder))) {
                 moved++;
-                movedKinds.merge(holder.getClass().getSimpleName(), 1, Integer::sum);
                 notes.setInWorld(one.getValue().ofWorld());
                 this.checkReport.enter(CheckReport.NOTES);
                 try {
@@ -590,19 +571,9 @@ final class CollectionReferences implements FixedLists.Walk {
         long ended = System.nanoTime();
         LOGGER.info("[Hotwire] the look read {} collections of the notes again in {} ms ({} passed as unchanged), {}"
                 + " objects whose fields moved (of {} watched), and passed the statics of {} classes unchanged; prints"
-                + " {} ms, reads again {} ms, holders {} ms; the reads again took longest over {}, and the longest one"
-                + " was {}; moved most: {}", again,
+                + " {} ms, reads again {} ms, holders {} ms", again,
                 (ended - began) / 1_000_000, notes.countLeftUnchanged(), moved, holders.size(), staticsUnchanged,
-                (printed - began) / 1_000_000, (readAgain - printed) / 1_000_000, (ended - readAgain) / 1_000_000,
-                describeLongest(spent), longestRead, movedKinds.entrySet().stream()
-                        .sorted(Map.Entry.<String, Integer>comparingByValue().reversed()).limit(6)
-                        .map(one -> one.getKey() + " " + one.getValue()).toList());
-    }
-
-    private static String describeLongest(Map<String, long[]> spent) {
-        return spent.entrySet().stream().sorted((a, b) -> Long.compare(b.getValue()[1], a.getValue()[1])).limit(6)
-                .map(one -> one.getKey() + " " + one.getValue()[0] + " in " + one.getValue()[1] / 1_000_000 + " ms")
-                .toList().toString();
+                (printed - began) / 1_000_000, (readAgain - printed) / 1_000_000, (ended - readAgain) / 1_000_000);
     }
 
     void takeOrNote(String owner, @Nullable Set<String> candidates, Supplier<@Nullable String> asked,
@@ -635,8 +606,7 @@ final class CollectionReferences implements FixedLists.Walk {
             take.accept(owner);
             this.look.getNotes().forgetPrint(this.collecting);
         } else {
-            this.report.countNoted(owner, this.collecting == null ? "a field"
-                    : this.collecting.getClass().getSimpleName() + " of " + this.readingStaticsOf);
+            this.report.countNoted(owner);
         }
     }
 
@@ -883,11 +853,7 @@ final class CollectionReferences implements FixedLists.Walk {
         CollectionNotes notes = ElementLook.isLooking() ? this.look.getNotes() : null;
 
         if (notes != null && !NO_PRINTS && !notes.isBeingRead(value)) {
-            if (!notes.isReadBy(value, this.reader)) {
-                this.report.countRead(notes.hasNote(value) ? "a new reader" : "no note", value);
-            } else if (!notes.isUnchanged(value)) {
-                this.report.countRead("a moved print", value);
-            } else {
+            if (notes.isReadBy(value, this.reader) && notes.isUnchanged(value)) {
                 return;
             }
         }
@@ -1068,9 +1034,6 @@ final class CollectionReferences implements FixedLists.Walk {
     }
 
     void noteWrappedInside(Object holder, int steps) {
-        if (steps == WRAPPED_BELOW) {
-            this.report.countRead("a wrapped read of", holder);
-        }
         CollectionNotes notes = ElementLook.isLooking() ? this.look.getNotes() : null;
         Set<String> was = this.enter(holder);
         if (notes != null) {
