@@ -619,6 +619,28 @@ final class CollectionReferences implements FixedLists.Walk {
                 && !ValueOwners.isLambda(item) && mod.equals(GameRegistrations.findModOrShipper(item.getClass()));
     }
 
+    private @Nullable Class<?> ownClassAsked;
+    private @Nullable String ownStaticsAsked;
+    private @Nullable ElementOwners ownOwnersAsked;
+    private boolean ownClassAnswer;
+
+    @SuppressWarnings("ReferenceEquality")
+    private boolean isOwnPlainByClass(Object item) {
+        String statics = this.readingStaticsOf;
+        if (this.inSmall || statics == null || this.owners.isRegistered(item)) {
+            return false;
+        }
+        Class<?> type = item.getClass();
+        if (type != this.ownClassAsked || this.owners != this.ownOwnersAsked || !statics.equals(this.ownStaticsAsked)) {
+            this.ownClassAsked = type;
+            this.ownStaticsAsked = statics;
+            this.ownOwnersAsked = this.owners;
+            this.ownClassAnswer = !ElementOwners.isGameObject(item) && !ValueOwners.isLambda(item)
+                    && statics.equals(this.owners.findOwnOwner(item)) && this.isOwnPlain(statics, item);
+        }
+        return this.ownClassAnswer;
+    }
+
     @Override
     public List<Removal> getRemovalsOf(String mod) {
         return this.mine.computeIfAbsent(mod, any -> new ArrayList<>());
@@ -839,6 +861,10 @@ final class CollectionReferences implements FixedLists.Walk {
                     boolean fixed = CollectionParts.isFixedSize(items);
                     for (int index = items.size() - 1; index >= 0; index--) {
                         Object item = items.get(index);
+                        if (item != null && this.isOwnPlainByClass(item)) {
+                            this.report.countOwnLeft();
+                            continue;
+                        }
                         String mod = item == null ? null : this.owners.findOwnerOf(item, this.inSmall);
                         if (mod != null && this.isOwnPlain(mod, item)) {
                             this.report.countOwnLeft();
@@ -863,6 +889,10 @@ final class CollectionReferences implements FixedLists.Walk {
                 case Collection<?> collection when collection.size() <= LARGEST -> {
                     Collection<Object> items = (Collection<Object>) collection;
                     for (Object item : Wrappers.readItems(items)) {
+                        if (item != null && this.isOwnPlainByClass(item)) {
+                            this.report.countOwnLeft();
+                            continue;
+                        }
                         String mod = item == null ? null : this.owners.findOwnerOf(item, this.inSmall);
                         if (mod != null && this.isOwnPlain(mod, item)) {
                             this.report.countOwnLeft();
@@ -906,6 +936,11 @@ final class CollectionReferences implements FixedLists.Walk {
                     for (Map.Entry<Object, Object> entry : Wrappers.copyEntries(entries)) {
                         Object key = entry.getKey();
                         Object element = entry.getValue();
+                        if (element != null && (key == null || ValueOwners.isPlain(key))
+                                && this.isOwnPlainByClass(element)) {
+                            this.report.countOwnLeft();
+                            continue;
+                        }
                         String mod = this.owners.findOwnerOfEntry(key, element, this.inSmall);
 
                         if (mod != null && element != null && this.isOwnPlain(mod, element)
