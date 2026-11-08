@@ -14,6 +14,7 @@ import java.util.function.BooleanSupplier;
 import java.util.function.Predicate;
 import java.util.function.Supplier;
 import net.minecraft.client.Minecraft;
+import net.minecraft.client.resources.model.ModelManager;
 import org.jspecify.annotations.Nullable;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -43,6 +44,12 @@ public final class ElementLook {
     private static final ThreadLocal<Boolean> WHOLE = ThreadLocal.withInitial(() -> false);
 
     private static final boolean NO_LOOK = Boolean.parseBoolean(System.getProperty("hotwire.noLook"));
+
+    private static final boolean PASS_MODELS = Boolean.parseBoolean(System.getProperty("hotwire.lookPassesModels"));
+
+    static boolean isLeftToModelWrappers(Object holder) {
+        return PASS_MODELS && !WHOLE.get() && holder instanceof ModelManager;
+    }
 
     private static volatile Mode runningMode = Mode.HOLD;
 
