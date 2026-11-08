@@ -45,10 +45,8 @@ public final class ElementLook {
 
     private static final boolean NO_LOOK = Boolean.parseBoolean(System.getProperty("hotwire.noLook"));
 
-    private static final boolean PASS_MODELS = Boolean.parseBoolean(System.getProperty("hotwire.lookPassesModels"));
-
     static boolean isLeftToModelWrappers(Object holder) {
-        return PASS_MODELS && !WHOLE.get() && holder instanceof ModelManager;
+        return !WHOLE.get() && holder instanceof ModelManager;
     }
 
     private static volatile Mode runningMode = Mode.HOLD;
@@ -177,6 +175,11 @@ public final class ElementLook {
             look(references, findEvery(List.of()), on, false);
             LOGGER.info("[Hotwire] check: after the off of {}, a whole read found still in place: {}", mods,
                     references.describeTakesFor(mods, known, watched));
+            String offOnly = references.takeReadOnlyByOff();
+            if (!offOnly.equals("{}")) {
+                LOGGER.info("[Hotwire] check: of the off of {}, what only the off's own mods read (nothing on reaches"
+                        + " it): {}", mods, offOnly);
+            }
             String notesOnly = references.takeOnlyThroughNotes();
             if (!notesOnly.equals("{}")) {
                 LOGGER.info("[Hotwire] check: of the off of {}, what only the notes still reach (no read from the"
@@ -302,6 +305,7 @@ public final class ElementLook {
             if (NEW_WORLD.get()) {
                 LOGGER.info("[Hotwire] the notes' collections by where they sit, the most elements first: {}",
                         this.notes.describeKinds(12));
+                LOGGER.info("[Hotwire] the objects the notes watch: {}", this.notes.describeWatched(12));
             }
         }
     }

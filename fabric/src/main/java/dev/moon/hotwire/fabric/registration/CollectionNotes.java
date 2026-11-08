@@ -592,6 +592,24 @@ final class CollectionNotes {
         return top.toString();
     }
 
+    synchronized String describeWatched(int most) {
+        Map<String, int[]> kinds = new HashMap<>();
+        this.holders.forEach((holder, read) -> {
+            int[] kind = kinds.computeIfAbsent(holder.getClass().getName(), any -> new int[3]);
+            kind[0]++;
+            kind[1] += read.through() ? 1 : 0;
+            kind[2] += read.ofWorld() ? 1 : 0;
+        });
+        List<Map.Entry<String, int[]>> sorted = new ArrayList<>(kinds.entrySet());
+        sorted.sort((a, b) -> Integer.compare(b.getValue()[0], a.getValue()[0]));
+        List<String> top = new ArrayList<>();
+        for (Map.Entry<String, int[]> kind : sorted.subList(0, Math.min(most, sorted.size()))) {
+            top.add(kind.getKey() + " " + kind.getValue()[0] + " (" + kind.getValue()[1] + " read through, "
+                    + kind.getValue()[2] + " the world's)");
+        }
+        return this.holders.size() + " in " + kinds.size() + " classes: " + top;
+    }
+
     @SuppressWarnings("checkstyle:IllegalCatch")
     private static int countElements(Object container) {
         try {

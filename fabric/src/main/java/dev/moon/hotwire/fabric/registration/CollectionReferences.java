@@ -188,6 +188,11 @@ final class CollectionReferences implements FixedLists.Walk {
                     this.onlyThroughNotes.merge(container.getClass().getSimpleName() + " of " + describeSize(container)
                             + " from " + this.look.getNotes().findOrigin(container).staticsOf(), 1, Integer::sum);
                 } else if (takes.get(at) instanceof ElementTakes.NotedTake noted && noted.whose().get() != null
+                        && this.holdsOwned(container) && this.isReadOnlyBy(container, mods)) {
+                    this.readOnlyByOff.merge(container.getClass().getSimpleName() + " of " + describeSize(container)
+                            + " from " + this.look.getNotes().findOrigin(container).staticsOf() + " holding "
+                            + this.findClassesOwned(container), 1, Integer::sum);
+                } else if (takes.get(at) instanceof ElementTakes.NotedTake noted && noted.whose().get() != null
                         && this.holdsOwned(container)) {
                     CollectionNotes.Origin origin = this.look.getNotes().findOrigin(container);
                     found.merge(container.getClass().getSimpleName() + " of " + describeSize(container) + " from "
@@ -208,6 +213,20 @@ final class CollectionReferences implements FixedLists.Walk {
     }
 
     private final Map<String, Integer> onlyThroughNotes = new TreeMap<>();
+
+    private final Map<String, Integer> readOnlyByOff = new TreeMap<>();
+
+    @SuppressWarnings("ReferenceEquality")
+    private boolean isReadOnlyBy(Object container, List<String> mods) {
+        Set<String> readers = this.look.getNotes().findReaders(container);
+        return readers != TakeReach.GAME && !readers.isEmpty() && mods.containsAll(readers);
+    }
+
+    synchronized String takeReadOnlyByOff() {
+        String said = this.readOnlyByOff.toString();
+        this.readOnlyByOff.clear();
+        return said;
+    }
 
     synchronized String takeOnlyThroughNotes() {
         String said = this.onlyThroughNotes.toString();

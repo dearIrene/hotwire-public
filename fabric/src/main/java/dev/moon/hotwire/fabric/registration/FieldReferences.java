@@ -189,6 +189,10 @@ public final class FieldReferences {
         return this.elements.takeOnlyThroughNotes();
     }
 
+    public String takeReadOnlyByOff() {
+        return this.elements.takeReadOnlyByOff();
+    }
+
     public IdentityHashMap<Object, CollectionNotes.NoteSummary> findSummaries() {
         return this.elements.look.getNotes().findSummaries();
     }
