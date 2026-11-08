@@ -33,6 +33,8 @@ public final class InitHookRuns {
 
     private static volatile Predicate<Class<?>> rebuilt = type -> false;
 
+    private static final Map<Class<?>, Due> WAITING = new LinkedHashMap<>();
+
     private InitHookRuns() {
     }
 
@@ -46,6 +48,53 @@ public final class InitHookRuns {
     }
 
     public static int run(Map<Class<?>, Due> hooked) {
+        Map<Class<?>, Due> now = new LinkedHashMap<>();
+        synchronized (WAITING) {
+            hooked.forEach((type, due) -> {
+                String mod = Tripwire.findOwner(type);
+                if (mod != null && !ReplacedStatics.isOnAfterSwitch(mod)) {
+                    WAITING.put(type, due);
+                    LOGGER.info("[Hotwire] the setup of {} waits for {} to come back on", type.getName(), mod);
+                } else {
+                    WAITING.remove(type);
+                    now.put(type, due);
+                }
+            });
+        }
+        return runNow(now);
+    }
+
+    public static boolean hasWaiting() {
+        synchronized (WAITING) {
+            return !WAITING.isEmpty();
+        }
+    }
+
+    public static int runWaiting(Predicate<String> on, Consumer<Runnable> onGameThread) {
+        Map<Class<?>, Due> due = new LinkedHashMap<>();
+        synchronized (WAITING) {
+            WAITING.entrySet().removeIf(entry -> {
+                String mod = Tripwire.findOwner(entry.getKey());
+                boolean back = mod == null || (on.test(mod) && !Tripwire.isWatched(mod));
+                if (back) {
+                    due.put(entry.getKey(), entry.getValue());
+                }
+                return back;
+            });
+        }
+        if (due.isEmpty()) {
+            return 0;
+        }
+        LOGGER.info("[Hotwire] the setups that waited for their mods run now: {}", due.keySet());
+        AtomicInteger failed = new AtomicInteger();
+        ReplacedStatics.runInOneWalk(onGameThread, () -> failed.addAndGet(runNow(due)));
+        return failed.get();
+    }
+
+    private static int runNow(Map<Class<?>, Due> hooked) {
+        if (hooked.isEmpty()) {
+            return 0;
+        }
         List<Object> made = InitHookReplay.getLongLived();
         List<Class<?>> order = new ArrayList<>(hooked.keySet());
         order.sort(Comparator.comparingInt(type -> {

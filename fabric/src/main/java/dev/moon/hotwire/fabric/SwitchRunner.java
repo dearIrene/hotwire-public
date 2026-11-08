@@ -36,6 +36,7 @@ import dev.moon.hotwire.fabric.report.SwitchFaults;
 import dev.moon.hotwire.fabric.update.LiveUpdates;
 import dev.moon.hotwire.plan.SwitchPlan;
 import dev.moon.hotwire.redefine.HandlerGuards;
+import dev.moon.hotwire.redefine.InitHookRuns;
 import dev.moon.hotwire.redefine.RebuildException;
 import dev.moon.hotwire.redefine.Tripwire;
 import dev.moon.hotwire.report.ActionJournal;
@@ -62,6 +63,7 @@ import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.concurrent.atomic.AtomicInteger;
 import java.util.concurrent.atomic.AtomicReference;
 import java.util.function.Consumer;
+import java.util.function.Predicate;
 import java.util.function.Supplier;
 import net.minecraft.client.Minecraft;
 import org.jspecify.annotations.Nullable;
@@ -212,6 +214,7 @@ public final class SwitchRunner {
 
             if (!off && result != null) {
                 LiveUpdates.runWaitingEntrypoints(this.switcher::isOn);
+                runWaitingSetups(this.switcher::isOn);
             }
             this.tripwire.closeRide();
             if (off) {
@@ -484,6 +487,18 @@ public final class SwitchRunner {
             Tripwire.endOff(stillOff);
         }
         this.tripwire.armLater(stillOff, id -> !this.switcher.isOn(id), GameTasks::takeOutAgain);
+    }
+
+    private static void runWaitingSetups(Predicate<String> on) {
+        if (!InitHookRuns.hasWaiting()) {
+            return;
+        }
+        GameHold hold = GameHold.begin(Minecraft.getInstance());
+        try {
+            InitHookRuns.runWaiting(on, GameHold::onGameAndWait);
+        } finally {
+            hold.release();
+        }
     }
 
     private void back(List<String> order) {

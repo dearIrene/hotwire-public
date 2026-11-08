@@ -40,6 +40,7 @@ public final class ReplacedStatics {
 
     private static @Nullable IdentityHashMap<Object, Object> batch;
     private static Set<String> goingOff = Set.of();
+    private static Set<String> onAfterSwitch = Set.of();
 
     private ReplacedStatics() {
     }
@@ -56,6 +57,11 @@ public final class ReplacedStatics {
             }
         }
         goingOff = Set.copyOf(off);
+        onAfterSwitch = Set.copyOf(onAfter);
+    }
+
+    static synchronized boolean isOnAfterSwitch(String mod) {
+        return !goingOff.contains(mod) && (onAfterSwitch.contains(mod) || !Tripwire.isWatched(mod));
     }
 
     static synchronized void noteWritten(Field field, Object old, Object made, InitHookReplay.StaticWriter writer) {
