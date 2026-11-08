@@ -2,8 +2,11 @@ package dev.moon.hotwire.redefine;
 
 import dev.moon.hotwire.classfile.ClassHeader;
 import java.lang.instrument.Instrumentation;
+import java.lang.invoke.CallSite;
+import java.lang.invoke.LambdaMetafactory;
 import java.lang.invoke.MethodHandle;
 import java.lang.invoke.MethodHandles;
+import java.lang.invoke.MethodType;
 import java.lang.invoke.VarHandle;
 import java.lang.reflect.Field;
 import java.lang.reflect.InaccessibleObjectException;
@@ -43,13 +46,13 @@ public final class FieldSlots {
     }
 
     private static final class Places {
-        private static final @Nullable MethodHandle GET;
-        private static final @Nullable MethodHandle GET_VOLATILE;
+        private static final @Nullable PlaceReader GET;
+        private static final @Nullable PlaceReader GET_VOLATILE;
         private static final @Nullable MethodHandle FIND;
 
         static {
-            MethodHandle get = null;
-            MethodHandle getVolatile = null;
+            PlaceReader get = null;
+            PlaceReader getVolatile = null;
             MethodHandle find = null;
             Instrumentation open = opener;
             try {
@@ -59,9 +62,8 @@ public final class FieldSlots {
                     Class<?> type = Class.forName("jdk.internal.misc.Unsafe");
                     Object unsafe = type.getMethod("getUnsafe").invoke(null);
                     MethodHandles.Lookup lookup = MethodHandles.lookup();
-                    get = lookup.unreflect(type.getMethod("getReference", Object.class, long.class)).bindTo(unsafe);
-                    getVolatile = lookup.unreflect(type.getMethod("getReferenceVolatile", Object.class, long.class))
-                            .bindTo(unsafe);
+                    get = makeReader(lookup, type, unsafe, "getReference");
+                    getVolatile = makeReader(lookup, type, unsafe, "getReferenceVolatile");
                     find = lookup.unreflect(type.getMethod("objectFieldOffset", Field.class)).bindTo(unsafe);
                 }
             } catch (ReflectiveOperationException | RuntimeException | LinkageError e) {
@@ -69,12 +71,26 @@ public final class FieldSlots {
                 getVolatile = null;
                 find = null;
             }
-            GET = get;
-            GET_VOLATILE = getVolatile;
-            FIND = find;
+            boolean all = get != null && getVolatile != null && find != null;
+            GET = all ? get : null;
+            GET_VOLATILE = all ? getVolatile : null;
+            FIND = all ? find : null;
         }
 
         private Places() {
+        }
+
+        @SuppressWarnings("checkstyle:IllegalCatch")
+        private static @Nullable PlaceReader makeReader(MethodHandles.Lookup lookup, Class<?> type, Object unsafe,
+                String name) {
+            MethodType read = MethodType.methodType(Object.class, Object.class, long.class);
+            try {
+                CallSite site = LambdaMetafactory.metafactory(lookup, "read", MethodType.methodType(PlaceReader.class,
+                        type), read, lookup.findVirtual(type, name, read), read);
+                return (PlaceReader) site.getTarget().invoke(unsafe);
+            } catch (Throwable e) {
+                return null;
+            }
         }
 
         @SuppressWarnings("checkstyle:IllegalCatch")
@@ -90,27 +106,17 @@ public final class FieldSlots {
             }
         }
 
-        @SuppressWarnings("checkstyle:IllegalCatch")
         static @Nullable Object read(Object holder, long place, boolean ordered) throws IllegalAccessException {
-            try {
-                if (ordered) {
-                    MethodHandle get = GET_VOLATILE;
-                    if (get == null) {
-                        throw new IllegalAccessException("no reads by place");
-                    }
-                    return (Object) get.invokeExact(holder, place);
-                }
-                MethodHandle get = GET;
-                if (get == null) {
-                    throw new IllegalAccessException("no reads by place");
-                }
-                return (Object) get.invokeExact(holder, place);
-            } catch (IllegalAccessException e) {
-                throw e;
-            } catch (Throwable e) {
-                throw new IllegalAccessException(e.toString());
+            PlaceReader reader = ordered ? GET_VOLATILE : GET;
+            if (reader == null) {
+                throw new IllegalAccessException("no reads by place");
             }
+            return reader.read(holder, place);
         }
+    }
+
+    private interface PlaceReader {
+        @Nullable Object read(Object holder, long place);
     }
 
     public static final class Slot {
