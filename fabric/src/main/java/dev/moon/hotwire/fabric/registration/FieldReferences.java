@@ -1,6 +1,7 @@
 package dev.moon.hotwire.fabric.registration;
 
 import com.google.common.collect.MapMaker;
+import dev.moon.hotwire.fabric.HotwireClient;
 import dev.moon.hotwire.fabric.add.LoaderModList;
 import dev.moon.hotwire.fabric.mixin.core.world.item.CreativeModeTabsAccessor;
 import dev.moon.hotwire.jvm.LoadedClassList;
@@ -235,7 +236,8 @@ public final class FieldReferences {
 
     private static boolean isStaying(Class<?> owner, Predicate<String> on) {
         String mod = GameRegistrations.findModOf(owner);
-        return mod == null || !GameRegistrations.isSwitchable(mod) || on.test(mod);
+        return mod == null || (!mod.equals(HotwireClient.ID) && (!GameRegistrations.isSwitchable(mod)
+                || on.test(mod)));
     }
 
     private LoadedClasses findLoaded(Collection<String> mods) {
@@ -327,7 +329,7 @@ public final class FieldReferences {
                     .forEach(statics::add);
 
             List<String> staying = classesOf.keySet().stream().filter(other -> (every || !mods.contains(other))
-                    && (GameRegistrations.isLibrary(other)
+                    && !other.equals(HotwireClient.ID) && (GameRegistrations.isLibrary(other)
                             || (on.test(other) && GameRegistrations.isSwitchable(other)))).toList();
 
             Map<String, List<Class<?>>> initialized = new HashMap<>();
@@ -512,6 +514,7 @@ public final class FieldReferences {
         return owner -> {
             String ownerMod = GameRegistrations.findModOf(owner);
             return !owner.getName().startsWith("java.") && (ownerMod == null || (!going.contains(ownerMod)
+                    && !ownerMod.equals(HotwireClient.ID)
                     && (!GameRegistrations.isSwitchable(ownerMod) || on.test(ownerMod))));
         };
     }
