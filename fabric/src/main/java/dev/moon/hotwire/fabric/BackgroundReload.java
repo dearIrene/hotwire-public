@@ -73,7 +73,7 @@ public final class BackgroundReload {
     }
 
     @SuppressWarnings("ReferenceEquality")
-    static void letGo(ReloadInstance reload) {
+    static void forget(ReloadInstance reload) {
         ReloadRun now = running;
         if (now != null && now.reload() == reload) {
             running = null;
@@ -102,10 +102,10 @@ public final class BackgroundReload {
                 if (!begin(begin)) {
                     LOGGER.info("[Hotwire] the whole reload after the switch runs under its loading screen");
                     Minecraft game = Minecraft.getInstance();
-                    OngoingReload.whenIdle(game).thenRunAsync(BackgroundReload::runAfter, game);
+                    OngoingReload.awaitIdleLater(game).thenRunAsync(BackgroundReload::runAfter, game);
                 }
             } finally {
-                OngoingReload.signal();
+                OngoingReload.markChanged();
             }
         }
         finishIfDone();

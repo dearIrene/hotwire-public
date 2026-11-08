@@ -62,7 +62,7 @@ public final class OngoingReload {
                 end(run);
             }
         });
-        signal();
+        markChanged();
     }
 
     public static Consumer<Optional<Throwable>> onShown(LoadingOverlay overlay, ReloadInstance reload,
@@ -85,7 +85,7 @@ public final class OngoingReload {
         Object pending = ((MinecraftAccessor) Minecraft.getInstance()).hotwire$getPendingReload();
         if (pending != pendingSeen) {
             pendingSeen = pending;
-            signal();
+            markChanged();
         }
         LoadingOverlay shown = null;
         boolean looked = false;
@@ -155,7 +155,7 @@ public final class OngoingReload {
             }
         } catch (TimeoutException e) {
             LOGGER.warn("[Hotwire] the wait for the reloads under way ran out: {}; they are let go", findBusy(game));
-            letGoBegunBefore(from);
+            forgetBegunBefore(from);
         } catch (InterruptedException e) {
             Thread.currentThread().interrupt();
         } catch (ExecutionException e) {
@@ -184,10 +184,10 @@ public final class OngoingReload {
         return under.stream().anyMatch(run -> !run.partial);
     }
 
-    static CompletableFuture<Void> whenIdle(Minecraft game) {
+    static CompletableFuture<Void> awaitIdleLater(Minecraft game) {
         CompletableFuture<Void> next = CHANGED.get();
         return findBusy(game) == null ? CompletableFuture.completedFuture(null)
-                : next.thenCompose(changed -> whenIdle(game));
+                : next.thenCompose(changed -> awaitIdleLater(game));
     }
 
     @SuppressWarnings("ReferenceEquality")
@@ -206,32 +206,37 @@ public final class OngoingReload {
         return BackgroundReload.isDue() ? "Hotwire's, due at the end of the next tick" : null;
     }
 
-    static void signal() {
+    static void markChanged() {
         CHANGED.getAndSet(new CompletableFuture<>()).complete(null);
     }
 
     private static void end(Run run) {
         if (RUNNING.remove(run.reload, run)) {
-            signal();
+            markChanged();
         }
     }
 
-    private static void letGoBegunBefore(long time) {
+    private static void forgetBegunBefore(long time) {
         RUNNING.values().removeIf(run -> {
             if (run.began > time) {
                 return false;
             }
             LOGGER.warn("[Hotwire] let go of a reload that never ended: {}", describe(run));
-            BackgroundReload.letGo(run.reload);
+            BackgroundReload.forget(run.reload);
             return true;
         });
-        signal();
+        markChanged();
     }
 
     private static String describe(Run run) {
+        String shown = "";
+        if (run.adopted) {
+            shown = ", with the game drawing";
+        } else if (run.shownBy != null) {
+            shown = ", under its overlay";
+        }
         return "begun " + (System.nanoTime() - run.began) / 1_000_000 + " ms ago, at "
                 + run.reload.getActualProgress() + (run.reload.isDone() ? ", done, its end not handed on yet" : "")
-                + (run.adopted ? ", with the game drawing" : run.shownBy != null ? ", under its overlay" : "")
-                + (run.partial ? ", for the renderers alone" : "");
+                + shown + (run.partial ? ", for the renderers alone" : "");
     }
 }
