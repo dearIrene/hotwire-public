@@ -1,5 +1,6 @@
 package dev.moon.hotwire.fabric.registration;
 
+import dev.moon.hotwire.fabric.mixin.core.fabric.base.event.ArrayBackedEventAccessor;
 import dev.moon.hotwire.redefine.FieldSlots;
 import dev.moon.hotwire.switching.HoldBudgetException;
 import java.lang.management.ClassLoadingMXBean;
@@ -17,9 +18,11 @@ import java.util.function.Predicate;
 import java.util.function.Supplier;
 import net.minecraft.client.Minecraft;
 import net.minecraft.client.resources.model.ModelManager;
+import net.minecraft.core.Holder;
 import org.jspecify.annotations.Nullable;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
+import org.spongepowered.asm.mixin.transformer.ClassInfo;
 
 public final class ElementLook {
     private static final Logger LOGGER = LoggerFactory.getLogger(ElementLook.class);
@@ -47,8 +50,9 @@ public final class ElementLook {
 
     private static final boolean NO_LOOK = Boolean.parseBoolean(System.getProperty("hotwire.noLook"));
 
-    static boolean isLeftToModelWrappers(Object holder) {
-        return !WHOLE.get() && (holder instanceof ModelManager || modelSets.contains(holder));
+    static boolean isLeftToOthers(Object holder) {
+        return !WHOLE.get() && (holder instanceof ModelManager || holder instanceof ArrayBackedEventAccessor
+                || holder instanceof Holder.Reference<?> || holder instanceof ClassInfo || modelSets.contains(holder));
     }
 
     private static volatile Set<Object> modelSets = Set.of();

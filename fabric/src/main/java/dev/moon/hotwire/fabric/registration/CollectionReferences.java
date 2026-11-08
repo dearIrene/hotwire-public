@@ -431,7 +431,7 @@ final class CollectionReferences implements FixedLists.Walk {
         Set<Object> looked = Collections.newSetFromMap(new IdentityHashMap<>());
         for (Object holder : holders) {
             ElementLook.stopIfAsked();
-            if (!looked.add(holder) || ElementLook.isLeftToModelWrappers(holder)) {
+            if (!looked.add(holder) || ElementLook.isLeftToOthers(holder)) {
                 continue;
             }
             long holderBegan = System.nanoTime();
@@ -731,6 +731,9 @@ final class CollectionReferences implements FixedLists.Walk {
     }
 
     void lookInto(Object holder) {
+        if (ElementLook.isLeftToOthers(holder)) {
+            return;
+        }
         if (this.isWatchedAsRead(holder)) {
             this.readThrough.add(holder);
             return;
@@ -836,7 +839,7 @@ final class CollectionReferences implements FixedLists.Walk {
                     FixedLists.removeFromField(this, field, holder);
                 }
             } else if (value != null && Wrappers.isLookedInto(value) && !isOneConfigNode(value.getClass())
-                    && !ElementLook.isLeftToModelWrappers(value) && this.visit(value)) {
+                    && !ElementLook.isLeftToOthers(value) && this.visit(value)) {
                 Set<String> was = this.enter(value);
                 this.checkReport.enter(value);
                 try {
