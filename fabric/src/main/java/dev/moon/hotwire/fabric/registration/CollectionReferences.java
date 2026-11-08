@@ -49,6 +49,11 @@ final class CollectionReferences implements FixedLists.Walk {
 
     private @Nullable Object collecting;
 
+    private final CheckReport checkReport = new CheckReport();
+    private ElementTakes.@Nullable Answers lastAnswered;
+
+    private Set<Object> readThrough = Collections.newSetFromMap(new IdentityHashMap<>());
+
     private WalkReport report = new WalkReport();
 
     private ElementTakes.@Nullable Answers prepared;
@@ -132,6 +137,7 @@ final class CollectionReferences implements FixedLists.Walk {
         }
 
         this.seen = new IdentityHashMap<>();
+        this.readThrough = Collections.newSetFromMap(new IdentityHashMap<>());
         this.mods = List.of();
         this.owners = new ElementOwners(List.of(), Set.of());
         this.mine = Map.of();
@@ -167,7 +173,8 @@ final class CollectionReferences implements FixedLists.Walk {
         return was;
     }
 
-    synchronized String describeTakesFor(List<String> mods) {
+    synchronized String describeTakesFor(List<String> mods, IdentityHashMap<Object, CollectionNotes.NoteSummary> known,
+            IdentityHashMap<Object, CollectionNotes.Holder> watched) {
         List<Object> containers = new ArrayList<>();
         List<Runnable> takes = this.look.getNotes().findTakesFor(mods, false, containers);
         Map<String, Integer> found = new TreeMap<>();
@@ -177,12 +184,20 @@ final class CollectionReferences implements FixedLists.Walk {
             for (int at = 0; at < takes.size(); at++) {
                 Object container = containers.get(at);
                 if (takes.get(at) instanceof ElementTakes.NotedTake noted && noted.whose().get() != null
+                        && this.holdsOwned(container) && this.checkReport.isOnlyThroughNotes(container)) {
+                    this.onlyThroughNotes.merge(container.getClass().getSimpleName() + " of " + sizeOf(container)
+                            + " from " + this.look.getNotes().findOrigin(container).staticsOf(), 1, Integer::sum);
+                } else if (takes.get(at) instanceof ElementTakes.NotedTake noted && noted.whose().get() != null
                         && this.holdsOwned(container)) {
                     CollectionNotes.Origin origin = this.look.getNotes().findOrigin(container);
                     found.merge(container.getClass().getSimpleName() + " of " + sizeOf(container) + " from "
                             + origin.staticsOf() + (origin.field() == null ? "" : " " + origin.field()
                             .getDeclaringClass().getName() + "." + origin.field().getName())
-                            + (this.look.getNotes().isOfWorld(container) ? " (world)" : "") + " holding "
+                            + (this.look.getNotes().isOfWorld(container) ? " (world)" : "")
+                            + CheckReport.describeKnown(known.get(container))
+                            + CheckReport.describeAnswered(this.lastAnswered, container)
+                            + CheckReport.describeFiled(noted)
+                            + this.checkReport.describePath(container, known, watched) + " holding "
                             + this.findClassesOwned(container), 1, Integer::sum);
                 }
             }
@@ -190,6 +205,30 @@ final class CollectionReferences implements FixedLists.Walk {
             this.endRemoval(mods);
         }
         return found.toString();
+    }
+
+    private final Map<String, Integer> onlyThroughNotes = new TreeMap<>();
+
+    synchronized String takeOnlyThroughNotes() {
+        String said = this.onlyThroughNotes.toString();
+        this.onlyThroughNotes.clear();
+        return said;
+    }
+
+    synchronized void traceReach(boolean on) {
+        if (on) {
+            this.checkReport.begin();
+        } else {
+            this.checkReport.endCheck();
+        }
+    }
+
+    synchronized void traceLook(boolean on) {
+        if (on) {
+            this.checkReport.begin();
+        } else {
+            this.checkReport.endLook();
+        }
     }
 
     private boolean holdsOwned(Object container) {
@@ -210,9 +249,9 @@ final class CollectionReferences implements FixedLists.Walk {
     private Set<String> findClassesOwned(Object container) {
         Set<String> found = new TreeSet<>();
         for (Object item : itemsOf(container)) {
-            if (item != null && found.size() < 4) {
-                found.add(item.getClass().getName() + (this.owners.findOwnerOf(item, false) != null ? " (theirs)"
-                        : ""));
+            String owner = item == null || found.size() >= 4 ? null : this.owners.findOwnerOf(item, false);
+            if (item != null && owner != null) {
+                found.add(item.getClass().getName() + " of " + owner);
             }
         }
         return found;
@@ -262,6 +301,9 @@ final class CollectionReferences implements FixedLists.Walk {
             notes.begin(value, new CollectionNotes.Origin(this.readingStaticsOf, game, field), this.reader);
         }
         boolean completed = false;
+        if (this.checkReport.isOn()) {
+            this.checkReport.enter("static " + field.getDeclaringClass().getName() + "." + field.getName());
+        }
         try {
             if (game && value instanceof Map<?, ?> map && map.size() <= LARGEST) {
                 this.readChanging(map, now -> NamespacedMaps.removeFrom(this, (Map<?, ?>) now));
@@ -282,6 +324,7 @@ final class CollectionReferences implements FixedLists.Walk {
             }
             completed = true;
         } finally {
+            this.checkReport.leave();
             if (notes != null) {
                 notes.end(value, completed);
             }
@@ -308,6 +351,7 @@ final class CollectionReferences implements FixedLists.Walk {
         List<Object> containers = this.look.takeContainersOfTakes();
         ElementTakes.Answers made = ElementTakes.prepare(ahead, mods, containers);
         this.prepared = made;
+        this.lastAnswered = ElementLook.isChecking() ? made : null;
         this.preparedFor = List.copyOf(mods);
         LOGGER.info("[Hotwire] {} of {} noted takes answered for {} ahead of the hold in {} ms; {} left in place, where"
                 + " nothing on can reach them", made.takes().size(), ahead.size(), mods,
@@ -334,6 +378,7 @@ final class CollectionReferences implements FixedLists.Walk {
 
     private void begin(List<String> mods) {
         this.seen = new IdentityHashMap<>();
+        this.readThrough = Collections.newSetFromMap(new IdentityHashMap<>());
         this.reader = TakeReach.GAME;
         this.mods = List.copyOf(mods);
         this.owners = new ElementOwners(mods, RegisteredContent.find());
@@ -443,13 +488,18 @@ final class CollectionReferences implements FixedLists.Walk {
             again++;
             CollectionNotes.Origin origin = notes.findOrigin(container);
             this.readingStaticsOf = origin.staticsOf();
-            if (origin.field() != null) {
-                this.readStatic(origin.field(), container, origin.game());
-            } else if (!(container instanceof Collection<?>) && !(container instanceof Map<?, ?>)
-                    && !(container instanceof Object[]) && notes.findWrapped(container) > 0) {
-                this.noteWrappedInside(container, notes.findWrapped(container));
-            } else {
-                this.collect(container);
+            this.checkReport.enter(CheckReport.NOTES);
+            try {
+                if (origin.field() != null) {
+                    this.readStatic(origin.field(), container, origin.game());
+                } else if (!(container instanceof Collection<?>) && !(container instanceof Map<?, ?>)
+                        && !(container instanceof Object[]) && notes.findWrapped(container) > 0) {
+                    this.noteWrappedInside(container, notes.findWrapped(container));
+                } else {
+                    this.collect(container);
+                }
+            } finally {
+                this.checkReport.leave();
             }
         }
         int moved = 0;
@@ -464,12 +514,16 @@ final class CollectionReferences implements FixedLists.Walk {
             }
             this.reader = one.getValue().readers();
             this.readingStaticsOf = one.getValue().staticsOf();
-            if (this.visit(holder)) {
+
+            boolean firstVisit = this.visit(holder);
+            if (firstVisit || (one.getValue().through() && !this.readThrough.contains(holder))) {
                 moved++;
                 notes.setInWorld(one.getValue().ofWorld());
+                this.checkReport.enter(CheckReport.NOTES);
                 try {
                     this.lookInto(holder);
                 } finally {
+                    this.checkReport.leave();
                     notes.setInWorld(false);
                 }
             }
@@ -486,7 +540,8 @@ final class CollectionReferences implements FixedLists.Walk {
 
     private void takeOrNote(String owner, @Nullable Set<String> candidates, Supplier<@Nullable String> asked,
             Consumer<String> take, @Nullable Object element, @Nullable Set<String> calledThrough) {
-        Set<String> under = this.candidates.withOwner(candidates, owner);
+        Set<String> under = this.candidates.withAll(this.candidates.withOwner(candidates, owner),
+                this.owners.findRecordedCandidates(element));
         if (ElementLook.isLooking() && this.collecting != null && TakeReach.isNeverNeeded(owner, under, calledThrough,
                 this.look.getNotes().findReaders(this.collecting))) {
             this.report.countOwnLeft();
@@ -583,10 +638,13 @@ final class CollectionReferences implements FixedLists.Walk {
     }
 
     void lookInto(Object holder) {
+        this.readThrough.add(holder);
         Set<String> was = this.enter(holder);
+        this.checkReport.enter(holder);
         try {
             this.lookIntoFields(holder);
         } finally {
+            this.checkReport.leave();
             this.reader = was;
         }
     }
@@ -595,18 +653,25 @@ final class CollectionReferences implements FixedLists.Walk {
         if (!ElementLook.isLooking()) {
             return;
         }
-        if (MOVING_FIELDS.get(holder.getClass()).isEmpty()) {
+        if (findMoving(holder.getClass(), false).isEmpty()) {
             this.look.getNotes().forgetHolder(holder);
             return;
         }
         this.look.getNotes().noteHolder(holder, new CollectionNotes.Holder(this.readingStaticsOf, this.reader,
-                printFields(holder), this.look.getNotes().isInWorld()));
+                printFields(holder), this.look.getNotes().isInWorld(), true));
+    }
+
+    private void noteHolderInside(Object holder) {
+        if (!ElementLook.isLooking() || findMoving(holder.getClass(), false).isEmpty()) {
+            return;
+        }
+        this.look.getNotes().noteHolderInside(holder, new CollectionNotes.Holder(this.readingStaticsOf, this.reader,
+                printFields(holder), this.look.getNotes().isInWorld(), false));
     }
 
     static long printFields(Object holder) {
         boolean statics = holder instanceof Class<?>;
-        List<FieldSlots.Slot> fields = statics ? MOVING_STATICS.get((Class<?>) holder)
-                : MOVING_FIELDS.get(holder.getClass());
+        List<FieldSlots.Slot> fields = findMoving(statics ? (Class<?>) holder : holder.getClass(), statics);
         List<@Nullable Object> values = new ArrayList<>(fields.size());
         for (FieldSlots.Slot field : fields) {
             values.add(CollectionParts.read(field, statics ? null : holder));
@@ -615,25 +680,31 @@ final class CollectionReferences implements FixedLists.Walk {
     }
 
     static boolean canMove(Class<?> owner) {
-        return !MOVING_STATICS.get(owner).isEmpty();
+        return !findMoving(owner, true).isEmpty();
     }
 
-    private static final ClassValue<List<FieldSlots.Slot>> MOVING_STATICS = new ClassValue<>() {
+    private record PrintFieldList(List<FieldSlots.Slot> from, List<FieldSlots.Slot> moving) {
+    }
+
+    private static final ClassValue<PrintFieldList[]> PRINT_FIELDS = new ClassValue<>() {
         @Override
-        protected List<FieldSlots.Slot> computeValue(Class<?> type) {
-            return findMoving(type, true);
-        }
-    };
-    private static final ClassValue<List<FieldSlots.Slot>> MOVING_FIELDS = new ClassValue<>() {
-        @Override
-        protected List<FieldSlots.Slot> computeValue(Class<?> type) {
-            return findMoving(type, false);
+        protected PrintFieldList[] computeValue(Class<?> type) {
+            return new PrintFieldList[2];
         }
     };
 
-    private static List<FieldSlots.Slot> findMoving(Class<?> type, boolean statics) {
-        return Fields.getReferenceFields(type, statics).stream()
-                .filter(field -> !Modifier.isFinal(field.getModifiers())).toList();
+    @SuppressWarnings("ReferenceEquality")
+    static List<FieldSlots.Slot> findMoving(Class<?> type, boolean statics) {
+        List<FieldSlots.Slot> all = Fields.getReferenceFields(type, statics);
+        PrintFieldList[] slots = PRINT_FIELDS.get(type);
+        int at = statics ? 1 : 0;
+        PrintFieldList known = slots[at];
+        if (known == null || known.from() != all) {
+            known = new PrintFieldList(all, all.stream()
+                    .filter(field -> !Modifier.isFinal(field.getModifiers())).toList());
+            slots[at] = known;
+        }
+        return known.moving();
     }
 
     private void lookIntoFields(Object holder) {
@@ -667,8 +738,9 @@ final class CollectionReferences implements FixedLists.Walk {
             } else if (value != null && Wrappers.isLookedInto(value) && !isOneConfigNode(value.getClass())
                     && this.visit(value)) {
                 Set<String> was = this.enter(value);
+                this.checkReport.enter(value);
                 try {
-                    this.noteHolder(value);
+                    this.noteHolderInside(value);
                     for (FieldSlots.Slot inner : Fields.getReferenceFields(value.getClass(), false)) {
                         Object innerValue = CollectionParts.read(inner, value);
                         if ((innerValue instanceof Collection<?> || innerValue instanceof Map<?, ?>
@@ -677,6 +749,7 @@ final class CollectionReferences implements FixedLists.Walk {
                         }
                     }
                 } finally {
+                    this.checkReport.leave();
                     this.reader = was;
                 }
             }
@@ -693,9 +766,11 @@ final class CollectionReferences implements FixedLists.Walk {
             return;
         }
         this.depth++;
+        this.checkReport.enter(value);
         try {
             this.collectWithin(value);
         } finally {
+            this.checkReport.leave();
             this.depth--;
         }
     }

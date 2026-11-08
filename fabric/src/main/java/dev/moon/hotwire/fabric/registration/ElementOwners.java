@@ -136,6 +136,43 @@ final class ElementOwners {
         return nested != null && this.modSet.contains(nested) ? nested : null;
     }
 
+    Set<String> findRecordedCandidates(@Nullable Object item) {
+        if (item == null) {
+            return Set.of();
+        }
+        String library = GameRegistrations.findModOf(item.getClass());
+        boolean nested = library == null && GameRegistrations.findShippedBy(item.getClass()) != null;
+        if (!nested && (library == null || !this.libraryOfSome.contains(library))) {
+            return Set.of();
+        }
+        Set<String> found = new HashSet<>();
+        for (FieldSlots.Slot field : Fields.getReferenceFields(item.getClass(), false)) {
+            Object inner = CollectionParts.read(field, item);
+            addRecorded(found, inner);
+            if (inner != null && ValueOwners.isLambda(inner)) {
+                for (FieldSlots.Slot captured : Fields.getReferenceFields(inner.getClass(), false)) {
+                    addRecorded(found, CollectionParts.read(captured, inner));
+                }
+            }
+        }
+        return found;
+    }
+
+    private static void addRecorded(Set<String> found, @Nullable Object value) {
+        if (value == null || value instanceof CharSequence || value instanceof Number || value instanceof Boolean) {
+            return;
+        }
+        Class<?> type = value instanceof Member member ? member.getDeclaringClass()
+                : value instanceof Class<?> named ? named : value.getClass();
+        String mod = GameRegistrations.findModOf(type);
+        mod = mod != null ? mod : GameRegistrations.findCodeMod(type);
+        mod = mod != null ? mod : GameRegistrations.findNestedModOf(type);
+        mod = mod != null || !type.isHidden() ? mod : ValueOwners.findLambdaOwner(type);
+        if (mod != null) {
+            found.add(mod);
+        }
+    }
+
     private @Nullable String findRegisteredBy(Object item) {
         String library = GameRegistrations.findModOf(item.getClass());
         boolean nested = library == null && GameRegistrations.findShippedBy(item.getClass()) != null;

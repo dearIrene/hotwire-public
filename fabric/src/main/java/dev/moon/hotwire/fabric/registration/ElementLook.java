@@ -5,6 +5,7 @@ import java.lang.management.ClassLoadingMXBean;
 import java.lang.management.ManagementFactory;
 import java.util.ArrayList;
 import java.util.Collection;
+import java.util.IdentityHashMap;
 import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Set;
@@ -35,6 +36,10 @@ public final class ElementLook {
     private static final ThreadLocal<Mode> MODE = ThreadLocal.withInitial(() -> Mode.HOLD);
 
     private static final boolean CHECK = Boolean.parseBoolean(System.getProperty("hotwire.checkLook"));
+
+    static boolean isChecking() {
+        return CHECK;
+    }
     private static final ThreadLocal<Boolean> WHOLE = ThreadLocal.withInitial(() -> false);
 
     private static final boolean NO_LOOK = Boolean.parseBoolean(System.getProperty("hotwire.noLook"));
@@ -121,12 +126,19 @@ public final class ElementLook {
             boolean newWorld = world != lookedEveryWorld;
             boolean whole = WHOLE.get() || newWorld;
             NEW_WORLD.set(newWorld);
+            boolean traced = CHECK && !WHOLE.get();
+            if (traced) {
+                references.traceLook(true);
+            }
             try {
                 GameHold.runUnheld(() -> {
                     if (whole || !references.refreshEvery(asked, on)) {
                         references.lookForEvery(asked, on);
                     }
                 });
+                if (traced) {
+                    references.traceLook(false);
+                }
                 lookedForEvery = asked;
                 lookedEveryAt = System.nanoTime();
                 lookedEveryClasses = LOADING.getTotalLoadedClassCount();
@@ -148,14 +160,25 @@ public final class ElementLook {
         if (!CHECK || mods.isEmpty()) {
             return;
         }
+
+        System.gc();
+        IdentityHashMap<Object, CollectionNotes.NoteSummary> known = references.findSummaries();
+        IdentityHashMap<Object, CollectionNotes.Holder> watched = references.findWatched();
+        references.traceReach(true);
         WHOLE.set(true);
         try {
             look(references, findEvery(List.of()), on, false);
+            LOGGER.info("[Hotwire] check: after the off of {}, a whole read found still in place: {}", mods,
+                    references.describeTakesFor(mods, known, watched));
+            String notesOnly = references.takeOnlyThroughNotes();
+            if (!notesOnly.equals("{}")) {
+                LOGGER.info("[Hotwire] check: of the off of {}, what only the notes still reach (no read from the"
+                        + " game's roots does): {}", mods, notesOnly);
+            }
         } finally {
             WHOLE.remove();
+            references.traceReach(false);
         }
-        LOGGER.info("[Hotwire] check: after the off of {}, a whole read found still in place: {}", mods,
-                references.describeTakesFor(mods));
     }
 
     public static void prepareAhead(FieldReferences references, Predicate<String> on) {

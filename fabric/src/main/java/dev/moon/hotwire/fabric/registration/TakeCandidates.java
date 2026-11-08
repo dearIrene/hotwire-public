@@ -114,6 +114,15 @@ final class TakeCandidates {
         return this.share(all);
     }
 
+    @Nullable Set<String> withAll(@Nullable Set<String> candidates, Set<String> more) {
+        if (candidates == null || candidates.containsAll(more)) {
+            return candidates;
+        }
+        Set<String> all = new HashSet<>(candidates);
+        all.addAll(more);
+        return this.share(all);
+    }
+
     private @Nullable Set<String> share(@Nullable Set<String> candidates) {
         return candidates == null ? null : this.shared.computeIfAbsent(candidates, Set::copyOf);
     }

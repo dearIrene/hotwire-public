@@ -167,8 +167,29 @@ public final class FieldReferences {
         this.elements.look.getNotes().finishEvery();
     }
 
-    public String describeTakesFor(Collection<String> mods) {
-        return this.elements.describeTakesFor(List.copyOf(mods));
+    public String describeTakesFor(Collection<String> mods, IdentityHashMap<Object, CollectionNotes.NoteSummary> known,
+            IdentityHashMap<Object, CollectionNotes.Holder> watched) {
+        return this.elements.describeTakesFor(List.copyOf(mods), known, watched);
+    }
+
+    public IdentityHashMap<Object, CollectionNotes.Holder> findWatched() {
+        return this.elements.look.getNotes().findWatched();
+    }
+
+    public void traceReach(boolean on) {
+        this.elements.traceReach(on);
+    }
+
+    public void traceLook(boolean on) {
+        this.elements.traceLook(on);
+    }
+
+    public String takeOnlyThroughNotes() {
+        return this.elements.takeOnlyThroughNotes();
+    }
+
+    public IdentityHashMap<Object, CollectionNotes.NoteSummary> findSummaries() {
+        return this.elements.look.getNotes().findSummaries();
     }
 
     public void forgetClosedWorld() {

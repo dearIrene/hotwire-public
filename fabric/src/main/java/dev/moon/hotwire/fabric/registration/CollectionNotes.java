@@ -98,7 +98,7 @@ final class CollectionNotes {
 
     private final Map<Object, Holder> holders = new MapMaker().weakKeys().makeMap();
 
-    record Holder(@Nullable String staticsOf, Set<String> readers, long print, boolean ofWorld) {
+    record Holder(@Nullable String staticsOf, Set<String> readers, long print, boolean ofWorld, boolean through) {
     }
 
     private List<Note> toRead = List.of();
@@ -285,6 +285,7 @@ final class CollectionNotes {
         IdentityHashMap<Set<String>, Boolean> unread = new IdentityHashMap<>();
         IdentityHashMap<Set<String>, Boolean> uncalled = new IdentityHashMap<>();
         this.lastLeft = 0;
+        this.leftIn.clear();
         for (Note note : this.order) {
             Object container = note.findFiled();
             if (container == null) {
@@ -311,6 +312,7 @@ final class CollectionNotes {
                         && uncalled.computeIfAbsent(filed.calledThrough(),
                                 one -> TakeReach.isCallableOnlyByOff(one, off))) {
                     this.lastLeft++;
+                    this.leftIn.add(container);
                     continue;
                 }
                 found.add(take);
@@ -320,6 +322,7 @@ final class CollectionNotes {
     }
 
     private int lastLeft;
+    private final Set<Object> leftIn = Collections.newSetFromMap(new MapMaker().weakKeys().makeMap());
 
     synchronized int countLastLeft() {
         return this.lastLeft;
@@ -474,6 +477,26 @@ final class CollectionNotes {
         return note == null ? 0 : note.wrapped;
     }
 
+    record NoteSummary(int takes, Set<String> under, Set<String> readers, boolean leftByOff) {
+    }
+
+    synchronized IdentityHashMap<Object, Holder> findWatched() {
+        IdentityHashMap<Object, Holder> watched = new IdentityHashMap<>();
+        this.holders.forEach(watched::put);
+        return watched;
+    }
+
+    synchronized IdentityHashMap<Object, NoteSummary> findSummaries() {
+        IdentityHashMap<Object, NoteSummary> known = new IdentityHashMap<>();
+        this.notes.forEach((container, note) -> {
+            Set<String> under = new HashSet<>();
+            addCandidates(under, note.takes);
+            known.put(container, new NoteSummary(note.takes.size(), under, note.readers,
+                    this.leftIn.contains(container)));
+        });
+        return known;
+    }
+
     synchronized boolean isOfWorld(Object container) {
         Note note = this.notes.get(container);
         return note != null && note.ofWorld;
@@ -500,8 +523,8 @@ final class CollectionNotes {
         }
         Holder read = this.holders.get(holder);
 
-        this.holders.put(holder, read == null ? new Holder(null, TakeReach.GAME, Fingerprints.UNKNOWN, false)
-                : new Holder(read.staticsOf(), read.readers(), Fingerprints.UNKNOWN, read.ofWorld()));
+        this.holders.put(holder, read == null ? new Holder(null, TakeReach.GAME, Fingerprints.UNKNOWN, false, true)
+                : new Holder(read.staticsOf(), read.readers(), Fingerprints.UNKNOWN, read.ofWorld(), read.through()));
     }
 
     synchronized void forgetHolder(Object holder) {
@@ -518,6 +541,13 @@ final class CollectionNotes {
 
     synchronized void noteHolder(Object holder, Holder read) {
         this.holders.put(holder, read);
+    }
+
+    synchronized void noteHolderInside(Object holder, Holder read) {
+        Holder had = this.holders.get(holder);
+        if (had == null || !had.through()) {
+            this.holders.put(holder, read);
+        }
     }
 
     synchronized List<Map.Entry<Object, Holder>> findHolders() {
