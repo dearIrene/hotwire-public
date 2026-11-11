@@ -1,21 +1,27 @@
 package dev.moon.hotwire.fabric.add;
 
+import dev.moon.hotwire.fabric.BackgroundReload;
 import dev.moon.hotwire.fabric.ResourceReload;
 import dev.moon.hotwire.fabric.WordsReload;
 import dev.moon.hotwire.fabric.mixin.core.client.ReloadableResourceManagerAccessor;
 import dev.moon.hotwire.fabric.registration.GameHold;
 import dev.moon.hotwire.fabric.registration.GameRegistrations;
+import dev.moon.hotwire.jar.ZipBytes;
 import java.io.IOException;
 import java.nio.file.Path;
 import java.util.Collection;
+import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.Set;
+import java.util.stream.Collectors;
 import java.util.zip.ZipFile;
 import net.minecraft.client.Minecraft;
 import net.minecraft.server.packs.PackType;
 import net.minecraft.server.packs.repository.PackRepository;
 import net.minecraft.server.packs.resources.MultiPackResourceManager;
 import net.minecraft.server.packs.resources.ReloadableResourceManager;
+import org.jspecify.annotations.Nullable;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -46,21 +52,33 @@ public final class AddAssets {
         reopenPacks(manager);
     }
 
-    public static void reloadForUpdated(Map<String, Path> jars) {
+    public static void reloadForUpdated(Map<String, Path> jars, Map<String, Path> running, Runnable then) {
+        Map<String, Set<String>> changed = new LinkedHashMap<>();
+        jars.forEach((id, jar) -> {
+            if (shipsAssets(jar)) {
+                changed.put(id, findChangedAssets(running.get(id), jar));
+            }
+        });
+        Set<String> listening = changed.keySet().stream().filter(id -> GameRegistrations.getJournal()
+                .countByKind(id).containsKey("resource reloader")).collect(Collectors.toSet());
         List<Map.Entry<String, Path>> shipping = jars.entrySet().stream()
-                .filter(entry -> shipsAssets(entry.getValue())).toList();
+                .filter(entry -> changed.containsKey(entry.getKey()))
+                .filter(entry -> !changed.getOrDefault(entry.getKey(), EVERY_ASSET).isEmpty()
+                        || listening.contains(entry.getKey()))
+                .toList();
         if (shipping.isEmpty()) {
+            then.run();
             return;
         }
         GameHold.runNextAtFrameEdge(() -> {
             if (Minecraft.getInstance().getResourceManager() instanceof ReloadableResourceManager manager) {
                 reopenPacks(manager);
             }
-            boolean wordsAlone = shipping.stream().allMatch(entry -> WordsReload.isWordsAlone(entry.getValue()))
-                    && shipping.stream().noneMatch(entry -> GameRegistrations.getJournal()
-                            .countByKind(entry.getKey()).containsKey("resource reloader"));
+            boolean wordsAlone = listening.isEmpty() && shipping.stream().allMatch(entry
+                    -> changed.getOrDefault(entry.getKey(), EVERY_ASSET).stream().allMatch(WordsReload::isWords));
             ResourceReload.reloadBeforeFrame(shipping.stream().map(Map.Entry::getKey).toList()
                     + " bring new assets", wordsAlone);
+            BackgroundReload.runAfterReload(then);
         });
     }
 
@@ -72,7 +90,20 @@ public final class AddAssets {
         access.hotwire$setResources(new MultiPackResourceManager(PackType.CLIENT_RESOURCES, packs.openAllSelected()));
     }
 
-    static boolean shipsAssets(Path jar) {
+    private static final Set<String> EVERY_ASSET = Set.of("assets/every/asset");
+
+    private static Set<String> findChangedAssets(@Nullable Path running, Path jar) {
+        if (running == null) {
+            return EVERY_ASSET;
+        }
+        try {
+            return ZipBytes.findChangedEntries(running, jar, "assets/");
+        } catch (IOException e) {
+            return EVERY_ASSET;
+        }
+    }
+
+    public static boolean shipsAssets(Path jar) {
         try (ZipFile zip = new ZipFile(jar.toFile())) {
             return zip.stream().anyMatch(entry -> entry.getName().startsWith("assets/"));
         } catch (IOException e) {

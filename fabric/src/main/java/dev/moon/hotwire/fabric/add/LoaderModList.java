@@ -1,5 +1,6 @@
 package dev.moon.hotwire.fabric.add;
 
+import dev.moon.hotwire.jar.ModManifest;
 import dev.moon.hotwire.jvm.PrivateField;
 import java.io.IOException;
 import java.io.InputStream;
@@ -19,6 +20,7 @@ import java.util.List;
 import java.util.Map;
 import java.util.Objects;
 import java.util.Set;
+import java.util.function.Predicate;
 import java.util.zip.ZipEntry;
 import java.util.zip.ZipFile;
 import net.fabricmc.loader.api.LanguageAdapter;
@@ -27,6 +29,7 @@ import net.fabricmc.loader.impl.FabricLoaderImpl;
 import net.fabricmc.loader.impl.ModContainerImpl;
 import net.fabricmc.loader.impl.discovery.ModCandidateImpl;
 import net.fabricmc.loader.impl.entrypoint.EntrypointStorage;
+import net.fabricmc.loader.impl.launch.FabricLauncher;
 import net.fabricmc.loader.impl.launch.FabricLauncherBase;
 import net.fabricmc.loader.impl.metadata.DependencyOverrides;
 import net.fabricmc.loader.impl.metadata.EntrypointMetadata;
@@ -344,6 +347,24 @@ public final class LoaderModList {
             HIDDEN.forEach((id, hidden) -> out.put(id, hidden.container()));
             return out;
         }
+    }
+
+    @SuppressWarnings("unchecked")
+    public static @Nullable String findNewLanguageAdapter(Collection<ModManifest> manifests,
+            Predicate<String> quiet) {
+        Map<String, LanguageAdapter> adapters = ADAPTERS.get(FabricLoaderImpl.INSTANCE, Map.class);
+        FabricLauncher launcher = FabricLauncherBase.getLauncher();
+        for (ModManifest manifest : manifests) {
+            for (Map.Entry<String, String> adapter : manifest.languageAdapters().entrySet()) {
+                String type = adapter.getValue();
+                boolean known = launcher.isClassLoaded(type)
+                        || launcher.getTargetClassLoader().getResource(type.replace('.', '/') + ".class") != null;
+                if (!adapters.containsKey(adapter.getKey()) && (known || !quiet.test(type))) {
+                    return adapter.getKey();
+                }
+            }
+        }
+        return null;
     }
 
     public static boolean isHidden(String id) {

@@ -2,6 +2,7 @@ package dev.moon.hotwire.fabric.add;
 
 import dev.moon.hotwire.fabric.mixin.core.core.MappedRegistryAccessor;
 import dev.moon.hotwire.fabric.registration.Fields;
+import dev.moon.hotwire.fabric.registration.InternedKeys;
 import dev.moon.hotwire.redefine.FieldSlots;
 import java.util.ArrayList;
 import java.util.Collections;
@@ -13,6 +14,9 @@ import net.minecraft.core.Holder;
 import net.minecraft.core.MappedRegistry;
 import net.minecraft.core.Registry;
 import net.minecraft.core.registries.BuiltInRegistries;
+//? if >=1.21.2 {
+import net.minecraft.tags.TagLoader;
+//?}
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -33,11 +37,7 @@ public final class OpenRegistries implements AutoCloseable {
     }
 
     private static String nameOf(Registry<?> registry) {
-        //? if >=1.21.11 {
-        return registry.key().identifier().toString();
-        //?} else {
-        /*return registry.key().location().toString();
-        *///?}
+        return InternedKeys.findIdOf(registry.key()).toString();
     }
 
     public static void allowIntrusive(MappedRegistry<?> registry) {
@@ -100,6 +100,9 @@ public final class OpenRegistries implements AutoCloseable {
             if (registry instanceof MappedRegistry<?> made && !this.sizes.containsKey(made)
                     && !((MappedRegistryAccessor) made).hotwire$isFrozen()) {
                 ((MappedRegistryAccessor) made).hotwire$setFrozen(true);
+                //? if >=1.21.2 {
+                bindNoRegistryTags(made);
+                //?}
                 grew.add(nameOf(made) + " (new)");
             }
         }
@@ -125,6 +128,16 @@ public final class OpenRegistries implements AutoCloseable {
             }
         }
     }
+
+    //? if >=1.21.2 {
+    private static <T> void bindNoRegistryTags(MappedRegistry<T> registry) {
+        try {
+            registry.prepareTagReload(new TagLoader.LoadResult<>(registry.key(), Map.of())).apply();
+        } catch (IllegalStateException bound) {
+            LOGGER.info("[Hotwire] {} keeps the tags it has: {}", nameOf(registry), bound.getMessage());
+        }
+    }
+    //?}
 
     List<String> getGrown() {
         return this.grew;

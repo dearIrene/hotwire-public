@@ -56,6 +56,7 @@ final class AddStart {
                     ClientModInitializer::onInitializeClient));
         }
         starts.addAll(YumiStarts.collect(ids, side));
+        LOGGER.info("[Hotwire] the start of {} runs {} entrypoints", ids, starts.size());
         CompletableFuture<Map<String, List<String>>> started = new CompletableFuture<>();
 
         GameHold.runNextAtFrameEdge(() -> {

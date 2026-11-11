@@ -26,6 +26,7 @@ import dev.moon.hotwire.switching.ModSwitcher;
 import dev.moon.hotwire.switching.PlayerMessages;
 import dev.moon.hotwire.switching.SwitchApplier;
 import dev.moon.hotwire.switching.SwitchTimes;
+import dev.moon.hotwire.ui.AddMode;
 import dev.moon.hotwire.ui.AddPreview;
 import dev.moon.hotwire.ui.Lang;
 import java.io.IOException;
@@ -70,7 +71,7 @@ public final class ModAdder {
         record Added(List<String> ids, String name, ModSwitcher.Result switched) implements Result {
         }
 
-        record Queued(String id, String name, String message) implements Result {
+        record Queued(String id, String message) implements Result {
         }
 
         record Refused(String reason, boolean restartOnly) implements Result {
@@ -97,6 +98,10 @@ public final class ModAdder {
 
     interface Engine extends WidenerUses.GameAccess {
         boolean isInstalled(String id);
+
+        default Set<String> findQueuedIds() {
+            return Set.of();
+        }
 
         ModGraph makeGraphWith(List<ModJar> jars);
 
@@ -136,6 +141,9 @@ public final class ModAdder {
     }
 
     private final Map<Path, ModJar> readsAhead = new ConcurrentHashMap<>();
+
+    private final Map<Path, ContentScan.Classes> scans = new ConcurrentHashMap<>();
+    private final Map<Path, ContentScan.Classes> ownScans = new ConcurrentHashMap<>();
 
     private final Map<String, List<Path>> setAside = new ConcurrentHashMap<>();
     private @Nullable CarriedLibraries carriedLibraries;
@@ -217,10 +225,17 @@ public final class ModAdder {
 
     AddPreview preview(Path jarPath) {
         StageTimes times = new StageTimes();
+        AddPreview preview = null;
         try {
-            return this.preview(jarPath, times);
+            preview = this.preview(jarPath, times);
+            return preview;
         } finally {
-            LOGGER.info("[Hotwire] the dry run of {} took {}", jarPath.getFileName(), times);
+            this.scans.clear();
+            this.ownScans.clear();
+
+            LOGGER.info("[Hotwire] the dry run of {} took {}{}", jarPath.getFileName(), times,
+                    preview == null || preview.mode() == AddMode.NOW ? ""
+                            : "; " + preview.mode() + ": " + String.join(" ", preview.lines()));
         }
     }
 
@@ -266,8 +281,25 @@ public final class ModAdder {
         }
         times.end("nested jars");
         List<ModJar> parts = found.values().stream().map(Part::jar).toList();
+        if (LoaderModList.findNewLanguageAdapter(parts.stream().map(ModJar::manifest).toList(),
+                type -> ContentScan.isQuietAdapter(this.scan(jarPath), type)) != null) {
+            return AddPreview.ofLater(manifest.name(), version, List.of(Lang.get("hotwire.add.later.adapter",
+                    manifest.name())));
+        }
         if (this.isComponentListShut(parts)) {
-            return AddPreview.ofLater(manifest.name(), version, List.of(Lang.get("hotwire.add.later.components")));
+            return AddPreview.ofLater(manifest.name(), version, List.of(Lang.get("hotwire.add.later.components",
+                    manifest.name())));
+        }
+
+        List<Path> brought = found.values().stream().map(Part::path).toList();
+        if (this.findEnumMixinJar(brought) != null) {
+            return AddPreview.ofLater(manifest.name(), version, List.of(Lang.get("hotwire.add.later.enum",
+                    manifest.name())));
+        }
+        StartOnly startOnlyMixin = this.findStartOnlyMixin(brought);
+        if (startOnlyMixin != null) {
+            return AddPreview.ofLater(manifest.name(), version, List.of(describeStartOnly(startOnlyMixin.kind(),
+                    manifest.name())));
         }
         for (Part part : found.values()) {
             Optional<String> missing = AddDependencies.findMissingRefusal(part.jar());
@@ -277,7 +309,8 @@ public final class ModAdder {
             Optional<String> widener = this.addWideners.findWidenerRefusal(part.jar(), part.path());
             if (widener.isPresent()) {
                 LOGGER.info("[Hotwire] {}", widener.get());
-                return AddPreview.ofLater(manifest.name(), version, List.of(Lang.get("hotwire.add.later.running")));
+                return AddPreview.ofLater(manifest.name(), version, List.of(Lang.get("hotwire.add.later.running",
+                        part.jar().manifest().name())));
             }
         }
         times.end("access wideners");
@@ -285,6 +318,12 @@ public final class ModAdder {
         SwitchPlan plan = AddDependencies.planOn(planner, parts, this.engine.getSwitcher().getOff());
         Optional<String> missing = AddDependencies.describe(plan, id -> id);
         List<Path> libraries = List.of();
+
+        Set<String> queued = this.engine.findQueuedIds();
+        if (missing.isPresent() && plan.refusals().stream().allMatch(refusal -> refusal instanceof
+                SwitchPlan.Refusal.MissingDependency needed && queued.contains(needed.dependency()))) {
+            return AddPreview.ofLater(manifest.name(), version, List.of(Lang.get("hotwire.add.later.needs_queued")));
+        }
         if (missing.isPresent()) {
             if (!AddDependencies.isCarriedNewer(jar, plan)) {
                 return makeRefusal(manifest.name(), version, missing.get());
@@ -294,7 +333,8 @@ public final class ModAdder {
             Optional<String> cannot = this.findLibrariesRefusal(libraries);
             if (cannot.isPresent()) {
                 LOGGER.info("[Hotwire] {}: {}", missing.get(), cannot.get());
-                return AddPreview.ofLater(manifest.name(), version, List.of(Lang.get("hotwire.add.later.library")));
+                return AddPreview.ofLater(manifest.name(), version, List.of(Lang.get("hotwire.add.later.library",
+                        manifest.name())));
             }
         }
         times.end("plan");
@@ -338,6 +378,16 @@ public final class ModAdder {
             lines.add(Lang.get("hotwire.add.makes", String.join(", ", content)));
             return AddPreview.reopen(manifest.name(), version, lines);
         }
+
+        if (this.engine.isInWorld() && this.listensForClientStart(List.of(jarPath))) {
+            Optional<String> cannot = WorldReopen.findRefusal();
+            if (cannot.isPresent()) {
+                return makeRefusal(manifest.name(), version, Lang.get("hotwire.add.starts_refused", manifest.name(),
+                        cannot.get()));
+            }
+            lines.add(Lang.get("hotwire.add.starts_before_world"));
+            return AddPreview.reopen(manifest.name(), version, lines);
+        }
         return AddPreview.ofReady(manifest.name(), version, lines, List.of());
     }
 
@@ -353,13 +403,78 @@ public final class ModAdder {
         }
     }
 
-    private Set<String> readContent(Path jarPath) {
-        try {
-            return ContentScan.findKinds(ContentScan.readClasses(jarPath), this.engine::findSuperOf);
-        } catch (IOException e) {
-            LOGGER.warn("[Hotwire] the classes of {} could not be read for the content they make", jarPath, e);
-            return Set.of();
+    private record StartOnly(Path jar, String kind) {
+    }
+
+    private @Nullable StartOnly findStartOnlyMixin(List<Path> jarPaths) {
+        for (Path jarPath : jarPaths) {
+            String found = ContentScan.findStartOnlyMixin(this.scanOwn(jarPath), target -> {
+                Class<?> loaded = this.engine.findLoaded(target);
+                return loaded != null && NetworkSetups.isOf(loaded);
+            });
+            if (found != null) {
+                return new StartOnly(jarPath, found);
+            }
         }
+        return null;
+    }
+
+    private ContentScan.Classes scan(Path jarPath) {
+        return this.scans.computeIfAbsent(jarPath, path -> {
+            try {
+                return ContentScan.readClasses(path);
+            } catch (IOException e) {
+                LOGGER.warn("[Hotwire] the classes of {} could not be read for what they hook and make", path, e);
+                return new ContentScan.Classes(Map.of(), Set.of());
+            }
+        });
+    }
+
+    private ContentScan.Classes scanOwn(Path jarPath) {
+        return this.ownScans.computeIfAbsent(jarPath, path -> {
+            try {
+                return ContentScan.readOwnClasses(path);
+            } catch (IOException e) {
+                LOGGER.warn("[Hotwire] the classes of {} could not be read for what they hook", path, e);
+                return new ContentScan.Classes(Map.of(), Set.of());
+            }
+        });
+    }
+
+    private static String describeStartOnly(String kind, String name) {
+        return kind.equals("attributes") ? Lang.get("hotwire.add.later.attributes", name)
+                : Lang.get("hotwire.add.later.codecs", name);
+    }
+
+    private String describeBecause(String asked, Path jar, String key) {
+        String reason = this.findName(jar);
+        String why = Lang.get(key, reason);
+        return reason.equals(asked) ? why : Lang.get("hotwire.add.needs_it", asked, reason) + " " + why;
+    }
+
+    private String findName(Path jar) {
+        try {
+            return this.readJar(jar).manifest().name();
+        } catch (ModJarException e) {
+            return String.valueOf(jar.getFileName());
+        }
+    }
+
+    private boolean listensForClientStart(List<Path> jarPaths) {
+        List<ContentScan.Classes> scans = jarPaths.stream().map(this::scan).toList();
+        return scans.stream().anyMatch(scan -> ContentScan.listensForClientStart(scan,
+                host -> this.engine.getApplier().getCarriedMixins().isPatched(host) || scans.stream()
+                        .anyMatch(other -> ContentScan.findMixinTargets(other).contains(host))));
+    }
+
+    private @Nullable Path findEnumMixinJar(List<Path> jarPaths) {
+        return jarPaths.stream().filter(jarPath -> ContentScan.hasEnumMixin(this.scanOwn(jarPath),
+                this.engine::isLoaded)).findFirst()
+                .orElse(null);
+    }
+
+    private Set<String> readContent(Path jarPath) {
+        return ContentScan.findKinds(this.scan(jarPath), this.engine::findSuperOf);
     }
 
     public Optional<String> findWidenerRefusalOfUpdate(ModJar part, Path path) {
@@ -437,6 +552,15 @@ public final class ModAdder {
     }
 
     private @Nullable Result findRefusal(List<Path> jarPaths, Map<String, Part> parts) {
+        try {
+            return this.findRefusalNow(jarPaths, parts);
+        } finally {
+            this.scans.clear();
+            this.ownScans.clear();
+        }
+    }
+
+    private @Nullable Result findRefusalNow(List<Path> jarPaths, Map<String, Part> parts) {
         this.setAside.clear();
         for (Path jarPath : jarPaths) {
             Optional<String> plain = AddFirstLook.findRefusal(jarPath);
@@ -464,7 +588,23 @@ public final class ModAdder {
             return new Result.Refused(Lang.get("hotwire.add.later.start_only", name));
         }
         if (this.isComponentListShut(parts.values().stream().map(Part::jar).toList())) {
-            return new Result.Refused(Lang.get("hotwire.add.later.components"), true);
+            return new Result.Refused(Lang.get("hotwire.add.later.components", name), true);
+        }
+        Path enumJar = this.findEnumMixinJar(jarPaths);
+        if (enumJar != null) {
+            return new Result.Refused(this.describeBecause(name, enumJar, "hotwire.add.later.enum"), true);
+        }
+        StartOnly startOnlyMixin = this.findStartOnlyMixin(jarPaths);
+        if (startOnlyMixin != null) {
+            String reason = this.findName(startOnlyMixin.jar());
+            String why = describeStartOnly(startOnlyMixin.kind(), reason);
+            return new Result.Refused(reason.equals(name) ? why : Lang.get("hotwire.add.needs_it", name, reason)
+                    + " " + why, true);
+        }
+        if (LoaderModList.findNewLanguageAdapter(parts.values().stream().map(part -> part.jar().manifest())
+                .toList(), type -> jarPaths.stream().anyMatch(jarPath -> ContentScan.isQuietAdapter(
+                        this.scan(jarPath), type))) != null) {
+            return new Result.Refused(Lang.get("hotwire.add.later.adapter", name), true);
         }
         Set<String> content = new LinkedHashSet<>();
         if (this.engine.isInWorld()) {
@@ -472,6 +612,9 @@ public final class ModAdder {
         }
         if (!content.isEmpty()) {
             return new Result.Refused(Lang.get("hotwire.add.makes_use_reopen", name, String.join(", ", content)));
+        }
+        if (this.engine.isInWorld() && this.listensForClientStart(jarPaths)) {
+            return new Result.Refused(Lang.get("hotwire.add.starts_use_reopen", name));
         }
         for (Part part : parts.values()) {
             Optional<String> missing = AddDependencies.findMissingRefusal(part.jar());
@@ -635,9 +778,10 @@ public final class ModAdder {
                 }
                 return this.backOut(ids, name, cause, grew, undo, e);
             } catch (InterruptedException e) {
+                hold.get().pauseGame(Minecraft.getInstance());
+                Result back = this.backOut(ids, name, e, grew, undo, e);
                 Thread.currentThread().interrupt();
-                this.engine.getSwitcher().turnOff(ids);
-                return new Result.Failed(name + " was interrupted while starting" + undo.run(), e);
+                return back;
             } finally {
                 this.engine.getApplier().getCatchUps().clear();
                 backedOut.countDown();

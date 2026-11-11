@@ -13,7 +13,7 @@ final class DisabledJars {
     private DisabledJars() {
     }
 
-    static Path disable(Path jar) throws IOException {
+    static Path disable(Path jar, boolean runs) throws IOException {
         KnotInternals.dropFromClassPath(jar);
         Path disabled = jar.resolveSibling(jar.getFileName() + SUFFIX);
         try {
@@ -21,18 +21,23 @@ final class DisabledJars {
         } catch (IOException e) {
             throw new IOException(e.getMessage() + " (" + KnotInternals.describeOpenZips(jar) + ")", e);
         }
-        FabricLauncherBase.getLauncher().addToClassPath(disabled);
+        if (runs) {
+            FabricLauncherBase.getLauncher().addToClassPath(disabled);
+        }
         return disabled;
     }
 
     static Path enable(Path disabled) throws IOException {
         KnotInternals.dropFromClassPath(disabled);
-        return restore(disabled);
+        return restore(disabled, true);
     }
 
-    static Path restore(Path disabled) throws IOException {
+    static Path restore(Path disabled, boolean runs) throws IOException {
         String name = String.valueOf(disabled.getFileName());
         Path jar = disabled.resolveSibling(name.substring(0, name.length() - SUFFIX.length()));
+        if (!runs) {
+            return Files.move(disabled, jar);
+        }
         KnotInternals.dropFromClassPath(disabled);
         Files.move(disabled, jar);
         FabricLauncherBase.getLauncher().addToClassPath(jar);

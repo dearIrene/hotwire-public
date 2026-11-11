@@ -30,6 +30,7 @@ import java.util.function.Consumer;
 import java.util.function.Supplier;
 import java.util.stream.Collectors;
 import net.minecraft.client.Minecraft;
+import net.minecraft.client.gui.screens.DisconnectedScreen;
 //? if <1.21.8 {
 /*import net.minecraft.client.gui.screens.TitleScreen;
 *///?}
@@ -281,6 +282,7 @@ public final class WorldReopen {
         return out.toString();
     }
 
+    @SuppressWarnings("ReferenceEquality")
     public static void open(Minecraft client, String level) throws InterruptedException {
         long deadline = System.nanoTime() + WAIT.toNanos();
         while (ModViews.openOverlay() != null) {
@@ -292,14 +294,20 @@ public final class WorldReopen {
         }
         awaitUnlocked(client, level, deadline);
         boolean[] refused = new boolean[1];
+        Object before = ModViews.openScreen();
         client.execute(() -> client.createWorldOpenFlows().openWorld(level, () -> refused[0] = true));
         while (client.player == null || client.level == null) {
             if (refused[0]) {
                 throw new IllegalStateException("the game would not open the world " + level + " again");
             }
+
+            if (ModViews.openScreen() instanceof DisconnectedScreen dropped && dropped != before) {
+                throw new IllegalStateException("the join of the world " + level + " was disconnected");
+            }
             if (System.nanoTime() > deadline) {
+                Object shown = ModViews.openScreen();
                 throw new IllegalStateException("the world " + level + " did not open again in " + WAIT.toSeconds()
-                        + " s");
+                        + " s; the game shows " + (shown == null ? "no screen" : shown.getClass().getName()));
             }
             Thread.sleep(200);
         }

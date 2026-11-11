@@ -38,7 +38,10 @@ final class NextStartQueue {
         }
         try {
             ModManifest manifest = ModJarReader.read(jar).manifest();
-            Path running = ModPolicy.isHotwire(manifest.id()) ? null : this.installed.findJarOf(manifest.id());
+
+            Path folder = this.installed.findFolderJarOf(manifest.id());
+            Path running = ModPolicy.isHotwire(manifest.id()) ? null
+                    : folder != null ? folder : this.installed.findJarOf(manifest.id());
             String from = running == null ? "" : this.installed.find(manifest.id()).map(ModManifest::version)
                     .orElse("");
             if (running != null && from.equals(manifest.version())) {
@@ -50,10 +53,10 @@ final class NextStartQueue {
                 Files.copy(jar, staged, StandardCopyOption.REPLACE_EXISTING);
             }
             this.queue.add(new UpdateQueue.Entry(manifest.id(), manifest.name(), from, manifest.version(),
-                    running == null ? "" : running.toAbsolutePath().toString(),
+                    running == null ? "" : String.valueOf(running.getFileName()),
                     running == null ? "" : FileHashes.findSha256(running), staged.toAbsolutePath().toString(),
                     FileHashes.findSha256(staged), "", System.currentTimeMillis()));
-            return new ModAdder.Result.Queued(manifest.id(), manifest.name(), Lang.get(running == null
+            return new ModAdder.Result.Queued(manifest.id(), Lang.get(running == null
                     ? "hotwire.next_start.add" : "hotwire.next_start.update", manifest.name(), manifest.version()));
         } catch (ModJarException | IOException e) {
             return new ModAdder.Result.Failed(jar.getFileName() + " could not be queued: " + e.getMessage(), e);

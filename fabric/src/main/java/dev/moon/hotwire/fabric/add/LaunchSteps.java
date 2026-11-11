@@ -16,7 +16,7 @@ import org.slf4j.LoggerFactory;
 public final class LaunchSteps {
     private static final Logger LOGGER = LoggerFactory.getLogger(LaunchSteps.class);
 
-    public record Step(String name, Runnable run) {
+    public record Step(String name, Runnable work) {
     }
 
     private LaunchSteps() {
@@ -32,6 +32,7 @@ public final class LaunchSteps {
                     for (String id : ids) {
                         setUp.put(id, ModLifecycle.runSetup(id, GameRegistrations.getJournal(),
                                 Minecraft.getInstance()));
+                        LOGGER.info("[Hotwire] {}'s client-started listeners ran: {}", id, setUp.get(id));
                     }
                 }));
     }
@@ -42,7 +43,7 @@ public final class LaunchSteps {
             if (skipped.contains(step.name())) {
                 continue;
             }
-            step.run();
+            step.work().run();
             ran.add(step.name());
         }
         LOGGER.info("[Hotwire] {}: launch steps {}{}", what, ran, skipped.isEmpty() ? "" : ", skipped " + skipped);

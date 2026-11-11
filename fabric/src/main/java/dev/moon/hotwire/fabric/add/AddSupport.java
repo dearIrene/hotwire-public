@@ -1,6 +1,7 @@
 package dev.moon.hotwire.fabric.add;
 
 import dev.moon.hotwire.classfile.ClassHeader;
+import dev.moon.hotwire.config.AtomicFiles;
 import dev.moon.hotwire.fabric.InstalledMods;
 import dev.moon.hotwire.fabric.ModPolicy;
 import dev.moon.hotwire.fabric.rebuild.GameClasses;
@@ -32,11 +33,13 @@ import java.nio.file.Files;
 import java.nio.file.Path;
 import java.nio.file.StandardCopyOption;
 import java.util.Collections;
+import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
 import java.util.Objects;
 import java.util.Optional;
 import java.util.OptionalInt;
+import java.util.Set;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.function.Function;
 import java.util.zip.ZipEntry;
@@ -105,13 +108,20 @@ public final class AddSupport implements ModAdder.Engine {
             }
             ModManifest manifest = this.queueJar(jar);
             journal.end(ActionJournal.Outcome.QUEUED, manifest.id());
-            return new ModAdder.Result.Queued(manifest.id(), manifest.name(), manifest.name() + " "
+            return new ModAdder.Result.Queued(manifest.id(), manifest.name() + " "
                     + manifest.version() + " is queued as a pending task: it goes into your mods folder when you close"
                     + " the game. Cancel it any time from Pending tasks.");
         } catch (ModJarException | IOException e) {
             journal.end(ActionJournal.Outcome.FAILED, e.getClass().getSimpleName());
             return new ModAdder.Result.Failed(jar.getFileName() + " could not be queued: " + e.getMessage(), e);
         }
+    }
+
+    @Override
+    public Set<String> findQueuedIds() {
+        Set<String> ids = new HashSet<>();
+        this.queue.getEntries().forEach(entry -> ids.add(entry.modId()));
+        return ids;
     }
 
     public boolean isInstalledJar(Path jar) {
@@ -140,7 +150,10 @@ public final class AddSupport implements ModAdder.Engine {
                         + " copied there: copy it there yourself to have the mod at the next launch.";
             }
             ModManifest manifest = ModJarReader.read(jar).manifest();
-            Files.copy(jar, target);
+
+            Path part = target.resolveSibling(target.getFileName() + ".part");
+            Files.copy(jar, part, StandardCopyOption.REPLACE_EXISTING);
+            AtomicFiles.moveInto(part, target);
             this.copied.put(manifest.id(), new PendingChange.Copied(manifest.id(), manifest.name(),
                     String.valueOf(target.getFileName())));
             this.copiedFrom.put(manifest.id(), jar.toAbsolutePath());

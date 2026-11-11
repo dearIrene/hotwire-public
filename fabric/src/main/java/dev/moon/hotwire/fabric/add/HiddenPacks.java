@@ -2,18 +2,17 @@ package dev.moon.hotwire.fabric.add;
 
 import dev.moon.hotwire.fabric.registration.GameRegistrations;
 import java.io.IOException;
+import java.io.UncheckedIOException;
 import java.nio.file.Files;
 import java.nio.file.Path;
-import java.util.Enumeration;
 import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
 import java.util.concurrent.ConcurrentHashMap;
-import java.util.zip.ZipEntry;
-import java.util.zip.ZipFile;
+import java.util.stream.Stream;
+import net.fabricmc.loader.api.FabricLoader;
 import net.fabricmc.loader.api.ModContainer;
-import net.fabricmc.loader.api.metadata.ModOrigin;
 import net.minecraft.client.Minecraft;
 import net.minecraft.server.packs.PackType;
 import org.jspecify.annotations.Nullable;
@@ -63,6 +62,27 @@ public final class HiddenPacks {
         *///?}
     }
 
+    //? if >=1.21.5 {
+    private static final boolean SHADERS_READ_LATE = true;
+    //?} else {
+    /*private static final boolean SHADERS_READ_LATE = false;
+    *///?}
+
+    private static boolean isOwned(String namespace, Set<String> hidden) {
+        return namespace.equals("minecraft") || namespace.equals("realms") || hidden.contains(namespace)
+                || FabricLoader.getInstance().isModLoaded(namespace);
+    }
+
+    private static boolean isFamily(String namespace, ModContainer container) {
+        for (ModContainer up = container.getContainingMod().orElse(null); up != null;
+                up = up.getContainingMod().orElse(null)) {
+            if (up.getMetadata().getId().equals(namespace)) {
+                return true;
+            }
+        }
+        return container.getContainedMods().stream().anyMatch(inside -> inside.getMetadata().getId().equals(namespace));
+    }
+
     private static boolean isOwnAlone(String id, ModContainer container) {
         Set<String> hidden = LoaderModList.getHidden();
         Set<String> others = new HashSet<>();
@@ -70,30 +90,30 @@ public final class HiddenPacks {
                 .filter(pack -> !hidden.contains(GameRegistrations.findModOf(pack.getClass())))
                 .filter(pack -> !pack.packId().equals(id))
                 .forEach(pack -> others.addAll(pack.getNamespaces(PackType.CLIENT_RESOURCES)));
-        if (container.getOrigin().getKind() != ModOrigin.Kind.PATH) {
-            return false;
-        }
+
         boolean any = false;
-        for (Path path : container.getOrigin().getPaths()) {
-            if (!Files.isRegularFile(path)) {
-                return false;
+        for (Path root : container.getRootPaths()) {
+            Path assets = root.resolve("assets");
+            if (!Files.isDirectory(assets)) {
+                continue;
             }
-            try (ZipFile zip = new ZipFile(path.toFile())) {
-                Enumeration<? extends ZipEntry> entries = zip.entries();
-                while (entries.hasMoreElements()) {
-                    String name = entries.nextElement().getName();
-                    int end = name.indexOf('/', 7);
-                    if (!name.startsWith("assets/") || end < 0) {
+            try (Stream<Path> files = Files.walk(assets)) {
+                for (Path file : files.filter(Files::isRegularFile).toList()) {
+                    Path inside = assets.relativize(file);
+                    if (inside.getNameCount() < 2) {
                         continue;
                     }
                     any = true;
-                    String namespace = name.substring(7, end);
-                    if ((!namespace.equals(id) && others.contains(namespace)) || name.contains("/shaders/")
-                            || name.contains("/post_effect/")) {
+                    String namespace = inside.getName(0).toString();
+                    String name = inside.toString().replace(file.getFileSystem().getSeparator(), "/");
+                    boolean shader = name.contains("/shaders/") || name.contains("/post_effect/");
+                    if ((!namespace.equals(id) && others.contains(namespace) && isOwned(namespace, hidden)
+                            && !isFamily(namespace, container))
+                            || (shader && !SHADERS_READ_LATE)) {
                         return false;
                     }
                 }
-            } catch (IOException e) {
+            } catch (IOException | UncheckedIOException e) {
                 LOGGER.info("[Hotwire] {}'s jar could not be read for its assets; its pack leaves at its off", id);
                 return false;
             }
@@ -101,6 +121,7 @@ public final class HiddenPacks {
         if (any) {
             LOGGER.info("[Hotwire] {}'s pack holds its own assets alone: it stays listed while the mod is off", id);
         }
-        return any;
+
+        return true;
     }
 }

@@ -65,12 +65,12 @@ final class DisabledMods {
         this.renaming.shutdown();
         for (PendingChange.OffAtStart off : this.offAtStart) {
             for (String id : off.ids()) {
-                Path jar = this.installed.findJarOf(id);
+                Path jar = this.installed.findFolderJarOf(id);
                 if (jar == null || this.installed.isDisabled(id)) {
                     continue;
                 }
                 try {
-                    Path renamed = DisabledJars.disable(jar);
+                    Path renamed = DisabledJars.disable(jar, this.installed.isRunningFromFolderJar(id));
                     LOGGER.info("[Hotwire] {} is off from the next start: {} is now {}", id, jar.getFileName(),
                             renamed.getFileName());
                 } catch (IOException e) {
@@ -84,7 +84,7 @@ final class DisabledMods {
         Path mods = this.modsFolder.toAbsolutePath().normalize();
         Set<String> waiting = this.findWaitingAtStart();
         List<String> ids = order.stream().filter(id -> {
-            Path jar = this.installed.findJarOf(id);
+            Path jar = this.installed.findFolderJarOf(id);
             return jar != null && this.installed.isTopLevel(id) && !this.installed.isDisabled(id)
                     && !waiting.contains(id) && mods.equals(jar.toAbsolutePath().normalize().getParent());
         }).toList();
@@ -127,12 +127,13 @@ final class DisabledMods {
     void restore(List<String> order) {
         this.awaitRenames();
         for (String id : order) {
-            Path disabledJar = this.installed.isDisabled(id) ? this.installed.findJarOf(id) : null;
+            Path disabledJar = this.installed.isDisabled(id) ? this.installed.findFolderJarOf(id) : null;
             if (disabledJar == null) {
                 continue;
             }
             try {
-                this.installed.onRestored(id, DisabledJars.restore(disabledJar));
+                this.installed.onRestored(id, DisabledJars.restore(disabledJar,
+                        this.installed.isRunningFromFolderJar(id)));
                 LOGGER.info("[Hotwire] {} is restored for the on: {} has its name back", id,
                         disabledJar.getFileName());
             } catch (IOException e) {
@@ -175,7 +176,7 @@ final class DisabledMods {
         }
         Path mods = this.modsFolder.toAbsolutePath().normalize();
         List<String> ids = done.plan().order().stream().filter(id -> {
-            Path jar = this.installed.findJarOf(id);
+            Path jar = this.installed.findFolderJarOf(id);
             return jar != null && this.installed.isTopLevel(id) && !this.installed.isDisabled(id)
                     && mods.equals(jar.toAbsolutePath().normalize().getParent());
         }).toList();
@@ -188,12 +189,12 @@ final class DisabledMods {
     private void renameJars(List<String> ids) {
         StringBuilder failed = new StringBuilder();
         for (String id : ids) {
-            Path jar = this.installed.findJarOf(id);
+            Path jar = this.installed.findFolderJarOf(id);
             if (jar == null || this.installed.isDisabled(id)) {
                 continue;
             }
             try {
-                this.installed.onDisabled(id, DisabledJars.disable(jar));
+                this.installed.onDisabled(id, DisabledJars.disable(jar, this.installed.isRunningFromFolderJar(id)));
                 LOGGER.info("[Hotwire] {} stays off: {} is now {}", id, jar.getFileName(), jar.getFileName()
                         + DisabledJars.SUFFIX);
             } catch (IOException e) {

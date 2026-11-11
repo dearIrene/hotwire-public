@@ -49,6 +49,13 @@ final class JarRequests {
 
     @SuppressWarnings("FutureReturnValueIgnored")
     void add(Path jar, AddMode mode, Consumer<ModAdder.Result> then) {
+        if (mode == AddMode.NEXT_START && this.engine.isInModsFolder(jar)) {
+            String name = String.valueOf(jar.getFileName());
+            ModAdder.Result queued = new ModAdder.Result.Queued(name, Lang.get("hotwire.folder.next_start", name));
+            this.engine.showMessage(ModAdder.describe(queued), false);
+            then.accept(queued);
+            return;
+        }
         if (mode == AddMode.NEXT_START) {
             ModAdder.Result queued = this.changes.queueAdd(jar);
             boolean ok = queued instanceof ModAdder.Result.Queued;
@@ -68,14 +75,22 @@ final class JarRequests {
                 this.progress.endAdding();
             }
         }, result -> {
+            if (mode == AddMode.SAVE_AND_REOPEN) {
+                this.storeJars.endReopenWait(false);
+            }
+
             boolean more = this.storeJars.hasQueued();
+            boolean reopens = mode == AddMode.NOW && ModAdder.isWorldBuilt(result)
+                    && WorldReopen.findRefusal().isEmpty() && this.engine.findHost() != null;
+            if (reopens && more) {
+                this.storeJars.waitForReopen();
+            }
             then.accept(result);
             if (result instanceof ModAdder.Result.Added) {
                 this.storeJars.markInstalled(jar);
             }
             JarHost current = this.engine.findHost();
-            if (mode == AddMode.NOW && ModAdder.isWorldBuilt(result) && WorldReopen.findRefusal().isEmpty()
-                    && current != null) {
+            if (reopens) {
                 LOGGER.info("[Hotwire] {}", ((ModAdder.Result.Failed) result).reason());
                 this.engine.findReopenHost().offerReopen(new ReopenPanel.Offer(false, List.of(), jar,
                         String.valueOf(jar.getFileName()), Lang.get("hotwire.add.world_open")));
@@ -107,6 +122,11 @@ final class JarRequests {
                 if (result instanceof ModAdder.Result.Failed failed && FailureReports.isUnplanned(failed.cause())) {
                     FailureReports.report(this.engine, Lang.get("hotwire.report.file.add_failed"), failed.reason());
                 }
+            }
+
+            if (mode == AddMode.SAVE_AND_REOPEN && this.storeJars.hasQueued() && this.engine.findHost() == null) {
+                this.engine.open();
+                this.storeJars.offerNext();
             }
             this.engine.refreshScreen();
         });
