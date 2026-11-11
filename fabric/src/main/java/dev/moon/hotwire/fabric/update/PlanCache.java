@@ -12,7 +12,7 @@ import java.util.Map;
 import java.util.concurrent.ConcurrentHashMap;
 
 final class PlanCache {
-    private static final int MOST = 256;
+    private static final int MOST = 2048;
 
     private final Map<String, ModJar> reads = new ConcurrentHashMap<>();
     private final Map<String, JarDiff> diffs = new ConcurrentHashMap<>();
@@ -46,7 +46,7 @@ final class PlanCache {
 
     private <T> void store(Map<String, T> into, String key, T value) {
         if (into.size() >= MOST) {
-            into.clear();
+            into.keySet().stream().findAny().ifPresent(into::remove);
         }
         into.put(key, value);
     }

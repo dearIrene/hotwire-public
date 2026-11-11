@@ -95,9 +95,17 @@ final class UpdateCopies {
     }
 
     @Nullable String findRestartRefusal(Set<String> group, Map<String, Path> given) {
-        if (group.size() > MOST_IN_A_COPY_GROUP) {
+        if (this.isOverCap(group)) {
             return "with " + group.size() + " mods going together, it takes a restart";
         }
+        return this.findRefusalUnderCap(group, given);
+    }
+
+    boolean isOverCap(Set<String> group) {
+        return group.size() > MOST_IN_A_COPY_GROUP;
+    }
+
+    @Nullable String findRefusalUnderCap(Set<String> group, Map<String, Path> given) {
         Map<String, ModManifest> manifests = new LinkedHashMap<>();
         Map<String, String> coming = new HashMap<>();
         for (String id : group) {

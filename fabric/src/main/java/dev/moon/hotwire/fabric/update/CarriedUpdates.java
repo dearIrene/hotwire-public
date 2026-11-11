@@ -93,6 +93,10 @@ final class CarriedUpdates {
             List<Path> leftOut) throws ModJarException {
         ModManifest manifest = read.manifest();
         String runs = this.versionOf.apply(manifest.id());
+
+        if (runs != null && this.versions.compare(manifest.version(), runs) <= 0) {
+            return true;
+        }
         Optional<String> rejected = this.rejection.apply(manifest);
         if (rejected.isPresent()) {
             LOGGER.info("[Hotwire] the carried {} {} cannot update with it: {}", manifest.id(), manifest.version(),
@@ -101,9 +105,6 @@ final class CarriedUpdates {
         }
         if (runs == null) {
             toAdd.add(written);
-            return true;
-        }
-        if (this.versions.compare(manifest.version(), runs) <= 0) {
             return true;
         }
         Map<String, byte[]> runningEntries = this.diffs.containsKey(written + " " + runs) ? Map.of("known",

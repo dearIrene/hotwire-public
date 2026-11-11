@@ -34,8 +34,12 @@ final class ConstructorUses {
         Map<String, Set<String>> added = new HashMap<>();
         List<ClassDiff> out = new ArrayList<>(classes.size());
         Map<String, Integer> at = new HashMap<>();
+        Set<String> nullSafe = StaticReads.findNullSafe(classes, running, incoming);
         for (ClassDiff diff : classes) {
             ClassDiff own = isOwnInterfaces(diff, running, incoming) ? withInterfacesOwn(diff) : diff;
+            if (nullSafe.contains(own.name())) {
+                own = dropStaticSetElsewhere(own);
+            }
             at.put(own.name(), out.size());
             out.add(own);
             if (own.shape().contains(ShapeChange.CONSTRUCTOR_ADDED)) {
@@ -110,6 +114,10 @@ final class ConstructorUses {
     }
 
     static boolean hasStaticSetElsewhere(ClassNode was, ClassNode now) {
+        return !findStaticsSetElsewhere(was, now).isEmpty();
+    }
+
+    static Set<String> findStaticsSetElsewhere(ClassNode was, ClassNode now) {
         Set<String> had = new HashSet<>();
         was.fields.forEach(field -> had.add(field.name + field.desc));
         Set<String> gained = new HashSet<>();
@@ -120,7 +128,7 @@ final class ConstructorUses {
             }
         });
         if (gained.isEmpty()) {
-            return false;
+            return gained;
         }
         Set<String> started = new HashSet<>();
         Set<String> setLater = new HashSet<>();
@@ -140,7 +148,7 @@ final class ConstructorUses {
         }
         setLater.removeAll(started);
         setLater.removeAll(tested);
-        return !setLater.isEmpty();
+        return setLater;
     }
 
     private static boolean isTestedForNull(AbstractInsnNode read) {
@@ -196,6 +204,12 @@ final class ConstructorUses {
         shape.remove(ShapeChange.INTERFACES);
         shape.add(ShapeChange.INTERFACES_OWN);
         return new ClassDiff(diff.name(), diff.change(), shape);
+    }
+
+    private static ClassDiff dropStaticSetElsewhere(ClassDiff diff) {
+        Set<ShapeChange> shape = EnumSet.copyOf(diff.shape());
+        shape.remove(ShapeChange.STATIC_SET_ELSEWHERE);
+        return shape.isEmpty() ? diff : new ClassDiff(diff.name(), diff.change(), shape);
     }
 
     private static Set<String> findAdded(String name, Map<String, byte[]> running, Map<String, byte[]> incoming) {

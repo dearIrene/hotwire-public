@@ -16,6 +16,7 @@ import java.util.concurrent.ExecutionException;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
 import java.util.concurrent.Future;
+import java.util.concurrent.atomic.AtomicInteger;
 import java.util.function.BiConsumer;
 import java.util.function.Consumer;
 import java.util.function.Function;
@@ -30,7 +31,7 @@ final class StoreUpdates {
 
     private static final int REFUSALS_SAID = 5;
 
-    record Ran(List<ModUpdater.Result> results, List<Path> updated, long fetchMillis, long updateMillis) {
+    record Ran(List<ModUpdater.Result> results, long fetchMillis, long updateMillis) {
         String describe() {
             long now = this.results.stream().filter(ModUpdater.Result.Updated.class::isInstance).count();
             long later = this.results.stream().filter(ModUpdater.Result.Queued.class::isInstance).count();
@@ -45,7 +46,7 @@ final class StoreUpdates {
     private final Progress progress;
     private final BiConsumer<String, Boolean> say;
     private volatile CompletableFuture<Ran> last = CompletableFuture.completedFuture(
-            new Ran(List.of(), List.of(), 0, 0));
+            new Ran(List.of(), 0, 0));
 
     StoreUpdates(UpdateCheck check, ModChanges changes, Progress progress, BiConsumer<String, Boolean> say) {
         this.check = check;
@@ -62,8 +63,13 @@ final class StoreUpdates {
 
     void run(List<UpdateOffer> offers, Consumer<List<Path>> needing, BiConsumer<Path, ModUpdater.Result> done,
             Runnable landed) {
+        if (!this.last.isDone()) {
+            return;
+        }
         long began = System.nanoTime();
         this.say.accept(Lang.get("hotwire.updates.getting_all", offers.size()), false);
+        this.progress.beginUpdating(Lang.get("hotwire.updates.all_subject", offers.size()));
+        this.progress.count(Lang.get("hotwire.progress.update.getting"), 0, offers.size());
         CompletableFuture<Ran> ran = new CompletableFuture<>();
         this.last = ran;
         Thread.ofPlatform().name("hotwire-updates-fetch").daemon().start(() -> {
@@ -80,15 +86,12 @@ final class StoreUpdates {
             }
             LOGGER.info("[Hotwire] Update all fetched {} of {} jars in {} ms; {} come with mods they need", jars.size()
                     + needed.size(), offers.size(), fetchMillis, needed.size());
-            Minecraft.getInstance().execute(() -> {
-                landed.run();
-                this.progress.begin(Lang.get("hotwire.updates.all_subject", jars.size()), false, jars.size());
-                this.progress.count(Lang.get("hotwire.updates.applying_all", jars.size()), 0, 0);
-            });
+            Minecraft.getInstance().execute(landed);
+            this.progress.stepUpdating(1);
             long applying = System.nanoTime();
             this.changes.updateAll(jars).whenComplete((results, failed) -> Minecraft.getInstance().execute(() -> {
                 long updateMillis = (System.nanoTime() - applying) / 1_000_000;
-                this.progress.end();
+                this.progress.endAdding();
                 List<ModUpdater.Result> made = results == null ? List.of() : results;
                 if (failed != null) {
                     this.say.accept(String.valueOf(failed), true);
@@ -98,7 +101,7 @@ final class StoreUpdates {
                     done.accept(jars.get(i), made.get(i));
                 }
                 LOGGER.info("[Hotwire] Update all: fetched in {} ms, updated in {} ms", fetchMillis, updateMillis);
-                ran.complete(new Ran(made, jars, fetchMillis, updateMillis));
+                ran.complete(new Ran(made, fetchMillis, updateMillis));
                 if (!needed.isEmpty()) {
                     needing.accept(needed);
                 }
@@ -111,9 +114,12 @@ final class StoreUpdates {
         ExecutorService pool = Executors.newFixedThreadPool(FETCHES,
                 Thread.ofPlatform().name("hotwire-updates-fetch-", 1).daemon().factory());
         List<Future<List<Path>>> futures = new ArrayList<>();
+        AtomicInteger landed = new AtomicInteger();
         for (UpdateOffer offer : offers) {
             futures.add(pool.submit(() -> {
                 List<Path> jars = fetch.apply(offer);
+                this.progress.count(Lang.get("hotwire.progress.update.getting"), landed.incrementAndGet(),
+                        offers.size());
                 if (jars.size() == 1) {
                     this.changes.planAhead(jars.getFirst());
                 }

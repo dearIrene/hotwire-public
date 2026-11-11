@@ -51,6 +51,8 @@ public record JarDiff(ModManifest running, ModManifest incoming, List<ClassDiff>
         CLASS_MODIFIERS(false),
 
         CLASS_FINALITY(true),
+
+        CLASS_MADE_ABSTRACT(true),
         SUPERCLASS(false),
 
         INTERFACES(false),
@@ -83,6 +85,8 @@ public record JarDiff(ModManifest running, ModManifest incoming, List<ClassDiff>
         METHOD_ABSTRACTNESS(true),
 
         NEST(true),
+
+        PERMITTED_NARROWED(true),
         PERMITTED_SUBCLASSES(false),
         RECORD_COMPONENTS(false);
 

@@ -223,6 +223,18 @@ public final class StoreModel implements AutoCloseable {
         this.ask(0);
     }
 
+    private void show(ModrinthClient.Search found, List<Card> before, ModrinthClient.Kind kind, String words,
+            String category) {
+        List<Card> next = new ArrayList<>(before);
+        for (ModrinthClient.Hit hit : found.hits()) {
+            next.add(this.makeCard(hit));
+        }
+        this.cards = Collections.unmodifiableList(next);
+        this.total = found.total();
+        this.saveAnswer(kind, words, category, this.cards, this.total);
+        this.loading = false;
+    }
+
     private boolean showSaved() {
         ModrinthClient.Kind kind = this.kind;
         String words = this.words;
@@ -234,14 +246,7 @@ public final class StoreModel implements AutoCloseable {
             return false;
         }
         int ticket = this.asked.incrementAndGet();
-        List<Card> next = new ArrayList<>();
-        for (ModrinthClient.Hit hit : found.hits()) {
-            next.add(this.makeCard(hit));
-        }
-        this.cards = Collections.unmodifiableList(next);
-        this.total = found.total();
-        this.saveAnswer(kind, words, category, this.cards, this.total);
-        this.loading = false;
+        this.show(found, List.of(), kind, words, category);
         this.onChanged.run();
         if (!saved.fresh()) {
             this.worker.execute(() -> this.refresh(ticket, kind, words, category, 0, key));
@@ -322,14 +327,7 @@ public final class StoreModel implements AutoCloseable {
             if (ticket != this.asked.get()) {
                 return;
             }
-            List<Card> next = new ArrayList<>(offset == 0 ? List.of() : this.cards);
-            for (ModrinthClient.Hit hit : found.hits()) {
-                next.add(this.makeCard(hit));
-            }
-            this.cards = Collections.unmodifiableList(next);
-            this.total = found.total();
-            this.saveAnswer(kind, words, category, this.cards, this.total);
-            this.loading = false;
+            this.show(found, offset == 0 ? List.of() : this.cards, kind, words, category);
             this.pageWanted = false;
             this.onChanged.run();
             if (stale) {

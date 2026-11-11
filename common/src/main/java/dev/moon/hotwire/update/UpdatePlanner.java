@@ -57,8 +57,7 @@ public final class UpdatePlanner {
                 continue;
             }
             boolean loaded = game.loadedClasses().contains(diffed.name());
-            actions.add(new ClassAction(diffed.name(), diffed.change(), chooseAction(diffed, loaded,
-                    game.takesShapes())));
+            actions.add(new ClassAction(diffed.name(), chooseAction(diffed, loaded, game.takesShapes())));
             Set<String> patchers = game.patchedBy().getOrDefault(diffed.name(), Set.of());
             if (loaded && diffed.change() != ClassChange.REMOVED && !patchers.isEmpty()) {
                 blockers.add(new UpdateBlocker.PatchedByRunningMod(diffed.name(), patchers));

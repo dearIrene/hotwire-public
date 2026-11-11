@@ -34,16 +34,25 @@ public final class UpdateQueue {
         this.file = new JsonFile<>(path, QueueFile.class, QueueFile::new);
     }
 
+    private QueueFile load() {
+        QueueFile queued = this.file.load();
+        queued.entries = queued.entries == null ? new ArrayList<>() : queued.entries;
+        queued.replaced = queued.replaced == null ? new ArrayList<>() : queued.replaced;
+        queued.entries.removeIf(entry -> entry == null || entry.modId() == null || entry.reason() == null);
+        queued.replaced.removeIf(record -> record == null || record.file() == null);
+        return queued;
+    }
+
     public synchronized void setOnAdded(Runnable onAdded) {
         this.onAdded = onAdded;
     }
 
     public synchronized List<Entry> getEntries() {
-        return List.copyOf(this.file.load().entries);
+        return List.copyOf(this.load().entries);
     }
 
     public synchronized void add(Entry entry) throws IOException {
-        QueueFile queued = this.file.load();
+        QueueFile queued = this.load();
         queued.entries.removeIf(other -> other.modId().equals(entry.modId()));
         queued.entries.add(entry);
         this.file.save(queued);
@@ -51,36 +60,37 @@ public final class UpdateQueue {
     }
 
     public synchronized void remove(String modId) throws IOException {
-        QueueFile queued = this.file.load();
+        QueueFile queued = this.load();
         queued.entries.removeIf(entry -> entry.modId().equals(modId));
         this.file.save(queued);
     }
 
     synchronized void replace(List<Entry> entries) throws IOException {
-        QueueFile queued = this.file.load();
+        QueueFile queued = this.load();
         queued.entries = new ArrayList<>(entries);
         this.file.save(queued);
     }
 
+    synchronized void replaceAll(List<Entry> entries, List<ReplacedJar> records) throws IOException {
+        QueueFile queued = this.load();
+        queued.entries = new ArrayList<>(entries);
+        queued.replaced = new ArrayList<>(records);
+        this.file.save(queued);
+    }
+
     synchronized List<ReplacedJar> getReplaced() {
-        return List.copyOf(this.file.load().replaced);
+        return List.copyOf(this.load().replaced);
     }
 
     synchronized void addReplaced(ReplacedJar record) throws IOException {
-        QueueFile queued = this.file.load();
+        QueueFile queued = this.load();
         queued.replaced.removeIf(other -> other.file().equals(record.file()));
         queued.replaced.add(record);
         this.file.save(queued);
     }
 
-    synchronized void removeReplaced(String file) throws IOException {
-        QueueFile queued = this.file.load();
-        queued.replaced.removeIf(record -> record.file().equals(file));
-        this.file.save(queued);
-    }
-
     synchronized void replaceReplaced(List<ReplacedJar> records) throws IOException {
-        QueueFile queued = this.file.load();
+        QueueFile queued = this.load();
         queued.replaced = new ArrayList<>(records);
         this.file.save(queued);
     }

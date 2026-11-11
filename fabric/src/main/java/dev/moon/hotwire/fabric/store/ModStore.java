@@ -265,8 +265,8 @@ public final class ModStore {
         Downloads downloads = this.model.getDownloads();
         downloads.start(job);
         try {
-            Files.createDirectories(this.downloads);
-            Path jar = this.downloads.resolve(version.fileName().replaceAll("[^A-Za-z0-9._+ -]", "_"));
+            Path jar = version.resolveIn(this.downloads);
+            Files.createDirectories(jar.getParent());
             this.model.getClient().fetchTo(version, jar, downloads.findFeed(job));
             downloads.end(job, true);
             return jar;

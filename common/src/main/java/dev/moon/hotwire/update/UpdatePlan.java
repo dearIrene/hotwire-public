@@ -1,6 +1,5 @@
 package dev.moon.hotwire.update;
 
-import dev.moon.hotwire.update.JarDiff.ClassChange;
 import dev.moon.hotwire.update.JarDiff.ShapeChange;
 import java.util.List;
 import java.util.Set;
@@ -21,7 +20,7 @@ public record UpdatePlan(String modId, String runningVersion, String incomingVer
         }
     }
 
-    public record ClassAction(String className, ClassChange change, Kind kind) {
+    public record ClassAction(String className, Kind kind) {
         public enum Kind {
             REDEFINE,
 

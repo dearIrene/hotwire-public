@@ -62,6 +62,10 @@ public final class ModrinthClient {
 
     public record Version(String id, String projectId, String number, String name, String fileName, String url,
             String sha512, long size, List<String> gameVersions, List<String> requiredProjects, String changelog) {
+        public Path resolveIn(Path folder) {
+            return folder.resolve(this.id.replaceAll("[^A-Za-z0-9._+ -]", "_"))
+                    .resolve(this.fileName.replaceAll("[^A-Za-z0-9._+ -]", "_"));
+        }
     }
 
     public interface Transport {

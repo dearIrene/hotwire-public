@@ -14,15 +14,17 @@ import dev.moon.hotwire.jar.ModJarException;
 import dev.moon.hotwire.jar.ModManifest;
 import dev.moon.hotwire.mixin_copy.MixinCopy;
 import dev.moon.hotwire.redefine.ConstructedFields;
+import dev.moon.hotwire.redefine.InitHookRuns;
 import dev.moon.hotwire.redefine.Linker;
 import dev.moon.hotwire.redefine.RebuildException;
 import dev.moon.hotwire.switching.ModMixins;
 import dev.moon.hotwire.switching.SwitchApplier;
 import dev.moon.hotwire.switching.SwitchTimes;
+import dev.moon.hotwire.ui.Progress;
 import dev.moon.hotwire.update.UpdateDiffer;
+import dev.moon.hotwire.update.UpdatePlan;
 import dev.moon.hotwire.update.UpdatePlan.ClassAction;
 import dev.moon.hotwire.update.UpdatePlan.UpdateNotice;
-import dev.moon.hotwire.update.UpdatePlan;
 import java.nio.file.Path;
 import java.util.ArrayDeque;
 import java.util.ArrayList;
@@ -42,6 +44,7 @@ import java.util.concurrent.ExecutionException;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.TimeoutException;
 import java.util.function.Consumer;
+import java.util.function.IntSupplier;
 import java.util.function.Predicate;
 import net.fabricmc.api.ClientModInitializer;
 import net.fabricmc.api.ModInitializer;
@@ -239,11 +242,14 @@ public final class LiveUpdates {
             });
 
             ConstructedFields.startUpdating(changed.keySet());
+            boolean ships = ready.stream().anyMatch(one -> AddAssets.shipsAssets(one.planned().jar()));
+            List<IntSupplier> late = ships ? InitHookRuns.beginWaitingLate() : List.of();
             SwitchApplier.ApplyResult applied;
             try {
                 applied = this.engine.getApplier().replace(ids, changed, this.engine.on(), targets, joined);
             } finally {
                 ConstructedFields.endUpdating();
+                InitHookRuns.endWaitingLate();
             }
             SwitchTimes.mark("update: class path");
             Map<String, ModUpdater.NewJar> jars = new LinkedHashMap<>();
@@ -254,13 +260,31 @@ public final class LiveUpdates {
             SwitchTimes.mark("update: learn");
             Map<String, Path> paths = new LinkedHashMap<>();
             jars.forEach((id, jar) -> paths.put(id, jar.jar()));
-            AddAssets.reloadForUpdated(paths);
+            String updated = String.join(", ", paths.keySet());
+            Map<String, Path> running = new LinkedHashMap<>();
+            ready.forEach(one -> running.put(one.manifest().id(), one.planned().running()));
+            AddAssets.reloadForUpdated(paths, running, () -> {
+                int failed = late.stream().mapToInt(IntSupplier::getAsInt).sum();
+                if (failed > 0) {
+                    LOGGER.warn("[Hotwire] {} of the late hooks of {} failed after its new assets loaded", failed,
+                            updated);
+                }
+            });
+            Progress shown = this.engine.getProgress();
+            shown.stepUpdating(4);
+            List<String> started = new ArrayList<>();
+            for (int i = 0; i < ready.size(); i++) {
+                shown.count(ready.get(i).manifest().name(), i, ready.size() * 2);
+                started.add(this.start(ready.get(i)));
+            }
+            this.runLaunchSteps(ready.stream().map(one -> one.manifest().id()).toList());
             List<ModUpdater.Result> results = new ArrayList<>();
             for (int i = 0; i < ready.size(); i++) {
                 Ready one = ready.get(i);
+                shown.count(one.manifest().name(), ready.size() + i, ready.size() * 2);
                 SwitchApplier.ApplyResult own = ready.size() == 1 ? applied : this.engine.getApplier()
                         .findShareOf(applied, one.ids(), one.changed(), targetsOf.get(i));
-                results.add(this.finish(one, own));
+                results.add(this.finish(one, own, started.get(i)));
             }
             return results;
         } catch (RebuildException e) {
@@ -300,9 +324,8 @@ public final class LiveUpdates {
         return adoption;
     }
 
-    private ModUpdater.Result finish(Ready one, SwitchApplier.ApplyResult applied) {
+    private String start(Ready one) {
         ModManifest manifest = one.manifest();
-        Path incoming = one.planned().jar();
         for (CarriedUpdates.Library carried : one.planned().whole().bundled()) {
             LOGGER.info("[Hotwire] {} is {} now, carried by {}", carried.manifest().id(),
                     carried.manifest().version(), manifest.id());
@@ -312,17 +335,24 @@ public final class LiveUpdates {
             started.append(runAddedEntrypoints(carried.manifest().id(), carried.plan()));
         }
         SwitchTimes.mark("update: entrypoints");
+        return started.toString();
+    }
 
+    private void runLaunchSteps(List<String> ids) {
         try {
-            Minecraft.getInstance().submit(() -> LaunchSteps.run("the update of " + manifest.id(),
-                    LaunchSteps.planAfterStart(List.of(manifest.id()), this.engine.getClasses()::findLoaded,
-                            new LinkedHashMap<>()),
-                    Set.of("host lists", "entrypoint lists", "client-started listeners"))).get(10, TimeUnit.SECONDS);
+            Minecraft.getInstance().submit(() -> LaunchSteps.run("the update of " + ids,
+                    LaunchSteps.planAfterStart(ids, this.engine.getClasses()::findLoaded, new LinkedHashMap<>()),
+                    Set.of("host lists", "entrypoint lists", "client-started listeners"))).get(30, TimeUnit.SECONDS);
         } catch (InterruptedException e) {
             Thread.currentThread().interrupt();
         } catch (ExecutionException | TimeoutException e) {
-            LOGGER.warn("[Hotwire] {}'s launch steps did not run after its update", manifest.id(), e);
+            LOGGER.warn("[Hotwire] the launch steps of {} did not run after their update", ids, e);
         }
+    }
+
+    private ModUpdater.Result finish(Ready one, SwitchApplier.ApplyResult applied, String started) {
+        ModManifest manifest = one.manifest();
+        Path incoming = one.planned().jar();
         List<String> updated = new ArrayList<>();
         updated.add(manifest.id());
         one.planned().whole().bundled().forEach(carried -> updated.add(carried.manifest().id()));

@@ -1,7 +1,9 @@
 package dev.moon.hotwire.fabric.update;
 
+import dev.moon.hotwire.config.AtomicFiles;
 import dev.moon.hotwire.fabric.ModPolicy;
 import dev.moon.hotwire.fabric.dev.DevSession;
+import dev.moon.hotwire.jar.ContentScan;
 import dev.moon.hotwire.jar.FileHashes;
 import dev.moon.hotwire.jar.JarLookup;
 import dev.moon.hotwire.jar.ModJar;
@@ -15,10 +17,12 @@ import dev.moon.hotwire.switching.SwitchApplier.ApplyResult;
 import dev.moon.hotwire.switching.SwitchTimes;
 import dev.moon.hotwire.ui.Canvas;
 import dev.moon.hotwire.ui.Lang;
+import dev.moon.hotwire.ui.Progress;
 import dev.moon.hotwire.ui.UpdateMethod;
 import dev.moon.hotwire.ui.UpdatePreview;
 import dev.moon.hotwire.update.JarDiff;
 import dev.moon.hotwire.update.JarIntake;
+import dev.moon.hotwire.update.JarLinks;
 import dev.moon.hotwire.update.UpdateContext;
 import dev.moon.hotwire.update.UpdateDiffer;
 import dev.moon.hotwire.update.UpdatePlan;
@@ -78,7 +82,11 @@ public final class ModUpdater {
     interface Engine {
         ModGraph getGraph();
 
+        Progress getProgress();
+
         @Nullable Path findRunningJarOf(String id);
+
+        @Nullable Path findFolderJarOf(String id);
 
         SwitchApplier getApplier();
 
@@ -130,6 +138,8 @@ public final class ModUpdater {
     private final PlanCache plans = new PlanCache();
 
     private final Map<String, Optional<String>> wideners = new ConcurrentHashMap<>();
+
+    private final Map<String, Map<String, Set<String>>> usersNames = new ConcurrentHashMap<>();
     private final Set<Path> afterWorld = ConcurrentHashMap.newKeySet();
 
     public ModUpdater(Engine engine) {
@@ -176,7 +186,7 @@ public final class ModUpdater {
         return manifest != null && this.engine.findRunningJarOf(manifest.id()) != null;
     }
 
-    UpdatePreview preview(Path picked) {
+    public UpdatePreview preview(Path picked) {
         long began = System.nanoTime();
         Path jar = this.unwrap(picked);
         String fileName = String.valueOf(picked.getFileName());
@@ -204,7 +214,8 @@ public final class ModUpdater {
         if (kind == JarIntake.Kind.REFUSED) {
             return new UpdatePreview.Unreadable(fileName);
         }
-        Optional<String> rejected = this.findRejection(manifest);
+        Optional<String> rejected = this.findRejection(manifest)
+                .or(() -> this.findBrokenUser(manifest, running, jar, Set.of()));
         if (rejected.isPresent()) {
             return new UpdatePreview.Refused(manifest.name(), rejected.get());
         }
@@ -432,7 +443,8 @@ public final class ModUpdater {
             }
             return new SortResult.IdChanged(manifest, replaced, jar);
         }
-        Optional<String> rejected = this.findRejection(manifest, brought);
+        Optional<String> rejected = this.findRejection(manifest, brought)
+                .or(() -> this.findBrokenUser(manifest, running, jar, brought.keySet()));
         if (rejected.isPresent()) {
             return new SortResult.Refused(new Result.Refused(rejected.get()));
         }
@@ -665,23 +677,21 @@ public final class ModUpdater {
         Path staging = this.engine.getStagingFolder();
         Files.createDirectories(staging);
         Path staged = staging.resolve(String.valueOf(incoming.getFileName()));
-        Files.deleteIfExists(staged);
-        try {
-            Files.createLink(staged, incoming);
-        } catch (IOException | UnsupportedOperationException e) {
-            Files.copy(incoming, staged, StandardCopyOption.REPLACE_EXISTING);
-        }
 
-        String runningJar = String.valueOf(running.getFileName());
-        String runningSha = FileHashes.findSha256(running);
-        for (UpdateQueue.Entry earlier : this.engine.getQueue().getEntries()) {
-            if (earlier.modId().equals(id) && earlier.stagedSha256().equals(runningSha)) {
-                runningJar = earlier.runningJar();
-                runningSha = earlier.runningSha256();
-            }
+        Path part = staged.resolveSibling(staged.getFileName() + ".part");
+        Files.deleteIfExists(part);
+        try {
+            Files.createLink(part, incoming);
+        } catch (IOException | UnsupportedOperationException e) {
+            Files.copy(incoming, part, StandardCopyOption.REPLACE_EXISTING);
         }
+        AtomicFiles.moveInto(part, staged);
+
+        Path folder = this.engine.findFolderJarOf(id);
+        Path replaced = folder != null && Files.isRegularFile(folder) ? folder : running;
         this.engine.getQueue().add(new UpdateQueue.Entry(id, name, plan.runningVersion(),
-                plan.incomingVersion(), runningJar, runningSha, staged.toAbsolutePath().toString(),
+                plan.incomingVersion(), String.valueOf(replaced.getFileName()), FileHashes.findSha256(replaced),
+                staged.toAbsolutePath().toString(),
                 FileHashes.findSha256(staged), "", System.currentTimeMillis()));
     }
 
@@ -710,6 +720,44 @@ public final class ModUpdater {
                 this.after = Map.of();
             }
         }
+    }
+
+    Optional<String> findBrokenUser(ModManifest incoming, Path running, Path jar, Set<String> updatedToo) {
+        Set<String> users = new TreeSet<>(this.engine.getGraph().getDependents(incoming.id()));
+        users.removeAll(updatedToo);
+        if (users.isEmpty()) {
+            return Optional.empty();
+        }
+        try {
+            Set<String> old = JarLinks.readClassNames(running);
+            Map<String, byte[]> fresh = ContentScan.readClasses(jar).bytes();
+            JarLinks.GameClassReader reader = new JarLinks.GameClassReader(fresh::get);
+            for (String user : users) {
+                Path userJar = this.engine.findRunningJarOf(user);
+                if (userJar == null || userJar.equals(running)) {
+                    continue;
+                }
+                Map<String, Set<String>> named = this.usersNames.computeIfAbsent(userJar + " " + running, key -> {
+                    try {
+                        return JarLinks.readNamed(userJar, Set.of(), old);
+                    } catch (IOException e) {
+                        LOGGER.info("[Hotwire] {} could not be read through: {}", userJar.getFileName(), e.toString());
+                        return Map.of();
+                    }
+                });
+                String missing = JarLinks.findMissing(named, old, reader);
+                if (missing != null) {
+                    String name = this.engine.getGraph().find(user).map(ModManifest::name).orElse(user);
+                    LOGGER.info("[Hotwire] {} {} would break {}: it uses {}", incoming.name(), incoming.version(),
+                            user, missing);
+                    return Optional.of(Lang.get("hotwire.update.breaks_user", name, missing.replace('/', '.'),
+                            incoming.version(), name));
+                }
+            }
+        } catch (IOException e) {
+            LOGGER.info("[Hotwire] {}'s users could not be checked against it: {}", jar.getFileName(), e.toString());
+        }
+        return Optional.empty();
     }
 
     Optional<String> findRejection(ModManifest incoming) {

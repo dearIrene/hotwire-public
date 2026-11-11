@@ -66,10 +66,6 @@ public final class StoreCache {
         this.limitBytes = limitBytes;
     }
 
-    public long getLimitBytes() {
-        return this.limitBytes;
-    }
-
     public void setLimitBytes(long limitBytes) {
         this.limitBytes = limitBytes;
         this.trim();

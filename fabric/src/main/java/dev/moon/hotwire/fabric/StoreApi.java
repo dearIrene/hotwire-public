@@ -1,6 +1,6 @@
 package dev.moon.hotwire.fabric;
 
-import dev.moon.hotwire.api.StoreAdd;
+import dev.moon.hotwire.api.Reason;
 import dev.moon.hotwire.api.StoreCategory;
 import dev.moon.hotwire.api.StoreDownload;
 import dev.moon.hotwire.api.StoreKind;
@@ -19,6 +19,7 @@ import dev.moon.hotwire.modrinth.Downloads;
 import dev.moon.hotwire.modrinth.ModrinthClient;
 import dev.moon.hotwire.modrinth.StoreCategories;
 import dev.moon.hotwire.modrinth.StoreModel;
+import dev.moon.hotwire.switching.Waits;
 import dev.moon.hotwire.ui.AddMode;
 import dev.moon.hotwire.ui.Lang;
 import java.io.IOException;
@@ -27,9 +28,11 @@ import java.nio.file.Path;
 import java.nio.file.StandardCopyOption;
 import java.util.ArrayList;
 import java.util.List;
+import java.util.Map;
 import java.util.Optional;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.CompletionException;
+import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.Executor;
 import net.fabricmc.loader.api.FabricLoader;
 import net.minecraft.client.Minecraft;
@@ -45,6 +48,8 @@ final class StoreApi {
 
     private static final Downloads SAVES = new Downloads();
     private static final Object BROWSING = new Object();
+
+    private static final Map<String, String> IDS = new ConcurrentHashMap<>();
     private static volatile @Nullable ModrinthClient client;
 
     private StoreApi() {
@@ -120,6 +125,7 @@ final class StoreApi {
                     PAGE) : asks.search(made, toKind(query.kind()), query.words(), query.category(),
                     Math.max(0, query.offset()), PAGE));
             StoreModel model = store == null ? null : store.getModel();
+            found.hits().forEach(hit -> IDS.put(hit.slug(), hit.projectId()));
             return new StorePage(found.hits().stream().map(hit -> new StoreMod(hit.projectId(), hit.slug(),
                     hit.title(), hit.description(), hit.author(), hit.downloads(), hit.iconUrl(), hit.categories(),
                     model != null && (model.isInstalledProject(hit.projectId())
@@ -154,6 +160,7 @@ final class StoreApi {
                     : asks.findVersions(made, toKind(browsing.kind()), project.id())).stream()
                     .map(version -> new StoreVersion(version.id(), version.number(), version.name(), version.size(),
                             version.gameVersions(), version.requiredProjects(), version.changelog())).toList();
+            IDS.put(project.slug(), project.id());
             return Optional.of(new StoreProject(project.id(), project.slug(), project.title(), project.description(),
                     project.body(), project.iconUrl(), project.downloads(), project.followers(), project.license(),
                     project.sourceUrl(), versions));
@@ -166,40 +173,67 @@ final class StoreApi {
                 StoreDownload.State.valueOf(job.state().name()), Downloads.findTag(job.id()))).toList();
     }
 
-    static StorePackState findPackState(StoreKind kind, String projectId) {
+    static StorePackState findPackState(StoreKind kind, String idOrSlug) {
         ModStore store = findStoreIfMade();
-        return store == null ? StorePackState.MISSING : StorePackState.valueOf(store.getModel().getPacks()
-                .find(toKind(kind), projectId).name());
+        return store == null || kind == StoreKind.MOD ? StorePackState.MISSING : StorePackState.valueOf(
+                store.getModel().getPacks().find(toKind(kind), IDS.getOrDefault(idOrSlug, idOrSlug)).name());
     }
 
-    static void togglePack(StoreKind kind, String projectId) {
+    static CompletableFuture<SwitchResult> togglePack(StoreKind kind, String idOrSlug) {
+        CompletableFuture<SwitchResult> ended = new CompletableFuture<>();
         ModStore store = findStoreIfMade();
-        if (store != null) {
-            Minecraft.getInstance().execute(() -> store.getModel().getPacks().toggle(toKind(kind), projectId));
+        if (store == null || kind == StoreKind.MOD) {
+            ended.complete(SwitchResult.ofRefusal(store == null ? Reason.NOT_READY : Reason.REFUSED,
+                    Lang.get(store == null ? "hotwire.api.starting" : "hotwire.api.pack.unchanged", idOrSlug)));
+            return ended;
         }
-    }
-
-    @SuppressWarnings("FutureReturnValueIgnored")
-    static void fetchPack(StoreKind kind, String idOrSlug, String versionId) {
-        findProject(new StoreQuery(kind, "", "", 0, "", ""), idOrSlug).thenAccept(found -> found.ifPresent(project -> {
-            ModStore store = findStore();
-            if (store != null) {
-                Minecraft.getInstance().execute(() -> {
-                    Downloads.markNextQuiet();
-                    store.getModel().getPacks().fetch(toKind(kind), project.id(), versionId, project.name());
-                });
+        String id = IDS.getOrDefault(idOrSlug, idOrSlug);
+        Minecraft.getInstance().execute(() -> {
+            try {
+                StoreModel.Packs packs = store.getModel().getPacks();
+                StoreModel.PackState before = packs.find(toKind(kind), id);
+                packs.toggle(toKind(kind), id);
+                StoreModel.PackState now = packs.find(toKind(kind), id);
+                ended.complete(now == before ? SwitchResult.ofRefusal(Reason.REFUSED,
+                        Lang.get("hotwire.api.pack.unchanged", idOrSlug)) : new SwitchResult(SwitchResult.Kind.DONE,
+                                List.of(), Lang.get(now == StoreModel.PackState.ON ? "hotwire.store.pack.turned_on"
+                                        : "hotwire.store.pack.turned_off", idOrSlug)));
+            } catch (RuntimeException e) {
+                ended.complete(HotwireApiImpl.toFailure(e));
             }
-        }));
+        });
+        return ended;
     }
 
     @SuppressWarnings("FutureReturnValueIgnored")
-    static CompletableFuture<StoreAdd> requestAdd(String idOrSlug, String versionId, String tag,
-            @Nullable String asker) {
-        LOGGER.info("[Hotwire] {} asked to add {} from Modrinth", asker == null ? "a mod" : asker, idOrSlug);
-        Runnable endTag = Downloads.beginTag(tag);
-        CompletableFuture<StoreAdd> made = StoreApiAdd.request(idOrSlug, versionId);
-        made.whenComplete((done, failed) -> endTag.run());
-        return made;
+    static CompletableFuture<SwitchResult> fetchPack(StoreKind kind, String idOrSlug, String versionId, Waits waits) {
+        CompletableFuture<SwitchResult> ended = new CompletableFuture<>();
+        findProject(new StoreQuery(kind, "", "", 0, "", ""), idOrSlug).whenComplete((found, failure) -> {
+            ModStore store = failure == null && found.isPresent() && kind != StoreKind.MOD ? findStore() : null;
+            if (store == null) {
+                ended.complete(SwitchResult.ofRefusal(Reason.REFUSED, Lang.get("hotwire.api.add.not_found",
+                        idOrSlug)));
+                return;
+            }
+            StoreProject project = found.get();
+            StoreModel.Packs packs = store.getModel().getPacks();
+            Minecraft game = Minecraft.getInstance();
+            game.execute(() -> {
+                Downloads.markNextQuiet();
+                packs.fetch(toKind(kind), project.id(), versionId, project.name());
+                waits.awaitTrue(() -> packs.find(toKind(kind), project.id()) != StoreModel.PackState.DOWNLOADING)
+                        .thenRun(() -> game.execute(() -> ended.complete(switch (packs.find(toKind(kind),
+                                project.id())) {
+                            case ON, OFF -> new SwitchResult(SwitchResult.Kind.DONE, List.of(),
+                                    Lang.get("hotwire.store.pack.downloaded", project.name()));
+                            case NEEDS_WORLD -> SwitchResult.ofRefusal(Reason.REFUSED,
+                                    Lang.get("hotwire.store.pack.needs_world"));
+                            default -> new SwitchResult(SwitchResult.Kind.FAILED, List.of(),
+                                    Lang.get("hotwire.api.pack.not_fetched", project.name()));
+                        })));
+            });
+        });
+        return ended;
     }
 
     static CompletableFuture<SwitchResult> queueForNextStart(String idOrSlug, String versionId) {

@@ -36,7 +36,7 @@ import org.objectweb.asm.tree.RecordComponentNode;
 public final class UpdateDiffer {
     private static final String CLASS_SUFFIX = ".class";
 
-    private static final int FLAGS = 0xFFFF;
+    static final int FLAGS = 0xFFFF;
 
     private UpdateDiffer() {
     }
@@ -62,7 +62,8 @@ public final class UpdateDiffer {
                 resources.add(path);
             }
         }
-        List<ClassDiff> refined = ConstructorUses.classifyChanges(classes, running, incoming);
+        List<ClassDiff> refined = HierarchyShapes.classifyAbstracts(
+                ConstructorUses.classifyChanges(classes, running, incoming), incoming);
         return new JarDiff(was, now, refined, resources, OpenedAccess.find(running, incoming, refined),
                 ConstructorUses.findAbstractsGained(refined, running, incoming),
                 ConstructorUses.findChains(refined, running, incoming));
@@ -99,12 +100,7 @@ public final class UpdateDiffer {
         if (!was.name.equals(now.name)) {
             shape.add(ShapeChange.CLASS_NAME);
         }
-        if ((was.access & FLAGS) != (now.access & FLAGS)) {
-            int differing = (was.access ^ now.access) & FLAGS;
-            boolean harmless = (differing & ~(Opcodes.ACC_FINAL | Opcodes.ACC_SUPER | Opcodes.ACC_SYNTHETIC
-                    | Opcodes.ACC_PUBLIC)) == 0;
-            shape.add(harmless ? ShapeChange.CLASS_FINALITY : ShapeChange.CLASS_MODIFIERS);
-        }
+        HierarchyShapes.addFlagChange(was, now, shape);
         if (!Objects.equals(was.superName, now.superName)) {
             shape.add(ShapeChange.SUPERCLASS);
         }
@@ -128,7 +124,8 @@ public final class UpdateDiffer {
             shape.add(ShapeChange.NEST);
         }
         if (!asSet(was.permittedSubclasses).equals(asSet(now.permittedSubclasses))) {
-            shape.add(ShapeChange.PERMITTED_SUBCLASSES);
+            shape.add(HierarchyShapes.classifyPermitted(asSet(was.permittedSubclasses),
+                    asSet(now.permittedSubclasses)));
         }
         if (!listComponents(was.recordComponents).equals(listComponents(now.recordComponents))) {
             shape.add(ShapeChange.RECORD_COMPONENTS);

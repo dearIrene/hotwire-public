@@ -59,6 +59,7 @@ public final class JarRelocation {
     private final Set<String> configs = new HashSet<>();
 
     private final Map<String, String> liveIds = new HashMap<>();
+    private final BoundNatives bound = new BoundNatives();
     private static final int MOST_ID_LENGTH = 64;
     private final String tag;
     private final String prefix;
@@ -102,6 +103,13 @@ public final class JarRelocation {
         JarRelocation copy = new JarRelocation(tag, takesCarried, running);
         for (Path jar : jars) {
             copy.scan(readAll(jar));
+        }
+        if (!copy.bound.isEmpty()) {
+            List<Map<String, byte[]>> group = new ArrayList<>();
+            for (Path jar : jars) {
+                collectGroup(readAll(jar), takesCarried, group);
+            }
+            copy.bound.check(group, copy.classes);
         }
         List<Path> out = new ArrayList<>();
         jars.forEach(jar -> out.add(folder.resolve(tag + "-" + jar.getFileName())));
@@ -201,6 +209,14 @@ public final class JarRelocation {
         }
     }
 
+    private static void collectGroup(Map<String, byte[]> entries, BiPredicate<String, String> takes,
+            List<Map<String, byte[]>> into) throws IOException {
+        into.add(entries);
+        for (Map<String, byte[]> nested : findGoingAlong(entries, takes).values()) {
+            collectGroup(nested, takes, into);
+        }
+    }
+
     private static Map<String, Map<String, byte[]>> findGoingAlong(Map<String, byte[]> entries,
             BiPredicate<String, String> takes) throws IOException {
         Map<String, Map<String, byte[]>> goingAlong = new LinkedHashMap<>();
@@ -251,8 +267,8 @@ public final class JarRelocation {
                 }
                 if (hasNative(entry.getValue())) {
                     byte[] runs = this.running.apply(internal);
-                    if (runs != null && !findMethods(runs).containsAll(findMethods(entry.getValue()))) {
-                        throw new IOException(internal + " has native methods and gained others");
+                    if (runs != null) {
+                        this.bound.add(internal, runs, entry.getValue());
                     }
                     continue;
                 }
@@ -289,19 +305,6 @@ public final class JarRelocation {
         } catch (RuntimeException notJson) {
             return false;
         }
-    }
-
-    private static Set<String> findMethods(byte[] bytes) {
-        Set<String> methods = new HashSet<>();
-        new ClassReader(bytes).accept(new ClassVisitor(Opcodes.ASM9) {
-            @Override
-            public @Nullable MethodVisitor visitMethod(int access, String name, String descriptor,
-                    @Nullable String signature, String @Nullable [] exceptions) {
-                methods.add(name + descriptor);
-                return null;
-            }
-        }, ClassReader.SKIP_CODE | ClassReader.SKIP_DEBUG | ClassReader.SKIP_FRAMES);
-        return methods;
     }
 
     private static boolean hasNative(byte[] bytes) {

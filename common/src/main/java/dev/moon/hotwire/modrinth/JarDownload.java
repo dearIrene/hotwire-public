@@ -62,6 +62,8 @@ final class JarDownload {
                 this.fetchFrom(url, size, part, 0, onBytes);
                 whole = ModrinthClient.hashOf(into).equalsIgnoreCase(sha512);
             }
+
+            part.force(true);
         }
         if (!whole) {
             Files.deleteIfExists(into);

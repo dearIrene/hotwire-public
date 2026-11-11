@@ -7,6 +7,8 @@ import dev.moon.hotwire.jar.ModManifest;
 import dev.moon.hotwire.redefine.RebuildException;
 import dev.moon.hotwire.switching.ModMixins;
 import dev.moon.hotwire.switching.SwitchTimes;
+import dev.moon.hotwire.ui.Lang;
+import dev.moon.hotwire.ui.Progress;
 import dev.moon.hotwire.ui.UpdateMethod;
 import dev.moon.hotwire.update.JarLinks;
 import dev.moon.hotwire.update.UpdatePlan;
@@ -23,6 +25,7 @@ import java.util.Map;
 import java.util.Set;
 import java.util.TreeSet;
 import java.util.concurrent.ConcurrentHashMap;
+import java.util.concurrent.atomic.AtomicInteger;
 import java.util.function.BiFunction;
 import java.util.function.Function;
 import java.util.zip.ZipEntry;
@@ -49,7 +52,20 @@ final class UpdateBatch {
         ModUpdater.Result[] results = new ModUpdater.Result[jars.size()];
 
         Map<String, ModManifest> brought = new HashMap<>();
-        Parallel.runEachBeside(jars, this.updater::readAhead);
+        Progress shown = this.updater.engine.getProgress();
+        shown.stepUpdating(1);
+        AtomicInteger read = new AtomicInteger();
+        Map<Path, Long> readMillis = new ConcurrentHashMap<>();
+        Parallel.runEachBeside(jars, jar -> {
+            long began = System.nanoTime();
+            this.updater.readAhead(jar);
+            readMillis.put(jar, (System.nanoTime() - began) / 1_000_000);
+            shown.count(Lang.get("hotwire.progress.update.reading"), read.incrementAndGet(), jars.size());
+        });
+        LOGGER.info("[Hotwire] {} updates were read ahead, the slowest {}", jars.size(), readMillis.entrySet().stream()
+                .sorted(Map.Entry.<Path, Long>comparingByValue().reversed()).limit(6)
+                .map(one -> one.getKey().getFileName() + " " + one.getValue() + " ms").toList());
+        shown.stepUpdating(2);
         SwitchTimes.mark("update: read ahead");
         jars.forEach(jar -> brought.putAll(this.updater.findComingOf(jar)));
         Map<String, String> waiting = new HashMap<>();
@@ -58,6 +74,7 @@ final class UpdateBatch {
         Set<String> claimed = new HashSet<>();
         List<Integer> later = new ArrayList<>();
         for (int i = 0; i < jars.size(); i++) {
+            shown.count(Lang.get("hotwire.progress.update.sorting"), i, jars.size());
             ModUpdater.SortResult sorted;
             try {
                 sorted = this.updater.sort(jars.get(i), brought, waiting);
@@ -94,6 +111,8 @@ final class UpdateBatch {
                 + " and the rest are refused", jars.size(), inPlace.size(), waiting.size(), later.size());
 
         while (!inPlace.isEmpty()) {
+            shown.stepUpdating(3);
+            shown.count(Lang.get("hotwire.progress.update.changing_n", inPlace.size(), waiting.size()), 0, 0);
             List<ModUpdater.Result> made = this.live.apply(inPlace);
             boolean refusedTogether = inPlace.size() > 1
                     && made.stream().allMatch(ModUpdater.Result.Failed.class::isInstance);

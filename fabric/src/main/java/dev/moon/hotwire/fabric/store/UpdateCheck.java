@@ -337,8 +337,8 @@ public final class UpdateCheck {
     }
 
     private Path write(ModrinthClient.Version version) throws IOException {
-        Files.createDirectories(this.folder);
-        Path jar = this.folder.resolve(version.fileName().replaceAll("[^A-Za-z0-9._+ -]", "_"));
+        Path jar = version.resolveIn(this.folder);
+        Files.createDirectories(jar.getParent());
         this.client.fetchTo(version, jar, this.downloads);
         return jar;
     }

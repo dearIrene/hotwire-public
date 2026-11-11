@@ -2,9 +2,12 @@ package dev.moon.hotwire.update;
 
 import dev.moon.hotwire.jar.FileHashes;
 import java.io.IOException;
+import java.io.UncheckedIOException;
+import java.nio.file.DirectoryNotEmptyException;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.util.ArrayList;
+import java.util.Comparator;
 import java.util.HashMap;
 import java.util.HashSet;
 import java.util.LinkedHashMap;
@@ -12,8 +15,11 @@ import java.util.List;
 import java.util.Map;
 import java.util.Set;
 import java.util.stream.Stream;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
 public final class PendingChanges {
+    private static final Logger LOGGER = LoggerFactory.getLogger(PendingChanges.class);
     static final int OLD_VERSIONS = 2;
 
     private final UpdateQueue queue;
@@ -85,21 +91,46 @@ public final class PendingChanges {
         }
     }
 
-    public void cleanAtStart() throws IOException {
+    public void cleanAtStart(Path downloads) throws IOException {
         Set<Path> wanted = new HashSet<>();
         for (UpdateQueue.Entry entry : this.queue.getEntries()) {
             wanted.add(Path.of(entry.stagedJar()).toAbsolutePath());
         }
-        for (Path file : listFiles(this.folders.staging())) {
-            if (!wanted.contains(file.toAbsolutePath())) {
-                Files.delete(file);
+        clean(this.folders.staging(), wanted);
+        clean(downloads, wanted);
+        clean(this.folders.swapper(), Set.of(this.folders.swapperJar().toAbsolutePath(),
+                this.folders.swapperLog().toAbsolutePath()));
+        tryDelete(this.folders.swapper());
+        trimReplaced(this.queue, this.folders.replaced());
+    }
+
+    static void clean(Path folder, Set<Path> wanted) {
+        if (!Files.isDirectory(folder)) {
+            return;
+        }
+        List<Path> inside;
+        try (Stream<Path> walked = Files.walk(folder)) {
+            inside = walked.filter(file -> !file.equals(folder)).sorted(Comparator.reverseOrder()).toList();
+        } catch (IOException | UncheckedIOException e) {
+            LOGGER.warn("[Hotwire] {} could not be listed, so nothing in it was deleted: {}", folder, e.toString());
+            return;
+        }
+        for (Path file : inside) {
+            Path whole = file.toAbsolutePath();
+            if (wanted.stream().noneMatch(jar -> jar.startsWith(whole))) {
+                tryDelete(file);
             }
         }
-        for (Path file : listFiles(this.folders.swapper())) {
-            Files.delete(file);
+    }
+
+    private static void tryDelete(Path file) {
+        try {
+            Files.deleteIfExists(file);
+        } catch (DirectoryNotEmptyException e) {
+            LOGGER.debug("[Hotwire] {} is not empty and stays", file);
+        } catch (IOException e) {
+            LOGGER.warn("[Hotwire] {} could not be deleted and stays until a later start: {}", file, e.toString());
         }
-        Files.deleteIfExists(this.folders.swapper());
-        trimReplaced(this.queue, this.folders.replaced());
     }
 
     static void trimReplaced(UpdateQueue queue, Path replaced) throws IOException {

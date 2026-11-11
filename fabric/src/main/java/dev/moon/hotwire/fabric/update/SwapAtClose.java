@@ -14,6 +14,7 @@ import java.security.CodeSource;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Optional;
+import net.fabricmc.loader.api.FabricLoader;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -30,7 +31,7 @@ public final class SwapAtClose {
         this.queue = queue;
         this.folders = folders;
         this.hotwireJar = hotwireJar;
-        this.swapperCopy = folders.swapper().resolve("hotwire.jar");
+        this.swapperCopy = folders.swapperJar();
     }
 
     public void arm() {
@@ -58,9 +59,10 @@ public final class SwapAtClose {
             new ProcessBuilder(java.get(), "-Xmx16m", "-XX:+UseSerialGC", "-XX:TieredStopAtLevel=1", "-cp",
                     this.getClassPath(), JarSwapper.class.getName(),
                     this.folders.queueFile().toString(), this.folders.mods().toString(),
-                    this.folders.replaced().toString(), Long.toString(ProcessHandle.current().pid()))
+                    this.folders.replaced().toString(), Long.toString(ProcessHandle.current().pid()),
+                    FabricLoader.getInstance().getGameDir().resolve("hotwire").resolve("store").toString())
                     .redirectErrorStream(true)
-                    .redirectOutput(this.swapperCopy.resolveSibling("swapper.log").toFile())
+                    .redirectOutput(this.folders.swapperLog().toFile())
                     .start();
             this.started = true;
             LOGGER.info("[Hotwire] the swapper waits to put what is queued in place once the game ends ({} now)",

@@ -23,6 +23,7 @@ import java.util.ArrayList;
 import java.util.Deque;
 import java.util.HashMap;
 import java.util.HashSet;
+import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
@@ -57,10 +58,14 @@ final class StoreJars {
 
     private boolean reopenWanted;
 
+    private boolean reopenWait;
+
     private final Set<String> needsMet = new HashSet<>();
     private List<UpdateOffer> offers = List.of();
     private boolean checked;
     private boolean started;
+
+    private boolean again;
     private final StoreUpdates all;
     private final Runnable refresh;
 
@@ -124,6 +129,11 @@ final class StoreJars {
         this.check.start(found -> Minecraft.getInstance().execute(() -> {
             this.offers = found;
             this.checked = true;
+            if (this.again) {
+                this.again = false;
+                this.started = false;
+                this.startCheck();
+            }
             ModScreen current = this.screen.get();
             if (current != null) {
                 current.setUpdates(found, true);
@@ -217,6 +227,7 @@ final class StoreJars {
     void queue(List<Path> jars, boolean update, List<String> projects) {
         this.queued.clear();
         this.reopenWanted = false;
+        this.reopenWait = false;
         for (int i = 0; i < jars.size(); i++) {
             this.queued.add(new StoreJar(jars.get(i), update && i == jars.size() - 1));
             this.projects.put(jars.get(i), projects.get(i));
@@ -258,6 +269,18 @@ final class StoreJars {
 
     boolean hasQueued() {
         return !this.queued.isEmpty();
+    }
+
+    void waitForReopen() {
+        this.reopenWait = true;
+    }
+
+    void endReopenWait(boolean offer) {
+        boolean waited = this.reopenWait;
+        this.reopenWait = false;
+        if (waited && offer) {
+            this.offerNext();
+        }
     }
 
     void markReopenWanted() {
@@ -316,13 +339,31 @@ final class StoreJars {
         if (project != null && made != null) {
             made.getModel().markInstalled(project);
         }
+        if (this.checked) {
+            this.started = false;
+            this.startCheck();
+        } else if (this.started) {
+            this.again = true;
+        }
     }
 
     @SuppressWarnings("FutureReturnValueIgnored")
     void offerNext() {
         JarHost current = this.host.get();
+        if (this.reopenWait) {
+            return;
+        }
         StoreJar next = current == null ? null : this.queued.poll();
         if (next == null || current == null) {
+            return;
+        }
+
+        if (!next.update() && !this.queued.isEmpty() && this.changes.isInstalledJar(next.jar())) {
+            this.offerNext();
+            return;
+        }
+
+        if (!next.update() && this.hasNeedsToMeet(next)) {
             return;
         }
         if (!next.update() || this.queued.isEmpty()) {
@@ -353,19 +394,41 @@ final class StoreJars {
                 }));
     }
 
+    private Set<String> findOlderNeeds(Path jar) {
+        ModManifest manifest = JarLookup.findManifest(jar);
+        Set<String> older = new LinkedHashSet<>();
+        if (manifest == null) {
+            return older;
+        }
+        manifest.getRelation(ModManifest.Relation.DEPENDS).forEach((id, ranges) -> {
+            String have = this.installed.getGraph().resolve(id);
+            String version = this.installed.find(have).map(ModManifest::version).orElse(null);
+            if (version != null && !ranges.isEmpty() && !ModPolicy.satisfies(version, ranges)) {
+                older.add(have);
+            }
+        });
+        return older;
+    }
+
     private boolean hasNeedsToMeet(StoreJar asked) {
-        UpdatePlan plan = this.changes.planUpdate(asked.jar());
-        if (plan == null) {
-            return false;
+        Set<String> unmet;
+        if (asked.update()) {
+            UpdatePlan plan = this.changes.planUpdate(asked.jar());
+            if (plan == null) {
+                return false;
+            }
+            unmet = UpdatePlanner.findUnmet(plan).keySet();
+        } else {
+            unmet = this.findOlderNeeds(asked.jar());
         }
         List<String> needs = new ArrayList<>();
-        for (String id : UpdatePlanner.findUnmet(plan).keySet()) {
+        for (String id : unmet) {
             if (this.needsMet.add(id)) {
                 needs.add(id);
             }
         }
         List<Path> carried = new ArrayList<>();
-        for (Path library : this.changes.findCarriedToAdd(asked.jar())) {
+        for (Path library : asked.update() ? this.changes.findCarriedToAdd(asked.jar()) : List.<Path>of()) {
             if (this.needsMet.add("carried:" + library.getFileName())) {
                 carried.add(library);
             }
