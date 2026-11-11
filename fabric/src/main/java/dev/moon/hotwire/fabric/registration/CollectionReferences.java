@@ -1091,8 +1091,8 @@ final class CollectionReferences implements FixedLists.Walk {
                 }
             }, ElementTakes.makeWeak(holder, (now, taker) -> {
                 try {
-                    field.set(now, inner);
-                    this.getRemovalsOf(taker).add(new Removal.InField(now, field, mods, inner));
+                    this.writer.write(field, now, inner);
+                    this.getRemovalsOf(taker).add(new Removal.InField(now, field, mods, inner, this.writer));
                 } catch (ReflectiveOperationException | RuntimeException e) {
                     LOGGER.info("[Hotwire] {}.{} keeps {}'s object: {}", now.getClass().getName(),
                             field.getName(), taker, e.toString());

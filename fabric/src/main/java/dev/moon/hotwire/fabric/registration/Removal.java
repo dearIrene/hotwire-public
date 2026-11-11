@@ -154,7 +154,8 @@ sealed interface Removal {
         }
     }
 
-    record InField(Object holder, FieldSlots.Slot field, Object mods, Object inner) implements Removal {
+    record InField(Object holder, FieldSlots.Slot field, Object mods, Object inner, StaticRecomputer.Writer writer)
+            implements Removal {
         @Override
         public Object container() {
             return this.holder;
@@ -165,7 +166,7 @@ sealed interface Removal {
         public void restore() {
             try {
                 if (this.field.get(this.holder) == this.inner) {
-                    this.field.set(this.holder, this.mods);
+                    this.writer.write(this.field, this.holder, this.mods);
                 }
             } catch (ReflectiveOperationException | RuntimeException e) {
                 LoggerFactory.getLogger(Removal.class).info("[Hotwire] {}.{} keeps what it was given: {}",
