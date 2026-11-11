@@ -20,7 +20,7 @@ val committed = git("show", "-s", "--format=%cI", "HEAD")
 
 val build = git("rev-list", "--count", "--since=${property("version_since")}", "HEAD").ifEmpty { "0" }
 val stageVersion = "${property("mod_version")}.$build"
-version = if (hasProperty("release")) "$stageVersion+mc$minecraft"
+version = if (hasProperty("release")) "${property("mod_version")}+mc$minecraft"
 else "$stageVersion+mc$minecraft.$commit" + if (dirty) "-dirty." + LocalDateTime.now()
     .format(DateTimeFormatter.ofPattern("MMddHHmm")) else ""
 base.archivesName = "hotwire"
