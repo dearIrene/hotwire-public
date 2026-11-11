@@ -3,6 +3,7 @@ package dev.moon.hotwire.fabric.registration;
 import dev.moon.hotwire.jvm.LoadedClassList;
 import dev.moon.hotwire.redefine.FieldSlots;
 import java.lang.instrument.Instrumentation;
+import java.util.Collection;
 import java.util.Collections;
 import java.util.HashSet;
 import java.util.IdentityHashMap;
@@ -53,6 +54,9 @@ public final class ModLocks {
     }
 
     private void add(Object value, Set<Integer> locks) {
+        if (value instanceof Collection<?> || value instanceof Map<?, ?>) {
+            return;
+        }
         locks.add(System.identityHashCode(value));
         if (!value.getClass().getName().startsWith("java.util.concurrent.locks.")) {
             return;
