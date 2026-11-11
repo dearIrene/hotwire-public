@@ -159,7 +159,7 @@ public final class SwitchApplier {
     }
 
     private final CarriedMixins carriedMixins;
-    private volatile GameObjectRebuilder objectRebuilder = (newlyBuilt, rebuilt, reload) -> { };
+    private volatile GameObjectRebuilder objectRebuilder = (newlyBuilt, rebuilt, reloadFor) -> { };
     private volatile Consumer<Runnable> onGameThread = Runnable::run;
     private volatile Supplier<List<String>> health = List::of;
     private volatile BiConsumer<Set<String>, Set<Class<?>>> afterRebuild = (rebuilt, rehashed) -> { };
@@ -177,7 +177,7 @@ public final class SwitchApplier {
     }
 
     void rebuildObjectsOf(Set<String> flipped) {
-        this.objectRebuilder.rebuild(Set.of(), flipped, false);
+        this.objectRebuilder.rebuild(Set.of(), flipped, Set.of());
     }
 
     public void rebuildObjectsWith(Predicate<Class<?>> rebuiltWhilePaused, GameObjectRebuilder rebuilder) {
@@ -197,7 +197,7 @@ public final class SwitchApplier {
     void applyWhilePaused(ClassRebuilder.PreparedRebuild prepared, Runnable beforeChange, Runnable whilePaused,
             Set<String> flipped) throws RebuildException {
         LiveObjects.checkWhilePaused(prepared);
-        this.objectRebuilder.announce(prepared.newlyBuilt(), !prepared.pausedReloads().isEmpty());
+        this.objectRebuilder.announce(prepared.newlyBuilt(), prepared.pausedReloads());
         Runnable release = this.redefinitionHold.get();
         SwitchTimes.mark("pause game");
         long pausedAt = System.nanoTime();

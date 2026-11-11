@@ -60,7 +60,7 @@ final class RebuildSteps {
         Set<String> changed = new HashSet<>(rebuilt);
         changed.addAll(flipped);
         Runnable rebuildObjects = () -> {
-            objectRebuilder.rebuild(prepared.newlyBuilt(), changed, !prepared.pausedReloads().isEmpty());
+            objectRebuilder.rebuild(prepared.newlyBuilt(), changed, prepared.pausedReloads());
 
             prepared.pausedReloads().forEach(OffWindowObjects::forget);
         };

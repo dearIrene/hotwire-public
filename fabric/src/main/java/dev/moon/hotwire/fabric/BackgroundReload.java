@@ -47,6 +47,21 @@ public final class BackgroundReload {
         due = begin;
     }
 
+    static boolean beginNow(Runnable begin) {
+        if (running != null) {
+            return false;
+        }
+        try {
+            if (!begin(begin)) {
+                return false;
+            }
+        } finally {
+            OngoingReload.markChanged();
+        }
+        due = null;
+        return true;
+    }
+
     static void dropDue() {
         due = null;
     }

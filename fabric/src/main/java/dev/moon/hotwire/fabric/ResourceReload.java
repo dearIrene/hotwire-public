@@ -45,6 +45,7 @@ import net.minecraft.client.resources.model.ModelManager;
 import net.minecraft.client.resources.sounds.SoundInstance;
 import net.minecraft.client.sounds.SoundManager;
 import net.minecraft.client.sounds.WeighedSoundEvents;
+import net.minecraft.server.packs.PackResources;
 import net.minecraft.server.packs.resources.MultiPackResourceManager;
 import net.minecraft.server.packs.resources.ReloadInstance;
 import net.minecraft.server.packs.resources.ReloadableResourceManager;
@@ -94,9 +95,9 @@ public final class ResourceReload {
     private ResourceReload() {
     }
 
-    static @Nullable String describePaused(Collection<String> newlyBuilt, boolean reloadAsked) {
+    static @Nullable String describePaused(Collection<String> newlyBuilt, Collection<String> reloadFor) {
         List<Class<?>> types = findLoaded(newlyBuilt);
-        if (reloadAsked || hasAny(types, RELOADED)) {
+        if ((!reloadFor.isEmpty() && !isMadeAsReloadBegins(reloadFor)) || hasAny(types, RELOADED)) {
             return Lang.get("hotwire.progress.reloading_models");
         }
         return hasAny(types, RENDERERS) ? Lang.get("hotwire.progress.rebuilding_renderers") : null;
@@ -109,7 +110,10 @@ public final class ResourceReload {
     }
 
     @SuppressWarnings("FutureReturnValueIgnored")
-    static void rebuildRenderers(Collection<String> newlyBuilt, Collection<String> rebuilt, boolean reloadAsked) {
+    static void rebuildRenderers(Collection<String> newlyBuilt, Collection<String> rebuilt,
+            Collection<String> reloadFor) {
+        boolean reloadAsked = !reloadFor.isEmpty();
+        boolean packsAlone = reloadAsked && isMadeAsReloadBegins(reloadFor);
         List<Class<?>> types = findLoaded(newlyBuilt);
         boolean renderers = hasAny(types, RENDERERS);
         boolean reload = reloadAsked || renderers || hasAny(types, RELOADED);
@@ -141,9 +145,7 @@ public final class ResourceReload {
                             }
                         });
                     } else {
-                        LOGGER.info("[Hotwire] a reload with the game held: {}", reloadAsked
-                                ? "objects made without a mod's setup wait for it" : "an off's");
-                        reloadWhilePaused(game, renderersOnly);
+                        reloadWhilePaused(game, renderersOnly, packsAlone);
                     }
                 }
                 if (particles) {
@@ -205,7 +207,7 @@ public final class ResourceReload {
         }
         GameHold.onGameAndWait(() -> {
             OngoingReload.awaitBegun(game);
-            reloadWhilePaused(game, false);
+            reloadWhilePaused(game, false, false);
         });
     }
 
@@ -223,7 +225,7 @@ public final class ResourceReload {
             return;
         }
         LOGGER.info("[Hotwire] {}; the game reloads its resources before its next frame", why);
-        reloadWhilePaused(game, false);
+        reloadWhilePaused(game, false, false);
     }
 
     public static void forgetPausedReload() {
@@ -289,7 +291,7 @@ public final class ResourceReload {
     }
 
     @SuppressWarnings("FutureReturnValueIgnored")
-    private static void reloadWhilePaused(Minecraft game, boolean renderersOnly) {
+    private static void reloadWhilePaused(Minecraft game, boolean renderersOnly, boolean packsAlone) {
         long began = System.nanoTime();
         Tripwire.release(comingOn);
 
@@ -305,6 +307,14 @@ public final class ResourceReload {
             BackgroundReload.beginAfterHold(() -> startWhole(game));
             return;
         }
+
+        if (packsAlone && BackgroundReload.beginNow(() -> startWhole(game))) {
+            reloadedWhilePaused = true;
+            LOGGER.info("[Hotwire] the reload began with the game held and ends with it drawing: only packs made"
+                    + " without a mod's setup waited for it");
+            return;
+        }
+        LOGGER.info("[Hotwire] a reload with the game held, for what the switch's mods make in it");
         OngoingReload.Run run = OngoingReload.begin(() -> {
             if (!renderersOnly || !ReloadListeners.runWithoutHeavy(game,
                     () -> startUnprofiled(() -> game.reloadResourcePacks()))) {
@@ -513,6 +523,11 @@ public final class ResourceReload {
         return hasAny(List.of(type), RENDERERS) || hasAny(List.of(type), SHORT_LIVED)
                 || hasAny(List.of(type), RELOADED) || ClientLanguage.class.isAssignableFrom(type)
                 || Model.class.isAssignableFrom(type);
+    }
+
+    private static boolean isMadeAsReloadBegins(Collection<String> names) {
+        List<Class<?>> types = findLoaded(names);
+        return types.size() == names.size() && types.stream().allMatch(PackResources.class::isAssignableFrom);
     }
 
     private static List<Class<?>> findLoaded(Collection<String> names) {

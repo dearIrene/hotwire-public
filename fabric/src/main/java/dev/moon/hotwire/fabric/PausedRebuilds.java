@@ -11,8 +11,8 @@ final class PausedRebuilds implements GameObjectRebuilder {
     private static final Logger LOGGER = LoggerFactory.getLogger(PausedRebuilds.class);
 
     @Override
-    public void rebuild(Set<String> newlyBuilt, Set<String> rebuilt, boolean reload) {
-        ResourceReload.rebuildRenderers(newlyBuilt, rebuilt, reload);
+    public void rebuild(Set<String> newlyBuilt, Set<String> rebuilt, Set<String> reloadFor) {
+        ResourceReload.rebuildRenderers(newlyBuilt, rebuilt, reloadFor);
     }
 
     @Override
@@ -21,8 +21,8 @@ final class PausedRebuilds implements GameObjectRebuilder {
     }
 
     @Override
-    public void announce(Set<String> newlyBuilt, boolean reload) {
-        String words = ResourceReload.describePaused(newlyBuilt, reload);
+    public void announce(Set<String> newlyBuilt, Set<String> reloadFor) {
+        String words = ResourceReload.describePaused(newlyBuilt, reloadFor);
         if (words == null) {
             return;
         }
