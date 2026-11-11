@@ -6,6 +6,7 @@ import dev.moon.hotwire.redefine.BatchRider;
 import dev.moon.hotwire.redefine.ClassRebuilder;
 import dev.moon.hotwire.redefine.HandlerGuards;
 import dev.moon.hotwire.redefine.HeapCensus;
+import dev.moon.hotwire.redefine.InitHookRuns;
 import dev.moon.hotwire.redefine.Linker;
 import dev.moon.hotwire.redefine.RebuildException;
 import dev.moon.hotwire.redefine.ReplacedStatics;
@@ -589,6 +590,10 @@ public final class SwitchApplier {
     private ApplyResult applyNow(Set<String> switched, Set<String> onAfter, Runnable beforeHold,
             Runnable inPause) throws RebuildException {
         ReplacedStatics.beginSwitch(switched, onAfter);
+        InitHookRuns.beginSwitch(switched, onAfter, id -> {
+            ModMixins mixins = this.mods.get(id);
+            return mixins == null ? Set.of() : mixins.targets();
+        });
         Runnable whilePaused = () -> {
             inPause.run();
             ReplacedStatics.putBackFor(onAfter);

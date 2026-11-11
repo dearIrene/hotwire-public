@@ -9,6 +9,7 @@ import java.lang.invoke.MethodType;
 import java.util.ArrayList;
 import java.util.Collections;
 import java.util.Comparator;
+import java.util.HashSet;
 import java.util.IdentityHashMap;
 import java.util.LinkedHashMap;
 import java.util.List;
@@ -16,9 +17,11 @@ import java.util.Map;
 import java.util.Objects;
 import java.util.Set;
 import java.util.TreeSet;
+import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.atomic.AtomicInteger;
 import java.util.function.BooleanSupplier;
 import java.util.function.Consumer;
+import java.util.function.Function;
 import java.util.function.IntSupplier;
 import java.util.function.Predicate;
 import org.jspecify.annotations.Nullable;
@@ -35,7 +38,57 @@ public final class InitHookRuns {
 
     private static final Map<Class<?>, Due> WAITING = new LinkedHashMap<>();
 
+    private static final Map<String, Set<Object>> ALIVE_AT_OFF = new ConcurrentHashMap<>();
+
+    private static volatile Set<String> comingOn = Set.of();
+
     private InitHookRuns() {
+    }
+
+    public static void beginSwitch(Set<String> switched, Set<String> onAfter, Function<String, Set<String>> targetsOf) {
+        Set<String> coming = new HashSet<>();
+        List<String> going = new ArrayList<>();
+        for (String id : switched) {
+            if (onAfter.contains(id)) {
+                coming.add(id);
+            } else {
+                going.add(id);
+            }
+        }
+        comingOn = Set.copyOf(coming);
+        if (going.isEmpty()) {
+            return;
+        }
+        List<Object> made = InitHookReplay.getLongLived();
+        for (String mod : going) {
+            Set<String> targets = targetsOf.apply(mod);
+            Set<Object> alive = Collections.newSetFromMap(new MapMaker().weakKeys().makeMap());
+            for (Object one : made) {
+                if (isOfAny(one.getClass(), targets)) {
+                    alive.add(one);
+                }
+            }
+            ALIVE_AT_OFF.put(mod, alive);
+        }
+    }
+
+    private static boolean isOfAny(Class<?> type, Set<String> targets) {
+        for (Class<?> at = type; at != null; at = at.getSuperclass()) {
+            if (targets.contains(at.getName().replace('.', '/'))) {
+                return true;
+            }
+        }
+        return false;
+    }
+
+    static boolean isAliveAtOff(Object one) {
+        for (String mod : comingOn) {
+            Set<Object> alive = ALIVE_AT_OFF.get(mod);
+            if (alive != null && alive.contains(one)) {
+                return true;
+            }
+        }
+        return false;
     }
 
     public static void skipRebuiltWith(Predicate<Class<?>> builtAgain) {
@@ -263,13 +316,22 @@ public final class InitHookRuns {
         String name = type.getName().replace('.', '/');
         Set<String> keys = onObjects ? due.onObjects() : due.onClass();
         if (onObjects && !due.missed().isEmpty() && !objects.isEmpty()) {
+            List<Object> without = new ArrayList<>();
+            for (Object one : objects) {
+                if (!isAliveAtOff(one)) {
+                    without.add(one);
+                }
+            }
             if (rebuilt.test(type)) {
                 LOGGER.info("[Hotwire] {} objects of {} were made before hooks that read their moment's arguments,"
                         + " and the switch builds its objects again with them: {}", objects.size(), name,
                         due.missed());
+            } else if (without.isEmpty()) {
+                LOGGER.info("[Hotwire] {} objects of {} were alive at the mod's last off: their moments passed with its"
+                        + " hooks, or before it was there, as was said then: {}", objects.size(), name, due.missed());
             } else {
                 LOGGER.warn("[Hotwire] {} objects of {} made before them go without hooks that read their moment's"
-                        + " arguments: {}", objects.size(), name, due.missed());
+                        + " arguments: {}", without.size(), name, due.missed());
             }
         }
         if (onObjects && objects.isEmpty() && (!keys.isEmpty() || !due.missed().isEmpty())) {
