@@ -1,38 +1,35 @@
 package dev.moon.hotwire.ui;
 
-import java.util.ArrayList;
 import java.util.List;
 import org.jspecify.annotations.Nullable;
 
-public final class FirstOpenPanel extends Panel {
+public final class FirstOpenPanel extends Sheet {
     public static final float WAIT = 10;
-    static final int WIDTH = 380;
-    static final int ACCEPT_W = 130;
-    static final int LINE = 14;
-    static final float TITLE_SCALE = 1.5f;
 
-    private static final List<MessageLine.Line> SENTENCES = List.of(
-            new MessageLine.Line("hotwire.first_open.what", Palette.TEXT),
-            new MessageLine.Line("hotwire.first_open.work", Palette.TEXT),
-            new MessageLine.Line("hotwire.first_open.report", Palette.BAD),
-            new MessageLine.Line("hotwire.first_open.crash", Palette.DIM));
+    private record Sentence(String key, int ink) {
+    }
 
-    private static final List<MessageLine.Line> CLIENT_SENTENCES = List.of(
-            new MessageLine.Line("hotwire.client_warning.not_made", Palette.TEXT),
-            new MessageLine.Line("hotwire.client_warning.no_reports", Palette.BAD));
-    private static final List<MessageLine.Line> DAWN_SENTENCES = List.of(
-            new MessageLine.Line("hotwire.client_warning.dawn_why", Palette.TEXT),
-            new MessageLine.Line("hotwire.client_warning.dawn_unsupported", Palette.BAD),
-            new MessageLine.Line("hotwire.client_warning.dawn_announcement", Palette.DIM));
+    private static final List<Sentence> SENTENCES = List.of(new Sentence("hotwire.first_open.what", Palette.TEXT),
+            new Sentence("hotwire.first_open.work", Palette.TEXT),
+            new Sentence("hotwire.first_open.report", Palette.BAD),
+            new Sentence("hotwire.first_open.crash", Palette.DIM));
+
+    private static final List<Sentence> CLIENT_SENTENCES = List.of(
+            new Sentence("hotwire.client_warning.not_made", Palette.TEXT),
+            new Sentence("hotwire.client_warning.no_reports", Palette.BAD));
+    private static final List<Sentence> DAWN_SENTENCES = List.of(
+            new Sentence("hotwire.client_warning.dawn_why", Palette.TEXT),
+            new Sentence("hotwire.client_warning.dawn_unsupported", Palette.BAD),
+            new Sentence("hotwire.client_warning.dawn_announcement", Palette.DIM));
 
     private final Runnable onAccept;
+    private final Push accept;
+    private final @Nullable Push openHotwire;
 
     private final @Nullable String credit;
     private float waited;
 
     private long inSince;
-
-    private int lineCount = SENTENCES.size() + 1;
 
     public FirstOpenPanel(Runnable onAccept) {
         this(onAccept, null);
@@ -40,19 +37,34 @@ public final class FirstOpenPanel extends Panel {
 
     @SuppressWarnings("this-escape")
     public FirstOpenPanel(Runnable onAccept, @Nullable Runnable onOpenHotwire) {
-        super(null);
+        super(380, null);
         this.onAccept = onAccept;
-        this.credit = onOpenHotwire == null ? null : Lang.get("hotwire.header.credit", Header.AUTHOR);
-        this.setPrimary(this.getLabel(), () -> this.accept(null));
-        this.setPrimaryWidth(ACCEPT_W);
-        if (onOpenHotwire != null) {
-            this.change(Lang.get("hotwire.first_open.open_hotwire"), () -> this.accept(onOpenHotwire));
+        this.credit = onOpenHotwire == null ? null : Lang.get("hotwire.header.credit", ModsPage.AUTHOR);
+        this.accept = this.setLead(Kit.lead(this.getLabel(), () -> this.accept(null)));
+        this.openHotwire = onOpenHotwire == null ? null
+                : Kit.push(Lang.get("hotwire.first_open.open_hotwire"), () -> this.accept(onOpenHotwire));
+        this.buttons.with(Kit.space());
+        if (this.openHotwire != null) {
+            this.buttons.with(this.openHotwire);
         }
+        this.buttons.with(this.accept);
     }
 
     void present() {
         this.waited = 0;
         this.inSince = 0;
+        String client = ModifiedClients.getCurrent();
+        this.title.set(client == null ? Lang.get("hotwire.first_open.title")
+                : Lang.get("hotwire.client_warning.title", client));
+        List<Sentence> sentences = SENTENCES;
+        if (client != null) {
+            sentences = client.equals(ModifiedClients.DAWN) ? DAWN_SENTENCES : CLIENT_SENTENCES;
+        }
+        this.body.clear();
+        sentences.forEach(sentence -> this.body.with(Kit.text(Lang.get(sentence.key()), sentence.ink()).wrap()));
+        if (this.credit != null) {
+            this.body.with(Kit.dim(this.credit));
+        }
         this.show();
     }
 
@@ -80,34 +92,10 @@ public final class FirstOpenPanel extends Panel {
             }
             this.waited = Math.min(WAIT, Math.max(this.waited + dt, (now - this.inSince) / 1e9f));
         }
-        this.size(WIDTH, 58 + (this.lineCount + (this.credit == null ? 0 : 1)) * LINE + 44);
-        this.setPrimaryLabel(this.getLabel());
-        this.setPrimaryActive(this.waited >= WAIT);
-        this.changeActive(this.waited >= WAIT);
+        this.accept.label(this.getLabel()).active(this.waited >= WAIT);
+        if (this.openHotwire != null) {
+            this.openHotwire.active(this.waited >= WAIT);
+        }
         super.step(dt);
-    }
-
-    @Override
-    protected void drawContent(Canvas canvas, float alpha, int x, int y, int w, int h) {
-        canvas.pushScale(TITLE_SCALE, x + 14, y + 14);
-        String client = ModifiedClients.getCurrent();
-        canvas.drawText(client == null ? Lang.get("hotwire.first_open.title")
-                : Lang.get("hotwire.client_warning.title", client), x + 14, y + 14, Colors.fade(Palette.TEXT, alpha));
-        canvas.popScale();
-        List<MessageLine.Line> lines = new ArrayList<>();
-        List<MessageLine.Line> sentences = client == null ? SENTENCES
-                : client.equals(ModifiedClients.DAWN) ? DAWN_SENTENCES : CLIENT_SENTENCES;
-        for (MessageLine.Line sentence : sentences) {
-            MessageLine.addWrapped(canvas, lines, Lang.get(sentence.text()), sentence.color(), w - 28);
-        }
-        this.lineCount = lines.size();
-        int lineY = y + 52;
-        for (MessageLine.Line line : lines) {
-            canvas.drawText(line.text(), x + 14, lineY, Colors.fade(line.color(), alpha));
-            lineY += LINE;
-        }
-        if (this.credit != null) {
-            canvas.drawText(this.credit, x + 14, lineY, Colors.fade(Palette.DIM, alpha));
-        }
     }
 }

@@ -2,40 +2,70 @@ package dev.moon.hotwire.ui;
 
 import dev.moon.hotwire.dev.BuildMerge;
 import dev.moon.hotwire.dev.DevBuildInfo;
-import dev.moon.hotwire.dev.DevClassChange;
+import dev.moon.hotwire.dev.DevCompare;
 import dev.moon.hotwire.dev.DevHost;
 import dev.moon.hotwire.dev.DevModView;
-import java.time.Instant;
-import java.time.LocalTime;
 import java.time.ZoneId;
-import java.time.format.DateTimeFormatter;
 import java.util.ArrayList;
 import java.util.HashSet;
 import java.util.List;
 import java.util.Locale;
-import java.util.Map;
 import java.util.Set;
 import java.util.SortedSet;
 import java.util.TreeSet;
 import org.jspecify.annotations.Nullable;
 
 final class BuildPicker {
-    static final int ROW_H = 18;
-    private static final int LANE = 9;
+    static final int TRY = 0;
+    static final int RESTORE = 1;
+    static final int COMPARE = 2;
+
+    static final int NEWEST = -1;
     private static final int SIDE_BY_SIDE = 330;
-    private static final int PAD = 8;
-    private static final int LINE = 10;
-    private static final int MOST_CONFLICTS = 6;
-    private static final DateTimeFormatter CLOCK = DateTimeFormatter.ofPattern("HH:mm:ss", Locale.ROOT);
+    private static final int TIGHT = 240;
+    private static final int ROW = 18;
+    private static final int STACKED_ROWS = 4;
+    private static final int COLUMN = 9;
 
+    private static final long PINNED_WAIT_NANOS = 3_000_000_000L;
+    private static final String PIN = "dev_pin";
+
+    interface Opener {
+        void open(int build, int mode);
+    }
+
+    private record BuildRow(int build, TreeRow tree, int columns, String number, String name, boolean pinned,
+            boolean running, String tag, String date, int dateInk, String size, int sizeInk, boolean ticking,
+            boolean tickable) {
+    }
+
+    final Part part;
     private final DevHost host;
-    private @Nullable TextField naming;
-    private boolean open;
-    private int picked = -1;
-    private boolean merging;
+    private final Runnable leave;
+    private final Tabs modes = Kit.tabs(Tabs.Look.BOX, this::chooseMode).tab(Lang.get("hotwire.dev.mode.try"))
+            .tab(Lang.get("hotwire.dev.mode.restore")).tab(Lang.get("hotwire.dev.mode.compare"));
+    private final Text title = Kit.dim("").wrap();
+    private final Rows<BuildRow> rows = new Rows<BuildRow>(row -> String.valueOf(row.build()), this::makeRow, ROW,
+            0).mark(row -> this.isTicking() ? this.chosen.contains(row.build()) : row.build() == this.picked);
+    private final Line report = Kit.column().gap(4);
+    private final Scroll scroll = Kit.scroll(this.report);
+    private final Line holder = Kit.column();
+    private final Push confirm = Kit.lead("", this::confirm);
+    private final Push merge = Kit.push(Lang.get("hotwire.dev.button.merge"), this::startMerge);
+    private final Push manage = Kit.push(Lang.get("hotwire.dev.button.manage"), this::startManage);
+    private final Push cancel = Kit.push(Lang.get("hotwire.dev.button.cancel"), this::cancel);
+    private final TextField naming = new TextField(Lang.get("hotwire.dev.name_hint"), text -> { },
+            this::finishNaming, this::cancel);
+    private final Part namingRow = Kit.fit(this.naming).height(Push.HEIGHT).grow(1);
+    private final BuildReport single;
     private final SortedSet<Integer> chosen = new TreeSet<>();
-
-    private int namingBuild = -1;
+    private @Nullable DevModView mod;
+    private int width;
+    private boolean narrow;
+    private int picked = NEWEST;
+    private boolean merging;
+    private boolean managing;
+    private boolean renaming;
 
     private @Nullable Set<Integer> before;
 
@@ -43,212 +73,190 @@ final class BuildPicker {
     private @Nullable DevModView planFor;
     private List<Integer> planOf = List.of();
 
-    private final EasedValue highlightMove = EasedValue.ofSpeed(20);
-    private final EasedValue fade = EasedValue.ofSpeed(9);
-    private boolean highlightPlaced;
+    private int warnedFor = NEWEST;
 
-    private final List<CodeBlock.Hit> hits = new ArrayList<>();
+    private long clearAt;
+    private boolean side;
+    private int listWidth;
+    private @Nullable Object shown;
+    private @Nullable Object risen;
 
-    BuildPicker(DevHost host) {
+    BuildPicker(DevHost host, Runnable leave) {
         this.host = host;
+        this.leave = leave;
+        this.single = new BuildReport(this, host);
+        this.rows.grow(0);
+        this.holder.grow(1);
+        this.confirm.width(0).grow(1);
+        this.part = Kit.column(Kit.row(this.modes), this.title, this.holder, Kit.rule(),
+                Kit.row(this.namingRow, this.confirm, this.merge, this.manage, this.cancel).gap(6)).gap(6).pad(8, 8);
     }
 
-    void setNamingField(TextField naming) {
-        this.naming = naming;
+    boolean isTicking() {
+        return this.merging || this.managing;
     }
 
-    boolean isOpen() {
-        return this.open;
+    boolean isRestoring() {
+        return this.modes.getChosen() == RESTORE;
     }
 
-    boolean isMerging() {
-        return this.open && this.merging;
+    boolean isSettingKey() {
+        return this.single.compare.isSettingKey();
     }
 
-    boolean isNaming() {
-        return this.open && this.namingBuild >= 0;
+    void takeKey(int key, int escape) {
+        this.single.compare.takeKey(key, escape);
+    }
+
+    SortedSet<Integer> getChosen() {
+        return this.chosen;
     }
 
     int getPicked() {
         return this.picked;
     }
 
-    void open(DevModView mod, int build) {
-        this.open = true;
+    void reset() {
         this.merging = false;
+        this.managing = false;
+        this.renaming = false;
+        this.clearAt = 0;
+        this.warnedFor = NEWEST;
         this.chosen.clear();
-        this.namingBuild = -1;
         this.before = null;
-        this.highlightPlaced = false;
-        if (mod.hasBuild(build)) {
-            this.picked = build;
-        } else {
-            this.picked = mod.savedBuilds().isEmpty() ? mod.runningBuild() : mod.savedBuilds().getFirst();
-        }
-        this.restartFade(0);
+        this.single.reset();
     }
 
-    void close() {
-        this.open = false;
-        this.merging = false;
-        this.namingBuild = -1;
+    void open(DevModView mod, int build, int mode) {
+        this.reset();
+        this.picked = mod.hasBuild(build) ? build : findFirstPick(mod);
+        this.modes.choose(mode);
+        this.rows.scrollToTop();
+    }
+
+    void chooseMode(int mode) {
+        this.modes.choose(mode);
+        this.warnedFor = NEWEST;
+        this.refresh();
+    }
+
+    static int findFirstPick(DevModView mod) {
+        Integer parent = mod.parents().get(mod.runningBuild());
+        if (parent != null && parent != mod.runningBuild() && (parent == 0 || mod.savedBuilds().contains(parent))) {
+            return parent;
+        }
+        for (int build : mod.savedBuilds()) {
+            if (build != mod.runningBuild()) {
+                return build;
+            }
+        }
+        return 0;
+    }
+
+    @Nullable String findOtherBranch(DevModView mod, int build) {
+        DevBuildInfo info = mod.infos().get(build);
+        String made = info == null ? "" : DevBuildInfo.findBranchOf(info.git());
+        String now = this.host.findBranch(mod.id());
+        return made.isEmpty() || now.isEmpty() || made.equals(now) ? null : made;
+    }
+
+    static String findName(DevModView mod, int build) {
+        String name = mod.names().get(build);
+        if (name != null) {
+            return name;
+        }
+        return build == 0 ? Lang.get("hotwire.dev.pick.start.short") : Lang.get("hotwire.dev.pick.build", build);
     }
 
     void cancel() {
-        if (this.namingBuild >= 0) {
-            this.namingBuild = -1;
-        } else if (this.merging) {
+        if (this.renaming) {
+            this.renaming = false;
+        } else if (this.isTicking()) {
             this.merging = false;
+            this.managing = false;
             this.chosen.clear();
-            this.restartFade(0.3f);
+            this.clearAt = 0;
         } else {
-            this.close();
+            this.leave.run();
         }
+        this.refresh();
     }
 
     void startMerge() {
+        this.managing = false;
         this.merging = true;
+        this.renaming = false;
         this.chosen.clear();
-        this.namingBuild = -1;
         if (this.picked > 0) {
             this.chosen.add(this.picked);
         }
-        this.restartFade(0.3f);
+        this.refresh();
     }
 
-    void update(@Nullable DevModView mod, float dt) {
-        this.highlightMove.step(dt);
-        this.fade.step(dt);
-        if (!this.open) {
-            return;
-        }
-        if (mod == null) {
-            this.close();
-            return;
-        }
-        this.chosen.removeIf(build -> !mod.hasBuild(build));
-        Set<Integer> waited = this.before;
-        if (waited != null) {
-            for (int build : mod.findBuilds()) {
-                if (!waited.contains(build)) {
-                    this.choose(build);
-                    this.before = null;
-                    break;
-                }
-            }
-        }
-        if (!mod.hasBuild(this.picked)) {
-            this.choose(mod.runningBuild());
-        }
+    void startManage() {
+        this.managing = true;
+        this.merging = false;
+        this.renaming = false;
+        this.chosen.clear();
+        this.clearAt = 0;
+        this.refresh();
     }
 
-    private void choose(int build) {
-        if (build != this.picked) {
+    void pick(int build) {
+        DevModView shownMod = this.mod;
+        if (!this.isTicking()) {
             this.picked = build;
-            this.restartFade(0);
-        }
-    }
-
-    private void restartFade(float from) {
-        this.fade.snap(from);
-        this.fade.to(1);
-    }
-
-    private void tick(int build) {
-        if (build == 0) {
-            return;
-        }
-        if (!this.chosen.remove(build)) {
-            this.chosen.add(build);
-        }
-        this.restartFade(0.55f);
-    }
-
-    void confirm(@Nullable DevModView mod) {
-        if (mod == null) {
-            return;
-        }
-        if (this.merging) {
-            BuildMerge.Plan made = this.findPlan(mod);
-            if (made == null || made.refusal() != null) {
-                return;
+        } else if (build != 0 && (this.merging || (shownMod != null && BuildManage.canClear(shownMod, build)))) {
+            if (!this.chosen.remove(build)) {
+                this.chosen.add(build);
             }
-            this.host.merge(mod.id(), List.copyOf(this.chosen), !made.conflicts().isEmpty());
-            this.merging = false;
-            this.chosen.clear();
-            if (made.isFast()) {
-                this.choose(made.tip());
-            } else {
-                this.before = new HashSet<>(mod.findBuilds());
-            }
-            this.restartFade(0);
-            return;
+            this.clearAt = 0;
         }
+        this.refresh();
+    }
 
-        if (this.picked != mod.runningBuild() && mod.savedBuilds().contains(this.picked)) {
-            this.host.revertTo(mod.id(), this.picked);
+    void tickOnly(List<Integer> builds) {
+        this.chosen.clear();
+        this.chosen.addAll(builds);
+        this.clearAt = 0;
+        this.refresh();
+    }
+
+    void pin() {
+        DevModView shownMod = this.mod;
+        if (shownMod != null) {
+            this.host.pin(shownMod.id(), this.picked, !shownMod.pinned().contains(this.picked));
         }
     }
 
-    boolean isConfirmActive(@Nullable DevModView mod) {
-        if (mod == null) {
-            return false;
-        }
-        if (this.merging) {
-            BuildMerge.Plan made = this.findPlan(mod);
-            return made != null && made.refusal() == null;
-        }
-        return this.picked != mod.runningBuild() && mod.savedBuilds().contains(this.picked);
-    }
-
-    String findConfirmLabel(@Nullable DevModView mod) {
-        if (!this.merging) {
-            return this.picked == 0 ? Lang.get("hotwire.dev.button.confirm_back.start")
-                    : Lang.get("hotwire.dev.button.confirm_back", this.picked);
-        }
-        BuildMerge.Plan made = mod == null ? null : this.findPlan(mod);
-        if (made == null || made.refusal() != null) {
-            return Lang.get("hotwire.dev.button.merge");
-        }
-        return made.conflicts().isEmpty() ? Lang.get("hotwire.dev.button.merge_these", this.chosen.size())
-                : Lang.get("hotwire.dev.button.merge_anyway");
-    }
-
-    String findConfirmShort() {
-        return Lang.get(this.merging ? "hotwire.dev.button.merge" : "hotwire.dev.button.back.short");
-    }
-
-    void pin(DevModView mod) {
-        this.host.pin(mod.id(), this.picked, !mod.pinned().contains(this.picked));
-    }
-
-    void copy(DevModView mod) {
-        if (this.picked != 0) {
-            this.before = new HashSet<>(mod.findBuilds());
-            this.host.copyBuild(mod.id(), this.picked);
+    void copy() {
+        DevModView shownMod = this.mod;
+        if (shownMod != null && this.picked != 0) {
+            this.before = new HashSet<>(shownMod.findBuilds());
+            this.host.copyBuild(shownMod.id(), this.picked);
         }
     }
 
-    void startNaming(DevModView mod) {
-        TextField field = this.naming;
-        if (field == null) {
-            return;
+    void startNaming() {
+        DevModView shownMod = this.mod;
+        if (shownMod != null) {
+            this.renaming = true;
+            this.naming.setText(shownMod.names().getOrDefault(this.picked, ""));
+            this.refresh();
         }
-        this.namingBuild = this.picked;
-        String name = mod.names().get(this.picked);
-        field.setText(name == null ? "" : name);
     }
 
-    void finishNaming(@Nullable DevModView mod) {
-        TextField field = this.naming;
-        if (mod != null && field != null && this.namingBuild >= 0) {
-            this.host.rename(mod.id(), this.namingBuild, field.getText());
+    private void finishNaming() {
+        DevModView shownMod = this.mod;
+        if (shownMod != null && this.renaming) {
+            this.host.rename(shownMod.id(), this.picked, this.naming.getText());
         }
-        this.namingBuild = -1;
+        this.renaming = false;
+        this.refresh();
     }
 
     @SuppressWarnings("ReferenceEquality")
-    private BuildMerge.@Nullable Plan findPlan(DevModView mod) {
+    BuildMerge.@Nullable Plan findPlan(DevModView mod) {
         if (this.chosen.size() < 2) {
             return null;
         }
@@ -264,403 +272,307 @@ final class BuildPicker {
         return this.plan;
     }
 
-    private static String findName(DevModView mod, int build) {
-        String name = mod.names().get(build);
-        if (name != null) {
-            return name;
-        }
-        return build == 0 ? Lang.get("hotwire.dev.pick.start.short") : Lang.get("hotwire.dev.pick.build", build);
+    private boolean hasPinnedTicked(DevModView mod) {
+        return this.chosen.stream().anyMatch(mod.pinned()::contains);
     }
 
-    boolean click(double px, double py) {
-        for (int at = this.hits.size() - 1; at >= 0; at--) {
-            CodeBlock.Hit hit = this.hits.get(at);
-            if (px >= hit.x0() && px < hit.x1() && py >= hit.y0() && py < hit.y1()) {
-                hit.action().run();
-                return true;
+    void confirm() {
+        DevModView shownMod = this.mod;
+        if (shownMod == null) {
+            return;
+        }
+        String id = shownMod.id();
+        if (this.managing) {
+            long now = System.nanoTime();
+            if (this.chosen.isEmpty()) {
+                return;
             }
+            if (this.hasPinnedTicked(shownMod) && (this.clearAt == 0 || now - this.clearAt < 0)) {
+                this.clearAt = this.clearAt == 0 ? now + PINNED_WAIT_NANOS : this.clearAt;
+            } else {
+                this.host.clear(id, List.copyOf(this.chosen));
+                this.chosen.clear();
+                this.clearAt = 0;
+            }
+        } else if (this.merging) {
+            BuildMerge.Plan made = this.findPlan(shownMod);
+            if (made == null || made.refusal() != null) {
+                return;
+            }
+            this.host.merge(id, List.copyOf(this.chosen), !made.conflicts().isEmpty());
+            this.merging = false;
+            this.chosen.clear();
+            if (made.isFast()) {
+                this.picked = made.tip();
+            } else {
+                this.before = new HashSet<>(shownMod.findBuilds());
+            }
+        } else if (this.modes.getChosen() == COMPARE) {
+            if (this.picked != shownMod.runningBuild() && shownMod.hasBuild(this.picked)) {
+                this.host.startCompare(id, shownMod.runningBuild(), this.picked);
+            }
+        } else if (this.isRestoring()) {
+            if (!shownMod.hasBuild(this.picked) || this.picked == shownMod.codeBuild()) {
+                return;
+            }
+
+            if (this.findOtherBranch(shownMod, this.picked) != null && this.warnedFor != this.picked) {
+                this.warnedFor = this.picked;
+            } else {
+                this.warnedFor = NEWEST;
+                this.host.restore(id, this.picked);
+            }
+        } else if (this.picked != shownMod.runningBuild() && shownMod.savedBuilds().contains(this.picked)) {
+            this.host.revertTo(id, this.picked);
         }
-        return false;
+        this.refresh();
     }
 
-    void pressRowForTests(int build) {
+    private boolean isConfirmActive(DevModView mod) {
+        if (this.managing) {
+            return !this.chosen.isEmpty() && (this.clearAt == 0 || System.nanoTime() - this.clearAt >= 0);
+        }
         if (this.merging) {
-            this.tick(build);
-        } else {
-            this.choose(build);
+            BuildMerge.Plan made = this.findPlan(mod);
+            return made != null && made.refusal() == null;
+        }
+        if (this.modes.getChosen() == COMPARE) {
+            DevCompare running = mod.compare();
+            return this.picked != mod.runningBuild() && mod.hasBuild(this.picked)
+                    && (running == null || running.done());
+        }
+        if (this.isRestoring()) {
+            return mod.hasBuild(this.picked) && this.picked != mod.codeBuild();
+        }
+        return this.picked != mod.runningBuild() && mod.savedBuilds().contains(this.picked);
+    }
+
+    private String describeClear(DevModView mod) {
+        String size = CacheFill.describeBytes(BuildManage.sumSizes(mod, this.chosen));
+        if (this.chosen.isEmpty()) {
+            return Lang.get("hotwire.dev.manage.clear_none");
+        }
+        if (!this.hasPinnedTicked(mod)) {
+            return this.chosen.size() == 1 ? Lang.get("hotwire.dev.manage.clear.one", size)
+                    : Lang.get("hotwire.dev.manage.clear", this.chosen.size(), size);
+        }
+        long left = this.clearAt - System.nanoTime();
+        if (this.clearAt != 0 && left > 0) {
+            return Lang.get("hotwire.dev.manage.wait", (int) Math.ceil(left / 1e9));
+        }
+        return Lang.get(this.clearAt != 0 ? "hotwire.dev.manage.clear_anyway" : "hotwire.dev.manage.clear_pinned",
+                this.chosen.size(), size);
+    }
+
+    private String describeConfirm(DevModView mod) {
+        if (this.managing) {
+            return this.narrow ? Lang.get("hotwire.dev.manage.clear.short") : this.describeClear(mod);
+        }
+        if (this.merging) {
+            BuildMerge.Plan made = this.findPlan(mod);
+            if (this.narrow || made == null || made.refusal() != null) {
+                return Lang.get("hotwire.dev.button.merge");
+            }
+            return made.conflicts().isEmpty() ? Lang.get("hotwire.dev.button.merge_these", this.chosen.size())
+                    : Lang.get("hotwire.dev.button.merge_anyway");
+        }
+        if (this.modes.getChosen() == COMPARE) {
+            return this.narrow ? Lang.get("hotwire.dev.mode.compare")
+                    : Lang.get("hotwire.dev.button.compare", mod.runningBuild(), this.picked);
+        }
+        if (!this.isRestoring()) {
+            if (this.narrow) {
+                return Lang.get("hotwire.dev.mode.try");
+            }
+            return this.picked == 0 ? Lang.get("hotwire.dev.button.try.start")
+                    : Lang.get("hotwire.dev.button.try", this.picked);
+        }
+        if (this.narrow) {
+            return Lang.get("hotwire.dev.mode.restore");
+        }
+        if (this.warnedFor == this.picked && this.findOtherBranch(mod, this.picked) != null) {
+            return Lang.get("hotwire.dev.button.restore.anyway", this.picked);
+        }
+        return this.picked == 0 ? Lang.get("hotwire.dev.button.restore.start")
+                : Lang.get("hotwire.dev.button.restore", this.picked);
+    }
+
+    void refresh() {
+        DevModView shownMod = this.mod;
+        if (shownMod != null) {
+            this.show(shownMod, this.width, this.narrow);
         }
     }
 
-    int paint(Canvas canvas, DevModView mod, int x, int y, int w, float a, double px, double py, boolean over) {
-        this.hits.clear();
-        String title = this.merging ? Lang.get("hotwire.dev.merge.title") : Lang.get("hotwire.dev.pick.title",
-                mod.runningBuild());
-        y = CodeBlock.paintWrapped(canvas, title, x, y + 4, w, Palette.DIM, a) + 4;
+    void show(DevModView mod, int width, boolean narrow) {
+        this.mod = mod;
+        this.width = width;
+        this.narrow = narrow;
+        this.chosen.removeIf(build -> !mod.hasBuild(build));
         List<Integer> builds = mod.findBuilds();
-        List<TreeRow> tree = BuildTree.lay(builds, mod.parents());
-        int widest = 1;
-        for (TreeRow row : tree) {
-            widest = Math.max(widest, row.width());
+        Set<Integer> waited = this.before;
+        if (waited != null && !waited.containsAll(builds)) {
+            this.picked = builds.stream().filter(build -> !waited.contains(build)).findFirst().orElse(this.picked);
+            this.before = null;
         }
-        int graphW = widest * LANE + 4;
-        boolean side = w >= SIDE_BY_SIDE;
-        int listW = side ? Math.clamp(w * 2 / 5, 120, 220) : w;
-        int top = y;
+        if (!mod.hasBuild(this.picked)) {
+            this.picked = findFirstPick(mod);
+        }
+        boolean beside = width >= SIDE_BY_SIDE;
+        int list = beside ? Math.clamp((width - 16) * 2 / 5, 120, 220) : Math.min(builds.size(), STACKED_ROWS) * ROW;
+        if (beside != this.side || list != this.listWidth || this.holder.isEmpty()) {
+            this.side = beside;
+            this.listWidth = list;
+            this.rows.width(beside ? list : Part.HUG).height(beside ? Part.HUG : list);
+            this.holder.clear().with((beside ? Kit.row(this.rows, this.scroll).gap(8).cross(Line.Cross.STRETCH)
+                    : Kit.column(this.rows, this.scroll).gap(6)).grow(1));
+        }
+        boolean ticking = this.isTicking();
+        this.modes.show(!ticking);
+        if (this.merging) {
+            this.title.set(Lang.get("hotwire.dev.merge.title"));
+        } else if (this.managing) {
+            this.title.set(Lang.get("hotwire.dev.manage.title", builds.size(), CacheFill.describeBytes(
+                    BuildManage.sumSizes(mod, builds))));
+        } else {
+            this.title.set(Lang.get("hotwire.dev.pick.title", mod.runningBuild()));
+        }
+        this.namingRow.show(this.renaming);
+        this.confirm.label(this.describeConfirm(mod)).active(this.isConfirmActive(mod))
+                .ink(this.managing ? Palette.BAD : Palette.ACCENT).show(!this.renaming);
+        this.merge.show(!this.renaming && !ticking);
+        this.manage.show(!this.renaming && !ticking);
+        this.cancel.show(!this.renaming && ticking);
+        boolean tight = width - 22 - (beside ? list + 8 : 0) < TIGHT;
+        Object key = List.of(mod.withoutCompare(), this.picked, this.modes.getChosen(), this.merging, this.managing,
+                List.copyOf(this.chosen), this.single.getShownClass(), this.host.getExtras(),
+                this.host.findBranch(mod.id()), tight);
+        if (!key.equals(this.shown)) {
+            this.shown = key;
+            this.fill(mod, builds, tight);
+        }
+        this.single.compare.show(mod, this.picked);
+    }
 
-        int index = builds.indexOf(this.picked);
-        if (!this.merging && index >= 0) {
-            float target = index * ROW_H;
-            if (!this.highlightPlaced) {
-                this.highlightMove.snap(target);
-                this.highlightPlaced = true;
-            }
-            this.highlightMove.to(target);
-            int hy = top + Math.round(this.highlightMove.getValue());
-            canvas.fill(x + graphW - 2, hy, x + listW, hy + ROW_H - 2, Colors.fade(Palette.PANEL_EDGE, a));
-            canvas.fill(x + graphW - 2, hy, x + graphW, hy + ROW_H - 2, Colors.fade(Palette.ACCENT, a));
-        }
-        int[] tops = new int[builds.size()];
-        int[] bottoms = new int[builds.size()];
+    private void fill(DevModView mod, List<Integer> builds, boolean tight) {
+        List<TreeRow> tree = BuildTree.lay(builds, mod.parents());
+        int columns = tree.stream().mapToInt(TreeRow::width).max().orElse(1);
+        long now = System.currentTimeMillis();
+        boolean sized = this.managing || this.host.getExtras().sizes();
+        List<BuildRow> made = new ArrayList<>();
         for (int at = 0; at < builds.size(); at++) {
             int build = builds.get(at);
-            tops[at] = y;
-            bottoms[at] = y + ROW_H;
-            this.paintRow(canvas, mod, build, x + graphW, y, listW - graphW, a, px, py, over);
-            y += ROW_H;
+            boolean running = build == mod.runningBuild();
+            String tag = "";
+            if (running) {
+                tag = Lang.get("hotwire.dev.pick.runs");
+            } else if (build > mod.runningBuild()) {
+                tag = Lang.get("hotwire.dev.pick.newer.short");
+            }
+            Long size = mod.sizes().get(build);
+            DevBuildInfo info = mod.infos().get(build);
+            made.add(new BuildRow(build, tree.get(at), columns, mod.names().containsKey(build) ? "#" + build : "",
+                    findName(mod, build), mod.pinned().contains(build), running, tag,
+                    info == null ? "" : BuildManage.describeShortDate(info.at(), now, ZoneId.systemDefault(),
+                            Locale.getDefault()),
+                    info == null ? 0 : BuildManage.findColor(BuildManage.findAge(info.at(), now)),
+                    size == null || !sized ? "" : CacheFill.describeBytes(size),
+                    size == null ? 0 : BuildManage.findColor(BuildManage.findWeight(size, mod.sizes().values())),
+                    this.isTicking(), build != 0 && (this.merging || BuildManage.canClear(mod, build))));
         }
-        this.paintTree(canvas, tree, builds, mod.runningBuild(), x, tops, bottoms, a);
-        int listBottom = y;
-        int reportX = side ? x + listW + PAD : x;
-        int reportY = side ? top : listBottom + PAD;
-        int reportW = side ? w - listW - PAD : w;
-        float in = this.fade.getValue();
-        int shift = Math.round((1 - in) * 6);
-        float ra = a * (0.25f + 0.75f * in);
-        int reportBottom = this.merging ? this.paintMerge(canvas, mod, reportX, reportY + shift, reportW, ra, px, py,
-                over) : this.paintReport(canvas, mod, this.picked, reportX, reportY + shift, reportW, ra, px, py, over);
-        return Math.max(listBottom, reportBottom) + 4;
+        this.rows.set(made);
+        List<Part> parts;
+        if (this.managing) {
+            parts = ManagePane.make(this, this.host, mod);
+        } else if (this.merging) {
+            parts = MergePane.make(mod, this.findPlan(mod));
+        } else {
+            parts = this.single.make(mod, this.picked, tight);
+        }
+        this.report.clear().with(parts.toArray(Part[]::new));
+
+        Object choice = List.of(this.picked, this.merging, this.managing);
+        if (!choice.equals(this.risen)) {
+            this.risen = choice;
+            this.report.rise();
+            this.scroll.reset();
+        }
     }
 
-    private void paintRow(Canvas canvas, DevModView mod, int build, int x, int y, int w, float a, double px,
-            double py, boolean over) {
-        boolean running = build == mod.runningBuild();
-        boolean ticked = this.merging && this.chosen.contains(build);
-        boolean lit = this.merging ? ticked : build == this.picked;
-        boolean hot = over && px >= x - 2 && px < x + w && py >= y && py < y + ROW_H - 2;
-        if (ticked) {
-            canvas.fill(x - 2, y, x + w, y + ROW_H - 2, Colors.fade(Palette.PANEL_EDGE, a * 0.8f));
-            canvas.fill(x - 2, y, x, y + ROW_H - 2, Colors.fade(Palette.ACCENT, a));
-        } else if (hot) {
-            canvas.fill(x - 2, y, x + w, y + ROW_H - 2, Colors.fade(CodeBlock.HOT, a));
+    private Part makeRow(BuildRow row) {
+        int build = row.build();
+        Line line = Kit.row(new TreeCell(row.tree(), row.columns(), row.running())).gap(5);
+        if (row.ticking() && row.tickable()) {
+            line.with(Kit.check(() -> this.chosen.contains(build), () -> this.pick(build)));
+        } else if (row.ticking()) {
+            line.with(new Part().width(Kit.Check.SIDE));
         }
-        int textX = x + 4;
-        if (this.merging) {
-            int box = Palette.DIM;
-            if (build == 0) {
-                box = Palette.HAIRLINE;
-            } else if (ticked) {
-                box = Palette.ACCENT;
-            }
-            CodeBlock.paintFrame(canvas, textX, y + 4, 8, 8, Colors.fade(box, a));
-            if (ticked) {
-                canvas.fill(textX + 2, y + 6, textX + 6, y + 10, Colors.fade(Palette.ACCENT, a));
-            }
-            textX += 12;
+        if (!row.number().isEmpty()) {
+            line.with(Kit.text(row.number(), Palette.FAINT));
         }
-        String tag = running ? Lang.get("hotwire.dev.pick.runs") : build > mod.runningBuild()
-                ? Lang.get("hotwire.dev.pick.newer.short") : "";
-        int right = x + w - 2;
-        if (!tag.isEmpty()) {
-            right -= canvas.measureText(tag);
-            canvas.drawText(tag, right, y + 5, Colors.fade(running ? Palette.GOOD : Palette.FAINT, a));
-            right -= 5;
+        line.with(Kit.text(row.name()).grow(1));
+        if (row.pinned()) {
+            line.with(Kit.icon(PIN, 9, Palette.WARN));
         }
-        if (mod.pinned().contains(build)) {
-            right -= 6;
-            CodeBlock.paintPin(canvas, right, y + 4, Colors.fade(Palette.WARN, a));
-            right -= 4;
+
+        if (!row.size().isEmpty()) {
+            line.with(Kit.text(row.size(), row.sizeInk()).spare());
         }
-        String named = mod.names().get(build);
-        int ink = Colors.fade(lit ? Palette.TEXT : Palette.DIM, a);
-        if (named != null) {
-            String number = "#" + build;
-            canvas.drawText(number, textX, y + 5, Colors.fade(Palette.FAINT, a));
-            textX += canvas.measureText(number) + 4;
+        if (!row.date().isEmpty()) {
+            line.with(Kit.text(row.date(), row.dateInk()).spare());
         }
-        canvas.drawText(canvas.clip(findName(mod, build), Math.max(1, right - textX)), textX, y + 5, ink);
-        this.hits.add(new CodeBlock.Hit(x - 2, y, x + w, y + ROW_H - 2, this.merging ? () -> this.tick(build)
-                : () -> this.choose(build)));
+        if (!row.tag().isEmpty()) {
+            line.with(Kit.text(row.tag(), row.running() ? Palette.GOOD : Palette.FAINT).spare());
+        }
+        return line.press((button, modifiers) -> this.pick(build));
     }
 
-    private void paintTree(Canvas canvas, List<TreeRow> tree, List<Integer> builds, int running, int x, int[] tops,
-            int[] bottoms, float a) {
-        int line = Colors.fade(Palette.DIM, a * 0.55f);
-        for (int at = 0; at < tree.size(); at++) {
-            TreeRow row = tree.get(at);
-            int top = tops[at];
-            int bottom = bottoms[at];
+    private static final class TreeCell extends Part {
+        private final int column;
+        private final boolean fromAbove;
+        private final boolean goesOn;
+        private final int[] joined;
+        private final int[] passing;
+        private final int dot;
+
+        TreeCell(TreeRow row, int columns, boolean running) {
+            this.column = row.column();
+            this.fromAbove = row.fromAbove();
+            this.goesOn = row.goesOn();
+            this.joined = row.joined().stream().mapToInt(Integer::intValue).toArray();
+            this.passing = row.passing().stream().mapToInt(Integer::intValue).toArray();
+            this.dot = running ? Palette.GOOD : Palette.DIM;
+            this.width(columns * COLUMN + 4).height(ROW);
+        }
+
+        @Override
+        protected void paint(Canvas canvas, float alpha) {
+            int x = this.getX();
+            int top = this.getY();
+            int bottom = top + this.getHeight();
+            int ink = Colors.fade(Palette.DIM, alpha * 0.55f);
             int dotY = top + 6;
-            int dotX = x + row.column() * LANE + 2;
-            for (int passing : row.passing()) {
-                int lx = x + passing * LANE + 4;
-                canvas.fill(lx, top, lx + 1, bottom, line);
+            int dotX = x + this.column * COLUMN + 2;
+            for (int other : this.passing) {
+                canvas.fill(x + other * COLUMN + 4, top, x + other * COLUMN + 5, bottom, ink);
             }
-            if (row.fromAbove()) {
-                canvas.fill(dotX + 2, top, dotX + 3, dotY, line);
+            if (this.fromAbove) {
+                canvas.fill(dotX + 2, top, dotX + 3, dotY, ink);
             }
-            if (row.goesOn()) {
-                canvas.fill(dotX + 2, dotY, dotX + 3, bottom, line);
+            if (this.goesOn) {
+                canvas.fill(dotX + 2, dotY, dotX + 3, bottom, ink);
             }
-            for (int joined : row.joined()) {
-                int lx = x + joined * LANE + 4;
-                canvas.fill(lx, top, lx + 1, dotY + 2, line);
-                canvas.fill(Math.min(lx, dotX + 2), dotY + 2, Math.max(lx + 1, dotX + 3), dotY + 3, line);
+            for (int other : this.joined) {
+                int lineX = x + other * COLUMN + 4;
+                canvas.fill(lineX, top, lineX + 1, dotY + 2, ink);
+                canvas.fill(Math.min(lineX, dotX + 2), dotY + 2, Math.max(lineX + 1, dotX + 3), dotY + 3, ink);
             }
-            int build = builds.get(at);
-            boolean lit = this.merging ? this.chosen.contains(build) : build == this.picked;
-            int dot = lit ? Palette.ACCENT : Palette.DIM;
-            if (build == running) {
-                dot = Palette.GOOD;
-            }
-            canvas.fill(dotX, dotY, dotX + 5, dotY + 5, Colors.fade(dot, a));
+            canvas.fill(dotX, dotY, dotX + 5, dotY + 5, Colors.fade(this.dot, alpha));
+        }
+
+        @Override
+        protected boolean takesPointer() {
+            return false;
         }
     }
-
-    private int paintReport(Canvas canvas, DevModView mod, int build, int x, int y, int w, float a, double px,
-            double py, boolean over) {
-        String named = mod.names().get(build);
-        String heading = named;
-        if (heading == null) {
-            heading = build == 0 ? Lang.get("hotwire.dev.pick.start") : Lang.get("hotwire.dev.pick.build", build);
-        }
-        int headX = x;
-        if (named != null) {
-            String number = "#" + build;
-            canvas.drawText(number, x, y, Colors.fade(Palette.FAINT, a));
-            headX += canvas.measureText(number) + 5;
-        }
-        canvas.drawText(canvas.clip(heading, Math.max(1, w - (headX - x))), headX, y, Colors.fade(Palette.TEXT, a));
-        y += LINE + 3;
-        List<String> tags = new ArrayList<>();
-        List<Integer> tagInks = new ArrayList<>();
-        if (build == mod.runningBuild()) {
-            tags.add(Lang.get("hotwire.dev.report.running"));
-            tagInks.add(Palette.GOOD);
-        } else if (build > mod.runningBuild()) {
-            tags.add(Lang.get("hotwire.dev.pick.newer"));
-            tagInks.add(Palette.FAINT);
-        }
-        if (mod.pinned().contains(build)) {
-            tags.add(Lang.get("hotwire.dev.report.pinned"));
-            tagInks.add(Palette.WARN);
-        }
-        int tagX = x;
-        for (int at = 0; at < tags.size(); at++) {
-            canvas.drawText(tags.get(at), tagX, y, Colors.fade(tagInks.get(at), a));
-            tagX += canvas.measureText(tags.get(at)) + 8;
-        }
-        if (!tags.isEmpty()) {
-            y += LINE + 2;
-        }
-
-        boolean pinned = mod.pinned().contains(build);
-        int chipX = x;
-        chipX = CodeBlock.paintChip(this.hits, canvas, chipX, y,
-                Lang.get(pinned ? "hotwire.dev.chip.unpin" : "hotwire.dev.chip.pin"),
-                a, px, py, over, () -> this.pin(mod));
-        chipX = CodeBlock.paintChip(this.hits, canvas, chipX, y, Lang.get("hotwire.dev.chip.rename"), a, px, py, over,
-                () -> this.startNaming(mod));
-        if (build != 0) {
-            CodeBlock.paintChip(this.hits, canvas, chipX, y, Lang.get("hotwire.dev.chip.copy"), a, px, py, over,
-                    () -> this.copy(mod));
-        }
-        y += CodeBlock.CHIP_H + 6;
-        DevBuildInfo info = mod.infos().get(build);
-        if (info == null) {
-            return CodeBlock.paintWrapped(canvas,
-                    Lang.get(build == 0 ? "hotwire.dev.report.first" : "hotwire.dev.report.none"),
-                    x, y, w, Palette.DIM, a);
-        }
-        String clock = LocalTime.ofInstant(Instant.ofEpochMilli(info.at()), ZoneId.systemDefault()).format(CLOCK);
-        String on = MergeWords.describeBuild(info.madeOn());
-        String made = info.merged().isEmpty() ? Lang.get("hotwire.dev.report.made", on, clock)
-                : Lang.get("hotwire.dev.report.merged_made", MergeWords.list(info.merged()), on);
-        y = CodeBlock.paintWrapped(canvas, made, x, y, w, Palette.DIM, a) + 2;
-        boolean opens = false;
-        for (DevClassChange change : info.classes()) {
-            List<CodeBlock.Code> rows = new ArrayList<>();
-            opens |= this.addMethods(rows, mod, change, change.changed(), "~", Palette.WARN);
-            opens |= this.addMethods(rows, mod, change, change.added(), "+", Palette.GOOD);
-            for (String method : change.removed()) {
-                rows.add(new CodeBlock.Code("-", Palette.BAD, method, Palette.DIM, Lang.get("hotwire.dev.report.gone"),
-                        Palette.FAINT, 0, null));
-            }
-            if (rows.isEmpty()) {
-                rows.add(new CodeBlock.Code("~", Palette.WARN, Lang.get("hotwire.dev.report.fields"), Palette.DIM,
-                        "", 0, 0,
-                        null));
-            }
-            String file = change.file().isEmpty() ? change.name() + ".class" : change.file();
-            String aside = file.startsWith(change.name() + ".") ? "" : change.name();
-            y = CodeBlock.paintBlock(this.hits, canvas, x, y, w, file, aside, Palette.ACCENT_SOFT, rows, a, px, py,
-                    over);
-        }
-        List<CodeBlock.Code> others = new ArrayList<>();
-        info.addedClasses().forEach(name -> others.add(new CodeBlock.Code("+", Palette.GOOD, name + ".class",
-                Palette.TEXT,
-                Lang.get("hotwire.dev.report.new"), Palette.FAINT, 0, null)));
-        info.removedClasses().forEach(name -> others.add(new CodeBlock.Code("-", Palette.BAD, name + ".class",
-                Palette.DIM,
-                Lang.get("hotwire.dev.report.gone"), Palette.FAINT, 0, null)));
-        info.files().forEach(name -> others.add(new CodeBlock.Code("~", Palette.WARN, name, Palette.TEXT, "", 0, 0,
-                null)));
-        if (!others.isEmpty()) {
-            y = CodeBlock.paintBlock(this.hits, canvas, x, y, w, Lang.get("hotwire.dev.report.other"), "",
-                    Palette.FAINT,
-                    CodeBlock.limitRows(others), a, px, py, over);
-        }
-        List<String> threw = mod.throwsByBuild().get(build);
-        if (threw != null && !threw.isEmpty()) {
-            List<CodeBlock.Code> rows = new ArrayList<>();
-            threw.forEach(line -> rows.add(new CodeBlock.Code("!", Palette.BAD, line, Palette.TEXT, "", 0, 0, null)));
-            y = CodeBlock.paintBlock(this.hits, canvas, x, y, w, Lang.get("hotwire.dev.report.threw"), "", Palette.BAD,
-                    CodeBlock.limitRows(rows), a,
-                    px, py, over);
-        } else {
-            boolean ran = info.merged().isEmpty() || info.merged().contains(build);
-            y = CodeBlock.paintWrapped(canvas,
-                    Lang.get(ran ? "hotwire.dev.report.clean" : "hotwire.dev.report.not_run"), x, y,
-                    w, ran ? Palette.GOOD : Palette.FAINT, a);
-        }
-        if (!info.notes().isEmpty()) {
-            List<CodeBlock.Code> rows = new ArrayList<>();
-            info.notes().forEach(note -> rows.add(CodeBlock.Code.of(note, Palette.WARN)));
-            y = CodeBlock.paintBlock(this.hits, canvas, x, y, w, Lang.get("hotwire.dev.report.notes"), "",
-                    Palette.WARN, rows, a, px,
-                    py, over);
-        }
-        if (opens) {
-            y = CodeBlock.paintWrapped(canvas, Lang.get("hotwire.dev.report.open"), x, y, w, Palette.FAINT, a);
-        }
-        return y;
-    }
-
-    private boolean addMethods(List<CodeBlock.Code> rows, DevModView mod, DevClassChange change, List<String> methods,
-            String mark, int ink) {
-        boolean opens = false;
-        for (String method : methods) {
-            List<Integer> span = change.lines().get(method);
-            int first = span == null ? 0 : span.get(0);
-            String aside = "";
-            if (span != null) {
-                aside = span.get(0).equals(span.get(1)) ? Lang.get("hotwire.dev.report.one_line")
-                        : Lang.get("hotwire.dev.report.lines_long", span.get(1) - span.get(0) + 1);
-            }
-            Runnable open = null;
-            if (first > 0 && !change.type().isEmpty()) {
-                String label = change.name() + "." + method;
-                open = () -> this.host.openPlace(mod.id(), change.type(), first, label);
-                opens = true;
-            }
-            rows.add(new CodeBlock.Code(mark, ink, method, Palette.TEXT, aside, Palette.FAINT, first, open));
-        }
-        return opens;
-    }
-
-    private int paintMerge(Canvas canvas, DevModView mod, int x, int y, int w, float a, double px, double py,
-            boolean over) {
-        if (this.chosen.size() < 2) {
-            y = CodeBlock.paintWrapped(canvas, Lang.get("hotwire.dev.merge.pick"), x, y, w, Palette.TEXT, a);
-            return CodeBlock.paintWrapped(canvas, Lang.get("hotwire.dev.merge.how"), x, y, w, Palette.DIM, a);
-        }
-        BuildMerge.Plan made = this.findPlan(mod);
-        if (made == null) {
-            return y;
-        }
-        BuildMerge.Refusal refusal = made.refusal();
-        if (refusal != null) {
-            return CodeBlock.paintWrapped(canvas, MergeWords.describe(refusal), x, y, w, Palette.BAD, a);
-        }
-        List<Integer> others = new ArrayList<>(made.builds());
-        String summary;
-        if (made.isFast()) {
-            others.remove(Integer.valueOf(made.tip()));
-            summary = Lang.get("hotwire.dev.merge.fast", made.tip(), MergeWords.list(others));
-        } else {
-            summary = Lang.get("hotwire.dev.merge.makes", MergeWords.list(made.builds()));
-        }
-        y = CodeBlock.paintWrapped(canvas, summary, x, y, w, Palette.TEXT, a);
-        y = CodeBlock.paintWrapped(canvas, Lang.get("hotwire.dev.merge.made_on",
-                MergeWords.describeBuild(made.parent())), x,
-                y - 2, w, Palette.DIM, a);
-
-        List<CodeBlock.Code> files = new ArrayList<>();
-        made.sources().entrySet().stream().sorted(Map.Entry.comparingByKey()).forEach(entry -> files.add(
-                new CodeBlock.Code("~", Palette.WARN, MergeWords.trimEntry(entry.getKey()), Palette.TEXT,
-                        Lang.get("hotwire.dev.merge.from", entry.getValue()), Palette.FAINT, 0, null)));
-        made.gone().stream().sorted().forEach(entry -> files.add(new CodeBlock.Code("-", Palette.BAD,
-                MergeWords.trimEntry(entry),
-                Palette.DIM, Lang.get("hotwire.dev.merge.taken_out"), Palette.FAINT, 0, null)));
-        if (!files.isEmpty()) {
-            y = CodeBlock.paintBlock(this.hits, canvas, x, y, w, Lang.get("hotwire.dev.merge.has"),
-                    Lang.get("hotwire.dev.merge.count", files.size()), Palette.ACCENT_SOFT,
-                            CodeBlock.limitRows(files), a, px, py,
-                    over);
-        }
-
-        List<BuildMerge.Conflict> conflicts = made.conflicts();
-        for (BuildMerge.Conflict conflict : conflicts.subList(0, Math.min(MOST_CONFLICTS, conflicts.size()))) {
-            List<CodeBlock.Code> rows = new ArrayList<>();
-            for (int build : conflict.builds()) {
-                DevBuildInfo info = mod.infos().get(build);
-                String what = info == null ? Lang.get("hotwire.dev.merge.class_changed")
-                        : MergeWords.describeEntry(info, conflict.entry());
-                rows.add(CodeBlock.makeConflictRow(build, conflict, what));
-            }
-            rows.add(CodeBlock.Code.of(Lang.get("hotwire.dev.merge.why_kept", conflict.winner(),
-                    MergeWords.list(conflict.dropped())), Palette.FAINT));
-            y = CodeBlock.paintBlock(this.hits, canvas, x, y, w, Lang.get("hotwire.dev.merge.conflict",
-                    MergeWords.trimEntry(conflict.entry())), "", Palette.WARN, rows, a, px, py, over);
-        }
-        if (conflicts.size() > MOST_CONFLICTS) {
-            y = CodeBlock.paintWrapped(canvas, Lang.get("hotwire.dev.merge.more_conflicts",
-                    conflicts.size() - MOST_CONFLICTS), x,
-                    y, w, Palette.WARN, a);
-        }
-
-        for (BuildMerge.BuildGap left : made.leftOut()) {
-            if (left.entries().isEmpty()) {
-                continue;
-            }
-            List<CodeBlock.Code> rows = new ArrayList<>();
-            rows.add(CodeBlock.Code.of(Lang.get("hotwire.dev.merge.left_why", left.build(), left.skipped().getFirst()),
-                    Palette.DIM));
-            left.entries().forEach(entry -> rows.add(new CodeBlock.Code("?", Palette.FAINT, MergeWords.trimEntry(entry),
-                    Palette.DIM, "", 0, 0, null)));
-            List<Integer> skipped = new ArrayList<>(left.skipped());
-            skipped.sort(null);
-            String key = skipped.size() == 1 ? "hotwire.dev.merge.left_out" : "hotwire.dev.merge.left_out.many";
-            y = CodeBlock.paintBlock(this.hits, canvas, x, y, w, Lang.get(key, MergeWords.list(skipped)), "",
-                    Palette.FAINT,
-                    CodeBlock.limitRows(rows),
-                    a, px, py, over);
-        }
-
-        for (int build : made.builds()) {
-            if (made.removed().contains(build) || build == made.tip()) {
-                continue;
-            }
-            String key = build == mod.runningBuild() ? "hotwire.dev.merge.stays_running"
-                    : "hotwire.dev.merge.stays_pinned";
-            y = CodeBlock.paintWrapped(canvas, Lang.get(key, build), x, y, w, Palette.DIM, a);
-        }
-        if (!made.removed().isEmpty()) {
-            String key = made.removed().size() == 1 ? "hotwire.dev.merge.goes.one" : "hotwire.dev.merge.goes";
-            y = CodeBlock.paintWrapped(canvas, Lang.get(key,
-                    MergeWords.list(List.copyOf(new TreeSet<>(made.removed())))), x, y,
-                    w, conflicts.isEmpty() ? Palette.DIM : Palette.BAD, a);
-        }
-        return CodeBlock.paintWrapped(canvas, Lang.get("hotwire.dev.merge.game"), x, y, w, Palette.FAINT, a);
-    }
-
 }

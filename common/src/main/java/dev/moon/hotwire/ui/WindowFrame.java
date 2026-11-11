@@ -49,6 +49,8 @@ final class WindowFrame {
     private boolean titlePressed;
     private boolean placed;
 
+    private double @Nullable [] share;
+
     WindowFrame(int minWidth, int minHeight, int titleHeight) {
         this.minWidth = minWidth;
         this.minHeight = minHeight;
@@ -57,8 +59,27 @@ final class WindowFrame {
 
     void setScreen(int screenWidth, int screenHeight, double @Nullable [] saved, int width, int height, int left,
             int top) {
+        int wasWidth = this.screenWidth;
+        int wasHeight = this.screenHeight;
         this.screenWidth = screenWidth;
         this.screenHeight = screenHeight;
+        double[] own = this.share;
+        if (this.placed && own != null && (wasWidth != screenWidth || wasHeight != screenHeight)) {
+            int x = (int) Math.round(own[0] * screenWidth);
+            int y = (int) Math.round(own[1] * screenHeight);
+            int w = (int) Math.round(own[2] * screenWidth);
+            int h = (int) Math.round(own[3] * screenHeight);
+            if (this.snapped == Snap.NONE) {
+                this.setBounds(x, y, w, h);
+                this.clamp();
+                this.snapDrawn();
+            } else {
+                this.restoreLeft = x;
+                this.restoreTop = y;
+                this.restoreWidth = w;
+                this.restoreHeight = h;
+            }
+        }
         if (!this.placed) {
             this.placed = true;
             if (saved != null && saved.length == 5) {
@@ -73,12 +94,18 @@ final class WindowFrame {
             }
             this.clamp();
             this.snapDrawn();
+            this.saveShare();
             return;
         }
         if (this.snapped != Snap.NONE) {
             this.snapTo(this.snapped);
         }
         this.clamp();
+    }
+
+    private void saveShare() {
+        double[] saved = this.save();
+        this.share = new double[] {saved[0], saved[1], saved[2], saved[3]};
     }
 
     private void setBounds(int x, int y, int w, int h) {
@@ -276,17 +303,20 @@ final class WindowFrame {
         int y0 = this.startTop;
         int x1 = x0 + this.startWidth;
         int y1 = y0 + this.startHeight;
+
+        int leastWidth = Math.min(this.minWidth, this.screenWidth);
+        int leastHeight = Math.min(this.minHeight, this.screenHeight);
         if ((this.holding & LEFT) != 0) {
-            x0 = clampTo(x0 + dx, 0, x1 - this.minWidth);
+            x0 = clampTo(x0 + dx, 0, x1 - leastWidth);
         }
         if ((this.holding & RIGHT) != 0) {
-            x1 = clampTo(x1 + dx, x0 + this.minWidth, this.screenWidth);
+            x1 = clampTo(x1 + dx, x0 + leastWidth, this.screenWidth);
         }
         if ((this.holding & TOP) != 0) {
-            y0 = clampTo(y0 + dy, 0, y1 - this.minHeight);
+            y0 = clampTo(y0 + dy, 0, y1 - leastHeight);
         }
         if ((this.holding & BOTTOM) != 0) {
-            y1 = clampTo(y1 + dy, y0 + this.minHeight, this.screenHeight);
+            y1 = clampTo(y1 + dy, y0 + leastHeight, this.screenHeight);
         }
         this.setBounds(x0, y0, x1 - x0, y1 - y0);
         this.snapped = Snap.NONE;
@@ -307,6 +337,9 @@ final class WindowFrame {
         }
         this.holding = 0;
         this.preview = Snap.NONE;
+        if (moved) {
+            this.saveShare();
+        }
         return moved;
     }
 

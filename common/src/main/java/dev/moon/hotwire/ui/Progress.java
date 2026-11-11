@@ -7,6 +7,13 @@ import java.util.Map;
 import org.jspecify.annotations.Nullable;
 
 public final class Progress {
+    private volatile boolean undone;
+
+    private volatile boolean updating;
+    private static final List<String> UPDATE_STEPS = List.of("hotwire.progress.update.getting",
+            "hotwire.progress.update.reading", "hotwire.progress.update.sorting",
+            "hotwire.progress.update.changing", "hotwire.progress.update.finishing");
+
     private static final List<String> OFF_STEPS = List.of("hotwire.progress.planning",
             "hotwire.progress.switching_off", "hotwire.progress.reporting");
     private static final List<String> ON_STEPS = List.of("hotwire.progress.finding_log",
@@ -100,20 +107,54 @@ public final class Progress {
         this.begin(queue.isEmpty() ? "" : queue.getFirst().name(), off, queue.size(), queue);
     }
 
+    public void markUndone() {
+        this.undone = true;
+    }
+
+    public boolean isUndone() {
+        return this.undone;
+    }
+
     private synchronized void begin(String subject, boolean off, int mods, List<Entry> queue) {
         if (this.isAdding()) {
             return;
         }
+        this.undone = false;
         this.now = new Snapshot(this.now.run() + 1, subject, read(off ? OFF_STEPS : ON_STEPS), 0, "", 0, 0, true, off,
                 false, mods, 0, queue, makeZeros(mods));
     }
 
     public synchronized void beginAdding(String subject) {
+        this.undone = false;
+        this.updating = false;
         this.now = new Snapshot(this.now.run() + 1, subject, read(ADD_STEPS), 0, "", 0, 0, true, false, true, 1, 0,
                 List.of(), List.of());
     }
 
+    public synchronized void beginUpdating(String subject) {
+        this.undone = false;
+        this.updating = true;
+        this.now = new Snapshot(this.now.run() + 1, subject, read(UPDATE_STEPS), 0, "", 0, 0, true, false, true, 1,
+                0, List.of(), List.of());
+    }
+
+    public synchronized void stepUpdating(int at) {
+        if (this.updating && at > this.now.at()) {
+            this.step(at);
+        }
+    }
+
+    public String getHeading() {
+        return Lang.get(this.updating ? "hotwire.progress.heading.updating" : "hotwire.progress.heading.adding");
+    }
+
     public synchronized void stepAdding(int at) {
+        if (!this.updating) {
+            this.step(at);
+        }
+    }
+
+    private void step(int at) {
         Snapshot was = this.now;
         if (was.adding() && was.running()) {
             this.now = new Snapshot(was.run(), was.subject(), was.labels(), at, "", 0, 0, true, false, true, 1, 0,
@@ -122,6 +163,7 @@ public final class Progress {
     }
 
     public synchronized void endAdding() {
+        this.updating = false;
         Snapshot was = this.now;
         this.now = new Snapshot(was.run(), was.subject(), was.labels(), was.labels().size(), "", 0, 0, false, false,
                 false, was.mods(), was.modsDone(), was.queue(), was.ticks());
@@ -186,6 +228,9 @@ public final class Progress {
 
     public synchronized void count(String words, int done, int total) {
         Snapshot was = this.now;
+        if (!was.running()) {
+            return;
+        }
         this.now = new Snapshot(was.run(), was.subject(), was.labels(), was.at(), words, done, total, true,
                 was.goingOff(), was.adding(), was.mods(), was.modsDone(), was.queue(), was.ticks());
     }

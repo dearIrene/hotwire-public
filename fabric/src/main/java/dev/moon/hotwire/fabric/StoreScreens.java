@@ -1,15 +1,15 @@
 package dev.moon.hotwire.fabric;
 
 import dev.moon.hotwire.fabric.screen.ModIcons;
-import dev.moon.hotwire.fabric.screen.StoreGameScreen;
 import dev.moon.hotwire.fabric.screen.WebLinks;
 import dev.moon.hotwire.fabric.store.ModStore;
 import dev.moon.hotwire.fabric.store.PackFolders;
 import dev.moon.hotwire.modrinth.StoreCache;
 import dev.moon.hotwire.modrinth.StoreModel;
 import dev.moon.hotwire.ui.Lang;
+import dev.moon.hotwire.ui.ModScreen;
 import dev.moon.hotwire.ui.StoreCacheView;
-import dev.moon.hotwire.ui.StoreScreen;
+import dev.moon.hotwire.ui.StorePage;
 import java.io.IOException;
 import java.nio.file.Files;
 import java.nio.file.Path;
@@ -18,6 +18,7 @@ import java.util.HashMap;
 import java.util.HashSet;
 import java.util.Locale;
 import java.util.Map;
+import java.util.Objects;
 import java.util.Set;
 import net.minecraft.client.gui.screens.Screen;
 import org.jspecify.annotations.Nullable;
@@ -31,7 +32,6 @@ final class StoreScreens {
     private final Set<String> fetching = new HashSet<>();
     private @Nullable ModStore store;
     private @Nullable PackFolders packs;
-    private @Nullable StoreScreen shown;
 
     StoreScreens(HotwireEngine engine, InstalledMods installed, StoreJars jars, ModIcons icons) {
         this.engine = engine;
@@ -105,9 +105,9 @@ final class StoreScreens {
         return this.store;
     }
 
-    @Nullable StoreScreen findShown() {
-        StoreScreen up = this.shown;
-        return up != null && ModViews.openScreen() instanceof StoreGameScreen ? up : null;
+    @Nullable StorePage findShown() {
+        ModScreen screen = this.engine.screen;
+        return screen != null && ModViews.isHotwireShown() ? screen.findShownStore() : null;
     }
 
     void openStoreNow(String words, @Nullable Screen back) {
@@ -126,7 +126,10 @@ final class StoreScreens {
     }
 
     void openStore(ModStore made, @Nullable Screen back) {
-        StoreScreen screen = new StoreScreen(made.getModel(), new StoreScreen.Game() {
+        if (this.engine.screen == null || !ModViews.isHotwireShown()) {
+            ModViews.show(this.engine.getScreens().makeScreen(back));
+        }
+        Objects.requireNonNull(this.engine.screen).showStore(made.getModel(), new StorePage.Game() {
             @Override
             public void addFromStore(String projectId, String versionId, String title) {
                 StoreScreens.this.addFromStore(made, back, projectId, versionId, title);
@@ -146,19 +149,7 @@ final class StoreScreens {
             public void openLink(String link) {
                 WebLinks.open(link);
             }
-
-            @Override
-            public void onBack() {
-                StoreScreens.this.engine.forgetUnder();
-                StoreScreens.this.engine.showBack(back);
-            }
-        }, this.engine, made.getIcons(), made.getLoader(), made.getGameVersion());
-        this.shown = screen;
-        ModViews.show(new StoreGameScreen(screen, () -> {
-            if (this.shown == screen) {
-                this.shown = null;
-            }
-        }));
+        }, made.getIcons(), made.getLoader(), made.getGameVersion());
     }
 
     private void queueFromStore(ModStore made, String projectId, String versionId, String title) {
@@ -230,7 +221,7 @@ final class StoreScreens {
             if (fetched.size() > 1) {
                 this.engine.showMessage(Lang.get("hotwire.store.getting_with", title, fetched.size() - 1), false);
             }
-            if (this.findShown() == null) {
+            if (!ModViews.isHotwireShown()) {
                 ModViews.show(this.engine.getScreens().makeScreen(back));
             }
             this.jars.queue(fetched, update, projects);

@@ -1,13 +1,9 @@
 package dev.moon.hotwire.fabric;
 
 import dev.moon.hotwire.fabric.registration.Fields;
-import dev.moon.hotwire.fabric.screen.ChooserGameScreen;
 import dev.moon.hotwire.fabric.screen.HotwireScreen;
 import dev.moon.hotwire.fabric.screen.ScreenOpenTimer;
-import dev.moon.hotwire.fabric.screen.StoreGameScreen;
-import dev.moon.hotwire.fabric.store.ModStore;
 import dev.moon.hotwire.fabric.update.SwapAtClose;
-import dev.moon.hotwire.ui.ChooserScreen;
 import dev.moon.hotwire.ui.ModScreen;
 import dev.moon.hotwire.update.UpdateOffer;
 import dev.moon.hotwire.update.UrgentUpdate;
@@ -33,6 +29,15 @@ public final class EngineScreens {
     public Screen makeScreen(@Nullable Screen back) {
         ScreenOpenTimer timer = new ScreenOpenTimer();
         return new HotwireScreen(() -> this.buildScreen(back, timer), timer);
+    }
+
+    public Screen makeDeveloperSettings(@Nullable Screen back) {
+        ScreenOpenTimer timer = new ScreenOpenTimer();
+        return new HotwireScreen(() -> {
+            ModScreen opened = this.buildScreen(back, timer);
+            opened.openDeveloperSettings();
+            return opened;
+        }, timer);
     }
 
     private ModScreen buildScreen(@Nullable Screen back, ScreenOpenTimer timer) {
@@ -99,32 +104,6 @@ public final class EngineScreens {
         if (current != null) {
             current.showCrashReport(where);
         }
-    }
-
-    public void openChooser() {
-        Screen current = ModViews.openScreen();
-        Screen back = current instanceof HotwireScreen || current instanceof ChooserGameScreen
-                || current instanceof StoreGameScreen ? this.owner.under : current;
-        this.owner.under = back;
-
-        ModStore store = this.owner.stores.findStore();
-        ModViews.show(new ChooserGameScreen(new ChooserScreen(OpenKey.findKeyName(), new ChooserScreen.Choice() {
-            @Override
-            public void openStore() {
-                EngineScreens.this.owner.stores.openStore(store, back);
-            }
-
-            @Override
-            public void openHotwire() {
-                ModViews.show(EngineScreens.this.makeScreen(back));
-            }
-
-            @Override
-            public void close() {
-                EngineScreens.this.owner.under = null;
-                EngineScreens.this.owner.showBack(back);
-            }
-        })));
     }
 
     public @Nullable CompletableFuture<String> pressUpdateAll() {

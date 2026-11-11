@@ -7,14 +7,14 @@ import org.jspecify.annotations.Nullable;
 final class AheadRequests {
     private static final long DWELL_NANOS = 250_000_000L;
 
-    private final ModScreen.Game game;
+    private final ModScreenGame game;
 
     private @Nullable String pointed;
     private long pointedSince;
     private boolean asked;
     private boolean askedOff;
 
-    AheadRequests(ModScreen.Game game) {
+    AheadRequests(ModScreenGame game) {
         this.game = game;
     }
 

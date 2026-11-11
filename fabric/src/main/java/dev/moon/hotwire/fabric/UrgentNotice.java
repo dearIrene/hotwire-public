@@ -1,5 +1,6 @@
 package dev.moon.hotwire.fabric;
 
+import dev.moon.hotwire.config.AtomicFiles;
 import dev.moon.hotwire.fabric.store.SelfUpdate;
 import dev.moon.hotwire.update.UrgentUpdate;
 import java.io.IOException;
@@ -52,8 +53,7 @@ public final class UrgentNotice {
             if (found.isEmpty()) {
                 Files.deleteIfExists(note);
             } else {
-                Files.createDirectories(note.getParent());
-                Files.writeString(note, found.get().version() + "\n" + found.get().message().replace('\n', ' '));
+                AtomicFiles.writeString(note, found.get().version() + "\n" + found.get().message().replace('\n', ' '));
                 LOGGER.info("[Hotwire] Hotwire {} is marked urgent on Modrinth: {}", found.get().version(),
                         found.get().message());
             }

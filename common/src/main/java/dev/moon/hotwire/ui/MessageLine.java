@@ -82,24 +82,8 @@ final class MessageLine extends Element {
     }
 
     static List<String> wrap(Canvas canvas, String text, int width, int most) {
-        List<String> lines = new ArrayList<>();
-        String line = "";
-        for (String word : text.split(" ", -1)) {
-            String longer = line.isEmpty() ? word : line + " " + word;
-            if (line.isEmpty() || canvas.measureText(longer) <= width) {
-                line = longer;
-                continue;
-            }
-            lines.add(line);
-            line = word;
-        }
-        if (!line.isEmpty()) {
-            lines.add(line);
-        }
-        if (lines.size() > most) {
-            lines = new ArrayList<>(lines.subList(0, most));
-        }
-        return lines;
+        List<String> lines = Text.findLines(canvas, text, width);
+        return lines.size() > most ? new ArrayList<>(lines.subList(0, most)) : lines;
     }
 
     @Override

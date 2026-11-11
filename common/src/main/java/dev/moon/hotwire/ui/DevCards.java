@@ -1,125 +1,81 @@
 package dev.moon.hotwire.ui;
 
+import dev.moon.hotwire.dev.DevCrash;
 import dev.moon.hotwire.dev.DevEvent;
-import dev.moon.hotwire.dev.DevMixin;
-import dev.moon.hotwire.dev.DevModView;
+import dev.moon.hotwire.dev.DevHost;
 import dev.moon.hotwire.dev.DevState;
-import java.util.ArrayList;
 import java.util.List;
-import java.util.Locale;
 
 final class DevCards {
-    private static final int PAD = 8;
-    private static final int LINE = 10;
-    private static final int GAP = 4;
-    private static final int BUTTON = 14;
     private static final int CARD = 0xFF1A1427;
+
+    private static final float MOST_CLEAR = 0.6f;
+
+    private static float solid = 1;
 
     private DevCards() {
     }
 
-    static void paintButtons(Canvas canvas, float a, int y, int maxX, int closeX, boolean onMax, boolean onClose,
-            boolean maximized) {
-        if (onMax) {
-            canvas.fill(maxX, y, maxX + BUTTON, y + BUTTON, Colors.fade(0x30B48CFF, a));
+    static Part makeCard(int stripe, String heading, String aside, int ink, List<String> lines) {
+        Line inside = Kit.column(Kit.row(Kit.text(heading).wrap().grow(1), Kit.text(aside, Palette.FAINT)).gap(6)
+                .cross(Line.Cross.START)).gap(3).pad(8, 6);
+        lines.forEach(line -> inside.with(makeLine(line, ink)));
+        return makePane(CARD, Kit.row(new Kit.Fill(stripe).width(2), inside.grow(1)).cross(Line.Cross.STRETCH));
+    }
+
+    static void setSeeThrough(double see) {
+        solid = 1 - (float) Math.clamp(see, 0, 1) * MOST_CLEAR;
+    }
+
+    static float getSolid() {
+        return solid;
+    }
+
+    static Part makePane(int face, Part inner) {
+        return new Pane(face, inner);
+    }
+
+    private static final class Pane extends Part {
+        private final int face;
+        private final Part inner;
+
+        Pane(int face, Part inner) {
+            this.face = face;
+            this.inner = this.add(inner);
         }
-        if (onClose) {
-            canvas.fill(closeX, y, closeX + BUTTON, y + BUTTON, Colors.fade(Palette.BAD, a * 0.85f));
+
+        @Override
+        protected void measure(Canvas canvas, int room) {
+            this.inner.measure(canvas, room);
+            this.hugWidth = this.inner.findWidth();
+            this.hugHeight = this.inner.findHeight();
         }
-        int ink = Colors.fade(Palette.DIM, a);
-        if (maximized) {
-            CodeBlock.paintFrame(canvas, maxX + 5, y + 3, 6, 6, ink);
-            CodeBlock.paintFrame(canvas, maxX + 3, y + 5, 6, 6, ink);
-            canvas.fill(maxX + 4, y + 6, maxX + 8, y + 10, Colors.fade(Palette.PANEL, a));
-        } else {
-            CodeBlock.paintFrame(canvas, maxX + 3, y + 3, 8, 8, ink);
+
+        @Override
+        protected void place(Canvas canvas) {
+            this.inner.lay(canvas, this.getX(), this.getY(), this.getWidth(), this.getHeight());
         }
-        int cross = Colors.fade(onClose ? Palette.TEXT : Palette.DIM, a);
-        for (int i = 0; i < 7; i++) {
-            canvas.fill(closeX + 4 + i, y + 4 + i, closeX + 5 + i, y + 5 + i, cross);
-            canvas.fill(closeX + 10 - i, y + 4 + i, closeX + 11 - i, y + 5 + i, cross);
+
+        @Override
+        protected void paint(Canvas canvas, float alpha) {
+            canvas.fill(this.getX(), this.getY(), this.getX() + this.getWidth(), this.getY() + this.getHeight(),
+                    Colors.fade(this.face, alpha * solid));
         }
     }
 
-    static int paintPill(Canvas canvas, DevState state, int right, int y, float a) {
-        String word = Lang.get("hotwire.dev.state." + state.name().toLowerCase(Locale.ROOT));
-        int x = right - canvas.measureText(word) - 18;
-        canvas.fill(x, y, right, y + 14, Colors.fade(Palette.PANEL_EDGE, a));
-        canvas.fill(x + 1, y + 1, right - 1, y + 13, Colors.fade(CARD, a));
-        canvas.fill(x + 5, y + 5, x + 9, y + 9, Colors.fade(findColor(state), a));
-        canvas.drawText(word, x + 12, y + 3, Colors.fade(Palette.TEXT, a));
-        return x;
+    static Part makeCrash(DevHost host, String id, DevCrash crash, String when) {
+        boolean placed = !crash.source().isEmpty();
+        Part made = makeCard(Palette.BAD, crash.what(), when, Palette.DIM, placed ? List.of(crash.where(),
+                Lang.get("hotwire.dev.crash.open")) : List.of(crash.where()));
+        return placed ? made.press((button, modifiers) -> host.openSource(id, crash)) : made;
     }
 
-    static int paintCard(Canvas canvas, int x, int y, int w, int stripe, String heading, String aside,
-            List<String> lines, int lineColor, float a) {
-        int textX = x + PAD + 2;
-        int textW = Math.max(1, w - 2 * PAD - 2);
-        int asideW = aside.isEmpty() ? 0 : canvas.measureText(aside) + 6;
-        List<String> head = wrap(canvas, heading, Math.max(1, textW - asideW));
-        List<String> wrapped = new ArrayList<>();
-        lines.forEach(line -> wrapped.addAll(wrap(canvas, line, textW)));
-        int h = 2 * PAD - 2 + head.size() * LINE + wrapped.size() * LINE + (wrapped.isEmpty() ? 0 : 2);
-        canvas.fill(x, y, x + w, y + h, Colors.fade(Palette.PANEL_EDGE, a));
-        canvas.fill(x + 1, y + 1, x + w - 1, y + h - 1, Colors.fade(CARD, a));
-        canvas.fill(x + 1, y + 1, x + 3, y + h - 1, Colors.fade(stripe, a));
-        int lineY = y + PAD;
-        for (String line : head) {
-            canvas.drawText(line, textX, lineY, Colors.fade(Palette.TEXT, a));
-            lineY += LINE;
-        }
-        if (!aside.isEmpty()) {
-            canvas.drawText(aside, x + w - PAD - canvas.measureText(aside), y + PAD, Colors.fade(Palette.FAINT, a));
-        }
-        lineY += 2;
-        for (String line : wrapped) {
-            canvas.drawText(line, textX, lineY, Colors.fade(lineColor, a));
-            lineY += LINE;
-        }
-        return y + h + GAP;
+    static Text makeLine(String words, int ink) {
+        return Kit.text(words, ink).wrap();
     }
 
-    static int paintMixins(Canvas canvas, DevModView mod, int x, int y, int w, float a) {
-        if (mod.mixins().isEmpty()) {
-            return paintText(canvas, Lang.get("hotwire.dev.window.no_mixins"), x, y, w, Palette.DIM, a);
-        }
-        for (DevMixin mixin : mod.mixins()) {
-            boolean shared = !mixin.others().isEmpty();
-            String line = shared ? Lang.get("hotwire.dev.mixin.also", String.join(", ", mixin.others()))
-                    : Lang.get("hotwire.dev.mixin.alone");
-            y = paintCard(canvas, x, y, w, shared ? Palette.WARN : Palette.FAINT, mixin.target(), "", List.of(line),
-                    shared ? Palette.WARN : Palette.FAINT, a);
-        }
-        return y;
-    }
-
-    static int paintText(Canvas canvas, String text, int x, int y, int w, int color, float a) {
-        for (String line : wrap(canvas, text, w)) {
-            canvas.drawText(line, x, y + 4, Colors.fade(color, a));
-            y += LINE;
-        }
-        return y + 8;
-    }
-
-    static List<String> wrap(Canvas canvas, String text, int width) {
-        List<String> lines = new ArrayList<>();
-        StringBuilder line = new StringBuilder();
-        for (String word : text.split(" ", -1)) {
-            if (word.isEmpty()) {
-                continue;
-            }
-            String tried = line.isEmpty() ? word : line + " " + word;
-            if (!line.isEmpty() && canvas.measureText(tried) > width) {
-                lines.add(line.toString());
-                line = new StringBuilder(word);
-            } else {
-                line = new StringBuilder(tried);
-            }
-        }
-        if (!line.isEmpty()) {
-            lines.add(line.toString());
-        }
-        return lines;
+    static Line makeList() {
+        return Kit.column().gap(4).pad(8, 8);
     }
 
     static int findColor(DevState state) {

@@ -15,7 +15,10 @@ import java.util.HashMap;
 import java.util.Map;
 import net.minecraft.client.Minecraft;
 import net.minecraft.client.gui.Font;
+import net.minecraft.locale.Language;
+import net.minecraft.network.chat.FormattedText;
 import net.minecraft.resources.Identifier;
+import net.minecraft.util.FormattedCharSequence;
 //? if >=26.1 {
 import net.minecraft.client.gui.GuiGraphicsExtractor;
 //?} else {
@@ -33,6 +36,9 @@ public final class GuiCanvas implements Canvas {
 
     private static final int MOST_WIDTHS = 4096;
     private static final Map<String, Integer> WIDTHS = new HashMap<>();
+
+    private static final Map<String, FormattedCharSequence> ORDERED = new HashMap<>();
+    private static Language orderedFor = Language.getInstance();
 
     //? if >=26.1 {
     private final GuiGraphicsExtractor graphics;
@@ -108,15 +114,23 @@ public final class GuiCanvas implements Canvas {
         }
     }
 
+    @SuppressWarnings("ReferenceEquality")
     @Override
     public void drawText(String text, int x, int y, int argb) {
         if (argb >>> 24 < 4 || text.isEmpty()) {
             return;
         }
+        Language language = Language.getInstance();
+        if (language != orderedFor || ORDERED.size() >= MOST_WIDTHS) {
+            ORDERED.clear();
+            orderedFor = language;
+        }
+        FormattedCharSequence ordered = ORDERED.computeIfAbsent(text,
+                words -> language.getVisualOrder(FormattedText.of(words)));
         //? if >=26.1 {
-        this.graphics.text(this.font, text, x, y, argb, false);
+        this.graphics.text(this.font, ordered, x, y, argb, false);
         //?} else {
-        /*this.graphics.drawString(this.font, text, x, y, argb, false);
+        /*this.graphics.drawString(this.font, ordered, x, y, argb, false);
         *///?}
     }
 
@@ -137,6 +151,26 @@ public final class GuiCanvas implements Canvas {
     @Override
     public String clip(String text, int width) {
         return this.font.plainSubstrByWidth(text, Math.max(0, width));
+    }
+
+    private static final Map<String, Identifier> ICONS = new HashMap<>();
+
+    @Override
+    public void drawIcon(String name, int x, int y, int side, int argb) {
+        Identifier texture = ICONS.computeIfAbsent(name, icon -> Identifier.fromNamespaceAndPath("hotwire",
+                "textures/icon/" + icon + ".png"));
+        //? if >=1.21.6 {
+        this.graphics.blit(RenderPipelines.GUI_TEXTURED, texture, x, y, 0, 0, side, side, side, side, argb);
+        //?} else if >=1.21.2 {
+        /*this.graphics.blit(RenderType::guiTextured, texture, x, y, 0, 0, side, side, side, side, argb);
+        *///?} else {
+        /*RenderSystem.enableBlend();
+        RenderSystem.setShaderColor((argb >> 16 & 0xFF) / 255f, (argb >> 8 & 0xFF) / 255f, (argb & 0xFF) / 255f,
+                (argb >>> 24) / 255f);
+        this.graphics.blit(texture, x, y, 0, 0, side, side, side, side);
+        RenderSystem.setShaderColor(1, 1, 1, 1);
+        RenderSystem.disableBlend();
+        *///?}
     }
 
     @Override

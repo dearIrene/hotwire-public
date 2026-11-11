@@ -13,7 +13,7 @@ public record CacheFill(int done, int of, boolean running, long savedBytes, long
         return this.of > 0 && this.done >= this.of;
     }
 
-    static String describeBytes(long bytes) {
+    public static String describeBytes(long bytes) {
         if (bytes < 1024 * 1024) {
             return Math.max(1, bytes / 1024) + " KB";
         }

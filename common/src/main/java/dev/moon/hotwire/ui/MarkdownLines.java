@@ -12,7 +12,12 @@ import java.util.regex.Pattern;
 import java.util.stream.Stream;
 
 final class MarkdownLines {
-    record Line(String text, int indent, int color, int above, String picture, List<Integer> columns) {
+    record Line(String text, int indent, int color, int above, String picture, List<Integer> columns,
+            List<Span> spans) {
+        Line(String text, int indent, int color, int above, String picture, List<Integer> columns) {
+            this(text, indent, color, above, picture, columns, List.of());
+        }
+
         Line(String text, int indent, int color, int above, String picture) {
             this(text, indent, color, above, picture, List.of());
         }
@@ -20,6 +25,12 @@ final class MarkdownLines {
         Line(String text, int indent, int color, int above) {
             this(text, indent, color, above, "");
         }
+    }
+
+    record Span(int from, int to, boolean bold, String url) {
+    }
+
+    private record Word(String text, boolean bold, String url) {
     }
 
     private static final int PARAGRAPH = 6;
@@ -41,11 +52,19 @@ final class MarkdownLines {
     private static final char PICTURE_END = '\u0002';
     private static final Pattern PICTURE_ROW = Pattern.compile(
             "\u0001[^\u0002]*\u0002(?:[ \t]*\n?[ \t]*\u0001[^\u0002]*\u0002)*");
-    private static final Pattern LINK = Pattern.compile("\\[([^\\]]*)]\\([^)]*\\)");
+    private static final Pattern LINK = Pattern.compile("\\[([^\\]]*)]\\(\\s*<?([^)\\s>]*)>?[^)]*\\)");
+
+    private static final char LINK_START = '\u0003';
+    private static final char LINK_URL = '\u0004';
+    private static final char LINK_END = '\u0005';
+    private static final char BOLD = '\u0006';
+    private static final Pattern LINK_MARKS = Pattern.compile("\u0003|\u0004[^\u0005]*\u0005");
+    private static final Pattern LINK_ADDRESS = Pattern.compile("\u0004([^\u0005]*)\u0005");
+    private static final Pattern BOLD_MARK = Pattern.compile("\\*\\*|__");
 
     private static final Pattern REFERENCE = Pattern.compile("(?m)^ {0,3}\\[([^\\]]+)]:\\s*<?([^\\s>]+)>?.*$\\n?");
     private static final Pattern REFERENCE_IMAGE = Pattern.compile("!\\[([^\\]]*)](?:\\[([^\\]]*)])?");
-    private static final Pattern REFERENCE_LINK = Pattern.compile("\\[([^\\]]*)]\\[[^\\]]*]");
+    private static final Pattern REFERENCE_LINK = Pattern.compile("\\[([^\\]]*)]\\[([^\\]]*)]");
 
     private static final Pattern HARD_BREAK = Pattern.compile("\\\\\n");
     private static final Pattern ESCAPE = Pattern.compile("\\\\([\\\\`*_{}\\[\\]()#+\\-.!|>~])");
@@ -84,15 +103,15 @@ final class MarkdownLines {
     }
 
     static List<Line> of(Canvas canvas, String markdown, int width) {
-        return read(new MarkdownLines(canvas, width, Palette.TEXT, Palette.TEXT), markdown);
+        return readAll(new MarkdownLines(canvas, width, Palette.TEXT, Palette.TEXT), markdown);
     }
 
     static List<Line> ofChangelog(Canvas canvas, String markdown, int width) {
-        return read(new MarkdownLines(canvas, width, Colors.mix(Palette.DIM, Palette.TEXT, 0.45f), Palette.TEXT),
+        return readAll(new MarkdownLines(canvas, width, Colors.mix(Palette.DIM, Palette.TEXT, 0.45f), Palette.TEXT),
                 markdown);
     }
 
-    private static List<Line> read(MarkdownLines lines, String markdown) {
+    private static List<Line> readAll(MarkdownLines lines, String markdown) {
         lines.read(clean(markdown));
         return List.copyOf(lines.out);
     }
@@ -121,8 +140,11 @@ final class MarkdownLines {
             String url = references.get(name.toLowerCase(Locale.ROOT));
             return Matcher.quoteReplacement(url == null ? found.group(1) : markPicture(url));
         });
-        text = LINK.matcher(text).replaceAll("$1");
-        text = REFERENCE_LINK.matcher(text).replaceAll("$1");
+        text = LINK.matcher(text).replaceAll(found -> Matcher.quoteReplacement(markLink(found.group(1),
+                found.group(2))));
+        text = REFERENCE_LINK.matcher(text).replaceAll(found -> Matcher.quoteReplacement(markLink(found.group(1),
+                references.getOrDefault((found.group(2).isEmpty() ? found.group(1) : found.group(2))
+                        .toLowerCase(Locale.ROOT), ""))));
         text = HARD_BREAK.matcher(text).replaceAll("\n\n");
         text = ESCAPE.matcher(text).replaceAll("$1");
         text = TAG.matcher(text).replaceAll("");
@@ -139,6 +161,11 @@ final class MarkdownLines {
     private static String markPicture(String url) {
         return url.startsWith("https://") && !url.toLowerCase(Locale.ROOT).endsWith(".svg")
                 ? PICTURE + url + PICTURE_END : "";
+    }
+
+    private static String markLink(String words, String url) {
+        return url.startsWith("https://") || url.startsWith("http://")
+                ? LINK_START + words + LINK_URL + url + LINK_END : words;
     }
 
     private static String decode(MatchResult found) {
@@ -166,8 +193,8 @@ final class MarkdownLines {
             if (isTableRow(line)) {
                 this.endParagraph();
                 this.table.add(Stream.of(CELL_BAR.split(line.strip().replaceAll("^[|\u2502\u2503\u2551]|"
-                        + "[|\u2502\u2503\u2551]$", ""), -1)).map(cell -> SPACES.matcher(MARKS.matcher(cell)
-                        .replaceAll("")).replaceAll(" ").strip()).toList());
+                        + "[|\u2502\u2503\u2551]$", ""), -1)).map(cell -> SPACES.matcher(MARKS.matcher(LINK_MARKS
+                        .matcher(cell).replaceAll("")).replaceAll("")).replaceAll(" ").strip()).toList());
                 continue;
             }
             boolean boxRule = BOX_RULE.matcher(line).matches()
@@ -177,7 +204,7 @@ final class MarkdownLines {
             }
             this.endTable();
             if (code) {
-                this.add(line, STEP, Palette.FAINT);
+                this.add(LINK_MARKS.matcher(line).replaceAll(""), STEP, Palette.FAINT, List.of());
                 continue;
             }
             if (line.strip().indexOf(PICTURE) == 0) {
@@ -282,20 +309,89 @@ final class MarkdownLines {
     }
 
     private void wrap(String words, int indent, String prefix, int color) {
-        String plain = SPACES.matcher(MARKS.matcher(words).replaceAll("")).replaceAll(" ").strip();
-        if (plain.isEmpty()) {
+        List<Word> parts = readWords(words);
+        if (parts.isEmpty()) {
             return;
         }
         int hang = this.canvas.measureText(prefix);
-        List<String> parts = MessageLine.wrap(this.canvas, plain, Math.max(40, this.width - indent - hang),
-                Integer.MAX_VALUE);
-        for (int i = 0; i < parts.size(); i++) {
-            this.add(i == 0 ? prefix + parts.get(i) : parts.get(i), i == 0 ? indent : indent + hang, color);
+        int room = Math.max(40, this.width - indent - hang);
+        StringBuilder line = new StringBuilder(prefix);
+        List<Span> spans = new ArrayList<>();
+        int start = prefix.length();
+        boolean first = true;
+        for (Word word : parts) {
+            if (line.length() > start && this.canvas.measureText(line.substring(start) + " " + word.text()) > room) {
+                this.add(line.toString(), first ? indent : indent + hang, color, spans);
+                first = false;
+                line.setLength(0);
+                spans = new ArrayList<>();
+                start = 0;
+            }
+            if (line.length() > start) {
+                line.append(' ');
+            }
+            int from = line.length();
+            line.append(word.text());
+            if (!word.bold() && word.url().isEmpty()) {
+                continue;
+            }
+
+            Span before = spans.isEmpty() ? null : spans.getLast();
+            if (before != null && before.to() == from - 1 && before.bold() == word.bold()
+                    && before.url().equals(word.url())) {
+                spans.set(spans.size() - 1, new Span(before.from(), line.length(), word.bold(), word.url()));
+            } else {
+                spans.add(new Span(from, line.length(), word.bold(), word.url()));
+            }
         }
+        this.add(line.toString(), first ? indent : indent + hang, color, spans);
     }
 
-    private void add(String text, int indent, int color) {
-        this.out.add(new Line(text, indent, color, this.out.isEmpty() ? 0 : this.above));
+    private static List<Word> readWords(String words) {
+        List<String> urls = new ArrayList<>();
+        Matcher link = LINK_ADDRESS.matcher(words);
+        StringBuilder bare = new StringBuilder();
+        while (link.find()) {
+            urls.add(link.group(1));
+            link.appendReplacement(bare, String.valueOf(LINK_URL));
+        }
+        link.appendTail(bare);
+        String text = MARKS.matcher(BOLD_MARK.matcher(bare).replaceAll(String.valueOf(BOLD))).replaceAll("");
+        List<Word> out = new ArrayList<>();
+        StringBuilder word = new StringBuilder();
+        boolean bold = false;
+        boolean wordBold = false;
+        String url = "";
+        String wordUrl = "";
+        int links = 0;
+        for (int at = 0; at <= text.length(); at++) {
+            char one = at < text.length() ? text.charAt(at) : ' ';
+            if (one == BOLD) {
+                bold = !bold;
+            } else if (one == LINK_START) {
+                url = links < urls.size() ? urls.get(links) : "";
+            } else if (one == LINK_URL) {
+                url = "";
+                links++;
+            } else if (Character.isWhitespace(one)) {
+                if (!word.isEmpty()) {
+                    out.add(new Word(word.toString(), wordBold, wordUrl));
+                    word.setLength(0);
+                }
+            } else {
+                if (word.isEmpty()) {
+                    wordBold = bold;
+                    wordUrl = url;
+                }
+                word.append(one);
+            }
+        }
+        return out;
+    }
+
+    private void add(String text, int indent, int color, List<Span> spans) {
+        this.out.add(new Line(text, indent, color, this.out.isEmpty() ? 0 : this.above, "", List.of(),
+                List.copyOf(spans)));
         this.above = 0;
     }
 

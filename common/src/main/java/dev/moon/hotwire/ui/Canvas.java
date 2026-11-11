@@ -29,6 +29,9 @@ public interface Canvas {
     default void popShift() {
     }
 
+    default void drawIcon(String name, int x, int y, int side, int argb) {
+    }
+
     interface Image {
     }
 

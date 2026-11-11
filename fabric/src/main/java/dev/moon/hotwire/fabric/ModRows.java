@@ -2,7 +2,7 @@ package dev.moon.hotwire.fabric;
 
 import dev.moon.hotwire.jar.ModManifest;
 import dev.moon.hotwire.plan.ModGraph;
-import dev.moon.hotwire.ui.list.ModList;
+import dev.moon.hotwire.ui.list.Badges;
 import dev.moon.hotwire.ui.list.ModStatus;
 import dev.moon.hotwire.update.PendingChange;
 import dev.moon.hotwire.update.PendingChanges;
@@ -48,8 +48,8 @@ final class ModRows {
         return out;
     }
 
-    ModList.Badges getBadges() {
-        return new ModList.Badges() {
+    Badges getBadges() {
+        return new Badges() {
             @Override
             public boolean isDeclaredLibrary(String id) {
                 return ModRows.this.installed.find(id).map(ModManifest::library).orElse(false);
@@ -90,7 +90,7 @@ final class ModRows {
     }
 
     void revertAtNextStart(String id) throws IOException {
-        Path jar = this.installed.findJarOf(id);
+        Path jar = this.installed.findFolderJarOf(id);
         if (jar == null) {
             throw new IllegalStateException(id + " is not installed, so there is nothing to revert.");
         }

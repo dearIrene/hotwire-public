@@ -5,6 +5,18 @@ import java.util.List;
 import org.jspecify.annotations.Nullable;
 
 public final class Root {
+    public interface FrameMeter {
+        void begin();
+
+        void end();
+    }
+
+    private static volatile @Nullable FrameMeter frameMeter;
+
+    public static void setFrameMeter(@Nullable FrameMeter meter) {
+        frameMeter = meter;
+    }
+
     private final Element base = new Element();
     private final Element menus = new Element();
     private final Element modal = new Element();
@@ -48,6 +60,10 @@ public final class Root {
     }
 
     public void drawFrame(Canvas canvas, long nowNanos, double mouseX, double mouseY) {
+        FrameMeter meter = frameMeter;
+        if (meter != null) {
+            meter.begin();
+        }
         this.hover(mouseX, mouseY);
         float dt = this.clock.tick(nowNanos);
         this.base.step(dt);
@@ -56,6 +72,9 @@ public final class Root {
         this.base.draw(canvas, 1);
         this.menus.draw(canvas, 1);
         this.modal.draw(canvas, 1);
+        if (meter != null) {
+            meter.end();
+        }
     }
 
     boolean isModalOpen() {
@@ -163,30 +182,22 @@ public final class Root {
     }
 
     public boolean hasPanelOpen() {
-        for (Element element : this.getModal().getChildren()) {
-            if (element instanceof Panel panel && panel.open() && !panel.isReading()) {
-                return true;
-            }
-        }
-        return false;
+        return this.getModal().getChildren().stream().anyMatch(element -> element instanceof Sheet sheet
+                && sheet.open() && !sheet.isReading());
     }
 
     public List<String> describePanels() {
         List<String> found = new ArrayList<>();
         for (Element element : this.getModal().getChildren()) {
-            if (element instanceof Panel panel && panel.isVisible()) {
-                found.add(panel.getClass().getSimpleName() + " open=" + panel.open() + " reading=" + panel.isReading());
+            if (element instanceof Sheet sheet && sheet.isVisible()) {
+                found.add(sheet.getClass().getSimpleName() + " open=" + sheet.open() + " reading=" + sheet.isReading());
             }
         }
         return found;
     }
 
     public boolean pressOpenPanel() {
-        for (Element element : this.getModal().getChildren()) {
-            if (element instanceof Panel panel && panel.pressPrimary()) {
-                return true;
-            }
-        }
-        return false;
+        return this.getModal().getChildren().stream().anyMatch(element -> element instanceof Sheet sheet
+                && sheet.pressPrimary());
     }
 }

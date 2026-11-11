@@ -15,10 +15,6 @@ public final class Colors {
                 k) | mixChannel(from, to, 0, k);
     }
 
-    public static int blend(int from, int to, float t) {
-        return 0xFF000000 | (mix(from, to, t) & 0xFFFFFF);
-    }
-
     private static int mixChannel(int from, int to, int shift, float t) {
         int a = (from >>> shift) & 0xFF;
         int b = (to >>> shift) & 0xFF;

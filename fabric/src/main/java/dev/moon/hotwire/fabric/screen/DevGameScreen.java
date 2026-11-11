@@ -1,6 +1,7 @@
 package dev.moon.hotwire.fabric.screen;
 
 import com.mojang.blaze3d.platform.Window;
+import dev.moon.hotwire.ui.BuildMark;
 import dev.moon.hotwire.ui.DevWindow;
 import dev.moon.hotwire.ui.NoticeLayer;
 import dev.moon.hotwire.ui.Root;
@@ -15,19 +16,31 @@ public final class DevGameScreen extends RootScreen {
     private final Root root = new Root();
     private final DevWindow window;
 
+    private final BuildMark mark;
+
     private final NoticeLayer notices = new NoticeLayer();
 
     private float factor = 1;
 
-    public DevGameScreen(DevWindow window) {
+    public DevGameScreen(DevWindow window, BuildMark mark) {
         super("Hotwire developer");
         this.window = window;
+        this.mark = mark;
         this.root.getBase().add(window);
+        window.present();
+        this.root.getBase().add(mark);
     }
 
     @Override
     protected Root getRoot() {
         return this.root;
+    }
+
+    @Override
+    protected void onKeyUp(int key) {
+        if (key == DevWindow.PEEK_KEY) {
+            this.window.setPeeking(false);
+        }
     }
 
     public Root getRootForTests() {
@@ -38,6 +51,10 @@ public final class DevGameScreen extends RootScreen {
         return this.window;
     }
 
+    public BuildMark getMark() {
+        return this.mark;
+    }
+
     @Override
     protected void onResized(int width, int height) {
         this.factor = this.findFactor();
@@ -45,6 +62,7 @@ public final class DevGameScreen extends RootScreen {
         int h = Math.round(height / this.factor);
         this.root.resize(w, h);
         this.window.setScreen(w, h);
+        this.mark.setScreen(w, h);
     }
 
     @Override

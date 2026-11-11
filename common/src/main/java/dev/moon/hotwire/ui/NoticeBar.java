@@ -38,6 +38,10 @@ final class NoticeBar extends Element {
         private int width = WIDEST;
         private int height;
 
+        private int actionX;
+        private int actionY;
+        private int actionWidth;
+
         Card(Notice notice, int topAt, boolean fresh) {
             this.notice = notice;
             this.placed = !fresh;
@@ -57,6 +61,22 @@ final class NoticeBar extends Element {
 
     private @Nullable Notice lastSaid;
 
+    private boolean actionsShown = true;
+
+    void hideActions() {
+        this.actionsShown = false;
+    }
+
+    void dropOffer() {
+        Notice said = this.lastSaid;
+        if (said != null && said.action() != null) {
+            if (Notices.getShowing().contains(said)) {
+                Notices.drop(said);
+            }
+            this.lastSaid = null;
+        }
+    }
+
     boolean isEmpty() {
         return this.cards.isEmpty();
     }
@@ -75,6 +95,10 @@ final class NoticeBar extends Element {
     }
 
     void show(String message, boolean failure, String hint) {
+        this.show(message, failure, hint, null);
+    }
+
+    void show(String message, boolean failure, String hint, Notice.@Nullable Action action) {
         String flat = message.replaceAll("\\s+", " ").strip();
 
         if (flat.isEmpty()) {
@@ -87,7 +111,7 @@ final class NoticeBar extends Element {
         }
         String title = MessageLine.getFirstSentence(flat);
         String detail = hint.isEmpty() ? flat.substring(title.length()).strip() : hint;
-        Notice notice = failure ? Notice.ofBad(title, detail) : Notice.ofDone(title, detail);
+        Notice notice = (failure ? Notice.ofBad(title, detail) : Notice.ofDone(title, detail)).withAction(action);
         this.lastSaid = notice;
         Notices.show(notice);
     }
@@ -150,6 +174,12 @@ final class NoticeBar extends Element {
     @Override
     protected boolean onClick(double px, double py, int button) {
         for (Card card : this.cards) {
+            Notice.Action action = card.notice.action();
+            if (!card.leaving && action != null && card.actionWidth > 0 && px >= card.actionX - 2
+                    && px < card.actionX + card.actionWidth + 2 && py >= card.actionY - 2
+                    && py < card.actionY + LINE) {
+                action.run().run();
+            }
             if (!card.leaving && this.isOn(card, px, py) && this.opensDownloads(card)) {
                 Objects.requireNonNull(this.onDownload).run();
                 return true;
@@ -193,6 +223,7 @@ final class NoticeBar extends Element {
             Card card = this.cards.get(i);
             Notice notice = card.notice;
             boolean detailed = !notice.detail().isEmpty();
+            Notice.Action action = this.actionsShown ? notice.action() : null;
 
             card.width = Math.max(NARROWEST, Math.min(WIDEST, 3 + PAD * 3 + Math.max(
                     canvas.measureText(notice.title()), detailed ? canvas.measureText(notice.detail()) : 0)));
@@ -200,7 +231,8 @@ final class NoticeBar extends Element {
             List<String> titleLines = MessageLine.wrap(canvas, notice.title(), w - 3 - PAD * 3, TITLE_LINES);
             List<String> detailLines = detailed ? MessageLine.wrap(canvas, notice.detail(), w - 3 - PAD * 3,
                     DETAIL_LINES) : List.of();
-            card.height = 15 + titleLines.size() * LINE + (detailed ? 3 + detailLines.size() * LINE : 0);
+            card.height = 15 + titleLines.size() * LINE + (detailed ? 3 + detailLines.size() * LINE : 0)
+                    + (action == null ? 0 : 3 + LINE);
             int h = card.height;
             float slidX = this.findSlidX(card);
             int x = (int) Math.floor(slidX);
@@ -229,11 +261,29 @@ final class NoticeBar extends Element {
                 lineY += LINE;
             }
             lineY += 3;
+
+            boolean red = false;
             for (String line : detailLines) {
                 String said = hover > 0.5f && this.opensDownloads(card) ? Lang.get("hotwire.notice.download_manage")
                         : line;
-                canvas.drawText(canvas.clip(said, room), textX, lineY, Colors.fade(Palette.DIM, a));
+                int partX = textX;
+                for (String part : canvas.clip(said, room).split("\\*", -1)) {
+                    canvas.drawText(part, partX, lineY, Colors.fade(red ? Palette.OFF_TINT : Palette.DIM, a));
+                    partX += canvas.measureText(part);
+                    red = !red;
+                }
+                red = !red;
                 lineY += LINE;
+            }
+            card.actionWidth = 0;
+            if (action != null) {
+                lineY += detailed ? 3 : 0;
+                card.actionX = textX;
+                card.actionY = lineY;
+                card.actionWidth = canvas.measureText(action.label());
+                int ink = Colors.fade(Palette.ACCENT, a);
+                canvas.drawText(action.label(), textX, lineY, ink);
+                canvas.fill(textX, lineY + Text.HEIGHT, textX + card.actionWidth, lineY + Text.HEIGHT + 1, ink);
             }
             if (notice.isUnderWay()) {
                 canvas.fill(x + 3, y + h - 2, x + w, y + h, Colors.fade(Palette.TRACK, a));

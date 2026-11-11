@@ -2,355 +2,183 @@ package dev.moon.hotwire.ui;
 
 import dev.moon.hotwire.modrinth.ModrinthClient;
 import dev.moon.hotwire.modrinth.StoreModel;
-import java.util.ArrayList;
-import java.util.HashMap;
 import java.util.List;
-import java.util.Map;
-import java.util.function.Consumer;
 import org.jspecify.annotations.Nullable;
 
-public final class StoreDetail extends Panel {
-    public interface Adds {
-        void add(String projectId, String versionId, String title);
-
-        void queueForNextStart(String projectId, String versionId, String title);
-
-        void saveToDownloads(String projectId, String versionId, String title);
-    }
-
-    static final int WIDTH = 520;
-    static final int LINE = 12;
-    static final int ROW = 18;
-    private static final int ICON = 28;
+final class StoreDetail extends Sheet {
     private static final int MOST_VERSIONS = 8;
-    private static final int LEAST_HEIGHT = 180;
-    private static final int MOST_HEIGHT = 440;
-
-    private static final int HEAD = 50;
-    private static final int MOST_PICTURE = 240;
-    private static final int MODRINTH_W = 104;
-    private static final int PICTURE_GAP = 6;
+    private static final int PAGE_TALL = 250;
 
     private final StoreModel model;
     private final StoreIcons icons;
-    private final Adds adds;
-    private final Consumer<String> openLink;
-    private final EasedValue scroll = EasedValue.ofSpeed(12);
+    private final StorePage.Game game;
+    private final Popup popup;
+    private final Markdown words;
+    private final Text link = Kit.text("", Palette.PATH);
+    private final Line versions = Kit.column().gap(2);
+    private final Scroll page;
+    private final Push download = Kit.push(Lang.get("hotwire.store.download"), this::openDownloads);
     private ModrinthClient.@Nullable Hit hit;
-    private ModrinthClient.@Nullable Project project;
-    private List<ModrinthClient.Version> versions = List.of();
-    private @Nullable String failure;
-    private List<MarkdownLines.Line> bodyLines = List.of();
 
-    private String bodyRead = "";
-    private int bodyWidth;
-    private float scrollTarget;
-    private int contentHeight;
-    private int rowsTop;
+    private volatile ModrinthClient.@Nullable Project project;
+    private volatile @Nullable List<ModrinthClient.Version> found;
+    private volatile @Nullable String failure;
+    private volatile boolean arrived;
+    private String state = "";
 
-    private int linkY = Integer.MIN_VALUE;
-    private int linkWidth;
-
-    private final Map<String, Integer> pictureRooms = new HashMap<>();
-
-    private final DownloadMenu downloads;
-
-    private final Button onModrinth;
-
-    public StoreDetail(StoreModel model, StoreIcons icons, Adds adds, Consumer<String> openLink, Runnable onClose) {
-        super(Lang.get("hotwire.button.close"), onClose);
+    @SuppressWarnings("this-escape")
+    StoreDetail(StoreModel model, StoreIcons icons, StorePage.Game game, Popup popup) {
+        super(520, null);
         this.model = model;
         this.icons = icons;
-        this.adds = adds;
-        this.openLink = openLink;
-        this.setLineY(HEAD - 10);
-        this.downloads = new DownloadMenu(this, model, adds);
-        this.onModrinth = this.add(new Button(Lang.get("hotwire.store.open_modrinth"), false, this::openOnModrinth));
+        this.game = game;
+        this.popup = popup;
+        this.words = new Markdown(icons).onLink(game::openLink);
+        this.page = Kit.scroll(Kit.column(Kit.row(this.link).press((button, modifiers) -> this.game.openLink(
+                this.link.get())), this.words, Kit.rule(),
+                Kit.dim(Lang.get("hotwire.store.versions")), this.versions).gap(8)).capAt(PAGE_TALL);
+        this.words.within(this.page);
+        this.body.with(this.page);
+    }
+
+    void open(ModrinthClient.Hit hit) {
+        this.hit = hit;
+        this.project = null;
+        this.found = null;
+        this.failure = null;
+        this.state = "";
+        this.title.set(hit.title());
+        this.setMark(ModScreen.Icons.STORE, () -> hit.iconUrl().isEmpty() ? null
+                : this.icons.find(hit.projectId(), hit.iconUrl()));
+        this.page.reset();
+        this.fill();
+        this.show();
+        this.model.findProject(hit, page -> this.take(() -> this.project = page), why -> this.take(
+                () -> this.failure = why));
+        this.model.findVersions(hit, versions -> this.take(() -> this.found = versions.size() > MOST_VERSIONS
+                ? List.copyOf(versions.subList(0, MOST_VERSIONS)) : versions), why -> this.take(
+                        () -> this.failure = why));
+    }
+
+    private void take(Runnable answer) {
+        answer.run();
+        this.arrived = true;
     }
 
     private void openOnModrinth() {
         ModrinthClient.Hit shown = this.hit;
         if (shown != null) {
-            this.openLink.accept("https://modrinth.com/project/" + (shown.slug().isEmpty() ? shown.projectId()
+            this.game.openLink("https://modrinth.com/project/" + (shown.slug().isEmpty() ? shown.projectId()
                     : shown.slug()));
         }
     }
 
-    public void open(ModrinthClient.Hit hit) {
-        this.hit = hit;
-        this.project = null;
-        this.versions = List.of();
-        this.failure = null;
-        this.bodyLines = List.of();
-        this.bodyRead = "";
-        this.pictureRooms.clear();
-        this.contentHeight = 0;
-        this.scrollTarget = 0;
-        this.scroll.snap(0);
-        this.setPrimaryWidth(110);
-        this.placePrimary();
-        this.show();
-        this.model.findProject(hit, found -> this.project = found, why -> this.failure = why);
-        this.model.findVersions(hit, found -> this.versions = found.size() > MOST_VERSIONS
-                ? List.copyOf(found.subList(0, MOST_VERSIONS)) : found, why -> this.failure = why);
+    private void openDownloads() {
+        ModrinthClient.Hit shown = this.hit;
+        if (shown != null) {
+            ModrinthClient.Version update = this.model.getUpdates().get(shown.projectId());
+            this.popup.openAt(this.download.getPointerX(), this.download.getPointerY(), this.getWidth(),
+                    this.getHeight(), StorePage.makeDownloads(this.model, this.game, shown,
+                            update == null ? "" : update.id()));
+        }
     }
 
-    private void placePrimary() {
+    private String findState(ModrinthClient.Hit shown) {
+        String id = shown.projectId();
+        if (this.model.isShowingPacks()) {
+            return this.model.findPackState(id).name();
+        }
+        if (!this.model.canAdd()) {
+            return "only";
+        }
+        if (this.model.isQueuedProject(id)) {
+            return "queued";
+        }
+        StoreModel.Card card = this.model.getCardsByProject().get(id);
+        boolean installed = this.model.isInstalledProject(id) || (card != null && card.installed());
+        if (this.model.getUpdates().containsKey(id)) {
+            return "update";
+        }
+        return installed ? "installed" : "add";
+    }
+
+    private Push makeLead(ModrinthClient.Hit shown, String state) {
+        String id = shown.projectId();
+        ModrinthClient.Version update = this.model.getUpdates().get(id);
+        Runnable add = () -> this.game.addFromStore(id, update == null ? "" : update.id(), shown.title());
+        return switch (state) {
+            case "add" -> Kit.lead(Lang.get("hotwire.store.add"), add);
+            case "update" -> Kit.lead(Lang.get("hotwire.store.update"), add);
+            case "MISSING" -> Kit.lead(Lang.get("hotwire.store.download"), add);
+            case "ON" -> Kit.lead(Lang.get("hotwire.store.pack.turn_off"), () -> this.model.togglePack(id));
+            case "OFF" -> Kit.lead(Lang.get("hotwire.store.pack.turn_on"), () -> this.model.togglePack(id));
+            default -> Kit.lead(Lang.get(switch (state) {
+                case "only" -> "hotwire.store.download_only";
+                case "queued" -> "hotwire.store.queued";
+                case "DOWNLOADING" -> "hotwire.store.pack.downloading";
+                case "NEEDS_WORLD" -> "hotwire.store.pack.needs_world";
+                default -> "hotwire.store.installed";
+            }), () -> { }).active(false);
+        };
+    }
+
+    private void fill() {
         ModrinthClient.Hit shown = this.hit;
         if (shown == null) {
             return;
         }
-        if (this.model.isShowingPacks()) {
-            this.placePackPrimary(shown);
-            return;
-        }
-        ModrinthClient.Version update = this.model.getUpdates().get(shown.projectId());
-        boolean installed = this.model.isInstalledProject(shown.projectId()) || this.model.getCardsByProject()
-                .getOrDefault(shown.projectId(), new StoreModel.Card(shown, false, null)).installed();
-        if (!this.model.canAdd()) {
-            this.setPrimary(Lang.get("hotwire.store.download_only"), () -> { });
-            this.setPrimaryActive(false);
-        } else if (this.model.isQueuedProject(shown.projectId())) {
-            this.setPrimary(Lang.get("hotwire.store.queued"), () -> { });
-            this.setPrimaryActive(false);
-        } else if (update != null) {
-            this.setPrimary(Lang.get("hotwire.store.update"), () -> this.adds.add(shown.projectId(), update.id(),
-                    shown.title()));
-            this.setPrimaryActive(true);
-        } else if (installed) {
-            this.setPrimary(Lang.get("hotwire.store.installed"), () -> { });
-            this.setPrimaryActive(false);
+        ModrinthClient.Project page = this.project;
+        String license = page == null || page.license().isEmpty() ? ""
+                : "  " + Lang.get("hotwire.store.license", page.license());
+        this.setSub(shown.author() + license + "  " + StorePage.describeDownloads(page == null ? shown.downloads()
+                : page.downloads()) + " " + Lang.get("hotwire.store.downloads"));
+        this.link.set(page == null ? "" : page.sourceUrl()).show(page != null && !page.sourceUrl().isEmpty());
+        this.words.set(page == null ? shown.description() : page.body());
+        List<ModrinthClient.Version> known = this.found;
+        String why = this.failure;
+        this.versions.clear();
+        if (known == null) {
+            this.versions.with(Kit.text(why == null ? Lang.get("hotwire.store.loading")
+                    : Lang.get("hotwire.store.failed", why), why == null ? Palette.FAINT : Palette.BAD).wrap());
         } else {
-            this.setPrimary(Lang.get("hotwire.store.add"), () -> this.adds.add(shown.projectId(), "",
-                    shown.title()));
-            this.setPrimaryActive(true);
+            known.forEach(version -> this.versions.with(this.makeVersion(shown, version)));
         }
-        String versionId = update == null ? "" : update.id();
-        this.change(Lang.get("hotwire.store.download"), () -> this.downloads.toggle(shown, versionId,
-                this.getBoxX() + this.getBoxWidth() - 20 - BUTTON_W - DownloadMenu.WIDTH,
-                this.getBoxY() + this.getBoxHeight() - 34, true));
+        this.state = this.findState(shown);
+        this.buttons.clear().with(Kit.push(Lang.get("hotwire.store.open_modrinth"), this::openOnModrinth),
+                Kit.space(), this.download.show(!this.model.isShowingPacks()),
+                this.setLead(this.makeLead(shown, this.state)),
+                Kit.push(Lang.get("hotwire.button.close"), this::dismiss));
     }
 
-    private void placePackPrimary(ModrinthClient.Hit shown) {
-        StoreModel.PackState state = this.model.findPackState(shown.projectId());
-        switch (state) {
-            case MISSING -> {
-                this.setPrimary(Lang.get("hotwire.store.download"), () -> this.adds.add(shown.projectId(), "",
-                        shown.title()));
-                this.setPrimaryActive(true);
-            }
-            case ON, OFF -> {
-                this.setPrimary(Lang.get(state == StoreModel.PackState.ON ? "hotwire.store.pack.turn_off"
-                        : "hotwire.store.pack.turn_on"), () -> this.model.togglePack(shown.projectId()));
-                this.setPrimaryActive(true);
-            }
-            case DOWNLOADING, NEEDS_WORLD -> {
-                this.setPrimary(Lang.get(state == StoreModel.PackState.DOWNLOADING ? "hotwire.store.pack.downloading"
-                        : "hotwire.store.pack.needs_world"), () -> { });
-                this.setPrimaryActive(false);
-            }
-        }
-        this.change(Lang.get("hotwire.store.download"), null);
+    private Part makeVersion(ModrinthClient.Hit shown, ModrinthClient.Version version) {
+        String name = version.number() + (version.name().isEmpty() || version.name().equals(version.number()) ? ""
+                : "  " + version.name());
+        String needs = version.requiredProjects().isEmpty() ? ""
+                : Lang.get("hotwire.store.needs", version.requiredProjects().size());
+        return Kit.row(Kit.dim(name).grow(1), Kit.text(needs, Palette.FAINT).spare(),
+                Kit.push(Lang.get("hotwire.store.add_this"), () -> {
+                    if (this.model.canAdd()) {
+                        this.game.addFromStore(shown.projectId(), version.id(), shown.title());
+                    } else {
+                        this.game.saveFromStore(shown.projectId(), version.id(), shown.title());
+                    }
+                })).gap(8).cross(Line.Cross.CENTER);
     }
 
     @Override
     public void step(float dt) {
-        int most = Math.min(this.getHeight() - 48, MOST_HEIGHT);
-        this.size(WIDTH, Math.min(most, Math.max(LEAST_HEIGHT, HEAD + this.contentHeight + 46)));
-        int room = this.getBoxHeight() - HEAD - 40;
-        this.scrollTarget = Math.max(0, Math.min(this.scrollTarget, Math.max(0, this.contentHeight - room)));
-        this.scroll.to(this.scrollTarget);
-        this.scroll.step(dt);
+        ModrinthClient.Hit shown = this.hit;
+        if (shown != null && this.open() && (this.arrived || !this.findState(shown).equals(this.state))) {
+            this.arrived = false;
+            this.fill();
+        }
         super.step(dt);
-        this.onModrinth.setBounds(this.getBoxX() + this.getBoxWidth() - 14 - MODRINTH_W, this.getBoxY() + 23,
-                MODRINTH_W, 14);
-        this.onModrinth.setVisible(this.hit != null);
-        this.onModrinth.setActive(this.open() && this.getBoxShown() > 0.9f, true);
     }
 
     @Override
-    protected void drawContent(Canvas canvas, float alpha, int x, int y, int w, int h) {
-        ModrinthClient.Hit shown = this.hit;
-        if (shown == null) {
-            return;
-        }
-        ModrinthClient.Project page = this.project;
-        int left = x + 14;
-        int textW = w - 28;
-        this.drawHeader(canvas, alpha, shown, page, left, y + 10, x + w - 14);
-        int top = y + HEAD;
-        int bottom = y + h - 40;
-        canvas.pushClip(x, top, x + w, bottom);
-        int lineY = top + 4 - Math.round(this.scroll.getValue());
-        int startY = lineY;
-        this.linkY = Integer.MIN_VALUE;
-        if (page != null && !page.sourceUrl().isEmpty()) {
-            String link = canvas.clip(page.sourceUrl(), textW);
-            this.linkWidth = canvas.measureText(link);
-            this.linkY = lineY;
-            boolean over = this.isHovered() && this.isOnLink(this.getPointerX(), this.getPointerY(), left)
-                    && lineY >= top && lineY + LINE <= bottom;
-            canvas.drawText(link, left, lineY, Colors.fade(over ? Palette.TEXT : Palette.PATH, alpha));
-            if (over) {
-                canvas.fill(left, lineY + 9, left + this.linkWidth, lineY + 10, Colors.fade(Palette.PATH, alpha));
-            }
-            lineY += LINE + 6;
-        }
-        for (MarkdownLines.Line line : this.findBodyLines(canvas, page == null ? shown.description() : page.body(),
-                textW)) {
-            lineY += line.above();
-            if (!line.picture().isEmpty()) {
-                lineY += this.drawPicture(canvas, alpha, line.picture(), left, lineY, textW, top, bottom);
-                continue;
-            }
-            if (line.columns().isEmpty()) {
-                canvas.drawText(line.text(), left + line.indent(), lineY, Colors.fade(line.color(), alpha));
-            } else {
-                this.drawRow(canvas, line, left, lineY, textW, alpha);
-            }
-            lineY += LINE;
-        }
-        lineY += 6;
-        canvas.fill(left, lineY, x + w - 14, lineY + 1, Colors.fade(Palette.TRACK, alpha));
-        lineY += 8;
-        canvas.drawText(Lang.get("hotwire.store.versions"), left, lineY, Colors.fade(Palette.DIM, alpha));
-        lineY += LINE + 2;
-        this.rowsTop = lineY;
-        if (this.versions.isEmpty()) {
-            canvas.drawText(this.failure == null ? Lang.get("hotwire.store.loading")
-                    : Lang.get("hotwire.store.failed", this.failure), left, lineY,
-                    Colors.fade(this.failure == null ? Palette.FAINT : Palette.BAD, alpha));
-            lineY += ROW;
-        }
-        for (ModrinthClient.Version version : this.versions) {
-            boolean over = this.isHovered() && this.getPointerY() >= lineY && this.getPointerY() < lineY + ROW
-                    && this.getPointerX() >= left && this.getPointerX() < x + w - 14 && lineY >= top
-                    && lineY + ROW <= bottom;
-            if (over) {
-                canvas.fill(left, lineY - 2, x + w - 14, lineY + ROW - 2, Colors.fade(Palette.HAIRLINE, alpha));
-            }
-            String name = version.number() + (version.name().isEmpty() || version.name().equals(version.number())
-                    ? "" : "  " + version.name());
-            canvas.drawText(canvas.clip(name, textW - 80), left + 4, lineY + 2,
-                    Colors.fade(over ? Palette.TEXT : Palette.DIM, alpha));
-            String needs = version.requiredProjects().isEmpty() ? ""
-                    : Lang.get("hotwire.store.needs", version.requiredProjects().size());
-            String right = over ? Lang.get("hotwire.store.add_this") : needs;
-            canvas.drawText(right, x + w - 18 - canvas.measureText(right), lineY + 2,
-                    Colors.fade(over ? Palette.ACCENT : Palette.FAINT, alpha));
-            lineY += ROW;
-        }
-        this.contentHeight = lineY - startY;
-        canvas.popClip();
-    }
-
-    private void drawHeader(Canvas canvas, float alpha, ModrinthClient.Hit shown,
-            ModrinthClient.@Nullable Project page, int left, int top, int right) {
-        Canvas.Image icon = shown.iconUrl().isEmpty() ? null : this.icons.find(shown.projectId(), shown.iconUrl());
-        if (icon == null || !canvas.drawImage(icon, left, top, ICON, ICON, alpha)) {
-            canvas.fill(left, top, left + ICON, top + ICON, Colors.fade(Palette.TRACK, alpha));
-        }
-        String counts = StoreGrid.describeDownloads(page == null ? shown.downloads() : page.downloads()) + " "
-                + Lang.get("hotwire.store.downloads");
-        int countsW = canvas.measureText(counts);
-        canvas.drawText(counts, right - countsW, top + 3, Colors.fade(Palette.FAINT, alpha));
-        int textX = left + ICON + 10;
-        canvas.drawText(canvas.clip(shown.title(), right - textX - countsW - 12), textX, top + 3,
-                Colors.fade(Palette.TEXT, alpha));
-        String by = shown.author() + (page == null || page.license().isEmpty() ? ""
-                : "  " + Lang.get("hotwire.store.license", page.license()));
-        canvas.drawText(canvas.clip(by, right - textX - MODRINTH_W - 8), textX, top + 16,
-                Colors.fade(Palette.DIM, alpha));
-    }
-
-    private int drawPicture(Canvas canvas, float alpha, String urls, int left, int y, int width, int top, int bottom) {
-        if (y < top - MOST_HEIGHT || y > bottom + MOST_HEIGHT) {
-            return this.pictureRooms.getOrDefault(urls, 0);
-        }
-        List<StoreIcons.PagePicture> pictures = new ArrayList<>();
-        for (String url : urls.split(" ", -1)) {
-            StoreIcons.PagePicture picture = this.icons.findPicture(url);
-            if (picture != null) {
-                pictures.add(picture);
-            }
-        }
-        if (pictures.isEmpty()) {
-            return this.pictureRooms.getOrDefault(urls, 0);
-        }
-        int gaps = PICTURE_GAP * (pictures.size() - 1);
-        float height = Math.min(MOST_PICTURE, pictures.stream().mapToInt(StoreIcons.PagePicture::height).max()
-                .orElse(1));
-        float wide = (float) pictures.stream().mapToDouble(picture -> (double) picture.width() / picture.height())
-                .sum() * height;
-        if (wide > width - gaps) {
-            height = height * (width - gaps) / wide;
-            wide = width - gaps;
-        }
-        int tall = Math.max(1, Math.round(height));
-        int x = left + Math.round((width - wide - gaps) / 2);
-        for (StoreIcons.PagePicture picture : pictures) {
-            int shown = Math.max(1, Math.round((float) picture.width() * tall / picture.height()));
-            canvas.drawImage(picture.image(), x, y, shown, tall, alpha);
-            x += shown + PICTURE_GAP;
-        }
-        this.pictureRooms.put(urls, tall + 4);
-        return tall + 4;
-    }
-
-    private boolean isOnLink(double px, double py, int left) {
-        return this.linkY != Integer.MIN_VALUE && px >= left && px < left + this.linkWidth && py >= this.linkY - 2
-                && py < this.linkY + LINE - 2;
-    }
-
-    private void drawRow(Canvas canvas, MarkdownLines.Line line, int left, int lineY, int textW, float alpha) {
-        String[] cells = line.text().split("\t", -1);
-        List<Integer> columns = line.columns();
-        for (int at = 0; at < cells.length && at < columns.size(); at++) {
-            int end = at + 1 < columns.size() ? columns.get(at + 1) : textW;
-            canvas.drawText(canvas.clip(cells[at], end - columns.get(at) - 6), left + line.indent() + columns.get(at),
-                    lineY, Colors.fade(line.color(), alpha));
-        }
-    }
-
-    private List<MarkdownLines.Line> findBodyLines(Canvas canvas, String body, int width) {
-        if (this.bodyWidth != width || !this.bodyRead.equals(body)) {
-            this.bodyLines = MarkdownLines.of(canvas, body, width);
-            this.bodyRead = body;
-            this.bodyWidth = width;
-        }
-        return this.bodyLines;
-    }
-
-    @Override
-    protected boolean onScroll(double amount) {
-        this.scrollTarget -= (float) amount * 30;
-        return true;
-    }
-
-    @Override
-    protected boolean onClick(double px, double py, int button) {
-        this.downloads.close();
-        ModrinthClient.Hit shown = this.hit;
-        ModrinthClient.Project page = this.project;
-        int left = this.getBoxX() + 14;
-        int right = this.getBoxX() + this.getBoxWidth() - 14;
-        int top = this.getBoxY() + HEAD;
-        int bottom = this.getBoxY() + this.getBoxHeight() - 40;
-        if (button != 0 || shown == null || px < left || px >= right || py < top || py >= bottom) {
-            return true;
-        }
-        if (page != null && this.isOnLink(px, py, left)) {
-            this.openLink.accept(page.sourceUrl());
-            return true;
-        }
-        int index = (int) Math.floor((py - this.rowsTop) / ROW);
-        if (index >= 0 && index < this.versions.size()) {
-            String versionId = this.versions.get(index).id();
-            if (this.model.canAdd()) {
-                this.adds.add(shown.projectId(), versionId, shown.title());
-            } else {
-                this.adds.saveToDownloads(shown.projectId(), versionId, shown.title());
-            }
+    protected boolean onKey(int key, int modifiers) {
+        if (key == TextField.ESCAPE) {
+            this.dismiss();
         }
         return true;
     }

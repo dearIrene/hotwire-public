@@ -13,6 +13,7 @@ public class Element {
     private int height;
     private boolean visible = true;
     private float alpha = 1;
+    private float lift;
     private boolean hovered;
     private boolean focused;
     private double pointerX;
@@ -126,11 +127,21 @@ public class Element {
         if (!this.visible || shown <= 0) {
             return;
         }
+        if (this.lift != 0) {
+            canvas.pushShift(0, this.lift);
+        }
         this.paint(canvas, shown);
         for (Element child : this.children) {
             child.draw(canvas, shown);
         }
         this.paintOver(canvas, shown);
+        if (this.lift != 0) {
+            canvas.popShift();
+        }
+    }
+
+    void setLift(float lift) {
+        this.lift = lift;
     }
 
     protected void paint(Canvas canvas, float alpha) {

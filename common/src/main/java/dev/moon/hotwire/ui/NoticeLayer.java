@@ -6,6 +6,10 @@ public final class NoticeLayer {
     private FrameClock clock = new FrameClock();
     private long drawnAt = -1;
 
+    public NoticeLayer() {
+        this.bar.hideActions();
+    }
+
     public void draw(Canvas canvas, int width, int height, long nowNanos) {
         this.draw(canvas, width, height, 0, nowNanos);
     }

@@ -1,15 +1,11 @@
 package dev.moon.hotwire.ui;
 
 import java.nio.file.Path;
-import java.util.ArrayList;
 import java.util.List;
 import java.util.function.Consumer;
 import org.jspecify.annotations.Nullable;
 
-public final class ReopenPanel extends Panel {
-    static final int WIDTH = 440;
-    static final int LINE = 12;
-
+public final class ReopenPanel extends Sheet {
     public record Offer(boolean off, List<String> ids, @Nullable Path jar, String who, String why, boolean leaves,
             boolean nextStart, boolean backup) {
         public Offer {
@@ -48,38 +44,36 @@ public final class ReopenPanel extends Panel {
     private static boolean backupWanted = true;
 
     private final Consumer<Offer> onConfirm;
-    private @Nullable Offer offer;
-    private int lineCount = 4;
+    private final Runnable onCancel;
 
     public ReopenPanel(Consumer<Offer> onConfirm, Runnable onCancel) {
-        super(onCancel);
+        super(440, onCancel);
         this.onConfirm = onConfirm;
+        this.onCancel = onCancel;
     }
 
     public void open(Offer offer) {
-        this.offer = offer;
-        boolean reopenOnly = offer.isReopenOnly();
-        this.setPrimary(Lang.get(findConfirmKey(offer)),
-                () -> this.onConfirm.accept(offer.withBackup(offer.isReopening() && backupWanted)));
-        this.setCancelLabel(Lang.get(reopenOnly ? "hotwire.reopen.later" : "hotwire.button.cancel"));
-        this.change(getBackupLabel(), offer.isReopening() ? this::toggleBackup : null);
-        this.setPrimaryWidth(offer.nextStart() ? 150 : 120);
+        this.fill(offer);
         this.show();
     }
 
-    @Override
-    public void step(float dt) {
-        this.size(WIDTH, CONTENT_Y + LINE * this.lineCount + 58);
-        super.step(dt);
-    }
-
-    private void toggleBackup() {
-        backupWanted = !backupWanted;
-        this.change(getBackupLabel(), this::toggleBackup);
-    }
-
-    private static String getBackupLabel() {
-        return Lang.get(backupWanted ? "hotwire.reopen.backup_on" : "hotwire.reopen.backup_off");
+    private void fill(Offer offer) {
+        this.title.set(findTitle(offer));
+        String safe = offer.leaves() ? "hotwire.reopen.safe.server" : "hotwire.reopen.safe.world";
+        this.body.clear().with(Kit.text(offer.who(), Palette.ACCENT).wrap(), Kit.dim(offer.why()).wrap(),
+                new Part().height(4), Kit.text(findPlan(offer)).wrap(),
+                Kit.text(Lang.get(offer.nextStart() ? "hotwire.reopen.safe.next_start" : safe),
+                        offer.nextStart() ? Palette.WARN : Palette.ON).wrap(),
+                Kit.dim(Lang.get("hotwire.reopen.backup_line")).wrap().show(offer.isReopening() && backupWanted));
+        this.buttons.clear().with(Kit.push(Lang.get(backupWanted ? "hotwire.reopen.backup_on"
+                : "hotwire.reopen.backup_off"), () -> {
+                    backupWanted = !backupWanted;
+                    this.fill(offer);
+                }).show(offer.isReopening()), Kit.space(),
+                this.setLead(Kit.lead(Lang.get(findConfirmKey(offer)),
+                        () -> this.onConfirm.accept(offer.withBackup(offer.isReopening() && backupWanted)))),
+                Kit.push(Lang.get(offer.isReopenOnly() ? "hotwire.reopen.later" : "hotwire.button.cancel"),
+                        this.onCancel));
     }
 
     private static String findConfirmKey(Offer offer) {
@@ -116,34 +110,5 @@ public final class ReopenPanel extends Panel {
             return Lang.get("hotwire.reopen.plan.add");
         }
         return Lang.get(offer.ids().isEmpty() ? "hotwire.reopen.plan.reopen" : "hotwire.reopen.plan.switch");
-    }
-
-    @Override
-    protected void drawContent(Canvas canvas, float alpha, int x, int y, int w, int h) {
-        Offer shown = this.offer;
-        if (shown == null) {
-            return;
-        }
-        canvas.drawText(canvas.clip(findTitle(shown), w - 28), x + 14, y + 16, Colors.fade(Palette.TEXT, alpha));
-        List<MessageLine.Line> lines = new ArrayList<>();
-        MessageLine.addWrapped(canvas, lines, shown.who(), Palette.ACCENT, w - 28);
-        MessageLine.addWrapped(canvas, lines, shown.why(), Palette.DIM, w - 28);
-        lines.add(new MessageLine.Line("", Palette.DIM));
-        MessageLine.addWrapped(canvas, lines, findPlan(shown), Palette.TEXT, w - 28);
-        if (shown.nextStart()) {
-            MessageLine.addWrapped(canvas, lines, Lang.get("hotwire.reopen.safe.next_start"), Palette.WARN, w - 28);
-        } else {
-            MessageLine.addWrapped(canvas, lines, Lang.get(shown.leaves() ? "hotwire.reopen.safe.server"
-                    : "hotwire.reopen.safe.world"), Palette.ON, w - 28);
-        }
-        if (shown.isReopening() && backupWanted) {
-            MessageLine.addWrapped(canvas, lines, Lang.get("hotwire.reopen.backup_line"), Palette.DIM, w - 28);
-        }
-        this.lineCount = lines.size();
-        int lineY = y + CONTENT_Y;
-        for (MessageLine.Line line : lines) {
-            MessageLine.drawWords(canvas, line.text(), x + 14, lineY, line.color(), alpha);
-            lineY += LINE;
-        }
     }
 }

@@ -6,10 +6,10 @@ import java.util.List;
 import java.util.function.BiConsumer;
 
 final class PendingActions {
-    private final ModScreen.Game game;
+    private final ModScreenGame game;
     private final BiConsumer<String, Boolean> say;
 
-    PendingActions(ModScreen.Game game, BiConsumer<String, Boolean> say) {
+    PendingActions(ModScreenGame game, BiConsumer<String, Boolean> say) {
         this.game = game;
         this.say = say;
     }

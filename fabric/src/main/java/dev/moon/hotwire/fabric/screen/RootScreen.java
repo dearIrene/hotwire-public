@@ -44,6 +44,9 @@ public abstract class RootScreen extends Screen {
 
     protected abstract Root getRoot();
 
+    protected void onKeyUp(int key) {
+    }
+
     public static @Nullable Root findRootOf(@Nullable Screen screen) {
         return screen instanceof RootScreen hotwire ? hotwire.getRoot() : null;
     }
@@ -160,6 +163,12 @@ public abstract class RootScreen extends Screen {
     }
 
     @Override
+    public boolean keyReleased(KeyEvent event) {
+        this.onKeyUp(toKey(event.key()));
+        return super.keyReleased(event);
+    }
+
+    @Override
     public boolean charTyped(CharacterEvent event) {
         return this.getRoot().typeChar(event.codepoint()) || super.charTyped(event);
     }
@@ -187,6 +196,12 @@ public abstract class RootScreen extends Screen {
     public boolean keyPressed(int key, int scancode, int modifiers) {
         return this.getRoot().pressKey(key, modifiers) || this.onKeyLeft(key, modifiers)
                 || super.keyPressed(key, scancode, modifiers);
+    }
+
+    @Override
+    public boolean keyReleased(int key, int scancode, int modifiers) {
+        this.onKeyUp(key);
+        return super.keyReleased(key, scancode, modifiers);
     }
 
     @Override

@@ -10,20 +10,6 @@ import java.util.function.Predicate;
 import org.jspecify.annotations.Nullable;
 
 final class ProfileMenu {
-    private sealed interface Row {
-        record Heading() implements Row {
-        }
-
-        record Apply(String name) implements Row {
-        }
-
-        record Save() implements Row {
-        }
-
-        record Rename(String name) implements Row {
-        }
-    }
-
     interface Screen {
         List<String> getRelevantIds();
 
@@ -36,24 +22,25 @@ final class ProfileMenu {
         void applyProfile(String name, ProfileStore.ProfilePlan plan);
     }
 
-    final Dropdown menu;
+    final Push menu = Kit.push(Lang.get("hotwire.setup.unsaved"), this::openMenu).menu();
     final TextField naming;
     private final ProfileStore profiles;
     private final Screen screen;
     private final Root root;
     private final TextField search;
     private final Element showMenu;
-    private List<Row> rows = List.of();
+    private final Popup popup;
+    private List<Popup.Item> items = List.of();
     private @Nullable String renaming;
     private boolean nameMode;
 
-    ProfileMenu(ProfileStore profiles, Screen screen, Root root, TextField search, Element showMenu) {
+    ProfileMenu(ProfileStore profiles, Screen screen, Root root, TextField search, Element showMenu, Popup popup) {
         this.profiles = profiles;
         this.screen = screen;
         this.root = root;
         this.search = search;
         this.showMenu = showMenu;
-        this.menu = new Dropdown(root.getMenus(), Lang.get("hotwire.setup.unsaved"), this::onPicked, this::onDeleted);
+        this.popup = popup;
         this.naming = new TextField(Lang.get("hotwire.setup.name_hint"), text -> { }, this::onNamed, this::stopNaming);
         this.naming.setVisible(false);
     }
@@ -62,41 +49,42 @@ final class ProfileMenu {
         return this.nameMode;
     }
 
+    private void openMenu() {
+        if (this.popup.isShowing(this.items)) {
+            this.popup.dismiss();
+            return;
+        }
+        Element base = this.root.getBase();
+        this.popup.openAt(this.menu.getX(), this.menu.getY() + this.menu.getHeight() + 2, base.getWidth(),
+                base.getHeight(), this.items);
+    }
+
     void refresh(List<String> relevant, Predicate<String> on) {
-        List<Dropdown.Item> items = new ArrayList<>();
-        List<Row> rows = new ArrayList<>();
+        List<Popup.Item> items = new ArrayList<>();
         String current = null;
         List<String> names = this.profiles.getNames();
         if (names.isEmpty()) {
-            items.add(new Dropdown.Item(Lang.get("hotwire.setup.none"), null, true, false));
-            rows.add(new Row.Heading());
+            items.add(new Popup.Item(Lang.get("hotwire.setup.none"), Palette.FAINT, null));
         }
         for (String name : names) {
             ProfileStore.ProfilePlan plan = this.profiles.planFor(name, relevant, on);
             if (plan.isEmpty() && current == null) {
                 current = name;
             }
-            items.add(new Dropdown.Item(name, name.equals(current) ? "current" : plan.describe(), false, true));
-            rows.add(new Row.Apply(name));
+            boolean now = name.equals(current);
+            items.add(new Popup.Item(name + "  " + (now ? Lang.get("hotwire.setup.current") : plan.describe()),
+                    now ? Palette.ON : Palette.TEXT, () -> this.apply(name)));
         }
-        items.add(Dropdown.Item.of(Lang.get("hotwire.setup.save")));
-        rows.add(new Row.Save());
+        items.add(new Popup.Item(Lang.get("hotwire.setup.save"), Palette.TEXT, () -> this.startNaming(null)));
         if (current != null) {
-            items.add(Dropdown.Item.of(Lang.get("hotwire.setup.rename", current)));
-            rows.add(new Row.Rename(current));
+            String named = current;
+            items.add(new Popup.Item(Lang.get("hotwire.setup.rename", named), Palette.TEXT,
+                    () -> this.startNaming(named)));
         }
-        this.rows = rows;
-        this.menu.setItems(items);
-        this.menu.setHeader(current == null ? Lang.get("hotwire.setup.unsaved") : current);
-    }
-
-    private void onPicked(int index) {
-        switch (this.rows.get(index)) {
-            case Row.Heading heading -> { }
-            case Row.Save save -> this.startNaming(null);
-            case Row.Rename rename -> this.startNaming(rename.name());
-            case Row.Apply apply -> this.apply(apply.name());
-        }
+        names.forEach(name -> items.add(new Popup.Item(Lang.get("hotwire.setup.delete", name), Palette.BAD,
+                () -> this.delete(name))));
+        this.items = items;
+        this.menu.label(current == null ? Lang.get("hotwire.setup.unsaved") : current);
     }
 
     private void apply(String name) {
@@ -108,10 +96,7 @@ final class ProfileMenu {
         this.screen.applyProfile(name, plan);
     }
 
-    private void onDeleted(int index) {
-        if (!(this.rows.get(index) instanceof Row.Apply(String name))) {
-            return;
-        }
+    private void delete(String name) {
         try {
             this.profiles.delete(name);
             this.screen.showMessage(Lang.get("hotwire.setup.deleted", name), false);

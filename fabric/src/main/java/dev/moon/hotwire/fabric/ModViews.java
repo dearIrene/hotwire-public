@@ -1,15 +1,12 @@
 package dev.moon.hotwire.fabric;
 
-//? if >=26.1 {
 import com.mojang.blaze3d.platform.InputConstants;
-//?}
 import dev.moon.hotwire.fabric.mixin.core.client.gui.components.toasts.ToastInstanceAccessor;
 import dev.moon.hotwire.fabric.mixin.core.client.gui.components.toasts.ToastManagerAccessor;
 import dev.moon.hotwire.fabric.registration.Fields;
 import dev.moon.hotwire.fabric.registration.GameHold;
 import dev.moon.hotwire.fabric.registration.GameRegistrations;
 import dev.moon.hotwire.fabric.screen.HotwireScreen;
-import dev.moon.hotwire.fabric.screen.StoreGameScreen;
 import dev.moon.hotwire.redefine.FieldSlots;
 import dev.moon.hotwire.ui.Notice;
 import dev.moon.hotwire.ui.Notices;
@@ -20,7 +17,13 @@ import java.util.Map;
 import java.util.Objects;
 import java.util.Set;
 import java.util.function.Function;
+//? if >=26.1 {
+import net.fabricmc.fabric.api.client.keymapping.v1.KeyMappingHelper;
+//?} else {
+/*import net.fabricmc.fabric.api.client.keybinding.v1.KeyBindingHelper;
+*///?}
 import net.minecraft.ChatFormatting;
+import net.minecraft.client.KeyMapping;
 import net.minecraft.client.Minecraft;
 import net.minecraft.client.gui.screens.LoadingOverlay;
 import net.minecraft.client.gui.screens.Overlay;
@@ -29,10 +32,8 @@ import net.minecraft.client.gui.screens.TitleScreen;
 import net.minecraft.client.particle.Particle;
 import net.minecraft.network.chat.Component;
 import net.minecraft.network.chat.MutableComponent;
+import net.minecraft.resources.Identifier;
 import org.jspecify.annotations.Nullable;
-//? if >=1.21.9 && <26.1 {
-/*import org.lwjgl.glfw.GLFW;
-*///?}
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -150,9 +151,6 @@ public final class ModViews {
             show(hotwire.makeAgain());
             return;
         }
-        if (screen instanceof StoreGameScreen) {
-            return;
-        }
         show(minecraft.level == null ? new TitleScreen() : null);
     }
 
@@ -258,20 +256,32 @@ public final class ModViews {
         *///?}
     }
 
-    static boolean isShiftDown() {
+    static List<KeyMapping> registerKeys(Map<String, Integer> defaults) {
+        Identifier id = Identifier.fromNamespaceAndPath(HotwireClient.ID, HotwireClient.ID);
+        //? if >=1.21.10 {
+        KeyMapping.Category category = KeyMapping.Category.register(id);
+        //?} else {
+        /*String category = "key.category." + id.toLanguageKey();
+        *///?}
+        List<KeyMapping> made = new ArrayList<>();
+        for (Map.Entry<String, Integer> key : defaults.entrySet()) {
+            made.add(new KeyMapping(key.getKey(), key.getValue(), category));
+        }
+        for (KeyMapping key : made) {
+            //? if >=26.1 {
+            KeyMappingHelper.registerKeyMapping(key);
+            //?} else {
+            /*KeyBindingHelper.registerKeyBinding(key);
+            *///?}
+        }
+        return made;
+    }
+
+    static void setKey(KeyMapping mapping, int code) {
         //? if >=26.3 {
-        return InputConstants.isKeyDown(InputConstants.KEY_LSHIFT)
-                || InputConstants.isKeyDown(InputConstants.KEY_RSHIFT);
-        //?} elif >=26.1 {
-        /*Minecraft client = Minecraft.getInstance();
-        return InputConstants.isKeyDown(client.getWindow(), InputConstants.KEY_LSHIFT)
-                || InputConstants.isKeyDown(client.getWindow(), InputConstants.KEY_RSHIFT);
-        *///?} elif >=1.21.9 {
-        /*long window = Minecraft.getInstance().getWindow().handle();
-        return GLFW.glfwGetKey(window, GLFW.GLFW_KEY_LEFT_SHIFT) == GLFW.GLFW_PRESS
-                || GLFW.glfwGetKey(window, GLFW.GLFW_KEY_RIGHT_SHIFT) == GLFW.GLFW_PRESS;
-        *///?} else {
-        /*return Screen.hasShiftDown();
+        mapping.setKey(InputConstants.Type.KEYBOARD.getOrCreate(code));
+        //?} else {
+        /*mapping.setKey(InputConstants.Type.KEYSYM.getOrCreate(code));
         *///?}
     }
 }

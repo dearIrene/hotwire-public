@@ -1,142 +1,159 @@
 package dev.moon.hotwire.ui;
 
-import dev.moon.hotwire.dev.BuildMerge;
 import java.util.ArrayList;
 import java.util.List;
 import org.jspecify.annotations.Nullable;
 
-final class CodeBlock {
-    static final int HOT = 0x24B48CFF;
-    private static final int LINE = 10;
-    private static final int GAP = 4;
-
-    private static final int HEAD_H = 14;
-    private static final int CODE_ROW = 12;
-    private static final int GUTTER = 22;
-    private static final int CODE_BG = 0xFF0E0B17;
-    private static final int CODE_HEAD = 0xFF181229;
-    static final int CHIP_H = 13;
-
+final class CodeBlock extends Part {
+    static final int CHIP = 14;
+    private static final int ROW = 12;
+    private static final int PAD = 6;
+    private static final int MARK = 9;
     private static final int MOST_ROWS = 12;
+    private static final String MORE = "    ";
+    private static final int HOT = 0x24B48CFF;
+    private static final int FACE = 0xFF0E0B17;
+    static final int HEAD = 0xFF181229;
 
-    private CodeBlock() {
-    }
-
-    record Hit(int x0, int y0, int x1, int y1, Runnable action) {
-    }
-
-    record Code(String mark, int markInk, String text, int ink, String aside, int asideInk, int line,
+    record Code(String mark, int markInk, String text, int ink, String aside, int asideInk,
             @Nullable Runnable open) {
         static Code of(String text, int ink) {
-            return new Code("", 0, text, ink, "", 0, 0, null);
+            return new Code("", 0, text, ink, "", 0, null);
+        }
+
+        static Code ofMark(String mark, int markInk, String text, int ink, String aside) {
+            return new Code(mark, markInk, text, ink, aside, Palette.FAINT, null);
         }
     }
 
-    static int paintBlock(List<Hit> hits, Canvas canvas, int x, int y, int w, String title, String aside, int edge,
-            List<Code> rows,
-            float a, double px, double py, boolean over) {
-        boolean gutter = rows.stream().anyMatch(row -> row.line() > 0);
-        int h = HEAD_H + rows.size() * CODE_ROW + 4;
-        canvas.fill(x, y, x + w, y + h, Colors.fade(Palette.PANEL_EDGE, a));
-        canvas.fill(x + 1, y + 1, x + w - 1, y + h - 1, Colors.fade(CODE_BG, a));
-        canvas.fill(x + 1, y + 1, x + w - 1, y + HEAD_H, Colors.fade(CODE_HEAD, a));
-        canvas.fill(x + 1, y + 1, x + 3, y + h - 1, Colors.fade(edge, a));
-        int asideW = aside.isEmpty() ? 0 : canvas.measureText(aside) + 8;
-        canvas.drawText(canvas.clip(title, Math.max(1, w - 14 - asideW)), x + 8, y + 4, Colors.fade(Palette.TEXT, a));
+    private record Row(Code code, String text, boolean first, int asideWidth) {
+    }
+
+    private final EasedValue markAt = EasedValue.ofSpeed(24);
+    private final EasedValue markShown = EasedValue.ofSpeed(16);
+    private List<Code> rows;
+    private List<Row> shown = List.of();
+    private boolean marked;
+
+    CodeBlock(List<Code> rows) {
+        this.rows = List.copyOf(rows);
+    }
+
+    void set(List<Code> rows) {
+        this.rows = List.copyOf(rows);
+        markChanged();
+    }
+
+    static Line makeBlock(String title, String aside, int edge, List<Code> rows, boolean tight, Part... buttons) {
+        Line head = Kit.row(Kit.text(title).grow(1)).gap(4).pad(PAD, 3);
+        Line inside = Kit.column(DevCards.makePane(HEAD, head));
         if (!aside.isEmpty()) {
-            canvas.drawText(aside, x + w - 6 - canvas.measureText(aside), y + 4, Colors.fade(Palette.FAINT, a));
+            head.with(Kit.text(aside, Palette.FAINT));
         }
-        int textX = x + 8 + (gutter ? GUTTER : 0);
-        if (gutter) {
-            canvas.fill(x + 6 + GUTTER - 4, y + HEAD_H, x + 7 + GUTTER - 4, y + h - 1, Colors.fade(Palette.HAIRLINE,
-                    a));
+        if (tight && buttons.length > 0) {
+            inside.with(DevCards.makePane(HEAD, Kit.row(buttons).gap(4).pad(PAD, 2)));
+        } else {
+            head.with(buttons);
         }
-        int rowY = y + HEAD_H + 2;
-        for (Code row : rows) {
-            Runnable open = row.open();
-            boolean hot = open != null && over && px >= x + 3 && px < x + w - 1 && py >= rowY && py < rowY + CODE_ROW;
-            if (hot) {
-                canvas.fill(x + 3, rowY, x + w - 1, rowY + CODE_ROW, Colors.fade(HOT, a));
-            }
-            if (row.line() > 0) {
-                String number = String.valueOf(row.line());
-                canvas.drawText(number, x + 4 + GUTTER - 6 - canvas.measureText(number), rowY + 2,
-                        Colors.fade(hot ? Palette.ACCENT : Palette.FAINT, a));
-            }
-            int at = textX;
-            if (!row.mark().isEmpty()) {
-                int markY = rowY + ("~".equals(row.mark()) ? 5 : 2);
-                canvas.drawText(row.mark(), at, markY, Colors.fade(row.markInk(), a));
-                at += 9;
-            }
-            int rowAsideW = row.aside().isEmpty() ? 0 : canvas.measureText(row.aside()) + 8;
-            canvas.drawText(canvas.clip(row.text(), Math.max(1, x + w - 6 - rowAsideW - at)), at, rowY + 2,
-                    Colors.fade(hot ? Palette.ACCENT : row.ink(), a));
-            if (!row.aside().isEmpty()) {
-                canvas.drawText(row.aside(), x + w - 6 - canvas.measureText(row.aside()), rowY + 2,
-                        Colors.fade(row.asideInk(), a));
-            }
-            if (open != null) {
-                hits.add(new Hit(x + 3, rowY, x + w - 1, rowY + CODE_ROW, open));
-            }
-            rowY += CODE_ROW;
-        }
-        return y + h + GAP;
+        inside.with(new CodeBlock(rows));
+        return Kit.row(new Kit.Fill(edge).width(2), inside.grow(1)).cross(Line.Cross.STRETCH);
+    }
+
+    static Part makeChip(String label, Runnable action) {
+        return Kit.push(label, action).height(CHIP);
     }
 
     static List<Code> limitRows(List<Code> rows) {
         if (rows.size() <= MOST_ROWS) {
             return rows;
         }
-        List<Code> shown = new ArrayList<>(rows.subList(0, MOST_ROWS - 1));
-        shown.add(Code.of(Lang.get("hotwire.dev.and_more", rows.size() - MOST_ROWS + 1), Palette.FAINT));
-        return shown;
+        List<Code> some = new ArrayList<>(rows.subList(0, MOST_ROWS - 1));
+        some.add(Code.of(Lang.get("hotwire.dev.and_more", rows.size() - MOST_ROWS + 1), Palette.FAINT));
+        return some;
     }
 
-    static int paintChip(List<Hit> hits, Canvas canvas, int x, int y, String label, float a, double px, double py,
-            boolean over,
-            Runnable action) {
-        int w = canvas.measureText(label) + 12;
-        boolean hot = over && px >= x && px < x + w && py >= y && py < y + CHIP_H;
-        canvas.fill(x, y, x + w, y + CHIP_H, Colors.fade(hot ? Palette.ACCENT_SOFT : Palette.PANEL_EDGE, a));
-        canvas.fill(x + 1, y + 1, x + w - 1, y + CHIP_H - 1, Colors.fade(hot ? 0xFF2A2140 : CODE_HEAD, a));
-        canvas.drawText(label, x + 6, y + 3, Colors.fade(hot ? Palette.TEXT : Palette.DIM, a));
-        hits.add(new Hit(x, y, x + w, y + CHIP_H, action));
-        return x + w + 4;
-    }
-
-    static void paintFrame(Canvas canvas, int x, int y, int w, int h, int ink) {
-        canvas.fill(x, y, x + w, y + 1, ink);
-        canvas.fill(x, y + h - 1, x + w, y + h, ink);
-        canvas.fill(x, y, x + 1, y + h, ink);
-        canvas.fill(x + w - 1, y, x + w, y + h, ink);
-    }
-
-    static void paintPin(Canvas canvas, int x, int y, int ink) {
-        canvas.fill(x + 1, y, x + 4, y + 1, ink);
-        canvas.fill(x, y + 1, x + 5, y + 4, ink);
-        canvas.fill(x + 2, y + 4, x + 3, y + 9, ink);
-    }
-
-    static int paintWrapped(Canvas canvas, String text, int x, int y, int w, int color, float a) {
-        for (String line : DevCards.wrap(canvas, text, w)) {
-            canvas.drawText(line, x, y, Colors.fade(color, a));
-            y += LINE;
+    private static List<String> wrap(Canvas canvas, String text, int room) {
+        if (canvas.measureText(text) <= room) {
+            return List.of(text);
         }
-        return y + GAP;
+        String code = text.stripLeading();
+        String indent = text.substring(0, text.length() - code.length());
+        List<String> lines = new ArrayList<>();
+        for (String line : Text.findLines(canvas, code, Math.max(1, room - canvas.measureText(indent + MORE)))) {
+            lines.add(canvas.clip(indent + (lines.isEmpty() ? "" : MORE) + line, room));
+        }
+        return lines.isEmpty() ? List.of(text) : lines;
     }
 
-    static Code makeConflictRow(int build, BuildMerge.Conflict conflict, String what) {
-        String said = Lang.get("hotwire.dev.merge.build_did", build, what);
-        if (build == conflict.winner()) {
-            return new Code("+", Palette.GOOD, said, Palette.TEXT, Lang.get("hotwire.dev.merge.kept"), Palette.GOOD,
-                    0, null);
+    @Override
+    protected void measure(Canvas canvas, int room) {
+        this.marked = this.rows.stream().anyMatch(row -> !row.mark().isEmpty());
+        int inner = Math.max(1, room - 2 * PAD - (this.marked ? MARK : 0));
+        List<Row> made = new ArrayList<>();
+        for (Code row : this.rows) {
+            int asideWidth = row.aside().isEmpty() ? 0 : canvas.measureText(row.aside());
+            boolean first = true;
+            for (String line : wrap(canvas, row.text(), Math.max(1, inner - (asideWidth > 0 ? asideWidth + 8 : 0)))) {
+                made.add(new Row(row, line, first, first ? asideWidth : 0));
+                first = false;
+            }
         }
-        if (conflict.dropped().contains(build)) {
-            return new Code("x", Palette.BAD, said, Palette.DIM, Lang.get("hotwire.dev.merge.dropped"), Palette.BAD,
-                    0, null);
+        this.shown = made;
+        this.hugWidth = room;
+        this.hugHeight = made.size() * ROW + 4;
+    }
+
+    private @Nullable Runnable findOpenAt(double py) {
+        int under = (int) Math.floor((py - this.getY() - 2) / ROW);
+        return under >= 0 && under < this.shown.size() ? this.shown.get(under).code().open() : null;
+    }
+
+    @Override
+    public void step(float dt) {
+        this.markAt.step(dt);
+        this.markShown.step(dt);
+    }
+
+    @Override
+    protected void paint(Canvas canvas, float alpha) {
+        int x = this.getX();
+        int y = this.getY();
+        int right = x + this.getWidth();
+        canvas.fill(x, y, right, y + this.getHeight(), Colors.fade(FACE, alpha * DevCards.getSolid()));
+        boolean live = this.isHovered() && this.findOpenAt(this.getPointerY()) != null;
+        if (live) {
+            float at = (float) Math.floor((this.getPointerY() - y - 2) / ROW) * ROW;
+            if (this.markShown.getValue() < 0.05f) {
+                this.markAt.snap(at);
+            }
+            this.markAt.to(at);
         }
-        return new Code("~", Palette.DIM, said, Palette.DIM, Lang.get("hotwire.dev.merge.inside"), Palette.FAINT, 0,
-                null);
+        this.markShown.to(live ? 1 : 0);
+        int mark = y + 2 + this.markAt.getRounded();
+        canvas.fill(x, mark, right, mark + ROW, Colors.fade(HOT, alpha * this.markShown.getValue()));
+        int textX = x + PAD + (this.marked ? MARK : 0);
+        for (int at = 0; at < this.shown.size(); at++) {
+            Row row = this.shown.get(at);
+            Code code = row.code();
+            int rowY = y + 4 + at * ROW;
+            if (row.first() && !code.mark().isEmpty()) {
+                canvas.drawText(code.mark(), x + PAD, rowY + ("~".equals(code.mark()) ? 3 : 0),
+                        Colors.fade(code.markInk(), alpha));
+            }
+            canvas.drawText(row.text(), textX, rowY, Colors.fade(code.ink(), alpha));
+            if (row.asideWidth() > 0) {
+                canvas.drawText(code.aside(), right - PAD - row.asideWidth(), rowY,
+                        Colors.fade(code.asideInk(), alpha));
+            }
+        }
+    }
+
+    @Override
+    protected boolean onClick(double px, double py, int button) {
+        Runnable open = this.findOpenAt(py);
+        if (open != null && button == 0) {
+            open.run();
+        }
+        return open != null;
     }
 }
