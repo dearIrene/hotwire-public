@@ -55,6 +55,28 @@ after a restart.
 
 The − and + in its title set its own size, apart from the game's GUI scale.
 
+Each build's report shows the lines you changed in every method, red for what went and green for what came, with the branch and commit it was built on and a tag when it had changes you hadn't committed yet. Save as jar puts any build in `hotwire/exported` to hand to a tester (from 26.1, before that a build only runs in a development setup).
+
+When your mod crashes the card tells you which build last changed that line.
+
+## Keys
+
+Bind them in Controls, they start unbound
+
+- Take the newest build now
+- Roll back one build
+- Swap with the last build, press it again to swap back, handy for comparing two builds
+
+## Your builds after a restart
+
+Turn on Keep builds after a restart and your builds, their names and pins are still there the next time you start the game. If you changed code while the game was closed, the start is a new build made on the one you left.
+
+Before a build goes back in Hotwire checks its jar is still exactly what it saved, so a file that changed on disk never goes in half right, and it stops writing builds when your disk is nearly full.
+
+## Build name on screen
+
+Turn it on and the build each mod runs sits in a corner over the game, with the name you gave it. Open the developer window to drag it wherever you like.
+
 ## Leaked worlds
 
 When you leave a world Hotwire checks whether one of your mod's statics still holds it, and if one does it tells you
@@ -77,6 +99,8 @@ All of this is under Settings, Developer, and each part can be turned off
 - Catch your mod's crashes
 - Watch for leaked worlds
 - Reload popups (every reload, or only the ones with a problem)
+- Keep builds after a restart
+- Build name on screen
 - Rebuild every switch
 
 The Developer section only works when you run the game from a dev setup, so players never see it do anything.

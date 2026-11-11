@@ -1,6 +1,7 @@
 package dev.moon.hotwire.fabric;
 
 import dev.moon.hotwire.config.HotwireSettings;
+import dev.moon.hotwire.dev.DevExtras;
 import dev.moon.hotwire.dev.DevMixin;
 import dev.moon.hotwire.fabric.dev.DevSession;
 import dev.moon.hotwire.fabric.update.ModUpdater;
@@ -41,7 +42,7 @@ final class DevEngine implements DevSession.Engine {
     public UpdatePreview preview(Path jar) {
         HotwireEngine.JvmParts found = this.parts.get();
         return found == null ? new UpdatePreview.Refused(String.valueOf(jar.getFileName()), this.refusal.get())
-                : found.updates().preview(jar);
+                : found.updates().getUpdater().preview(jar);
     }
 
     @Override
@@ -88,6 +89,12 @@ final class DevEngine implements DevSession.Engine {
             }
         }
         return loaded;
+    }
+
+    @Override
+    public boolean isInitialized(Class<?> type) {
+        HotwireEngine.JvmParts found = this.parts.get();
+        return found != null && found.runner().isInitialized(type);
     }
 
     @Override
@@ -162,7 +169,18 @@ final class DevEngine implements DevSession.Engine {
     }
 
     @Override
+    public boolean isHistorySaved() {
+        return this.settings.isHistorySaved();
+    }
+
+    @Override
     public int getSavedBuilds() {
         return this.settings.getSavedBuilds();
+    }
+
+    @Override
+    public DevExtras getExtras() {
+        return new DevExtras(this.settings.isCompareTickShown(), this.settings.isCompareMemoryShown(),
+                this.settings.isCopyRowsShown(), this.settings.isSizesShown());
     }
 }

@@ -14,8 +14,10 @@ import java.nio.file.Path;
 import java.util.ArrayList;
 import java.util.HashSet;
 import java.util.List;
+import java.util.Map;
 import java.util.Set;
 import java.util.TreeSet;
+import java.util.concurrent.ConcurrentHashMap;
 import java.util.function.Function;
 import java.util.function.LongSupplier;
 import java.util.function.Supplier;
@@ -24,6 +26,7 @@ import org.jspecify.annotations.Nullable;
 public final class DevBridge implements Function<String, String> {
     private static final Gson GSON = new GsonBuilder().setPrettyPrinting().disableHtmlEscaping().create();
     private static final long POLL_MILLIS = 150;
+    private static final long LOOK_BACK_MILLIS = 10_000;
     private static final long CHANGE_WAIT_MILLIS = 60_000;
 
     private static final long FIRST_THROWS_MILLIS = 2_000;
@@ -34,6 +37,8 @@ public final class DevBridge implements Function<String, String> {
     private final Supplier<@Nullable Path> log;
     private final List<Path> projects;
     private final LongSupplier clock;
+
+    private final Map<String, Long> told = new ConcurrentHashMap<>();
 
     public DevBridge(DevHost host, Supplier<@Nullable Path> log, List<Path> projects) {
         this(host, log, projects, System::currentTimeMillis);
@@ -72,6 +77,14 @@ public final class DevBridge implements Function<String, String> {
             case "wait_for_build" -> this.waitForBuild(this.findMod(args), args.has("timeout_seconds")
                     ? Math.clamp(args.get("timeout_seconds").getAsLong(), 1, 600) : 120);
             case "roll_back" -> this.revertTo(this.findMod(args), getInt(args, "build"));
+            case "restore" -> this.restore(this.findMod(args), getInt(args, "build"));
+            case "undo_restore" -> this.restoreSavePoint(this.findMod(args));
+            case "code" -> {
+                DevModView mod = this.findMod(args);
+                String code = this.host.findCode(mod.id(), getInt(args, "build"), getString(args, "class"),
+                        getString(args, "method"), isTrue(args, "before"));
+                yield code == null ? fail("no kept sources of that method in that build") : GSON.toJsonTree(code);
+            }
             case "merge_preview" -> this.previewMerge(this.findMod(args), getInts(args, "builds"));
             case "merge" -> this.merge(this.findMod(args), getInts(args, "builds"), isTrue(args, "confirm"),
                     isTrue(args, "anyway"));
@@ -87,6 +100,18 @@ public final class DevBridge implements Function<String, String> {
                 yield this.findBuilds(this.findMod(args));
             }
             case "copy_build" -> this.copy(this.findMod(args), getInt(args, "build"));
+            case "save_jar" -> {
+                DevModView mod = this.findMod(args);
+                String saved = this.host.saveJar(mod.id(), getInt(args, "build"));
+                if (saved == null) {
+                    yield fail("build " + getInt(args, "build") + " is not kept; builds lists those that are");
+                }
+                JsonObject out = new JsonObject();
+                out.addProperty("saved", saved);
+                yield out;
+            }
+            case "ab" -> this.runCompare(this.findMod(args), args.has("action") ? args.get("action").getAsString()
+                    : "status", args.has("build") ? args.get("build").getAsInt() : -1);
             case "crashes" -> this.findCrashes(this.findMod(args));
             case "history" -> this.findHistory(this.findMod(args), args.has("limit")
                     ? Math.clamp(args.get("limit").getAsInt(), 1, 100) : 20);
@@ -205,6 +230,9 @@ public final class DevBridge implements Function<String, String> {
                 one.add("changed_methods", this.withLines(change, change.changed()));
                 one.add("new_methods", this.withLines(change, change.added()));
                 one.add("removed_methods", GSON.toJsonTree(change.removed()));
+                if (!change.diffs().isEmpty()) {
+                    one.add("diffs", GSON.toJsonTree(change.diffs()));
+                }
                 classes.add(one);
             }
             out.add("changed_classes", classes);
@@ -212,6 +240,10 @@ public final class DevBridge implements Function<String, String> {
             out.add("removed_classes", GSON.toJsonTree(info.removedClasses()));
             out.add("files", GSON.toJsonTree(info.files()));
             out.add("notes", GSON.toJsonTree(info.notes()));
+            if (!info.git().isEmpty()) {
+                out.addProperty("git", info.git());
+                out.addProperty("uncommitted", info.uncommitted());
+            }
         }
         out.add("threw", GSON.toJsonTree(mod.throwsByBuild().getOrDefault(build, List.of())));
         return out;
@@ -227,13 +259,16 @@ public final class DevBridge implements Function<String, String> {
     }
 
     private JsonElement waitForBuild(DevModView mod, long seconds) throws InterruptedException {
-        long since = this.clock.getAsLong();
-        long until = since + seconds * 1000;
+        long asked = this.clock.getAsLong();
+
+        long since = Math.max(asked - LOOK_BACK_MILLIS, this.told.getOrDefault(mod.id(), -1L) + 1);
+        long until = asked + seconds * 1000;
         while (this.clock.getAsLong() < until) {
             DevModView now = this.findById(mod.id());
             DevEvent event = now == null ? null : findEventSince(now, since, Set.of(DevEvent.Kind.IN,
                     DevEvent.Kind.ASSETS, DevEvent.Kind.NEEDS_RESTART, DevEvent.Kind.FAILED));
             if (now != null && event != null) {
+                this.told.put(mod.id(), event.at());
                 if (event.kind() == DevEvent.Kind.IN || event.kind() == DevEvent.Kind.ASSETS) {
                     Thread.sleep(FIRST_THROWS_MILLIS);
                     now = this.findById(mod.id());
@@ -265,6 +300,24 @@ public final class DevBridge implements Function<String, String> {
         }
         long since = this.clock.getAsLong();
         this.host.revertTo(mod.id(), build);
+        return this.awaitChange(mod.id(), since, Set.of(DevEvent.Kind.IN, DevEvent.Kind.FAILED));
+    }
+
+    private JsonElement restore(DevModView mod, int build) throws InterruptedException {
+        if (!mod.hasBuild(build)) {
+            return fail("build " + build + " is not kept; builds lists those that are");
+        }
+        long since = this.clock.getAsLong();
+        this.host.restore(mod.id(), build);
+        return this.awaitChange(mod.id(), since, Set.of(DevEvent.Kind.IN, DevEvent.Kind.FAILED));
+    }
+
+    private JsonElement restoreSavePoint(DevModView mod) throws InterruptedException {
+        if (!mod.canUndo()) {
+            return fail("no restore to undo");
+        }
+        long since = this.clock.getAsLong();
+        this.host.restoreSavePoint(mod.id());
         return this.awaitChange(mod.id(), since, Set.of(DevEvent.Kind.IN, DevEvent.Kind.FAILED));
     }
 
@@ -348,6 +401,7 @@ public final class DevBridge implements Function<String, String> {
             DevModView now = this.findById(id);
             DevEvent event = now == null ? null : findEventSince(now, since, kinds);
             if (event != null) {
+                this.told.put(id, event.at());
                 return describe(event);
             }
             Thread.sleep(POLL_MILLIS);
@@ -451,6 +505,59 @@ public final class DevBridge implements Function<String, String> {
         return out;
     }
 
+    private JsonElement runCompare(DevModView mod, String action, int build) {
+        switch (action) {
+            case "start" -> {
+                if (build < 0 || !mod.hasBuild(build) || build == mod.runningBuild()) {
+                    return fail("start takes a kept build other than the running one; builds lists them");
+                }
+                this.host.startCompare(mod.id(), mod.runningBuild(), build);
+            }
+            case "switch" -> this.host.switchCompare(mod.id());
+            case "stop" -> this.host.stopCompare(mod.id());
+            case "status" -> {
+            }
+            default -> {
+                return fail("action is start, switch, stop or status");
+            }
+        }
+        DevCompare compare = this.host.getDevMods().stream().filter(one -> one.id().equals(mod.id())).findFirst()
+                .map(DevModView::compare).orElse(null);
+        if (compare == null) {
+            return makeOk("no A/B has run");
+        }
+        JsonObject out = new JsonObject();
+        out.addProperty("a", compare.a());
+        out.addProperty("b", compare.b());
+        out.addProperty("running", compare.on());
+        out.addProperty("fps_a", compare.fpsA());
+        out.addProperty("fps_b", compare.fpsB());
+        out.addProperty("tick_ms_a", compare.tickMillisA());
+        out.addProperty("tick_ms_b", compare.tickMillisB());
+        out.addProperty("mb_per_second_a", compare.allocMbA());
+        out.addProperty("mb_per_second_b", compare.allocMbB());
+        out.addProperty("seconds_a", compare.secondsA());
+        out.addProperty("seconds_b", compare.secondsB());
+        out.addProperty("stopped", compare.done());
+        if (!compare.failed().isEmpty()) {
+            out.addProperty("failed", compare.failed());
+        }
+        JsonArray why = new JsonArray();
+        for (DevWhy one : compare.why()) {
+            JsonObject row = new JsonObject();
+            row.addProperty("method", one.findName());
+            row.addProperty("type", one.type());
+            row.addProperty("line", one.line());
+            row.addProperty("ms_per_second_a", one.timeA() * 1000);
+            row.addProperty("ms_per_second_b", one.timeB() * 1000);
+            row.addProperty("mb_per_second_a", one.madeA());
+            row.addProperty("mb_per_second_b", one.madeB());
+            why.add(row);
+        }
+        out.add("why", why);
+        return out;
+    }
+
     private static JsonObject makeOk(String said) {
         JsonObject out = new JsonObject();
         out.addProperty("ok", said);
@@ -468,6 +575,13 @@ public final class DevBridge implements Function<String, String> {
             throw new IllegalArgumentException("missing " + name);
         }
         return args.get(name).getAsInt();
+    }
+
+    private static String getString(JsonObject args, String name) {
+        if (!args.has(name)) {
+            throw new IllegalArgumentException("missing " + name);
+        }
+        return args.get(name).getAsString();
     }
 
     private static boolean isTrue(JsonObject args, String name) {

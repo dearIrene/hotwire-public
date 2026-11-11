@@ -90,6 +90,48 @@ public record DevMod(String id, String name, List<Path> folders) {
         return List.copyOf(found);
     }
 
+    public List<Path> findSourceRoots() {
+        Set<Path> roots = new LinkedHashSet<>();
+        for (Path folder : this.folders) {
+            Path module = findModule(folder);
+            Path src = module == null ? null : module.resolve("src");
+            if (src != null && Files.isDirectory(src)) {
+                roots.add(src);
+            } else {
+                Path project = findProject(normalize(folder));
+                if (project != null) {
+                    roots.add(project);
+                }
+            }
+        }
+        return List.copyOf(roots);
+    }
+
+    public @Nullable Path findSourceProject() {
+        for (Path folder : this.folders) {
+            Path project = findProject(normalize(folder));
+            if (project != null) {
+                return project;
+            }
+            Path module = findModule(folder);
+            if (module != null) {
+                return module;
+            }
+        }
+        return null;
+    }
+
+    private static @Nullable Path findModule(Path folder) {
+        Path at = normalize(folder);
+        for (int up = 0; at != null && up < 8; up++, at = at.getParent()) {
+            Path name = at.getFileName();
+            if (name != null && Set.of("build", "out", "bin").contains(name.toString())) {
+                return at.getParent();
+            }
+        }
+        return null;
+    }
+
     private static List<Path> findLoose(Set<Path> owned) {
         List<Path> loose = new ArrayList<>();
         for (String entry : System.getProperty("java.class.path", "").split(File.pathSeparator, -1)) {

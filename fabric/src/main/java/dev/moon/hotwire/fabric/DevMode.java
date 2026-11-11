@@ -6,12 +6,16 @@ import dev.moon.hotwire.config.HotwireSettings;
 import dev.moon.hotwire.fabric.dev.DevSession;
 import dev.moon.hotwire.fabric.screen.DevGameScreen;
 import dev.moon.hotwire.fabric.screen.WebLinks;
+import dev.moon.hotwire.ui.BuildMark;
 import dev.moon.hotwire.ui.DevWindow;
 import dev.moon.hotwire.ui.Lang;
 import dev.moon.hotwire.ui.Notice;
 import dev.moon.hotwire.ui.Notices;
 import java.io.IOException;
+import java.util.List;
+import java.util.function.UnaryOperator;
 import net.fabricmc.loader.api.FabricLoader;
+import net.minecraft.client.gui.screens.Screen;
 import org.jspecify.annotations.Nullable;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -21,6 +25,12 @@ final class DevMode implements AutoCloseable {
     private final @Nullable DevSession session;
     private final HotwireSettings settings;
     private @Nullable DevWindow window;
+
+    private UnaryOperator<@Nullable Screen> settingsScreen = back -> back;
+
+    void setSettingsScreen(UnaryOperator<@Nullable Screen> make) {
+        this.settingsScreen = make;
+    }
 
     DevMode(HotwireSettings settings, Tasks tasks, DevSession.Engine engine) {
         this.settings = settings;
@@ -32,6 +42,43 @@ final class DevMode implements AutoCloseable {
         }
         this.session = settings.isDevReloadOn(setup.inSetup())
                 ? DevSession.start(DevSetups.getBuildFolder(), tasks, engine) : null;
+        DevSession running = this.session;
+        if (running != null) {
+            NoticeHud.markWith(this::findMarkLines, settings::getBuildMarkAt);
+            NoticeHud.compareWith(running::findRunningCompare, running::getCompareKey, running::getExtras);
+        }
+    }
+
+    private List<String> findMarkLines() {
+        DevSession running = this.session;
+        return running == null || !this.settings.isBuildMarkOn() ? List.of() : running.findMarkLines();
+    }
+
+    void reloadAll() {
+        DevSession running = this.session;
+        if (running == null) {
+            Notices.show(Notice.ofAsk(Lang.get("hotwire.dev.window.title"), Lang.get("hotwire.dev.window.off")));
+        } else {
+            running.getDevMods().forEach(mod -> running.reloadNow(mod.id()));
+        }
+    }
+
+    void stepBack() {
+        DevSession running = this.session;
+        if (running == null) {
+            Notices.show(Notice.ofAsk(Lang.get("hotwire.dev.window.title"), Lang.get("hotwire.dev.window.off")));
+        } else {
+            running.stepBack();
+        }
+    }
+
+    void flip() {
+        DevSession running = this.session;
+        if (running == null) {
+            Notices.show(Notice.ofAsk(Lang.get("hotwire.dev.window.title"), Lang.get("hotwire.dev.window.off")));
+        } else {
+            running.flip();
+        }
     }
 
     void openWindow() {
@@ -48,12 +95,16 @@ final class DevMode implements AutoCloseable {
                 case JETBRAINS_WITHOUT_FLAG -> "hotwire.settings.developer.no_flag";
                 case OTHER -> "hotwire.settings.developer.other_java";
             }), setup.isFull(), this.settings.getDevWindow(), this.settings::setDevWindow,
-                    this.settings.getDevScale(), this.settings::setDevScale, () -> ModViews.show(null));
+                    this.settings.getDevScale(), this.settings::setDevScale, this.settings.getDevSeeThrough(),
+                    this.settings::setDevSeeThrough, () -> ModViews.show(null));
+
+            shown.setSettings(() -> ModViews.show(this.settingsScreen.apply(ModViews.openScreen())));
             shown.setMcp(FabricLoader.getInstance().isModLoaded("hotwire-mcp"),
                     () -> WebLinks.open("https://github.com/moonshee/hotwire/releases"));
             this.window = shown;
         }
-        ModViews.show(new DevGameScreen(shown));
+        ModViews.show(new DevGameScreen(shown, new BuildMark(this::findMarkLines, this.settings::getBuildMarkAt,
+                this.settings::setBuildMarkAt)));
     }
 
     @Override

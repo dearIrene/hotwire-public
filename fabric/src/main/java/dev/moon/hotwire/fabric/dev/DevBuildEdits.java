@@ -52,21 +52,19 @@ final class DevBuildEdits {
             indexed = false;
             LOGGER.debug("[Hotwire] {} could not be saved for a roll back", before.getJar(), e);
         }
+
+        Path launched = before.getJar().resolveSibling("build-0.jar");
+        if (indexed && !before.getJar().equals(launched) && !before.getJar().equals(mod.startJar)
+                && !before.getJar().equals(built.getJar())) {
+            before.dropJar();
+        }
         synchronized (mod) {
             mod.parents.putIfAbsent(number, mod.runningNumber);
             mod.saved.removeIf(saved -> saved.number() == number || saved.number() == mod.runningNumber);
             if (indexed) {
                 mod.saved.addFirst(new SavedBuild(mod.runningNumber, before.getJar()));
             }
-
-            int over = mod.saved.size() - this.engine.getSavedBuilds();
-            Iterator<SavedBuild> oldest = mod.saved.descendingIterator();
-            while (over > 0 && oldest.hasNext()) {
-                if (!mod.pinned.contains(oldest.next().number())) {
-                    oldest.remove();
-                    over--;
-                }
-            }
+            this.dropOldest(mod);
             for (SavedBuild saved : mod.saved) {
                 staying.add(saved.jar());
                 staying.add(saved.jar().resolveSibling(saved.jar().getFileName() + ".idx"));
@@ -74,6 +72,7 @@ final class DevBuildEdits {
 
             forgetGone(mod, number);
         }
+        mod.lastRunning = mod.runningNumber;
         mod.running = built;
         mod.runningNumber = number;
         mod.builtAt = System.currentTimeMillis();
@@ -82,11 +81,33 @@ final class DevBuildEdits {
 
         Path start = built.getJar().resolveSibling("build-0.jar");
         staying.add(built.getJar());
-        staying.add(start);
-        staying.add(start.resolveSibling("build-0.jar.idx"));
+        staying.add(built.getJar().resolveSibling(built.getJar().getFileName() + ".idx"));
+        for (Path launch : List.of(start, mod.startJar)) {
+            staying.add(launch);
+            staying.add(launch.resolveSibling(launch.getFileName() + ".idx"));
+        }
         DevSession.deleteBuildsBut(staying.toArray(Path[]::new));
         LOGGER.info("[Hotwire] {} runs build {} now (was {})", mod.mod.id(), built.getJar().getFileName(),
                 before.getJar().getFileName());
+    }
+
+    private void dropOldest(SessionMod mod) {
+        int over = mod.saved.size() - this.engine.getSavedBuilds();
+        Iterator<SavedBuild> oldest = mod.saved.descendingIterator();
+        while (over > 0 && oldest.hasNext()) {
+            int number = oldest.next().number();
+            if (!mod.pinned.contains(number) && !mod.isInUse(number)) {
+                oldest.remove();
+                over--;
+            }
+        }
+    }
+
+    void dropPastLimit(SessionMod mod) {
+        synchronized (mod) {
+            this.dropOldest(mod);
+            forgetGone(mod, mod.runningNumber);
+        }
     }
 
     void record(SessionMod mod, DevBuild built, int number, int madeOn, DevBuild.Diff diff, Map<String, byte[]> was,
@@ -196,7 +217,6 @@ final class DevBuildEdits {
             Path jar = this.folder.resolve(mod.mod.id()).resolve("build-" + number + ".jar");
             try {
                 merged = DevBuild.combine(base, from, plan.gone(), jar);
-                merged.writeIndex();
             } catch (IOException e) {
                 DevSession.deleteQuietly(jar);
                 DevSession.deleteQuietly(jar.resolveSibling(jar.getFileName() + ".idx"));
@@ -207,6 +227,10 @@ final class DevBuildEdits {
             mod.builds = number;
         }
         DevBuildInfo info = findMergedInfo(plan, number, base, merged, infos);
+
+        if (!plan.isFast() && merged != mod.running) {
+            merged.dropJar();
+        }
         synchronized (mod) {
             mod.saved.removeIf(saved -> plan.removed().contains(saved.number()));
             if (!plan.isFast()) {
@@ -339,8 +363,16 @@ final class DevBuildEdits {
             if (running) {
                 mod.running.writeIndex();
             }
-            link(from, jar);
+
+            if (Files.isRegularFile(from)) {
+                link(from, jar);
+            }
             link(from.resolveSibling(from.getFileName() + ".idx"), index);
+
+            DevBuild copied = DevBuild.readIndex(jar);
+            if (copied != null) {
+                copied.dropJar();
+            }
         } catch (IOException e) {
             DevSession.deleteQuietly(jar);
             DevSession.deleteQuietly(index);
@@ -358,7 +390,8 @@ final class DevBuildEdits {
             DevBuildInfo info = mod.infos.get(build);
             if (info != null) {
                 mod.infos.put(number, new DevBuildInfo(number, info.madeOn(), info.at(), info.classes(),
-                        info.addedClasses(), info.removedClasses(), info.files(), info.notes(), info.merged()));
+                        info.addedClasses(), info.removedClasses(), info.files(), info.notes(), info.merged(),
+                        info.git(), info.uncommitted()));
             }
             DevDelta delta = mod.deltas.get(build);
             if (delta != null) {
@@ -405,5 +438,13 @@ final class DevBuildEdits {
                     Lang.get("hotwire.dev.config.refreshed", name)));
         }
         return notes;
+    }
+
+    static void collectStore(Path modFolder) {
+        try {
+            DevBuild.collect(modFolder);
+        } catch (IOException e) {
+            LOGGER.debug("[Hotwire] the stored files of {} could not be collected", modFolder.getFileName(), e);
+        }
     }
 }

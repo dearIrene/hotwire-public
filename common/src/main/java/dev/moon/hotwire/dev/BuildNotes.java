@@ -10,6 +10,7 @@ import java.util.SortedSet;
 import java.util.TreeSet;
 import org.jspecify.annotations.Nullable;
 import org.objectweb.asm.ClassReader;
+import org.objectweb.asm.Handle;
 import org.objectweb.asm.tree.AbstractInsnNode;
 import org.objectweb.asm.tree.ClassNode;
 import org.objectweb.asm.tree.FieldInsnNode;
@@ -19,8 +20,11 @@ import org.objectweb.asm.tree.IntInsnNode;
 import org.objectweb.asm.tree.InvokeDynamicInsnNode;
 import org.objectweb.asm.tree.LdcInsnNode;
 import org.objectweb.asm.tree.LineNumberNode;
+import org.objectweb.asm.tree.LookupSwitchInsnNode;
 import org.objectweb.asm.tree.MethodInsnNode;
 import org.objectweb.asm.tree.MethodNode;
+import org.objectweb.asm.tree.MultiANewArrayInsnNode;
+import org.objectweb.asm.tree.TableSwitchInsnNode;
 import org.objectweb.asm.tree.TypeInsnNode;
 import org.objectweb.asm.tree.VarInsnNode;
 
@@ -162,7 +166,18 @@ public final class BuildNotes {
                 case IntInsnNode value -> code.append(value.operand);
                 case VarInsnNode local -> code.append(local.var);
                 case IincInsnNode step -> code.append(step.var).append(':').append(step.incr);
-                case InvokeDynamicInsnNode dynamic -> code.append(dynamic.name).append(dynamic.desc);
+                case InvokeDynamicInsnNode dynamic -> {
+                    code.append(dynamic.name).append(dynamic.desc);
+
+                    for (Object arg : dynamic.bsmArgs) {
+                        if (!(arg instanceof Handle)) {
+                            code.append(arg);
+                        }
+                    }
+                }
+                case TableSwitchInsnNode table -> code.append(table.min).append(':').append(table.max);
+                case LookupSwitchInsnNode lookup -> code.append(lookup.keys);
+                case MultiANewArrayInsnNode array -> code.append(array.desc).append(array.dims);
                 default -> {
                 }
             }

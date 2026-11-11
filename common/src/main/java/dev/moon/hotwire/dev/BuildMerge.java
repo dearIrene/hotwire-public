@@ -153,7 +153,8 @@ public final class BuildMerge {
         removed.remove(running);
         removed.removeAll(pinned);
         int parent = base;
-        while (removed.contains(parent)) {
+
+        for (int steps = 0; removed.contains(parent) && steps <= removed.size(); steps++) {
             Integer up = parents.get(parent);
             parent = up == null ? -1 : up;
         }

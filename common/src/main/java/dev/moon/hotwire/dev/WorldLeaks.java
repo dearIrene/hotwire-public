@@ -8,7 +8,6 @@ import java.lang.reflect.Modifier;
 import java.util.ArrayDeque;
 import java.util.Collection;
 import java.util.Collections;
-import java.util.ConcurrentModificationException;
 import java.util.Deque;
 import java.util.IdentityHashMap;
 import java.util.List;
@@ -90,18 +89,20 @@ public final class WorldLeaks {
     private static boolean reaches(Object from, Object target, Set<Object> seen) {
         Deque<Object> level = new ArrayDeque<>();
         level.add(from);
+
+        int walked = 0;
         for (int depth = 0; depth <= DEPTH && !level.isEmpty(); depth++) {
             Deque<Object> next = new ArrayDeque<>();
             for (Object at : level) {
                 if (at == target) {
                     return true;
                 }
-                if (!seen.add(at) || seen.size() > MOST_OBJECTS) {
+                if (!seen.add(at) || ++walked > MOST_OBJECTS) {
                     continue;
                 }
                 try {
                     collectChildren(at, next);
-                } catch (ConcurrentModificationException e) {
+                } catch (RuntimeException | LinkageError e) {
                 }
             }
             level = next;

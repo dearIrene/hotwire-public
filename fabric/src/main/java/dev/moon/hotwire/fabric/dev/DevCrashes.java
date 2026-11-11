@@ -1,5 +1,7 @@
 package dev.moon.hotwire.fabric.dev;
 
+import dev.moon.hotwire.dev.DevBuildInfo;
+import dev.moon.hotwire.dev.DevClassChange;
 import dev.moon.hotwire.dev.DevCrash;
 import dev.moon.hotwire.dev.DevEvent;
 import dev.moon.hotwire.ui.Lang;
@@ -8,6 +10,7 @@ import dev.moon.hotwire.ui.Notices;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.OptionalInt;
 import org.jspecify.annotations.Nullable;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -75,14 +78,50 @@ final class DevCrashes {
             session.revertTo(id, parent);
             return;
         }
-        Notice card = findCrashCard(mod, count == 1 ? Lang.get("hotwire.dev.crash.at", kind, place)
-                : Lang.get("hotwire.dev.crash.times", kind, place, count));
+        String said = count == 1 ? Lang.get("hotwire.dev.crash.at", kind, place)
+                : Lang.get("hotwire.dev.crash.times", kind, place, count);
+        OptionalInt blamed = findBlamed(mod, source, line);
+        Notice card = findCrashCard(mod, blamed.isEmpty() ? said
+                : Lang.get("hotwire.dev.crash.blame", said, blamed.getAsInt()));
         if (mod.crashTold) {
             Notices.replace(card);
         } else {
             mod.crashTold = true;
             Notices.show(card);
         }
+    }
+
+    static OptionalInt findBlamed(SessionMod mod, String source, int line) {
+        if (source.isEmpty() || line <= 0) {
+            return OptionalInt.empty();
+        }
+        synchronized (mod) {
+            int best = -1;
+            for (Map.Entry<Integer, DevBuildInfo> entry : mod.infos.entrySet()) {
+                int build = entry.getKey();
+                if (build > mod.runningNumber || build <= best || !isOnPath(mod, build)) {
+                    continue;
+                }
+                for (DevClassChange change : entry.getValue().classes()) {
+                    if (change.type().equals(source) && change.lines().values().stream()
+                            .anyMatch(span -> span.size() == 2 && span.get(0) <= line && line <= span.get(1))) {
+                        best = build;
+                    }
+                }
+            }
+            return best < 0 ? OptionalInt.empty() : OptionalInt.of(best);
+        }
+    }
+
+    private static boolean isOnPath(SessionMod mod, int build) {
+        Integer at = mod.runningNumber;
+        for (int steps = 0; at != null && steps < 10_000; steps++) {
+            if (at == build) {
+                return true;
+            }
+            at = mod.parents.get(at);
+        }
+        return false;
     }
 
     static Map<Integer, List<String>> findThrows(SessionMod mod) {
