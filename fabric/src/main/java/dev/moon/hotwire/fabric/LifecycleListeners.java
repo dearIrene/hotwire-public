@@ -1,13 +1,14 @@
 package dev.moon.hotwire.fabric;
 
 import dev.moon.hotwire.api.ModLifecycleListener;
+import dev.moon.hotwire.api.Registration;
 import dev.moon.hotwire.fabric.registration.GameHold;
 import dev.moon.hotwire.fabric.registration.GameRegistrations;
+import dev.moon.hotwire.switching.Listeners;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Set;
 import java.util.concurrent.ConcurrentHashMap;
-import java.util.concurrent.CopyOnWriteArrayList;
 import java.util.concurrent.ExecutionException;
 import java.util.concurrent.TimeoutException;
 import java.util.function.Consumer;
@@ -20,7 +21,7 @@ import org.slf4j.LoggerFactory;
 public final class LifecycleListeners {
     private static final Logger LOGGER = LoggerFactory.getLogger(LifecycleListeners.class);
     private static final long WAIT_SECONDS = 5;
-    private static final List<Listener> LISTENERS = new CopyOnWriteArrayList<>();
+    private static final Listeners<ModLifecycleListener> LISTENERS = new Listeners<>();
 
     private static final Set<String> TOLD_OFF = ConcurrentHashMap.newKeySet();
     private static final Set<String> CAME_ON = ConcurrentHashMap.newKeySet();
@@ -28,18 +29,54 @@ public final class LifecycleListeners {
     private static final ThreadLocal<int[]> DEPTH = ThreadLocal.withInitial(() -> new int[1]);
     private static volatile Predicate<String> isOn = id -> true;
 
-    private record Listener(ModLifecycleListener listener, @Nullable String mod) {
-    }
-
     private LifecycleListeners() {
     }
 
-    static void add(ModLifecycleListener listener) {
-        LISTENERS.add(new Listener(listener, GameRegistrations.findModOrShipper(listener.getClass())));
+    static Registration add(ModLifecycleListener listener) {
+        return LISTENERS.add(listener, GameRegistrations.findModOrShipper(listener.getClass()));
+    }
+
+    static Registration add(String modId, ModLifecycleListener listener) {
+        return LISTENERS.add(new ModLifecycleListener() {
+            @Override
+            public void prepareOff(List<String> ids) {
+                if (ids.contains(modId)) {
+                    listener.prepareOff(ids);
+                }
+            }
+
+            @Override
+            public void finishOn(List<String> ids) {
+                if (ids.contains(modId)) {
+                    listener.finishOn(ids);
+                }
+            }
+
+            @Override
+            public void prepareStart(List<String> ids) {
+                if (ids.contains(modId)) {
+                    listener.prepareStart(ids);
+                }
+            }
+
+            @Override
+            public void finishStart(List<String> ids, boolean ok) {
+                if (ids.contains(modId)) {
+                    listener.finishStart(ids, ok);
+                }
+            }
+
+            @Override
+            public void finishUpdate(List<String> ids) {
+                if (ids.contains(modId)) {
+                    listener.finishUpdate(ids);
+                }
+            }
+        }, GameRegistrations.findModOrShipper(listener.getClass()));
     }
 
     public static boolean isListening(@Nullable String mod) {
-        return mod != null && LISTENERS.stream().anyMatch(one -> mod.equals(one.mod()));
+        return LISTENERS.isListening(mod);
     }
 
     static void setIsOn(Predicate<String> on) {
@@ -120,18 +157,7 @@ public final class LifecycleListeners {
         if (LISTENERS.isEmpty()) {
             return;
         }
-        Runnable each = () -> {
-            for (Listener listener : LISTENERS) {
-                if (listener.mod() != null && !isOn.test(listener.mod())) {
-                    continue;
-                }
-                try {
-                    call.accept(listener.listener());
-                } catch (RuntimeException | LinkageError e) {
-                    LOGGER.warn("[Hotwire] {}'s lifecycle listener threw in {}", listener.mod(), what, e);
-                }
-            }
-        };
+        Runnable each = () -> LISTENERS.tell(what, isOn, call);
         Minecraft client = Minecraft.getInstance();
         if (client.isSameThread()) {
             each.run();

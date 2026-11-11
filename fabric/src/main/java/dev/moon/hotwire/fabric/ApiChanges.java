@@ -5,6 +5,7 @@ import dev.moon.hotwire.api.ChangeRequest;
 import dev.moon.hotwire.api.ModUpdate;
 import dev.moon.hotwire.api.ModUpdates;
 import dev.moon.hotwire.api.PendingTask;
+import dev.moon.hotwire.api.Reason;
 import dev.moon.hotwire.api.SwitchPreview;
 import dev.moon.hotwire.api.SwitchResult;
 import dev.moon.hotwire.fabric.add.ModAdder;
@@ -85,7 +86,7 @@ final class ApiChanges {
                 made.complete(work(request, callers));
             } catch (IOException | RuntimeException e) {
                 LOGGER.warn("[Hotwire] the API's plan failed", e);
-                made.complete(new Plan(false, ChangePlan.Reason.REFUSED, List.of(Lang.get("hotwire.api.plan_failed",
+                made.complete(new Plan(false, Reason.REFUSED, List.of(Lang.get("hotwire.api.plan_failed",
                         e.toString())), request, List.of(), callers, List.of(), List.of(), false));
             }
         });
@@ -96,11 +97,11 @@ final class ApiChanges {
         HotwireEngine engine = HotwireClient.findEngine();
         if (engine == null || engine.findJvmParts().isEmpty()) {
             String why = engine == null ? Lang.get("hotwire.api.starting") : engine.getSwitchRefusal();
-            return new Plan(false, ChangePlan.Reason.NOT_READY, List.of(why), request, List.of(), callers,
+            return new Plan(false, Reason.NOT_READY, List.of(why), request, List.of(), callers,
                     List.of(), List.of(), false);
         }
         List<String> lines = new ArrayList<>();
-        ChangePlan.Reason reason = ChangePlan.Reason.NONE;
+        Reason reason = Reason.NONE;
         boolean can = true;
         List<String> goingOff = List.of();
         if (!request.off().isEmpty()) {
@@ -109,7 +110,7 @@ final class ApiChanges {
             lines.add(preview.message());
             if (!preview.possible()) {
                 can = false;
-                reason = engine.isWorldLocked() ? ChangePlan.Reason.WORLD_LOCKED : ChangePlan.Reason.REFUSED;
+                reason = engine.isWorldLocked() ? Reason.WORLD_LOCKED : Reason.REFUSED;
             }
         }
 
@@ -126,15 +127,15 @@ final class ApiChanges {
             if (on.isRefused()) {
                 lines.add(PlayerMessages.describe(new ModSwitcher.Result.Refused(on), engine::nameOfMod));
                 can = false;
-                reason = ChangePlan.Reason.NEEDS_MOD;
+                reason = Reason.NEEDS_MOD;
             } else if (self != null) {
                 lines.add(self);
                 can = false;
-                reason = ChangePlan.Reason.REFUSED;
+                reason = Reason.REFUSED;
             } else if (!both.isEmpty()) {
                 lines.add(Lang.get("hotwire.api.on_and_off", PlayerMessages.joinNames(both, engine::nameOfMod)));
                 can = false;
-                reason = ChangePlan.Reason.REFUSED;
+                reason = Reason.REFUSED;
             } else if (!on.order().isEmpty()) {
                 lines.add(Lang.get("hotwire.switch.preview_on", PlayerMessages.joinNames(on.order(),
                         engine::nameOfMod)));
@@ -147,8 +148,14 @@ final class ApiChanges {
             ModManifest manifest = JarLookup.findManifest(jar);
             (manifest != null && engine.findJarOf(manifest.id()) != null ? jars : adding).add(jar);
         }
-        for (String project : request.add()) {
-            adding.addAll(StoreApiAdd.fetchJars(project).join());
+        for (ChangeRequest.Add project : request.add()) {
+            StoreApiAdd.StoreJars fetched = StoreApiAdd.fetchJars(project.idOrSlug(), project.versionId()).join();
+            adding.addAll(fetched.jars());
+            if (fetched.jars().isEmpty()) {
+                lines.add(fetched.why());
+                can = false;
+                reason = Reason.REFUSED;
+            }
         }
         if (!request.update().isEmpty() || !jars.isEmpty()) {
             UpdateCheck check = engine.storeJars.getCheck();
@@ -179,21 +186,21 @@ final class ApiChanges {
             if (jars.isEmpty() && !request.update().isEmpty()) {
                 lines.add(Lang.get("hotwire.api.no_update"));
                 can = false;
-                reason = ChangePlan.Reason.REFUSED;
+                reason = Reason.REFUSED;
             }
             for (ModUpdater.SortResult sorted : results) {
                 switch (sorted) {
                     case ModUpdater.SortResult.Refused refused -> {
                         lines.add(describe(refused.result()));
                         can = false;
-                        reason = ChangePlan.Reason.NEEDS_MOD;
+                        reason = Reason.NEEDS_MOD;
                     }
                     case ModUpdater.SortResult.Planned planned -> {
                         boolean now = planned.method() == UpdateMethod.IN_PLACE;
                         lines.add(Lang.get(now ? "hotwire.api.update_now" : "hotwire.api.update_later",
                                 planned.manifest().name(), planned.manifest().version()));
-                        if (!now && reason == ChangePlan.Reason.NONE) {
-                            reason = ChangePlan.Reason.NEEDS_RESTART;
+                        if (!now && reason == Reason.NONE) {
+                            reason = Reason.NEEDS_RESTART;
                         }
                     }
                     case ModUpdater.SortResult.IdChanged changed -> lines.add(Lang.get("hotwire.api.update_later",
@@ -212,8 +219,8 @@ final class ApiChanges {
             if (parts.runner().getSwitcher().needsReopen(planned)) {
                 reopen = true;
                 lines.add(Lang.get("hotwire.api.switch_reopen"));
-                if (reason == ChangePlan.Reason.NONE) {
-                    reason = ChangePlan.Reason.NEEDS_REOPEN;
+                if (reason == Reason.NONE) {
+                    reason = Reason.NEEDS_REOPEN;
                 }
             }
         }
@@ -224,19 +231,21 @@ final class ApiChanges {
                 case REFUSED -> {
                     lines.addAll(preview.lines());
                     can = false;
-                    reason = ChangePlan.Reason.REFUSED;
+                    ModManifest manifest = JarLookup.findManifest(jar);
+                    reason = manifest != null && engine.findJarOf(manifest.id()) != null ? Reason.INSTALLED
+                            : Reason.REFUSED;
                 }
                 case NEXT_START -> {
                     lines.add(Lang.get("hotwire.api.add_later", preview.name()));
-                    if (reason == ChangePlan.Reason.NONE) {
-                        reason = ChangePlan.Reason.NEEDS_RESTART;
+                    if (reason == Reason.NONE) {
+                        reason = Reason.NEEDS_RESTART;
                     }
                 }
                 case SAVE_AND_REOPEN -> {
                     lines.add(Lang.get("hotwire.api.add_reopen", preview.name()));
                     reopen = true;
-                    if (reason == ChangePlan.Reason.NONE) {
-                        reason = ChangePlan.Reason.NEEDS_REOPEN;
+                    if (reason == Reason.NONE) {
+                        reason = Reason.NEEDS_REOPEN;
                     }
                 }
                 default -> lines.add(Lang.get("hotwire.api.add_now", preview.name()));
@@ -352,7 +361,7 @@ final class ApiChanges {
         return result instanceof ModUpdater.Result.Refused refused ? refused.reason() : String.valueOf(result);
     }
 
-    private record Plan(boolean can, ChangePlan.Reason reason, List<String> lines, ChangeRequest request,
+    private record Plan(boolean can, Reason reason, List<String> lines, ChangeRequest request,
             List<Path> jars, CallerBlocks.Callers callers, List<Path> adding, List<AddMode> addModes,
             boolean reopen) implements ChangePlan {
         @Override
@@ -373,7 +382,7 @@ final class ApiChanges {
             if (engine == null || !this.canWaitForNextStart()) {
                 ended.complete(new SwitchResult(SwitchResult.Kind.REFUSED, List.of(),
                         Lang.get("hotwire.api.no_wait")));
-                return ended;
+                return HotwireApiImpl.onGame(ended);
             }
             Thread.ofPlatform().name("hotwire-api-queue").daemon().start(() -> {
                 ChangeOutcome updates = readUpdates(this.jars.stream().map(jar -> engine.getChanges().queueUpdate(jar))
@@ -388,7 +397,7 @@ final class ApiChanges {
                         List.of(), bad.isEmpty() ? Lang.get("hotwire.api.change_done") : String.join(" ", bad),
                         List.of(), later));
             });
-            return ended;
+            return HotwireApiImpl.onGameAsResult(ended);
         }
 
         @Override
@@ -397,7 +406,7 @@ final class ApiChanges {
         }
 
         @Override
-        public ChangePlan.Reason getReason() {
+        public Reason getReason() {
             return this.reason;
         }
 
@@ -410,8 +419,9 @@ final class ApiChanges {
         public CompletableFuture<SwitchResult> accept() {
             CompletableFuture<SwitchResult> ended = new CompletableFuture<>();
             if (!this.can) {
-                ended.complete(new SwitchResult(SwitchResult.Kind.REFUSED, List.of(), String.join(" ", this.lines)));
-                return ended;
+                ended.complete(SwitchResult.ofRefusal(this.reason == Reason.NONE ? Reason.REFUSED : this.reason,
+                        String.join(" ", this.lines)));
+                return HotwireApiImpl.onGame(ended);
             }
             RUNNING.incrementAndGet();
             Thread.ofPlatform().name("hotwire-api-change").daemon().start(() -> {
@@ -425,7 +435,7 @@ final class ApiChanges {
                     RUNNING.decrementAndGet();
                 }
             });
-            return ended;
+            return HotwireApiImpl.onGame(ended);
         }
 
         @SuppressWarnings("FutureReturnValueIgnored")

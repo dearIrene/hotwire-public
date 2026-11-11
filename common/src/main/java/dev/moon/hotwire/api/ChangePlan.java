@@ -4,24 +4,6 @@ import java.util.List;
 import java.util.concurrent.CompletableFuture;
 
 public interface ChangePlan {
-    enum Reason {
-        NONE,
-
-        NOT_READY,
-
-        NEEDS_MOD,
-
-        NEEDS_RESTART,
-
-        NEEDS_REOPEN,
-
-        WORLD_LOCKED,
-
-        REFUSED,
-
-        INSTALLED
-    }
-
     boolean canApply();
 
     Reason getReason();

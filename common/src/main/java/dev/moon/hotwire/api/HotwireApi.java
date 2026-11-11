@@ -15,25 +15,25 @@ public interface HotwireApi {
 
     int getRevision();
 
-    boolean isReady();
+    default boolean hasRevision(int revision) {
+        return this.getRevision() >= revision;
+    }
 
     ApiStatus getStatus();
-
-    boolean isSwitching();
 
     SwitchProgress getProgress();
 
     List<ModState> getMods();
 
-    Optional<ModState> findMod(String id);
+    Optional<ModState> findMod(String modId);
 
-    SwitchPreview previewOff(Collection<String> ids);
+    SwitchPreview previewOff(Collection<String> modIds);
 
-    SwitchPreview previewOn(Collection<String> ids);
+    SwitchPreview previewOn(Collection<String> modIds);
 
-    CompletableFuture<SwitchResult> turnOff(Collection<String> ids);
+    CompletableFuture<SwitchResult> turnOff(Collection<String> modIds);
 
-    CompletableFuture<SwitchResult> turnOn(Collection<String> ids);
+    CompletableFuture<SwitchResult> turnOn(Collection<String> modIds);
 
     CompletableFuture<ModUpdates> checkUpdates();
 
@@ -43,23 +43,21 @@ public interface HotwireApi {
 
     List<PendingTask> getPendingTasks();
 
-    List<PendingTask> getAllPendingTasks();
-
     boolean cancelPendingTask(String modId);
 
-    boolean isAddedThisSession(String id);
+    boolean isAddedThisSession(String modId);
 
-    Optional<byte[]> findIcon(String id);
+    Optional<byte[]> findIcon(String modId);
 
     String findNewerHotwire();
 
-    void updateHotwire();
+    CompletableFuture<SwitchResult> updateHotwire();
 
-    CompletableFuture<SwitchResult> queueHotwireUpdate();
+    Registration addListener(Consumer<SwitchResult> listener);
 
-    void addListener(Consumer<SwitchResult> listener);
+    Registration addLifecycleListener(ModLifecycleListener listener);
 
-    void addLifecycleListener(ModLifecycleListener listener);
+    Registration addLifecycleListener(String modId, ModLifecycleListener listener);
 
     boolean showPrompt();
 
@@ -75,21 +73,29 @@ public interface HotwireApi {
 
     CompletableFuture<Optional<StoreProject>> findStoreProject(StoreQuery browsing, String idOrSlug);
 
-    CompletableFuture<StoreAdd> requestAdd(String idOrSlug, String versionId);
-
-    CompletableFuture<StoreAdd> requestAdd(String idOrSlug, String versionId, String tag);
-
     CompletableFuture<SwitchResult> queueForNextStart(String idOrSlug, String versionId);
+
+    default CompletableFuture<SwitchResult> queueForNextStart(String idOrSlug) {
+        return this.queueForNextStart(idOrSlug, "");
+    }
 
     CompletableFuture<SwitchResult> saveToDownloads(StoreQuery browsing, String idOrSlug, String versionId);
 
+    default CompletableFuture<SwitchResult> saveToDownloads(StoreQuery browsing, String idOrSlug) {
+        return this.saveToDownloads(browsing, idOrSlug, "");
+    }
+
     void openDownloads();
 
-    void fetchPack(StoreKind kind, String idOrSlug, String versionId);
+    CompletableFuture<SwitchResult> fetchPack(StoreKind kind, String idOrSlug, String versionId);
 
-    StorePackState findPackState(StoreKind kind, String projectId);
+    default CompletableFuture<SwitchResult> fetchPack(StoreKind kind, String idOrSlug) {
+        return this.fetchPack(kind, idOrSlug, "");
+    }
 
-    void togglePack(StoreKind kind, String projectId);
+    StorePackState findPackState(StoreKind kind, String idOrSlug);
+
+    CompletableFuture<SwitchResult> togglePack(StoreKind kind, String idOrSlug);
 
     List<StoreDownload> getStoreDownloads();
 

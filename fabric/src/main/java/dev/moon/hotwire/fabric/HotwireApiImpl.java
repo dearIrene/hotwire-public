@@ -9,7 +9,8 @@ import dev.moon.hotwire.api.ModState;
 import dev.moon.hotwire.api.ModUpdates;
 import dev.moon.hotwire.api.OpeningPrompt;
 import dev.moon.hotwire.api.PendingTask;
-import dev.moon.hotwire.api.StoreAdd;
+import dev.moon.hotwire.api.Reason;
+import dev.moon.hotwire.api.Registration;
 import dev.moon.hotwire.api.StoreCategory;
 import dev.moon.hotwire.api.StoreDownload;
 import dev.moon.hotwire.api.StoreKind;
@@ -27,8 +28,11 @@ import dev.moon.hotwire.modrinth.Downloads;
 import dev.moon.hotwire.plan.SwitchPlan;
 import dev.moon.hotwire.redefine.HandlerGuards;
 import dev.moon.hotwire.switching.CallerBlocks;
+import dev.moon.hotwire.switching.Listeners;
 import dev.moon.hotwire.switching.ModSwitcher;
 import dev.moon.hotwire.switching.PlayerMessages;
+import dev.moon.hotwire.switching.SwitchHistory;
+import dev.moon.hotwire.switching.Waits;
 import dev.moon.hotwire.ui.FirstOpenPanel;
 import dev.moon.hotwire.ui.Lang;
 import dev.moon.hotwire.ui.Progress;
@@ -46,7 +50,6 @@ import java.util.Optional;
 import java.util.Set;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.ConcurrentHashMap;
-import java.util.concurrent.CopyOnWriteArrayList;
 import java.util.concurrent.atomic.AtomicInteger;
 import java.util.function.Consumer;
 import java.util.function.Predicate;
@@ -58,29 +61,48 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 public final class HotwireApiImpl implements HotwireApi {
-    private static final int REVISION = 10;
+    private static final int REVISION = 1;
     private static final StackWalker STACK = StackWalker.getInstance(StackWalker.Option.RETAIN_CLASS_REFERENCE);
     private static final Logger LOGGER = LoggerFactory.getLogger(HotwireApiImpl.class);
+    private static final Listeners<Consumer<SwitchResult>> LISTENERS = new Listeners<>();
+    private static final Waits WAITS = new Waits();
 
-    private static final List<Listener> LISTENERS = new CopyOnWriteArrayList<>();
+    private static final Map<CallerBlocks.Callers, ModRowCache> MODS_SEEN = new ConcurrentHashMap<>();
+    private static final long MODS_FRESH_NANOS = 100_000_000L;
 
     private static final AtomicInteger SWITCHING = new AtomicInteger();
 
     private static final Set<String> PROMPTED = ConcurrentHashMap.newKeySet();
     private static final Set<String> UNPROMPTED_TOLD = ConcurrentHashMap.newKeySet();
 
-    private record Listener(Consumer<SwitchResult> listener, @Nullable String mod) {
+    private record ModRowCache(long at, List<ModState> mods) {
+    }
+
+    @SuppressWarnings("FutureReturnValueIgnored")
+    static <T> CompletableFuture<T> onGame(CompletableFuture<T> made) {
+        CompletableFuture<T> ended = new CompletableFuture<>();
+        made.whenComplete((value, error) -> Minecraft.getInstance().execute(() -> {
+            if (error != null) {
+                ended.completeExceptionally(error);
+            } else {
+                ended.complete(value);
+            }
+        }));
+        return ended;
+    }
+
+    static CompletableFuture<SwitchResult> onGameAsResult(CompletableFuture<SwitchResult> made) {
+        return onGame(made.exceptionally(HotwireApiImpl::toFailure));
+    }
+
+    static SwitchResult toFailure(Throwable error) {
+        LOGGER.warn("[Hotwire] a change asked through the API failed", error);
+        return new SwitchResult(SwitchResult.Kind.FAILED, List.of(), Lang.get("hotwire.failed", error));
     }
 
     @Override
     public int getRevision() {
         return REVISION;
-    }
-
-    @Override
-    public boolean isReady() {
-        HotwireEngine engine = HotwireClient.findEngine();
-        return engine != null && engine.findJvmParts().isPresent();
     }
 
     @Override
@@ -93,7 +115,7 @@ public final class HotwireApiImpl implements HotwireApi {
             return new ApiStatus(ApiStatus.State.UNAVAILABLE, 0, engine.getSwitchRefusal());
         }
         Progress.Snapshot now = engine.getProgress().snapshot();
-        if (now.running() || this.isSwitching() || ApiChanges.isRunning()) {
+        if (now.running() || SWITCHING.get() > 0 || ApiChanges.isRunning()) {
             return new ApiStatus(ApiStatus.State.BUSY, now.running() ? now.getFraction() : 0,
                     now.running() ? now.describe() : "");
         }
@@ -102,27 +124,11 @@ public final class HotwireApiImpl implements HotwireApi {
 
     @Override
     public CompletableFuture<Void> awaitIdle() {
-        CompletableFuture<Void> idle = new CompletableFuture<>();
-        Thread.ofPlatform().name("hotwire-api-idle").daemon().start(() -> {
-            try {
-                while (this.getStatus().state() == ApiStatus.State.BUSY) {
-                    Thread.sleep(50);
-                }
-            } catch (InterruptedException e) {
-                Thread.currentThread().interrupt();
-            }
-            idle.complete(null);
-        });
-        return idle;
+        return onGame(WAITS.awaitTrue(() -> this.getStatus().state() != ApiStatus.State.BUSY));
     }
 
     @Override
     public List<PendingTask> getPendingTasks() {
-        return ApiChanges.findPending().stream().filter(task -> task.kind() != PendingTask.Kind.REVERTABLE).toList();
-    }
-
-    @Override
-    public List<PendingTask> getAllPendingTasks() {
         return ApiChanges.findPending();
     }
 
@@ -149,40 +155,27 @@ public final class HotwireApiImpl implements HotwireApi {
     }
 
     @Override
-    public void updateHotwire() {
-        HotwireEngine engine = HotwireClient.findEngine();
-        if (engine != null) {
-            Minecraft.getInstance().execute(engine::updateHotwireAtNextStart);
-        }
-    }
-
-    @Override
-    public CompletableFuture<SwitchResult> queueHotwireUpdate() {
+    public CompletableFuture<SwitchResult> updateHotwire() {
         CompletableFuture<SwitchResult> done = new CompletableFuture<>();
         HotwireEngine engine = HotwireClient.findEngine();
         if (engine == null) {
-            done.complete(new SwitchResult(SwitchResult.Kind.REFUSED, List.of(), Lang.get("hotwire.api.starting")));
+            done.complete(SwitchResult.ofRefusal(Reason.NOT_READY, Lang.get("hotwire.api.starting")));
         } else {
             Minecraft.getInstance().execute(() -> engine.updateHotwireAtNextStart(done));
         }
-        return done;
+        return onGameAsResult(done);
     }
 
     @Override
     public CompletableFuture<ModUpdates> checkUpdates() {
-        return ApiChanges.checkUpdates();
+        return onGame(ApiChanges.checkUpdates());
     }
 
     @Override
     public CompletableFuture<ChangePlan> planChange(ChangeRequest request) {
         CallerBlocks.Callers callers = findCallers();
         tellIfUnprompted(callers);
-        return ApiChanges.plan(request, callers);
-    }
-
-    @Override
-    public boolean isSwitching() {
-        return SWITCHING.get() > 0;
+        return onGame(ApiChanges.plan(request, callers));
     }
 
     @Override
@@ -203,6 +196,16 @@ public final class HotwireApiImpl implements HotwireApi {
             return List.of();
         }
         CallerBlocks.Callers callers = findCallers();
+        ModRowCache seen = MODS_SEEN.get(callers);
+        long now = System.nanoTime();
+        if (seen == null || now - seen.at() > MODS_FRESH_NANOS) {
+            seen = new ModRowCache(now, makeRows(engine, callers));
+            MODS_SEEN.put(callers, seen);
+        }
+        return seen.mods();
+    }
+
+    private static List<ModState> makeRows(HotwireEngine engine, CallerBlocks.Callers callers) {
         Map<String, String> neededBy = new HashMap<>();
         for (String caller : callers.mods()) {
             for (String needed : engine.getGraph().getUses(caller)) {
@@ -219,8 +222,8 @@ public final class HotwireApiImpl implements HotwireApi {
     }
 
     @Override
-    public Optional<ModState> findMod(String id) {
-        return this.getMods().stream().filter(mod -> mod.id().equals(id)).findFirst();
+    public Optional<ModState> findMod(String modId) {
+        return this.getMods().stream().filter(mod -> mod.id().equals(modId)).findFirst();
     }
 
     @Override
@@ -313,7 +316,7 @@ public final class HotwireApiImpl implements HotwireApi {
 
     @Override
     public CompletableFuture<StorePage> searchStore(StoreQuery query) {
-        return StoreApi.search(query);
+        return onGame(StoreApi.search(query));
     }
 
     @Override
@@ -323,32 +326,22 @@ public final class HotwireApiImpl implements HotwireApi {
 
     @Override
     public CompletableFuture<List<String>> findStoreGameVersions() {
-        return StoreApi.findGameVersions();
+        return onGame(StoreApi.findGameVersions());
     }
 
     @Override
     public CompletableFuture<Optional<StoreProject>> findStoreProject(StoreQuery browsing, String idOrSlug) {
-        return StoreApi.findProject(browsing, idOrSlug);
-    }
-
-    @Override
-    public CompletableFuture<StoreAdd> requestAdd(String idOrSlug, String versionId) {
-        return StoreApi.requestAdd(idOrSlug, versionId, "", findCallers().findAsker());
-    }
-
-    @Override
-    public CompletableFuture<StoreAdd> requestAdd(String idOrSlug, String versionId, String tag) {
-        return StoreApi.requestAdd(idOrSlug, versionId, tag, findCallers().findAsker());
+        return onGame(StoreApi.findProject(browsing, idOrSlug));
     }
 
     @Override
     public CompletableFuture<SwitchResult> queueForNextStart(String idOrSlug, String versionId) {
-        return StoreApi.queueForNextStart(idOrSlug, versionId);
+        return onGameAsResult(StoreApi.queueForNextStart(idOrSlug, versionId));
     }
 
     @Override
     public CompletableFuture<SwitchResult> saveToDownloads(StoreQuery browsing, String idOrSlug, String versionId) {
-        return StoreApi.saveToDownloads(browsing, idOrSlug, versionId);
+        return onGameAsResult(StoreApi.saveToDownloads(browsing, idOrSlug, versionId));
     }
 
     @Override
@@ -357,18 +350,18 @@ public final class HotwireApiImpl implements HotwireApi {
     }
 
     @Override
-    public void fetchPack(StoreKind kind, String idOrSlug, String versionId) {
-        StoreApi.fetchPack(kind, idOrSlug, versionId);
+    public CompletableFuture<SwitchResult> fetchPack(StoreKind kind, String idOrSlug, String versionId) {
+        return onGameAsResult(StoreApi.fetchPack(kind, idOrSlug, versionId, WAITS));
     }
 
     @Override
-    public StorePackState findPackState(StoreKind kind, String projectId) {
-        return StoreApi.findPackState(kind, projectId);
+    public StorePackState findPackState(StoreKind kind, String idOrSlug) {
+        return StoreApi.findPackState(kind, idOrSlug);
     }
 
     @Override
-    public void togglePack(StoreKind kind, String projectId) {
-        StoreApi.togglePack(kind, projectId);
+    public CompletableFuture<SwitchResult> togglePack(StoreKind kind, String idOrSlug) {
+        return onGameAsResult(StoreApi.togglePack(kind, idOrSlug));
     }
 
     @Override
@@ -482,13 +475,18 @@ public final class HotwireApiImpl implements HotwireApi {
     }
 
     @Override
-    public void addListener(Consumer<SwitchResult> listener) {
-        LISTENERS.add(new Listener(listener, GameRegistrations.findModOrShipper(listener.getClass())));
+    public Registration addListener(Consumer<SwitchResult> listener) {
+        return LISTENERS.add(listener, GameRegistrations.findModOrShipper(listener.getClass()));
     }
 
     @Override
-    public void addLifecycleListener(ModLifecycleListener listener) {
-        LifecycleListeners.add(listener);
+    public Registration addLifecycleListener(ModLifecycleListener listener) {
+        return LifecycleListeners.add(listener);
+    }
+
+    @Override
+    public Registration addLifecycleListener(String modId, ModLifecycleListener listener) {
+        return LifecycleListeners.add(modId, listener);
     }
 
     @Override
@@ -499,9 +497,9 @@ public final class HotwireApiImpl implements HotwireApi {
         }
         String asker = findCallers().findAsker();
         String name = asker == null ? "A mod" : engine.nameOfMod(asker);
-        return engine.getScreens().writeReportZip(Lang.get("hotwire.report.file.mod_asked", name), name
+        return onGame(engine.getScreens().writeReportZip(Lang.get("hotwire.report.file.mod_asked", name), name
                 + " asked for a report: "
-                + why);
+                + why));
     }
 
     static CompletableFuture<SwitchResult> beginSwitch() {
@@ -511,17 +509,9 @@ public final class HotwireApiImpl implements HotwireApi {
 
     static void endSwitch(CompletableFuture<SwitchResult> ended, SwitchResult result, Predicate<String> on) {
         SWITCHING.decrementAndGet();
+        MODS_SEEN.clear();
         ended.complete(result);
-        for (Listener each : LISTENERS) {
-            if (each.mod() != null && !on.test(each.mod())) {
-                continue;
-            }
-            try {
-                each.listener().accept(result);
-            } catch (RuntimeException | LinkageError e) {
-                LOGGER.warn("[Hotwire] {}'s listener of switches threw", each.mod() == null ? "a" : each.mod(), e);
-            }
-        }
+        LISTENERS.tell("a switch's end", on, listener -> listener.accept(result));
     }
 
     static void endIfFailed(CompletableFuture<SwitchResult> ended, @Nullable Throwable error, Predicate<String> on) {
@@ -555,14 +545,14 @@ public final class HotwireApiImpl implements HotwireApi {
     static SwitchPreview preview(boolean off, List<String> ids, CallerBlocks.Callers callers) {
         HotwireEngine engine = HotwireClient.findEngine();
         if (engine == null) {
-            return new SwitchPreview(false, List.of(), Lang.get("hotwire.api.starting"));
+            return new SwitchPreview(false, Reason.NOT_READY, List.of(), Lang.get("hotwire.api.starting"));
         }
         HotwireEngine.JvmParts parts = engine.findJvmParts().orElse(null);
         if (parts == null) {
-            return new SwitchPreview(false, List.of(), engine.getSwitchRefusal());
+            return new SwitchPreview(false, Reason.NOT_READY, List.of(), engine.getSwitchRefusal());
         }
         if (engine.isWorldLocked()) {
-            return new SwitchPreview(false, List.of(), Lang.get("hotwire.switch.world_locked"));
+            return new SwitchPreview(false, Reason.WORLD_LOCKED, List.of(), Lang.get("hotwire.switch.world_locked"));
         }
         ModSwitcher switcher = parts.runner().getSwitcher();
 
@@ -570,22 +560,22 @@ public final class HotwireApiImpl implements HotwireApi {
         List<String> rest = ids.stream().filter(id -> !back.contains(id)).toList();
         SwitchPlan plan = off ? switcher.planOff(ids) : switcher.planOn(rest);
         if (plan.isRefused()) {
-            return new SwitchPreview(false, List.of(), PlayerMessages.describe(new ModSwitcher.Result.Refused(plan),
-                    engine::nameOfMod));
+            return new SwitchPreview(false, Reason.REFUSED, List.of(), PlayerMessages.describe(
+                    new ModSwitcher.Result.Refused(plan), engine::nameOfMod));
         }
         String self = CallerBlocks.findRefusal(plan, ids, callers, engine::nameOfMod);
         if (self != null) {
-            return new SwitchPreview(false, List.of(), self);
+            return new SwitchPreview(false, Reason.REFUSED, List.of(), self);
         }
         if (plan.order().isEmpty() && back.isEmpty()) {
-            return new SwitchPreview(true, List.of(), Lang.get(off ? "hotwire.switch.already_off"
+            return new SwitchPreview(true, Reason.NONE, List.of(), Lang.get(off ? "hotwire.switch.already_off"
                     : "hotwire.switch.already_on"));
         }
         List<String> all = new ArrayList<>(back);
         all.addAll(plan.order());
         String said = back.isEmpty() ? "" : Lang.get("hotwire.api.back_from_jar",
                 PlayerMessages.joinNames(back, engine::nameOfMod)) + " ";
-        return new SwitchPreview(true, List.copyOf(all), (said + (plan.order().isEmpty() ? ""
+        return new SwitchPreview(true, Reason.NONE, List.copyOf(all), (said + (plan.order().isEmpty() ? ""
                 : Lang.get(off ? "hotwire.switch.preview_off" : "hotwire.switch.preview_on",
                         PlayerMessages.joinNames(plan.order(), engine::nameOfMod)))).strip());
     }
@@ -595,26 +585,34 @@ public final class HotwireApiImpl implements HotwireApi {
             CallerBlocks.Callers callers) {
         CompletableFuture<SwitchResult> ended = new CompletableFuture<>();
         Minecraft.getInstance().execute(() -> {
-            HotwireEngine engine = HotwireClient.findEngine();
-            if (engine == null) {
-                ended.complete(new SwitchResult(SwitchResult.Kind.REFUSED, List.of(),
-                        Lang.get("hotwire.api.starting")));
-                return;
-            }
-            HotwireEngine.JvmParts parts = engine.findJvmParts().orElse(null);
-            String self = off && parts != null ? CallerBlocks.findRefusal(parts.runner().getSwitcher().planOff(asked),
-                    asked, callers, engine::nameOfMod) : null;
-            if (self != null) {
-                ended.complete(new SwitchResult(SwitchResult.Kind.REFUSED, List.of(), self));
-                return;
-            }
-            engine.switchFor(off, asked).whenComplete((result, error) -> {
-                if (error != null) {
-                    ended.completeExceptionally(error);
-                } else {
-                    ended.complete(result);
+            try {
+                HotwireEngine engine = HotwireClient.findEngine();
+                HotwireEngine.JvmParts parts = engine == null ? null : engine.findJvmParts().orElse(null);
+                if (engine == null || parts == null) {
+                    ended.complete(SwitchResult.ofRefusal(Reason.NOT_READY, engine == null
+                            ? Lang.get("hotwire.api.starting") : engine.getSwitchRefusal()));
+                    return;
                 }
-            });
+                String self = off ? CallerBlocks.findRefusal(parts.runner().getSwitcher().planOff(asked), asked,
+                        callers, engine::nameOfMod) : null;
+                if (self != null) {
+                    ended.complete(SwitchResult.ofRefusal(Reason.REFUSED, self));
+                    return;
+                }
+                boolean locked = engine.isWorldLocked();
+                engine.switchFor(off, asked).whenComplete((result, error) -> {
+                    if (error == null && result.isDone()) {
+                        String asker = callers.findAsker();
+                        SwitchHistory.get().record(result.switched(), off, System.currentTimeMillis(),
+                                SwitchHistory.Cause.MOD, asker == null ? "" : engine.nameOfMod(asker));
+                    }
+                    ended.complete(error != null
+                            ? toFailure(error) : locked && result.kind() == SwitchResult.Kind.REFUSED
+                                    ? result.withReason(Reason.WORLD_LOCKED) : result);
+                });
+            } catch (RuntimeException | LinkageError e) {
+                ended.complete(toFailure(e));
+            }
         });
         return ended;
     }
