@@ -291,6 +291,11 @@ public final class Tripwire {
         }
     }
 
+    static boolean canWaitForOn(String mod) {
+        return !onGameThread.getAsBoolean() && !EXPECTED.get().contains(mod) && !HOTWIRE_WORK.get()
+                && !IN_HIT.get();
+    }
+
     public static void runAsHotwire(Runnable work) {
         boolean before = markHotwireWork(true);
         try {

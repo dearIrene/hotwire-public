@@ -280,7 +280,10 @@ public final class SwitchRunner {
                     new IllegalStateException(why))), new Report.OffCheck.NotRun(), List.of());
         }
 
-        LifecycleListeners.prepareOff(wired);
+        if (!wired.isEmpty()) {
+            this.tripwire.wireCoroutines(wired);
+        }
+        Tripwire.runAsHotwire(() -> LifecycleListeners.prepareOff(wired));
 
         ResourceReload.awaitIdle();
         if (!wired.isEmpty()) {

@@ -25,6 +25,7 @@ import org.objectweb.asm.tree.JumpInsnNode;
 import org.objectweb.asm.tree.LabelNode;
 import org.objectweb.asm.tree.MethodInsnNode;
 import org.objectweb.asm.tree.MethodNode;
+import org.objectweb.asm.tree.VarInsnNode;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -35,6 +36,8 @@ public final class TripwireSites {
     static final String OFF = "off";
     static final String HIT = "hit";
     static final String SKIP = "skip";
+    static final String DEFER = "defer";
+    static final String DEFER_DESC = "(Ljava/lang/Object;Ljava/lang/Object;)Ljava/lang/Object;";
 
     private static final Map<String, String> ARMED = new ConcurrentHashMap<>();
 
@@ -88,6 +91,11 @@ public final class TripwireSites {
             }
             if (isGated(method)) {
                 method.instructions.insert(makeGate(method, holder));
+            } else if (DueCoroutines.isBody(node.superName, method.name, method.desc)) {
+                method.instructions.insert(makeDeferGate(method, holder));
+            } else if ((method.access & Opcodes.ACC_STATIC) == 0 && hasJdkBody(node.superName, method.name,
+                    method.desc)) {
+                method.instructions.insert(makeJdkGate(method, holder, node.superName));
             } else {
                 method.instructions.insert(makeHit(method, holder));
             }
@@ -121,6 +129,78 @@ public final class TripwireSites {
     static boolean isGated(String name, String desc) {
         char returned = desc.charAt(desc.indexOf(')') + 1);
         return !NEVER_GATED.contains(name) && ((returned != 'L' && returned != '[') || isSuspending(desc));
+    }
+
+    private static final Set<String> PASSING_BODIES = Set.of(
+            "java/lang/InheritableThreadLocal.childValue(Ljava/lang/Object;)Ljava/lang/Object;");
+
+    private static final Set<String> PASSING_NAMES = Set.of("childValue");
+
+    static boolean hasJdkBody(@Nullable String superName, String name, String desc) {
+        if (superName == null || !superName.startsWith("java/") || !PASSING_NAMES.contains(name)) {
+            return false;
+        }
+        try {
+            for (Class<?> type = Class.forName(superName.replace('/', '.'), false, null); type != null;
+                    type = type.getSuperclass()) {
+                if (PASSING_BODIES.contains(type.getName().replace('.', '/') + "." + name + desc)) {
+                    return true;
+                }
+            }
+        } catch (ClassNotFoundException | LinkageError e) {
+            return false;
+        }
+        return false;
+    }
+
+    private static InsnList makeDeferGate(MethodNode method, String holder) {
+        InsnList gate = new InsnList();
+        LabelNode go = new LabelNode();
+        LabelNode runs = new LabelNode();
+
+        gate.add(new FieldInsnNode(Opcodes.GETSTATIC, holder, OFF, "Z"));
+        gate.add(new JumpInsnNode(Opcodes.IFEQ, go));
+        gate.add(new VarInsnNode(Opcodes.ALOAD, 0));
+        gate.add(new VarInsnNode(Opcodes.ALOAD, 1));
+        gate.add(new MethodInsnNode(Opcodes.INVOKESTATIC, holder, DEFER, DEFER_DESC, false));
+        gate.add(new InsnNode(Opcodes.DUP));
+        gate.add(new JumpInsnNode(Opcodes.IFNULL, runs));
+        gate.add(new InsnNode(Opcodes.ARETURN));
+        gate.add(runs);
+        gate.add(new FrameNode(Opcodes.F_SAME1, 0, null, 1, new Object[] {"java/lang/Object"}));
+        gate.add(new InsnNode(Opcodes.POP));
+        gate.add(new JumpInsnNode(Opcodes.GOTO, go));
+        gate.add(go);
+        if (!startsWithFrame(method)) {
+            gate.add(new FrameNode(Opcodes.F_SAME, 0, null, 0, null));
+        }
+        return gate;
+    }
+
+    static boolean isRewriteOnly(@Nullable String superName, String name, String desc) {
+        return DueCoroutines.isBody(superName, name, desc) || hasJdkBody(superName, name, desc);
+    }
+
+    private static InsnList makeJdkGate(MethodNode method, String holder, String superName) {
+        InsnList gate = new InsnList();
+        LabelNode go = new LabelNode();
+        gate.add(new FieldInsnNode(Opcodes.GETSTATIC, holder, OFF, "Z"));
+        gate.add(new JumpInsnNode(Opcodes.IFEQ, go));
+        gate.add(new MethodInsnNode(Opcodes.INVOKESTATIC, holder, SKIP, "()Z", false));
+        gate.add(new JumpInsnNode(Opcodes.IFEQ, go));
+        gate.add(new VarInsnNode(Opcodes.ALOAD, 0));
+        int slot = 1;
+        for (Type argument : Type.getArgumentTypes(method.desc)) {
+            gate.add(new VarInsnNode(argument.getOpcode(Opcodes.ILOAD), slot));
+            slot += argument.getSize();
+        }
+        gate.add(new MethodInsnNode(Opcodes.INVOKESPECIAL, superName, method.name, method.desc, false));
+        gate.add(new InsnNode(Type.getReturnType(method.desc).getOpcode(Opcodes.IRETURN)));
+        gate.add(go);
+        if (!startsWithFrame(method)) {
+            gate.add(new FrameNode(Opcodes.F_SAME, 0, null, 0, null));
+        }
+        return gate;
     }
 
     private static boolean isSuspending(String desc) {
@@ -304,6 +384,17 @@ public final class TripwireSites {
         skip.visitInsn(Opcodes.IRETURN);
         skip.visitMaxs(0, 0);
         skip.visitEnd();
+        MethodVisitor defer = writer.visitMethod(Opcodes.ACC_PUBLIC | Opcodes.ACC_STATIC, DEFER, DEFER_DESC, null,
+                null);
+        defer.visitCode();
+        defer.visitLdcInsn(mod);
+        defer.visitVarInsn(Opcodes.ALOAD, 0);
+        defer.visitVarInsn(Opcodes.ALOAD, 1);
+        defer.visitMethodInsn(Opcodes.INVOKESTATIC, DueCoroutines.class.getName().replace('.', '/'), "addDue",
+                "(Ljava/lang/String;Ljava/lang/Object;Ljava/lang/Object;)Ljava/lang/Object;", false);
+        defer.visitInsn(Opcodes.ARETURN);
+        defer.visitMaxs(0, 0);
+        defer.visitEnd();
         writer.visitEnd();
         return writer.toByteArray();
     }
@@ -314,6 +405,9 @@ public final class TripwireSites {
             return;
         }
         watch.flag().setVolatile(off);
+        if (!off) {
+            DueCoroutines.resume(mod);
+        }
 
         if (LOGGER.isDebugEnabled()) {
             LOGGER.debug("[Hotwire] the watch of {} was set by {}", mod, StackWalker.getInstance().walk(frames ->

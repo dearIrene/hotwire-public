@@ -3,6 +3,7 @@ package dev.moon.hotwire.fabric;
 import com.google.common.collect.MapMaker;
 import dev.moon.hotwire.redefine.BatchRider;
 import dev.moon.hotwire.redefine.ClassRebuilder;
+import dev.moon.hotwire.redefine.DueCoroutines;
 import dev.moon.hotwire.redefine.HotwireLoaders;
 import dev.moon.hotwire.redefine.LambdaSites;
 import dev.moon.hotwire.redefine.RebuildException;
@@ -109,7 +110,7 @@ public final class ModTripwire {
 
     public synchronized int arm(Collection<String> ids) throws RebuildException {
         ids.forEach(Tripwire::watchIfNew);
-        return this.wire(ids, Set.of(), false);
+        return this.wire(ids, Set.of(), false, type -> true);
     }
 
     void armEarly(Collection<String> ids, Set<String> rebuilt) {
@@ -118,7 +119,7 @@ public final class ModTripwire {
         this.watcher.execute(() -> {
             synchronized (this) {
                 try {
-                    this.wire(ids, rebuilt, true);
+                    this.wire(ids, rebuilt, true, type -> true);
                 } catch (RebuildException | RuntimeException e) {
                     LOGGER.warn("[Hotwire] {} could not be wired ahead of its off: {}", ids, e.toString());
                 } finally {
@@ -126,6 +127,14 @@ public final class ModTripwire {
                 }
             }
         });
+    }
+
+    synchronized void wireCoroutines(Collection<String> ids) {
+        try {
+            this.wire(ids, Set.of(), false, DueCoroutines::isBodyClass);
+        } catch (RebuildException | RuntimeException e) {
+            LOGGER.warn("[Hotwire] the coroutines of {} could not be wired ahead of their off: {}", ids, e.toString());
+        }
     }
 
     void watchNow(Collection<String> ids) {
@@ -339,20 +348,25 @@ public final class ModTripwire {
     }
 
     @SuppressWarnings("ReferenceEquality")
-    private int wire(Collection<String> asked, Set<String> rebuilt, boolean ride) throws RebuildException {
+
+    private int wire(Collection<String> asked, Set<String> rebuilt, boolean ride, Predicate<Class<?>> only)
+            throws RebuildException {
         List<String> ids = asked.stream().filter(ModPolicy::isSwitchable).toList();
         Map<Class<?>, String> owned = new LinkedHashMap<>();
         this.tripwireOwners.findOwned(ids).forEach((type, mod) -> {
             if (rebuilt.contains(type.getName().replace('.', '/'))) {
                 return;
             }
-            this.loadedAtArm.put(type, mod);
             String source = findSourceOf(type.getProtectionDomain());
             if (source != null) {
                 synchronized (this.sources) {
                     this.sources.put(source, mod);
                 }
             }
+            if (!only.test(type)) {
+                return;
+            }
+            this.loadedAtArm.put(type, mod);
             if (!type.isHidden() && this.instrumentation.isModifiableClass(type) && !this.armed.containsKey(type)
                     && !TripwireSites.isArmed(type.getName().replace('.', '/'))) {
                 owned.put(type, mod);

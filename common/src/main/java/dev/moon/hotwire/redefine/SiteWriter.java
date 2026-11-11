@@ -43,6 +43,8 @@ final class SiteWriter {
 
     private int moved;
 
+    private @Nullable String superName;
+
     private SiteWriter(byte[] in, String mod) {
         this.in = in;
         this.mod = mod;
@@ -62,6 +64,8 @@ final class SiteWriter {
             return null;
         }
         int poolEnd = pool.getAsInt();
+        int superClass = this.readShort(poolEnd + 4);
+        this.superName = superClass == 0 ? null : this.readText(this.readShort(this.pool[superClass] + 1));
         int methodsAt = this.skipFields(poolEnd + 6 + 2 + 2 * this.readShort(poolEnd + 6));
         int methods = this.readShort(methodsAt);
 
@@ -231,6 +235,9 @@ final class SiteWriter {
         }
         String nameText = this.readText(name);
         String descText = this.readText(desc);
+        if (TripwireSites.isRewriteOnly(this.superName, nameText, descText)) {
+            return false;
+        }
         int site = HIT_LENGTH;
         if (TripwireSites.isGated(nameText, descText)) {
             byte returned = (byte) descText.charAt(descText.indexOf(')') + 1);
