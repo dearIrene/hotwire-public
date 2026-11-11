@@ -169,21 +169,31 @@ public final class StaticCopies {
         }
     }
 
+    private static final ClassValue<Boolean> WALKED_KIND = new ClassValue<>() {
+        @Override
+        protected Boolean computeValue(Class<?> type) {
+            return !Level.class.isAssignableFrom(type) && !Entity.class.isAssignableFrom(type)
+                    && !Minecraft.class.isAssignableFrom(type) && !MinecraftServer.class.isAssignableFrom(type)
+                    && !Channel.class.isAssignableFrom(type) && !Thread.class.isAssignableFrom(type)
+                    && type != Class.class && !ClassLoader.class.isAssignableFrom(type) && isWalked(type.getName());
+        }
+    };
+    private static final ClassValue<Boolean> FOLLOWED = new ClassValue<>() {
+        @Override
+        protected Boolean computeValue(Class<?> type) {
+            if (Collection.class.isAssignableFrom(type) || Map.class.isAssignableFrom(type)) {
+                return type.getName().startsWith("java.util.");
+            }
+            return WALKED_KIND.get(type);
+        }
+    };
+
     private static boolean isFollowed(Object value) {
-        if (value instanceof Object[]) {
-            return true;
-        }
-        if (value instanceof Collection<?> || value instanceof Map<?, ?>) {
-            return value.getClass().getName().startsWith("java.util.");
-        }
-        return isOfWalkedKind(value);
+        return value instanceof Object[] || FOLLOWED.get(value.getClass());
     }
 
     static boolean isOfWalkedKind(Object value) {
-        return !(value instanceof Level) && !(value instanceof Entity) && !(value instanceof Minecraft)
-                && !(value instanceof MinecraftServer) && !(value instanceof Channel) && !(value instanceof Thread)
-                && !(value instanceof Class<?>) && !(value instanceof ClassLoader)
-                && isWalked(value.getClass().getName());
+        return WALKED_KIND.get(value.getClass());
     }
 
     private static boolean isWalked(String name) {
