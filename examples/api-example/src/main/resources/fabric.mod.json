@@ -1,0 +1,19 @@
+{
+  "schemaVersion": 1,
+  "id": "hotwire-api-example",
+  "version": "1.0.0",
+  "name": "Hotwire API example",
+  "description": "/toggle <mod id> turns a mod off or on through Hotwire.",
+  "environment": "client",
+  "entrypoints": {
+    "client": ["dev.example.hotwire.ExampleMod"]
+  },
+  "depends": {
+    "fabricloader": "*",
+    "minecraft": ">=26.1",
+    "fabric-api": "*"
+  },
+  "suggests": {
+    "hotwire": "*"
+  }
+}
