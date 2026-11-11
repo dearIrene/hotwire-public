@@ -8,6 +8,7 @@ import java.nio.file.Files;
 import java.nio.file.Path;
 import java.util.Collection;
 import java.util.Collections;
+import java.util.HashMap;
 import java.util.HashSet;
 import java.util.IdentityHashMap;
 import java.util.List;
@@ -38,7 +39,9 @@ import net.fabricmc.fabric.impl.resource.loader.ModNioResourcePack;
 public final class HiddenPacks {
     private static final Logger LOGGER = LoggerFactory.getLogger(HiddenPacks.class);
 
-    private static final Map<String, Optional<Set<String>>> FOREIGN = new ConcurrentHashMap<>();
+    private static final Map<String, Optional<Set<String>>> NAMESPACES = new ConcurrentHashMap<>();
+
+    private static final Map<String, Set<String>> SAID = new ConcurrentHashMap<>();
 
     private static final Map<String, Object> TRIMMED = new ConcurrentHashMap<>();
     private static volatile Function<String, Set<String>> containersOf = id -> Set.of();
@@ -51,17 +54,25 @@ public final class HiddenPacks {
         if (type != PackType.CLIENT_RESOURCES) {
             return;
         }
-        for (Map.Entry<String, ModContainer> hidden : LoaderModList.getHiddenContainers().entrySet()) {
+        Map<String, ModContainer> hiddenMods = LoaderModList.getHiddenContainers();
+        if (hiddenMods.isEmpty()) {
+            return;
+        }
+        Map<String, Set<String>> providers = findProviders();
+        for (Map.Entry<String, ModContainer> hidden : hiddenMods.entrySet()) {
             String id = hidden.getKey();
-            Optional<Set<String>> foreign = FOREIGN.computeIfAbsent(id, any -> findForeign(id, hidden.getValue()));
-            if (foreign.isEmpty()) {
+            Optional<Set<String>> named = NAMESPACES.computeIfAbsent(id, any -> readNamespaces(id, hidden.getValue()));
+            if (named.isEmpty()) {
                 continue;
             }
+            Set<String> foreign = findForeign(id, named.get(), providers);
             Object pack = create(id, hidden.getValue(), subPath, type);
-            if (pack == null || (!foreign.get().isEmpty() && !trim(pack, foreign.get()))) {
+            if (pack == null || (!foreign.isEmpty() && !trim(pack, foreign))) {
                 continue;
             }
-            if (!foreign.get().isEmpty()) {
+            if (foreign.isEmpty()) {
+                TRIMMED.remove(id);
+            } else {
                 TRIMMED.put(id, pack);
             }
             ((List<Object>) packs).add(pack);
@@ -114,17 +125,8 @@ public final class HiddenPacks {
                 || FabricLoader.getInstance().isModLoaded(namespace);
     }
 
-    private static boolean isFamily(String namespace, ModContainer container) {
-        for (ModContainer up = container.getContainingMod().orElse(null); up != null;
-                up = up.getContainingMod().orElse(null)) {
-            if (up.getMetadata().getId().equals(namespace)) {
-                return true;
-            }
-        }
-        if (container.getContainedMods().stream().anyMatch(inside -> inside.getMetadata().getId().equals(namespace))) {
-            return true;
-        }
-        return isInside(container.getMetadata().getId(), namespace, new HashSet<>());
+    private static boolean isFamily(String namespace, String id) {
+        return isInside(id, namespace, new HashSet<>()) || isInside(namespace, id, new HashSet<>());
     }
 
     private static boolean isInside(String mod, String container, Set<String> seen) {
@@ -140,16 +142,40 @@ public final class HiddenPacks {
         containersOf = containers;
     }
 
-    private static Optional<Set<String>> findForeign(String id, ModContainer container) {
+    private static Map<String, Set<String>> findProviders() {
         Set<String> hidden = LoaderModList.getHidden();
-        Set<String> others = new HashSet<>();
+        Map<String, Set<String>> providers = new HashMap<>();
         Minecraft.getInstance().getResourceManager().listPacks()
                 .filter(pack -> !hidden.contains(GameRegistrations.findModOf(pack.getClass())))
-                .filter(pack -> !pack.packId().equals(id))
-                .forEach(pack -> others.addAll(pack.getNamespaces(PackType.CLIENT_RESOURCES)));
+                .forEach(pack -> pack.getNamespaces(PackType.CLIENT_RESOURCES).forEach(namespace ->
+                        providers.computeIfAbsent(namespace, any -> new HashSet<>()).add(pack.packId())));
+        return providers;
+    }
 
-        boolean any = false;
+    private static Set<String> findForeign(String id, Set<String> named, Map<String, Set<String>> providers) {
+        Set<String> hidden = LoaderModList.getHidden();
         Set<String> foreign = new TreeSet<>();
+        for (String namespace : named) {
+            boolean provided = providers.getOrDefault(namespace, Set.of()).stream().anyMatch(by -> !by.equals(id));
+            if (!namespace.equals(id) && provided && isOwned(namespace, hidden)
+                    && !isFamily(namespace, id)) {
+                foreign.add(namespace);
+            }
+        }
+        if (!foreign.equals(SAID.put(id, foreign))) {
+            if (!foreign.isEmpty()) {
+                LOGGER.info("[Hotwire] {}'s pack stays listed while the mod is off, without what it puts in {}", id,
+                        foreign);
+            } else if (!named.isEmpty()) {
+                LOGGER.info("[Hotwire] {}'s pack holds its own assets alone: it stays listed while the mod is off",
+                        id);
+            }
+        }
+        return foreign;
+    }
+
+    private static Optional<Set<String>> readNamespaces(String id, ModContainer container) {
+        Set<String> named = new TreeSet<>();
         for (Path root : container.getRootPaths()) {
             Path assets = root.resolve("assets");
             if (!Files.isDirectory(assets)) {
@@ -161,30 +187,17 @@ public final class HiddenPacks {
                     if (inside.getNameCount() < 2) {
                         continue;
                     }
-                    any = true;
-                    String namespace = inside.getName(0).toString();
                     String name = inside.toString().replace(file.getFileSystem().getSeparator(), "/");
-                    boolean shader = name.contains("/shaders/") || name.contains("/post_effect/");
-                    if (shader && !SHADERS_READ_LATE) {
+                    if (!SHADERS_READ_LATE && (name.contains("/shaders/") || name.contains("/post_effect/"))) {
                         return Optional.empty();
                     }
-                    if (!namespace.equals(id) && others.contains(namespace) && isOwned(namespace, hidden)
-                            && !isFamily(namespace, container)) {
-                        foreign.add(namespace);
-                    }
+                    named.add(inside.getName(0).toString());
                 }
             } catch (IOException | UncheckedIOException e) {
                 LOGGER.info("[Hotwire] {}'s jar could not be read for its assets; its pack leaves at its off", id);
                 return Optional.empty();
             }
         }
-        if (!foreign.isEmpty()) {
-            LOGGER.info("[Hotwire] {}'s pack stays listed while the mod is off, without what it puts in {}", id,
-                    foreign);
-        } else if (any) {
-            LOGGER.info("[Hotwire] {}'s pack holds its own assets alone: it stays listed while the mod is off", id);
-        }
-
-        return Optional.of(Set.copyOf(foreign));
+        return Optional.of(Set.copyOf(named));
     }
 }
