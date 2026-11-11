@@ -1,6 +1,7 @@
 package dev.moon.hotwire.fabric.rebuild;
 
 import dev.moon.hotwire.jvm.PrivateField;
+import dev.moon.hotwire.redefine.Tripwire;
 import java.lang.reflect.Field;
 import java.lang.reflect.InvocationHandler;
 import java.lang.reflect.InvocationTargetException;
@@ -103,7 +104,21 @@ public final class TransformerChain {
             }
             ALONE.set(name);
             try {
-                bytes = (byte[]) this.transformBytes.invoke(this.wrappers.get(index), name, name, bytes);
+                byte[] given = bytes;
+                Object[] made = new Object[1];
+                ReflectiveOperationException[] failed = new ReflectiveOperationException[1];
+                Object wrapper = this.wrappers.get(index);
+                Tripwire.runAsHotwire(() -> {
+                    try {
+                        made[0] = this.transformBytes.invoke(wrapper, name, name, given);
+                    } catch (ReflectiveOperationException e) {
+                        failed[0] = e;
+                    }
+                });
+                if (failed[0] != null) {
+                    throw failed[0];
+                }
+                bytes = (byte[]) made[0];
             } catch (ReflectiveOperationException | RuntimeException e) {
                 LOGGER.warn("[Hotwire] {}'s transformer would not run on {} again; it is mixed without it",
                         this.owners.get(index), name, e);
