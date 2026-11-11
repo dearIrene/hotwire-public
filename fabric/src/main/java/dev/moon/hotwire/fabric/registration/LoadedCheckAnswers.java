@@ -206,8 +206,8 @@ final class LoadedCheckAnswers {
         try {
             Object old = field.get(null);
             Object now = switch (ask.kind()) {
-                case SETUP -> InitialValues.ofStatic(type, bytes, field.getName(), field.getType().descriptorString())
-                        .orElse(null);
+                case SETUP -> InitialValues.ofStaticBranching(type, bytes, field.getName(),
+                        field.getType().descriptorString()).orElse(null);
                 case REMEMBERED -> (Object) false;
                 case SET_ONCE -> off ? (Object) false : null;
             };

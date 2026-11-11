@@ -11,6 +11,7 @@ import java.util.Optional;
 import java.util.Set;
 import java.util.function.Function;
 import java.util.function.Supplier;
+import org.jspecify.annotations.Nullable;
 import org.objectweb.asm.ClassWriter;
 import org.objectweb.asm.Opcodes;
 import org.objectweb.asm.Type;
@@ -38,10 +39,27 @@ public final class InitialValues {
     public static Optional<Object> ofStatic(Class<?> owner, byte[] original, String name, String descriptor)
             throws ReflectiveOperationException {
         ClassNode node = RetainedInitializers.read(original);
-        InsnList slice = FieldInitializers.findStaticSlices(node.name, node, Set.of(name + descriptor))
-                .get(name + descriptor);
+        return ofStatic(owner, node, FieldInitializers.findStaticSlices(node.name, node, Set.of(name + descriptor))
+                .get(name + descriptor), descriptor);
+    }
+
+    public static Optional<Object> ofStaticBranching(Class<?> owner, byte[] original, String name, String descriptor)
+            throws ReflectiveOperationException {
+        ClassNode node = RetainedInitializers.read(original);
+        return ofStatic(owner, node, FieldInitializers.findStaticSlicesBranching(node.name, node,
+                Set.of(name + descriptor)).get(name + descriptor), descriptor);
+    }
+
+    private static Optional<Object> ofStatic(Class<?> owner, ClassNode node, @Nullable InsnList slice,
+            String descriptor) throws ReflectiveOperationException {
         if (slice == null) {
             return Optional.empty();
+        }
+        Map<LabelNode, LabelNode> labels = new HashMap<>();
+        for (AbstractInsnNode insn : slice) {
+            if (insn instanceof LabelNode label) {
+                labels.put(label, new LabelNode());
+            }
         }
         ClassNode made = new ClassNode();
         made.visit(Math.max(node.version, Opcodes.V1_8), Opcodes.ACC_FINAL | Opcodes.ACC_SYNTHETIC,
@@ -50,7 +68,7 @@ public final class InitialValues {
                 null, null);
         for (AbstractInsnNode insn : slice) {
             if (!(insn instanceof FieldInsnNode store && store.getOpcode() == Opcodes.PUTSTATIC)) {
-                value.instructions.add(insn.clone(Map.of()));
+                value.instructions.add(insn.clone(labels));
             }
         }
 

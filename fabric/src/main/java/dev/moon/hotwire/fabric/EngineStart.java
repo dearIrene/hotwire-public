@@ -65,6 +65,7 @@ import dev.moon.hotwire.redefine.LoadedClassBytes;
 import dev.moon.hotwire.redefine.OffWindowObjects;
 import dev.moon.hotwire.redefine.ReplacedStatics;
 import dev.moon.hotwire.redefine.ShutOverrides;
+import dev.moon.hotwire.redefine.SiteCache;
 import dev.moon.hotwire.redefine.Tripwire;
 import dev.moon.hotwire.redefine.TripwireSites;
 import dev.moon.hotwire.registration.ModThreadFinder;
@@ -73,6 +74,7 @@ import dev.moon.hotwire.switching.ModMixins;
 import dev.moon.hotwire.switching.ModSwitcher;
 import dev.moon.hotwire.switching.OffChecker;
 import dev.moon.hotwire.switching.SwitchApplier;
+import dev.moon.hotwire.switching.SwitchHistory;
 import dev.moon.hotwire.switching.SwitchTimes;
 import dev.moon.hotwire.ui.Lang;
 import dev.moon.hotwire.ui.Progress;
@@ -92,7 +94,6 @@ import java.util.List;
 import java.util.Map;
 import java.util.Optional;
 import java.util.Set;
-import java.util.concurrent.ForkJoinPool;
 import java.util.function.BiConsumer;
 import java.util.function.BiFunction;
 import java.util.stream.Collectors;
@@ -127,7 +128,7 @@ final class EngineStart {
     private static volatile @Nullable Path cacheFolder;
     private static final StackWalker STACK = StackWalker.getInstance();
 
-    private static final long JAR_SCANS_BYTES = 64L << 20;
+    static final long JAR_SCANS_BYTES = 64L << 20;
 
     private static final String RELOAD_TASKS = SimpleReloadInstance.class.getName();
 
@@ -148,8 +149,17 @@ final class EngineStart {
 
     static InstalledMods readInstalledMods(FabricLoader loader) throws IOException {
         Path mods = ModsFolder.find(loader);
-        JarScans scans = new JarScans(CacheStore.open(findCacheFolder().resolve("jars"), "jars", JAR_SCANS_BYTES));
-        ModIndex.Snapshot snapshot = new ModIndex(ForkJoinPool.commonPool(), scans).scan(mods);
+        EarlyModsReader.Read ahead = EarlyModsReader.open();
+        JarScans scans = ahead.scans();
+        ModIndex.Snapshot snapshot = ahead.index().scan(mods);
+
+        for (ModIndex.Failure failure : snapshot.failures()) {
+            ModJarException why = failure.reason();
+            if (why.getReason() != ModJarException.Reason.NOT_A_MOD) {
+                LOGGER.warn("[Hotwire] not read from the mods folder: {}{}", why.getMessage(),
+                        why.getCause() == null ? "" : " (" + why.getCause() + ")");
+            }
+        }
         List<ModJar> jars = new ArrayList<>();
         Map<String, Path> jarOf = new HashMap<>();
         Set<String> topLevel = new HashSet<>();
@@ -196,13 +206,15 @@ final class EngineStart {
             }
         }
 
+        boolean withHistory = DevSetups.get().inSetup() && new HotwireSettings(FabricLoader.getInstance().getConfigDir()
+                .resolve("hotwire/settings.json")).isHistorySaved();
         if (DevSetups.get().inSetup()) {
             for (DevMod mod : DevMod.find()) {
                 if (jarOf.containsKey(mod.id())) {
                     continue;
                 }
                 try {
-                    Path jar = DevSession.takeStart(mod, DevSetups.getBuildFolder());
+                    Path jar = DevSession.takeStart(mod, DevSetups.getBuildFolder(), withHistory);
                     jars.add(ModJarReader.read(jar, scans));
                     topLevel.add(mod.id());
                     jarOf.put(mod.id(), jar);
@@ -244,6 +256,9 @@ final class EngineStart {
         FabricLoader.getInstance().getAllMods().forEach(mod -> loadedIds.add(mod.getMetadata().getId()));
         Map<String, ModMixins> mixins = MixinConfigs.withCodeAdded(
                 MixinConfigs.of(installed.getGraphJars(), loadedIds), mixin.getConfigObjects());
+
+        SiteCache.finish();
+        laps.endLap("wait for the call sites' notes");
         if (HandlerGuards.ENABLED) {
             Set<String> fixed = new HashSet<>();
             mixins.keySet().stream().filter(id -> !ModPolicy.isSwitchable(id)).forEach(fixed::add);
@@ -324,6 +339,9 @@ final class EngineStart {
         ModSwitcher switcher = new ModSwitcher(installed.getGraph(), ModPolicy.makePlannerFor(installed.getGraph()),
                 applier, progress, GameRegistrations.getJournal(),
                 ModLifecycle.makeLifecycle(GameRegistrations.getJournal(), Minecraft.getInstance()));
+        RestartOnlyFile restartOnly = new RestartOnlyFile(FabricLoader.getInstance().getConfigDir()
+                .resolve("hotwire/restart-only.json"), id -> installed.find(id).map(ModManifest::version).orElse(null));
+        switcher.setRestartMemory(restartOnly.findCurrent(), restartOnly::add);
         LifecycleListeners.setIsOn(switcher::isOn);
 
         LifecycleListeners.add(new OneConfigSaves(LifecycleListeners::isListening));
@@ -402,7 +420,7 @@ final class EngineStart {
         }
     }
 
-    private static void writeStartFailure(Path gameDir, Throwable failure) {
+    static void writeStartFailure(Path gameDir, Throwable failure) {
         StringBuilder trace = new StringBuilder();
         describeTrace(failure, trace, "");
         try {
@@ -529,7 +547,7 @@ final class EngineStart {
         FabricLoader loader = FabricLoader.getInstance();
         Path gameDir = loader.getGameDir();
         StartTimes.Laps laps = StartTimes.startLaps("engine start: ");
-        InstalledMods installed = readInstalledMods(loader);
+        InstalledMods installed = EarlyModsReader.take(loader);
         laps.endLap("read the installed mods");
         Progress progress = new Progress();
         LoggedFaults.install();
@@ -537,6 +555,7 @@ final class EngineStart {
         UpdateFolders folders = UpdateFolders.ofMods(ModsFolder.find(loader));
         UpdateQueue queue = new UpdateQueue(folders.queueFile());
         HotwireSettings settings = new HotwireSettings(loader.getConfigDir().resolve("hotwire/settings.json"));
+        SwitchHistory.open(loader.getConfigDir().resolve("hotwire/history.json"));
         RootScreen.pauseWith(settings::isPausing);
         ModPolicy.setNestedJars(settings.getNestedJars());
 
@@ -578,7 +597,7 @@ final class EngineStart {
                 parts.runner().getSwitcher().getFiller().fillChanged();
             }
             laps.endLap("switch cache");
-        } catch (JvmAccessException | IllegalStateException | LinkageError e) {
+        } catch (JvmAccessException | RuntimeException | LinkageError e) {
             LOGGER.error("[Hotwire] Switching mods is not possible in this game: {}", e.getMessage(), e);
             writeStartFailure(gameDir, e);
             engine = new HotwireEngine(installed, progress, reports, folders, queue, settings, icons,

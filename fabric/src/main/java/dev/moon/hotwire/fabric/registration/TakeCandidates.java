@@ -1,5 +1,6 @@
 package dev.moon.hotwire.fabric.registration;
 
+import dev.moon.hotwire.redefine.FieldSlots;
 import dev.moon.hotwire.registration.ModNames;
 import java.util.HashMap;
 import java.util.HashSet;
@@ -56,6 +57,19 @@ final class TakeCandidates {
         }
         if (ValueOwners.isLambda(element)) {
             add(all, ValueOwners.findForwardedTo(element));
+
+            for (FieldSlots.Slot field : Fields.getReferenceFields(type, false)) {
+                Object part = CollectionParts.read(field, element);
+                if (!deep || part == null || ValueOwners.isPlain(part) || ValueOwners.isLambda(part)
+                        || !Wrappers.isAsked(part.getClass())) {
+                    continue;
+                }
+                Set<String> captured = this.find(part, true);
+                if (captured == null) {
+                    return null;
+                }
+                all.addAll(captured);
+            }
         }
         return this.share(this.count(all, element));
     }

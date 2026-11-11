@@ -74,7 +74,7 @@ public final class GameRegistrations {
         return findModOf(type) == null && findNestedModOf(type) != null && findOwnNested(type) == null;
     }
 
-    static @Nullable String findNestedModOf(Class<?> type) {
+    public static @Nullable String findNestedModOf(Class<?> type) {
         ModOfClass classes = modOfClass;
         return classes == null ? null : classes.findNested(type);
     }

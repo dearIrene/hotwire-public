@@ -13,6 +13,7 @@ import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Set;
 import java.util.concurrent.CancellationException;
+import java.util.concurrent.atomic.AtomicLong;
 import java.util.function.BooleanSupplier;
 import java.util.function.Predicate;
 import java.util.function.Supplier;
@@ -70,6 +71,40 @@ public final class ElementLook {
         return sets;
     }
 
+    private static final long OFF_WAIT_NANOS = 30_000_000_000L;
+
+    private static volatile long offDeadline;
+
+    private static long steps;
+    private static volatile long stepsOfLast;
+    private static volatile @Nullable Runnable stepHearer;
+    private static final int STEPS_A_WORD = 4095;
+    private static final int SLOW_SECONDS = 10;
+    private static final int SLOW_PRINTS = 12;
+
+    private static final AtomicLong LOOK_NUMBER = new AtomicLong();
+
+    private static void watchSlowLook(Thread look) {
+        long number = LOOK_NUMBER.incrementAndGet();
+        Thread.ofPlatform().daemon().name("hotwire-look-watch").start(() -> {
+            for (int print = 1; print <= SLOW_PRINTS; print++) {
+                try {
+                    Thread.sleep(SLOW_SECONDS * 1000L);
+                } catch (InterruptedException e) {
+                    return;
+                }
+                if (LOOK_NUMBER.get() != number || looking == null) {
+                    return;
+                }
+                StringBuilder at = new StringBuilder();
+                for (StackTraceElement frame : look.getStackTrace()) {
+                    at.append(System.lineSeparator()).append("    at ").append(frame);
+                }
+                LOGGER.info("[Hotwire] the look has run {} s and is at:{}", print * SLOW_SECONDS, at);
+            }
+        });
+    }
+
     private static volatile Mode runningMode = Mode.HOLD;
 
     private static final Object ONE_LOOK = new Object();
@@ -101,10 +136,25 @@ public final class ElementLook {
         switchUnderWay = busy;
     }
 
-    public static void findAheadForOff(FieldReferences references, Collection<String> mods, Predicate<String> on) {
-        if (!NO_LOOK) {
-            look(references, findEvery(mods), on, false);
+    public static void findAheadForOff(FieldReferences references, Collection<String> mods, Predicate<String> on,
+            Runnable hearer) {
+        if (NO_LOOK) {
+            return;
         }
+        offDeadline = System.nanoTime() + OFF_WAIT_NANOS;
+        stepHearer = hearer;
+        try {
+            look(references, findEvery(mods), on, false);
+        } finally {
+            offDeadline = 0;
+            stepHearer = null;
+        }
+    }
+
+    public static int findPercent() {
+        long done = steps;
+        long whole = stepsOfLast;
+        return (int) Math.min(99, whole > 0 ? done * 100 / whole : done * 100 / (done + 400_000));
     }
 
     public static void findAhead(FieldReferences references, Collection<String> mods, Predicate<String> on) {
@@ -145,9 +195,11 @@ public final class ElementLook {
             Thread self = Thread.currentThread();
             int priority = self.getPriority();
             looking = self;
+            watchSlowLook(self);
             runningMode = Mode.LOOK_EVERY;
             MODE.set(Mode.LOOK_EVERY);
 
+            steps = 0;
             int world = findWorldNumber();
             boolean newWorld = world != lookedEveryWorld;
             boolean whole = WHOLE.get() || newWorld;
@@ -171,6 +223,9 @@ public final class ElementLook {
                 lookedEveryClasses = LOADING.getTotalLoadedClassCount();
                 lookedEveryWorld = world;
                 references.finishEveryLook();
+                if (whole) {
+                    stepsOfLast = steps;
+                }
             } catch (RuntimeException | LinkageError e) {
                 LOGGER.info("[Hotwire] the look ahead for {} mods ended early: {}", asked.size(), e.toString());
             } finally {
@@ -268,6 +323,17 @@ public final class ElementLook {
         }
         if (GameHold.isOverBudget()) {
             throw new HoldBudgetException();
+        }
+        if ((++steps & STEPS_A_WORD) == 0 && isLooking()) {
+            long deadline = offDeadline;
+            if (deadline != 0 && System.nanoTime() - deadline > 0) {
+                throw new CancellationException("an off waited " + OFF_WAIT_NANOS / 1_000_000_000L
+                        + " s for it, and walks for itself");
+            }
+            Runnable hearer = stepHearer;
+            if (hearer != null) {
+                hearer.run();
+            }
         }
     }
 

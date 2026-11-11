@@ -10,6 +10,7 @@ import java.nio.charset.StandardCharsets;
 import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.HashSet;
+import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Locale;
 import java.util.Map;
@@ -39,7 +40,7 @@ public final class HandlerGuards {
     public static final boolean ENABLED = !"false".equals(System.getProperty("hotwire.guards"));
     private static final Logger LOGGER = LoggerFactory.getLogger(HandlerGuards.class);
     private static final String MERGED = "Lorg/spongepowered/asm/mixin/transformer/meta/MixinMerged;";
-    private static final byte[] MERGED_BYTES = MERGED.getBytes(StandardCharsets.UTF_8);
+    static final byte[] MERGED_BYTES = MERGED.getBytes(StandardCharsets.UTF_8);
 
     static final int OWN = 0;
     static final int STATIC = 1;
@@ -120,6 +121,8 @@ public final class HandlerGuards {
             "blockcolor", "quad", "mesh", "terrain", "fluidrender", "section", "blockstatemodel", "light");
     private static final Object LOCK = new Object();
 
+    private static final Set<String> REBUILT = ConcurrentHashMap.newKeySet();
+
     static volatile Set<String> neverSwitched = Set.of();
 
     private static volatile Set<String> neverSwitchedMixins = Set.of();
@@ -170,12 +173,35 @@ public final class HandlerGuards {
         return FieldSites.isSitedFor(internalName, owns);
     }
 
-    public static Set<String> findBehavingAt(String internalName) {
+    static Set<String> findBehavingAt(String internalName) {
         return BEHAVING.getOrDefault(internalName, Set.of());
     }
 
-    private static void noteBehaving(String internalName, ClassNode node) {
-        Set<String> behaving = findBehaving(node);
+    public static Set<String> findBehavingAt(String internalName, Set<String> owns) {
+        Set<String> reached = OwnMethods.findReachedAt(internalName, owns);
+        reached.addAll(findBehavingAt(internalName));
+        return reached;
+    }
+
+    public static Set<String> findBehavingNamesAt(String internalName, String mixin, Set<String> owns) {
+        return OwnMethods.findNamesAt(internalName, mixin, owns);
+    }
+
+    private static void noteBehaving(String internalName, ClassNode node, boolean rebuilt) {
+        Map<MethodNode, String> working = findWorking(node);
+        Set<String> behaving;
+        if (rebuilt) {
+            OwnMethods.forget(internalName);
+            behaving = Set.copyOf(working.values());
+        } else {
+            for (MethodNode method : node.methods) {
+                String mixin = (method.access & Opcodes.ACC_BRIDGE) != 0 ? findMerged(method) : null;
+                if (mixin != null) {
+                    working.put(method, mixin);
+                }
+            }
+            behaving = OwnMethods.note(internalName, node, working);
+        }
         if (behaving.isEmpty()) {
             BEHAVING.remove(internalName);
         } else {
@@ -184,17 +210,21 @@ public final class HandlerGuards {
     }
 
     private static Set<String> findBehaving(ClassNode node) {
-        Set<String> behaving = new HashSet<>();
+        return Set.copyOf(findWorking(node).values());
+    }
+
+    private static Map<MethodNode, String> findWorking(ClassNode node) {
+        Map<MethodNode, String> working = new LinkedHashMap<>();
         for (MethodNode method : node.methods) {
             String mixin = findMerged(method);
 
             if (mixin != null && method.name.indexOf('$') < 0 && !method.name.startsWith("<")
                     && (method.access & Opcodes.ACC_SYNTHETIC) == 0 && !isPlainAccess(method)
                     && !OverwriteSites.isTrampoline(method)) {
-                behaving.add(mixin);
+                working.put(method, mixin);
             }
         }
-        return Set.copyOf(behaving);
+        return working;
     }
 
     private static boolean isPlainAccess(MethodNode method) {
@@ -320,10 +350,15 @@ public final class HandlerGuards {
         return GUARDED.getOrDefault(internalName, Set.of());
     }
 
+    public static boolean isRebuilt(String internalName) {
+        return REBUILT.contains(internalName);
+    }
+
     public static void forget(String internalName) {
         GUARDED.remove(internalName);
         PRESENT.remove(internalName);
         PUT_IN.remove(internalName);
+        FieldSites.forgetExamined(internalName);
     }
 
     public static final String IN_CONSTRUCTOR = "handler in a constructor";
@@ -349,28 +384,29 @@ public final class HandlerGuards {
 
     public static byte @Nullable [] rewrite(String internalName, byte[] bytes) {
         try {
-            return rewriteOrThrow(internalName, bytes);
+            return rewriteOrThrow(internalName, bytes, true);
         } catch (RuntimeException | LinkageError e) {
             LOGGER.warn("[Hotwire] {} keeps its callbacks called direct: {}", internalName, e.toString());
             return null;
         }
     }
 
-    private static byte @Nullable [] rewriteOrThrow(String internalName, byte[] bytes) {
+    static byte @Nullable [] rewriteOrThrow(String internalName, byte[] bytes, boolean written) {
         if (!ClassBytes.mentions(bytes, MERGED_BYTES)) {
             if (bytes.length >= 8 && ((bytes[6] & 0xFF) << 8 | (bytes[7] & 0xFF)) >= Opcodes.V1_7) {
                 STAGED_PRESENT.put(internalName, Set.of());
             }
             BEHAVING.remove(internalName);
+            OwnMethods.forget(internalName);
             commitStaged(internalName);
             return null;
         }
         ClassNode node = ClassNodes.read(bytes, 0);
         boolean made = HandlerSites.makeSites(internalName, node, true);
-        noteBehaving(internalName, node);
+        noteBehaving(internalName, node, false);
         notePutIn(internalName, node);
         commitStaged(internalName);
-        return made ? DuckBridge.write(node, 0) : null;
+        return made && written ? DuckBridge.write(node, 0) : null;
     }
 
     public static void recordSidecar(String internalName, byte[] sidecar) {
@@ -399,6 +435,8 @@ public final class HandlerGuards {
     }
 
     public static void recordFrom(String internalName, byte[] bytes) {
+        REBUILT.add(internalName);
+        FieldSites.forgetExamined(internalName);
         DIRECT_MODS.remove(internalName);
         STAGED.remove(internalName);
         STAGED_PRESENT.remove(internalName);
@@ -462,7 +500,7 @@ public final class HandlerGuards {
                 }
             }
         }
-        noteBehaving(internalName, node);
+        noteBehaving(internalName, node, true);
         notePutIn(internalName, node);
         PRESENT.put(internalName, Set.copyOf(present));
         if (guarded.isEmpty()) {

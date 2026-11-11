@@ -120,6 +120,10 @@ public final class FieldReferences {
         this.refreshFinalReaders();
     }
 
+    public int readPoolsAhead() {
+        return FinalReaders.readAhead(this.instrumentation, this.lambdas.open());
+    }
+
     private void refreshFinalReaders() {
         Set<Field> written = Set.copyOf(this.finalsWritten);
 

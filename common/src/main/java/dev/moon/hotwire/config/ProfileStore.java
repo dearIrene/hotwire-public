@@ -4,6 +4,7 @@ import java.io.IOException;
 import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
 import java.nio.file.Path;
+import java.nio.file.StandardCopyOption;
 import java.util.ArrayList;
 import java.util.Collections;
 import java.util.LinkedHashMap;
@@ -50,6 +51,8 @@ public final class ProfileStore {
     private final Map<String, Set<String>> profiles = new LinkedHashMap<>();
     private boolean loaded;
 
+    private boolean unread;
+
     public ProfileStore(Path file) {
         this.file = file;
     }
@@ -64,20 +67,19 @@ public final class ProfileStore {
         return Collections.unmodifiableSet(new LinkedHashSet<>(this.profiles.getOrDefault(name, Set.of())));
     }
 
-    synchronized boolean exists(String name) {
-        this.load();
-        return this.profiles.containsKey(name);
-    }
-
     public synchronized void save(String name, Set<String> modsOn) throws IOException {
         this.load();
-        this.profiles.put(name.strip(), new LinkedHashSet<>(modsOn));
+        String cleaned = clean(name);
+        if (cleaned.isEmpty()) {
+            return;
+        }
+        this.profiles.put(cleaned, new LinkedHashSet<>(modsOn));
         this.write();
     }
 
     public synchronized boolean rename(String from, String to) throws IOException {
         this.load();
-        String wanted = to.strip();
+        String wanted = clean(to);
         if (wanted.isEmpty() || !this.profiles.containsKey(from)
                 || (this.profiles.containsKey(wanted) && !wanted.equals(from))) {
             return false;
@@ -124,7 +126,12 @@ public final class ProfileStore {
             Files.readAllLines(this.file, StandardCharsets.UTF_8).forEach(this::parse);
         } catch (IOException e) {
             LOGGER.warn("[Hotwire] {} could not be read", this.file, e);
+            this.unread = true;
         }
+    }
+
+    private static String clean(String name) {
+        return name.replace('=', '-').replaceFirst("^[#\\s]+", "").strip();
     }
 
     private void parse(String line) {
@@ -146,6 +153,11 @@ public final class ProfileStore {
     }
 
     private void write() throws IOException {
+        if (this.unread) {
+            Files.copy(this.file, this.file.resolveSibling(this.file.getFileName() + ".unread"),
+                    StandardCopyOption.REPLACE_EXISTING);
+            this.unread = false;
+        }
         List<String> lines = new ArrayList<>(HEAD);
         this.profiles.forEach((name, mods) -> lines.add(name + " = " + String.join(", ", mods)));
         AtomicFiles.writeString(this.file, String.join(System.lineSeparator(), lines) + System.lineSeparator());

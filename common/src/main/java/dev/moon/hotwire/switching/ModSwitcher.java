@@ -24,10 +24,12 @@ import java.util.concurrent.Executors;
 import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.concurrent.atomic.AtomicInteger;
 import java.util.concurrent.atomic.AtomicReference;
+import java.util.function.BiConsumer;
 import java.util.function.Consumer;
 import java.util.function.Function;
 import java.util.function.Predicate;
 import java.util.function.Supplier;
+import java.util.regex.Pattern;
 import org.jspecify.annotations.Nullable;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -56,6 +58,13 @@ public final class ModSwitcher {
     private final Progress progress;
     private final RegistrationJournal registrations;
     private final Set<String> off = ConcurrentHashMap.newKeySet();
+    private volatile List<String> stayedOn = List.of();
+    private final Map<String, String> restartOnly = new ConcurrentHashMap<>();
+
+    private static final int NAMED_ROUNDS = 4;
+    private volatile BiConsumer<String, String> restartLearned = (id, why) -> { };
+
+    private static final Pattern HOOK_WORD = Pattern.compile("[$]([A-Za-z0-9_-]+)(?=[$])");
 
     private final Map<String, String> offBecauseOf = new HashMap<>();
 
@@ -64,6 +73,8 @@ public final class ModSwitcher {
     private final Set<Set<String>> reopenedFamilies = ConcurrentHashMap.newKeySet();
 
     private final Set<Set<String>> worldBound = ConcurrentHashMap.newKeySet();
+
+    private final Set<Set<String>> overBudget = ConcurrentHashMap.newKeySet();
     private volatile boolean switched;
 
     private volatile @Nullable SwitchPlan waiting;
@@ -202,6 +213,24 @@ public final class ModSwitcher {
         this.reopenedFamilies.add(Set.copyOf(family));
     }
 
+    public void forgetWorld() {
+        this.worldBound.retainAll(this.overBudget);
+        this.reopenedFamilies.retainAll(this.overBudget);
+    }
+
+    void noteWorldBuilt(List<String> order, boolean goingOff, boolean budget) {
+        if (order.size() == 1) {
+            this.worldBound.add(Set.copyOf(order));
+        } else if (!goingOff) {
+            this.noteFamilyReopened(order);
+        } else {
+            return;
+        }
+        if (budget) {
+            this.overBudget.add(Set.copyOf(order));
+        }
+    }
+
     public boolean needsReopen(SwitchPlan plan) {
         return !plan.isRefused() && this.isWorldBound(plan);
     }
@@ -261,6 +290,108 @@ public final class ModSwitcher {
     }
 
     public Result turnOff(Collection<String> asked, Consumer<List<String>> out) {
+        this.stayedOn = List.of();
+        List<String> rest = new ArrayList<>(asked);
+        Set<String> staying = new LinkedHashSet<>();
+
+        asked.stream().filter(id -> this.restartOnly.containsKey(this.graph.resolve(id))).forEach(staying::add);
+        if (staying.size() < rest.size()) {
+            rest.removeAll(staying);
+        } else {
+            staying.clear();
+        }
+        Result result = this.turnOffWhole(rest, out);
+
+        for (int round = 0; round < NAMED_ROUNDS && rest.size() > 1 && isAnswered(result); round++) {
+            Set<String> named = this.findNamed(rest, result);
+            if (named.isEmpty()) {
+                named = this.findRefusers(rest, true);
+            }
+            this.remember(named, result);
+            staying.addAll(named);
+            rest.removeAll(named);
+            if (rest.isEmpty()) {
+                return result;
+            }
+            LOGGER.info("[Hotwire] {} of the {} asked off stay on, they do not go off while the game runs: {}",
+                    staying.size(), asked.size(), staying);
+            result = this.turnOffWhole(rest, out);
+        }
+        if (rest.size() == 1) {
+            this.remember(rest, result);
+        }
+        if (result instanceof Result.Done) {
+            this.stayedOn = List.copyOf(staying);
+        }
+        return result;
+    }
+
+    private void remember(Collection<String> mods, Result result) {
+        if (result instanceof Result.Failed failed && failed.cause().isRestartOnly()) {
+            mods.forEach(id -> {
+                String why = String.valueOf(failed.cause().getMessage());
+                this.restartOnly.put(this.graph.resolve(id), why);
+                this.restartLearned.accept(this.graph.resolve(id), why);
+            });
+        }
+    }
+
+    public void setRestartMemory(Map<String, String> known, BiConsumer<String, String> learned) {
+        this.restartOnly.putAll(known);
+        this.restartLearned = learned;
+    }
+
+    public Map<String, String> getRestartOnly() {
+        return Map.copyOf(this.restartOnly);
+    }
+
+    private Set<String> findNamed(List<String> mods, Result result) {
+        if (!(result instanceof Result.Failed failed)) {
+            return Set.of();
+        }
+        Set<String> blamed = new HashSet<>(failed.cause().getBlamedClasses());
+        failed.cause().getParts().forEach(part -> blamed.addAll(part.getBlamedClasses()));
+        Set<String> words = new HashSet<>();
+        blamed.add(String.valueOf(failed.cause().getMessage()));
+        blamed.forEach(text -> HOOK_WORD.matcher(text).results().forEach(word -> words.add(word.group(1))));
+        Set<String> named = new LinkedHashSet<>();
+        for (String id : mods) {
+            String known = this.graph.resolve(id);
+            if (blamed.contains(RebuildException.MOD_MARK + known) || words.contains(known)
+                    || words.contains(known.replace('-', '_'))) {
+                named.add(id);
+            }
+        }
+        if (named.isEmpty()) {
+            Set<String> patchers = this.graph.findPatchersOf(blamed);
+            mods.stream().filter(id -> patchers.contains(this.graph.resolve(id))).forEach(named::add);
+        }
+        return named;
+    }
+
+    public List<String> getStayedOn() {
+        return this.stayedOn;
+    }
+
+    private static boolean isAnswered(Result result) {
+        return result instanceof Result.Refused || (result instanceof Result.Failed failed
+                && (failed.cause().isRestartOnly() || failed.cause().reopenFixes()));
+    }
+
+    private Set<String> findRefusers(List<String> mods, boolean refused) {
+        if (!refused && !isAnswered(this.dryRun(mods, true))) {
+            return Set.of();
+        }
+        if (mods.size() == 1) {
+            return Set.of(mods.getFirst());
+        }
+        int half = mods.size() / 2;
+        Set<String> found = new LinkedHashSet<>(this.findRefusers(mods.subList(0, half), false));
+        found.addAll(this.findRefusers(mods.subList(half, mods.size()), false));
+        return found.isEmpty() ? new LinkedHashSet<>(mods) : found;
+    }
+
+    private Result turnOffWhole(Collection<String> asked, Consumer<List<String>> out) {
         Set<String> along = this.withGoingAlong(asked, id -> true);
         Result result = this.run(this.planner.planOff(along, this.getOff()), out);
         if (result instanceof Result.Failed failed && !failed.cause().getLosing().isEmpty()) {
@@ -294,7 +425,7 @@ public final class ModSwitcher {
     }
 
     public SwitchPlan planOff(Collection<String> asked) {
-        return this.planner.planOff(asked, this.getOff());
+        return this.planner.planOff(this.withGoingAlong(asked, id -> true), this.getOff());
     }
 
     public SwitchPlan planOn(Collection<String> asked) {
@@ -382,7 +513,7 @@ public final class ModSwitcher {
     }
 
     public void prepareAhead(Collection<String> asked, boolean off) {
-        SwitchPlan plan = off ? this.planner.planOff(asked, this.getOff()) : this.planOn(asked);
+        SwitchPlan plan = off ? this.planOff(asked) : this.planOn(asked);
         this.aheadAsked = true;
         if (!plan.isRefused() && !plan.order().isEmpty() && this.nextAhead.getAndSet(plan) == null) {
             this.aheadThread.execute(this::workAhead);
@@ -460,8 +591,12 @@ public final class ModSwitcher {
                 if (plan.direction() == SwitchPlan.Direction.OFF && this.applier.isInWorld()) {
                     this.calledByWorld.workOutAhead(this.switches.get());
                 }
-                if (this.dryRun(plan) instanceof Result.Failed failed) {
+                Result ahead = this.dryRun(plan);
+                if (ahead instanceof Result.Failed failed) {
                     LOGGER.debug("[Hotwire] {} was not worked out ahead: {}", plan.order(), failed.cause().toString());
+
+                    List<String> order = plan.order();
+                    this.remember(order.size() == 1 ? order : this.findNamed(order, ahead), ahead);
                 }
             } finally {
                 this.aheadWorker = null;
@@ -619,11 +754,8 @@ public final class ModSwitcher {
                         + " budget to take out of what others hold; it stays as it was, and changes with the world"
                         + " saved and opened again", e, true)
                         : new RebuildException("the switch threw: " + e, e);
-
-                if (failure.isWorldBuilt() && plan.order().size() == 1) {
-                    this.worldBound.add(Set.copyOf(plan.order()));
-                } else if (failure.isWorldBuilt() && !goingOff) {
-                    this.noteFamilyReopened(plan.order());
+                if (failure.isWorldBuilt()) {
+                    this.noteWorldBuilt(plan.order(), goingOff, isOverBudget(e));
                 }
                 if (stopped.get()) {
                     this.withGamePaused(() -> plan.order().forEach(this.registrations::restore));
@@ -645,6 +777,7 @@ public final class ModSwitcher {
             plan.order().forEach(id -> this.progress.advance());
             return new Result.Done(plan, applied, (System.nanoTime() - start) / 1_000_000);
         } catch (RebuildException e) {
+            this.progress.markUndone();
             if (e.reopenFixes() || e.isRestartOnly()) {
                 LOGGER.info("[Hotwire] Switching {} {} needs {}, and nothing changed: {}",
                         goingOff ? "off" : "on", plan.order(),

@@ -6,6 +6,9 @@ import java.util.Set;
 public interface GameObjectRebuilder {
     void rebuild(Set<String> newlyBuilt, Set<String> rebuilt, boolean reload);
 
+    default void closeBuilt(Set<String> newlyBuilt) {
+    }
+
     default void announce(Set<String> newlyBuilt, boolean reload) {
     }
 }

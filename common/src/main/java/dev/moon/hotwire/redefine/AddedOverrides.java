@@ -12,7 +12,6 @@ import java.util.Collection;
 import java.util.Collections;
 import java.util.Deque;
 import java.util.HashSet;
-import java.util.List;
 import java.util.Map;
 import java.util.Set;
 import java.util.WeakHashMap;
@@ -303,14 +302,7 @@ public final class AddedOverrides {
 
     static void forget() {
         GENERATION.incrementAndGet();
-        List<Site> sites;
-        synchronized (SITES) {
-            sites = List.copyOf(SITES);
-        }
-        sites.forEach(Site::forget);
-        if (!sites.isEmpty()) {
-            MutableCallSite.syncAll(sites.toArray(MutableCallSite[]::new));
-        }
+        MovedSites.forgetAll(SITES, Site::forget);
     }
 
     static void clear() {

@@ -67,6 +67,10 @@ public final class SwitchApplier {
             return false;
         }
 
+        default @Nullable List<Object> findAllKnown(Class<?> type) {
+            return null;
+        }
+
         default boolean isWorldObject(Class<?> type) {
             return false;
         }
@@ -102,7 +106,7 @@ public final class SwitchApplier {
         }
     }
 
-    record DryRun(ApplyResult applied, ClassRebuilder.@Nullable PreparedRebuild prepared, List<String> configs) {
+    record DryRun(ApplyResult applied, ClassRebuilder.@Nullable PreparedRebuild prepared) {
     }
 
     private static final Logger LOGGER = LoggerFactory.getLogger(SwitchApplier.class);
@@ -197,6 +201,10 @@ public final class SwitchApplier {
         SwitchTimes.mark("pause game");
         long pausedAt = System.nanoTime();
         try {
+            if (this.catchUps.findHolder() == null) {
+                this.objectRebuilder.closeBuilt(prepared.newlyBuilt());
+                SwitchTimes.mark("close objects");
+            }
             beforeChange.run();
             Runnable rebuildObjects = RebuildSteps.apply(this.rebuilder, prepared, this.health, this.afterRebuild,
                     this.onGameThread, this.objectRebuilder, this.game.isInWorld(), this.catchUps.findHolder(),
@@ -212,6 +220,8 @@ public final class SwitchApplier {
             SwitchTimes.mark("rebuild objects");
         } finally {
             release.run();
+
+            HeapCensus.markChanged();
             LOGGER.info("[Hotwire] the game was paused {} ms", (System.nanoTime() - pausedAt) / 1_000_000);
         }
     }
@@ -439,7 +449,7 @@ public final class SwitchApplier {
             LOGGER.error("[Hotwire] Mods that are off would still patch: {}", leftBehind);
         }
         return new DryRun(new ApplyResult(rebuilt, notLoaded, leftBehind,
-                prepared == null ? List.of() : List.copyOf(prepared.newlyBuilt())), prepared, configs);
+                prepared == null ? List.of() : List.copyOf(prepared.newlyBuilt())), prepared);
     }
 
     public synchronized ApplyResult replace(Collection<String> ids, Map<String, byte[]> classes, Set<String> on,
@@ -542,11 +552,6 @@ public final class SwitchApplier {
         return this.on.mods().contains(mod);
     }
 
-    Map<String, byte[]> decideAsLaunched(List<String> configs, String className, Set<String> launch)
-            throws RebuildException {
-        return this.decideAsLaunched(configs, className, launch, this::isOn);
-    }
-
     Map<String, byte[]> decideAsLaunched(List<String> configs, String className, Set<String> launch,
             Predicate<String> on) throws RebuildException {
         return this.decisions.of(configs, Map.of(className, launch), on).configs();
@@ -593,18 +598,19 @@ public final class SwitchApplier {
         GuardFlips.Plan plan = HandlerGuards.ENABLED ? this.guardFlips.find(switched, onAfter,
                 this.alsoRebuilt.apply(switched, onAfter), this.replaced.keySet()) : null;
         this.on = this.makeOnState(onAfter);
+        GuardFlips.Sites sites = this.guardFlips.new Sites(plan, onAfter);
         if (plan != null && plan.isSitesAlone()) {
             try {
                 beforeHold.run();
                 return this.guardFlips.flip(plan, switched, onAfter, this.redefinitionHold.get(),
                         whilePaused);
             } catch (RuntimeException | LinkageError e) {
+                sites.restore();
                 this.on = before;
                 throw e;
             }
         }
         DryRun dryRun;
-        GuardFlips.Sites sites = this.guardFlips.new Sites(plan, onAfter);
         this.duckRide.arm(movedBefore);
         try {
             dryRun = this.dryRun(switched, onAfter, true, plan == null ? null : plan.rebuild());
@@ -619,7 +625,10 @@ public final class SwitchApplier {
             } else {
                 Runnable release = this.redefinitionHold.get();
                 try {
-                    sites.set();
+                    sites.setBefore(whilePaused).run();
+                } catch (RuntimeException | LinkageError e) {
+                    sites.restore();
+                    throw e;
                 } finally {
                     release.run();
                 }
@@ -639,9 +648,21 @@ public final class SwitchApplier {
         } catch (RebuildException | RuntimeException | LinkageError e) {
             this.duckRide.disarm();
             ClassRebuilder.PreparedRebuild prepared = dryRun.prepared();
-            if (prepared != null) {
-                RebuildSteps.revertWhilePaused(this.rebuilder, prepared, this.afterRebuild,
-                        this.redefinitionHold);
+
+            Runnable release = this.redefinitionHold.get();
+            try {
+                try {
+                    if (!Collections.disjoint(switched, onAfter)) {
+                        sites.restore();
+                    }
+                    if (prepared != null) {
+                        RebuildSteps.revert(this.rebuilder, prepared, this.afterRebuild);
+                    }
+                } finally {
+                    sites.restore();
+                }
+            } finally {
+                release.run();
             }
             this.on = before;
             throw e;

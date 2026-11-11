@@ -152,10 +152,6 @@ public final class Linker {
         mixinOwner = owner;
     }
 
-    public static @Nullable String findMixinOwner(String mixin) {
-        return mixinOwner.apply(mixin.replace('.', '/'));
-    }
-
     public static void onReached(String member, String mixin) {
         if (REACHED.add(member)) {
             LOGGER.info("[Hotwire] {} belongs to a mod that is off and was reached; its old body ran. The caller"
@@ -228,14 +224,32 @@ public final class Linker {
             MethodType wanted = MethodType.fromMethodDescriptorString(descriptor, at.getClassLoader());
             for (; at != null; at = at.getSuperclass()) {
                 MethodHandles.Lookup side = SIDECARS.get(at);
-                if (side != null && MOVED_BY_TARGET.getOrDefault(at, Set.of()).contains(method + descriptor)) {
+                Set<String> moved = MOVED_BY_TARGET.getOrDefault(at, Set.of());
+                String named = moved.contains(method + descriptor) ? method
+                        : findRenumbered(moved, method, descriptor);
+                if (side != null && named != null) {
                     return new ConstantCallSite(MethodHandles.explicitCastArguments(
-                            side.findStatic(side.lookupClass(), method, wanted), type));
+                            side.findStatic(side.lookupClass(), named, wanted), type));
                 }
             }
             Class<?> real = Class.forName(owner.replace('/', '.'), false, caller.lookupClass().getClassLoader());
-            return new ConstantCallSite(MethodHandles.explicitCastArguments(MethodHandles.privateLookupIn(real,
-                    MethodHandles.lookup()).findStatic(real, method, wanted), type));
+            MethodHandles.Lookup lookup = MethodHandles.privateLookupIn(real, MethodHandles.lookup());
+            try {
+                return new ConstantCallSite(MethodHandles.explicitCastArguments(
+                        lookup.findStatic(real, method, wanted), type));
+            } catch (NoSuchMethodException absent) {
+                Set<String> declared = new HashSet<>();
+                for (Method one : real.getDeclaredMethods()) {
+                    declared.add(one.getName() + MethodType.methodType(one.getReturnType(), one.getParameterTypes())
+                            .toMethodDescriptorString());
+                }
+                String named = findRenumbered(declared, method, descriptor);
+                if (named == null) {
+                    throw absent;
+                }
+                return new ConstantCallSite(MethodHandles.explicitCastArguments(
+                        lookup.findStatic(real, named, wanted), type));
+            }
         }
         MethodHandle own = MovedSites.findOwnFinal(caller, owner, method, descriptor);
         if (own != null) {
@@ -244,8 +258,23 @@ public final class Linker {
         return MovedSites.make(type, method, descriptor, MovedSites.findPlain(caller, owner, method, descriptor));
     }
 
-    static MethodHandle findMoved(String method, String descriptor, Class<?> receiver) throws Throwable {
-        return findMoved(method, descriptor, receiver, null);
+    static @Nullable String findRenumbered(Set<String> members, String method, String descriptor) {
+        if (!GeneratedNames.isGenerated(method)) {
+            return null;
+        }
+        String wanted = GeneratedNames.mask(method);
+        String found = null;
+        for (String member : members) {
+            int open = member.indexOf('(');
+            if (open > 0 && member.substring(open).equals(descriptor)
+                    && GeneratedNames.mask(member.substring(0, open)).equals(wanted)) {
+                if (found != null) {
+                    return null;
+                }
+                found = member.substring(0, open);
+            }
+        }
+        return found;
     }
 
     static MethodHandle findMoved(String method, String descriptor, Class<?> receiver, @Nullable MethodHandle plain)
@@ -380,10 +409,6 @@ public final class Linker {
 
     static MethodHandles.@Nullable Lookup findCurrentLookup(Class<?> target) {
         return SIDECARS.get(target);
-    }
-
-    public static boolean isInstalled(Class<?> target) {
-        return SIDECARS.containsKey(target);
     }
 
     public static synchronized void open(WidenerUses.Openings more) {
@@ -527,10 +552,6 @@ public final class Linker {
 
     public static @Nullable Method findSpunBody(Class<?> type) {
         return Lambdas.findBody(type);
-    }
-
-    static MethodHandles.@Nullable Lookup findSidecar(Class<?> target) {
-        return SIDECARS.get(target);
     }
 
     static boolean standsForInstanceMethod(Class<?> sidecar, String nameAndDescriptor) {

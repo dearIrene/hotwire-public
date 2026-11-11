@@ -136,6 +136,10 @@ final class FieldInitializers {
         return findSlices(target, node, fields, Opcodes.PUTSTATIC, false);
     }
 
+    static Map<String, InsnList> findStaticSlicesBranching(String target, ClassNode node, Set<String> fields) {
+        return findSlices(target, node, fields, Opcodes.PUTSTATIC, true);
+    }
+
     static void carryRetyped(String target, List<FieldNode> running, List<FieldNode> added, String holder,
             MethodNode instance, MethodNode statics) {
         Map<String, FieldNode> byName = new HashMap<>();

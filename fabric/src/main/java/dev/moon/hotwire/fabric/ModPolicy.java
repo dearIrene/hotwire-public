@@ -1,5 +1,7 @@
 package dev.moon.hotwire.fabric;
 
+import com.google.common.base.Splitter;
+import com.google.common.collect.Sets;
 import dev.moon.hotwire.jar.ModManifest;
 import dev.moon.hotwire.plan.KnownUses;
 import dev.moon.hotwire.plan.ModGraph;
@@ -28,7 +30,9 @@ public final class ModPolicy {
     static final Set<String> NEVER_TOUCHED = Set.of("ixeris", "ferritecore", "c2me");
     private static final String NEVER_TOUCHED_PARTS = "c2me-";
 
-    static final Set<String> ALWAYS_ON = Set.of("sodium", "lithium", "phosphor", "vulkanmod", "modernfix");
+    static final Set<String> ALWAYS_ON = Sets.difference(Set.of("sodium", "lithium", "phosphor", "vulkanmod",
+            "modernfix", "debugify", "gnetum"), Set.copyOf(Splitter.on(',').omitEmptyStrings().trimResults()
+            .splitToList(System.getProperty("hotwire.unlock", "")))).immutableCopy();
 
     private static volatile SwitchPlanner.NestedJars nestedJars = SwitchPlanner.NestedJars.AUTO;
 

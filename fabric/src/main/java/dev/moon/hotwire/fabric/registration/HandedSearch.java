@@ -65,7 +65,7 @@ record HandedSearch(Set<Object> handed, Set<String> consumers, Collection<Class<
         Deque<Object> next = new ArrayDeque<>();
         for (Class<?> owner : this.roots) {
             for (FieldSlots.Slot field : Fields.getReferenceFields(owner, true)) {
-                this.offer(read(field, null), visited, next);
+                this.offer(CollectionParts.read(field, null), visited, next);
             }
         }
         for (int left = BUDGET; !next.isEmpty() && left > 0; left--) {
@@ -73,7 +73,7 @@ record HandedSearch(Set<Object> handed, Set<String> consumers, Collection<Class<
             Object one = next.poll();
             if (!isContainer(one)) {
                 for (FieldSlots.Slot field : Fields.getReferenceFields(one.getClass(), false)) {
-                    this.offer(read(field, one), visited, next);
+                    this.offer(CollectionParts.read(field, one), visited, next);
                 }
                 continue;
             }
@@ -130,13 +130,5 @@ record HandedSearch(Set<Object> handed, Set<String> consumers, Collection<Class<
             case Object[] array -> array.length <= LARGEST ? Arrays.asList(array) : List.of();
             default -> List.of();
         };
-    }
-
-    private static @Nullable Object read(FieldSlots.Slot field, @Nullable Object holder) {
-        try {
-            return field.get(holder);
-        } catch (ReflectiveOperationException | RuntimeException | LinkageError e) {
-            return null;
-        }
     }
 }

@@ -9,9 +9,11 @@ import java.util.List;
 import java.util.Map;
 import java.util.Set;
 import java.util.concurrent.ConcurrentHashMap;
+import java.util.concurrent.CopyOnWriteArrayList;
 import java.util.function.Supplier;
 import org.jspecify.annotations.Nullable;
 import org.objectweb.asm.Opcodes;
+import org.objectweb.asm.Type;
 import org.objectweb.asm.tree.AbstractInsnNode;
 import org.objectweb.asm.tree.ClassNode;
 import org.objectweb.asm.tree.FieldInsnNode;
@@ -22,9 +24,11 @@ import org.objectweb.asm.tree.InsnList;
 import org.objectweb.asm.tree.InsnNode;
 import org.objectweb.asm.tree.InvokeDynamicInsnNode;
 import org.objectweb.asm.tree.LabelNode;
+import org.objectweb.asm.tree.LdcInsnNode;
 import org.objectweb.asm.tree.LineNumberNode;
 import org.objectweb.asm.tree.MethodInsnNode;
 import org.objectweb.asm.tree.MethodNode;
+import org.objectweb.asm.tree.MultiANewArrayInsnNode;
 import org.objectweb.asm.tree.TypeInsnNode;
 import org.objectweb.asm.tree.VarInsnNode;
 import org.slf4j.Logger;
@@ -39,6 +43,9 @@ final class FieldSites {
     private static final Map<String, Set<String>> UNSITED = new ConcurrentHashMap<>();
     private static final Map<String, Set<String>> SITED = new ConcurrentHashMap<>();
 
+    private static final Map<String, Set<String>> EXAMINED = new ConcurrentHashMap<>();
+    private static final String CALLBACKS = "org/spongepowered/asm/mixin/injection/callback/";
+
     private record Init(String className, MethodHandle setUp) {
     }
 
@@ -47,6 +54,7 @@ final class FieldSites {
 
     static void make(String internalName, ClassNode node, Set<String> merged, Supplier<@Nullable ClassNode> shipped,
             Set<String> guarded) {
+        EXAMINED.remove(internalName);
         ClassNode original = shipped.get();
         if (merged.isEmpty() || original == null) {
             return;
@@ -76,8 +84,9 @@ final class FieldSites {
         if (added.isEmpty()) {
             return;
         }
+
         Set<String> methods = new HashSet<>();
-        node.methods.forEach(method -> methods.add(method.name + method.desc));
+        original.methods.forEach(method -> methods.add(method.name + method.desc));
         Map<String, String> modOfMixin = new HashMap<>();
         for (String mixin : merged) {
             String mod = TripwireSites.findModOfClass(mixin.replace('.', '/'));
@@ -90,6 +99,7 @@ final class FieldSites {
         List<String> why = new ArrayList<>();
         Set<String> sitedMixins = new HashSet<>();
         List<String> sited = new ArrayList<>();
+        List<InsnList> pure = new ArrayList<>();
         for (Map.Entry<String, String> field : added.entrySet()) {
             InsnList slice = slices.get(field.getKey());
             if (slice == null) {
@@ -98,6 +108,7 @@ final class FieldSites {
                 continue;
             }
             if (RetainedInitializers.isPure(slice, internalName, methods)) {
+                pure.add(slice);
                 continue;
             }
             String mixin = findDeclaring(field.getKey(), merged);
@@ -132,6 +143,79 @@ final class FieldSites {
             SITED.put(internalName, Set.copyOf(sitedMixins));
             LOGGER.info("[Hotwire] {} sets up {} through sites", internalName, sited);
         }
+        if (unsited.isEmpty()) {
+            String unknown = findUnknown(internalName, node, original, pure);
+            if (unknown == null) {
+                EXAMINED.put(internalName, Set.copyOf(merged));
+            } else {
+                LOGGER.debug("[Hotwire] {} rebuilds for its field setups: its constructors hold {}", internalName,
+                        unknown);
+            }
+        }
+    }
+
+    private static @Nullable String findUnknown(String internalName, ClassNode node, ClassNode original,
+            List<InsnList> pure) {
+        for (MethodNode method : node.methods) {
+            if (!method.name.equals("<init>")) {
+                continue;
+            }
+            MethodNode was = null;
+            for (MethodNode candidate : original.methods) {
+                if (candidate.name.equals("<init>") && candidate.desc.equals(method.desc)) {
+                    was = candidate;
+                }
+            }
+            if (was == null) {
+                return "a constructor the game does not ship";
+            }
+            List<String> extra = new ArrayList<>();
+            for (AbstractInsnNode insn : method.instructions) {
+                String named = describe(insn, internalName);
+                if (named != null) {
+                    extra.add(named);
+                }
+            }
+            for (AbstractInsnNode insn : was.instructions) {
+                String named = describe(insn, internalName);
+                if (named != null) {
+                    extra.remove(named);
+                }
+            }
+            for (InsnList slice : pure) {
+                for (AbstractInsnNode insn : slice) {
+                    String named = describe(insn, internalName);
+                    if (named != null) {
+                        extra.remove(named);
+                    }
+                }
+            }
+            if (!extra.isEmpty()) {
+                return extra.getFirst();
+            }
+        }
+        return null;
+    }
+
+    private static @Nullable String describe(AbstractInsnNode insn, String self) {
+        return switch (insn) {
+            case MethodInsnNode call when call.owner.equals(self) && HandlerGuards.isHandlerName(call.name) -> null;
+            case MethodInsnNode call when call.owner.startsWith(CALLBACKS) -> null;
+            case MethodInsnNode call -> call.getOpcode() + " " + call.owner + "." + call.name + call.desc;
+            case FieldInsnNode field when field.getOpcode() == Opcodes.GETFIELD && field.owner.equals(self) -> null;
+            case FieldInsnNode field -> field.getOpcode() + " " + field.owner + "." + field.name + field.desc;
+            case TypeInsnNode type when type.desc.startsWith(CALLBACKS) -> null;
+            case TypeInsnNode type -> type.getOpcode() + " " + type.desc;
+            case InvokeDynamicInsnNode dynamic when HandlerGuards.isSite(dynamic.bsm) -> null;
+            case InvokeDynamicInsnNode dynamic -> "invokedynamic " + dynamic.name + dynamic.desc;
+            case MultiANewArrayInsnNode array -> "multianewarray " + array.desc;
+            case LdcInsnNode ldc when ldc.cst instanceof Type type -> "ldc " + type.getDescriptor();
+            default -> null;
+        };
+    }
+
+    static void forgetExamined(String internalName) {
+        EXAMINED.remove(internalName);
     }
 
     static boolean isSitedFor(String internalName, Set<String> owns) {
@@ -139,6 +223,9 @@ final class FieldSites {
         Set<String> unsitedHere = UNSITED.getOrDefault(internalName, Set.of());
         boolean any = false;
         for (String mixin : sitedHere) {
+            any |= owns.contains(mixin.replace('.', '/'));
+        }
+        for (String mixin : EXAMINED.getOrDefault(internalName, Set.of())) {
             any |= owns.contains(mixin.replace('.', '/'));
         }
         for (String mixin : unsitedHere) {
@@ -317,7 +404,7 @@ final class FieldSites {
     }
 
     static void note(String mixin, String className, MethodHandle setUp) {
-        INITS.computeIfAbsent(mixin, any -> new ArrayList<>()).add(new Init(className, setUp));
+        INITS.computeIfAbsent(mixin, any -> new CopyOnWriteArrayList<>()).add(new Init(className, setUp));
     }
 
     private static boolean hasOtherOff(String className, String mixin) {

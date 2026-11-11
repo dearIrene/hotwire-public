@@ -131,7 +131,8 @@ final class CollectionReferences implements FixedLists.Walk {
             }
         });
         if (!this.cannotChange.isEmpty()) {
-            LOGGER.info("[Hotwire] collections that cannot change keep {}'s objects: {}", mods,
+            LOGGER.info("[Hotwire] collections that cannot change keep {}'s objects: {}",
+                    mods.size() > 4 ? mods.size() + " mods" : mods,
                     new TreeMap<>(this.cannotChange));
             this.cannotChange.clear();
         }

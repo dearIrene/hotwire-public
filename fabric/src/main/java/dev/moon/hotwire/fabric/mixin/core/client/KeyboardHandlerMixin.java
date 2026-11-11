@@ -16,7 +16,7 @@ public abstract class KeyboardHandlerMixin {
     //? if >=1.21.9 {
     @Inject(method = "keyPress", at = @At("HEAD"), cancellable = true)
     private void hotwire$openAtScreen(long window, int action, KeyEvent event, CallbackInfo ci) {
-        if (action == InputConstants.PRESS && OpenKey.openAtScreen(key -> key.matches(event), event.hasShiftDown())) {
+        if (action == InputConstants.PRESS && OpenKey.openAtScreen(key -> key.matches(event))) {
             ci.cancel();
         }
     }
@@ -24,8 +24,7 @@ public abstract class KeyboardHandlerMixin {
     /*@Inject(method = "keyPress", at = @At("HEAD"), cancellable = true)
     private void hotwire$openAtScreen(long window, int action, int key, int scanCode, int modifiers,
             CallbackInfo ci) {
-        if (action == InputConstants.PRESS && OpenKey.openAtScreen(mapping -> mapping.matches(key, scanCode),
-                (modifiers & 1) != 0)) {
+        if (action == InputConstants.PRESS && OpenKey.openAtScreen(mapping -> mapping.matches(key, scanCode))) {
             ci.cancel();
         }
     }

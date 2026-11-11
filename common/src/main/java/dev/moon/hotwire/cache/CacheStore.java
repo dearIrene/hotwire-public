@@ -52,6 +52,8 @@ public final class CacheStore {
 
     private int start;
     private boolean used;
+
+    private boolean lost;
     private volatile long bytes;
     private long hits;
     private long misses;
@@ -73,6 +75,8 @@ public final class CacheStore {
         } catch (IOException | RuntimeException e) {
             LOGGER.info("[Hotwire] the {} cache starts empty: {}", kind, e.toString());
             store.places.clear();
+            store.lost = true;
+            store.start = Math.max(store.start, 1);
         }
         return store;
     }
@@ -139,12 +143,6 @@ public final class CacheStore {
 
     public long getBytes() {
         return this.bytes;
-    }
-
-    public int getEntries() {
-        synchronized (this.lock) {
-            return this.places.size();
-        }
     }
 
     public String describe() {
@@ -228,13 +226,17 @@ public final class CacheStore {
         if (Files.notExists(head)) {
             return;
         }
-        String read = Files.readString(head, StandardCharsets.UTF_8).trim();
-        int latest = Integer.parseInt(read.substring(0, read.indexOf(' ')));
-        if (latest != this.generation) {
-            Map<CacheKey, Place> theirs = new HashMap<>();
-            this.readIndex(latest, theirs);
-            theirs.forEach(this.places::putIfAbsent);
-            this.generation = Math.max(this.generation, latest);
+        try {
+            String read = Files.readString(head, StandardCharsets.UTF_8).trim();
+            int latest = Integer.parseInt(read.substring(0, read.indexOf(' ')));
+            if (latest != this.generation) {
+                Map<CacheKey, Place> theirs = new HashMap<>();
+                this.readIndex(latest, theirs);
+                theirs.forEach(this.places::putIfAbsent);
+                this.generation = Math.max(this.generation, latest);
+            }
+        } catch (IOException | RuntimeException e) {
+            LOGGER.info("[Hotwire] the {} cache's head could not be read: {}", this.kind, e.toString());
         }
     }
 
@@ -286,7 +288,7 @@ public final class CacheStore {
         boolean full = total > this.capBytes;
         int oldest = this.start - STALE_STARTS;
         boolean stale = written.values().stream().anyMatch(place -> place.lastUse() < oldest);
-        boolean compact = empty || full || stale
+        boolean compact = empty || this.lost || full || stale
                 || written.values().stream().map(Place::pack).distinct().count() >= MOST_PACKS;
         long limit = full ? this.capBytes * 3 / 4 : Long.MAX_VALUE;
         ByteArrayOutputStream pack = new ByteArrayOutputStream();
@@ -329,7 +331,8 @@ public final class CacheStore {
         index.putInt(INDEX_MAGIC).putInt(written.size());
         new TreeMap<>(written).forEach((key, place) -> index.putLong(key.high()).putLong(key.low())
                 .putInt(place.pack()).putLong(place.offset()).putInt(place.length()).putInt(place.lastUse()));
-        Files.write(this.folder.resolve(this.kind + "." + next + ".idx"), index.array());
+
+        AtomicFiles.write(this.folder.resolve(this.kind + "." + next + ".idx"), index.array());
         Path head = this.folder.resolve(this.kind + ".head");
         AtomicFiles.writeString(head, next + " " + this.start);
         int before = this.generation;
@@ -337,6 +340,7 @@ public final class CacheStore {
         this.places.clear();
         this.places.putAll(written);
         this.bytes = sumBytes(written);
+        this.lost = false;
         this.dropUnused(before, compact);
     }
 

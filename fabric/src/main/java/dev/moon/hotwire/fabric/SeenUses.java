@@ -18,7 +18,8 @@ import org.slf4j.LoggerFactory;
 
 final class SeenUses implements KnownUses {
     private static final Logger LOGGER = LoggerFactory.getLogger(SeenUses.class);
-    private static final int FORMAT = 1;
+
+    private static final int FORMAT = 2;
 
     @SuppressWarnings("FieldCanBeFinal")
     private static final class UsesJson {
@@ -40,9 +41,13 @@ final class SeenUses implements KnownUses {
             LOGGER.warn("[Hotwire] uses.json is from a newer Hotwire (format {}); what this one knows is read",
                     read.format);
         }
-        Map<String, List<String>> saved = read.uses;
+        Map<String, List<String>> saved = read.format < FORMAT ? null : read.uses;
         if (saved != null) {
-            saved.forEach((user, used) -> this.uses.put(user, new TreeSet<>(used)));
+            saved.forEach((user, used) -> {
+                if (used != null && user.indexOf('@') >= 0 && !used.contains(null)) {
+                    this.uses.put(user, new TreeSet<>(used));
+                }
+            });
         }
     }
 

@@ -34,6 +34,8 @@ public final class InstalledMods {
     private final List<ModJar> nestedAdded = new ArrayList<>();
 
     private final Map<String, Path> jarOf = new HashMap<>();
+
+    private final Map<String, Path> folderJarOf = new HashMap<>();
     private final Set<String> topLevel = new HashSet<>();
 
     private final Map<String, ModJar> disabled = new HashMap<>();
@@ -44,6 +46,7 @@ public final class InstalledMods {
             Map<String, ModJar> disabled) {
         this.jars = new ArrayList<>(jars);
         this.jarOf.putAll(jarOf);
+        this.folderJarOf.putAll(jarOf);
         this.topLevel.addAll(topLevel);
         this.disabled.putAll(disabled);
         for (ModJar jar : jars) {
@@ -103,6 +106,22 @@ public final class InstalledMods {
         return this.jarOf.get(id);
     }
 
+    public synchronized @Nullable Path findFolderJarOf(String id) {
+        return this.folderJarOf.get(id);
+    }
+
+    synchronized boolean isRunningFromFolderJar(String id) {
+        Path folder = this.folderJarOf.get(id);
+        return folder == null || folder.equals(this.jarOf.get(id));
+    }
+
+    private void setFolderJar(String id, Path jar) {
+        if (this.isRunningFromFolderJar(id)) {
+            this.jarOf.put(id, jar);
+        }
+        this.folderJarOf.put(id, jar);
+    }
+
     public synchronized boolean isTopLevel(String id) {
         return this.topLevel.contains(id);
     }
@@ -155,7 +174,7 @@ public final class InstalledMods {
             this.disabled.put(id, jar);
         });
         this.graph = tell(new ModGraph(this.jars, InstalledMods::isOfGame, LoadedMods::findVersion));
-        this.jarOf.put(id, renamed);
+        this.setFolderJar(id, renamed);
     }
 
     public synchronized void onRestored(String id, Path jar) {
@@ -164,12 +183,12 @@ public final class InstalledMods {
             this.jars.add(back);
             this.graph = tell(new ModGraph(this.jars, InstalledMods::isOfGame, LoadedMods::findVersion));
         }
-        this.jarOf.put(id, jar);
+        this.setFolderJar(id, jar);
     }
 
     public synchronized void onBroughtBack(String id, Path jar) {
         this.disabled.remove(id);
-        this.jarOf.put(id, jar);
+        this.setFolderJar(id, jar);
     }
 
     public synchronized ModGraph makeGraphWith(Collection<ModJar> more) {
@@ -197,12 +216,13 @@ public final class InstalledMods {
         this.graph = tell(new ModGraph(this.jars, InstalledMods::isOfGame, LoadedMods::findVersion));
         this.topLevel.add(read.manifest().id());
         this.jarOf.put(read.manifest().id(), jar);
+        this.folderJarOf.put(read.manifest().id(), jar);
         this.addedThisSession.addAll(ids);
     }
 
     public synchronized void onMoved(String id, Path jar) {
         if (this.jarOf.containsKey(id)) {
-            this.jarOf.put(id, jar);
+            this.setFolderJar(id, jar);
         }
     }
 

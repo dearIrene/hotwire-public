@@ -71,6 +71,8 @@ public final class GlfwCallbacks {
         }
     }
     private static final int BELOW = 3;
+
+    private static final int WRAP_DEPTH = 4;
     private static volatile @Nullable Instrumentation instrumentation;
 
     private GlfwCallbacks() {
@@ -78,10 +80,6 @@ public final class GlfwCallbacks {
 
     public static void useInstrumentation(Instrumentation found) {
         instrumentation = found;
-    }
-
-    private static @Nullable String findOwnerOf(Class<?> type) {
-        return GameRegistrations.findModOrShipper(type);
     }
 
     public static synchronized void takeOut(Collection<String> mods) {
@@ -101,12 +99,12 @@ public final class GlfwCallbacks {
                     continue;
                 }
                 Object current = read(setter, window);
-                String mod = current == null ? null : findOwnerOf(current.getClass());
+                String mod = current == null ? null : GameRegistrations.findModOrShipper(current.getClass());
                 if (current == null || mod == null || !mods.contains(mod)) {
                     LOGGER.debug("[Hotwire] {} holds {} ({})", setter.getName(), current, mod);
                     continue;
                 }
-                Object inner = findWrapped(current, setter.getParameterTypes()[1], mod, 2);
+                Object inner = findWrapped(current, setter.getParameterTypes()[1], mod, WRAP_DEPTH);
 
                 if (inner != null && set(setter, window, inner)) {
                     OffRemovals.add(mod, new WrapperRemoval(setter, current, inner));
@@ -176,7 +174,7 @@ public final class GlfwCallbacks {
                     Object value = field.get(object);
                     Object java = value == null ? null
                             : unwrap(value instanceof Callback callback ? Callback.get(callback.address()) : value);
-                    String mod = java == null ? null : findOwnerOf(java.getClass());
+                    String mod = java == null ? null : GameRegistrations.findModOrShipper(java.getClass());
                     if (value == null || java == null) {
                         continue;
                     }
@@ -185,7 +183,14 @@ public final class GlfwCallbacks {
                                 field.getName(), java.getClass().getName(), mod, mods);
                         continue;
                     }
-                    Object inner = findWrapped(java, type, mod, 2);
+                    Object inner = findWrapped(java, type, mod, WRAP_DEPTH);
+
+                    if (inner == null) {
+                        LOGGER.info("[Hotwire] {}.{} of {} keeps {}'s callback: what it wraps was not found, and"
+                                + " a callback is never put back as nothing", object.getClass().getName(),
+                                field.getName(), holder, mod);
+                        continue;
+                    }
                     field.set(object, inner);
                     out++;
                     OffRemovals.add(mod, new FieldRemoval(field, object, value, inner));
@@ -274,7 +279,7 @@ public final class GlfwCallbacks {
                     if (java == null) {
                         continue;
                     }
-                    boolean theirs = mod.equals(findOwnerOf(java.getClass()));
+                    boolean theirs = mod.equals(GameRegistrations.findModOrShipper(java.getClass()));
                     if (type.isInstance(java) && !theirs) {
                         return java;
                     }

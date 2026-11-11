@@ -2,8 +2,10 @@ package dev.moon.hotwire.fabric;
 
 import dev.moon.hotwire.config.HotwireSettings;
 import dev.moon.hotwire.jar.ModManifest;
+import dev.moon.hotwire.plan.ModGraph;
 import dev.moon.hotwire.ui.list.ModCatalog;
 import java.util.Set;
+import java.util.TreeSet;
 import java.util.function.BooleanSupplier;
 import java.util.function.Predicate;
 import java.util.stream.Collectors;
@@ -74,7 +76,15 @@ final class InstalledModCatalog implements ModCatalog {
 
     @Override
     public Set<String> getNeededBy(String id) {
-        return this.installed.getGraph().getDependents(id);
+        ModGraph graph = this.installed.getGraph();
+        Set<String> out = new TreeSet<>(graph.getDependents(id));
+        for (String other : graph.getIds()) {
+            if (graph.getContainers(other).contains(id)) {
+                out.addAll(graph.getDependents(other));
+            }
+        }
+        out.remove(id);
+        return out;
     }
 
     @Override

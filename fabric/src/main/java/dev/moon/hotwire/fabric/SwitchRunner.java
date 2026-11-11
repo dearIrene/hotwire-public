@@ -31,6 +31,7 @@ import dev.moon.hotwire.fabric.registration.UncaughtHandlers;
 import dev.moon.hotwire.fabric.registration.WindowCursor;
 import dev.moon.hotwire.fabric.registration.WorldContent;
 import dev.moon.hotwire.fabric.registration.WorldWrappers;
+import dev.moon.hotwire.fabric.report.FreezeDump;
 import dev.moon.hotwire.fabric.report.GameReports;
 import dev.moon.hotwire.fabric.report.SwitchFaults;
 import dev.moon.hotwire.fabric.update.LiveUpdates;
@@ -49,6 +50,7 @@ import dev.moon.hotwire.switching.SwitchTimes;
 import dev.moon.hotwire.ui.Lang;
 import dev.moon.hotwire.ui.Notice;
 import dev.moon.hotwire.ui.Notices;
+import dev.moon.hotwire.ui.Progress;
 import java.lang.management.ManagementFactory;
 import java.lang.management.ThreadMXBean;
 import java.util.ArrayList;
@@ -126,6 +128,10 @@ public final class SwitchRunner {
         return this.tripwire;
     }
 
+    boolean isInitialized(Class<?> type) {
+        return this.fieldReferences.isInitialized(type);
+    }
+
     ModSwitcher getSwitcher() {
         return this.switcher;
     }
@@ -147,7 +153,7 @@ public final class SwitchRunner {
         List<Long> took = new ArrayList<>();
         for (int at = 0; at < times; at++) {
             long began = System.nanoTime();
-            ElementLook.findAheadForOff(this.fieldReferences, List.of(), this.switcher::isOn);
+            ElementLook.findAheadForOff(this.fieldReferences, List.of(), this.switcher::isOn, () -> { });
             took.add((System.nanoTime() - began) / 1_000_000);
             Thread.sleep(gapMillis);
         }
@@ -166,6 +172,10 @@ public final class SwitchRunner {
             ElementLook.findAheadForAll(this.fieldReferences, this.switcher::isOn);
             LOGGER.info("[Hotwire] the look ahead for every mod took {} ms, {} ms of it running",
                     (System.nanoTime() - start) / 1_000_000, (THREADS.getCurrentThreadCpuTime() - ran) / 1_000_000);
+            long pools = System.nanoTime();
+            int read = this.fieldReferences.readPoolsAhead();
+            LOGGER.info("[Hotwire] what {} loaded classes name was read ahead in {} ms", read,
+                    (System.nanoTime() - pools) / 1_000_000);
         });
     }
 
@@ -198,6 +208,9 @@ public final class SwitchRunner {
         ActionJournal.Entry journal = ActionJournal.get().begin(off ? ActionJournal.Action.OFF
                 : ActionJournal.Action.ON, ids);
         SwitchTimes.begin();
+        FreezeDump.onSwitchBegun((off ? "the off of " : "the on of ") + ids.size()
+                + (ids.size() == 1 ? " mod, " : " mods, ")
+                + String.join(", ", ids.subList(0, Math.min(8, ids.size()))) + (ids.size() > 8 ? " and more" : ""));
         RegistryCheck.takeKeysOnce();
         this.switcher.setBusy(true);
         this.reports.onBegun(off ? Report.Operation.OFF : Report.Operation.ON, String.join(", ", ids));
@@ -212,6 +225,8 @@ public final class SwitchRunner {
         } finally {
             LifecycleListeners.end(this.switcher::isOn);
 
+            OffModCommands.onWatched();
+
             if (!off && result != null) {
                 LiveUpdates.runWaitingEntrypoints(this.switcher::isOn);
                 runWaitingSetups(this.switcher::isOn);
@@ -222,6 +237,8 @@ public final class SwitchRunner {
             } else {
                 ResourceReload.endAssetWait();
             }
+
+            FreezeDump.onSwitchEnded();
             this.reports.onEnded();
             this.switcher.setBusy(false);
             SwitchTimes.end((off ? "the off of " : "the on of ") + ids);
@@ -264,6 +281,8 @@ public final class SwitchRunner {
         }
 
         LifecycleListeners.prepareOff(wired);
+
+        ResourceReload.awaitIdle();
         if (!wired.isEmpty()) {
             this.tripwire.armEarly(wired, this.switcher.findPatchedBy(wired));
         }
@@ -271,7 +290,9 @@ public final class SwitchRunner {
         if (!plan.isRefused()) {
             this.switcher.showBegun(plan);
 
-            ElementLook.findAheadForOff(this.fieldReferences, wired, this.switcher::isOn);
+            Progress shown = this.switcher.getProgress();
+            ElementLook.findAheadForOff(this.fieldReferences, wired, this.switcher::isOn,
+                    () -> shown.count(Lang.get("hotwire.progress.looking"), ElementLook.findPercent(), 100));
             SwitchTimes.mark("look: notes");
         }
 
@@ -286,6 +307,10 @@ public final class SwitchRunner {
                 GameHold hold = GameHold.begin(Minecraft.getInstance());
                 try {
                     this.takeOut(order);
+
+                    if (ShaderPrograms.isChangedBy(this.switcher.findPatchedBy(order))) {
+                        GameHold.onGameAndWait(() -> ShaderPrograms.compileAgain(Minecraft.getInstance()));
+                    }
                 } finally {
                     hold.release();
                 }
@@ -341,34 +366,38 @@ public final class SwitchRunner {
     }
 
     private void takeOut(List<String> ids) {
-        LoaderModList.hide(ids);
-        this.plugins.takeOut(ids);
-        if (this.chain != null) {
-            this.chain.passBy(ids);
+        try {
+            LoaderModList.hide(ids);
+            this.plugins.takeOut(ids);
+            if (this.chain != null) {
+                this.chain.passBy(ids);
+            }
+            CrashGuard.onSwitched(ids);
+            LogAppenders.takeOut(ids);
+            ImageReaders.takeOut(ids);
+            ModSounds.takeOut(ids);
+            SwitchTimes.mark("first removals");
+            ReloadedLists.takeOut(ids);
+            SwitchTimes.mark("checked lists");
+            WindowCursor.chooseAgainFor(this.switcher.findPatchedBy(ids));
+            SwitchTimes.mark("removals: cursor");
+            OneConfigHuds.takeOut(ids);
+            OneConfigModCards.takeOut(ids);
+            SodiumSettingsPages.takeOut(ids);
+            SwitchTimes.mark("removals: huds");
+            NetworkHandlers.takeOut(ids);
+            SwitchTimes.mark("removals: network");
+            EntityRendererProviders.takeOut(ids);
+            SwitchTimes.mark("removals: renderer providers");
+            GameTasks.takeOut(ids);
+            SwitchTimes.mark("removals: tasks");
+            OffModCommands.takeOut(id -> ids.contains(id) || !this.switcher.isOn(id));
+            SwitchTimes.mark("removals: commands");
+            this.logging.takeOut(ids);
+            SwitchTimes.mark("removals");
+        } catch (RuntimeException | LinkageError e) {
+            this.onTakeOutThrown(ids, e);
         }
-        CrashGuard.onSwitched(ids);
-        LogAppenders.takeOut(ids);
-        ImageReaders.takeOut(ids);
-        ModSounds.takeOut(ids);
-        SwitchTimes.mark("first removals");
-        ReloadedLists.takeOut(ids);
-        SwitchTimes.mark("checked lists");
-        WindowCursor.chooseAgainFor(this.switcher.findPatchedBy(ids));
-        SwitchTimes.mark("removals: cursor");
-        OneConfigHuds.takeOut(ids);
-        OneConfigModCards.takeOut(ids);
-        SodiumSettingsPages.takeOut(ids);
-        SwitchTimes.mark("removals: huds");
-        NetworkHandlers.takeOut(ids);
-        SwitchTimes.mark("removals: network");
-        EntityRendererProviders.takeOut(ids);
-        SwitchTimes.mark("removals: renderer providers");
-        GameTasks.takeOut(ids);
-        SwitchTimes.mark("removals: tasks");
-        OffModCommands.takeOut(id -> ids.contains(id) || !this.switcher.isOn(id));
-        SwitchTimes.mark("removals: commands");
-        this.logging.takeOut(ids);
-        SwitchTimes.mark("removals");
 
         Tripwire.hold(ids);
         ids.forEach(Tripwire::watch);
@@ -391,18 +420,22 @@ public final class SwitchRunner {
             ModelReloadCheck.unwrapModels(ids);
             SwitchTimes.mark("models");
         } catch (RuntimeException | LinkageError e) {
-            if (e instanceof HoldBudgetException budget) {
-                LOGGER.warn("[Hotwire] the hold's budget ran out while {}'s objects were taken out: it is put back"
-                        + " and the switch refused", ids);
-                this.putBackAll(ids);
-                throw budget;
-            }
-            LOGGER.error("[Hotwire] what {} left in others could not all be taken out", ids, e);
+            this.onTakeOutThrown(ids, e);
         }
         ModViews.clearParticlesOf(ids);
         if (EntityRendererProviders.takeChanged()) {
             ResourceReload.reloadForRenderers(false);
         }
+    }
+
+    private void onTakeOutThrown(List<String> ids, Throwable e) {
+        if (e instanceof HoldBudgetException budget) {
+            LOGGER.warn("[Hotwire] the hold's budget ran out while {}'s objects were taken out: it is put back"
+                    + " and the switch refused", ids);
+            this.putBackAll(ids);
+            throw budget;
+        }
+        LOGGER.error("[Hotwire] what {} left in others could not all be taken out", ids, e);
     }
 
     private CheckedResult runTimedOn(List<String> ids) {
@@ -465,6 +498,9 @@ public final class SwitchRunner {
                     }
                     this.plugins.takeOut(stillOff);
                     LoaderModList.hide(stillOff);
+
+                    Tripwire.hold(stillOff);
+                    this.tripwire.watchNow(stillOff);
                 }
             }
             SwitchTimes.mark("taken out again");
@@ -525,6 +561,7 @@ public final class SwitchRunner {
                 this.fieldReferences.takeRevealedBy(order);
                 GameTasks.onBack(order);
                 OffRemovals.restore(order, this.switcher::isOn);
+                EntityAttachments.giveBack(order);
 
                 WindowCursor.chooseAgainFor(this.switcher.findPatchedBy(order));
                 this.logging.putBack(order);

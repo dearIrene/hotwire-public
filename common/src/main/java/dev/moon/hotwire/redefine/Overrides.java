@@ -191,7 +191,7 @@ final class Overrides {
         return node == null ? null : node.findMethod(name, desc);
     }
 
-    private static @Nullable ClassHeader read(String internalName, Function<String, byte @Nullable []> classBytes) {
+    static @Nullable ClassHeader read(String internalName, Function<String, byte @Nullable []> classBytes) {
         byte[] bytes = classBytes.apply(internalName);
         if (bytes != null) {
             return ClassHeader.of(bytes);

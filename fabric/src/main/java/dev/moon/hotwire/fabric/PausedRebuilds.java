@@ -16,6 +16,11 @@ final class PausedRebuilds implements GameObjectRebuilder {
     }
 
     @Override
+    public void closeBuilt(Set<String> newlyBuilt) {
+        ResourceReload.closeWorldRenderer(newlyBuilt);
+    }
+
+    @Override
     public void announce(Set<String> newlyBuilt, boolean reload) {
         String words = ResourceReload.describePaused(newlyBuilt, reload);
         if (words == null) {

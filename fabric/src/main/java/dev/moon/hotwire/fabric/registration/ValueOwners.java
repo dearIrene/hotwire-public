@@ -111,24 +111,16 @@ final class ValueOwners {
         return mods > 0;
     }
 
-    private static boolean isGame(Object part) {
+    static boolean isGame(Object part) {
         String name = part.getClass().getName();
         return (name.startsWith("net.minecraft.") || name.startsWith("com.mojang.")) && !part.getClass().isHidden();
     }
 
     static @Nullable String findIdOwner(Object value) {
         Identifier id = value instanceof Identifier plain ? plain
-                : value instanceof ResourceKey<?> key ? findIdOf(key) : null;
+                : value instanceof ResourceKey<?> key ? InternedKeys.findIdOf(key) : null;
         String space = id == null ? null : id.getNamespace();
         return space == null || space.equals("minecraft") ? null : space;
-    }
-
-    private static Identifier findIdOf(ResourceKey<?> key) {
-        //? if >=1.21.11 {
-        return key.identifier();
-        //?} else {
-        /*return key.location();
-        *///?}
     }
 
     static boolean isPlain(Object part) {

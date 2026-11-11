@@ -1,5 +1,6 @@
 package dev.moon.hotwire.fabric.rebuild;
 
+import dev.moon.hotwire.jvm.ClassPathIndex;
 import dev.moon.hotwire.jvm.JvmAccess;
 import dev.moon.hotwire.jvm.JvmAccessException;
 import dev.moon.hotwire.jvm.PrivateField;
@@ -72,6 +73,7 @@ public final class KnotInternals {
     @SuppressWarnings("checkstyle:IllegalCatch")
     public static void dropFromClassPath(Path jar) throws IOException {
         Path wanted = jar.toAbsolutePath().normalize();
+        ClassPathIndex.drop(wanted);
         FabricLauncher launcher = FabricLauncherBase.getLauncher();
         Object delegate = PrivateField.of(launcher.getClass(), "classLoader").get(launcher, Object.class);
         Object knot = PrivateField.of(delegate.getClass(), "classLoader").get(delegate, Object.class);

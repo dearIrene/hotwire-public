@@ -178,7 +178,8 @@ public final class InitHookReplay {
             if (!fresh.contains(key) || handler == null) {
                 return;
             }
-            boolean onObject = site.call().getOpcode() != Opcodes.INVOKESTATIC;
+
+            boolean onObject = site.call().getOpcode() != Opcodes.INVOKESTATIC || site.moment().equals("<init>");
             StringBuilder why = new StringBuilder();
             InsnList invocation = buildInvocation(now, site, handler, finals, why);
             if (invocation == null) {
@@ -187,6 +188,7 @@ public final class InitHookReplay {
                 if (onObject) {
                     unset.addAll(ConstructedFields.findReliedSetBy(mixed, site.call().name, site.call().desc));
                 }
+                unset.addAll(findStaticWrites(handler));
             } else if (late.contains(site.moment())) {
                 (onObject ? lateOnObjects : lateOnClass).add(invocation);
                 (onObject ? lateObjectKeys : lateClassKeys).add(key);
@@ -200,6 +202,19 @@ public final class InitHookReplay {
         });
         Set<String> values = new LinkedHashSet<>(fresh);
         values.removeIf(InitHookReplay::isHandler);
+
+        values.removeIf(key -> {
+            Site site = findCallOutsideStatics(now, key, read);
+            if (site == null) {
+                return false;
+            }
+            MethodNode handler = ArgumentInitializers.findMethod(now, site.call().name, site.call().desc);
+            Set<String> statics = handler == null ? Set.of() : findStaticWrites(handler);
+            missed.add(name + "." + site.moment() + " ran before " + key + " was there, a wrapping hook that is not"
+                    + " run again" + (statics.isEmpty() ? "" : ", which keeps " + statics));
+            unset.addAll(statics);
+            return true;
+        });
         Map<String, String> recomputed = new LinkedHashMap<>(values.isEmpty() ? Map.of()
                 : ChangedStatics.add(now, values));
         ClassNode runs = RetainedInitializers.read(running);
@@ -207,6 +222,10 @@ public final class InitHookReplay {
         if (original != null) {
             recomputed.putAll(ChangedStatics.addMadeFresh(now, RetainedInitializers.read(original), runs));
         }
+        findBuiltFrom(now, recomputed).forEach(field -> {
+            unset.add(field);
+            missed.add(name + "'s constructors built them from the old " + field);
+        });
         if (objectKeys.isEmpty() && classKeys.isEmpty() && lateObjectKeys.isEmpty() && lateClassKeys.isEmpty()
                 && recomputed.isEmpty() && missed.isEmpty()) {
             return new Addition(mixed, null);
@@ -252,10 +271,31 @@ public final class InitHookReplay {
         if (recomputed.isEmpty()) {
             return new Addition(mixed, null);
         }
+        Set<String> built = findBuiltFrom(now, recomputed);
+        List<String> missed = new ArrayList<>();
+        for (String field : built) {
+            missed.add(now.name + "'s constructors built them from the old " + field);
+        }
         ClassWriter writer = new ClassWriter(ClassWriter.COMPUTE_MAXS);
         now.accept(writer);
-        return new Addition(writer.toByteArray(), new Due(Set.of(), Set.of(), recomputed, List.of(), Set.of(),
-                Set.of()));
+        return new Addition(writer.toByteArray(), new Due(Set.of(), Set.of(), recomputed, missed, built, Set.of()));
+    }
+
+    private static Set<String> findBuiltFrom(ClassNode now, Map<String, String> recomputed) {
+        Set<String> read = new TreeSet<>();
+        for (MethodNode method : now.methods) {
+            if (!method.name.equals("<init>")) {
+                continue;
+            }
+            for (AbstractInsnNode insn : method.instructions) {
+                if (insn instanceof FieldInsnNode get && get.getOpcode() == Opcodes.GETSTATIC
+                        && get.owner.equals(now.name) && get.desc.length() == 1
+                        && get.desc.equals(recomputed.get(get.name))) {
+                    read.add(get.name);
+                }
+            }
+        }
+        return read;
     }
 
     private static Set<String> findKeys(byte[] bytes, String owner, Set<String> once) {
@@ -453,6 +493,36 @@ public final class InitHookReplay {
             }
         }
         return null;
+    }
+
+    private static @Nullable Site findCallOutsideStatics(ClassNode node, String key, Set<String> once) {
+        Site found = null;
+        for (MethodNode method : node.methods) {
+            boolean moment = method.name.equals("<init>") || once.contains(method.name);
+            if (!moment && !method.name.equals("<clinit>")) {
+                continue;
+            }
+            for (AbstractInsnNode insn : method.instructions) {
+                if (insn instanceof MethodInsnNode call && call.owner.equals(node.name)
+                        && (ChangedStatics.makeKey(call.name) + call.desc).equals(key)) {
+                    if (!moment) {
+                        return null;
+                    }
+                    found = found != null ? found : new Site(method.name, call);
+                }
+            }
+        }
+        return found;
+    }
+
+    private static Set<String> findStaticWrites(MethodNode handler) {
+        Set<String> written = new TreeSet<>();
+        for (AbstractInsnNode insn : handler.instructions) {
+            if (insn instanceof FieldInsnNode put && put.getOpcode() == Opcodes.PUTSTATIC) {
+                written.add(put.owner.replace('/', '.') + "." + put.name);
+            }
+        }
+        return written;
     }
 
     private static boolean isHandler(String descriptor) {

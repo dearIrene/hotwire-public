@@ -8,7 +8,7 @@ import java.util.regex.Pattern;
 import org.jspecify.annotations.Nullable;
 
 public final class CallerOwner {
-    public record Owner(String mod, @Nullable String via) {
+    public record Owner(String mod) {
     }
 
     private static final Pattern MIXIN_UID = Pattern.compile("(?!lambda)[a-z]{3}[0-9a-f]{3}");
@@ -64,23 +64,23 @@ public final class CallerOwner {
 
             if (handler != null) {
                 if (firstLibrary == null) {
-                    return new Owner(mod, null);
+                    return new Owner(mod);
                 }
                 continue;
             }
 
             if (frame.method().equals("<clinit>")
                     && (this.libraries.contains(mod) || this.nestedLibrary.test(frame.type()))) {
-                return new Owner(mod, null);
+                return new Owner(mod);
             }
             if (!this.libraries.contains(mod) && !this.nestedLibrary.test(frame.type())) {
-                return new Owner(mod, firstLibrary);
+                return new Owner(mod);
             }
             if (firstLibrary == null) {
                 firstLibrary = mod;
             }
         }
-        return firstLibrary == null ? null : new Owner(firstLibrary, null);
+        return firstLibrary == null ? null : new Owner(firstLibrary);
     }
 
     private boolean isWrappedOriginal(Frame within, Frame handler) {

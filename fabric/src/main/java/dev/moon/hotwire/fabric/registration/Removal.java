@@ -104,12 +104,13 @@ sealed interface Removal {
             StaticRecomputer.Writer writer, List<?> first) implements Removal {
         @Override
         public @Nullable Object container() {
-            return read(this.field, this.holder);
+            return CollectionParts.read(this.field, this.holder);
         }
 
         @Override
         public void restore() {
-            if (!(read(this.field, this.holder) instanceof List<?> now) || containsSame(now, this.element)) {
+            if (!(CollectionParts.read(this.field, this.holder) instanceof List<?> now)
+                    || containsSame(now, this.element)) {
                 return;
             }
             List<Object> back = new ArrayList<>(now);
@@ -226,13 +227,5 @@ sealed interface Removal {
             }
         }
         return false;
-    }
-
-    private static @Nullable Object read(FieldSlots.Slot field, @Nullable Object holder) {
-        try {
-            return field.get(holder);
-        } catch (ReflectiveOperationException | RuntimeException | LinkageError e) {
-            return null;
-        }
     }
 }

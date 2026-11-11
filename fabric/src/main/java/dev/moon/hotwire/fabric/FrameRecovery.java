@@ -2,7 +2,6 @@ package dev.moon.hotwire.fabric;
 
 import com.mojang.blaze3d.systems.RenderSystem;
 import dev.moon.hotwire.fabric.screen.HotwireScreen;
-import dev.moon.hotwire.fabric.screen.StoreGameScreen;
 import dev.moon.hotwire.report.Causes;
 import dev.moon.hotwire.ui.Lang;
 //? if >=26.2 {
@@ -25,7 +24,7 @@ public final class FrameRecovery {
 
     public static boolean closeThrowingScreen(Throwable thrown) {
         Screen screen = ModViews.openScreen();
-        if (!(screen instanceof HotwireScreen) && !(screen instanceof StoreGameScreen)) {
+        if (!(screen instanceof HotwireScreen)) {
             return false;
         }
         for (Throwable at : Causes.list(thrown)) {

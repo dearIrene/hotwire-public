@@ -73,6 +73,10 @@ final class TripwireOwners {
             if (mod == null) {
                 mod = findSplitOwner(type);
             }
+
+            if (mod == null) {
+                mod = GameRegistrations.findNestedModOf(type);
+            }
             if (mod != null && ids.contains(mod)) {
                 owned.put(type, mod);
             }

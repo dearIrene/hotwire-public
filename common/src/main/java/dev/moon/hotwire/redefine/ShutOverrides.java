@@ -34,7 +34,7 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 public final class ShutOverrides {
-    private record Shut(String owner, String method, String mod, String overriding) {
+    private record Shut(String owner, String method, String mod) {
     }
 
     private static final String SHUT = ShutOverrides.class.getName().replace('.', '/');
@@ -55,7 +55,7 @@ public final class ShutOverrides {
 
     public static void register(String mod, String owner, String method, String overriding) {
         BY_OVERRIDING.computeIfAbsent(overriding, key -> new CopyOnWriteArrayList<>())
-                .add(new Shut(owner, method, mod, overriding));
+                .add(new Shut(owner, method, mod));
     }
 
     private static List<Shut> findAll() {

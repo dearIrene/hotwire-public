@@ -64,8 +64,8 @@ public final class SwitchCacheFiller {
         }
     }
 
-    public record Fill(boolean running, int stepsDone, int steps, long classesDone, long classes, long bytesDone,
-            long bytes, long millis, boolean sampled, long filledBytes, long baseBytes, boolean outdated) {
+    public record Fill(boolean running, long classesDone, long classes, long bytesDone, long bytes, long millis,
+            boolean sampled, long filledBytes, long baseBytes, boolean outdated) {
     }
 
     private final Host host;
@@ -165,8 +165,8 @@ public final class SwitchCacheFiller {
         Thread running = this.thread;
         boolean alive = running != null && running.isAlive() && !this.paused && !this.healing
                 && !this.joining;
-        return new Fill(alive, this.done.get(), this.steps.size(), this.classesDone.get(), this.classes,
-                this.bytesDone.get(), this.bytes, this.nanos.get() / 1_000_000,
+        return new Fill(alive, this.classesDone.get(), this.classes, this.bytesDone.get(), this.bytes,
+                this.nanos.get() / 1_000_000,
                 !this.steps.isEmpty() && this.done.get() >= this.sample, this.filledBytes, this.baseBytes,
                 this.outdated);
     }

@@ -8,6 +8,7 @@ import java.util.Map;
 import java.util.Set;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.stream.Collectors;
+import java.util.stream.Stream;
 import org.jspecify.annotations.Nullable;
 import org.objectweb.asm.ClassReader;
 import org.objectweb.asm.ClassWriter;
@@ -126,6 +127,35 @@ public final class TripwireSites {
         return desc.endsWith("Lkotlin/coroutines/Continuation;)Ljava/lang/Object;");
     }
 
+    static boolean isUnderGatedFrame(String mod, Stream<StackWalker.StackFrame> frames) {
+        boolean counted = false;
+        for (StackWalker.StackFrame frame : (Iterable<StackWalker.StackFrame>) frames::iterator) {
+            Class<?> type = frame.getDeclaringClass();
+            if (type.equals(Tripwire.class) || type.equals(TripwireSites.class)
+                    || type.getName().startsWith(TripwireSites.class.getName() + "$")) {
+                continue;
+            }
+
+            if (!counted) {
+                counted = true;
+                continue;
+            }
+            ClassLoader loader = type.getClassLoader();
+            if (loader == null || loader.equals(ClassLoader.getPlatformClassLoader())) {
+                continue;
+            }
+
+            Class<?> host = type.isHidden() ? type.getNestHost() : type;
+            if (!mod.equals(ARMED.get(host.getName().replace('.', '/')))) {
+                return false;
+            }
+            if (!type.isHidden() && isGated(frame.getMethodName(), frame.getMethodType().toMethodDescriptorString())) {
+                return true;
+            }
+        }
+        return false;
+    }
+
     private static InsnList makeGate(MethodNode method, String holder) {
         InsnList gate = new InsnList();
         LabelNode go = new LabelNode();
@@ -177,7 +207,7 @@ public final class TripwireSites {
         return hit;
     }
 
-    private static boolean startsWithFrame(MethodNode method) {
+    public static boolean startsWithFrame(MethodNode method) {
         for (AbstractInsnNode insn = method.instructions.getFirst(); insn != null; insn = insn.getNext()) {
             if (insn instanceof FrameNode) {
                 return true;

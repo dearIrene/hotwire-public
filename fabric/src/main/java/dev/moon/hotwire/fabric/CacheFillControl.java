@@ -2,6 +2,7 @@ package dev.moon.hotwire.fabric;
 
 import com.google.common.base.Splitter;
 import dev.moon.hotwire.redefine.CachedMixes;
+import dev.moon.hotwire.redefine.SiteCache;
 import dev.moon.hotwire.report.ActionJournal;
 import dev.moon.hotwire.switching.SwitchCacheFiller;
 import dev.moon.hotwire.ui.CacheFill;
@@ -157,6 +158,7 @@ final class CacheFillControl implements CacheHost {
             if (found != null) {
                 found.runner().getSwitcher().getFiller().restart();
                 found.adds().getApplier().getRebuilder().getCache().clear();
+                SiteCache.clear();
                 this.estimate = -1;
             }
         }

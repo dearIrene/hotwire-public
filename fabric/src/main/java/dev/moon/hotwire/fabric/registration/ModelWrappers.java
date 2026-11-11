@@ -71,7 +71,7 @@ final class ModelWrappers {
                 if (field.isStatic() || field.getType().isPrimitive()) {
                     continue;
                 }
-                Object value = read(field, holder);
+                Object value = CollectionParts.read(field, holder);
                 this.visit(value, field.getType(), inner -> write(field, holder, inner), depth + 1);
             }
         }
@@ -139,7 +139,7 @@ final class ModelWrappers {
                 if (field.isStatic() || type == Object.class || !type.isInstance(wrapper)) {
                     continue;
                 }
-                Object value = read(field, wrapper);
+                Object value = CollectionParts.read(field, wrapper);
                 String mod = value == null ? null : GameRegistrations.findModOf(value.getClass());
                 if (value != null && (mod == null || !this.mods.contains(mod))) {
                     found.add(value);
@@ -147,14 +147,6 @@ final class ModelWrappers {
             }
         }
         return found.size() == 1 ? found.getFirst() : null;
-    }
-
-    private static @Nullable Object read(FieldSlots.Slot field, Object holder) {
-        try {
-            return field.get(holder);
-        } catch (ReflectiveOperationException | RuntimeException e) {
-            return null;
-        }
     }
 
     private static void write(FieldSlots.Slot field, Object holder, Object value) {

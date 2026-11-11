@@ -60,11 +60,6 @@ public final class CachedMixes {
         return known == null ? 0 : known.getBytes();
     }
 
-    public int getEntries() {
-        MixedCache known = this.cache;
-        return known == null ? 0 : known.getEntries();
-    }
-
     public long getLimitBytes() {
         MixedCache known = this.cache;
         return known == null ? 0 : known.getStore().getCapBytes();
@@ -110,11 +105,10 @@ public final class CachedMixes {
 
     public Sizes getSizes() {
         MixedCache known = this.cache;
-        long[] saved = known == null ? new long[6] : known.findSaved();
-        return new Sizes(saved[0], saved[1], saved[2], saved[3], saved[4], saved[5]);
+        return known == null ? new Sizes(0, 0, 0, 0, 0) : known.findSaved();
     }
 
-    public record Sizes(long classes, long classesBefore, long reads, long readLists, long bases, long basesBefore) {
+    public record Sizes(long classes, long classesBefore, long reads, long bases, long basesBefore) {
     }
 
     List<MixinCopy.MixResult> mix(Set<String> allTargets, Map<String, byte[]> classes, Map<String, byte[]> resources,

@@ -92,7 +92,6 @@ final class MixedCache {
     private final AtomicLong classesSaved = new AtomicLong();
     private final AtomicLong classesBefore = new AtomicLong();
     private final AtomicLong readsSaved = new AtomicLong();
-    private final AtomicLong readLists = new AtomicLong();
 
     private final AtomicLong basesSaved = new AtomicLong();
     private final AtomicLong basesBefore = new AtomicLong();
@@ -246,8 +245,12 @@ final class MixedCache {
         try (DataInputStream in = new DataInputStream(new ByteArrayInputStream(list))) {
             for (int count = in.readInt(); count > 0; count--) {
                 String name = in.readUTF();
-                if (this.hashOf(name, this.copy.findReadable(name)) != in.readLong()) {
-                    LOGGER.info("[Hotwire] the switch cache's saved read of {} no longer holds", name);
+                byte[] now = this.copy.findReadable(name);
+                long saved = in.readLong();
+                if (this.hashOf(name, now) != saved) {
+                    LOGGER.info("[Hotwire] the switch cache's saved read of {} no longer holds: saved {}, now {} of "
+                            + "{} bytes", name, Long.toHexString(saved), Long.toHexString(this.hashOf(name, now)),
+                            now == null ? -1 : now.length);
                     return false;
                 }
             }
@@ -341,7 +344,6 @@ final class MixedCache {
         this.store.put(reads, bytes, null);
         if (this.counted.add(reads)) {
             this.readsSaved.addAndGet(this.store.findSize(reads));
-            this.readLists.incrementAndGet();
         }
         this.holding.add(reads);
         return reads;
@@ -397,9 +399,9 @@ final class MixedCache {
         this.count(used, key, original == null ? mixed.length : original.length, body.base());
     }
 
-    long[] findSaved() {
-        return new long[] {this.classesSaved.get(), this.classesBefore.get(), this.readsSaved.get(),
-            this.readLists.get(), this.basesSaved.get(), this.basesBefore.get()};
+    CachedMixes.Sizes findSaved() {
+        return new CachedMixes.Sizes(this.classesSaved.get(), this.classesBefore.get(), this.readsSaved.get(),
+                this.basesSaved.get(), this.basesBefore.get());
     }
 
     String describe() {
@@ -450,7 +452,6 @@ final class MixedCache {
             this.classesSaved.set(0);
             this.classesBefore.set(0);
             this.readsSaved.set(0);
-            this.readLists.set(0);
             this.basesSaved.set(0);
             this.basesBefore.set(0);
         });
@@ -458,10 +459,6 @@ final class MixedCache {
 
     long getBytes() {
         return this.store.getBytes();
-    }
-
-    int getEntries() {
-        return this.store.getEntries();
     }
 
     long hashOfMixin(String mixin) {

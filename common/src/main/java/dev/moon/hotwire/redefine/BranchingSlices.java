@@ -89,7 +89,9 @@ final class BranchingSlices {
                 }
                 beforeFrame.clear();
                 height += change;
-                if (height <= 0 && at != from) {
+
+                boolean atTest = operands == 1 && height == 0 && at instanceof JumpInsnNode;
+                if (height <= 0 && at != from && !atTest) {
                     return false;
                 }
                 if (at instanceof JumpInsnNode jump) {

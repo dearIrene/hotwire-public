@@ -1,6 +1,7 @@
 package dev.moon.hotwire.fabric;
 
 import dev.moon.hotwire.fabric.mixin.core.client.MinecraftAccessor;
+import dev.moon.hotwire.fabric.registration.GameHold;
 import java.util.ArrayList;
 import java.util.HashSet;
 import java.util.List;
@@ -12,6 +13,7 @@ import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.ExecutionException;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.TimeoutException;
+import java.util.concurrent.atomic.AtomicInteger;
 import java.util.concurrent.atomic.AtomicReference;
 import java.util.function.Consumer;
 import java.util.stream.Collectors;
@@ -25,6 +27,8 @@ import org.slf4j.LoggerFactory;
 public final class OngoingReload {
     private static final Logger LOGGER = LoggerFactory.getLogger(OngoingReload.class);
     private static final Map<ReloadInstance, Run> RUNNING = new ConcurrentHashMap<>();
+
+    private static final AtomicInteger SERVER = new AtomicInteger();
 
     private static final AtomicReference<CompletableFuture<Void>> CHANGED =
             new AtomicReference<>(new CompletableFuture<>());
@@ -65,12 +69,24 @@ public final class OngoingReload {
         markChanged();
     }
 
+    @SuppressWarnings("FutureReturnValueIgnored")
+    public static void onServerReload(CompletableFuture<Void> reload) {
+        SERVER.incrementAndGet();
+        reload.whenComplete((done, thrown) -> {
+            SERVER.decrementAndGet();
+            markChanged();
+        });
+        markChanged();
+    }
+
     public static Consumer<Optional<Throwable>> onShown(LoadingOverlay overlay, ReloadInstance reload,
             Consumer<Optional<Throwable>> onFinish) {
         Run run = RUNNING.computeIfAbsent(reload, Run::new);
         Consumer<Optional<Throwable>> ending = result -> {
             try {
                 onFinish.accept(result);
+
+                OpenKey.noteHome();
             } finally {
                 end(run);
             }
@@ -145,6 +161,9 @@ public final class OngoingReload {
     // must not be removed under any circumstance.
 
     static boolean awaitIdle(Minecraft game) {
+        if (GameHold.isGamePaused()) {
+            return false;
+        }
         Set<Run> seen = new HashSet<>();
         long from = System.nanoTime();
         long until = from + ResourceReload.WAIT.toNanos();
@@ -176,11 +195,13 @@ public final class OngoingReload {
         if (under.isEmpty()) {
             return false;
         }
-        long until = System.nanoTime() + ResourceReload.WAIT.toNanos();
-        game.managedBlock(() -> {
+        ResourceReload.awaitWhilePaused(game, () -> {
             BackgroundReload.finishIfDone();
-            return under.stream().allMatch(run -> run.reload.isDone()) || System.nanoTime() > until;
+            return under.stream().allMatch(run -> run.reload.isDone());
         });
+        if (under.stream().anyMatch(run -> !run.reload.isDone())) {
+            LOGGER.warn("[Hotwire] the wait for a reload begun before the hold ran out; it ends with the game drawing");
+        }
         return under.stream().anyMatch(run -> !run.partial);
     }
 
@@ -202,6 +223,9 @@ public final class OngoingReload {
         }
         if (((MinecraftAccessor) game).hotwire$getPendingReload() != null) {
             return "one the game put off behind its loading overlay";
+        }
+        if (SERVER.get() > 0) {
+            return SERVER.get() + " of the server's data";
         }
         return BackgroundReload.isDue() ? "Hotwire's, due at the end of the next tick" : null;
     }

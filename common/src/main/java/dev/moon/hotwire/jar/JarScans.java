@@ -9,26 +9,32 @@ import java.io.DataOutputStream;
 import java.io.IOException;
 import java.io.InputStream;
 import java.net.URISyntaxException;
+import java.nio.ByteBuffer;
 import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
 import java.nio.file.Path;
+import java.nio.file.attribute.BasicFileAttributes;
 import java.security.CodeSource;
 import java.util.ArrayList;
 import java.util.Collection;
+import java.util.Collections;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;
 import java.util.Set;
+import java.util.concurrent.TimeUnit;
 import java.util.zip.ZipEntry;
 import java.util.zip.ZipFile;
-import java.util.zip.ZipInputStream;
 import org.jspecify.annotations.Nullable;
 import org.objectweb.asm.ClassReader;
 import org.objectweb.asm.ClassWriter;
 
 public final class JarScans {
     private static final String KEYS = "jar scans 3";
+    private static final String STAMPS = "jar stamps 1";
+
+    private static final long UNWRITTEN_MILLIS = 2_000;
     private static final String SCANNER = "dev/moon/hotwire/jar/";
 
     private final CacheStore store;
@@ -55,6 +61,44 @@ public final class JarScans {
         CacheKey.Builder key = CacheKey.of(KEYS).add(this.recipe).add(name);
         zip.stream().forEach(entry -> key.add(entry.getName()).add(entry.getSize()).add(entry.getCrc()));
         return key.build();
+    }
+
+    @Nullable CacheKey findStamp(Path jar) {
+        if (this.recipe == null) {
+            return null;
+        }
+        try {
+            BasicFileAttributes file = Files.readAttributes(jar, BasicFileAttributes.class);
+            return CacheKey.of(STAMPS).add(this.recipe).add(jar.toAbsolutePath().toString()).add(file.size())
+                    .add(file.lastModifiedTime().to(TimeUnit.MICROSECONDS))
+                    .add(file.creationTime().to(TimeUnit.MICROSECONDS)).build();
+        } catch (IOException e) {
+            return null;
+        }
+    }
+
+    @Nullable ModJar findStamped(CacheKey stamp) {
+        byte[] key = this.store.get(stamp, null);
+        if (key == null || key.length != 2 * Long.BYTES) {
+            return null;
+        }
+        ByteBuffer both = ByteBuffer.wrap(key);
+        return this.find(new CacheKey(both.getLong(), both.getLong()));
+    }
+
+    void saveStamp(Path jar, @Nullable CacheKey before, @Nullable CacheKey key) {
+        if (before == null || key == null || !before.equals(this.findStamp(jar))) {
+            return;
+        }
+        try {
+            if (System.currentTimeMillis() - Files.getLastModifiedTime(jar).toMillis() < UNWRITTEN_MILLIS) {
+                return;
+            }
+        } catch (IOException e) {
+            return;
+        }
+        this.store.put(before, ByteBuffer.allocate(2 * Long.BYTES).putLong(key.high()).putLong(key.low()).array(),
+                null);
     }
 
     @Nullable ModJar find(CacheKey key) {
@@ -192,11 +236,14 @@ public final class JarScans {
             if (own == null || !Files.isRegularFile(own)) {
                 return null;
             }
-            try (InputStream file = Files.newInputStream(own); ZipInputStream zip = new ZipInputStream(file)) {
-                for (ZipEntry entry = zip.getNextEntry(); entry != null; entry = zip.getNextEntry()) {
+
+            try (ZipFile zip = new ZipFile(own.toFile())) {
+                for (ZipEntry entry : Collections.list(zip.entries())) {
                     if (entry.getName().startsWith(SCANNER) && entry.getName().endsWith(".class")) {
                         ClassWriter bare = new ClassWriter(0);
-                        new ClassReader(zip.readAllBytes()).accept(bare, ClassReader.SKIP_DEBUG);
+                        try (InputStream in = zip.getInputStream(entry)) {
+                            new ClassReader(in.readAllBytes()).accept(bare, ClassReader.SKIP_DEBUG);
+                        }
                         recipe.add(entry.getName()).add(bare.toByteArray());
                         any = true;
                     }

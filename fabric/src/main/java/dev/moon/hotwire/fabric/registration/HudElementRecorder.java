@@ -44,7 +44,7 @@ public final class HudElementRecorder {
         }
         HudElementReplacement replacement = new HudElementReplacement(id, replacer);
         HudElementRegistryImpl.replaceElement(id, replacement);
-        GameRegistrations.getJournal().record(owner.mod(), owner.via(), replacement);
+        GameRegistrations.getJournal().record(owner.mod(), replacement);
         return true;
     }
 

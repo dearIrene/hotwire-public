@@ -82,11 +82,6 @@ public final class ConfigTrim {
     }
 
     public static byte[] repeatDecisions(byte[] json, String side, UnaryOperator<Set<String>> choose,
-            Set<String> applied) {
-        return repeatDecisions(json, side, choose, applied, name -> false, plugin -> false, plugin -> false);
-    }
-
-    public static byte[] repeatDecisions(byte[] json, String side, UnaryOperator<Set<String>> choose,
             Set<String> applied, Predicate<String> listedElsewhere, Predicate<String> retainsPlugin,
             Predicate<String> runsLive) {
         JsonObject root = JsonParser.parseString(new String(json, StandardCharsets.UTF_8)).getAsJsonObject();

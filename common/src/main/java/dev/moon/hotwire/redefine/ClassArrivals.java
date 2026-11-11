@@ -9,11 +9,11 @@ import org.jspecify.annotations.Nullable;
 
 public final class ClassArrivals {
     private static final int MOST = 4096;
-    private static final Queue<Arrival> ARRIVED = new ConcurrentLinkedQueue<>();
+    private static final Queue<NewClass> ARRIVED = new ConcurrentLinkedQueue<>();
     private static final AtomicInteger COUNT = new AtomicInteger();
     private static volatile boolean listening;
 
-    private record Arrival(String binaryName, ClassLoader loader) {
+    private record NewClass(String binaryName, ClassLoader loader) {
     }
 
     private ClassArrivals() {
@@ -28,7 +28,7 @@ public final class ClassArrivals {
             ARRIVED.clear();
             return;
         }
-        ARRIVED.add(new Arrival(internalName.replace('/', '.'), loader));
+        ARRIVED.add(new NewClass(internalName.replace('/', '.'), loader));
     }
 
     public static void listen() {
@@ -42,10 +42,10 @@ public final class ClassArrivals {
             return null;
         }
         List<Class<?>> found = new ArrayList<>();
-        for (Arrival arrival = ARRIVED.poll(); arrival != null; arrival = ARRIVED.poll()) {
+        for (NewClass defined = ARRIVED.poll(); defined != null; defined = ARRIVED.poll()) {
             COUNT.decrementAndGet();
             try {
-                found.add(Class.forName(arrival.binaryName(), false, arrival.loader()));
+                found.add(Class.forName(defined.binaryName(), false, defined.loader()));
             } catch (ClassNotFoundException | LinkageError e) {
             }
         }

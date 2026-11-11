@@ -1,17 +1,22 @@
 package dev.moon.hotwire.redefine;
 
+import java.util.Map;
 import org.objectweb.asm.Opcodes;
 import org.objectweb.asm.Type;
 import org.objectweb.asm.tree.AbstractInsnNode;
 import org.objectweb.asm.tree.InsnList;
 import org.objectweb.asm.tree.InsnNode;
+import org.objectweb.asm.tree.InvokeDynamicInsnNode;
 import org.objectweb.asm.tree.LdcInsnNode;
 import org.objectweb.asm.tree.MethodInsnNode;
 import org.objectweb.asm.tree.MethodNode;
 import org.objectweb.asm.tree.TypeInsnNode;
 import org.objectweb.asm.tree.VarInsnNode;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
 final class HandlerFallbacks {
+    private static final Logger LOGGER = LoggerFactory.getLogger(HandlerFallbacks.class);
     private static final String OPERATION = "/wrapoperation/Operation";
 
     private HandlerFallbacks() {
@@ -67,6 +72,50 @@ final class HandlerFallbacks {
         code.add(new InsnNode(answer.getOpcode(Opcodes.IRETURN)));
         body.maxLocals = slot;
         body.maxStack = 6;
+        return true;
+    }
+
+    static boolean bridgeToPresent(MethodNode body, MethodNode bridge, String owner, Map<String, MethodNode> present) {
+        if (!bridge.name.startsWith("mixinextras$bridge$")) {
+            return false;
+        }
+
+        String handler = null;
+        for (AbstractInsnNode insn : bridge.instructions) {
+            String called = insn instanceof MethodInsnNode call && call.owner.equals(owner) ? call.name
+                    : insn instanceof InvokeDynamicInsnNode site ? site.name : null;
+            if (called != null && bridge.name.contains(called) && !called.equals(handler)) {
+                if (handler != null) {
+                    return false;
+                }
+                handler = called;
+            }
+        }
+        String key = handler == null ? null : SidecarCallSites.stripNumber(handler);
+        if (handler == null || key == null) {
+            return false;
+        }
+        String name = null;
+        for (MethodNode method : present.values()) {
+            if (key.equals(SidecarCallSites.stripNumber(method.name))) {
+                if (name != null) {
+                    return false;
+                }
+                name = method.name;
+            }
+        }
+        if (name == null) {
+            return false;
+        }
+        bridge.accept(new ClassSplit.CodeOnly(body));
+        for (AbstractInsnNode insn : body.instructions) {
+            if (insn instanceof MethodInsnNode call && call.owner.equals(owner) && call.name.equals(handler)) {
+                call.name = name;
+            } else if (insn instanceof InvokeDynamicInsnNode site && site.name.equals(handler)) {
+                site.name = name;
+            }
+        }
+        LOGGER.info("[Hotwire] {}.{} goes on to {}, which the class still has", owner, bridge.name, name);
         return true;
     }
 

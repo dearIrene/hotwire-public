@@ -11,6 +11,7 @@ import dev.moon.hotwire.report.ActionJournal;
 import dev.moon.hotwire.report.Report;
 import dev.moon.hotwire.switching.ModSwitcher;
 import dev.moon.hotwire.switching.PlayerMessages;
+import dev.moon.hotwire.switching.SwitchHistory;
 import dev.moon.hotwire.ui.Lang;
 import dev.moon.hotwire.ui.ModScreen;
 import dev.moon.hotwire.ui.ReopenPanel;
@@ -22,6 +23,7 @@ import java.util.TreeSet;
 import java.util.concurrent.CompletableFuture;
 import java.util.function.Function;
 import java.util.function.Supplier;
+import java.util.stream.Collectors;
 import net.minecraft.client.Minecraft;
 import net.minecraft.client.server.IntegratedServer;
 import org.jspecify.annotations.Nullable;
@@ -59,7 +61,7 @@ final class SwitchRequests {
         List<CompletableFuture<ModAdder.Result>> adds = disabledIds.stream().map(this.disabled::enableByAdd).toList();
         List<String> rest = ids.stream().filter(id -> !disabledIds.contains(id)).toList();
         if (disabledIds.isEmpty()) {
-            return this.run(runner -> off ? runner.turnOff(rest) : runner.turnOn(rest), off, rest, quiet);
+            return this.run(runner -> off ? runner.turnOff(rest) : runner.turnOn(rest), off, rest, quiet, !quiet);
         }
 
         CompletableFuture<SwitchResult> brought = CompletableFuture.allOf(adds.toArray(CompletableFuture[]::new))
@@ -67,7 +69,7 @@ final class SwitchRequests {
         if (rest.isEmpty()) {
             return brought;
         }
-        return this.run(runner -> runner.turnOn(rest), false, rest, quiet).thenCombine(brought,
+        return this.run(runner -> runner.turnOn(rest), false, rest, quiet, false).thenCombine(brought,
                 SwitchRequests::combine);
     }
 
@@ -97,12 +99,12 @@ final class SwitchRequests {
 
     @SuppressWarnings("FutureReturnValueIgnored")
     void run(Function<SwitchRunner, SwitchRunner.CheckedResult> work) {
-        this.run(work, false, List.of(), false);
+        this.run(work, false, List.of(), false, false);
     }
 
     @SuppressWarnings("FutureReturnValueIgnored")
     private CompletableFuture<SwitchResult> run(Function<SwitchRunner, SwitchRunner.CheckedResult> work, boolean off,
-            List<String> ids, boolean quiet) {
+            List<String> ids, boolean quiet, boolean undoable) {
         HotwireEngine.JvmParts parts = this.engine.findJvmParts().orElse(null);
         if (parts == null) {
             return this.refuse(this.engine.getSwitchRefusal(), quiet);
@@ -119,13 +121,21 @@ final class SwitchRequests {
         this.tasks.submit("switch", () -> work.apply(parts.runner()), result -> {
             boolean untilOn = off && result.result() instanceof ModSwitcher.Result.Done
                     && this.settings.getOffLasts() == HotwireSettings.OffLasts.UNTIL_ON;
+            List<String> stayed = off && result.result() instanceof ModSwitcher.Result.Done
+                    ? parts.runner().getSwitcher().getStayedOn() : List.of();
             String said = PlayerMessages.describe(result.result(), this.installed::nameOf, untilOn)
+                    + (stayed.isEmpty() ? "" : " " + Lang.get("hotwire.switch.stayed_on", stayed.stream()
+                            .map(this.installed::nameOf).collect(Collectors.joining(", "))))
                     + PlayerMessages.describe(result.check())
                     + PlayerMessages.describeFaults(result.result(), result.faults().size());
 
             if (result.result() instanceof ModSwitcher.Result.Failed failed
                     ? FailureReports.isUnplanned(failed.cause()) : !result.faults().isEmpty()) {
                 FailureReports.report(this.engine, Lang.get("hotwire.report.file.switch_failed"), said);
+            }
+
+            if (!quiet && !ids.isEmpty()) {
+                SwitchHistory.get().recordDone(result.result(), SwitchHistory.Cause.PLAYER, "");
             }
             ModScreen current = this.screen.get();
             if (quiet) {
@@ -149,8 +159,14 @@ final class SwitchRequests {
             } else {
                 boolean lasting = off && result.result() instanceof ModSwitcher.Result.Done done
                         && !done.plan().order().isEmpty() && !untilOn;
-                this.say.show(said, PlayerMessages.isBad(result.result()) || !result.faults().isEmpty(),
-                        lasting ? Lang.get("hotwire.switch.hint.session") : "");
+                boolean bad = PlayerMessages.isBad(result.result()) || !result.faults().isEmpty();
+                String hint = lasting ? Lang.get("hotwire.switch.hint.session") : "";
+                if (undoable && !bad && result.result() instanceof ModSwitcher.Result.Done done
+                        && !done.plan().order().isEmpty()) {
+                    this.engine.showSwitched(said, hint, off, done.plan().order());
+                } else {
+                    this.say.show(said, bad, hint);
+                }
             }
             this.engine.refreshScreen();
             HotwireApiImpl.endSwitch(ended, HotwireApiImpl.toResult(result.result(), said), this.engine::isOn);
@@ -207,6 +223,7 @@ final class SwitchRequests {
             String said = result.map(done -> PlayerMessages.describe(done.result(), this.installed::nameOf)
                     + PlayerMessages.describe(done.check())).orElse(Lang.get("hotwire.reopen.world_open_again"));
             this.say.show(said, result.map(done -> PlayerMessages.isBad(done.result())).orElse(false), "");
+            result.ifPresent(done -> SwitchHistory.get().recordDone(done.result(), SwitchHistory.Cause.PLAYER, ""));
             this.engine.refreshScreen();
             HotwireApiImpl.endSwitch(ended, result.map(done -> HotwireApiImpl.toResult(done.result(), said))
                     .orElse(new SwitchResult(SwitchResult.Kind.DONE, List.of(), said)), this.engine::isOn);

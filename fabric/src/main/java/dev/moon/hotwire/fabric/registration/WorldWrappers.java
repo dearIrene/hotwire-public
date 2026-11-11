@@ -27,7 +27,7 @@ public final class WorldWrappers {
         @Override
         @SuppressWarnings("ReferenceEquality")
         public void restore() {
-            if (read(this.field, this.entity) == this.inner) {
+            if (CollectionParts.read(this.field, this.entity) == this.inner) {
                 write(this.field, this.entity, this.wrapper);
             }
         }
@@ -74,7 +74,7 @@ public final class WorldWrappers {
             Map<Class<?>, List<FieldSlots.Slot>> fieldsOf) {
         for (Entity entity : entities) {
             for (FieldSlots.Slot field : fieldsOf.computeIfAbsent(entity.getClass(), WorldWrappers::findGameFields)) {
-                Object value = read(field, entity);
+                Object value = CollectionParts.read(field, entity);
                 String mod = value == null ? null : GameRegistrations.findCodeMod(value.getClass());
                 if (value == null || mod == null || !mods.contains(mod)) {
                     continue;
@@ -131,7 +131,7 @@ public final class WorldWrappers {
         List<String> out = new ArrayList<>();
         for (Class<?> at = wrapper.getClass(); at != null && at != Object.class; at = at.getSuperclass()) {
             for (FieldSlots.Slot field : Fields.getDeclared(at)) {
-                Object value = field.isStatic() ? null : read(field, wrapper);
+                Object value = field.isStatic() ? null : CollectionParts.read(field, wrapper);
                 out.add(at.getSimpleName() + "." + field.getName() + ": " + field.getType().getName() + " = "
                         + (value == null ? "null" : value.getClass().getName() + " ("
                         + GameRegistrations.findModOf(value.getClass()) + ")"));
@@ -164,14 +164,6 @@ public final class WorldWrappers {
             }
         }
         return found;
-    }
-
-    private static @Nullable Object read(FieldSlots.Slot field, Object holder) {
-        try {
-            return field.get(holder);
-        } catch (ReflectiveOperationException | RuntimeException e) {
-            return null;
-        }
     }
 
     private static boolean write(FieldSlots.Slot field, Object holder, Object value) {

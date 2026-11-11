@@ -3,12 +3,15 @@ package dev.moon.hotwire.fabric.mixin.core.server;
 import com.llamalad7.mixinextras.injector.wrapoperation.Operation;
 import com.llamalad7.mixinextras.injector.wrapoperation.WrapOperation;
 import dev.moon.hotwire.fabric.CrashGuard;
+import dev.moon.hotwire.fabric.OngoingReload;
 import dev.moon.hotwire.fabric.mixin.core.util.thread.BlockableEventLoopAccessor;
 import dev.moon.hotwire.switching.CrashPolicy;
 //? if <1.21.11 {
 /*import java.util.function.BooleanSupplier;
 *///?}
+import java.util.Collection;
 import java.util.Queue;
+import java.util.concurrent.CompletableFuture;
 import net.minecraft.network.protocol.status.ServerStatus;
 import net.minecraft.server.MinecraftServer;
 import org.slf4j.Logger;
@@ -18,12 +21,18 @@ import org.spongepowered.asm.mixin.Shadow;
 import org.spongepowered.asm.mixin.injection.At;
 import org.spongepowered.asm.mixin.injection.Inject;
 import org.spongepowered.asm.mixin.injection.callback.CallbackInfo;
+import org.spongepowered.asm.mixin.injection.callback.CallbackInfoReturnable;
 
 @Mixin(MinecraftServer.class)
 public abstract class MinecraftServerMixin {
     private static final Logger LOGGER = LoggerFactory.getLogger("Hotwire");
     @Shadow
     private ServerStatus status;
+
+    @Inject(method = "reloadResources", at = @At("RETURN"))
+    private void hotwire$noteDataReload(Collection<String> packs, CallbackInfoReturnable<CompletableFuture<Void>> cir) {
+        OngoingReload.onServerReload(cir.getReturnValue());
+    }
 
     //? if >=1.21.11 {
     @WrapOperation(method = "runServer", at = @At(value = "INVOKE",

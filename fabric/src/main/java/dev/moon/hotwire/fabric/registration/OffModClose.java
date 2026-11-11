@@ -4,6 +4,7 @@ import dev.moon.hotwire.redefine.Tripwire;
 import dev.moon.hotwire.registration.RegistrationJournal;
 import net.fabricmc.fabric.api.client.event.lifecycle.v1.ClientLifecycleEvents;
 import net.minecraft.client.Minecraft;
+import net.minecraft.server.MinecraftServer;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -15,15 +16,25 @@ public final class OffModClose {
 
     private static final long EXIT_AFTER_MILLIS = 10_000;
 
-    public static void exitWhenStuck() {
+    public static void exitWhenStuck(Minecraft client) {
         boolean anyOff = GameRegistrations.getJournal().countByOwner().keySet().stream().anyMatch(Tripwire::isWatched);
         if (!anyOff) {
             return;
         }
 
+        MinecraftServer server = client.getSingleplayerServer();
+        Thread game = Thread.currentThread();
         Thread watch = new Thread(() -> {
             try {
-                Thread.sleep(EXIT_AFTER_MILLIS);
+                while (server != null && !server.isShutdown()) {
+                    Thread.sleep(100);
+                }
+
+                long quiet = 0;
+                for (long waited = 0; quiet < EXIT_AFTER_MILLIS && waited < 6 * EXIT_AFTER_MILLIS; waited += 100) {
+                    quiet = game.isAlive() && game.getState() == Thread.State.RUNNABLE ? 0 : quiet + 100;
+                    Thread.sleep(100);
+                }
                 LOGGER.warn("[Hotwire] the game was told to stop {} s ago, yet {} keep it up: it exits now",
                         EXIT_AFTER_MILLIS / 1000, Thread.getAllStackTraces().keySet().stream()
                                 .filter(thread -> !thread.isDaemon() && thread.isAlive()
@@ -32,7 +43,8 @@ public final class OffModClose {
                 Thread exit = new Thread(() -> System.exit(0), "hotwire-close-exit");
                 exit.setDaemon(true);
                 exit.start();
-                Thread.sleep(EXIT_AFTER_MILLIS);
+
+                Thread.sleep(3 * EXIT_AFTER_MILLIS);
             } catch (InterruptedException e) {
                 Thread.currentThread().interrupt();
                 return;

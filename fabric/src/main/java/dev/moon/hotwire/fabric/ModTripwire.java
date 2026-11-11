@@ -566,7 +566,13 @@ public final class ModTripwire {
     private Map<String, List<String>> findLoadedSinceArm(Collection<String> ids) {
         Map<String, List<String>> loaded = new TreeMap<>();
         this.tripwireOwners.findOwned(ids).forEach((type, mod) -> {
-            if (!this.loadedAtArm.containsKey(type) && !this.loadedWhileArming.containsKey(type.getName())) {
+            if (this.loadedAtArm.containsKey(type) || this.loadedWhileArming.containsKey(type.getName())) {
+                return;
+            }
+
+            String source = type.isHidden() ? null : findSourceOf(type.getProtectionDomain());
+            String watchedAs = source == null ? null : this.sources.get(source);
+            if (watchedAs == null || Tripwire.hasSeenLoad(watchedAs, type.getName().replace('.', '/'))) {
                 loaded.computeIfAbsent(mod, any -> new ArrayList<>()).add(type.getName());
             }
         });

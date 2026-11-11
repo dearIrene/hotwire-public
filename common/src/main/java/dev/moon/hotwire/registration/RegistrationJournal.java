@@ -9,12 +9,11 @@ import java.util.Map;
 import java.util.Set;
 import java.util.TreeMap;
 import java.util.function.Predicate;
-import org.jspecify.annotations.Nullable;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 public final class RegistrationJournal {
-    public record Entry(long sequence, String owner, @Nullable String via, Registration registration) {
+    public record Entry(long sequence, String owner, Registration registration) {
     }
 
     private static final Logger LOGGER = LoggerFactory.getLogger(RegistrationJournal.class);
@@ -26,13 +25,13 @@ public final class RegistrationJournal {
     private int recordsSincePrune;
     private final Set<Entry> removed = new HashSet<>();
     private long nextSequence;
-    public synchronized long record(String owner, @Nullable String via, Registration registration) {
+    public synchronized long record(String owner, Registration registration) {
         if (++this.recordsSincePrune >= PRUNE_EVERY) {
             this.recordsSincePrune = 0;
             this.dropStale();
         }
         long sequence = this.nextSequence++;
-        Entry entry = new Entry(sequence, owner, via, registration);
+        Entry entry = new Entry(sequence, owner, registration);
         this.entries.add(entry);
         return sequence;
     }

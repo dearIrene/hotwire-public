@@ -19,6 +19,7 @@ import org.slf4j.LoggerFactory;
 
 final class GuardFlips {
     private static final Logger LOGGER = LoggerFactory.getLogger(GuardFlips.class);
+    static final String FIELD_SETUP = "a field setup no site switches";
 
     private final Map<String, ModMixins> mods;
     private final SwitchApplier.Game game;
@@ -26,6 +27,8 @@ final class GuardFlips {
 
     private final BiPredicate<String, String> mixedWith;
     private final Set<String> flipped = ConcurrentHashMap.newKeySet();
+
+    private Set<String> flippedBefore = Set.of();
 
     GuardFlips(Map<String, ModMixins> mods, SwitchApplier.Game game, Set<String> onAtLaunch,
             BiPredicate<String, String> mixedWith) {
@@ -50,6 +53,7 @@ final class GuardFlips {
         if (plan == null) {
             return null;
         }
+        this.flippedBefore = Set.copyOf(this.flipped);
         if (plan.isSitesAlone()) {
             switched.forEach(id -> {
                 if (onAfter.contains(id)) {
@@ -90,6 +94,7 @@ final class GuardFlips {
             Set<String> own = new HashSet<>();
             for (String target : mixins.targets()) {
                 if (this.game.findLoaded(target) == null) {
+                    mixins.owns().forEach(mixin -> own.add(mixin.replace('/', '.')));
                     continue;
                 }
                 Set<String> here = new HashSet<>();
@@ -108,7 +113,7 @@ final class GuardFlips {
                 boolean present = HandlerGuards.getPresentMixins(target).stream()
                         .anyMatch(mixin -> mixins.owns().contains(mixin.replace('.', '/')));
                 stuck |= HandlerGuards.findDirectModsAt(target).contains(id)
-                        || HandlerGuards.findBehavingAt(target).stream()
+                        || HandlerGuards.findBehavingAt(target, mixins.owns()).stream()
                                 .anyMatch(mixin -> mixins.owns().contains(mixin.replace('.', '/')));
 
                 stuck |= mixins.fieldsSetUp().contains(target) && !HandlerGuards.isFieldSitedFor(target, mixins.owns());
@@ -116,20 +121,8 @@ final class GuardFlips {
                         || !HandlerGuards.isWritten(target) || (!present && !here.isEmpty())) {
                     rebuild.add(target);
                     if (said && stuck) {
-                        List<String> whys = new ArrayList<>();
-                        HandlerGuards.findWhyUnflippableAt(target).forEach((mixin, reason) -> {
-                            if (mixins.owns().contains(mixin.replace('.', '/'))) {
-                                whys.add(mixin.substring(mixin.lastIndexOf('.') + 1) + ": " + reason);
-                            }
-                        });
-                        if (HandlerGuards.findDirectModsAt(target).contains(id)) {
-                            whys.add("code of its own called straight " + HandlerGuards.findPutInAt(target, id));
-                        }
-                        HandlerGuards.findBehavingAt(target).stream()
-                                .filter(mixin -> mixins.owns().contains(mixin.replace('.', '/')))
-                                .forEach(mixin -> whys.add(mixin.substring(mixin.lastIndexOf('.') + 1)
-                                        + ": methods of its own the game calls"));
-                        LOGGER.info("[Hotwire] {} cannot flip in {}: {}", id, target, whys);
+                        LOGGER.info("[Hotwire] {} cannot flip in {}: {}{}", id, target, findWhys(id, target, mixins),
+                                HandlerGuards.isRebuilt(target) ? " (rebuilt since it loaded)" : "");
                     }
                     if (said) {
                         why.put(target, stuck ? "sites that cannot flip" : replaced.contains(target) ? "replaced"
@@ -166,6 +159,29 @@ final class GuardFlips {
             }
         }
         return new Plan(flips, rebuild, flipped);
+    }
+
+    static List<String> findWhys(String id, String target, ModMixins mixins) {
+        List<String> whys = new ArrayList<>();
+        HandlerGuards.findWhyUnflippableAt(target).forEach((mixin, reason) -> {
+            if (mixins.owns().contains(mixin.replace('.', '/'))) {
+                whys.add(mixin.substring(mixin.lastIndexOf('.') + 1) + ": " + reason);
+            }
+        });
+        if (HandlerGuards.findDirectModsAt(target).contains(id)) {
+            whys.add("code of its own called straight " + HandlerGuards.findPutInAt(target, id));
+        }
+        for (String mixin : HandlerGuards.findBehavingAt(target, mixins.owns())) {
+            if (mixins.owns().contains(mixin.replace('.', '/'))) {
+                Set<String> names = HandlerGuards.findBehavingNamesAt(target, mixin, mixins.owns());
+                whys.add(mixin.substring(mixin.lastIndexOf('.') + 1) + ": methods of its own the game calls"
+                        + (names.isEmpty() ? "" : " (" + String.join(" ", names) + ")"));
+            }
+        }
+        if (mixins.fieldsSetUp().contains(target) && !HandlerGuards.isFieldSitedFor(target, mixins.owns())) {
+            whys.add(FIELD_SETUP);
+        }
+        return whys;
     }
 
     int setSites(Plan plan, Set<String> onAfter) {
@@ -209,11 +225,19 @@ final class GuardFlips {
             if (planned != null && this.set) {
                 GuardFlips.this.restoreSites(planned, this.onAfter);
             }
+            if (planned != null) {
+                GuardFlips.this.restoreFlipped();
+            }
         }
     }
 
     void restoreSites(Plan plan, Set<String> onAfter) {
         setAll(plan, onAfter, false);
+    }
+
+    private void restoreFlipped() {
+        this.flipped.retainAll(this.flippedBefore);
+        this.flipped.addAll(this.flippedBefore);
     }
 
     SwitchApplier.ApplyResult flip(Plan plan, Set<String> switched, Set<String> onAfter, Runnable release,
@@ -234,6 +258,10 @@ final class GuardFlips {
             SwitchTimes.mark("flip sites");
             whilePaused.run();
             SwitchTimes.mark("paused: removals");
+        } catch (RuntimeException | LinkageError e) {
+            this.restoreSites(plan, onAfter);
+            this.restoreFlipped();
+            throw e;
         } finally {
             release.run();
             LOGGER.info("[Hotwire] the game was paused {} ms", (System.nanoTime() - pausedAt) / 1_000_000);

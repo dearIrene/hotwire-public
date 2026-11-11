@@ -20,7 +20,7 @@ import org.jspecify.annotations.Nullable;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
-final class CollectionParts {
+public final class CollectionParts {
     private static final Logger LOGGER = LoggerFactory.getLogger(CollectionParts.class);
 
     private static final Set<String> UNREADABLE = ConcurrentHashMap.newKeySet();
@@ -113,7 +113,7 @@ final class CollectionParts {
         }
     }
 
-    static @Nullable Object read(FieldSlots.Slot field, @Nullable Object holder) {
+    public static @Nullable Object read(FieldSlots.Slot field, @Nullable Object holder) {
         try {
             return field.get(holder);
         } catch (ReflectiveOperationException | RuntimeException | LinkageError e) {
@@ -153,6 +153,16 @@ final class CollectionParts {
                     Thread.currentThread().interrupt();
                     return;
                 }
+            } catch (RuntimeException e) {
+                StackTraceElement[] frames = e.getStackTrace();
+                if (frames.length == 0 || frames[0].getClassName().startsWith("dev.moon.hotwire.")) {
+                    throw e;
+                }
+                if (UNREADABLE.add(value.getClass().getName())) {
+                    LOGGER.info("[Hotwire] {} threw as it was read ({}); the removal passes it by",
+                            value.getClass().getName(), e.toString());
+                }
+                return;
             }
         }
     }

@@ -23,19 +23,27 @@ final class AgentJar {
     static Path write(Path folder) throws IOException {
         Files.createDirectories(folder);
         Path jar = folder.resolve("agent.jar");
-        Path part = folder.resolve("agent.jar.part");
+        Path part = folder.resolve("agent.jar." + ProcessHandle.current().pid() + ".part");
         Manifest manifest = new Manifest();
         Attributes main = manifest.getMainAttributes();
         main.put(Attributes.Name.MANIFEST_VERSION, "1.0");
         main.putValue("Launcher-Agent-Class", JvmAccess.AGENT);
         main.putValue("Can-Redefine-Classes", "true");
         main.putValue("Can-Retransform-Classes", "true");
-        try (OutputStream out = Files.newOutputStream(part); JarOutputStream zip = new JarOutputStream(out, manifest)) {
-            zip.putNextEntry(new JarEntry(AGENT + ".class"));
-            zip.write(makeAgent());
-            zip.closeEntry();
+        try {
+            try (OutputStream out = Files.newOutputStream(part);
+                    JarOutputStream zip = new JarOutputStream(out, manifest)) {
+                zip.putNextEntry(new JarEntry(AGENT + ".class"));
+                zip.write(makeAgent());
+                zip.closeEntry();
+            }
+            Files.move(part, jar, StandardCopyOption.REPLACE_EXISTING);
+        } catch (IOException e) {
+            Files.deleteIfExists(part);
+            if (!Files.isRegularFile(jar)) {
+                throw e;
+            }
         }
-        Files.move(part, jar, StandardCopyOption.REPLACE_EXISTING);
         return jar;
     }
 

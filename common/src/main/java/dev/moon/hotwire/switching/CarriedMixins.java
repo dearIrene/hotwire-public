@@ -45,11 +45,6 @@ public final class CarriedMixins {
     }
 
     List<String> findLost(Map<String, Set<String>> carriedNow, Map<String, Set<String>> carried,
-            Map<String, byte[]> mixed, Set<String> on, Predicate<String> askedAgain) {
-        return this.findLost(carriedNow, carried, mixed, on, askedAgain, Set.of());
-    }
-
-    List<String> findLost(Map<String, Set<String>> carriedNow, Map<String, Set<String>> carried,
             Map<String, byte[]> mixed, Set<String> on, Predicate<String> askedAgain, Set<String> replacing) {
         Set<String> offMixins = this.getMixinsOf(id -> !on.contains(id));
         List<String> found = new ArrayList<>();
@@ -230,6 +225,21 @@ public final class CarriedMixins {
             }
         }
         return known.get(internalName);
+    }
+
+    public boolean isPatched(String internalName) {
+        try {
+            for (ModMixins mod : this.mods.values()) {
+                for (Set<String> targets : mod.targetsOf().values()) {
+                    if (targets.contains(internalName)) {
+                        return true;
+                    }
+                }
+            }
+            return false;
+        } catch (ConcurrentModificationException e) {
+            return true;
+        }
     }
 
     public Set<String> findOverwriters(String method) {

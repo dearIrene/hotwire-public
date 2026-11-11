@@ -3,13 +3,21 @@ package dev.moon.hotwire.jar;
 import java.io.IOException;
 import java.nio.ByteBuffer;
 import java.nio.ByteOrder;
+import java.nio.channels.FileChannel;
 import java.nio.charset.StandardCharsets;
+import java.nio.file.Path;
+import java.nio.file.StandardOpenOption;
+import java.util.HashMap;
 import java.util.LinkedHashMap;
 import java.util.Map;
+import java.util.Objects;
 import java.util.Set;
+import java.util.TreeSet;
+import java.util.zip.CRC32C;
 import java.util.zip.DataFormatException;
 import java.util.zip.Inflater;
 import java.util.zip.ZipException;
+import java.util.zip.ZipFile;
 import org.jspecify.annotations.Nullable;
 
 public final class ZipBytes {
@@ -60,6 +68,64 @@ public final class ZipBytes {
             String name = new String(zip, at + 46, nameLength, StandardCharsets.UTF_8);
             this.entries.put(name, new Entry(method, (int) compressed, (int) size, (int) local));
             at += 46 + nameLength + extraLength + commentLength;
+        }
+    }
+
+    public static long findDirectoryCrc(Path jar) throws IOException {
+        try (FileChannel file = FileChannel.open(jar, StandardOpenOption.READ)) {
+            long size = file.size();
+
+            ByteBuffer tail = ByteBuffer.allocate((int) Math.min(size, 22)).order(ByteOrder.LITTLE_ENDIAN);
+            readWhole(file, tail, size - tail.capacity());
+            int end = 0;
+            if (tail.capacity() < 22 || tail.getInt(0) != END_OF_DIRECTORY) {
+                tail = ByteBuffer.allocate((int) Math.min(size, 22 + 0xFFFF)).order(ByteOrder.LITTLE_ENDIAN);
+                readWhole(file, tail, size - tail.capacity());
+                end = tail.capacity() - 22;
+                while (end >= 0 && tail.getInt(end) != END_OF_DIRECTORY) {
+                    end--;
+                }
+                if (end < 0) {
+                    throw new ZipException("no end of central directory");
+                }
+            }
+            long directorySize = Integer.toUnsignedLong(tail.getInt(end + 12));
+            long directoryStart = Integer.toUnsignedLong(tail.getInt(end + 16));
+            if (directorySize == 0xFFFFFFFFL || directoryStart == 0xFFFFFFFFL
+                    || directoryStart + directorySize > size) {
+                throw new Zip64Exception("ZIP64 archives are not read here");
+            }
+            ByteBuffer directory = ByteBuffer.allocate((int) directorySize);
+            readWhole(file, directory, directoryStart);
+            CRC32C crc = new CRC32C();
+            crc.update(directory.array());
+            return crc.getValue();
+        }
+    }
+
+    public static Set<String> findChangedEntries(Path one, Path other, String folder) throws IOException {
+        Map<String, Long> first = listEntries(one, folder);
+        Map<String, Long> second = listEntries(other, folder);
+        Set<String> changed = new TreeSet<>(first.keySet());
+        changed.addAll(second.keySet());
+        changed.removeIf(name -> Objects.equals(first.get(name), second.get(name)));
+        return changed;
+    }
+
+    private static Map<String, Long> listEntries(Path jar, String folder) throws IOException {
+        Map<String, Long> found = new HashMap<>();
+        try (ZipFile zip = new ZipFile(jar.toFile())) {
+            zip.stream().filter(entry -> !entry.isDirectory() && entry.getName().startsWith(folder))
+                    .forEach(entry -> found.put(entry.getName(), entry.getCrc() << 32 ^ entry.getSize()));
+        }
+        return found;
+    }
+
+    private static void readWhole(FileChannel file, ByteBuffer into, long from) throws IOException {
+        while (into.hasRemaining()) {
+            if (file.read(into, from + into.position()) < 0) {
+                throw new ZipException("the file ends early");
+            }
         }
     }
 

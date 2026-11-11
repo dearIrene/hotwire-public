@@ -54,10 +54,6 @@ final class WalkReport {
         this.notedBy.merge(owner, 1, Integer::sum);
     }
 
-    int countTakes() {
-        return this.filed + this.unfiled;
-    }
-
     void end(boolean looking, List<String> mods, int statics, long began, String wrappers,
             TakeCandidates candidates) {
         if (looking && !this.notedBy.isEmpty()) {
@@ -80,7 +76,7 @@ final class WalkReport {
             this.slowest.stream().sorted(Map.Entry.<Long, String>comparingByKey().reversed())
                     .forEach(one -> named.add(one.getValue() + " " + one.getKey() / 1_000_000 + " ms"));
             LOGGER.info("[Hotwire] {} classes' statics looked through for {} in {} ms; {}; slowest {}", statics,
-                    mods, millis, wrappers, named);
+                    mods.size() > 4 ? mods.size() + " mods" : mods, millis, wrappers, named);
             LOGGER.info("[Hotwire] the game objects the walk took longest over, by class: {}", this.holders.entrySet()
                     .stream().sorted(Comparator.comparingLong(one -> -one.getValue()[1])).limit(SLOWEST_NAMED)
                     .map(one -> one.getKey().getName() + " " + one.getValue()[0] + " in "

@@ -14,6 +14,7 @@ import dev.moon.hotwire.fabric.BackgroundReload;
 import dev.moon.hotwire.fabric.OngoingReload;
 import dev.moon.hotwire.fabric.add.TickEnd;
 import dev.moon.hotwire.fabric.registration.GameHold;
+import dev.moon.hotwire.fabric.registration.WorldTintCaches;
 import dev.moon.hotwire.redefine.StartArguments;
 import dev.moon.hotwire.switching.CrashPolicy;
 import net.minecraft.CrashReport;
@@ -111,5 +112,6 @@ public abstract class MinecraftMixin {
         TickEnd.runDue();
         BackgroundReload.tick();
         OngoingReload.tick();
+        WorldTintCaches.tick(game);
     }
 }

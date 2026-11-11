@@ -1,8 +1,11 @@
 package dev.moon.hotwire.redefine;
 
+import com.google.errorprone.annotations.CanIgnoreReturnValue;
+import dev.moon.hotwire.jvm.ClassPathIndex;
 import java.io.IOException;
 import java.io.InputStream;
 import java.lang.instrument.Instrumentation;
+import java.nio.file.Path;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.Collection;
@@ -29,7 +32,21 @@ public final class LoadedClassBytes {
 
     private final Set<String> loadedAs = ConcurrentHashMap.newKeySet();
 
-    private static final DefinedClasses DEFINED = new DefinedClasses();
+    private static final DefinedClasses DEFINED = new DefinedClasses(new DefinedClasses.Jars() {
+        @Override
+        public @Nullable Path findWithSame(String name, byte[] bytes) {
+            return ClassPathIndex.findJarWithSame(name + ".class", bytes);
+        }
+
+        @Override
+        public byte @Nullable [] read(String name, Path jar) {
+            return ClassPathIndex.read(name + ".class", jar);
+        }
+    });
+
+    static {
+        ClassPathIndex.onLeaving(DEFINED::writeFrom);
+    }
     private final DefinedClasses definedAs = DEFINED;
 
     private static final Map<String, Integer> IN_GAME = new ConcurrentHashMap<>();
@@ -53,9 +70,11 @@ public final class LoadedClassBytes {
         DEFINED.close();
     }
 
-    public static void recordDefinedInGame(String internal, byte[] bytes, ClassLoader loader) {
-        DEFINED.put(internal, bytes);
+    @CanIgnoreReturnValue
+    public static boolean recordDefinedInGame(String internal, byte[] bytes, ClassLoader loader) {
+        boolean written = DEFINED.put(internal, bytes);
         IN_GAME.put(internal, System.identityHashCode(loader));
+        return written;
     }
 
     public void onDefinedInGame(String internal, byte[] bytes, ClassLoader loader) {

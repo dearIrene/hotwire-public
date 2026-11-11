@@ -32,6 +32,7 @@ import java.util.function.Predicate;
 import java.util.function.Supplier;
 import java.util.regex.Pattern;
 import java.util.stream.Collectors;
+import java.util.stream.Stream;
 import org.jspecify.annotations.Nullable;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -73,9 +74,9 @@ final class LiveObjects {
             standing.add(RebuildException.ofRestartOnly("the " + what
                     + " changes how entries of the game's registries are"
                     + " made: " + entries + ". Those are made once, when the game starts, so it takes a restart",
-                    new IllegalStateException(String.join(", ", entries))).withBlamed(entries.stream()
-                    .map(entry -> entry.substring(0, entry.lastIndexOf('.')).replace('.', '/'))
-                    .collect(Collectors.toSet())));
+                    new IllegalStateException(String.join(", ", entries))).withBlamed(Stream.concat(
+                    entries.stream().map(entry -> entry.substring(0, entry.lastIndexOf('.')).replace('.', '/')),
+                    findMakersOf(entries, hooked)).collect(Collectors.toSet())));
         }
         boolean gathers = what.equals("update");
         if (!gathers && !standing.isEmpty()) {
@@ -151,7 +152,8 @@ final class LiveObjects {
             }
             List<String> fills = HandlerSetups.find(running, originalOf.apply(name), offMixin, offClass);
 
-            if (!fills.isEmpty() && !game.isMadeOnce(type) && (game.isWorldObject(type) || alive.test(type))) {
+            if (!fills.isEmpty() && !game.isMadeOnce(type) && (game.isWorldObject(type) || alive.test(type))
+                    && isAnyFilled(game.findAllKnown(type), type, fills, offClass)) {
                 worldFills.add(type.getSimpleName() + " " + fills);
             }
         }
@@ -160,6 +162,47 @@ final class LiveObjects {
                     + " fields of objects this world built: " + worldFills + ". The world is saved and opened again,"
                     + " which builds them anew",new IllegalStateException(String.join(", ", worldFills)));
         }
+    }
+
+    static boolean isAnyFilled(@Nullable List<Object> objects, Class<?> type, List<String> fills,
+            Predicate<String> offClass) {
+        if (objects == null) {
+            return true;
+        }
+        for (String fill : fills) {
+            Field field;
+            try {
+                field = type.getDeclaredField(fill.substring(0, fill.indexOf(' ')));
+                field.setAccessible(true);
+            } catch (ReflectiveOperationException | RuntimeException e) {
+                return true;
+            }
+            for (Object object : objects) {
+                Object value;
+                try {
+                    value = field.get(object);
+                } catch (ReflectiveOperationException | RuntimeException e) {
+                    return true;
+                }
+                Class<?> of = value == null ? null : value.getClass().isHidden() ? value.getClass().getNestHost()
+                        : value.getClass();
+                if (of != null && offClass.test(of.getName().replace('.', '/'))) {
+                    return true;
+                }
+            }
+        }
+        return false;
+    }
+
+    private static Stream<String> findMakersOf(List<String> entries, Map<Class<?>, InitHookReplay.Due> hooked) {
+        List<String> makers = new ArrayList<>();
+        hooked.forEach((type, due) -> due.statics().forEach((name, hook) -> {
+            if (entries.contains(type.getName() + "." + name)) {
+                makers.add(hook);
+                makers.addAll(due.onClass());
+            }
+        }));
+        return makers.stream();
     }
 
     static List<String> findRegistryEntries(Map<Class<?>, InitHookReplay.Due> hooked,

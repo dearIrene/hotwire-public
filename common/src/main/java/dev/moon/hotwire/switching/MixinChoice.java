@@ -36,16 +36,6 @@ final class MixinChoice {
         return this.elsewhere.sumThenReset();
     }
 
-    Set<String> choose(Set<String> listed, Map<String, Set<String>> appliedByClass) {
-        return this.choose(listed, appliedByClass, false);
-    }
-
-    Set<String> choose(Set<String> listed, Map<String, Set<String>> appliedByClass, boolean declinable) {
-        Set<String> carried = new HashSet<>();
-        appliedByClass.values().forEach(carried::addAll);
-        return this.choose(listed, appliedByClass, carried, declinable);
-    }
-
     Set<String> choose(Set<String> listed, Map<String, Set<String>> appliedByClass, Set<String> carried,
             boolean declinable) {
         Set<String> chosen = new HashSet<>();

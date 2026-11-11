@@ -9,7 +9,6 @@ import java.util.IdentityHashMap;
 import java.util.Map;
 import java.util.Set;
 import java.util.function.Predicate;
-import org.jspecify.annotations.Nullable;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -35,14 +34,14 @@ public final class ModLocks {
             }
             locks.add(System.identityHashCode(type));
             for (FieldSlots.Slot field : Fields.getReferenceFields(type, true)) {
-                Object value = read(field, null);
+                Object value = CollectionParts.read(field, null);
                 if (value == null || !seen.add(value)) {
                     continue;
                 }
                 this.add(value, locks);
                 if (mod.equals(GameRegistrations.findModOf(value.getClass()))) {
                     for (FieldSlots.Slot inner : Fields.getReferenceFields(value.getClass(), false)) {
-                        Object innerValue = read(inner, value);
+                        Object innerValue = CollectionParts.read(inner, value);
                         if (innerValue != null && seen.add(innerValue)) {
                             this.add(innerValue, locks);
                         }
@@ -61,7 +60,7 @@ public final class ModLocks {
         this.open();
         for (Class<?> at = value.getClass(); at != null && at != Object.class; at = at.getSuperclass()) {
             for (FieldSlots.Slot field : Fields.getDeclared(at)) {
-                Object sync = field.getName().equals("sync") ? read(field, value) : null;
+                Object sync = field.getName().equals("sync") ? CollectionParts.read(field, value) : null;
                 if (sync != null) {
                     locks.add(System.identityHashCode(sync));
                 }
@@ -79,14 +78,6 @@ public final class ModLocks {
                     Map.of("java.util.concurrent.locks", Set.of(ModLocks.class.getModule())), Set.of(), Map.of());
         } catch (RuntimeException e) {
             LOGGER.warn("[Hotwire] a mod's locks are not read: {}", e.toString());
-        }
-    }
-
-    private static @Nullable Object read(FieldSlots.Slot field, @Nullable Object holder) {
-        try {
-            return field.get(holder);
-        } catch (ReflectiveOperationException | RuntimeException | LinkageError e) {
-            return null;
         }
     }
 }

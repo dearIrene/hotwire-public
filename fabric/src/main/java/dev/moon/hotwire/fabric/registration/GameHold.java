@@ -91,15 +91,19 @@ public final class GameHold {
 
     static CompletableFuture<Void> runOnPausedServer(Runnable work) {
         CompletableFuture<Void> done = new CompletableFuture<>();
-        PAUSED_WORK.add(() -> {
+        PAUSED_WORK.add(complete(work, done));
+        return done;
+    }
+
+    private static Runnable complete(Runnable work, CompletableFuture<Void> done) {
+        return () -> {
             try {
                 work.run();
                 done.complete(null);
             } catch (RuntimeException | LinkageError e) {
                 done.completeExceptionally(e);
             }
-        });
-        return done;
+        };
     }
 
     public static CompletableFuture<Void> onGameBeforeNextFrame(Runnable work, Minecraft client) {
@@ -176,14 +180,7 @@ public final class GameHold {
 
     static CompletableFuture<Void> onServer(MinecraftServer server, Runnable work) {
         CompletableFuture<Void> done = new CompletableFuture<>();
-        schedule(server, () -> {
-            try {
-                work.run();
-                done.complete(null);
-            } catch (RuntimeException | LinkageError e) {
-                done.completeExceptionally(e);
-            }
-        });
+        schedule(server, complete(work, done));
         return done;
     }
 
@@ -215,6 +212,10 @@ public final class GameHold {
             HOLDING.set(false);
             Tripwire.markHotwireWork(before);
         }
+    }
+
+    public static boolean isGamePaused() {
+        return gamePaused;
     }
 
     public static boolean isOverBudget() {

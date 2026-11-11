@@ -44,6 +44,8 @@ public final class AccessBridge {
             false);
     private static final String OBJECT = "Ljava/lang/Object;";
 
+    private static final int NAME_AND_TYPE = 12;
+
     private static final String ACCESSOR = "$hotwire$access";
 
     private static final Set<Class<?>> ACCESSIBLE = Collections.synchronizedSet(
@@ -64,6 +66,13 @@ public final class AccessBridge {
                 String name = reader.readUTF8(offset, buffer);
                 if (openings.classes().contains(name) || ownsMember(openings, name)) {
                     return true;
+                }
+            } else if (offset > 0 && reader.readByte(offset - 1) == NAME_AND_TYPE) {
+                String member = "." + reader.readUTF8(offset, buffer) + reader.readUTF8(offset + 2, buffer);
+                for (String opened : openings.members()) {
+                    if (opened.endsWith(member)) {
+                        return true;
+                    }
                 }
             }
         }

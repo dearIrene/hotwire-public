@@ -23,6 +23,26 @@ final class FinalReaders {
     private FinalReaders() {
     }
 
+    private static boolean isRead(Class<?> type, ClassLoader game, Instrumentation instrumentation) {
+        return Objects.equals(type.getClassLoader(), game) && !type.isHidden() && !type.isArray()
+                && instrumentation.isModifiableClass(type);
+    }
+
+    static int readAhead(Instrumentation instrumentation, @Nullable ConstantPools pools) {
+        if (pools == null) {
+            return 0;
+        }
+        ClassLoader game = FinalReaders.class.getClassLoader();
+        int read = 0;
+        for (Class<?> type : LoadedClassList.of(instrumentation)) {
+            if (isRead(type, game, instrumentation)) {
+                pools.namesField(type, Map.of());
+                read++;
+            }
+        }
+        return read;
+    }
+
     static void refresh(Instrumentation instrumentation, @Nullable ConstantPools pools, Set<Field> written) {
         if (written.isEmpty()) {
             return;
@@ -41,8 +61,7 @@ final class FinalReaders {
         ClassLoader game = FinalReaders.class.getClassLoader();
         if (pools != null && !fields.isEmpty()) {
             readers.addAll(Arrays.<Class<?>>stream(LoadedClassList.of(instrumentation)).parallel()
-                    .filter(type -> Objects.equals(type.getClassLoader(), game) && !type.isHidden() && !type.isArray()
-                            && instrumentation.isModifiableClass(type) && pools.namesField(type, fields))
+                    .filter(type -> isRead(type, game, instrumentation) && pools.namesField(type, fields))
                     .toList());
         }
         try {

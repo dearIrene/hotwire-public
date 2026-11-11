@@ -221,6 +221,17 @@ public final class GameClasses implements SwitchApplier.Game {
     }
 
     @Override
+    public @Nullable List<Object> findAllKnown(Class<?> type) {
+        Minecraft client = Minecraft.getInstance();
+        for (Object one : new Object[] {client.level, client.player, client.getConnection()}) {
+            if (one != null && one.getClass() == type) {
+                return List.of(one);
+            }
+        }
+        return null;
+    }
+
+    @Override
     public boolean isWorldObject(Class<?> type) {
         for (Class<?> root : WORLD_OBJECTS) {
             if (root.isAssignableFrom(type)) {

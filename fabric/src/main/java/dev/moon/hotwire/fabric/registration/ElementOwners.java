@@ -10,6 +10,7 @@ import java.util.Arrays;
 import java.util.HashSet;
 import java.util.List;
 import java.util.Set;
+import net.fabricmc.loader.api.ModContainer;
 import net.minecraft.resources.Identifier;
 import org.jspecify.annotations.Nullable;
 
@@ -97,7 +98,7 @@ final class ElementOwners {
                 : null;
         if (madeBy != null && !this.modSet.contains(madeBy) && ModPolicy.isSwitchable(madeBy)
                 && ValueOwners.findForwardedTo(item) == null) {
-            return null;
+            return inSmall ? this.findCapturedWrapperOf(item) : null;
         }
         String owner = this.findOwnerAmong(item);
         if (owner != null) {
@@ -132,13 +133,64 @@ final class ElementOwners {
             return wrapped;
         }
 
+        String captured = inSmall && ValueOwners.isLambda(item) ? this.findCapturedWrapperOf(item) : null;
+        if (captured != null) {
+            return captured;
+        }
+
         String nested = GameRegistrations.findNestedModOf(item.getClass());
         return nested != null && this.modSet.contains(nested) ? nested : null;
+    }
+
+    private boolean isAskingCaptured;
+
+    private @Nullable String findOwnerOfCaptured(Object part) {
+        this.isAskingCaptured = true;
+        try {
+            return this.findOwnerOf(part, true);
+        } finally {
+            this.isAskingCaptured = false;
+        }
+    }
+
+    private @Nullable String findCapturedWrapperOf(Object lambda) {
+        String owner = null;
+        try {
+            for (FieldSlots.Slot field : Fields.getReferenceFields(lambda.getClass(), false)) {
+                Object part = field.get(lambda);
+                if (part == null || ValueOwners.isPlain(part) || ValueOwners.isGame(part)) {
+                    continue;
+                }
+
+                @SuppressWarnings("ReferenceEquality")
+                boolean itself = part == lambda;
+                String of = itself || this.isAskingCaptured || ValueOwners.isLambda(part) ? null
+                        : this.findOwnerOfCaptured(part);
+                if (of == null || (owner != null && !owner.equals(of))) {
+                    return null;
+                }
+                owner = of;
+            }
+        } catch (ReflectiveOperationException | RuntimeException e) {
+            return null;
+        }
+        return owner;
     }
 
     Set<String> findRecordedCandidates(@Nullable Object item) {
         if (item == null) {
             return Set.of();
+        }
+
+        if (ValueOwners.isLambda(item)) {
+            Set<String> found = new HashSet<>();
+            for (FieldSlots.Slot captured : Fields.getReferenceFields(item.getClass(), false)) {
+                Object part = CollectionParts.read(captured, item);
+                if (part != null && !ValueOwners.isLambda(part)) {
+                    found.addAll(this.findRecordedCandidates(part));
+                }
+            }
+            return found;
         }
         String library = GameRegistrations.findModOf(item.getClass());
         boolean nested = library == null && GameRegistrations.findShippedBy(item.getClass()) != null;
@@ -160,6 +212,11 @@ final class ElementOwners {
 
     private static void addRecorded(Set<String> found, @Nullable Object value) {
         if (value == null || value instanceof CharSequence || value instanceof Number || value instanceof Boolean) {
+            return;
+        }
+
+        if (value instanceof ModContainer container) {
+            found.add(container.getMetadata().getId());
             return;
         }
         Class<?> type = value instanceof Member member ? member.getDeclaringClass()
@@ -242,6 +299,10 @@ final class ElementOwners {
     }
 
     private @Nullable String findRecordedOwner(Object value, boolean nested) {
+        if (value instanceof ModContainer container) {
+            String id = container.getMetadata().getId();
+            return this.modSet.contains(id) ? id : null;
+        }
         Class<?> type = value instanceof Member member ? member.getDeclaringClass() : null;
         String mod = this.findOwnOwner(type != null ? type : value);
         if (mod != null || !nested) {

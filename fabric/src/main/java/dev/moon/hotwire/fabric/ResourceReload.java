@@ -8,6 +8,7 @@ import dev.moon.hotwire.fabric.registration.GameHold;
 import dev.moon.hotwire.fabric.registration.GameRegistrations;
 import dev.moon.hotwire.fabric.registration.ModelReloadCheck;
 import dev.moon.hotwire.fabric.registration.ReloadedLists;
+import dev.moon.hotwire.fabric.report.FreezeDump;
 import dev.moon.hotwire.fabric.screen.HoldFrame;
 import dev.moon.hotwire.redefine.Tripwire;
 import dev.moon.hotwire.ui.Lang;
@@ -23,6 +24,7 @@ import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.ExecutionException;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.TimeoutException;
+import java.util.function.BooleanSupplier;
 import java.util.stream.Collectors;
 import net.minecraft.client.Minecraft;
 import net.minecraft.client.gui.font.FontManager;
@@ -97,6 +99,12 @@ public final class ResourceReload {
         return hasAny(types, RENDERERS) ? Lang.get("hotwire.progress.rebuilding_renderers") : null;
     }
 
+    static void closeWorldRenderer(Collection<String> newlyBuilt) {
+        if (WorldRendererReset.holdsAny(findLoaded(newlyBuilt))) {
+            GameHold.onGameAndWait(WorldRendererReset::close);
+        }
+    }
+
     @SuppressWarnings("FutureReturnValueIgnored")
     static void rebuildRenderers(Collection<String> newlyBuilt, Collection<String> rebuilt, boolean reloadAsked) {
         List<Class<?>> types = findLoaded(newlyBuilt);
@@ -106,7 +114,7 @@ public final class ResourceReload {
         boolean particles = hasAny(types, List.of(Particle.class));
         boolean sounds = hasAny(types, List.of(SoundInstance.class));
         boolean language = hasAny(findLoaded(rebuilt), LANGUAGE);
-        boolean world = WorldRendererReset.holdsAny(types);
+        boolean world = WorldRendererReset.isClosed() || WorldRendererReset.holdsAny(types);
         if (!renderers && !screens && !particles && !sounds && !language && !reload && !world) {
             return;
         }
@@ -130,6 +138,8 @@ public final class ResourceReload {
                             }
                         });
                     } else {
+                        LOGGER.info("[Hotwire] a reload with the game held: {}", reloadAsked
+                                ? "objects made without a mod's setup wait for it" : "an off's");
                         reloadWhilePaused(game, renderersOnly);
                     }
                 }
@@ -214,6 +224,8 @@ public final class ResourceReload {
     }
 
     public static void forgetPausedReload() {
+        FreezeDump.onSwitchEnded();
+        ShaderPrograms.forget();
         reloadedWhilePaused = false;
         reloadedRenderers = false;
         packsAtPause = Set.of();
@@ -225,7 +237,7 @@ public final class ResourceReload {
         comingOn = List.copyOf(mods);
     }
 
-    static void awaitIdle() {
+    public static void awaitIdle() {
         Minecraft game = Minecraft.getInstance();
         if (!game.isSameThread()) {
             OngoingReload.awaitIdle(game);
@@ -274,6 +286,7 @@ public final class ResourceReload {
 
         if (comingOn.isEmpty()) {
             reloadedWhilePaused = true;
+            ShaderPrograms.compileAgain(game);
             BackgroundReload.beginAfterHold(() -> startWhole(game));
             return;
         }
@@ -316,13 +329,17 @@ public final class ResourceReload {
     }
 
     private static void awaitWhilePaused(Minecraft game, ReloadInstance reload) {
+        awaitWhilePaused(game, reload::isDone);
+    }
+
+    static void awaitWhilePaused(Minecraft game, BooleanSupplier done) {
         long deadline = System.nanoTime() + PAUSED_WAIT.toNanos();
         game.managedBlock(() -> {
             //? if <1.21.5 {
             /*RenderSystem.replayQueue();
             *///?}
             HoldFrame.drawIfDue();
-            return reload.isDone() || System.nanoTime() > deadline;
+            return done.getAsBoolean() || System.nanoTime() > deadline;
         });
     }
 
@@ -410,8 +427,13 @@ public final class ResourceReload {
     static boolean hasPackGone(Collection<String> mods) {
         Set<String> available = getAvailablePacks();
         Set<String> atPause = packsAtPause;
-        return mods.stream().anyMatch(id -> (PACKED.contains(id) || atPause.contains(id))
-                && !available.contains(id));
+        List<String> gone = mods.stream().filter(id -> (PACKED.contains(id) || atPause.contains(id))
+                && !available.contains(id)).toList();
+        if (!gone.isEmpty()) {
+            LOGGER.info("[Hotwire] the packs of {} left with a reload since their off: a reload brings them back",
+                    gone);
+        }
+        return !gone.isEmpty();
     }
 
     private static boolean hasPackOf(Collection<String> mods) {

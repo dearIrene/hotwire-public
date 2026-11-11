@@ -41,7 +41,7 @@ final class Rehash {
                 continue;
             }
             for (FieldSlots.Slot field : Fields.getReferenceFields(type, true)) {
-                Object value = read(field, null);
+                Object value = CollectionParts.read(field, null);
                 if (value == null || !seen.add(value)) {
                     continue;
                 }
@@ -49,7 +49,7 @@ final class Rehash {
                     rehashed++;
                 } else if (!(value instanceof Map<?, ?>) && !(value instanceof Collection<?>)) {
                     for (FieldSlots.Slot inner : Fields.getReferenceFields(value.getClass(), false)) {
-                        Object innerValue = read(inner, value);
+                        Object innerValue = CollectionParts.read(inner, value);
                         if (innerValue != null && seen.add(innerValue) && rehash(innerValue, changed, parts)) {
                             rehashed++;
                         }
@@ -69,7 +69,12 @@ final class Rehash {
                 Map<Object, Object> entries = (Map<Object, Object>) map;
                 Map<Object, Object> copy = new LinkedHashMap<>(entries);
                 entries.clear();
-                entries.putAll(copy);
+                try {
+                    entries.putAll(copy);
+                } catch (RuntimeException e) {
+                    copy.forEach((key, entry) -> putBack(() -> entries.putIfAbsent(key, entry)));
+                    throw e;
+                }
                 return true;
             }
             if (value instanceof Set<?> set && isHashed(set.getClass()) && set.size() <= LARGEST
@@ -77,13 +82,28 @@ final class Rehash {
                 Set<Object> elements = (Set<Object>) set;
                 List<Object> copy = new ArrayList<>(elements);
                 elements.clear();
-                elements.addAll(copy);
+                try {
+                    elements.addAll(copy);
+                } catch (RuntimeException e) {
+                    copy.forEach(element -> putBack(() -> elements.add(element)));
+                    throw e;
+                }
                 return true;
             }
         } catch (UnsupportedOperationException | IllegalStateException e) {
             LOGGER.info("[Hotwire] {} cannot be put in order for a new hash", value.getClass().getName());
+        } catch (RuntimeException e) {
+            LOGGER.error("[Hotwire] {} could not be put in order for a new hash; it keeps what could go back",
+                    value.getClass().getName(), e);
         }
         return false;
+    }
+
+    private static void putBack(Runnable one) {
+        try {
+            one.run();
+        } catch (RuntimeException e) {
+        }
     }
 
     private static boolean isHashed(Class<?> type) {
@@ -106,7 +126,7 @@ final class Rehash {
             return true;
         }
         for (FieldSlots.Slot field : parts.computeIfAbsent(key.getClass(), type -> findPartsOf(type, changed))) {
-            Object part = read(field, key);
+            Object part = CollectionParts.read(field, key);
             if (part != null && changed.stream().anyMatch(type -> type.isInstance(part))) {
                 return true;
             }
@@ -121,13 +141,5 @@ final class Rehash {
         }
         return Fields.getReferenceFields(type, false).stream().filter(field -> changed.stream()
                 .anyMatch(one -> field.getType().isAssignableFrom(one))).toList();
-    }
-
-    private static @Nullable Object read(FieldSlots.Slot field, @Nullable Object holder) {
-        try {
-            return field.get(holder);
-        } catch (ReflectiveOperationException | RuntimeException | LinkageError e) {
-            return null;
-        }
     }
 }

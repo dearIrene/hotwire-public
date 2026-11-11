@@ -46,7 +46,7 @@ final class RecorderSupport {
     }
 
     static void recordAs(String mod, Object key, Registration registration) {
-        long sequence = GameRegistrations.getJournal().record(mod, null, registration);
+        long sequence = GameRegistrations.getJournal().record(mod, registration);
         synchronized (SEQUENCES) {
             SEQUENCES.put(key, sequence);
         }
@@ -63,7 +63,7 @@ final class RecorderSupport {
             logUnowned(registration);
             return false;
         }
-        long sequence = GameRegistrations.getJournal().record(owner.mod(), owner.via(), registration);
+        long sequence = GameRegistrations.getJournal().record(owner.mod(), registration);
         synchronized (SEQUENCES) {
             SEQUENCES.put(key, sequence);
         }

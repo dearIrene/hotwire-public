@@ -3,6 +3,7 @@ package dev.moon.hotwire.fabric;
 import dev.moon.hotwire.fabric.add.LoaderModList;
 import dev.moon.hotwire.fabric.add.WorldReopen;
 import dev.moon.hotwire.fabric.registration.GameRegistrations;
+import dev.moon.hotwire.plan.ModGraph;
 import dev.moon.hotwire.redefine.Tripwire;
 import dev.moon.hotwire.ui.Lang;
 import dev.moon.hotwire.ui.ModScreen;
@@ -21,6 +22,8 @@ import org.slf4j.LoggerFactory;
 
 final class OffCodeNotice {
     private static final Logger LOGGER = LoggerFactory.getLogger(OffCodeNotice.class);
+    private static final Set<String> CALL_PLUMBING = Set.of("java.lang.invoke", "java.lang.reflect",
+            "jdk.internal.reflect");
 
     private OffCodeNotice() {
     }
@@ -49,6 +52,11 @@ final class OffCodeNotice {
         }
         List<String> first = Tripwire.peek(mod).first();
         boolean ran = Tripwire.hasRun(mod);
+        if (ran && isOwnThreadAlone(mod, first)) {
+            LOGGER.info("[Hotwire] {}'s own thread went on with work it had begun before the off: {}", mod,
+                    String.join(" < ", first));
+            return;
+        }
         if (ran) {
             LOGGER.warn("[Hotwire] {} is off, yet its code ran: {}", mod, String.join(" < ", first));
         } else {
@@ -84,6 +92,34 @@ final class OffCodeNotice {
         engine.showMessage(Lang.get("hotwire.off_code.ran", installed.nameOf(mod), clears), true);
     }
 
+    private static boolean isOwnThreadAlone(String mod, List<String> frames) {
+        boolean any = false;
+        for (String frame : frames) {
+            int paren = frame.indexOf('(');
+            String method = paren < 0 ? frame : frame.substring(0, paren);
+            int slash = method.lastIndexOf('/');
+            int dot = method.lastIndexOf('.');
+            if (dot <= slash) {
+                return false;
+            }
+            Class<?> type;
+            try {
+                type = Class.forName(method.substring(slash + 1, dot), false, OffCodeNotice.class.getClassLoader());
+            } catch (ClassNotFoundException | LinkageError e) {
+                return false;
+            }
+            ClassLoader loader = type.getClassLoader();
+            if (loader == null || loader.equals(ClassLoader.getPlatformClassLoader())) {
+                continue;
+            }
+            if (!mod.equals(GameRegistrations.findModOrShipper(type))) {
+                return false;
+            }
+            any = true;
+        }
+        return any;
+    }
+
     private static @Nullable String findUser(HotwireEngine engine, InstalledMods installed, String mod,
             List<String> frames) {
         @Nullable Class<?> entered = null;
@@ -103,6 +139,10 @@ final class OffCodeNotice {
                 continue;
             }
 
+            if (CALL_PLUMBING.contains(type.getPackageName())) {
+                continue;
+            }
+
             String owner = GameRegistrations.findModOrShipper(type);
             if (mod.equals(owner)) {
                 entered = type;
@@ -110,11 +150,30 @@ final class OffCodeNotice {
                 continue;
             }
             boolean isUser = owner != null && ModPolicy.isSwitchable(owner) && engine.isOn(owner)
-                    && !installed.getGraph().getUses(mod).contains(owner)
+                    && !isLibraryOf(installed.getGraph(), mod, owner)
                     && (entered == null || !isDeclaredOutside(entered, enteredMethod, mod));
             return isUser ? owner : null;
         }
         return null;
+    }
+
+    private static boolean isLibraryOf(ModGraph graph, String mod, String owner) {
+        Set<String> seen = new HashSet<>();
+        Deque<String> next = new ArrayDeque<>(List.of(mod));
+        while (!next.isEmpty()) {
+            String one = next.poll();
+            Set<String> reached = new HashSet<>(graph.getUses(one));
+            reached.addAll(graph.getContainers(one));
+            for (String other : reached) {
+                if (other.equals(owner)) {
+                    return true;
+                }
+                if (seen.add(other)) {
+                    next.add(other);
+                }
+            }
+        }
+        return false;
     }
 
     private static boolean isDeclaredOutside(Class<?> type, String method, String mod) {

@@ -135,6 +135,16 @@ public final class InitHookRuns {
         return failed + late.getAsInt();
     }
 
+    public static List<IntSupplier> beginWaitingLate() {
+        List<IntSupplier> waiting = new ArrayList<>();
+        waitingLate = waiting;
+        return waiting;
+    }
+
+    public static void endWaitingLate() {
+        waitingLate = null;
+    }
+
     public static int runLoadFinishedAfter(IntSupplier early, Runnable between, Consumer<Runnable> afterReload) {
         List<IntSupplier> waiting = new ArrayList<>();
         waitingLate = waiting;
@@ -209,11 +219,6 @@ public final class InitHookRuns {
 
     public static void catchUpLaterWhile(BooleanSupplier noWorld) {
         isLaterAllowed = noWorld;
-    }
-
-    public static ConstructedFields.Unmade findUnset(Map<Class<?>, Due> hooked, Predicate<Class<?>> worldObject,
-            boolean inWorld) {
-        return findUnset(hooked, worldObject, inWorld, type -> true);
     }
 
     public static ConstructedFields.Unmade findUnset(Map<Class<?>, Due> hooked, Predicate<Class<?>> worldObject,

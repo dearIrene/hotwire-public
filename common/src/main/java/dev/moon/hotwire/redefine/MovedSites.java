@@ -5,6 +5,7 @@ import java.lang.invoke.MethodHandle;
 import java.lang.invoke.MethodHandles;
 import java.lang.invoke.MethodType;
 import java.lang.invoke.MutableCallSite;
+import java.lang.reflect.Method;
 import java.lang.reflect.Modifier;
 import java.util.Collection;
 import java.util.Collections;
@@ -14,7 +15,9 @@ import java.util.Map;
 import java.util.Set;
 import java.util.WeakHashMap;
 import java.util.concurrent.ConcurrentHashMap;
+import java.util.function.Consumer;
 import org.jspecify.annotations.Nullable;
+import org.objectweb.asm.Type;
 
 final class MovedSites {
     private static final int REMEMBERED = 4;
@@ -65,8 +68,16 @@ final class MovedSites {
                 before = this.resets;
             }
 
-            MethodHandle answer = MethodHandles.explicitCastArguments(
-                    Linker.findMoved(this.method, this.descriptor, receiver, this.plain), this.type());
+            MethodHandle found;
+            try {
+                found = Linker.findMoved(this.method, this.descriptor, receiver, this.plain);
+            } catch (NoSuchMethodException e) {
+                if (!hasAnywhere(receiver, this.method, this.descriptor)) {
+                    throw new MissingMember(receiver.getName() + "." + this.method + this.descriptor);
+                }
+                throw e;
+            }
+            MethodHandle answer = MethodHandles.explicitCastArguments(found, this.type());
             MethodHandle spread = MethodHandles.explicitCastArguments(answer, answer.type().generic())
                     .asSpreader(Object[].class, all.length);
             synchronized (this) {
@@ -80,6 +91,34 @@ final class MovedSites {
                 }
             }
             return (Object) spread.invokeExact(all);
+        }
+
+        private static boolean hasAnywhere(Class<?> type, String method, String descriptor) {
+            for (Class<?> at = type; at != null; at = at.getSuperclass()) {
+                if (declares(at, method, descriptor)) {
+                    return true;
+                }
+                for (Class<?> face : at.getInterfaces()) {
+                    if (hasAnywhere(face, method, descriptor)) {
+                        return true;
+                    }
+                }
+            }
+            return false;
+        }
+
+        private static boolean declares(Class<?> type, String method, String descriptor) {
+            try {
+                for (Method declared : type.getDeclaredMethods()) {
+                    if (declared.getName().equals(method)
+                            && Type.getMethodDescriptor(declared).equals(descriptor)) {
+                        return true;
+                    }
+                }
+            } catch (LinkageError e) {
+                return true;
+            }
+            return false;
         }
 
         synchronized void forget() {
@@ -115,11 +154,15 @@ final class MovedSites {
 
     static void reset() {
         AddedOverrides.forget();
-        List<Site> sites;
-        synchronized (SITES) {
-            sites = List.copyOf(SITES);
+        forgetAll(SITES, Site::forget);
+    }
+
+    static <S extends MutableCallSite> void forgetAll(Collection<S> all, Consumer<S> forget) {
+        List<S> sites;
+        synchronized (all) {
+            sites = List.copyOf(all);
         }
-        sites.forEach(Site::forget);
+        sites.forEach(forget);
         if (!sites.isEmpty()) {
             MutableCallSite.syncAll(sites.toArray(MutableCallSite[]::new));
         }

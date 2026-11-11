@@ -219,11 +219,17 @@ final class PatchScanner {
         }
     }
 
-    private static void collectCalledNames(byte[] bytes, Set<String> into) {
-        ClassReader reader;
+    private static @Nullable ClassReader openPool(byte[] bytes) {
         try {
-            reader = new ClassReader(bytes);
+            return new ClassReader(bytes);
         } catch (RuntimeException e) {
+            return null;
+        }
+    }
+
+    private static void collectCalledNames(byte[] bytes, Set<String> into) {
+        ClassReader reader = openPool(bytes);
+        if (reader == null) {
             return;
         }
         char[] buffer = new char[reader.getMaxStringLength()];
@@ -240,10 +246,8 @@ final class PatchScanner {
     }
 
     private static void collectModIds(byte[] bytes, Set<String> into) {
-        ClassReader reader;
-        try {
-            reader = new ClassReader(bytes);
-        } catch (RuntimeException e) {
+        ClassReader reader = openPool(bytes);
+        if (reader == null) {
             return;
         }
         char[] buffer = new char[reader.getMaxStringLength()];
@@ -260,10 +264,8 @@ final class PatchScanner {
 
     private static void collectAsksOfFieldsRead(byte[] bytes, Set<String> owns, ModJarReader.EntryReader entries,
             Set<String> into) throws IOException {
-        ClassReader reader;
-        try {
-            reader = new ClassReader(bytes);
-        } catch (RuntimeException e) {
+        ClassReader reader = openPool(bytes);
+        if (reader == null) {
             return;
         }
         char[] buffer = new char[reader.getMaxStringLength()];
@@ -287,10 +289,8 @@ final class PatchScanner {
     }
 
     private static void collectNamedClasses(byte[] bytes, Set<String> into) {
-        ClassReader reader;
-        try {
-            reader = new ClassReader(bytes);
-        } catch (RuntimeException e) {
+        ClassReader reader = openPool(bytes);
+        if (reader == null) {
             return;
         }
         char[] buffer = new char[reader.getMaxStringLength()];

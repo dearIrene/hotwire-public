@@ -8,6 +8,7 @@ import java.io.IOException;
 import java.nio.file.Path;
 import java.util.Arrays;
 import java.util.List;
+import java.util.Objects;
 import java.util.Set;
 import java.util.concurrent.ConcurrentHashMap;
 import org.jspecify.annotations.Nullable;
@@ -23,6 +24,8 @@ public final class HotwireSettings {
 
     public enum KeyAlert { ON, OFF }
 
+    public enum SwitchSounds { ON, OFF }
+
     public enum AutoFill { OFF, ON }
 
     public enum Developer { OFF, ON }
@@ -37,10 +40,20 @@ public final class HotwireSettings {
 
     public enum DevLeaks { ON, OFF }
 
+    public enum CompareShows { ALL, TICK, FRAMES }
+
+    public enum DevCopyRows { ON, OFF }
+
+    public enum DevSizes { ON, OFF }
+
     public enum AutoRollBackMode { ON, OFF }
 
+    public enum BuildHistory { SESSION, ALWAYS }
+
+    public enum BuildMark { OFF, ON }
+
     public enum BuildLimit {
-        FIVE(5), TEN(10), FIFTEEN(15), TWENTY(20), TWENTY_FIVE(25);
+        FIVE(5), TEN(10), FIFTEEN(15), TWENTY(20), TWENTY_FIVE(25), EVERY(Integer.MAX_VALUE);
 
         private final int count;
 
@@ -60,6 +73,7 @@ public final class HotwireSettings {
     public static final String NESTED_JARS = "nested-jars";
     static final String PAUSE_GAME = "pause-game";
     static final String KEY_ALERT = "key-alert";
+    static final String SOUNDS = "sounds";
     static final String AUTO_FILL = "auto-fill";
     static final String DEVELOPER = "developer";
     static final String UPDATE_CHECKS = "update-checks";
@@ -68,8 +82,13 @@ public final class HotwireSettings {
     static final String RELOAD_POPUPS = "reload-popups";
     static final String DEV_CATCH = "dev-catch";
     static final String DEV_LEAKS = "dev-leaks";
+    static final String DEV_COMPARE = "dev-compare";
+    static final String DEV_COPY = "dev-copy";
+    static final String DEV_SIZES = "dev-sizes";
     static final String DEV_BUILD_LIMIT = "dev-kept";
     static final String DEV_AUTO_BACK = "dev-auto-back";
+    static final String DEV_HISTORY = "dev-history";
+    static final String DEV_MARK = "dev-mark";
 
     private static final Logger LOGGER = LoggerFactory.getLogger(HotwireSettings.class);
 
@@ -89,6 +108,9 @@ public final class HotwireSettings {
     private static final List<KeyAlert> KEY_ALERT_ORDER = List.of(KeyAlert.OFF, KeyAlert.ON);
     private static final List<String> KEY_ALERT_CHOICES = List.of("hotwire.settings.key_alert.off",
             "hotwire.settings.key_alert.on");
+    private static final List<SwitchSounds> SOUNDS_ORDER = List.of(SwitchSounds.OFF, SwitchSounds.ON);
+    private static final List<String> SOUNDS_CHOICES = List.of("hotwire.settings.sounds.off",
+            "hotwire.settings.sounds.on");
     private static final List<AutoFill> AUTO_FILL_ORDER = List.of(AutoFill.OFF, AutoFill.ON);
     private static final List<String> AUTO_FILL_CHOICES = List.of("hotwire.settings.auto_fill.off",
             "hotwire.settings.auto_fill.on");
@@ -111,8 +133,24 @@ public final class HotwireSettings {
     private static final List<String> DEV_CATCH_CHOICES = List.of("hotwire.settings.dev_catch.off",
             "hotwire.settings.dev_catch.on");
     private static final List<DevLeaks> DEV_LEAKS_ORDER = List.of(DevLeaks.OFF, DevLeaks.ON);
+    private static final List<CompareShows> DEV_COMPARE_ORDER = List.of(CompareShows.ALL, CompareShows.TICK,
+            CompareShows.FRAMES);
+    private static final List<String> DEV_COMPARE_CHOICES = List.of("hotwire.settings.dev_compare.all",
+            "hotwire.settings.dev_compare.tick", "hotwire.settings.dev_compare.frames");
+    private static final List<DevCopyRows> DEV_COPY_ORDER = List.of(DevCopyRows.OFF, DevCopyRows.ON);
+    private static final List<String> DEV_COPY_CHOICES = List.of("hotwire.settings.dev_copy.off",
+            "hotwire.settings.dev_copy.on");
+    private static final List<DevSizes> DEV_SIZES_ORDER = List.of(DevSizes.OFF, DevSizes.ON);
+    private static final List<String> DEV_SIZES_CHOICES = List.of("hotwire.settings.dev_sizes.off",
+            "hotwire.settings.dev_sizes.on");
     private static final List<String> DEV_LEAKS_CHOICES = List.of("hotwire.settings.dev_leaks.off",
             "hotwire.settings.dev_leaks.on");
+    private static final List<BuildHistory> DEV_HISTORY_ORDER = List.of(BuildHistory.SESSION, BuildHistory.ALWAYS);
+    private static final List<String> DEV_HISTORY_CHOICES = List.of("hotwire.settings.dev_history.session",
+            "hotwire.settings.dev_history.always");
+    private static final List<BuildMark> DEV_MARK_ORDER = List.of(BuildMark.OFF, BuildMark.ON);
+    private static final List<String> DEV_MARK_CHOICES = List.of("hotwire.settings.dev_mark.off",
+            "hotwire.settings.dev_mark.on");
     private static final List<AutoRollBackMode> DEV_AUTO_BACK_ORDER = List.of(AutoRollBackMode.OFF,
             AutoRollBackMode.ON);
     private static final List<String> DEV_AUTO_BACK_CHOICES = List.of("hotwire.settings.dev_auto_back.off",
@@ -120,7 +158,7 @@ public final class HotwireSettings {
     private static final List<BuildLimit> DEV_BUILD_LIMIT_ORDER = List.of(BuildLimit.values());
     private static final List<String> DEV_BUILD_LIMIT_CHOICES = List.of("hotwire.settings.dev_kept.5",
             "hotwire.settings.dev_kept.10", "hotwire.settings.dev_kept.15", "hotwire.settings.dev_kept.20",
-            "hotwire.settings.dev_kept.25");
+            "hotwire.settings.dev_kept.25", "hotwire.settings.dev_kept.every");
     private static final List<ReloadPopups> RELOAD_POPUPS_ORDER = List.of(ReloadPopups.ALL, ReloadPopups.PROBLEMS);
     private static final List<String> RELOAD_POPUPS_CHOICES = List.of("hotwire.settings.reload_popups.all",
             "hotwire.settings.reload_popups.problems");
@@ -133,6 +171,7 @@ public final class HotwireSettings {
         @Nullable NestedJars nestedJars = NestedJars.AUTO;
         @Nullable PauseGame pauseGame = PauseGame.NO;
         @Nullable KeyAlert keyAlert = KeyAlert.ON;
+        @Nullable SwitchSounds sounds = SwitchSounds.ON;
         @Nullable AutoFill autoFill = AutoFill.ON;
         @Nullable Developer developer = Developer.OFF;
         @Nullable UpdateChecks updateChecks = UpdateChecks.ON;
@@ -141,15 +180,29 @@ public final class HotwireSettings {
         @Nullable ReloadPopups reloadPopups = ReloadPopups.ALL;
         @Nullable DevCatch devCatch = DevCatch.ON;
         @Nullable DevLeaks devLeaks = DevLeaks.ON;
-        @Nullable BuildLimit devBuildLimit = BuildLimit.TEN;
+        @Nullable CompareShows devCompare = CompareShows.ALL;
+        @Nullable DevCopyRows devCopy = DevCopyRows.ON;
+        @Nullable DevSizes devSizes = DevSizes.ON;
+        @Nullable BuildLimit devBuildLimit = BuildLimit.EVERY;
         @Nullable AutoRollBackMode devAutoBack = AutoRollBackMode.ON;
+        @Nullable BuildHistory devHistory = BuildHistory.ALWAYS;
+        @Nullable BuildMark devMark = BuildMark.OFF;
+
+        @Nullable List<Double> devMarkAt;
 
         @Nullable List<Double> devWindow;
 
         @Nullable Integer devScale;
+
+        @Nullable Double devSeeThrough;
         @Nullable String promptAcceptedFor;
         boolean keyCardShown;
+        boolean tourSeen;
         @Nullable List<String> favorites = List.of();
+
+        @Nullable List<String> searchSetup;
+
+        @Nullable List<String> searchPins;
     }
 
     private final JsonFile<SettingsJson> file;
@@ -158,6 +211,7 @@ public final class HotwireSettings {
     private volatile NestedJars nestedJars;
     private volatile PauseGame pauseGame;
     private volatile KeyAlert keyAlert;
+    private volatile SwitchSounds sounds;
     private volatile AutoFill autoFill;
     private volatile Developer developer;
     private volatile UpdateChecks updateChecks;
@@ -166,13 +220,23 @@ public final class HotwireSettings {
     private volatile ReloadPopups reloadPopups;
     private volatile DevCatch devCatch;
     private volatile DevLeaks devLeaks;
+    private volatile CompareShows devCompare;
+    private volatile DevCopyRows devCopy;
+    private volatile DevSizes devSizes;
     private volatile BuildLimit devBuildLimit;
     private volatile AutoRollBackMode devAutoBack;
+    private volatile BuildHistory devHistory;
+    private volatile BuildMark devMark;
+    private volatile double @Nullable [] devMarkAt;
     private volatile double @Nullable [] devWindow;
     private volatile int devScale;
+    private volatile double devSeeThrough;
     private volatile @Nullable String promptAcceptedFor;
     private volatile boolean keyCardShown;
+    private volatile boolean tourSeen;
     private final Set<String> favorites = ConcurrentHashMap.newKeySet();
+    private volatile List<String> searchSetup = List.of();
+    private volatile List<String> searchPins = List.of();
 
     public HotwireSettings(Path path) {
         this.file = new JsonFile<>(path, SettingsJson.class, SettingsJson::new);
@@ -186,6 +250,7 @@ public final class HotwireSettings {
         this.nestedJars = checkKnown(saved.nestedJars, NestedJars.AUTO, "nestedJars");
         this.pauseGame = checkKnown(saved.pauseGame, PauseGame.NO, "pauseGame");
         this.keyAlert = checkKnown(saved.keyAlert, KeyAlert.ON, "keyAlert");
+        this.sounds = checkKnown(saved.sounds, SwitchSounds.ON, "sounds");
         this.autoFill = saved.format < AUTO_FILL_ON_FROM ? AutoFill.ON
                 : checkKnown(saved.autoFill, AutoFill.ON, "autoFill");
         this.developer = checkKnown(saved.developer, Developer.OFF, "developer");
@@ -196,15 +261,31 @@ public final class HotwireSettings {
         this.reloadPopups = saved.reloadPopups == null ? ReloadPopups.ALL : saved.reloadPopups;
         this.devCatch = saved.devCatch == null ? DevCatch.ON : saved.devCatch;
         this.devLeaks = saved.devLeaks == null ? DevLeaks.ON : saved.devLeaks;
-        this.devBuildLimit = saved.devBuildLimit == null ? BuildLimit.TEN : saved.devBuildLimit;
+        this.devCompare = saved.devCompare == null ? CompareShows.ALL : saved.devCompare;
+        this.devCopy = saved.devCopy == null ? DevCopyRows.ON : saved.devCopy;
+        this.devSizes = saved.devSizes == null ? DevSizes.ON : saved.devSizes;
+        this.devBuildLimit = saved.devBuildLimit == null ? BuildLimit.EVERY : saved.devBuildLimit;
         this.devAutoBack = saved.devAutoBack == null ? AutoRollBackMode.ON : saved.devAutoBack;
-        this.devWindow = saved.devWindow == null || saved.devWindow.size() != 5 ? null
+        this.devHistory = saved.devHistory == null ? BuildHistory.ALWAYS : saved.devHistory;
+        this.devMark = saved.devMark == null ? BuildMark.OFF : saved.devMark;
+        this.devMarkAt = saved.devMarkAt == null || saved.devMarkAt.size() != 2 || saved.devMarkAt.contains(null) ? null
+                : saved.devMarkAt.stream().mapToDouble(Double::doubleValue).toArray();
+        this.devWindow = saved.devWindow == null || saved.devWindow.size() != 5 || saved.devWindow.contains(null)
+                ? null
                 : saved.devWindow.stream().mapToDouble(Double::doubleValue).toArray();
         this.promptAcceptedFor = saved.promptAcceptedFor;
         this.devScale = saved.devScale == null ? 0 : Math.max(0, saved.devScale);
+        this.devSeeThrough = saved.devSeeThrough == null ? 0 : Math.clamp(saved.devSeeThrough, 0, 1);
         this.keyCardShown = saved.keyCardShown;
+        this.tourSeen = saved.tourSeen;
         if (saved.favorites != null) {
-            this.favorites.addAll(saved.favorites);
+            saved.favorites.stream().filter(Objects::nonNull).forEach(this.favorites::add);
+        }
+        if (saved.searchPins != null) {
+            this.searchPins = saved.searchPins.stream().filter(Objects::nonNull).toList();
+        }
+        if (saved.searchSetup != null) {
+            this.searchSetup = saved.searchSetup.stream().filter(Objects::nonNull).toList();
         }
     }
 
@@ -234,6 +315,10 @@ public final class HotwireSettings {
 
     public boolean isKeyAlertOn() {
         return this.keyAlert == KeyAlert.ON;
+    }
+
+    public boolean isSoundOn() {
+        return this.sounds == SwitchSounds.ON;
     }
 
     public boolean isAutoFillOn() {
@@ -275,12 +360,55 @@ public final class HotwireSettings {
         this.save();
     }
 
+    public double getDevSeeThrough() {
+        return this.devSeeThrough;
+    }
+
+    public void setDevSeeThrough(double part) {
+        this.devSeeThrough = Math.clamp(part, 0, 1);
+        this.save();
+    }
+
     public boolean isAutoRollBackOn() {
         return this.devAutoBack == AutoRollBackMode.ON;
     }
 
+    public boolean isHistorySaved() {
+        return this.devHistory == BuildHistory.ALWAYS;
+    }
+
+    public boolean isBuildMarkOn() {
+        return this.devMark == BuildMark.ON;
+    }
+
+    public double @Nullable [] getBuildMarkAt() {
+        double[] at = this.devMarkAt;
+        return at == null ? null : at.clone();
+    }
+
+    public void setBuildMarkAt(double x, double y) {
+        this.devMarkAt = new double[] {Math.clamp(x, 0, 1), Math.clamp(y, 0, 1)};
+        this.save();
+    }
+
     public int getSavedBuilds() {
         return this.devBuildLimit.getCount();
+    }
+
+    public boolean isCompareTickShown() {
+        return this.devCompare != CompareShows.FRAMES;
+    }
+
+    public boolean isCompareMemoryShown() {
+        return this.devCompare == CompareShows.ALL;
+    }
+
+    public boolean isCopyRowsShown() {
+        return this.devCopy == DevCopyRows.ON;
+    }
+
+    public boolean isSizesShown() {
+        return this.devSizes == DevSizes.ON;
     }
 
     public boolean isDevLeaksOn(boolean inSetup) {
@@ -309,12 +437,43 @@ public final class HotwireSettings {
         }
     }
 
+    public List<String> getSearchPins() {
+        return this.searchPins;
+    }
+
+    public void setSearchPins(List<String> ids) {
+        if (!ids.equals(this.searchPins)) {
+            this.searchPins = List.copyOf(ids);
+            this.save();
+        }
+    }
+
+    public List<String> getSearchSetup() {
+        return this.searchSetup;
+    }
+
+    public void setSearchSetup(List<String> ids) {
+        if (!ids.equals(this.searchSetup)) {
+            this.searchSetup = List.copyOf(ids);
+            this.save();
+        }
+    }
+
     public boolean isKeyCardShown() {
         return this.keyCardShown;
     }
 
     public void markKeyCardShown() {
         this.keyCardShown = true;
+        this.save();
+    }
+
+    public boolean isTourSeen() {
+        return this.tourSeen;
+    }
+
+    public void markTourSeen() {
+        this.tourSeen = true;
         this.save();
     }
 
@@ -327,7 +486,9 @@ public final class HotwireSettings {
         return List.of(new SettingsSection(Lang.get("hotwire.settings.section.general"), List.of(
                         makeOption(PAUSE_GAME, "hotwire.settings.pause", PAUSE_CHOICES, PAUSE_ORDER, this.pauseGame),
                         makeOption(KEY_ALERT, "hotwire.settings.key_alert", KEY_ALERT_CHOICES, KEY_ALERT_ORDER,
-                                this.keyAlert))),
+                                this.keyAlert),
+                        makeOption(SOUNDS, "hotwire.settings.sounds", SOUNDS_CHOICES, SOUNDS_ORDER,
+                                this.sounds))),
                 new SettingsSection(Lang.get("hotwire.settings.section.switching"), List.of(
                         makeOption(OFF_LASTS, "hotwire.settings.off_lasts", OFF_LASTS_CHOICES, OFF_LASTS_ORDER,
                                 this.offLasts),
@@ -352,10 +513,17 @@ public final class HotwireSettings {
                         this.devReload),
                 makeOption(DEV_CATCH, "hotwire.settings.dev_catch", DEV_CATCH_CHOICES, DEV_CATCH_ORDER, this.devCatch),
                 makeOption(DEV_LEAKS, "hotwire.settings.dev_leaks", DEV_LEAKS_CHOICES, DEV_LEAKS_ORDER, this.devLeaks),
+                makeOption(DEV_COMPARE, "hotwire.settings.dev_compare", DEV_COMPARE_CHOICES, DEV_COMPARE_ORDER,
+                        this.devCompare),
+                makeOption(DEV_COPY, "hotwire.settings.dev_copy", DEV_COPY_CHOICES, DEV_COPY_ORDER, this.devCopy),
+                makeOption(DEV_SIZES, "hotwire.settings.dev_sizes", DEV_SIZES_CHOICES, DEV_SIZES_ORDER, this.devSizes),
                 makeOption(DEV_BUILD_LIMIT, "hotwire.settings.dev_kept", DEV_BUILD_LIMIT_CHOICES, DEV_BUILD_LIMIT_ORDER,
                         this.devBuildLimit),
                 makeOption(DEV_AUTO_BACK, "hotwire.settings.dev_auto_back", DEV_AUTO_BACK_CHOICES, DEV_AUTO_BACK_ORDER,
                         this.devAutoBack),
+                makeOption(DEV_HISTORY, "hotwire.settings.dev_history", DEV_HISTORY_CHOICES, DEV_HISTORY_ORDER,
+                        this.devHistory),
+                makeOption(DEV_MARK, "hotwire.settings.dev_mark", DEV_MARK_CHOICES, DEV_MARK_ORDER, this.devMark),
                 makeOption(RELOAD_POPUPS, "hotwire.settings.reload_popups", RELOAD_POPUPS_CHOICES, RELOAD_POPUPS_ORDER,
                         this.reloadPopups),
                 makeOption(DEVELOPER, "hotwire.settings.developer", DEVELOPER_CHOICES, DEVELOPER_ORDER,
@@ -390,6 +558,7 @@ public final class HotwireSettings {
         NestedJars nested = NESTED_JARS.equals(option) ? pick(NESTED_ORDER, choice, this.nestedJars) : this.nestedJars;
         PauseGame pause = PAUSE_GAME.equals(option) ? pick(PAUSE_ORDER, choice, this.pauseGame) : this.pauseGame;
         KeyAlert alert = KEY_ALERT.equals(option) ? pick(KEY_ALERT_ORDER, choice, this.keyAlert) : this.keyAlert;
+        SwitchSounds heard = SOUNDS.equals(option) ? pick(SOUNDS_ORDER, choice, this.sounds) : this.sounds;
         AutoFill fill = AUTO_FILL.equals(option) ? pick(AUTO_FILL_ORDER, choice, this.autoFill) : this.autoFill;
         Developer dev = DEVELOPER.equals(option) ? pick(DEVELOPER_ORDER, choice, this.developer) : this.developer;
         UpdateChecks checks = UPDATE_CHECKS.equals(option) ? pick(UPDATE_CHECKS_ORDER, choice, this.updateChecks)
@@ -400,20 +569,35 @@ public final class HotwireSettings {
                 : this.reloadPopups;
         DevCatch caught = DEV_CATCH.equals(option) ? pick(DEV_CATCH_ORDER, choice, this.devCatch) : this.devCatch;
         DevLeaks leaks = DEV_LEAKS.equals(option) ? pick(DEV_LEAKS_ORDER, choice, this.devLeaks) : this.devLeaks;
+        CompareShows compare = DEV_COMPARE.equals(option) ? pick(DEV_COMPARE_ORDER, choice, this.devCompare)
+                : this.devCompare;
+        DevCopyRows copy = DEV_COPY.equals(option) ? pick(DEV_COPY_ORDER, choice, this.devCopy) : this.devCopy;
+        DevSizes sizes = DEV_SIZES.equals(option) ? pick(DEV_SIZES_ORDER, choice, this.devSizes) : this.devSizes;
         BuildLimit limit = DEV_BUILD_LIMIT.equals(option) ? pick(DEV_BUILD_LIMIT_ORDER, choice, this.devBuildLimit)
                 : this.devBuildLimit;
         AutoRollBackMode autoBack = DEV_AUTO_BACK.equals(option) ? pick(DEV_AUTO_BACK_ORDER, choice, this.devAutoBack)
                 : this.devAutoBack;
+        BuildHistory history = DEV_HISTORY.equals(option) ? pick(DEV_HISTORY_ORDER, choice, this.devHistory)
+                : this.devHistory;
+        BuildMark mark = DEV_MARK.equals(option) ? pick(DEV_MARK_ORDER, choice, this.devMark) : this.devMark;
         if (world == this.inWorld && nested == this.nestedJars && lasts == this.offLasts && pause == this.pauseGame
-                && alert == this.keyAlert && fill == this.autoFill && dev == this.developer
+                && alert == this.keyAlert && heard == this.sounds
+                && fill == this.autoFill && dev == this.developer
                 && checks == this.updateChecks && crash == this.antiCrash && reload == this.devReload
                 && popups == this.reloadPopups && caught == this.devCatch && leaks == this.devLeaks
-                && limit == this.devBuildLimit && autoBack == this.devAutoBack) {
+                && limit == this.devBuildLimit && autoBack == this.devAutoBack && history == this.devHistory
+                && mark == this.devMark && compare == this.devCompare && copy == this.devCopy
+                && sizes == this.devSizes) {
             return;
         }
         this.devLeaks = leaks;
+        this.devCompare = compare;
+        this.devCopy = copy;
+        this.devSizes = sizes;
         this.devBuildLimit = limit;
         this.devAutoBack = autoBack;
+        this.devHistory = history;
+        this.devMark = mark;
         this.devCatch = caught;
         this.antiCrash = crash;
         this.devReload = reload;
@@ -423,6 +607,7 @@ public final class HotwireSettings {
         this.autoFill = fill;
         this.pauseGame = pause;
         this.keyAlert = alert;
+        this.sounds = heard;
         this.inWorld = world;
         this.offLasts = lasts;
         this.nestedJars = nested;
@@ -436,6 +621,7 @@ public final class HotwireSettings {
         saved.nestedJars = this.nestedJars;
         saved.pauseGame = this.pauseGame;
         saved.keyAlert = this.keyAlert;
+        saved.sounds = this.sounds;
         saved.autoFill = this.autoFill;
         saved.developer = this.developer;
         saved.updateChecks = this.updateChecks;
@@ -444,14 +630,25 @@ public final class HotwireSettings {
         saved.reloadPopups = this.reloadPopups;
         saved.devCatch = this.devCatch;
         saved.devLeaks = this.devLeaks;
+        saved.devCompare = this.devCompare;
+        saved.devCopy = this.devCopy;
+        saved.devSizes = this.devSizes;
         saved.devBuildLimit = this.devBuildLimit;
         saved.devAutoBack = this.devAutoBack;
+        saved.devHistory = this.devHistory;
+        saved.devMark = this.devMark;
+        double[] markAt = this.devMarkAt;
+        saved.devMarkAt = markAt == null ? null : Arrays.stream(markAt).boxed().toList();
         double[] window = this.devWindow;
         saved.devWindow = window == null ? null : Arrays.stream(window).boxed().toList();
         saved.devScale = this.devScale == 0 ? null : this.devScale;
+        saved.devSeeThrough = this.devSeeThrough == 0 ? null : this.devSeeThrough;
         saved.promptAcceptedFor = this.promptAcceptedFor;
         saved.keyCardShown = this.keyCardShown;
+        saved.tourSeen = this.tourSeen;
         saved.favorites = this.favorites.stream().sorted().toList();
+        saved.searchSetup = this.searchSetup.isEmpty() ? null : this.searchSetup;
+        saved.searchPins = this.searchPins.isEmpty() ? null : this.searchPins;
         try {
             this.file.save(saved);
         } catch (IOException e) {

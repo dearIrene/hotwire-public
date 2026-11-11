@@ -30,6 +30,7 @@ public final class OneConfigHuds {
             List<Object> all = findHuds(this.manager);
             this.huds.forEach(hud -> {
                 if (!hasHud(all, hud.getValue())) {
+                    dropRuntime(hud.getValue());
                     all.add(Math.min(hud.getKey(), all.size()), hud.getValue());
                 }
             });
@@ -111,6 +112,7 @@ public final class OneConfigHuds {
             OffRemovals.add(mod, new Removal(manager, removed, kinds));
             for (int i = removed.size() - 1; i >= 0; i--) {
                 huds.remove((int) removed.get(i).getKey());
+                dropRuntime(removed.get(i).getValue());
             }
             kinds.keySet().forEach(providers::remove);
             LOGGER.info("[Hotwire] {}'s {} OneConfig HUDs are taken out while it is off", mod, removed.size());
@@ -137,6 +139,25 @@ public final class OneConfigHuds {
             return mod.equals(modOf.invoke(wrapper));
         } catch (ReflectiveOperationException | RuntimeException e) {
             return false;
+        } finally {
+            Tripwire.markHotwireWork(before);
+        }
+    }
+
+    private static void dropRuntime(Object hud) {
+        boolean before = Tripwire.markHotwireWork(true);
+        try {
+            Object runtime = hud.getClass().getMethod("getRuntimeOrNull").invoke(hud);
+            if (runtime != null) {
+                runtime.getClass().getMethod("dispose").invoke(runtime);
+            }
+            for (Method method : hud.getClass().getMethods()) {
+                if (method.getName().equals("set_runtime$hud") || method.getName().equals("setLastDraw$hud")) {
+                    method.invoke(hud, (Object) null);
+                }
+            }
+        } catch (ReflectiveOperationException | RuntimeException | LinkageError e) {
+            LOGGER.debug("[Hotwire] {} has no drawing of its own to drop: {}", hud.getClass().getName(), e.toString());
         } finally {
             Tripwire.markHotwireWork(before);
         }

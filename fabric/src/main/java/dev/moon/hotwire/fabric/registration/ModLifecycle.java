@@ -25,6 +25,11 @@ import net.fabricmc.fabric.api.client.command.v2.FabricClientCommandSource;
 import net.fabricmc.fabric.api.client.event.lifecycle.v1.ClientLifecycleEvents;
 import net.fabricmc.fabric.api.client.networking.v1.ClientPlayConnectionEvents;
 import net.fabricmc.fabric.api.client.networking.v1.ClientPlayNetworking;
+//? if >=26.1 {
+import net.fabricmc.fabric.api.event.lifecycle.v1.ServerLevelEvents;
+//?} else {
+/*import net.fabricmc.fabric.api.event.lifecycle.v1.ServerWorldEvents;
+*///?}
 import net.fabricmc.fabric.api.event.lifecycle.v1.ServerLifecycleEvents;
 import net.fabricmc.fabric.api.networking.v1.ServerPlayConnectionEvents;
 import net.fabricmc.fabric.api.networking.v1.ServerPlayNetworking;
@@ -33,6 +38,7 @@ import net.minecraft.client.Minecraft;
 import net.minecraft.client.multiplayer.ClientPacketListener;
 import net.minecraft.commands.CommandBuildContext;
 import net.minecraft.server.MinecraftServer;
+import net.minecraft.server.level.ServerLevel;
 import net.minecraft.server.level.ServerPlayer;
 import org.jspecify.annotations.Nullable;
 import org.slf4j.Logger;
@@ -68,8 +74,18 @@ public final class ModLifecycle {
             serverParts.add(findPartOf(id, listener));
             return true;
         };
+
+        if (listensTo(id, journal, ClientPlayConnectionEvents.DISCONNECT)) {
+            onThread(work -> GameHold.onGameBeforeNextFrame(work, client), () -> {
+                ClientPacketListener connection = client.getConnection();
+                if (connection != null) {
+                    callEach(id, journal, ClientPlayConnectionEvents.DISCONNECT, ofClient, listener ->
+                            ((ClientPlayConnectionEvents.Disconnect) listener).onPlayDisconnect(connection, client));
+                }
+            }, "client");
+        }
         if (server != null && !server.isStopped() && listensTo(id, journal, ServerPlayConnectionEvents.DISCONNECT,
-                ServerLifecycleEvents.SERVER_STOPPING, ServerLifecycleEvents.SERVER_STOPPED,
+                ServerLifecycleEvents.SERVER_STOPPING, ServerLifecycleEvents.SERVER_STOPPED, findLevelEvent(false),
                 ArchitecturyEventRegistration.findLifecycleEvent("SERVER_STOPPING"),
                 ArchitecturyEventRegistration.findLifecycleEvent("SERVER_STOPPED"))) {
             onThread(work -> GameHold.onServer(server, work), () -> {
@@ -81,19 +97,15 @@ public final class ModLifecycle {
                 callEach(id, journal, ServerLifecycleEvents.SERVER_STOPPING, ofServer, listener ->
                         ((ServerLifecycleEvents.ServerStopping) listener).onServerStopping(server), noted);
                 callArchitectury(id, journal, "SERVER_STOPPING", ofServer, server);
+
+                for (ServerLevel level : server.getAllLevels()) {
+                    callEach(id, journal, findLevelEvent(false), ofServer, listener ->
+                            callLevel(listener, server, level, false), noted);
+                }
                 callEach(id, journal, ServerLifecycleEvents.SERVER_STOPPED, ofServer, listener ->
                         ((ServerLifecycleEvents.ServerStopped) listener).onServerStopped(server), noted);
                 callArchitectury(id, journal, "SERVER_STOPPED", ofServer, server);
             }, "server");
-        }
-        if (listensTo(id, journal, ClientPlayConnectionEvents.DISCONNECT)) {
-            onThread(work -> GameHold.onGameBeforeNextFrame(work, client), () -> {
-                ClientPacketListener connection = client.getConnection();
-                if (connection != null) {
-                    callEach(id, journal, ClientPlayConnectionEvents.DISCONNECT, ofClient, listener ->
-                            ((ClientPlayConnectionEvents.Disconnect) listener).onPlayDisconnect(connection, client));
-                }
-            }, "client");
         }
         LAST_STOPS.put(id, new LastStop(server == null ? null : new WeakReference<>(server), !ofServer.isEmpty(),
                 !ofPlayers.isEmpty(), !ofClient.isEmpty(), Set.copyOf(serverParts)));
@@ -110,7 +122,7 @@ public final class ModLifecycle {
         LastStop last = before != null && before.isOf(server) ? before : EVERYTHING;
 
         if (server != null && server.isRunning() && listensTo(id, journal, ServerLifecycleEvents.SERVER_STARTING,
-                ServerLifecycleEvents.SERVER_STARTED, ServerPlayConnectionEvents.JOIN,
+                ServerLifecycleEvents.SERVER_STARTED, ServerPlayConnectionEvents.JOIN, findLevelEvent(true),
                 ArchitecturyEventRegistration.findLifecycleEvent("SERVER_STARTING"),
                 ArchitecturyEventRegistration.findLifecycleEvent("SERVER_STARTED"))) {
             Set<String> parts = last.serverParts();
@@ -121,6 +133,11 @@ public final class ModLifecycle {
                     callEach(id, journal, ServerLifecycleEvents.SERVER_STARTING, ran, listener ->
                             ((ServerLifecycleEvents.ServerStarting) listener).onServerStarting(server), stopped);
                     callArchitectury(id, journal, "SERVER_STARTING", ran, server);
+
+                    for (ServerLevel level : server.getAllLevels()) {
+                        callEach(id, journal, findLevelEvent(true), ran, listener ->
+                                callLevel(listener, server, level, true), stopped);
+                    }
                     callEach(id, journal, ServerLifecycleEvents.SERVER_STARTED, ran, listener ->
                             ((ServerLifecycleEvents.ServerStarted) listener).onServerStarted(server), stopped);
                     callArchitectury(id, journal, "SERVER_STARTED", ran, server);
@@ -159,6 +176,30 @@ public final class ModLifecycle {
                             ClientPlayNetworking.getSender(), client));
         }, "client");
         return ran;
+    }
+
+    private static Object findLevelEvent(boolean load) {
+        //? if >=26.1 {
+        return load ? ServerLevelEvents.LOAD : ServerLevelEvents.UNLOAD;
+        //?} else {
+        /*return load ? ServerWorldEvents.LOAD : ServerWorldEvents.UNLOAD;
+        *///?}
+    }
+
+    private static void callLevel(Object listener, MinecraftServer server, ServerLevel level, boolean load) {
+        //? if >=26.1 {
+        if (load) {
+            ((ServerLevelEvents.Load) listener).onLevelLoad(server, level);
+        } else {
+            ((ServerLevelEvents.Unload) listener).onLevelUnload(server, level);
+        }
+        //?} else {
+        /*if (load) {
+            ((ServerWorldEvents.Load) listener).onWorldLoad(server, level);
+        } else {
+            ((ServerWorldEvents.Unload) listener).onWorldUnload(server, level);
+        }
+        *///?}
     }
 
     private static boolean listensTo(String id, RegistrationJournal journal, @Nullable Object... events) {

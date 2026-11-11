@@ -95,7 +95,7 @@ public final class ModGraph {
                         && !this.getContainers(mod).contains(owner) && !this.getContainers(owner).contains(mod)) {
                     this.calls.computeIfAbsent(mod, key -> new TreeSet<>()).add(owner);
 
-                    if (!this.hasCompatibilityFor(patched, owner, askable)) {
+                    if (!this.hasCompatibilityFor(mod, patched, owner, askable)) {
                         this.dependents.computeIfAbsent(owner, key -> new TreeSet<>()).add(mod);
                     }
                 }
@@ -103,11 +103,15 @@ public final class ModGraph {
         });
     }
 
-    private boolean hasCompatibilityFor(ModPatches patched, String other, Map<String, List<ModManifest>> askable) {
+    private boolean hasCompatibilityFor(String asker, ModPatches patched, String other,
+            Map<String, List<ModManifest>> askable) {
         if (this.isAskedFor(patched, other)) {
             return true;
         }
         for (String asked : patched.asks()) {
+            if (this.getContainers(asker).contains(asked)) {
+                continue;
+            }
             for (ModManifest mod : askable.getOrDefault(asked, List.of())) {
                 if (mod.getRelation(Relation.DEPENDS).keySet().stream()
                         .anyMatch(dependency -> this.resolve(dependency).equals(other))) {
@@ -163,6 +167,16 @@ public final class ModGraph {
 
     public String resolve(String idOrAlias) {
         return this.mods.containsKey(idOrAlias) ? idOrAlias : this.aliases.getOrDefault(idOrAlias, idOrAlias);
+    }
+
+    public SortedSet<String> findPatchersOf(Set<String> classes) {
+        SortedSet<String> out = new TreeSet<>();
+        this.patches.forEach((id, patched) -> {
+            if (!Collections.disjoint(patched.patches(), classes)) {
+                out.add(id);
+            }
+        });
+        return out;
     }
 
     public SortedSet<String> getDependents(String id) {

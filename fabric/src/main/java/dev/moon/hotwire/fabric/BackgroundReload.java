@@ -43,13 +43,6 @@ public final class BackgroundReload {
                 (System.nanoTime() - began) / 1_000_000, now.reload().isDone() ? "" : ", which did not");
     }
 
-    static String describe() {
-        ReloadRun now = running;
-        String run = now == null ? "none running" : "one running " + (System.nanoTime() - now.began()) / 1_000_000
-                + " ms, done " + now.reload().isDone() + ", at " + now.reload().getActualProgress();
-        return run + (due != null ? ", one due" : ", none due");
-    }
-
     static void beginAfterHold(Runnable begin) {
         due = begin;
     }

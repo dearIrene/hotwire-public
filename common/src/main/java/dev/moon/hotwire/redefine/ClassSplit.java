@@ -253,6 +253,7 @@ public final class ClassSplit {
                 } else if (BodyMarks.injectCallback(shape)) {
                     body.instructions.add(new InsnNode(Opcodes.RETURN));
                     BodyMarks.prependSkipNotice(body, running.name);
+                } else if (HandlerFallbacks.bridgeToPresent(body, shape, running.name, mixedMethods)) {
                 } else if (HandlerFallbacks.passThrough(body, shape)
                         || HandlerFallbacks.passThroughWrapped(body, shape)) {
                     BodyMarks.prependSkipNotice(body, running.name);
@@ -448,7 +449,7 @@ public final class ClassSplit {
         return ClassNodes.read(bytes, 0);
     }
 
-    private static final class CodeOnly extends MethodVisitor {
+    static final class CodeOnly extends MethodVisitor {
         CodeOnly(MethodVisitor next) {
             super(Opcodes.ASM9, next);
         }
@@ -535,6 +536,7 @@ public final class ClassSplit {
                     }
                 }
                 case InvokeDynamicInsnNode indy -> {
+                    RecordMethods.rewrite(indy, this.target, this.addedFields);
                     this.rewriteLambda(method, indy);
                     if (inSidecar) {
                         for (int i = 0; i < indy.bsmArgs.length; i++) {

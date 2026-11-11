@@ -28,7 +28,51 @@ public final class SwitchTimes {
             PARTS.clear();
             began = System.nanoTime();
             last = began;
+            watch(owner, ++watched);
         }
+    }
+
+    private static final long STALL_NANOS = 10_000_000_000L;
+    private static final int STALL_PRINTS = 6;
+    private static final int STALL_FRAMES = 30;
+    private static long watched;
+
+    private static void watch(Thread worker, long number) {
+        Thread.ofPlatform().daemon().name("hotwire-switch-watch").start(() -> {
+            int prints = 0;
+            while (prints < STALL_PRINTS) {
+                try {
+                    Thread.sleep(STALL_NANOS / 1_000_000);
+                } catch (InterruptedException e) {
+                    return;
+                }
+                String running;
+                synchronized (SwitchTimes.class) {
+                    if (depth == 0 || watched != number) {
+                        return;
+                    }
+                    if (System.nanoTime() - last < STALL_NANOS) {
+                        continue;
+                    }
+                    running = describeRunning();
+                }
+                prints++;
+                StringBuilder at = new StringBuilder();
+                Thread.getAllStackTraces().forEach((thread, frames) -> {
+                    if (!thread.equals(worker) && !thread.getName().startsWith("hotwire-")
+                            && !thread.getName().equals("Render thread")) {
+                        return;
+                    }
+                    at.append(System.lineSeparator()).append(thread.getName()).append(" (")
+                            .append(thread.getState()).append(thread.equals(worker) ? ", the switch's" : "")
+                            .append(')');
+                    for (int frame = 0; frame < Math.min(frames.length, STALL_FRAMES); frame++) {
+                        at.append(System.lineSeparator()).append("    at ").append(frames[frame]);
+                    }
+                });
+                LOGGER.info("[Hotwire] a switch stands still; {}{}", running, at);
+            }
+        });
     }
 
     public static synchronized void mark(String part) {

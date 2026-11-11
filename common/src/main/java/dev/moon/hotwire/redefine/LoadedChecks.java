@@ -21,6 +21,8 @@ public final class LoadedChecks {
 
     private static final int REACH = 6;
 
+    private static final int CHAIN = 3;
+
     public enum Kind {
         SETUP,
 
@@ -45,7 +47,7 @@ public final class LoadedChecks {
             }
             boolean setup = method.name.equals("<clinit>");
             Map<String, InsnList> slices = setup
-                    ? FieldInitializers.findStaticSlices(node.name, node, Set.copyOf(answers)) : Map.of();
+                    ? FieldInitializers.findStaticSlicesBranching(node.name, node, Set.copyOf(answers)) : Map.of();
             String guard = setup ? null : findGuard(method, node.name);
             for (String field : answers) {
                 if (slices.containsKey(field)) {
@@ -81,17 +83,23 @@ public final class LoadedChecks {
         List<String> answers = new ArrayList<>();
         int sinceId = -1;
         int sinceAsk = -1;
+
+        boolean chained = false;
         for (AbstractInsnNode insn : code) {
             if (insn.getOpcode() < 0) {
                 continue;
             }
             if (insn instanceof LdcInsnNode ldc && ldc.cst instanceof String id) {
                 sinceId = mods.contains(id) ? 0 : -1;
-                sinceAsk = -1;
+                chained = sinceAsk >= 0 && sinceAsk <= CHAIN && isAskNext(insn);
+                if (!chained) {
+                    sinceAsk = -1;
+                }
                 continue;
             }
-            if (sinceId >= 0 && insn instanceof MethodInsnNode call && ASKS.contains(call.name)) {
+            if ((sinceId >= 0 || chained) && insn instanceof MethodInsnNode call && ASKS.contains(call.name)) {
                 sinceAsk = 0;
+                chained = false;
             } else if (sinceAsk >= 0 && insn instanceof FieldInsnNode put && put.getOpcode() == Opcodes.PUTSTATIC
                     && put.owner.equals(owner)) {
                 if (!answers.contains(put.name + put.desc)) {
@@ -103,6 +111,14 @@ public final class LoadedChecks {
             sinceAsk = sinceAsk < 0 || ++sinceAsk > REACH * 2 ? -1 : sinceAsk;
         }
         return answers;
+    }
+
+    private static boolean isAskNext(AbstractInsnNode constant) {
+        AbstractInsnNode next = constant.getNext();
+        while (next != null && next.getOpcode() < 0) {
+            next = next.getNext();
+        }
+        return next instanceof MethodInsnNode call && ASKS.contains(call.name);
     }
 
     private static @Nullable String findGuard(MethodNode method, String owner) {

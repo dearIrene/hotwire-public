@@ -117,10 +117,6 @@ final class CollectionNotes {
     private @Nullable Object printed;
     private long printedAs = Fingerprints.UNKNOWN;
 
-    synchronized void startLook(boolean newWorld, long owners) {
-        this.startLook(newWorld, owners, false);
-    }
-
     private int looks;
 
     synchronized void startLook(boolean newWorld, long owners, boolean whole) {

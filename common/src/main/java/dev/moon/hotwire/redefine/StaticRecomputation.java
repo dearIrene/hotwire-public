@@ -53,10 +53,6 @@ public final class StaticRecomputation {
         return made;
     }
 
-    public static List<String> findStored(byte[] bytes) {
-        return findStored(RetainedInitializers.read(bytes));
-    }
-
     private static List<String> findStored(ClassNode node) {
         MethodNode setup = null;
         for (MethodNode method : node.methods) {

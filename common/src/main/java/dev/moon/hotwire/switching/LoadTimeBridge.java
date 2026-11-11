@@ -88,7 +88,8 @@ final class LoadTimeBridge implements ClassFileTransformer {
         if (base != bytes) {
             mixed = base;
         }
-        if (!HotwireLoaders.seesHotwire(loader) || isHotwireItself(domain) || AccessBridge.isAccessor(className)) {
+        if (!HotwireLoaders.seesHotwire(loader) || isHotwireItself(className, domain)
+                || AccessBridge.isAccessor(className)) {
             return mixed;
         }
         byte[] guarded = HandlerGuards.ENABLED ? HandlerGuards.rewrite(className, base) : null;
@@ -119,7 +120,11 @@ final class LoadTimeBridge implements ClassFileTransformer {
         return bridged == base ? mixed : bridged;
     }
 
-    private static boolean isHotwireItself(@Nullable ProtectionDomain domain) {
+    private static boolean isHotwireItself(String className, @Nullable ProtectionDomain domain) {
+        String name = className.replace('.', '/');
+        if (name.startsWith("dev/moon/hotwire/fabric/") && !name.startsWith("dev/moon/hotwire/fabric/harness/")) {
+            return true;
+        }
         CodeSource own = Linker.class.getProtectionDomain().getCodeSource();
         CodeSource source = domain == null ? null : domain.getCodeSource();
         return own != null && source != null && Objects.equals(own.getLocation(), source.getLocation());

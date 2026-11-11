@@ -74,21 +74,4 @@ public final class JarLookup {
             return at;
         }
     }
-
-    public static boolean copyEntry(Path jar, String path, Path at) throws IOException {
-        try (ZipFile zip = new ZipFile(jar.toFile())) {
-            ZipEntry entry = zip.getEntry(path);
-            if (entry == null) {
-                return false;
-            }
-            Path folder = at.getParent();
-            if (folder != null) {
-                Files.createDirectories(folder);
-            }
-            try (InputStream in = zip.getInputStream(entry)) {
-                Files.copy(in, at, StandardCopyOption.REPLACE_EXISTING);
-            }
-            return true;
-        }
-    }
 }

@@ -29,7 +29,7 @@ public final class WordsReload {
         }
     }
 
-    static boolean isWords(String name) {
+    public static boolean isWords(String name) {
         String[] parts = name.split("/", 3);
         if (parts.length < 3) {
             return false;

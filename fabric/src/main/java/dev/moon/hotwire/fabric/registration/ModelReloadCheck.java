@@ -83,7 +83,7 @@ public final class ModelReloadCheck {
             for (FieldSlots.Slot field : Fields.getDeclared(at)) {
                 int access = field.getModifiers();
                 if (!Modifier.isStatic(access) && !Modifier.isFinal(access) && !field.getType().isPrimitive()) {
-                    made.add(System.identityHashCode(read(field, manager)));
+                    made.add(System.identityHashCode(CollectionParts.read(field, manager)));
                 }
             }
         }
@@ -111,7 +111,7 @@ public final class ModelReloadCheck {
                 int access = field.getModifiers();
                 if (!Modifier.isStatic(access) && !field.getType().isPrimitive()) {
                     List<String> path = new ArrayList<>(List.of(at.getSimpleName() + "." + field.getName()));
-                    look(read(field, manager), wanted, found, seen, owners, path, 1, DEPTH);
+                    look(CollectionParts.read(field, manager), wanted, found, seen, owners, path, 1, DEPTH);
                 }
             }
         }
@@ -223,7 +223,7 @@ public final class ModelReloadCheck {
                     continue;
                 }
                 path.add(at.getSimpleName() + "." + field.getName());
-                look(read(field, value), mods, found, seen, owners, path, next, most);
+                look(CollectionParts.read(field, value), mods, found, seen, owners, path, next, most);
                 path.removeLast();
             }
         }
@@ -237,13 +237,5 @@ public final class ModelReloadCheck {
     private static boolean isShared(Object value) {
         return value instanceof PreparableReloadListener || value instanceof ResourceManager
                 || value instanceof Minecraft;
-    }
-
-    private static @Nullable Object read(FieldSlots.Slot field, Object holder) {
-        try {
-            return field.get(holder);
-        } catch (ReflectiveOperationException | RuntimeException | LinkageError e) {
-            return null;
-        }
     }
 }

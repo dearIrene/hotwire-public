@@ -1,5 +1,6 @@
 package dev.moon.hotwire.fabric;
 
+import dev.moon.hotwire.fabric.registration.GameHold;
 import java.lang.reflect.Field;
 import java.lang.reflect.Modifier;
 import java.util.ArrayDeque;
@@ -9,10 +10,16 @@ import java.util.IdentityHashMap;
 import java.util.List;
 import java.util.Set;
 import net.minecraft.client.Minecraft;
+import net.minecraft.client.multiplayer.ClientLevel;
 import org.jspecify.annotations.Nullable;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
 final class WorldRendererReset {
     private static final int DEPTH = 3;
+    private static final Logger LOGGER = LoggerFactory.getLogger(WorldRendererReset.class);
+
+    private static volatile boolean closed;
 
     private WorldRendererReset() {
     }
@@ -78,8 +85,46 @@ final class WorldRendererReset {
                 || name.startsWith("sun.");
     }
 
+    static void close() {
+        Minecraft game = Minecraft.getInstance();
+        if (game.level == null || closed) {
+            return;
+        }
+        closed = true;
+        setLevel(game, null);
+        GameHold.runNextAtFrameEdge(WorldRendererReset::open);
+        LOGGER.info("[Hotwire] the world's renderer was closed before the classes that built it change");
+    }
+
+    static boolean isClosed() {
+        return closed;
+    }
+
+    private static void open() {
+        Minecraft game = Minecraft.getInstance();
+        if (!closed) {
+            return;
+        }
+        closed = false;
+        if (game.level != null) {
+            setLevel(game, game.level);
+        }
+    }
+
+    private static void setLevel(Minecraft game, @Nullable ClientLevel level) {
+        //? if >=26.2 {
+        game.levelExtractor.setLevel(level);
+        //?} else {
+        /*game.levelRenderer.setLevel(level);
+        *///?}
+    }
+
     static void run() {
         Minecraft game = Minecraft.getInstance();
+        if (closed) {
+            open();
+            return;
+        }
         if (game.level == null) {
             return;
         }

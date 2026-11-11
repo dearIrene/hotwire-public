@@ -311,7 +311,7 @@ public final class SidecarReflection {
     }
 
     private static @Nullable Method findAddedMethod(Class<?> type, String name, Class<?>[] params) {
-        MethodHandles.Lookup side = Linker.findSidecar(type);
+        MethodHandles.Lookup side = Linker.findCurrentLookup(type);
         if (side == null) {
             return null;
         }
@@ -342,7 +342,7 @@ public final class SidecarReflection {
     }
 
     private static List<Method> findAddedMethods(Class<?> type) {
-        MethodHandles.Lookup side = Linker.findSidecar(type);
+        MethodHandles.Lookup side = Linker.findCurrentLookup(type);
         return side == null ? List.of() : Arrays.asList(side.lookupClass().getDeclaredMethods());
     }
 

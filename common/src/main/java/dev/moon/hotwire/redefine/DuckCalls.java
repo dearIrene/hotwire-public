@@ -10,7 +10,6 @@ import java.util.ArrayDeque;
 import java.util.Collections;
 import java.util.Deque;
 import java.util.LinkedHashSet;
-import java.util.List;
 import java.util.Map;
 import java.util.Set;
 import java.util.WeakHashMap;
@@ -61,14 +60,7 @@ final class DuckCalls {
 
     static void forget() {
         CHANGES.incrementAndGet();
-        List<Site> sites;
-        synchronized (SITES) {
-            sites = List.copyOf(SITES);
-        }
-        sites.forEach(Site::forget);
-        if (!sites.isEmpty()) {
-            MutableCallSite.syncAll(sites.toArray(MutableCallSite[]::new));
-        }
+        MovedSites.forgetAll(SITES, Site::forget);
     }
 
     static CallSite makeSite(MethodHandle slow, Function<Class<?>, @Nullable MethodHandle> direct) {

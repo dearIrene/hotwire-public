@@ -1,5 +1,6 @@
 package dev.moon.hotwire.jar;
 
+import dev.moon.hotwire.jar.ModJarException.Reason;
 import java.io.IOException;
 import java.nio.file.Files;
 import java.nio.file.Path;
@@ -33,7 +34,7 @@ public final class ModIndex {
     public record Entry(Path file, boolean disabled, ModJar jar) {
     }
 
-    record Failure(Path file, ModJarException reason) {
+    public record Failure(Path file, ModJarException reason) {
     }
 
     public record Snapshot(List<Entry> mods, List<Failure> failures) {
@@ -88,8 +89,14 @@ public final class ModIndex {
         return Files.isRegularFile(file) && (name.endsWith(".jar") || name.endsWith(DISABLED_SUFFIX));
     }
 
-    private CompletableFuture<Result> readResult(Path file) throws IOException {
-        BasicFileAttributes attributes = Files.readAttributes(file, BasicFileAttributes.class);
+    private CompletableFuture<Result> readResult(Path file) {
+        BasicFileAttributes attributes;
+        try {
+            attributes = Files.readAttributes(file, BasicFileAttributes.class);
+        } catch (IOException e) {
+            return CompletableFuture.completedFuture(new Result.Refused(new ModJarException(Reason.UNREADABLE,
+                    String.valueOf(file.getFileName()), "it could not be read as a jar", e)));
+        }
         Stamp stamp = new Stamp(attributes.size(), attributes.lastModifiedTime().toMillis());
         CacheEntry cached = this.cache.get(file);
         if (cached != null && cached.stamp().equals(stamp)) {

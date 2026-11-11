@@ -37,7 +37,12 @@ final class RebuildSteps {
         Set<Class<?>> rehashed = getRehashed(prepared);
         rebuilder.apply(prepared);
         SwitchTimes.mark("redefine");
-        afterRebuild.accept(rebuilt, rehashed);
+        try {
+            afterRebuild.accept(rebuilt, rehashed);
+        } catch (RuntimeException | LinkageError e) {
+            revert(rebuilder, prepared, afterRebuild);
+            throw e;
+        }
         SwitchTimes.mark("after rebuild");
 
         List<String> broken = new ArrayList<>(health.get());
@@ -92,16 +97,6 @@ final class RebuildSteps {
         } catch (RuntimeException | LinkageError e) {
             LOGGER.error("[Hotwire] After {} were put back, what the game holds of them could not be put right again",
                     prepared.splits().keySet(), e);
-        }
-    }
-
-    static void revertWhilePaused(ClassRebuilder rebuilder, ClassRebuilder.PreparedRebuild prepared,
-            BiConsumer<Set<String>, Set<Class<?>>> afterRebuild, Supplier<Runnable> hold) throws RebuildException {
-        Runnable release = hold.get();
-        try {
-            revert(rebuilder, prepared, afterRebuild);
-        } finally {
-            release.run();
         }
     }
 

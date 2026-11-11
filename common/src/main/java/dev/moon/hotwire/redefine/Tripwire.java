@@ -261,9 +261,14 @@ public final class Tripwire {
         if (paused) {
             return;
         }
+
+        if (runs && !RAN.contains(mod) && WALKER.walk(frames -> TripwireSites.isUnderGatedFrame(mod, frames))) {
+            return;
+        }
         long before = calls.getAndIncrement();
         boolean firstRun = runs && RAN.add(mod);
-        if (before == 0 || firstRun) {
+
+        if (before == 0 || firstRun || !FIRST.containsKey(mod)) {
             List<String> frames = new ArrayList<>();
 
             Set<String> seen = new HashSet<>();
@@ -275,9 +280,7 @@ public final class Tripwire {
                 }
             }
             if (TripwireSites.isLetGo(frames)) {
-                if (before == 0) {
-                    calls.set(0);
-                }
+                calls.decrementAndGet();
                 if (firstRun) {
                     RAN.remove(mod);
                 }
@@ -408,7 +411,9 @@ public final class Tripwire {
             if (of != null && (of.equals(HOTWIRE) || of.startsWith(HOTWIRE + "-"))) {
                 return Whose.UNSAFE;
             }
-            if (mod.equals(of)) {
+
+            Class<?> host = type.isHidden() ? type.getNestHost() : type;
+            if (mod.equals(of) || mod.equals(TripwireSites.findModOfClass(host.getName().replace('.', '/')))) {
                 unsafe |= frame.getMethodName().equals("<clinit>") || (mine == 0 && isSynchronizedMethod(frame));
                 mine++;
                 gameBelow = false;

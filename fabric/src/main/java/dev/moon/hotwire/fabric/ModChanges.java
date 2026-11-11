@@ -58,6 +58,11 @@ public final class ModChanges {
         return result;
     }
 
+    public boolean isInstalledJar(Path jar) {
+        HotwireEngine.JvmParts ready = this.parts;
+        return ready != null && ready.adds().isInstalledJar(jar);
+    }
+
     public ModAdder.Result queueAdd(Path jar) {
         HotwireEngine.JvmParts ready = this.parts;
         if (ready == null) {
@@ -68,9 +73,9 @@ public final class ModChanges {
         }
         ModUpdater.Result update = ready.updates().queueForNextStart(jar);
         return switch (update) {
-            case ModUpdater.Result.Queued queued -> new ModAdder.Result.Queued(queued.id(), queued.name(),
+            case ModUpdater.Result.Queued queued -> new ModAdder.Result.Queued(queued.id(),
                     UpdateSupport.describe(update));
-            case ModUpdater.Result.Updated updated -> new ModAdder.Result.Queued(updated.id(), updated.name(),
+            case ModUpdater.Result.Updated updated -> new ModAdder.Result.Queued(updated.id(),
                     UpdateSupport.describe(update));
             case ModUpdater.Result.Refused refused -> new ModAdder.Result.Refused(refused.reason());
             case ModUpdater.Result.Failed failed -> new ModAdder.Result.Failed(failed.reason(), failed.cause());
@@ -107,7 +112,7 @@ public final class ModChanges {
 
     public List<ModUpdater.SortResult> previewUpdates(List<Path> jars) {
         HotwireEngine.JvmParts ready = this.parts;
-        return ready == null ? List.of() : ready.updates().previewAll(jars);
+        return ready == null ? List.of() : ready.updates().getUpdater().previewAll(jars);
     }
 
     @SuppressWarnings("FutureReturnValueIgnored")
@@ -124,7 +129,7 @@ public final class ModChanges {
     public void describePlans(Path jar, Consumer<String> out) throws ModJarException {
         HotwireEngine.JvmParts ready = this.parts;
         if (ready != null) {
-            ready.updates().describePlans(jar, out);
+            ready.updates().getUpdater().describePlans(jar, out);
         }
     }
 
@@ -138,17 +143,17 @@ public final class ModChanges {
 
     public @Nullable UpdatePlan planUpdate(Path jar) {
         HotwireEngine.JvmParts ready = this.parts;
-        return ready == null ? null : ready.updates().findPlan(jar);
+        return ready == null ? null : ready.updates().getUpdater().findPlan(jar);
     }
 
     public List<Path> findCarriedToAdd(Path jar) {
         HotwireEngine.JvmParts ready = this.parts;
-        return ready == null ? List.of() : ready.updates().findCarriedToAdd(jar);
+        return ready == null ? List.of() : ready.updates().getUpdater().findCarriedToAdd(jar);
     }
 
     public UpdatePreview previewUpdate(Path jar) {
         HotwireEngine.JvmParts ready = this.parts;
-        return ready == null ? this.later.previewUpdate(jar) : ready.updates().preview(jar);
+        return ready == null ? this.later.previewUpdate(jar) : ready.updates().getUpdater().preview(jar);
     }
 
     CompletableFuture<AddPreview> dryRunAdd(Path jar) {
@@ -169,7 +174,7 @@ public final class ModChanges {
         if (ready == null) {
             return CompletableFuture.completedFuture(this.later.previewUpdate(jar));
         }
-        return this.tasks.submit("dry-run update", () -> ready.updates().preview(jar));
+        return this.tasks.submit("dry-run update", () -> ready.updates().getUpdater().preview(jar));
     }
 
     boolean canUpdate(Path jar) {

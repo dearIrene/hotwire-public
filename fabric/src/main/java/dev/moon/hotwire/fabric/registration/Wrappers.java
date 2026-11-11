@@ -328,20 +328,20 @@ final class Wrappers {
         return mod != null && findRanks(this.mods).containsKey(mod);
     }
 
-    private record Ranked(List<String> mods, Map<String, Integer> ranks) {
+    private record ModRanks(List<String> mods, Map<String, Integer> ranks) {
     }
 
-    private static volatile Ranked ranked = new Ranked(List.of(), Map.of());
+    private static volatile ModRanks ranked = new ModRanks(List.of(), Map.of());
 
     @SuppressWarnings("ReferenceEquality")
     static Map<String, Integer> findRanks(List<String> mods) {
-        Ranked now = ranked;
+        ModRanks now = ranked;
         if (now.mods() != mods) {
             Map<String, Integer> ranks = new HashMap<>();
             for (int at = 0; at < mods.size(); at++) {
                 ranks.putIfAbsent(mods.get(at), at);
             }
-            now = new Ranked(mods, ranks);
+            now = new ModRanks(mods, ranks);
             ranked = now;
         }
         return now.ranks();

@@ -48,7 +48,8 @@ public final class ModManifestParser {
                 parseMenuParent(root, id),
                 parseBadges(root).contains("library"),
                 asObject(root.get("custom")).map(custom -> asTexts(custom.get("cardinal-components")))
-                        .orElse(List.of()));
+                        .orElse(List.of()),
+                parseLanguageAdapters(root));
     }
 
     private static JsonObject parseRoot(byte[] json, String jar) throws ModJarException {
@@ -65,6 +66,13 @@ public final class ModManifestParser {
             throw new ModJarException(Reason.MANIFEST_NOT_JSON, jar, "its fabric.mod.json is not valid JSON", e);
         }
         throw new ModJarException(Reason.MANIFEST_NOT_JSON, jar, "its fabric.mod.json is not a JSON object");
+    }
+
+    private static Map<String, String> parseLanguageAdapters(JsonObject root) {
+        Map<String, String> out = new LinkedHashMap<>();
+        asObject(root.get("languageAdapters")).ifPresent(adapters -> adapters.entrySet()
+                .forEach(entry -> asText(entry.getValue()).ifPresent(type -> out.put(entry.getKey(), type))));
+        return out;
     }
 
     private static List<String> parseAuthors(JsonObject root) {

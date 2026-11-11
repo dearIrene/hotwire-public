@@ -10,6 +10,7 @@ import java.util.List;
 import java.util.Map;
 import java.util.Set;
 import net.minecraft.core.Registry;
+import net.minecraft.resources.Identifier;
 import net.minecraft.resources.ResourceKey;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -60,10 +61,14 @@ public final class InternedKeys {
 
     private static Object makeNow(ResourceKey<?> key) {
         ResourceKey<? extends Registry<Object>> registry = ResourceKey.createRegistryKey(key.registry());
+        return ResourceKey.create(registry, findIdOf(key));
+    }
+
+    public static Identifier findIdOf(ResourceKey<?> key) {
         //? if >=1.21.11 {
-        return ResourceKey.create(registry, key.identifier());
+        return key.identifier();
         //?} else {
-        /*return ResourceKey.create(registry, key.location());
+        /*return key.location();
         *///?}
     }
 

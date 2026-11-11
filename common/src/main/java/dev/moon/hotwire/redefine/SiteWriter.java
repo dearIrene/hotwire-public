@@ -2,6 +2,7 @@ package dev.moon.hotwire.redefine;
 
 import java.nio.charset.StandardCharsets;
 import java.util.Arrays;
+import java.util.OptionalInt;
 import org.jspecify.annotations.Nullable;
 import org.objectweb.asm.Opcodes;
 
@@ -56,19 +57,21 @@ final class SiteWriter {
     }
 
     private byte @Nullable [] write() {
-        int poolEnd = this.readPool();
-        if (poolEnd < 0 || this.holdsSites) {
+        OptionalInt pool = this.readPool();
+        if (pool.isEmpty() || this.holdsSites) {
             return null;
         }
+        int poolEnd = pool.getAsInt();
         int methodsAt = this.skipFields(poolEnd + 6 + 2 + 2 * this.readShort(poolEnd + 6));
         int methods = this.readShort(methodsAt);
 
         int[] sites = new int[methods];
         byte[] gates = new byte[methods];
-        int attributesAt = this.planMethods(methodsAt + 2, sites, gates);
-        if (attributesAt < 0) {
+        OptionalInt planned = this.planMethods(methodsAt + 2, sites, gates);
+        if (planned.isEmpty()) {
             return null;
         }
+        int attributesAt = planned.getAsInt();
         boolean anyHit = false;
         boolean anyGate = false;
         for (int method = 0; method < methods; method++) {
@@ -93,7 +96,7 @@ final class SiteWriter {
         return Arrays.copyOf(this.out, this.to);
     }
 
-    private int readPool() {
+    private OptionalInt readPool() {
         int count = this.readShort(8);
         this.pool = new int[count];
         int at = 10;
@@ -115,12 +118,12 @@ final class SiteWriter {
                 case 7, 8, 16, 19, 20 -> at += 3;
                 case 15 -> at += 4;
                 default -> {
-                    return -1;
+                    return OptionalInt.empty();
                 }
             }
             entry++;
         }
-        return at;
+        return OptionalInt.of(at);
     }
 
     private void noteName(int entry, int at, int length) {
@@ -193,7 +196,7 @@ final class SiteWriter {
         return place;
     }
 
-    private int planMethods(int first, int[] sites, byte[] gates) {
+    private OptionalInt planMethods(int first, int[] sites, byte[] gates) {
         int at = first;
         for (int method = 0; method < sites.length; method++) {
             int name = this.readShort(at + 2);
@@ -203,12 +206,12 @@ final class SiteWriter {
             for (int attribute = 0; attribute < attributes; attribute++) {
                 if (this.codeName != 0 && this.readShort(at) == this.codeName
                         && !this.planCode(at, name, desc, sites, gates, method)) {
-                    return -1;
+                    return OptionalInt.empty();
                 }
                 at += 6 + this.readInt(at + 2);
             }
         }
-        return at;
+        return OptionalInt.of(at);
     }
 
     private boolean planCode(int at, int name, int desc, int[] sites, byte[] gates, int method) {

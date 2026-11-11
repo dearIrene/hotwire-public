@@ -29,12 +29,16 @@ public abstract class CrashReportMixin {
     @Inject(method = "saveToFile(Ljava/nio/file/Path;Lnet/minecraft/ReportType;Ljava/util/List;)Z", at = @At("RETURN"),
             require = 0)
     private void hotwire$onSaved(Path file, ReportType type, List<String> lines, CallbackInfoReturnable<Boolean> cir) {
-        CrashSection.Detail trace = this.describeTrace();
-
-        if (cir.getReturnValueZ()) {
-            GameReports.logCrashDecision(trace);
+        if (!cir.getReturnValueZ()) {
+            return;
         }
-        if (cir.getReturnValueZ() && !CrashSection.isCleared(trace.value())) {
+        CrashSection.Detail trace = this.describeTrace();
+        boolean cleared = CrashSection.isCleared(trace.value());
+        if (GameReports.countRepeat(file, cleared)) {
+            return;
+        }
+        GameReports.logCrashDecision(trace);
+        if (!cleared) {
             GameReports.tellCrashSaved(file);
         }
     }

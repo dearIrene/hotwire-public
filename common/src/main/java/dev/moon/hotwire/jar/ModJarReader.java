@@ -35,10 +35,18 @@ public final class ModJarReader {
 
     public static ModJar read(Path jar, @Nullable JarScans scans) throws ModJarException {
         String name = String.valueOf(jar.getFileName());
+        CacheKey stamp = scans == null ? null : scans.findStamp(jar);
+        ModJar unchanged = scans == null || stamp == null ? null : scans.findStamped(stamp);
+        if (unchanged != null) {
+            return unchanged;
+        }
         try (ZipFile zip = new ZipFile(jar.toFile())) {
             CacheKey key = scans == null ? null : scans.findKey(zip, name);
             ModJar known = scans == null || key == null ? null : scans.find(key);
             if (known != null) {
+                if (scans != null) {
+                    scans.saveStamp(jar, stamp, key);
+                }
                 return known;
             }
             List<String> names = zip.stream().map(ZipEntry::getName).toList();
@@ -48,9 +56,10 @@ public final class ModJarReader {
             });
             if (scans != null && key != null) {
                 scans.save(key, scanned);
+                scans.saveStamp(jar, stamp, key);
             }
             return scanned.jar();
-        } catch (IOException e) {
+        } catch (IOException | RuntimeException e) {
             throw new ModJarException(Reason.UNREADABLE, name, "it could not be read as a jar", e);
         }
     }
