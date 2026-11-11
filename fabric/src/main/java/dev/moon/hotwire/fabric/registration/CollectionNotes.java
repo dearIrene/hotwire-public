@@ -65,6 +65,8 @@ final class CollectionNotes {
         private Origin origin;
         private @Nullable Set<String> under;
         private long print = Fingerprints.UNKNOWN;
+
+        private Set<String> printedFor = Set.of();
         private boolean ofWorld;
         private boolean filed = true;
 
@@ -112,6 +114,9 @@ final class CollectionNotes {
 
     private long printedUnder = Long.MIN_VALUE;
 
+    private Set<String> lookFor = Set.of();
+    private final IdentityHashMap<Set<String>, Boolean> covering = new IdentityHashMap<>();
+
     private boolean whole;
 
     private @Nullable Object printed;
@@ -119,8 +124,13 @@ final class CollectionNotes {
 
     private int looks;
 
-    synchronized void startLook(boolean newWorld, long owners, boolean whole) {
+    synchronized void startLook(boolean newWorld, long owners, Collection<String> walked, boolean whole) {
         this.looks++;
+        Set<String> asked = Set.copyOf(walked);
+        if (!asked.equals(this.lookFor)) {
+            this.lookFor = asked;
+        }
+        this.covering.clear();
         this.whole = whole;
         this.dropCleared();
         this.printed = null;
@@ -239,6 +249,7 @@ final class CollectionNotes {
         } else {
             long now = Fingerprints.of(container);
             note.print = now == frame.print ? now : Fingerprints.UNKNOWN;
+            note.printedFor = this.lookFor;
             if (frame.now.isEmpty() && !isCollection(container)) {
                 this.remove(container, note);
                 return;
@@ -379,7 +390,8 @@ final class CollectionNotes {
             if (container == null || GameRegistrations.isOfOffMod(container.getClass())) {
                 continue;
             }
-            if (!this.whole && note.print != Fingerprints.UNKNOWN && (isImmutable(container.getClass())
+            if (!this.whole && note.print != Fingerprints.UNKNOWN && this.isPrintedFor(note)
+                    && (isImmutable(container.getClass())
                     || note.print == Fingerprints.of(container))) {
                 this.leftUnchanged++;
                 note.unchangedIn = this.looks;
@@ -418,7 +430,7 @@ final class CollectionNotes {
 
     synchronized boolean isUnchanged(Object container) {
         Note note = this.notes.get(container);
-        if (this.whole || note == null || note.print == Fingerprints.UNKNOWN) {
+        if (this.whole || note == null || note.print == Fingerprints.UNKNOWN || !this.isPrintedFor(note)) {
             return false;
         }
         if (isImmutable(container.getClass()) || note.unchangedIn == this.looks) {
@@ -432,6 +444,13 @@ final class CollectionNotes {
         }
         this.leftUnchanged++;
         return true;
+    }
+
+    @SuppressWarnings("ReferenceEquality")
+    private boolean isPrintedFor(Note note) {
+        Set<String> printedFor = note.printedFor;
+        return printedFor == this.lookFor
+                || this.covering.computeIfAbsent(printedFor, set -> set.containsAll(this.lookFor));
     }
 
     synchronized int countLeftUnchanged() {
