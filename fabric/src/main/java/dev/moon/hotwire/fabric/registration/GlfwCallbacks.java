@@ -93,8 +93,15 @@ public final class GlfwCallbacks {
                     for (String holder : holders) {
                         List<Object> objects = objectsOf.computeIfAbsent(holder, GlfwCallbacks::findObjectsOf);
                         int out = takeOutOfFields(holder, setter.getParameterTypes()[1], mods, objects);
-                        LOGGER.info("[Hotwire] {} is set through {}'s handler: {} objects of its looked through, {}"
-                                + " of {}'s callbacks taken out", setter.getName(), holder, objects.size(), out, mods);
+
+                        if (out > 0) {
+                            LOGGER.info("[Hotwire] {} is set through {}'s handler: {} objects of its looked through,"
+                                    + " {} of {}'s callbacks taken out", setter.getName(), holder, objects.size(), out,
+                                    mods);
+                        } else {
+                            LOGGER.debug("[Hotwire] {} is set through {}'s handler, none of {}'s callbacks in it",
+                                    setter.getName(), holder, mods);
+                        }
                     }
                     continue;
                 }
@@ -179,7 +186,7 @@ public final class GlfwCallbacks {
                         continue;
                     }
                     if (mod == null || !mods.contains(mod)) {
-                        LOGGER.info("[Hotwire] {}.{} holds {} ({}'s), not one of {}'s", object.getClass().getName(),
+                        LOGGER.debug("[Hotwire] {}.{} holds {} ({}'s), not one of {}'s", object.getClass().getName(),
                                 field.getName(), java.getClass().getName(), mod, mods);
                         continue;
                     }
