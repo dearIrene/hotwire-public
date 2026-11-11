@@ -17,6 +17,7 @@ import java.util.Optional;
 import java.util.Set;
 import java.util.TreeSet;
 import java.util.concurrent.ConcurrentHashMap;
+import java.util.function.Function;
 import java.util.stream.Collectors;
 import java.util.stream.Stream;
 import net.fabricmc.loader.api.FabricLoader;
@@ -40,6 +41,7 @@ public final class HiddenPacks {
     private static final Map<String, Optional<Set<String>>> FOREIGN = new ConcurrentHashMap<>();
 
     private static final Map<String, Object> TRIMMED = new ConcurrentHashMap<>();
+    private static volatile Function<String, Set<String>> containersOf = id -> Set.of();
 
     private HiddenPacks() {
     }
@@ -119,7 +121,23 @@ public final class HiddenPacks {
                 return true;
             }
         }
-        return container.getContainedMods().stream().anyMatch(inside -> inside.getMetadata().getId().equals(namespace));
+        if (container.getContainedMods().stream().anyMatch(inside -> inside.getMetadata().getId().equals(namespace))) {
+            return true;
+        }
+        return isInside(container.getMetadata().getId(), namespace, new HashSet<>());
+    }
+
+    private static boolean isInside(String mod, String container, Set<String> seen) {
+        for (String up : containersOf.apply(mod)) {
+            if (up.equals(container) || (seen.add(up) && isInside(up, container, seen))) {
+                return true;
+            }
+        }
+        return false;
+    }
+
+    public static void readContainersWith(Function<String, Set<String>> containers) {
+        containersOf = containers;
     }
 
     private static Optional<Set<String>> findForeign(String id, ModContainer container) {

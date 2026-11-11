@@ -3,6 +3,7 @@ package dev.moon.hotwire.fabric;
 import dev.moon.hotwire.cache.CacheStore;
 import dev.moon.hotwire.config.HotwireSettings;
 import dev.moon.hotwire.fabric.add.AddSupport;
+import dev.moon.hotwire.fabric.add.HiddenPacks;
 import dev.moon.hotwire.fabric.dev.DevMod;
 import dev.moon.hotwire.fabric.dev.DevSession;
 import dev.moon.hotwire.fabric.rebuild.ConstantPools;
@@ -308,6 +309,7 @@ final class EngineStart {
         applier.runOnGameThreadWith(GameHold::onGameAndWait);
         CrashGuard.setMixinOwners(applier.getCarriedMixins()::findModShipping);
         OffModCommands.readUsesFrom(installed::getGraph);
+        HiddenPacks.readContainersWith(id -> installed.getGraph().getContainers(id));
         Linker.setMixinOwners(applier.getCarriedMixins()::findModShipping);
         laps.endLap("load-time mixer, hooks");
         TransformerChain chain = TransformerChain.bind(ForeignPatches.makeOwnerFinder(installed.getGraphJars()));
