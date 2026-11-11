@@ -47,11 +47,6 @@ public record CrashSection(List<Detail> details) {
         return decision.startsWith("Hotwire involved? NO");
     }
 
-    public static Detail describeTrace(Collection<String> frames, Function<String, @Nullable String> rebuiltBy,
-            Set<String> switched, Function<String, @Nullable String> modOf, Function<String, String> nameOf) {
-        return describeTrace(frames, List.of(), rebuiltBy, switched, modOf, nameOf);
-    }
-
     public static Detail describeTrace(Collection<String> frames, Collection<String> messages,
             Function<String, @Nullable String> rebuiltBy, Set<String> switched,
             Function<String, @Nullable String> modOf, Function<String, String> nameOf) {

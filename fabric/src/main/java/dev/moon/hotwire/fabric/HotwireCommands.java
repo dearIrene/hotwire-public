@@ -13,11 +13,14 @@ final class HotwireCommands {
     private HotwireCommands() {
     }
 
-    static void register(CommandDispatcher<FabricClientCommandSource> dispatcher, Runnable open) {
+    static void register(CommandDispatcher<FabricClientCommandSource> dispatcher, Runnable open, Runnable report) {
         dispatcher.register(makeLiteral(HotwireClient.ID).executes(context -> {
             open.run();
             return 1;
-        }));
+        }).then(makeLiteral("bug").executes(context -> {
+            report.run();
+            return 1;
+        })));
     }
 
     private static LiteralArgumentBuilder<FabricClientCommandSource> makeLiteral(String name) {

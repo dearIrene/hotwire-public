@@ -1,5 +1,6 @@
 package dev.moon.hotwire.fabric.report;
 
+import dev.moon.hotwire.config.AtomicFiles;
 import dev.moon.hotwire.fabric.HotwireClient;
 import dev.moon.hotwire.fabric.LoadedMods;
 import dev.moon.hotwire.fabric.add.ModAdder;
@@ -47,6 +48,7 @@ import java.util.concurrent.TimeoutException;
 import java.util.concurrent.atomic.AtomicInteger;
 import java.util.function.Consumer;
 import java.util.function.Function;
+import java.util.stream.Collectors;
 import java.util.stream.Stream;
 import net.fabricmc.loader.api.FabricLoader;
 import net.minecraft.client.Minecraft;
@@ -70,6 +72,11 @@ public final class GameReports {
 
     private final List<String> story = new CopyOnWriteArrayList<>();
     private final Map<String, String> rebuiltBy = new ConcurrentHashMap<>();
+
+    private final Map<String, LastRebuild> lastRebuilt = new ConcurrentHashMap<>();
+
+    public record LastRebuild(List<String> ids, long at) {
+    }
     private final Set<String> redefined = new ConcurrentSkipListSet<>();
     private volatile Set<String> off = Set.of();
     private volatile @Nullable Report last;
@@ -107,17 +114,21 @@ public final class GameReports {
     private static long lastCrashAt;
     private static int repeats;
 
-    public static synchronized void tellCrashSaved(Path file) {
-        String what = readWhat(file);
+    public static synchronized boolean countRepeat(Path file, boolean cleared) {
+        String what = readWhat(file) + (cleared ? " (cleared)" : "");
         long now = System.nanoTime();
         if (what.equals(lastCrash) && now - lastCrashAt < REPEAT_NANOS) {
             repeats++;
             LOGGER.info("[Hotwire] the same crash again ({} since its report): {}", repeats, what);
-            return;
+            return true;
         }
         lastCrash = what;
         lastCrashAt = now;
         repeats = 0;
+        return false;
+    }
+
+    public static void tellCrashSaved(Path file) {
         crashSaved.accept(file);
     }
 
@@ -196,6 +207,11 @@ public final class GameReports {
     public static boolean isRebuilt(String binaryName) {
         GameReports reports = current;
         return reports != null && reports.rebuiltBy.containsKey(binaryName.replace('.', '/'));
+    }
+
+    public static @Nullable LastRebuild findLastRebuild(String binaryName) {
+        GameReports reports = current;
+        return reports == null ? null : reports.lastRebuilt.get(binaryName.replace('.', '/'));
     }
 
     public static CrashSection.Detail describeTrace(Collection<String> frames, Collection<String> messages) {
@@ -318,8 +334,10 @@ public final class GameReports {
             } + (report.faults().isEmpty() ? "" : ", with faults");
         }
         this.story.add(line);
+        LastRebuild last = new LastRebuild(List.copyOf(order), System.nanoTime());
         for (String rebuilt : report.rebuilt()) {
             this.rebuiltBy.putIfAbsent(rebuilt, line);
+            this.lastRebuilt.put(rebuilt, last);
         }
     }
 
@@ -373,8 +391,7 @@ public final class GameReports {
                     }
                 }
             }
-            Files.createDirectories(marker.getParent());
-            Files.writeString(marker, this.began.toString());
+            AtomicFiles.writeString(marker, this.began.toString());
         } catch (IOException | RuntimeException e) {
             LOGGER.warn("[Hotwire] the last session's start could not be read or kept", e);
         }
@@ -419,12 +436,15 @@ public final class GameReports {
         Map<String, String> texts = new LinkedHashMap<>();
         Path log = game.resolve("logs").resolve("latest.log");
         Instant now = Instant.now();
-        texts.put("latest.log", TidyLog.write(why, WHEN.format(now), MachineDetails.read(), mods,
-                Files.isRegularFile(log) ? getTail(read(log)) : "(the game wrote no log)\n"));
-
         Path logs = game.resolve("hotwire").resolve("logs");
 
         boolean froze = FreezeDump.isRecent(logs.resolve(FreezeDump.FILE));
+
+        String told = froze ? read(logs.resolve(FreezeDump.FILE)).lines().limit(3).collect(Collectors.joining(" "))
+                + " " + why : why;
+        texts.put("latest.log", TidyLog.write(told, WHEN.format(now), MachineDetails.read(), mods,
+                Files.isRegularFile(log) ? getTail(read(log)) : "(the game wrote no log)\n"));
+
         if (froze) {
             texts.put("hotwire-" + FreezeDump.FILE, read(logs.resolve(FreezeDump.FILE)));
         }

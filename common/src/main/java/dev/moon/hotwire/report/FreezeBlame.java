@@ -2,6 +2,7 @@ package dev.moon.hotwire.report;
 
 import java.util.Iterator;
 import java.util.List;
+import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 
 public final class FreezeBlame {
@@ -9,6 +10,10 @@ public final class FreezeBlame {
 
     private static final Pattern FRAME_PREFIX = Pattern.compile("^.*/(?!0x)");
     private static final String HOTWIRE = "dev.moon.hotwire.";
+
+    private static final Pattern ENDED_BEFORE = Pattern.compile("\\) ended (\\d+) s before\\.");
+    private static final long SHORTLY_SECONDS = 180;
+    private static final String UNDER_WAY = "A switch of Hotwire's was under way";
 
     private static final List<String> ON_BEHALF = List.of("java.", "javax.", "jdk.", "sun.", "com.sun.",
             "org.objectweb.asm.", "org.spongepowered.", "net.fabricmc.loader.");
@@ -19,7 +24,28 @@ public final class FreezeBlame {
     }
 
     public static boolean isHotwires(String dump, String journal) {
-        return isSwitchUnderWay(journal) || isStuckInHotwire(dump);
+        return isSwitchUnderWay(journal) || isStuckInHotwire(dump) || isShortlyAfterSwitch(dump)
+                || dump.contains(UNDER_WAY);
+    }
+
+    static boolean isShortlyAfterSwitch(String dump) {
+        Matcher ended = ENDED_BEFORE.matcher(dump);
+        return ended.find() && Long.parseLong(ended.group(1)) <= SHORTLY_SECONDS;
+    }
+
+    public static String describeStuck(StackTraceElement[] stack) {
+        for (StackTraceElement frame : stack) {
+            String name = frame.getClassName();
+            String where = name.substring(name.lastIndexOf('.') + 1) + "." + frame.getMethodName();
+            if (name.startsWith("org.lwjgl.")) {
+                return "The game's thread was waiting on the graphics driver (" + where + ").";
+            }
+            if (!isOnBehalf(name + ".")) {
+                return "The game's thread was in " + (name.startsWith(HOTWIRE) ? "Hotwire's own code" : name)
+                        + " (" + where + ").";
+            }
+        }
+        return "The game's thread had no code of the game's or a mod's on it.";
     }
 
     static boolean isSwitchUnderWay(String journal) {

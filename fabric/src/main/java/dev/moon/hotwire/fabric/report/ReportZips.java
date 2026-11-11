@@ -98,6 +98,10 @@ public final class ReportZips {
         return zip;
     }
 
+    public @Nullable Path findLast() {
+        return this.last;
+    }
+
     public void revealLast() {
         Path zip = this.last;
         if (zip != null) {

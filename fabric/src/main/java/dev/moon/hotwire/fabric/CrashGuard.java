@@ -14,6 +14,7 @@ import dev.moon.hotwire.report.Report;
 import dev.moon.hotwire.switching.CrashPolicy;
 import dev.moon.hotwire.switching.ModSwitcher;
 import dev.moon.hotwire.switching.PlayerMessages;
+import dev.moon.hotwire.switching.SwitchHistory;
 import dev.moon.hotwire.ui.Lang;
 import java.lang.annotation.Annotation;
 import java.lang.reflect.AnnotatedElement;
@@ -138,6 +139,7 @@ public final class CrashGuard {
             throw e;
         }
         journal.endSwitch(result.result(), result.check() instanceof Report.OffCheck.PartlyOff);
+        SwitchHistory.get().recordDone(result.result(), SwitchHistory.Cause.ANTI_CRASH, "");
         return result;
     }
 
@@ -213,7 +215,7 @@ public final class CrashGuard {
         return null;
     }
 
-    private static @Nullable String findMixinOf(Class<?> type, String method, String mod) {
+    public static @Nullable String findMixinOf(Class<?> type, String method, String mod) {
         Method[] methods;
         try {
             methods = type.getDeclaredMethods();
@@ -273,14 +275,38 @@ public final class CrashGuard {
         if (owner != null) {
             return owner.mod();
         }
+
+        for (CallerOwner.Frame frame : frames) {
+            GameReports.LastRebuild last = GameReports.findLastRebuild(frame.type().getName());
+            if (last != null && !last.ids().isEmpty() && System.nanoTime() - last.at() < AFTER_SWITCH_NANOS) {
+                if (shouldSayBlame(last.at() + " " + frame.type().getName())) {
+                    LOGGER.warn("[Hotwire] the game's own code threw within 30 s of {}'s switch, through {}, which"
+                            + " that switch redefined, with no mod in the trace: taken as that switch's", last.ids(),
+                            frame.type().getName());
+                }
+                return last.ids().getFirst();
+            }
+        }
         List<String> recent = lastSwitched;
         if (!recent.isEmpty() && System.nanoTime() - lastSwitchedAt < AFTER_SWITCH_NANOS
                 && frames.stream().anyMatch(frame -> GameReports.isRebuilt(frame.type().getName()))) {
-            LOGGER.warn("[Hotwire] the game's own code threw within 30 s of {}'s switch, through a class a switch"
-                    + " redefined and with no mod in the trace: taken as that switch's", recent);
+            if (shouldSayBlame(String.valueOf(lastSwitchedAt))) {
+                LOGGER.warn("[Hotwire] the game's own code threw within 30 s of {}'s switch, through a class a switch"
+                        + " redefined and with no mod in the trace: taken as that switch's", recent);
+            }
             return recent.getFirst();
         }
         return null;
+    }
+
+    private static volatile String saidBlame = "";
+
+    private static boolean shouldSayBlame(String blame) {
+        if (blame.equals(saidBlame)) {
+            return false;
+        }
+        saidBlame = blame;
+        return true;
     }
 
     private static boolean canLeave(@Nullable String mod) {

@@ -1,5 +1,6 @@
 package dev.moon.hotwire.fabric;
 
+import dev.moon.hotwire.config.AtomicFiles;
 import java.io.IOException;
 import java.nio.file.Files;
 import java.nio.file.Path;
@@ -19,8 +20,7 @@ public final class CrashNotice {
     static void save(String where) {
         Path note = findNote();
         try {
-            Files.createDirectories(note.getParent());
-            Files.writeString(note, where);
+            AtomicFiles.writeString(note, where);
         } catch (IOException e) {
             LOGGER.warn("[Hotwire] the crash notice could not be kept for the next launch", e);
         }
