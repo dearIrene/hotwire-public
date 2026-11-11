@@ -131,7 +131,7 @@ final class CollectionReferences implements FixedLists.Walk {
             }
         });
         if (!this.cannotChange.isEmpty()) {
-            LOGGER.info("[Hotwire] collections that cannot change keep {}'s objects: {}",
+            LOGGER.info("[Hotwire] collections that cannot change keep objects of {}: {}",
                     mods.size() > 4 ? mods.size() + " mods" : mods,
                     new TreeMap<>(this.cannotChange));
             this.cannotChange.clear();
@@ -510,6 +510,8 @@ final class CollectionReferences implements FixedLists.Walk {
         }
     }
 
+    private static final long SLOW_READ_NANOS = 1_000_000;
+
     private void readNotedAgain(CollectionNotes notes, int staticsUnchanged) {
         long began = System.nanoTime();
         int again = 0;
@@ -526,6 +528,7 @@ final class CollectionReferences implements FixedLists.Walk {
             CollectionNotes.Origin origin = notes.findOrigin(container);
             this.readingStaticsOf = origin.staticsOf();
             this.checkReport.enter(CheckReport.NOTES);
+            long readBegan = System.nanoTime();
             try {
                 if (origin.field() != null) {
                     this.readStatic(origin.field(), container, origin.game());
@@ -539,6 +542,11 @@ final class CollectionReferences implements FixedLists.Walk {
                 }
             } finally {
                 this.checkReport.leave();
+            }
+
+            if (System.nanoTime() - readBegan >= SLOW_READ_NANOS) {
+                this.report.time(readBegan, "notes: " + container.getClass().getName() + " of "
+                        + describeSize(container) + " (" + origin.staticsOf() + ")");
             }
         }
         long readAgain = System.nanoTime();
