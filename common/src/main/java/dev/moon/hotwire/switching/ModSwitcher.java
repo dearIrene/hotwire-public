@@ -574,6 +574,8 @@ public final class ModSwitcher {
     public void setBusy(boolean busy) {
         if (busy) {
             this.busy.incrementAndGet();
+
+            this.filler.runFaster();
         } else {
             this.busy.decrementAndGet();
         }
@@ -703,6 +705,7 @@ public final class ModSwitcher {
         if (worker != null) {
             worker.setPriority(Thread.NORM_PRIORITY);
         }
+        this.filler.runFaster();
         try {
             synchronized (this.rebuilding) {
                 this.waiting = null;

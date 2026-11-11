@@ -204,6 +204,14 @@ public final class SwitchCacheFiller {
         filler.start();
     }
 
+    @SuppressWarnings("ThreadPriorityCheck")
+    void runFaster() {
+        Thread running = this.thread;
+        if (running != null && running.isAlive()) {
+            running.setPriority(Thread.NORM_PRIORITY);
+        }
+    }
+
     private boolean isWaiting() {
         return this.paused || this.host.isSwitching();
     }
