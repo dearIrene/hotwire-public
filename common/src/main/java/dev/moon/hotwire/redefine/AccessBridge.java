@@ -219,13 +219,12 @@ public final class AccessBridge {
         return body;
     }
 
-    static void rewriteMembers(ClassNode node, String host, WidenerUses.Openings openings) {
-        if (openings.members().isEmpty()) {
+    static void rewriteOpened(ClassNode node, String host, WidenerUses.Openings openings) {
+        if (openings.isEmpty()) {
             return;
         }
-        WidenerUses.Openings members = new WidenerUses.Openings(Set.of(), openings.members());
         for (MethodNode method : node.methods) {
-            rewrite(method, members, host, null);
+            rewrite(method, openings, host, null);
         }
     }
 
@@ -285,7 +284,7 @@ public final class AccessBridge {
                 case TypeInsnNode made when made.getOpcode() == Opcodes.NEW -> {
                     pendingNews.add(made);
                 }
-                case TypeInsnNode type when openings.classes().contains(type.desc) -> {
+                case TypeInsnNode type when openings.classes().contains(type.desc) && !type.desc.equals(host) -> {
                     String typed = "L" + type.desc + ";";
                     switch (type.getOpcode()) {
                         case Opcodes.CHECKCAST -> method.instructions.set(insn, makeAccess(type.desc, "cast",

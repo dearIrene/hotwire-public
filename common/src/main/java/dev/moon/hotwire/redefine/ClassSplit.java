@@ -330,8 +330,8 @@ public final class ClassSplit {
         Adoption.rewriteAddedNews(side, gainedConstructors);
         DuckBridge.rewriteInheritedMoved(out, running.name, allMoved, notMoved);
         DuckBridge.rewriteInheritedMoved(side, running.name, allMoved, notMoved);
-        AccessBridge.rewriteMembers(out, running.name, Linker.getOpenings());
-        AccessBridge.rewriteMembers(side, running.name, Linker.getOpenings());
+        AccessBridge.rewriteOpened(out, running.name, Linker.getOpenings());
+        AccessBridge.rewriteOpened(side, running.name, Linker.getOpenings());
         DuckBridge.rewrite(out, allDucks, allMoved);
         DuckBridge.rewrite(side, allDucks, allMoved);
         ReflectionBridge.rewrite(out);
@@ -385,7 +385,7 @@ public final class ClassSplit {
         FieldInitializers.carryRetyped(this.target, this.runningFields, fields, name, instance, statics);
         holder.methods.add(instance);
         holder.methods.add(statics);
-        AccessBridge.rewriteMembers(holder, target, Linker.getOpenings());
+        AccessBridge.rewriteOpened(holder, target, Linker.getOpenings());
         DuckBridge.rewrite(holder, ducks, moved);
         ReflectionBridge.rewrite(holder);
         DuckBridge.eraseFields(holder, ducks);
