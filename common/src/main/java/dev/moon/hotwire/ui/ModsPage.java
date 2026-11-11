@@ -102,7 +102,7 @@ final class ModsPage implements ProfileMenu.Screen {
                 Kit.column(Kit.text(mod.name()), Kit.dim(mod.version())).gap(3).grow(1),
                 Kit.text(shown.note(), Palette.FAINT).spare(), this.makeTags(mod).spare());
         if (this.hasSettings(id)) {
-            row.with(Kit.icon("settings", 9, Palette.DIM).press((button, modifiers) -> this.openSettings(id)));
+            row.with(Kit.push(Lang.get("hotwire.row.settings"), () -> this.openSettings(id)));
         }
         row.with(new Star(id).press((button, modifiers) -> this.toggleFavorite(id)),
                 new Flip(() -> this.wishes.getOrDefault(id, mod.on()), () -> this.toggle(mod))
