@@ -248,6 +248,29 @@ public final class ModGraph {
         return tops;
     }
 
+    public boolean isOwnPart(String child, String container) {
+        Set<String> roots = this.findRoots(container);
+        return !roots.isEmpty() && this.findRoots(child).stream().anyMatch(roots::contains);
+    }
+
+    private final Map<String, Set<String>> roots = new ConcurrentHashMap<>();
+
+    private Set<String> findRoots(String mod) {
+        return this.roots.computeIfAbsent(mod, any -> {
+            Set<String> found = new HashSet<>();
+            ModPatches patched = this.patches.get(mod);
+            for (String type : patched == null ? Set.<String>of() : patched.owns()) {
+                int first = type.indexOf('/');
+                int second = first < 0 ? -1 : type.indexOf('/', first + 1);
+                int third = second < 0 ? -1 : type.indexOf('/', second + 1);
+                if (third > 0) {
+                    found.add(type.substring(0, third));
+                }
+            }
+            return found;
+        });
+    }
+
     SortedSet<String> getChildrenOf(String container) {
         SortedSet<String> out = new TreeSet<>();
         this.getContainers.forEach((child, carriedBy) -> {

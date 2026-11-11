@@ -201,9 +201,12 @@ public final class SwitchPlanner {
                     : parent.get().equals(container) ? EnabledNestedMod.Why.NESTED_JARS_SETTING_OFF
                             : EnabledNestedMod.Why.NOT_DECLARED_PART_OF_IT;
         }
-        if (this.settings.nestedJars() != NestedJars.ALL) {
-            return this.settings.nestedJars() == NestedJars.NONE ? EnabledNestedMod.Why.NESTED_JARS_SETTING_OFF
-                    : EnabledNestedMod.Why.NOT_DECLARED_PART_OF_IT;
+        if (this.settings.nestedJars() == NestedJars.NONE) {
+            return EnabledNestedMod.Why.NESTED_JARS_SETTING_OFF;
+        }
+
+        if (this.settings.nestedJars() == NestedJars.AUTO && !this.graph.isOwnPart(child, container)) {
+            return EnabledNestedMod.Why.NOT_DECLARED_PART_OF_IT;
         }
         for (String other : this.graph.getContainers(child)) {
             if (!leaving.contains(other) && !alreadyOff.contains(other)) {
@@ -222,7 +225,7 @@ public final class SwitchPlanner {
         Optional<String> parent = this.graph.find(child).flatMap(ModManifest::menuParent);
         return switch (this.settings.nestedJars()) {
             case NONE -> false;
-            case AUTO -> parent.map(container::equals).orElse(false);
+            case AUTO -> parent.map(container::equals).orElseGet(() -> this.graph.isOwnPart(child, container));
             case ALL -> parent.map(container::equals).orElse(true);
         };
     }
