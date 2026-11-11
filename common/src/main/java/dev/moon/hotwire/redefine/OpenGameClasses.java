@@ -10,6 +10,7 @@ import org.objectweb.asm.Opcodes;
 
 public final class OpenGameClasses implements ClassFileTransformer {
     private static final Set<String> OPENED = ConcurrentHashMap.newKeySet();
+    private static final String OWN = "dev/moon/hotwire/";
 
     private final ClassLoader game;
 
@@ -25,7 +26,7 @@ public final class OpenGameClasses implements ClassFileTransformer {
     @SuppressWarnings("ReferenceEquality")
     public byte @Nullable [] transform(@Nullable ClassLoader loader, @Nullable String name,
             @Nullable Class<?> redefining, @Nullable ProtectionDomain domain, byte[] bytes) {
-        if (name == null || loader != this.game || !isGameClass(name)
+        if (name == null || loader != this.game || name.startsWith(OWN)
                 || (redefining != null && !OPENED.contains(name))) {
             return null;
         }
@@ -34,10 +35,6 @@ public final class OpenGameClasses implements ClassFileTransformer {
             OPENED.add(name);
         }
         return opened;
-    }
-
-    private static boolean isGameClass(String name) {
-        return name.startsWith("net/minecraft/") || name.startsWith("com/mojang/");
     }
 
     static byte @Nullable [] open(byte[] bytes) {
