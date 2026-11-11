@@ -46,6 +46,10 @@ public final class ModGraph {
         this(jars, type -> false, id -> null);
     }
 
+    public Set<String> getAddsOnly(String mod) {
+        return this.patches.getOrDefault(mod, ModPatches.NONE).addsOnly();
+    }
+
     public ModGraph(Collection<ModJar> jars, Predicate<String> gameHas, Function<String, @Nullable String> running) {
         this.gameHas = gameHas;
         this.running = running;

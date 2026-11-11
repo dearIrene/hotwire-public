@@ -18,6 +18,7 @@ import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
+import java.util.TreeSet;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
@@ -422,6 +423,16 @@ public final class ModSwitcher {
 
     public Set<String> findPatchedBy(Collection<String> ids) {
         return this.applier.findClassesPatchedBy(Set.copyOf(ids));
+    }
+
+    public Set<String> findChangedBy(Collection<String> ids) {
+        Set<String> changed = new TreeSet<>();
+        for (String id : ids) {
+            Set<String> patched = new HashSet<>(this.applier.findClassesPatchedBy(Set.of(id)));
+            patched.removeAll(this.graph.getAddsOnly(id));
+            changed.addAll(patched);
+        }
+        return changed;
     }
 
     public SwitchPlan planOff(Collection<String> asked) {

@@ -311,7 +311,7 @@ public final class SwitchRunner {
                 try {
                     this.takeOut(order);
 
-                    if (ShaderPrograms.isChangedBy(this.switcher.findPatchedBy(order))) {
+                    if (ShaderPrograms.isChangedBy(this.switcher.findChangedBy(order))) {
                         GameHold.onGameAndWait(() -> ShaderPrograms.compileAgain(Minecraft.getInstance()));
                     }
                 } finally {

@@ -16,6 +16,7 @@ import java.util.Deque;
 import java.util.HashSet;
 import java.util.LinkedHashMap;
 import java.util.List;
+import java.util.Locale;
 import java.util.Map;
 import java.util.Set;
 import java.util.TreeSet;
@@ -38,6 +39,11 @@ final class PatchScanner {
     private static final String OVERWRITE = "Lorg/spongepowered/asm/mixin/Overwrite;";
 
     private static final Set<String> OPENERS = Set.of("Lorg/spongepowered/asm/mixin/gen/Accessor;",
+            "Lorg/spongepowered/asm/mixin/gen/Invoker;");
+
+    private static final Set<String> ADDS = Set.of("Lorg/spongepowered/asm/mixin/Shadow;",
+            "Lorg/spongepowered/asm/mixin/Unique;", "Lorg/spongepowered/asm/mixin/Final;",
+            "Lorg/spongepowered/asm/mixin/Mutable;", "Lorg/spongepowered/asm/mixin/gen/Accessor;",
             "Lorg/spongepowered/asm/mixin/gen/Invoker;");
 
     private static final String INJECTORS = "Lorg/spongepowered/asm/mixin/injection/";
@@ -83,6 +89,7 @@ final class PatchScanner {
         Set<String> rebuildOnly = new TreeSet<>();
         Set<String> fieldsSetUp = new TreeSet<>();
         Map<String, Set<String>> overwrites = new LinkedHashMap<>();
+        Set<String> changed = new HashSet<>();
         for (MixinConfigRef ref : manifest.mixinConfigs()) {
             byte[] config = reader.read(ref.config());
             if (config == null) {
@@ -110,6 +117,9 @@ final class PatchScanner {
                     fieldsSetUp.addAll(read.targets());
                 }
                 addOverwrites(read, mixin, overwrites);
+                if (!read.addsOnly()) {
+                    changed.addAll(read.targets());
+                }
                 patches.addAll(read.targets());
                 configTargets.addAll(read.targets());
                 (read.hook() ? hooked : tied).addAll(read.targets());
@@ -133,6 +143,9 @@ final class PatchScanner {
                             fieldsSetUp.addAll(added.targets());
                         }
                         addOverwrites(added, name, overwrites);
+                        if (!added.addsOnly()) {
+                            changed.addAll(added.targets());
+                        }
                         configTargets.addAll(added.targets());
                         collectNamedIfInTheGame(added, bytes, named);
                         collectModIds(bytes, asks);
@@ -206,8 +219,11 @@ final class PatchScanner {
                 collectCalledNames(bytes, calledNames);
             }
         }
+        Set<String> addsOnly = new TreeSet<>();
+        byConfig.values().forEach(addsOnly::addAll);
+        addsOnly.removeAll(changed);
         return new ModPatches(owns, patches, hooked, missing, byConfig, calls, asks, callbacksOnly, rebuildOnly,
-                CalledNames.of(calledNames), fieldsSetUp, overwrites);
+                CalledNames.of(calledNames), fieldsSetUp, overwrites, addsOnly);
     }
 
     private static void addOverwrites(Mixin read, String mixin, Map<String, Set<String>> into) {
@@ -422,7 +438,7 @@ final class PatchScanner {
     }
 
     private record Mixin(Set<String> targets, boolean hook, boolean callbacksOnly, boolean fieldsSetUp,
-            Set<String> overwrites) {
+            Set<String> overwrites, boolean addsOnly) {
     }
 
     static Set<String> readTargets(byte[] bytes) {
@@ -435,6 +451,7 @@ final class PatchScanner {
         boolean[] opens = {false};
         boolean[] beyondCallbacks = {false};
         boolean[] ownInstanceField = {false};
+        boolean[] changes = {false};
         Set<String> overwrites = new TreeSet<>();
         ClassReader reader = new ClassReader(bytes);
         reader.accept(new ClassVisitor(Opcodes.ASM9) {
@@ -457,6 +474,7 @@ final class PatchScanner {
             @Override
             public MethodVisitor visitMethod(int access, String name, String descriptor, @Nullable String signature,
                     String @Nullable [] exceptions) {
+                boolean[] adds = {false};
                 return new MethodVisitor(Opcodes.ASM9) {
                     @Override
                     public @Nullable AnnotationVisitor visitAnnotation(String annotation, boolean visible) {
@@ -466,14 +484,23 @@ final class PatchScanner {
                         }
                         beyondCallbacks[0] |= annotation.startsWith(INJECTORS)
                                 && !KNOWN_INJECTORS.contains(annotation);
+                        adds[0] |= ADDS.contains(annotation);
+                        changes[0] |= !ADDS.contains(annotation)
+                                && annotation.toLowerCase(Locale.ROOT).contains("mixin");
                         return null;
+                    }
+
+                    @Override
+                    public void visitEnd() {
+                        changes[0] |= name.equals("<clinit>") || (!adds[0] && !name.equals("<init>")
+                                && (access & Opcodes.ACC_SYNTHETIC) == 0 && name.indexOf('$') < 0);
                     }
                 };
             }
         }, ClassReader.SKIP_CODE | ClassReader.SKIP_DEBUG | ClassReader.SKIP_FRAMES);
         boolean fieldsSetUp = ownInstanceField[0] && setsOwnField(reader, mixin);
         return new Mixin(targets, pseudo[0] && reader.getInterfaces().length == 0 && !opens[0], !beyondCallbacks[0],
-                fieldsSetUp, overwrites);
+                fieldsSetUp, overwrites, !changes[0] && !fieldsSetUp);
     }
 
     private static boolean setsOwnField(ClassReader reader, String mixin) {
