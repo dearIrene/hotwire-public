@@ -13,7 +13,9 @@ import java.util.ArrayDeque;
 import java.util.Deque;
 import java.util.HashSet;
 import java.util.List;
+import java.util.Map;
 import java.util.Set;
+import java.util.concurrent.ConcurrentHashMap;
 import net.minecraft.client.Minecraft;
 import net.minecraft.server.MinecraftServer;
 import org.jspecify.annotations.Nullable;
@@ -24,6 +26,8 @@ final class OffCodeNotice {
     private static final Logger LOGGER = LoggerFactory.getLogger(OffCodeNotice.class);
     private static final Set<String> CALL_PLUMBING = Set.of("java.lang.invoke", "java.lang.reflect",
             "jdk.internal.reflect");
+
+    private static final Map<String, Object> TOLD = new ConcurrentHashMap<>();
 
     private OffCodeNotice() {
     }
@@ -55,6 +59,10 @@ final class OffCodeNotice {
         if (ran && isOwnThreadAlone(mod, first)) {
             LOGGER.info("[Hotwire] {}'s own thread went on with work it had begun before the off: {}", mod,
                     String.join(" < ", first));
+            return;
+        }
+        Object watch = Tripwire.findWatch(mod);
+        if (ran && watch != null && isToldFor(mod, watch)) {
             return;
         }
         if (ran) {
@@ -90,6 +98,11 @@ final class OffCodeNotice {
 
         String clears = Lang.get(fromWorld ? "hotwire.off_code.reopen" : "hotwire.off_code.restart");
         engine.showMessage(Lang.get("hotwire.off_code.ran", installed.nameOf(mod), clears), true);
+    }
+
+    @SuppressWarnings("ReferenceEquality")
+    private static boolean isToldFor(String mod, Object watch) {
+        return TOLD.put(mod, watch) == watch;
     }
 
     private static boolean isOwnThreadAlone(String mod, List<String> frames) {

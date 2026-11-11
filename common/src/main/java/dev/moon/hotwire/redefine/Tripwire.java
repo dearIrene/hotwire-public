@@ -528,6 +528,10 @@ public final class Tripwire {
         return new Hits(calls == null ? 0 : calls.get(), first == null ? List.of() : first, countWaiting(mod));
     }
 
+    public static @Nullable Object findWatch(String mod) {
+        return CALLS.get(mod);
+    }
+
     public static boolean hasRun(String mod) {
         return RAN.contains(mod);
     }
