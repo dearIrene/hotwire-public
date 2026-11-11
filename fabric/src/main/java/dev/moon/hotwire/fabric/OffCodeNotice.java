@@ -162,8 +162,11 @@ final class OffCodeNotice {
                 enteredMethod = method.substring(dot + 1);
                 continue;
             }
+
+            String nested = GameRegistrations.findNestedModOf(type);
             boolean isUser = owner != null && ModPolicy.isSwitchable(owner) && engine.isOn(owner)
                     && !isLibraryOf(installed.getGraph(), mod, owner)
+                    && (nested == null || !isLibraryOf(installed.getGraph(), mod, nested))
                     && (entered == null || !isDeclaredOutside(entered, enteredMethod, mod));
             return isUser ? owner : null;
         }
@@ -176,7 +179,10 @@ final class OffCodeNotice {
         while (!next.isEmpty()) {
             String one = next.poll();
             Set<String> reached = new HashSet<>(graph.getUses(one));
-            reached.addAll(graph.getContainers(one));
+            Set<String> shippedIn = graph.getContainers(one);
+            if (!shippedIn.contains(mod)) {
+                reached.addAll(shippedIn);
+            }
             for (String other : reached) {
                 if (other.equals(owner)) {
                     return true;
