@@ -19,6 +19,7 @@ import java.util.concurrent.ConcurrentHashMap;
 import java.util.function.Function;
 import net.fabricmc.loader.api.FabricLoader;
 import net.minecraft.client.Minecraft;
+import net.minecraft.client.multiplayer.ClientLevel;
 import net.minecraft.client.multiplayer.ClientPacketListener;
 import net.minecraft.client.multiplayer.MultiPlayerGameMode;
 import net.minecraft.core.Registry;
@@ -35,6 +36,7 @@ import net.minecraft.world.level.Level;
 import net.minecraft.world.level.block.entity.BlockEntity;
 import net.minecraft.world.level.chunk.ChunkAccess;
 import net.minecraft.world.level.chunk.ChunkSource;
+import net.minecraft.world.level.chunk.LevelChunk;
 import net.minecraft.world.level.chunk.LevelChunkSection;
 import net.minecraft.world.level.chunk.storage.IOWorker;
 import net.minecraft.world.level.lighting.LevelLightEngine;
@@ -215,9 +217,15 @@ public final class GameClasses implements SwitchApplier.Game {
     @Override
     public boolean isKnownAlive(Class<?> type) {
         Minecraft client = Minecraft.getInstance();
-        return type.isInstance(client.getSingleplayerServer()) || type.isInstance(client.level)
+        if (type.isInstance(client.getSingleplayerServer()) || type.isInstance(client.level)
                 || type.isInstance(client.particleEngine) || type.isInstance(client.levelRenderer)
-                || type.isInstance(client.gameRenderer) || type.isInstance(client.player);
+                || type.isInstance(client.gameRenderer) || type.isInstance(client.player)) {
+            return true;
+        }
+
+        ClientLevel level = client.level;
+        return level != null && (type.isInstance(level.getChunkSource()) || type.isInstance(level.getLightEngine())
+                || (type.isAssignableFrom(LevelChunk.class) && level.getChunkSource().getLoadedChunksCount() > 0));
     }
 
     @Override
