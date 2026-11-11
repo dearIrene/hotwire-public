@@ -11,6 +11,8 @@ import java.util.Collection;
 import java.util.Collections;
 import java.util.ConcurrentModificationException;
 import java.util.Deque;
+import java.util.HashMap;
+import java.util.HashSet;
 import java.util.IdentityHashMap;
 import java.util.List;
 import java.util.Map;
@@ -48,17 +50,56 @@ public final class StaticCopies {
 
         Set<Object> seen = Collections.newSetFromMap(new IdentityHashMap<>());
         Predicate<String> ofNetwork = name -> name.startsWith("net.minecraft.network.");
-        int swapped = walk(types, replaced, NETWORK_STEPS, ofNetwork, seen);
+        CopyHolders holders = new CopyHolders(replaced.keySet());
+        int swapped = walk(types, replaced, NETWORK_STEPS, ofNetwork, seen, holders);
         long network = System.nanoTime();
-        swapped += walk(types, replaced, STEPS, ofNetwork.negate().and(StaticCopies::isWalked), seen);
-        LOGGER.info("[Hotwire] {} copies of statics made again took the new ones ({} ms, {} of it the network's)",
-                swapped, (System.nanoTime() - began) / 1_000_000, (network - began) / 1_000_000);
+        swapped += walk(types, replaced, STEPS, ofNetwork.negate().and(StaticCopies::isWalked), seen, holders);
+        LOGGER.info("[Hotwire] {} copies of statics made again took the new ones ({} ms, {} of it the network's; {}"
+                + " objects at the last step left unread by their type)", swapped,
+                (System.nanoTime() - began) / 1_000_000, (network - began) / 1_000_000, holders.left);
+    }
+
+    private static final class CopyHolders {
+        private final Set<Class<?>> old = new HashSet<>();
+        private final Map<Class<?>, Boolean> answers = new HashMap<>();
+        private int left;
+
+        private CopyHolders(Set<Object> replaced) {
+            replaced.forEach(one -> this.old.add(one.getClass()));
+        }
+
+        private boolean canHold(Object one) {
+            boolean can;
+            if (one instanceof Object[] array) {
+                can = this.takes(array.getClass().getComponentType());
+            } else if (one instanceof List<?> || one instanceof Map<?, ?>) {
+                can = true;
+            } else if (one instanceof Collection<?>) {
+                can = false;
+            } else {
+                can = this.answers.computeIfAbsent(one.getClass(), type -> Fields.getReferenceFields(type, false)
+                        .stream().anyMatch(slot -> this.takes(slot.getType())));
+            }
+            if (!can) {
+                this.left++;
+            }
+            return can;
+        }
+
+        private boolean takes(Class<?> type) {
+            for (Class<?> made : this.old) {
+                if (type.isAssignableFrom(made)) {
+                    return true;
+                }
+            }
+            return false;
+        }
     }
 
     private static final int NETWORK_STEPS = 8;
 
     private static int walk(Class<?>[] types, IdentityHashMap<Object, Object> replaced, int steps,
-            Predicate<String> walked, Set<Object> seen) {
+            Predicate<String> walked, Set<Object> seen, CopyHolders holders) {
         int most = seen.size() + MOST;
         Deque<Object> step = new ArrayDeque<>();
         int swapped = 0;
@@ -71,9 +112,13 @@ public final class StaticCopies {
             drawHoldFrame(++count);
         }
         for (int depth = 0; depth < steps && !step.isEmpty() && seen.size() < most; depth++) {
+            boolean last = depth == steps - 1;
             Deque<Object> next = new ArrayDeque<>();
             while (!step.isEmpty() && seen.size() < most) {
-                swapped += swapIn(step.poll(), replaced, seen, next);
+                Object one = step.poll();
+                if (!last || holders.canHold(one)) {
+                    swapped += swapIn(one, replaced, seen, last ? null : next);
+                }
                 drawHoldFrame(++count);
             }
             step = next;
@@ -88,7 +133,7 @@ public final class StaticCopies {
     }
 
     private static int swapIn(Object one, IdentityHashMap<Object, Object> replaced, Set<Object> seen,
-            Deque<Object> next) {
+            @Nullable Deque<Object> next) {
         try {
             return seen.add(one) ? swapInside(one, replaced, next) : 0;
         } catch (RuntimeException e) {
@@ -96,7 +141,7 @@ public final class StaticCopies {
         }
     }
 
-    private static int swapInside(Object one, IdentityHashMap<Object, Object> replaced, Deque<Object> next) {
+    private static int swapInside(Object one, IdentityHashMap<Object, Object> replaced, @Nullable Deque<Object> next) {
         int swapped = 0;
         if (one instanceof Object[] array) {
             for (int at = 0; at < array.length; at++) {
@@ -110,7 +155,9 @@ public final class StaticCopies {
             }
         } else if (one instanceof List<?> list) {
             swapped += LiveConnections.swapIn(list, replaced);
-            list.forEach(item -> follow(item, next));
+            if (next != null) {
+                list.forEach(item -> follow(item, next));
+            }
         } else if (one instanceof Map<?, ?> map) {
             swapped += swapValues(map, replaced, next);
         } else if (one instanceof Collection<?> items) {
@@ -122,7 +169,7 @@ public final class StaticCopies {
     }
 
     private static int swapFields(Class<?> type, @Nullable Object holder, IdentityHashMap<Object, Object> replaced,
-            Deque<Object> next) {
+            @Nullable Deque<Object> next) {
         int swapped = 0;
         for (FieldSlots.Slot slot : Fields.getReferenceFields(type, holder == null)) {
             Object value;
@@ -145,7 +192,8 @@ public final class StaticCopies {
     }
 
     @SuppressWarnings("unchecked")
-    private static int swapValues(Map<?, ?> map, IdentityHashMap<Object, Object> replaced, Deque<Object> next) {
+    private static int swapValues(Map<?, ?> map, IdentityHashMap<Object, Object> replaced,
+            @Nullable Deque<Object> next) {
         int swapped = 0;
         try {
             for (Map.Entry<Object, Object> entry : ((Map<Object, Object>) map).entrySet()) {
@@ -163,8 +211,8 @@ public final class StaticCopies {
         return swapped;
     }
 
-    private static void follow(@Nullable Object value, Deque<Object> next) {
-        if (value != null && isFollowed(value)) {
+    private static void follow(@Nullable Object value, @Nullable Deque<Object> next) {
+        if (next != null && value != null && isFollowed(value)) {
             next.add(value);
         }
     }
