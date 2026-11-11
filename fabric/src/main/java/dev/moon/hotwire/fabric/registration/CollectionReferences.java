@@ -691,6 +691,9 @@ final class CollectionReferences implements FixedLists.Walk {
 
         this.look.getNotes().notePrintsAfter(containers, () -> {
             for (Map.Entry<String, Removal> one : back) {
+                if (isOfStoppedSound(one.getValue())) {
+                    continue;
+                }
                 try {
                     one.getValue().restore();
                 } catch (RuntimeException e) {
@@ -699,6 +702,15 @@ final class CollectionReferences implements FixedLists.Walk {
                 }
             }
         });
+    }
+
+    private static boolean isOfStoppedSound(Removal removal) {
+        return switch (removal) {
+            case Removal.InList one -> ModSounds.isStopped(one.element());
+            case Removal.InCollection one -> ModSounds.isStopped(one.element());
+            case Removal.InMap one -> ModSounds.isStopped(one.key()) || ModSounds.isStopped(one.value());
+            default -> false;
+        };
     }
 
     void lookInto(Object holder) {
