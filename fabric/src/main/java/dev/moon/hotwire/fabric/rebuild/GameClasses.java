@@ -224,8 +224,14 @@ public final class GameClasses implements SwitchApplier.Game {
         }
 
         ClientLevel level = client.level;
-        return level != null && (type.isInstance(level.getChunkSource()) || type.isInstance(level.getLightEngine())
-                || (type.isAssignableFrom(LevelChunk.class) && level.getChunkSource().getLoadedChunksCount() > 0));
+        if (level != null && (type.isInstance(level.getChunkSource()) || type.isInstance(level.getLightEngine())
+                || (type.isAssignableFrom(LevelChunk.class) && level.getChunkSource().getLoadedChunksCount() > 0))) {
+            return true;
+        }
+
+        MinecraftServer server = client.getSingleplayerServer();
+        return server != null && server.getAllLevels().iterator().hasNext()
+                && (type.isAssignableFrom(ChunkMap.class) || type.isAssignableFrom(DistanceManager.class));
     }
 
     @Override
