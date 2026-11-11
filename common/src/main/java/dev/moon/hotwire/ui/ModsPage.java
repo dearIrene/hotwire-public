@@ -106,7 +106,7 @@ final class ModsPage implements ProfileMenu.Screen {
         }
         row.with(new Star(id).press((button, modifiers) -> this.toggleFavorite(id)),
                 new Flip(() -> this.wishes.getOrDefault(id, mod.on()), () -> this.toggle(mod))
-                        .active(() -> this.isSwitchable(id)));
+                        .pending(() -> this.wishes.containsKey(id)).active(() -> this.isSwitchable(id)));
         return row.press(new RowPress(mod));
     }
 
@@ -254,6 +254,7 @@ final class ModsPage implements ProfileMenu.Screen {
 
     private void toggle(ModStatus mod) {
         if (!this.screen.isIdle()) {
+            this.screen.showMessage(Lang.get("hotwire.screen.still_switching"), false);
             return;
         }
         this.wishes.put(mod.id(), !mod.on());

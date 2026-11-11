@@ -199,6 +199,7 @@
   "hotwire.notice.download_failed": "Couldn't download",
   "hotwire.screen.closed_after_fault": "Hotwire's screen hit a fault and closed. Please check the report at: hotwire/reports.",
   "hotwire.screen.show_libraries": "Libraries",
+  "hotwire.screen.still_switching": "Still busy with the last switch, give it a moment",
   "hotwire.screen.pick_limit": "You can only pick up to %s mods at once! Switch these first, then pick more.",
   "hotwire.screen.pick_limit_stopped": "You can pick up to %s mods at once, so picking stopped here! Switch these first, then pick more.",
   "hotwire.show.all": "All",

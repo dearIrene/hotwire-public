@@ -240,6 +240,8 @@ public final class SwitchRunner {
 
             FreezeDump.onSwitchEnded();
             this.reports.onEnded();
+
+            this.switcher.hideProgress();
             this.switcher.setBusy(false);
             SwitchTimes.end((off ? "the off of " : "the on of ") + ids);
             endJournal(journal, result);
@@ -291,7 +293,7 @@ public final class SwitchRunner {
         }
         SwitchTimes.mark("plan");
         if (!plan.isRefused()) {
-            this.switcher.showBegun(plan);
+            this.switcher.showBegun(plan, Lang.get("hotwire.progress.looking"));
 
             Progress shown = this.switcher.getProgress();
             ElementLook.findAheadForOff(this.fieldReferences, wired, this.switcher::isOn,
@@ -442,6 +444,11 @@ public final class SwitchRunner {
     }
 
     private CheckedResult runTimedOn(List<String> ids) {
+        SwitchPlan asked = this.switcher.planOn(ids);
+        if (!asked.isRefused()) {
+            this.switcher.showBegun(asked, Lang.get("hotwire.progress.preparing"));
+        }
+
         ResourceReload.awaitIdle();
         SwitchTimes.mark("off's reload ended");
         ElementLook.giveWay();

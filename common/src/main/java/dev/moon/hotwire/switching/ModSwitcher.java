@@ -622,9 +622,9 @@ public final class ModSwitcher {
         }
     }
 
-    public void showBegun(SwitchPlan plan) {
+    public void showBegun(SwitchPlan plan, String doing) {
         this.progress.begin(plan.direction() == SwitchPlan.Direction.OFF, this.makeQueue(plan));
-        this.progress.count(Lang.get("hotwire.progress.looking"), 0, 0);
+        this.progress.count(doing, 0, 0);
     }
 
     public List<Progress.Entry> previewOff(Collection<String> asked) {
