@@ -587,6 +587,7 @@ public final class SwitchRunner {
             if (EntityRendererProviders.takeChanged() || isPackGone) {
                 ResourceReload.reloadForRenderers(isPackGone);
             }
+            ResourceReload.restoreTrimmed(order);
         } finally {
             hold.release();
         }

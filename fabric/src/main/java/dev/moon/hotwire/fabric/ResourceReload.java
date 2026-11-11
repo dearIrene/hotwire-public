@@ -3,6 +3,7 @@ package dev.moon.hotwire.fabric;
 //? if <1.21.5 {
 /*import com.mojang.blaze3d.systems.RenderSystem;
 *///?}
+import dev.moon.hotwire.fabric.add.HiddenPacks;
 import dev.moon.hotwire.fabric.add.LoaderModList;
 import dev.moon.hotwire.fabric.registration.GameHold;
 import dev.moon.hotwire.fabric.registration.GameRegistrations;
@@ -63,6 +64,8 @@ public final class ResourceReload {
     private static volatile boolean reloadedWhilePaused;
 
     private static volatile boolean reloadedRenderers;
+
+    private static volatile boolean wholeAfterHold;
 
     private static volatile Set<String> packsAtPause = Set.of();
 
@@ -133,7 +136,7 @@ public final class ResourceReload {
                         reloadedWhilePaused |= !renderersOnly;
                         BackgroundReload.beginAfterHold(() -> {
                             Runnable start = () -> startUnprofiled(() -> game.reloadResourcePacks());
-                            if (!renderersOnly || !ReloadListeners.runWithoutHeavy(game, start)) {
+                            if (!renderersOnly || wholeAfterHold || !ReloadListeners.runWithoutHeavy(game, start)) {
                                 startWhole(game);
                             }
                         });
@@ -194,7 +197,7 @@ public final class ResourceReload {
             reloadedRenderers = true;
             BackgroundReload.beginAfterHold(() -> {
                 Runnable start = () -> startUnprofiled(() -> game.reloadResourcePacks());
-                if (!ReloadListeners.runWithoutHeavy(game, start)) {
+                if (wholeAfterHold || !ReloadListeners.runWithoutHeavy(game, start)) {
                     startWhole(game);
                 }
             });
@@ -228,6 +231,7 @@ public final class ResourceReload {
         ShaderPrograms.forget();
         reloadedWhilePaused = false;
         reloadedRenderers = false;
+        wholeAfterHold = false;
         packsAtPause = Set.of();
         MODELS_AT_PAUSE.clear();
         FONTS_AT_PAUSE.clear();
@@ -235,6 +239,16 @@ public final class ResourceReload {
 
     static void onComingOn(List<String> mods) {
         comingOn = List.copyOf(mods);
+    }
+
+    static void restoreTrimmed(Collection<String> mods) {
+        if (!HiddenPacks.isTrimmedListed(mods)) {
+            return;
+        }
+        Minecraft game = Minecraft.getInstance();
+        LOGGER.info("[Hotwire] the packs of {} come back whole with a reload after the hold, the game drawing", mods);
+        wholeAfterHold = true;
+        BackgroundReload.beginAfterHold(() -> startWhole(game));
     }
 
     public static void awaitIdle() {
@@ -250,6 +264,7 @@ public final class ResourceReload {
 
     @SuppressWarnings("FutureReturnValueIgnored")
     private static void startWhole(Minecraft game) {
+        wholeAfterHold = false;
         List<String> switched = new ArrayList<>(comingOn);
         switched.addAll(goingOff);
         Runnable start = () -> startUnprofiled(() -> game.reloadResourcePacks());
@@ -326,6 +341,10 @@ public final class ResourceReload {
         }
         LOGGER.info("[Hotwire] the resources were reloaded with the game held in {} ms{}",
                 (System.nanoTime() - began) / 1_000_000, isWhole ? "" : ", for the renderers alone");
+        if (isWhole && wholeAfterHold) {
+            BackgroundReload.dropDue();
+            wholeAfterHold = false;
+        }
     }
 
     private static void awaitWhilePaused(Minecraft game, ReloadInstance reload) {

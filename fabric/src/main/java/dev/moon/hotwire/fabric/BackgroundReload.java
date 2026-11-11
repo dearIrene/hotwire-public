@@ -47,6 +47,10 @@ public final class BackgroundReload {
         due = begin;
     }
 
+    static void dropDue() {
+        due = null;
+    }
+
     public static void runAfterReload(Runnable then) {
         if (!isBusy()) {
             then.run();
