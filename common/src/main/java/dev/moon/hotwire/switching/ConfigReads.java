@@ -30,6 +30,11 @@ final class ConfigReads {
                 if (bytes != null) {
                     ConfigTrim.readListed(bytes, game.getSide()).forEach(mixin -> late.put(mixin.replace('.', '/'),
                             config));
+
+                    Set<String> answered = game.findPluginAnswers(config);
+                    if (answered != null) {
+                        answered.forEach(mixin -> late.put(mixin.replace('.', '/'), config));
+                    }
                 }
             } catch (JsonParseException | IllegalStateException e) {
                 LOGGER.warn("[Hotwire] the mixin config {} is not readable JSON, so its accessors are not written",
