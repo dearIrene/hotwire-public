@@ -433,10 +433,12 @@ public final class InitHookReplay {
                 loads.add(new VarInsnNode(arguments[index].getOpcode(Opcodes.ILOAD), local));
             } else if (index < callback && moment != null && arguments[index].getSort() >= Type.ARRAY
                     && StartArguments.has(node.name + "." + moment.name + moment.desc, index)) {
+                loads.add((handler.access & Opcodes.ACC_STATIC) != 0 ? new InsnNode(Opcodes.ACONST_NULL)
+                        : new VarInsnNode(Opcodes.ALOAD, 0));
                 loads.add(new LdcInsnNode(node.name + "." + moment.name + moment.desc));
                 loads.add(new LdcInsnNode(index));
                 loads.add(new MethodInsnNode(Opcodes.INVOKESTATIC, START_ARGUMENTS, "get",
-                        "(Ljava/lang/String;I)Ljava/lang/Object;", false));
+                        "(Ljava/lang/Object;Ljava/lang/String;I)Ljava/lang/Object;", false));
                 loads.add(new TypeInsnNode(Opcodes.CHECKCAST, arguments[index].getInternalName()));
             } else {
                 why.append("argument ").append(index).append(" (").append(arguments[index].getClassName())
