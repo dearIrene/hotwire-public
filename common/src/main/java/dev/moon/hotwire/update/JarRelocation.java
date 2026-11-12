@@ -31,6 +31,7 @@ import java.util.Objects;
 import java.util.Set;
 import java.util.function.BiPredicate;
 import java.util.function.Function;
+import java.util.function.Predicate;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 import java.util.zip.ZipEntry;
@@ -254,22 +255,59 @@ public final class JarRelocation {
         return files;
     }
 
-    public static Set<String> findApart(Map<String, Map<String, byte[]>> libraries, Set<String> changing) {
+    public static Set<String> readClassesOf(Path jar, Predicate<String> nestedGoes) throws IOException {
+        Set<String> classes = new HashSet<>();
+        collectClassesOf(readAll(jar), nestedGoes, classes);
+        return classes;
+    }
+
+    private static void collectClassesOf(Map<String, byte[]> entries, Predicate<String> nestedGoes, Set<String> into)
+            throws IOException {
+        entries.keySet().stream().filter(name -> name.endsWith(".class"))
+                .forEach(name -> into.add(name.substring(0, name.length() - 6)));
+        JsonArray jars = entries.containsKey(MANIFEST) ? readManifest(entries).getAsJsonArray("jars") : null;
+        if (jars == null) {
+            return;
+        }
+        for (JsonElement one : jars) {
+            byte[] bytes = entries.get(one.getAsJsonObject().get("file").getAsString());
+            Map<String, byte[]> nested = bytes == null ? Map.of() : readAll(bytes);
+            if (nested.containsKey(MANIFEST) && nestedGoes.test(readManifest(nested).get("id").getAsString())) {
+                collectClassesOf(nested, nestedGoes, into);
+            }
+        }
+    }
+
+    public static Set<String> findApart(Map<String, Map<String, byte[]>> libraries, Set<String> changing,
+            Set<String> changingMods) {
         Set<String> moving = new HashSet<>(changing);
+        Set<String> movingMods = new HashSet<>(changingMods);
         Map<String, Map<String, byte[]>> apart = new HashMap<>(libraries);
         boolean fewer = true;
         while (fewer) {
-            fewer = apart.values().removeIf(files -> {
-                boolean names = files.entrySet().stream().anyMatch(file -> file.getKey().endsWith(".class")
-                        && readClassesNamed(file.getValue()).stream().anyMatch(moving::contains));
-                if (names) {
+            fewer = apart.entrySet().removeIf(library -> {
+                Map<String, byte[]> files = library.getValue();
+                boolean leans = needsAnyOf(files, movingMods) || files.entrySet().stream().anyMatch(
+                        file -> file.getKey().endsWith(".class")
+                                && readClassesNamed(file.getValue()).stream().anyMatch(moving::contains));
+                if (leans) {
+                    movingMods.add(library.getKey());
                     files.keySet().stream().filter(name -> name.endsWith(".class"))
                             .forEach(name -> moving.add(name.substring(0, name.length() - 6)));
                 }
-                return names;
+                return leans;
             });
         }
         return apart.keySet();
+    }
+
+    private static boolean needsAnyOf(Map<String, byte[]> files, Set<String> mods) {
+        try {
+            JsonObject depends = files.containsKey(MANIFEST) ? readManifest(files).getAsJsonObject("depends") : null;
+            return depends != null && depends.keySet().stream().anyMatch(mods::contains);
+        } catch (IOException | RuntimeException e) {
+            return true;
+        }
     }
 
     private static Set<String> readClassesNamed(byte[] bytes) {

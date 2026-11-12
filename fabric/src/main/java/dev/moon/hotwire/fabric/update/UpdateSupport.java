@@ -65,6 +65,8 @@ public final class UpdateSupport implements ModUpdater.Engine, ModAdder.CarriedL
 
     private final Function<List<String>, ModSwitcher.Result> wholeOff;
     private final Function<List<String>, ModSwitcher.Result> wholeOn;
+
+    private final Function<Set<String>, Runnable> oldStatics;
     private final GameClasses classes;
     private final UpdateFolders folders;
     private final UpdateQueue queue;
@@ -114,10 +116,12 @@ public final class UpdateSupport implements ModUpdater.Engine, ModAdder.CarriedL
 
     public UpdateSupport(InstalledMods installed, SwitchApplier applier, ModSwitcher switcher, GameClasses classes,
             UpdateFolders folders, UpdateQueue queue, GameReports reports, ModIcons icons, ModAdder adder,
-            Function<List<String>, ModSwitcher.Result> off, Function<List<String>, ModSwitcher.Result> on) {
+            Function<List<String>, ModSwitcher.Result> off, Function<List<String>, ModSwitcher.Result> on,
+            Function<Set<String>, Runnable> oldStatics) {
         this.adder = adder;
         this.wholeOff = off;
         this.wholeOn = on;
+        this.oldStatics = oldStatics;
         this.installed = installed;
         this.icons = icons;
         this.applier = applier;
@@ -414,6 +418,7 @@ public final class UpdateSupport implements ModUpdater.Engine, ModAdder.CarriedL
             return String.valueOf(e);
         }
         Set<String> offBefore = this.switcher.getOff();
+        Set<String> leaving = this.updater.getCopies().findLeavingClasses(offs);
         ModSwitcher.Result off = this.wholeOff.apply(List.copyOf(offs));
         if (!(off instanceof ModSwitcher.Result.Done)) {
             return off instanceof ModSwitcher.Result.Failed failed ? String.valueOf(failed.cause().getMessage())
@@ -421,7 +426,12 @@ public final class UpdateSupport implements ModUpdater.Engine, ModAdder.CarriedL
         }
         wentOff[0] = true;
         noteInHistory(offs, true);
-        this.oldPayloadsBack = OldPayloads.takeOut(offs);
+        Runnable payloadsBack = OldPayloads.takeOut(offs);
+        Runnable staticsBack = this.oldStatics.apply(leaving);
+        this.oldPayloadsBack = () -> {
+            payloadsBack.run();
+            staticsBack.run();
+        };
         this.noteRebuilt(off, "turned off for their copies");
         Set<String> tookAlong = new HashSet<>(this.switcher.getOff());
         tookAlong.removeAll(offBefore);

@@ -44,6 +44,7 @@ import dev.moon.hotwire.fabric.report.GameReports;
 import dev.moon.hotwire.fabric.report.LoggedFaults;
 import dev.moon.hotwire.fabric.screen.ModIcons;
 import dev.moon.hotwire.fabric.screen.RootScreen;
+import dev.moon.hotwire.fabric.update.OldStatics;
 import dev.moon.hotwire.fabric.update.SwapAtClose;
 import dev.moon.hotwire.fabric.update.UpdateSupport;
 import dev.moon.hotwire.jar.JarScans;
@@ -55,6 +56,7 @@ import dev.moon.hotwire.jar.ModManifest;
 import dev.moon.hotwire.jvm.JarChannels;
 import dev.moon.hotwire.jvm.JvmAccess;
 import dev.moon.hotwire.jvm.JvmAccessException;
+import dev.moon.hotwire.jvm.LoadedClassList;
 import dev.moon.hotwire.redefine.ClassRebuilder;
 import dev.moon.hotwire.redefine.FieldSlots;
 import dev.moon.hotwire.redefine.FinalWrites;
@@ -388,7 +390,9 @@ final class EngineStart {
                 icons, ids -> runner.turnOff(ids).result());
         UpdateSupport updates = new UpdateSupport(installed, applier, switcher, classes, folders, queue, reports,
                 icons, adds.getAdder(), ids -> SwitchRunner.runQuietly(() -> runner.turnOff(ids)).result(),
-                ids -> SwitchRunner.runQuietly(() -> runner.turnOn(ids)).result());
+                ids -> SwitchRunner.runQuietly(() -> runner.turnOn(ids)).result(),
+                leaving -> OldStatics.takeOut(leaving, LoadedClassList.of(instrumentation),
+                        fieldReferences::isInitialized, classes::findOriginalBytes));
         adds.getAdder().setCarriedLibraries(updates);
         laps.endLap("runner, adds, updates");
         return new HotwireEngine.JvmParts(runner, adds, updates, instrumentation, loadTimeMixer, classes);

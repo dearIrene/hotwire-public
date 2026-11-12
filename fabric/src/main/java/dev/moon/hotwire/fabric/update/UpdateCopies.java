@@ -26,6 +26,7 @@ import java.util.Set;
 import java.util.TreeSet;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.function.Function;
+import java.util.function.Predicate;
 import java.util.function.Supplier;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
@@ -117,6 +118,44 @@ final class UpdateCopies {
         return this.runWithUnchanged(() -> this.findGroups(waiting, given, leavingWith));
     }
 
+    private Set<String> findUsersOf(Set<String> group) {
+        Set<String> leaving = this.findLeavingClasses(group);
+        Set<String> users = new TreeSet<>();
+        for (String id : this.engine.on()) {
+            Path jar = group.contains(id) || this.unchanged.contains(id) || ModPolicy.isHotwire(id) ? null
+                    : this.engine.findRunningJarOf(id);
+            try {
+                if (jar != null && !JarLinks.readNamed(jar, Set.of(), leaving).isEmpty()) {
+                    users.add(id);
+                }
+            } catch (IOException | RuntimeException e) {
+                LOGGER.info("[Hotwire] {} could not be read through: {}", jar.getFileName(), e.toString());
+            }
+        }
+        if (!users.isEmpty()) {
+            LOGGER.info("[Hotwire] {} use classes of {} mods that go, and go with them", users, group.size());
+        }
+        return users;
+    }
+
+    Set<String> findLeavingClasses(Set<String> offs) {
+        Set<String> classes = new HashSet<>();
+
+        Predicate<String> goes = nested -> offs.contains(this.engine.getGraph().resolve(nested));
+        for (String id : offs) {
+            Path jar = this.engine.findRunningJarOf(id);
+            try {
+                if (jar != null) {
+                    classes.addAll(JarRelocation.readClassesOf(jar, goes));
+                }
+            } catch (IOException e) {
+                LOGGER.info("[Hotwire] {} could not be read through: {}", jar.getFileName(), e.toString());
+            }
+        }
+        classes.removeAll(this.unchangedClasses);
+        return classes;
+    }
+
     <T> T runWithUnchanged(Supplier<T> work) {
         ModPolicy.setStayingThrough(this.unchanged);
         try {
@@ -132,7 +171,9 @@ final class UpdateCopies {
         this.unchangedClasses.clear();
         try {
             Map<String, Map<String, byte[]>> found = new HashMap<>();
+            Set<String> changingMods = new HashSet<>(waiting);
             JarRelocation.readPicked(jars, ModUpdater.VERSION_ORDER).forEach((id, files) -> {
+                changingMods.add(id);
                 if (ModPolicy.isSwitchable(id) && this.engine.findVersionOf(id) != null
                         && hasSameFiles(files, this.engine.readRunningOf(id))) {
                     found.put(id, files);
@@ -144,7 +185,8 @@ final class UpdateCopies {
             }
             found.values().forEach(files -> files.keySet().stream().filter(name -> name.endsWith(".class"))
                     .forEach(name -> changing.remove(name.substring(0, name.length() - 6))));
-            for (String id : JarRelocation.findApart(found, changing)) {
+            changingMods.removeAll(found.keySet());
+            for (String id : JarRelocation.findApart(found, changing, changingMods)) {
                 same.add(id);
                 Objects.requireNonNull(found.get(id)).keySet().stream().filter(name -> name.endsWith(".class"))
                         .forEach(name -> this.unchangedClasses.add(name.substring(0, name.length() - 6)));
@@ -183,6 +225,7 @@ final class UpdateCopies {
             }
             Set<String> group = new LinkedHashSet<>();
             Deque<String> open = new ArrayDeque<>(List.of(id));
+            Set<String> asked = new HashSet<>();
             while (!open.isEmpty()) {
                 String at = open.remove();
 
@@ -191,9 +234,18 @@ final class UpdateCopies {
                     open.addAll(this.engine.getGraph().getDependents(at));
                     this.findCarriedWithState(at, given)
                             .forEach(carried -> open.addAll(this.engine.getGraph().getDependents(carried)));
+
+                    this.findCarriedGoing(at, given).keySet().stream()
+                            .filter(carried -> this.engine.findVersionOf(carried) != null
+                                    && !this.unchanged.contains(carried)
+                                    && this.engine.getGraph().getContainers(carried).contains(at))
+                            .forEach(carried -> open.addAll(this.engine.getGraph().getDependents(carried)));
                     open.addAll(this.findPatchersOf(at, given));
                     open.addAll(this.findWaitingNeeded(at, waiting, given));
                     open.addAll(leavingWith.apply(at));
+                }
+                if (open.isEmpty()) {
+                    this.findUsersOf(group).stream().filter(asked::add).forEach(open::add);
                 }
             }
             if (group.isEmpty()) {
@@ -324,6 +376,15 @@ final class UpdateCopies {
                     offs.add(id);
                     grew = true;
                 }
+            }
+        }
+        for (String id : carried) {
+            if (!offs.contains(id) && this.engine.findVersionOf(id) != null && ModPolicy.isSwitchable(id)
+                    && !this.unchanged.contains(id)) {
+                Set<String> holding = new TreeSet<>(this.engine.getGraph().getDependents(id));
+                holding.addAll(this.engine.getGraph().getContainers(id));
+                holding.removeAll(offs);
+                LOGGER.info("[Hotwire] {} stays on beside its copy: {} hold it", id, holding);
             }
         }
         return offs;
