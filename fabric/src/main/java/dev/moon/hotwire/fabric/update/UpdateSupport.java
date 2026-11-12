@@ -49,6 +49,7 @@ import java.util.Objects;
 import java.util.Optional;
 import java.util.Set;
 import java.util.TreeSet;
+import java.util.function.Function;
 import java.util.stream.Stream;
 import net.fabricmc.loader.api.FabricLoader;
 import net.minecraft.client.Minecraft;
@@ -61,6 +62,9 @@ public final class UpdateSupport implements ModUpdater.Engine, ModAdder.CarriedL
     private final InstalledMods installed;
     private final SwitchApplier applier;
     private final ModSwitcher switcher;
+
+    private final Function<List<String>, ModSwitcher.Result> wholeOff;
+    private final Function<List<String>, ModSwitcher.Result> wholeOn;
     private final GameClasses classes;
     private final UpdateFolders folders;
     private final UpdateQueue queue;
@@ -109,8 +113,11 @@ public final class UpdateSupport implements ModUpdater.Engine, ModAdder.CarriedL
     }
 
     public UpdateSupport(InstalledMods installed, SwitchApplier applier, ModSwitcher switcher, GameClasses classes,
-            UpdateFolders folders, UpdateQueue queue, GameReports reports, ModIcons icons, ModAdder adder) {
+            UpdateFolders folders, UpdateQueue queue, GameReports reports, ModIcons icons, ModAdder adder,
+            Function<List<String>, ModSwitcher.Result> off, Function<List<String>, ModSwitcher.Result> on) {
         this.adder = adder;
+        this.wholeOff = off;
+        this.wholeOn = on;
         this.installed = installed;
         this.icons = icons;
         this.applier = applier;
@@ -349,7 +356,7 @@ public final class UpdateSupport implements ModUpdater.Engine, ModAdder.CarriedL
                     this.copyTriesLeft = 0;
                 }
                 this.oldPayloadsBack.run();
-                this.noteRebuilt(this.switcher.turnOn(List.copyOf(offs)), "turned on again after their copies");
+                this.noteRebuilt(this.wholeOn.apply(List.copyOf(offs)), "turned on again after their copies");
                 noteInHistory(offs, false);
             }
             return added instanceof ModAdder.Result.Failed failed ? String.valueOf(failed.cause().getMessage())
@@ -378,6 +385,10 @@ public final class UpdateSupport implements ModUpdater.Engine, ModAdder.CarriedL
     }
 
     private @Nullable String turnOffFor(Set<String> offs, Set<String> ons, boolean[] wentOff) {
+        return this.updater.getCopies().runWithUnchanged(() -> this.turnOffNow(offs, ons, wentOff));
+    }
+
+    private @Nullable String turnOffNow(Set<String> offs, Set<String> ons, boolean[] wentOff) {
         if (this.afterWorld && Minecraft.getInstance().level != null) {
             this.copyTriesLeft = 0;
             return "a world opened meanwhile";
@@ -403,7 +414,7 @@ public final class UpdateSupport implements ModUpdater.Engine, ModAdder.CarriedL
             return String.valueOf(e);
         }
         Set<String> offBefore = this.switcher.getOff();
-        ModSwitcher.Result off = this.switcher.turnOff(offs);
+        ModSwitcher.Result off = this.wholeOff.apply(List.copyOf(offs));
         if (!(off instanceof ModSwitcher.Result.Done)) {
             return off instanceof ModSwitcher.Result.Failed failed ? String.valueOf(failed.cause().getMessage())
                     : PlayerMessages.describe(off, this.installed::nameOf);
@@ -422,7 +433,7 @@ public final class UpdateSupport implements ModUpdater.Engine, ModAdder.CarriedL
         back.addAll(offs);
         this.copyTriesLeft = 0;
         this.oldPayloadsBack.run();
-        this.noteRebuilt(this.switcher.turnOn(back), "turned on again after their copies");
+        this.noteRebuilt(this.wholeOn.apply(back), "turned on again after their copies");
         noteInHistory(offs, false);
         wentOff[0] = false;
         return "their off takes " + tookAlong + " along";

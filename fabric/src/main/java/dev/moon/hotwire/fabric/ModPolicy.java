@@ -39,6 +39,8 @@ public final class ModPolicy {
     private static volatile @Nullable SeenUses seenUses;
     private static volatile Predicate<String> staying = mod -> false;
 
+    private static volatile Set<String> stayingThrough = Set.of();
+
     private ModPolicy() {
     }
 
@@ -123,6 +125,14 @@ public final class ModPolicy {
         staying = mods;
     }
 
+    public static void setStayingThrough(Set<String> libraries) {
+        stayingThrough = Set.copyOf(libraries);
+    }
+
+    private static boolean isStaying(String mod) {
+        return staying.test(mod) || stayingThrough.contains(mod);
+    }
+
     static @Nullable SeenUses getSeenUses() {
         return seenUses;
     }
@@ -132,7 +142,7 @@ public final class ModPolicy {
         graph.getIds().stream().filter(ModPolicy::isGuarded).forEach(guarded::add);
         guarded.addAll(findNeededByUnread(graph.getIds()));
         return new SwitchPlanner(graph, new SwitchPlanner.Settings(nestedJars, findBuiltIn(graph.getIds()), guarded,
-                ModPolicy::satisfies, seenUses != null ? seenUses : KnownUses.NONE, staying));
+                ModPolicy::satisfies, seenUses != null ? seenUses : KnownUses.NONE, ModPolicy::isStaying));
     }
 
     static Set<String> findNeededByUnread(Set<String> known) {

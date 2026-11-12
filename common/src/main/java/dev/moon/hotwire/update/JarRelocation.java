@@ -18,9 +18,11 @@ import java.nio.file.Path;
 import java.util.AbstractMap;
 import java.util.AbstractSet;
 import java.util.ArrayList;
+import java.util.Comparator;
 import java.util.Enumeration;
 import java.util.HashMap;
 import java.util.HashSet;
+import java.util.IdentityHashMap;
 import java.util.Iterator;
 import java.util.LinkedHashMap;
 import java.util.List;
@@ -42,6 +44,7 @@ import org.objectweb.asm.ClassVisitor;
 import org.objectweb.asm.ClassWriter;
 import org.objectweb.asm.MethodVisitor;
 import org.objectweb.asm.Opcodes;
+import org.objectweb.asm.Type;
 import org.objectweb.asm.commons.ClassRemapper;
 import org.objectweb.asm.commons.Remapper;
 
@@ -53,6 +56,7 @@ public final class JarRelocation {
     private static final String CLASS_SUFFIX = ".class";
     private static final String SERVICES = "META-INF/services/";
     private static final String META_INF = "META-INF/";
+    private static final String LIVE_NAMES = LiveNames.class.getName().replace('.', '/');
 
     private final Set<String> classes = new HashSet<>();
     private final Set<String> packages = new HashSet<>();
@@ -61,6 +65,7 @@ public final class JarRelocation {
     private final Map<String, String> liveIds = new HashMap<>();
     private final BoundNatives bound = new BoundNatives();
     private static final int MOST_ID_LENGTH = 64;
+    private static final int MOST_NESTED = 8;
     private final String tag;
     private final String prefix;
     private final String filePrefix;
@@ -104,6 +109,7 @@ public final class JarRelocation {
         for (Path jar : jars) {
             copy.scan(readAll(jar));
         }
+        LiveNames.learn(tag, copy.classes);
         if (!copy.bound.isEmpty()) {
             List<Map<String, byte[]>> group = new ArrayList<>();
             for (Path jar : jars) {
@@ -217,6 +223,118 @@ public final class JarRelocation {
         }
     }
 
+    public static Map<String, String> findPicked(List<Path> jars, Comparator<String> byVersion) throws IOException {
+        List<Map<String, byte[]>> tops = new ArrayList<>();
+        for (Path jar : jars) {
+            tops.add(readAll(jar));
+        }
+        IdentityHashMap<byte[], Map<String, byte[]>> opened = new IdentityHashMap<>();
+        Map<String, String> picked = new HashMap<>();
+
+        for (int round = 0; round < MOST_NESTED; round++) {
+            Map<String, String> next = new HashMap<>();
+            for (Map<String, byte[]> top : tops) {
+                collectPicked(top, picked, byVersion, opened, next);
+            }
+            if (next.equals(picked)) {
+                break;
+            }
+            picked = next;
+        }
+        return picked;
+    }
+
+    public static Map<String, Map<String, byte[]>> readPicked(List<Path> jars, Comparator<String> byVersion)
+            throws IOException {
+        Map<String, String> picked = findPicked(jars, byVersion);
+        Map<String, Map<String, byte[]>> files = new HashMap<>();
+        for (Path jar : jars) {
+            collectFiles(readAll(jar), picked, files);
+        }
+        return files;
+    }
+
+    public static Set<String> findApart(Map<String, Map<String, byte[]>> libraries, Set<String> changing) {
+        Set<String> moving = new HashSet<>(changing);
+        Map<String, Map<String, byte[]>> apart = new HashMap<>(libraries);
+        boolean fewer = true;
+        while (fewer) {
+            fewer = apart.values().removeIf(files -> {
+                boolean names = files.entrySet().stream().anyMatch(file -> file.getKey().endsWith(".class")
+                        && readClassesNamed(file.getValue()).stream().anyMatch(moving::contains));
+                if (names) {
+                    files.keySet().stream().filter(name -> name.endsWith(".class"))
+                            .forEach(name -> moving.add(name.substring(0, name.length() - 6)));
+                }
+                return names;
+            });
+        }
+        return apart.keySet();
+    }
+
+    private static Set<String> readClassesNamed(byte[] bytes) {
+        ClassReader reader = new ClassReader(bytes);
+        char[] buffer = new char[reader.getMaxStringLength()];
+        Set<String> named = new HashSet<>();
+        for (int item = 1; item < reader.getItemCount(); item++) {
+            int at = reader.getItem(item);
+            if (at > 0 && bytes[at - 1] == 7) {
+                named.add(reader.readUTF8(at, buffer));
+            }
+        }
+        return named;
+    }
+
+    private static void collectFiles(Map<String, byte[]> entries, Map<String, String> picked,
+            Map<String, Map<String, byte[]>> into) throws IOException {
+        JsonArray jars = entries.containsKey(MANIFEST) ? readManifest(entries).getAsJsonArray("jars") : null;
+        if (jars == null) {
+            return;
+        }
+        for (JsonElement one : jars) {
+            byte[] bytes = entries.get(one.getAsJsonObject().get("file").getAsString());
+            Map<String, byte[]> nested = bytes == null ? Map.of() : readAll(bytes);
+            if (!nested.containsKey(MANIFEST)) {
+                continue;
+            }
+            JsonObject manifest = readManifest(nested);
+            String id = manifest.get("id").getAsString();
+            if (manifest.get("version").getAsString().equals(picked.get(id)) && into.putIfAbsent(id, nested) == null) {
+                collectFiles(nested, picked, into);
+            }
+        }
+    }
+
+    private static void collectPicked(Map<String, byte[]> entries, Map<String, String> picked,
+            Comparator<String> byVersion, IdentityHashMap<byte[], Map<String, byte[]>> opened,
+            Map<String, String> into) throws IOException {
+        JsonArray jars = entries.containsKey(MANIFEST) ? readManifest(entries).getAsJsonArray("jars") : null;
+        if (jars == null) {
+            return;
+        }
+        for (JsonElement one : jars) {
+            byte[] bytes = entries.get(one.getAsJsonObject().get("file").getAsString());
+            if (bytes == null) {
+                continue;
+            }
+            Map<String, byte[]> nested = opened.get(bytes);
+            if (nested == null) {
+                nested = readAll(bytes);
+                opened.put(bytes, nested);
+            }
+            if (!nested.containsKey(MANIFEST)) {
+                continue;
+            }
+            JsonObject manifest = readManifest(nested);
+            String id = manifest.get("id").getAsString();
+            String version = manifest.get("version").getAsString();
+            into.merge(id, version, (had, other) -> byVersion.compare(had, other) >= 0 ? had : other);
+            if (version.equals(picked.get(id))) {
+                collectPicked(nested, picked, byVersion, opened, into);
+            }
+        }
+    }
+
     private static Map<String, Map<String, byte[]>> findGoingAlong(Map<String, byte[]> entries,
             BiPredicate<String, String> takes) throws IOException {
         Map<String, Map<String, byte[]>> goingAlong = new LinkedHashMap<>();
@@ -324,6 +442,7 @@ public final class JarRelocation {
         JsonObject manifest = readManifest(entries);
         Map<String, String> renamed = this.findRenamedFiles(entries, manifest);
         Map<String, Map<String, byte[]>> goingAlong = findGoingAlong(entries, this.takesCarried);
+        this.requireLeftLibraries(entries, manifest, goingAlong.keySet());
         ByteArrayOutputStream bytes = new ByteArrayOutputStream();
         try (ZipOutputStream into = new ZipOutputStream(bytes)) {
             for (Map.Entry<String, byte[]> entry : entries.entrySet()) {
@@ -344,7 +463,7 @@ public final class JarRelocation {
             put(into, name, this.makeManifest(manifest, renamed, goingAlong.keySet()));
         } else if (name.endsWith(CLASS_SUFFIX)) {
             ClassWriter writer = new ClassWriter(0);
-            new ClassReader(body).accept(new ClassRemapper(writer, this.remapper), 0);
+            new ClassReader(body).accept(makeNamesOwn(new ClassRemapper(writer, this.remapper)), 0);
             put(into, this.remapper.map(name.substring(0, name.length() - CLASS_SUFFIX.length())) + CLASS_SUFFIX,
                     writer.toByteArray());
         } else if (renamed.containsKey(name)) {
@@ -386,6 +505,94 @@ public final class JarRelocation {
             }
         }
         return renamed;
+    }
+
+    private void requireLeftLibraries(Map<String, byte[]> entries, JsonObject manifest, Set<String> goingAlong)
+            throws IOException {
+        JsonArray jars = manifest.getAsJsonArray("jars");
+        if (jars == null) {
+            return;
+        }
+        JsonObject depends = manifest.has("depends") ? manifest.getAsJsonObject("depends") : new JsonObject();
+        for (JsonElement one : jars) {
+            String file = one.getAsJsonObject().get("file").getAsString();
+            byte[] bytes = entries.get(file);
+            Map<String, byte[]> nested = bytes == null || goingAlong.contains(file) ? Map.of() : readAll(bytes);
+            if (nested.containsKey(MANIFEST)) {
+                String id = readManifest(nested).get("id").getAsString();
+                if (!depends.has(id)) {
+                    depends.addProperty(id, "*");
+                }
+            }
+        }
+        manifest.add("depends", depends);
+    }
+
+    private static ClassVisitor makeNamesOwn(ClassVisitor next) {
+        return new ClassVisitor(Opcodes.ASM9, next) {
+            private String asking = "";
+
+            @Override
+            public void visit(int version, int access, String name, @Nullable String signature,
+                    @Nullable String superName, String @Nullable [] interfaces) {
+                this.asking = name;
+                super.visit(version, access, name, signature, superName, interfaces);
+            }
+
+            @Override
+            public MethodVisitor visitMethod(int access, String name, String descriptor, @Nullable String signature,
+                    String @Nullable [] exceptions) {
+                String asking = this.asking;
+                return new MethodVisitor(Opcodes.ASM9, super.visitMethod(access, name, descriptor, signature,
+                        exceptions)) {
+                    @Override
+                    public void visitMethodInsn(int opcode, String owner, String called, String calledDescriptor,
+                            boolean isInterface) {
+                        String byName = findByName(owner, called, calledDescriptor);
+                        if (byName != null) {
+                            super.visitLdcInsn(Type.getObjectType(asking));
+                            super.visitMethodInsn(Opcodes.INVOKESTATIC, LIVE_NAMES,
+                                    called.equals("forName") ? "findClass" : called, byName, false);
+                            return;
+                        }
+                        super.visitMethodInsn(opcode, owner, called, calledDescriptor, isInterface);
+                        if (isNameOf(owner, called, calledDescriptor)) {
+                            super.visitMethodInsn(Opcodes.INVOKESTATIC, LIVE_NAMES, "findOwnName",
+                                    "(Ljava/lang/String;)Ljava/lang/String;", false);
+                        }
+                    }
+
+                    @Override
+                    public void visitMaxs(int maxStack, int maxLocals) {
+                        super.visitMaxs(maxStack + 1, maxLocals);
+                    }
+                };
+            }
+        };
+    }
+
+    private static @Nullable String findByName(String owner, String called, String descriptor) {
+        if (owner.equals("java/lang/Class") && called.equals("forName")) {
+            return switch (descriptor) {
+                case "(Ljava/lang/String;)Ljava/lang/Class;" ->
+                        "(Ljava/lang/String;Ljava/lang/Class;)Ljava/lang/Class;";
+                case "(Ljava/lang/String;ZLjava/lang/ClassLoader;)Ljava/lang/Class;" ->
+                        "(Ljava/lang/String;ZLjava/lang/ClassLoader;Ljava/lang/Class;)Ljava/lang/Class;";
+                default -> null;
+            };
+        }
+        return owner.equals("java/lang/ClassLoader") && called.equals("loadClass")
+                && descriptor.equals("(Ljava/lang/String;)Ljava/lang/Class;")
+                        ? "(Ljava/lang/ClassLoader;Ljava/lang/String;Ljava/lang/Class;)Ljava/lang/Class;" : null;
+    }
+
+    private static boolean isNameOf(String owner, String called, String descriptor) {
+        if (!descriptor.equals("()Ljava/lang/String;")) {
+            return false;
+        }
+        return owner.equals("java/lang/Class") ? called.equals("getName") || called.equals("getTypeName")
+                || called.equals("getCanonicalName")
+                : owner.equals("kotlin/reflect/KClass") && called.equals("getQualifiedName");
     }
 
     private String mapNestedName(String name) {

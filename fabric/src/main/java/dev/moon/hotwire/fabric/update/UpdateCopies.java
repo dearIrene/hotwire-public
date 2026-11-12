@@ -11,6 +11,7 @@ import java.io.IOException;
 import java.nio.file.Path;
 import java.util.ArrayDeque;
 import java.util.ArrayList;
+import java.util.Arrays;
 import java.util.Collection;
 import java.util.Collections;
 import java.util.Deque;
@@ -20,10 +21,12 @@ import java.util.LinkedHashMap;
 import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Map;
+import java.util.Objects;
 import java.util.Set;
 import java.util.TreeSet;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.function.Function;
+import java.util.function.Supplier;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 import org.jspecify.annotations.Nullable;
@@ -42,7 +45,22 @@ final class UpdateCopies {
     private final Map<Path, Set<String>> carriedWithState = new ConcurrentHashMap<>();
 
     private final Map<String, Set<String>> patchersOf = new ConcurrentHashMap<>();
-    private static final int MOST_IN_A_COPY_GROUP = 12;
+
+    private volatile Set<String> unchanged = Set.of();
+
+    private final Set<String> unchangedClasses = ConcurrentHashMap.newKeySet();
+
+    private final Set<String> ownPatched = ConcurrentHashMap.newKeySet();
+
+    private volatile Set<String> aimed = Set.of();
+    private volatile Set<String> leaving = Set.of();
+    private volatile Map<String, String> picked = Map.of();
+
+    private static final int MOST_IN_A_COPY_GROUP = Integer.getInteger("hotwire.copyGroupCap", 12);
+    private static final int MOST_ROUNDS = 6;
+
+    private static final boolean COPIES_OWN_PATCHED = Boolean.parseBoolean(
+            System.getProperty("hotwire.copyOwnPatched"));
 
     private static final Pattern SLASHED_NAME = Pattern.compile("[a-zA-Z0-9_$]+(?:/[a-zA-Z0-9_$]+)+");
 
@@ -51,6 +69,39 @@ final class UpdateCopies {
         this.carriedGoing.clear();
         this.carriedWithState.clear();
         this.patchersOf.clear();
+        this.ownPatched.clear();
+        this.chooseFor(Set.of(), Map.of());
+    }
+
+    private void chooseFor(Set<String> group, Map<String, Path> given) {
+        if (group.equals(this.aimed)) {
+            return;
+        }
+        this.aimed = Set.copyOf(group);
+        this.leaving = Set.of();
+        this.picked = Map.of();
+        this.carriedGoing.clear();
+        this.carriedWithState.clear();
+        if (group.isEmpty()) {
+            return;
+        }
+        List<Path> jars = group.stream().map(id -> this.findJarOf(id, given)).filter(Objects::nonNull).distinct()
+                .toList();
+        try {
+            this.picked = JarRelocation.findPicked(jars, ModUpdater.VERSION_ORDER);
+        } catch (IOException | RuntimeException e) {
+            LOGGER.info("[Hotwire] {}'s jars could not be read through for what they ship: {}", group, e.toString());
+            return;
+        }
+        for (int round = 0; round < MOST_ROUNDS; round++) {
+            Set<String> offs = this.findOffs(group, given);
+            if (offs.equals(this.leaving)) {
+                break;
+            }
+            this.leaving = offs;
+            this.carriedGoing.clear();
+            this.carriedWithState.clear();
+        }
     }
 
     UpdateCopies(ModUpdater.Engine engine) {
@@ -60,6 +111,71 @@ final class UpdateCopies {
     List<Set<String>> findRestartGroups(Collection<String> waiting, Map<String, Path> given,
             Function<String, List<String>> leavingWith) {
         this.patchersOf.clear();
+        this.ownPatched.clear();
+        this.chooseFor(Set.of(), Map.of());
+        this.unchanged = this.findUnchanged(waiting, given);
+        return this.runWithUnchanged(() -> this.findGroups(waiting, given, leavingWith));
+    }
+
+    <T> T runWithUnchanged(Supplier<T> work) {
+        ModPolicy.setStayingThrough(this.unchanged);
+        try {
+            return work.get();
+        } finally {
+            ModPolicy.setStayingThrough(Set.of());
+        }
+    }
+
+    private Set<String> findUnchanged(Collection<String> waiting, Map<String, Path> given) {
+        List<Path> jars = waiting.stream().map(given::get).filter(Objects::nonNull).distinct().toList();
+        Set<String> same = new TreeSet<>();
+        this.unchangedClasses.clear();
+        try {
+            Map<String, Map<String, byte[]>> found = new HashMap<>();
+            JarRelocation.readPicked(jars, ModUpdater.VERSION_ORDER).forEach((id, files) -> {
+                if (ModPolicy.isSwitchable(id) && this.engine.findVersionOf(id) != null
+                        && hasSameFiles(files, this.engine.readRunningOf(id))) {
+                    found.put(id, files);
+                }
+            });
+            Set<String> changing = new HashSet<>();
+            for (Path jar : jars) {
+                changing.addAll(JarLinks.readClassNames(jar));
+            }
+            found.values().forEach(files -> files.keySet().stream().filter(name -> name.endsWith(".class"))
+                    .forEach(name -> changing.remove(name.substring(0, name.length() - 6))));
+            for (String id : JarRelocation.findApart(found, changing)) {
+                same.add(id);
+                Objects.requireNonNull(found.get(id)).keySet().stream().filter(name -> name.endsWith(".class"))
+                        .forEach(name -> this.unchangedClasses.add(name.substring(0, name.length() - 6)));
+            }
+        } catch (IOException | RuntimeException e) {
+            LOGGER.info("[Hotwire] the new jars could not be read through for what they ship unchanged: {}",
+                    e.toString());
+            return Set.of();
+        }
+        if (!same.isEmpty()) {
+            LOGGER.info("[Hotwire] {} are in the new jars just as they run, and stay on through the update", same);
+        }
+        return same;
+    }
+
+    private static boolean hasSameFiles(Map<String, byte[]> shipped, Map<String, byte[]> running) {
+        Map<String, byte[]> files = new HashMap<>(shipped);
+        files.keySet().removeIf(name -> name.endsWith("/"));
+        if (running.isEmpty() || !files.keySet().equals(running.keySet())) {
+            return false;
+        }
+        for (Map.Entry<String, byte[]> file : files.entrySet()) {
+            if (!Arrays.equals(file.getValue(), running.get(file.getKey()))) {
+                return false;
+            }
+        }
+        return true;
+    }
+
+    private List<Set<String>> findGroups(Collection<String> waiting, Map<String, Path> given,
+            Function<String, List<String>> leavingWith) {
         List<Set<String>> groups = new ArrayList<>();
         for (String id : waiting) {
             if (!ModPolicy.isSwitchable(id) || groups.stream().anyMatch(group -> group.contains(id))) {
@@ -70,7 +186,8 @@ final class UpdateCopies {
             while (!open.isEmpty()) {
                 String at = open.remove();
 
-                if (!this.engine.getApplier().patchesLiveBackend(at) && group.add(at)) {
+                if (!this.engine.getApplier().patchesLiveBackend(at) && !this.unchanged.contains(at)
+                        && group.add(at)) {
                     open.addAll(this.engine.getGraph().getDependents(at));
                     this.findCarriedWithState(at, given)
                             .forEach(carried -> open.addAll(this.engine.getGraph().getDependents(carried)));
@@ -106,6 +223,7 @@ final class UpdateCopies {
     }
 
     @Nullable String findRefusalUnderCap(Set<String> group, Map<String, Path> given) {
+        this.chooseFor(group, given);
         Map<String, ModManifest> manifests = new LinkedHashMap<>();
         Map<String, String> coming = new HashMap<>();
         for (String id : group) {
@@ -151,6 +269,10 @@ final class UpdateCopies {
             if (!patching.isEmpty()) {
                 return patching + " patch classes of " + id;
             }
+
+            if (!COPIES_OWN_PATCHED && this.ownPatched.contains(id)) {
+                return "Hotwire's own patches of " + id + " would not follow its copy";
+            }
             String shut = this.findInterfacePatched(id, given);
             if (shut != null) {
                 return id + " patches the loaded interface " + shut;
@@ -160,6 +282,7 @@ final class UpdateCopies {
     }
 
     List<Path> findRestartJars(Set<String> group, Map<String, Path> given) {
+        this.chooseFor(group, given);
         Set<String> carried = new HashSet<>();
         group.forEach(id -> carried.addAll(this.findCarriedGoing(id, given).keySet()));
         List<String> order = new ArrayList<>();
@@ -182,6 +305,11 @@ final class UpdateCopies {
     }
 
     Set<String> findRestartOffs(Set<String> group, Map<String, Path> given) {
+        this.chooseFor(group, given);
+        return this.findOffs(group, given);
+    }
+
+    private Set<String> findOffs(Set<String> group, Map<String, Path> given) {
         Set<String> carried = new HashSet<>();
         group.forEach(id -> carried.addAll(this.findCarriedGoing(id, given).keySet()));
         Set<String> offs = new LinkedHashSet<>(group);
@@ -190,6 +318,7 @@ final class UpdateCopies {
             grew = false;
             for (String id : carried) {
                 if (!offs.contains(id) && this.engine.findVersionOf(id) != null && ModPolicy.isSwitchable(id)
+                        && !this.unchanged.contains(id)
                         && offs.containsAll(this.engine.getGraph().getDependents(id))
                         && offs.containsAll(this.engine.getGraph().getContainers(id))) {
                     offs.add(id);
@@ -205,6 +334,9 @@ final class UpdateCopies {
             return false;
         }
         String runs = this.engine.findVersionOf(id);
+        if (runs != null && this.leaving.contains(id)) {
+            return version.equals(this.picked.get(id));
+        }
         return runs == null || !this.engine.satisfies(runs, List.of(">=" + version));
     }
 
@@ -310,9 +442,13 @@ final class UpdateCopies {
         return this.patchersOf.computeIfAbsent(id, any -> {
             try {
                 Set<String> patching = new TreeSet<>();
-                this.engine.getApplier().getPatchersOf(JarLinks.readClassNames(jar), this.engine.on(),
-                        id).values()
+                Set<String> classes = JarLinks.readClassNames(jar);
+                classes.removeAll(this.unchangedClasses);
+                this.engine.getApplier().getPatchersOf(classes, this.engine.on(), id).values()
                         .forEach(patching::addAll);
+                if (patching.stream().anyMatch(ModPolicy::isHotwire)) {
+                    this.ownPatched.add(id);
+                }
 
                 patching.removeIf(mod -> !ModPolicy.isSwitchable(mod));
                 return patching;
