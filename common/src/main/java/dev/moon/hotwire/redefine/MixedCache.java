@@ -87,6 +87,8 @@ final class MixedCache {
     private final Map<String, ReadHash> hashes = new ConcurrentHashMap<>();
     private final Set<CacheKey> holding = ConcurrentHashMap.newKeySet();
 
+    private final Set<CacheKey> changed = ConcurrentHashMap.newKeySet();
+
     final Set<String> listed = ConcurrentHashMap.newKeySet();
 
     private final AtomicLong classesSaved = new AtomicLong();
@@ -233,10 +235,14 @@ final class MixedCache {
         int changes = this.copy.findReadChanges();
         if (changes != this.readsAt) {
             this.holding.clear();
+            this.changed.clear();
             this.readsAt = changes;
         }
         if (this.holding.contains(reads)) {
             return true;
+        }
+        if (this.changed.contains(reads)) {
+            return false;
         }
         byte[] list = this.store.get(reads, null);
         if (list == null) {
@@ -251,6 +257,7 @@ final class MixedCache {
                     LOGGER.info("[Hotwire] the switch cache's saved read of {} no longer holds: saved {}, now {} of "
                             + "{} bytes", name, Long.toHexString(saved), Long.toHexString(this.hashOf(name, now)),
                             now == null ? -1 : now.length);
+                    this.changed.add(reads);
                     return false;
                 }
             }
@@ -448,6 +455,7 @@ final class MixedCache {
             this.store.clear();
             this.packs.forget();
             this.holding.clear();
+            this.changed.clear();
             this.counted.clear();
             this.classesSaved.set(0);
             this.classesBefore.set(0);
