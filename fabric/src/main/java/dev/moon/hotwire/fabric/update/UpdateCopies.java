@@ -1,6 +1,7 @@
 package dev.moon.hotwire.fabric.update;
 
 import dev.moon.hotwire.classfile.ClassNodes;
+import dev.moon.hotwire.concurrent.Parallel;
 import dev.moon.hotwire.fabric.ModPolicy;
 import dev.moon.hotwire.jar.JarLookup;
 import dev.moon.hotwire.jar.ModManifest;
@@ -25,6 +26,7 @@ import java.util.Objects;
 import java.util.Set;
 import java.util.TreeSet;
 import java.util.concurrent.ConcurrentHashMap;
+import java.util.concurrent.ConcurrentSkipListSet;
 import java.util.function.Function;
 import java.util.function.Predicate;
 import java.util.function.Supplier;
@@ -120,8 +122,9 @@ final class UpdateCopies {
 
     private Set<String> findUsersOf(Set<String> group) {
         Set<String> leaving = this.findLeavingClasses(group);
-        Set<String> users = new TreeSet<>();
-        for (String id : this.engine.on()) {
+        Set<String> users = new ConcurrentSkipListSet<>();
+
+        Parallel.runEachBeside(List.copyOf(this.engine.on()), id -> {
             Path jar = group.contains(id) || this.unchanged.contains(id) || ModPolicy.isHotwire(id) ? null
                     : this.engine.findRunningJarOf(id);
             try {
@@ -129,9 +132,9 @@ final class UpdateCopies {
                     users.add(id);
                 }
             } catch (IOException | RuntimeException e) {
-                LOGGER.info("[Hotwire] {} could not be read through: {}", jar.getFileName(), e.toString());
+                LOGGER.info("[Hotwire] {} could not be read through: {}", id, e.toString());
             }
-        }
+        });
         if (!users.isEmpty()) {
             LOGGER.info("[Hotwire] {} use classes of {} mods that go, and go with them", users, group.size());
         }
