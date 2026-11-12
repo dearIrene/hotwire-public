@@ -22,6 +22,11 @@ public final class OpenGameClasses implements ClassFileTransformer {
         return OPENED.contains(internalName);
     }
 
+    public static byte[] reopen(String internalName, byte[] bytes) {
+        byte[] opened = OPENED.contains(internalName) ? open(bytes) : null;
+        return opened == null ? bytes : opened;
+    }
+
     @Override
     @SuppressWarnings("ReferenceEquality")
     public byte @Nullable [] transform(@Nullable ClassLoader loader, @Nullable String name,
