@@ -67,10 +67,28 @@ final class StaticReads {
         } catch (IOException unread) {
             return Set.of();
         }
+
+        Set<String> names = new HashSet<>();
+        reads.watched.keySet().stream().filter(mark -> mark.startsWith("S "))
+                .forEach(mark -> names.add(mark.substring(2)));
         for (byte[] bytes : all) {
-            reads.scan(ClassNodes.read(bytes, ClassReader.SKIP_DEBUG | ClassReader.SKIP_FRAMES));
+            if (hasName(bytes, names)) {
+                reads.scan(ClassNodes.read(bytes, ClassReader.SKIP_DEBUG | ClassReader.SKIP_FRAMES));
+            }
         }
         return reads.safe;
+    }
+
+    static boolean hasName(byte[] bytes, Set<String> names) {
+        ClassReader reader = new ClassReader(bytes);
+        char[] buffer = new char[reader.getMaxStringLength()];
+        for (int item = 1; item < reader.getItemCount(); item++) {
+            int at = reader.getItem(item);
+            if (at > 0 && (bytes[at - 1] == 8 || bytes[at - 1] == 12) && names.contains(reader.readUTF8(at, buffer))) {
+                return true;
+            }
+        }
+        return false;
     }
 
     private static void collectClasses(Map<String, byte[]> entries, List<byte[]> into) throws IOException {
