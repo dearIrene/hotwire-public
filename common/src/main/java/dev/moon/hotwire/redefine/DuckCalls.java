@@ -257,6 +257,10 @@ final class DuckCalls {
             if (found != null) {
                 return found;
             }
+
+            if (Linker.hasOwn(at, method, type)) {
+                return MethodHandles.privateLookupIn(at, MethodHandles.lookup()).findVirtual(at, method, type);
+            }
         }
 
         for (String one : named) {

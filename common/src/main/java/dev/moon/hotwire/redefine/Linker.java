@@ -49,6 +49,8 @@ public final class Linker {
     private static final Set<String> MOVED = ConcurrentHashMap.newKeySet();
     static final Map<Class<?>, Set<String>> MOVED_BY_TARGET = new ConcurrentHashMap<>();
 
+    private static final Map<Class<?>, Set<String>> STUBBED = new ConcurrentHashMap<>();
+
     private static volatile WidenerUses.Openings openings = WidenerUses.Openings.NONE;
     private static final Set<String> ADOPTED = ConcurrentHashMap.newKeySet();
     private static final Set<String> ADDED_CONSTRUCTORS = ConcurrentHashMap.newKeySet();
@@ -61,12 +63,14 @@ public final class Linker {
     }
 
     public static Class<?> install(Class<?> target, ClassSplit.Result split) throws IllegalAccessException {
+        STUBBED.put(target, Set.copyOf(split.stubbed()));
         return install(target, split.sidecar(), split.ducks(), split.fieldHolder(), split.movedInstance(),
                 Set.copyOf(split.moved()));
     }
 
     static Class<?> installInBatch(Class<?> target, ClassSplit.Result split) throws IllegalAccessException {
         PENDING.add(target);
+        STUBBED.put(target, Set.copyOf(split.stubbed()));
         return install(target, split.sidecar(), split.ducks(), split.fieldHolder(), split.movedInstance(),
                 Set.copyOf(split.moved()), false);
     }
@@ -178,6 +182,7 @@ public final class Linker {
             INSTANCE_METHODS.remove(side.lookupClass());
         }
         MOVED_BY_TARGET.remove(target);
+        STUBBED.remove(target);
         MovedSites.reset(MOVED, MOVED_BY_TARGET.values());
         FieldHolders.drop(target);
         DUCKS.values().forEach(containers -> containers.remove(target));
@@ -290,7 +295,10 @@ public final class Linker {
         }
     }
 
-    private static boolean hasOwn(Class<?> type, String method, MethodType shape) {
+    static boolean hasOwn(Class<?> type, String method, MethodType shape) {
+        if (STUBBED.getOrDefault(type, Set.of()).contains(method + shape.toMethodDescriptorString())) {
+            return false;
+        }
         try {
             Method own = type.getDeclaredMethod(method, shape.parameterArray());
             return own.getReturnType() == shape.returnType() && !Modifier.isAbstract(own.getModifiers())
@@ -384,7 +392,7 @@ public final class Linker {
     }
 
     record Snapshot(Class<?> target, MethodHandles.@Nullable Lookup sidecar, Set<String> instanceMethods,
-            Set<String> moved, Set<String> ducks, FieldHolders.@Nullable Holder holder) {
+            Set<String> moved, Set<String> ducks, FieldHolders.@Nullable Holder holder, Set<String> stubbed) {
     }
 
     static Snapshot snapshot(Class<?> target) {
@@ -396,7 +404,8 @@ public final class Linker {
             }
         });
         return new Snapshot(target, side, side == null ? Set.of() : INSTANCE_METHODS.getOrDefault(side.lookupClass(),
-                Set.of()), MOVED_BY_TARGET.getOrDefault(target, Set.of()), ducks, FieldHolders.snapshot(target));
+                Set.of()), MOVED_BY_TARGET.getOrDefault(target, Set.of()), ducks, FieldHolders.snapshot(target),
+                STUBBED.getOrDefault(target, Set.of()));
     }
 
     static void restore(Snapshot snapshot) {
@@ -416,6 +425,7 @@ public final class Linker {
             SidecarCallSites.rebind(target, snapshot.sidecar());
         }
         setDucksOf(target, snapshot.ducks());
+        STUBBED.put(target, snapshot.stubbed());
         MovedSites.reset(MOVED, MOVED_BY_TARGET.values());
         DuckCalls.forget();
         FieldHolders.restore(target, snapshot.holder());
