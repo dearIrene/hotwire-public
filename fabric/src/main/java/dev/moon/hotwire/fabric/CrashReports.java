@@ -22,6 +22,7 @@ public final class CrashReports {
     private static final DateTimeFormatter FILE_TIME = DateTimeFormatter.ofPattern("yyyy-MM-dd_HH.mm.ss", Locale.ROOT);
 
     private static volatile boolean goingDown;
+    private static volatile boolean closing;
 
     private CrashReports() {
     }
@@ -34,6 +35,10 @@ public final class CrashReports {
         GameReports.listenForCrashes(crash -> {
             String words = zips.writeForCrash(crash);
             LOGGER.info("[Hotwire] {}", words);
+            if (closing) {
+                LOGGER.info("[Hotwire] the game was closing by then: no box now and no notice at the next start");
+                return;
+            }
             CrashNotice.save(words);
             if (!goingDown) {
                 Minecraft.getInstance().execute(() -> CrashNotice.showNow(words));
@@ -47,6 +52,10 @@ public final class CrashReports {
                 zips.revealLastBeforeExit();
             }
         });
+    }
+
+    public static void markClosing() {
+        closing = true;
     }
 
     public static void markGoingDown() {

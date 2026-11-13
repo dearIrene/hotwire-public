@@ -229,6 +229,7 @@ public final class HotwireEngine implements ModScreenGame, AutoCloseable {
 
     @Override
     public void close() {
+        CrashReports.markClosing();
         this.dev.close();
         this.folderJars.close();
         JvmParts parts = this.findParts();
