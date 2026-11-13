@@ -45,10 +45,17 @@ final class StoreUpdates {
     private final ModChanges changes;
     private final Progress progress;
     private final BiConsumer<String, Boolean> say;
+    private final Summary summary;
     private volatile CompletableFuture<Ran> last = CompletableFuture.completedFuture(
             new Ran(List.of(), 0, 0));
 
-    StoreUpdates(UpdateCheck check, ModChanges changes, Progress progress, BiConsumer<String, Boolean> say) {
+    interface Summary {
+        void show(List<String> now, List<String> later, List<String> not);
+    }
+
+    StoreUpdates(UpdateCheck check, ModChanges changes, Progress progress, BiConsumer<String, Boolean> say,
+            Summary summary) {
+        this.summary = summary;
         this.check = check;
         this.changes = changes;
         this.progress = progress;
@@ -158,17 +165,23 @@ final class StoreUpdates {
     }
 
     private void tell(List<ModUpdater.Result> results) {
-        int now = 0;
-        int later = 0;
+        List<String> now = new ArrayList<>();
+        List<String> later = new ArrayList<>();
         List<String> refused = new ArrayList<>();
         for (ModUpdater.Result result : results) {
             switch (result) {
-                case ModUpdater.Result.Updated updated -> now++;
-                case ModUpdater.Result.Queued queued -> later++;
+                case ModUpdater.Result.Updated updated -> now.add(updated.name() + " "
+                        + updated.plan().incomingVersion());
+                case ModUpdater.Result.Queued queued -> later.add(queued.name() + " "
+                        + queued.plan().incomingVersion());
                 default -> refused.add(UpdateSupport.describe(result));
             }
         }
-        this.say.accept(Lang.get("hotwire.updates.all_done", now, later, refused.size()), !refused.isEmpty());
+        this.say.accept(Lang.get("hotwire.updates.all_done", now.size(), later.size(), refused.size()),
+                !refused.isEmpty());
+        if (!results.isEmpty()) {
+            this.summary.show(now, later, refused);
+        }
         refused.subList(0, Math.min(REFUSALS_SAID, refused.size())).forEach(why -> this.say.accept(why, true));
         for (String why : refused) {
             LOGGER.info("[Hotwire] Update all: not updated: {}", why);

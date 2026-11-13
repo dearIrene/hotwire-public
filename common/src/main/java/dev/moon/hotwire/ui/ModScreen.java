@@ -57,6 +57,7 @@ public final class ModScreen implements JarHost {
     final FindBrokenPanel findBroken;
     private final PendingActions pendingActions;
     private final ClosePanel closePanel = new ClosePanel(this::closeForPending);
+    private final UpdateSummaryPanel updateSummary = new UpdateSummaryPanel(() -> this.pickRail(PENDING));
 
     private final Line storeSlot = Kit.column().cross(Line.Cross.STRETCH);
     private @Nullable StorePage store;
@@ -134,6 +135,7 @@ public final class ModScreen implements JarHost {
                 this.selfUpdate);
         this.panels.forEach(this.root.getModal()::add);
         this.root.getModal().add(this.closePanel);
+        this.root.getModal().add(this.updateSummary);
         this.message.openDownloadsWith(this.root::openDownloads);
         if (!game.isFirstOpenAccepted() || ModifiedClients.takePromptDue()) {
             this.firstOpen.present();
@@ -242,6 +244,7 @@ public final class ModScreen implements JarHost {
         this.message.setBounds(0, 0, width, height);
         this.panels.forEach(panel -> panel.setBounds(0, 0, width, height));
         this.closePanel.setBounds(0, 0, width, height);
+        this.updateSummary.setBounds(0, 0, width, height);
         StorePage shop = this.store;
         if (shop != null) {
             shop.detail.setBounds(0, 0, width, height);
@@ -523,6 +526,10 @@ public final class ModScreen implements JarHost {
 
     private void cleanUpEarlier(String modId) {
         this.setPending(this.pendingActions.cleanUp(modId));
+    }
+
+    public void showUpdateSummary(List<String> now, List<String> later, List<String> not) {
+        this.updateSummary.open(now, later, not);
     }
 
     private void askToClose(List<PendingChange> waiting) {
