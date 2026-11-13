@@ -302,7 +302,8 @@ public final class Linker {
         if (gained != null) {
             return gained;
         }
-        if (plain != null) {
+
+        if (plain != null && plain.type().parameterType(0).isAssignableFrom(receiver)) {
             return plain;
         }
 
