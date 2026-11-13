@@ -483,7 +483,10 @@ public final class GameReports {
         }
         Path whole = logs.resolve(lastSession ? HotwireLog.LAST : HotwireLog.FILE);
 
-        texts.put(Diagnosis.FILE, Diagnosis.write(told, about == null ? List.of() : about.messages(),
+        ActionJournal.get().flush();
+        Path journal = logs.resolve(lastSession ? ActionJournal.LAST : ActionJournal.FILE);
+        texts.put(Diagnosis.FILE, (Files.isRegularFile(journal) ? Diagnosis.describeJournal(read(journal)) : "")
+                + Diagnosis.write(told, about == null ? List.of() : about.messages(),
                 about == null ? List.of() : about.frames(), about == null ? List.of() : about.mods(),
                 about == null ? List.of() : about.spans(), Files.isRegularFile(whole) ? read(whole) : ""));
 

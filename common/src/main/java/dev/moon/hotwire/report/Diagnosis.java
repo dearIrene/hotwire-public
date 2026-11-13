@@ -2,13 +2,17 @@ package dev.moon.hotwire.report;
 
 import java.util.ArrayList;
 import java.util.Collection;
+import java.util.HashMap;
 import java.util.LinkedHashSet;
 import java.util.List;
+import java.util.Locale;
+import java.util.Map;
 import java.util.Set;
 
 public final class Diagnosis {
     public static final String FILE = "DIAGNOSIS.txt";
     private static final int MOST_LEADS = 80;
+    private static final int MOST_ACTIONS = 80;
     private static final int MOST_FIRST = 120;
     private static final int MOST_LAST = 280;
 
@@ -59,6 +63,65 @@ public final class Diagnosis {
         out.append("\nEvery line of Hotwire's about them, in order (").append(about.size()).append(")\n");
         append(out, about);
         return out.toString();
+    }
+
+    public static String describeJournal(String journal) {
+        List<String[]> told = new ArrayList<>();
+        Map<String, String[]> open = new HashMap<>();
+        for (String line : journal.lines().toList()) {
+            String[] parts = line.split("\t", -1);
+            if (parts.length < 5 || line.startsWith("#")) {
+                continue;
+            }
+            long at;
+            try {
+                at = Long.parseLong(parts[0]);
+            } catch (NumberFormatException e) {
+                continue;
+            }
+            String what = parts[2] + " " + findPlace(parts[3]) + (parts[4].isEmpty() ? "" : ": " + parts[4]);
+            String key = parts[2] + "\t" + parts[4];
+            if (parts[1].equals("end")) {
+                String[] began = open.remove(key);
+                String ended = (parts.length > 5 ? parts[5] : "ended") + (parts.length > 6 && !parts[6].isEmpty()
+                        ? " (" + parts[6] + ")" : "");
+                if (began == null) {
+                    told.add(new String[] {formatSince(at), what, ended});
+                } else {
+                    began[2] = ended + String.format(Locale.ROOT, ", %.1f s", (at - Long.parseLong(began[3])) / 1e9);
+                }
+                continue;
+            }
+            String[] one = {formatSince(at), what, parts[1].equals("start") ? "NEVER ENDED" : "", parts[0]};
+            told.add(one);
+            if (parts[1].equals("start")) {
+                open.put(key, one);
+            }
+        }
+        StringBuilder out = new StringBuilder("What Hotwire did, in order (the time since the game started; the last ")
+                .append(Math.min(told.size(), MOST_ACTIONS)).append(" of ").append(told.size()).append(")\n");
+        for (String[] one : told.subList(Math.max(0, told.size() - MOST_ACTIONS), told.size())) {
+            out.append("  ").append(one[0]).append("  ").append(one[1]);
+            if (!one[2].isEmpty()) {
+                out.append(" -> ").append(one[2]);
+            }
+            out.append('\n');
+        }
+        return out.append('\n').toString();
+    }
+
+    private static String findPlace(String place) {
+        return switch (place) {
+            case "title" -> "at the title screen";
+            case "world" -> "in a world";
+            case "server" -> "on a server";
+            default -> place;
+        };
+    }
+
+    private static String formatSince(long nanos) {
+        long seconds = nanos / 1_000_000_000L;
+        return String.format(Locale.ROOT, "%d:%02d", seconds / 60, seconds % 60);
     }
 
     public static List<String> readFrames(String trace) {
