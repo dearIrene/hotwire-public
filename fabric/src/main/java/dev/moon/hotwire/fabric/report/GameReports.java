@@ -416,6 +416,8 @@ public final class GameReports {
                 }
             }
             AtomicFiles.writeString(marker, this.began.toString());
+
+            Files.deleteIfExists(game.resolve("hotwire").resolve("reported-crashes.txt"));
         } catch (IOException | RuntimeException e) {
             LOGGER.warn("[Hotwire] the last session's start could not be read or kept", e);
         }
@@ -484,6 +486,11 @@ public final class GameReports {
         texts.put(Diagnosis.FILE, Diagnosis.write(told, about == null ? List.of() : about.messages(),
                 about == null ? List.of() : about.frames(), about == null ? List.of() : about.mods(),
                 about == null ? List.of() : about.spans(), Files.isRegularFile(whole) ? read(whole) : ""));
+
+        Path pending = game.resolve("hotwire").resolve("updates.json");
+        if (Files.isRegularFile(pending)) {
+            texts.put("hotwire-updates.json", read(pending));
+        }
 
         for (String name : List.of(HotwireClient.START_FAILURE, SwapAtClose.LAST_LOGS)) {
             if (Files.isRegularFile(logs.resolve(name))) {

@@ -1,12 +1,17 @@
 package dev.moon.hotwire.update;
 
 import dev.moon.hotwire.jar.FileHashes;
+import dev.moon.hotwire.jar.JarLookup;
+import dev.moon.hotwire.jar.ModManifest;
 import java.io.IOException;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.nio.file.StandardCopyOption;
 import java.util.ArrayList;
+import java.util.HashMap;
+import java.util.LinkedHashMap;
 import java.util.List;
+import java.util.Map;
 import java.util.Optional;
 import java.util.Set;
 import org.jspecify.annotations.Nullable;
@@ -15,7 +20,6 @@ import org.slf4j.LoggerFactory;
 
 public final class JarSwapper {
     private static final Logger LOGGER = LoggerFactory.getLogger(JarSwapper.class);
-    private static final String OTHER_FAILED = "another queued jar could not be put in place, so none was";
 
     private static final String DISABLED = ".disabled";
 
@@ -44,24 +48,63 @@ public final class JarSwapper {
 
     static void swap(UpdateQueue queue, Path mods, Path replaced) throws IOException {
         List<UpdateQueue.Entry> entries = queue.getEntries();
-        List<UpdateQueue.Entry> left = new ArrayList<>();
-        boolean changed = false;
+        Map<String, String> stuck = new LinkedHashMap<>();
         for (UpdateQueue.Entry entry : entries) {
             String reason = findChange(entry, mods);
-            changed |= !reason.isEmpty();
-            left.add(entry.withReason(reason.isEmpty() ? OTHER_FAILED : reason));
+            if (!reason.isEmpty()) {
+                stuck.put(entry.modId(), reason);
+            }
         }
-        if (!changed) {
-            left = moveAll(queue, entries, mods, replaced);
+        if (!stuck.isEmpty()) {
+            holdTied(entries, stuck);
         }
-        if (!left.isEmpty()) {
+        List<UpdateQueue.Entry> left = new ArrayList<>();
+        List<UpdateQueue.Entry> free = new ArrayList<>();
+        for (UpdateQueue.Entry entry : entries) {
+            String reason = stuck.get(entry.modId());
+            if (reason == null) {
+                free.add(entry);
+            } else {
+                left.add(entry.withReason(reason));
+            }
+        }
+        List<UpdateQueue.Entry> failed = free.isEmpty() ? List.of() : moveAll(queue, free, left, mods, replaced);
+        if (free.isEmpty() || !failed.isEmpty()) {
+            left.addAll(failed);
             queue.replace(left);
         }
         PendingChanges.trimReplaced(queue, replaced);
     }
 
-    private static List<UpdateQueue.Entry> moveAll(UpdateQueue queue, List<UpdateQueue.Entry> entries, Path mods,
-            Path replaced) {
+    private static void holdTied(List<UpdateQueue.Entry> entries, Map<String, String> stuck) {
+        Map<String, Set<String>> needs = new HashMap<>();
+        for (UpdateQueue.Entry entry : entries) {
+            ModManifest manifest = JarLookup.findManifest(Path.of(entry.stagedJar()));
+            needs.put(entry.modId(), manifest == null ? Set.of()
+                    : manifest.getRelation(ModManifest.Relation.DEPENDS).keySet());
+        }
+        boolean grew = true;
+        while (grew) {
+            grew = false;
+            for (UpdateQueue.Entry entry : entries) {
+                String id = entry.modId();
+                if (stuck.containsKey(id)) {
+                    continue;
+                }
+                for (String other : List.copyOf(stuck.keySet())) {
+                    if (needs.getOrDefault(id, Set.of()).contains(other)
+                            || needs.getOrDefault(other, Set.of()).contains(id)) {
+                        stuck.put(id, "it goes in together with " + other + ", whose jar could not be put in place");
+                        grew = true;
+                        break;
+                    }
+                }
+            }
+        }
+    }
+
+    private static List<UpdateQueue.Entry> moveAll(UpdateQueue queue, List<UpdateQueue.Entry> entries,
+            List<UpdateQueue.Entry> stuck, Path mods, Path replaced) {
         List<Move> moved = new ArrayList<>();
         List<UpdateQueue.ReplacedJar> records = new ArrayList<>(queue.getReplaced());
         try {
@@ -77,7 +120,7 @@ public final class JarSwapper {
                     records.add(new UpdateQueue.ReplacedJar(entry.modId(), entry.name(), entry.fromVersion(), aside));
                 }
             }
-            queue.replaceAll(List.of(), records);
+            queue.replaceAll(stuck, records);
             return List.of();
         } catch (IOException e) {
             putBack(moved);

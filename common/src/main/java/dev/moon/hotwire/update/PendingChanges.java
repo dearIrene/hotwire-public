@@ -101,7 +101,6 @@ public final class PendingChanges {
         clean(added, wanted);
         clean(this.folders.swapper(), Set.of(this.folders.swapperJar().toAbsolutePath(),
                 this.folders.swapperLog().toAbsolutePath()));
-        tryDelete(this.folders.swapper());
         trimReplaced(this.queue, this.folders.replaced());
     }
 
