@@ -110,6 +110,8 @@ import java.util.stream.Stream;
 import java.util.zip.ZipFile;
 import net.fabricmc.loader.api.FabricLoader;
 import net.fabricmc.loader.api.ModContainer;
+import net.fabricmc.loader.api.metadata.CustomValue;
+import net.fabricmc.loader.api.metadata.ModMetadata;
 import net.fabricmc.loader.impl.metadata.LoaderModMetadata;
 import net.minecraft.client.Minecraft;
 import net.minecraft.client.multiplayer.ClientLevel;
@@ -146,6 +148,20 @@ final class EngineStart {
 
     private static boolean isReloadMaking() {
         return STACK.walk(frames -> frames.anyMatch(frame -> frame.getClassName().startsWith(RELOAD_TASKS)));
+    }
+
+    private static boolean isLibrary(ModMetadata mod) {
+        CustomValue menu = mod.getCustomValue("modmenu");
+        CustomValue badges = menu != null && menu.getType() == CustomValue.CvType.OBJECT
+                ? menu.getAsObject().get("badges") : null;
+        if (badges != null && badges.getType() == CustomValue.CvType.ARRAY) {
+            for (CustomValue badge : badges.getAsArray()) {
+                if (badge.getType() == CustomValue.CvType.STRING && badge.getAsString().equals("library")) {
+                    return true;
+                }
+            }
+        }
+        return mod.containsCustomValue("fabric-loom:generated");
     }
 
     private static boolean isNewer(Path file, Path than) {
@@ -207,8 +223,11 @@ final class EngineStart {
             try {
                 ModJar read = ModJarReader.read(jar, scans);
                 jars.add(read);
-                topLevel.add(id);
                 jarOf.put(id, jar);
+
+                if (!isLibrary(container.getMetadata())) {
+                    topLevel.add(id);
+                }
                 LOGGER.info("[Hotwire] {} runs from {}, outside the mods folder", id, jar.getFileName());
             } catch (ModJarException e) {
                 LOGGER.warn("[Hotwire] {} runs from {}, which could not be read: {}", id, jar, e.getMessage());
