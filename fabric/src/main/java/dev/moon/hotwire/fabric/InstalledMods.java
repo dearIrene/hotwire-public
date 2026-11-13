@@ -240,7 +240,7 @@ public final class InstalledMods {
             return false;
         }
         for (int i = 0; i < one.size(); i++) {
-            if (one.get(i) != other.get(i)) {
+            if (one.get(i) != other.get(i) && !one.get(i).equals(other.get(i))) {
                 return false;
             }
         }
