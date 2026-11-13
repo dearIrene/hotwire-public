@@ -32,8 +32,7 @@ import java.util.Set;
 import java.util.function.BiPredicate;
 import java.util.function.Function;
 import java.util.function.Predicate;
-import java.util.regex.Matcher;
-import java.util.regex.Pattern;
+import java.util.function.UnaryOperator;
 import java.util.zip.Deflater;
 import java.util.zip.ZipEntry;
 import java.util.zip.ZipException;
@@ -52,8 +51,6 @@ import org.objectweb.asm.commons.Remapper;
 
 public final class JarRelocation {
     private static final String ROOT = "hotwire_live/";
-    private static final Pattern SLASHED = Pattern.compile("[\\w$-]+(?:/[\\w$-]+)+");
-    private static final Pattern DOTTED = Pattern.compile("[\\w$-]+(?:\\.[\\w$-]+)+");
     private static final String MANIFEST = "fabric.mod.json";
     private static final String CLASS_SUFFIX = ".class";
     private static final String SERVICES = "META-INF/services/";
@@ -796,29 +793,58 @@ public final class JarRelocation {
         if (text.indexOf('/') < 0 && text.indexOf('.') < 0) {
             return text;
         }
-        Matcher slashed = SLASHED.matcher(text);
-        StringBuilder out = new StringBuilder();
-        while (slashed.find()) {
-            String token = slashed.group();
-            String mapped = token;
+        String slashed = mapNames(text, '/', token -> {
             if (this.isOurs(token)) {
-                mapped = this.prefix + token;
-            } else if (token.length() > 1 && token.charAt(0) == 'L' && this.isOurs(token.substring(1))) {
-                mapped = "L" + this.prefix + token.substring(1);
+                return this.prefix + token;
             }
-            slashed.appendReplacement(out, Matcher.quoteReplacement(mapped));
+            return token.length() > 1 && token.charAt(0) == 'L' && this.isOurs(token.substring(1))
+                    ? "L" + this.prefix + token.substring(1) : token;
+        });
+        return mapNames(slashed, '.', token -> this.isOurs(token.replace('.', '/'))
+                ? this.prefix.replace('/', '.') + token : token);
+    }
+
+    static String mapNames(String text, char joint, UnaryOperator<String> map) {
+        StringBuilder out = null;
+        int copied = 0;
+        int at = 0;
+        int length = text.length();
+        while (at < length) {
+            if (!isOfName(text.charAt(at))) {
+                at++;
+                continue;
+            }
+            int start = at;
+            boolean joined = false;
+            while (true) {
+                while (at < length && isOfName(text.charAt(at))) {
+                    at++;
+                }
+                if (at + 1 >= length || text.charAt(at) != joint || !isOfName(text.charAt(at + 1))) {
+                    break;
+                }
+                joined = true;
+                at++;
+            }
+            if (!joined) {
+                continue;
+            }
+            String token = text.substring(start, at);
+            String mapped = map.apply(token);
+            if (!mapped.equals(token)) {
+                if (out == null) {
+                    out = new StringBuilder(length + 64);
+                }
+                out.append(text, copied, start).append(mapped);
+                copied = at;
+            }
         }
-        slashed.appendTail(out);
-        Matcher dotted = DOTTED.matcher(out);
-        StringBuilder done = new StringBuilder();
-        while (dotted.find()) {
-            String token = dotted.group();
-            boolean ours = this.isOurs(token.replace('.', '/'));
-            dotted.appendReplacement(done,
-                    Matcher.quoteReplacement(ours ? this.prefix.replace('/', '.') + token : token));
-        }
-        dotted.appendTail(done);
-        return done.toString();
+        return out == null ? text : out.append(text, copied, length).toString();
+    }
+
+    private static boolean isOfName(char c) {
+        return c == '$' || c == '-' || c == '_' || (c >= '0' && c <= '9') || (c >= 'a' && c <= 'z')
+                || (c >= 'A' && c <= 'Z');
     }
 
     private boolean isOurs(String slashed) {
