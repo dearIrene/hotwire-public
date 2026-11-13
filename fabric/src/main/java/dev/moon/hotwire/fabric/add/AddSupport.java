@@ -68,6 +68,7 @@ public final class AddSupport implements ModAdder.Engine {
     private final ModIcons icons;
     private final Function<List<String>, ModSwitcher.Result> takeOut;
     private final Map<String, PendingChange.Copied> copied = new ConcurrentHashMap<>();
+    private volatile Runnable afterAdd = () -> { };
 
     private final Map<String, Path> copiedFrom = new ConcurrentHashMap<>();
 
@@ -85,6 +86,10 @@ public final class AddSupport implements ModAdder.Engine {
         this.folders = folders;
         this.queue = queue;
         this.adder = new ModAdder(this);
+    }
+
+    public void setAfterAdd(Runnable afterAdd) {
+        this.afterAdd = afterAdd;
     }
 
     public AddPreview preview(Path jar) {
@@ -231,6 +236,7 @@ public final class AddSupport implements ModAdder.Engine {
             } catch (ModJarException e) {
                 throw new IllegalStateException(e);
             }
+            this.afterAdd.run();
         }
         return result;
     }

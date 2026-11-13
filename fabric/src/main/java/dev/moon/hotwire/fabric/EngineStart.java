@@ -396,6 +396,7 @@ final class EngineStart {
                         mixin.getProcessor()), chain);
         AddSupport adds = new AddSupport(installed, applier, switcher, classes, reports, gameDir, folders, queue,
                 icons, ids -> runner.turnOff(ids).result());
+        adds.setAfterAdd(runner::lookAheadForAll);
         UpdateSupport updates = new UpdateSupport(installed, applier, switcher, classes, folders, queue, reports,
                 icons, adds.getAdder(), ids -> SwitchRunner.runQuietly(() -> runner.turnOff(ids)).result(),
                 ids -> SwitchRunner.runQuietly(() -> runner.turnOn(ids)).result(),
