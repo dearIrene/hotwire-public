@@ -89,6 +89,9 @@ public final class CrashGuard {
                 });
                 return;
             }
+
+            ModViews.showNotice(Lang.get(byAntiCrash ? "hotwire.anti_crash.title" : "hotwire.crash.title"),
+                    Lang.get("hotwire.anti_crash.turning_off", name));
             endWhenThrown(made[0], caught.mod(), tasks.submit("turning off " + caught.mod() + " after its crash",
                     () -> turnOffAfterCrash(caught.mod(), () -> switching.turnOff(List.of(caught.mod()))), reported -> {
                         if (isWorldBuilt(reported.result())) {

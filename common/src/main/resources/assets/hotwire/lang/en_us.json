@@ -687,6 +687,7 @@
   "hotwire.settings.developer.no_flag": "You're on the JetBrains Runtime so add -XX:+AllowEnhancedClassRedefinition to your VM options for full reloads",
   "hotwire.settings.developer.full": "You're on the JetBrains Runtime with full reloads so every change you build goes in",
   "hotwire.anti_crash.title": "Anti-Crash",
+  "hotwire.anti_crash.turning_off": "%s crashed. Turning it off now, your game might pause for a moment",
   "hotwire.anti_crash.caught": "%s crashed so Anti-Crash turned it off and your game kept going",
   "hotwire.anti_crash.not_turned_off": "%s crashed and Anti-Crash couldn't turn it off: %s",
   "hotwire.add.read_failed": "%s can't be added. Reading it failed: %s",
