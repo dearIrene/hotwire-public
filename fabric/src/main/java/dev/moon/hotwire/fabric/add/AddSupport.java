@@ -272,6 +272,11 @@ public final class AddSupport implements ModAdder.Engine {
     }
 
     @Override
+    public void rememberParts(List<ModJar> parts) {
+        this.installed.rememberParts(parts);
+    }
+
+    @Override
     public SwitchPlanner makePlannerFor(ModGraph graph) {
         return ModPolicy.makePlannerFor(graph);
     }

@@ -109,6 +109,8 @@ public final class ModAdder {
 
         SwitchPlanner makePlannerFor(ModGraph graph);
 
+        void rememberParts(List<ModJar> parts);
+
         SwitchApplier getApplier();
 
         ModSwitcher getSwitcher();
@@ -809,6 +811,7 @@ public final class ModAdder {
                 hold.release();
             }
             parts.values().forEach(part -> FailedAddJars.remove(part.path()));
+            this.engine.rememberParts(parts.values().stream().map(Part::jar).toList());
             return new Result.Added(ids, name, switched);
         } finally {
             LifecycleListeners.endStarting(ids);

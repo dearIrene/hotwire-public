@@ -35,6 +35,9 @@ public final class InstalledMods {
 
     private final List<ModJar> nestedAdded = new ArrayList<>();
 
+    private final List<ModJar> partsAdded = new ArrayList<>();
+    private List<ModJar> partsOfLastAdd = List.of();
+
     private final Map<String, Path> jarOf = new HashMap<>();
 
     private final Map<String, Path> folderJarOf = new HashMap<>();
@@ -93,6 +96,7 @@ public final class InstalledMods {
     synchronized List<ModJar> getGraphJars() {
         List<ModJar> all = new ArrayList<>(this.jars);
         all.addAll(this.nestedAdded);
+        all.addAll(this.partsAdded);
         return List.copyOf(all);
     }
 
@@ -204,7 +208,8 @@ public final class InstalledMods {
     private void makeGraphAgain() {
         List<ModJar> all;
         synchronized (this) {
-            all = List.copyOf(this.jars);
+            all = new ArrayList<>(this.jars);
+            all.addAll(this.partsAdded);
         }
         ModGraph made = tell(new ModGraph(all, InstalledMods::isOfGame, LoadedMods::findVersion));
         synchronized (this) {
@@ -218,6 +223,8 @@ public final class InstalledMods {
         List<ModJar> all;
         synchronized (this) {
             all = new ArrayList<>(this.jars);
+            this.partsAdded.stream().filter(part -> more.stream().noneMatch(jar -> jar.manifest().id()
+                    .equals(part.manifest().id()))).forEach(all::add);
         }
         more.stream().filter(jar -> !inside.contains(jar.manifest().id())).forEach(all::add);
         synchronized (this) {
@@ -258,6 +265,10 @@ public final class InstalledMods {
         this.onAddedTogether(Map.of(jar, read), ids);
     }
 
+    public synchronized void rememberParts(List<ModJar> parts) {
+        this.partsOfLastAdd = List.copyOf(parts);
+    }
+
     public void onAddedTogether(Map<Path, ModJar> reads, Collection<String> ids) {
         synchronized (this) {
             reads.forEach((jar, read) -> {
@@ -272,6 +283,15 @@ public final class InstalledMods {
                 this.folderJarOf.put(read.manifest().id(), jar);
             });
             this.addedThisSession.addAll(ids);
+            Set<String> known = new HashSet<>();
+            for (ModJar jar : this.jars) {
+                known.add(jar.manifest().id());
+                addNestedIds(jar, known);
+            }
+            this.partsAdded.forEach(part -> known.add(part.manifest().id()));
+            this.partsOfLastAdd.stream().filter(part -> known.add(part.manifest().id()))
+                    .forEach(this.partsAdded::add);
+            this.partsOfLastAdd = List.of();
         }
         this.makeGraphAgain();
     }
