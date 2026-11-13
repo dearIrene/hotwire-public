@@ -53,6 +53,7 @@ import java.util.Optional;
 import java.util.Set;
 import java.util.TreeSet;
 import java.util.function.Function;
+import java.util.stream.Collectors;
 import java.util.stream.Stream;
 import net.fabricmc.loader.api.FabricLoader;
 import net.minecraft.client.Minecraft;
@@ -561,8 +562,11 @@ public final class UpdateSupport implements ModUpdater.Engine, ModAdder.CarriedL
         }
         long now = results.stream().filter(ModUpdater.Result.Updated.class::isInstance).count();
         long later = results.stream().filter(ModUpdater.Result.Queued.class::isInstance).count();
+
         journal.end(now + later > 0 ? ActionJournal.Outcome.DONE : ActionJournal.Outcome.REFUSED,
-                now + " in place, " + later + " next start, " + (results.size() - now - later) + " not");
+                now + " in place, " + later + " next start, " + (results.size() - now - later) + " not; "
+                        + results.stream().map(UpdateSupport::describeVersions).filter(one -> !one.isEmpty())
+                                .collect(Collectors.joining(", ")));
         long millis = (System.nanoTime() - start) / 1_000_000;
         results.forEach(result -> this.reports.onUpdated(result, millis));
         return results;
@@ -585,13 +589,25 @@ public final class UpdateSupport implements ModUpdater.Engine, ModAdder.CarriedL
         }
     }
 
+    private static String describeVersions(ModUpdater.Result result) {
+        return switch (result) {
+            case ModUpdater.Result.Updated updated -> updated.id() + " " + updated.plan().runningVersion() + ">"
+                    + updated.plan().incomingVersion();
+            case ModUpdater.Result.Queued queued -> queued.id() + " " + queued.plan().runningVersion() + ">"
+                    + queued.plan().incomingVersion() + " (next start)";
+            default -> "";
+        };
+    }
+
     private static void endJournal(ActionJournal.Entry journal, ModUpdater.@Nullable Result result,
             UpdateMethod method) {
         String how = method == UpdateMethod.IN_PLACE ? "in place" : "next start";
         switch (result) {
             case null -> journal.endThrown();
-            case ModUpdater.Result.Updated updated -> journal.end(ActionJournal.Outcome.DONE, how + " " + updated.id());
-            case ModUpdater.Result.Queued queued -> journal.end(ActionJournal.Outcome.QUEUED, how + " " + queued.id());
+            case ModUpdater.Result.Updated updated -> journal.end(ActionJournal.Outcome.DONE, how + " "
+                    + describeVersions(updated));
+            case ModUpdater.Result.Queued queued -> journal.end(ActionJournal.Outcome.QUEUED, how + " "
+                    + describeVersions(queued));
             case ModUpdater.Result.Refused refused -> journal.end(ActionJournal.Outcome.REFUSED, how);
             case ModUpdater.Result.Failed failed -> journal.end(ActionJournal.Outcome.REVERTED, how);
         }
