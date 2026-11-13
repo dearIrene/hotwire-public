@@ -29,6 +29,8 @@ public final class InstalledMods {
     private final Map<String, String> copyOf = new HashMap<>();
     private static final Logger LOGGER = LoggerFactory.getLogger(InstalledMods.class);
     private ModGraph graph;
+    private List<ModJar> lastJarsWith = List.of();
+    private @Nullable ModGraph lastGraphWith;
     private final List<ModJar> jars;
 
     private final List<ModJar> nestedAdded = new ArrayList<>();
@@ -168,22 +170,30 @@ public final class InstalledMods {
         return Optional.ofNullable(this.disabled.get(id)).map(ModJar::manifest);
     }
 
-    public synchronized void onDisabled(String id, Path renamed) {
-        this.jars.stream().filter(jar -> jar.manifest().id().equals(id)).findFirst().ifPresent(jar -> {
-            this.jars.remove(jar);
-            this.disabled.put(id, jar);
-        });
-        this.graph = tell(new ModGraph(this.jars, InstalledMods::isOfGame, LoadedMods::findVersion));
-        this.setFolderJar(id, renamed);
+    public void onDisabled(String id, Path renamed) {
+        synchronized (this) {
+            this.jars.stream().filter(jar -> jar.manifest().id().equals(id)).findFirst().ifPresent(jar -> {
+                this.jars.remove(jar);
+                this.disabled.put(id, jar);
+            });
+            this.setFolderJar(id, renamed);
+        }
+        this.makeGraphAgain();
     }
 
-    public synchronized void onRestored(String id, Path jar) {
-        ModJar back = this.disabled.remove(id);
-        if (back != null) {
-            this.jars.add(back);
-            this.graph = tell(new ModGraph(this.jars, InstalledMods::isOfGame, LoadedMods::findVersion));
+    public void onRestored(String id, Path jar) {
+        boolean back;
+        synchronized (this) {
+            ModJar was = this.disabled.remove(id);
+            back = was != null;
+            if (was != null) {
+                this.jars.add(was);
+            }
+            this.setFolderJar(id, jar);
         }
-        this.setFolderJar(id, jar);
+        if (back) {
+            this.makeGraphAgain();
+        }
     }
 
     public synchronized void onBroughtBack(String id, Path jar) {
@@ -191,12 +201,50 @@ public final class InstalledMods {
         this.setFolderJar(id, jar);
     }
 
-    public synchronized ModGraph makeGraphWith(Collection<ModJar> more) {
+    private void makeGraphAgain() {
+        List<ModJar> all;
+        synchronized (this) {
+            all = List.copyOf(this.jars);
+        }
+        ModGraph made = tell(new ModGraph(all, InstalledMods::isOfGame, LoadedMods::findVersion));
+        synchronized (this) {
+            this.graph = made;
+        }
+    }
+
+    public ModGraph makeGraphWith(Collection<ModJar> more) {
         Set<String> inside = new HashSet<>();
         more.forEach(jar -> addNestedIds(jar, inside));
-        List<ModJar> all = new ArrayList<>(this.jars);
+        List<ModJar> all;
+        synchronized (this) {
+            all = new ArrayList<>(this.jars);
+        }
         more.stream().filter(jar -> !inside.contains(jar.manifest().id())).forEach(all::add);
-        return new ModGraph(all, InstalledMods::isOfGame, LoadedMods::findVersion);
+        synchronized (this) {
+            ModGraph last = this.lastGraphWith;
+            if (last != null && isSame(this.lastJarsWith, all)) {
+                return last;
+            }
+        }
+        ModGraph made = new ModGraph(all, InstalledMods::isOfGame, LoadedMods::findVersion);
+        synchronized (this) {
+            this.lastJarsWith = all;
+            this.lastGraphWith = made;
+        }
+        return made;
+    }
+
+    @SuppressWarnings("ReferenceEquality")
+    private static boolean isSame(List<ModJar> one, List<ModJar> other) {
+        if (one.size() != other.size()) {
+            return false;
+        }
+        for (int i = 0; i < one.size(); i++) {
+            if (one.get(i) != other.get(i)) {
+                return false;
+            }
+        }
+        return true;
     }
 
     private static void addNestedIds(ModJar jar, Set<String> ids) {
@@ -206,18 +254,26 @@ public final class InstalledMods {
         }
     }
 
-    public synchronized void onAdded(Path jar, ModJar read, Collection<String> ids) {
-        this.jars.add(read);
-        for (ModJar nested : read.nested()) {
-            if (ids.contains(nested.manifest().id())) {
-                this.nestedAdded.add(nested);
-            }
+    public void onAdded(Path jar, ModJar read, Collection<String> ids) {
+        this.onAddedTogether(Map.of(jar, read), ids);
+    }
+
+    public void onAddedTogether(Map<Path, ModJar> reads, Collection<String> ids) {
+        synchronized (this) {
+            reads.forEach((jar, read) -> {
+                this.jars.add(read);
+                for (ModJar nested : read.nested()) {
+                    if (ids.contains(nested.manifest().id())) {
+                        this.nestedAdded.add(nested);
+                    }
+                }
+                this.topLevel.add(read.manifest().id());
+                this.jarOf.put(read.manifest().id(), jar);
+                this.folderJarOf.put(read.manifest().id(), jar);
+            });
+            this.addedThisSession.addAll(ids);
         }
-        this.graph = tell(new ModGraph(this.jars, InstalledMods::isOfGame, LoadedMods::findVersion));
-        this.topLevel.add(read.manifest().id());
-        this.jarOf.put(read.manifest().id(), jar);
-        this.folderJarOf.put(read.manifest().id(), jar);
-        this.addedThisSession.addAll(ids);
+        this.makeGraphAgain();
     }
 
     public synchronized void onMoved(String id, Path jar) {
@@ -226,12 +282,14 @@ public final class InstalledMods {
         }
     }
 
-    public synchronized void onUpdated(Map<String, Path> paths, Map<String, ModJar> reads) {
-        this.jars.removeIf(old -> reads.containsKey(old.manifest().id()));
-        this.jars.addAll(reads.values());
-        this.jarOf.putAll(paths);
-        this.updatedThisSession.addAll(reads.keySet());
-        this.graph = tell(new ModGraph(this.jars, InstalledMods::isOfGame, LoadedMods::findVersion));
+    public void onUpdated(Map<String, Path> paths, Map<String, ModJar> reads) {
+        synchronized (this) {
+            this.jars.removeIf(old -> reads.containsKey(old.manifest().id()));
+            this.jars.addAll(reads.values());
+            this.jarOf.putAll(paths);
+            this.updatedThisSession.addAll(reads.keySet());
+        }
+        this.makeGraphAgain();
     }
 
     public synchronized boolean isAddedThisSession(String id) {

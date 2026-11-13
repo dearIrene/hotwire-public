@@ -384,13 +384,15 @@ public final class UpdateSupport implements ModUpdater.Engine, ModAdder.CarriedL
         noteInHistory(offs, false);
         liveIds.forEach((id, live) -> this.installed.onCopyOf(live, id));
 
+        Map<Path, ModJar> reads = new LinkedHashMap<>();
         for (Path copy : copies) {
             try {
-                this.installed.onAdded(copy, adds.readJar(copy), went.ids());
+                reads.put(copy, adds.readJar(copy));
             } catch (ModJarException e) {
                 LOGGER.error("[Hotwire] {} runs but could not be read again", copy.getFileName(), e);
             }
         }
+        this.installed.onAddedTogether(reads, went.ids());
         LOGGER.info("[Hotwire] {} run from copies of their own, in {} ms", liveIds.keySet(),
                 (System.nanoTime() - began) / 1_000_000);
         liveIds.forEach((id, live) -> {
