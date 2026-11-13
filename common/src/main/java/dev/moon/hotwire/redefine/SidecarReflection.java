@@ -2,6 +2,7 @@ package dev.moon.hotwire.redefine;
 
 import java.lang.invoke.MethodHandle;
 import java.lang.invoke.MethodHandles;
+import java.lang.invoke.MethodType;
 import java.lang.reflect.Field;
 import java.lang.reflect.InvocationTargetException;
 import java.lang.reflect.Method;
@@ -74,6 +75,23 @@ public final class SidecarReflection {
             @Nullable Object[] all = new @Nullable Object[given.length + 1];
             all[0] = receiver;
             System.arraycopy(given, 0, all, 1, given.length);
+            if (receiver != null) {
+                Class<?>[] taken = method.getParameterTypes();
+                MethodType shape = MethodType.methodType(method.getReturnType(),
+                        Arrays.copyOfRange(taken, 1, taken.length));
+                MethodHandle found;
+                try {
+                    found = Linker.findMoved(method.getName(), shape.toMethodDescriptorString(), receiver.getClass(),
+                            null);
+                } catch (Throwable absent) {
+                    return method.invoke(null, all);
+                }
+                try {
+                    return found.invokeWithArguments(all);
+                } catch (Throwable thrown) {
+                    throw new InvocationTargetException(thrown);
+                }
+            }
             return method.invoke(null, all);
         }
         try {
