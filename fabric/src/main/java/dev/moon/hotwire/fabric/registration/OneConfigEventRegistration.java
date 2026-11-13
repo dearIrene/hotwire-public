@@ -1,6 +1,7 @@
 package dev.moon.hotwire.fabric.registration;
 
 import dev.moon.hotwire.registration.Registration;
+import dev.moon.hotwire.update.LiveNames;
 import java.lang.reflect.Field;
 import java.lang.reflect.InvocationTargetException;
 import java.lang.reflect.Method;
@@ -63,7 +64,7 @@ final class OneConfigEventRegistration implements Registration {
 
     private @Nullable Object call(String name) {
         try {
-            Class<?> handlerType = Class.forName(HANDLER, false, this.bus.getClass().getClassLoader());
+            Class<?> handlerType = LiveNames.findBeside(HANDLER, this.bus.getClass());
             Method method = this.bus.getClass().getMethod(name, handlerType);
             return method.invoke(this.bus, this.handler);
         } catch (ClassNotFoundException | NoSuchMethodException | IllegalAccessException e) {

@@ -1,6 +1,7 @@
 package dev.moon.hotwire.fabric.update;
 
 import com.google.gson.JsonParseException;
+import dev.moon.hotwire.update.CloseWatch;
 import dev.moon.hotwire.update.JarSwapper;
 import dev.moon.hotwire.update.UpdateFolders;
 import dev.moon.hotwire.update.UpdateQueue;
@@ -36,6 +37,7 @@ public final class SwapAtClose {
 
     public void arm() {
         Runtime.getRuntime().addShutdownHook(new Thread(this::start, "Hotwire swapper launch"));
+        Runtime.getRuntime().addShutdownHook(new Thread(this::watchClose, "Hotwire close watch launch"));
         this.queue.setOnAdded(this::start);
         if (!this.queue.getEntries().isEmpty()) {
             Thread.ofPlatform().name("Hotwire swapper launch").daemon().start(this::start);
@@ -70,6 +72,28 @@ public final class SwapAtClose {
         } catch (IOException e) {
             LOGGER.error("[Hotwire] the swapper could not start; {} queued updates wait for the next close",
                     entries.size(), e);
+        }
+    }
+
+    private synchronized void watchClose() {
+        Optional<String> java = ProcessHandle.current().info().command();
+        if (java.isEmpty()) {
+            return;
+        }
+        try {
+            Files.createDirectories(this.swapperCopy.getParent());
+            try {
+                Files.copy(this.hotwireJar, this.swapperCopy, StandardCopyOption.REPLACE_EXISTING);
+            } catch (IOException running) {
+            }
+            new ProcessBuilder(java.get(), "-Xmx16m", "-XX:+UseSerialGC", "-XX:TieredStopAtLevel=1", "-cp",
+                    this.swapperCopy.toString(), CloseWatch.class.getName(),
+                    Long.toString(ProcessHandle.current().pid()))
+                    .redirectErrorStream(true)
+                    .redirectOutput(this.folders.swapperLog().resolveSibling("close-watch.log").toFile())
+                    .start();
+        } catch (IOException | RuntimeException e) {
+            LOGGER.warn("[Hotwire] the close watch could not start: {}", e.toString());
         }
     }
 

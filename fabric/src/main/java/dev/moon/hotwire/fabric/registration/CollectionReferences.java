@@ -3,6 +3,7 @@ package dev.moon.hotwire.fabric.registration;
 import dev.moon.hotwire.redefine.FieldSlots;
 import dev.moon.hotwire.redefine.Tripwire;
 import dev.moon.hotwire.registration.Fingerprints;
+import dev.moon.hotwire.update.LiveNames;
 import java.lang.ref.WeakReference;
 import java.lang.reflect.Proxy;
 import java.util.ArrayList;
@@ -281,7 +282,7 @@ final class CollectionReferences implements FixedLists.Walk {
 
     private static boolean isOneConfigNode(Class<?> type) {
         for (Class<?> at = type.getSuperclass(); at != null; at = at.getSuperclass()) {
-            if (at.getName().equals(ONECONFIG_NODE)) {
+            if (ONECONFIG_NODE.equals(LiveNames.findOwnName(at.getName()))) {
                 return true;
             }
         }

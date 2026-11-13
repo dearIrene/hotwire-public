@@ -34,6 +34,7 @@ import java.util.function.Function;
 import java.util.function.Predicate;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
+import java.util.zip.Deflater;
 import java.util.zip.ZipEntry;
 import java.util.zip.ZipException;
 import java.util.zip.ZipFile;
@@ -72,6 +73,8 @@ public final class JarRelocation {
     private final String filePrefix;
     private final BiPredicate<String, String> takesCarried;
     private final Function<String, byte @Nullable []> running;
+    private final List<OwnPatch> patches;
+    private final PinnedClasses pinned;
     private final Remapper remapper = new Remapper() {
         @Override
         public String map(String internalName) {
@@ -86,7 +89,9 @@ public final class JarRelocation {
     };
 
     private JarRelocation(String tag, BiPredicate<String, String> takesCarried,
-            Function<String, byte @Nullable []> running) {
+            Function<String, byte @Nullable []> running, List<OwnPatch> patches, PinnedClasses pinned) {
+        this.patches = patches;
+        this.pinned = pinned;
         this.tag = tag;
         this.prefix = ROOT + tag + "/";
         this.filePrefix = tag + ".";
@@ -105,12 +110,19 @@ public final class JarRelocation {
 
     public static List<Path> write(List<Path> jars, Path folder, String tag, BiPredicate<String, String> takesCarried,
             Function<String, byte @Nullable []> running) throws IOException {
+        return write(jars, folder, tag, takesCarried, running, List.of(), new PinnedClasses(Set.of()));
+    }
+
+    public static List<Path> write(List<Path> jars, Path folder, String tag, BiPredicate<String, String> takesCarried,
+            Function<String, byte @Nullable []> running, List<OwnPatch> patches, PinnedClasses pinned)
+            throws IOException {
         Files.createDirectories(folder);
-        JarRelocation copy = new JarRelocation(tag, takesCarried, running);
+        JarRelocation copy = new JarRelocation(tag, takesCarried, running, patches, pinned);
         for (Path jar : jars) {
             copy.scan(readAll(jar));
         }
         LiveNames.learn(tag, copy.classes);
+        LiveNames.learnIds(copy.liveIds);
         if (!copy.bound.isEmpty()) {
             List<Map<String, byte[]>> group = new ArrayList<>();
             for (Path jar : jars) {
@@ -289,7 +301,7 @@ public final class JarRelocation {
                 Map<String, byte[]> files = library.getValue();
                 boolean leans = needsAnyOf(files, movingMods) || files.entrySet().stream().anyMatch(
                         file -> file.getKey().endsWith(".class")
-                                && readClassesNamed(file.getValue()).stream().anyMatch(moving::contains));
+                                && JarLinks.readClassesNamed(file.getValue()).stream().anyMatch(moving::contains));
                 if (leans) {
                     movingMods.add(library.getKey());
                     files.keySet().stream().filter(name -> name.endsWith(".class"))
@@ -308,19 +320,6 @@ public final class JarRelocation {
         } catch (IOException | RuntimeException e) {
             return true;
         }
-    }
-
-    private static Set<String> readClassesNamed(byte[] bytes) {
-        ClassReader reader = new ClassReader(bytes);
-        char[] buffer = new char[reader.getMaxStringLength()];
-        Set<String> named = new HashSet<>();
-        for (int item = 1; item < reader.getItemCount(); item++) {
-            int at = reader.getItem(item);
-            if (at > 0 && bytes[at - 1] == 7) {
-                named.add(reader.readUTF8(at, buffer));
-            }
-        }
-        return named;
     }
 
     private static void collectFiles(Map<String, byte[]> entries, Map<String, String> picked,
@@ -418,7 +417,8 @@ public final class JarRelocation {
             String name = entry.getKey();
             if (name.endsWith(CLASS_SUFFIX) && !name.startsWith(META_INF)) {
                 String internal = name.substring(0, name.length() - CLASS_SUFFIX.length());
-                if (internal.startsWith("net/minecraft/") || internal.startsWith("com/mojang/")) {
+                if (internal.startsWith("net/minecraft/") || internal.startsWith("com/mojang/")
+                        || this.pinned.has(internal)) {
                     continue;
                 }
                 if (hasNative(entry.getValue())) {
@@ -481,13 +481,73 @@ public final class JarRelocation {
         Map<String, String> renamed = this.findRenamedFiles(entries, manifest);
         Map<String, Map<String, byte[]>> goingAlong = findGoingAlong(entries, this.takesCarried);
         this.requireLeftLibraries(entries, manifest, goingAlong.keySet());
+        Map<String, byte[]> twins = this.makeTwins(entries, manifest, renamed);
         ByteArrayOutputStream bytes = new ByteArrayOutputStream();
         try (ZipOutputStream into = new ZipOutputStream(bytes)) {
+            into.setLevel(Deflater.NO_COMPRESSION);
             for (Map.Entry<String, byte[]> entry : entries.entrySet()) {
                 this.copyEntry(into, entry.getKey(), entry.getValue(), manifest, renamed, goingAlong);
             }
+            for (Map.Entry<String, byte[]> twin : twins.entrySet()) {
+                put(into, twin.getKey(), twin.getValue());
+            }
         }
         return bytes.toByteArray();
+    }
+
+    private void notePinned(String internalName, byte[] made) throws IOException {
+        byte[] runs = this.running.apply(internalName);
+        if (runs == null) {
+            throw new IOException(internalName + " is called by what stays on, and what runs of it could not be read");
+        }
+        Set<JarDiff.ShapeChange> shape = UpdateDiffer.compareClass(runs, made).shape();
+        if (!shape.isEmpty()) {
+            throw new IOException(internalName + " is called by what stays on, and its new version differs in "
+                    + shape);
+        }
+        this.pinned.put(internalName, made, runs);
+    }
+
+    private Map<String, byte[]> makeTwins(Map<String, byte[]> entries, JsonObject manifest,
+            Map<String, String> renamed) {
+        Map<String, byte[]> files = new LinkedHashMap<>();
+        JsonArray names = new JsonArray();
+        for (OwnPatch patch : this.patches) {
+            if (!patch.canFollow() || patch.getTargets().stream().noneMatch(
+                    target -> entries.containsKey(target + CLASS_SUFFIX))) {
+                continue;
+            }
+            ClassWriter writer = new ClassWriter(0);
+            new ClassReader(patch.getBytes()).accept(new ClassRemapper(writer, new Remapper() {
+                @Override
+                public String map(String internalName) {
+                    return internalName.equals(patch.getName()) ? JarRelocation.this.prefix + internalName
+                            : JarRelocation.this.remapper.map(internalName);
+                }
+
+                @Override
+                public Object mapValue(Object value) {
+                    return JarRelocation.this.remapper.mapValue(value);
+                }
+            }), 0);
+            files.put(this.prefix + patch.getName() + CLASS_SUFFIX, writer.toByteArray());
+            names.add(patch.getName().replace('/', '.'));
+        }
+        if (files.isEmpty()) {
+            return files;
+        }
+        String config = this.filePrefix + manifest.get("id").getAsString() + ".patches.mixins.json";
+        JsonObject root = new JsonObject();
+        root.addProperty("required", false);
+        root.addProperty("package", this.prefix.substring(0, this.prefix.length() - 1).replace('/', '.'));
+        root.addProperty("compatibilityLevel", "JAVA_21");
+        root.add("mixins", names);
+        files.put(config, root.toString().getBytes(StandardCharsets.UTF_8));
+        JsonArray mixins = manifest.has("mixins") ? manifest.getAsJsonArray("mixins") : new JsonArray();
+        mixins.add(config);
+        manifest.add("mixins", mixins);
+        renamed.put(config, config);
+        return files;
     }
 
     private void copyEntry(ZipOutputStream into, String name, byte[] body, JsonObject manifest,
@@ -502,8 +562,13 @@ public final class JarRelocation {
         } else if (name.endsWith(CLASS_SUFFIX)) {
             ClassWriter writer = new ClassWriter(0);
             new ClassReader(body).accept(makeNamesOwn(new ClassRemapper(writer, this.remapper)), 0);
-            put(into, this.remapper.map(name.substring(0, name.length() - CLASS_SUFFIX.length())) + CLASS_SUFFIX,
-                    writer.toByteArray());
+            String internal = name.substring(0, name.length() - CLASS_SUFFIX.length());
+
+            if (this.pinned.has(internal)) {
+                this.notePinned(internal, writer.toByteArray());
+            } else {
+                put(into, this.remapper.map(internal) + CLASS_SUFFIX, writer.toByteArray());
+            }
         } else if (renamed.containsKey(name)) {
             put(into, renamed.get(name), this.makeRenamed(body, renamed));
         } else if (name.startsWith(SERVICES)) {

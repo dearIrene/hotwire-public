@@ -1,5 +1,6 @@
 package dev.moon.hotwire.fabric.registration;
 
+import dev.moon.hotwire.update.LiveNames;
 import java.lang.reflect.Field;
 import java.lang.reflect.Method;
 import java.util.ArrayList;
@@ -20,8 +21,8 @@ public final class OneConfigModCards {
         @Override
         public void restore() {
             try {
-                this.registry.getClass().getMethod("register", Class.forName(CARD, false, this.registry.getClass()
-                        .getClassLoader())).invoke(this.registry, this.card);
+                this.registry.getClass().getMethod("register", LiveNames.findBeside(CARD, this.registry.getClass()))
+                        .invoke(this.registry, this.card);
             } catch (ReflectiveOperationException e) {
                 throw new IllegalStateException("OneConfig's register", e);
             }
@@ -54,7 +55,7 @@ public final class OneConfigModCards {
             List<?> cards = new ArrayList<>((List<?>) Objects.requireNonNull(registry.getClass()
                     .getMethod("getConfigs").invoke(registry)));
 
-            Method idOf = Class.forName(CARD, false, registry.getClass().getClassLoader()).getMethod("getId");
+            Method idOf = LiveNames.findBeside(CARD, registry.getClass()).getMethod("getId");
             for (Object card : cards) {
                 Objects.requireNonNull(card);
                 String id = (String) idOf.invoke(card);
@@ -73,7 +74,7 @@ public final class OneConfigModCards {
 
     private static @Nullable Object findRegistry() {
         try {
-            return Class.forName(REGISTRY, false, OneConfigModCards.class.getClassLoader()).getField("INSTANCE")
+            return LiveNames.findRunning(REGISTRY, OneConfigModCards.class.getClassLoader()).getField("INSTANCE")
                     .get(null);
         } catch (ClassNotFoundException | NoSuchFieldException | IllegalAccessException | LinkageError e) {
             return null;
@@ -90,10 +91,11 @@ public final class OneConfigModCards {
                 continue;
             }
             String mod = null;
-            if (node.getClass().getName().equals("org.polyfrost.oneconfig.api.config.v1.Property$Field")) {
+            String type = LiveNames.findOwnName(node.getClass().getName());
+            if ("org.polyfrost.oneconfig.api.config.v1.Property$Field".equals(type)) {
                 Object owner = read(node, node.getClass().getName(), "owner");
                 mod = owner == null ? null : GameRegistrations.findModOf(owner.getClass());
-            } else if (node.getClass().getName().equals("org.polyfrost.oneconfig.api.config.v1.Tree")) {
+            } else if ("org.polyfrost.oneconfig.api.config.v1.Tree".equals(type)) {
                 mod = findModOf(node);
             }
             if (mod != null) {
@@ -104,7 +106,7 @@ public final class OneConfigModCards {
     }
 
     private static @Nullable Object read(Object of, String type, String name) throws ReflectiveOperationException {
-        Field field = Class.forName(type, false, of.getClass().getClassLoader()).getDeclaredField(name);
+        Field field = LiveNames.findBeside(type, of.getClass()).getDeclaredField(name);
         field.setAccessible(true);
         return field.get(of);
     }

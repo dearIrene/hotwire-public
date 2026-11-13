@@ -2,6 +2,7 @@ package dev.moon.hotwire.fabric;
 
 import dev.moon.hotwire.fabric.registration.GameRegistrations;
 import dev.moon.hotwire.ui.Lang;
+import dev.moon.hotwire.update.LiveNames;
 import java.lang.reflect.Constructor;
 import java.lang.reflect.Field;
 import java.lang.reflect.InvocationTargetException;
@@ -104,8 +105,8 @@ final class ConfigScreens {
         Method factoryOf;
         Method provides;
         try {
-            api = Class.forName(MENU_API, false, game);
-            create = Class.forName(MENU_FACTORY, false, game).getMethod("create", Screen.class);
+            api = LiveNames.findRunning(MENU_API, game);
+            create = LiveNames.findRunning(MENU_FACTORY, game).getMethod("create", Screen.class);
             factoryOf = api.getMethod("getModConfigScreenFactory");
             provides = api.getMethod("getProvidedConfigScreenFactories");
         } catch (ClassNotFoundException | NoSuchMethodException | LinkageError e) {
@@ -159,16 +160,16 @@ final class ConfigScreens {
         Method create;
         Constructor<?> route;
         try {
-            manager = Class.forName(ONECONFIG_MANAGER, false, game);
-            Class<?> config = Class.forName(ONECONFIG_CONFIG, false, game);
+            manager = LiveNames.findRunning(ONECONFIG_MANAGER, game);
+            Class<?> config = LiveNames.findRunning(ONECONFIG_CONFIG, game);
             configs = manager.getDeclaredField("initializedConfigs");
             configs.setAccessible(true);
             tree = config.getDeclaredField("tree");
             tree.setAccessible(true);
             page = config.getField("id");
-            metadata = Class.forName(ONECONFIG_NODE, false, game).getMethod("getMetadata", String.class);
-            create = Class.forName(ONECONFIG_UI, false, game).getMethod("createScreen", Object.class);
-            route = Class.forName(ONECONFIG_ROUTE, false, game).getConstructor(String.class, String.class);
+            metadata = LiveNames.findRunning(ONECONFIG_NODE, game).getMethod("getMetadata", String.class);
+            create = LiveNames.findRunning(ONECONFIG_UI, game).getMethod("createScreen", Object.class);
+            route = LiveNames.findRunning(ONECONFIG_ROUTE, game).getConstructor(String.class, String.class);
         } catch (ClassNotFoundException | NoSuchFieldException | NoSuchMethodException | LinkageError
                 | RuntimeException e) {
             return;

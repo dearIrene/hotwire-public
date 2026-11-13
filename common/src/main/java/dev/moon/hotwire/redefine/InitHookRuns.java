@@ -284,8 +284,11 @@ public final class InitHookRuns {
 
             boolean world = worldObject.test(type) && !holdsAny(made, type);
             Set<String> unset = entry.getValue().unset();
-            boolean lateOnWorld = world && inWorld && (!entry.getValue().onObjects().isEmpty()
-                    || !entry.getValue().lateOnObjects().isEmpty());
+
+            Set<String> late = new HashSet<>(entry.getValue().onObjects());
+            late.addAll(entry.getValue().lateOnObjects());
+            late.removeAll(entry.getValue().succeeding());
+            boolean lateOnWorld = world && inWorld && !late.isEmpty();
             if ((unset.isEmpty() && !lateOnWorld) || (world && !inWorld)) {
                 continue;
             }

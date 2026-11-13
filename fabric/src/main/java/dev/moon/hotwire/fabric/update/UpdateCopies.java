@@ -2,12 +2,16 @@ package dev.moon.hotwire.fabric.update;
 
 import dev.moon.hotwire.classfile.ClassNodes;
 import dev.moon.hotwire.concurrent.Parallel;
+import dev.moon.hotwire.fabric.HotwireClient;
 import dev.moon.hotwire.fabric.ModPolicy;
 import dev.moon.hotwire.jar.JarLookup;
 import dev.moon.hotwire.jar.ModManifest;
 import dev.moon.hotwire.mixin_copy.MixinClassInfo;
+import dev.moon.hotwire.redefine.RebuildException;
 import dev.moon.hotwire.update.JarLinks;
 import dev.moon.hotwire.update.JarRelocation;
+import dev.moon.hotwire.update.OwnPatch;
+import dev.moon.hotwire.update.PinnedClasses;
 import java.io.IOException;
 import java.nio.file.Path;
 import java.util.ArrayDeque;
@@ -55,15 +59,14 @@ final class UpdateCopies {
 
     private final Set<String> ownPatched = ConcurrentHashMap.newKeySet();
 
+    private @Nullable List<OwnPatch> ownPatches;
+
     private volatile Set<String> aimed = Set.of();
     private volatile Set<String> leaving = Set.of();
     private volatile Map<String, String> picked = Map.of();
 
     private static final int MOST_IN_A_COPY_GROUP = Integer.getInteger("hotwire.copyGroupCap", 12);
     private static final int MOST_ROUNDS = 6;
-
-    private static final boolean COPIES_OWN_PATCHED = Boolean.parseBoolean(
-            System.getProperty("hotwire.copyOwnPatched"));
 
     private static final Pattern SLASHED_NAME = Pattern.compile("[a-zA-Z0-9_$]+(?:/[a-zA-Z0-9_$]+)+");
 
@@ -128,7 +131,7 @@ final class UpdateCopies {
             Path jar = group.contains(id) || this.unchanged.contains(id) || ModPolicy.isHotwire(id) ? null
                     : this.engine.findRunningJarOf(id);
             try {
-                if (jar != null && !JarLinks.readNamed(jar, Set.of(), leaving).isEmpty()) {
+                if (jar != null && !JarLinks.readNamedOf(jar, leaving, false).isEmpty()) {
                     users.add(id);
                 }
             } catch (IOException | RuntimeException e) {
@@ -139,6 +142,43 @@ final class UpdateCopies {
             LOGGER.info("[Hotwire] {} use classes of {} mods that go, and go with them", users, group.size());
         }
         return users;
+    }
+
+    PinnedClasses findPinned(Set<String> group, Set<String> offs) {
+        Set<String> leaving = this.findLeavingClasses(offs);
+        Set<Path> jars = new HashSet<>();
+        for (String id : group) {
+            for (String needed : this.engine.getGraph().getUses(id)) {
+                Path jar = offs.contains(needed) || group.contains(needed) ? null
+                        : this.engine.findRunningJarOf(needed);
+                if (jar != null) {
+                    jars.add(jar);
+                }
+            }
+        }
+        Set<String> named = new ConcurrentSkipListSet<>();
+        Parallel.runEachBeside(jars, jar -> {
+            try {
+                named.addAll(JarLinks.readNamedOf(jar, leaving, true));
+            } catch (IOException | RuntimeException e) {
+                LOGGER.info("[Hotwire] {} could not be read through: {}", jar.getFileName(), e.toString());
+            }
+        });
+        if (!named.isEmpty()) {
+            LOGGER.info("[Hotwire] {} keep their names in the copies: what the mods need calls them by name", named);
+        }
+        return new PinnedClasses(named);
+    }
+
+    void putPinned(Map<String, byte[]> bodies) {
+        if (bodies.isEmpty()) {
+            return;
+        }
+        try {
+            this.engine.getApplier().replace(List.of(), bodies, this.engine.on(), Set.of(), () -> { });
+        } catch (RebuildException | RuntimeException | LinkageError e) {
+            LOGGER.error("[Hotwire] {} could not take their bodies in place", bodies.keySet(), e);
+        }
     }
 
     Set<String> findLeavingClasses(Set<String> offs) {
@@ -325,7 +365,7 @@ final class UpdateCopies {
                 return patching + " patch classes of " + id;
             }
 
-            if (!COPIES_OWN_PATCHED && this.ownPatched.contains(id)) {
+            if (this.ownPatched.contains(id)) {
                 return "Hotwire's own patches of " + id + " would not follow its copy";
             }
             String shut = this.findInterfacePatched(id, given);
@@ -498,6 +538,19 @@ final class UpdateCopies {
         return needed;
     }
 
+    synchronized List<OwnPatch> getOwnPatches() {
+        if (this.ownPatches == null) {
+            try {
+                this.ownPatches = OwnPatch.readAll(UpdateCopies.class.getClassLoader(),
+                        HotwireClient.ID + ".mixins.json");
+            } catch (IOException | RuntimeException e) {
+                LOGGER.warn("[Hotwire] Hotwire's own mixins could not be read", e);
+                this.ownPatches = List.of();
+            }
+        }
+        return this.ownPatches;
+    }
+
     Set<String> findPatchersOf(String id, Map<String, Path> given) {
         Path jar = this.findJarOf(id, given);
         if (jar == null) {
@@ -510,7 +563,8 @@ final class UpdateCopies {
                 classes.removeAll(this.unchangedClasses);
                 this.engine.getApplier().getPatchersOf(classes, this.engine.on(), id).values()
                         .forEach(patching::addAll);
-                if (patching.stream().anyMatch(ModPolicy::isHotwire)) {
+                if (this.getOwnPatches().stream().anyMatch(patch -> !patch.canFollow()
+                        && !Collections.disjoint(patch.getTargets(), classes))) {
                     this.ownPatched.add(id);
                 }
 

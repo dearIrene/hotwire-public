@@ -3,6 +3,7 @@ package dev.moon.hotwire.fabric.update;
 import dev.moon.hotwire.fabric.InstalledMods;
 import dev.moon.hotwire.fabric.LoadedMods;
 import dev.moon.hotwire.fabric.ModPolicy;
+import dev.moon.hotwire.fabric.ResourceReload;
 import dev.moon.hotwire.fabric.add.ModAdder;
 import dev.moon.hotwire.fabric.rebuild.GameClasses;
 import dev.moon.hotwire.fabric.report.GameReports;
@@ -28,6 +29,8 @@ import dev.moon.hotwire.ui.Progress;
 import dev.moon.hotwire.ui.UpdateMethod;
 import dev.moon.hotwire.ui.UpdatePreview;
 import dev.moon.hotwire.update.JarRelocation;
+import dev.moon.hotwire.update.LiveNames;
+import dev.moon.hotwire.update.PinnedClasses;
 import dev.moon.hotwire.update.UpdateContext;
 import dev.moon.hotwire.update.UpdateFolders;
 import dev.moon.hotwire.update.UpdatePlan;
@@ -297,7 +300,8 @@ public final class UpdateSupport implements ModUpdater.Engine, ModAdder.CarriedL
                 refusal == null ? "would go" : "would be refused: " + refusal);
     }
 
-    private record LiveCopies(Set<String> group, Map<String, String> liveIds, List<Path> jars, Set<String> offs) {
+    private record LiveCopies(Set<String> group, Map<String, String> liveIds, List<Path> jars, Set<String> offs,
+            String tag, PinnedClasses pinned) {
     }
 
     private static final int MOST_COPY_TRIES = 6;
@@ -313,11 +317,13 @@ public final class UpdateSupport implements ModUpdater.Engine, ModAdder.CarriedL
         Map<String, String> liveIds = new HashMap<>();
         group.forEach(id -> liveIds.put(id, JarRelocation.findLiveId(id, tag)));
         try {
+            Set<String> offs = this.updater.getCopies().findRestartOffs(group, given);
+            PinnedClasses pinned = this.updater.getCopies().findPinned(group, offs);
             return new LiveCopies(group, liveIds,
                     JarRelocation.write(this.updater.getCopies().findRestartJars(group, given),
                     this.folders.staging().resolve("live"), tag, this.updater.getCopies()::takesCarried,
-                            this.updater::findReadable),
-                    this.updater.getCopies().findRestartOffs(group, given));
+                            this.updater::findReadable, this.updater.getCopies().getOwnPatches(), pinned),
+                    offs, tag, pinned);
         } catch (IOException | RuntimeException e) {
             LOGGER.info("[Hotwire] {} wait for the next start: they could not be copied to run live: {}", group,
                     e.toString());
@@ -345,17 +351,23 @@ public final class UpdateSupport implements ModUpdater.Engine, ModAdder.CarriedL
             String refusal = this.turnOffFor(offs, ons, wentOff);
             if (refusal != null) {
                 refused.add(refusal);
+            } else {
+                all.forEach(one -> LiveNames.setRunning(one.tag(), true));
+                all.forEach(one -> this.updater.getCopies().putPinned(one.pinned().getBodies()));
             }
             return refusal;
         });
         if (!refused.isEmpty()) {
+            ResourceReload.runWaitingReload();
             LOGGER.info("[Hotwire] {} stay until the next start: {}", liveIds.keySet(), refused.getFirst());
             return refused.getFirst();
         }
         if (!(added instanceof ModAdder.Result.Added went)) {
             LOGGER.info("[Hotwire] {} stay until the next start: the add of their copies was refused: {}",
                     liveIds.keySet(), added);
+            all.forEach(one -> LiveNames.setRunning(one.tag(), false));
             if (wentOff[0]) {
+                all.forEach(one -> this.updater.getCopies().putPinned(one.pinned().getBefore()));
                 if (++this.refusedAdds >= MOST_REFUSED_ADDS) {
                     this.copyTriesLeft = 0;
                 }
@@ -363,9 +375,11 @@ public final class UpdateSupport implements ModUpdater.Engine, ModAdder.CarriedL
                 this.noteRebuilt(this.wholeOn.apply(List.copyOf(offs)), "turned on again after their copies");
                 noteInHistory(offs, false);
             }
+            ResourceReload.runWaitingReload();
             return added instanceof ModAdder.Result.Failed failed ? String.valueOf(failed.cause().getMessage())
                     : String.valueOf(added);
         }
+        ResourceReload.runWaitingReload();
         offs.forEach(this.installed::onRunningFromCopy);
         noteInHistory(offs, false);
         liveIds.forEach((id, live) -> this.installed.onCopyOf(live, id));
@@ -419,7 +433,14 @@ public final class UpdateSupport implements ModUpdater.Engine, ModAdder.CarriedL
         }
         Set<String> offBefore = this.switcher.getOff();
         Set<String> leaving = this.updater.getCopies().findLeavingClasses(offs);
-        ModSwitcher.Result off = this.wholeOff.apply(List.copyOf(offs));
+        ModSwitcher.Result off;
+
+        ResourceReload.leaveReloadToNext(true);
+        try {
+            off = this.wholeOff.apply(List.copyOf(offs));
+        } finally {
+            ResourceReload.leaveReloadToNext(false);
+        }
         if (!(off instanceof ModSwitcher.Result.Done)) {
             return off instanceof ModSwitcher.Result.Failed failed ? String.valueOf(failed.cause().getMessage())
                     : PlayerMessages.describe(off, this.installed::nameOf);

@@ -1,6 +1,7 @@
 package dev.moon.hotwire.fabric.registration;
 
 import dev.moon.hotwire.api.ModLifecycleListener;
+import dev.moon.hotwire.update.LiveNames;
 import java.lang.reflect.Field;
 import java.lang.reflect.Method;
 import java.util.Collection;
@@ -31,8 +32,8 @@ public final class OneConfigSaves implements ModLifecycleListener {
         int saved = 0;
         try {
             Object active = manager.getMethod("active").invoke(null);
-            Method save = manager.getMethod("save", Class.forName(TREE, false, manager.getClassLoader()));
-            Method idOf = Class.forName(TREE, false, manager.getClassLoader()).getMethod("getID");
+            Method save = manager.getMethod("save", LiveNames.findBeside(TREE, manager));
+            Method idOf = LiveNames.findBeside(TREE, manager).getMethod("getID");
             Map<?, ?> configs = (Map<?, ?>) read(manager, "initializedConfigs");
             for (Object tree : List.copyOf((Collection<?>) manager.getMethod("trees").invoke(active))) {
                 if (tree == null) {
@@ -64,7 +65,7 @@ public final class OneConfigSaves implements ModLifecycleListener {
 
     private static @Nullable Class<?> findManager() {
         try {
-            return Class.forName(MANAGER, false, OneConfigSaves.class.getClassLoader());
+            return LiveNames.findRunning(MANAGER, OneConfigSaves.class.getClassLoader());
         } catch (ClassNotFoundException | LinkageError e) {
             return null;
         }

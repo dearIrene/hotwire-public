@@ -53,13 +53,16 @@ public final class InitHookReplay {
     private static volatile Function<String, Set<String>> joining = name -> Set.of();
 
     private static volatile Function<String, Set<String>> loadFinished = name -> Set.of();
+    private static volatile Function<String, Set<String>> succeeded = key -> Set.of();
     private static volatile StaticWriter statics = (field, value) -> {
         throw new IllegalAccessException("no writer of statics is set");
     };
 
     public record Due(Set<String> onObjects, Set<String> onClass, Map<String, String> statics, List<String> missed,
-            Set<String> unset, Set<String> caughtUp, Set<String> lateOnObjects, Set<String> lateOnClass) {
+            Set<String> unset, Set<String> caughtUp, Set<String> lateOnObjects, Set<String> lateOnClass,
+            Set<String> succeeding) {
         public Due {
+            succeeding = Set.copyOf(succeeding);
             onObjects = Set.copyOf(onObjects);
             onClass = Set.copyOf(onClass);
             statics = Map.copyOf(statics);
@@ -72,7 +75,7 @@ public final class InitHookReplay {
 
         public Due(Set<String> onObjects, Set<String> onClass, Map<String, String> statics, List<String> missed,
                 Set<String> unset, Set<String> caughtUp) {
-            this(onObjects, onClass, statics, missed, unset, caughtUp, Set.of(), Set.of());
+            this(onObjects, onClass, statics, missed, unset, caughtUp, Set.of(), Set.of(), Set.of());
         }
     }
 
@@ -127,6 +130,10 @@ public final class InitHookReplay {
         statics = writer;
     }
 
+    public static void nameSucceededWith(Function<String, Set<String>> names) {
+        succeeded = names;
+    }
+
     static Addition add(String name, byte[] mixed, byte[] running, byte @Nullable [] first) {
         return add(name, mixed, running, first, null, null);
     }
@@ -155,6 +162,17 @@ public final class InitHookReplay {
         }
         if (fresh.isEmpty()) {
             return addStaticsOnly(mixed, original, running, previous);
+        }
+
+        Set<String> succeeding = new TreeSet<>();
+        for (String key : fresh) {
+            for (String old : succeeded.apply(key)) {
+                if (RUN.contains(name + " " + old) || findKeys(running, name, once).contains(old)
+                        || (first != null && findKeys(first, name, once).contains(old))
+                        || (previous != null && findKeys(previous, name, once).contains(old))) {
+                    succeeding.add(key);
+                }
+            }
         }
         ClassNode now = ClassNodes.read(mixed, 0);
 
@@ -248,7 +266,7 @@ public final class InitHookReplay {
         ClassWriter writer = new ClassWriter(ClassWriter.COMPUTE_MAXS);
         now.accept(writer);
         return new Addition(writer.toByteArray(), new Due(objectKeys, classKeys, recomputed, missed, unset, caughtUp,
-                lateObjectKeys, lateClassKeys));
+                lateObjectKeys, lateClassKeys, succeeding));
     }
 
     static boolean isGameClass(String name) {

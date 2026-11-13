@@ -81,6 +81,7 @@ import dev.moon.hotwire.switching.SwitchHistory;
 import dev.moon.hotwire.switching.SwitchTimes;
 import dev.moon.hotwire.ui.Lang;
 import dev.moon.hotwire.ui.Progress;
+import dev.moon.hotwire.update.LiveNames;
 import dev.moon.hotwire.update.UpdateFolders;
 import dev.moon.hotwire.update.UpdateQueue;
 import java.io.IOException;
@@ -305,6 +306,7 @@ final class EngineStart {
         applier.rebuildObjectsWith(ResourceReload::isRebuiltWhilePaused, new PausedRebuilds());
         InitHookRuns.skipRebuiltWith(ResourceReload::isRebuiltWhilePaused);
         InitHookReplay.answerLoadFinishedWith(GameClasses::getLoadFinishedMethods);
+        InitHookReplay.nameSucceededWith(LiveNames::findOwnKeys);
         OffWindowObjects.setReloading(() -> ModViews.findLoadingOverlay() != null && isReloadMaking());
         InitHookReplay.answerWith(GameClasses::findLongLived, GameClasses::getStartupMethods,
                 GameClasses::getJoinMethods);

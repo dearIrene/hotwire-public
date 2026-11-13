@@ -2,6 +2,7 @@ package dev.moon.hotwire.fabric.registration;
 
 import dev.moon.hotwire.fabric.ModViews;
 import dev.moon.hotwire.redefine.Tripwire;
+import dev.moon.hotwire.update.LiveNames;
 import java.lang.reflect.Field;
 import java.lang.reflect.Method;
 import java.util.ArrayList;
@@ -175,7 +176,7 @@ public final class OneConfigHuds {
 
     private static @Nullable Class<?> findManager() {
         try {
-            return Class.forName(MANAGER, false, OneConfigHuds.class.getClassLoader());
+            return LiveNames.findRunning(MANAGER, OneConfigHuds.class.getClassLoader());
         } catch (ClassNotFoundException | LinkageError e) {
             return null;
         }
@@ -212,7 +213,7 @@ public final class OneConfigHuds {
             Method setRevision = manager.getDeclaredMethod("setRevision", int.class);
             setRevision.setAccessible(true);
             setRevision.invoke(instance, (int) manager.getMethod("getRevision").invoke(instance) + 1);
-            Class<?> state = Class.forName("androidx.compose.runtime.MutableIntState", false, manager.getClassLoader());
+            Class<?> state = LiveNames.findBeside("androidx.compose.runtime.MutableIntState", manager);
             for (Method getter : manager.getMethods()) {
                 if (getter.getName().equals("getInstancesRevision")) {
                     Object counter = getter.invoke(instance);
@@ -235,7 +236,7 @@ public final class OneConfigHuds {
     @SuppressWarnings("ReferenceEquality")
     private static void dropEditorScene() {
         try {
-            Class<?> editor = Class.forName(EDITOR, false, OneConfigHuds.class.getClassLoader());
+            Class<?> editor = LiveNames.findRunning(EDITOR, OneConfigHuds.class.getClassLoader());
             Field instance = editor.getDeclaredField("instance");
             instance.setAccessible(true);
             Object screen = instance.get(null);
