@@ -21,6 +21,7 @@ import dev.moon.hotwire.plan.SwitchPlanner;
 import dev.moon.hotwire.redefine.InitHookRuns;
 import dev.moon.hotwire.redefine.RebuildException;
 import dev.moon.hotwire.report.StageTimes;
+import dev.moon.hotwire.switching.BetweenFrames;
 import dev.moon.hotwire.switching.ModMixins;
 import dev.moon.hotwire.switching.ModSwitcher;
 import dev.moon.hotwire.switching.PlayerMessages;
@@ -145,6 +146,8 @@ public final class ModAdder {
     private final Map<Path, ContentScan.Classes> scans = new ConcurrentHashMap<>();
     private final Map<Path, ContentScan.Classes> ownScans = new ConcurrentHashMap<>();
 
+    private final Map<Path, Set<String>> contents = new ConcurrentHashMap<>();
+
     private final Map<String, List<Path>> setAside = new ConcurrentHashMap<>();
     private @Nullable CarriedLibraries carriedLibraries;
     private boolean savingReads;
@@ -232,6 +235,7 @@ public final class ModAdder {
         } finally {
             this.scans.clear();
             this.ownScans.clear();
+            this.contents.clear();
 
             LOGGER.info("[Hotwire] the dry run of {} took {}{}", jarPath.getFileName(), times,
                     preview == null || preview.mode() == AddMode.NOW ? ""
@@ -474,7 +478,8 @@ public final class ModAdder {
     }
 
     private Set<String> readContent(Path jarPath) {
-        return ContentScan.findKinds(this.scan(jarPath), this.engine::findSuperOf);
+        return this.contents.computeIfAbsent(jarPath,
+                path -> ContentScan.findKinds(this.scan(path), this.engine::findSuperOf));
     }
 
     public Optional<String> findWidenerRefusalOfUpdate(ModJar part, Path path) {
@@ -555,8 +560,11 @@ public final class ModAdder {
         try {
             return this.findRefusalNow(jarPaths, parts);
         } finally {
-            this.scans.clear();
-            this.ownScans.clear();
+            if (!this.savingReads) {
+                this.scans.clear();
+                this.ownScans.clear();
+                this.contents.clear();
+            }
         }
     }
 
@@ -746,9 +754,11 @@ public final class ModAdder {
                 IntSupplier setUp = () -> InitHookRuns.runLoadFinishedAfter(
                         () -> {
                             AddAssets.openPacks(parts.values());
+                            BetweenFrames.draw();
                             return this.engine.getApplier().getCatchUps().run();
                         }, () -> {
                             this.engine.showAddStep(4);
+                            BetweenFrames.draw();
                             AddAssets.reloadForAssets(parts.values());
                         }, BackgroundReload::runAfterReload);
                 this.engine.showAddStep(3);
@@ -830,6 +840,9 @@ public final class ModAdder {
 
     public void forgetReadsAhead() {
         this.readsAhead.clear();
+        this.scans.clear();
+        this.ownScans.clear();
+        this.contents.clear();
     }
 
     public ModJar readJar(Path path) throws ModJarException {

@@ -33,6 +33,7 @@ public final class WaitingCatchUps {
         int failed = 0;
         for (IntSupplier catchUp : this.waiting) {
             failed += catchUp.getAsInt();
+            BetweenFrames.draw();
         }
         this.waiting.clear();
         return failed;

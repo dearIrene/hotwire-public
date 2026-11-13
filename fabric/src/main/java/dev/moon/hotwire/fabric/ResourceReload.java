@@ -135,6 +135,7 @@ public final class ResourceReload {
                 OngoingReload.awaitBegun(game);
                 if (world) {
                     WorldRendererReset.run();
+                    HoldFrame.drawIfDue();
                 }
 
                 boolean renderersOnly = !reloadAsked && !hasAny(types, RELOADED);

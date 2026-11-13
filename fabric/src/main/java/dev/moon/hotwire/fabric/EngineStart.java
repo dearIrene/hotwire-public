@@ -42,6 +42,7 @@ import dev.moon.hotwire.fabric.registration.RegistryHolders;
 import dev.moon.hotwire.fabric.registration.StaticCopies;
 import dev.moon.hotwire.fabric.report.GameReports;
 import dev.moon.hotwire.fabric.report.LoggedFaults;
+import dev.moon.hotwire.fabric.screen.HoldFrame;
 import dev.moon.hotwire.fabric.screen.ModIcons;
 import dev.moon.hotwire.fabric.screen.RootScreen;
 import dev.moon.hotwire.fabric.update.OldStatics;
@@ -73,6 +74,7 @@ import dev.moon.hotwire.redefine.Tripwire;
 import dev.moon.hotwire.redefine.TripwireSites;
 import dev.moon.hotwire.registration.ModThreadFinder;
 import dev.moon.hotwire.report.StartTimes;
+import dev.moon.hotwire.switching.BetweenFrames;
 import dev.moon.hotwire.switching.ModMixins;
 import dev.moon.hotwire.switching.ModSwitcher;
 import dev.moon.hotwire.switching.OffChecker;
@@ -307,6 +309,7 @@ final class EngineStart {
         InitHookRuns.skipRebuiltWith(ResourceReload::isRebuiltWhilePaused);
         InitHookReplay.answerLoadFinishedWith(GameClasses::getLoadFinishedMethods);
         InitHookReplay.nameSucceededWith(LiveNames::findOwnKeys);
+        BetweenFrames.drawWith(HoldFrame::drawIfDue);
         OffWindowObjects.setReloading(() -> ModViews.findLoadingOverlay() != null && isReloadMaking());
         InitHookReplay.answerWith(GameClasses::findLongLived, GameClasses::getStartupMethods,
                 GameClasses::getJoinMethods);

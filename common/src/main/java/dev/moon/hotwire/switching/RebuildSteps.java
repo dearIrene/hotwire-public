@@ -71,9 +71,11 @@ final class RebuildSteps {
         } else {
             catchUpLater.accept(() -> {
                 int later = LiveObjects.replay(prepared, onGameThread);
+                BetweenFrames.draw();
                 Tripwire.releaseComingOn();
                 rebuilder.startStatics();
                 rebuildObjects.run();
+                BetweenFrames.draw();
                 return later;
             });
         }
