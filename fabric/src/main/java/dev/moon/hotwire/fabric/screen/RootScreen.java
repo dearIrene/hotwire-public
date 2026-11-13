@@ -38,6 +38,8 @@ public abstract class RootScreen extends Screen {
 
     private static volatile BooleanSupplier pausing = () -> false;
 
+    private boolean drawn;
+
     protected RootScreen(String title) {
         super(Component.literal(title));
     }
@@ -96,6 +98,7 @@ public abstract class RootScreen extends Screen {
     @Override
     public void extractRenderState(GuiGraphicsExtractor graphics, int mouseX, int mouseY, float partialTick) {
         super.extractRenderState(graphics, mouseX, mouseY, partialTick);
+        this.drawn = true;
         this.drawFrame(new GuiCanvas(graphics, this.font), System.nanoTime(), mouseX, mouseY);
     }
     //?} else {
@@ -107,6 +110,7 @@ public abstract class RootScreen extends Screen {
     @Override
     public void render(GuiGraphics graphics, int mouseX, int mouseY, float partialTick) {
         super.render(graphics, mouseX, mouseY, partialTick);
+        this.drawn = true;
         this.drawFrame(new GuiCanvas(graphics, this.font), System.nanoTime(), mouseX, mouseY);
     }
     *///?}
@@ -170,7 +174,7 @@ public abstract class RootScreen extends Screen {
 
     @Override
     public boolean charTyped(CharacterEvent event) {
-        return this.getRoot().typeChar(event.codepoint()) || super.charTyped(event);
+        return !this.drawn || this.getRoot().typeChar(event.codepoint()) || super.charTyped(event);
     }
     //?} else {
     /*@Override
@@ -206,7 +210,7 @@ public abstract class RootScreen extends Screen {
 
     @Override
     public boolean charTyped(char typed, int modifiers) {
-        return this.getRoot().typeChar(typed) || super.charTyped(typed, modifiers);
+        return !this.drawn || this.getRoot().typeChar(typed) || super.charTyped(typed, modifiers);
     }
     *///?}
 }
