@@ -6,6 +6,7 @@ import dev.moon.hotwire.fabric.LoadedMods;
 import dev.moon.hotwire.fabric.add.ModAdder;
 import dev.moon.hotwire.fabric.registration.GameRegistrations;
 import dev.moon.hotwire.fabric.update.ModUpdater;
+import dev.moon.hotwire.fabric.update.SwapAtClose;
 import dev.moon.hotwire.plan.SwitchPlan;
 import dev.moon.hotwire.report.ActionJournal;
 import dev.moon.hotwire.report.CrashSection;
@@ -470,12 +471,25 @@ public final class GameReports {
         texts.put("latest.log", TidyLog.write(told, WHEN.format(now), MachineDetails.read(), mods,
                 Files.isRegularFile(log) ? getTail(read(log)) : "(the game wrote no log)\n"));
         HotwireLog.flush();
-        LastThrow about = this.lastThrow;
+
+        boolean lastSession = froze || extra.stream().anyMatch(this::isFromLastSession);
+
+        LastThrow about = lastSession ? null : this.lastThrow;
+        if (about == null && !extra.isEmpty()) {
+            String crash = read(extra.get(0));
+            about = new LastThrow(Diagnosis.readMessages(crash), Diagnosis.readFrames(crash), List.of(), List.of());
+        }
+        Path whole = logs.resolve(lastSession ? HotwireLog.LAST : HotwireLog.FILE);
 
         texts.put(Diagnosis.FILE, Diagnosis.write(told, about == null ? List.of() : about.messages(),
                 about == null ? List.of() : about.frames(), about == null ? List.of() : about.mods(),
-                about == null ? List.of() : about.spans(),
-                Files.isRegularFile(logs.resolve(HotwireLog.FILE)) ? read(logs.resolve(HotwireLog.FILE)) : ""));
+                about == null ? List.of() : about.spans(), Files.isRegularFile(whole) ? read(whole) : ""));
+
+        for (String name : List.of(HotwireClient.START_FAILURE, SwapAtClose.LAST_LOGS)) {
+            if (Files.isRegularFile(logs.resolve(name))) {
+                texts.put("hotwire-" + name, read(logs.resolve(name)));
+            }
+        }
 
         if (froze) {
             texts.put("hotwire-" + FreezeDump.FILE, read(logs.resolve(FreezeDump.FILE)));
@@ -483,8 +497,6 @@ public final class GameReports {
         if (FreezeDump.isRecent(logs.resolve(FreezeDump.PAUSE_FILE))) {
             texts.put("hotwire-" + FreezeDump.PAUSE_FILE, read(logs.resolve(FreezeDump.PAUSE_FILE)));
         }
-
-        boolean lastSession = froze || extra.stream().anyMatch(this::isFromLastSession);
         for (String name : lastSession ? List.of(HotwireLog.FILE, HotwireLog.LAST) : List.of(HotwireLog.FILE)) {
             if (Files.isRegularFile(logs.resolve(name))) {
                 texts.put("hotwire-" + name, getTail(read(logs.resolve(name))));

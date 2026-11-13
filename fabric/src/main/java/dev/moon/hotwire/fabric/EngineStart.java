@@ -432,13 +432,21 @@ final class EngineStart {
         }
     }
 
+    private static void forgetStartFailure(Path gameDir) {
+        try {
+            Files.deleteIfExists(gameDir.resolve("hotwire").resolve("logs").resolve(HotwireClient.START_FAILURE));
+        } catch (IOException | RuntimeException e) {
+            LOGGER.debug("[Hotwire] the last start's failure could not be deleted: {}", e.toString());
+        }
+    }
+
     static void writeStartFailure(Path gameDir, Throwable failure) {
         StringBuilder trace = new StringBuilder();
         describeTrace(failure, trace, "");
         try {
             Path logs = gameDir.resolve("hotwire").resolve("logs");
             Files.createDirectories(logs);
-            Files.writeString(logs.resolve("start-failure.txt"), trace.toString());
+            Files.writeString(logs.resolve(HotwireClient.START_FAILURE), trace.toString());
         } catch (IOException | RuntimeException e) {
             LOGGER.warn("[Hotwire] the start's failure could not be written down", e);
         }
@@ -609,6 +617,7 @@ final class EngineStart {
                 parts.runner().getSwitcher().getFiller().fillChanged();
             }
             laps.endLap("switch cache");
+            forgetStartFailure(gameDir);
         } catch (JvmAccessException | RuntimeException | LinkageError e) {
             LOGGER.error("[Hotwire] Switching mods is not possible in this game: {}", e.getMessage(), e);
             writeStartFailure(gameDir, e);

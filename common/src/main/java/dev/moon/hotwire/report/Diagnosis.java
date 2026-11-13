@@ -61,6 +61,28 @@ public final class Diagnosis {
         return out.toString();
     }
 
+    public static List<String> readFrames(String trace) {
+        List<String> frames = new ArrayList<>();
+        for (String line : trace.lines().toList()) {
+            String frame = line.strip();
+            int end = frame.indexOf('(');
+            if (frame.startsWith("at ") && end > 0) {
+                String method = frame.substring(Math.max(3, frame.lastIndexOf('/', end) + 1), end);
+                int dot = method.lastIndexOf('.');
+                if (dot > 0) {
+                    frames.add(method.substring(0, dot));
+                }
+            }
+        }
+        return frames;
+    }
+
+    public static List<String> readMessages(String trace) {
+        return trace.lines().map(String::strip).filter(line -> !line.startsWith("at ")
+                && (line.startsWith("Caused by: ") || line.matches("[\\w.$]+(Exception|Error)(: .*)?")))
+                .distinct().limit(12).toList();
+    }
+
     private static void append(StringBuilder out, List<String> lines) {
         if (lines.size() <= MOST_FIRST + MOST_LAST) {
             lines.forEach(line -> out.append("  ").append(line).append('\n'));

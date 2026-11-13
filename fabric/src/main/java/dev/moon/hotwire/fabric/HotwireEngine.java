@@ -18,6 +18,7 @@ import dev.moon.hotwire.fabric.screen.ModIcons;
 import dev.moon.hotwire.fabric.screen.WebLinks;
 import dev.moon.hotwire.fabric.store.ModStore;
 import dev.moon.hotwire.fabric.store.UpdateCheck;
+import dev.moon.hotwire.fabric.update.SwapAtClose;
 import dev.moon.hotwire.fabric.update.UpdateSupport;
 import dev.moon.hotwire.modrinth.Downloads;
 import dev.moon.hotwire.plan.ModGraph;
@@ -168,7 +169,9 @@ public final class HotwireEngine implements ModScreenGame, AutoCloseable {
 
     void cleanUpdateFolders() {
         try {
-            this.pending.cleanAtStart(FabricLoader.getInstance().getGameDir().resolve("hotwire").resolve("store"));
+            Path hotwire = FabricLoader.getInstance().getGameDir().resolve("hotwire");
+            SwapAtClose.saveLastLogs(this.updateFolders.swapper(), hotwire.resolve("logs"));
+            this.pending.cleanAtStart(hotwire.resolve("store"), hotwire.resolve("added"));
         } catch (IOException e) {
             LOGGER.warn("[Hotwire] the update folders under {} could not be cleaned", this.updateFolders.staging(), e);
         }
@@ -493,7 +496,9 @@ public final class HotwireEngine implements ModScreenGame, AutoCloseable {
     }
 
     void showUpdateInChat() {
-        this.selfUpdate.showInChat();
+        if (this.getSettings().isUpdateCheckOn()) {
+            this.selfUpdate.showInChat();
+        }
     }
 
     @Override

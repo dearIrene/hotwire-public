@@ -49,6 +49,7 @@ public final class HotwireClient implements ClientModInitializer {
     public static final Identifier NOTICES = Identifier.fromNamespaceAndPath(ID, "notices");
     private static final Logger LOGGER = LoggerFactory.getLogger(HotwireClient.class);
 
+    public static final String START_FAILURE = "start-failure.txt";
     private static final String START_FAILED = "Hotwire did not start; hotwire/logs/start-failure.txt says why";
     private static @Nullable HotwireEngine engine;
 

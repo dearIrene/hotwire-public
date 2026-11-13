@@ -51,8 +51,8 @@ public final class EngineScreens {
         opened.setUpdates(this.owner.storeJars.getOffers(), this.owner.storeJars.isChecked());
         if (this.owner.getSettings().isUpdateCheckOn()) {
             this.owner.storeJars.startCheck();
+            this.owner.selfUpdate.start();
         }
-        this.owner.selfUpdate.start();
         HotwireEngine.JvmParts parts = this.owner.findParts();
         if (parts != null) {
             Fields.preloadStatics(parts.instrumentation());

@@ -8,6 +8,7 @@ import dev.moon.hotwire.update.UpdateQueue;
 import java.io.File;
 import java.io.IOException;
 import java.net.URI;
+import java.nio.file.DirectoryStream;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.nio.file.StandardCopyOption;
@@ -20,6 +21,7 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 public final class SwapAtClose {
+    public static final String LAST_LOGS = "last-close.log";
     private static final Logger LOGGER = LoggerFactory.getLogger(SwapAtClose.class);
 
     private final UpdateQueue queue;
@@ -114,5 +116,28 @@ public final class SwapAtClose {
                 .map(entry -> entry.name() + " " + entry.toVersion() + " was not put in place: " + entry.reason()
                         + " It is tried again at the next close; cancel it any time from Pending tasks.")
                 .toList();
+    }
+
+    public static void saveLastLogs(Path swapper, Path logs) {
+        if (!Files.isDirectory(swapper)) {
+            return;
+        }
+        StringBuilder all = new StringBuilder();
+        try (DirectoryStream<Path> written = Files.newDirectoryStream(swapper, "*.log")) {
+            for (Path log : written) {
+                String text = Files.readString(log);
+                if (!text.isBlank()) {
+                    all.append(log.getFileName()).append('\n').append(text).append('\n');
+                }
+            }
+            if (all.isEmpty()) {
+                Files.deleteIfExists(logs.resolve(LAST_LOGS));
+            } else {
+                Files.createDirectories(logs);
+                Files.writeString(logs.resolve(LAST_LOGS), all);
+            }
+        } catch (IOException | RuntimeException e) {
+            LOGGER.debug("[Hotwire] the last close's logs could not be read: {}", e.toString());
+        }
     }
 }

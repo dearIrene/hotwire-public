@@ -91,13 +91,14 @@ public final class PendingChanges {
         }
     }
 
-    public void cleanAtStart(Path downloads) throws IOException {
+    public void cleanAtStart(Path downloads, Path added) throws IOException {
         Set<Path> wanted = new HashSet<>();
         for (UpdateQueue.Entry entry : this.queue.getEntries()) {
             wanted.add(Path.of(entry.stagedJar()).toAbsolutePath());
         }
         clean(this.folders.staging(), wanted);
         clean(downloads, wanted);
+        clean(added, wanted);
         clean(this.folders.swapper(), Set.of(this.folders.swapperJar().toAbsolutePath(),
                 this.folders.swapperLog().toAbsolutePath()));
         tryDelete(this.folders.swapper());
