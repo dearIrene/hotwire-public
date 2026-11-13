@@ -57,9 +57,11 @@ public final class HoldFrame {
         failed = false;
         drawnAt = System.nanoTime();
         if (LOGGER.isDebugEnabled()) {
-            LOGGER.debug("[Hotwire] the hold took the game's thread at {}", StackWalker.getInstance()
-                    .walk(frames -> frames.filter(frame -> !frame.getClassName().startsWith("dev.moon.hotwire."))
-                    .limit(8).map(frame -> frame.getClassName() + "." + frame.getMethodName()).toList()));
+            String at = StackWalker.getInstance().walk(frames -> frames
+                    .filter(frame -> !frame.getClassName().startsWith("dev.moon.hotwire.")).limit(8)
+                    .map(frame -> frame.getClassName() + "." + frame.getMethodName())
+                    .reduce("", (all, one) -> all.isEmpty() ? one : all + " < " + one));
+            LOGGER.debug("[Hotwire] the hold took the game's thread at {}", at);
         }
     }
 

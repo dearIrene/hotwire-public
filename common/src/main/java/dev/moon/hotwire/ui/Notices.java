@@ -18,6 +18,12 @@ public final class Notices {
 
     private static volatile @Nullable Consumer<Notice> whenShown;
 
+    private static final int MOST_TOLD = 400;
+    private static final List<Told> told = new ArrayList<>();
+
+    public record Told(long atMillis, Notice notice) {
+    }
+
     private Notices() {
     }
 
@@ -25,6 +31,7 @@ public final class Notices {
         if (notice.title().isBlank()) {
             return;
         }
+        remember(notice);
         List<Notice> next = new ArrayList<>(showing);
         int at = indexOf(next, notice.key());
         if (at >= 0) {
@@ -60,8 +67,29 @@ public final class Notices {
         return true;
     }
 
-    public static void onShown(Consumer<Notice> told) {
-        whenShown = told;
+    public static void onShown(Consumer<Notice> listener) {
+        whenShown = listener;
+    }
+
+    private static void remember(Notice notice) {
+        if (notice.progress() >= 0) {
+            return;
+        }
+        if (!told.isEmpty()) {
+            Notice last = told.getLast().notice();
+            if (last.key().equals(notice.key()) && last.title().equals(notice.title())
+                    && last.detail().equals(notice.detail())) {
+                return;
+            }
+        }
+        told.add(new Told(System.currentTimeMillis(), notice));
+        if (told.size() > MOST_TOLD) {
+            told.removeFirst();
+        }
+    }
+
+    public static synchronized List<Told> getTold() {
+        return List.copyOf(told.reversed());
     }
 
     public static synchronized void drop(Notice notice) {
@@ -97,6 +125,7 @@ public final class Notices {
         showing = List.of();
         resting.clear();
         seen.clear();
+        told.clear();
     }
 
     public static List<Notice> getShowing() {

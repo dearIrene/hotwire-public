@@ -244,6 +244,13 @@ public final class LoadingScreen extends Part {
         String lead = (now.adding() ? this.progress.getHeading() : working) + " ";
         String tail = now.adding() || this.name.isBlank() ? ""
                 : Lang.get(now.goingOff() ? "hotwire.screen.off" : "hotwire.screen.on");
+
+        Canvas.Image icon = now.queue().size() == 1 && !now.queue().getFirst().id().isEmpty()
+                ? this.icons.apply(now.queue().getFirst().id()) : null;
+        if (icon != null) {
+            float in = this.nameIn.getValue();
+            canvas.drawImage(icon, left, top - 28 + Math.round((1 - in) * (1 - in) * 8), 20, 20, alpha * in);
+        }
         canvas.pushClip(left, top - 2, right, top + 20);
         canvas.pushScale(2, left, top);
         int leadWide = canvas.measureText(lead);

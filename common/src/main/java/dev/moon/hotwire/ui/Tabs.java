@@ -10,6 +10,7 @@ public final class Tabs extends Part {
 
     static final int RAIL_WIDTH = 50;
     private static final int RAIL_TALL = 32;
+    private static final int RAIL_WORDED = 29;
     private static final int RAIL_SHORT = 17;
     private static final int ICON = 9;
     private static final int WORD_GAP = 14;
@@ -144,8 +145,9 @@ public final class Tabs extends Part {
         if (this.look == Look.WORDS) {
             this.placeWords(this.getX(), this.getWidth());
         } else if (this.look == Look.RAIL) {
-            this.worded = this.getHeight() >= this.tabs.size() * RAIL_TALL + 8;
-            int tall = this.worded ? RAIL_TALL : RAIL_SHORT;
+            int room = (this.getHeight() - 8) / Math.max(1, this.tabs.size());
+            this.worded = room >= RAIL_WORDED;
+            int tall = this.worded ? Math.min(RAIL_TALL, room) : RAIL_SHORT;
             int high = this.getY() + 4;
             int lows = (int) this.tabs.stream().filter(tab -> tab.low).count();
             int low = this.getY() + this.getHeight() - 4 - tall * lows;
