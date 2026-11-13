@@ -45,6 +45,8 @@ import java.util.function.Function;
 import java.util.zip.ZipEntry;
 import java.util.zip.ZipFile;
 import net.fabricmc.loader.api.FabricLoader;
+import net.fabricmc.loader.api.ModContainer;
+import net.fabricmc.loader.api.metadata.ModOrigin;
 import net.minecraft.client.Minecraft;
 import org.jspecify.annotations.Nullable;
 import org.objectweb.asm.ClassReader;
@@ -190,10 +192,21 @@ public final class AddSupport implements ModAdder.Engine {
         Files.createDirectories(this.folders.staging());
         Path staged = this.folders.staging().resolve(String.valueOf(jar.getFileName()));
         Files.copy(jar, staged, StandardCopyOption.REPLACE_EXISTING);
-        this.queue.add(new UpdateQueue.Entry(manifest.id(), manifest.name(), "", manifest.version(), "", "",
+
+        Path running = this.findRunningJar(manifest.id());
+        this.queue.add(new UpdateQueue.Entry(manifest.id(), manifest.name(), "", manifest.version(),
+                running == null ? "" : running.toString(), running == null ? "" : FileHashes.findSha256(running),
                 staged.toAbsolutePath().toString(), FileHashes.findSha256(staged), "",
                 System.currentTimeMillis()));
         return manifest;
+    }
+
+    private @Nullable Path findRunningJar(String id) {
+        Path mods = this.folders.mods().toAbsolutePath().normalize();
+        return FabricLoader.getInstance().getModContainer(id).map(ModContainer::getOrigin)
+                .filter(origin -> origin.getKind() == ModOrigin.Kind.PATH && !origin.getPaths().isEmpty())
+                .map(origin -> origin.getPaths().get(0).toAbsolutePath().normalize())
+                .filter(jar -> mods.equals(jar.getParent()) && Files.isRegularFile(jar)).orElse(null);
     }
 
     public ModAdder.Result add(Path jar, Function<String, String> nameOf) {

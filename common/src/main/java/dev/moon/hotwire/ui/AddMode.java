@@ -23,8 +23,4 @@ public enum AddMode {
     @Nullable String findButton() {
         return this.button == null ? null : Lang.get(this.button);
     }
-
-    boolean isDeclinedNow() {
-        return this == NEXT_START || this == REFUSED;
-    }
 }

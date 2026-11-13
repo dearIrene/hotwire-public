@@ -35,10 +35,6 @@ public final class Progress {
             return Math.max(this.countTicked(), this.getFraction() * count);
         }
 
-        public double getModFraction(int index) {
-            return Math.max(0, Math.min(1, this.getModsReached() - index));
-        }
-
         public int countTicked() {
             int done = 0;
             for (int tick : this.ticks) {

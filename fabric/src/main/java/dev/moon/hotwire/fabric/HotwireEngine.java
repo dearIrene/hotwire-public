@@ -852,8 +852,4 @@ public final class HotwireEngine implements ModScreenGame, AutoCloseable {
     public void addFromStoreNow(String projectId, String versionId) {
         this.stores.addFromStoreNow(projectId, versionId, this.under);
     }
-
-    void forgetUnder() {
-        this.under = null;
-    }
 }

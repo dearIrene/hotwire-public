@@ -41,10 +41,6 @@ final class Entrance {
         return true;
     }
 
-    boolean isClosing() {
-        return this.closingAt != 0;
-    }
-
     boolean isClosed(long now) {
         return this.closingAt != 0 && this.findSince(this.closingAt, now) >= CLOSE;
     }

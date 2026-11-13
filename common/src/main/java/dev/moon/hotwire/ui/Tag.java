@@ -39,10 +39,6 @@ public final class Tag extends Part {
         return new Tag(Lang.get("hotwire.row.library"), Palette.PATH, Palette.PATH, BOOK);
     }
 
-    public void setGlow(float glow) {
-        this.glow = glow;
-    }
-
     private int findLead() {
         return 4 + this.signs.length * (SIGN + 2) + (this.signs.length > 0 ? 1 : 0);
     }

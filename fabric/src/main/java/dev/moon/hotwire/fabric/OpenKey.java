@@ -116,11 +116,6 @@ public final class OpenKey {
                 + names.getLast();
     }
 
-    static String findKeyName() {
-        KeyMapping made = key;
-        return made == null ? "H" : made.getTranslatedKeyMessage().getString();
-    }
-
     public static boolean openAtScreen(Predicate<KeyMapping> pressed) {
         KeyMapping made = key;
         KeyMapping store = storeKey;

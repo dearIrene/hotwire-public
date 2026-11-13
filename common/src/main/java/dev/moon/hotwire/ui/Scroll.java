@@ -29,17 +29,6 @@ public final class Scroll extends Part {
         this.wanted = Float.MAX_VALUE;
     }
 
-    static void fadeEdges(Canvas canvas, int x0, int top, int x1, int bottom, boolean above, boolean below,
-            float alpha) {
-        int clear = Palette.PANEL & 0x00FFFFFF;
-        if (above) {
-            canvas.fillDown(x0, top, x1, top + 10, Colors.fade(Palette.PANEL, alpha), clear);
-        }
-        if (below) {
-            canvas.fillDown(x0, bottom - 28, x1, bottom, clear, Colors.fade(Palette.PANEL, alpha));
-        }
-    }
-
     void scrollTo(int scrolled) {
         this.wanted = scrolled;
         this.shown.snap(scrolled);

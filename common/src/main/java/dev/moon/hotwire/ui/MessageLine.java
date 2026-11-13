@@ -49,12 +49,6 @@ final class MessageLine extends Element {
     record Line(String text, int color) {
     }
 
-    static void addWrapped(Canvas canvas, List<Line> lines, String text, int color, int width) {
-        for (String part : wrap(canvas, text, width, Integer.MAX_VALUE)) {
-            lines.add(new Line(part, color));
-        }
-    }
-
     static boolean isPath(String word) {
         String bare = word.replaceAll("[.,:;)]+$", "");
         return bare.endsWith(".jar") || bare.endsWith(".zip") || (bare.contains("/") && bare.length() > 1);
