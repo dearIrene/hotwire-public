@@ -79,7 +79,8 @@ public final class PlayerMessages {
     }
 
     private static List<String> listAskedFirst(SwitchPlan plan) {
-        return plan.order().stream().sorted(Comparator.comparing(
+        List<String> order = plan.direction() == SwitchPlan.Direction.ON ? plan.order().reversed() : plan.order();
+        return order.stream().sorted(Comparator.comparing(
                 id -> !(plan.why().get(id) instanceof SwitchPlan.Reason.Asked))).toList();
     }
 
