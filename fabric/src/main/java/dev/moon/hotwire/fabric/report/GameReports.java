@@ -9,6 +9,7 @@ import dev.moon.hotwire.fabric.update.ModUpdater;
 import dev.moon.hotwire.plan.SwitchPlan;
 import dev.moon.hotwire.report.ActionJournal;
 import dev.moon.hotwire.report.CrashSection;
+import dev.moon.hotwire.report.Diagnosis;
 import dev.moon.hotwire.report.FreezeBlame;
 import dev.moon.hotwire.report.Report;
 import dev.moon.hotwire.report.ReportBundle;
@@ -36,6 +37,7 @@ import java.util.List;
 import java.util.Map;
 import java.util.Optional;
 import java.util.Set;
+import java.util.TreeSet;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.ConcurrentSkipListSet;
 import java.util.concurrent.CopyOnWriteArrayList;
@@ -58,6 +60,7 @@ import org.slf4j.LoggerFactory;
 import org.spongepowered.asm.launch.MixinBootstrap;
 
 public final class GameReports {
+    private static final DateTimeFormatter SPAN = DateTimeFormatter.ofPattern("HH:mm:ss");
     private static final Logger LOGGER = LoggerFactory.getLogger(GameReports.class);
 
     private static final DateTimeFormatter WHEN = DateTimeFormatter.ofPattern("yyyy-MM-dd HH:mm:ss")
@@ -82,6 +85,14 @@ public final class GameReports {
     private volatile @Nullable Report last;
 
     private volatile @Nullable String underWay;
+
+    private volatile LocalTime begun = LocalTime.MIN;
+    private final Map<String, String> ranWhen = new ConcurrentHashMap<>();
+
+    private volatile @Nullable LastThrow lastThrow;
+
+    private record LastThrow(List<String> messages, List<String> frames, List<String> mods, List<String> spans) {
+    }
 
     private final AtomicInteger depth = new AtomicInteger();
     private final List<Report.Failure> outerFaults = new CopyOnWriteArrayList<>();
@@ -181,7 +192,8 @@ public final class GameReports {
             return;
         }
         this.outerFaults.clear();
-        this.underWay = LocalTime.now(ZoneId.systemDefault()).withNano(0) + " " + operation.getWords() + " " + what
+        this.begun = LocalTime.now(ZoneId.systemDefault()).withNano(0);
+        this.underWay = this.begun + " " + operation.getWords() + " " + what
                 + ": under way, the classes it redefined so far not counted below";
     }
 
@@ -222,6 +234,7 @@ public final class GameReports {
         Set<String> switched = new HashSet<>(reports.off);
         switched.addAll(reports.added);
         ClassLoader game = GameReports.class.getClassLoader();
+        reports.note(frames, messages, game);
         CrashSection.Detail trace = CrashSection.describeTrace(frames, messages, reports.rebuiltBy::get, switched,
                 name -> {
                     try {
@@ -237,6 +250,12 @@ public final class GameReports {
                     + " switching (" + now + "). Send the newest zip under hotwire/reports.");
         }
         return trace;
+    }
+
+    private String describeSpan() {
+        LocalTime now = LocalTime.now(ZoneId.systemDefault());
+        LocalTime from = this.begun.equals(LocalTime.MIN) ? now.minusMinutes(1) : this.begun;
+        return SPAN.format(from) + "-" + SPAN.format(now.plusSeconds(1));
     }
 
     public synchronized Report reportSwitch(ModSwitcher.Result result, Set<String> off, Report.OffCheck offCheck,
@@ -335,15 +354,19 @@ public final class GameReports {
         }
         this.story.add(line);
         LastRebuild last = new LastRebuild(List.copyOf(order), System.nanoTime());
+        String span = this.describeSpan();
         for (String rebuilt : report.rebuilt()) {
             this.rebuiltBy.putIfAbsent(rebuilt, line);
             this.lastRebuilt.put(rebuilt, last);
+            this.ranWhen.put(rebuilt, span);
         }
     }
 
     public void onRebuilt(Collection<String> classes, String line) {
         this.story.add(line + ": " + classes.size() + " classes redefined");
         classes.forEach(rebuilt -> this.rebuiltBy.putIfAbsent(rebuilt, line));
+        String span = this.describeSpan();
+        classes.forEach(rebuilt -> this.ranWhen.put(rebuilt, span));
     }
 
     private Map<String, String> getNames(List<String> ids) {
@@ -434,6 +457,8 @@ public final class GameReports {
         this.onWritten();
         Path game = FabricLoader.getInstance().getGameDir();
         Map<String, String> texts = new LinkedHashMap<>();
+
+        texts.put(Diagnosis.FILE, "");
         Path log = game.resolve("logs").resolve("latest.log");
         Instant now = Instant.now();
         Path logs = game.resolve("hotwire").resolve("logs");
@@ -444,6 +469,13 @@ public final class GameReports {
                 + " " + why : why;
         texts.put("latest.log", TidyLog.write(told, WHEN.format(now), MachineDetails.read(), mods,
                 Files.isRegularFile(log) ? getTail(read(log)) : "(the game wrote no log)\n"));
+        HotwireLog.flush();
+        LastThrow about = this.lastThrow;
+
+        texts.put(Diagnosis.FILE, Diagnosis.write(told, about == null ? List.of() : about.messages(),
+                about == null ? List.of() : about.frames(), about == null ? List.of() : about.mods(),
+                about == null ? List.of() : about.spans(),
+                Files.isRegularFile(logs.resolve(HotwireLog.FILE)) ? read(logs.resolve(HotwireLog.FILE)) : ""));
 
         if (froze) {
             texts.put("hotwire-" + FreezeDump.FILE, read(logs.resolve(FreezeDump.FILE)));
@@ -478,6 +510,31 @@ public final class GameReports {
         Path zip = ReportBundle.write(this.folder, now, title, this.machine.hotwireVersion(), texts,
                 Set.of(Minecraft.getInstance().getUser().getName()));
         return zip;
+    }
+
+    private void note(Collection<String> frames, Collection<String> messages, ClassLoader game) {
+        Set<String> mods = new TreeSet<>();
+        Set<String> spans = new TreeSet<>();
+        for (String frame : frames) {
+            try {
+                String mod = GameRegistrations.findModOf(Class.forName(frame, false, game));
+                if (mod != null) {
+                    mods.add(mod);
+                }
+            } catch (ClassNotFoundException | LinkageError e) {
+            }
+            String slashed = frame.replace('.', '/');
+            String span = this.ranWhen.get(slashed);
+            if (span != null) {
+                spans.add(span);
+            }
+            LastRebuild last = this.lastRebuilt.get(slashed);
+            if (last != null) {
+                mods.addAll(last.ids());
+            }
+        }
+        this.lastThrow = new LastThrow(List.copyOf(messages), List.copyOf(frames), List.copyOf(mods),
+                List.copyOf(spans));
     }
 
     private List<Path> listSince(Path folder, String suffix) {

@@ -406,7 +406,7 @@ public final class ClassRebuilder {
             }
         });
         if (!newlyBuilt.isEmpty()) {
-            LOGGER.info("[Hotwire] {} classes build their objects another way (the debug log says where): {}",
+            LOGGER.info("[Hotwire] {} classes build their objects another way (each said above): {}",
                     newlyBuilt.size(), List.copyOf(newlyBuilt).subList(0, Math.min(12, newlyBuilt.size())));
         }
         if (!numbersAlone.isEmpty()) {
