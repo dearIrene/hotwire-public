@@ -762,6 +762,16 @@ public final class ModUpdater {
 
     Optional<String> findRejection(ModManifest incoming) {
         ModGraph graph = this.engine.getGraph();
+
+        for (Map.Entry<String, List<String>> breaks : incoming.getRelation(ModManifest.Relation.BREAKS).entrySet()) {
+            String have = this.findVersionAfter(breaks.getKey());
+            if (have != null && this.engine.satisfies(have, breaks.getValue())) {
+                String name = graph.find(graph.resolve(breaks.getKey())).map(ModManifest::name)
+                        .orElse(breaks.getKey());
+                return Optional.of(incoming.name() + " " + incoming.version() + " does not work with " + name + " "
+                        + have + ". Update " + name + " first, then this.");
+            }
+        }
         Set<String> ids = new TreeSet<>(graph.getIds());
         ids.addAll(this.after.keySet());
         for (String id : ids) {
@@ -804,9 +814,22 @@ public final class ModUpdater {
         return into;
     }
 
+    private @Nullable ModManifest findComingAs(String id) {
+        ModManifest coming = this.after.get(this.engine.getGraph().resolve(id));
+        if (coming != null) {
+            return coming;
+        }
+        for (ModManifest other : this.after.values()) {
+            if (other.provides().contains(id)) {
+                return other;
+            }
+        }
+        return null;
+    }
+
     @Nullable String findVersionAfter(String id) {
         String resolved = this.engine.getGraph().resolve(id);
-        ModManifest coming = this.after.get(resolved);
+        ModManifest coming = this.findComingAs(id);
         if (coming != null) {
             return coming.version();
         }
@@ -815,7 +838,7 @@ public final class ModUpdater {
     }
 
     boolean isMetNow(String id, List<String> ranges) {
-        ModManifest coming = this.after.get(this.engine.getGraph().resolve(id));
+        ModManifest coming = this.findComingAs(id);
         String now = coming != null ? coming.version() : this.engine.findVersionOf(id);
         return now != null && this.engine.satisfies(now, ranges);
     }
@@ -870,6 +893,13 @@ public final class ModUpdater {
             if (have == null || !this.engine.satisfies(have, ranges)) {
                 unmet.put(mod, ranges);
             } else if (!this.isMetNow(mod, ranges)) {
+                waits.add(new UpdatePlan.UpdateBlocker.DependencyQueued(mod, have));
+            }
+        });
+
+        diff.incoming().getRelation(ModManifest.Relation.BREAKS).forEach((mod, ranges) -> {
+            String have = this.findVersionAfter(mod);
+            if (have != null && !this.engine.satisfies(have, ranges) && this.isMetNow(mod, ranges)) {
                 waits.add(new UpdatePlan.UpdateBlocker.DependencyQueued(mod, have));
             }
         });
