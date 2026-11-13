@@ -74,8 +74,9 @@ public final class OneConfigModCards {
 
     private static @Nullable Object findRegistry() {
         try {
-            return LiveNames.findRunning(REGISTRY, OneConfigModCards.class.getClassLoader()).getField("INSTANCE")
-                    .get(null);
+            Class<?> registry = LiveNames.findRunning(REGISTRY, OneConfigModCards.class.getClassLoader());
+
+            return GameRegistrations.isOfOffMod(registry) ? null : registry.getField("INSTANCE").get(null);
         } catch (ClassNotFoundException | NoSuchFieldException | IllegalAccessException | LinkageError e) {
             return null;
         }

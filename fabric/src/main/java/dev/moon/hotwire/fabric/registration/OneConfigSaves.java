@@ -65,7 +65,9 @@ public final class OneConfigSaves implements ModLifecycleListener {
 
     private static @Nullable Class<?> findManager() {
         try {
-            return LiveNames.findRunning(MANAGER, OneConfigSaves.class.getClassLoader());
+            Class<?> manager = LiveNames.findRunning(MANAGER, OneConfigSaves.class.getClassLoader());
+
+            return GameRegistrations.isOfOffMod(manager) ? null : manager;
         } catch (ClassNotFoundException | LinkageError e) {
             return null;
         }

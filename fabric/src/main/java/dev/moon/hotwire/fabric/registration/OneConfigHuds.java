@@ -176,7 +176,9 @@ public final class OneConfigHuds {
 
     private static @Nullable Class<?> findManager() {
         try {
-            return LiveNames.findRunning(MANAGER, OneConfigHuds.class.getClassLoader());
+            Class<?> manager = LiveNames.findRunning(MANAGER, OneConfigHuds.class.getClassLoader());
+
+            return GameRegistrations.isOfOffMod(manager) ? null : manager;
         } catch (ClassNotFoundException | LinkageError e) {
             return null;
         }
