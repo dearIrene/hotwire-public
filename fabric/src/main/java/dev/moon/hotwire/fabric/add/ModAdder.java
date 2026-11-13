@@ -1,5 +1,6 @@
 package dev.moon.hotwire.fabric.add;
 
+import dev.moon.hotwire.concurrent.Parallel;
 import dev.moon.hotwire.fabric.BackgroundReload;
 import dev.moon.hotwire.fabric.CrashGuard;
 import dev.moon.hotwire.fabric.LifecycleListeners;
@@ -570,6 +571,13 @@ public final class ModAdder {
 
     private @Nullable Result findRefusalNow(List<Path> jarPaths, Map<String, Part> parts) {
         this.setAside.clear();
+
+        if (jarPaths.size() > 1) {
+            Parallel.runEachBeside(jarPaths, jarPath -> {
+                this.scan(jarPath);
+                this.scanOwn(jarPath);
+            });
+        }
         for (Path jarPath : jarPaths) {
             Optional<String> plain = AddFirstLook.findRefusal(jarPath);
             if (plain.isPresent()) {
@@ -616,6 +624,9 @@ public final class ModAdder {
         }
         Set<String> content = new LinkedHashSet<>();
         if (this.engine.isInWorld()) {
+            if (jarPaths.size() > 1) {
+                Parallel.runEachBeside(jarPaths, this::readContent);
+            }
             jarPaths.forEach(jarPath -> content.addAll(this.readContent(jarPath)));
         }
         if (!content.isEmpty()) {
