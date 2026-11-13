@@ -4,6 +4,7 @@ import dev.moon.hotwire.plan.SwitchPlan;
 import dev.moon.hotwire.plan.SwitchPlan.Refusal;
 import dev.moon.hotwire.report.Report;
 import dev.moon.hotwire.ui.Lang;
+import java.util.Comparator;
 import java.util.List;
 import java.util.Locale;
 import java.util.function.Function;
@@ -23,17 +24,17 @@ public final class PlayerMessages {
                     ? "hotwire.switch.already_off" : "hotwire.switch.already_on");
             case ModSwitcher.Result.Done done -> Lang.get(!off ? "hotwire.switch.turned_on"
                     : untilOn ? "hotwire.switch.turned_off_kept" : "hotwire.switch.turned_off",
-                    joinNames(done.plan().order(), nameOf), formatSeconds(done.millis()));
+                    joinNames(listAskedFirst(done.plan()), nameOf), formatSeconds(done.millis()));
             case ModSwitcher.Result.Refused refused -> describeRefusal(refused.plan().refusals().getFirst(), off,
                     nameOf);
             case ModSwitcher.Result.Failed failed when failed.cause().reopenFixes() -> Lang.get(off
                     ? "hotwire.switch.reopen_off" : "hotwire.switch.reopen_on",
-                    joinNames(failed.plan().order(), nameOf));
+                    joinNames(listAskedFirst(failed.plan()), nameOf));
             case ModSwitcher.Result.Failed failed when failed.cause().isRestartOnly() -> Lang.get(off
                     ? "hotwire.switch.next_start_off" : "hotwire.switch.next_start_on",
-                    joinNames(failed.plan().order(), nameOf));
+                    joinNames(listAskedFirst(failed.plan()), nameOf));
             case ModSwitcher.Result.Failed failed -> Lang.get(off ? "hotwire.switch.failed_off"
-                    : "hotwire.switch.failed_on", joinNames(failed.plan().order(), nameOf),
+                    : "hotwire.switch.failed_on", joinNames(listAskedFirst(failed.plan()), nameOf),
                     String.valueOf(failed.cause().getMessage()).replaceFirst("[.]$", ""));
         };
     }
@@ -75,6 +76,11 @@ public final class PlayerMessages {
             case Refusal.OldDependency old -> Lang.get("hotwire.refusal.old", nameOf.apply(old.mod()),
                     nameOf.apply(old.dependency()), old.wanted(), old.present());
         };
+    }
+
+    private static List<String> listAskedFirst(SwitchPlan plan) {
+        return plan.order().stream().sorted(Comparator.comparing(
+                id -> !(plan.why().get(id) instanceof SwitchPlan.Reason.Asked))).toList();
     }
 
     public static String joinNames(List<String> ids, Function<String, String> nameOf) {
