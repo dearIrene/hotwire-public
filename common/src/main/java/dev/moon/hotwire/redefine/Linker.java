@@ -8,6 +8,7 @@ import java.lang.invoke.MethodHandleInfo;
 import java.lang.invoke.MethodHandles;
 import java.lang.invoke.MethodType;
 import java.lang.reflect.Method;
+import java.lang.reflect.Modifier;
 import java.util.ArrayDeque;
 import java.util.Collection;
 import java.util.Collections;
@@ -289,13 +290,30 @@ public final class Linker {
         }
     }
 
+    private static boolean hasOwn(Class<?> type, String method, MethodType shape) {
+        try {
+            Method own = type.getDeclaredMethod(method, shape.parameterArray());
+            return own.getReturnType() == shape.returnType() && !Modifier.isAbstract(own.getModifiers())
+                    && !Modifier.isStatic(own.getModifiers());
+        } catch (NoSuchMethodException | LinkageError absent) {
+            return false;
+        }
+    }
+
     private static MethodHandle resolveMoved(String method, String descriptor, Class<?> receiver,
             @Nullable MethodHandle plain) throws ReflectiveOperationException {
         MethodType type = MethodType.fromMethodDescriptorString(descriptor, receiver.getClassLoader());
+        Class<?> overrider = null;
         for (Class<?> at = receiver; at != null; at = at.getSuperclass()) {
             MethodHandles.Lookup side = SIDECARS.get(at);
             if (side != null && MOVED_BY_TARGET.getOrDefault(at, Set.of()).contains(method + descriptor)) {
-                return side.findStatic(side.lookupClass(), method, type.insertParameterTypes(0, at));
+                return overrider == null ? side.findStatic(side.lookupClass(), method,
+                        type.insertParameterTypes(0, at))
+                        : MethodHandles.privateLookupIn(overrider, MethodHandles.lookup()).findVirtual(overrider,
+                                method, type);
+            }
+            if (overrider == null && hasOwn(at, method, type)) {
+                overrider = at;
             }
         }
         MethodHandle gained = LinkerLookups.findGainedDefault(method, type, receiver);
