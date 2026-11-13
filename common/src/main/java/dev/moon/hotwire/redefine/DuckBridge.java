@@ -27,7 +27,7 @@ public final class DuckBridge {
     private static final Handle DUCK = new Handle(Opcodes.H_INVOKESTATIC, LINKER, "bootstrapDuck",
             "(" + BOOTSTRAP + "Ljava/lang/String;Ljava/lang/String;Ljava/lang/String;)Ljava/lang/invoke/CallSite;",
             false);
-    private static final Handle MOVED = new Handle(Opcodes.H_INVOKESTATIC, LINKER, "bootstrapMoved",
+    static final Handle MOVED = new Handle(Opcodes.H_INVOKESTATIC, LINKER, "bootstrapMoved",
             "(" + BOOTSTRAP + "Ljava/lang/String;Ljava/lang/String;Ljava/lang/String;I)Ljava/lang/invoke/CallSite;",
             false);
     private static final Handle MOVED_LAMBDA = new Handle(Opcodes.H_INVOKESTATIC, LINKER, "bootstrapMovedLambda",

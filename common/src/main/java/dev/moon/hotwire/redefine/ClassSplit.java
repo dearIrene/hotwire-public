@@ -612,7 +612,13 @@ public final class ClassSplit {
         MethodNode added = this.addedMethods.get(call.name + call.desc);
         if (added != null) {
             String descriptor = this.makeStaticDescriptor(added);
-            method.instructions.set(call, inSidecar
+
+            boolean byObject = (call.getOpcode() == Opcodes.INVOKEVIRTUAL
+                    || call.getOpcode() == Opcodes.INVOKEINTERFACE)
+                    && (added.access & (Opcodes.ACC_STATIC | Opcodes.ACC_PRIVATE | Opcodes.ACC_FINAL)) == 0
+                    && !GeneratedNames.isGenerated(call.name);
+            method.instructions.set(call, byObject ? new InvokeDynamicInsnNode(call.name, descriptor,
+                    DuckBridge.MOVED, call.owner, call.name, call.desc, 0) : inSidecar
                     ? new MethodInsnNode(Opcodes.INVOKESTATIC, this.sidecar, call.name, descriptor, false)
                     : new InvokeDynamicInsnNode(call.name, descriptor, ClassSplit.METHOD));
         } else if (inSidecar && call.getOpcode() == Opcodes.INVOKESPECIAL && !call.name.equals("<init>")) {
