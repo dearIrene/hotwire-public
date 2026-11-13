@@ -40,8 +40,8 @@ public final class AddAssets {
         boolean wordsAlone = shipping.stream().allMatch(part -> WordsReload.isWordsAlone(part.path()))
                 && parts.stream().noneMatch(part -> GameRegistrations.getJournal()
                         .countByKind(part.jar().manifest().id()).containsKey("resource reloader"));
-        ResourceReload.reloadBeforeFrame(shipping.stream().map(part -> part.jar().manifest().id()).toList()
-                + " bring assets", wordsAlone);
+        List<String> ids = shipping.stream().map(part -> part.jar().manifest().id()).toList();
+        ResourceReload.reloadBeforeFrame(ids + " bring assets", wordsAlone, ids);
     }
 
     static void openPacks(Collection<ModAdder.Part> parts) {
@@ -76,8 +76,8 @@ public final class AddAssets {
             }
             boolean wordsAlone = listening.isEmpty() && shipping.stream().allMatch(entry
                     -> changed.getOrDefault(entry.getKey(), EVERY_ASSET).stream().allMatch(WordsReload::isWords));
-            ResourceReload.reloadBeforeFrame(shipping.stream().map(Map.Entry::getKey).toList()
-                    + " bring new assets", wordsAlone);
+            List<String> ids = shipping.stream().map(Map.Entry::getKey).toList();
+            ResourceReload.reloadBeforeFrame(ids + " bring new assets", wordsAlone, ids);
             BackgroundReload.runAfterReload(then);
         });
     }

@@ -64,6 +64,9 @@ public final class ResourceReload {
 
     private static volatile boolean reloadedWhilePaused;
 
+    private static volatile boolean leavingReload;
+    private static volatile @Nullable String waitingReload;
+
     private static volatile boolean reloadedRenderers;
 
     private static volatile boolean wholeAfterHold;
@@ -75,6 +78,7 @@ public final class ResourceReload {
 
     private static volatile List<String> comingOn = List.of();
     private static volatile List<String> goingOff = List.of();
+    private static volatile List<String> added = List.of();
 
     private static volatile List<String> awaitingAssets = List.of();
     static final Duration WAIT = Duration.ofMinutes(2);
@@ -211,8 +215,9 @@ public final class ResourceReload {
         });
     }
 
-    public static void reloadBeforeFrame(String why, boolean wordsAlone) {
+    public static void reloadBeforeFrame(String why, boolean wordsAlone, List<String> adding) {
         Minecraft game = Minecraft.getInstance();
+        added = List.copyOf(adding);
         if (reloadedWhilePaused) {
             LOGGER.info("[Hotwire] {}: the reload that made the game's objects again brought them", why);
             return;
@@ -228,12 +233,24 @@ public final class ResourceReload {
         reloadWhilePaused(game, false, false);
     }
 
+    public static void leaveReloadToNext(boolean leaves) {
+        leavingReload = leaves;
+    }
+
+    public static void runWaitingReload() {
+        String why = waitingReload;
+        if (why != null) {
+            run(why);
+        }
+    }
+
     public static void forgetPausedReload() {
         FreezeDump.onSwitchEnded();
         ShaderPrograms.forget();
         reloadedWhilePaused = false;
         reloadedRenderers = false;
         wholeAfterHold = false;
+        added = List.of();
         packsAtPause = Set.of();
         MODELS_AT_PAUSE.clear();
         FONTS_AT_PAUSE.clear();
@@ -267,8 +284,10 @@ public final class ResourceReload {
     @SuppressWarnings("FutureReturnValueIgnored")
     private static void startWhole(Minecraft game) {
         wholeAfterHold = false;
+        waitingReload = null;
         List<String> switched = new ArrayList<>(comingOn);
         switched.addAll(goingOff);
+        switched.addAll(added);
         Runnable start = () -> startUnprofiled(() -> game.reloadResourcePacks());
         if (ModSoundFiles.isAnyIn(switched) || !ReloadListeners.runWithout(game, SoundManager.class, start)) {
             start.run();
@@ -293,6 +312,9 @@ public final class ResourceReload {
     @SuppressWarnings("FutureReturnValueIgnored")
     private static void reloadWhilePaused(Minecraft game, boolean renderersOnly, boolean packsAlone) {
         long began = System.nanoTime();
+        if (!renderersOnly && !packsAlone) {
+            waitingReload = null;
+        }
         Tripwire.release(comingOn);
 
         comingOn.forEach(LoaderModList::show);
@@ -304,6 +326,11 @@ public final class ResourceReload {
         if (comingOn.isEmpty()) {
             reloadedWhilePaused = true;
             ShaderPrograms.compileAgain(game);
+            if (leavingReload) {
+                waitingReload = "the off before left the game's resources as they were";
+                LOGGER.info("[Hotwire] the off's resource reload is left to the switch that follows it");
+                return;
+            }
             BackgroundReload.beginAfterHold(() -> startWhole(game));
             return;
         }
@@ -436,6 +463,11 @@ public final class ResourceReload {
                 .filter(type -> RESOURCES.stream().anyMatch(root -> root.isAssignableFrom(type))).toList();
         String changed = "the switch changed how " + resources.stream().map(Class::getSimpleName).toList()
                 + " are built";
+        if (off && leavingReload && (!resources.isEmpty() || models || fonts)) {
+            waitingReload = "the off before left the game's resources holding " + mods + "'s";
+            LOGGER.info("[Hotwire] the off's resource reload is left to the switch that follows it");
+            return;
+        }
         if (!resources.isEmpty() && !models && packsGone.isEmpty() && !ownPack
                 && resources.stream().allMatch(type -> hasAny(List.of(type), FONTS))) {
             FontReload.reloadFonts(changed, List.of());
@@ -574,6 +606,8 @@ public final class ResourceReload {
     }
 
     static void run(String why, Collection<String> closing) {
+        waitingReload = null;
+
         Minecraft game = Minecraft.getInstance();
         if (OngoingReload.awaitIdle(game)) {
             LOGGER.info("[Hotwire] {}: a reload already under way brought them", why);

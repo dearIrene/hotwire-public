@@ -4,6 +4,8 @@ import dev.moon.hotwire.fabric.registration.Fields;
 import dev.moon.hotwire.redefine.FieldSlots;
 import java.util.ArrayList;
 import java.util.List;
+import java.util.Map;
+import java.util.concurrent.CompletableFuture;
 import java.util.function.Predicate;
 import net.minecraft.client.Minecraft;
 import net.minecraft.client.gui.font.FontManager;
@@ -15,8 +17,11 @@ import net.minecraft.client.resources.language.LanguageManager;
 //? if <26.1 {
 /*import net.minecraft.client.resources.model.ModelManager;
 *///?}
+import net.minecraft.client.resources.sounds.Sound;
 import net.minecraft.client.sounds.SoundManager;
 import net.minecraft.server.packs.resources.PreparableReloadListener;
+import net.minecraft.server.packs.resources.Resource;
+import net.minecraft.server.packs.resources.ResourceManager;
 import org.jspecify.annotations.Nullable;
 
 final class ReloadListeners {
@@ -53,7 +58,29 @@ final class ReloadListeners {
             listeners.clear();
             listeners.addAll(all);
         }
+        listSoundsAgain(game);
         return true;
+    }
+
+    @SuppressWarnings({"unchecked", "FutureReturnValueIgnored"})
+    private static void listSoundsAgain(Minecraft game) {
+        SoundManager sounds = game.getSoundManager();
+        ResourceManager packs = game.getResourceManager();
+        for (FieldSlots.Slot field : Fields.getDeclared(SoundManager.class)) {
+            try {
+                if (!field.isStatic() && field.get(sounds) instanceof Map<?, ?> files && !files.isEmpty()
+                        && files.values().iterator().next() instanceof Resource) {
+                    Map<Object, Object> list = (Map<Object, Object>) files;
+                    CompletableFuture.supplyAsync(() -> Sound.SOUND_LISTER.listMatchingResources(packs))
+                            .thenAcceptAsync(listed -> {
+                                list.putAll(listed);
+                                list.keySet().retainAll(listed.keySet());
+                            }, game);
+                    return;
+                }
+            } catch (IllegalAccessException e) {
+            }
+        }
     }
 
     @SuppressWarnings("unchecked")
