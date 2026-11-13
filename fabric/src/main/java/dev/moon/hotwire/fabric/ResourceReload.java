@@ -200,6 +200,12 @@ public final class ResourceReload {
     static void reloadForRenderers(boolean whole) {
         Minecraft game = Minecraft.getInstance();
         if (!whole) {
+            if (leavingReload) {
+                waitingReload = "the off before left the renderers as they were";
+                LOGGER.info("[Hotwire] the off's reload for the renderers is left to the switch that follows it");
+                return;
+            }
+
             reloadedRenderers = true;
             BackgroundReload.beginAfterHold(() -> {
                 Runnable start = () -> startUnprofiled(() -> game.reloadResourcePacks());
