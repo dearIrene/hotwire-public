@@ -74,6 +74,7 @@ import dev.moon.hotwire.redefine.Tripwire;
 import dev.moon.hotwire.redefine.TripwireSites;
 import dev.moon.hotwire.registration.ModThreadFinder;
 import dev.moon.hotwire.report.StartTimes;
+import dev.moon.hotwire.switching.BestTimes;
 import dev.moon.hotwire.switching.BetweenFrames;
 import dev.moon.hotwire.switching.ModMixins;
 import dev.moon.hotwire.switching.ModSwitcher;
@@ -82,6 +83,8 @@ import dev.moon.hotwire.switching.SwitchApplier;
 import dev.moon.hotwire.switching.SwitchHistory;
 import dev.moon.hotwire.switching.SwitchTimes;
 import dev.moon.hotwire.ui.Lang;
+import dev.moon.hotwire.ui.Notice;
+import dev.moon.hotwire.ui.Notices;
 import dev.moon.hotwire.ui.Progress;
 import dev.moon.hotwire.update.LiveNames;
 import dev.moon.hotwire.update.UpdateFolders;
@@ -576,6 +579,16 @@ final class EngineStart {
         UpdateQueue queue = new UpdateQueue(folders.queueFile());
         HotwireSettings settings = new HotwireSettings(loader.getConfigDir().resolve("hotwire/settings.json"));
         SwitchHistory.open(loader.getConfigDir().resolve("hotwire/history.json"));
+        BestTimes.open(loader.getConfigDir().resolve("hotwire/records.txt"));
+        BestTimes.listen(beaten -> {
+            List<String> asked = beaten.asked().isEmpty() ? beaten.ids() : beaten.asked();
+            String who = installed.nameOf(asked.getFirst());
+            int others = beaten.ids().size() - 1;
+            Notices.show(Notice.ofRecord(Lang.get("hotwire.record.title"), (others == 0 ? who
+                    : Lang.get("hotwire.record.with", who, others)) + ": " + Lang.get(beaten.off()
+                    ? "hotwire.record.off" : "hotwire.record.on", BestTimes.format(beaten.millis())) + " "
+                    + Lang.get("hotwire.record.was", BestTimes.format(beaten.before()))));
+        });
         RootScreen.pauseWith(settings::isPausing);
         ModPolicy.setNestedJars(settings.getNestedJars());
 

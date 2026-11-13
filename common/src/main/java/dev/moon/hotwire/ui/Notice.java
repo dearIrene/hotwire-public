@@ -7,7 +7,7 @@ public record Notice(Kind kind, String title, String detail, String key, float p
     static final float REST = 4.5f;
 
     public enum Kind {
-        DONE(Palette.ACCENT), ON(Palette.ON), BAD(Palette.BAD), ASK(Palette.WARN);
+        DONE(Palette.ACCENT), ON(Palette.ON), BAD(Palette.BAD), ASK(Palette.WARN), RECORD(Palette.GOLD);
 
         private final int color;
 
@@ -55,6 +55,10 @@ public record Notice(Kind kind, String title, String detail, String key, float p
 
     public static Notice ofBad(String title, String detail) {
         return new Notice(Kind.BAD, title, detail, title);
+    }
+
+    public static Notice ofRecord(String title, String detail) {
+        return new Notice(Kind.RECORD, title, detail, "record").makeResting(7);
     }
 
     public static Notice ofAsk(String title, String detail) {

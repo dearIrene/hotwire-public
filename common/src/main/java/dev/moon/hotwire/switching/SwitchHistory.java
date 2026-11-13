@@ -64,8 +64,13 @@ public final class SwitchHistory {
 
     public void recordDone(ModSwitcher.Result result, Cause cause, String by) {
         if (result instanceof ModSwitcher.Result.Done done) {
-            this.record(done.plan().order(), done.plan().direction() == SwitchPlan.Direction.OFF,
-                    System.currentTimeMillis(), cause, by);
+            boolean off = done.plan().direction() == SwitchPlan.Direction.OFF;
+            this.record(done.plan().order(), off, System.currentTimeMillis(), cause, by);
+
+            if (cause != Cause.UPDATE && cause != Cause.ANTI_CRASH) {
+                BestTimes.get().note(done.plan().order().stream().filter(id -> done.plan().why().get(id)
+                        instanceof SwitchPlan.Reason.Asked).toList(), done.plan().order(), off, done.millis());
+            }
         }
     }
 

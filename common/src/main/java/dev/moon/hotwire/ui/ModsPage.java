@@ -1,6 +1,7 @@
 package dev.moon.hotwire.ui;
 
 import dev.moon.hotwire.config.ProfileStore;
+import dev.moon.hotwire.switching.BestTimes;
 import dev.moon.hotwire.ui.list.ModCatalog;
 import dev.moon.hotwire.ui.list.ModListModel;
 import dev.moon.hotwire.ui.list.ModListModel.Show;
@@ -395,6 +396,7 @@ final class ModsPage implements ProfileMenu.Screen {
         } else if (!this.shown.get(slot).note().isEmpty()) {
             this.detailsBody.with(Kit.dim(this.shown.get(slot).note()).wrap());
         }
+        HistoryLines.fillBest(this.detailsBody, BestTimes.get().find(id, true), BestTimes.get().find(id, false));
         HistoryLines.fill(this.detailsBody, this.game.findHistory(id));
         this.detailsBody.with(Kit.space(),
                 Kit.push(Lang.get("hotwire.row.settings"), () -> this.openSettings(id)).show(this.hasSettings(id)),
