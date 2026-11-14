@@ -45,6 +45,9 @@ public final class UpdateCheck {
             + this.client.getScope().replaceAll("[^A-Za-z0-9.-]", "_") + ".gz");
     private static final long RECENT_NANOS = 60_000_000_000L;
     private volatile int newlyFound;
+
+    private final List<Consumer<List<UpdateOffer>>> asking = new ArrayList<>();
+    private boolean checking;
     private volatile @Nullable OfferMatch lastFound;
 
     private record OfferMatch(Map<String, Path> jars, long atNanos, List<UpdateOffer> offers) {
@@ -56,14 +59,35 @@ public final class UpdateCheck {
 
     @SuppressWarnings("ThreadPriorityCheck")
     public void start(Consumer<List<UpdateOffer>> then) {
-        Thread.ofPlatform().name("hotwire-updates").daemon().priority(Thread.MIN_PRIORITY).start(() -> {
-            List<UpdateOffer> offers = new ArrayList<>();
-            try {
-                offers.addAll(this.find());
-            } catch (IOException | RuntimeException e) {
-                LOGGER.info("[Hotwire] the update check could not ask Modrinth: {}", e.toString());
+        synchronized (this.asking) {
+            if (this.checking) {
+                this.asking.add(then);
+                return;
             }
-            then.accept(offers);
+            this.checking = true;
+        }
+        Thread.ofPlatform().name("hotwire-updates").daemon().priority(Thread.MIN_PRIORITY).start(() -> {
+            List<Consumer<List<UpdateOffer>>> askers = List.of(then);
+            while (!askers.isEmpty()) {
+                List<UpdateOffer> offers = new ArrayList<>();
+                try {
+                    offers.addAll(this.find());
+                } catch (IOException | RuntimeException e) {
+                    LOGGER.info("[Hotwire] the update check could not ask Modrinth: {}", e.toString());
+                }
+                for (Consumer<List<UpdateOffer>> asker : askers) {
+                    try {
+                        asker.accept(offers);
+                    } catch (RuntimeException e) {
+                        LOGGER.warn("[Hotwire] the update check's answer was not taken", e);
+                    }
+                }
+                synchronized (this.asking) {
+                    askers = List.copyOf(this.asking);
+                    this.asking.clear();
+                    this.checking = !askers.isEmpty();
+                }
+            }
         });
     }
 
