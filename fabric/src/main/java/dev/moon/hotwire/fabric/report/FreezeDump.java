@@ -72,7 +72,9 @@ public final class FreezeDump {
                 return switched + "\n" + FreezeBlame.describeStuck(thread.getStackTrace()) + "\n";
             }
         }
-        return switched + "\n";
+
+        return switched + "\nThe game's own thread has ended: the game died as it started or is closing, and other"
+                + " threads keep it open.\n";
     }
 
     public static synchronized void stop() {
