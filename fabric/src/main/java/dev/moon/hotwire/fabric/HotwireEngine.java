@@ -403,7 +403,10 @@ public final class HotwireEngine implements ModScreenGame, AutoCloseable {
 
     @Override
     public ModCatalog getCatalog() {
-        return new InstalledModCatalog(this.installed, this::isOn, this::isWorldLocked, this.settings);
+        return new InstalledModCatalog(this.installed, this::isOn, this::isWorldLocked, this.settings, id -> {
+            JvmParts parts = this.findParts();
+            return parts == null ? List.of() : parts.runner().getSwitcher().planOff(List.of(id)).order();
+        });
     }
 
     @Override

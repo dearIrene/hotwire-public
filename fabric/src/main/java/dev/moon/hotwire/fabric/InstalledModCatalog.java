@@ -2,16 +2,14 @@ package dev.moon.hotwire.fabric;
 
 import dev.moon.hotwire.config.HotwireSettings;
 import dev.moon.hotwire.jar.ModManifest;
-import dev.moon.hotwire.plan.ModGraph;
-import dev.moon.hotwire.plan.SwitchPlanner;
 import dev.moon.hotwire.ui.list.ModCatalog;
 import java.util.List;
 import java.util.Set;
 import java.util.TreeSet;
 import java.util.function.BooleanSupplier;
+import java.util.function.Function;
 import java.util.function.Predicate;
 import java.util.stream.Collectors;
-import org.jspecify.annotations.Nullable;
 
 final class InstalledModCatalog implements ModCatalog {
     private final InstalledMods installed;
@@ -19,8 +17,11 @@ final class InstalledModCatalog implements ModCatalog {
     private final BooleanSupplier worldLocked;
     private final HotwireSettings settings;
 
+    private final Function<String, List<String>> offOrder;
+
     InstalledModCatalog(InstalledMods installed, Predicate<String> on, BooleanSupplier worldLocked,
-            HotwireSettings settings) {
+            HotwireSettings settings, Function<String, List<String>> offOrder) {
+        this.offOrder = offOrder;
         this.installed = installed;
         this.on = on;
         this.worldLocked = worldLocked;
@@ -79,22 +80,8 @@ final class InstalledModCatalog implements ModCatalog {
 
     @Override
     public Set<String> getNeededBy(String id) {
-        ModGraph graph = this.installed.getGraph();
-        if (this.planned != graph) {
-            this.planner = ModPolicy.makePlannerFor(graph);
-            this.planned = graph;
-        }
-        Set<String> off = graph.getIds().stream().filter(one -> !this.on.test(one)).collect(Collectors.toSet());
-        Set<String> out = new TreeSet<>(this.planner.planOff(List.of(id), off).order());
+        Set<String> out = new TreeSet<>(this.offOrder.apply(id));
         out.remove(id);
         return out;
-    }
-
-    private @Nullable ModGraph planned;
-    private SwitchPlanner planner = ModPolicy.makePlannerFor(new ModGraph(List.of()));
-
-    @Override
-    public float getStanding(String id) {
-        return 0;
     }
 }

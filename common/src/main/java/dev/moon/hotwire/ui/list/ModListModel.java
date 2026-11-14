@@ -267,7 +267,6 @@ public final class ModListModel {
                     children.add(child);
                 }
             }
-            children.sort(Comparator.comparingDouble(this.catalog::getStanding));
             for (String child : children) {
                 if (placed.add(child)) {
                     out.add(child);
