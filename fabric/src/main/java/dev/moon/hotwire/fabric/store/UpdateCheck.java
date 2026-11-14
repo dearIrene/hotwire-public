@@ -20,7 +20,9 @@ import java.util.HashSet;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.Queue;
 import java.util.Set;
+import java.util.concurrent.ConcurrentLinkedQueue;
 import java.util.function.Consumer;
 import net.fabricmc.loader.api.FabricLoader;
 import net.fabricmc.loader.api.Version;
@@ -45,6 +47,8 @@ public final class UpdateCheck {
             + this.client.getScope().replaceAll("[^A-Za-z0-9.-]", "_") + ".gz");
     private static final long RECENT_NANOS = 60_000_000_000L;
     private volatile int newlyFound;
+
+    private final Queue<String> installedSince = new ConcurrentLinkedQueue<>();
 
     private final List<Consumer<List<UpdateOffer>>> asking = new ArrayList<>();
     private boolean checking;
@@ -91,6 +95,10 @@ public final class UpdateCheck {
         });
     }
 
+    public void noteInstalled(String projectId) {
+        this.installedSince.add(projectId);
+    }
+
     public long findWaitSeconds() {
         return this.client.findWaitSeconds();
     }
@@ -117,6 +125,13 @@ public final class UpdateCheck {
         Map<String, String> idByName = new HashMap<>();
         jars.forEach((id, jar) -> idByName.put(String.valueOf(jar.getFileName()), id));
         UpdateMemory memory = UpdateMemory.read(this.memoryFile);
+
+        List<String> installedSince = new ArrayList<>();
+        for (String project = this.installedSince.poll(); project != null; project = this.installedSince.poll()) {
+            installedSince.add(project);
+        }
+        long now = System.currentTimeMillis();
+        installedSince.forEach(project -> memory.markCurrent(project, now));
         memory.retain(hashByName.values());
         Map<String, ModrinthClient.Version> newest = this.recall(memory, hashByName);
         Set<String> known = new HashSet<>();

@@ -344,11 +344,9 @@ final class StoreJars {
         if (project != null && made != null) {
             made.getModel().markInstalled(project);
         }
-        if (this.checked) {
-            this.started = false;
-            this.startCheck();
-        } else if (this.started) {
-            this.again = true;
+
+        if (project != null) {
+            this.check.noteInstalled(project);
         }
     }
 

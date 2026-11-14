@@ -157,6 +157,17 @@ public final class UpdateMemory {
         this.byHash.put(hash, entry);
     }
 
+    public void markCurrent(String projectId, long now) {
+        Map<String, Entry> current = new HashMap<>();
+        this.byHash.forEach((hash, entry) -> {
+            Newer newer = entry.newer();
+            if (entry.projectId().equals(projectId) && newer != null && !newer.sha512().isEmpty()) {
+                current.put(newer.sha512(), new Entry(projectId, entry.updated(), null, now));
+            }
+        });
+        this.byHash.putAll(current);
+    }
+
     public Set<String> findProjects() {
         Set<String> projects = new HashSet<>();
         this.byHash.values().stream().filter(entry -> !entry.isUnknown()).forEach(entry -> projects.add(entry
