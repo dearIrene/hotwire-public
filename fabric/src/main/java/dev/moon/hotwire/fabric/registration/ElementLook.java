@@ -224,6 +224,7 @@ public final class ElementLook {
             NEW_WORLD.set(newWorld);
             boolean traced = CHECK && !WHOLE.get();
             modelSets = findModelSets();
+            Fields.beginLook();
             if (traced) {
                 references.traceLook(true);
             }
@@ -248,6 +249,7 @@ public final class ElementLook {
                 LOGGER.info("[Hotwire] the look ahead for {} mods ended early: {}", asked.size(), e.toString());
             } finally {
                 NEW_WORLD.remove();
+                Fields.endLook();
                 MODE.remove();
                 runningMode = Mode.HOLD;
                 looking = null;
@@ -295,6 +297,7 @@ public final class ElementLook {
             int world = findWorldNumber();
             try {
                 modelSets = findModelSets();
+                Fields.beginLook();
                 GameHold.runUnheld(() -> references.lookForEvery(every, on));
                 lookedForEvery = every;
                 lookedEveryAt = System.nanoTime();
@@ -304,6 +307,7 @@ public final class ElementLook {
             } catch (RuntimeException | LinkageError e) {
                 LOGGER.info("[Hotwire] the look's warm-up ended early: {}", e.toString());
             } finally {
+                Fields.endLook();
                 MODE.remove();
                 runningMode = Mode.HOLD;
                 looking = null;

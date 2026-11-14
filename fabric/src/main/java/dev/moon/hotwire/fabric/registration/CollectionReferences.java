@@ -555,11 +555,21 @@ final class CollectionReferences implements FixedLists.Walk {
 
         boolean whole = notes.isWhole();
         List<Map.Entry<Object, CollectionNotes.Holder>> holders = notes.findHolders();
-        for (Map.Entry<Object, CollectionNotes.Holder> one : holders) {
+
+        long[] prints = new long[holders.size()];
+        if (!whole) {
+            LookWorkers.runEach(prints.length, at -> {
+                Map.Entry<Object, CollectionNotes.Holder> one = holders.get(at);
+                prints[at] = one.getValue().print() == Fingerprints.UNKNOWN ? Fingerprints.UNKNOWN
+                        : printFields(one.getKey());
+            });
+        }
+        for (int at = 0; at < prints.length; at++) {
+            Map.Entry<Object, CollectionNotes.Holder> one = holders.get(at);
             ElementLook.stopIfAsked();
             Object holder = one.getKey();
             long was = one.getValue().print();
-            if (!whole && was != Fingerprints.UNKNOWN && was == printFields(holder)) {
+            if (!whole && was != Fingerprints.UNKNOWN && was == prints[at]) {
                 continue;
             }
             this.reader = one.getValue().readers();

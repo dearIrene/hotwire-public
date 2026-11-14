@@ -15,6 +15,7 @@ import java.lang.invoke.MethodHandle;
 import java.lang.invoke.MethodHandles;
 import java.lang.management.ClassLoadingMXBean;
 import java.lang.management.ManagementFactory;
+import java.lang.ref.WeakReference;
 import java.lang.reflect.Field;
 import java.lang.reflect.Modifier;
 import java.util.ArrayList;
@@ -225,8 +226,16 @@ public final class FieldReferences {
         }
         this.loadedChecks.catchUpWith(arrived, this.lambdas.open());
         List<Class<?>> statics = new ArrayList<>();
-        for (Class<?> owner : this.elements.look.getNotes().findStaticsRead()) {
-            if (CollectionReferences.canMove(owner) && isStaying(owner, on)) {
+        this.readStaticsLists();
+        for (WeakReference<Class<?>> one : this.movingStatics) {
+            Class<?> owner = one.get();
+            if (owner != null && isStaying(owner, on)) {
+                statics.add(owner);
+            }
+        }
+        for (WeakReference<Class<?>> one : this.unsureStatics) {
+            Class<?> owner = one.get();
+            if (owner != null && CollectionReferences.canMove(owner) && isStaying(owner, on)) {
                 statics.add(owner);
             }
         }
@@ -243,6 +252,26 @@ public final class FieldReferences {
         this.elements.takeOut(List.copyOf(mods), List.of(), statics, HandedSearch.NONE);
         return true;
     }
+
+    private void readStaticsLists() {
+        for (CollectionNotes.StaticsMove move : this.elements.look.getNotes().takeStaticsMoves()) {
+            Class<?> owner = move.owner().get();
+            if (owner == null) {
+                continue;
+            }
+            if (!move.joined()) {
+                this.movingStatics.removeIf(one -> one.refersTo(owner));
+                this.unsureStatics.removeIf(one -> one.refersTo(owner));
+            } else if (!Fields.isWhole(owner)) {
+                this.unsureStatics.add(move.owner());
+            } else if (CollectionReferences.canMove(owner)) {
+                this.movingStatics.add(move.owner());
+            }
+        }
+    }
+
+    private final List<WeakReference<Class<?>>> movingStatics = new ArrayList<>();
+    private final List<WeakReference<Class<?>>> unsureStatics = new ArrayList<>();
 
     private final Set<Class<?>> notSetUp = Collections.newSetFromMap(new MapMaker().weakKeys().makeMap());
 

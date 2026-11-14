@@ -400,19 +400,52 @@ final class CollectionNotes {
 
     synchronized List<Object> findChanged() {
         List<Object> changed = new ArrayList<>();
-        int at = 0;
 
-        for (Note note : this.toRead) {
-            if ((++at & STOP_EVERY) == 0) {
+        List<Note> notes = this.toRead;
+        int count = notes.size();
+
+        @Nullable Object[] containers = new Object[count];
+        byte[] steps = new byte[count];
+
+        IdentityHashMap<Class<?>, Byte> kinds = new IdentityHashMap<>();
+        for (int at = 0; at < count; at++) {
+            if ((at & STOP_EVERY) == STOP_EVERY) {
                 ElementLook.stopIfAsked();
             }
+            Note note = notes.get(at);
             Object container = note.findFiled();
-            if (container == null || GameRegistrations.isOfOffMod(container.getClass())) {
+            if (container == null) {
                 continue;
             }
-            if (!this.whole && note.print != Fingerprints.UNKNOWN && this.isPrintedFor(note)
-                    && (isImmutable(container.getClass())
-                    || note.print == Fingerprints.of(container))) {
+            byte kind = kinds.computeIfAbsent(container.getClass(), type -> GameRegistrations.isOfOffMod(type)
+                    ? OFF : isImmutable(type) ? SAME : LookWorkers.isPlain(type) ? PLAIN : PRINT);
+            if (kind == OFF) {
+                continue;
+            }
+            containers[at] = container;
+            steps[at] = this.whole || note.print == Fingerprints.UNKNOWN || !this.isPrintedFor(note) ? READ : kind;
+        }
+
+        long[] prints = new long[count];
+        LookWorkers.runEach(count, at -> {
+            Object container = containers[at];
+            if (steps[at] == PLAIN && container != null) {
+                prints[at] = Fingerprints.of(container);
+            }
+        });
+        for (int at = 0; at < count; at++) {
+            Object container = containers[at];
+            if (container == null) {
+                continue;
+            }
+            Note note = notes.get(at);
+            if (steps[at] == PRINT) {
+                if ((at & STOP_EVERY) == STOP_EVERY) {
+                    ElementLook.stopIfAsked();
+                }
+                prints[at] = Fingerprints.of(container);
+            }
+            if (steps[at] == SAME || (steps[at] != READ && note.print == prints[at])) {
                 this.leftUnchanged++;
                 note.unchangedIn = this.looks;
             } else {
@@ -421,6 +454,13 @@ final class CollectionNotes {
         }
         return changed;
     }
+
+    private static final byte READ = 1;
+    private static final byte SAME = 2;
+    private static final byte PRINT = 3;
+
+    private static final byte PLAIN = 4;
+    private static final byte OFF = 5;
 
     static boolean isImmutable(Class<?> type) {
         String name = type.getName();
@@ -577,12 +617,27 @@ final class CollectionNotes {
     }
 
     synchronized void noteStatics(Class<?> owner, long print) {
-        this.staticsPrints.put(owner, print);
+        if (this.staticsPrints.put(owner, print) == null) {
+            this.staticsMoves.add(new StaticsMove(new WeakReference<>(owner), true));
+        }
     }
+
+    record StaticsMove(WeakReference<Class<?>> owner, boolean joined) {
+    }
+
+    synchronized List<StaticsMove> takeStaticsMoves() {
+        List<StaticsMove> moves = List.copyOf(this.staticsMoves);
+        this.staticsMoves.clear();
+        return moves;
+    }
+
+    private final List<StaticsMove> staticsMoves = new ArrayList<>();
 
     synchronized void forgetFieldsOf(Object holder) {
         if (holder instanceof Class<?> owner) {
-            this.staticsPrints.remove(owner);
+            if (this.staticsPrints.remove(owner) != null) {
+                this.staticsMoves.add(new StaticsMove(new WeakReference<>(owner), false));
+            }
             return;
         }
         Holder read = this.holders.get(holder);
@@ -593,10 +648,6 @@ final class CollectionNotes {
 
     synchronized void forgetHolder(Object holder) {
         this.holders.remove(holder);
-    }
-
-    synchronized List<Class<?>> findStaticsRead() {
-        return List.copyOf(this.staticsPrints.keySet());
     }
 
     synchronized boolean isWhole() {

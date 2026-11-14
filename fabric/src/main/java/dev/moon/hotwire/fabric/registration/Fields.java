@@ -17,6 +17,7 @@ import java.util.List;
 import java.util.Map;
 import java.util.Objects;
 import java.util.Set;
+import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.function.Function;
 import java.util.function.Predicate;
@@ -24,6 +25,20 @@ import org.jspecify.annotations.Nullable;
 
 public final class Fields {
     private static volatile Predicate<String> loaded = name -> true;
+
+    private static volatile @Nullable Set<String> notLoaded;
+
+    static void beginLook() {
+        notLoaded = ConcurrentHashMap.newKeySet();
+    }
+
+    static void endLook() {
+        notLoaded = null;
+    }
+
+    static boolean isWhole(Class<?> owner) {
+        return findList(owner, true).complete();
+    }
     private static volatile Function<Class<?>, byte @Nullable []> bytesOf = type -> null;
 
     private static final class FieldCache {
@@ -200,8 +215,16 @@ public final class Fields {
         if (read == null || read.unloaded().isEmpty()) {
             return;
         }
+
+        Set<String> missing = notLoaded;
         for (String name : read.unloaded()) {
+            if (missing != null && missing.contains(name)) {
+                return;
+            }
             if (!loaded.test(name)) {
+                if (missing != null) {
+                    missing.add(name);
+                }
                 return;
             }
         }
