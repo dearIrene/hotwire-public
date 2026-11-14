@@ -807,7 +807,7 @@ public final class HotwireEngine implements ModScreenGame, AutoCloseable {
     private void checkQueue() {
         JvmParts parts = this.findParts();
         if (parts != null) {
-            parts.updates().checkQueue().forEach(why -> this.showMessage(why, true));
+            parts.updates().checkQueue().values().forEach(why -> this.showMessage(why, true));
         }
     }
 

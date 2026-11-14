@@ -13,6 +13,7 @@ import dev.moon.hotwire.ui.UpdatePreview;
 import dev.moon.hotwire.update.UpdatePlan;
 import java.nio.file.Path;
 import java.util.List;
+import java.util.Map;
 import java.util.concurrent.CompletableFuture;
 import java.util.function.Consumer;
 import org.jspecify.annotations.Nullable;
@@ -63,13 +64,24 @@ public final class ModChanges {
         return ready != null && ready.adds().isInstalledJar(jar);
     }
 
+    public Map<String, String> checkQueue() {
+        HotwireEngine.JvmParts ready = this.parts;
+        return ready == null ? Map.of() : ready.updates().checkQueue();
+    }
+
+    public ModAdder.Result queueAddAlone(Path jar) {
+        ModAdder.Result queued = this.queueAdd(jar);
+        String why = queued instanceof ModAdder.Result.Queued one ? this.checkQueue().get(one.id()) : null;
+        return why == null ? queued : new ModAdder.Result.Refused(why);
+    }
+
     public ModAdder.Result queueAdd(Path jar) {
         HotwireEngine.JvmParts ready = this.parts;
         if (ready == null) {
             return this.later.queue(jar);
         }
         if (!ready.adds().isInstalledJar(jar)) {
-            return ready.updates().checkQueued(ready.adds().queue(jar));
+            return ready.adds().queue(jar);
         }
         ModUpdater.Result update = ready.updates().queueForNextStart(jar);
         return switch (update) {

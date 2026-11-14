@@ -262,13 +262,21 @@ final class StoreJars {
         List<ModAdder.Result> results = new ArrayList<>();
         for (int i = 0; i < jars.size(); i++) {
             this.projects.put(jars.get(i), projects.get(i));
-            ModAdder.Result queued = this.changes.queueAdd(jars.get(i));
+            results.add(this.changes.queueAdd(jars.get(i)));
+        }
+
+        Map<String, String> dropped = this.changes.checkQueue();
+        for (int i = 0; i < jars.size(); i++) {
+            ModAdder.Result queued = results.get(i);
+            if (queued instanceof ModAdder.Result.Queued one && dropped.containsKey(one.id())) {
+                queued = new ModAdder.Result.Refused(dropped.get(one.id()));
+                results.set(i, queued);
+            }
             boolean ok = queued instanceof ModAdder.Result.Queued;
             this.say.accept(ModAdder.describe(queued), !ok);
             if (ok) {
                 this.markQueued(jars.get(i), pending);
             }
-            results.add(queued);
         }
         return results;
     }

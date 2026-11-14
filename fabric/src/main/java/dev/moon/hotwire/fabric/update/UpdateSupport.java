@@ -141,14 +141,8 @@ public final class UpdateSupport implements ModUpdater.Engine, ModAdder.CarriedL
         return this.updater.canUpdate(this.updater.unwrap(jar));
     }
 
-    public List<String> checkQueue() {
-        return List.copyOf(this.updater.dropUnstartable().values());
-    }
-
-    public ModAdder.Result checkQueued(ModAdder.Result result) {
-        String why = result instanceof ModAdder.Result.Queued queued
-                ? this.updater.dropUnstartable().get(queued.id()) : null;
-        return why == null ? result : new ModAdder.Result.Refused(why);
+    public Map<String, String> checkQueue() {
+        return Map.copyOf(this.updater.dropUnstartable());
     }
 
     public ModUpdater getUpdater() {

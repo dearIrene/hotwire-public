@@ -57,7 +57,7 @@ final class JarRequests {
             return;
         }
         if (mode == AddMode.NEXT_START) {
-            ModAdder.Result queued = this.changes.queueAdd(jar);
+            ModAdder.Result queued = this.changes.queueAddAlone(jar);
             boolean ok = queued instanceof ModAdder.Result.Queued;
             this.engine.showMessage(ModAdder.describe(queued), !ok);
             if (ok) {
@@ -136,7 +136,7 @@ final class JarRequests {
     void update(Path jar, UpdateMethod method) {
         HotwireEngine.JvmParts parts = this.engine.findJvmParts().orElse(null);
         if (parts == null) {
-            ModAdder.Result queued = this.changes.queueAdd(jar);
+            ModAdder.Result queued = this.changes.queueAddAlone(jar);
             boolean ok = queued instanceof ModAdder.Result.Queued;
             this.engine.showMessage(ModAdder.describe(queued), !ok);
             if (ok) {
