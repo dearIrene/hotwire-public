@@ -141,6 +141,10 @@ public final class ModTripwire {
         ids.forEach(id -> TripwireSites.setOff(id, true));
     }
 
+    void findOwnersAhead() {
+        this.tripwireOwners.findOwned(Set.of());
+    }
+
     void readAhead(Collection<String> ids) {
         List<Class<?>> types = new ArrayList<>();
         this.tripwireOwners.findOwned(ids).keySet().forEach(type -> {

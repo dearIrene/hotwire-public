@@ -176,6 +176,10 @@ public final class SwitchRunner {
             int read = this.fieldReferences.readPoolsAhead();
             LOGGER.info("[Hotwire] what {} loaded classes name was read ahead in {} ms", read,
                     (System.nanoTime() - pools) / 1_000_000);
+            long owners = System.nanoTime();
+            this.tripwire.findOwnersAhead();
+            LOGGER.info("[Hotwire] whose each loaded class is was asked ahead in {} ms",
+                    (System.nanoTime() - owners) / 1_000_000);
         });
     }
 
