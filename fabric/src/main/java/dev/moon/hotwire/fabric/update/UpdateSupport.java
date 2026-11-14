@@ -141,6 +141,10 @@ public final class UpdateSupport implements ModUpdater.Engine, ModAdder.CarriedL
         return this.updater.canUpdate(this.updater.unwrap(jar));
     }
 
+    public List<String> checkQueue() {
+        return List.copyOf(this.updater.dropUnstartable().values());
+    }
+
     public ModUpdater getUpdater() {
         return this.updater;
     }
@@ -273,7 +277,7 @@ public final class UpdateSupport implements ModUpdater.Engine, ModAdder.CarriedL
                 || copies.liveIds().values().stream().anyMatch(refusal::contains);
     }
 
-    private static final boolean ASKS_OVER_CAP = Boolean.parseBoolean(System.getProperty("hotwire.askOverCap"));
+    static final boolean ASKS_OVER_CAP = Boolean.parseBoolean(System.getProperty("hotwire.askOverCap"));
 
     private void askOverCap(Set<String> group, Map<String, Path> given) {
         String refusal = this.updater.getCopies().findRefusalUnderCap(group, given);

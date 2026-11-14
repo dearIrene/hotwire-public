@@ -5,6 +5,7 @@ import dev.moon.hotwire.concurrent.Parallel;
 import dev.moon.hotwire.fabric.HotwireClient;
 import dev.moon.hotwire.fabric.ModPolicy;
 import dev.moon.hotwire.jar.JarLookup;
+import dev.moon.hotwire.jar.JarNames;
 import dev.moon.hotwire.jar.ModManifest;
 import dev.moon.hotwire.mixin_copy.MixinClassInfo;
 import dev.moon.hotwire.redefine.RebuildException;
@@ -131,13 +132,14 @@ final class UpdateCopies {
             Path jar = group.contains(id) || this.unchanged.contains(id) || ModPolicy.isHotwire(id) ? null
                     : this.engine.findRunningJarOf(id);
             try {
-                if (jar != null && !JarLinks.readNamedOf(jar, leaving, false).isEmpty()) {
+                if (jar != null && !JarNames.get().findNamedOf(jar, leaving, false).isEmpty()) {
                     users.add(id);
                 }
             } catch (IOException | RuntimeException e) {
                 LOGGER.info("[Hotwire] {} could not be read through: {}", id, e.toString());
             }
         });
+        JarNames.get().flush();
         if (!users.isEmpty()) {
             LOGGER.info("[Hotwire] {} use classes of {} mods that go, and go with them", users, group.size());
         }
@@ -159,7 +161,7 @@ final class UpdateCopies {
         Set<String> named = new ConcurrentSkipListSet<>();
         Parallel.runEachBeside(jars, jar -> {
             try {
-                named.addAll(JarLinks.readNamedOf(jar, leaving, true));
+                named.addAll(JarNames.get().findNamedOf(jar, leaving, true));
             } catch (IOException | RuntimeException e) {
                 LOGGER.info("[Hotwire] {} could not be read through: {}", jar.getFileName(), e.toString());
             }
@@ -287,7 +289,8 @@ final class UpdateCopies {
                     open.addAll(this.findWaitingNeeded(at, waiting, given));
                     open.addAll(leavingWith.apply(at));
                 }
-                if (open.isEmpty()) {
+
+                if (open.isEmpty() && !this.isSureToWait(group, given)) {
                     this.findUsersOf(group).stream().filter(asked::add).forEach(open::add);
                 }
             }
@@ -304,6 +307,11 @@ final class UpdateCopies {
             groups.add(group);
         }
         return groups;
+    }
+
+    private boolean isSureToWait(Set<String> group, Map<String, Path> given) {
+        return (this.isOverCap(group) && !UpdateSupport.ASKS_OVER_CAP) || group.stream()
+                .anyMatch(id -> !ModPolicy.isSwitchable(id) && this.findJarOf(id, given) != null);
     }
 
     @Nullable String findRestartRefusal(Set<String> group, Map<String, Path> given) {

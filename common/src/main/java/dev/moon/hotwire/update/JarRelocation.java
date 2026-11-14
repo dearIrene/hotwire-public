@@ -6,6 +6,7 @@ import com.google.gson.JsonObject;
 import com.google.gson.JsonParser;
 import com.google.gson.JsonPrimitive;
 import dev.moon.hotwire.concurrent.Parallel;
+import dev.moon.hotwire.jar.JarNames;
 import dev.moon.hotwire.jar.ZipBytes;
 import java.io.ByteArrayInputStream;
 import java.io.ByteArrayOutputStream;
@@ -298,7 +299,7 @@ public final class JarRelocation {
                 Map<String, byte[]> files = library.getValue();
                 boolean leans = needsAnyOf(files, movingMods) || files.entrySet().stream().anyMatch(
                         file -> file.getKey().endsWith(".class")
-                                && JarLinks.readClassesNamed(file.getValue()).stream().anyMatch(moving::contains));
+                                && JarNames.readClassesNamed(file.getValue()).stream().anyMatch(moving::contains));
                 if (leans) {
                     movingMods.add(library.getKey());
                     files.keySet().stream().filter(name -> name.endsWith(".class"))

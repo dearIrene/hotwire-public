@@ -1,6 +1,7 @@
 package dev.moon.hotwire.fabric;
 
 import dev.moon.hotwire.cache.CacheStore;
+import dev.moon.hotwire.jar.JarNames;
 import dev.moon.hotwire.jar.JarScans;
 import dev.moon.hotwire.jar.ModIndex;
 import dev.moon.hotwire.report.StartTimes;
@@ -83,6 +84,8 @@ final class EarlyModsReader {
 
     static Read open() {
         JarScans scans = new JarScans(CacheStore.open(EngineStart.findCacheFolder().resolve("jars"), "jars",
+                EngineStart.JAR_SCANS_BYTES));
+        JarNames.open(CacheStore.open(EngineStart.findCacheFolder().resolve("names"), "names",
                 EngineStart.JAR_SCANS_BYTES));
         return new Read(scans, new ModIndex(ForkJoinPool.commonPool(), scans));
     }
