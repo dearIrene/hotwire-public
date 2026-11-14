@@ -5,6 +5,7 @@ import dev.moon.hotwire.jar.JarPaths;
 import dev.moon.hotwire.jar.ModJar;
 import dev.moon.hotwire.jar.ModManifest;
 import dev.moon.hotwire.plan.ModGraph;
+import dev.moon.hotwire.update.PendingChange;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.util.ArrayList;
@@ -18,6 +19,7 @@ import java.util.Set;
 import java.util.SortedSet;
 import java.util.TreeSet;
 import java.util.concurrent.ConcurrentHashMap;
+import java.util.concurrent.CopyOnWriteArrayList;
 import net.fabricmc.loader.api.ModContainer;
 import net.fabricmc.loader.api.metadata.ModOrigin;
 import org.jspecify.annotations.Nullable;
@@ -170,6 +172,16 @@ public final class InstalledMods {
 
     public synchronized boolean isDisabled(String id) {
         return this.disabled.containsKey(id);
+    }
+
+    private final List<PendingChange.OffAtStart> offAtStart = new CopyOnWriteArrayList<>();
+
+    List<PendingChange.OffAtStart> getOffAtStart() {
+        return this.offAtStart;
+    }
+
+    public boolean isGoneAtNextStart(String id) {
+        return this.isDisabled(id) || this.offAtStart.stream().anyMatch(off -> off.ids().contains(id));
     }
 
     public synchronized Optional<ModManifest> findDisabled(String id) {

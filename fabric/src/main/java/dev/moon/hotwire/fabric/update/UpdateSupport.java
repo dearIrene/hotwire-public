@@ -145,6 +145,12 @@ public final class UpdateSupport implements ModUpdater.Engine, ModAdder.CarriedL
         return List.copyOf(this.updater.dropUnstartable().values());
     }
 
+    public ModAdder.Result checkQueued(ModAdder.Result result) {
+        String why = result instanceof ModAdder.Result.Queued queued
+                ? this.updater.dropUnstartable().get(queued.id()) : null;
+        return why == null ? result : new ModAdder.Result.Refused(why);
+    }
+
     public ModUpdater getUpdater() {
         return this.updater;
     }
@@ -711,8 +717,8 @@ public final class UpdateSupport implements ModUpdater.Engine, ModAdder.CarriedL
     }
 
     @Override
-    public boolean isDisabled(String id) {
-        return this.installed.isDisabled(id);
+    public boolean isGoneAtNextStart(String id) {
+        return this.installed.isGoneAtNextStart(id);
     }
 
     @Override

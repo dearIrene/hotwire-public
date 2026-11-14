@@ -784,6 +784,8 @@ public final class HotwireEngine implements ModScreenGame, AutoCloseable {
         this.disabled.turnOffAtNextStart(ids, who);
         journal.end(ActionJournal.Outcome.QUEUED);
         this.showMessage(Lang.get("hotwire.switch.off_at_start", who), false);
+
+        this.checkQueue();
         this.refreshScreen();
     }
 

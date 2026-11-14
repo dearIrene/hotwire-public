@@ -88,7 +88,7 @@ public final class ModUpdater {
 
         @Nullable Path findRunningJarOf(String id);
 
-        boolean isDisabled(String id);
+        boolean isGoneAtNextStart(String id);
 
         @Nullable String findOfferedFor(Path jar);
 
@@ -214,7 +214,7 @@ public final class ModUpdater {
         if (kind == JarIntake.Kind.REFUSED) {
             return new UpdatePreview.Unreadable(fileName);
         }
-        Optional<String> rejected = this.findRejection(manifest)
+        Optional<String> rejected = this.findRejection(manifest, Map.of())
                 .or(() -> this.findBrokenUser(manifest, running, jar, Set.of()));
         if (rejected.isPresent()) {
             return new UpdatePreview.Refused(manifest.name(), rejected.get());
@@ -271,7 +271,7 @@ public final class ModUpdater {
         NextStart.Game game = new NextStart.Game() {
             @Override
             public @Nullable String findVersionOf(String id) {
-                return ModUpdater.this.engine.isDisabled(graph.resolve(id)) ? null
+                return ModUpdater.this.engine.isGoneAtNextStart(graph.resolve(id)) ? null
                         : ModUpdater.this.engine.findVersionOf(id);
             }
 
@@ -288,7 +288,7 @@ public final class ModUpdater {
             @Override
             public List<ModManifest> getInstalled() {
                 List<ModManifest> installed = new ArrayList<>();
-                graph.getIds().stream().filter(id -> !ModUpdater.this.engine.isDisabled(id))
+                graph.getIds().stream().filter(id -> !ModUpdater.this.engine.isGoneAtNextStart(id))
                         .forEach(id -> graph.find(id).ifPresent(installed::add));
                 return installed;
             }
@@ -392,11 +392,13 @@ public final class ModUpdater {
         if (running == null) {
             return null;
         }
-        Optional<String> rejected = this.findRejection(manifest);
+        Optional<String> rejected = this.findRejection(manifest, Map.of());
         if (rejected.isPresent()) {
             LOGGER.info("[Hotwire] sweep: {} rejected: {}", manifest.id(), rejected.get());
             return null;
         }
+
+        SwitchTimes.begin();
         try {
             Whole whole = this.planWhole(manifest.id(), running, jar);
             if (whole.refusal() != null) {
@@ -406,6 +408,8 @@ public final class ModUpdater {
         } catch (ModJarException e) {
             LOGGER.info("[Hotwire] sweep: {} unreadable: {}", manifest.id(), e.getMessage());
             return null;
+        } finally {
+            SwitchTimes.end("the plan of " + jar.getFileName());
         }
     }
 
@@ -845,7 +849,7 @@ public final class ModUpdater {
         return Optional.empty();
     }
 
-    Optional<String> findRejection(ModManifest incoming) {
+    private Optional<String> findRejection(ModManifest incoming) {
         ModGraph graph = this.engine.getGraph();
 
         for (Map.Entry<String, List<String>> breaks : incoming.getRelation(ModManifest.Relation.BREAKS).entrySet()) {

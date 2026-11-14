@@ -12,7 +12,6 @@ import java.util.HashSet;
 import java.util.List;
 import java.util.Set;
 import java.util.concurrent.CompletableFuture;
-import java.util.concurrent.CopyOnWriteArrayList;
 import java.util.concurrent.ExecutionException;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
@@ -41,11 +40,12 @@ final class DisabledMods {
             Thread.ofPlatform().name("hotwire-renames").daemon().factory());
     private volatile CompletableFuture<Void> renames = CompletableFuture.completedFuture(null);
 
-    private final List<PendingChange.OffAtStart> offAtStart = new CopyOnWriteArrayList<>();
+    private final List<PendingChange.OffAtStart> offAtStart;
 
     DisabledMods(InstalledMods installed, HotwireSettings settings, Path modsFolder,
             BiConsumer<String, Boolean> say, Adder adder) {
         this.installed = installed;
+        this.offAtStart = installed.getOffAtStart();
         this.settings = settings;
         this.modsFolder = modsFolder;
         this.say = say;

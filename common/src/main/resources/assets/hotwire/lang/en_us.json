@@ -703,6 +703,7 @@
   "hotwire.add.shader_pack": "%s is a shader pack, not a mod! It goes in your shaderpacks folder.",
   "hotwire.add.data_pack": "%s is a data pack, not a mod! It goes in a world's datapacks folder.",
   "hotwire.add.not_a_mod": "%s isn't a Minecraft mod!",
+  "hotwire.add.queued": "%s %s is queued as a pending task: it goes into your mods folder when you close the game. Cancel it any time from Pending tasks.",
   "hotwire.add.queue_failed": "%s could not be queued: %s",
   "hotwire.add.start_failed": "%s failed while starting (%s).",
   "hotwire.add.start_failed_stays": "It could not be taken back out, so it stays until the game restarts: restart before playing on.",

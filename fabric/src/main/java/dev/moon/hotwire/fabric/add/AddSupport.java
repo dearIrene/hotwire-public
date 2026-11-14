@@ -115,9 +115,8 @@ public final class AddSupport implements ModAdder.Engine {
             }
             ModManifest manifest = this.queueJar(jar);
             journal.end(ActionJournal.Outcome.QUEUED, manifest.id());
-            return new ModAdder.Result.Queued(manifest.id(), manifest.name() + " "
-                    + manifest.version() + " is queued as a pending task: it goes into your mods folder when you close"
-                    + " the game. Cancel it any time from Pending tasks.");
+            return new ModAdder.Result.Queued(manifest.id(), Lang.get("hotwire.add.queued", manifest.name(),
+                    manifest.version()));
         } catch (ModJarException | IOException e) {
             journal.end(ActionJournal.Outcome.FAILED, e.getClass().getSimpleName());
             return new ModAdder.Result.Failed(Lang.get("hotwire.add.queue_failed", jar.getFileName(), e.getMessage()),

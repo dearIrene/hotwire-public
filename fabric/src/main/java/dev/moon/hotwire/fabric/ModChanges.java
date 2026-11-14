@@ -69,7 +69,7 @@ public final class ModChanges {
             return this.later.queue(jar);
         }
         if (!ready.adds().isInstalledJar(jar)) {
-            return ready.adds().queue(jar);
+            return ready.updates().checkQueued(ready.adds().queue(jar));
         }
         ModUpdater.Result update = ready.updates().queueForNextStart(jar);
         return switch (update) {
