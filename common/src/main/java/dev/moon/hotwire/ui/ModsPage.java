@@ -179,7 +179,7 @@ final class ModsPage implements ProfileMenu.Screen {
             ModsPage.this.pick(id, modifiers);
             ModsPage.this.sweeping = ModsPage.this.model.getPicked().contains(id);
             if (again) {
-                ModsPage.this.showDetails(id);
+                ModsPage.this.showDetails(id.equals(ModsPage.this.detailed) ? null : id);
             }
         }
 
