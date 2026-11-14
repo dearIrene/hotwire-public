@@ -312,10 +312,18 @@ public final class ModUpdater {
             String why = unmet.asking()
                     ? Lang.get(unmet.breaks() ? "hotwire.update.stays_excluded" : "hotwire.update.stays_asked", mod,
                             other, has)
+                    : unmet.has() == null && !unmet.breaks() ? Lang.get("hotwire.update.stays_missing", mod, other)
                     : Lang.get(unmet.breaks() ? "hotwire.update.stays_excludes" : "hotwire.update.stays_needs", mod,
                             other, ranges, has);
             LOGGER.info("[Hotwire] {}'s update does not wait for the next start: {}", unmet.entry(), why);
             try {
+                Path staging = this.engine.getStagingFolder().toAbsolutePath();
+                for (UpdateQueue.Entry entry : this.engine.getQueue().getEntries()) {
+                    Path staged = Path.of(entry.stagedJar()).toAbsolutePath();
+                    if (entry.modId().equals(unmet.entry()) && staged.startsWith(staging)) {
+                        Files.deleteIfExists(staged);
+                    }
+                }
                 this.engine.getQueue().remove(unmet.entry());
             } catch (IOException e) {
                 LOGGER.warn("[Hotwire] {}'s update could not be taken off the queue", unmet.entry(), e);

@@ -733,6 +733,7 @@
   "hotwire.add.makes_refused": "%s makes %s, which a world only loads when it opens. %s",
   "hotwire.add.makes": "Makes %s, which a world only loads when it opens. Hotwire will save your world, close it, add the mod, and reopen it",
   "hotwire.update.stays_needs": "%s needs %s %s, and you'd still have %s, so the game wouldn't start with it. It stays on the version you have.",
+  "hotwire.update.stays_missing": "%s needs %s, and you wouldn't have it, so the game wouldn't start with it. It doesn't wait for your next start.",
   "hotwire.update.stays_excludes": "%1$s doesn't work with %2$s %4$s, so the game wouldn't start with it. It stays on the version you have.",
   "hotwire.update.stays_asked": "%s doesn't meet what %s %s needs, so the game wouldn't start with it. It stays on the version you have.",
   "hotwire.update.stays_excluded": "%s doesn't work with %s %s, so the game wouldn't start with it. It stays on the version you have.",

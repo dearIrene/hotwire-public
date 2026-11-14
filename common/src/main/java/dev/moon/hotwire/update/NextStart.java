@@ -42,7 +42,7 @@ public final class NextStart {
         for (Map.Entry<String, List<String>> wants : mod.getRelation(ModManifest.Relation.DEPENDS).entrySet()) {
             String has = findVersion(wants.getKey(), waiting, game);
 
-            if (has != null && !wants.getValue().isEmpty() && !game.satisfies(has, wants.getValue())) {
+            if (has == null || (!wants.getValue().isEmpty() && !game.satisfies(has, wants.getValue()))) {
                 return new Unmet(entry, mod, wants.getKey(), wants.getValue(), has, false, false);
             }
         }
