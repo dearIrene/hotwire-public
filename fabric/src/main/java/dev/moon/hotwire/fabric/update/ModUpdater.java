@@ -323,7 +323,6 @@ public final class ModUpdater {
                 LOGGER.warn("[Hotwire] {}'s update could not be taken off the queue", unmet.entry(), e);
                 return dropped;
             }
-            waiting.getOrDefault(unmet.entry(), Map.of()).keySet().forEach(this.queuedCarried::remove);
             dropped.put(unmet.entry(), why);
         }
     }
@@ -492,7 +491,18 @@ public final class ModUpdater {
         }
     }
 
-    private final Map<String, String> queuedCarried = new ConcurrentHashMap<>();
+    private final Map<String, Map<String, String>> carriedByQueued = new ConcurrentHashMap<>();
+
+    private Map<String, String> findCarriedBy(UpdateQueue.Entry entry) {
+        return this.carriedByQueued.computeIfAbsent(entry.stagedSha256(), hash -> {
+            Map<String, String> carried = new HashMap<>();
+            Path staged = Path.of(entry.stagedJar());
+            if (Files.isRegularFile(staged)) {
+                this.findComingOf(staged).forEach((id, coming) -> carried.put(id, coming.version()));
+            }
+            return carried;
+        });
+    }
 
     SortResult sort(Path picked, Map<String, ModManifest> brought, Map<String, String> waiting) {
         Path jar = this.unwrap(picked);
@@ -601,13 +611,7 @@ public final class ModUpdater {
         return switch (method) {
             case IN_PLACE -> this.live.apply(List.of(planned)).getFirst();
             case NEXT_START -> {
-                Result queued = this.queue(planned.manifest(), planned.running(), planned.jar(),
-                        planned.whole().plan());
-                if (queued instanceof Result.Queued) {
-                    this.findComing(planned.read()).forEach((id, coming) -> this.queuedCarried.put(id,
-                            coming.version()));
-                }
-                yield queued;
+                yield this.queue(planned.manifest(), planned.running(), planned.jar(), planned.whole().plan());
             }
         };
     }
@@ -659,8 +663,10 @@ public final class ModUpdater {
         bringing.putAll(this.readComing(read, new HashMap<>()));
         this.after = bringing;
         Map<String, String> queuedNow = new HashMap<>();
-        this.engine.getQueue().getEntries().forEach(entry -> queuedNow.put(entry.modId(), entry.toVersion()));
-        queuedNow.putAll(this.queuedCarried);
+        for (UpdateQueue.Entry entry : this.engine.getQueue().getEntries()) {
+            queuedNow.putAll(this.findCarriedBy(entry));
+            queuedNow.put(entry.modId(), entry.toVersion());
+        }
         queuedNow.putAll(waiting);
         this.queued = queuedNow;
         try {

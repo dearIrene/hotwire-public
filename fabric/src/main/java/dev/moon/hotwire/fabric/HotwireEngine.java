@@ -795,7 +795,15 @@ public final class HotwireEngine implements ModScreenGame, AutoCloseable {
     @Override
     public void cancelPending(String id) throws IOException {
         this.pending.cancel(id);
+        this.checkQueue();
         this.storeJars.dropUnqueued(this.getPendingChanges());
+    }
+
+    private void checkQueue() {
+        JvmParts parts = this.findParts();
+        if (parts != null) {
+            parts.updates().checkQueue().forEach(why -> this.showMessage(why, true));
+        }
     }
 
     @Override
@@ -810,6 +818,7 @@ public final class HotwireEngine implements ModScreenGame, AutoCloseable {
     @Override
     public void revertAtNextStart(String id) throws IOException {
         this.rows.revertAtNextStart(id);
+        this.checkQueue();
     }
 
     public @Nullable ModScreen getScreen() {
