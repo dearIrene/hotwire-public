@@ -8,6 +8,7 @@ import dev.moon.hotwire.plan.ModGraph;
 import dev.moon.hotwire.plan.SwitchPlanner;
 import dev.moon.hotwire.ui.Lang;
 import java.util.ArrayList;
+import java.util.Comparator;
 import java.util.HashSet;
 import java.util.List;
 import java.util.Optional;
@@ -92,6 +93,18 @@ public final class ModPolicy {
 
     public static boolean isSwitchable(String id) {
         return !isGuarded(id) && !BUILT_IN.contains(id);
+    }
+
+    public static final Comparator<String> VERSION_ORDER = (left, right) -> {
+        try {
+            return Version.parse(left).compareTo(Version.parse(right));
+        } catch (VersionParsingException e) {
+            return left.compareTo(right);
+        }
+    };
+
+    public static boolean isNewer(String candidate, String running) {
+        return VERSION_ORDER.compare(candidate, running) > 0;
     }
 
     public static boolean satisfies(String version, List<String> ranges) {

@@ -182,7 +182,8 @@ final class StoreJars {
 
     private boolean isUpdate(Path jar) {
         ModManifest manifest = JarLookup.findManifest(jar);
-        return manifest != null && this.installed.isInstalled(manifest.id());
+        return manifest != null && (this.installed.isInstalled(manifest.id())
+                || this.installed.findOfferedFor(jar) != null);
     }
 
     private void updateOne(List<UpdateOffer> asked) {

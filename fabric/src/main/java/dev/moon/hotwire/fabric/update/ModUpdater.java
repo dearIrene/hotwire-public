@@ -54,8 +54,6 @@ import java.util.function.Function;
 import java.util.stream.Collectors;
 import java.util.zip.ZipEntry;
 import java.util.zip.ZipFile;
-import net.fabricmc.loader.api.Version;
-import net.fabricmc.loader.api.VersionParsingException;
 import org.jspecify.annotations.Nullable;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -89,6 +87,10 @@ public final class ModUpdater {
         Progress getProgress();
 
         @Nullable Path findRunningJarOf(String id);
+
+        boolean isDisabled(String id);
+
+        @Nullable String findOfferedFor(Path jar);
 
         @Nullable Path findFolderJarOf(String id);
 
@@ -126,14 +128,7 @@ public final class ModUpdater {
     }
 
     private static final Logger LOGGER = LoggerFactory.getLogger(ModUpdater.class);
-
-    static final Comparator<String> VERSION_ORDER = (left, right) -> {
-        try {
-            return Version.parse(left).compareTo(Version.parse(right));
-        } catch (VersionParsingException e) {
-            return left.compareTo(right);
-        }
-    };
+    static final Comparator<String> VERSION_ORDER = ModPolicy.VERSION_ORDER;
 
     final Engine engine;
 
@@ -191,6 +186,7 @@ public final class ModUpdater {
     }
 
     public UpdatePreview preview(Path picked) {
+        this.wideners.clear();
         long began = System.nanoTime();
         Path jar = this.unwrap(picked);
         String fileName = String.valueOf(picked.getFileName());
@@ -203,7 +199,7 @@ public final class ModUpdater {
         }
         Path running = this.engine.findRunningJarOf(manifest.id());
         if (running == null) {
-            String replaced = this.idChanged.findReplacedBy(manifest);
+            String replaced = this.idChanged.findReplacedBy(manifest, picked);
             if (replaced == null) {
                 return new UpdatePreview.Refused(fileName, Lang.get("hotwire.update.not_installed", manifest.id()));
             }
@@ -275,7 +271,8 @@ public final class ModUpdater {
         NextStart.Game game = new NextStart.Game() {
             @Override
             public @Nullable String findVersionOf(String id) {
-                return ModUpdater.this.engine.findVersionOf(id);
+                return ModUpdater.this.engine.isDisabled(graph.resolve(id)) ? null
+                        : ModUpdater.this.engine.findVersionOf(id);
             }
 
             @Override
@@ -291,7 +288,8 @@ public final class ModUpdater {
             @Override
             public List<ModManifest> getInstalled() {
                 List<ModManifest> installed = new ArrayList<>();
-                graph.getIds().forEach(id -> graph.find(id).ifPresent(installed::add));
+                graph.getIds().stream().filter(id -> !ModUpdater.this.engine.isDisabled(id))
+                        .forEach(id -> graph.find(id).ifPresent(installed::add));
                 return installed;
             }
         };
@@ -412,6 +410,7 @@ public final class ModUpdater {
     }
 
     public Result update(Path picked, UpdateMethod method) {
+        this.wideners.clear();
         SwitchTimes.begin();
         try {
             return this.updateTimed(picked, method);
@@ -433,6 +432,7 @@ public final class ModUpdater {
     }
 
     public List<SortResult> previewAll(List<Path> jars) {
+        this.wideners.clear();
         Map<String, ModManifest> brought = new HashMap<>();
         jars.forEach(jar -> brought.putAll(this.findComingOf(jar)));
         return jars.stream().map(jar -> this.sort(jar, brought, Map.of())).toList();
@@ -452,6 +452,7 @@ public final class ModUpdater {
     }
 
     public Result updateAsPlanned(Path picked) {
+        this.wideners.clear();
         return this.checkQueue(switch (this.sort(picked, Map.of(), Map.of())) {
             case SortResult.Refused refused -> refused.result();
             case SortResult.IdChanged changed -> this.idChanged.update(changed.manifest(), changed.replaced(),
@@ -515,7 +516,7 @@ public final class ModUpdater {
         }
         Path running = this.engine.findRunningJarOf(manifest.id());
         if (running == null) {
-            String replaced = this.idChanged.findReplacedBy(manifest);
+            String replaced = this.idChanged.findReplacedBy(manifest, picked);
             if (replaced == null) {
                 return new SortResult.Refused(new Result.Refused(Lang.get("hotwire.update.not_installed",
                         manifest.id())));

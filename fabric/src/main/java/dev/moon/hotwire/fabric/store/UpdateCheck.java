@@ -25,8 +25,6 @@ import java.util.Set;
 import java.util.concurrent.ConcurrentLinkedQueue;
 import java.util.function.Consumer;
 import net.fabricmc.loader.api.FabricLoader;
-import net.fabricmc.loader.api.Version;
-import net.fabricmc.loader.api.VersionParsingException;
 import org.jspecify.annotations.Nullable;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -220,7 +218,7 @@ public final class UpdateCheck {
                     .containsKey(parent)) {
                 id = parent;
                 String running = this.installed.find(id).map(ModManifest::version).orElse("");
-                if (running.isEmpty() || !isNewer(version.number(), running)) {
+                if (running.isEmpty() || !ModPolicy.isNewer(version.number(), running)) {
                     return;
                 }
             }
@@ -297,14 +295,6 @@ public final class UpdateCheck {
         return jars;
     }
 
-    private static boolean isNewer(String candidate, String running) {
-        try {
-            return Version.parse(candidate).compareTo(Version.parse(running)) > 0;
-        } catch (VersionParsingException e) {
-            return !candidate.equals(running);
-        }
-    }
-
     public List<Path> fetchWithNeeds(UpdateOffer offer, Consumer<String> saying) throws IOException {
         List<Path> jars = new ArrayList<>();
         Set<String> seen = new HashSet<>();
@@ -312,7 +302,9 @@ public final class UpdateCheck {
             this.fetchNeeded(needed, offer.name(), seen, jars, saying);
         }
         saying.accept(Lang.get("hotwire.updates.getting", offer.name(), offer.newVersion()));
-        jars.add(this.fetch(offer));
+        Path fetched = this.fetch(offer);
+        this.installed.noteOffered(fetched, offer.id());
+        jars.add(fetched);
         return jars;
     }
 

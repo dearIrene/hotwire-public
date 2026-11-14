@@ -109,6 +109,24 @@ final class UpdateBatch {
         SwitchTimes.mark("updates: sorted");
         LOGGER.info("[Hotwire] of {} updates, {} go in now together, {} wait for the next start, {} go on their own"
                 + " and the rest are refused", jars.size(), inPlace.size(), waiting.size(), later.size());
+        try {
+            this.runSorted(jars, inPlace, inPlaceAt, later, results, waiting, alone, instead);
+        } finally {
+            Map<String, String> dropped = this.updater.dropUnstartable();
+            for (int i = 0; i < results.length; i++) {
+                if (results[i] instanceof ModUpdater.Result.Queued queued && dropped.containsKey(queued.id())) {
+                    results[i] = new ModUpdater.Result.Refused(dropped.get(queued.id()));
+                }
+            }
+        }
+        return List.of(results);
+    }
+
+    private void runSorted(List<Path> jars, List<ModUpdater.SortResult.Planned> inPlace, List<Integer> inPlaceAt,
+            List<Integer> later, ModUpdater.Result[] results, Map<String, String> waiting,
+            Function<Path, ModUpdater.Result> alone,
+            BiFunction<Path, ModUpdater.Result.Failed, ModUpdater.Result> instead) {
+        Progress shown = this.updater.engine.getProgress();
 
         while (!inPlace.isEmpty()) {
             shown.stepUpdating(3);
@@ -140,14 +158,6 @@ final class UpdateBatch {
                 results[at] = fail(jars.get(at), e);
             }
         }
-
-        Map<String, String> dropped = this.updater.dropUnstartable();
-        for (int i = 0; i < results.length; i++) {
-            if (results[i] instanceof ModUpdater.Result.Queued queued && dropped.containsKey(queued.id())) {
-                results[i] = new ModUpdater.Result.Refused(dropped.get(queued.id()));
-            }
-        }
-        return List.of(results);
     }
 
     private void sendBackClashes(List<Path> jars, List<ModUpdater.SortResult.Planned> inPlace, List<Integer> inPlaceAt,

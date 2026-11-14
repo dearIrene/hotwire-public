@@ -711,6 +711,16 @@ public final class UpdateSupport implements ModUpdater.Engine, ModAdder.CarriedL
     }
 
     @Override
+    public boolean isDisabled(String id) {
+        return this.installed.isDisabled(id);
+    }
+
+    @Override
+    public @Nullable String findOfferedFor(Path jar) {
+        return this.installed.findOfferedFor(jar);
+    }
+
+    @Override
     public @Nullable Path findFolderJarOf(String id) {
         return this.installed.findFolderJarOf(id);
     }

@@ -1,6 +1,7 @@
 package dev.moon.hotwire.fabric.store;
 
 import dev.moon.hotwire.fabric.LoadedMods;
+import dev.moon.hotwire.fabric.ModPolicy;
 import dev.moon.hotwire.modrinth.Downloads;
 import dev.moon.hotwire.modrinth.ModrinthClient;
 import dev.moon.hotwire.update.HotwireChanges;
@@ -12,8 +13,6 @@ import java.util.List;
 import java.util.Optional;
 import java.util.function.Consumer;
 import net.fabricmc.loader.api.FabricLoader;
-import net.fabricmc.loader.api.Version;
-import net.fabricmc.loader.api.VersionParsingException;
 import org.jspecify.annotations.Nullable;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -47,24 +46,17 @@ public final class SelfUpdate {
         try {
             List<ModrinthClient.Version> versions = this.client.findVersions(ModrinthClient.Kind.MOD, PROJECT);
             String running = LoadedMods.findVersion("hotwire", "0");
-            this.changes = HotwireChanges.join(versions, number -> isNewer(number, running));
-            checked.accept(Optional.ofNullable(UrgentUpdate.find(versions, number -> isNewer(number, running))));
+            this.changes = HotwireChanges.join(versions, number -> ModPolicy.isNewer(number, running));
+            checked.accept(Optional.ofNullable(UrgentUpdate.find(versions,
+                    number -> ModPolicy.isNewer(number, running))));
             if (versions.isEmpty()) {
                 return null;
             }
             ModrinthClient.Version newest = versions.getFirst();
-            return isNewer(newest.number(), running) ? newest : null;
+            return ModPolicy.isNewer(newest.number(), running) ? newest : null;
         } catch (IOException | RuntimeException e) {
             LOGGER.info("[Hotwire] could not ask Modrinth for a newer Hotwire: {}", e.toString());
             return null;
-        }
-    }
-
-    public static boolean isNewer(String modrinth, String running) {
-        try {
-            return Version.parse(modrinth).compareTo(Version.parse(running)) > 0;
-        } catch (VersionParsingException e) {
-            return false;
         }
     }
 

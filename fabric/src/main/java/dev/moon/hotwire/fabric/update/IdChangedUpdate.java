@@ -28,11 +28,15 @@ final class IdChangedUpdate {
         this.swapper = swapper;
     }
 
-    @Nullable String findReplacedBy(ModManifest incoming) {
+    @Nullable String findReplacedBy(ModManifest incoming, Path jar) {
         for (String provided : incoming.provides()) {
             if (this.engine.findRunningJarOf(provided) != null) {
                 return provided;
             }
+        }
+        String offered = this.engine.findOfferedFor(jar);
+        if (offered != null && this.engine.findRunningJarOf(offered) != null) {
+            return offered;
         }
         for (String id : this.engine.getGraph().getIds()) {
             ModManifest installed = this.engine.getGraph().find(id).orElse(null);

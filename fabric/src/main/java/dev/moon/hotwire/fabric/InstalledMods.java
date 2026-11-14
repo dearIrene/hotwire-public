@@ -45,6 +45,8 @@ public final class InstalledMods {
 
     private final Map<String, ModJar> disabled = new HashMap<>();
     private final Set<String> addedThisSession = new HashSet<>();
+
+    private final Map<String, String> offeredFor = new HashMap<>();
     private final Set<String> updatedThisSession = new HashSet<>();
 
     public InstalledMods(List<ModJar> jars, Map<String, Path> jarOf, Set<String> topLevel,
@@ -295,6 +297,15 @@ public final class InstalledMods {
             this.updatedThisSession.addAll(reads.keySet());
         }
         this.makeGraphAgain();
+    }
+
+    public synchronized void noteOffered(Path jar, String id) {
+        this.offeredFor.put(jar.getFileName().toString(), id);
+    }
+
+    public synchronized @Nullable String findOfferedFor(Path jar) {
+        String id = this.offeredFor.get(jar.getFileName().toString());
+        return id != null && this.graph.find(id).isPresent() ? id : null;
     }
 
     public synchronized boolean isAddedThisSession(String id) {

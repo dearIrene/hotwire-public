@@ -196,6 +196,8 @@ public final class LiveUpdates {
     private List<ModUpdater.Result> applyReady(List<Ready> ready) {
         List<SwitchApplier.Adoption> adoptions = new ArrayList<>();
         this.registered.clear();
+
+        boolean replaced = false;
         try {
             this.engine.getApplier().getRebuilder().launchChanged();
 
@@ -247,6 +249,7 @@ public final class LiveUpdates {
             SwitchApplier.ApplyResult applied;
             try {
                 applied = this.engine.getApplier().replace(ids, changed, this.engine.on(), targets, joined);
+                replaced = true;
             } finally {
                 ConstructedFields.endUpdating();
                 InitHookRuns.endWaitingLate();
@@ -287,14 +290,24 @@ public final class LiveUpdates {
                 results.add(this.finish(one, own, started.get(i)));
             }
             return results;
-        } catch (RebuildException e) {
+        } catch (RebuildException | RuntimeException | LinkageError e) {
+            if (replaced) {
+                if (e instanceof RuntimeException thrown) {
+                    throw thrown;
+                }
+                if (e instanceof LinkageError thrown) {
+                    throw thrown;
+                }
+                throw new IllegalStateException("the update threw once its classes were in", e);
+            }
+
             adoptions.reversed().forEach(this.engine.getApplier()::revertAdoption);
             Linker.removeAddedConstructors(this.registered);
             List<ModUpdater.Result> failed = new ArrayList<>();
             for (Ready one : ready) {
                 LOGGER.warn("[Hotwire] {} could not be updated in place", one.manifest().id(), e);
                 failed.add(new ModUpdater.Result.Failed(one.manifest().name() + " could not be updated in place: "
-                        + e.getMessage(), e));
+                        + (e instanceof RebuildException ? e.getMessage() : e.toString()), e));
             }
             return failed;
         } finally {

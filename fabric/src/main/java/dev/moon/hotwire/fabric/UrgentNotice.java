@@ -1,7 +1,6 @@
 package dev.moon.hotwire.fabric;
 
 import dev.moon.hotwire.config.AtomicFiles;
-import dev.moon.hotwire.fabric.store.SelfUpdate;
 import dev.moon.hotwire.update.UrgentUpdate;
 import java.io.IOException;
 import java.nio.file.Files;
@@ -37,7 +36,7 @@ public final class UrgentNotice {
                 return;
             }
             List<String> lines = Files.readAllLines(note);
-            if (lines.isEmpty() || !SelfUpdate.isNewer(lines.getFirst(), LoadedMods.findVersion("hotwire", "0"))) {
+            if (lines.isEmpty() || !ModPolicy.isNewer(lines.getFirst(), LoadedMods.findVersion("hotwire", "0"))) {
                 Files.delete(note);
                 return;
             }
