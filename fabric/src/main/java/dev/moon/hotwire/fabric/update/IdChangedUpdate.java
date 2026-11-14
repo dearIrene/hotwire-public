@@ -76,8 +76,8 @@ final class IdChangedUpdate {
             this.swapper.queue(replaced, incoming.name(), running, jar, plan);
             return new ModUpdater.Result.Queued(replaced, incoming.name(), plan);
         } catch (IOException e) {
-            return new ModUpdater.Result.Failed(incoming.name() + " could not be queued for the next launch: "
-                    + e.getMessage(), e);
+            return new ModUpdater.Result.Failed(Lang.get("hotwire.update.queue_failed", incoming.name(),
+                    e.getMessage()), e);
         }
     }
 

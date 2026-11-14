@@ -509,7 +509,8 @@ public final class ModUpdater {
         Path jar = this.unwrap(picked);
         ModManifest manifest = JarLookup.findManifest(jar);
         if (manifest == null) {
-            return new SortResult.Refused(new Result.Refused(jar.getFileName() + " is not a mod jar."));
+            return new SortResult.Refused(new Result.Refused(Lang.get("hotwire.update.not_a_mod",
+                    jar.getFileName())));
         }
         if (ModPolicy.isHotwire(manifest.id())) {
             return new SortResult.Refused(new Result.Refused(ModPolicy.describeSelfChange()));
@@ -534,8 +535,8 @@ public final class ModUpdater {
             read = this.plans.read(jar);
             whole = this.planWhole(manifest.id(), running, jar, read, brought, waiting);
         } catch (ModJarException e) {
-            return new SortResult.Refused(new Result.Refused(jar.getFileName() + " cannot be compared with the running"
-                    + " jar: " + e.getMessage()));
+            return new SortResult.Refused(new Result.Refused(Lang.get("hotwire.update.cannot_compare",
+                    jar.getFileName(), e.getMessage())));
         }
         SwitchTimes.mark("update: plan");
         if (whole.refusal() != null) {
@@ -586,8 +587,8 @@ public final class ModUpdater {
                 List<Path> leftOut = new ArrayList<>();
                 List<CarriedUpdates.Library> planned = this.carried.planAlone(library, read, toAdd, leftOut);
                 if (planned == null || !leftOut.isEmpty()) {
-                    out.add(new SortResult.Refused(new Result.Refused(read.manifest().name() + " cannot update while"
-                            + " the game runs.")));
+                    out.add(new SortResult.Refused(new Result.Refused(Lang.get(
+                            "hotwire.update.not_while_running", read.manifest().name()))));
                     continue;
                 }
                 CarriedUpdates.Library self = planned.getLast();
@@ -597,7 +598,8 @@ public final class ModUpdater {
                         self.adoptsConfigs(), null, toAdd, leftOut, null)));
             }
         } catch (ModJarException e) {
-            out.add(new SortResult.Refused(new Result.Refused("A library cannot be read: " + e.getMessage())));
+            out.add(new SortResult.Refused(new Result.Refused(Lang.get("hotwire.update.library_unreadable",
+                    e.getMessage()))));
         } finally {
             this.after = Map.of();
         }
@@ -606,8 +608,8 @@ public final class ModUpdater {
 
     Result take(SortResult.Planned planned, UpdateMethod method) {
         if (method == UpdateMethod.IN_PLACE && planned.method() != method) {
-            return new Result.Refused("The update of " + planned.manifest().name() + " was planned "
-                    + planned.method() + " and asked " + method + ".");
+            return new Result.Refused(Lang.get("hotwire.update.planned_other", planned.manifest().name(),
+                    planned.method(), method));
         }
         return switch (method) {
             case IN_PLACE -> this.live.apply(List.of(planned)).getFirst();
@@ -688,9 +690,10 @@ public final class ModUpdater {
                 return new Whole(whole.plan(), List.of(), false, Lang.get("hotwire.update.needs_loader", name, wanted,
                         have), List.of(), List.of(), wanted);
             }
-            return new Whole(whole.plan(), List.of(), false, name + " needs " + first.getKey() + " "
-                    + String.join(" or ", first.getValue()) + (have == null ? ", which the game does not have"
-                    : ", and the game has " + have) + ". Update or add " + first.getKey() + " first, then this.");
+            String ranges = String.join(" or ", first.getValue());
+            return new Whole(whole.plan(), List.of(), false, have == null
+                    ? Lang.get("hotwire.update.needs_missing", name, first.getKey(), ranges, first.getKey())
+                    : Lang.get("hotwire.update.needs_has", name, first.getKey(), ranges, have, first.getKey()));
         } finally {
             this.after = Map.of();
             this.queued = Map.of();
@@ -733,8 +736,7 @@ public final class ModUpdater {
             this.queueSwap(manifest, running, incoming, plan);
             return new Result.Queued(manifest.id(), manifest.name(), plan);
         } catch (IOException e) {
-            return new Result.Failed(manifest.name() + " could not be queued for the next launch: " + e.getMessage(),
-                    e);
+            return new Result.Failed(Lang.get("hotwire.update.queue_failed", manifest.name(), e.getMessage()), e);
         }
     }
 
@@ -851,8 +853,8 @@ public final class ModUpdater {
             if (have != null && this.engine.satisfies(have, breaks.getValue())) {
                 String name = graph.find(graph.resolve(breaks.getKey())).map(ModManifest::name)
                         .orElse(breaks.getKey());
-                return Optional.of(incoming.name() + " " + incoming.version() + " does not work with " + name + " "
-                        + have + ". Update " + name + " first, then this.");
+                return Optional.of(Lang.get("hotwire.update.breaks_other", incoming.name(), incoming.version(),
+                        name, have, name));
             }
         }
         Set<String> ids = new TreeSet<>(graph.getIds());
@@ -866,17 +868,16 @@ public final class ModUpdater {
             for (Map.Entry<String, List<String>> wants : other.getRelation(ModManifest.Relation.DEPENDS).entrySet()) {
                 if (graph.resolve(wants.getKey()).equals(incoming.id()) && !wants.getValue().isEmpty()
                         && !this.engine.satisfies(incoming.version(), wants.getValue())) {
-                    return Optional.of(other.name() + " needs " + incoming.name() + " "
-                            + String.join(" or ", wants.getValue()) + ", and this is " + incoming.version()
-                            + ". Update " + other.name() + " first, or keep " + incoming.name() + " as it is.");
+                    return Optional.of(Lang.get("hotwire.update.other_needs", other.name(), incoming.name(),
+                            String.join(" or ", wants.getValue()), incoming.version(), other.name(),
+                            incoming.name()));
                 }
             }
             for (Map.Entry<String, List<String>> breaks : other.getRelation(ModManifest.Relation.BREAKS).entrySet()) {
                 if (graph.resolve(breaks.getKey()).equals(incoming.id())
                         && this.engine.satisfies(incoming.version(), breaks.getValue())) {
-                    return Optional.of(other.name() + " does not work with " + incoming.name() + " "
-                            + incoming.version() + ". Update " + other.name() + " first, or keep "
-                            + incoming.name() + " as it is.");
+                    return Optional.of(Lang.get("hotwire.update.other_breaks", other.name(), incoming.name(),
+                            incoming.version(), other.name(), incoming.name()));
                 }
             }
         }

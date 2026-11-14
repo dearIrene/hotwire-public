@@ -7,6 +7,7 @@ import dev.moon.hotwire.redefine.AccessBridge;
 import dev.moon.hotwire.redefine.Linker;
 import dev.moon.hotwire.redefine.Relocations;
 import dev.moon.hotwire.redefine.ShutOverrides;
+import dev.moon.hotwire.ui.Lang;
 import java.nio.file.Path;
 import java.util.LinkedHashMap;
 import java.util.List;
@@ -52,8 +53,7 @@ final class AddWideners {
         JarUseReader.JarClasses jar = JarUseReader.readJar(path);
         for (WidenerUses.Use use : JarUseReader.findUsesOf(jar, loaded, this.engine)) {
             if (!use.isFixable() && !JarUseReader.isMovable(use, jar, this.engine, false)) {
-                return Optional.of(name + " cannot be added: " + use.describe() + ", and the game has loaded that"
-                        + " class already, so its access cannot change.");
+                return Optional.of(Lang.get("hotwire.add.widener_loaded", name, use.describe()));
             }
         }
         return Optional.empty();
@@ -77,8 +77,7 @@ final class AddWideners {
         JarUseReader.JarClasses jar = JarUseReader.readJar(path);
         for (WidenerUses.Use use : JarUseReader.findUsesOf(jar, loaded, this.engine)) {
             if (!use.isFixable()) {
-                return Optional.of(name + " cannot be updated while it runs: " + use.describe() + ", and the game"
-                        + " has loaded that class already, so its access cannot change.");
+                return Optional.of(Lang.get("hotwire.update.widener_loaded", name, use.describe()));
             }
         }
         return Optional.empty();

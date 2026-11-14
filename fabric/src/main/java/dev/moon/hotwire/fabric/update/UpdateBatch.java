@@ -329,6 +329,6 @@ final class UpdateBatch {
 
     private static ModUpdater.Result fail(Path jar, RuntimeException thrown) {
         LOGGER.warn("[Hotwire] {} could not be updated", jar.getFileName(), thrown);
-        return new ModUpdater.Result.Failed(jar.getFileName() + " could not be updated: " + thrown, thrown);
+        return new ModUpdater.Result.Failed(Lang.get("hotwire.update.failed", jar.getFileName(), thrown), thrown);
     }
 }

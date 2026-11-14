@@ -59,7 +59,8 @@ final class NextStartQueue {
             return new ModAdder.Result.Queued(manifest.id(), Lang.get(running == null
                     ? "hotwire.next_start.add" : "hotwire.next_start.update", manifest.name(), manifest.version()));
         } catch (ModJarException | IOException e) {
-            return new ModAdder.Result.Failed(jar.getFileName() + " could not be queued: " + e.getMessage(), e);
+            return new ModAdder.Result.Failed(Lang.get("hotwire.add.queue_failed", jar.getFileName(), e.getMessage()),
+                    e);
         }
     }
 

@@ -20,6 +20,7 @@ import dev.moon.hotwire.redefine.RebuildException;
 import dev.moon.hotwire.switching.ModMixins;
 import dev.moon.hotwire.switching.SwitchApplier;
 import dev.moon.hotwire.switching.SwitchTimes;
+import dev.moon.hotwire.ui.Lang;
 import dev.moon.hotwire.ui.Progress;
 import dev.moon.hotwire.update.UpdateDiffer;
 import dev.moon.hotwire.update.UpdatePlan;
@@ -102,8 +103,8 @@ public final class LiveUpdates {
                     at.add(i);
                 }
             } catch (ModJarException e) {
-                results[i] = new ModUpdater.Result.Refused(planned.jar().getFileName() + " cannot be read: "
-                        + e.getMessage());
+                results[i] = new ModUpdater.Result.Refused(Lang.get("hotwire.update.jar_unreadable",
+                        planned.jar().getFileName(), e.getMessage()));
             }
         }
         SwitchTimes.mark("update: read jar");
@@ -126,8 +127,8 @@ public final class LiveUpdates {
             if (refusal.isPresent()) {
                 LOGGER.info("[Hotwire] {} carries {}, which could not be added: {}", planned.manifest().id(),
                         library.getFileName(), refusal.get());
-                return Optional.of(planned.manifest().name() + " could not be updated in place: its library "
-                        + library.getFileName() + " could not be added: " + refusal.get());
+                return Optional.of(Lang.get("hotwire.update.library_not_added", planned.manifest().name(),
+                        library.getFileName(), refusal.get()));
             }
         }
         return Optional.empty();
@@ -306,8 +307,8 @@ public final class LiveUpdates {
             List<ModUpdater.Result> failed = new ArrayList<>();
             for (Ready one : ready) {
                 LOGGER.warn("[Hotwire] {} could not be updated in place", one.manifest().id(), e);
-                failed.add(new ModUpdater.Result.Failed(one.manifest().name() + " could not be updated in place: "
-                        + (e instanceof RebuildException ? e.getMessage() : e.toString()), e));
+                failed.add(new ModUpdater.Result.Failed(Lang.get("hotwire.update.in_place_failed",
+                        one.manifest().name(), e instanceof RebuildException ? e.getMessage() : e.toString()), e));
             }
             return failed;
         } finally {

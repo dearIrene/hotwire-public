@@ -10,6 +10,7 @@ import dev.moon.hotwire.fabric.registration.GameHold;
 import dev.moon.hotwire.fabric.registration.GameRegistrations;
 import dev.moon.hotwire.fabric.registration.ModLifecycle;
 import dev.moon.hotwire.jar.ContentScan;
+import dev.moon.hotwire.jar.JarLookup;
 import dev.moon.hotwire.jar.ModJar;
 import dev.moon.hotwire.jar.ModJarException;
 import dev.moon.hotwire.jar.ModJarReader;
@@ -45,6 +46,7 @@ import java.util.LinkedHashMap;
 import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Map;
+import java.util.Objects;
 import java.util.Optional;
 import java.util.Set;
 import java.util.concurrent.CompletableFuture;
@@ -247,112 +249,32 @@ public final class ModAdder {
     }
 
     private AddPreview preview(Path jarPath, StageTimes times) {
-        Optional<String> plain = AddFirstLook.findRefusal(jarPath);
-        if (plain.isPresent()) {
-            return makeRefusal(String.valueOf(jarPath.getFileName()).replaceFirst("(?i)\\.jar$", ""), "",
-                    plain.get());
-        }
-        times.end("first look");
-        ModJar jar;
-        try {
-            jar = ModJarReader.read(jarPath);
-        } catch (ModJarException e) {
-            LOGGER.warn("[Hotwire] reading {} for the dry run failed", jarPath, e);
-            return makeRefusal(jarPath.getFileName().toString(), "", Lang.get("hotwire.add.read_failed",
-                    jarPath.getFileName(), e.getMessage()));
-        }
-        times.end("read");
-        ModManifest manifest = jar.manifest();
-        String version = manifest.version();
-        if (ModPolicy.isHotwire(manifest.id()) || this.engine.isInstalled(manifest.id())) {
-            return makeRefusal(manifest.name(), version, ModPolicy.isHotwire(manifest.id())
-                    ? ModPolicy.describeSelfChange() : Lang.get("hotwire.add.installed", manifest.name()));
-        }
-
-        String startOnly = manifest.getRelation(ModManifest.Relation.DEPENDS).keySet().stream()
-                .filter(id -> ModPolicy.isStartOnly(id) && !this.engine.isInstalled(id)).findFirst()
-                .orElse(ModPolicy.isStartOnly(manifest.id()) ? manifest.id() : null);
-        if (startOnly != null) {
-            return AddPreview.ofLater(manifest.name(), version, List.of(Lang.get("hotwire.add.later.start_only",
-                    startOnly.equals(manifest.id()) ? manifest.name() : startOnly)));
-        }
-
         Map<String, Part> found = new LinkedHashMap<>();
-        this.setAside.clear();
-        try {
-            this.collect(jarPath, found);
-        } catch (ModJarException | IOException e) {
-            LOGGER.warn("[Hotwire] reading the jars inside {} for the dry run failed", jarPath, e);
-            return makeRefusal(manifest.name(), version, Lang.get("hotwire.add.nested_unreadable", manifest.name(),
-                    e.getMessage()));
+        AddDecision decision = this.decide(List.of(jarPath), found, this.engine.getSwitcher().getOff(), id -> id);
+        times.end("decision");
+
+        ModManifest manifest = JarLookup.findManifest(jarPath);
+        String name = manifest == null ? String.valueOf(jarPath.getFileName()).replaceFirst("(?i)\\.jar$", "")
+                : manifest.name();
+        String version = manifest == null ? "" : manifest.version();
+        if (decision instanceof AddDecision.Refused refused) {
+            return makeRefusal(name, version, refused.why());
         }
-        times.end("nested jars");
+        if (decision instanceof AddDecision.Later later) {
+            if (!later.why().equals(later.line())) {
+                LOGGER.info("[Hotwire] {}", later.why());
+            }
+            return AddPreview.ofLater(name, version, List.of(later.line()));
+        }
         List<ModJar> parts = found.values().stream().map(Part::jar).toList();
-        if (LoaderModList.findNewLanguageAdapter(parts.stream().map(ModJar::manifest).toList(),
-                type -> ContentScan.isQuietAdapter(this.scan(jarPath), type)) != null) {
-            return AddPreview.ofLater(manifest.name(), version, List.of(Lang.get("hotwire.add.later.adapter",
-                    manifest.name())));
-        }
-        if (this.isComponentListShut(parts)) {
-            return AddPreview.ofLater(manifest.name(), version, List.of(Lang.get("hotwire.add.later.components",
-                    manifest.name())));
-        }
-
-        List<Path> brought = found.values().stream().map(Part::path).toList();
-        if (this.findEnumMixinJar(brought) != null) {
-            return AddPreview.ofLater(manifest.name(), version, List.of(Lang.get("hotwire.add.later.enum",
-                    manifest.name())));
-        }
-        StartOnly startOnlyMixin = this.findStartOnlyMixin(brought);
-        if (startOnlyMixin != null) {
-            return AddPreview.ofLater(manifest.name(), version, List.of(describeStartOnly(startOnlyMixin.kind(),
-                    manifest.name())));
-        }
-        for (Part part : found.values()) {
-            Optional<String> missing = AddDependencies.findMissingRefusal(part.jar());
-            if (missing.isPresent()) {
-                return makeRefusal(manifest.name(), version, missing.get());
-            }
-            Optional<String> widener = this.addWideners.findWidenerRefusal(part.jar(), part.path());
-            if (widener.isPresent()) {
-                LOGGER.info("[Hotwire] {}", widener.get());
-                return AddPreview.ofLater(manifest.name(), version, List.of(Lang.get("hotwire.add.later.running",
-                        part.jar().manifest().name())));
-            }
-        }
-        times.end("access wideners");
-        SwitchPlanner planner = this.engine.makePlannerFor(this.engine.makeGraphWith(parts));
-        SwitchPlan plan = AddDependencies.planOn(planner, parts, this.engine.getSwitcher().getOff());
-        Optional<String> missing = AddDependencies.describe(plan, id -> id);
-        List<Path> libraries = List.of();
-
-        Set<String> queued = this.engine.findQueuedIds();
-        if (missing.isPresent() && plan.refusals().stream().allMatch(refusal -> refusal instanceof
-                SwitchPlan.Refusal.MissingDependency needed && queued.contains(needed.dependency()))) {
-            return AddPreview.ofLater(manifest.name(), version, List.of(Lang.get("hotwire.add.later.needs_queued")));
-        }
-        if (missing.isPresent()) {
-            if (!AddDependencies.isCarriedNewer(jar, plan)) {
-                return makeRefusal(manifest.name(), version, missing.get());
-            }
-
-            libraries = this.findCarriedNewer(plan);
-            Optional<String> cannot = this.findLibrariesRefusal(libraries);
-            if (cannot.isPresent()) {
-                LOGGER.info("[Hotwire] {}: {}", missing.get(), cannot.get());
-                return AddPreview.ofLater(manifest.name(), version, List.of(Lang.get("hotwire.add.later.library",
-                        manifest.name())));
-            }
-        }
-        times.end("plan");
-        Set<String> content = this.readContent(jarPath);
-        times.end("content");
+        List<Path> libraries = decision instanceof AddDecision.Ready ready ? ready.libraries()
+                : ((AddDecision.Reopen) decision).libraries();
         List<String> lines = new ArrayList<>();
-        if (!manifest.authors().isEmpty()) {
+        if (manifest != null && !manifest.authors().isEmpty()) {
             lines.add(Lang.get("hotwire.add.by", String.join(", ", manifest.authors())));
         }
-        List<String> nested = parts.stream().filter(part -> !part.manifest().id().equals(manifest.id()))
-                .map(part -> part.manifest().name()).toList();
+        List<String> nested = parts.stream().filter(part -> manifest == null
+                || !part.manifest().id().equals(manifest.id())).map(part -> part.manifest().name()).toList();
         if (nested.size() > MOST_NESTED_NAMED) {
             lines.add(Lang.get("hotwire.add.also_adds_many", nested.size()));
         } else if (!nested.isEmpty()) {
@@ -376,26 +298,19 @@ public final class ModAdder {
             lines.add(onLoaded == 0 ? Lang.get("hotwire.add.opens", widened) : Lang.get("hotwire.add.opens_loaded",
                     widened, onLoaded));
         }
-        if (!content.isEmpty() && this.engine.isInWorld()) {
+        if (decision instanceof AddDecision.Reopen reopen) {
             Optional<String> cannot = WorldReopen.findRefusal();
             if (cannot.isPresent()) {
-                return makeRefusal(manifest.name(), version, Lang.get("hotwire.add.makes_refused", manifest.name(),
-                        String.join(", ", content), cannot.get()));
+                return makeRefusal(name, version, reopen.content().isEmpty()
+                        ? Lang.get("hotwire.add.starts_refused", name, cannot.get())
+                        : Lang.get("hotwire.add.makes_refused", name, String.join(", ", reopen.content()),
+                                cannot.get()));
             }
-            lines.add(Lang.get("hotwire.add.makes", String.join(", ", content)));
-            return AddPreview.reopen(manifest.name(), version, lines);
+            lines.add(reopen.content().isEmpty() ? Lang.get("hotwire.add.starts_before_world")
+                    : Lang.get("hotwire.add.makes", String.join(", ", reopen.content())));
+            return AddPreview.reopen(name, version, lines);
         }
-
-        if (this.engine.isInWorld() && this.listensForClientStart(List.of(jarPath))) {
-            Optional<String> cannot = WorldReopen.findRefusal();
-            if (cannot.isPresent()) {
-                return makeRefusal(manifest.name(), version, Lang.get("hotwire.add.starts_refused", manifest.name(),
-                        cannot.get()));
-            }
-            lines.add(Lang.get("hotwire.add.starts_before_world"));
-            return AddPreview.reopen(manifest.name(), version, lines);
-        }
-        return AddPreview.ofReady(manifest.name(), version, lines, List.of());
+        return AddPreview.ofReady(name, version, lines, List.of());
     }
 
     private boolean isComponentListShut(List<ModJar> parts) {
@@ -542,26 +457,55 @@ public final class ModAdder {
     public Optional<String> findRefusalAhead(List<Path> jarPaths, Function<String, String> nameOf,
             Set<String> leaving) {
         Map<String, Part> parts = new LinkedHashMap<>();
-        Result refused;
+        Set<String> off = new HashSet<>(this.engine.getSwitcher().getOff());
+        off.addAll(leaving);
+        AddDecision decision;
         this.savingReads = true;
         try {
-            refused = this.findRefusal(jarPaths, parts);
+            decision = this.decideForAdd(jarPaths, parts, off, nameOf);
         } finally {
             this.savingReads = false;
         }
-        if (refused != null) {
-            return Optional.of(refused instanceof Result.Refused plain ? plain.reason() : String.valueOf(refused));
-        }
-        List<ModJar> jars = parts.values().stream().map(Part::jar).toList();
-        ModGraph graph = this.engine.makeGraphWith(jars);
-        Set<String> off = new HashSet<>(this.engine.getSwitcher().getOff());
-        off.addAll(leaving);
-        return AddDependencies.describe(AddDependencies.planOn(this.engine.makePlannerFor(graph), jars, off), nameOf);
+        Result refused = this.refuse(decision, parts);
+        return Optional.ofNullable(refused == null ? null
+                : refused instanceof Result.Refused plain ? plain.reason() : String.valueOf(refused));
     }
 
-    private @Nullable Result findRefusal(List<Path> jarPaths, Map<String, Part> parts) {
+    private sealed interface AddDecision {
+        record Ready(List<Path> libraries) implements AddDecision {
+        }
+
+        record Reopen(Set<String> content, List<Path> libraries) implements AddDecision {
+        }
+
+        record Later(String line, String why) implements AddDecision {
+            Later(String why) {
+                this(why, why);
+            }
+        }
+
+        record Refused(String why) implements AddDecision {
+        }
+    }
+
+    private @Nullable Result refuse(AddDecision decision, Map<String, Part> parts) {
+        return switch (decision) {
+            case AddDecision.Ready ready -> null;
+            case AddDecision.Refused refused -> new Result.Refused(refused.why());
+            case AddDecision.Later later -> new Result.Refused(later.why(), true);
+            case AddDecision.Reopen reopen -> {
+                String name = parts.values().stream().reduce((first, second) -> second).orElseThrow().jar()
+                        .manifest().name();
+                yield new Result.Refused(reopen.content().isEmpty() ? Lang.get("hotwire.add.starts_use_reopen", name)
+                        : Lang.get("hotwire.add.makes_use_reopen", name, String.join(", ", reopen.content())));
+            }
+        };
+    }
+
+    private AddDecision decideForAdd(List<Path> jarPaths, Map<String, Part> parts, Set<String> off,
+            Function<String, String> nameOf) {
         try {
-            return this.findRefusalNow(jarPaths, parts);
+            return this.decide(jarPaths, parts, off, nameOf);
         } finally {
             if (!this.savingReads) {
                 this.scans.clear();
@@ -571,7 +515,8 @@ public final class ModAdder {
         }
     }
 
-    private @Nullable Result findRefusalNow(List<Path> jarPaths, Map<String, Part> parts) {
+    private AddDecision decide(List<Path> jarPaths, Map<String, Part> parts, Set<String> off,
+            Function<String, String> nameOf) {
         this.setAside.clear();
 
         if (jarPaths.size() > 1) {
@@ -583,72 +528,101 @@ public final class ModAdder {
         for (Path jarPath : jarPaths) {
             Optional<String> plain = AddFirstLook.findRefusal(jarPath);
             if (plain.isPresent()) {
-                return new Result.Refused(plain.get());
+                return new AddDecision.Refused(plain.get());
             }
+
             try {
                 this.collect(jarPath, parts);
             } catch (ModJarException e) {
                 LOGGER.warn("[Hotwire] reading {} for the add failed", jarPath, e);
-                return new Result.Refused(Lang.get("hotwire.add.read_failed", jarPath.getFileName(), e.getMessage()));
+                return new AddDecision.Refused(Lang.get("hotwire.add.read_failed", jarPath.getFileName(),
+                        e.getMessage()));
             } catch (IOException e) {
-                return new Result.Refused(Lang.get("hotwire.add.nested_unwritable", jarPath.getFileName(),
+                return new AddDecision.Refused(Lang.get("hotwire.add.nested_unwritable", jarPath.getFileName(),
                         e.getMessage()));
             }
         }
         Part asked = parts.values().stream().reduce((first, second) -> second).orElseThrow();
-        String name = asked.jar().manifest().name();
-        String askedId = asked.jar().manifest().id();
-        if (ModPolicy.isHotwire(askedId) || this.engine.isInstalled(askedId)) {
-            return new Result.Refused(ModPolicy.isHotwire(askedId) ? ModPolicy.describeSelfChange()
+        ModManifest manifest = asked.jar().manifest();
+        String name = manifest.name();
+        if (ModPolicy.isHotwire(manifest.id()) || this.engine.isInstalled(manifest.id())) {
+            return new AddDecision.Refused(ModPolicy.isHotwire(manifest.id()) ? ModPolicy.describeSelfChange()
                     : Lang.get("hotwire.add.installed", name));
         }
-        if (ModPolicy.isStartOnly(askedId)) {
-            return new Result.Refused(Lang.get("hotwire.add.later.start_only", name));
+
+        String startOnly = manifest.getRelation(ModManifest.Relation.DEPENDS).keySet().stream()
+                .filter(id -> ModPolicy.isStartOnly(id) && !this.engine.isInstalled(id)).findFirst()
+                .orElse(ModPolicy.isStartOnly(manifest.id()) ? manifest.id() : null);
+        if (startOnly != null) {
+            return new AddDecision.Later(Lang.get("hotwire.add.later.start_only",
+                    startOnly.equals(manifest.id()) ? name : startOnly));
         }
-        if (this.isComponentListShut(parts.values().stream().map(Part::jar).toList())) {
-            return new Result.Refused(Lang.get("hotwire.add.later.components", name), true);
+        List<ModJar> jars = parts.values().stream().map(Part::jar).toList();
+        if (LoaderModList.findNewLanguageAdapter(jars.stream().map(ModJar::manifest).toList(),
+                type -> jarPaths.stream().anyMatch(jarPath -> ContentScan.isQuietAdapter(this.scan(jarPath), type)))
+                != null) {
+            return new AddDecision.Later(Lang.get("hotwire.add.later.adapter", name));
         }
-        Path enumJar = this.findEnumMixinJar(jarPaths);
+        if (this.isComponentListShut(jars)) {
+            return new AddDecision.Later(Lang.get("hotwire.add.later.components", name));
+        }
+
+        List<Path> brought = parts.values().stream().map(Part::path).toList();
+        Path enumJar = this.findEnumMixinJar(brought);
         if (enumJar != null) {
-            return new Result.Refused(this.describeBecause(name, enumJar, "hotwire.add.later.enum"), true);
+            return new AddDecision.Later(this.describeBecause(name, enumJar, "hotwire.add.later.enum"));
         }
-        StartOnly startOnlyMixin = this.findStartOnlyMixin(jarPaths);
+        StartOnly startOnlyMixin = this.findStartOnlyMixin(brought);
         if (startOnlyMixin != null) {
             String reason = this.findName(startOnlyMixin.jar());
             String why = describeStartOnly(startOnlyMixin.kind(), reason);
-            return new Result.Refused(reason.equals(name) ? why : Lang.get("hotwire.add.needs_it", name, reason)
-                    + " " + why, true);
-        }
-        if (LoaderModList.findNewLanguageAdapter(parts.values().stream().map(part -> part.jar().manifest())
-                .toList(), type -> jarPaths.stream().anyMatch(jarPath -> ContentScan.isQuietAdapter(
-                        this.scan(jarPath), type))) != null) {
-            return new Result.Refused(Lang.get("hotwire.add.later.adapter", name), true);
-        }
-        Set<String> content = new LinkedHashSet<>();
-        if (this.engine.isInWorld()) {
-            if (jarPaths.size() > 1) {
-                Parallel.runEachBeside(jarPaths, this::readContent);
-            }
-            jarPaths.forEach(jarPath -> content.addAll(this.readContent(jarPath)));
-        }
-        if (!content.isEmpty()) {
-            return new Result.Refused(Lang.get("hotwire.add.makes_use_reopen", name, String.join(", ", content)));
-        }
-        if (this.engine.isInWorld() && this.listensForClientStart(jarPaths)) {
-            return new Result.Refused(Lang.get("hotwire.add.starts_use_reopen", name));
+            return new AddDecision.Later(reason.equals(name) ? why : Lang.get("hotwire.add.needs_it", name, reason)
+                    + " " + why);
         }
         for (Part part : parts.values()) {
             Optional<String> missing = AddDependencies.findMissingRefusal(part.jar());
             if (missing.isPresent()) {
-                return new Result.Refused(missing.get());
+                return new AddDecision.Refused(missing.get());
             }
 
             Optional<String> widener = this.addWideners.findWidenerRefusal(part.jar(), part.path());
             if (widener.isPresent()) {
-                return new Result.Refused(widener.get(), true);
+                return new AddDecision.Later(Lang.get("hotwire.add.later.running", part.jar().manifest().name()),
+                        widener.get());
             }
         }
-        return null;
+        SwitchPlan plan = AddDependencies.planOn(this.engine.makePlannerFor(this.engine.makeGraphWith(jars)), jars,
+                off);
+        Optional<String> missing = AddDependencies.describe(plan, nameOf);
+        List<Path> libraries = List.of();
+        if (missing.isPresent()) {
+            Set<String> queued = this.engine.findQueuedIds();
+            if (plan.refusals().stream().allMatch(refusal -> refusal instanceof
+                    SwitchPlan.Refusal.MissingDependency needed && queued.contains(needed.dependency()))) {
+                return new AddDecision.Later(Lang.get("hotwire.add.later.needs_queued"));
+            }
+            if (!AddDependencies.isCarriedNewer(asked.jar(), plan)) {
+                return new AddDecision.Refused(missing.get());
+            }
+
+            libraries = this.findCarriedNewer(plan);
+            Optional<String> cannot = this.findLibrariesRefusal(libraries);
+            if (cannot.isPresent()) {
+                return new AddDecision.Later(Lang.get("hotwire.add.later.library", name),
+                        missing.get() + ": " + cannot.get());
+            }
+        }
+        if (this.engine.isInWorld()) {
+            if (jarPaths.size() > 1) {
+                Parallel.runEachBeside(jarPaths, this::readContent);
+            }
+            Set<String> content = new LinkedHashSet<>();
+            jarPaths.forEach(jarPath -> content.addAll(this.readContent(jarPath)));
+            if (!content.isEmpty() || this.listensForClientStart(jarPaths)) {
+                return new AddDecision.Reopen(content, libraries);
+            }
+        }
+        return new AddDecision.Ready(libraries);
     }
 
     public Result add(List<Path> jarPaths, Function<String, String> nameOf) {
@@ -658,20 +632,18 @@ public final class ModAdder {
     public Result add(List<Path> jarPaths, Function<String, String> nameOf, Set<String> leaving,
             Function<Set<String>, @Nullable String> beforeOn) {
         Map<String, Part> parts = new LinkedHashMap<>();
-        Result refused = this.findRefusal(jarPaths, parts);
-        if (refused != null) {
-            return refused;
+        Set<String> offThen = new HashSet<>(this.engine.getSwitcher().getOff());
+        offThen.addAll(leaving);
+        AddDecision decision = this.decideForAdd(jarPaths, parts, offThen, nameOf);
+        if (!(decision instanceof AddDecision.Ready ready)) {
+            return Objects.requireNonNull(this.refuse(decision, parts));
         }
         String name = parts.values().stream().reduce((first, second) -> second).orElseThrow().jar().manifest().name();
         List<ModJar> jars = parts.values().stream().map(Part::jar).toList();
         this.engine.showAddStep(1);
-        Set<String> offThen = new HashSet<>(this.engine.getSwitcher().getOff());
-        offThen.addAll(leaving);
-        SwitchPlan needs = AddDependencies.planOn(this.engine.makePlannerFor(this.engine.makeGraphWith(jars)), jars,
-                offThen);
         CarriedLibraries asked = this.carriedLibraries;
-        if (asked != null && AddDependencies.isCarriedNewer(jars.getLast(), needs)) {
-            Optional<String> notIn = asked.updateCarried(this.findCarriedNewer(needs));
+        if (asked != null && !ready.libraries().isEmpty()) {
+            Optional<String> notIn = asked.updateCarried(ready.libraries());
             if (notIn.isPresent()) {
                 return new Result.Refused(notIn.get(), true);
             }
@@ -824,18 +796,16 @@ public final class ModAdder {
             Exception failure) {
         LOGGER.error("[Hotwire] {} failed while starting; it goes back out", ids, failure);
         ModSwitcher.Result back = this.engine.takeOut(ids);
-        String failed = name + " failed while starting (" + cause + ").";
+        String failed = Lang.get("hotwire.add.start_failed", name, cause);
         if (PlayerMessages.isBad(back)) {
             LOGGER.error("[Hotwire] {} could not be taken back out: {}", ids, PlayerMessages.describe(back, id -> id));
-            return new Result.Failed(failed + " It could not be taken back out, so it stays until the game restarts:"
-                    + " restart before playing on.", failure, true);
+            return new Result.Failed(failed + " " + Lang.get("hotwire.add.start_failed_stays"), failure, true);
         }
         ids.forEach(GameRegistrations.getJournal()::forget);
-        String stays = grew.isEmpty() ? "" : " Its entries in " + String.join(", ", grew)
-                + " stay registered until the game restarts.";
+        String stays = grew.isEmpty() ? "" : " " + Lang.get("hotwire.add.start_failed_entries",
+                String.join(", ", grew));
 
-        String said = failed + " It was taken back out: its patches and everything it registered are gone." + stays
-                + undo.run();
+        String said = failed + " " + Lang.get("hotwire.add.start_failed_out") + stays + undo.run();
         return new Result.Failed(said, RebuildException.ofRestartOnly(said, failure));
     }
 
@@ -847,8 +817,8 @@ public final class ModAdder {
             return null;
         } catch (IllegalStateException e) {
             LOGGER.error("[Hotwire] {} could not join the loader's mod list", id, e);
-            return new Result.Failed(part.jar().manifest().name() + " could not join the mod list: " + e.getMessage()
-                    + undo.run(), e);
+            return new Result.Failed(Lang.get("hotwire.add.list_failed", part.jar().manifest().name(),
+                    e.getMessage()) + undo.run(), e);
         }
     }
 

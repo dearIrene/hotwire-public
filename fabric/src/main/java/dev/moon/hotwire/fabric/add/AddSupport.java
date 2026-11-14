@@ -120,7 +120,8 @@ public final class AddSupport implements ModAdder.Engine {
                     + " the game. Cancel it any time from Pending tasks.");
         } catch (ModJarException | IOException e) {
             journal.end(ActionJournal.Outcome.FAILED, e.getClass().getSimpleName());
-            return new ModAdder.Result.Failed(jar.getFileName() + " could not be queued: " + e.getMessage(), e);
+            return new ModAdder.Result.Failed(Lang.get("hotwire.add.queue_failed", jar.getFileName(), e.getMessage()),
+                    e);
         }
     }
 
