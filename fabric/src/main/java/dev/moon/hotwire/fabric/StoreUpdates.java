@@ -11,6 +11,7 @@ import java.io.UncheckedIOException;
 import java.nio.file.Path;
 import java.util.ArrayList;
 import java.util.List;
+import java.util.TreeSet;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.ExecutionException;
 import java.util.concurrent.ExecutorService;
@@ -20,6 +21,7 @@ import java.util.concurrent.atomic.AtomicInteger;
 import java.util.function.BiConsumer;
 import java.util.function.Consumer;
 import java.util.function.Function;
+import net.fabricmc.loader.api.FabricLoader;
 import net.minecraft.client.Minecraft;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -50,7 +52,7 @@ final class StoreUpdates {
             new Ran(List.of(), 0, 0));
 
     interface Summary {
-        void show(List<String> now, List<String> later, List<String> not);
+        void show(List<String> first, List<String> now, List<String> later, List<String> not);
     }
 
     StoreUpdates(UpdateCheck check, ModChanges changes, Progress progress, BiConsumer<String, Boolean> say,
@@ -168,19 +170,31 @@ final class StoreUpdates {
         List<String> now = new ArrayList<>();
         List<String> later = new ArrayList<>();
         List<String> refused = new ArrayList<>();
+        List<String> loaders = new ArrayList<>();
         for (ModUpdater.Result result : results) {
             switch (result) {
                 case ModUpdater.Result.Updated updated -> now.add(updated.name() + " "
                         + updated.plan().incomingVersion());
                 case ModUpdater.Result.Queued queued -> later.add(queued.name() + " "
                         + queued.plan().incomingVersion());
+
+                case ModUpdater.Result.Refused byLoader when byLoader.loader() != null -> {
+                    refused.add(loaders.size(), byLoader.reason());
+                    loaders.add(byLoader.loader());
+                }
                 default -> refused.add(UpdateSupport.describe(result));
             }
         }
+
+        List<String> first = loaders.isEmpty() ? List.of() : List.of(Lang.get("hotwire.updates.loader_first",
+                loaders.size(), String.join(" / ", new TreeSet<>(loaders)), FabricLoader.getInstance()
+                        .getModContainer("fabricloader").map(loader -> loader.getMetadata().getVersion()
+                                .getFriendlyString()).orElse("an older one")));
+        first.forEach(line -> this.say.accept(line, true));
         this.say.accept(Lang.get("hotwire.updates.all_done", now.size(), later.size(), refused.size()),
                 !refused.isEmpty());
         if (!results.isEmpty()) {
-            this.summary.show(now, later, refused);
+            this.summary.show(first, now, later, refused);
         }
         refused.subList(0, Math.min(REFUSALS_SAID, refused.size())).forEach(why -> this.say.accept(why, true));
         for (String why : refused) {

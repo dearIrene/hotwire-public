@@ -80,10 +80,10 @@ final class StoreJars {
         this.store = store;
         this.say = say;
         this.refresh = refresh;
-        this.all = new StoreUpdates(this.check, changes, progress, say, (now, later, not) -> {
+        this.all = new StoreUpdates(this.check, changes, progress, say, (first, now, later, not) -> {
             ModScreen shown = screen.get();
             if (shown != null) {
-                shown.showUpdateSummary(now, later, not);
+                shown.showUpdateSummary(first, now, later, not);
             }
         });
     }

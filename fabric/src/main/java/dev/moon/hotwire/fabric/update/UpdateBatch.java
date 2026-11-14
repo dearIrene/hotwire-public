@@ -140,6 +140,13 @@ final class UpdateBatch {
                 results[at] = fail(jars.get(at), e);
             }
         }
+
+        Map<String, String> dropped = this.updater.dropUnstartable();
+        for (int i = 0; i < results.length; i++) {
+            if (results[i] instanceof ModUpdater.Result.Queued queued && dropped.containsKey(queued.id())) {
+                results[i] = new ModUpdater.Result.Refused(dropped.get(queued.id()));
+            }
+        }
         return List.of(results);
     }
 

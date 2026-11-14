@@ -528,8 +528,8 @@ public final class ModScreen implements JarHost {
         this.setPending(this.pendingActions.cleanUp(modId));
     }
 
-    public void showUpdateSummary(List<String> now, List<String> later, List<String> not) {
-        this.updateSummary.open(now, later, not);
+    public void showUpdateSummary(List<String> first, List<String> now, List<String> later, List<String> not) {
+        this.updateSummary.open(first, now, later, not);
     }
 
     private void askToClose(List<PendingChange> waiting) {

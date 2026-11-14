@@ -23,6 +23,7 @@ import dev.moon.hotwire.ui.UpdatePreview;
 import dev.moon.hotwire.update.JarDiff;
 import dev.moon.hotwire.update.JarIntake;
 import dev.moon.hotwire.update.JarLinks;
+import dev.moon.hotwire.update.NextStart;
 import dev.moon.hotwire.update.UpdateContext;
 import dev.moon.hotwire.update.UpdateDiffer;
 import dev.moon.hotwire.update.UpdatePlan;
@@ -69,7 +70,10 @@ public final class ModUpdater {
         record Queued(String id, String name, UpdatePlan plan) implements Result {
         }
 
-        record Refused(String reason) implements Result {
+        record Refused(String reason, @Nullable String loader) implements Result {
+            public Refused(String reason) {
+                this(reason, null);
+            }
         }
 
         record Failed(String reason, Throwable cause) implements Result {
@@ -265,6 +269,71 @@ public final class ModUpdater {
         return ids;
     }
 
+    Map<String, String> dropUnstartable() {
+        Map<String, String> dropped = new HashMap<>();
+        ModGraph graph = this.engine.getGraph();
+        NextStart.Game game = new NextStart.Game() {
+            @Override
+            public @Nullable String findVersionOf(String id) {
+                return ModUpdater.this.engine.findVersionOf(id);
+            }
+
+            @Override
+            public boolean satisfies(String version, List<String> ranges) {
+                return ModUpdater.this.engine.satisfies(version, ranges);
+            }
+
+            @Override
+            public String resolve(String id) {
+                return graph.resolve(id);
+            }
+
+            @Override
+            public List<ModManifest> getInstalled() {
+                List<ModManifest> installed = new ArrayList<>();
+                graph.getIds().forEach(id -> graph.find(id).ifPresent(installed::add));
+                return installed;
+            }
+        };
+        while (true) {
+            Map<String, Map<String, ModManifest>> waiting = new TreeMap<>();
+            for (UpdateQueue.Entry entry : this.engine.getQueue().getEntries()) {
+                Path staged = Path.of(entry.stagedJar());
+                if (Files.isRegularFile(staged)) {
+                    waiting.put(entry.modId(), this.findComingOf(staged));
+                }
+            }
+            NextStart.Unmet unmet = NextStart.findUnmet(waiting, game);
+            if (unmet == null) {
+                return dropped;
+            }
+            String other = graph.find(unmet.other()).map(ModManifest::name).orElse(unmet.other());
+            String ranges = String.join(" or ", unmet.ranges());
+            String has = unmet.has() == null ? "" : unmet.has();
+            String mod = unmet.mod().name() + " " + unmet.mod().version();
+            String why = unmet.asking()
+                    ? Lang.get(unmet.breaks() ? "hotwire.update.stays_excluded" : "hotwire.update.stays_asked", mod,
+                            other, has)
+                    : Lang.get(unmet.breaks() ? "hotwire.update.stays_excludes" : "hotwire.update.stays_needs", mod,
+                            other, ranges, has);
+            LOGGER.info("[Hotwire] {}'s update does not wait for the next start: {}", unmet.entry(), why);
+            try {
+                this.engine.getQueue().remove(unmet.entry());
+            } catch (IOException e) {
+                LOGGER.warn("[Hotwire] {}'s update could not be taken off the queue", unmet.entry(), e);
+                return dropped;
+            }
+            waiting.getOrDefault(unmet.entry(), Map.of()).keySet().forEach(this.queuedCarried::remove);
+            dropped.put(unmet.entry(), why);
+        }
+    }
+
+    private Result checkQueue(Result result) {
+        Map<String, String> dropped = this.dropUnstartable();
+        return result instanceof Result.Queued queued && dropped.containsKey(queued.id())
+                ? new Result.Refused(dropped.get(queued.id())) : result;
+    }
+
     List<Path> getQueuedJars() {
         List<Path> jars = new ArrayList<>();
         this.engine.getQueue().getEntries().forEach(entry -> {
@@ -384,21 +453,21 @@ public final class ModUpdater {
     }
 
     public Result updateAsPlanned(Path picked) {
-        return switch (this.sort(picked, Map.of(), Map.of())) {
+        return this.checkQueue(switch (this.sort(picked, Map.of(), Map.of())) {
             case SortResult.Refused refused -> refused.result();
             case SortResult.IdChanged changed -> this.idChanged.update(changed.manifest(), changed.replaced(),
                     changed.jar(), UpdateMethod.NEXT_START);
             case SortResult.Planned planned -> this.take(planned, planned.method());
-        };
+        });
     }
 
     private Result updateTimed(Path picked, UpdateMethod method) {
-        return switch (this.sort(picked, Map.of(), Map.of())) {
+        return this.checkQueue(switch (this.sort(picked, Map.of(), Map.of())) {
             case SortResult.Refused refused -> refused.result();
             case SortResult.IdChanged changed -> this.idChanged.update(changed.manifest(), changed.replaced(),
                     changed.jar(), method);
             case SortResult.Planned planned -> this.take(planned, method);
-        };
+        });
     }
 
     public sealed interface SortResult {
@@ -459,7 +528,7 @@ public final class ModUpdater {
         }
         SwitchTimes.mark("update: plan");
         if (whole.refusal() != null) {
-            return new SortResult.Refused(new Result.Refused(whole.refusal()));
+            return new SortResult.Refused(new Result.Refused(whole.refusal(), whole.loader()));
         }
         return new SortResult.Planned(manifest, running, jar, read, whole);
     }
@@ -514,7 +583,7 @@ public final class ModUpdater {
                 List<CarriedUpdates.Library> inside = planned.subList(0, planned.size() - 1).stream()
                         .filter(carried -> !own.contains(carried.manifest().id())).toList();
                 out.add(new SortResult.Planned(read.manifest(), library, library, read, new Whole(self.plan(), inside,
-                        self.adoptsConfigs(), null, toAdd, leftOut)));
+                        self.adoptsConfigs(), null, toAdd, leftOut, null)));
             }
         } catch (ModJarException e) {
             out.add(new SortResult.Refused(new Result.Refused("A library cannot be read: " + e.getMessage())));
@@ -566,13 +635,13 @@ public final class ModUpdater {
     }
 
     record Whole(UpdatePlan plan, List<CarriedUpdates.Library> bundled, boolean adoptsConfigs,
-            @Nullable String refusal, List<Path> toAdd, List<Path> leftOut) {
+            @Nullable String refusal, List<Path> toAdd, List<Path> leftOut, @Nullable String loader) {
         Whole(UpdatePlan plan, List<CarriedUpdates.Library> bundled, boolean adoptsConfigs) {
-            this(plan, bundled, adoptsConfigs, null, List.of(), List.of());
+            this(plan, bundled, adoptsConfigs, null, List.of(), List.of(), null);
         }
 
         Whole(UpdatePlan plan, List<CarriedUpdates.Library> bundled, boolean adoptsConfigs, @Nullable String refusal) {
-            this(plan, bundled, adoptsConfigs, refusal, List.of(), List.of());
+            this(plan, bundled, adoptsConfigs, refusal, List.of(), List.of(), null);
         }
     }
 
@@ -605,6 +674,13 @@ public final class ModUpdater {
             String have = this.findVersionAfter(first.getKey());
             ModManifest coming = this.after.get(id);
             String name = coming == null ? id : coming.name() + " " + coming.version();
+
+            if (first.getKey().equals("fabricloader") && have != null) {
+                String wanted = first.getValue().stream().map(range -> range.startsWith(">=")
+                        ? range.substring(2) + " or newer" : range).collect(Collectors.joining(" or "));
+                return new Whole(whole.plan(), List.of(), false, Lang.get("hotwire.update.needs_loader", name, wanted,
+                        have), List.of(), List.of(), wanted);
+            }
             return new Whole(whole.plan(), List.of(), false, name + " needs " + first.getKey() + " "
                     + String.join(" or ", first.getValue()) + (have == null ? ", which the game does not have"
                     : ", and the game has " + have) + ". Update or add " + first.getKey() + " first, then this.");
@@ -634,7 +710,7 @@ public final class ModUpdater {
         boolean configs = UpdatePlanner.hasConfigChanged(relieved);
         UpdatePlan adopted = configs ? UpdatePlanner.withConfigsAdopted(relieved) : relieved;
         if (adopted.tier() == UpdateTier.IN_PLACE && bundled != null) {
-            return new Whole(adopted, bundled, configs, null, toAdd, leftOut);
+            return new Whole(adopted, bundled, configs, null, toAdd, leftOut, null);
         }
         LOGGER.info("[Hotwire] {}'s update waits for the next start: {}", id, bundled == null
                 ? "a library it carries cannot update with it" : adopted.blockers());

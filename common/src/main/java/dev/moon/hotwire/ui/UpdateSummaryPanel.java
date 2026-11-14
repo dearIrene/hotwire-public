@@ -13,9 +13,14 @@ final class UpdateSummaryPanel extends Sheet {
         this.setMark(ModScreen.Icons.UPDATES);
     }
 
-    void open(List<String> now, List<String> later, List<String> not) {
+    void open(List<String> first, List<String> now, List<String> later, List<String> not) {
         this.title.set(Lang.get("hotwire.updates.summary.title"));
         Line list = Kit.column().gap(8);
+        if (!first.isEmpty()) {
+            list.with(Kit.row(Kit.text(Lang.get("hotwire.updates.summary.first"), Palette.BAD), Kit.rule().grow(1))
+                    .gap(6));
+            first.forEach(line -> list.with(Kit.text(line, Palette.BAD).wrap()));
+        }
         add(list, "hotwire.updates.summary.now", Palette.GOOD, now);
         add(list, "hotwire.updates.summary.later", Palette.WARN, later);
         add(list, "hotwire.updates.summary.not", Palette.BAD, not);
