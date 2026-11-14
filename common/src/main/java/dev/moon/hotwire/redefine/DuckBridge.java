@@ -33,7 +33,7 @@ public final class DuckBridge {
     private static final Handle MOVED_SUPER = new Handle(Opcodes.H_INVOKESTATIC, LINKER, "bootstrapMovedSuper",
             "(" + BOOTSTRAP + "Ljava/lang/String;Ljava/lang/String;Ljava/lang/String;)Ljava/lang/invoke/CallSite;",
             false);
-    private static final Handle MOVED_LAMBDA = new Handle(Opcodes.H_INVOKESTATIC, LINKER, "bootstrapMovedLambda",
+    static final Handle MOVED_LAMBDA = new Handle(Opcodes.H_INVOKESTATIC, LINKER, "bootstrapMovedLambda",
             "(Ljava/lang/invoke/MethodHandles$Lookup;Ljava/lang/String;Ljava/lang/invoke/MethodType;"
                     + "Ljava/lang/invoke/MethodType;Ljava/lang/String;Ljava/lang/String;Ljava/lang/String;I)"
                     + "Ljava/lang/invoke/CallSite;", false);

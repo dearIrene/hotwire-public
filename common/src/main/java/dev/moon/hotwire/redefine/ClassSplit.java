@@ -633,8 +633,13 @@ public final class ClassSplit {
         }
         MethodNode added = this.addedMethods.get(impl.getName() + impl.getDesc());
         if (added != null) {
-            method.instructions.set(indy, new InvokeDynamicInsnNode(indy.name, indy.desc, ClassSplit.LAMBDA,
-                    indy.bsmArgs[0], impl.getName(), this.makeStaticDescriptor(added), indy.bsmArgs[2]));
+            boolean byObject = (impl.getTag() == Opcodes.H_INVOKEVIRTUAL || impl.getTag() == Opcodes.H_INVOKEINTERFACE)
+                    && (added.access & (Opcodes.ACC_STATIC | Opcodes.ACC_PRIVATE | Opcodes.ACC_FINAL)) == 0
+                    && !GeneratedNames.isGenerated(impl.getName());
+            method.instructions.set(indy, byObject ? new InvokeDynamicInsnNode(indy.name, indy.desc,
+                    DuckBridge.MOVED_LAMBDA, indy.bsmArgs[0], impl.getOwner(), impl.getName(), impl.getDesc(), 0)
+                    : new InvokeDynamicInsnNode(indy.name, indy.desc, ClassSplit.LAMBDA, indy.bsmArgs[0],
+                            impl.getName(), this.makeStaticDescriptor(added), indy.bsmArgs[2]));
         }
     }
 
