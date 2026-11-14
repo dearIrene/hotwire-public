@@ -174,33 +174,18 @@ public final class InstalledMods {
         return Optional.ofNullable(this.disabled.get(id)).map(ModJar::manifest);
     }
 
-    public void onDisabled(String id, Path renamed) {
-        synchronized (this) {
-            this.jars.stream().filter(jar -> jar.manifest().id().equals(id)).findFirst().ifPresent(jar -> {
-                this.jars.remove(jar);
-                this.disabled.put(id, jar);
-            });
-            this.setFolderJar(id, renamed);
-        }
-        this.makeGraphAgain();
+    public synchronized boolean isDisabledSinceStart(String id) {
+        return this.disabled.containsKey(id)
+                && this.jars.stream().noneMatch(jar -> jar.manifest().id().equals(id));
     }
 
-    public void onRestored(String id, Path jar) {
-        boolean back;
-        synchronized (this) {
-            ModJar was = this.disabled.remove(id);
-            back = was != null;
-            if (was != null) {
-                this.jars.add(was);
-            }
-            this.setFolderJar(id, jar);
-        }
-        if (back) {
-            this.makeGraphAgain();
-        }
+    public synchronized void onDisabled(String id, Path renamed) {
+        this.jars.stream().filter(jar -> jar.manifest().id().equals(id)).findFirst()
+                .ifPresent(jar -> this.disabled.put(id, jar));
+        this.setFolderJar(id, renamed);
     }
 
-    public synchronized void onBroughtBack(String id, Path jar) {
+    public synchronized void onRestored(String id, Path jar) {
         this.disabled.remove(id);
         this.setFolderJar(id, jar);
     }

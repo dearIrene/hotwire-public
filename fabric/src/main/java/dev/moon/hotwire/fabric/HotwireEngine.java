@@ -161,7 +161,7 @@ public final class HotwireEngine implements ModScreenGame, AutoCloseable {
                 this.forgetWorld();
             }
         });
-        this.disabled = new DisabledMods(installed, this::findParts, settings, folders.mods(), this::showMessage,
+        this.disabled = new DisabledMods(installed, settings, folders.mods(), this::showMessage,
                 (jar, then) -> this.jars.add(jar, AddMode.NOW, then));
         this.switches = new SwitchRequests(this, this.tasks, installed, settings, this.disabled, () -> this.screen,
                 this::showMessage);

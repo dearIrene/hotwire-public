@@ -20,9 +20,7 @@ import java.util.concurrent.TimeUnit;
 import java.util.concurrent.TimeoutException;
 import java.util.function.BiConsumer;
 import java.util.function.Consumer;
-import java.util.function.Supplier;
 import net.minecraft.client.Minecraft;
-import org.jspecify.annotations.Nullable;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -34,7 +32,6 @@ final class DisabledMods {
     }
 
     private final InstalledMods installed;
-    private final Supplier<HotwireEngine.@Nullable JvmParts> parts;
     private final HotwireSettings settings;
     private final Path modsFolder;
     private final BiConsumer<String, Boolean> say;
@@ -46,10 +43,9 @@ final class DisabledMods {
 
     private final List<PendingChange.OffAtStart> offAtStart = new CopyOnWriteArrayList<>();
 
-    DisabledMods(InstalledMods installed, Supplier<HotwireEngine.@Nullable JvmParts> parts, HotwireSettings settings,
-            Path modsFolder, BiConsumer<String, Boolean> say, Adder adder) {
+    DisabledMods(InstalledMods installed, HotwireSettings settings, Path modsFolder,
+            BiConsumer<String, Boolean> say, Adder adder) {
         this.installed = installed;
-        this.parts = parts;
         this.settings = settings;
         this.modsFolder = modsFolder;
         this.say = say;
@@ -120,8 +116,7 @@ final class DisabledMods {
     }
 
     boolean isDisabledSinceStart(String id) {
-        HotwireEngine.JvmParts parts = this.parts.get();
-        return this.installed.isDisabled(id) && (parts == null || !parts.runner().getSwitcher().getOff().contains(id));
+        return this.installed.isDisabledSinceStart(id);
     }
 
     void restore(List<String> order) {
@@ -156,11 +151,11 @@ final class DisabledMods {
                 return;
             }
             try {
-                this.installed.onBroughtBack(id, DisabledJars.enable(disabledJar));
+                this.installed.onRestored(id, DisabledJars.enable(disabledJar));
             } catch (IOException e) {
                 LOGGER.warn("[Hotwire] {} is back on, but {} could not get its name back", id,
                         disabledJar.getFileName(), e);
-                this.installed.onBroughtBack(id, disabledJar);
+                this.installed.onRestored(id, disabledJar);
                 this.say.accept(Lang.get("hotwire.switch.brought_back_failed", this.installed.nameOf(id),
                         e.getMessage()), true);
             }
