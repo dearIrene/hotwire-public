@@ -155,6 +155,20 @@ public final class OffWindowObjects {
         }
     }
 
+    private static final Map<String, Set<String>> RELOADED_WITH = new ConcurrentHashMap<>();
+
+    public static void noteReloadedWith(String className, Set<String> fields) {
+        RELOADED_WITH.merge(className, Set.copyOf(fields), (had, more) -> {
+            Set<String> all = new TreeSet<>(had);
+            all.addAll(more);
+            return Set.copyOf(all);
+        });
+    }
+
+    public static boolean isReloadedWith(String className, Set<String> fields) {
+        return RELOADED_WITH.getOrDefault(className, Set.of()).containsAll(fields);
+    }
+
     public static void pruneAll() {
         MADE.values().forEach(ClassRecord::prune);
     }

@@ -235,9 +235,10 @@ final class LiveObjects {
             byte[] original = originalOf.apply(name);
             byte[] launched = launchOf.apply(name);
 
-            boolean madeWithout = OffWindowObjects.countAliveFromReload(name) > 0 || (launched != null
-                    && !OffWindowObjects.isMadeElsewhere(name)
-                    && !ConstructedFields.findSetOutsideConstructors(mixed, launched).isEmpty());
+            Set<String> sinceLaunch = launched == null || OffWindowObjects.isMadeElsewhere(name) ? Set.of()
+                    : ConstructedFields.findSetOutsideConstructors(mixed, launched);
+            boolean madeWithout = OffWindowObjects.countAliveFromReload(name) > 0
+                    || !OffWindowObjects.isReloadedWith(name, sinceLaunch);
             byte[] running = current.get(name);
             byte[] base = running != null ? running : original;
             Set<String> missing = base == null || game.isWorldObject(type) || !madeWithout ? Set.of()
@@ -254,6 +255,18 @@ final class LiveObjects {
         Set<String> classes = new TreeSet<>();
         reload.forEach(one -> classes.add(one.substring(0, one.indexOf(' '))));
         return prepared.withPausedReloads(classes);
+    }
+
+    static void noteReloaded(ClassRebuilder.PreparedRebuild prepared, Function<String, byte @Nullable []> launchOf) {
+        Map<String, byte[]> targets = new HashMap<>();
+        prepared.splits().forEach((type, split) -> targets.put(type.getName().replace('.', '/'), split.target()));
+        for (String name : prepared.pausedReloads()) {
+            byte[] mixed = prepared.mixed().getOrDefault(name, targets.get(name));
+            byte[] launched = launchOf.apply(name);
+            if (mixed != null && launched != null) {
+                OffWindowObjects.noteReloadedWith(name, ConstructedFields.findSetOutsideConstructors(mixed, launched));
+            }
+        }
     }
 
     private static List<String> findLikeNamed(Set<String> missing, byte[] running) {
