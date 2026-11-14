@@ -24,7 +24,7 @@ public final class FailedAddJars {
 
     static void add(Path jar) {
         try {
-            UpdateDiffer.readEntries(jar).keySet().stream().filter(entry -> entry.endsWith(".class"))
+            UpdateDiffer.readEntries(jar, entry -> entry.endsWith(".class")).keySet().stream()
                     .map(entry -> entry.substring(0, entry.length() - ".class".length())).forEach(CLASSES::add);
             LOGGER.info("[Hotwire] {} stays on the class path; its classes are hidden from the plugins asked again",
                     jar.getFileName());
@@ -36,7 +36,7 @@ public final class FailedAddJars {
 
     static void remove(Path jar) {
         try {
-            UpdateDiffer.readEntries(jar).keySet().stream().filter(entry -> entry.endsWith(".class"))
+            UpdateDiffer.readEntries(jar, entry -> entry.endsWith(".class")).keySet().stream()
                     .map(entry -> entry.substring(0, entry.length() - ".class".length())).forEach(CLASSES::remove);
         } catch (ModJarException e) {
             LOGGER.warn("[Hotwire] {} could not be read, so its classes stay hidden", jar.getFileName(), e);

@@ -9,6 +9,7 @@ import dev.moon.hotwire.jar.JarNames;
 import dev.moon.hotwire.jar.ModManifest;
 import dev.moon.hotwire.mixin_copy.MixinClassInfo;
 import dev.moon.hotwire.redefine.RebuildException;
+import dev.moon.hotwire.switching.SwitchTimes;
 import dev.moon.hotwire.update.JarLinks;
 import dev.moon.hotwire.update.JarRelocation;
 import dev.moon.hotwire.update.OwnPatch;
@@ -121,6 +122,7 @@ final class UpdateCopies {
         this.ownPatched.clear();
         this.chooseFor(Set.of(), Map.of());
         this.unchanged = this.findUnchanged(waiting, given);
+        SwitchTimes.mark("copies: unchanged");
         return this.runWithUnchanged(() -> this.findGroups(waiting, given, leavingWith));
     }
 
@@ -217,17 +219,32 @@ final class UpdateCopies {
         try {
             Map<String, Map<String, byte[]>> found = new HashMap<>();
             Set<String> changingMods = new HashSet<>(waiting);
-            JarRelocation.readPicked(jars, ModUpdater.VERSION_ORDER).forEach((id, files) -> {
+            long[] took = new long[3];
+            long began = System.nanoTime();
+            Map<String, Map<String, byte[]>> picked = JarRelocation.readPicked(jars, ModUpdater.VERSION_ORDER);
+            took[0] = System.nanoTime() - began;
+            picked.forEach((id, files) -> {
                 changingMods.add(id);
-                if (ModPolicy.isSwitchable(id) && this.engine.findVersionOf(id) != null
-                        && hasSameFiles(files, this.engine.readRunningOf(id))) {
-                    found.put(id, files);
+                if (ModPolicy.isSwitchable(id) && this.engine.findVersionOf(id) != null) {
+                    long from = System.nanoTime();
+                    Map<String, byte[]> running = this.engine.readRunningOf(id);
+                    took[1] += System.nanoTime() - from;
+                    from = System.nanoTime();
+                    if (hasSameFiles(files, running)) {
+                        found.put(id, files);
+                    }
+                    took[2] += System.nanoTime() - from;
                 }
             });
+            LOGGER.info("[Hotwire] {} libraries of the new jars were compared with what runs: the jars read in {} ms,"
+                    + " what runs in {} ms, compared in {} ms", picked.size(), took[0] / 1_000_000,
+                    took[1] / 1_000_000, took[2] / 1_000_000);
+            SwitchTimes.mark("unchanged: files");
             Set<String> changing = new HashSet<>();
             for (Path jar : jars) {
                 changing.addAll(JarLinks.readClassNames(jar));
             }
+            SwitchTimes.mark("unchanged: names");
             found.values().forEach(files -> files.keySet().stream().filter(name -> name.endsWith(".class"))
                     .forEach(name -> changing.remove(name.substring(0, name.length() - 6))));
             changingMods.removeAll(found.keySet());

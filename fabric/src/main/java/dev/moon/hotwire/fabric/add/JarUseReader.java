@@ -33,7 +33,10 @@ final class JarUseReader {
         try {
             Map<String, byte[]> classes = new LinkedHashMap<>();
             StringBuilder texts = new StringBuilder();
-            UpdateDiffer.readEntries(path).forEach((entry, bytes) -> {
+
+            Map<String, byte[]> read = UpdateDiffer.readEntries(path,
+                    entry -> entry.endsWith(".class") || entry.endsWith(".json"));
+            read.forEach((entry, bytes) -> {
                 if (entry.endsWith(".class")) {
                     classes.put(entry.substring(0, entry.length() - ".class".length()), bytes);
                 } else if (entry.endsWith(".json")) {

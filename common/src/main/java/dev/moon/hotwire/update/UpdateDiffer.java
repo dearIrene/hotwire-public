@@ -22,6 +22,7 @@ import java.util.Map;
 import java.util.Objects;
 import java.util.Set;
 import java.util.TreeSet;
+import java.util.function.Predicate;
 import java.util.zip.ZipEntry;
 import java.util.zip.ZipFile;
 import org.jspecify.annotations.Nullable;
@@ -42,24 +43,75 @@ public final class UpdateDiffer {
     }
 
     public static JarDiff compare(Path running, Path incoming) throws ModJarException {
-        return compare(readEntries(running), readEntries(incoming));
+        try (ZipFile before = new ZipFile(running.toFile()); ZipFile after = new ZipFile(incoming.toFile())) {
+            Set<String> paths = new TreeSet<>();
+            before.stream().filter(entry -> !entry.isDirectory()).forEach(entry -> paths.add(entry.getName()));
+            after.stream().filter(entry -> !entry.isDirectory()).forEach(entry -> paths.add(entry.getName()));
+            List<String> resources = new ArrayList<>();
+            for (String path : paths) {
+                if (!isClass(path) && !isSame(before, after, path)) {
+                    resources.add(path);
+                }
+            }
+            return compare(readEntries(before, UpdateDiffer::isLookedInto),
+                    readEntries(after, UpdateDiffer::isLookedInto), resources);
+        } catch (IOException e) {
+            throw new ModJarException(ModJarException.Reason.UNREADABLE, String.valueOf(incoming.getFileName()),
+                    "it could not be read as a jar", e);
+        }
+    }
+
+    private static boolean isLookedInto(String path) {
+        return path.endsWith(CLASS_SUFFIX) || path.equals(ModJarReader.MANIFEST);
+    }
+
+    private static boolean isSame(ZipFile before, ZipFile after, String path) throws IOException {
+        ZipEntry was = before.getEntry(path);
+        ZipEntry now = after.getEntry(path);
+        if (was == null || now == null || was.getSize() != now.getSize() || was.getCrc() != now.getCrc()) {
+            return false;
+        }
+        byte[] one = new byte[1 << 16];
+        byte[] other = new byte[1 << 16];
+        try (InputStream first = before.getInputStream(was); InputStream second = after.getInputStream(now)) {
+            while (true) {
+                int read = first.readNBytes(one, 0, one.length);
+                int also = second.readNBytes(other, 0, other.length);
+                if (!Arrays.equals(one, 0, read, other, 0, also)) {
+                    return false;
+                }
+                if (read < one.length) {
+                    return true;
+                }
+            }
+        }
     }
 
     public static JarDiff compare(Map<String, byte[]> running, Map<String, byte[]> incoming)
+            throws ModJarException {
+        Set<String> paths = new TreeSet<>(running.keySet());
+        paths.addAll(incoming.keySet());
+        List<String> resources = new ArrayList<>();
+        for (String path : paths) {
+            byte[] before = running.get(path);
+            if (!isClass(path) && (before == null || !Arrays.equals(before, incoming.get(path)))) {
+                resources.add(path);
+            }
+        }
+        return compare(running, incoming, resources);
+    }
+
+    private static JarDiff compare(Map<String, byte[]> running, Map<String, byte[]> incoming, List<String> resources)
             throws ModJarException {
         ModManifest was = readManifest(running, "the running jar");
         ModManifest now = readManifest(incoming, "the new jar");
         Set<String> paths = new TreeSet<>(running.keySet());
         paths.addAll(incoming.keySet());
         List<ClassDiff> classes = new ArrayList<>();
-        List<String> resources = new ArrayList<>();
         for (String path : paths) {
-            byte[] before = running.get(path);
-            byte[] after = incoming.get(path);
             if (isClass(path)) {
-                classes.add(compareEntry(path.substring(0, path.length() - CLASS_SUFFIX.length()), before, after));
-            } else if (before == null || after == null || !Arrays.equals(before, after)) {
-                resources.add(path);
+                classes.add(compareEntry(path.substring(0, path.length() - CLASS_SUFFIX.length()), running.get(path),
+                        incoming.get(path)));
             }
         }
         List<ClassDiff> refined = HierarchyShapes.classifyAbstracts(
@@ -227,19 +279,27 @@ public final class UpdateDiffer {
     }
 
     public static Map<String, byte[]> readEntries(Path jar) throws ModJarException {
-        String name = String.valueOf(jar.getFileName());
-        Map<String, byte[]> entries = new HashMap<>();
+        return readEntries(jar, path -> true);
+    }
+
+    public static Map<String, byte[]> readEntries(Path jar, Predicate<String> wanted) throws ModJarException {
         try (ZipFile zip = new ZipFile(jar.toFile())) {
-            for (ZipEntry entry : zip.stream().toList()) {
-                if (entry.isDirectory()) {
-                    continue;
-                }
-                try (InputStream in = zip.getInputStream(entry)) {
-                    entries.put(entry.getName(), in.readAllBytes());
-                }
-            }
+            return readEntries(zip, wanted);
         } catch (IOException e) {
-            throw new ModJarException(ModJarException.Reason.UNREADABLE, name, "it could not be read as a jar", e);
+            throw new ModJarException(ModJarException.Reason.UNREADABLE, String.valueOf(jar.getFileName()),
+                    "it could not be read as a jar", e);
+        }
+    }
+
+    private static Map<String, byte[]> readEntries(ZipFile zip, Predicate<String> wanted) throws IOException {
+        Map<String, byte[]> entries = new HashMap<>();
+        for (ZipEntry entry : zip.stream().toList()) {
+            if (entry.isDirectory() || !wanted.test(entry.getName())) {
+                continue;
+            }
+            try (InputStream in = zip.getInputStream(entry)) {
+                entries.put(entry.getName(), in.readAllBytes());
+            }
         }
         return entries;
     }

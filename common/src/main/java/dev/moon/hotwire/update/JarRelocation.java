@@ -235,10 +235,19 @@ public final class JarRelocation {
     }
 
     public static Map<String, String> findPicked(List<Path> jars, Comparator<String> byVersion) throws IOException {
+        return findPickedIn(readTops(jars), byVersion);
+    }
+
+    private static List<Map<String, byte[]>> readTops(List<Path> jars) throws IOException {
         List<Map<String, byte[]>> tops = new ArrayList<>();
         for (Path jar : jars) {
             tops.add(readAll(jar));
         }
+        return tops;
+    }
+
+    private static Map<String, String> findPickedIn(List<Map<String, byte[]>> tops, Comparator<String> byVersion)
+            throws IOException {
         IdentityHashMap<byte[], Map<String, byte[]>> opened = new IdentityHashMap<>();
         Map<String, String> picked = new HashMap<>();
 
@@ -257,10 +266,11 @@ public final class JarRelocation {
 
     public static Map<String, Map<String, byte[]>> readPicked(List<Path> jars, Comparator<String> byVersion)
             throws IOException {
-        Map<String, String> picked = findPicked(jars, byVersion);
+        List<Map<String, byte[]>> tops = readTops(jars);
+        Map<String, String> picked = findPickedIn(tops, byVersion);
         Map<String, Map<String, byte[]>> files = new HashMap<>();
-        for (Path jar : jars) {
-            collectFiles(readAll(jar), picked, files);
+        for (Map<String, byte[]> top : tops) {
+            collectFiles(top, picked, files);
         }
         return files;
     }
@@ -864,6 +874,8 @@ public final class JarRelocation {
         private final ZipBytes zip;
         private final List<String> names = new ArrayList<>();
 
+        private final Map<String, byte[]> nestedJars = new HashMap<>();
+
         JarEntries(byte[] jar) throws IOException {
             this.zip = new ZipBytes(jar);
             for (String name : this.zip.getNames()) {
@@ -888,7 +900,11 @@ public final class JarRelocation {
 
         @Override
         public byte @Nullable [] get(Object name) {
-            return this.containsKey(name) ? this.read(String.valueOf(name)) : null;
+            if (!this.containsKey(name)) {
+                return null;
+            }
+            String path = String.valueOf(name);
+            return path.endsWith(".jar") ? this.nestedJars.computeIfAbsent(path, this::read) : this.read(path);
         }
 
         @Override
