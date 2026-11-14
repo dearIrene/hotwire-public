@@ -67,7 +67,7 @@ public final class GameRegistrations {
 
     public static boolean isOfOffMod(Class<?> type) {
         String mod = findModOf(type);
-        return mod != null && Tripwire.isWatched(mod);
+        return (mod != null && Tripwire.isWatched(mod)) || Tripwire.isOfOffMod(type);
     }
 
     private static boolean isOfNestedLibrary(Class<?> type) {
