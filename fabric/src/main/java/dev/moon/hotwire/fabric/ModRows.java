@@ -51,11 +51,6 @@ final class ModRows {
     Badges getBadges() {
         return new Badges() {
             @Override
-            public boolean isDeclaredLibrary(String id) {
-                return ModRows.this.installed.find(id).map(ModManifest::library).orElse(false);
-            }
-
-            @Override
 
             public String getEnvironmentOf(String id) {
                 return ModRows.this.installed.find(id).map(mod -> switch (mod.environment()) {

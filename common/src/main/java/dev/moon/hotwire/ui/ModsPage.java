@@ -129,7 +129,7 @@ final class ModsPage implements ProfileMenu.Screen {
 
     private Line makeTags(ModStatus mod) {
         Line tags = Kit.row().gap(4);
-        if (mod.library() || this.game.getBadges().isDeclaredLibrary(mod.id())) {
+        if (mod.library()) {
             tags.with(Tag.ofLibrary());
         }
         return tags.with(Tag.ofSide(this.game.getBadges().getEnvironmentOf(mod.id())));
