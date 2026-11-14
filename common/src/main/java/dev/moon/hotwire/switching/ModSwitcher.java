@@ -51,10 +51,10 @@ public final class ModSwitcher {
         }
     }
 
-    private ModGraph graph;
+    private volatile ModGraph graph;
 
     private final Map<String, Set<String>> goingAlong = new ConcurrentHashMap<>();
-    private SwitchPlanner planner;
+    private volatile SwitchPlanner planner;
     final SwitchApplier applier;
     private final Progress progress;
     private final RegistrationJournal registrations;

@@ -332,8 +332,12 @@ public final class SwitchRunner {
             }
             this.tripwire.unwire(wired);
         }
-        if (result instanceof ModSwitcher.Result.Done) {
-            ElementLook.checkAfterOff(this.fieldReferences, wired, this.switcher::isOn);
+        if (result instanceof ModSwitcher.Result.Done done) {
+            List<String> stayed = wired.stream().filter(id -> !done.plan().order().contains(id)).toList();
+            if (!stayed.isEmpty()) {
+                this.tripwire.unwire(stayed);
+            }
+            ElementLook.checkAfterOff(this.fieldReferences, done.plan().order(), this.switcher::isOn);
         }
         try {
             return this.checkAndReport(result);
