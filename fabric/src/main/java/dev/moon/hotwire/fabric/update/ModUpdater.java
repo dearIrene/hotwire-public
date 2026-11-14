@@ -1,6 +1,5 @@
 package dev.moon.hotwire.fabric.update;
 
-import dev.moon.hotwire.config.AtomicFiles;
 import dev.moon.hotwire.fabric.ModPolicy;
 import dev.moon.hotwire.fabric.dev.DevSession;
 import dev.moon.hotwire.jar.ContentScan;
@@ -187,6 +186,7 @@ public final class ModUpdater {
 
     public UpdatePreview preview(Path picked) {
         this.wideners.clear();
+        this.carried.forget();
         long began = System.nanoTime();
         Path jar = this.unwrap(picked);
         String fileName = String.valueOf(picked.getFileName());
@@ -415,6 +415,7 @@ public final class ModUpdater {
 
     public Result update(Path picked, UpdateMethod method) {
         this.wideners.clear();
+        this.carried.forget();
         SwitchTimes.begin();
         try {
             return this.updateTimed(picked, method);
@@ -437,6 +438,7 @@ public final class ModUpdater {
 
     public List<SortResult> previewAll(List<Path> jars) {
         this.wideners.clear();
+        this.carried.forget();
         Map<String, ModManifest> brought = new HashMap<>();
         jars.forEach(jar -> brought.putAll(this.findComingOf(jar)));
         return jars.stream().map(jar -> this.sort(jar, brought, Map.of())).toList();
@@ -451,12 +453,14 @@ public final class ModUpdater {
             return new UpdateBatch(this, this.live).run(jars, alone, instead);
         } finally {
             this.plans.clear();
+            this.carried.forget();
             SwitchTimes.end("the update of " + jars.size() + " mods");
         }
     }
 
     public Result updateAsPlanned(Path picked) {
         this.wideners.clear();
+        this.carried.forget();
         return this.checkQueue(switch (this.sort(picked, Map.of(), Map.of())) {
             case SortResult.Refused refused -> refused.result();
             case SortResult.IdChanged changed -> this.idChanged.update(changed.manifest(), changed.replaced(),
@@ -763,18 +767,7 @@ public final class ModUpdater {
     }
 
     private void queueSwap(String id, String name, Path running, Path incoming, UpdatePlan plan) throws IOException {
-        Path staging = this.engine.getStagingFolder();
-        Files.createDirectories(staging);
-        Path staged = staging.resolve(String.valueOf(incoming.getFileName()));
-
-        Path part = staged.resolveSibling(staged.getFileName() + ".part");
-        Files.deleteIfExists(part);
-        try {
-            Files.createLink(part, incoming);
-        } catch (IOException | UnsupportedOperationException e) {
-            Files.copy(incoming, part, StandardCopyOption.REPLACE_EXISTING);
-        }
-        AtomicFiles.moveInto(part, staged);
+        Path staged = UpdateQueue.putInStaging(this.engine.getStagingFolder(), incoming, true);
 
         Path folder = this.engine.findFolderJarOf(id);
         Path replaced = folder != null && Files.isRegularFile(folder) ? folder : running;

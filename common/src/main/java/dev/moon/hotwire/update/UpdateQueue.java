@@ -1,8 +1,11 @@
 package dev.moon.hotwire.update;
 
+import dev.moon.hotwire.config.AtomicFiles;
 import dev.moon.hotwire.config.JsonFile;
 import java.io.IOException;
+import java.nio.file.Files;
 import java.nio.file.Path;
+import java.nio.file.StandardCopyOption;
 import java.util.ArrayList;
 import java.util.List;
 
@@ -49,6 +52,30 @@ public final class UpdateQueue {
 
     public synchronized List<Entry> getEntries() {
         return List.copyOf(this.load().entries);
+    }
+
+    public static Path putInStaging(Path staging, Path jar, boolean linked) throws IOException {
+        Files.createDirectories(staging);
+        Path staged = staging.resolve(String.valueOf(jar.getFileName()));
+        if (staged.toAbsolutePath().normalize().equals(jar.toAbsolutePath().normalize())) {
+            return staged;
+        }
+        Path part = staged.resolveSibling(staged.getFileName() + ".part");
+        Files.deleteIfExists(part);
+        try {
+            if (linked) {
+                Files.createLink(part, jar);
+            } else {
+                Files.copy(jar, part, StandardCopyOption.REPLACE_EXISTING);
+            }
+        } catch (IOException | UnsupportedOperationException e) {
+            if (!linked) {
+                throw e;
+            }
+            Files.copy(jar, part, StandardCopyOption.REPLACE_EXISTING);
+        }
+        AtomicFiles.moveInto(part, staged);
+        return staged;
     }
 
     public synchronized void add(Entry entry) throws IOException {

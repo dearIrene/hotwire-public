@@ -45,6 +45,11 @@ final class CarriedUpdates {
     private final Map<Path, ModJar> reads = new ConcurrentHashMap<>();
     private final Map<String, JarDiff> diffs = new ConcurrentHashMap<>();
 
+    void forget() {
+        this.reads.clear();
+        this.diffs.clear();
+    }
+
     interface WidenerCheck {
         UpdatePlan withWidenerChecked(UpdatePlan plan, ModJar read, Path jar);
     }

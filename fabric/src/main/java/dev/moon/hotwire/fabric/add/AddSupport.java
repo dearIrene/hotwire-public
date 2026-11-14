@@ -194,13 +194,12 @@ public final class AddSupport implements ModAdder.Engine {
 
     private ModManifest queueJar(Path jar) throws ModJarException, IOException {
         ModManifest manifest = ModJarReader.read(jar).manifest();
-        Files.createDirectories(this.folders.staging());
-        Path staged = this.folders.staging().resolve(String.valueOf(jar.getFileName()));
-        Files.copy(jar, staged, StandardCopyOption.REPLACE_EXISTING);
+        Path staged = UpdateQueue.putInStaging(this.folders.staging(), jar, false);
 
         Path running = this.findRunningJar(manifest.id());
         this.queue.add(new UpdateQueue.Entry(manifest.id(), manifest.name(), "", manifest.version(),
-                running == null ? "" : running.toString(), running == null ? "" : FileHashes.findSha256(running),
+                running == null ? "" : String.valueOf(running.getFileName()),
+                running == null ? "" : FileHashes.findSha256(running),
                 staged.toAbsolutePath().toString(), FileHashes.findSha256(staged), "",
                 System.currentTimeMillis()));
         return manifest;

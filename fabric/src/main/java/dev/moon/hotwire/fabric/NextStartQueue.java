@@ -13,9 +13,7 @@ import dev.moon.hotwire.ui.UpdatePreview;
 import dev.moon.hotwire.update.UpdateFolders;
 import dev.moon.hotwire.update.UpdateQueue;
 import java.io.IOException;
-import java.nio.file.Files;
 import java.nio.file.Path;
-import java.nio.file.StandardCopyOption;
 import java.util.List;
 import java.util.Optional;
 import org.jspecify.annotations.Nullable;
@@ -47,11 +45,7 @@ final class NextStartQueue {
             if (running != null && from.equals(manifest.version())) {
                 return new ModAdder.Result.Refused(Lang.get("hotwire.update.same", manifest.name()));
             }
-            Files.createDirectories(this.folders.staging());
-            Path staged = this.folders.staging().resolve(String.valueOf(jar.getFileName()));
-            if (!staged.toAbsolutePath().normalize().equals(jar.toAbsolutePath().normalize())) {
-                Files.copy(jar, staged, StandardCopyOption.REPLACE_EXISTING);
-            }
+            Path staged = UpdateQueue.putInStaging(this.folders.staging(), jar, false);
             this.queue.add(new UpdateQueue.Entry(manifest.id(), manifest.name(), from, manifest.version(),
                     running == null ? "" : String.valueOf(running.getFileName()),
                     running == null ? "" : FileHashes.findSha256(running), staged.toAbsolutePath().toString(),
