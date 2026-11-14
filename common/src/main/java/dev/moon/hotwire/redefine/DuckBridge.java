@@ -30,6 +30,9 @@ public final class DuckBridge {
     static final Handle MOVED = new Handle(Opcodes.H_INVOKESTATIC, LINKER, "bootstrapMoved",
             "(" + BOOTSTRAP + "Ljava/lang/String;Ljava/lang/String;Ljava/lang/String;I)Ljava/lang/invoke/CallSite;",
             false);
+    private static final Handle MOVED_SUPER = new Handle(Opcodes.H_INVOKESTATIC, LINKER, "bootstrapMovedSuper",
+            "(" + BOOTSTRAP + "Ljava/lang/String;Ljava/lang/String;Ljava/lang/String;)Ljava/lang/invoke/CallSite;",
+            false);
     private static final Handle MOVED_LAMBDA = new Handle(Opcodes.H_INVOKESTATIC, LINKER, "bootstrapMovedLambda",
             "(Ljava/lang/invoke/MethodHandles$Lookup;Ljava/lang/String;Ljava/lang/invoke/MethodType;"
                     + "Ljava/lang/invoke/MethodType;Ljava/lang/String;Ljava/lang/String;Ljava/lang/String;I)"
@@ -181,6 +184,12 @@ public final class DuckBridge {
                 }
                 case InvokeDynamicInsnNode lambda when isDuckLambda(lambda, ducks) -> lambda.bsm = DUCK_LAMBDA;
 
+                case MethodInsnNode call when !self.equals(call.owner) && call.getOpcode() == Opcodes.INVOKESPECIAL
+                        && !call.name.equals("<init>") && moved.contains(call.name + call.desc) -> {
+                    method.instructions.set(insn, new InvokeDynamicInsnNode(call.name,
+                            "(L" + self + ";" + call.desc.substring(1), MOVED_SUPER, call.owner, call.name,
+                            call.desc));
+                }
                 case MethodInsnNode call when !self.equals(call.owner)
                         && (call.getOpcode() == Opcodes.INVOKEVIRTUAL || call.getOpcode() == Opcodes.INVOKESTATIC
                         || call.getOpcode() == Opcodes.INVOKEINTERFACE)

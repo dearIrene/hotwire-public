@@ -22,12 +22,17 @@ import org.objectweb.asm.Type;
 final class MovedSites {
     private static final int REMEMBERED = 4;
     private static final Set<Site> SITES = Collections.synchronizedSet(Collections.newSetFromMap(new WeakHashMap<>()));
+    private static final Set<SuperSite> SUPER_SITES = Collections.synchronizedSet(Collections.newSetFromMap(
+            new WeakHashMap<>()));
     private static final MethodHandle FIND;
+    private static final MethodHandle FIND_SUPER;
 
     static {
         try {
             MethodHandles.Lookup lookup = MethodHandles.lookup();
             FIND = lookup.findVirtual(Site.class, "find", MethodType.methodType(Object.class, Object[].class));
+            FIND_SUPER = lookup.findVirtual(SuperSite.class, "find", MethodType.methodType(Object.class,
+                    Object[].class));
         } catch (ReflectiveOperationException e) {
             throw new ExceptionInInitializerError(e);
         }
@@ -129,6 +134,55 @@ final class MovedSites {
         }
     }
 
+    private static final class SuperSite extends MutableCallSite {
+        private final MethodHandles.Lookup caller;
+        private final Class<?> from;
+        private final String method;
+        private final String descriptor;
+        private final MethodHandle asking;
+        private int resets;
+
+        SuperSite(MethodHandles.Lookup caller, MethodType type, Class<?> from, String method, String descriptor) {
+            super(type);
+            this.caller = caller;
+            this.from = from;
+            this.method = method;
+            this.descriptor = descriptor;
+            this.asking = MethodHandles.explicitCastArguments(
+                    FIND_SUPER.bindTo(this).asCollector(Object[].class, type.parameterCount()), type);
+            this.setTarget(this.asking);
+        }
+
+        @SuppressWarnings("unused")
+        Object find(Object[] all) throws Throwable {
+            int before;
+            synchronized (this) {
+                before = this.resets;
+            }
+            MethodHandle answer = MethodHandles.explicitCastArguments(Linker.findMovedSuper(this.caller, this.from,
+                    this.method, this.descriptor), this.type());
+            synchronized (this) {
+                if (this.resets == before) {
+                    this.setTarget(answer);
+                }
+            }
+            return (Object) MethodHandles.explicitCastArguments(answer, answer.type().generic())
+                    .asSpreader(Object[].class, all.length).invokeExact(all);
+        }
+
+        synchronized void forget() {
+            this.resets++;
+            this.setTarget(this.asking);
+        }
+    }
+
+    static CallSite makeSuper(MethodHandles.Lookup caller, MethodType type, Class<?> from, String method,
+            String descriptor) {
+        SuperSite site = new SuperSite(caller, type, from, method, descriptor);
+        SUPER_SITES.add(site);
+        return site;
+    }
+
     static CallSite make(MethodType type, String method, String descriptor) {
         return make(type, method, descriptor, null);
     }
@@ -155,6 +209,7 @@ final class MovedSites {
     static void reset() {
         AddedOverrides.forget();
         forgetAll(SITES, Site::forget);
+        forgetAll(SUPER_SITES, SuperSite::forget);
     }
 
     static <S extends MutableCallSite> void forgetAll(Collection<S> all, Consumer<S> forget) {

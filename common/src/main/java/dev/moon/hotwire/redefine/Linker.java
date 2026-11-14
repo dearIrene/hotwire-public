@@ -264,6 +264,27 @@ public final class Linker {
         return MovedSites.make(type, method, descriptor, MovedSites.findPlain(caller, owner, method, descriptor));
     }
 
+    public static CallSite bootstrapMovedSuper(MethodHandles.Lookup caller, String name, MethodType type, String owner,
+            String method, String descriptor) throws ReflectiveOperationException {
+        Class<?> from = Class.forName(owner.replace('/', '.'), false, caller.lookupClass().getClassLoader());
+        return MovedSites.makeSuper(caller, type, from, method, descriptor);
+    }
+
+    static MethodHandle findMovedSuper(MethodHandles.Lookup caller, Class<?> from, String method, String descriptor)
+            throws ReflectiveOperationException {
+        MethodType type = MethodType.fromMethodDescriptorString(descriptor, from.getClassLoader());
+        for (Class<?> at = from; at != null; at = at.getSuperclass()) {
+            MethodHandles.Lookup side = SIDECARS.get(at);
+            if (side != null && MOVED_BY_TARGET.getOrDefault(at, Set.of()).contains(method + descriptor)) {
+                return side.findStatic(side.lookupClass(), method, type.insertParameterTypes(0, at));
+            }
+            if (hasOwn(at, method, type)) {
+                break;
+            }
+        }
+        return caller.findSpecial(from, method, type, caller.lookupClass());
+    }
+
     static @Nullable String findRenumbered(Set<String> members, String method, String descriptor) {
         if (!GeneratedNames.isGenerated(method)) {
             return null;
