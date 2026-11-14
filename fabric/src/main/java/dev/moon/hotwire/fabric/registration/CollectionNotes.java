@@ -332,6 +332,26 @@ final class CollectionNotes {
         }
     }
 
+    synchronized IdentityHashMap<Object, Integer> countTakesOf(Collection<String> mods) {
+        IdentityHashMap<Object, Integer> counts = new IdentityHashMap<>();
+        for (Note note : this.order) {
+            Object container = note.findFiled();
+            Set<String> under = note.under;
+            if (container == null || under == null || Collections.disjoint(under, mods)) {
+                continue;
+            }
+            int theirs = 0;
+            for (Runnable take : note.takes) {
+                theirs += take instanceof ElementTakes.NotedTake filed && filed.candidates() != null
+                        && !Collections.disjoint(filed.candidates(), mods) ? 1 : 0;
+            }
+            if (theirs > 0) {
+                counts.put(container, theirs);
+            }
+        }
+        return counts;
+    }
+
     private int lastLeft;
     private final Set<Object> leftIn = Collections.newSetFromMap(new MapMaker().weakKeys().makeMap());
 

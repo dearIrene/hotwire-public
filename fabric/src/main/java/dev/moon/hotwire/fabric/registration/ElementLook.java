@@ -143,12 +143,30 @@ public final class ElementLook {
         }
         offDeadline = System.nanoTime() + OFF_WAIT_NANOS;
         stepHearer = hearer;
+
+        boolean stood = lookedEveryWorld == findWorldNumber();
+        long sinceLast = (System.nanoTime() - lookedEveryAt) / 1_000_000;
+        IdentityHashMap<Object, Integer> before = references.countNotedTakesOf(mods);
         try {
             look(references, findEvery(mods), on, false);
         } finally {
             offDeadline = 0;
             stepHearer = null;
         }
+        if (mods.isEmpty()) {
+            return;
+        }
+        int[] added = new int[4];
+        references.countNotedTakesOf(mods).forEach((container, takes) -> {
+            Integer had = before.get(container);
+            added[0] += had == null ? takes : Math.max(0, takes - had);
+            added[1] += had == null ? 1 : 0;
+            added[2] += takes;
+            added[3]++;
+        });
+        LOGGER.info("[Hotwire] the off's look added {} takes in {} new collections for {}, of {} takes in {}; the look"
+                + " before it {}", added[0], added[1], mods, added[2], added[3],
+                stood ? "ended " + sinceLast + " ms earlier" : "was of no world or another");
     }
 
     public static int findPercent() {

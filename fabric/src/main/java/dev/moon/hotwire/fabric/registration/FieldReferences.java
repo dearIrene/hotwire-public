@@ -172,6 +172,10 @@ public final class FieldReferences {
         this.elements.look.getNotes().finishEvery();
     }
 
+    public IdentityHashMap<Object, Integer> countNotedTakesOf(Collection<String> mods) {
+        return this.elements.look.getNotes().countTakesOf(mods);
+    }
+
     public String describeTakesFor(Collection<String> mods, IdentityHashMap<Object, CollectionNotes.NoteSummary> known,
             IdentityHashMap<Object, CollectionNotes.Holder> watched) {
         return this.elements.describeTakesFor(List.copyOf(mods), known, watched);
