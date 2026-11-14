@@ -16,10 +16,13 @@ public final class RetainedPluginShape implements IMixinConfigPlugin {
     public static final String PLUGIN = "hotwirePlugin";
     public static final String APPLIED = "hotwireApplied";
 
+    public static final String AFRESH = "hotwireAfresh";
+
     private @Nullable IMixinConfigPlugin plugin;
     private Set<String> applied = Set.of();
 
     private List<String> unlisted = List.of();
+    private boolean afresh;
 
     @Override
     public void onLoad(String mixinPackage) {
@@ -46,10 +49,14 @@ public final class RetainedPluginShape implements IMixinConfigPlugin {
             throw new IllegalStateException("the config of " + mixinPackage + " names no plugin for the copy");
         }
         String name = named.group(1);
+        this.afresh = text.contains("\"" + AFRESH + "\"");
         try {
             this.plugin = Class.forName(name, true, CopyMixinService.MODS).asSubclass(IMixinConfigPlugin.class)
                     .getConstructor().newInstance();
         } catch (ReflectiveOperationException | RuntimeException | LinkageError e) {
+            if (this.afresh) {
+                return;
+            }
             throw new IllegalStateException("the plugin " + name + " could not be made in the copy", e);
         }
         this.plugin.onLoad(mixinPackage);
@@ -74,6 +81,11 @@ public final class RetainedPluginShape implements IMixinConfigPlugin {
 
     @Override
     public boolean shouldApplyMixin(String targetClassName, String mixinClassName) {
+        if (this.afresh) {
+            boolean answer = this.plugin == null || this.plugin.shouldApplyMixin(targetClassName, mixinClassName);
+            CopyMixinService.recordAnswer(targetClassName, mixinClassName, answer);
+            return answer;
+        }
         return this.applied.contains(mixinClassName)
                 || (this.plugin != null && this.plugin.shouldApplyMixin(targetClassName, mixinClassName));
     }

@@ -302,12 +302,18 @@ public final class MixinCopy implements AutoCloseable {
     }
 
     public record MixResult(Map<String, byte[]> classes, Map<String, String> argsShapes,
-            Map<String, byte[]> generated, Set<String> read) {
+            Map<String, byte[]> generated, Set<String> read, Map<String, Boolean> answers) {
         public MixResult {
             classes = Map.copyOf(classes);
             argsShapes = Map.copyOf(argsShapes);
             generated = Map.copyOf(generated);
             read = Set.copyOf(read);
+            answers = Map.copyOf(answers);
+        }
+
+        public MixResult(Map<String, byte[]> classes, Map<String, String> argsShapes, Map<String, byte[]> generated,
+                Set<String> read) {
+            this(classes, argsShapes, generated, read, Map.of());
         }
     }
 
@@ -366,12 +372,14 @@ public final class MixinCopy implements AutoCloseable {
             Map<String, String> argsShapes = (Map<String, String>) answer[2];
             @SuppressWarnings("unchecked")
             Map<String, byte[]> generated = (Map<String, byte[]>) answer[3];
+            @SuppressWarnings("unchecked")
+            Map<String, Boolean> answers = (Map<String, Boolean>) answer[4];
             LOGGER.info("[Hotwire] Mixin's {} copy mixed {} classes with {} configs in {} ms (reset {}, load {}, "
                     + "start {}, read {}, prepare {}, patch {})", reused ? "reused" : "fresh", targets.size(),
                     configs.size(), (System.nanoTime() - start) / 1_000_000, (reset - start) / 1_000_000,
                     (loaded - reset) / 1_000_000, stages[0] / 1_000_000, stages[1] / 1_000_000,
                     stages[2] / 1_000_000, stages[3] / 1_000_000);
-            return new MixResult(mixed, argsShapes, generated, reading);
+            return new MixResult(mixed, argsShapes, generated, reading, answers);
         } finally {
             READ_IN_MIX.remove();
             MIXING.remove(span);

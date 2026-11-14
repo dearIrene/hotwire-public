@@ -154,7 +154,8 @@ final class LaunchDecisions {
 
         Set<String> unlisted = ConfigTrim.readPluginOf(bytes) == null ? Set.of()
                 : this.findUnlisted(config, bytes, name -> false);
-        into.put(config, unlisted.isEmpty() ? bytes : ConfigTrim.addUnlisted(bytes, unlisted));
+
+        into.put(config, ConfigTrim.askAfresh(unlisted.isEmpty() ? bytes : ConfigTrim.addUnlisted(bytes, unlisted)));
         try {
             String refmap = ConfigTrim.readRefmapOf(bytes);
             byte[] map = refmap == null ? null : this.findBytes(refmap);

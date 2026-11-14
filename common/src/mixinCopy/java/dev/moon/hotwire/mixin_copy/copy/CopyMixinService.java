@@ -162,6 +162,18 @@ public final class CopyMixinService extends MixinServiceAbstract
         CopyMixinService.liveResources = liveResources;
     }
 
+    private static final Map<String, Boolean> ANSWERS = new ConcurrentHashMap<>();
+
+    static void recordAnswer(String target, String mixin, boolean answer) {
+        ANSWERS.put(target + ' ' + mixin, answer);
+    }
+
+    static Map<String, Boolean> takeAnswers() {
+        Map<String, Boolean> all = new HashMap<>(ANSWERS);
+        ANSWERS.clear();
+        return all;
+    }
+
     static void setLivePlugins(Function<String, @Nullable Object> plugins,
             BiFunction<String, String, @Nullable Object> mixins) {
         livePlugins = plugins;

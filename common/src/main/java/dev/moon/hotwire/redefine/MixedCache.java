@@ -81,6 +81,9 @@ final class MixedCache {
 
     private final Set<String> uncached = ConcurrentHashMap.newKeySet();
 
+    private final Map<String, Boolean> afresh = new ConcurrentHashMap<>();
+    private volatile int afreshPaths = -1;
+
     private final Map<String, Aims> aims = new ConcurrentHashMap<>();
     private volatile int readsAt;
     private final Map<CacheKey, Config> parsed = new ConcurrentHashMap<>();
@@ -130,8 +133,27 @@ final class MixedCache {
         }
     }
 
+    void learn(Map<String, Boolean> answers) {
+        if (answers.isEmpty()) {
+            return;
+        }
+        synchronized (this.afresh) {
+            int paths = MixinCopy.findClassPathChanges();
+            if (paths != this.afreshPaths) {
+                this.afresh.clear();
+                this.afreshPaths = paths;
+            }
+            this.afresh.putAll(answers);
+        }
+    }
+
     Map<String, CacheKey> findKeys(Set<String> targets, Map<String, byte[]> classes, Map<String, byte[]> resources,
             List<String> configNames) {
+        return this.findKeys(targets, classes, resources, configNames, targets);
+    }
+
+    Map<String, CacheKey> findKeys(Set<String> targets, Map<String, byte[]> classes, Map<String, byte[]> resources,
+            List<String> configNames, Set<String> wanted) {
         List<Config> configs = new ArrayList<>();
         for (String name : configNames) {
             byte[] json = resources.get(name);
@@ -150,6 +172,9 @@ final class MixedCache {
         }
         Map<String, CacheKey> keys = new LinkedHashMap<>();
         for (String target : targets) {
+            if (!wanted.contains(target)) {
+                continue;
+            }
             byte[] original = classes.get(target);
             StringBuilder trace = KEY_DUMP == null ? null : new StringBuilder();
             Set<String> above = original == null ? Set.of() : this.findAbove(original, classes);
@@ -604,6 +629,9 @@ final class MixedCache {
                     int space = aimed.indexOf(' ');
                     Boolean answer = this.answers.ask(config.name(), aimed.substring(0, space).replace('/', '.'),
                             aimed.substring(space + 1).replace('/', '.'));
+                    if (answer == null && this.afreshPaths == MixinCopy.findClassPathChanges()) {
+                        answer = this.afresh.get(aimed.replace('/', '.'));
+                    }
                     if (answer == null) {
                         if (this.uncached.add(config.name())) {
                             LOGGER.info("[Hotwire] classes {} patches are mixed afresh each time: the game holds no"

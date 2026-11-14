@@ -197,9 +197,23 @@ public final class CachedMixes {
             List<MixinCopy.MixResult> made = this.mixInLots(toMix, classes, resources, configs, stop);
             long copied = System.nanoTime();
             this.copyNanos.add(copied - copying);
+            Map<String, CacheKey> keysNow = keys;
+            Set<String> unkeyed = new LinkedHashSet<>(toMix);
+            unkeyed.removeAll(keys.keySet());
+            boolean answered = false;
+            for (MixinCopy.MixResult lot : made) {
+                answered |= !lot.answers().isEmpty();
+            }
+            if (known != null && !unkeyed.isEmpty() && answered) {
+                for (MixinCopy.MixResult lot : made) {
+                    known.learn(lot.answers());
+                }
+                keysNow = new HashMap<>(keys);
+                keysNow.putAll(known.findKeys(targets, classes, resources, configs, unkeyed));
+            }
             for (MixinCopy.MixResult lot : made) {
                 parts.add(lot);
-                Map<String, CacheKey> toSave = new HashMap<>(keys);
+                Map<String, CacheKey> toSave = new HashMap<>(keysNow);
                 toSave.keySet().retainAll(lot.classes().keySet());
                 toSave.keySet().retainAll(toMix);
                 if (known != null && !toSave.isEmpty() && !stop.getAsBoolean()) {

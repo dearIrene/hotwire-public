@@ -33,6 +33,17 @@ public final class ConfigTrim {
         return root.toString().getBytes(StandardCharsets.UTF_8);
     }
 
+    public static byte[] askAfresh(byte[] json) {
+        JsonObject root = JsonParser.parseString(new String(json, StandardCharsets.UTF_8)).getAsJsonObject();
+        if (!isName(root.get("plugin"))) {
+            return json;
+        }
+        root.addProperty("hotwirePlugin", root.get("plugin").getAsString());
+        root.addProperty("plugin", RETAINED_PLUGIN);
+        root.addProperty("hotwireAfresh", true);
+        return root.toString().getBytes(StandardCharsets.UTF_8);
+    }
+
     public static Set<String> readUnlisted(byte[] json) {
         JsonObject root = JsonParser.parseString(new String(json, StandardCharsets.UTF_8)).getAsJsonObject();
         Set<String> names = new TreeSet<>();

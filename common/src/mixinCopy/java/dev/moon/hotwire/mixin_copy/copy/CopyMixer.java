@@ -81,6 +81,8 @@ public final class CopyMixer implements Function<Object[], Object[]> {
             Map<String, Integer> orders) {
         long[] stages = new long[4];
         long start = System.nanoTime();
+
+        CopyMixinService.takeAnswers();
         boolean first = !this.booted;
         if (first) {
             MixinBootstrap.init();
@@ -118,7 +120,7 @@ public final class CopyMixer implements Function<Object[], Object[]> {
         stages[2] = prepared - added;
         stages[3] = System.nanoTime() - prepared;
         return new Object[] {mixed, stages, collectArgsShapes(transformer, mixed),
-                collectGenerated(transformer, mixed)};
+                collectGenerated(transformer, mixed), CopyMixinService.takeAnswers()};
     }
 
     private static Map<String, byte[]> collectGenerated(IMixinTransformer transformer, Map<String, byte[]> mixed) {
