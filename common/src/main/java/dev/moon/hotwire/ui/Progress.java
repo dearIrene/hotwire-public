@@ -238,8 +238,9 @@ public final class Progress {
             ticks.set(was.modsDone(), MOD_TICKS);
         }
         this.now = new Snapshot(was.run(), was.subject(), was.labels(), was.at(), was.words(), was.countDone(),
-                was.countTotal(), was.running(), was.goingOff(), was.adding(), was.mods(), was.modsDone() + 1,
-                was.queue(), ticks);
+                was.countTotal(), was.running(), was.goingOff(), was.adding(), was.mods(),
+
+                Math.min(Math.max(was.mods(), 1), was.modsDone() + 1), was.queue(), ticks);
     }
 
     public static final int MOD_TICKS = 3;

@@ -471,6 +471,7 @@ public final class ModSwitcher {
                 case SwitchPlan.Reason.DependsOn on -> on.mod();
                 case SwitchPlan.Reason.NestedIn nested -> nested.container();
                 case SwitchPlan.Reason.Ships ships -> ships.nested();
+                case SwitchPlan.Reason.Asked picked -> goingOff ? this.findCarriedCopy(id, plan) : null;
                 case null, default -> null;
             };
             if (goingOff && cause != null) {
@@ -479,6 +480,16 @@ public final class ModSwitcher {
                 this.offBecauseOf.remove(id);
             }
         }
+    }
+
+    private @Nullable String findCarriedCopy(String container, SwitchPlan plan) {
+        for (String other : plan.order()) {
+            if (!other.equals(container) && plan.why().get(other) instanceof SwitchPlan.Reason.Asked
+                    && this.graph.getContainers(other).contains(container)) {
+                return other;
+            }
+        }
+        return null;
     }
 
     public Result dryRun(Collection<String> asked, boolean off) {
@@ -636,7 +647,12 @@ public final class ModSwitcher {
 
     private List<Progress.Entry> makeQueue(SwitchPlan plan) {
         List<Progress.Entry> queue = new ArrayList<>();
+
+        boolean anyListed = plan.order().stream().anyMatch(PlayerMessages::isListed);
         for (String id : plan.order()) {
+            if (anyListed && !PlayerMessages.isListed(id)) {
+                continue;
+            }
             SwitchPlan.Reason why = plan.why().get(id);
             queue.add(new Progress.Entry(this.nameOf(id), why == null ? "" : switch (why) {
                 case SwitchPlan.Reason.Asked asked -> Lang.get("hotwire.progress.why.asked");

@@ -5,6 +5,7 @@ import java.time.ZoneId;
 import java.time.format.DateTimeFormatter;
 import java.util.List;
 import java.util.Locale;
+import org.jspecify.annotations.Nullable;
 
 final class HistoryPage {
     private static final DateTimeFormatter AT = DateTimeFormatter.ofPattern("HH:mm:ss", Locale.ROOT);
@@ -23,10 +24,16 @@ final class HistoryPage {
                 Kit.dim(Lang.get("hotwire.history.session"))), this.scroll, this.none).pad(12, 10).gap(10);
     }
 
-    void set(List<Notices.Told> told) {
+    void set(List<Notices.Told> told, @Nullable String last, Runnable undo) {
         this.list.clear();
-        this.none.show(told.isEmpty());
-        this.scroll.show(!told.isEmpty());
+        this.none.show(told.isEmpty() && last == null);
+        this.scroll.show(!told.isEmpty() || last != null);
+        if (last != null) {
+            this.list.with(Kit.row(Kit.text(Lang.get("hotwire.history.last"), Palette.TEXT), Kit.rule().grow(1))
+                    .gap(6));
+            this.list.with(Kit.row(Kit.text(last).wrap().grow(1), Kit.push(Lang.get("hotwire.notice.undo"), undo))
+                    .gap(10).cross(Line.Cross.CENTER));
+        }
         for (Section section : Section.values()) {
             List<Notices.Told> ofKind = told.stream().filter(one -> one.notice().kind() == section.kind
                     || one.notice().kind() == section.also).toList();

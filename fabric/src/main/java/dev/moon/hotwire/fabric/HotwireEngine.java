@@ -35,6 +35,7 @@ import dev.moon.hotwire.ui.CacheHost;
 import dev.moon.hotwire.ui.Canvas;
 import dev.moon.hotwire.ui.JarHost;
 import dev.moon.hotwire.ui.Lang;
+import dev.moon.hotwire.ui.LastSwitch;
 import dev.moon.hotwire.ui.LoadingScreen;
 import dev.moon.hotwire.ui.ModScreen;
 import dev.moon.hotwire.ui.ModScreenGame;
@@ -123,6 +124,7 @@ public final class HotwireEngine implements ModScreenGame, AutoCloseable {
     HotwireEngine(InstalledMods installed, Progress progress, GameReports reports, UpdateFolders folders,
             UpdateQueue queue, HotwireSettings settings, ModIcons icons, Bound bound) {
         this.installed = installed;
+        PlayerMessages.setListed(installed::isTopLevel);
         this.icons = icons;
         this.settings = settings;
         this.progress = progress;
@@ -308,6 +310,7 @@ public final class HotwireEngine implements ModScreenGame, AutoCloseable {
             GameLog.LOGGER.info("[Hotwire] told the player: {}", text);
             current.showSwitched(text, hint, off, switched);
         } else {
+            LastSwitch.note(off, switched, this.getProgress().snapshot().run(), text);
             this.showMessage(text, false, hint);
         }
     }

@@ -8,6 +8,7 @@ import java.util.Comparator;
 import java.util.List;
 import java.util.Locale;
 import java.util.function.Function;
+import java.util.function.Predicate;
 
 public final class PlayerMessages {
     private PlayerMessages() {
@@ -79,9 +80,21 @@ public final class PlayerMessages {
     }
 
     private static List<String> listAskedFirst(SwitchPlan plan) {
-        List<String> order = plan.direction() == SwitchPlan.Direction.ON ? plan.order().reversed() : plan.order();
+        List<String> all = plan.direction() == SwitchPlan.Direction.ON ? plan.order().reversed() : plan.order();
+        List<String> shown = all.stream().filter(PlayerMessages::isListed).toList();
+        List<String> order = shown.isEmpty() ? all : shown;
         return order.stream().sorted(Comparator.comparing(
                 id -> !(plan.why().get(id) instanceof SwitchPlan.Reason.Asked))).toList();
+    }
+
+    private static volatile Predicate<String> listed = id -> true;
+
+    public static void setListed(Predicate<String> isListed) {
+        listed = isListed;
+    }
+
+    public static boolean isListed(String id) {
+        return listed.test(id);
     }
 
     public static String joinNames(List<String> ids, Function<String, String> nameOf) {

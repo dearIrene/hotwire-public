@@ -131,6 +131,7 @@
   "hotwire.screen.pending_short": "Pending",
   "hotwire.screen.history": "History",
   "hotwire.screen.history_short": "History",
+  "hotwire.history.last": "Last action",
   "hotwire.history.session": "This session",
   "hotwire.history.none": "Nothing has happened yet this session.",
   "hotwire.history.kind.problems": "Crashes and problems",

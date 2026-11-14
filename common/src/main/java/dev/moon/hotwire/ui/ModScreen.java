@@ -66,6 +66,7 @@ public final class ModScreen implements JarHost {
     private boolean offersChecked;
 
     private int undoRun = -1;
+    private int historyRun = -1;
     private int width;
     private int height;
 
@@ -176,7 +177,7 @@ public final class ModScreen implements JarHost {
             }
             case CACHE -> this.turnTo(CACHE, 4);
             case HISTORY -> {
-                this.history.set(Notices.getTold());
+                this.refreshHistory();
                 this.turnTo(HISTORY, 7);
             }
             case REPORT -> this.turnTo(REPORT, 2);
@@ -256,6 +257,12 @@ public final class ModScreen implements JarHost {
             this.undoRun = -1;
             this.message.dropOffer();
         }
+
+        int run = this.game.getProgress().snapshot().run();
+        if (run != this.historyRun) {
+            this.historyRun = run;
+            this.refreshHistory();
+        }
         this.refreshRail();
         this.mods.refresh(nowNanos);
         this.updates.refresh(nowNanos, this.deck.getAt() == 5);
@@ -327,19 +334,33 @@ public final class ModScreen implements JarHost {
     }
 
     public void showSwitched(String text, String hint, boolean off, List<String> switched) {
-        List<String> ids = List.copyOf(switched);
         int run = this.game.getProgress().snapshot().run();
         this.undoRun = run;
-        this.message.show(text, false, hint, new Notice.Action(Lang.get("hotwire.notice.undo"), () -> {
-            if (this.game.getProgress().snapshot().run() != run || !this.isIdle()) {
-                return;
+        LastSwitch.note(off, switched, run, text);
+        LastSwitch.Entry made = new LastSwitch.Entry(off, switched, run, text);
+        this.message.show(text, false, hint, new Notice.Action(Lang.get("hotwire.notice.undo"),
+                () -> this.revert(made)));
+        this.refreshHistory();
+    }
+
+    private void revert(LastSwitch.Entry made) {
+        if (this.game.getProgress().snapshot().run() != made.run() || !this.isIdle()) {
+            return;
+        }
+        if (made.off()) {
+            this.game.turnOn(made.ids());
+        } else {
+            this.game.turnOff(made.ids());
+        }
+    }
+
+    private void refreshHistory() {
+        LastSwitch.Entry made = LastSwitch.find(this.game.getProgress().snapshot().run());
+        this.history.set(Notices.getTold(), made == null ? null : made.said(), () -> {
+            if (made != null) {
+                this.revert(made);
             }
-            if (off) {
-                this.game.turnOn(ids);
-            } else {
-                this.game.turnOff(ids);
-            }
-        }));
+        });
     }
 
     public void showNewerHotwire() {
