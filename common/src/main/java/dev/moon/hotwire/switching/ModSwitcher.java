@@ -242,7 +242,8 @@ public final class ModSwitcher {
     }
 
     public boolean isOnForReopen(Collection<String> family) {
-        return family.size() > 1 && this.applier.isInWorld() && this.reopenedFamilies.contains(Set.copyOf(family));
+        return this.applier.isInWorld() && ((family.size() > 1 && this.reopenedFamilies.contains(Set.copyOf(family)))
+                || family.stream().anyMatch(this.reopenToTurnOn));
     }
 
     public void reopenToTurnOnWith(Predicate<String> tookFrom) {

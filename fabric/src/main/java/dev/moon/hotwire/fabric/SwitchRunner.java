@@ -457,7 +457,9 @@ public final class SwitchRunner {
             this.switcher.showBegun(asked, Lang.get("hotwire.progress.preparing"));
         }
 
-        ResourceReload.awaitIdle();
+        if (asked.isRefused() || !this.switcher.isOnForReopen(asked.order())) {
+            ResourceReload.awaitIdle();
+        }
         SwitchTimes.mark("off's reload ended");
         ElementLook.giveWay();
         SwitchTimes.mark("look gave way");
