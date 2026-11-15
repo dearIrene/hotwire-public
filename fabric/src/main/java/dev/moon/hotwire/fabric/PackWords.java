@@ -53,7 +53,8 @@ final class PackWords {
             return Map.of();
         }
         List<PackResources> packs = client.getResourceManager().listPacks()
-                .filter(pack -> !PackSource.SERVER.equals(pack.location().source())).toList();
+                .filter(pack -> !PackSource.SERVER.equals(pack.location().source())
+                        && !PackSource.WORLD.equals(pack.location().source())).toList();
         Map<String, String> read = new HashMap<>();
         String chosen = client.getLanguageManager().getSelected();
         for (String code : chosen.equals(ENGLISH) ? List.of(ENGLISH) : List.of(ENGLISH, chosen)) {

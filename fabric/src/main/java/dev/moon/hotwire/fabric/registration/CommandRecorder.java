@@ -29,9 +29,22 @@ public final class CommandRecorder {
     private CommandRecorder() {
     }
 
+    private static final ThreadLocal<Boolean> SERVER_TREE = ThreadLocal.withInitial(() -> false);
+
+    public static void runForServerTree(Runnable reading) {
+        boolean was = SERVER_TREE.get();
+        SERVER_TREE.set(true);
+        try {
+            reading.run();
+        } finally {
+            SERVER_TREE.set(was);
+        }
+    }
+
     @SuppressWarnings("ReferenceEquality")
     public static void onAdded(RootCommandNode<?> root, CommandNode<?> node) {
-        if (root.getChild(node.getName()) != node || !RecorderSupport.isFirst(node) || isSuggestionTree(root)) {
+        if (SERVER_TREE.get() || root.getChild(node.getName()) != node || !RecorderSupport.isFirst(node)
+                || isSuggestionTree(root)) {
             return;
         }
         CallerOwner.Owner caller = RecorderSupport.findOwner();

@@ -39,6 +39,7 @@ import org.slf4j.LoggerFactory;
 
 public final class ModrinthClient {
     public static final String API = "https://api.modrinth.com/v2";
+    private static final String API_HOST = "api.modrinth.com";
     private static final Duration TIMEOUT = Duration.ofSeconds(20);
 
     private static final Duration STALL = Duration.ofSeconds(30);
@@ -620,7 +621,9 @@ public final class ModrinthClient {
                     Thread.sleep(Math.min(wait / 1_000_000, 60_000));
                 }
                 HttpResponse<T> response = HTTP.send(built, handler);
-                this.readRateLimit(response);
+                if (API_HOST.equals(built.uri().getHost())) {
+                    this.readRateLimit(response);
+                }
                 if (response.statusCode() == GONE) {
                     throw new IOException("Modrinth has retired the API this Hotwire speaks; a newer Hotwire is"
                             + " needed");
