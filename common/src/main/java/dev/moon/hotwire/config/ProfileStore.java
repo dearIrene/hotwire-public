@@ -10,9 +10,11 @@ import java.util.Collections;
 import java.util.LinkedHashMap;
 import java.util.LinkedHashSet;
 import java.util.List;
+import java.util.Locale;
 import java.util.Map;
 import java.util.Set;
 import java.util.function.Predicate;
+import org.jspecify.annotations.Nullable;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -20,7 +22,11 @@ public final class ProfileStore {
     private static final Logger LOGGER = LoggerFactory.getLogger(ProfileStore.class);
     private static final List<String> HEAD = List.of("# Hotwire profiles. One per line:  name = modid, modid, ...",
             "# Everything installed and NOT listed is switched off when",
-                    "# the profile is applied. Safe to edit by hand.");
+                    "# the profile is applied. Safe to edit by hand.",
+            "# A profile's servers:  @name = address, address  (singleplayer for your own worlds)");
+
+    public static final String SINGLEPLAYER = "singleplayer";
+    private static final String DEFAULT_PORT = ":25565";
 
     public record ProfilePlan(List<String> turnOff, List<String> turnOn) {
         public ProfilePlan {
@@ -49,6 +55,8 @@ public final class ProfileStore {
 
     private final Path file;
     private final Map<String, Set<String>> profiles = new LinkedHashMap<>();
+
+    private final Map<String, Set<String>> servers = new LinkedHashMap<>();
     private boolean loaded;
 
     private boolean unread;
@@ -88,6 +96,10 @@ public final class ProfileStore {
         this.profiles.forEach((name, mods) -> rebuilt.put(name.equals(from) ? wanted : name, mods));
         this.profiles.clear();
         this.profiles.putAll(rebuilt);
+        Set<String> moved = this.servers.remove(from);
+        if (moved != null) {
+            this.servers.put(wanted, moved);
+        }
         this.write();
         return true;
     }
@@ -95,7 +107,52 @@ public final class ProfileStore {
     public synchronized void delete(String name) throws IOException {
         this.load();
         this.profiles.remove(name);
+        this.servers.remove(name);
         this.write();
+    }
+
+    public synchronized List<String> getServersOf(String name) {
+        this.load();
+        return List.copyOf(this.servers.getOrDefault(name, Set.of()));
+    }
+
+    public synchronized boolean addServer(String name, String address) throws IOException {
+        this.load();
+        String server = normalize(address);
+        if (server.isEmpty() || !this.profiles.containsKey(name)) {
+            return false;
+        }
+        this.servers.values().forEach(of -> of.remove(server));
+        this.servers.computeIfAbsent(name, any -> new LinkedHashSet<>()).add(server);
+        this.write();
+        return true;
+    }
+
+    public synchronized void removeServer(String name, String address) throws IOException {
+        this.load();
+        Set<String> of = this.servers.get(name);
+        if (of != null && of.remove(normalize(address))) {
+            this.write();
+        }
+    }
+
+    public synchronized @Nullable String findFor(String address) {
+        this.load();
+        String server = normalize(address);
+        for (Map.Entry<String, Set<String>> entry : this.servers.entrySet()) {
+            if (entry.getValue().contains(server) && this.profiles.containsKey(entry.getKey())) {
+                return entry.getKey();
+            }
+        }
+        return null;
+    }
+
+    public static String normalize(String address) {
+        String server = address.strip().toLowerCase(Locale.ROOT);
+        if (server.endsWith(DEFAULT_PORT)) {
+            server = server.substring(0, server.length() - DEFAULT_PORT.length());
+        }
+        return server.matches("[a-z0-9._:\\[\\]-]{1,255}") ? server : "";
     }
 
     public ProfilePlan planFor(String name, List<String> installed, Predicate<String> on) {
@@ -131,13 +188,27 @@ public final class ProfileStore {
     }
 
     private static String clean(String name) {
-        return name.replace('=', '-').replaceFirst("^[#\\s]+", "").strip();
+        return name.replace('=', '-').replaceFirst("^[#@\\s]+", "").strip();
     }
 
     private void parse(String line) {
         String trimmed = line.strip();
         int split = trimmed.indexOf('=');
         if (trimmed.startsWith("#") || split <= 0) {
+            return;
+        }
+        if (trimmed.startsWith("@")) {
+            Set<String> of = new LinkedHashSet<>();
+            for (String address : trimmed.substring(split + 1).split(",", -1)) {
+                String server = normalize(address);
+                if (!server.isEmpty()) {
+                    of.add(server);
+                }
+            }
+            String owner = trimmed.substring(1, split).strip();
+            if (!owner.isEmpty() && !of.isEmpty()) {
+                this.servers.put(owner, of);
+            }
             return;
         }
         String name = trimmed.substring(0, split).strip();
@@ -160,6 +231,11 @@ public final class ProfileStore {
         }
         List<String> lines = new ArrayList<>(HEAD);
         this.profiles.forEach((name, mods) -> lines.add(name + " = " + String.join(", ", mods)));
+        this.servers.forEach((name, of) -> {
+            if (!of.isEmpty() && this.profiles.containsKey(name)) {
+                lines.add("@" + name + " = " + String.join(", ", of));
+            }
+        });
         AtomicFiles.writeString(this.file, String.join(System.lineSeparator(), lines) + System.lineSeparator());
     }
 }
