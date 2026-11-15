@@ -3,16 +3,21 @@ package dev.moon.hotwire.fabric;
 import dev.moon.hotwire.fabric.store.UpdateCheck;
 import dev.moon.hotwire.fabric.update.ModUpdater;
 import dev.moon.hotwire.fabric.update.UpdateSupport;
+import dev.moon.hotwire.modrinth.Downloads;
 import dev.moon.hotwire.ui.Lang;
 import dev.moon.hotwire.ui.Progress;
+import dev.moon.hotwire.update.EarlyUpdates;
 import dev.moon.hotwire.update.UpdateOffer;
 import java.io.IOException;
 import java.io.UncheckedIOException;
 import java.nio.file.Path;
 import java.util.ArrayList;
+import java.util.HashSet;
 import java.util.List;
+import java.util.Set;
 import java.util.TreeSet;
 import java.util.concurrent.CompletableFuture;
+import java.util.concurrent.CompletionException;
 import java.util.concurrent.ExecutionException;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
@@ -30,6 +35,11 @@ final class StoreUpdates {
     private static final Logger LOGGER = LoggerFactory.getLogger(StoreUpdates.class);
 
     private static final int FETCHES = 8;
+
+    private static final double WORTH_SECONDS = 10;
+    private static final long QUIET_NANOS = 3_000_000_000L;
+    private static final long POLL_MILLIS = 200;
+    private static final double NEARLY_IN = 0.5;
 
     private static final int REFUSALS_SAID = 5;
 
@@ -50,6 +60,11 @@ final class StoreUpdates {
     private final Summary summary;
     private volatile CompletableFuture<Ran> last = CompletableFuture.completedFuture(
             new Ran(List.of(), 0, 0));
+
+    private volatile boolean early;
+
+    private record Fetches(ExecutorService pool, List<Future<List<Path>>> futures) {
+    }
 
     interface Summary {
         void show(List<String> first, List<String> now, List<String> later, List<String> not);
@@ -82,17 +97,42 @@ final class StoreUpdates {
         CompletableFuture<Ran> ran = new CompletableFuture<>();
         this.last = ran;
         Thread.ofPlatform().name("hotwire-updates-fetch").daemon().start(() -> {
-            List<List<Path>> fetched = this.fetchAll(offers, this::fetch);
+            Fetches fetches = this.beginFetches(offers, this::fetch);
+            List<Integer> apart = this.awaitApart(offers, fetches.futures(), began);
+            List<Path> firstJars = apart.stream().map(at -> fetches.futures().get(at).resultNow().getFirst()).toList();
+            List<ModUpdater.Result> firstMade = List.of();
+            if (!firstJars.isEmpty()) {
+                LOGGER.info("[Hotwire] Update all takes {} of {} updates now, {} ms in: the downloads still coming have"
+                        + " nothing to do with them", firstJars.size(), offers.size(),
+                        (System.nanoTime() - began) / 1_000_000);
+                this.early = true;
+                this.progress.stepUpdating(1);
+                try {
+                    firstMade = this.changes.updateAll(firstJars).join();
+                } catch (CompletionException e) {
+                    LOGGER.warn("[Hotwire] Update all's first updates failed as a set", e.getCause());
+                    apart = List.of();
+                    firstJars = List.of();
+                } finally {
+                    this.early = false;
+                }
+                this.progress.count(Lang.get("hotwire.progress.update.getting"),
+                        (int) fetches.futures().stream().filter(Future::isDone).count(), offers.size());
+            }
+            List<List<Path>> fetched = collect(fetches);
             long fetchMillis = (System.nanoTime() - began) / 1_000_000;
             List<Path> jars = new ArrayList<>();
             List<Path> needed = new ArrayList<>();
-            for (List<Path> one : fetched) {
-                if (one.size() == 1) {
+            for (int i = 0; i < fetched.size(); i++) {
+                List<Path> one = fetched.get(i);
+                if (one.size() == 1 && !apart.contains(i)) {
                     jars.add(one.getFirst());
                 } else if (one.size() > 1) {
                     needed.addAll(one);
                 }
             }
+            List<Path> first = firstJars;
+            List<ModUpdater.Result> firstResults = firstMade;
             LOGGER.info("[Hotwire] Update all fetched {} of {} jars in {} ms; {} come with mods they need", jars.size()
                     + needed.size(), offers.size(), fetchMillis, needed.size());
             Minecraft.getInstance().execute(landed);
@@ -101,13 +141,16 @@ final class StoreUpdates {
             this.changes.updateAll(jars).whenComplete((results, failed) -> Minecraft.getInstance().execute(() -> {
                 long updateMillis = (System.nanoTime() - applying) / 1_000_000;
                 this.progress.endAdding();
-                List<ModUpdater.Result> made = results == null ? List.of() : results;
+                List<ModUpdater.Result> made = new ArrayList<>(firstResults);
+                made.addAll(results == null ? List.of() : results);
+                List<Path> all = new ArrayList<>(first);
+                all.addAll(jars);
                 if (failed != null) {
                     this.say.accept(String.valueOf(failed), true);
                 }
                 this.tell(made);
                 for (int i = 0; i < made.size(); i++) {
-                    done.accept(jars.get(i), made.get(i));
+                    done.accept(all.get(i), made.get(i));
                 }
                 LOGGER.info("[Hotwire] Update all: fetched in {} ms, updated in {} ms", fetchMillis, updateMillis);
                 ran.complete(new Ran(made, fetchMillis, updateMillis));
@@ -118,8 +161,59 @@ final class StoreUpdates {
         });
     }
 
-    @SuppressWarnings("FutureReturnValueIgnored")
+    private List<Integer> awaitApart(List<UpdateOffer> offers, List<Future<List<Path>>> futures, long began) {
+        int seen = 0;
+        long lastLanding = began;
+        try {
+            while (true) {
+                Set<Integer> landed = new HashSet<>();
+                int over = 0;
+                long got = 0;
+                for (int i = 0; i < futures.size(); i++) {
+                    Future<List<Path>> future = futures.get(i);
+                    if (future.isDone()) {
+                        over++;
+                        got += offers.get(i).size();
+                        if (future.state() == Future.State.SUCCESS && future.resultNow().size() == 1) {
+                            landed.add(i);
+                        }
+                    }
+                }
+                if (over == futures.size()) {
+                    return List.of();
+                }
+                long now = System.nanoTime();
+                if (over != seen) {
+                    seen = over;
+                    lastLanding = now;
+                }
+                if (!landed.isEmpty() && now - lastLanding >= QUIET_NANOS) {
+                    long left = 0;
+                    boolean known = true;
+                    for (Downloads.Job job : Downloads.findAllUnderWay()) {
+                        known &= job.total() > 0 && job.getFraction() < NEARLY_IN;
+                        left += job.total() - job.done();
+                        got += job.done();
+                    }
+                    if (known && EarlyUpdates.estimateSecondsLeft(got, left, now - began) >= WORTH_SECONDS) {
+                        return EarlyUpdates.findApart(offers.size(), landed,
+                                (one, other) -> this.check.isRelated(offers.get(one), offers.get(other)));
+                    }
+                }
+                Thread.sleep(POLL_MILLIS);
+            }
+        } catch (InterruptedException e) {
+            Thread.currentThread().interrupt();
+            return List.of();
+        }
+    }
+
     List<List<Path>> fetchAll(List<UpdateOffer> offers, Function<UpdateOffer, List<Path>> fetch) {
+        return collect(this.beginFetches(offers, fetch));
+    }
+
+    @SuppressWarnings("FutureReturnValueIgnored")
+    private Fetches beginFetches(List<UpdateOffer> offers, Function<UpdateOffer, List<Path>> fetch) {
         ExecutorService pool = Executors.newFixedThreadPool(FETCHES,
                 Thread.ofPlatform().name("hotwire-updates-fetch-", 1).daemon().factory());
         List<Future<List<Path>>> futures = new ArrayList<>();
@@ -127,17 +221,24 @@ final class StoreUpdates {
         for (UpdateOffer offer : offers) {
             futures.add(pool.submit(() -> {
                 List<Path> jars = fetch.apply(offer);
-                this.progress.count(Lang.get("hotwire.progress.update.getting"), landed.incrementAndGet(),
-                        offers.size());
+                int in = landed.incrementAndGet();
+                if (!this.early) {
+                    this.progress.count(Lang.get("hotwire.progress.update.getting"), in, offers.size());
+                }
                 if (jars.size() == 1) {
                     this.changes.planAhead(jars.getFirst());
                 }
                 return jars;
             }));
         }
+        return new Fetches(pool, futures);
+    }
+
+    private static List<List<Path>> collect(Fetches fetches) {
+        ExecutorService pool = fetches.pool();
         List<List<Path>> out = new ArrayList<>();
         try {
-            for (Future<List<Path>> future : futures) {
+            for (Future<List<Path>> future : fetches.futures()) {
                 try {
                     out.add(future.get());
                 } catch (ExecutionException e) {

@@ -8,6 +8,7 @@ import dev.moon.hotwire.jar.ModManifest;
 import dev.moon.hotwire.modrinth.Downloads;
 import dev.moon.hotwire.modrinth.ModrinthClient;
 import dev.moon.hotwire.modrinth.UpdateMemory;
+import dev.moon.hotwire.plan.ModGraph;
 import dev.moon.hotwire.ui.Lang;
 import dev.moon.hotwire.update.UpdateOffer;
 import java.io.IOException;
@@ -240,6 +241,14 @@ public final class UpdateCheck {
         offers.sort((a, b) -> a.name().compareToIgnoreCase(b.name()));
         LOGGER.info("[Hotwire] {} of {} mods have a newer version", offers.size(), hashByName.size());
         return offers;
+    }
+
+    public boolean isRelated(UpdateOffer one, UpdateOffer other) {
+        ModGraph graph = this.installed.getGraph();
+        return one.requiredProjects().contains(other.projectId())
+                || other.requiredProjects().contains(one.projectId())
+                || graph.getUses(one.id()).contains(other.id()) || graph.getCalls(one.id()).contains(other.id())
+                || graph.getUses(other.id()).contains(one.id()) || graph.getCalls(other.id()).contains(one.id());
     }
 
     public List<UpdateOffer> orderByNeeds(List<UpdateOffer> picked, List<UpdateOffer> all) {
