@@ -67,7 +67,9 @@ final class ClassPacks {
             }
         }
         byte[] bytes = body.toByteArray();
-        CacheKey key = CacheKey.of("class body 2").add(target).add(bytes).build();
+
+        CacheKey key = CacheKey.of("class body 3").add(target).add(bytes)
+                .add(original == null ? new byte[0] : original).build();
         this.store.put(key, bytes, original);
         used.add(key);
         return new Body(key, base);
@@ -157,8 +159,9 @@ final class ClassPacks {
         node.methods = fresh;
         byte[] pack = write(node);
         node.methods = methods;
-        CacheKey packKey = CacheKey.of("class pack 1").add(target).add(pack).build();
-        this.store.put(packKey, pack, base == null ? original : base.bytes());
+        byte[] against = base == null ? original : base.bytes();
+        CacheKey packKey = CacheKey.of("class pack 2").add(target).add(pack).add(against).build();
+        this.store.put(packKey, pack, against);
         used.add(packKey);
         boolean isBase = baseKey == null;
         if (baseKey == null) {
@@ -212,7 +215,12 @@ final class ClassPacks {
     }
 
     private static @Nullable ClassNode read(byte[] bytes) {
-        ClassNode node = ClassNodes.read(bytes, 0);
+        ClassNode node;
+        try {
+            node = ClassNodes.read(bytes, 0);
+        } catch (RuntimeException e) {
+            return null;
+        }
         return hasRawAttributes(node) ? null : node;
     }
 
