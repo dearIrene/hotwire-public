@@ -157,7 +157,14 @@ public final class LifecycleListeners {
         if (LISTENERS.isEmpty()) {
             return;
         }
-        Runnable each = () -> LISTENERS.tell(what, isOn, call);
+        long asked = System.nanoTime();
+        Runnable each = () -> {
+            long began = System.nanoTime();
+            LISTENERS.tell(what, isOn, call);
+            LOGGER.debug("[Hotwire] the lifecycle listeners' {} waited {} ms for the game's thread, ran {} ms, at {}",
+                    what, (began - asked) / 1_000_000, (System.nanoTime() - began) / 1_000_000,
+                    System.currentTimeMillis());
+        };
         Minecraft client = Minecraft.getInstance();
         if (client.isSameThread()) {
             each.run();

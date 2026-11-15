@@ -222,20 +222,26 @@ public final class SwitchRunner {
         LifecycleListeners.begin();
         try {
             result = off ? this.runTimedOff(ids) : this.runTimedOn(ids);
-            if (off) {
+            SwitchTimes.mark("told");
+
+            if (off && !QUIET.get()) {
                 this.afterOff.accept(result.result());
+                SwitchTimes.mark("after off");
             }
             return result;
         } finally {
             LifecycleListeners.end(this.switcher::isOn);
+            SwitchTimes.mark("listeners told");
 
             OffModCommands.onWatched();
 
             if (!off && result != null) {
                 LiveUpdates.runWaitingEntrypoints(this.switcher::isOn);
                 runWaitingSetups(this.switcher::isOn);
+                SwitchTimes.mark("waiting setups");
             }
             this.tripwire.closeRide();
+            SwitchTimes.mark("ride closed");
             if (off) {
                 ResourceReload.forgetPausedReload();
             } else {
@@ -247,6 +253,7 @@ public final class SwitchRunner {
 
             this.switcher.hideProgress();
             this.switcher.setBusy(false);
+            SwitchTimes.mark("progress hidden");
             SwitchTimes.end((off ? "the off of " : "the on of ") + ids);
             endJournal(journal, result);
         }
