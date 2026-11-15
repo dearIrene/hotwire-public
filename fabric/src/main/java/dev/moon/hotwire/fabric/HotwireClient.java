@@ -36,7 +36,6 @@ import net.fabricmc.fabric.api.event.Event;
 import net.fabricmc.fabric.api.event.lifecycle.v1.ServerLifecycleEvents;
 import net.fabricmc.loader.api.FabricLoader;
 import net.minecraft.client.Minecraft;
-import net.minecraft.locale.Language;
 import net.minecraft.network.Connection;
 import net.minecraft.resources.Identifier;
 import org.jspecify.annotations.Nullable;
@@ -84,8 +83,8 @@ public final class HotwireClient implements ClientModInitializer {
                     }
                 }).orElse(null));
         Lang.useTranslator((key, values) -> {
-            Language language = Language.getInstance();
-            return language.has(key) ? Lang.fill(language.getOrDefault(key), values) : null;
+            String said = PackWords.find(key);
+            return said == null ? null : Lang.fill(said, values);
         });
 
         ClientCommandRegistrationCallback.EVENT.register((dispatcher, context) ->
