@@ -290,26 +290,36 @@ public final class SwitchCacheFiller {
 
     private void checkOneStep(int current) throws InterruptedException {
         int holding = Math.min(this.done.get(), this.steps.size());
-        if (holding == 0 || current != this.run.get()) {
+        if (holding == 0) {
             return;
         }
-        Step step = this.steps.get(ThreadLocalRandom.current().nextInt(holding));
+        boolean all = Boolean.parseBoolean(System.getProperty("hotwire.cacheAuditAll"));
+        List<Step> checked = all ? this.steps.subList(0, holding)
+                : List.of(this.steps.get(ThreadLocalRandom.current().nextInt(holding)));
         CachedMixes cache = this.applier.getRebuilder().getCache();
-        cache.setAuditing(true);
-        try {
-            this.applier.getRebuilder().takeConstructorsChanged();
-            String id = step.id();
-            if (!step.parts().isEmpty()) {
-                this.fillOffs(step);
-            } else if (id != null) {
-                this.fillOff(id);
+        for (Step step : checked) {
+            if (current != this.run.get()) {
+                return;
             }
-            this.fillOn(step.mods(), this.applier.getRebuilder().takeConstructorsChanged());
-        } finally {
-            cache.setAuditing(false);
+            cache.setAuditing(true);
+            try {
+                this.applier.getRebuilder().takeConstructorsChanged();
+                String id = step.id();
+                if (!step.parts().isEmpty()) {
+                    this.fillOffs(step);
+                } else if (id != null) {
+                    this.fillOff(id);
+                }
+                this.fillOn(step.mods(), this.applier.getRebuilder().takeConstructorsChanged());
+            } finally {
+                cache.setAuditing(false);
+            }
+            LOGGER.info("[Hotwire] the switch cache was held against a fresh mix for the off and on of {}: {}",
+                    step.mods(), cache.takeAudit());
         }
-        LOGGER.info("[Hotwire] the switch cache was held against a fresh mix for the off and on of {}: {}",
-                step.mods(), cache.takeAudit());
+        if (all) {
+            LOGGER.info("[Hotwire] the switch cache's audit of all {} steps is done", checked.size());
+        }
     }
 
     private void plan() {

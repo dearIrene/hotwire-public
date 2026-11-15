@@ -112,7 +112,7 @@ final class MixedCache {
         this.packs = new ClassPacks(store);
     }
 
-    private static final String KEYS = "mixed class 11";
+    private static final String KEYS = "mixed class 12";
 
     private static final Map<byte[], CacheKey> SHAPES = Collections.synchronizedMap(new WeakHashMap<>());
 
@@ -215,12 +215,11 @@ final class MixedCache {
             List<CacheKey> used = new ArrayList<>();
             used.add(key);
             CacheKey body = new CacheKey(in.readLong(), in.readLong());
-            byte[] mixed = this.packs.get(body, original);
+            byte[] mixed = this.packs.get(body, original, used);
             if (mixed == null) {
                 this.missedPack.incrementAndGet();
                 return null;
             }
-            used.add(body);
             this.count(used, key, original.length);
             Map<String, String> argsShapes = new LinkedHashMap<>();
             for (int count = in.readInt(); count > 0; count--) {
@@ -404,8 +403,7 @@ final class MixedCache {
         try (DataOutputStream out = new DataOutputStream(listed)) {
             out.writeLong(reads.high());
             out.writeLong(reads.low());
-            CacheKey body = this.packs.put(target, mixed, originals.get(target));
-            used.add(body);
+            CacheKey body = this.packs.put(target, mixed, originals.get(target), used);
             out.writeLong(body.high());
             out.writeLong(body.low());
             Map<String, String> shapes = findShapesUsed(mixed, made);
