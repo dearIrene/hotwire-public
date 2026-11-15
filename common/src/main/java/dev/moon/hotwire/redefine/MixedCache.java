@@ -192,6 +192,11 @@ final class MixedCache {
         return keys;
     }
 
+    void drop(CacheKey key) {
+        this.unwritten.remove(key);
+        this.store.remove(key);
+    }
+
     MixinCopy.@Nullable MixResult find(CacheKey key, String target, byte[] original) {
         Unwritten waiting = this.unwritten.get(key);
         if (waiting != null && this.isHoldingStill(waiting.reads())) {

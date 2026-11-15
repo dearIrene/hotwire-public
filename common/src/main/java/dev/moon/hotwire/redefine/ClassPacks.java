@@ -215,12 +215,7 @@ final class ClassPacks {
     }
 
     private static @Nullable ClassNode read(byte[] bytes) {
-        ClassNode node;
-        try {
-            node = ClassNodes.read(bytes, 0);
-        } catch (RuntimeException e) {
-            return null;
-        }
+        ClassNode node = ClassNodes.read(bytes, 0);
         return hasRawAttributes(node) ? null : node;
     }
 

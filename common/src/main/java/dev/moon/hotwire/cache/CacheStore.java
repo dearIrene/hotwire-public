@@ -13,9 +13,12 @@ import java.nio.file.StandardOpenOption;
 import java.util.ArrayList;
 import java.util.Comparator;
 import java.util.HashMap;
+import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
+import java.util.Set;
 import java.util.TreeMap;
+import java.util.concurrent.ConcurrentHashMap;
 import java.util.stream.Stream;
 import java.util.zip.CRC32C;
 import java.util.zip.DataFormatException;
@@ -27,12 +30,16 @@ import org.slf4j.LoggerFactory;
 
 public final class CacheStore {
     private static final Logger LOGGER = LoggerFactory.getLogger(CacheStore.class);
+
+    private static final Map<Path, CacheStore> OPEN = new ConcurrentHashMap<>();
     private static final int INDEX_MAGIC = 0x48574931;
     private static final int PACK_MAGIC = 0x48575031;
 
     private static final int RECORD = 16 + 4 + 8 + 4 + 4;
     private static final int HEADER = 4 + 4;
     private static final byte WITH_DICTIONARY = 1;
+
+    private static final byte VALUE_CHECKED = 2;
 
     private static final int MOST_PACKS = 16;
 
@@ -48,6 +55,7 @@ public final class CacheStore {
     private final Map<Integer, FileChannel> packs = new HashMap<>();
     private final Map<CacheKey, byte[]> pending = new TreeMap<>();
     private final Map<CacheKey, Byte> pendingFlags = new HashMap<>();
+    private final Map<CacheKey, Integer> pendingChecks = new HashMap<>();
     private int generation;
 
     private int start;
@@ -78,16 +86,27 @@ public final class CacheStore {
             store.lost = true;
             store.start = Math.max(store.start, 1);
         }
+        OPEN.put(folder.toAbsolutePath().normalize(), store);
         return store;
+    }
+
+    public static CacheStore of(Path folder, String kind) {
+        CacheStore open = OPEN.get(folder.toAbsolutePath().normalize());
+        return open != null ? open : open(folder, kind, Long.MAX_VALUE);
     }
 
     public byte @Nullable [] get(CacheKey key, byte @Nullable [] dictionary) {
         synchronized (this.lock) {
             byte[] waiting = this.pending.get(key);
             if (waiting != null) {
-                this.hits++;
                 byte flags = this.pendingFlags.getOrDefault(key, (byte) 0);
-                return expand(waiting, flags == WITH_DICTIONARY ? dictionary : null);
+                byte[] value = expand(waiting, (flags & WITH_DICTIONARY) != 0 ? dictionary : null);
+                if (value == null || check(value) != this.pendingChecks.getOrDefault(key, 0)) {
+                    this.misses++;
+                    return null;
+                }
+                this.hits++;
+                return value;
             }
             Place place = this.places.get(key);
             if (place == null) {
@@ -128,9 +147,27 @@ public final class CacheStore {
                 return 0;
             }
             this.pending.put(key, packed);
-            this.pendingFlags.put(key, dictionary == null ? 0 : WITH_DICTIONARY);
+            this.pendingFlags.put(key, (byte) (VALUE_CHECKED | (dictionary == null ? 0 : WITH_DICTIONARY)));
+            this.pendingChecks.put(key, check(value));
         }
         return packed.length + 5;
+    }
+
+    public void remove(CacheKey key) {
+        synchronized (this.lock) {
+            this.pending.remove(key);
+            this.pendingFlags.remove(key);
+            this.pendingChecks.remove(key);
+            if (this.places.remove(key) != null) {
+                this.used = true;
+            }
+        }
+    }
+
+    private static int check(byte[] value) {
+        CRC32C crc = new CRC32C();
+        crc.update(value);
+        return (int) crc.getValue();
     }
 
     public void setCapBytes(long capBytes) {
@@ -156,8 +193,16 @@ public final class CacheStore {
     // an AI, violates the license. This notice must not be removed under any circumstance.
 
     public void flush() {
+        this.writeLocked(false);
+    }
+
+    public void trim() {
+        this.writeLocked(true);
+    }
+
+    private void writeLocked(boolean trimming) {
         synchronized (this.lock) {
-            if (this.pending.isEmpty() && !this.used) {
+            if (!trimming && this.pending.isEmpty() && !this.used) {
                 return;
             }
             try (FileChannel lockFile = FileChannel.open(this.folder.resolve(this.kind + ".lock"),
@@ -165,9 +210,13 @@ public final class CacheStore {
                 FileLock fileLock = lockFile.lock();
                 try {
                     this.mergeHead();
+                    if (trimming && sumBytes(this.places) <= this.capBytes) {
+                        return;
+                    }
                     this.write(false);
                     this.pending.clear();
                     this.pendingFlags.clear();
+                    this.pendingChecks.clear();
                     this.used = false;
                 } finally {
                     fileLock.release();
@@ -188,6 +237,7 @@ public final class CacheStore {
                     this.places.clear();
                     this.pending.clear();
                     this.pendingFlags.clear();
+                    this.pendingChecks.clear();
                     this.write(true);
                     this.used = false;
                 } finally {
@@ -264,12 +314,12 @@ public final class CacheStore {
             byte flags = at.get();
             byte[] packed = new byte[place.length()];
             at.get(packed);
-            CRC32C check = new CRC32C();
-            check.update(packed);
-            if ((int) check.getValue() != crc) {
+            boolean valueChecked = (flags & VALUE_CHECKED) != 0;
+            if (!valueChecked && check(packed) != crc) {
                 return null;
             }
-            return expand(packed, flags == WITH_DICTIONARY ? dictionary : null);
+            byte[] value = expand(packed, (flags & WITH_DICTIONARY) != 0 ? dictionary : null);
+            return value == null || (valueChecked && check(value) != crc) ? null : value;
         } catch (RuntimeException e) {
             return null;
         }
@@ -315,9 +365,7 @@ public final class CacheStore {
         }
         for (Map.Entry<CacheKey, byte[]> entry : this.pending.entrySet()) {
             byte[] packed = entry.getValue();
-            CRC32C crc = new CRC32C();
-            crc.update(packed);
-            ByteBuffer entryHeader = ByteBuffer.allocate(5).putInt((int) crc.getValue())
+            ByteBuffer entryHeader = ByteBuffer.allocate(5).putInt(this.pendingChecks.getOrDefault(entry.getKey(), 0))
                     .put(this.pendingFlags.getOrDefault(entry.getKey(), (byte) 0));
             written.put(entry.getKey(), new Place(next, pack.size(), packed.length, this.start));
             pack.write(entryHeader.array());
@@ -341,7 +389,7 @@ public final class CacheStore {
         this.places.putAll(written);
         this.bytes = sumBytes(written);
         this.lost = false;
-        this.dropUnused(before, compact);
+        this.dropUnused(before);
     }
 
     private byte @Nullable [] readRaw(Place place) {
@@ -366,27 +414,36 @@ public final class CacheStore {
         }
     }
 
-    private void dropUnused(int before, boolean compacted) {
+    private void dropUnused(int before) {
+        Set<Integer> named = new HashSet<>();
+        this.places.values().forEach(place -> named.add(place.pack()));
+        List<Path> listed;
         try (Stream<Path> files = Files.list(this.folder)) {
-            for (Path file : files.toList()) {
-                String name = file.getFileName().toString();
-                if (!name.startsWith(this.kind + ".")) {
-                    continue;
-                }
+            listed = files.toList();
+        } catch (IOException | RuntimeException e) {
+            LOGGER.debug("[Hotwire] old {} cache files stay until the next flush (from {}): {}", this.kind, before,
+                    e.toString());
+            return;
+        }
+        for (Path file : listed) {
+            String name = file.getFileName().toString();
+            if (!name.startsWith(this.kind + ".")) {
+                continue;
+            }
+            try {
                 boolean oldIndex = name.endsWith(".idx") && !name.equals(this.kind + "." + this.generation + ".idx");
-                boolean oldPack = compacted && name.endsWith(".pack")
-                        && !name.equals(this.kind + "." + this.generation + ".pack");
-                if (oldIndex || oldPack) {
-                    FileChannel open = oldPack ? this.packs.remove(this.parseGeneration(name)) : null;
+                boolean deadPack = name.endsWith(".pack") && !named.contains(this.parseGeneration(name));
+                if (oldIndex || deadPack || name.endsWith(".tmp")) {
+                    FileChannel open = deadPack ? this.packs.remove(this.parseGeneration(name)) : null;
                     if (open != null) {
                         open.close();
                     }
                     Files.deleteIfExists(file);
                 }
+            } catch (IOException | RuntimeException e) {
+                LOGGER.debug("[Hotwire] the old {} cache file {} stays until the next flush: {}", this.kind, name,
+                        e.toString());
             }
-        } catch (IOException | RuntimeException e) {
-            LOGGER.debug("[Hotwire] old {} cache files stay until the next flush (from {}): {}", this.kind, before,
-                    e.toString());
         }
     }
 

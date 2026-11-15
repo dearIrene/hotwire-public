@@ -19,6 +19,7 @@ import java.util.concurrent.ExecutionException;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
 import java.util.concurrent.Future;
+import java.util.concurrent.atomic.AtomicInteger;
 import java.util.concurrent.atomic.LongAdder;
 import java.util.function.BooleanSupplier;
 import org.jspecify.annotations.Nullable;
@@ -38,6 +39,10 @@ public final class CachedMixes {
     private final MixinCopy copy;
     private volatile @Nullable MixedCache cache;
 
+    private volatile boolean auditing;
+    private final AtomicInteger audited = new AtomicInteger();
+    private final AtomicInteger auditedWrong = new AtomicInteger();
+
     private final LongAdder keysNanos = new LongAdder();
     private final LongAdder readNanos = new LongAdder();
     private final LongAdder copyNanos = new LongAdder();
@@ -55,6 +60,15 @@ public final class CachedMixes {
         @Nullable Boolean ask(String config, String target, String mixin);
     }
 
+    public void setAuditing(boolean on) {
+        this.auditing = on;
+    }
+
+    public String takeAudit() {
+        return this.audited.getAndSet(0) + " classes, " + this.auditedWrong.getAndSet(0)
+                + " differed and are made again";
+    }
+
     public long getBytes() {
         MixedCache known = this.cache;
         return known == null ? 0 : known.getBytes();
@@ -69,6 +83,13 @@ public final class CachedMixes {
         MixedCache known = this.cache;
         if (known != null) {
             known.getStore().setCapBytes(bytes);
+        }
+    }
+
+    public void trim() {
+        MixedCache known = this.cache;
+        if (known != null) {
+            known.getStore().trim();
         }
     }
 
@@ -170,7 +191,15 @@ public final class CachedMixes {
         Set<String> toMix = new LinkedHashSet<>(targets);
         if (known != null) {
             keys.forEach((target, key) -> {
-                MixinCopy.MixResult part = known.find(key, target, Objects.requireNonNull(classes.get(target)));
+                MixinCopy.MixResult part;
+                try {
+                    part = known.find(key, target, Objects.requireNonNull(classes.get(target)));
+                } catch (RuntimeException e) {
+                    LOGGER.warn("[Hotwire] the switch cache's entry for {} could not be read and is made again: {}",
+                            target, e.toString());
+                    known.drop(key);
+                    part = null;
+                }
                 if (part != null) {
                     parts.add(part);
                     readBack.putAll(part.classes());
@@ -188,8 +217,24 @@ public final class CachedMixes {
                     + " decides for ({})", readBack.size(), targets.size(), keys.size() - readBack.size(),
                     missed.isEmpty() ? "" : " " + missed, targets.size() - keys.size(), known.describe());
 
-            if (!readBack.isEmpty() && Boolean.parseBoolean(System.getProperty("hotwire.cacheVerify"))) {
-                verify(readBack, this.copy.mixAll(readBack.keySet(), classes, resources, configs, stop));
+            boolean audit = this.auditing;
+            if (!readBack.isEmpty() && (audit || Boolean.parseBoolean(System.getProperty("hotwire.cacheVerify")))) {
+                List<String> differ = verify(readBack, this.copy.mixAll(readBack.keySet(), classes, resources,
+                        configs, stop));
+                if (audit) {
+                    this.audited.addAndGet(readBack.size());
+                    this.auditedWrong.addAndGet(differ.size());
+                    for (String name : differ) {
+                        CacheKey key = keys.get(name);
+                        if (key != null) {
+                            known.drop(key);
+                        }
+                    }
+                    if (!differ.isEmpty()) {
+                        LOGGER.warn("[Hotwire] the switch cache gave {} classes a fresh mix makes differently; their"
+                                + " entries are made again: {}", differ.size(), differ);
+                    }
+                }
             }
         }
         if (!toMix.isEmpty()) {
@@ -286,7 +331,7 @@ public final class CachedMixes {
         this.saveNanos.reset();
     }
 
-    private static void verify(Map<String, byte[]> readBack, MixinCopy.MixResult fresh) {
+    private static List<String> verify(Map<String, byte[]> readBack, MixinCopy.MixResult fresh) {
         List<String> numbers = new ArrayList<>();
         List<String> differ = new ArrayList<>();
         fresh.classes().forEach((name, bytes) -> {
@@ -306,5 +351,6 @@ public final class CachedMixes {
         });
         LOGGER.info("[Hotwire] cache verify: {} classes, {} in Mixin's numbers alone, {} differ {}",
                 fresh.classes().size(), numbers.size(), differ.size(), differ);
+        return differ;
     }
 }

@@ -19,6 +19,7 @@ import java.util.Map;
 import java.util.Objects;
 import java.util.Set;
 import java.util.TreeSet;
+import java.util.concurrent.ThreadLocalRandom;
 import java.util.concurrent.atomic.AtomicInteger;
 import java.util.concurrent.atomic.AtomicLong;
 import java.util.function.BooleanSupplier;
@@ -229,6 +230,7 @@ public final class SwitchCacheFiller {
                 LOGGER.info("[Hotwire] the switch cache heals nothing: {} of {} steps hold", this.done.get(),
                         this.steps.size());
                 this.healing = false;
+                this.checkOneStep(current);
                 return;
             }
             LOGGER.info("[Hotwire] the switch cache heals {} of {} steps, which a mod's change undid",
@@ -284,6 +286,30 @@ public final class SwitchCacheFiller {
                 + " steps {}", this.done.get(), planned.size(), mixed, (System.nanoTime() - began) / 1_000_000,
                 this.classes, this.bytes, (planEnd - began) / 1_000_000, (looked - planEnd) / 1_000_000, times[0],
                 times[1], times[2], times[3], work - times[0] - times[1] - times[2] - times[3]);
+    }
+
+    private void checkOneStep(int current) throws InterruptedException {
+        int holding = Math.min(this.done.get(), this.steps.size());
+        if (holding == 0 || current != this.run.get()) {
+            return;
+        }
+        Step step = this.steps.get(ThreadLocalRandom.current().nextInt(holding));
+        CachedMixes cache = this.applier.getRebuilder().getCache();
+        cache.setAuditing(true);
+        try {
+            this.applier.getRebuilder().takeConstructorsChanged();
+            String id = step.id();
+            if (!step.parts().isEmpty()) {
+                this.fillOffs(step);
+            } else if (id != null) {
+                this.fillOff(id);
+            }
+            this.fillOn(step.mods(), this.applier.getRebuilder().takeConstructorsChanged());
+        } finally {
+            cache.setAuditing(false);
+        }
+        LOGGER.info("[Hotwire] the switch cache was held against a fresh mix for the off and on of {}: {}",
+                step.mods(), cache.takeAudit());
     }
 
     private void plan() {
