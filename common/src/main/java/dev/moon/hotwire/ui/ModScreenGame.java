@@ -59,6 +59,10 @@ public interface ModScreenGame {
 
     void applyProfile(String name, ProfileStore.ProfilePlan plan);
 
+    default @Nullable String findJoinedAddress() {
+        return null;
+    }
+
     String report();
 
     default void openLink(String link) {

@@ -71,7 +71,8 @@ final class ModsPage implements ProfileMenu.Screen {
         this.search = new TextField(Lang.get("hotwire.screen.search"), this::onSearched, this::switchPicked,
                 screen::leave);
         SHOWS.forEach(choice -> this.show.tab(choice.getLabel()));
-        this.profiles = new ProfileMenu(store, this, root, this.search, this.show, this.popup);
+        this.profiles = new ProfileMenu(store, this, root, this.search, this.show, this.popup,
+                screen::openProfiles);
         this.rows = new Rows<ModRow>(shown -> shown.mod().id(), this::makeRow, ROW, 2)
                 .mark(shown -> this.model.getPicked().contains(shown.mod().id()));
         root.getMenus().add(this.popup);

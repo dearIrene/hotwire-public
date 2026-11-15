@@ -169,6 +169,7 @@ public final class HotwireClient implements ClientModInitializer {
             InWorldWork.lookAheadSoon(started);
             InWorldWork.fillCacheSoon(started);
             started.showUpdateInChat();
+            started.offerProfileHere();
 
             OffModCommands.takeOut(id -> !started.isOn(id));
         }

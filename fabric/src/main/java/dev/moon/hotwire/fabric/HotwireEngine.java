@@ -39,6 +39,8 @@ import dev.moon.hotwire.ui.LastSwitch;
 import dev.moon.hotwire.ui.LoadingScreen;
 import dev.moon.hotwire.ui.ModScreen;
 import dev.moon.hotwire.ui.ModScreenGame;
+import dev.moon.hotwire.ui.Notice;
+import dev.moon.hotwire.ui.Notices;
 import dev.moon.hotwire.ui.Progress;
 import dev.moon.hotwire.ui.SettingsSection;
 import dev.moon.hotwire.ui.StoreCacheView;
@@ -68,6 +70,7 @@ import java.util.function.Consumer;
 import net.fabricmc.loader.api.FabricLoader;
 import net.minecraft.client.Minecraft;
 import net.minecraft.client.gui.screens.Screen;
+import net.minecraft.client.multiplayer.ServerData;
 import net.minecraft.client.resources.sounds.SimpleSoundInstance;
 import net.minecraft.client.server.IntegratedServer;
 import net.minecraft.sounds.SoundEvent;
@@ -601,6 +604,39 @@ public final class HotwireEngine implements ModScreenGame, AutoCloseable {
             SwitchHistory.get().recordDone(on.result(), SwitchHistory.Cause.PROFILE, name);
             return on;
         });
+    }
+
+    @Override
+    public @Nullable String findJoinedAddress() {
+        Minecraft game = Minecraft.getInstance();
+        ServerData server = game.getCurrentServer();
+        if (server != null) {
+            return server.ip;
+        }
+        return game.hasSingleplayerServer() ? ProfileStore.SINGLEPLAYER : null;
+    }
+
+    void offerProfileHere() {
+        String address = this.findJoinedAddress();
+        String name = address == null ? null : this.profiles.findFor(address);
+        if (name == null) {
+            return;
+        }
+        ModCatalog catalog = this.getCatalog();
+        List<String> ids = new ArrayList<>();
+        for (ModStatus mod : this.getMods()) {
+            if (!catalog.isHidden(mod.id()) && !catalog.isLibrary(mod.id())) {
+                ids.add(mod.id());
+            }
+        }
+        ProfileStore.ProfilePlan plan = this.profiles.planFor(name, ids, this::isOn);
+        if (plan.isEmpty()) {
+            return;
+        }
+        Notices.show(Notice.ofAsk(Lang.get("hotwire.profiles.offer", name),
+                Lang.get("hotwire.profiles.offer_how", plan.describe()))
+                .withAction(new Notice.Action(Lang.get("hotwire.profiles.offer_apply"),
+                        () -> this.applyProfile(name, plan))).makeResting(15));
     }
 
     @Override

@@ -7,7 +7,6 @@ import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Set;
 import java.util.function.Predicate;
-import org.jspecify.annotations.Nullable;
 
 final class ProfileMenu {
     interface Screen {
@@ -30,17 +29,19 @@ final class ProfileMenu {
     private final TextField search;
     private final Element showMenu;
     private final Popup popup;
+    private final Runnable manage;
     private List<Popup.Item> items = List.of();
-    private @Nullable String renaming;
     private boolean nameMode;
 
-    ProfileMenu(ProfileStore profiles, Screen screen, Root root, TextField search, Element showMenu, Popup popup) {
+    ProfileMenu(ProfileStore profiles, Screen screen, Root root, TextField search, Element showMenu, Popup popup,
+            Runnable manage) {
         this.profiles = profiles;
         this.screen = screen;
         this.root = root;
         this.search = search;
         this.showMenu = showMenu;
         this.popup = popup;
+        this.manage = manage;
         this.naming = new TextField(Lang.get("hotwire.setup.name_hint"), text -> { }, this::onNamed, this::stopNaming);
         this.naming.setVisible(false);
     }
@@ -75,14 +76,8 @@ final class ProfileMenu {
             items.add(new Popup.Item(name + "  " + (now ? Lang.get("hotwire.setup.current") : plan.describe()),
                     now ? Palette.ON : Palette.TEXT, () -> this.apply(name)));
         }
-        items.add(new Popup.Item(Lang.get("hotwire.setup.save"), Palette.TEXT, () -> this.startNaming(null)));
-        if (current != null) {
-            String named = current;
-            items.add(new Popup.Item(Lang.get("hotwire.setup.rename", named), Palette.TEXT,
-                    () -> this.startNaming(named)));
-        }
-        names.forEach(name -> items.add(new Popup.Item(Lang.get("hotwire.setup.delete", name), Palette.BAD,
-                () -> this.delete(name))));
+        items.add(new Popup.Item(Lang.get("hotwire.setup.save"), Palette.TEXT, this::startNaming));
+        items.add(new Popup.Item(Lang.get("hotwire.setup.manage"), Palette.TEXT, this.manage));
         this.items = items;
         this.menu.label(current == null ? Lang.get("hotwire.setup.unsaved") : current);
     }
@@ -96,26 +91,14 @@ final class ProfileMenu {
         this.screen.applyProfile(name, plan);
     }
 
-    private void delete(String name) {
-        try {
-            this.profiles.delete(name);
-            this.screen.showMessage(Lang.get("hotwire.setup.deleted", name), false);
-        } catch (IOException e) {
-            this.screen.showMessage(Lang.get("hotwire.setup.delete_failed", name, e.getMessage()), true);
-        }
-        this.screen.refilter();
-    }
-
-    private void startNaming(@Nullable String renaming) {
-        this.renaming = renaming;
+    private void startNaming() {
         this.nameMode = true;
         this.menu.setVisible(false);
         this.showMenu.setVisible(false);
         this.naming.setVisible(true);
-        this.naming.setText(renaming == null ? "" : renaming);
+        this.naming.setText("");
         this.root.focus(this.naming);
-        this.screen.showMessage(renaming == null ? Lang.get("hotwire.setup.name_prompt")
-                : Lang.get("hotwire.setup.rename_prompt", renaming), false);
+        this.screen.showMessage(Lang.get("hotwire.setup.name_prompt"), false);
     }
 
     private void stopNaming() {
@@ -132,19 +115,12 @@ final class ProfileMenu {
         if (name.isEmpty()) {
             return;
         }
-        String from = this.renaming;
         this.stopNaming();
         try {
-            if (from == null) {
-                Set<String> on = new LinkedHashSet<>();
-                this.screen.getRelevantIds().stream().filter(this.screen::isOn).forEach(on::add);
-                this.profiles.save(name, on);
-                this.screen.showMessage(Lang.get("hotwire.setup.saved", name, on.size()), false);
-            } else if (this.profiles.rename(from, name)) {
-                this.screen.showMessage(Lang.get("hotwire.setup.renamed", name), false);
-            } else {
-                this.screen.showMessage(Lang.get("hotwire.setup.name_taken", name), true);
-            }
+            Set<String> on = new LinkedHashSet<>();
+            this.screen.getRelevantIds().stream().filter(this.screen::isOn).forEach(on::add);
+            this.profiles.save(name, on);
+            this.screen.showMessage(Lang.get("hotwire.setup.saved", name, on.size()), false);
         } catch (IOException e) {
             this.screen.showMessage(Lang.get("hotwire.setup.save_failed", name, e.getMessage()), true);
         }

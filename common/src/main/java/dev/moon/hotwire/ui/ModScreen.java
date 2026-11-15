@@ -43,6 +43,7 @@ public final class ModScreen implements JarHost {
     private final List<Element> panels;
     private final ReopenPanel reopenPanel;
     private final AlsoOffPanel alsoOffPanel;
+    private final ProfilesPanel profilesPanel;
     private final CarriedPanel carriedPanel;
     final SettingsPage settings;
     private final ReportPage report;
@@ -108,6 +109,7 @@ public final class ModScreen implements JarHost {
             this.game.cancelReopen();
         });
         this.alsoOffPanel = new AlsoOffPanel(game::turnOff, this::callOff, game.getProgress(), game::findIcon);
+        this.profilesPanel = new ProfilesPanel(profiles, this.mods, game::findJoinedAddress, this::closePanels);
         this.carriedPanel = new CarriedPanel(ids -> {
             this.closePanels();
             this.turnOffAsking(ids);
@@ -133,7 +135,7 @@ public final class ModScreen implements JarHost {
 
         this.panels = List.of(this.findBroken, this.addPanel, this.updatePanel, this.progress,
                 this.reopenPanel, this.carriedPanel, this.alsoOffPanel, this.firstOpen, this.tour,
-                this.selfUpdate);
+                this.selfUpdate, this.profilesPanel);
         this.panels.forEach(this.root.getModal()::add);
         this.root.getModal().add(this.closePanel);
         this.root.getModal().add(this.updateSummary);
@@ -599,6 +601,11 @@ public final class ModScreen implements JarHost {
     private void callOff() {
         this.closePanels();
         this.mods.clearWishes();
+    }
+
+    void openProfiles() {
+        this.closePanels();
+        this.profilesPanel.present();
     }
 
     void closePanels() {
