@@ -16,6 +16,7 @@ import java.security.CodeSource;
 import java.security.MessageDigest;
 import java.security.NoSuchAlgorithmException;
 import java.util.ArrayList;
+import java.util.Collections;
 import java.util.HashMap;
 import java.util.HashSet;
 import java.util.List;
@@ -31,7 +32,7 @@ import java.util.function.BiFunction;
 import java.util.function.BooleanSupplier;
 import java.util.function.Function;
 import java.util.zip.ZipEntry;
-import java.util.zip.ZipInputStream;
+import java.util.zip.ZipFile;
 import org.jspecify.annotations.Nullable;
 import org.objectweb.asm.ClassReader;
 import org.objectweb.asm.ClassWriter;
@@ -204,12 +205,15 @@ public final class MixinCopy implements AutoCloseable {
     }
 
     private static void addEntryCode(MessageDigest digest, Path own) throws IOException {
-        try (ZipInputStream zip = new ZipInputStream(Files.newInputStream(own))) {
-            for (ZipEntry entry = zip.getNextEntry(); entry != null; entry = zip.getNextEntry()) {
+        try (ZipFile zip = new ZipFile(own.toFile())) {
+            for (ZipEntry entry : Collections.list(zip.entries())) {
                 String name = entry.getName();
                 if (isEntryCode(name)) {
                     digest.update(name.getBytes(StandardCharsets.UTF_8));
-                    byte[] bytes = zip.readAllBytes();
+                    byte[] bytes;
+                    try (InputStream in = zip.getInputStream(entry)) {
+                        bytes = in.readAllBytes();
+                    }
                     digest.update(name.endsWith(".class") ? stripDebug(bytes) : bytes);
                 }
             }
