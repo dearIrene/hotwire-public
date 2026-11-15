@@ -36,10 +36,13 @@ public final class ReportBundle {
             "(?i)\\b[0-9a-f]{8}-?[0-9a-f]{4}-?[0-9a-f]{4}-?[0-9a-f]{4}-?[0-9a-f]{12}\\b");
     private static final Pattern IP_WITH_PORT = Pattern.compile("\\b\\d{1,3}(\\.\\d{1,3}){3}:\\d{1,5}\\b");
 
+    private static final Pattern CONNECTING = Pattern.compile("(?i)(Connecting to )[^\\r\\n]+");
+
     private static final Pattern HOME = Pattern.compile("(?i)([a-z]:[\\\\/]+users[\\\\/]+|/home/|/Users/)"
             + "(?:[^\\\\/\\r\\n\"':]+?(?=[\\\\/])|[^\\\\/\\s\"':]+)");
     private static final Pattern USER_VARIABLE = Pattern.compile(
-            "(?im)^(\\s*(?:USERNAME|USER|LOGNAME|HOME|USERPROFILE)\\s*=\\s*).+$");
+            "(?im)^(\\s*(?:USERNAME|USER|LOGNAME|HOME|USERPROFILE|COMPUTERNAME|HOSTNAME|USERDOMAIN\\w*"
+                    + "|LOGONSERVER)\\s*=\\s*).+$");
 
     private static final Pattern CHAT = Pattern.compile("\\[CHAT\\](?! \\[Hotwire\\])");
 
@@ -84,6 +87,7 @@ public final class ReportBundle {
         out = JWT.matcher(out).replaceAll("[removed]");
         out = KEY_VALUE.matcher(out).replaceAll("$1$2[removed]");
         out = UUID.matcher(out).replaceAll("[id]");
+        out = CONNECTING.matcher(out).replaceAll("$1[address]");
         out = IP_WITH_PORT.matcher(out).replaceAll("[address]");
         out = HOME.matcher(out).replaceAll("$1[user]");
         out = USER_VARIABLE.matcher(out).replaceAll("$1[removed]");

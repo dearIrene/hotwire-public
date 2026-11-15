@@ -63,8 +63,12 @@ public final class ModrinthClient {
     public record Version(String id, String projectId, String number, String name, String fileName, String url,
             String sha512, long size, List<String> gameVersions, List<String> requiredProjects, String changelog) {
         public Path resolveIn(Path folder) {
-            return folder.resolve(this.id.replaceAll("[^A-Za-z0-9._+ -]", "_"))
-                    .resolve(this.fileName.replaceAll("[^A-Za-z0-9._+ -]", "_"));
+            return folder.resolve(cleanName(this.id)).resolve(cleanName(this.fileName));
+        }
+
+        private static String cleanName(String name) {
+            String cleaned = name.replaceAll("[^A-Za-z0-9._+ -]", "_");
+            return cleaned.isBlank() || cleaned.matches("[. ]+") ? "_" : cleaned;
         }
     }
 
@@ -98,6 +102,8 @@ public final class ModrinthClient {
     }
 
     public static final int MOST_PICTURE_BYTES = 8 * 1024 * 1024;
+
+    private static final int MOST_BYTES_IN_MEMORY = 256 * 1024 * 1024;
 
     public enum Kind {
         MOD("mod"), RESOURCE_PACK("resourcepack"), SHADER("shader"), DATA_PACK("datapack");
@@ -553,6 +559,11 @@ public final class ModrinthClient {
                             return out.toByteArray();
                         }
                     } catch (TimeoutException e) {
+                        if (out.size() > MOST_BYTES_IN_MEMORY) {
+                            pending.cancel(true);
+                            throw new IOException(url + " went on past " + MOST_BYTES_IN_MEMORY / (1024 * 1024)
+                                    + " MB");
+                        }
                         if (System.nanoTime() - heard.get() > STALL.toNanos()) {
                             pending.cancel(true);
                             throw new StalledException("nothing of " + url + " arrived for " + STALL.toSeconds()

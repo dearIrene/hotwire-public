@@ -3,12 +3,14 @@ package dev.moon.hotwire.mixin_copy;
 import java.io.IOException;
 import java.nio.file.DirectoryStream;
 import java.nio.file.Files;
+import java.nio.file.LinkOption;
 import java.nio.file.Path;
 import java.nio.file.StandardCopyOption;
 import java.security.MessageDigest;
 import java.security.NoSuchAlgorithmException;
 import java.time.Duration;
 import java.time.Instant;
+import java.util.Arrays;
 import java.util.HexFormat;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -27,20 +29,30 @@ final class MixinCopyJar {
         Path folder = Path.of(System.getProperty("java.io.tmpdir"));
         byte[] hash = MessageDigest.getInstance("SHA-256").digest(bytes);
         Path jar = folder.resolve(COPY_PREFIX + "-" + HexFormat.of().formatHex(hash, 0, HASH_BYTES) + ".jar");
-        if (!Files.isRegularFile(jar) || Files.size(jar) != bytes.length) {
+
+        if (!isSame(jar, bytes)) {
             Path part = Files.createTempFile(folder, COPY_PREFIX + "-part", ".tmp");
             try {
                 Files.write(part, bytes);
                 Files.move(part, jar, StandardCopyOption.REPLACE_EXISTING);
             } catch (IOException e) {
                 Files.deleteIfExists(part);
-                if (!Files.isRegularFile(jar) || Files.size(jar) != bytes.length) {
+                if (!isSame(jar, bytes)) {
                     throw e;
                 }
             }
         }
         removeOldCopies(folder, jar);
         return jar;
+    }
+
+    private static boolean isSame(Path jar, byte[] bytes) {
+        try {
+            return Files.isRegularFile(jar, LinkOption.NOFOLLOW_LINKS) && Files.size(jar) == bytes.length
+                    && Arrays.equals(Files.readAllBytes(jar), bytes);
+        } catch (IOException e) {
+            return false;
+        }
     }
 
     private static void removeOldCopies(Path folder, Path current) {

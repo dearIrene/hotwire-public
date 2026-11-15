@@ -7,6 +7,7 @@ import java.util.Arrays;
 import org.jspecify.annotations.Nullable;
 
 public final class WebpLossless {
+    private static final long MOST_PIXELS = 16_000_000;
     private static final int MAGIC = 0x2f;
     private static final int CODE_LENGTH_CODES = 19;
     private static final int[] CODE_LENGTH_ORDER = {17, 18, 0, 1, 2, 3, 4, 5, 16, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15};
@@ -202,6 +203,10 @@ public final class WebpLossless {
             }
             this.width = this.bits.read(14) + 1;
             this.height = this.bits.read(14) + 1;
+
+            if ((long) this.width * this.height > MOST_PIXELS) {
+                throw new IOException("a WebP of " + this.width + " by " + this.height + " is too large");
+            }
             this.bits.read(1);
             if (this.bits.read(3) != 0) {
                 throw new IOException("a lossless WebP of a version this reader does not know");

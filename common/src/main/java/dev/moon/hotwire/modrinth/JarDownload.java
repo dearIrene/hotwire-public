@@ -93,7 +93,7 @@ final class JarDownload {
                 throw new IOException("interrupted", e);
             }
             try {
-                this.request(url, part, at, onBytes);
+                this.request(url, size, part, at, onBytes);
                 last = new IOException(url + " stopped at byte " + at.get() + " of " + size);
             } catch (IOException e) {
                 last = e;
@@ -110,7 +110,8 @@ final class JarDownload {
         }
     }
 
-    private void request(String url, FileChannel part, AtomicLong at, LongConsumer onBytes) throws IOException {
+    private void request(String url, long size, FileChannel part, AtomicLong at, LongConsumer onBytes)
+            throws IOException {
         long from = at.get();
         HttpRequest.Builder request = HttpRequest.newBuilder(URI.create(url)).header("User-Agent", this.agent)
                 .timeout(this.timeout).GET();
@@ -120,7 +121,8 @@ final class JarDownload {
         AtomicLong heard = new AtomicLong(System.nanoTime());
         CompletableFuture<HttpResponse<Long>> pending = this.http.sendAsync(request.build(), info ->
                 info.statusCode() == 206 || (info.statusCode() == 200 && from == 0)
-                        ? new IntoFile(part, at, onBytes, heard) : HttpResponse.BodySubscribers.replacing(-1L));
+                        ? new IntoFile(part, at, size, onBytes, heard)
+                        : HttpResponse.BodySubscribers.replacing(-1L));
         try {
             while (true) {
                 try {
@@ -163,14 +165,17 @@ final class JarDownload {
     private static final class IntoFile implements HttpResponse.BodySubscriber<Long> {
         private final FileChannel part;
         private final AtomicLong at;
+
+        private final long size;
         private final LongConsumer onBytes;
         private final AtomicLong heard;
         private final CompletableFuture<Long> done = new CompletableFuture<>();
         private Flow.@Nullable Subscription subscription;
 
-        IntoFile(FileChannel part, AtomicLong at, LongConsumer onBytes, AtomicLong heard) {
+        IntoFile(FileChannel part, AtomicLong at, long size, LongConsumer onBytes, AtomicLong heard) {
             this.part = part;
             this.at = at;
+            this.size = size;
             this.onBytes = onBytes;
             this.heard = heard;
         }
@@ -187,6 +192,9 @@ final class JarDownload {
             try {
                 for (ByteBuffer buffer : buffers) {
                     long position = this.at.get();
+                    if (position + buffer.remaining() > this.size) {
+                        throw new IOException("the download went on past its " + this.size + " bytes");
+                    }
                     while (buffer.hasRemaining()) {
                         position += this.part.write(buffer, position);
                     }
