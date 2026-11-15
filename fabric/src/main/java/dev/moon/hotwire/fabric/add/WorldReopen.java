@@ -138,6 +138,9 @@ public final class WorldReopen {
     }
 
     public static <T> T runAround(Supplier<T> add) throws InterruptedException {
+        //? if <1.21.5 {
+        /*ResourceReload.awaitIdle();
+        *///?}
         Minecraft client = Minecraft.getInstance();
         if (isLeftOnly()) {
             leave(client);
