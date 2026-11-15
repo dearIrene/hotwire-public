@@ -8,6 +8,7 @@ import java.io.ByteArrayOutputStream;
 import java.io.DataInputStream;
 import java.io.DataOutputStream;
 import java.io.IOException;
+import java.nio.ByteBuffer;
 import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
 import java.nio.file.Path;
@@ -30,7 +31,7 @@ import org.slf4j.LoggerFactory;
 
 public final class SiteCache {
     private static final Logger LOGGER = LoggerFactory.getLogger(SiteCache.class);
-    private static final String RECIPE = "call sites 2";
+    private static final String RECIPE = "call sites 3";
 
     private static volatile @Nullable SiteCache active;
     private static volatile @Nullable SiteCache opened;
@@ -96,7 +97,9 @@ public final class SiteCache {
         CacheKey key = CacheKey.of(RECIPE).add(this.stamp.high()).add(this.stamp.low()).add(internalName)
                 .add(names.findPlainHash()).build();
         long keyed = System.nanoTime();
-        byte[] saved = this.store.get(key, null);
+        byte[] named = this.store.get(key, null);
+        byte[] saved = named == null || named.length != 2 * Long.BYTES ? null
+                : this.store.get(readKey(named), null);
         long read = System.nanoTime();
         Fit fit = saved == null ? null : fit(saved, names);
         StartTimes.add("call sites: tell the class from its last start", began, keyed);
@@ -108,9 +111,26 @@ public final class SiteCache {
             return fit.getBytes();
         }
         byte[] sited = HandlerGuards.rewriteOrThrow(internalName, bytes, true);
-        this.store.put(key, pack(names, sited), null);
+
+        long sitesHash = 0;
+        if (sited != null) {
+            MixedNames sitedNames = MixedNames.read(sited);
+            sitesHash = sitedNames == null ? CacheKey.of("whole").add(sited).build().low() : sitedNames.findPlainHash();
+        }
+        CacheKey sites = CacheKey.of("call sites of 1").add(internalName).add(names.findPlainHash()).add(sitesHash)
+                .add(sited == null ? 0L : 1L).build();
+        if (this.store.findSize(sites) == 0) {
+            this.store.put(sites, pack(names, sited), null);
+        }
+        this.store.put(key, ByteBuffer.allocate(2 * Long.BYTES).putLong(sites.high()).putLong(sites.low()).array(),
+                null);
         this.made.incrementAndGet();
         return sited;
+    }
+
+    private static CacheKey readKey(byte[] named) {
+        ByteBuffer read = ByteBuffer.wrap(named);
+        return new CacheKey(read.getLong(), read.getLong());
     }
 
     private void note(String internalName, byte[] bytes, byte @Nullable [] given) {

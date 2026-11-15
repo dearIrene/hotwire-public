@@ -1,8 +1,10 @@
 package dev.moon.hotwire.cache;
 
 import dev.moon.hotwire.config.AtomicFiles;
+import java.io.BufferedOutputStream;
 import java.io.ByteArrayOutputStream;
 import java.io.IOException;
+import java.io.OutputStream;
 import java.nio.ByteBuffer;
 import java.nio.channels.FileChannel;
 import java.nio.channels.FileLock;
@@ -32,10 +34,10 @@ public final class CacheStore {
     private static final Logger LOGGER = LoggerFactory.getLogger(CacheStore.class);
 
     private static final Map<Path, CacheStore> OPEN = new ConcurrentHashMap<>();
-    private static final int INDEX_MAGIC = 0x48574931;
+    private static final int INDEX_MAGIC = 0x48574932;
     private static final int PACK_MAGIC = 0x48575031;
 
-    private static final int RECORD = 16 + 4 + 8 + 4 + 4;
+    private static final int RECORD = 16 + 4 + 8 + 4 + 4 + 4;
     private static final int HEADER = 4 + 4;
     private static final byte WITH_DICTIONARY = 1;
 
@@ -45,8 +47,16 @@ public final class CacheStore {
 
     private static final int STALE_STARTS = 20;
 
+    private static final int FAR_STARTS = 400;
+
+    private static final long DEAD_BYTES = 1L << 20;
+
     private final Path folder;
     private final String kind;
+
+    private final int user;
+
+    private final Map<Integer, List<Integer>> starts = new HashMap<>();
     private volatile long capBytes;
     private final Object lock = new Object();
 
@@ -66,25 +76,36 @@ public final class CacheStore {
     private long hits;
     private long misses;
 
-    private record Place(int pack, long offset, int length, int lastUse) {
+    private record Place(int pack, long offset, int length, int lastUse, int user) {
     }
 
-    private CacheStore(Path folder, String kind, long capBytes) {
+    private CacheStore(Path folder, String kind, long capBytes, int user) {
         this.folder = folder;
         this.kind = kind;
         this.capBytes = capBytes;
+        this.user = user;
     }
 
     public static CacheStore open(Path folder, String kind, long capBytes) {
-        CacheStore store = new CacheStore(folder, kind, capBytes);
+        return open(folder, kind, capBytes, Path.of("").toAbsolutePath().toString());
+    }
+
+    public static CacheStore open(Path folder, String kind, long capBytes, String instance) {
+        CacheStore store = new CacheStore(folder, kind, capBytes, instance.hashCode());
         try {
             Files.createDirectories(folder);
             store.readHead();
         } catch (IOException | RuntimeException e) {
             LOGGER.info("[Hotwire] the {} cache starts empty: {}", kind, e.toString());
             store.places.clear();
+            store.starts.clear();
             store.lost = true;
             store.start = Math.max(store.start, 1);
+        }
+        List<Integer> own = store.starts.computeIfAbsent(store.user, user -> new ArrayList<>());
+        own.add(store.start);
+        if (own.size() > STALE_STARTS) {
+            own.subList(0, own.size() - STALE_STARTS).clear();
         }
         OPEN.put(folder.toAbsolutePath().normalize(), store);
         return store;
@@ -120,8 +141,8 @@ public final class CacheStore {
                 this.misses++;
                 return null;
             }
-            if (place.lastUse() != this.start) {
-                this.places.put(key, new Place(place.pack(), place.offset(), place.length(), this.start));
+            if (place.lastUse() != this.start || place.user() != this.user) {
+                this.places.put(key, new Place(place.pack(), place.offset(), place.length(), this.start, this.user));
                 this.used = true;
             }
             this.hits++;
@@ -263,12 +284,37 @@ public final class CacheStore {
             this.start = 1;
             return;
         }
-        String read = Files.readString(head, StandardCharsets.UTF_8).trim();
-        int space = read.indexOf(' ');
-        this.generation = Integer.parseInt(read.substring(0, space));
-        this.start = Integer.parseInt(read.substring(space + 1)) + 1;
+        List<String> lines = Files.readAllLines(head, StandardCharsets.UTF_8);
+        String[] first = lines.getFirst().trim().split(" ", -1);
+        this.generation = Integer.parseInt(first[0]);
+        this.start = Integer.parseInt(first[1]) + 1;
         this.readIndex(this.generation, this.places);
+        this.starts.putAll(readStarts(lines));
         this.bytes = sumBytes(this.places);
+    }
+
+    private static Map<Integer, List<Integer>> readStarts(List<String> lines) {
+        Map<Integer, List<Integer>> read = new HashMap<>();
+        for (String line : lines.subList(1, lines.size())) {
+            String[] words = line.trim().split(" ", -1);
+            if (words.length < 2) {
+                continue;
+            }
+            List<Integer> starts = new ArrayList<>();
+            for (int at = 1; at < words.length; at++) {
+                starts.add(Integer.parseInt(words[at]));
+            }
+            read.put(Integer.parseInt(words[0]), starts);
+        }
+        return read;
+    }
+
+    private boolean isStale(Place place) {
+        if (place.lastUse() < this.start - FAR_STARTS) {
+            return true;
+        }
+        List<Integer> theirs = this.starts.get(place.user());
+        return theirs != null && theirs.size() >= STALE_STARTS && place.lastUse() < theirs.getFirst();
     }
 
     private void mergeHead() throws IOException {
@@ -277,13 +323,19 @@ public final class CacheStore {
             return;
         }
         try {
-            String read = Files.readString(head, StandardCharsets.UTF_8).trim();
-            int latest = Integer.parseInt(read.substring(0, read.indexOf(' ')));
+            List<String> lines = Files.readAllLines(head, StandardCharsets.UTF_8);
+            int latest = Integer.parseInt(lines.getFirst().trim().split(" ", -1)[0]);
             if (latest != this.generation) {
                 Map<CacheKey, Place> theirs = new HashMap<>();
                 this.readIndex(latest, theirs);
                 theirs.forEach(this.places::putIfAbsent);
                 this.generation = Math.max(this.generation, latest);
+
+                readStarts(lines).forEach((user, theirStarts) -> {
+                    if (user != this.user) {
+                        this.starts.put(user, theirStarts);
+                    }
+                });
             }
         } catch (IOException | RuntimeException e) {
             LOGGER.info("[Hotwire] the {} cache's head could not be read: {}", this.kind, e.toString());
@@ -299,7 +351,7 @@ public final class CacheStore {
         int count = read.getInt();
         for (int entry = 0; entry < count; entry++) {
             CacheKey key = new CacheKey(read.getLong(), read.getLong());
-            into.put(key, new Place(read.getInt(), read.getLong(), read.getInt(), read.getInt()));
+            into.put(key, new Place(read.getInt(), read.getLong(), read.getInt(), read.getInt(), read.getInt()));
         }
     }
 
@@ -328,61 +380,73 @@ public final class CacheStore {
     private void write(boolean empty) throws IOException {
         int next = this.generation + 1;
         Map<CacheKey, Place> written = new HashMap<>(this.places);
-        long total = 0;
-        for (Place place : written.values()) {
-            total += place.length() + 5;
-        }
+        written.values().removeIf(this::isStale);
+        long total = sumBytes(written);
         for (byte[] packed : this.pending.values()) {
             total += packed.length + 5;
         }
         boolean full = total > this.capBytes;
-        int oldest = this.start - STALE_STARTS;
-        boolean stale = written.values().stream().anyMatch(place -> place.lastUse() < oldest);
-        boolean compact = empty || this.lost || full || stale
-                || written.values().stream().map(Place::pack).distinct().count() >= MOST_PACKS;
+        Set<Integer> named = new HashSet<>();
+        written.values().forEach(place -> named.add(place.pack()));
+        long dead = this.sumPackBytes(named) - sumBytes(written);
+        boolean compact = empty || this.lost || full || named.size() >= MOST_PACKS
+                || dead > Math.max(DEAD_BYTES, total / 4);
         long limit = full ? this.capBytes * 3 / 4 : Long.MAX_VALUE;
-        ByteArrayOutputStream pack = new ByteArrayOutputStream();
-        ByteBuffer header = ByteBuffer.allocate(4).putInt(PACK_MAGIC);
-        pack.write(header.array());
-        if (compact) {
-            List<Map.Entry<CacheKey, Place>> byUse = new ArrayList<>(written.entrySet());
-            byUse.sort(Comparator.comparingInt((Map.Entry<CacheKey, Place> entry) -> entry.getValue().lastUse())
-                    .reversed());
-            written.clear();
-            long copied = 0;
-            for (Map.Entry<CacheKey, Place> entry : byUse) {
-                if (entry.getValue().lastUse() < oldest) {
-                    continue;
-                }
-                byte[] raw = this.readRaw(entry.getValue());
-                if (raw == null || copied + raw.length > limit) {
-                    continue;
-                }
-                copied += raw.length;
-                written.put(entry.getKey(), new Place(next, pack.size(), raw.length - 5, entry.getValue().lastUse()));
-                pack.write(raw);
-            }
-        }
-        for (Map.Entry<CacheKey, byte[]> entry : this.pending.entrySet()) {
-            byte[] packed = entry.getValue();
-            ByteBuffer entryHeader = ByteBuffer.allocate(5).putInt(this.pendingChecks.getOrDefault(entry.getKey(), 0))
-                    .put(this.pendingFlags.getOrDefault(entry.getKey(), (byte) 0));
-            written.put(entry.getKey(), new Place(next, pack.size(), packed.length, this.start));
-            pack.write(entryHeader.array());
-            pack.write(packed);
-        }
+        boolean packed = compact || !this.pending.isEmpty();
 
-        if (compact || !this.pending.isEmpty()) {
-            Files.write(this.folder.resolve(this.kind + "." + next + ".pack"), pack.toByteArray());
+        try (OutputStream pack = packed ? new BufferedOutputStream(
+                Files.newOutputStream(this.folder.resolve(this.kind + "." + next + ".pack")), 1 << 16)
+                : OutputStream.nullOutputStream()) {
+            pack.write(ByteBuffer.allocate(4).putInt(PACK_MAGIC).array());
+            long at = 4;
+            if (compact) {
+                List<Map.Entry<CacheKey, Place>> byUse = new ArrayList<>(written.entrySet());
+                byUse.sort(Comparator.comparingInt((Map.Entry<CacheKey, Place> entry) -> entry.getValue().lastUse())
+                        .reversed());
+                written.clear();
+                long copied = 0;
+                for (Map.Entry<CacheKey, Place> entry : byUse) {
+                    Place place = entry.getValue();
+                    byte[] raw = this.readRaw(place);
+                    if (raw == null || copied + raw.length > limit) {
+                        continue;
+                    }
+                    copied += raw.length;
+                    written.put(entry.getKey(), new Place(next, at, raw.length - 5, place.lastUse(), place.user()));
+                    pack.write(raw);
+                    at += raw.length;
+                }
+            }
+            for (Map.Entry<CacheKey, byte[]> entry : this.pending.entrySet()) {
+                byte[] value = entry.getValue();
+                ByteBuffer entryHeader = ByteBuffer.allocate(5)
+                        .putInt(this.pendingChecks.getOrDefault(entry.getKey(), 0))
+                        .put(this.pendingFlags.getOrDefault(entry.getKey(), (byte) 0));
+                written.put(entry.getKey(), new Place(next, at, value.length, this.start, this.user));
+                pack.write(entryHeader.array());
+                pack.write(value);
+                at += 5 + value.length;
+            }
         }
         ByteBuffer index = ByteBuffer.allocate(HEADER + written.size() * RECORD);
         index.putInt(INDEX_MAGIC).putInt(written.size());
         new TreeMap<>(written).forEach((key, place) -> index.putLong(key.high()).putLong(key.low())
-                .putInt(place.pack()).putLong(place.offset()).putInt(place.length()).putInt(place.lastUse()));
+                .putInt(place.pack()).putLong(place.offset()).putInt(place.length()).putInt(place.lastUse())
+                .putInt(place.user()));
 
         AtomicFiles.write(this.folder.resolve(this.kind + "." + next + ".idx"), index.array());
+
+        Set<Integer> users = new HashSet<>();
+        written.values().forEach(place -> users.add(place.user()));
+        this.starts.keySet().removeIf(user -> user != this.user && !users.contains(user));
+        StringBuilder told = new StringBuilder().append(next).append(' ').append(this.start).append('\n');
+        new TreeMap<>(this.starts).forEach((user, theirs) -> {
+            told.append(user);
+            theirs.forEach(one -> told.append(' ').append(one));
+            told.append('\n');
+        });
         Path head = this.folder.resolve(this.kind + ".head");
-        AtomicFiles.writeString(head, next + " " + this.start);
+        AtomicFiles.writeString(head, told.toString());
         int before = this.generation;
         this.generation = next;
         this.places.clear();
@@ -390,6 +454,19 @@ public final class CacheStore {
         this.bytes = sumBytes(written);
         this.lost = false;
         this.dropUnused(before);
+    }
+
+    private long sumPackBytes(Set<Integer> named) {
+        long total = 0;
+        for (int pack : named) {
+            try {
+                total += Files.size(this.folder.resolve(this.kind + "." + pack + ".pack"));
+            } catch (IOException | RuntimeException e) {
+                LOGGER.debug("[Hotwire] the {} cache's pack {} could not be measured: {}", this.kind, pack,
+                        e.toString());
+            }
+        }
+        return total;
     }
 
     private byte @Nullable [] readRaw(Place place) {
@@ -453,7 +530,7 @@ public final class CacheStore {
     }
 
     private static byte[] pack(byte[] value, byte @Nullable [] dictionary) {
-        Deflater deflater = new Deflater(Deflater.BEST_COMPRESSION, true);
+        Deflater deflater = new Deflater(Deflater.DEFAULT_COMPRESSION, true);
         try {
             if (dictionary != null) {
                 deflater.setDictionary(dictionary, Math.max(0, dictionary.length - 32_768),
