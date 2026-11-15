@@ -16,6 +16,7 @@ import dev.moon.hotwire.jar.ModJarException;
 import dev.moon.hotwire.jar.ModJarReader;
 import dev.moon.hotwire.jar.ModManifest;
 import dev.moon.hotwire.jar.WidenerUses;
+import dev.moon.hotwire.jar.ZipBytes;
 import dev.moon.hotwire.mixin_copy.MixinCopy;
 import dev.moon.hotwire.plan.ModGraph;
 import dev.moon.hotwire.plan.SwitchPlan;
@@ -853,14 +854,19 @@ public final class ModAdder {
                 if (entry == null) {
                     continue;
                 }
-                Path written = this.engine.getAddedJarsFolder().resolve(Path.of(nestedPath).getFileName().toString());
+                String name = Path.of(nestedPath).getFileName().toString();
+                Path written = this.engine.getAddedJarsFolder().resolve(name);
                 Files.createDirectories(written.getParent());
                 byte[] bytes;
                 try (InputStream in = zip.getInputStream(entry)) {
-                    bytes = in.readAllBytes();
+                    bytes = ZipBytes.readEntry(in);
                 }
 
-                if (!Files.exists(written) || !Arrays.equals(Files.readAllBytes(written), bytes)) {
+                for (int number = 2; Files.exists(written) && !Arrays.equals(Files.readAllBytes(written), bytes);
+                        number++) {
+                    written = written.resolveSibling(number + "-" + name);
+                }
+                if (!Files.exists(written)) {
                     Files.write(written, bytes);
                 }
                 this.collectWritten(written, into);

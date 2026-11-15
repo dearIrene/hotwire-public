@@ -1,5 +1,6 @@
 package dev.moon.hotwire.fabric.add;
 
+import dev.moon.hotwire.jar.ZipBytes;
 import dev.moon.hotwire.redefine.ClassBytes;
 import java.io.ByteArrayInputStream;
 import java.io.IOException;
@@ -40,12 +41,12 @@ final class JoinHooks {
         for (ZipEntry entry = zip.getNextEntry(); entry != null; entry = zip.getNextEntry()) {
             String name = entry.getName();
             if (name.endsWith(".class")) {
-                byte[] bytes = zip.readAllBytes();
+                byte[] bytes = ZipBytes.readEntry(zip);
                 if (ClassBytes.mentions(bytes, MIXIN) && targetsJoin(bytes)) {
                     return true;
                 }
             } else if (depth > 0 && name.endsWith(".jar")
-                    && isIn(new ByteArrayInputStream(zip.readAllBytes()), depth - 1)) {
+                    && isIn(new ByteArrayInputStream(ZipBytes.readEntry(zip)), depth - 1)) {
                 return true;
             }
         }

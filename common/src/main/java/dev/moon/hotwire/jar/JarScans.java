@@ -244,7 +244,7 @@ public final class JarScans {
                     if (entry.getName().startsWith(SCANNER) && entry.getName().endsWith(".class")) {
                         ClassWriter bare = new ClassWriter(0);
                         try (InputStream in = zip.getInputStream(entry)) {
-                            new ClassReader(in.readAllBytes()).accept(bare, ClassReader.SKIP_DEBUG);
+                            new ClassReader(ZipBytes.readEntry(in)).accept(bare, ClassReader.SKIP_DEBUG);
                         }
                         recipe.add(entry.getName()).add(bare.toByteArray());
                         any = true;

@@ -89,11 +89,14 @@ public final class ModJarReader {
         Map<String, byte[]> entries = new HashMap<>();
         List<String> names = new ArrayList<>();
         try (ZipInputStream zip = new ZipInputStream(new ByteArrayInputStream(jar))) {
+            long soFar = 0;
             for (ZipEntry entry = zip.getNextEntry(); entry != null; entry = zip.getNextEntry()) {
                 names.add(entry.getName());
                 if (entry.getName().endsWith(".json") || entry.getName().endsWith(".jar")
                         || entry.getName().endsWith(".class")) {
-                    entries.put(entry.getName(), zip.readAllBytes());
+                    byte[] bytes = ZipBytes.readEntry(zip);
+                    soFar = ZipBytes.countRead(soFar, bytes);
+                    entries.put(entry.getName(), bytes);
                 }
             }
             return build(name, depth, names, entries::get);
@@ -183,7 +186,7 @@ public final class ModJarReader {
 
     private static byte[] readBytes(ZipFile zip, ZipEntry entry) throws IOException {
         try (InputStream in = zip.getInputStream(entry)) {
-            return in.readAllBytes();
+            return ZipBytes.readEntry(in);
         }
     }
 

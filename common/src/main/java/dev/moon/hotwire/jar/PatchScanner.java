@@ -341,7 +341,7 @@ final class PatchScanner {
                     return null;
                 }
                 try (InputStream in = zip.getInputStream(found)) {
-                    return in.readAllBytes();
+                    return ZipBytes.readEntry(in);
                 }
             };
             List<String> names = zip.stream().map(ZipEntry::getName).toList();

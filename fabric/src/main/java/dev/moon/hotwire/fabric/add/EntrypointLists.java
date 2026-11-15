@@ -1,6 +1,7 @@
 package dev.moon.hotwire.fabric.add;
 
 import dev.moon.hotwire.classfile.ClassNodes;
+import dev.moon.hotwire.jar.ZipBytes;
 import dev.moon.hotwire.redefine.ClassBytes;
 import dev.moon.hotwire.redefine.FinalWrites;
 import java.io.IOException;
@@ -160,7 +161,7 @@ final class EntrypointLists {
 
     private static byte @Nullable [] read(Path file) {
         try (InputStream in = Files.newInputStream(file)) {
-            return in.readAllBytes();
+            return ZipBytes.readEntry(in);
         } catch (IOException e) {
             return null;
         }

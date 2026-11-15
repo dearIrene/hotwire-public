@@ -52,7 +52,7 @@ public final class JarLookup {
                 return null;
             }
             try (InputStream in = zip.getInputStream(entry)) {
-                return in.readAllBytes();
+                return ZipBytes.readEntry(in);
             }
         }
     }

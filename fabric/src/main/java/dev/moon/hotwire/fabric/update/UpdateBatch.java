@@ -4,6 +4,7 @@ import dev.moon.hotwire.concurrent.Parallel;
 import dev.moon.hotwire.fabric.ModPolicy;
 import dev.moon.hotwire.jar.ModJarReader;
 import dev.moon.hotwire.jar.ModManifest;
+import dev.moon.hotwire.jar.ZipBytes;
 import dev.moon.hotwire.redefine.RebuildException;
 import dev.moon.hotwire.switching.ModMixins;
 import dev.moon.hotwire.switching.SwitchTimes;
@@ -295,7 +296,7 @@ final class UpdateBatch {
                 ZipEntry entry = zip.getEntry(action.className() + ".class");
                 if (entry != null) {
                     try (InputStream in = zip.getInputStream(entry)) {
-                        into.addAll(ModJarReader.readMixinTargets(in.readAllBytes()));
+                        into.addAll(ModJarReader.readMixinTargets(ZipBytes.readEntry(in)));
                     }
                 }
             }

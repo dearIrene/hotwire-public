@@ -13,6 +13,7 @@ import dev.moon.hotwire.jar.ModJar;
 import dev.moon.hotwire.jar.ModJarException;
 import dev.moon.hotwire.jar.ModJarReader;
 import dev.moon.hotwire.jar.ModManifest;
+import dev.moon.hotwire.jar.ZipBytes;
 import dev.moon.hotwire.mixin_copy.MixinCopy;
 import dev.moon.hotwire.plan.ModGraph;
 import dev.moon.hotwire.plan.SwitchPlanner;
@@ -367,7 +368,8 @@ public final class AddSupport implements ModAdder.Engine {
         }
         try (ZipFile zip = new ZipFile(jar.toFile())) {
             for (ZipEntry entry : Collections.list(zip.entries())) {
-                if (entry.getName().endsWith(".class") && isInstrumenting(zip.getInputStream(entry).readAllBytes())) {
+                if (entry.getName().endsWith(".class")
+                        && isInstrumenting(ZipBytes.readEntry(zip.getInputStream(entry)))) {
                     return Optional.of(name + " changes the game's classes in the JVM itself, which nothing takes back"
                             + " out while the game runs.");
                 }

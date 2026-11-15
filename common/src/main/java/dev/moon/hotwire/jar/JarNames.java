@@ -116,11 +116,11 @@ public final class JarNames {
         if (name.endsWith(CLASS_SUFFIX)) {
             own.add(name.substring(0, name.length() - CLASS_SUFFIX.length()));
             try {
-                named.addAll(readClassesNamed(zip.readAllBytes()));
+                named.addAll(readClassesNamed(ZipBytes.readEntry(zip)));
             } catch (RuntimeException unreadable) {
             }
         } else if (name.endsWith(JAR_SUFFIX)) {
-            ZipInputStream inner = new ZipInputStream(new ByteArrayInputStream(zip.readAllBytes()));
+            ZipInputStream inner = new ZipInputStream(new ByteArrayInputStream(ZipBytes.readEntry(zip)));
             for (ZipEntry entry = inner.getNextEntry(); entry != null; entry = inner.getNextEntry()) {
                 collect(entry.getName(), inner, namedNested, ownNested, namedNested, ownNested);
             }

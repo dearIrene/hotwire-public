@@ -1,6 +1,7 @@
 package dev.moon.hotwire.jar;
 
 import java.io.IOException;
+import java.io.InputStream;
 import java.nio.ByteBuffer;
 import java.nio.ByteOrder;
 import java.nio.channels.FileChannel;
@@ -26,6 +27,9 @@ public final class ZipBytes {
     private static final int LOCAL_HEADER = 0x04034b50;
     private static final int STORED = 0;
     private static final int DEFLATED = 8;
+
+    public static final int MOST_ENTRY_BYTES = 256 * 1024 * 1024;
+    public static final long MOST_SCAN_BYTES = 1L << 30;
 
     private final ByteBuffer bytes;
     private final Map<String, Entry> entries = new LinkedHashMap<>();
@@ -129,6 +133,21 @@ public final class ZipBytes {
         }
     }
 
+    public static byte[] readEntry(InputStream in) throws IOException {
+        byte[] bytes = in.readNBytes(MOST_ENTRY_BYTES + 1);
+        if (bytes.length > MOST_ENTRY_BYTES) {
+            throw new ZipException("an entry of over " + MOST_ENTRY_BYTES / (1024 * 1024) + " MB");
+        }
+        return bytes;
+    }
+
+    public static long countRead(long soFar, byte[] entry) throws IOException {
+        if (soFar + entry.length > MOST_SCAN_BYTES) {
+            throw new ZipException("entries of over " + MOST_SCAN_BYTES / (1024 * 1024) + " MB in all");
+        }
+        return soFar + entry.length;
+    }
+
     public Set<String> getNames() {
         return this.entries.keySet();
     }
@@ -144,6 +163,9 @@ public final class ZipBytes {
         }
         int start = local + 30 + Short.toUnsignedInt(this.bytes.getShort(local + 26))
                 + Short.toUnsignedInt(this.bytes.getShort(local + 28));
+        if (entry.size() < 0 || entry.size() > MOST_ENTRY_BYTES) {
+            throw new ZipException(name + " says it is " + Integer.toUnsignedLong(entry.size()) + " bytes");
+        }
         byte[] out = new byte[entry.size()];
         if (entry.method() == STORED) {
             this.bytes.get(start, out);
