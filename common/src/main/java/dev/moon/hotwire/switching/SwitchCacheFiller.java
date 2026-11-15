@@ -241,6 +241,10 @@ public final class SwitchCacheFiller {
         long looked = System.nanoTime();
         int mixed = 0;
         List<Step> planned = this.steps;
+
+        if (!planned.isEmpty() && this.done.get() >= planned.size()) {
+            this.checkOneStep(current);
+        }
         for (Step step : planned.subList(this.done.get(), planned.size())) {
             if (current != this.run.get()) {
                 break;
