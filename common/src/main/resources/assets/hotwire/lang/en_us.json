@@ -188,6 +188,7 @@
   "hotwire.updates.summary.now": "Updated now",
   "hotwire.updates.summary.later": "When you close the game",
   "hotwire.updates.summary.not": "Not updated",
+  "hotwire.updates.first_in": "Updated %d of %d, the rest are still downloading.",
   "hotwire.updates.all_done": "%d mods updated now, %d at the next start, %d not updated.",
   "hotwire.folder.title": "%s is in your mods folder",
   "hotwire.folder.detail": "Open Hotwire to add it now. If you don't, it starts with the game next time.",

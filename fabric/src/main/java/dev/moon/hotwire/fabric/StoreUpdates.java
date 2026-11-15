@@ -118,6 +118,18 @@ final class StoreUpdates {
                 }
                 this.progress.count(Lang.get("hotwire.progress.update.getting"),
                         (int) fetches.futures().stream().filter(Future::isDone).count(), offers.size());
+
+                List<Path> in = firstJars;
+                List<ModUpdater.Result> inMade = firstMade;
+                long now = inMade.stream().filter(ModUpdater.Result.Updated.class::isInstance).count();
+                Minecraft.getInstance().execute(() -> {
+                    if (now > 0) {
+                        this.say.accept(Lang.get("hotwire.updates.first_in", now, offers.size()), false);
+                    }
+                    for (int i = 0; i < inMade.size(); i++) {
+                        done.accept(in.get(i), inMade.get(i));
+                    }
+                });
             }
             List<List<Path>> fetched = collect(fetches);
             long fetchMillis = (System.nanoTime() - began) / 1_000_000;
@@ -149,7 +161,7 @@ final class StoreUpdates {
                     this.say.accept(String.valueOf(failed), true);
                 }
                 this.tell(made);
-                for (int i = 0; i < made.size(); i++) {
+                for (int i = firstResults.size(); i < made.size(); i++) {
                     done.accept(all.get(i), made.get(i));
                 }
                 LOGGER.info("[Hotwire] Update all: fetched in {} ms, updated in {} ms", fetchMillis, updateMillis);
