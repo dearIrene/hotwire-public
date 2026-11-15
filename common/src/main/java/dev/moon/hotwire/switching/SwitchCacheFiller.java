@@ -66,7 +66,7 @@ public final class SwitchCacheFiller {
     }
 
     public record Fill(boolean running, long classesDone, long classes, long bytesDone, long bytes, long millis,
-            boolean sampled, long filledBytes, long baseBytes, boolean outdated) {
+            boolean sampled, long filledBytes, boolean outdated) {
     }
 
     private final Host host;
@@ -74,8 +74,6 @@ public final class SwitchCacheFiller {
     private volatile List<Step> steps = List.of();
 
     private volatile long filledBytes = -1;
-
-    private volatile long baseBytes;
     private volatile long classes;
     private volatile long bytes;
     private final AtomicInteger done = new AtomicInteger();
@@ -157,7 +155,6 @@ public final class SwitchCacheFiller {
         this.nanos.set(0);
         this.classes = 0;
         this.bytes = 0;
-        this.baseBytes = 0;
         this.filledBytes = -1;
         this.outdated = false;
     }
@@ -168,8 +165,7 @@ public final class SwitchCacheFiller {
                 && !this.joining;
         return new Fill(alive, this.classesDone.get(), this.classes, this.bytesDone.get(), this.bytes,
                 this.nanos.get() / 1_000_000,
-                !this.steps.isEmpty() && this.done.get() >= this.sample, this.filledBytes, this.baseBytes,
-                this.outdated);
+                !this.steps.isEmpty() && this.done.get() >= this.sample, this.filledBytes, this.outdated);
     }
 
     @SuppressWarnings("ThreadPriorityCheck")
@@ -316,8 +312,6 @@ public final class SwitchCacheFiller {
         Set<String> on = this.host.findOnNow();
         Map<String, Set<String>> patchers = this.applier.getPatchersOf(this.applier.findClassesPatchedBy(on), on, "");
         Set<String> saved = new HashSet<>();
-
-        Set<String> named = new HashSet<>();
         Map<Set<String>, Step> offs = new LinkedHashMap<>();
 
         Map<Set<String>, Set<String>> prints = new HashMap<>();
@@ -343,7 +337,6 @@ public final class SwitchCacheFiller {
                     down.retainAll(mods);
                     if (saved.add(name + " " + down)) {
                         fresh.add(name);
-                        named.add(name);
                     }
                 }
                 offs.put(mods, new Step(id, mods, patched.size(), this.sumBytes(fresh), List.of(),
@@ -364,7 +357,6 @@ public final class SwitchCacheFiller {
         }
         this.classes = planned.stream().mapToLong(Step::classes).sum();
         this.bytes = planned.stream().mapToLong(Step::bytes).sum();
-        this.baseBytes = this.sumBytes(named);
 
         List<Step> already = new ArrayList<>();
         List<Step> rest = new ArrayList<>();

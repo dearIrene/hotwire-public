@@ -110,14 +110,9 @@ final class CacheFillControl implements CacheHost {
         long estimated = this.estimate;
         if (fill.filledBytes() >= 0) {
             estimated = fill.filledBytes();
-        } else if (estimated < 0 && fill.sampled() && sizes.basesBefore() > 0) {
-            double perBase = sizes.bases() / (double) sizes.basesBefore();
-            long versionsBefore = sizes.classesBefore() - sizes.basesBefore();
-            double perVersion = versionsBefore > 0 ? (sizes.classes() - sizes.bases()) / (double) versionsBefore
-                    : perBase;
-            double perRead = sizes.reads() / (double) sizes.classesBefore();
-            estimated = Math.round(fill.baseBytes() * perBase + (fill.bytes() - fill.baseBytes()) * perVersion
-                    + fill.bytes() * perRead);
+        } else if (estimated < 0 && fill.sampled() && sizes.classesBefore() > 0) {
+            estimated = Math.round(fill.bytes() * ((sizes.classes() + sizes.reads())
+                    / (double) sizes.classesBefore()));
             this.estimate = estimated;
         }
         long millisLeft = fill.bytesDone() == 0 ? -1

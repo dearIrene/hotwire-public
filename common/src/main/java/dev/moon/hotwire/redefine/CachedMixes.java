@@ -126,10 +126,10 @@ public final class CachedMixes {
 
     public Sizes getSizes() {
         MixedCache known = this.cache;
-        return known == null ? new Sizes(0, 0, 0, 0, 0) : known.findSaved();
+        return known == null ? new Sizes(0, 0, 0) : known.findSaved();
     }
 
-    public record Sizes(long classes, long classesBefore, long reads, long bases, long basesBefore) {
+    public record Sizes(long classes, long classesBefore, long reads) {
     }
 
     List<MixinCopy.MixResult> mix(Set<String> allTargets, Map<String, byte[]> classes, Map<String, byte[]> resources,

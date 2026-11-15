@@ -98,9 +98,6 @@ final class MixedCache {
     private final AtomicLong classesBefore = new AtomicLong();
     private final AtomicLong readsSaved = new AtomicLong();
 
-    private final AtomicLong basesSaved = new AtomicLong();
-    private final AtomicLong basesBefore = new AtomicLong();
-
     private final Set<CacheKey> counted = ConcurrentHashMap.newKeySet();
 
     private final Map<CacheKey, Unwritten> unwritten = new ConcurrentHashMap<>();
@@ -115,7 +112,7 @@ final class MixedCache {
         this.packs = new ClassPacks(store);
     }
 
-    private static final String KEYS = "mixed class 10";
+    private static final String KEYS = "mixed class 11";
 
     private static final Map<byte[], CacheKey> SHAPES = Collections.synchronizedMap(new WeakHashMap<>());
 
@@ -217,13 +214,14 @@ final class MixedCache {
             }
             List<CacheKey> used = new ArrayList<>();
             used.add(key);
-            ClassPacks.Read read = this.packs.get(new CacheKey(in.readLong(), in.readLong()), original, used);
-            if (read == null) {
+            CacheKey body = new CacheKey(in.readLong(), in.readLong());
+            byte[] mixed = this.packs.get(body, original);
+            if (mixed == null) {
                 this.missedPack.incrementAndGet();
                 return null;
             }
-            byte[] mixed = read.bytes();
-            this.count(used, key, original.length, read.base());
+            used.add(body);
+            this.count(used, key, original.length);
             Map<String, String> argsShapes = new LinkedHashMap<>();
             for (int count = in.readInt(); count > 0; count--) {
                 argsShapes.put(in.readUTF(), in.readUTF());
@@ -243,7 +241,7 @@ final class MixedCache {
         }
     }
 
-    private void count(List<CacheKey> keys, CacheKey entry, int before, boolean base) {
+    private void count(List<CacheKey> keys, CacheKey entry, int before) {
         boolean first = !this.counted.contains(entry);
         long bytes = 0;
         for (CacheKey one : keys) {
@@ -254,10 +252,6 @@ final class MixedCache {
         this.classesSaved.addAndGet(bytes);
         if (first) {
             this.classesBefore.addAndGet(before);
-            if (base) {
-                this.basesSaved.addAndGet(bytes);
-                this.basesBefore.addAndGet(before);
-            }
         }
     }
 
@@ -407,13 +401,13 @@ final class MixedCache {
             Map<String, byte[]> originals) {
         ByteArrayOutputStream listed = new ByteArrayOutputStream();
         List<CacheKey> used = new ArrayList<>();
-        ClassPacks.Body body;
         try (DataOutputStream out = new DataOutputStream(listed)) {
             out.writeLong(reads.high());
             out.writeLong(reads.low());
-            body = this.packs.put(target, mixed, originals.get(target), used);
-            out.writeLong(body.key().high());
-            out.writeLong(body.key().low());
+            CacheKey body = this.packs.put(target, mixed, originals.get(target));
+            used.add(body);
+            out.writeLong(body.high());
+            out.writeLong(body.low());
             Map<String, String> shapes = findShapesUsed(mixed, made);
             out.writeInt(shapes.size());
             for (Map.Entry<String, String> shape : shapes.entrySet()) {
@@ -433,12 +427,11 @@ final class MixedCache {
         this.store.put(key, listed.toByteArray(), null);
         used.add(key);
         byte[] original = originals.get(target);
-        this.count(used, key, original == null ? mixed.length : original.length, body.base());
+        this.count(used, key, original == null ? mixed.length : original.length);
     }
 
     CachedMixes.Sizes findSaved() {
-        return new CachedMixes.Sizes(this.classesSaved.get(), this.classesBefore.get(), this.readsSaved.get(),
-                this.basesSaved.get(), this.basesBefore.get());
+        return new CachedMixes.Sizes(this.classesSaved.get(), this.classesBefore.get(), this.readsSaved.get());
     }
 
     String describe() {
@@ -483,15 +476,12 @@ final class MixedCache {
     void clear() {
         this.writer.execute(() -> {
             this.store.clear();
-            this.packs.forget();
             this.holding.clear();
             this.changed.clear();
             this.counted.clear();
             this.classesSaved.set(0);
             this.classesBefore.set(0);
             this.readsSaved.set(0);
-            this.basesSaved.set(0);
-            this.basesBefore.set(0);
         });
     }
 

@@ -22,19 +22,15 @@ import org.objectweb.asm.tree.MethodNode;
 import org.objectweb.asm.tree.RecordComponentNode;
 
 final class ClassPacks {
-    private static final int MOST_BASES = 64;
+    private static final int MOST_ORIGINALS = 64;
 
     private final CacheStore store;
 
-    @SuppressWarnings("ArrayRecordComponent")
-    private record Base(byte[] bytes, Map<CacheKey, Integer> index) {
-    }
-
-    private final Map<CacheKey, Base> bases = Collections.synchronizedMap(
+    private final Map<CacheKey, Map<CacheKey, Integer>> originals = Collections.synchronizedMap(
             new LinkedHashMap<>(16, 0.75f, true) {
                 @Override
-                protected boolean removeEldestEntry(Map.Entry<CacheKey, Base> eldest) {
-                    return this.size() > MOST_BASES;
+                protected boolean removeEldestEntry(Map.Entry<CacheKey, Map<CacheKey, Integer>> eldest) {
+                    return this.size() > MOST_ORIGINALS;
                 }
             });
 
@@ -42,166 +38,93 @@ final class ClassPacks {
         this.store = store;
     }
 
-    void forget() {
-        this.bases.clear();
-    }
-
-    record Body(CacheKey key, boolean base) {
-    }
-
-    @SuppressWarnings("ArrayRecordComponent")
-    record Read(byte[] bytes, boolean base) {
-    }
-
-    Body put(String target, byte[] mixed, byte @Nullable [] original, List<CacheKey> used) throws IOException {
+    CacheKey put(String target, byte[] mixed, byte @Nullable [] original) throws IOException {
         ClassNode node = read(mixed);
+        Map<CacheKey, Integer> index = node == null || original == null ? null : this.findOriginal(original);
         ByteArrayOutputStream body = new ByteArrayOutputStream();
-        boolean base = true;
         try (DataOutputStream out = new DataOutputStream(body)) {
-            if (node == null || original == null) {
+            if (node == null || index == null) {
                 out.writeBoolean(false);
                 out.write(mixed);
             } else {
                 out.writeBoolean(true);
-                base = this.writePacked(target, node, original, out, used);
+                List<MethodNode> methods = node.methods;
+                List<MethodNode> made = new ArrayList<>();
+                out.writeInt(methods.size());
+                for (MethodNode method : methods) {
+                    Integer before = index.get(findKey(node, method));
+                    out.writeBoolean(before != null);
+                    if (before != null) {
+                        out.writeShort(before);
+                    } else {
+                        out.writeShort(made.size());
+                        made.add(method);
+                    }
+                }
+                node.methods = made;
+                out.write(write(node));
+                node.methods = methods;
             }
         }
         byte[] bytes = body.toByteArray();
-
-        CacheKey key = CacheKey.of("class body 3").add(target).add(bytes)
+        CacheKey key = CacheKey.of("class body 4").add(target).add(bytes)
                 .add(original == null ? new byte[0] : original).build();
         this.store.put(key, bytes, original);
-        used.add(key);
-        return new Body(key, base);
+        return key;
     }
 
-    @Nullable Read get(CacheKey key, byte[] original, List<CacheKey> used) throws IOException {
+    byte @Nullable [] get(CacheKey key, byte[] original) throws IOException {
         byte[] body = this.store.get(key, original);
         if (body == null) {
             return null;
         }
-        used.add(key);
         try (DataInputStream in = new DataInputStream(new ByteArrayInputStream(body))) {
             if (!in.readBoolean()) {
-                return new Read(in.readAllBytes(), true);
+                return in.readAllBytes();
             }
-            CacheKey ownKey = new CacheKey(in.readLong(), in.readLong());
-            CacheKey baseKey = new CacheKey(in.readLong(), in.readLong());
-            if (ownKey.equals(baseKey)) {
-                byte[] whole = this.store.get(ownKey, original);
-                if (whole != null) {
-                    used.add(ownKey);
-                }
-                return whole == null ? null : new Read(whole, true);
+            int count = in.readInt();
+            boolean[] before = new boolean[count];
+            int[] places = new int[count];
+            boolean anyBefore = false;
+            for (int at = 0; at < count; at++) {
+                before[at] = in.readBoolean();
+                places[at] = in.readUnsignedShort();
+                anyBefore |= before[at];
             }
-
-            byte[] baseBytes = this.store.get(baseKey, original);
-            if (baseBytes == null) {
+            ClassNode own = read(in.readAllBytes());
+            ClassNode plain = anyBefore ? read(original) : own;
+            if (own == null || plain == null) {
                 return null;
             }
-            used.add(baseKey);
-            ClassNode own = this.readPack(ownKey, baseBytes, used);
-            if (own == null) {
-                return null;
-            }
-            List<MethodNode> ownMethods = own.methods;
-            List<MethodNode> baseMethods = List.of();
-            boolean baseRead = false;
-            List<MethodNode> methods = new ArrayList<>();
-            for (int count = in.readInt(); count > 0; count--) {
-                boolean fromBase = in.readBoolean();
-                int at = in.readUnsignedShort();
-                if (fromBase && !baseRead) {
-                    ClassNode base = read(baseBytes);
-                    if (base == null) {
-                        return null;
-                    }
-                    baseMethods = base.methods;
-                    baseRead = true;
-                }
-                List<MethodNode> from = fromBase ? baseMethods : ownMethods;
-                if (at >= from.size()) {
+            List<MethodNode> methods = new ArrayList<>(count);
+            for (int at = 0; at < count; at++) {
+                List<MethodNode> from = before[at] ? plain.methods : own.methods;
+                if (places[at] >= from.size()) {
                     return null;
                 }
-                methods.add(from.get(at));
+                methods.add(from.get(places[at]));
             }
             own.methods = methods;
-            return new Read(write(own), false);
+            return write(own);
         }
     }
 
-    private boolean writePacked(String target, ClassNode node, byte[] original, DataOutputStream out,
-            List<CacheKey> used) throws IOException {
-        CacheKey baseName = CacheKey.of("class base 1").add(target).add(original).build();
-        byte[] named = this.store.get(baseName, null);
-        CacheKey baseKey = named == null || named.length != 2 * Long.BYTES ? null : readKey(named);
-        Base base = baseKey == null ? null : this.findBase(baseKey, original);
-        if (base == null) {
-            baseKey = null;
-        }
-        Map<CacheKey, Integer> index = base == null ? Map.of() : base.index();
-        List<MethodNode> methods = node.methods;
-        List<MethodNode> fresh = new ArrayList<>();
-        ByteArrayOutputStream places = new ByteArrayOutputStream();
-        try (DataOutputStream where = new DataOutputStream(places)) {
-            where.writeInt(methods.size());
-            for (MethodNode method : methods) {
-                Integer inBase = index.get(findKey(node, method));
-                where.writeBoolean(inBase != null);
-                if (inBase != null) {
-                    where.writeShort(inBase);
-                } else {
-                    where.writeShort(fresh.size());
-                    fresh.add(method);
-                }
-            }
-        }
-        node.methods = fresh;
-        byte[] pack = write(node);
-        node.methods = methods;
-        byte[] against = base == null ? original : base.bytes();
-        CacheKey packKey = CacheKey.of("class pack 2").add(target).add(pack).add(against).build();
-        this.store.put(packKey, pack, against);
-        used.add(packKey);
-        boolean isBase = baseKey == null;
-        if (baseKey == null) {
-            baseKey = packKey;
-            this.store.put(baseName, writeKey(packKey), null);
-        } else {
-            used.add(baseKey);
-        }
-        writeKey(out, packKey);
-        writeKey(out, baseKey);
-        out.write(places.toByteArray());
-        return isBase;
-    }
-
-    private @Nullable Base findBase(CacheKey baseKey, byte[] original) {
-        Base known = this.bases.get(baseKey);
-        if (known != null && this.store.findSize(baseKey) > 0) {
+    private @Nullable Map<CacheKey, Integer> findOriginal(byte[] original) {
+        CacheKey name = CacheKey.of("class before 1").add(original).build();
+        Map<CacheKey, Integer> known = this.originals.get(name);
+        if (known != null) {
             return known;
         }
-        byte[] pack = this.store.get(baseKey, original);
-        ClassNode node = pack == null ? null : read(pack);
-        if (pack == null || node == null) {
+        ClassNode node = read(original);
+        if (node == null) {
             return null;
         }
         Map<CacheKey, Integer> index = new HashMap<>();
         for (int at = 0; at < node.methods.size(); at++) {
             index.putIfAbsent(findKey(node, node.methods.get(at)), at);
         }
-        Base made = new Base(pack, index);
-        this.bases.put(baseKey, made);
-        return made;
-    }
-
-    private @Nullable ClassNode readPack(CacheKey key, byte[] original, List<CacheKey> used) {
-        byte[] pack = this.store.get(key, original);
-        if (pack == null) {
-            return null;
-        }
-        used.add(key);
-        return read(pack);
+        this.originals.put(name, index);
+        return index;
     }
 
     private static CacheKey findKey(ClassNode owner, MethodNode method) {
@@ -247,30 +170,5 @@ final class ClassPacks {
         ClassWriter writer = new ClassWriter(0);
         node.accept(writer);
         return writer.toByteArray();
-    }
-
-    private static CacheKey readKey(byte[] bytes) {
-        long high = 0;
-        long low = 0;
-        for (int i = 0; i < Long.BYTES; i++) {
-            high = high << 8 | (bytes[i] & 0xFF);
-            low = low << 8 | (bytes[Long.BYTES + i] & 0xFF);
-        }
-        return new CacheKey(high, low);
-    }
-
-    private static byte[] writeKey(CacheKey key) {
-        ByteArrayOutputStream bytes = new ByteArrayOutputStream();
-        try (DataOutputStream out = new DataOutputStream(bytes)) {
-            writeKey(out, key);
-        } catch (IOException e) {
-            throw new IllegalStateException(e);
-        }
-        return bytes.toByteArray();
-    }
-
-    private static void writeKey(DataOutputStream out, CacheKey key) throws IOException {
-        out.writeLong(key.high());
-        out.writeLong(key.low());
     }
 }
