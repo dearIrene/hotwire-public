@@ -24,6 +24,13 @@ public interface CacheHost {
     default void setCacheLimit(int megabytes) {
     }
 
+    default long getOldJarsBytes() {
+        return 0;
+    }
+
+    default void clearOldJars() {
+    }
+
     default StoreCacheView getStoreCache() {
         return StoreCacheView.NONE;
     }

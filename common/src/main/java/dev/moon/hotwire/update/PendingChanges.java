@@ -22,6 +22,8 @@ public final class PendingChanges {
     private static final Logger LOGGER = LoggerFactory.getLogger(PendingChanges.class);
     static final int OLD_VERSIONS = 2;
 
+    static final long OLD_JARS_BYTES = 256L << 20;
+
     private final UpdateQueue queue;
     private final UpdateFolders folders;
 
@@ -102,6 +104,29 @@ public final class PendingChanges {
         clean(this.folders.swapper(), Set.of(this.folders.swapperJar().toAbsolutePath(),
                 this.folders.swapperLog().toAbsolutePath()));
         trimReplaced(this.queue, this.folders.replaced());
+
+        Set<Path> recorded = new HashSet<>();
+        for (UpdateQueue.ReplacedJar record : this.queue.getReplaced()) {
+            recorded.add(this.folders.replaced().resolve(record.file()).toAbsolutePath());
+        }
+        clean(this.folders.replaced(), recorded);
+    }
+
+    public long measureReplaced() {
+        long total = 0;
+        try {
+            for (Path file : listFiles(this.folders.replaced())) {
+                total += file.toFile().length();
+            }
+        } catch (IOException e) {
+            return 0;
+        }
+        return total;
+    }
+
+    public void clearReplaced() throws IOException {
+        this.queue.replaceReplaced(List.of());
+        clean(this.folders.replaced(), Set.of());
     }
 
     static void clean(Path folder, Set<Path> wanted) {
@@ -146,6 +171,15 @@ public final class PendingChanges {
             } else {
                 Files.deleteIfExists(file);
             }
+        }
+        long total = 0;
+        for (UpdateQueue.ReplacedJar record : retained) {
+            total += replaced.resolve(record.file()).toFile().length();
+        }
+        while (total > OLD_JARS_BYTES && !retained.isEmpty()) {
+            Path oldest = replaced.resolve(retained.removeFirst().file());
+            total -= oldest.toFile().length();
+            Files.deleteIfExists(oldest);
         }
         queue.replaceReplaced(retained);
     }

@@ -1,5 +1,6 @@
 package dev.moon.hotwire.fabric;
 
+import dev.moon.hotwire.cache.CacheBudget;
 import dev.moon.hotwire.cache.CacheStore;
 import dev.moon.hotwire.config.HotwireSettings;
 import dev.moon.hotwire.fabric.add.AddSupport;
@@ -316,9 +317,11 @@ final class EngineStart {
         laps.endLap("applier and Mixin copy");
         applier.getRebuilder().resolveArgsWith(mixin::getArgsClassFor);
         laps.endLap("args classes");
+        long limit = (long) CacheLimit.read(findCacheFolder()) << 20;
         applier.getRebuilder().getCache().cacheIn(
                 CacheStore.open(findCacheFolder().resolve("mixed"), "mixed",
-                        (long) CacheLimit.read(findCacheFolder()) << 20), LivePluginShapes::ask);
+                        CacheBudget.findOwnCap(findCacheFolder(), limit)), LivePluginShapes::ask);
+        CacheLimit.fitLater(findCacheFolder(), limit);
         laps.endLap("open the switch cache");
         applier.getRebuilder().getHooks()
                 .sendGeneratedTo(new GeneratedClasses(gameDir.resolve("hotwire").resolve("generated")) ::write);

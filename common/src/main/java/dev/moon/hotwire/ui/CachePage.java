@@ -17,6 +17,8 @@ final class CachePage {
     private static final long LIST_NANOS = 1_000_000_000L;
     private static final String ALL = "";
 
+    private static final String OLD_JARS = "old jars";
+
     private static final List<String> STORE_KINDS = List.of("search", "page", "versions", "picture");
 
     private record Row(String key, String name, long bytes, boolean inUse) {
@@ -154,6 +156,11 @@ final class CachePage {
                 found.add(new Row(one.version(), one.current() ? Lang.get("hotwire.cache.version_current",
                         one.version()) : one.version(), one.bytes(), one.inUse()));
             }
+
+            if (this.caches.getOldJarsBytes() > 0) {
+                found.add(new Row(OLD_JARS, Lang.get("hotwire.cache.old_jars"), this.caches.getOldJarsBytes(),
+                        false));
+            }
         }
         this.list.clear();
         if (found.isEmpty()) {
@@ -178,6 +185,9 @@ final class CachePage {
             this.askedAt = this.now;
         } else if (this.storeShown) {
             this.caches.getStoreCache().clear(key.equals(ALL) ? null : key);
+            this.asked = null;
+        } else if (key.equals(OLD_JARS)) {
+            this.caches.clearOldJars();
             this.asked = null;
         } else {
             this.caches.clearCache(key.equals(ALL) ? null : key);

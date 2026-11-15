@@ -114,12 +114,17 @@ public final class HotwireEngine implements ModScreenGame, AutoCloseable {
     private final ModRows rows;
     private final ModIcons icons;
     private final ModChanges changes;
-    private final CacheFillControl cacheFill = new CacheFillControl(this::findParts, this::findStoreCacheView);
+    private final CacheFillControl cacheFill = new CacheFillControl(this::findParts, this::findStoreCacheView,
+            this::getPending);
     private final ConfigScreens configScreens = new ConfigScreens(this::isOn, this::nameOfMod,
             text -> this.showMessage(text, true));
     private final DisabledMods disabled;
     private final SwitchRequests switches;
     private final FolderJars folderJars;
+
+    private PendingChanges getPending() {
+        return this.pending;
+    }
 
     HotwireEngine(InstalledMods installed, Progress progress, GameReports reports, UpdateFolders folders,
             UpdateQueue queue, HotwireSettings settings, ModIcons icons, Bound bound) {

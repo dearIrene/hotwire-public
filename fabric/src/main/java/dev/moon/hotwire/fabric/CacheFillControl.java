@@ -1,14 +1,15 @@
 package dev.moon.hotwire.fabric;
 
 import com.google.common.base.Splitter;
+import dev.moon.hotwire.cache.CacheBudget;
 import dev.moon.hotwire.redefine.CachedMixes;
-import dev.moon.hotwire.redefine.SiteCache;
 import dev.moon.hotwire.report.ActionJournal;
 import dev.moon.hotwire.switching.SwitchCacheFiller;
 import dev.moon.hotwire.ui.CacheFill;
 import dev.moon.hotwire.ui.CacheHost;
 import dev.moon.hotwire.ui.CacheVersion;
 import dev.moon.hotwire.ui.StoreCacheView;
+import dev.moon.hotwire.update.PendingChanges;
 import java.io.IOException;
 import java.nio.file.Files;
 import java.nio.file.Path;
@@ -42,10 +43,40 @@ final class CacheFillControl implements CacheHost {
     private final AtomicBoolean readingVersions = new AtomicBoolean();
     private final Set<String> busy = ConcurrentHashMap.newKeySet();
     private final Supplier<StoreCacheView> store;
+    private final Supplier<PendingChanges> updates;
 
-    CacheFillControl(Supplier<HotwireEngine.@Nullable JvmParts> parts, Supplier<StoreCacheView> store) {
+    private volatile long limitBytes = -1;
+    private volatile long oldJarsBytes;
+
+    CacheFillControl(Supplier<HotwireEngine.@Nullable JvmParts> parts, Supplier<StoreCacheView> store,
+            Supplier<PendingChanges> updates) {
         this.parts = parts;
         this.store = store;
+        this.updates = updates;
+    }
+
+    private long findLimitBytes() {
+        long known = this.limitBytes;
+        if (known < 0) {
+            known = (long) CacheLimit.read(EngineStart.findCacheFolder()) << 20;
+            this.limitBytes = known;
+        }
+        return known;
+    }
+
+    @Override
+    public long getOldJarsBytes() {
+        return this.oldJarsBytes;
+    }
+
+    @Override
+    public void clearOldJars() {
+        try {
+            this.updates.get().clearReplaced();
+        } catch (IOException e) {
+            LOGGER.warn("[Hotwire] the old jars of updated mods could not all be deleted: {}", e.toString());
+        }
+        this.oldJarsBytes = this.updates.get().measureReplaced();
     }
 
     @Override
@@ -92,7 +123,7 @@ final class CacheFillControl implements CacheHost {
         long millisLeft = fill.bytesDone() == 0 ? -1
                 : Math.round((fill.bytes() - fill.bytesDone()) * (fill.millis() / (double) fill.bytesDone()));
         return new CacheFill((int) Math.min(fill.classesDone(), fill.classes()), (int) fill.classes(), fill.running(),
-                saved, estimated, millisLeft, cache.getBytes(), cache.getLimitBytes(), fill.outdated());
+                saved, estimated, millisLeft, cache.getBytes(), this.findLimitBytes(), fill.outdated());
     }
 
     @Override
@@ -102,6 +133,7 @@ final class CacheFillControl implements CacheHost {
             Thread.ofPlatform().name("hotwire-cache-sizes").daemon().start(() -> {
                 try {
                     this.versions = this.readVersions();
+                    this.oldJarsBytes = this.updates.get().measureReplaced();
                     this.versionsAt = System.nanoTime();
                 } finally {
                     this.readingVersions.set(false);
@@ -129,7 +161,8 @@ final class CacheFillControl implements CacheHost {
                 if (!version.matches("[0-9][0-9.]*[0-9]")) {
                     continue;
                 }
-                found.add(new CacheVersion(version, measure(folder), folder.equals(here), this.busy.contains(version)));
+                found.add(new CacheVersion(version, CacheBudget.measureFolder(folder), folder.equals(here),
+                        this.busy.contains(version)));
             }
         } catch (IOException e) {
             return List.of();
@@ -138,14 +171,6 @@ final class CacheFillControl implements CacheHost {
         found.sort(Comparator.comparing(CacheVersion::current).reversed()
                 .thenComparing(Comparator.comparingLong((CacheVersion one) -> parseVersion(one.version())).reversed()));
         return List.copyOf(found);
-    }
-
-    private static long measure(Path folder) {
-        try (Stream<Path> files = Files.walk(folder)) {
-            return files.filter(Files::isRegularFile).mapToLong(file -> file.toFile().length()).sum();
-        } catch (IOException e) {
-            return 0;
-        }
     }
 
     @Override
@@ -158,9 +183,10 @@ final class CacheFillControl implements CacheHost {
             if (found != null) {
                 found.runner().getSwitcher().getFiller().restart();
                 found.adds().getApplier().getRebuilder().getCache().clear();
-                SiteCache.clear();
                 this.estimate = -1;
             }
+
+            CacheBudget.clearStores(here);
         }
         for (CacheVersion one : this.readVersions()) {
             if (!one.current() && (version == null || version.equals(one.version()))) {
@@ -172,14 +198,11 @@ final class CacheFillControl implements CacheHost {
     }
 
     private void delete(Path folder, String version) {
-        try (Stream<Path> files = Files.walk(folder)) {
-            for (Path file : files.sorted(Comparator.reverseOrder()).toList()) {
-                Files.delete(file);
-            }
+        if (CacheBudget.clear(folder)) {
             this.busy.remove(version);
-        } catch (IOException e) {
+        } else {
             this.busy.add(version);
-            LOGGER.info("[Hotwire] the {} switch cache is in use and was not all cleared: {}", version, e.toString());
+            LOGGER.info("[Hotwire] the {} switch cache is in use and was not all cleared", version);
         }
     }
 
@@ -203,10 +226,23 @@ final class CacheFillControl implements CacheHost {
     @Override
     public void setCacheLimit(int megabytes) {
         HotwireEngine.JvmParts found = this.parts.get();
-        if (found != null) {
-            found.adds().getApplier().getRebuilder().getCache().setLimitBytes((long) CacheLimit.clamp(megabytes) << 20);
-            CacheLimit.write(EngineStart.findCacheFolder(), megabytes);
+        if (found == null) {
+            return;
         }
+        Path here = EngineStart.findCacheFolder();
+        long limit = (long) CacheLimit.clamp(megabytes) << 20;
+        CacheLimit.write(here, megabytes);
+        this.limitBytes = limit;
+        Thread.ofPlatform().name("hotwire-cache-limit").daemon().start(() -> {
+            CachedMixes cache = found.adds().getApplier().getRebuilder().getCache();
+            cache.setLimitBytes(CacheBudget.findOwnCap(here, limit));
+            cache.trim();
+            Path root = here.toAbsolutePath().getParent();
+            if (root != null) {
+                CacheBudget.fit(root, String.valueOf(here.getFileName()), limit);
+            }
+            this.versionsAt = 0;
+        });
     }
 
     static boolean isPlaying() {
