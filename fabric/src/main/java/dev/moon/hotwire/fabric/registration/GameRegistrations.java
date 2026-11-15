@@ -85,7 +85,7 @@ public final class GameRegistrations {
 
     private static @Nullable String findOwnNested(Class<?> type) {
         String nested = findNestedModOf(type);
-        return nested != null && isSwitchable(nested) && (alone.contains(nested) || shared.contains(nested)) ? nested
+        return nested != null && isRecordedMod(nested) && (alone.contains(nested) || shared.contains(nested)) ? nested
                 : null;
     }
 
@@ -151,10 +151,10 @@ public final class GameRegistrations {
     }
 
     static boolean isLibrary(String owner) {
-        return !isSwitchable(owner) && !ModPolicy.isBuiltIn(owner) && !ModPolicy.isHotwire(owner);
+        return !isRecordedMod(owner) && !ModPolicy.isBuiltIn(owner) && !ModPolicy.isHotwire(owner);
     }
 
-    public static boolean isSwitchable(@Nullable String mod) {
+    public static boolean isRecordedMod(@Nullable String mod) {
         getOwners();
         return mod != null && !never.contains(mod);
     }

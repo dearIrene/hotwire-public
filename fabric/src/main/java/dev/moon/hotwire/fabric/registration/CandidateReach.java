@@ -117,7 +117,7 @@ final class CandidateReach {
                     || Object[].class.isAssignableFrom(type);
             String mod = GameRegistrations.findModOf(type);
             boolean readInto = (container || hidden || Wrappers.isOfAMod(type)
-                    || !Fields.getRecordParts(type).isEmpty()) && !(container && GameRegistrations.isSwitchable(mod));
+                    || !Fields.getRecordParts(type).isEmpty()) && !(container && GameRegistrations.isRecordedMod(mod));
             BitSet own = this.add(null, hidden ? ValueOwners.findLambdaOwner(type) : null);
             own = this.add(own, mod);
             kind = new Kind(readInto, own == null ? NONE : this.share(own));

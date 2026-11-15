@@ -55,7 +55,7 @@ public final class ConnectionLambdas {
                 String owner = GameRegistrations.findModOf(handler.getValue().getClass());
                 if (handler.getValue() instanceof Connection connection) {
                     seen.add(connection);
-                } else if (owner != null && GameRegistrations.isSwitchable(owner)
+                } else if (owner != null && GameRegistrations.isRecordedMod(owner)
                         && (channel instanceof EmbeddedChannel || isWriting(handler.getValue()))) {
                     if (mods.add(owner)) {
                         LOGGER.info("[Hotwire] a connection's packets run through {}'s handler {}", owner,

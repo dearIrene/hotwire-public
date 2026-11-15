@@ -277,7 +277,7 @@ public final class FieldReferences {
 
     private static boolean isStaying(Class<?> owner, Predicate<String> on) {
         String mod = GameRegistrations.findModOf(owner);
-        return mod == null || (!mod.equals(HotwireClient.ID) && (!GameRegistrations.isSwitchable(mod)
+        return mod == null || (!mod.equals(HotwireClient.ID) && (!GameRegistrations.isRecordedMod(mod)
                 || on.test(mod)));
     }
 
@@ -371,7 +371,7 @@ public final class FieldReferences {
 
             List<String> staying = classesOf.keySet().stream().filter(other -> (every || !mods.contains(other))
                     && !other.equals(HotwireClient.ID) && (GameRegistrations.isLibrary(other)
-                            || (on.test(other) && GameRegistrations.isSwitchable(other)))).toList();
+                            || (on.test(other) && GameRegistrations.isRecordedMod(other)))).toList();
 
             Map<String, List<Class<?>>> initialized = new HashMap<>();
 
@@ -440,7 +440,7 @@ public final class FieldReferences {
         }
         for (String owner : candidates) {
             if (!owner.equals(mod) && !mods.contains(owner)
-                    && ((GameRegistrations.isSwitchable(owner) && on.test(owner))
+                    && ((GameRegistrations.isRecordedMod(owner) && on.test(owner))
                     || GameRegistrations.isLibrary(owner))) {
                 owners.add(owner);
             }
@@ -556,7 +556,7 @@ public final class FieldReferences {
             String ownerMod = GameRegistrations.findModOf(owner);
             return !owner.getName().startsWith("java.") && (ownerMod == null || (!going.contains(ownerMod)
                     && !ownerMod.equals(HotwireClient.ID)
-                    && (!GameRegistrations.isSwitchable(ownerMod) || on.test(ownerMod))));
+                    && (!GameRegistrations.isRecordedMod(ownerMod) || on.test(ownerMod))));
         };
     }
 

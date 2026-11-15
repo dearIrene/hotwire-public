@@ -129,7 +129,7 @@ final class Wrappers {
                 if (!container && !hidden && !isOfAMod(value) && Fields.getRecordParts(value.getClass()).isEmpty()) {
                     continue;
                 }
-                if (container && GameRegistrations.isSwitchable(GameRegistrations.findModOf(value.getClass()))) {
+                if (container && GameRegistrations.isRecordedMod(GameRegistrations.findModOf(value.getClass()))) {
                     continue;
                 }
                 if (--budget < 0) {
@@ -219,7 +219,7 @@ final class Wrappers {
             return NONE_OPEN;
         }
 
-        if (container && GameRegistrations.isSwitchable(GameRegistrations.findModOf(value.getClass()))) {
+        if (container && GameRegistrations.isRecordedMod(GameRegistrations.findModOf(value.getClass()))) {
             return NONE_OPEN;
         }
         if (further <= 0 || this.budget <= 0) {
@@ -371,7 +371,7 @@ final class Wrappers {
     static boolean isOfAnotherMod(Class<?> type) {
         String mod = GameRegistrations.findModOf(type);
         return mod == null ? GameRegistrations.findShippedBy(type) != null
-                : GameRegistrations.isSwitchable(mod) || GameRegistrations.isLibrary(mod);
+                : GameRegistrations.isRecordedMod(mod) || GameRegistrations.isLibrary(mod);
     }
 
     static boolean isLookedInto(Object value) {

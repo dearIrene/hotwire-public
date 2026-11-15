@@ -110,7 +110,7 @@ record HandedSearch(Set<Object> handed, Set<String> consumers, Collection<Class<
             return false;
         }
         String mod = GameRegistrations.findModOf(value.getClass());
-        boolean open = mod == null || this.consumers.contains(mod) || !GameRegistrations.isSwitchable(mod);
+        boolean open = mod == null || this.consumers.contains(mod) || !GameRegistrations.isRecordedMod(mod);
         if (isContainer(value)) {
             return open;
         }

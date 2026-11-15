@@ -424,7 +424,7 @@ public final class HotwireApiImpl implements HotwireApi {
             String mod = findModOf(frame);
             if (mod != null && ModPolicy.isHotwire(mod)) {
                 hotwire = true;
-            } else if (GameRegistrations.isSwitchable(mod)) {
+            } else if (GameRegistrations.isRecordedMod(mod)) {
                 mods.add(mod);
             }
         }

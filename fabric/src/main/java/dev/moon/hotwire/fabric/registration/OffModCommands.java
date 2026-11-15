@@ -183,7 +183,7 @@ public final class OffModCommands {
     }
 
     private static Set<String> findMods(CommandNode<?> node) {
-        Set<String> mods = CommandRecorder.findModsRun(node).stream().filter(GameRegistrations::isSwitchable)
+        Set<String> mods = CommandRecorder.findModsRun(node).stream().filter(GameRegistrations::isRecordedMod)
                 .collect(Collectors.toSet());
         Set<String> owners = mods.stream().filter(mod -> mods.stream().noneMatch(user -> isDependentOf(user, mod)))
                 .collect(Collectors.toSet());

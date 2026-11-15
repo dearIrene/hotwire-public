@@ -55,7 +55,7 @@ public final class CommandRecorder {
     private static @Nullable String findOwner(Set<String> runs, @Nullable String caller) {
         List<String> libraries = new ArrayList<>();
         for (String mod : runs) {
-            if (!GameRegistrations.isSwitchable(mod) || mod.equals(caller)) {
+            if (!GameRegistrations.isRecordedMod(mod) || mod.equals(caller)) {
                 continue;
             }
             if (!GameRegistrations.getOwners().isLibrary(mod)) {

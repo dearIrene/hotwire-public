@@ -313,7 +313,7 @@ public final class CrashGuard {
     }
 
     private static boolean canLeave(@Nullable String mod) {
-        return mod != null && GameRegistrations.isSwitchable(mod) && ModPolicy.isSwitchable(mod);
+        return mod != null && GameRegistrations.isRecordedMod(mod) && ModPolicy.isSwitchable(mod);
     }
 
     private static List<StackTraceElement> findFramesAbove(Throwable thrown) {
@@ -347,7 +347,7 @@ public final class CrashGuard {
             } catch (ClassNotFoundException | LinkageError e) {
                 continue;
             }
-            if (GameRegistrations.isSwitchable(GameRegistrations.findModOf(type))) {
+            if (GameRegistrations.isRecordedMod(GameRegistrations.findModOf(type))) {
                 return "";
             }
             Method[] methods;
@@ -359,7 +359,7 @@ public final class CrashGuard {
             for (Method method : methods) {
                 if (method.getName().equals(element.getMethodName())) {
                     String mod = findMergedMod(method);
-                    if (GameRegistrations.isSwitchable(mod)) {
+                    if (GameRegistrations.isRecordedMod(mod)) {
                         return mod;
                     }
                 }
