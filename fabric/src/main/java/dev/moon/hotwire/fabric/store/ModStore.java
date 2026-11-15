@@ -3,7 +3,6 @@ package dev.moon.hotwire.fabric.store;
 import dev.moon.hotwire.fabric.CacheLimit;
 import dev.moon.hotwire.fabric.InstalledMods;
 import dev.moon.hotwire.fabric.LoadedMods;
-import dev.moon.hotwire.jar.FileHashes;
 import dev.moon.hotwire.modrinth.Downloads;
 import dev.moon.hotwire.modrinth.LocalJars;
 import dev.moon.hotwire.modrinth.ModrinthClient;
@@ -11,6 +10,7 @@ import dev.moon.hotwire.modrinth.StoreCache;
 import dev.moon.hotwire.modrinth.StoreModel;
 import dev.moon.hotwire.ui.Canvas;
 import dev.moon.hotwire.ui.Lang;
+import dev.moon.hotwire.update.UpdateOffer;
 import java.io.IOException;
 import java.nio.file.Files;
 import java.nio.file.Path;
@@ -41,16 +41,14 @@ public final class ModStore {
     private static final Logger LOGGER = LoggerFactory.getLogger(ModStore.class);
     private static final String LOADER = "fabric";
 
-    private final InstalledMods installed;
+    private final UpdateCheck check;
     private final StoreModel model;
     private final StoreIconLoader icons;
     private final String gameVersion;
     private final Path downloads;
 
-    private volatile Map<String, String> modByProject = Map.of();
-
-    public ModStore(InstalledMods installed, Function<String, Canvas.@Nullable Image> icons) {
-        this.installed = installed;
+    public ModStore(InstalledMods installed, UpdateCheck check, Function<String, Canvas.@Nullable Image> icons) {
+        this.check = check;
         Path game = FabricLoader.getInstance().getGameDir();
         this.gameVersion = findVersionOf("minecraft");
         ModrinthClient client = makeClient();
@@ -59,7 +57,7 @@ public final class ModStore {
         this.model = new StoreModel(client, cache, id -> installed.isInstalled(id)
                 || FabricLoader.getInstance().isModLoaded(id), () -> { });
         this.icons = new StoreIconLoader(this.model, cache, project -> {
-            String id = this.modByProject.get(project);
+            String id = check.getIdByProject().get(project);
             return id == null ? null : icons.apply(id);
         });
         this.downloads = game.resolve("hotwire").resolve("store");
@@ -87,14 +85,19 @@ public final class ModStore {
     }
 
     public void checkInstalled() {
-        Map<String, Path> jars = this.installed.getJarsByTopLevel();
-        this.model.run(() -> {
+        this.check.start(offers -> this.model.run(() -> {
             try {
-                this.askInstalled(jars);
+                Map<String, ModrinthClient.Version> updates = new HashMap<>();
+                for (UpdateOffer offer : offers) {
+                    updates.put(offer.projectId(), new ModrinthClient.Version(offer.versionId(), offer.projectId(),
+                            offer.newVersion(), offer.newVersion(), offer.fileName(), offer.url(), offer.sha512(),
+                            offer.size(), List.of(), offer.requiredProjects(), offer.changelog()));
+                }
+                this.model.setInstalled(this.check.getInstalledProjects(), updates);
             } finally {
                 this.installedKnown.complete(null);
             }
-        });
+        }));
     }
 
     private final CompletableFuture<Void> installedKnown = new CompletableFuture<>();
@@ -111,37 +114,6 @@ public final class ModStore {
     }
 
     private static final int INSTALLED_WAIT_SECONDS = 15;
-
-    private void askInstalled(Map<String, Path> jars) {
-        Map<String, String> hashByName = FileHashes.findSha512ByName(jars.values());
-        if (hashByName.isEmpty()) {
-            return;
-        }
-        Map<String, String> idByName = new HashMap<>();
-        jars.forEach((id, jar) -> idByName.put(String.valueOf(jar.getFileName()), id));
-        try {
-            Map<String, ModrinthClient.Version> newest = this.model.getClient().findNewest(hashByName);
-            Set<String> projects = new HashSet<>();
-            Map<String, String> mods = new HashMap<>();
-            Map<String, ModrinthClient.Version> updates = new HashMap<>();
-            newest.forEach((name, version) -> {
-                projects.add(version.projectId());
-                String id = idByName.get(name);
-                if (id != null) {
-                    mods.put(version.projectId(), id);
-                }
-                if (!version.sha512().equalsIgnoreCase(hashByName.get(name))) {
-                    updates.put(version.projectId(), version);
-                }
-            });
-            LOGGER.info("[Hotwire] the store knows {} of {} mods; {} have a newer version", projects.size(),
-                    hashByName.size(), updates.size());
-            this.modByProject = Map.copyOf(mods);
-            this.model.setInstalled(projects, updates);
-        } catch (IOException | RuntimeException e) {
-            LOGGER.info("[Hotwire] the store could not check the installed mods: {}", e.toString());
-        }
-    }
 
     public void fetch(String projectId, String versionId, String title, BiConsumer<List<Path>, List<String>> onJars,
             Consumer<String> onFailure) {

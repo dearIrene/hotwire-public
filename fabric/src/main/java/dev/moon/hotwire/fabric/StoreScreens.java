@@ -43,7 +43,7 @@ final class StoreScreens {
     ModStore findStore() {
         ModStore made = this.store;
         if (made == null) {
-            made = new ModStore(this.installed, this.icons::of);
+            made = new ModStore(this.installed, this.jars.getCheck(), this.icons::of);
             made.checkInstalled();
             PackFolders packs = new PackFolders(made.getModel().getClient(), made.getModel().getDownloads(),
                     this.engine::showMessage);

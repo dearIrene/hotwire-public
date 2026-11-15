@@ -23,6 +23,7 @@ import java.util.Map;
 import java.util.Queue;
 import java.util.Set;
 import java.util.concurrent.ConcurrentLinkedQueue;
+import java.util.concurrent.atomic.AtomicInteger;
 import java.util.function.Consumer;
 import net.fabricmc.loader.api.FabricLoader;
 import org.jspecify.annotations.Nullable;
@@ -44,7 +45,7 @@ public final class UpdateCheck {
     private final Path memoryFile = CacheLimit.findStoreFolder().resolve("updates-"
             + this.client.getScope().replaceAll("[^A-Za-z0-9.-]", "_") + ".gz");
     private static final long RECENT_NANOS = 60_000_000_000L;
-    private volatile int newlyFound;
+    private final AtomicInteger newlyFound = new AtomicInteger();
 
     private final Queue<String> installedSince = new ConcurrentLinkedQueue<>();
 
@@ -154,7 +155,7 @@ public final class UpdateCheck {
         for (UpdateOffer offer : found) {
             fresh += memory.tell(offer.versionId()) ? 1 : 0;
         }
-        this.newlyFound = fresh;
+        this.newlyFound.addAndGet(fresh);
         memory.write();
         this.lastFound = new OfferMatch(Map.copyOf(jars), System.nanoTime(), List.copyOf(found));
         return found;
@@ -200,8 +201,16 @@ public final class UpdateCheck {
         return newest;
     }
 
-    public int getNewlyFound() {
-        return this.newlyFound;
+    public int takeNewlyFound() {
+        return this.newlyFound.getAndSet(0);
+    }
+
+    public Set<String> getInstalledProjects() {
+        return this.installedProjects;
+    }
+
+    public Map<String, String> getIdByProject() {
+        return this.idByProject;
     }
 
     private List<UpdateOffer> makeOffers(Map<String, ModrinthClient.Version> newest, Map<String, String> hashByName,

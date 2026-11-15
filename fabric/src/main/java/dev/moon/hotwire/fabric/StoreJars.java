@@ -144,7 +144,7 @@ final class StoreJars {
                 current.setUpdates(found, true);
             }
 
-            int fresh = this.check.getNewlyFound();
+            int fresh = this.check.takeNewlyFound();
             if (fresh > 0) {
                 this.say.accept(fresh == 1 ? Lang.get("hotwire.updates.found_one")
                         : Lang.get("hotwire.updates.found", fresh), false);
