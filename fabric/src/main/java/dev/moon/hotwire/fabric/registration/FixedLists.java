@@ -2,6 +2,7 @@ package dev.moon.hotwire.fabric.registration;
 
 import com.google.common.collect.MapMaker;
 import dev.moon.hotwire.redefine.FieldSlots;
+import java.lang.ref.WeakReference;
 import java.util.ArrayList;
 import java.util.Collections;
 import java.util.LinkedHashMap;
@@ -113,8 +114,19 @@ final class FixedLists {
     static void removeFromValue(Walk walk, Map<Object, Object> entries, Object key) {
         Plan plan = planValue(walk, entries, key);
         if (plan != null) {
-            noteOrWrite(walk, plan, () -> entries.get(key), () -> planValue(walk, entries, key),
-                    found -> writeValue(walk, entries, key, found));
+            WeakReference<Map<Object, Object>> weak = new WeakReference<>(entries);
+            noteOrWrite(walk, plan, () -> {
+                Map<Object, Object> now = weak.get();
+                return now == null ? null : now.get(key);
+            }, () -> {
+                Map<Object, Object> now = weak.get();
+                return now == null ? null : planValue(walk, now, key);
+            }, found -> {
+                Map<Object, Object> now = weak.get();
+                if (now != null) {
+                    writeValue(walk, now, key, found);
+                }
+            });
         }
     }
 
@@ -147,10 +159,27 @@ final class FixedLists {
 
     static void removeFromField(Walk walk, FieldSlots.Slot field, @Nullable Object holder) {
         Plan plan = planField(walk, field, holder);
-        if (plan != null) {
-            noteOrWrite(walk, plan, () -> CollectionParts.read(field, holder), () -> planField(walk, field, holder),
-                    found -> writeField(walk, field, holder, found));
+        if (plan == null) {
+            return;
         }
+        if (holder == null) {
+            noteOrWrite(walk, plan, () -> CollectionParts.read(field, null), () -> planField(walk, field, null),
+                    found -> writeField(walk, field, null, found));
+            return;
+        }
+        WeakReference<Object> weak = new WeakReference<>(holder);
+        noteOrWrite(walk, plan, () -> {
+            Object now = weak.get();
+            return now == null ? null : CollectionParts.read(field, now);
+        }, () -> {
+            Object now = weak.get();
+            return now == null ? null : planField(walk, field, now);
+        }, found -> {
+            Object now = weak.get();
+            if (now != null) {
+                writeField(walk, field, now, found);
+            }
+        });
     }
 
     private static @Nullable Plan planField(Walk walk, FieldSlots.Slot field, @Nullable Object holder) {

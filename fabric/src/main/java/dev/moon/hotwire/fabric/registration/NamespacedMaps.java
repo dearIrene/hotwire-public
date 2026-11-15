@@ -1,5 +1,6 @@
 package dev.moon.hotwire.fabric.registration;
 
+import java.lang.ref.WeakReference;
 import java.util.HashSet;
 import java.util.Map;
 import java.util.Set;
@@ -52,8 +53,13 @@ final class NamespacedMaps {
             }
         }
         if (!mods.isEmpty()) {
-            walk.getLook().hasNoted(new ElementTakes.NotedTake(() -> "", any -> removeFrom(walk, map),
-                    Set.copyOf(mods)));
+            WeakReference<Map<?, ?>> weak = new WeakReference<>(map);
+            walk.getLook().hasNoted(new ElementTakes.NotedTake(() -> "", any -> {
+                Map<?, ?> now = weak.get();
+                if (now != null) {
+                    removeFrom(walk, now);
+                }
+            }, Set.copyOf(mods)));
         }
     }
 

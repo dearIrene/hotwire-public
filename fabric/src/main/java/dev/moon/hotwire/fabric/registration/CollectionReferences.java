@@ -142,6 +142,10 @@ final class CollectionReferences implements FixedLists.Walk {
         this.readThrough = Collections.newSetFromMap(new IdentityHashMap<>());
         this.mods = List.of();
         this.owners = new ElementOwners(List.of(), Set.of());
+
+        this.ownClassAsked = null;
+        this.ownStaticsAsked = null;
+        this.ownOwnersAsked = null;
         this.mine = Map.of();
     }
 
