@@ -2,7 +2,6 @@ package dev.moon.hotwire.jvm;
 
 import dev.moon.hotwire.jvm.JvmAccessException.Reason;
 import java.io.IOException;
-import java.io.IOException;
 import java.lang.instrument.Instrumentation;
 import java.lang.invoke.MethodHandle;
 import java.lang.invoke.MethodHandleProxies;

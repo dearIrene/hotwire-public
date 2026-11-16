@@ -199,6 +199,7 @@ public final class Tripwire {
 
         CountDownLatch gate = GATES.get(mod);
         long until = System.nanoTime() + OFF_WAIT_NANOS;
+
         while (gate == null && GOING_OFF.contains(mod) && System.nanoTime() < until) {
             LockSupport.parkNanos(1_000_000);
             gate = GATES.get(mod);

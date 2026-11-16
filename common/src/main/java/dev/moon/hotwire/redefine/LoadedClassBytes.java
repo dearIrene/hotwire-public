@@ -74,6 +74,7 @@ public final class LoadedClassBytes {
     @CanIgnoreReturnValue
     public static boolean recordDefinedInGame(String internal, byte[] bytes, ClassLoader loader) {
         boolean written = DEFINED.put(internal, bytes);
+
         IN_GAME.put(internal, System.identityHashCode(loader));
         return written;
     }
