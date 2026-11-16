@@ -24,7 +24,8 @@ public final class ProfileStore {
     private static final List<String> HEAD = List.of("# Hotwire profiles. One per line:  name = modid, modid, ...",
             "# Everything installed and NOT listed is switched off when",
                     "# the profile is applied. Safe to edit by hand.",
-            "# A profile's servers:  @name = address, address  (singleplayer for your own worlds)");
+            "# A profile's servers:  @name = address, address  (singleplayer for your own worlds,",
+            "# * for any part of an address: *.example.net)");
 
     public static final String SINGLEPLAYER = "singleplayer";
     private static final String DEFAULT_PORT = ":25565";
@@ -145,7 +146,22 @@ public final class ProfileStore {
                 return entry.getKey();
             }
         }
+
+        for (Map.Entry<String, Set<String>> entry : this.servers.entrySet()) {
+            if (!this.profiles.containsKey(entry.getKey())) {
+                continue;
+            }
+            for (String pattern : entry.getValue()) {
+                if (pattern.indexOf('*') >= 0 && isMatching(pattern, server)) {
+                    return entry.getKey();
+                }
+            }
+        }
         return null;
+    }
+
+    private static boolean isMatching(String pattern, String server) {
+        return server.matches("\\Q" + pattern.replace("*", "\\E.*\\Q") + "\\E");
     }
 
     public static String normalize(String address) {
@@ -153,7 +169,7 @@ public final class ProfileStore {
         if (server.endsWith(DEFAULT_PORT)) {
             server = server.substring(0, server.length() - DEFAULT_PORT.length());
         }
-        return server.matches("[a-z0-9._:\\[\\]-]{1,255}") ? server : "";
+        return server.matches("[a-z0-9._:*\\[\\]-]{1,255}") ? server : "";
     }
 
     public ProfilePlan planFor(String name, List<String> installed, Predicate<String> on) {

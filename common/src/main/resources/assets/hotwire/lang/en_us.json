@@ -343,7 +343,7 @@
   "hotwire.profiles.apply": "Switch to '%s'",
   "hotwire.profiles.servers": "Servers for '%s'",
   "hotwire.profiles.servers_line": "Joining one of these switches to this profile.",
-  "hotwire.profiles.server_hint": "Server address, then Enter",
+  "hotwire.profiles.server_hint": "Server address (* for any part), then Enter",
   "hotwire.profiles.add_joined": "Add %s",
   "hotwire.profiles.singleplayer": "Singleplayer",
   "hotwire.profiles.remove": "Remove",
