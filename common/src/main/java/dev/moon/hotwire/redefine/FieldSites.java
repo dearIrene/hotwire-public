@@ -103,7 +103,12 @@ final class FieldSites {
                 added.put(field.name + field.desc, field.name);
             }
         }
-        if (added.isEmpty() && sitedMixins.isEmpty()) {
+
+        boolean anyAdded = false;
+        for (FieldNode field : node.fields) {
+            anyAdded |= (field.access & Opcodes.ACC_STATIC) == 0 && !own.contains(field.name + field.desc);
+        }
+        if (!anyAdded && sitedMixins.isEmpty()) {
             return;
         }
 
