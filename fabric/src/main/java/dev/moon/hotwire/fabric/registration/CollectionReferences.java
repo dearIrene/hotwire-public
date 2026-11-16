@@ -1,5 +1,6 @@
 package dev.moon.hotwire.fabric.registration;
 
+import dev.moon.hotwire.config.Flags;
 import dev.moon.hotwire.redefine.FieldSlots;
 import dev.moon.hotwire.redefine.Tripwire;
 import dev.moon.hotwire.registration.Fingerprints;
@@ -57,7 +58,7 @@ final class CollectionReferences implements FixedLists.Walk {
     private ElementTakes.@Nullable Answers prepared;
     private List<String> preparedFor = List.of();
 
-    private static final boolean NO_PRINTS = System.getProperty("hotwire.noFingerprints") != null;
+    private static final boolean NO_PRINTS = Flags.NO_FINGERPRINTS;
     private boolean inSmall;
 
     final TakeCandidates candidates = new TakeCandidates();

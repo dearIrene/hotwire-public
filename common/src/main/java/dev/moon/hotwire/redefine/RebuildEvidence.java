@@ -1,6 +1,7 @@
 package dev.moon.hotwire.redefine;
 
 import dev.moon.hotwire.classfile.ClassHeader;
+import dev.moon.hotwire.config.Flags;
 import java.io.IOException;
 import java.lang.instrument.ClassDefinition;
 import java.lang.instrument.Instrumentation;
@@ -30,7 +31,7 @@ final class RebuildEvidence {
     }
 
     static void dump(String name, byte[] running, byte[] mixed, ClassSplit.Result split) {
-        String folder = System.getProperty("hotwire.dump");
+        String folder = Flags.DUMP;
         if (folder == null) {
             return;
         }
@@ -47,7 +48,7 @@ final class RebuildEvidence {
     }
 
     static void dumpFailed(String name, byte[] running, byte[] mixed) {
-        String folder = System.getProperty("hotwire.dump");
+        String folder = Flags.DUMP;
         if (folder == null) {
             return;
         }
@@ -93,7 +94,7 @@ final class RebuildEvidence {
     }
 
     static void dumpCopy(String name, byte[] bytes) {
-        dumpCopyTo(System.getProperty("hotwire.dump"), name, bytes);
+        dumpCopyTo(Flags.DUMP, name, bytes);
     }
 
     static void dumpCopyTo(@Nullable String folder, String name, byte[] bytes) {
@@ -110,7 +111,7 @@ final class RebuildEvidence {
     }
 
     static void dumpReadBack(String name, byte @Nullable [] bytes) {
-        String folder = System.getProperty("hotwire.dump");
+        String folder = Flags.DUMP;
         if (folder == null || bytes == null) {
             return;
         }

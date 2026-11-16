@@ -2,6 +2,7 @@ package dev.moon.hotwire.switching;
 
 import dev.moon.hotwire.cache.CacheKey;
 import dev.moon.hotwire.classfile.ClassHeader;
+import dev.moon.hotwire.config.Flags;
 import dev.moon.hotwire.plan.SwitchPlan;
 import dev.moon.hotwire.redefine.CachedMixes;
 import dev.moon.hotwire.redefine.ClassRebuilder;
@@ -293,7 +294,7 @@ public final class SwitchCacheFiller {
         if (holding == 0) {
             return;
         }
-        boolean all = Boolean.parseBoolean(System.getProperty("hotwire.cacheAuditAll"));
+        boolean all = Flags.CACHE_AUDIT_ALL;
         List<Step> checked = all ? this.steps.subList(0, holding)
                 : List.of(this.steps.get(ThreadLocalRandom.current().nextInt(holding)));
         CachedMixes cache = this.applier.getRebuilder().getCache();
@@ -364,7 +365,7 @@ public final class SwitchCacheFiller {
         }
 
         List<Step> planned = new ArrayList<>(offs.values());
-        if (Boolean.parseBoolean(System.getProperty("hotwire.fillOneByOne"))) {
+        if (Flags.FILL_ONE_BY_ONE) {
             planned.sort(Comparator.comparingInt(Step::classes));
         } else {
             planned = groupOffs(planned, prints);

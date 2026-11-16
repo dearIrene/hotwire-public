@@ -1,5 +1,6 @@
 package dev.moon.hotwire.switching;
 
+import dev.moon.hotwire.config.Flags;
 import dev.moon.hotwire.redefine.BatchRider;
 import dev.moon.hotwire.redefine.ClassRebuilder;
 import dev.moon.hotwire.redefine.DuckBridge;
@@ -292,7 +293,7 @@ final class DuckRebridge {
     }
 
     private static void dumpRefused(String name, byte[] bytes) {
-        String folder = System.getProperty("hotwire.dump");
+        String folder = Flags.DUMP;
         if (folder == null) {
             return;
         }

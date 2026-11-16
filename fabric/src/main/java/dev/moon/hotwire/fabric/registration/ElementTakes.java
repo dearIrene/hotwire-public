@@ -1,5 +1,6 @@
 package dev.moon.hotwire.fabric.registration;
 
+import dev.moon.hotwire.config.Flags;
 import dev.moon.hotwire.registration.Fingerprints;
 import dev.moon.hotwire.registration.GuavaCaches;
 import java.lang.ref.WeakReference;
@@ -301,7 +302,7 @@ final class ElementTakes {
                 + (value == null ? "null" : value.getClass().getName());
     }
 
-    private static final boolean CHECKING_SKIPS = System.getProperty("hotwire.checkSkips") != null;
+    private static final boolean CHECKING_SKIPS = Flags.CHECK_SKIPS;
 
     static boolean isCheckingSkips() {
         return CHECKING_SKIPS;

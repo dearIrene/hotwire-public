@@ -1,6 +1,7 @@
 package dev.moon.hotwire.fabric;
 
 import dev.moon.hotwire.concurrent.Tasks;
+import dev.moon.hotwire.config.Flags;
 import dev.moon.hotwire.fabric.report.GameReports;
 import dev.moon.hotwire.fabric.report.ReportZips;
 import dev.moon.hotwire.fabric.screen.CrashPopup;
@@ -42,7 +43,7 @@ public final class CrashReports {
             CrashNotice.save(words);
             if (!goingDown) {
                 Minecraft.getInstance().execute(() -> CrashNotice.showNow(words));
-            } else if (System.getProperty("hotwire.oneclient") != null) {
+            } else if (Flags.ONECLIENT) {
                 LOGGER.info("[Hotwire] the crash box is not shown in a test launch");
             } else if (!Minecraft.getInstance().isSameThread() || CrashPopup.showOnItsOwnThread(
                     Lang.get("hotwire.report.crash_title"),

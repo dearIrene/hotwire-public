@@ -1,5 +1,6 @@
 package dev.moon.hotwire.switching;
 
+import dev.moon.hotwire.config.Flags;
 import dev.moon.hotwire.redefine.AccessBridge;
 import dev.moon.hotwire.redefine.Adoption;
 import dev.moon.hotwire.redefine.DuckBridge;
@@ -131,8 +132,8 @@ final class LoadTimeBridge implements ClassFileTransformer {
     }
 
     private static void dumpLoad(String className, byte[] given, byte @Nullable [] mixed, byte[] returned) {
-        String folder = System.getProperty("hotwire.dump");
-        String part = System.getProperty("hotwire.dumpLoad");
+        String folder = Flags.DUMP;
+        String part = Flags.DUMP_LOAD;
         if (folder == null || part == null || !className.contains(part)) {
             return;
         }

@@ -1,5 +1,6 @@
 package dev.moon.hotwire.fabric.registration;
 
+import dev.moon.hotwire.config.Flags;
 import dev.moon.hotwire.jvm.ClassPathListing;
 import java.net.URL;
 import org.jspecify.annotations.Nullable;
@@ -7,7 +8,7 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 public final class GameLibraries {
-    private static final boolean VERIFY = Boolean.parseBoolean(System.getProperty("hotwire.verifyLibraries"));
+    private static final boolean VERIFY = Flags.VERIFY_LIBRARIES;
     private static final Logger LOGGER = LoggerFactory.getLogger(GameLibraries.class);
 
     private GameLibraries() {

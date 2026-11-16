@@ -1,5 +1,6 @@
 package dev.moon.hotwire.fabric.registration;
 
+import dev.moon.hotwire.config.Flags;
 import dev.moon.hotwire.fabric.mixin.core.fabric.base.event.ArrayBackedEventAccessor;
 import dev.moon.hotwire.redefine.FieldSlots;
 import dev.moon.hotwire.switching.HoldBudgetException;
@@ -42,14 +43,14 @@ public final class ElementLook {
 
     private static final ThreadLocal<Mode> MODE = ThreadLocal.withInitial(() -> Mode.HOLD);
 
-    private static final boolean CHECK = Boolean.parseBoolean(System.getProperty("hotwire.checkLook"));
+    private static final boolean CHECK = Flags.CHECK_LOOK;
 
     static boolean isChecking() {
         return CHECK;
     }
     private static final ThreadLocal<Boolean> WHOLE = ThreadLocal.withInitial(() -> false);
 
-    private static final boolean NO_LOOK = Boolean.parseBoolean(System.getProperty("hotwire.noLook"));
+    private static final boolean NO_LOOK = Flags.NO_LOOK;
 
     static boolean isLeftToOthers(Object holder) {
         return !WHOLE.get() && (holder instanceof ModelManager || holder instanceof ArrayBackedEventAccessor

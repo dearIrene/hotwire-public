@@ -1,6 +1,7 @@
 package dev.moon.hotwire.redefine;
 
 import dev.moon.hotwire.classfile.ClassNodes;
+import dev.moon.hotwire.config.Flags;
 import java.lang.invoke.CallSite;
 import java.lang.invoke.MethodHandle;
 import java.lang.invoke.MethodHandles;
@@ -37,7 +38,7 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 public final class HandlerGuards {
-    public static final boolean ENABLED = !"false".equals(System.getProperty("hotwire.guards"));
+    public static final boolean ENABLED = !"false".equals(Flags.findGuards());
     private static final Logger LOGGER = LoggerFactory.getLogger(HandlerGuards.class);
     private static final String MERGED = "Lorg/spongepowered/asm/mixin/transformer/meta/MixinMerged;";
     static final byte[] MERGED_BYTES = MERGED.getBytes(StandardCharsets.UTF_8);

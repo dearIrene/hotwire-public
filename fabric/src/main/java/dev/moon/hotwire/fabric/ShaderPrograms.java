@@ -7,6 +7,7 @@ import java.util.Set;
 import java.util.stream.Collectors;
 import net.minecraft.client.Minecraft;
 //? if >=1.21.5 {
+import dev.moon.hotwire.config.Flags;
 import java.util.concurrent.CompletableFuture;
 import net.minecraft.client.renderer.RenderPipelines;
 import net.minecraft.client.renderer.ShaderDefines;
@@ -15,7 +16,8 @@ import net.minecraft.server.packs.resources.ReloadInstance;
 import net.minecraft.server.packs.resources.SimpleReloadInstance;
 import net.minecraft.util.Unit;
 //?} else if >=1.21.2 {
-/*import java.util.concurrent.CompletableFuture;
+/*import dev.moon.hotwire.config.Flags;
+import java.util.concurrent.CompletableFuture;
 import net.minecraft.client.renderer.CompiledShaderProgram;
 import net.minecraft.client.renderer.CoreShaders;
 import net.minecraft.client.renderer.ShaderDefines;
@@ -88,7 +90,7 @@ final class ShaderPrograms {
         }
         madeThisSwitch = true;
         //? if >=1.21.2 {
-        if (!Boolean.parseBoolean(System.getProperty("hotwire.shadersAgain", "true"))) {
+        if (!Flags.SHADERS_AGAIN) {
             return;
         }
         long began = System.nanoTime();

@@ -1,6 +1,7 @@
 package dev.moon.hotwire.fabric;
 
 import dev.moon.hotwire.config.AtomicFiles;
+import dev.moon.hotwire.config.Flags;
 import dev.moon.hotwire.update.UrgentUpdate;
 import java.io.IOException;
 import java.nio.file.Files;
@@ -83,7 +84,7 @@ public final class UrgentNotice {
 
     static @Nullable UrgentUpdate find() {
         readOnce();
-        return Boolean.parseBoolean(System.getProperty("hotwire.noUrgent")) ? null : due.orElse(null);
+        return Flags.NO_URGENT ? null : due.orElse(null);
     }
 
     private static Path findNote() {

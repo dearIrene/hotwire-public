@@ -3,6 +3,7 @@ package dev.moon.hotwire.fabric;
 import dev.moon.hotwire.cache.CacheKey;
 import dev.moon.hotwire.cache.CacheStore;
 import dev.moon.hotwire.config.AtomicFiles;
+import dev.moon.hotwire.config.Flags;
 import dev.moon.hotwire.config.HotwireSettings;
 import dev.moon.hotwire.fabric.dev.DevSession;
 import dev.moon.hotwire.fabric.report.HotwireLog;
@@ -58,7 +59,7 @@ public final class EarlyDefinitions implements PreLaunchEntrypoint {
             DevSession.takeEarlySources(DevSetups.getBuildFolder());
         }
 
-        if (System.getProperty("hotwire.guards") == null && new HotwireSettings(FabricLoader.getInstance()
+        if (Flags.findGuards() == null && new HotwireSettings(FabricLoader.getInstance()
                 .getConfigDir().resolve("hotwire/settings.json")).isRebuildEverySwitch(FabricLoader.getInstance()
                 .isDevelopmentEnvironment())) {
             System.setProperty("hotwire.guards", "false");
@@ -126,7 +127,7 @@ public final class EarlyDefinitions implements PreLaunchEntrypoint {
             EarlyModsReader.start();
             GameClassIndex.begin(found, game);
             if (HandlerGuards.ENABLED && !DevSetups.get().inSetup() && game.getParent() instanceof URLClassLoader jars
-                    && Boolean.parseBoolean(System.getProperty("hotwire.siteCache", "true"))) {
+                    && Flags.SITE_CACHE) {
                 Thread.ofPlatform().daemon().name("hotwire-sites-open").start(() -> openSites(jars.getURLs()));
             }
         } catch (JvmAccessException | RuntimeException | LinkageError e) {

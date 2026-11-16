@@ -5,6 +5,7 @@ import com.google.gson.JsonParser;
 import dev.moon.hotwire.cache.CacheKey;
 import dev.moon.hotwire.cache.CacheStore;
 import dev.moon.hotwire.classfile.ClassHeader;
+import dev.moon.hotwire.config.Flags;
 import dev.moon.hotwire.mixin_copy.ConfigTrim;
 import dev.moon.hotwire.mixin_copy.MixinClassInfo;
 import dev.moon.hotwire.mixin_copy.MixinCopy;
@@ -116,7 +117,7 @@ final class MixedCache {
 
     private static final Map<byte[], CacheKey> SHAPES = Collections.synchronizedMap(new WeakHashMap<>());
 
-    private static final @Nullable String KEY_DUMP = System.getProperty("hotwire.cacheKeyDump");
+    private static final @Nullable String KEY_DUMP = Flags.CACHE_KEY_DUMP;
     private final AtomicLong missedNoEntry = new AtomicLong();
     private final AtomicLong missedReads = new AtomicLong();
     private final AtomicLong missedPack = new AtomicLong();

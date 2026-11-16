@@ -1,5 +1,6 @@
 package dev.moon.hotwire.fabric.registration;
 
+import dev.moon.hotwire.config.Flags;
 import dev.moon.hotwire.redefine.FieldSlots;
 import dev.moon.hotwire.registration.ModNames;
 import java.util.HashMap;
@@ -24,7 +25,7 @@ final class TakeCandidates {
         this.reach = null;
     }
 
-    private static final boolean VERIFY = Boolean.parseBoolean(System.getProperty("hotwire.verifyCandidates"));
+    private static final boolean VERIFY = Flags.VERIFY_CANDIDATES;
     private int differed;
 
     @Nullable Set<String> find(@Nullable Object element, boolean deep) {

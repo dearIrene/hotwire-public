@@ -1,5 +1,6 @@
 package dev.moon.hotwire.fabric;
 
+import dev.moon.hotwire.config.Flags;
 import dev.moon.hotwire.jvm.ClassPathIndex;
 import dev.moon.hotwire.jvm.JvmAccess;
 import dev.moon.hotwire.jvm.JvmAccessException;
@@ -46,7 +47,7 @@ final class GameClassIndex {
     }
 
     static void begin(Instrumentation instrumentation, ClassLoader game) {
-        if (!Boolean.parseBoolean(System.getProperty("hotwire.classIndex", "true"))
+        if (!Flags.CLASS_INDEX
                 || !game.getClass().getName().equals(KNOT) || !(game.getParent() instanceof URLClassLoader jars)) {
             return;
         }

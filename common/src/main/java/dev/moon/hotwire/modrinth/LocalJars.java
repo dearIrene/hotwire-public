@@ -1,5 +1,6 @@
 package dev.moon.hotwire.modrinth;
 
+import dev.moon.hotwire.config.Flags;
 import java.io.IOException;
 import java.io.UncheckedIOException;
 import java.nio.file.Files;
@@ -53,7 +54,7 @@ public final class LocalJars {
 
     static boolean isSameJar(Path file, long size, String sha512) {
         try {
-            return System.getProperty("hotwire.noLocalJars") == null && Files.isRegularFile(file)
+            return !Flags.NO_LOCAL_JARS && Files.isRegularFile(file)
                     && Files.size(file) == size && ModrinthClient.hashOf(file).equalsIgnoreCase(sha512);
         } catch (IOException | UncheckedIOException e) {
             return false;
@@ -61,7 +62,7 @@ public final class LocalJars {
     }
 
     public @Nullable Path find(String fileName, long size, String sha512) {
-        if (System.getProperty("hotwire.noLocalJars") != null) {
+        if (Flags.NO_LOCAL_JARS) {
             return null;
         }
         long began = System.nanoTime();

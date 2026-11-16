@@ -7,6 +7,7 @@ import com.mojang.blaze3d.Blaze3D;
 *///?} else {
 /*import net.minecraft.Util;
 *///?}
+import dev.moon.hotwire.config.Flags;
 import java.io.IOException;
 import java.net.URI;
 import java.net.URISyntaxException;
@@ -37,7 +38,7 @@ public final class WebLinks {
             return;
         }
         LOGGER.info("[Hotwire] opening {}", uri.toASCIIString());
-        if (System.getProperty("hotwire.oneclient") != null) {
+        if (Flags.ONECLIENT) {
             return;
         }
         //? if >=26.3 {
@@ -48,7 +49,7 @@ public final class WebLinks {
     }
 
     public static void openFolderBeforeExit(Path folder) {
-        if (System.getProperty("hotwire.oneclient") != null) {
+        if (Flags.ONECLIENT) {
             return;
         }
         String os = System.getProperty("os.name", "").toLowerCase(Locale.ROOT);
@@ -64,7 +65,7 @@ public final class WebLinks {
     }
 
     public static void openFolder(Path folder) {
-        if (System.getProperty("hotwire.oneclient") != null) {
+        if (Flags.ONECLIENT) {
             return;
         }
         //? if >=26.3 {

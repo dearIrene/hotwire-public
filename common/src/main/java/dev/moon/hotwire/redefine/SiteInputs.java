@@ -1,5 +1,6 @@
 package dev.moon.hotwire.redefine;
 
+import dev.moon.hotwire.config.Flags;
 import java.io.IOException;
 import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
@@ -13,8 +14,8 @@ import org.slf4j.LoggerFactory;
 
 final class SiteInputs {
     private static final Logger LOGGER = LoggerFactory.getLogger(SiteInputs.class);
-    private static final @Nullable Path FOLDER = System.getProperty("hotwire.dumpSites") == null ? null
-            : Path.of(System.getProperty("hotwire.dumpSites"));
+    private static final @Nullable Path FOLDER = Flags.DUMP_SITES == null ? null
+            : Path.of(Flags.DUMP_SITES);
 
     private SiteInputs() {
     }

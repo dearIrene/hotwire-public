@@ -2,6 +2,7 @@ package dev.moon.hotwire.fabric.update;
 
 import dev.moon.hotwire.classfile.ClassNodes;
 import dev.moon.hotwire.concurrent.Parallel;
+import dev.moon.hotwire.config.Flags;
 import dev.moon.hotwire.fabric.HotwireClient;
 import dev.moon.hotwire.fabric.ModPolicy;
 import dev.moon.hotwire.jar.JarLookup;
@@ -67,7 +68,7 @@ final class UpdateCopies {
     private volatile Set<String> leaving = Set.of();
     private volatile Map<String, String> picked = Map.of();
 
-    private static final int MOST_IN_A_COPY_GROUP = Integer.getInteger("hotwire.copyGroupCap", 12);
+    private static final int MOST_IN_A_COPY_GROUP = Flags.COPY_GROUP_CAP;
     private static final int MOST_ROUNDS = 6;
 
     private static final Pattern SLASHED_NAME = Pattern.compile("[a-zA-Z0-9_$]+(?:/[a-zA-Z0-9_$]+)+");

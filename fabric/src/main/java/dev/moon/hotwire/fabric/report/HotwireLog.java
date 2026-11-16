@@ -1,5 +1,6 @@
 package dev.moon.hotwire.fabric.report;
 
+import dev.moon.hotwire.config.Flags;
 import dev.moon.hotwire.report.GameLog;
 import java.io.IOException;
 import java.io.Writer;
@@ -83,8 +84,8 @@ public final class HotwireLog extends AbstractAppender {
     }
 
     public static boolean isTestLog() {
-        return System.getProperty("hotwire.oneclient") != null
-                && !Boolean.parseBoolean(System.getProperty("hotwire.playerlog"));
+        return Flags.ONECLIENT
+                && !Flags.PLAYER_LOG;
     }
 
     @Override

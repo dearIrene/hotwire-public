@@ -2,6 +2,7 @@ package dev.moon.hotwire.fabric;
 
 import dev.moon.hotwire.cache.CacheBudget;
 import dev.moon.hotwire.cache.CacheStore;
+import dev.moon.hotwire.config.Flags;
 import dev.moon.hotwire.config.HotwireSettings;
 import dev.moon.hotwire.fabric.add.AddSupport;
 import dev.moon.hotwire.fabric.add.HiddenPacks;
@@ -562,7 +563,7 @@ final class EngineStart {
             String game = LoadedMods.findVersion("minecraft", "unknown");
             List<Path> bases = new ArrayList<>();
 
-            String chosen = System.getProperty("hotwire.cacheFolder");
+            String chosen = Flags.CACHE_FOLDER;
             if (chosen != null) {
                 bases.add(Path.of(chosen));
             }

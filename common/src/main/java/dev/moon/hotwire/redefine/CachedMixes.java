@@ -2,6 +2,7 @@ package dev.moon.hotwire.redefine;
 
 import dev.moon.hotwire.cache.CacheKey;
 import dev.moon.hotwire.cache.CacheStore;
+import dev.moon.hotwire.config.Flags;
 import dev.moon.hotwire.mixin_copy.ConfigTrim;
 import dev.moon.hotwire.mixin_copy.MixinCopy;
 import dev.moon.hotwire.mixin_copy.MixinCopyException;
@@ -218,7 +219,7 @@ public final class CachedMixes {
                     missed.isEmpty() ? "" : " " + missed, targets.size() - keys.size(), known.describe());
 
             boolean audit = this.auditing;
-            if (!readBack.isEmpty() && (audit || Boolean.parseBoolean(System.getProperty("hotwire.cacheVerify")))) {
+            if (!readBack.isEmpty() && (audit || Flags.CACHE_VERIFY)) {
                 List<String> differ = verify(readBack, this.copy.mixAll(readBack.keySet(), classes, resources,
                         configs, stop));
                 if (audit) {
@@ -315,7 +316,7 @@ public final class CachedMixes {
     }
 
     private static int findWays() {
-        String chosen = System.getProperty("hotwire.mixWays");
+        String chosen = Flags.MIX_WAYS;
         return chosen == null ? 1 : Math.max(1, Integer.parseInt(chosen));
     }
 
@@ -343,7 +344,7 @@ public final class CachedMixes {
                     numbers.add(name);
                 } else {
                     differ.add(name);
-                    String folder = System.getProperty("hotwire.cacheVerifyDump");
+                    String folder = Flags.CACHE_VERIFY_DUMP;
                     RebuildEvidence.dumpCopyTo(folder, name + ".cached", cached);
                     RebuildEvidence.dumpCopyTo(folder, name + ".fresh", bytes);
                 }

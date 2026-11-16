@@ -1,5 +1,6 @@
 package dev.moon.hotwire.fabric.update;
 
+import dev.moon.hotwire.config.Flags;
 import dev.moon.hotwire.fabric.InstalledMods;
 import dev.moon.hotwire.fabric.LoadedMods;
 import dev.moon.hotwire.fabric.ModPolicy;
@@ -277,7 +278,7 @@ public final class UpdateSupport implements ModUpdater.Engine, ModAdder.CarriedL
                 || copies.liveIds().values().stream().anyMatch(refusal::contains);
     }
 
-    static final boolean ASKS_OVER_CAP = Boolean.parseBoolean(System.getProperty("hotwire.askOverCap"));
+    static final boolean ASKS_OVER_CAP = Flags.ASK_OVER_CAP;
 
     private void askOverCap(Set<String> group, Map<String, Path> given) {
         String refusal = this.updater.getCopies().findRefusalUnderCap(group, given);
