@@ -63,32 +63,32 @@ public final class HandlerGuards {
     static final Set<String> UNFLIPPABLE = ConcurrentHashMap.newKeySet();
 
     static final Handle BOOTSTRAP = new Handle(Opcodes.H_INVOKESTATIC,
-            Type.getInternalName(HandlerGuards.class), "bootstrap",
+            Live.NAME, "guard",
             MethodType.methodType(CallSite.class, MethodHandles.Lookup.class, String.class, MethodType.class,
                     String.class, int.class, int.class, int.class).toMethodDescriptorString(), false);
 
     static final Handle BOOTSTRAP_CONSTRUCTOR = new Handle(Opcodes.H_INVOKESTATIC,
-            Type.getInternalName(HandlerGuards.class), "bootstrapConstructor",
+            Live.NAME, "guardConstructor",
             MethodType.methodType(CallSite.class, MethodHandles.Lookup.class, String.class, MethodType.class,
                     String.class, int.class).toMethodDescriptorString(), false);
     static final Handle BOOTSTRAP_REDIRECT = new Handle(Opcodes.H_INVOKESTATIC,
-            Type.getInternalName(HandlerGuards.class), "bootstrapRedirect",
+            Live.NAME, "guardRedirect",
             MethodType.methodType(CallSite.class, MethodHandles.Lookup.class, String.class, MethodType.class,
                     String.class, int.class, int.class, String.class, String.class, String.class)
                     .toMethodDescriptorString(), false);
 
     static final Handle BOOTSTRAP_REDIRECT_FORGETTING = new Handle(Opcodes.H_INVOKESTATIC,
-            Type.getInternalName(HandlerGuards.class), "bootstrapRedirectForgetting",
+            Live.NAME, "guardRedirectForgetting",
             MethodType.methodType(CallSite.class, MethodHandles.Lookup.class, String.class, MethodType.class,
                     String.class, int.class, int.class, String.class, String.class, String.class, String.class)
                     .toMethodDescriptorString(), false);
 
     static final Handle BOOTSTRAP_FIELD = new Handle(Opcodes.H_INVOKESTATIC,
-            Type.getInternalName(HandlerGuards.class), "bootstrapField",
+            Live.NAME, "guardField",
             MethodType.methodType(CallSite.class, MethodHandles.Lookup.class, String.class, MethodType.class,
                     String.class).toMethodDescriptorString(), false);
     static final Handle BOOTSTRAP_OVERWRITE = new Handle(Opcodes.H_INVOKESTATIC,
-            Type.getInternalName(HandlerGuards.class), "bootstrapOverwrite",
+            Live.NAME, "guardOverwrite",
             MethodType.methodType(CallSite.class, MethodHandles.Lookup.class, String.class, MethodType.class,
                     String.class, int.class, String.class).toMethodDescriptorString(), false);
 
@@ -320,7 +320,7 @@ public final class HandlerGuards {
     }
 
     public static boolean isSite(Handle bootstrap) {
-        return bootstrap.getOwner().equals(BOOTSTRAP.getOwner()) && bootstrap.getName().startsWith("bootstrap");
+        return bootstrap.getOwner().equals(Live.NAME) && bootstrap.getName().startsWith("guard");
     }
 
     public static boolean isWritten(String internalName) {
@@ -551,13 +551,13 @@ public final class HandlerGuards {
         return null;
     }
 
-    public static CallSite bootstrap(MethodHandles.Lookup caller, String name, MethodType type, String mixin,
+    static CallSite bootstrap(MethodHandles.Lookup caller, String name, MethodType type, String mixin,
             int isStatic, int kind, int index) throws ReflectiveOperationException {
         return link(caller, name, type, mixin, isStatic,
                 () -> HandlerStandIns.make(caller, type, kind, index, isStatic == STATIC ? 0 : 1));
     }
 
-    public static CallSite bootstrapConstructor(MethodHandles.Lookup caller, String name, MethodType type,
+    static CallSite bootstrapConstructor(MethodHandles.Lookup caller, String name, MethodType type,
             String mixin, int isStatic) throws ReflectiveOperationException {
         Class<?> owner = caller.lookupClass();
         MethodHandle handler = isStatic == VIRTUAL ? caller.findVirtual(owner, name, type.dropParameterTypes(0, 1))
@@ -566,13 +566,13 @@ public final class HandlerGuards {
                 () -> SkippedConstructorCalls.makeStandIn(mixin, handler, type));
     }
 
-    public static CallSite bootstrapRedirect(MethodHandles.Lookup caller, String name, MethodType type, String mixin,
+    static CallSite bootstrapRedirect(MethodHandles.Lookup caller, String name, MethodType type, String mixin,
             int isStatic, int opcode, String owner, String target, String desc) throws ReflectiveOperationException {
         return link(caller, name, type, mixin, isStatic, () -> RedirectStandIns.makeStandIn(caller, type,
                 isStatic == STATIC ? 0 : 1, new RedirectStandIns.Target(opcode, owner, target, desc)));
     }
 
-    public static CallSite bootstrapRedirectForgetting(MethodHandles.Lookup caller, String name, MethodType type,
+    static CallSite bootstrapRedirectForgetting(MethodHandles.Lookup caller, String name, MethodType type,
             String mixin, int isStatic, int opcode, String owner, String target, String desc, String unset)
             throws ReflectiveOperationException {
         return link(caller, name, type, mixin, isStatic, () -> {
@@ -594,7 +594,7 @@ public final class HandlerGuards {
         });
     }
 
-    public static CallSite bootstrapField(MethodHandles.Lookup caller, String name, MethodType type, String mixin)
+    static CallSite bootstrapField(MethodHandles.Lookup caller, String name, MethodType type, String mixin)
             throws ReflectiveOperationException {
         Class<?> owner = caller.lookupClass();
         String className = Type.getInternalName(owner);
@@ -605,7 +605,7 @@ public final class HandlerGuards {
                         String.class)), 1, className).asType(type));
     }
 
-    public static CallSite bootstrapOverwrite(MethodHandles.Lookup caller, String name, MethodType type, String mixin,
+    static CallSite bootstrapOverwrite(MethodHandles.Lookup caller, String name, MethodType type, String mixin,
             int isStatic, String was) throws ReflectiveOperationException {
         Class<?> owner = caller.lookupClass();
         return link(caller, name, type, mixin, isStatic, () -> was.isEmpty() ? MethodHandles.empty(type)

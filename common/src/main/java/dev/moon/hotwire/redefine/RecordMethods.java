@@ -14,7 +14,7 @@ import org.objectweb.asm.tree.InvokeDynamicInsnNode;
 public final class RecordMethods {
     private static final String OBJECT_METHODS = Type.getInternalName(ObjectMethods.class);
     private static final Handle BOOTSTRAP = new Handle(Opcodes.H_INVOKESTATIC,
-            Type.getInternalName(RecordMethods.class), "bootstrap", "(Ljava/lang/invoke/MethodHandles$Lookup;"
+            Live.NAME, "linkRecord", "(Ljava/lang/invoke/MethodHandles$Lookup;"
                     + "Ljava/lang/String;Ljava/lang/invoke/TypeDescriptor;Ljava/lang/Class;Ljava/lang/String;"
                     + "[Ljava/lang/Object;)Ljava/lang/Object;", false);
 
@@ -41,7 +41,7 @@ public final class RecordMethods {
         }
     }
 
-    public static Object bootstrap(MethodHandles.Lookup caller, String name, TypeDescriptor type, Class<?> recordClass,
+    static Object bootstrap(MethodHandles.Lookup caller, String name, TypeDescriptor type, Class<?> recordClass,
             String names, Object... parts) throws Throwable {
         String[] components = names.split(";", -1);
         MethodHandle[] getters = new MethodHandle[parts.length];

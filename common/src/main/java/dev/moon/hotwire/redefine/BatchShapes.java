@@ -40,7 +40,6 @@ import org.objectweb.asm.tree.VarInsnNode;
 
 final class BatchShapes {
     private static final String MADE = Type.getInternalName(OffWindowObjects.class);
-    private static final String LAMBDA_SITES = Type.getInternalName(LambdaSites.class);
 
     private static final Map<byte[], ClassNode> CONSTRUCTORS = Collections.synchronizedMap(new WeakHashMap<>());
     private static final Pattern MERGED = Pattern.compile("\\b(?:md|fd)[0-9a-f]{6}\\$");
@@ -196,8 +195,8 @@ final class BatchShapes {
     }
 
     private static boolean isLambdaLink(InvokeDynamicInsnNode dynamic) {
-        String owner = dynamic.bsm.getOwner();
-        return owner.equals("java/lang/invoke/LambdaMetafactory") || owner.equals(LAMBDA_SITES);
+        return dynamic.bsm.getOwner().equals("java/lang/invoke/LambdaMetafactory")
+                || LambdaSites.isFactory(dynamic.bsm);
     }
 
     static String describeFirstDifference(List<String> was, List<String> now) {

@@ -17,27 +17,26 @@ import org.objectweb.asm.tree.MethodNode;
 import org.objectweb.asm.tree.TypeInsnNode;
 
 public final class DuckBridge {
-    private static final String LINKER = Type.getInternalName(Linker.class);
     private static final String BOOTSTRAP = "Ljava/lang/invoke/MethodHandles$Lookup;Ljava/lang/String;"
             + "Ljava/lang/invoke/MethodType;";
-    private static final Handle IS_INSTANCE = new Handle(Opcodes.H_INVOKESTATIC, LINKER, "bootstrapIsInstance",
+    private static final Handle IS_INSTANCE = new Handle(Opcodes.H_INVOKESTATIC, Live.NAME, "linkIsInstance",
             "(" + BOOTSTRAP + "Ljava/lang/String;)Ljava/lang/invoke/CallSite;", false);
-    private static final Handle CAST = new Handle(Opcodes.H_INVOKESTATIC, LINKER, "bootstrapCast",
+    private static final Handle CAST = new Handle(Opcodes.H_INVOKESTATIC, Live.NAME, "linkCast",
             "(" + BOOTSTRAP + "Ljava/lang/String;)Ljava/lang/invoke/CallSite;", false);
-    private static final Handle DUCK = new Handle(Opcodes.H_INVOKESTATIC, LINKER, "bootstrapDuck",
+    private static final Handle DUCK = new Handle(Opcodes.H_INVOKESTATIC, Live.NAME, "linkDuck",
             "(" + BOOTSTRAP + "Ljava/lang/String;Ljava/lang/String;Ljava/lang/String;)Ljava/lang/invoke/CallSite;",
             false);
-    static final Handle MOVED = new Handle(Opcodes.H_INVOKESTATIC, LINKER, "bootstrapMoved",
+    static final Handle MOVED = new Handle(Opcodes.H_INVOKESTATIC, Live.NAME, "linkMoved",
             "(" + BOOTSTRAP + "Ljava/lang/String;Ljava/lang/String;Ljava/lang/String;I)Ljava/lang/invoke/CallSite;",
             false);
-    private static final Handle MOVED_SUPER = new Handle(Opcodes.H_INVOKESTATIC, LINKER, "bootstrapMovedSuper",
+    private static final Handle MOVED_SUPER = new Handle(Opcodes.H_INVOKESTATIC, Live.NAME, "linkMovedSuper",
             "(" + BOOTSTRAP + "Ljava/lang/String;Ljava/lang/String;Ljava/lang/String;)Ljava/lang/invoke/CallSite;",
             false);
-    static final Handle MOVED_LAMBDA = new Handle(Opcodes.H_INVOKESTATIC, LINKER, "bootstrapMovedLambda",
+    static final Handle MOVED_LAMBDA = new Handle(Opcodes.H_INVOKESTATIC, Live.NAME, "linkMovedLambda",
             "(Ljava/lang/invoke/MethodHandles$Lookup;Ljava/lang/String;Ljava/lang/invoke/MethodType;"
                     + "Ljava/lang/invoke/MethodType;Ljava/lang/String;Ljava/lang/String;Ljava/lang/String;I)"
                     + "Ljava/lang/invoke/CallSite;", false);
-    private static final Handle DUCK_LAMBDA = new Handle(Opcodes.H_INVOKESTATIC, LINKER, "bootstrapDuckLambda",
+    private static final Handle DUCK_LAMBDA = new Handle(Opcodes.H_INVOKESTATIC, Live.NAME, "linkDuckLambda",
             "(" + BOOTSTRAP + "Ljava/lang/invoke/MethodType;Ljava/lang/invoke/MethodHandle;"
                     + "Ljava/lang/invoke/MethodType;)Ljava/lang/invoke/CallSite;", false);
 

@@ -37,8 +37,7 @@ public final class AddedOverrides {
     }
 
     static final String INHERITED = "hotwire$inherited$";
-    private static final String SELF = Type.getInternalName(AddedOverrides.class);
-    private static final Handle BOOTSTRAP = new Handle(Opcodes.H_INVOKESTATIC, SELF, "bootstrap",
+    private static final Handle BOOTSTRAP = new Handle(Opcodes.H_INVOKESTATIC, Live.NAME, "linkOverride",
             "(Ljava/lang/invoke/MethodHandles$Lookup;Ljava/lang/String;Ljava/lang/invoke/MethodType;"
                     + "Ljava/lang/String;)Ljava/lang/invoke/CallSite;", false);
     private static final int NEVER_OVERRIDES = Opcodes.ACC_STATIC | Opcodes.ACC_PRIVATE | Opcodes.ACC_ABSTRACT;
@@ -240,7 +239,7 @@ public final class AddedOverrides {
         method.invisibleLocalVariableAnnotations = null;
     }
 
-    public static CallSite bootstrap(MethodHandles.Lookup caller, String name, MethodType type, String key)
+    static CallSite bootstrap(MethodHandles.Lookup caller, String name, MethodType type, String key)
             throws ReflectiveOperationException {
         Class<?> holder = caller.lookupClass();
         MethodHandles.Lookup side = Linker.findCurrentLookup(holder);

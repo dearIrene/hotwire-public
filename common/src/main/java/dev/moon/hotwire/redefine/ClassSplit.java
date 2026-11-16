@@ -35,19 +35,18 @@ import org.objectweb.asm.tree.TryCatchBlockNode;
 import org.objectweb.asm.tree.VarInsnNode;
 
 public final class ClassSplit {
-    private static final String LINKER = Type.getInternalName(Linker.class);
     private static final String BOOTSTRAP = "Ljava/lang/invoke/MethodHandles$Lookup;Ljava/lang/String;"
             + "Ljava/lang/invoke/MethodType;";
-    static final Handle METHOD = new Handle(Opcodes.H_INVOKESTATIC, LINKER, "bootstrapMethod",
+    static final Handle METHOD = new Handle(Opcodes.H_INVOKESTATIC, Live.NAME, "linkMethod",
             "(" + BOOTSTRAP + ")Ljava/lang/invoke/CallSite;", false);
-    static final Handle FIELD = new Handle(Opcodes.H_INVOKESTATIC, LINKER, "bootstrapField",
+    static final Handle FIELD = new Handle(Opcodes.H_INVOKESTATIC, Live.NAME, "linkField",
             "(" + BOOTSTRAP + "ILjava/lang/String;)Ljava/lang/invoke/CallSite;", false);
-    private static final Handle LAMBDA = new Handle(Opcodes.H_INVOKESTATIC, LINKER, "bootstrapLambda",
+    private static final Handle LAMBDA = new Handle(Opcodes.H_INVOKESTATIC, Live.NAME, "linkSplitLambda",
             "(" + BOOTSTRAP + "Ljava/lang/invoke/MethodType;Ljava/lang/String;Ljava/lang/String;"
                     + "Ljava/lang/invoke/MethodType;)Ljava/lang/invoke/CallSite;", false);
-    private static final Handle SUPER = new Handle(Opcodes.H_INVOKESTATIC, LINKER, "bootstrapSuperCall",
+    private static final Handle SUPER = new Handle(Opcodes.H_INVOKESTATIC, Live.NAME, "linkSuperCall",
             "(" + BOOTSTRAP + "Ljava/lang/Class;)Ljava/lang/invoke/CallSite;", false);
-    static final Handle INHERITED = new Handle(Opcodes.H_INVOKESTATIC, LINKER, "bootstrapInherited",
+    static final Handle INHERITED = new Handle(Opcodes.H_INVOKESTATIC, Live.NAME, "linkInherited",
             "(" + BOOTSTRAP + "Ljava/lang/Class;I)Ljava/lang/invoke/CallSite;", false);
     private static final String METAFACTORY = "java/lang/invoke/LambdaMetafactory";
 

@@ -305,7 +305,7 @@ public final class Linker {
         return Set.of();
     }
 
-    public static CallSite bootstrapMoved(MethodHandles.Lookup caller, String name, MethodType type, String owner,
+    static CallSite bootstrapMoved(MethodHandles.Lookup caller, String name, MethodType type, String owner,
             String method, String descriptor, int isStatic) throws ReflectiveOperationException {
         if (isStatic != 0) {
             Class<?> at = Class.forName(owner.replace('.', '/').replace('/', '.'), false,
@@ -347,7 +347,7 @@ public final class Linker {
         return MovedSites.make(type, method, descriptor, MovedSites.findPlain(caller, owner, method, descriptor));
     }
 
-    public static CallSite bootstrapMovedSuper(MethodHandles.Lookup caller, String name, MethodType type, String owner,
+    static CallSite bootstrapMovedSuper(MethodHandles.Lookup caller, String name, MethodType type, String owner,
             String method, String descriptor) throws ReflectiveOperationException {
         Class<?> from = Class.forName(owner.replace('/', '.'), false, caller.lookupClass().getClassLoader());
         return MovedSites.makeSuper(caller, type, from, method, descriptor);
@@ -451,14 +451,14 @@ public final class Linker {
         }
     }
 
-    public static CallSite bootstrapIsInstance(MethodHandles.Lookup caller, String name, MethodType type, String duck)
+    static CallSite bootstrapIsInstance(MethodHandles.Lookup caller, String name, MethodType type, String duck)
             throws ReflectiveOperationException {
         MethodHandle test = MethodHandles.lookup().findStatic(Linker.class, "carries",
                 MethodType.methodType(boolean.class, String.class, Object.class));
         return new ConstantCallSite(MethodHandles.insertArguments(test, 0, duck).asType(type));
     }
 
-    public static CallSite bootstrapCast(MethodHandles.Lookup caller, String name, MethodType type, String duck)
+    static CallSite bootstrapCast(MethodHandles.Lookup caller, String name, MethodType type, String duck)
             throws ReflectiveOperationException {
         MethodHandle cast = MethodHandles.lookup().findStatic(Linker.class, "castTo",
                 MethodType.methodType(Object.class, String.class, Object.class));
@@ -467,7 +467,7 @@ public final class Linker {
                 kind -> DuckCalls.carries(duck, kind) ? same : null);
     }
 
-    public static CallSite bootstrapDuck(MethodHandles.Lookup caller, String name, MethodType type, String duck,
+    static CallSite bootstrapDuck(MethodHandles.Lookup caller, String name, MethodType type, String duck,
             String method, String descriptor) {
         MethodHandle bound = DuckCalls.bind(duck, method, descriptor).asCollector(Object[].class,
                 type.parameterCount() - 1);
@@ -576,19 +576,19 @@ public final class Linker {
         return Set.copyOf(ADOPTED);
     }
 
-    public static CallSite bootstrapMethod(MethodHandles.Lookup caller, String name, MethodType type)
+    static CallSite bootstrapMethod(MethodHandles.Lookup caller, String name, MethodType type)
             throws ReflectiveOperationException {
         return SidecarCallSites.bind(getHostOf(caller.lookupClass()),
                 LinkerLookups.findInSidecars(caller.lookupClass(), name, type),
                 name, type);
     }
 
-    public static CallSite bootstrapSuperCall(MethodHandles.Lookup caller, String name, MethodType type, Class<?> owner)
+    static CallSite bootstrapSuperCall(MethodHandles.Lookup caller, String name, MethodType type, Class<?> owner)
             throws ReflectiveOperationException {
         return SidecarCallSites.bindSuper(getHostOf(caller.lookupClass()), name, type, owner);
     }
 
-    public static CallSite bootstrapInherited(MethodHandles.Lookup caller, String name, MethodType type, Class<?> owner,
+    static CallSite bootstrapInherited(MethodHandles.Lookup caller, String name, MethodType type, Class<?> owner,
             int kind) throws ReflectiveOperationException {
         MethodHandle handle;
         try {
@@ -614,12 +614,12 @@ public final class Linker {
         return new ConstantCallSite(MethodHandles.explicitCastArguments(handle, type));
     }
 
-    public static CallSite bootstrapField(MethodHandles.Lookup caller, String name, MethodType type, int kind,
+    static CallSite bootstrapField(MethodHandles.Lookup caller, String name, MethodType type, int kind,
             String descriptor) throws ReflectiveOperationException {
         return bindField(getHostOf(caller.lookupClass()), name, type, kind);
     }
 
-    public static CallSite bootstrapForeignField(MethodHandles.Lookup caller, String name, MethodType type,
+    static CallSite bootstrapForeignField(MethodHandles.Lookup caller, String name, MethodType type,
             Class<?> owner, int kind) throws ReflectiveOperationException {
         return bindField(owner, name, type, kind);
     }
@@ -635,7 +635,7 @@ public final class Linker {
         return MethodHandles.explicitCastArguments(LinkerLookups.findFieldHandle(target, name, type, kind), type);
     }
 
-    public static CallSite bootstrapDuckLambda(MethodHandles.Lookup caller, String name, MethodType factory,
+    static CallSite bootstrapDuckLambda(MethodHandles.Lookup caller, String name, MethodType factory,
             MethodType erased, MethodHandle target, MethodType instantiated) throws ReflectiveOperationException {
         MethodHandleInfo info = caller.revealDirect(target);
         String owner = Type.getInternalName(info.getDeclaringClass());
@@ -648,7 +648,7 @@ public final class Linker {
         return Lambdas.spin(caller, name, factory, erased, DuckCalls.loosen(body));
     }
 
-    public static CallSite bootstrapMovedLambda(MethodHandles.Lookup caller, String name, MethodType factory,
+    static CallSite bootstrapMovedLambda(MethodHandles.Lookup caller, String name, MethodType factory,
             MethodType erased, String owner, String method, String descriptor, int isStatic)
             throws ReflectiveOperationException {
         MethodType shape = MethodType.fromMethodDescriptorString(descriptor, caller.lookupClass().getClassLoader());
@@ -659,7 +659,7 @@ public final class Linker {
         return Lambdas.spin(caller, name, factory, erased, DuckCalls.loosen(body));
     }
 
-    public static CallSite bootstrapLambda(MethodHandles.Lookup caller, String name, MethodType type, MethodType erased,
+    static CallSite bootstrapLambda(MethodHandles.Lookup caller, String name, MethodType type, MethodType erased,
             String implName, String implDescriptor, MethodType instantiated) throws ReflectiveOperationException {
         MethodHandles.Lookup side = getSidecarOf(caller.lookupClass());
         MethodType implType = MethodType.fromMethodDescriptorString(implDescriptor,

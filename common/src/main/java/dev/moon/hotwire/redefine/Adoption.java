@@ -127,7 +127,7 @@ public final class Adoption {
                 } else {
                     String adopting = call.desc.substring(0, call.desc.lastIndexOf(')') + 1) + "L" + owner.name + ";";
                     construct.instructions.add(new InvokeDynamicInsnNode(ADOPT, adopting, new Handle(
-                            Opcodes.H_INVOKESTATIC, BOOTSTRAP, "bootstrap", BOOTSTRAP_TYPE, false)));
+                            Opcodes.H_INVOKESTATIC, Live.NAME, "adopt", BOOTSTRAP_TYPE, false)));
                 }
                 construct.instructions.add(new VarInsnNode(Opcodes.ASTORE, 0));
                 before = false;
@@ -276,8 +276,8 @@ public final class Adoption {
         } else {
             construct.instructions.add(new InvokeDynamicInsnNode(own ? "own" : "parent",
                     "(Ljava/lang/Object;" + args + ")L" + owner.name + ";",
-                            new Handle(Opcodes.H_INVOKESTATIC, BOOTSTRAP,
-                    "bootstrapAdded", BOOTSTRAP_TYPE, false)));
+                            new Handle(Opcodes.H_INVOKESTATIC, Live.NAME,
+                    "adoptAdded", BOOTSTRAP_TYPE, false)));
         }
     }
 
@@ -437,7 +437,7 @@ public final class Adoption {
         }
     }
 
-    public static CallSite bootstrapAdded(MethodHandles.Lookup caller, String name, MethodType type)
+    static CallSite bootstrapAdded(MethodHandles.Lookup caller, String name, MethodType type)
             throws ReflectiveOperationException {
         Class<?> declaring = type.returnType();
         Class<?>[] params = type.dropParameterTypes(0, 1).parameterArray();
@@ -478,7 +478,7 @@ public final class Adoption {
         }
     }
 
-    public static CallSite bootstrap(MethodHandles.Lookup caller, String name, MethodType type)
+    static CallSite bootstrap(MethodHandles.Lookup caller, String name, MethodType type)
             throws ReflectiveOperationException {
         Class<?> made = type.returnType();
         Class<?> parent = made.getSuperclass();

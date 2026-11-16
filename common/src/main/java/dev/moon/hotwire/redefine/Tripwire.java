@@ -126,7 +126,7 @@ public final class Tripwire {
     private static final String SELF = Type.getInternalName(Tripwire.class);
 
     private static final Set<Class<?>> LINKERS = Set.of(Tripwire.class, TripwireSites.class, Linker.class,
-            DuckCalls.class, MovedSites.class);
+            DuckCalls.class, MovedSites.class, Live.class);
     private static final String HOTWIRE = "hotwire";
     private static final int FRAMES = 28;
     private static final ThreadLocal<@Nullable String> SENDING = new ThreadLocal<>();

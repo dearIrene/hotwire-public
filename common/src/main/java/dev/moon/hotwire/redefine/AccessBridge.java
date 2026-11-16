@@ -36,10 +36,9 @@ import org.slf4j.LoggerFactory;
 
 public final class AccessBridge {
     private static final Logger LOGGER = LoggerFactory.getLogger(AccessBridge.class);
-    private static final String OPENED = Type.getInternalName(OpenedMembers.class);
     private static final String BOOTSTRAP = "Ljava/lang/invoke/MethodHandles$Lookup;Ljava/lang/String;"
             + "Ljava/lang/invoke/MethodType;";
-    private static final Handle OPEN = new Handle(Opcodes.H_INVOKESTATIC, OPENED, "open",
+    private static final Handle OPEN = new Handle(Opcodes.H_INVOKESTATIC, Live.NAME, "open",
             "(" + BOOTSTRAP + "ILjava/lang/String;Ljava/lang/String;Ljava/lang/String;)Ljava/lang/invoke/CallSite;",
             false);
     private static final String OBJECT = "Ljava/lang/Object;";

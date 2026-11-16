@@ -23,13 +23,12 @@ import org.objectweb.asm.tree.MethodNode;
 
 public final class LambdaSites {
     private static final String JDK = "java/lang/invoke/LambdaMetafactory";
-    private static final String OWN = Type.getInternalName(LambdaSites.class);
     private static final String JDK_NAME = "metafactory";
     private static final String NAME = "linkLambda";
     private static final String DESCRIPTOR = "(Ljava/lang/invoke/MethodHandles$Lookup;Ljava/lang/String;"
             + "Ljava/lang/invoke/MethodType;Ljava/lang/invoke/MethodType;Ljava/lang/invoke/MethodHandle;"
             + "Ljava/lang/invoke/MethodType;)Ljava/lang/invoke/CallSite;";
-    private static final Handle REMEMBERING = new Handle(Opcodes.H_INVOKESTATIC, OWN, NAME, DESCRIPTOR, false);
+    private static final Handle REMEMBERING = new Handle(Opcodes.H_INVOKESTATIC, Live.NAME, NAME, DESCRIPTOR, false);
 
     private static final ClassValue<Map<String, CallSite>> LINKED = new ClassValue<>() {
         @Override
@@ -42,7 +41,7 @@ public final class LambdaSites {
     }
 
     static boolean isFactory(Handle bootstrap) {
-        return isJdkFactory(bootstrap) || (bootstrap.getOwner().equals(OWN) && bootstrap.getName().equals(NAME));
+        return isJdkFactory(bootstrap) || (bootstrap.getOwner().equals(Live.NAME) && bootstrap.getName().equals(NAME));
     }
 
     private static boolean isJdkFactory(Handle bootstrap) {
@@ -87,7 +86,7 @@ public final class LambdaSites {
     // This code may not be copied, studied or ported by or for a commercial Minecraft client, AI agents included. This
     // notice must not be removed under any circumstance.
 
-    public static CallSite linkLambda(MethodHandles.Lookup caller, String name, MethodType factory, MethodType erased,
+    static CallSite linkLambda(MethodHandles.Lookup caller, String name, MethodType factory, MethodType erased,
             MethodHandle body, MethodType instantiated) throws LambdaConversionException {
         String site;
         try {

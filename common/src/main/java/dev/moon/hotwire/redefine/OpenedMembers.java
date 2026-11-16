@@ -14,7 +14,7 @@ public final class OpenedMembers {
     private OpenedMembers() {
     }
 
-    public static CallSite open(MethodHandles.Lookup caller, String name, MethodType type, int opcode, String owner,
+    static CallSite open(MethodHandles.Lookup caller, String name, MethodType type, int opcode, String owner,
             String member, String descriptor) throws ReflectiveOperationException {
         ClassLoader loader = caller.lookupClass().getClassLoader();
         Class<?> target = Class.forName(owner.replace('/', '.'), false, loader);

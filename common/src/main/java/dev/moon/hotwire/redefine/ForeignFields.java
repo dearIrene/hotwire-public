@@ -15,8 +15,7 @@ import org.objectweb.asm.tree.InvokeDynamicInsnNode;
 import org.objectweb.asm.tree.MethodNode;
 
 public final class ForeignFields {
-    private static final String LINKER = Type.getInternalName(Linker.class);
-    private static final Handle FOREIGN = new Handle(Opcodes.H_INVOKESTATIC, LINKER, "bootstrapForeignField",
+    private static final Handle FOREIGN = new Handle(Opcodes.H_INVOKESTATIC, Live.NAME, "linkForeignField",
             "(Ljava/lang/invoke/MethodHandles$Lookup;Ljava/lang/String;Ljava/lang/invoke/MethodType;"
                     + "Ljava/lang/Class;I)Ljava/lang/invoke/CallSite;", false);
 
