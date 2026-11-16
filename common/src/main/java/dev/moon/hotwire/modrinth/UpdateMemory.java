@@ -60,6 +60,11 @@ public final class UpdateMemory {
     private final Map<String, Entry> byHash = new HashMap<>();
     private final Set<String> told = new HashSet<>();
 
+    private final Map<String, LoaderNeed> loaders = new HashMap<>();
+
+    public record LoaderNeed(String wanted, String had) {
+    }
+
     private UpdateMemory(Path file) {
         this.file = file;
     }
@@ -80,10 +85,20 @@ public final class UpdateMemory {
                         entry.get("t").getAsLong()));
             }
             root.getAsJsonArray("told").forEach(id -> memory.told.add(id.getAsString()));
+
+            JsonObject needs = root.getAsJsonObject("loaders");
+            if (needs != null) {
+                for (Map.Entry<String, JsonElement> one : needs.entrySet()) {
+                    JsonObject need = one.getValue().getAsJsonObject();
+                    memory.loaders.put(one.getKey(), new LoaderNeed(need.get("w").getAsString(),
+                            need.get("h").getAsString()));
+                }
+            }
         } catch (IOException | RuntimeException e) {
             LOGGER.info("[Hotwire] the update memory in {} could not be read: {}", file, e.toString());
             memory.byHash.clear();
             memory.told.clear();
+            memory.loaders.clear();
         }
         return memory;
     }
@@ -128,6 +143,14 @@ public final class UpdateMemory {
         JsonArray toldIds = new JsonArray();
         this.told.forEach(toldIds::add);
         root.add("told", toldIds);
+        JsonObject needs = new JsonObject();
+        this.loaders.forEach((versionId, need) -> {
+            JsonObject one = new JsonObject();
+            one.addProperty("w", need.wanted());
+            one.addProperty("h", need.had());
+            needs.add(versionId, one);
+        });
+        root.add("loaders", needs);
         ByteArrayOutputStream bytes = new ByteArrayOutputStream();
         try (GZIPOutputStream out = new GZIPOutputStream(bytes)) {
             out.write(root.toString().getBytes(StandardCharsets.UTF_8));
@@ -195,5 +218,15 @@ public final class UpdateMemory {
 
     public void retainTold(Collection<String> versionIds) {
         this.told.retainAll(Set.copyOf(versionIds));
+        this.loaders.keySet().retainAll(Set.copyOf(versionIds));
+    }
+
+    public void noteLoader(String versionId, String wanted, String had) {
+        this.loaders.put(versionId, new LoaderNeed(wanted, had));
+    }
+
+    public String findLoaderWanted(String versionId, String have) {
+        LoaderNeed need = this.loaders.get(versionId);
+        return need != null && need.had().equals(have) ? need.wanted() : "";
     }
 }

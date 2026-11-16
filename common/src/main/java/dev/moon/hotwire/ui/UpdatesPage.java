@@ -35,6 +35,8 @@ final class UpdatesPage {
     private List<UpdateTree.Node> tree = List.of();
     private final Set<String> opened = new HashSet<>();
     private final Set<String> unpicked = new HashSet<>();
+
+    private final Set<String> leftForLoader = new HashSet<>();
     private boolean checked;
 
     private boolean running;
@@ -68,6 +70,11 @@ final class UpdatesPage {
         this.offers.forEach(offer -> known.add(offer.projectId()));
         this.opened.retainAll(known);
         this.unpicked.retainAll(known);
+        for (UpdateOffer offer : this.offers) {
+            if (!offer.loaderNeeded().isEmpty() && this.leftForLoader.add(offer.versionId())) {
+                this.unpicked.add(offer.projectId());
+            }
+        }
         this.fill();
     }
 
@@ -209,6 +216,9 @@ final class UpdatesPage {
         Line words = Kit.column(Kit.text(offer.name())).gap(2);
         if (node.isLibrary()) {
             words.with(Kit.text(Lang.get("hotwire.updates.needed_by", node.neededBy()), Palette.FAINT));
+        }
+        if (!offer.loaderNeeded().isEmpty()) {
+            words.with(Kit.text(Lang.get("hotwire.updates.needs_loader", offer.loaderNeeded()), Palette.BAD));
         }
         words.grow(1);
         Line row = Kit.row(new Part().width(above.size() * INDENT),

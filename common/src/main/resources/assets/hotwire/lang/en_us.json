@@ -168,6 +168,7 @@
   "hotwire.updates.picked": "Update %d",
   "hotwire.updates.summary": "%d updates, %s",
   "hotwire.updates.needed_by": "needed by %d",
+  "hotwire.updates.needs_loader": "Needs Fabric Loader %s",
   "hotwire.updates.no_changelog": "No changelog",
   "hotwire.updates.run": "%d of %d in, %s of %s",
   "hotwire.updates.run_speed": "%s, %s a second, %s left",

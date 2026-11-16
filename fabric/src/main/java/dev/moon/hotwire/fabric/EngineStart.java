@@ -698,7 +698,11 @@ final class EngineStart {
                 why -> started.writeReport(Lang.get("hotwire.report.file.hotwire_error"), why));
         HotwireEngine.JvmParts ready = started.findParts();
         if (ready != null) {
-            ready.runner().setAfterOff(started.getDisabled()::disableAfter);
+            ready.runner().setAfterOff(result -> {
+                started.getDisabled().disableAfter(result);
+
+                Minecraft.getInstance().execute(started::checkQueue);
+            });
             ready.runner().setBeforeOn(started.getDisabled()::restore);
         }
         CrashReports.watch(engine.getTasks(), engine.getZips());

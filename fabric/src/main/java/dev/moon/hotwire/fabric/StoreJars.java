@@ -165,6 +165,7 @@ final class StoreJars {
                 this.offerNext();
             }, (jar, result) -> {
                 this.dropOffer(result);
+                this.noteLoaderNeed(jar, result);
                 if (result instanceof ModUpdater.Result.Updated || result instanceof ModUpdater.Result.Queued) {
                     this.markInstalled(jar);
                 }
@@ -312,6 +313,27 @@ final class StoreJars {
         this.reopenWanted = false;
         this.projects.clear();
         this.needsMet.clear();
+    }
+
+    private void noteLoaderNeed(Path jar, ModUpdater.Result result) {
+        String id = this.installed.findOfferedFor(jar);
+        if (id == null || !(result instanceof ModUpdater.Result.Refused refused) || refused.loader() == null) {
+            return;
+        }
+        List<UpdateOffer> now = new ArrayList<>();
+        for (UpdateOffer offer : this.offers) {
+            if (offer.id().equals(id)) {
+                this.check.noteLoaderNeed(offer.versionId(), refused.loader());
+                now.add(offer.withLoaderNeeded(refused.loader()));
+            } else {
+                now.add(offer);
+            }
+        }
+        this.offers = List.copyOf(now);
+        ModScreen current = this.screen.get();
+        if (current != null) {
+            current.setUpdates(this.offers, true);
+        }
     }
 
     void dropOffer(ModUpdater.Result result) {

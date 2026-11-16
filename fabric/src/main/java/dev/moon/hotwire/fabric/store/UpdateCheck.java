@@ -151,7 +151,7 @@ public final class UpdateCheck {
         });
         this.installedProjects = known;
         this.idByProject = ids;
-        List<UpdateOffer> found = this.makeOffers(newest, hashByName, idByName);
+        List<UpdateOffer> found = this.makeOffers(newest, hashByName, idByName, memory);
 
         memory.retainTold(found.stream().map(UpdateOffer::versionId).toList());
         int fresh = 0;
@@ -217,8 +217,9 @@ public final class UpdateCheck {
     }
 
     private List<UpdateOffer> makeOffers(Map<String, ModrinthClient.Version> newest, Map<String, String> hashByName,
-            Map<String, String> idByName) {
+            Map<String, String> idByName, UpdateMemory memory) {
         List<UpdateOffer> offers = new ArrayList<>();
+        String loader = findLoaderVersion();
         newest.forEach((name, version) -> {
             if (version.sha512().equalsIgnoreCase(hashByName.get(name)) || version.url().isEmpty()) {
                 return;
@@ -238,11 +239,22 @@ public final class UpdateCheck {
             offers.add(new UpdateOffer(id, manifest == null ? id : manifest.name(),
                     manifest == null ? "" : manifest.version(), version.number(), version.changelog(),
                     version.projectId(), version.id(), version.fileName(), version.url(), version.sha512(),
-                    version.size(), version.requiredProjects()));
+                    version.size(), version.requiredProjects(), memory.findLoaderWanted(version.id(), loader)));
         });
         offers.sort((a, b) -> a.name().compareToIgnoreCase(b.name()));
         LOGGER.info("[Hotwire] {} of {} mods have a newer version", offers.size(), hashByName.size());
         return offers;
+    }
+
+    private static String findLoaderVersion() {
+        return FabricLoader.getInstance().getModContainer("fabricloader")
+                .map(mod -> mod.getMetadata().getVersion().getFriendlyString()).orElse("");
+    }
+
+    public void noteLoaderNeed(String versionId, String wanted) {
+        UpdateMemory memory = UpdateMemory.read(this.memoryFile);
+        memory.noteLoader(versionId, wanted, findLoaderVersion());
+        memory.write();
     }
 
     public boolean isRelated(UpdateOffer one, UpdateOffer other) {
