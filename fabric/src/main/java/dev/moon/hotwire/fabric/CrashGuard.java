@@ -340,6 +340,7 @@ public final class CrashGuard {
 
     private static @Nullable String findMergedOwnerOf(Throwable thrown) {
         ClassLoader game = CrashGuard.class.getClassLoader();
+        boolean gameInside = false;
         for (StackTraceElement element : findFramesAbove(thrown)) {
             Class<?> type;
             try {
@@ -356,16 +357,30 @@ public final class CrashGuard {
             } catch (LinkageError e) {
                 continue;
             }
+            boolean merged = false;
             for (Method method : methods) {
                 if (method.getName().equals(element.getMethodName())) {
                     String mod = findMergedMod(method);
                     if (GameRegistrations.isRecordedMod(mod)) {
-                        return mod;
+                        if (!gameInside || !isWrapper(element.getMethodName())) {
+                            return mod;
+                        }
+                        merged = true;
                     }
                 }
             }
+
+            gameInside |= !merged && type.getClassLoader() != null && !PLATFORM.equals(type.getClassLoader());
         }
         return null;
+    }
+
+    private static final ClassLoader PLATFORM = ClassLoader.getPlatformClassLoader();
+    private static final Set<String> WRAPPERS = Set.of("wrapOperation", "wrapMethod", "redirect");
+
+    private static boolean isWrapper(String method) {
+        int mark = method.indexOf('$');
+        return mark > 0 && WRAPPERS.contains(method.substring(0, mark));
     }
 
     public static @Nullable String findMergedMod(Method method) {
