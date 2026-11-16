@@ -457,9 +457,7 @@ public final class HandlerGuards {
             }
         }
 
-        Set<String> switched = new HashSet<>(present);
-        switched.removeIf(HandlerGuards::isNeverSwitched);
-        FieldSites.make(internalName, node, switched, () -> {
+        FieldSites.make(internalName, node, present, () -> {
             byte[] game = originals.apply(internalName);
             return game == null ? null : ClassNodes.read(game, ClassReader.SKIP_DEBUG | ClassReader.SKIP_FRAMES);
         }, new HashSet<>(), FieldSites.Mode.RECORD);

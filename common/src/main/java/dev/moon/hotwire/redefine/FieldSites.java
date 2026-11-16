@@ -45,6 +45,7 @@ final class FieldSites {
     private static final Map<String, Set<String>> SITED = new ConcurrentHashMap<>();
 
     private static final Map<String, Set<String>> EXAMINED = new ConcurrentHashMap<>();
+    private static final String OFF_WINDOW = Type.getInternalName(OffWindowObjects.class);
     private static final String OPERATION = "/wrapoperation/Operation;";
     private static final String CALLBACKS = "org/spongepowered/asm/mixin/injection/callback/";
 
@@ -56,8 +57,10 @@ final class FieldSites {
     private FieldSites() {
     }
 
-    static void make(String internalName, ClassNode node, Set<String> merged, Supplier<@Nullable ClassNode> shipped,
-            Set<String> guarded, Mode mode) {
+    static void make(String internalName, ClassNode node, Set<String> everyMixin,
+            Supplier<@Nullable ClassNode> shipped, Set<String> guarded, Mode mode) {
+        Set<String> merged = new HashSet<>(everyMixin);
+        merged.removeIf(HandlerGuards::isNeverSwitched);
         if (mode != Mode.REBUILD) {
             EXAMINED.remove(internalName);
         }
@@ -128,12 +131,27 @@ final class FieldSites {
         List<InsnList> pure = new ArrayList<>();
         for (Map.Entry<String, String> field : added.entrySet()) {
             InsnList slice = slices.get(field.getKey());
+
+            String owner = findDeclaring(field.getKey(), everyMixin);
+            boolean stays = owner != null && HandlerGuards.isNeverSwitched(owner);
+            if (slice == null && stays) {
+                continue;
+            }
             if (slice == null) {
-                unsited.addAll(merged);
+                String declaring = findDeclaring(field.getKey(), merged);
+                if (declaring == null) {
+                    unsited.addAll(merged);
+                } else {
+                    unsited.add(declaring);
+                }
                 why.add(field.getValue() + ": no plain setup");
                 continue;
             }
             if (RetainedInitializers.isPure(slice, internalName, methods)) {
+                pure.add(slice);
+                continue;
+            }
+            if (stays) {
                 pure.add(slice);
                 continue;
             }
@@ -238,6 +256,8 @@ final class FieldSites {
         return switch (insn) {
             case MethodInsnNode call when call.owner.equals(self) && HandlerGuards.isHandlerName(call.name) -> null;
             case MethodInsnNode call when call.owner.startsWith(CALLBACKS) -> null;
+
+            case MethodInsnNode call when call.owner.equals(OFF_WINDOW) && call.name.equals("onMade") -> null;
             case MethodInsnNode call -> call.getOpcode() + " " + call.owner + "." + call.name + call.desc;
             case FieldInsnNode field when field.getOpcode() == Opcodes.GETFIELD && field.owner.equals(self) -> null;
             case FieldInsnNode field -> field.getOpcode() + " " + field.owner + "." + field.name + field.desc;
