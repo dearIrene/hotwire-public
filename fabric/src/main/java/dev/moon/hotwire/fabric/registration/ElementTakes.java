@@ -4,6 +4,7 @@ import dev.moon.hotwire.classfile.GameNames;
 import dev.moon.hotwire.config.Flags;
 import dev.moon.hotwire.registration.Fingerprints;
 import dev.moon.hotwire.registration.GuavaCaches;
+import dev.moon.hotwire.seam.Games;
 import java.lang.ref.WeakReference;
 import java.util.ArrayList;
 import java.util.Collection;
@@ -19,7 +20,6 @@ import java.util.function.Consumer;
 import java.util.function.Function;
 import java.util.function.Supplier;
 import java.util.function.ToLongFunction;
-import net.minecraft.client.Minecraft;
 import org.jspecify.annotations.Nullable;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -321,8 +321,8 @@ final class ElementTakes {
     }
 
     static void changeOnItsThread(Object container, Runnable change) {
-        if (GuavaCaches.isCache(container) && !Minecraft.getInstance().isSameThread()) {
-            GameHold.onGameAndWait(change);
+        if (GuavaCaches.isCache(container) && !Games.getNow().isOnGameThread()) {
+            Games.getNow().runOnGameAndWait(change);
         } else {
             change.run();
         }

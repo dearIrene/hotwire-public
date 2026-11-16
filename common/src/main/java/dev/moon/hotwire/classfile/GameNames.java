@@ -1,6 +1,7 @@
 package dev.moon.hotwire.classfile;
 
 public final class GameNames {
+    public static final String HOTWIRE = "hotwire";
     private GameNames() {
     }
 

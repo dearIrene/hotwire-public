@@ -2,8 +2,10 @@ package dev.moon.hotwire.fabric.registration;
 
 import dev.moon.hotwire.classfile.GameNames;
 import dev.moon.hotwire.config.Flags;
-import dev.moon.hotwire.fabric.mixin.core.fabric.base.event.ArrayBackedEventAccessor;
 import dev.moon.hotwire.redefine.FieldSlots;
+import dev.moon.hotwire.seam.ClassKinds;
+import dev.moon.hotwire.seam.Game;
+import dev.moon.hotwire.seam.Games;
 import dev.moon.hotwire.switching.HoldBudgetException;
 import java.lang.management.ClassLoadingMXBean;
 import java.lang.management.ManagementFactory;
@@ -19,13 +21,9 @@ import java.util.concurrent.atomic.AtomicLong;
 import java.util.function.BooleanSupplier;
 import java.util.function.Predicate;
 import java.util.function.Supplier;
-import net.minecraft.client.Minecraft;
-import net.minecraft.client.resources.model.ModelManager;
-import net.minecraft.core.Holder;
 import org.jspecify.annotations.Nullable;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
-import org.spongepowered.asm.mixin.transformer.ClassInfo;
 
 public final class ElementLook {
     private static final Logger LOGGER = LoggerFactory.getLogger(ElementLook.class);
@@ -54,14 +52,13 @@ public final class ElementLook {
     private static final boolean NO_LOOK = Flags.NO_LOOK;
 
     static boolean isLeftToOthers(Object holder) {
-        return !WHOLE.get() && (holder instanceof ModelManager || holder instanceof ArrayBackedEventAccessor
-                || holder instanceof Holder.Reference<?> || holder instanceof ClassInfo || modelSets.contains(holder));
+        return !WHOLE.get() && (ClassKinds.is(holder, Game.LEFT_TO_OTHERS) || modelSets.contains(holder));
     }
 
     private static volatile Set<Object> modelSets = Set.of();
 
     private static Set<Object> findModelSets() {
-        Object manager = Minecraft.getInstance().getModelManager();
+        Object manager = Games.getNow().getModelManager();
         Set<Object> sets = Collections.newSetFromMap(new IdentityHashMap<>());
         for (FieldSlots.Slot field : Fields.getReferenceFields(manager.getClass(), false)) {
             Object value = CollectionParts.read(field, manager);
@@ -231,7 +228,7 @@ public final class ElementLook {
                 references.traceLook(true);
             }
             try {
-                GameHold.runUnheld(() -> {
+                Games.getNow().runUnheld(() -> {
                     if (whole || !references.refreshEvery(asked, on)) {
                         references.lookForEvery(asked, on);
                     }
@@ -300,7 +297,7 @@ public final class ElementLook {
             try {
                 modelSets = findModelSets();
                 Fields.beginLook();
-                GameHold.runUnheld(() -> references.lookForEvery(every, on));
+                Games.getNow().runUnheld(() -> references.lookForEvery(every, on));
                 lookedForEvery = every;
                 lookedEveryAt = System.nanoTime();
                 lookedEveryClasses = LOADING.getTotalLoadedClassCount();
@@ -345,7 +342,7 @@ public final class ElementLook {
         if (isStopAsked()) {
             throw new CancellationException("a switch began, which the notes serves");
         }
-        if (GameHold.isOverBudget()) {
+        if (Games.getNow().isHoldOverBudget()) {
             throw new HoldBudgetException();
         }
         if ((++steps & STEPS_A_WORD) == 0 && isLooking()) {
@@ -372,7 +369,7 @@ public final class ElementLook {
     }
 
     private static int findWorldNumber() {
-        return System.identityHashCode(Minecraft.getInstance().level);
+        return System.identityHashCode(Games.getNow().getWorld());
     }
 
     public static void giveWay() {

@@ -2,11 +2,11 @@ package dev.moon.hotwire.fabric.registration;
 
 import dev.moon.hotwire.classfile.GameNames;
 import dev.moon.hotwire.redefine.FieldSlots;
+import dev.moon.hotwire.seam.ClassKinds;
+import dev.moon.hotwire.seam.Game;
 import java.util.HashSet;
 import java.util.Set;
 import java.util.function.Function;
-import net.minecraft.resources.Identifier;
-import net.minecraft.resources.ResourceKey;
 import org.jspecify.annotations.Nullable;
 
 final class ValueOwners {
@@ -118,9 +118,7 @@ final class ValueOwners {
     }
 
     static @Nullable String findIdOwner(Object value) {
-        Identifier id = value instanceof Identifier plain ? plain
-                : value instanceof ResourceKey<?> key ? InternedKeys.findIdOf(key) : null;
-        String space = id == null ? null : id.getNamespace();
+        String space = ClassKinds.findNamespaceOf(value, Game.ID | Game.KEY);
         return space == null || space.equals("minecraft") ? null : space;
     }
 

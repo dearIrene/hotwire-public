@@ -7,14 +7,14 @@ import net.minecraft.core.Registry;
 import net.minecraft.core.registries.BuiltInRegistries;
 import net.minecraft.world.level.block.Block;
 
-final class RegisteredContent {
+public final class RegisteredContent {
     private static Set<Object> found = Set.of();
     private static long foundAt = -1;
 
     private RegisteredContent() {
     }
 
-    static long findSizes() {
+    public static long findSizes() {
         long size = BuiltInRegistries.REGISTRY.size();
         for (Registry<?> registry : BuiltInRegistries.REGISTRY) {
             size = size * 31 + registry.size();
@@ -22,7 +22,7 @@ final class RegisteredContent {
         return size;
     }
 
-    static synchronized Set<Object> find() {
+    public static synchronized Set<Object> find() {
         long size = findSizes();
         if (size == foundAt) {
             return found;

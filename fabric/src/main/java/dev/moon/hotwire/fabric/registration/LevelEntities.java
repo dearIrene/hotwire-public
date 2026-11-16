@@ -8,11 +8,11 @@ import net.minecraft.client.server.IntegratedServer;
 import net.minecraft.server.level.ServerLevel;
 import net.minecraft.world.entity.Entity;
 
-final class LevelEntities {
+public final class LevelEntities {
     private LevelEntities() {
     }
 
-    static List<Object> findAll() {
+    public static List<Object> findAll() {
         List<Object> found = new ArrayList<>();
         Minecraft minecraft = Minecraft.getInstance();
         ClientLevel level = minecraft.level;

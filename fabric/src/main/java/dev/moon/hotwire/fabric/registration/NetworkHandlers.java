@@ -125,7 +125,7 @@ public final class NetworkHandlers {
         }
     }
 
-    static List<Object> findPipelineObjects() {
+    public static List<Object> findPipelineObjects() {
         List<Object> found = new ArrayList<>();
         for (Channel channel : findChannels()) {
             for (Map.Entry<String, ChannelHandler> handler : channel.pipeline()) {

@@ -1,12 +1,12 @@
 package dev.moon.hotwire.fabric.registration;
 
 import dev.moon.hotwire.classfile.GameNames;
-import dev.moon.hotwire.fabric.HotwireClient;
 import dev.moon.hotwire.fabric.ModPolicy;
 import dev.moon.hotwire.fabric.dev.DevMod;
 import dev.moon.hotwire.jar.JarPaths;
 import dev.moon.hotwire.redefine.Tripwire;
 import dev.moon.hotwire.registration.CallerOwner;
+import dev.moon.hotwire.seam.Games;
 import java.net.URI;
 import java.net.URISyntaxException;
 import java.net.URL;
@@ -169,7 +169,7 @@ public final class Owners {
 
     static long findVersion() {
         Jars current = jars;
-        return (current == null ? 0 : current.learned.get()) * 31L + RegisteredContent.findSizes();
+        return (current == null ? 0 : current.learned.get()) * 31L + Games.getNow().findRegistrySizes();
     }
 
     public static @Nullable String findModOf(Class<?> type) {
@@ -299,7 +299,7 @@ public final class Owners {
 
     private static Set<String> findNeverSwitched(FabricLoader loader) {
         Set<String> ids = new HashSet<>(ModPolicy.BUILT_IN);
-        ids.add(HotwireClient.ID);
+        ids.add(GameNames.HOTWIRE);
         for (ModContainer mod : loader.getAllMods()) {
             String id = mod.getMetadata().getId();
             if (ModPolicy.isFabricApi(id) || ModPolicy.isNeverTouched(id)) {

@@ -1,10 +1,13 @@
 package dev.moon.hotwire.fabric.registration;
 
-import dev.moon.hotwire.fabric.screen.HoldFrame;
 import dev.moon.hotwire.jvm.LoadedClassList;
 import dev.moon.hotwire.redefine.FieldSlots;
-import io.netty.channel.Channel;
+import dev.moon.hotwire.redefine.FinalWrites;
+import dev.moon.hotwire.seam.ClassKinds;
+import dev.moon.hotwire.seam.Game;
+import dev.moon.hotwire.seam.Games;
 import java.lang.instrument.Instrumentation;
+import java.lang.reflect.Field;
 import java.lang.reflect.InaccessibleObjectException;
 import java.util.ArrayDeque;
 import java.util.Collection;
@@ -18,10 +21,6 @@ import java.util.List;
 import java.util.Map;
 import java.util.Set;
 import java.util.function.Predicate;
-import net.minecraft.client.Minecraft;
-import net.minecraft.server.MinecraftServer;
-import net.minecraft.world.entity.Entity;
-import net.minecraft.world.level.Level;
 import org.jspecify.annotations.Nullable;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -128,7 +127,7 @@ public final class StaticCopies {
 
     static void drawHoldFrame(int walked) {
         if ((walked & 255) == 0) {
-            HoldFrame.drawIfDue();
+            Games.getNow().drawHoldFrame();
         }
     }
 
@@ -154,7 +153,7 @@ public final class StaticCopies {
                 }
             }
         } else if (one instanceof List<?> list) {
-            swapped += LiveConnections.swapIn(list, replaced);
+            swapped += swapInList(list, replaced);
             if (next != null) {
                 list.forEach(item -> follow(item, next));
             }
@@ -183,7 +182,7 @@ public final class StaticCopies {
             }
             Object made = replaced.get(value);
             if (made != null) {
-                swapped += LiveConnections.write(slot, holder, made) ? 1 : 0;
+                swapped += writeSlot(slot, holder, made) ? 1 : 0;
             } else {
                 follow(value, next);
             }
@@ -220,9 +219,7 @@ public final class StaticCopies {
     private static final ClassValue<Boolean> WALKED_KIND = new ClassValue<>() {
         @Override
         protected Boolean computeValue(Class<?> type) {
-            return !Level.class.isAssignableFrom(type) && !Entity.class.isAssignableFrom(type)
-                    && !Minecraft.class.isAssignableFrom(type) && !MinecraftServer.class.isAssignableFrom(type)
-                    && !Channel.class.isAssignableFrom(type) && !Thread.class.isAssignableFrom(type)
+            return !ClassKinds.isClass(type, Game.NOT_ENTERED) && !Thread.class.isAssignableFrom(type)
                     && type != Class.class && !ClassLoader.class.isAssignableFrom(type) && isWalked(type.getName());
         }
     };
@@ -249,5 +246,35 @@ public final class StaticCopies {
                 && !name.startsWith("com.sun.") && !name.startsWith("io.netty.") && !name.startsWith("org.lwjgl.")
                 && !name.startsWith("dev.moon.hotwire.") && !name.startsWith("org.objectweb.")
                 && !name.startsWith("org.spongepowered.");
+    }
+
+    @SuppressWarnings("unchecked")
+    static int swapInList(List<?> list, IdentityHashMap<Object, Object> replaced) {
+        int found = 0;
+        try {
+            for (int at = 0; at < list.size(); at++) {
+                Object made = list.get(at) == null ? null : replaced.get(list.get(at));
+                if (made != null) {
+                    ((List<Object>) list).set(at, made);
+                    found++;
+                }
+            }
+        } catch (UnsupportedOperationException | IndexOutOfBoundsException | IllegalStateException fixed) {
+            return found;
+        }
+        return found;
+    }
+
+    static boolean writeSlot(FieldSlots.Slot slot, @Nullable Object holder, Object value) {
+        try {
+            Field field = slot.getDeclaringClass().getDeclaredField(slot.getName());
+            field.trySetAccessible();
+            FinalWrites.write(field, holder, value);
+            return true;
+        } catch (ReflectiveOperationException | RuntimeException e) {
+            LOGGER.warn("[Hotwire] {}.{} keeps a static's old value: {}", slot.getDeclaringClass().getName(),
+                    slot.getName(), e.toString());
+            return false;
+        }
     }
 }

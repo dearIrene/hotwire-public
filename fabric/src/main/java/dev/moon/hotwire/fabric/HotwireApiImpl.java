@@ -27,6 +27,7 @@ import dev.moon.hotwire.fabric.screen.PromptGameScreen;
 import dev.moon.hotwire.modrinth.Downloads;
 import dev.moon.hotwire.plan.SwitchPlan;
 import dev.moon.hotwire.redefine.HandlerGuards;
+import dev.moon.hotwire.registration.MergedMembers;
 import dev.moon.hotwire.switching.CallerBlocks;
 import dev.moon.hotwire.switching.Listeners;
 import dev.moon.hotwire.switching.ModSwitcher;
@@ -458,13 +459,13 @@ public final class HotwireApiImpl implements HotwireApi {
     private static @Nullable String findMergedModOf(Class<?> type, StackWalker.StackFrame frame) {
         String internal = Type.getInternalName(type);
         if (HandlerGuards.isWritten(internal) && HandlerGuards.getPresentMixins(internal).isEmpty()) {
-            return CrashGuard.findMergedModByName(frame.getMethodName());
+            return MergedMembers.findMergedModByName(frame.getMethodName());
         }
         try {
             for (Method method : type.getDeclaredMethods()) {
                 if (method.getName().equals(frame.getMethodName())
                         && Arrays.equals(method.getParameterTypes(), frame.getMethodType().parameterArray())) {
-                    String merged = CrashGuard.findMergedMod(method);
+                    String merged = MergedMembers.findMergedMod(method);
                     if (merged != null) {
                         return merged;
                     }

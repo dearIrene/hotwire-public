@@ -1,6 +1,6 @@
 package dev.moon.hotwire.fabric.registration;
 
-import dev.moon.hotwire.fabric.CrashGuard;
+import dev.moon.hotwire.registration.MergedMembers;
 import java.lang.reflect.Field;
 import java.lang.reflect.Modifier;
 import java.util.ArrayList;
@@ -31,7 +31,7 @@ public final class EntityHolders {
                 for (Field field : at.getDeclaredFields()) {
                     if (!Modifier.isStatic(field.getModifiers()) && !field.getType().isPrimitive()
                             && field.trySetAccessible()) {
-                        out.add(new Slot(field, CrashGuard.findMergedMod(field)));
+                        out.add(new Slot(field, MergedMembers.findMergedMod(field)));
                     }
                 }
             }

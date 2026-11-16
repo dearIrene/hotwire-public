@@ -5,6 +5,8 @@ import dev.moon.hotwire.fabric.ModPolicy;
 import dev.moon.hotwire.redefine.FieldSlots;
 import dev.moon.hotwire.redefine.Tripwire;
 import dev.moon.hotwire.registration.ModNames;
+import dev.moon.hotwire.seam.ClassKinds;
+import dev.moon.hotwire.seam.Game;
 import java.lang.reflect.Member;
 import java.lang.reflect.Proxy;
 import java.util.Arrays;
@@ -12,7 +14,6 @@ import java.util.HashSet;
 import java.util.List;
 import java.util.Set;
 import net.fabricmc.loader.api.ModContainer;
-import net.minecraft.resources.Identifier;
 import org.jspecify.annotations.Nullable;
 
 final class ElementOwners {
@@ -337,7 +338,7 @@ final class ElementOwners {
         if (named == null || this.modSet.contains(named)) {
             return named;
         }
-        if (value == null || value instanceof Identifier) {
+        if (value == null || ClassKinds.is(value, Game.ID)) {
             return null;
         }
         for (FieldSlots.Slot field : Fields.getReferenceFields(value.getClass(), false)) {

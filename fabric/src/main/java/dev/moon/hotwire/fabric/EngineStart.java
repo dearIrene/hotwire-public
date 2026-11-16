@@ -75,6 +75,7 @@ import dev.moon.hotwire.redefine.ShutOverrides;
 import dev.moon.hotwire.redefine.SiteCache;
 import dev.moon.hotwire.redefine.Tripwire;
 import dev.moon.hotwire.redefine.TripwireSites;
+import dev.moon.hotwire.registration.MergedMembers;
 import dev.moon.hotwire.registration.ModThreadFinder;
 import dev.moon.hotwire.report.StartTimes;
 import dev.moon.hotwire.switching.BestTimes;
@@ -356,7 +357,7 @@ final class EngineStart {
         InitHookReplay.answerWith(GameClasses::findLongLived, GameClasses::getStartupMethods,
                 GameClasses::getJoinMethods);
         applier.runOnGameThreadWith(GameHold::onGameAndWait);
-        CrashGuard.setMixinOwners(applier.getCarriedMixins()::findModShipping);
+        MergedMembers.setMixinOwners(applier.getCarriedMixins()::findModShipping);
         OffModCommands.readUsesFrom(installed::getGraph);
         HiddenPacks.readContainersWith(id -> installed.getGraph().getContainers(id));
         Linker.setMixinOwners(applier.getCarriedMixins()::findModShipping);

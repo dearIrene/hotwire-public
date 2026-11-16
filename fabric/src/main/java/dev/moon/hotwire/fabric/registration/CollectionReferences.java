@@ -5,6 +5,9 @@ import dev.moon.hotwire.config.Flags;
 import dev.moon.hotwire.redefine.FieldSlots;
 import dev.moon.hotwire.redefine.Tripwire;
 import dev.moon.hotwire.registration.Fingerprints;
+import dev.moon.hotwire.seam.ClassKinds;
+import dev.moon.hotwire.seam.Game;
+import dev.moon.hotwire.seam.Games;
 import dev.moon.hotwire.update.LiveNames;
 import java.lang.ref.WeakReference;
 import java.lang.reflect.Proxy;
@@ -25,7 +28,6 @@ import java.util.TreeSet;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.function.Consumer;
 import java.util.function.Supplier;
-import net.minecraft.core.Registry;
 import org.jspecify.annotations.Nullable;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -414,7 +416,7 @@ final class CollectionReferences implements FixedLists.Walk {
         this.readThrough = Collections.newSetFromMap(new IdentityHashMap<>());
         this.reader = TakeReach.GAME;
         this.mods = List.copyOf(mods);
-        this.owners = new ElementOwners(mods, RegisteredContent.find());
+        this.owners = new ElementOwners(mods, Games.getNow().getRegistered());
         Map<String, List<Removal>> mine = new LinkedHashMap<>();
         mods.forEach(mod -> mine.put(mod, new ArrayList<>()));
         this.mine = mine;
@@ -726,10 +728,11 @@ final class CollectionReferences implements FixedLists.Walk {
     }
 
     private static boolean isOfStoppedSound(Removal removal) {
+        Game game = Games.getNow();
         return switch (removal) {
-            case Removal.InList one -> ModSounds.isStopped(one.element());
-            case Removal.InCollection one -> ModSounds.isStopped(one.element());
-            case Removal.InMap one -> ModSounds.isStopped(one.key()) || ModSounds.isStopped(one.value());
+            case Removal.InList one -> game.isStoppedSound(one.element());
+            case Removal.InCollection one -> game.isStoppedSound(one.element());
+            case Removal.InMap one -> game.isStoppedSound(one.key()) || game.isStoppedSound(one.value());
             default -> false;
         };
     }
@@ -815,7 +818,7 @@ final class CollectionReferences implements FixedLists.Walk {
     }
 
     private void lookIntoFields(Object holder) {
-        if (holder instanceof Registry<?>) {
+        if (ClassKinds.is(holder, Game.REGISTRY)) {
             return;
         }
 

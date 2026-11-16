@@ -2,6 +2,7 @@ package dev.moon.hotwire.fabric;
 
 import com.google.common.base.Splitter;
 import com.google.common.collect.Sets;
+import dev.moon.hotwire.classfile.GameNames;
 import dev.moon.hotwire.config.Flags;
 import dev.moon.hotwire.fabric.registration.Owners;
 import dev.moon.hotwire.jar.ModManifest;
@@ -48,7 +49,7 @@ public final class ModPolicy {
     }
 
     static boolean isGuarded(String id) {
-        return id.equals(HotwireClient.ID) || id.startsWith(HotwireClient.ID + "-") || isFabricApi(id)
+        return id.equals(GameNames.HOTWIRE) || id.startsWith(GameNames.HOTWIRE + "-") || isFabricApi(id)
                 || ALWAYS_ON.contains(id) || isNeverTouched(id);
     }
 
@@ -78,7 +79,7 @@ public final class ModPolicy {
     }
 
     public static boolean isHotwire(String id) {
-        return id.equals(HotwireClient.ID) || id.startsWith(HotwireClient.ID + "-");
+        return id.equals(GameNames.HOTWIRE) || id.startsWith(GameNames.HOTWIRE + "-");
     }
 
     public static boolean isStartOnly(String id) {

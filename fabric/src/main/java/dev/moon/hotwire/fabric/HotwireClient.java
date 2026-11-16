@@ -3,6 +3,7 @@ package dev.moon.hotwire.fabric;
 //? if >=26.1 {
 import dev.moon.hotwire.fabric.add.LoadStatusViews;
 //?}
+import dev.moon.hotwire.classfile.GameNames;
 import dev.moon.hotwire.fabric.dev.DevSession;
 import dev.moon.hotwire.fabric.registration.EntityAttachments;
 import dev.moon.hotwire.fabric.registration.GameRegistrations;
@@ -18,6 +19,7 @@ import dev.moon.hotwire.redefine.Tripwire;
 import dev.moon.hotwire.report.ActionJournal;
 import dev.moon.hotwire.report.GameLog;
 import dev.moon.hotwire.report.StartTimes;
+import dev.moon.hotwire.seam.Games;
 import dev.moon.hotwire.ui.DownloadNotices;
 import dev.moon.hotwire.ui.Lang;
 import dev.moon.hotwire.ui.ModScreen;
@@ -43,7 +45,7 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 public final class HotwireClient implements ClientModInitializer {
-    public static final String ID = "hotwire";
+    public static final String ID = GameNames.HOTWIRE;
 
     public static final Identifier NOTICES = Identifier.fromNamespaceAndPath(ID, "notices");
     private static final Logger LOGGER = LoggerFactory.getLogger(HotwireClient.class);
@@ -59,6 +61,7 @@ public final class HotwireClient implements ClientModInitializer {
     @Override
     public void onInitializeClient() {
         StartTimes.mark("Hotwire's client start begins");
+        Games.start(new GameSide());
         long began = System.nanoTime();
         HotwireLog.install(FabricLoader.getInstance().getGameDir().resolve("hotwire").resolve("logs"));
         ActionJournal.open(FabricLoader.getInstance().getGameDir().resolve("hotwire").resolve("logs"),

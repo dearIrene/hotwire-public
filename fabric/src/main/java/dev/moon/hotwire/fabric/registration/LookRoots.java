@@ -1,8 +1,8 @@
 package dev.moon.hotwire.fabric.registration;
 
 import dev.moon.hotwire.classfile.GameNames;
-import dev.moon.hotwire.fabric.HotwireClient;
 import dev.moon.hotwire.fabric.add.LoaderModList;
+import dev.moon.hotwire.seam.Games;
 import java.util.ArrayList;
 import java.util.Collection;
 import java.util.HashMap;
@@ -14,7 +14,6 @@ import java.util.Objects;
 import java.util.Set;
 import java.util.function.Function;
 import java.util.function.Predicate;
-import net.minecraft.client.Minecraft;
 
 final class LookRoots {
     static final int GAME_STEPS = 2;
@@ -60,7 +59,7 @@ final class LookRoots {
                 .forEach(statics::add);
 
         List<String> staying = classesOf.keySet().stream().filter(other -> (every || !mods.contains(other))
-                && !other.equals(HotwireClient.ID) && (Owners.isLibrary(other)
+                && !other.equals(GameNames.HOTWIRE) && (Owners.isLibrary(other)
                         || (on.test(other) && Owners.isRecordedMod(other)))).toList();
 
         Map<String, List<Class<?>>> initialized = new HashMap<>();
@@ -97,7 +96,7 @@ final class LookRoots {
     }
 
     private static List<Object> findHolders(List<Object> entities, Set<String> targets) {
-        Object game = Minecraft.getInstance();
+        Object game = Games.getNow().getRoot();
         List<Object> holders = new ArrayList<>(List.of(game));
         holders.addAll(findGameObjectsBelow(game, 1));
         holders.addAll(entities);

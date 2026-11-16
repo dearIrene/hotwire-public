@@ -2,13 +2,14 @@ package dev.moon.hotwire.fabric.registration;
 
 import com.google.common.collect.MapMaker;
 import dev.moon.hotwire.classfile.GameNames;
-import dev.moon.hotwire.fabric.HotwireClient;
-import dev.moon.hotwire.fabric.mixin.core.world.item.CreativeModeTabsAccessor;
 import dev.moon.hotwire.jvm.LoadedClassList;
 import dev.moon.hotwire.redefine.ClassArrivals;
 import dev.moon.hotwire.redefine.ClassRebuilder;
 import dev.moon.hotwire.redefine.FieldSlots;
 import dev.moon.hotwire.redefine.ReplacedStatics;
+import dev.moon.hotwire.seam.ClassKinds;
+import dev.moon.hotwire.seam.Game;
+import dev.moon.hotwire.seam.Games;
 import dev.moon.hotwire.switching.SwitchTimes;
 import java.lang.instrument.Instrumentation;
 import java.lang.invoke.MethodHandle;
@@ -35,11 +36,6 @@ import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.function.Function;
 import java.util.function.Predicate;
-import net.minecraft.client.Minecraft;
-import net.minecraft.core.Registry;
-import net.minecraft.core.registries.BuiltInRegistries;
-import net.minecraft.world.entity.Entity;
-import net.minecraft.world.item.CreativeModeTab;
 import org.jspecify.annotations.Nullable;
 import org.objectweb.asm.Type;
 import org.slf4j.Logger;
@@ -106,7 +102,7 @@ public final class FieldReferences {
         LoadedClasses scan = this.findLoadedAhead(mods);
         SwitchTimes.mark("field references: classes");
         Map<String, List<Replacement>> planned = new HashMap<>();
-        GameHold.onGameAndWait(() -> planned.putAll(this.plan(mods, on, scan)));
+        Games.getNow().runOnGameAndWait(() -> planned.putAll(this.plan(mods, on, scan)));
         SwitchTimes.mark("field references: planned");
         this.removeElements(mods, on, scan, planned, false);
         SwitchTimes.mark("field references: elements");
@@ -149,11 +145,11 @@ public final class FieldReferences {
     }
 
     public void putBackElements(Collection<String> mods) {
-        GameHold hold = GameHold.begin(Minecraft.getInstance());
+        Runnable hold = Games.getNow().hold();
         try {
             this.elements.putBack(mods);
         } finally {
-            hold.release();
+            hold.run();
         }
     }
 
@@ -178,12 +174,12 @@ public final class FieldReferences {
         Predicate<Class<?>> others = getOthers(mods, on);
 
         LookRoots.Roots roots;
-        GameHold hold = GameHold.begin(Minecraft.getInstance());
+        Runnable hold = Games.getNow().hold();
         try {
             roots = this.roots.find(mods, on, scan, new HashSet<>(this.mixinTargets.apply(mod)), List.of(), others,
                     false);
         } finally {
-            hold.release();
+            hold.run();
         }
         long start = System.nanoTime();
         CalledSearch.Holders found = CalledSearch.find(called, roots.holders(), roots.statics());
@@ -193,12 +189,12 @@ public final class FieldReferences {
         if (found.holders().isEmpty() && found.statics().isEmpty()) {
             return 0;
         }
-        hold = GameHold.begin(Minecraft.getInstance());
+        hold = Games.getNow().hold();
         try {
             this.elements.takeOut(mods, found.holders().stream().filter(one -> others.test(one.getClass())).toList(),
                     found.statics(), HandedSearch.NONE);
         } finally {
-            hold.release();
+            hold.run();
         }
         return found.holders().size() + found.statics().size();
     }
@@ -311,7 +307,7 @@ public final class FieldReferences {
 
     private static boolean isStaying(Class<?> owner, Predicate<String> on) {
         String mod = Owners.findModOf(owner);
-        return mod == null || (!mod.equals(HotwireClient.ID) && (!Owners.isRecordedMod(mod)
+        return mod == null || (!mod.equals(GameNames.HOTWIRE) && (!Owners.isRecordedMod(mod)
                 || on.test(mod)));
     }
 
@@ -388,8 +384,8 @@ public final class FieldReferences {
         mods.forEach(mod -> targets.addAll(this.mixinTargets.apply(mod)));
 
         List<Object> entities = targets.stream().map(name -> loaded.get(name.replace('.', '/')))
-                .anyMatch(FieldReferences::isEntity) ? LevelEntities.findAll() : List.of();
-        GameHold hold = GameHold.begin(Minecraft.getInstance());
+                .anyMatch(FieldReferences::isEntity) ? Games.getNow().getEntities() : List.of();
+        Runnable hold = Games.getNow().hold();
         try {
             planned.forEach(this::putIn);
             if (answered || this.elements.look.isReadyFor(mods)) {
@@ -399,7 +395,7 @@ public final class FieldReferences {
             LookRoots.Roots roots = this.roots.find(mods, on, scan, targets, entities, others, every);
             this.elements.takeOut(List.copyOf(mods), roots.holders(), roots.statics(), roots.handed());
         } finally {
-            hold.release();
+            hold.run();
         }
     }
 
@@ -510,14 +506,14 @@ public final class FieldReferences {
         return owner -> {
             String ownerMod = Owners.findModOf(owner);
             return !owner.getName().startsWith("java.") && (ownerMod == null || (!going.contains(ownerMod)
-                    && !ownerMod.equals(HotwireClient.ID)
+                    && !ownerMod.equals(GameNames.HOTWIRE)
                     && (!Owners.isRecordedMod(ownerMod) || on.test(ownerMod))));
         };
     }
 
     private static void rebuildTabs(List<Replacement> changed) {
-        if (changed.stream().anyMatch(one -> one.field().getDeclaringClass() == CreativeModeTab.class)) {
-            CreativeModeTabsAccessor.hotwire$setCachedParameters(null);
+        if (changed.stream().anyMatch(one -> ClassKinds.isClass(one.field().getDeclaringClass(), Game.CREATIVE_TAB))) {
+            Games.getNow().forgetCreativeTabItems();
         }
     }
 
@@ -535,7 +531,7 @@ public final class FieldReferences {
 
     @SuppressWarnings("ReferenceEquality")
     public void putBack(Collection<String> mods) {
-        GameHold.onGameAndWait(() -> mods.forEach(mod -> {
+        Games.getNow().runOnGameAndWait(() -> mods.forEach(mod -> {
             for (Replacement one : this.replacements.getOrDefault(mod, List.of())) {
                 try {
                     if (one.field().get(one.holder()) == one.put()) {
@@ -559,14 +555,14 @@ public final class FieldReferences {
         Predicate<Class<?>> others = getOthers(mods, on);
         Map<String, List<Replacement>> planned = new HashMap<>();
 
-        Object game = Minecraft.getInstance();
+        Object game = Games.getNow().getRoot();
         List<Object> near = LookRoots.findGameObjectsBelow(game, LookRoots.GAME_STEPS);
 
         List<Object> deep = Fields.findBelow(game, LookRoots.PATCHED_STEPS,
                 type -> GameNames.isGame(type.getName()));
         List<Object> graph = new ArrayList<>(deep);
         graph.add(game);
-        List<Object> connected = NetworkHandlers.findPipelineObjects();
+        List<Object> connected = Games.getNow().getPipelineObjects();
         List<PlacedWrappers.Wrapper> placed = PlacedWrappers.find(graph);
         for (String mod : mods) {
             List<Replacement> mine = new ArrayList<>();
@@ -603,7 +599,7 @@ public final class FieldReferences {
             List<Object> holders = new ArrayList<>(near);
             holders.addAll(connected);
 
-            BuiltInRegistries.CREATIVE_MODE_TAB.forEach(holders::add);
+            Games.getNow().getCreativeTabs().forEach(holders::add);
             Set<String> uses = named.getOrDefault(mod, Set.of());
             deep.stream().filter(one -> SuperclassNames.containsAny(one.getClass(), targets)
                     || SuperclassNames.containsAny(one.getClass(), uses)).forEach(holders::add);
@@ -623,7 +619,7 @@ public final class FieldReferences {
     private void putIn(String mod, List<Replacement> planned) {
         List<Replacement> done = new ArrayList<>();
         for (Replacement one : planned) {
-            if (one.holder() instanceof Registry<?>) {
+            if (ClassKinds.is(one.holder(), Game.REGISTRY)) {
                 LOGGER.info("[Hotwire] {} keeps {}'s object: a registry's own data is not given back",
                         one.field().getDeclaringClass().getSimpleName() + "." + one.field().getName(), mod);
                 continue;
@@ -648,7 +644,7 @@ public final class FieldReferences {
     }
 
     private static boolean isEntity(@Nullable Class<?> type) {
-        return type != null && Entity.class.isAssignableFrom(type);
+        return ClassKinds.isClass(type, Game.ENTITY);
     }
 
 }

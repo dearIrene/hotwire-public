@@ -2,9 +2,7 @@ package dev.moon.hotwire.fabric.registration;
 
 import dev.moon.hotwire.classfile.GameNames;
 import dev.moon.hotwire.redefine.FieldSlots;
-import dev.moon.hotwire.redefine.FinalWrites;
 import io.netty.channel.Channel;
-import java.lang.reflect.Field;
 import java.lang.reflect.InaccessibleObjectException;
 import java.util.ArrayDeque;
 import java.util.ArrayList;
@@ -81,9 +79,9 @@ public final class LiveConnections {
                 }
                 Object made = replaced.get(value);
                 if (made != null) {
-                    swapped += write(slot, one, made) ? 1 : 0;
+                    swapped += StaticCopies.writeSlot(slot, one, made) ? 1 : 0;
                 } else if (value instanceof List<?> list) {
-                    swapped += swapIn(list, replaced);
+                    swapped += StaticCopies.swapInList(list, replaced);
                     list.stream().filter(item -> item != null && isFollowed(item)).forEach(next::add);
                 } else if (isFollowed(value)) {
                     next.add(value);
@@ -142,35 +140,5 @@ public final class LiveConnections {
                 && !(value instanceof MinecraftServer) && !(value instanceof Channel)
                 && (GameNames.isGame(name)
                 || name.startsWith("net.fabricmc."));
-    }
-
-    @SuppressWarnings("unchecked")
-    static int swapIn(List<?> list, IdentityHashMap<Object, Object> replaced) {
-        int found = 0;
-        try {
-            for (int at = 0; at < list.size(); at++) {
-                Object made = list.get(at) == null ? null : replaced.get(list.get(at));
-                if (made != null) {
-                    ((List<Object>) list).set(at, made);
-                    found++;
-                }
-            }
-        } catch (UnsupportedOperationException | IndexOutOfBoundsException | IllegalStateException fixed) {
-            return found;
-        }
-        return found;
-    }
-
-    static boolean write(FieldSlots.Slot slot, @Nullable Object holder, Object value) {
-        try {
-            Field field = slot.getDeclaringClass().getDeclaredField(slot.getName());
-            field.trySetAccessible();
-            FinalWrites.write(field, holder, value);
-            return true;
-        } catch (ReflectiveOperationException | RuntimeException e) {
-            LOGGER.warn("[Hotwire] {}.{} keeps a static's old value: {}", slot.getDeclaringClass().getName(),
-                    slot.getName(), e.toString());
-            return false;
-        }
     }
 }

@@ -1,9 +1,9 @@
 package dev.moon.hotwire.fabric.registration;
 
-import dev.moon.hotwire.fabric.CrashGuard;
 import dev.moon.hotwire.fabric.rebuild.ConstantPools;
 import dev.moon.hotwire.redefine.FieldSlots;
 import dev.moon.hotwire.redefine.Linker;
+import dev.moon.hotwire.registration.MergedMembers;
 import java.lang.instrument.Instrumentation;
 import java.lang.reflect.Method;
 import java.util.Optional;
@@ -33,7 +33,7 @@ final class Lambdas {
     private @Nullable String tell(Class<?> type) {
         Method spun = type.isHidden() ? Linker.findSpunBody(type) : null;
         if (spun != null) {
-            return CrashGuard.findMergedMod(spun);
+            return MergedMembers.findMergedMod(spun);
         }
         if (!type.isHidden() || !type.getName().contains("$$Lambda")) {
             return null;
@@ -46,7 +46,7 @@ final class Lambdas {
         try {
             for (Method method : host.getDeclaredMethods()) {
                 if (method.getName().equals(target)) {
-                    return CrashGuard.findMergedMod(method);
+                    return MergedMembers.findMergedMod(method);
                 }
             }
         } catch (LinkageError e) {

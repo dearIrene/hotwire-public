@@ -4,6 +4,8 @@ import com.google.common.collect.ImmutableCollection;
 import dev.moon.hotwire.classfile.GameNames;
 import dev.moon.hotwire.classfile.PlainTypes;
 import dev.moon.hotwire.redefine.FieldSlots;
+import dev.moon.hotwire.seam.ClassKinds;
+import dev.moon.hotwire.seam.Game;
 import java.lang.ref.WeakReference;
 import java.lang.reflect.Constructor;
 import java.util.Arrays;
@@ -16,7 +18,6 @@ import java.util.NoSuchElementException;
 import java.util.Set;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.function.Consumer;
-import net.minecraft.resources.Identifier;
 import org.jspecify.annotations.Nullable;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -86,7 +87,7 @@ public final class CollectionParts {
     }
 
     static @Nullable String findNamespaceOf(@Nullable Object key) {
-        return key instanceof Identifier id ? id.getNamespace() : null;
+        return ClassKinds.findNamespaceOf(key, Game.ID);
     }
 
     static @Nullable Object withStandIns(String mod, Object item) {

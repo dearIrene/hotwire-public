@@ -6,8 +6,8 @@ import dev.moon.hotwire.fabric.dev.DevSession;
 import dev.moon.hotwire.fabric.registration.GameHold;
 import dev.moon.hotwire.fabric.registration.Owners;
 import dev.moon.hotwire.fabric.report.GameReports;
-import dev.moon.hotwire.redefine.HandlerGuards;
 import dev.moon.hotwire.registration.CallerOwner;
+import dev.moon.hotwire.registration.MergedMembers;
 import dev.moon.hotwire.report.ActionJournal;
 import dev.moon.hotwire.report.Causes;
 import dev.moon.hotwire.report.Report;
@@ -16,9 +16,6 @@ import dev.moon.hotwire.switching.ModSwitcher;
 import dev.moon.hotwire.switching.PlayerMessages;
 import dev.moon.hotwire.switching.SwitchHistory;
 import dev.moon.hotwire.ui.Lang;
-import java.lang.annotation.Annotation;
-import java.lang.reflect.AnnotatedElement;
-import java.lang.reflect.Field;
 import java.lang.reflect.Method;
 import java.util.ArrayList;
 import java.util.Arrays;
@@ -32,25 +29,18 @@ import java.util.concurrent.TimeUnit;
 import java.util.function.BiConsumer;
 import java.util.function.BiFunction;
 import java.util.function.BooleanSupplier;
-import java.util.function.Function;
 import java.util.function.Predicate;
 import java.util.function.Supplier;
-import java.util.regex.Matcher;
-import java.util.regex.Pattern;
 import org.jspecify.annotations.Nullable;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 public final class CrashGuard {
-    private static final Pattern MERGED_LAMBDA = Pattern.compile("^(?:md|fd)[0-9a-f]{6}[$]([^$]+)[$]");
     private static final Logger LOGGER = LoggerFactory.getLogger(CrashGuard.class);
     private static final int FRAMES = 512;
-    private static final String MIXIN_MERGED = "org.spongepowered.asm.mixin.transformer.meta.MixinMerged";
     private static volatile @Nullable CrashPolicy policy;
 
     private static final Set<String> SWITCHED = ConcurrentHashMap.newKeySet();
-
-    private static volatile Function<String, @Nullable String> mixinOwner = name -> null;
     private static final List<String> CAUGHT = new CopyOnWriteArrayList<>();
 
     private static final int MOST_CAUGHT = 200;
@@ -226,8 +216,8 @@ public final class CrashGuard {
             return null;
         }
         for (Method declared : methods) {
-            String mixin = declared.getName().equals(method) ? findMergedFrom(declared) : null;
-            if (mixin != null && mod.equals(mixinOwner.apply(mixin.replace('.', '/')))) {
+            String mixin = declared.getName().equals(method) ? MergedMembers.findMixinOf(declared) : null;
+            if (mixin != null && mod.equals(MergedMembers.findModOfMixin(mixin))) {
                 return mixin;
             }
         }
@@ -250,10 +240,6 @@ public final class CrashGuard {
     private static volatile List<String> lastSwitched = List.of();
     private static volatile long lastSwitchedAt;
     private static final long AFTER_SWITCH_NANOS = TimeUnit.SECONDS.toNanos(30);
-
-    static void setMixinOwners(Function<String, @Nullable String> owner) {
-        mixinOwner = owner;
-    }
 
     private static @Nullable String findModBehind(Throwable thrown) {
         String merged = findMergedOwner(thrown);
@@ -360,7 +346,7 @@ public final class CrashGuard {
             boolean merged = false;
             for (Method method : methods) {
                 if (method.getName().equals(element.getMethodName())) {
-                    String mod = findMergedMod(method);
+                    String mod = MergedMembers.findMergedMod(method);
                     if (Owners.isRecordedMod(mod)) {
                         if (!gameInside || !isWrapper(element.getMethodName())) {
                             return mod;
@@ -381,37 +367,6 @@ public final class CrashGuard {
     private static boolean isWrapper(String method) {
         int mark = method.indexOf('$');
         return mark > 0 && WRAPPERS.contains(method.substring(0, mark));
-    }
-
-    public static @Nullable String findMergedMod(Method method) {
-        String mixin = findMergedFrom(method);
-        if (mixin != null) {
-            return mixinOwner.apply(mixin.replace('.', '/'));
-        }
-        return findMergedModByName(method.getName());
-    }
-
-    public static @Nullable String findMergedModByName(String name) {
-        Matcher lambda = MERGED_LAMBDA.matcher(name);
-        return lambda.find() ? lambda.group(1) : HandlerGuards.findModInHandlerName(name);
-    }
-
-    public static @Nullable String findMergedMod(Field field) {
-        String mixin = findMergedFrom(field);
-        return mixin == null ? null : mixinOwner.apply(mixin.replace('.', '/'));
-    }
-
-    private static @Nullable String findMergedFrom(AnnotatedElement member) {
-        for (Annotation annotation : member.getDeclaredAnnotations()) {
-            if (annotation.annotationType().getName().equals(MIXIN_MERGED)) {
-                try {
-                    return String.valueOf(annotation.annotationType().getMethod("mixin").invoke(annotation));
-                } catch (ReflectiveOperationException | RuntimeException e) {
-                    return null;
-                }
-            }
-        }
-        return null;
     }
 
     public static boolean handle(Throwable thrown, CrashPolicy.Site site) {
