@@ -36,15 +36,21 @@ public final class FieldHolders {
             Map<Object, Boolean> awaiting, Set<String> restarted) {
     }
 
-    private static final Map<Class<?>, Holder> HOLDERS = new ConcurrentHashMap<>();
+    private static @Nullable Holder findHolder(Class<?> target) {
+        Linker.Link link = Linker.LINKS.get(target);
+        return link == null ? null : link.holder;
+    }
+
+    private static @Nullable Consumer<Object> findCatchUp(Class<?> target) {
+        Linker.Link link = Linker.LINKS.get(target);
+        return link == null ? null : link.catchUp;
+    }
 
     private static final Map<String, Set<String>> ADDED_BY_NAME = new ConcurrentHashMap<>();
 
     private static final Map<Class<?>, Class<?>> TARGET_OF = new MapMaker().weakKeys().makeMap();
 
     private static final Map<Field, Field> NOW = new ConcurrentHashMap<>();
-
-    private static final Map<Class<?>, Consumer<Object>> CATCH_UP = new ConcurrentHashMap<>();
 
     private static final Set<Class<?>> STARTED = Collections.newSetFromMap(new MapMaker().weakKeys().makeMap());
 
@@ -59,9 +65,9 @@ public final class FieldHolders {
 
     static void install(Class<?> target, byte @Nullable [] holderBytes, MethodHandles.Lookup host)
             throws IllegalAccessException {
-        Holder previous = HOLDERS.get(target);
+        Holder previous = findHolder(target);
 
-        CATCH_UP.remove(target);
+        Linker.link(target).catchUp = null;
         if (holderBytes == null) {
             return;
         }
@@ -89,7 +95,7 @@ public final class FieldHolders {
         Class<?> type = lookup.lookupClass();
         Holder holder = new Holder(type, lookup, new WeakIdentityMap(), new AtomicReference<>(previous),
                 initInstance(lookup, type, target), new MapMaker().weakKeys().makeMap(), Set.copyOf(restarted));
-        HOLDERS.put(target, holder);
+        Linker.link(target).holder = holder;
         TARGET_OF.put(type, target);
         NOW.clear();
     }
@@ -100,7 +106,7 @@ public final class FieldHolders {
     }
 
     static void carryOver(Class<?> target) {
-        Holder holder = HOLDERS.get(target);
+        Holder holder = findHolder(target);
         Holder last = holder == null ? null : holder.previous().get();
         if (holder == null || last == null) {
             return;
@@ -127,7 +133,7 @@ public final class FieldHolders {
     }
 
     private static String describeStaticsOf(Class<?> target) {
-        Holder holder = HOLDERS.get(target);
+        Holder holder = findHolder(target);
         if (holder == null) {
             return "no holder";
         }
@@ -159,16 +165,25 @@ public final class FieldHolders {
         return ADDED_BY_NAME.getOrDefault(internal, Set.of());
     }
 
-    private static final Map<Class<?>, Map<Object, Boolean>> RETRYING = new ConcurrentHashMap<>();
-    private static final Set<Class<?>> SAID_FAILED = ConcurrentHashMap.newKeySet();
-
     static boolean tryCatchUp(Class<?> target, Consumer<Object> catchUp, Object instance) {
         try {
             catchUp.accept(instance);
             return true;
         } catch (RuntimeException | LinkageError e) {
-            RETRYING.computeIfAbsent(target, any -> new MapMaker().weakKeys().makeMap()).put(instance, Boolean.TRUE);
-            if (SAID_FAILED.add(target)) {
+            Linker.Link link = Linker.link(target);
+            Map<Object, Boolean> retrying;
+            boolean first;
+            synchronized (link) {
+                retrying = link.retrying;
+                if (retrying == null) {
+                    retrying = new MapMaker().weakKeys().makeMap();
+                    link.retrying = retrying;
+                }
+                first = !link.saidFailed;
+                link.saidFailed = true;
+            }
+            retrying.put(instance, Boolean.TRUE);
+            if (first) {
                 LOGGER.info("[Hotwire] the hooks {} missed could not run on an object made before them yet ({}); it"
                         + " is tried again when a world opens", target.getName(), e.toString());
             }
@@ -178,26 +193,35 @@ public final class FieldHolders {
 
     public static int retryCatchUps() {
         int left = 0;
-        for (Map.Entry<Class<?>, Map<Object, Boolean>> waiting : RETRYING.entrySet()) {
-            Consumer<Object> catchUp = CATCH_UP.get(waiting.getKey());
-            for (Object instance : List.copyOf(waiting.getValue().keySet())) {
-                waiting.getValue().remove(instance);
-                if (catchUp != null && !tryCatchUp(waiting.getKey(), catchUp, instance)) {
+        boolean any = false;
+        for (Map.Entry<Class<?>, Linker.Link> entry : Linker.LINKS.entrySet()) {
+            Map<Object, Boolean> waiting = entry.getValue().retrying;
+            if (waiting == null) {
+                continue;
+            }
+            any = true;
+            Consumer<Object> catchUp = entry.getValue().catchUp;
+            for (Object instance : List.copyOf(waiting.keySet())) {
+                waiting.remove(instance);
+                if (catchUp != null && !tryCatchUp(entry.getKey(), catchUp, instance)) {
                     left++;
                 }
             }
         }
-        if (left == 0 && !RETRYING.isEmpty()) {
-            RETRYING.clear();
+        if (left == 0 && any) {
+            for (Map.Entry<Class<?>, Linker.Link> entry : Linker.LINKS.entrySet()) {
+                entry.getValue().retrying = null;
+                Linker.dropIfEmpty(entry.getKey());
+            }
             LOGGER.info("[Hotwire] the hooks that could not run before a world opened ran on their objects");
         }
         return left;
     }
 
     static void catchUpWith(Class<?> target, Consumer<Object> catchUp) {
-        CATCH_UP.put(target, catchUp);
+        Linker.link(target).catchUp = catchUp;
 
-        Holder holder = HOLDERS.get(target);
+        Holder holder = findHolder(target);
         if (holder != null) {
             for (Object instance : List.copyOf(holder.awaiting().keySet())) {
                 holder.awaiting().remove(instance);
@@ -207,14 +231,14 @@ public final class FieldHolders {
     }
 
     public static void markMade(Class<?> target, Object instance) {
-        Holder holder = HOLDERS.get(target);
+        Holder holder = findHolder(target);
         if (holder != null) {
             getHolderFor(holder, instance, true);
         }
     }
 
     static void startStatics(Class<?> target) {
-        Holder holder = HOLDERS.get(target);
+        Holder holder = findHolder(target);
         if (holder != null) {
             startStatics(holder);
         }
@@ -250,7 +274,7 @@ public final class FieldHolders {
     static Field getCurrent(Field field) {
         Class<?> declaring = field.getDeclaringClass();
         Class<?> target = TARGET_OF.get(declaring);
-        Holder now = target == null ? null : HOLDERS.get(target);
+        Holder now = target == null ? null : findHolder(target);
         if (now == null || now.type() == declaring) {
             return field;
         }
@@ -266,31 +290,33 @@ public final class FieldHolders {
     }
 
     static @Nullable Holder snapshot(Class<?> target) {
-        return HOLDERS.get(target);
+        return findHolder(target);
     }
 
     static void restore(Class<?> target, @Nullable Holder holder) {
-        Holder now = HOLDERS.get(target);
+        Holder now = findHolder(target);
         if (now != null) {
             TARGET_OF.remove(now.type());
         }
+        Linker.link(target).holder = holder;
         if (holder == null) {
-            HOLDERS.remove(target);
+            Linker.dropIfEmpty(target);
         } else {
-            HOLDERS.put(target, holder);
             TARGET_OF.put(holder.type(), target);
         }
     }
 
     static void drop(Class<?> target) {
-        Holder holder = HOLDERS.remove(target);
+        Holder holder = findHolder(target);
         if (holder != null) {
+            Linker.link(target).holder = null;
             TARGET_OF.remove(holder.type());
         }
+        Linker.dropIfEmpty(target);
     }
 
     public static @Nullable Class<?> findHolderClassOf(Class<?> target) {
-        Holder holder = HOLDERS.get(target);
+        Holder holder = findHolder(target);
         return holder == null ? null : holder.type();
     }
 
@@ -331,7 +357,7 @@ public final class FieldHolders {
             return found;
         }
         Class<?> target = TARGET_OF.get(holder.type());
-        Consumer<Object> catchUp = made || target == null ? null : CATCH_UP.get(target);
+        Consumer<Object> catchUp = made || target == null ? null : findCatchUp(target);
         if (catchUp != null && target != null) {
             tryCatchUp(target, catchUp, instance);
         } else if (!made) {
@@ -387,7 +413,7 @@ public final class FieldHolders {
     }
 
     static Holder getHolderOf(Class<?> target) {
-        Holder holder = HOLDERS.get(target);
+        Holder holder = findHolder(target);
         if (holder == null) {
             throw new IllegalStateException("[Hotwire] no added fields are installed for " + target.getName());
         }

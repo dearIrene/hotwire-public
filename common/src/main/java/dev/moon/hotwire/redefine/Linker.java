@@ -21,6 +21,7 @@ import java.util.Set;
 import java.util.WeakHashMap;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.ConcurrentLinkedDeque;
+import java.util.function.Consumer;
 import java.util.function.Function;
 import org.jspecify.annotations.Nullable;
 import org.objectweb.asm.Type;
@@ -47,9 +48,17 @@ public final class Linker {
 
         volatile Set<String> stubbed = Set.of();
 
+        volatile FieldHolders.@Nullable Holder holder;
+
+        volatile @Nullable Consumer<Object> catchUp;
+
+        volatile @Nullable Map<Object, Boolean> retrying;
+        volatile boolean saidFailed;
+
         private boolean isEmpty() {
             return this.sidecar == null && !this.pending && this.moved == null && this.stubbed.isEmpty()
-                    && this.earlier.isEmpty();
+                    && this.earlier.isEmpty() && this.holder == null && this.catchUp == null
+                    && this.retrying == null;
         }
     }
 
@@ -57,6 +66,10 @@ public final class Linker {
 
     static Link link(Class<?> target) {
         return LINKS.computeIfAbsent(target, type -> new Link());
+    }
+
+    static void dropIfEmpty(Class<?> target) {
+        LINKS.computeIfPresent(target, (type, now) -> now.isEmpty() ? null : now);
     }
 
     static MethodHandles.@Nullable Lookup findSidecar(Class<?> target) {
@@ -125,7 +138,7 @@ public final class Linker {
             Link linked = LINKS.get(target);
             if (linked != null) {
                 linked.pending = false;
-                LINKS.computeIfPresent(target, (type, now) -> now.isEmpty() ? null : now);
+                dropIfEmpty(target);
             }
         }
         DuckCalls.forget();
@@ -244,7 +257,7 @@ public final class Linker {
             linked.earlier.clear();
             linked.moved = null;
             linked.stubbed = Set.of();
-            LINKS.computeIfPresent(target, (type, now) -> now.isEmpty() ? null : now);
+            dropIfEmpty(target);
         }
         MovedSites.reset(MOVED, findEveryMoved());
         FieldHolders.drop(target);
@@ -520,7 +533,7 @@ public final class Linker {
         }
         setDucksOf(target, snapshot.ducks());
         linked.stubbed = snapshot.stubbed();
-        LINKS.computeIfPresent(target, (type, here) -> here.isEmpty() ? null : here);
+        dropIfEmpty(target);
         MovedSites.reset(MOVED, findEveryMoved());
         DuckCalls.forget();
         FieldHolders.restore(target, snapshot.holder());

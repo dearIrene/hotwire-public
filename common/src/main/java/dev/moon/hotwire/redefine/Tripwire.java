@@ -20,6 +20,8 @@ import java.util.concurrent.ForkJoinPool;
 import java.util.concurrent.ForkJoinWorkerThread;
 import java.util.concurrent.ThreadPoolExecutor;
 import java.util.concurrent.TimeUnit;
+import java.util.concurrent.atomic.AtomicBoolean;
+import java.util.concurrent.atomic.AtomicInteger;
 import java.util.concurrent.atomic.AtomicLong;
 import java.util.concurrent.locks.LockSupport;
 import java.util.function.BooleanSupplier;
@@ -53,7 +55,42 @@ public final class Tripwire {
 
     private static final String POOL_WORKER = ThreadPoolExecutor.class.getName() + "$Worker";
 
-    private static final Map<String, CountDownLatch> GATES = new ConcurrentHashMap<>();
+    private static final class ModWatch {
+        volatile @Nullable AtomicLong calls;
+
+        volatile @Nullable CountDownLatch gate;
+
+        volatile @Nullable Set<String> libraries;
+
+        volatile @Nullable Set<Integer> ownLocks;
+
+        volatile @Nullable List<String> first;
+        volatile @Nullable List<String> firstLoad;
+
+        final AtomicBoolean ran = new AtomicBoolean();
+
+        volatile boolean goingOff;
+        final Map<String, WeakReference<Thread>> loaders = new ConcurrentHashMap<>();
+        final Set<Thread> waiting = ConcurrentHashMap.newKeySet();
+    }
+
+    private static final Map<String, ModWatch> MODS = new ConcurrentHashMap<>();
+
+    private static final AtomicInteger WATCHED = new AtomicInteger();
+
+    private static ModWatch of(String mod) {
+        return MODS.computeIfAbsent(mod, any -> new ModWatch());
+    }
+
+    private static @Nullable CountDownLatch findGate(String mod) {
+        ModWatch watch = MODS.get(mod);
+        return watch == null ? null : watch.gate;
+    }
+
+    private static boolean isGoingOff(String mod) {
+        ModWatch watch = MODS.get(mod);
+        return watch != null && watch.goingOff;
+    }
 
     private static volatile boolean exiting;
 
@@ -63,9 +100,6 @@ public final class Tripwire {
             releaseAll();
         }));
     }
-    private static final Map<String, Set<Thread>> WAITING = new ConcurrentHashMap<>();
-
-    private static final Set<String> GOING_OFF = ConcurrentHashMap.newKeySet();
 
     private static final Set<String> UNHELD = ConcurrentHashMap.newKeySet();
     private static final long OFF_WAIT_NANOS = TimeUnit.SECONDS.toNanos(10);
@@ -79,9 +113,6 @@ public final class Tripwire {
     private static volatile Function<String, Set<String>> librariesOf = mod -> Set.of();
 
     private static volatile Set<String> game = Set.of();
-    private static final Map<String, Set<String>> LIBRARIES = new ConcurrentHashMap<>();
-
-    private static final Map<String, Set<Integer>> OWN_LOCKS = new ConcurrentHashMap<>();
     private static volatile Function<String, Set<Integer>> locksOf = mod -> Set.of();
 
     private static final ThreadLocal<String> OTHERS_FRAME = ThreadLocal.withInitial(() -> "");
@@ -99,12 +130,6 @@ public final class Tripwire {
     private static final String HOTWIRE = "hotwire";
     private static final int FRAMES = 28;
     private static final ThreadLocal<@Nullable String> SENDING = new ThreadLocal<>();
-    private static final Map<String, AtomicLong> CALLS = new ConcurrentHashMap<>();
-    private static final Map<String, List<String>> FIRST = new ConcurrentHashMap<>();
-
-    private static final Set<String> RAN = ConcurrentHashMap.newKeySet();
-    private static final Map<String, List<String>> FIRST_LOAD = new ConcurrentHashMap<>();
-    private static final Map<String, Map<String, WeakReference<Thread>>> LOADERS = new ConcurrentHashMap<>();
 
     private static volatile boolean paused;
 
@@ -126,8 +151,12 @@ public final class Tripwire {
     }
 
     public static void expectOff(Runnable work) {
-        Set<String> off = new HashSet<>(CALLS.keySet());
-        off.addAll(GATES.keySet());
+        Set<String> off = new HashSet<>();
+        MODS.forEach((mod, watch) -> {
+            if (watch.calls != null || watch.gate != null) {
+                off.add(mod);
+            }
+        });
         expect(off, work);
     }
 
@@ -154,8 +183,12 @@ public final class Tripwire {
     private static final Set<String> SAID_WHOSE = ConcurrentHashMap.newKeySet();
 
     private static boolean hitOnce(String mod, boolean runs) {
-        CountDownLatch gate = GATES.get(mod);
-        if ((gate != null || CALLS.containsKey(mod)) && isCoroutineHandover()) {
+        ModWatch watch = MODS.get(mod);
+        if (watch == null) {
+            return false;
+        }
+        CountDownLatch gate = watch.gate;
+        if ((gate != null || watch.calls != null) && isCoroutineHandover()) {
             return false;
         }
         if (gate != null) {
@@ -178,9 +211,9 @@ public final class Tripwire {
                 release(List.of(mod));
             }
         }
-        AtomicLong calls = CALLS.get(mod);
+        AtomicLong calls = watch.calls;
         if (calls != null) {
-            count(mod, calls, runs);
+            count(mod, watch, calls, runs);
             return true;
         }
         return false;
@@ -197,17 +230,17 @@ public final class Tripwire {
             return false;
         }
 
-        CountDownLatch gate = GATES.get(mod);
+        CountDownLatch gate = findGate(mod);
         long until = System.nanoTime() + OFF_WAIT_NANOS;
 
-        while (gate == null && GOING_OFF.contains(mod) && System.nanoTime() < until) {
+        while (gate == null && isGoingOff(mod) && System.nanoTime() < until) {
             LockSupport.parkNanos(1_000_000);
-            gate = GATES.get(mod);
+            gate = findGate(mod);
         }
         if (gate == null) {
             if (UNHELD.add(mod)) {
                 LOGGER.warn("[Hotwire] {} called a method an off took away and is not held: {} is {}",
-                        caller.getName(), mod, GOING_OFF.contains(mod) ? "going off and got no gate in time"
+                        caller.getName(), mod, isGoingOff(mod) ? "going off and got no gate in time"
                                 : "neither off nor going off");
             }
             return false;
@@ -219,7 +252,7 @@ public final class Tripwire {
     static boolean holdCaster() {
         Class<?> caller = findCaller();
         String mod = caller == null ? null : owner.apply(caller);
-        return mod != null && (GATES.containsKey(mod) || GOING_OFF.contains(mod)) && holdCaller();
+        return mod != null && (findGate(mod) != null || isGoingOff(mod)) && holdCaller();
     }
 
     private static @Nullable Class<?> findCaller() {
@@ -246,9 +279,13 @@ public final class Tripwire {
     }
 
     static void onCounted(String mod) {
-        AtomicLong calls = CALLS.get(mod);
+        ModWatch watch = MODS.get(mod);
+        if (watch == null) {
+            return;
+        }
+        AtomicLong calls = watch.calls;
         if (calls != null && !isCoroutineHandover()) {
-            count(mod, calls, true);
+            count(mod, watch, calls, true);
         }
     }
 
@@ -259,18 +296,18 @@ public final class Tripwire {
                 .findFirst().map(frame -> DISPATCHING.contains(frame.getMethodName())).orElse(false));
     }
 
-    private static void count(String mod, AtomicLong calls, boolean runs) {
+    private static void count(String mod, ModWatch watch, AtomicLong calls, boolean runs) {
         if (paused) {
             return;
         }
 
-        if (runs && !RAN.contains(mod) && WALKER.walk(frames -> TripwireSites.isUnderGatedFrame(mod, frames))) {
+        if (runs && !watch.ran.get() && WALKER.walk(frames -> TripwireSites.isUnderGatedFrame(mod, frames))) {
             return;
         }
         long before = calls.getAndIncrement();
-        boolean firstRun = runs && RAN.add(mod);
+        boolean firstRun = runs && watch.ran.compareAndSet(false, true);
 
-        if (before == 0 || firstRun || !FIRST.containsKey(mod)) {
+        if (before == 0 || firstRun || watch.first == null) {
             List<String> frames = new ArrayList<>();
 
             Set<String> seen = new HashSet<>();
@@ -284,11 +321,11 @@ public final class Tripwire {
             if (TripwireSites.isLetGo(frames)) {
                 calls.decrementAndGet();
                 if (firstRun) {
-                    RAN.remove(mod);
+                    watch.ran.set(false);
                 }
                 return;
             }
-            FIRST.put(mod, List.copyOf(frames));
+            watch.first = List.copyOf(frames);
             firstCall.accept(mod);
         }
     }
@@ -338,19 +375,21 @@ public final class Tripwire {
     }
 
     public static void beginOff(Collection<String> mods) {
-        GOING_OFF.addAll(mods);
+        mods.forEach(mod -> of(mod).goingOff = true);
     }
 
     public static void endOff(Collection<String> mods) {
-        GOING_OFF.removeAll(mods);
+        mods.forEach(mod -> of(mod).goingOff = false);
     }
 
     public static boolean isHolding(String mod) {
-        return LIBRARIES.containsKey(mod);
+        ModWatch watch = MODS.get(mod);
+        return watch != null && watch.libraries != null;
     }
 
     public static Set<String> getLibrariesOf(String mod) {
-        Set<String> known = LIBRARIES.get(mod);
+        ModWatch watch = MODS.get(mod);
+        Set<String> known = watch == null ? null : watch.libraries;
         return known != null ? known : Set.copyOf(librariesOf.apply(mod));
     }
 
@@ -359,10 +398,15 @@ public final class Tripwire {
             return;
         }
         mods.forEach(mod -> {
-            LIBRARIES.put(mod, Set.copyOf(librariesOf.apply(mod)));
+            ModWatch watch = of(mod);
+            watch.libraries = Set.copyOf(librariesOf.apply(mod));
 
-            OWN_LOCKS.remove(mod);
-            GATES.putIfAbsent(mod, new CountDownLatch(1));
+            watch.ownLocks = null;
+            synchronized (watch) {
+                if (watch.gate == null) {
+                    watch.gate = new CountDownLatch(1);
+                }
+            }
         });
     }
 
@@ -378,8 +422,16 @@ public final class Tripwire {
 
     public static void release(Collection<String> mods) {
         for (String mod : mods) {
-            CountDownLatch gate = GATES.remove(mod);
-            LIBRARIES.remove(mod);
+            ModWatch watch = MODS.get(mod);
+            if (watch == null) {
+                continue;
+            }
+            CountDownLatch gate;
+            synchronized (watch) {
+                gate = watch.gate;
+                watch.gate = null;
+            }
+            watch.libraries = null;
             if (gate != null) {
                 if (countWaiting(mod) > 0) {
                     LOGGER.info("[Hotwire] {} of {}'s threads go on", countWaiting(mod), mod);
@@ -390,7 +442,7 @@ public final class Tripwire {
     }
 
     public static void releaseAll() {
-        release(Set.copyOf(GATES.keySet()));
+        release(Set.copyOf(MODS.keySet()));
     }
 
     private enum Whose {
@@ -400,7 +452,9 @@ public final class Tripwire {
     @SuppressWarnings("ReferenceEquality")
     private static Whose findWhose(String mod) {
         Function<Class<?>, @Nullable String> modOf = owner;
-        Set<String> libraries = LIBRARIES.getOrDefault(mod, Set.of());
+        ModWatch watch = MODS.get(mod);
+        Set<String> known = watch == null ? null : watch.libraries;
+        Set<String> libraries = known == null ? Set.of() : known;
         List<StackWalker.StackFrame> frames = WALKER.walk(stack -> stack
                 .filter(frame -> !isLinker(frame.getDeclaringClass())).toList());
         int mine = 0;
@@ -424,7 +478,7 @@ public final class Tripwire {
                 unsafe |= frame.getMethodName().equals("<clinit>") || (mine == 0 && isSynchronizedMethod(frame));
                 mine++;
                 gameBelow = false;
-            } else if (of != null && (libraries.contains(of) || LIBRARIES.containsKey(of))) {
+            } else if (of != null && (libraries.contains(of) || isHolding(of))) {
                 gameBelow = game.contains(of);
                 library = true;
             } else {
@@ -455,7 +509,14 @@ public final class Tripwire {
         if (info.length == 0 || info[0] == null) {
             return Whose.UNSAFE;
         }
-        Set<Integer> own = OWN_LOCKS.computeIfAbsent(mod, key -> Set.copyOf(locksOf.apply(key)));
+
+        Set<Integer> own = watch == null ? null : watch.ownLocks;
+        if (own == null) {
+            own = Set.copyOf(locksOf.apply(mod));
+            if (watch != null) {
+                watch.ownLocks = own;
+            }
+        }
         for (MonitorInfo monitor : info[0].getLockedMonitors()) {
             if (!own.contains(monitor.getIdentityHashCode())) {
                 return Whose.UNSAFE;
@@ -492,7 +553,8 @@ public final class Tripwire {
 
     private static void waitUntilOn(String mod, CountDownLatch gate) {
         Thread thread = Thread.currentThread();
-        if (WAITING.computeIfAbsent(mod, any -> ConcurrentHashMap.newKeySet()).add(thread)) {
+        Set<Thread> waiting = of(mod).waiting;
+        if (waiting.add(thread)) {
             LOGGER.info("[Hotwire] {}'s thread {} waits until {} is on, stopped at {}", mod, thread.getName(), mod,
                     WALKER.walk(frames -> frames.filter(frame -> frame.getDeclaringClass() != Tripwire.class
                             && !isLinker(frame.getDeclaringClass())).limit(6)
@@ -509,7 +571,7 @@ public final class Tripwire {
                 }
             }
         } finally {
-            WAITING.getOrDefault(mod, Set.of()).remove(thread);
+            waiting.remove(thread);
             if (interrupted) {
                 thread.interrupt();
             }
@@ -517,11 +579,15 @@ public final class Tripwire {
     }
 
     private static int countWaiting(String mod) {
-        return WAITING.getOrDefault(mod, Set.of()).size();
+        ModWatch watch = MODS.get(mod);
+        return watch == null ? 0 : watch.waiting.size();
     }
 
     public static void listenAgain(String mod) {
-        FIRST.remove(mod);
+        ModWatch watch = MODS.get(mod);
+        if (watch != null) {
+            watch.first = null;
+        }
     }
 
     public static void onFirstCall(Consumer<String> listener) {
@@ -529,25 +595,35 @@ public final class Tripwire {
     }
 
     public static Hits peek(String mod) {
-        AtomicLong calls = CALLS.get(mod);
-        List<String> first = FIRST.get(mod);
+        ModWatch watch = MODS.get(mod);
+        AtomicLong calls = watch == null ? null : watch.calls;
+        List<String> first = watch == null ? null : watch.first;
         return new Hits(calls == null ? 0 : calls.get(), first == null ? List.of() : first, countWaiting(mod));
     }
 
     public static @Nullable Object findWatch(String mod) {
-        return CALLS.get(mod);
+        ModWatch watch = MODS.get(mod);
+        return watch == null ? null : watch.calls;
     }
 
     public static boolean hasRun(String mod) {
-        return RAN.contains(mod);
+        ModWatch watch = MODS.get(mod);
+        return watch != null && watch.ran.get();
     }
 
     public static List<String> findWatched() {
-        return List.copyOf(CALLS.keySet());
+        List<String> watched = new ArrayList<>();
+        MODS.forEach((mod, watch) -> {
+            if (watch.calls != null) {
+                watched.add(mod);
+            }
+        });
+        return List.copyOf(watched);
     }
 
     public static boolean isWatched(String mod) {
-        return CALLS.containsKey(mod);
+        ModWatch watch = MODS.get(mod);
+        return watch != null && watch.calls != null;
     }
 
     public static @Nullable String findOwner(Class<?> type) {
@@ -556,7 +632,7 @@ public final class Tripwire {
 
     public static boolean isOfOffMod(Class<?> type) {
         String mod = owner.apply(type);
-        return mod != null && (CALLS.containsKey(mod) || isOff.test(mod));
+        return mod != null && (isWatched(mod) || isOff.test(mod));
     }
 
     public static boolean isOfHiddenMod(Class<?> type) {
@@ -569,25 +645,30 @@ public final class Tripwire {
     }
 
     public static boolean isAnyWatched() {
-        return !CALLS.isEmpty();
+        return WATCHED.get() > 0;
     }
 
     public static void onLoading(String mod, String className) {
-        LOADERS.computeIfAbsent(mod, any -> new ConcurrentHashMap<>())
-                .put(className, new WeakReference<>(Thread.currentThread()));
-        FIRST_LOAD.computeIfAbsent(mod, any -> {
-            List<String> frames = new ArrayList<>();
-            frames.add("load of " + className.replace('/', '.'));
-            StackTraceElement[] stack = new Throwable().getStackTrace();
-            int at = 1;
-            while (at < stack.length && isLoadingFrame(stack[at])) {
-                at++;
+        ModWatch watch = of(mod);
+        watch.loaders.put(className, new WeakReference<>(Thread.currentThread()));
+        if (watch.firstLoad != null) {
+            return;
+        }
+        List<String> frames = new ArrayList<>();
+        frames.add("load of " + className.replace('/', '.'));
+        StackTraceElement[] stack = new Throwable().getStackTrace();
+        int at = 1;
+        while (at < stack.length && isLoadingFrame(stack[at])) {
+            at++;
+        }
+        for (; at < stack.length && frames.size() < FRAMES; at++) {
+            frames.add(stack[at].toString());
+        }
+        synchronized (watch) {
+            if (watch.firstLoad == null) {
+                watch.firstLoad = List.copyOf(frames);
             }
-            for (; at < stack.length && frames.size() < FRAMES; at++) {
-                frames.add(stack[at].toString());
-            }
-            return List.copyOf(frames);
-        });
+        }
     }
 
     private static boolean isLoadingFrame(StackTraceElement frame) {
@@ -598,13 +679,15 @@ public final class Tripwire {
     }
 
     public static boolean hasSeenLoad(String mod, String className) {
-        return LOADERS.getOrDefault(mod, Map.of()).containsKey(className);
+        ModWatch watch = MODS.get(mod);
+        return watch != null && watch.loaders.containsKey(className);
     }
 
     public static boolean isLoadedOnItsWay(String mod, String className) {
-        WeakReference<Thread> loader = LOADERS.getOrDefault(mod, Map.of()).get(className);
+        ModWatch watch = MODS.get(mod);
+        WeakReference<Thread> loader = watch == null ? null : watch.loaders.get(className);
         Thread thread = loader == null ? null : loader.get();
-        return thread != null && WAITING.getOrDefault(mod, Set.of()).contains(thread);
+        return watch != null && thread != null && watch.waiting.contains(thread);
     }
 
     public static void noteSending(@Nullable String packet) {
@@ -633,27 +716,48 @@ public final class Tripwire {
     }
 
     public static List<String> getFirstLoad(String mod) {
-        return FIRST_LOAD.getOrDefault(mod, List.of());
+        ModWatch watch = MODS.get(mod);
+        List<String> first = watch == null ? null : watch.firstLoad;
+        return first == null ? List.of() : first;
     }
 
     public static void watch(String mod) {
-        FIRST.remove(mod);
-        RAN.remove(mod);
-        FIRST_LOAD.remove(mod);
-        LOADERS.remove(mod);
-        CALLS.put(mod, new AtomicLong());
+        ModWatch watch = of(mod);
+        synchronized (watch) {
+            watch.first = null;
+            watch.ran.set(false);
+            watch.firstLoad = null;
+            watch.loaders.clear();
+            if (watch.calls == null) {
+                WATCHED.incrementAndGet();
+            }
+            watch.calls = new AtomicLong();
+        }
     }
 
     public static void watchIfNew(String mod) {
-        if (!CALLS.containsKey(mod)) {
+        if (!isWatched(mod)) {
             watch(mod);
         }
     }
 
     public static Hits unwatch(String mod) {
-        AtomicLong calls = CALLS.remove(mod);
-        RAN.remove(mod);
-        List<String> first = FIRST.remove(mod);
+        ModWatch watch = MODS.get(mod);
+        if (watch == null) {
+            return new Hits(0, List.of(), 0);
+        }
+        AtomicLong calls;
+        List<String> first;
+        synchronized (watch) {
+            calls = watch.calls;
+            if (calls != null) {
+                WATCHED.decrementAndGet();
+            }
+            watch.calls = null;
+            watch.ran.set(false);
+            first = watch.first;
+            watch.first = null;
+        }
         return new Hits(calls == null ? 0 : calls.get(), first == null ? List.of() : first, countWaiting(mod));
     }
 
