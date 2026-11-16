@@ -2,6 +2,7 @@ package dev.moon.hotwire.fabric;
 
 import com.google.common.base.Splitter;
 import com.google.common.collect.Sets;
+import dev.moon.hotwire.fabric.registration.GameRegistrations;
 import dev.moon.hotwire.jar.ModManifest;
 import dev.moon.hotwire.plan.KnownUses;
 import dev.moon.hotwire.plan.ModGraph;
@@ -154,8 +155,14 @@ public final class ModPolicy {
         Set<String> guarded = new HashSet<>();
         graph.getIds().stream().filter(ModPolicy::isGuarded).forEach(guarded::add);
         guarded.addAll(findNeededByUnread(graph.getIds()));
-        return new SwitchPlanner(graph, new SwitchPlanner.Settings(nestedJars, findBuiltIn(graph.getIds()), guarded,
-                ModPolicy::satisfies, seenUses != null ? seenUses : KnownUses.NONE, ModPolicy::isStaying));
+        SwitchPlanner planner = new SwitchPlanner(graph, new SwitchPlanner.Settings(nestedJars,
+                findBuiltIn(graph.getIds()), guarded, ModPolicy::satisfies,
+                seenUses != null ? seenUses : KnownUses.NONE, ModPolicy::isStaying));
+
+        Set<String> own = new HashSet<>(graph.findSharedNested());
+        own.addAll(planner.findNestedStayingOn());
+        GameRegistrations.useShared(own);
+        return planner;
     }
 
     static Set<String> findNeededByUnread(Set<String> known) {

@@ -221,6 +221,27 @@ public final class SwitchPlanner {
         return null;
     }
 
+    public SortedSet<String> findNestedStayingOn() {
+        SortedSet<String> staying = new TreeSet<>();
+        for (String child : this.graph.getIds()) {
+            Set<String> containers = this.graph.getContainers(child);
+            if (containers.isEmpty() || this.graph.isInstalledOnItsOwn(child)) {
+                continue;
+            }
+
+            Set<String> others = new HashSet<>(this.graph.getIds());
+            others.remove(child);
+            boolean stays = true;
+            for (String container : containers) {
+                stays &= this.findReasonToStay(child, container, others, Set.of()) != null;
+            }
+            if (stays) {
+                staying.add(child);
+            }
+        }
+        return staying;
+    }
+
     private boolean returnsWith(String child, String container) {
         Optional<String> parent = this.graph.find(child).flatMap(ModManifest::menuParent);
         return switch (this.settings.nestedJars()) {
