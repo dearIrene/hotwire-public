@@ -4,6 +4,8 @@ import dev.moon.hotwire.fabric.CacheLimit;
 import dev.moon.hotwire.fabric.InstalledMods;
 import dev.moon.hotwire.fabric.ModPolicy;
 import dev.moon.hotwire.jar.FileHashes;
+import dev.moon.hotwire.jar.ModJarException;
+import dev.moon.hotwire.jar.ModJarReader;
 import dev.moon.hotwire.jar.ModManifest;
 import dev.moon.hotwire.modrinth.Downloads;
 import dev.moon.hotwire.modrinth.ModrinthClient;
@@ -305,12 +307,28 @@ public final class UpdateCheck {
         List<Path> jars = new ArrayList<>();
         Set<String> seen = new HashSet<>();
         ModrinthClient.Version newest = versions.getFirst();
+        saying.accept(Lang.get("hotwire.updates.getting_for_update", newest.name().isBlank() ? id : newest.name()));
+
+        Path jar = this.write(newest);
+        if (!isMod(jar, id)) {
+            LOGGER.info("[Hotwire] Modrinth's project {} is not the mod {}: left out", id, id);
+            Files.deleteIfExists(jar);
+            return List.of();
+        }
         for (String needed : newest.requiredProjects()) {
             this.fetchNeeded(needed, newest.name().isBlank() ? id : newest.name(), seen, jars, saying);
         }
-        saying.accept(Lang.get("hotwire.updates.getting_for_update", newest.name().isBlank() ? id : newest.name()));
-        jars.add(this.write(newest));
+        jars.add(jar);
         return jars;
+    }
+
+    private static boolean isMod(Path jar, String id) {
+        try {
+            ModManifest manifest = ModJarReader.read(jar).manifest();
+            return manifest.id().equals(id) || manifest.provides().contains(id);
+        } catch (ModJarException e) {
+            return false;
+        }
     }
 
     public List<Path> fetchWithNeeds(UpdateOffer offer, Consumer<String> saying) throws IOException {
