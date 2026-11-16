@@ -48,8 +48,8 @@ final class LinkerLookups {
     }
 
     static @Nullable MethodHandle findSidecarBody(Class<?> at, String method, MethodType type) {
-        MethodHandles.Lookup side = Linker.SIDECARS.get(at);
-        if (side == null || !Linker.MOVED_BY_TARGET.getOrDefault(at, Set.of()).contains(method
+        MethodHandles.Lookup side = Linker.findSidecar(at);
+        if (side == null || !Linker.findMoved(at).contains(method
                 + type.toMethodDescriptorString())) {
             return null;
         }
@@ -87,7 +87,7 @@ final class LinkerLookups {
                 return MethodHandles.empty(type);
             }
             for (MethodHandles.Lookup earlier
-                    : Linker.EARLIER.getOrDefault(Linker.getHostOf(caller), new ArrayDeque<>())) {
+                    : Linker.findEarlier(Linker.getHostOf(caller))) {
                 try {
                     MethodHandle found = earlier.findStatic(earlier.lookupClass(), name, type);
                     LOGGER.info("[Hotwire] {} ran on through its redefinition and reached {} in its earlier sidecar",

@@ -9,11 +9,13 @@ import java.lang.invoke.MethodHandles;
 import java.lang.invoke.MethodType;
 import java.lang.reflect.Method;
 import java.lang.reflect.Modifier;
-import java.util.ArrayDeque;
+import java.util.ArrayList;
 import java.util.Collection;
 import java.util.Collections;
 import java.util.Deque;
+import java.util.HashMap;
 import java.util.HashSet;
+import java.util.List;
 import java.util.Map;
 import java.util.Set;
 import java.util.WeakHashMap;
@@ -34,13 +36,57 @@ public final class Linker {
     static final int VIRTUAL = 4;
     static final int PUT_FINAL = 5;
 
-    static final Map<Class<?>, MethodHandles.Lookup> SIDECARS = new ConcurrentHashMap<>();
+    static final class Link {
+        volatile MethodHandles.@Nullable Lookup sidecar;
+
+        final Deque<MethodHandles.Lookup> earlier = new ConcurrentLinkedDeque<>();
+
+        volatile boolean pending;
+
+        volatile @Nullable Set<String> moved;
+
+        volatile Set<String> stubbed = Set.of();
+
+        private boolean isEmpty() {
+            return this.sidecar == null && !this.pending && this.moved == null && this.stubbed.isEmpty()
+                    && this.earlier.isEmpty();
+        }
+    }
+
+    static final Map<Class<?>, Link> LINKS = new ConcurrentHashMap<>();
+
+    static Link link(Class<?> target) {
+        return LINKS.computeIfAbsent(target, type -> new Link());
+    }
+
+    static MethodHandles.@Nullable Lookup findSidecar(Class<?> target) {
+        Link linked = LINKS.get(target);
+        return linked == null ? null : linked.sidecar;
+    }
+
+    static Set<String> findMoved(Class<?> target) {
+        Link linked = LINKS.get(target);
+        Set<String> moved = linked == null ? null : linked.moved;
+        return moved == null ? Set.of() : moved;
+    }
+
+    static Collection<MethodHandles.Lookup> findEarlier(Class<?> target) {
+        Link linked = LINKS.get(target);
+        return linked == null ? List.of() : linked.earlier;
+    }
+
+    private static List<Set<String>> findEveryMoved() {
+        List<Set<String>> every = new ArrayList<>();
+        for (Link linked : LINKS.values()) {
+            Set<String> moved = linked.moved;
+            if (moved != null) {
+                every.add(moved);
+            }
+        }
+        return every;
+    }
 
     private static final Map<Class<?>, Class<?>> SIDECAR_TARGETS = Collections.synchronizedMap(new WeakHashMap<>());
-
-    static final Map<Class<?>, Deque<MethodHandles.Lookup>> EARLIER = new ConcurrentHashMap<>();
-
-    private static final Set<Class<?>> PENDING = ConcurrentHashMap.newKeySet();
     private static final int EARLIER_LIMIT = 4;
 
     private static final Map<Class<?>, Set<String>> INSTANCE_METHODS = Collections.synchronizedMap(new WeakHashMap<>());
@@ -48,9 +94,6 @@ public final class Linker {
     private static final Map<String, Set<Class<?>>> DUCKS = new ConcurrentHashMap<>();
 
     private static final Set<String> MOVED = ConcurrentHashMap.newKeySet();
-    static final Map<Class<?>, Set<String>> MOVED_BY_TARGET = new ConcurrentHashMap<>();
-
-    private static final Map<Class<?>, Set<String>> STUBBED = new ConcurrentHashMap<>();
 
     private static volatile WidenerUses.Openings openings = WidenerUses.Openings.NONE;
     private static final Set<String> ADOPTED = ConcurrentHashMap.newKeySet();
@@ -64,35 +107,47 @@ public final class Linker {
     }
 
     public static Class<?> install(Class<?> target, ClassSplit.Result split) throws IllegalAccessException {
-        STUBBED.put(target, Set.copyOf(split.stubbed()));
+        link(target).stubbed = Set.copyOf(split.stubbed());
         return install(target, split.sidecar(), split.ducks(), split.fieldHolder(), split.movedInstance(),
                 Set.copyOf(split.moved()));
     }
 
     static Class<?> installInBatch(Class<?> target, ClassSplit.Result split) throws IllegalAccessException {
-        PENDING.add(target);
-        STUBBED.put(target, Set.copyOf(split.stubbed()));
+        Link linked = link(target);
+        linked.pending = true;
+        linked.stubbed = Set.copyOf(split.stubbed());
         return install(target, split.sidecar(), split.ducks(), split.fieldHolder(), split.movedInstance(),
                 Set.copyOf(split.moved()), false);
     }
 
     static void endBatch(Collection<Class<?>> targets) {
-        PENDING.removeAll(targets);
+        for (Class<?> target : targets) {
+            Link linked = LINKS.get(target);
+            if (linked != null) {
+                linked.pending = false;
+                LINKS.computeIfPresent(target, (type, now) -> now.isEmpty() ? null : now);
+            }
+        }
         DuckCalls.forget();
     }
 
     static boolean isPending(Class<?> target) {
-        return PENDING.contains(target);
+        Link linked = LINKS.get(target);
+        return linked != null && linked.pending;
     }
 
     static MethodHandles.@Nullable Lookup findLookupForOldCode(Class<?> target) {
-        if (PENDING.contains(target)) {
-            MethodHandles.Lookup before = EARLIER.getOrDefault(target, new ArrayDeque<>()).peekFirst();
+        Link linked = LINKS.get(target);
+        if (linked == null) {
+            return null;
+        }
+        if (linked.pending) {
+            MethodHandles.Lookup before = linked.earlier.peekFirst();
             if (before != null) {
                 return before;
             }
         }
-        return SIDECARS.get(target);
+        return linked.sidecar;
     }
 
     public static Class<?> install(Class<?> target, byte[] sidecar, Set<String> ducks, byte @Nullable [] fieldHolder,
@@ -108,21 +163,22 @@ public final class Linker {
 
         MethodHandles.Lookup side = host.defineHiddenClass(sidecar, false, MethodHandles.Lookup.ClassOption.NESTMATE);
         SIDECAR_TARGETS.put(side.lookupClass(), target);
-        MethodHandles.Lookup before = SIDECARS.put(target, side);
+        Link linked = link(target);
+        MethodHandles.Lookup before = linked.sidecar;
+        linked.sidecar = side;
         SidecarCallSites.rebind(target, side);
         if (fieldHolder != null && startStatics) {
             FieldHolders.startStatics(target);
         }
         if (before != null) {
-            Deque<MethodHandles.Lookup> earlier = EARLIER.computeIfAbsent(target, t -> new ConcurrentLinkedDeque<>());
-            earlier.addFirst(before);
-            while (earlier.size() > EARLIER_LIMIT) {
-                earlier.removeLast();
+            linked.earlier.addFirst(before);
+            while (linked.earlier.size() > EARLIER_LIMIT) {
+                linked.earlier.removeLast();
             }
         }
         INSTANCE_METHODS.put(side.lookupClass(), Set.copyOf(instanceMethods));
-        MOVED_BY_TARGET.put(target, Set.copyOf(moved));
-        MovedSites.reset(MOVED, MOVED_BY_TARGET.values());
+        linked.moved = Set.copyOf(moved);
+        MovedSites.reset(MOVED, findEveryMoved());
         String internal = Type.getInternalName(target);
         for (String one : moved) {
             if (one.startsWith(Adoption.CONSTRUCT + "(Ljava/lang/Object;")) {
@@ -177,14 +233,20 @@ public final class Linker {
     }
 
     public static void drop(Class<?> target) {
-        EARLIER.remove(target);
-        MethodHandles.Lookup side = SIDECARS.remove(target);
-        if (side != null) {
-            INSTANCE_METHODS.remove(side.lookupClass());
+        Link linked = LINKS.get(target);
+        if (linked != null) {
+            MethodHandles.Lookup side = linked.sidecar;
+            if (side != null) {
+                INSTANCE_METHODS.remove(side.lookupClass());
+            }
+
+            linked.sidecar = null;
+            linked.earlier.clear();
+            linked.moved = null;
+            linked.stubbed = Set.of();
+            LINKS.computeIfPresent(target, (type, now) -> now.isEmpty() ? null : now);
         }
-        MOVED_BY_TARGET.remove(target);
-        STUBBED.remove(target);
-        MovedSites.reset(MOVED, MOVED_BY_TARGET.values());
+        MovedSites.reset(MOVED, findEveryMoved());
         FieldHolders.drop(target);
         DUCKS.values().forEach(containers -> containers.remove(target));
         DuckCalls.forget();
@@ -211,13 +273,20 @@ public final class Linker {
     }
 
     public static Map<Class<?>, Set<String>> getMovedByTarget() {
-        return Map.copyOf(MOVED_BY_TARGET);
+        Map<Class<?>, Set<String>> all = new HashMap<>();
+        LINKS.forEach((target, linked) -> {
+            Set<String> moved = linked.moved;
+            if (moved != null) {
+                all.put(target, moved);
+            }
+        });
+        return Map.copyOf(all);
     }
 
     static Set<String> getMovedOf(String internalName) {
-        for (Map.Entry<Class<?>, Set<String>> entry : MOVED_BY_TARGET.entrySet()) {
-            if (Type.getInternalName(entry.getKey()).equals(internalName)) {
-                return entry.getValue();
+        for (Class<?> target : LINKS.keySet()) {
+            if (Type.getInternalName(target).equals(internalName)) {
+                return findMoved(target);
             }
         }
         return Set.of();
@@ -230,8 +299,8 @@ public final class Linker {
                     caller.lookupClass().getClassLoader());
             MethodType wanted = MethodType.fromMethodDescriptorString(descriptor, at.getClassLoader());
             for (; at != null; at = at.getSuperclass()) {
-                MethodHandles.Lookup side = SIDECARS.get(at);
-                Set<String> moved = MOVED_BY_TARGET.getOrDefault(at, Set.of());
+                MethodHandles.Lookup side = findSidecar(at);
+                Set<String> moved = findMoved(at);
                 String named = moved.contains(method + descriptor) ? method
                         : findRenumbered(moved, method, descriptor);
                 if (side != null && named != null) {
@@ -275,8 +344,8 @@ public final class Linker {
             throws ReflectiveOperationException {
         MethodType type = MethodType.fromMethodDescriptorString(descriptor, from.getClassLoader());
         for (Class<?> at = from; at != null; at = at.getSuperclass()) {
-            MethodHandles.Lookup side = SIDECARS.get(at);
-            if (side != null && MOVED_BY_TARGET.getOrDefault(at, Set.of()).contains(method + descriptor)) {
+            MethodHandles.Lookup side = findSidecar(at);
+            if (side != null && findMoved(at).contains(method + descriptor)) {
                 return side.findStatic(side.lookupClass(), method, type.insertParameterTypes(0, at));
             }
             if (hasOwn(at, method, type)) {
@@ -318,7 +387,8 @@ public final class Linker {
     }
 
     static boolean hasOwn(Class<?> type, String method, MethodType shape) {
-        if (STUBBED.getOrDefault(type, Set.of()).contains(method + shape.toMethodDescriptorString())) {
+        Link linked = LINKS.get(type);
+        if (linked != null && linked.stubbed.contains(method + shape.toMethodDescriptorString())) {
             return false;
         }
         try {
@@ -335,8 +405,8 @@ public final class Linker {
         MethodType type = MethodType.fromMethodDescriptorString(descriptor, receiver.getClassLoader());
         Class<?> overrider = null;
         for (Class<?> at = receiver; at != null; at = at.getSuperclass()) {
-            MethodHandles.Lookup side = SIDECARS.get(at);
-            if (side != null && MOVED_BY_TARGET.getOrDefault(at, Set.of()).contains(method + descriptor)) {
+            MethodHandles.Lookup side = findSidecar(at);
+            if (side != null && findMoved(at).contains(method + descriptor)) {
                 return overrider == null ? side.findStatic(side.lookupClass(), method,
                         type.insertParameterTypes(0, at))
                         : MethodHandles.privateLookupIn(overrider, MethodHandles.lookup()).findVirtual(overrider,
@@ -418,7 +488,8 @@ public final class Linker {
     }
 
     static Snapshot snapshot(Class<?> target) {
-        MethodHandles.Lookup side = SIDECARS.get(target);
+        Link linked = LINKS.get(target);
+        MethodHandles.Lookup side = linked == null ? null : linked.sidecar;
         Set<String> ducks = new HashSet<>();
         DUCKS.forEach((duck, containers) -> {
             if (containers.contains(target)) {
@@ -426,29 +497,31 @@ public final class Linker {
             }
         });
         return new Snapshot(target, side, side == null ? Set.of() : INSTANCE_METHODS.getOrDefault(side.lookupClass(),
-                Set.of()), MOVED_BY_TARGET.getOrDefault(target, Set.of()), ducks, FieldHolders.snapshot(target),
-                STUBBED.getOrDefault(target, Set.of()));
+                Set.of()), findMoved(target), ducks, FieldHolders.snapshot(target),
+                linked == null ? Set.of() : linked.stubbed);
     }
 
     static void restore(Snapshot snapshot) {
         Class<?> target = snapshot.target();
-        MethodHandles.Lookup now = SIDECARS.get(target);
+        Link linked = link(target);
+        MethodHandles.Lookup now = linked.sidecar;
         if (now != null) {
             INSTANCE_METHODS.remove(now.lookupClass());
         }
         if (snapshot.sidecar() == null) {
-            SIDECARS.remove(target);
-            MOVED_BY_TARGET.remove(target);
+            linked.sidecar = null;
+            linked.moved = null;
         } else {
-            SIDECARS.put(target, snapshot.sidecar());
+            linked.sidecar = snapshot.sidecar();
             INSTANCE_METHODS.put(snapshot.sidecar().lookupClass(), snapshot.instanceMethods());
-            MOVED_BY_TARGET.put(target, snapshot.moved());
+            linked.moved = snapshot.moved();
 
             SidecarCallSites.rebind(target, snapshot.sidecar());
         }
         setDucksOf(target, snapshot.ducks());
-        STUBBED.put(target, snapshot.stubbed());
-        MovedSites.reset(MOVED, MOVED_BY_TARGET.values());
+        linked.stubbed = snapshot.stubbed();
+        LINKS.computeIfPresent(target, (type, here) -> here.isEmpty() ? null : here);
+        MovedSites.reset(MOVED, findEveryMoved());
         DuckCalls.forget();
         FieldHolders.restore(target, snapshot.holder());
         FieldCallSites.rebind(target);
@@ -459,7 +532,7 @@ public final class Linker {
     }
 
     static MethodHandles.@Nullable Lookup findCurrentLookup(Class<?> target) {
-        return SIDECARS.get(target);
+        return findSidecar(target);
     }
 
     public static synchronized void open(WidenerUses.Openings more) {
@@ -583,7 +656,7 @@ public final class Linker {
     }
 
     static MethodHandles.Lookup getSidecarOf(Class<?> caller) {
-        MethodHandles.Lookup side = SIDECARS.get(getHostOf(caller));
+        MethodHandles.Lookup side = findSidecar(getHostOf(caller));
         if (side == null) {
             throw new IllegalStateException("[Hotwire] no sidecar is installed for " + caller.getName());
         }
