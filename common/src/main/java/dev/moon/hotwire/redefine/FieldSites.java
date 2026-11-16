@@ -33,6 +33,7 @@ import org.objectweb.asm.tree.TypeInsnNode;
 import org.objectweb.asm.tree.VarInsnNode;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
+import org.slf4j.event.Level;
 
 final class FieldSites {
     static final String INIT = "$hotwire$init";
@@ -44,20 +45,41 @@ final class FieldSites {
     private static final Map<String, Set<String>> SITED = new ConcurrentHashMap<>();
 
     private static final Map<String, Set<String>> EXAMINED = new ConcurrentHashMap<>();
+    private static final String OPERATION = "/wrapoperation/Operation;";
     private static final String CALLBACKS = "org/spongepowered/asm/mixin/injection/callback/";
 
-    private record Init(String className, MethodHandle setUp) {
+    private record Init(String className, String name, MethodHandle setUp) {
     }
+
+    enum Mode { LOAD, REBUILD, RECORD }
 
     private FieldSites() {
     }
 
     static void make(String internalName, ClassNode node, Set<String> merged, Supplier<@Nullable ClassNode> shipped,
-            Set<String> guarded) {
-        EXAMINED.remove(internalName);
+            Set<String> guarded, Mode mode) {
+        if (mode != Mode.REBUILD) {
+            EXAMINED.remove(internalName);
+        }
+        if (mode == Mode.RECORD) {
+            SITED.remove(internalName);
+            UNSITED.remove(internalName);
+        }
         ClassNode original = shipped.get();
         if (merged.isEmpty() || original == null) {
             return;
+        }
+
+        Set<String> sitedMixins = new HashSet<>();
+        if (mode == Mode.RECORD) {
+            for (MethodNode method : node.methods) {
+                for (AbstractInsnNode insn : method.instructions) {
+                    if (method.name.equals("<init>") && insn instanceof InvokeDynamicInsnNode site
+                            && HandlerGuards.BOOTSTRAP_FIELD.equals(site.bsm)) {
+                        sitedMixins.add((String) site.bsmArgs[0]);
+                    }
+                }
+            }
         }
         Set<String> own = new HashSet<>();
         original.fields.forEach(field -> own.add(field.name + field.desc));
@@ -81,7 +103,7 @@ final class FieldSites {
                 added.put(field.name + field.desc, field.name);
             }
         }
-        if (added.isEmpty()) {
+        if (added.isEmpty() && sitedMixins.isEmpty()) {
             return;
         }
 
@@ -97,7 +119,6 @@ final class FieldSites {
         Map<String, InsnList> slices = FieldInitializers.findInstanceSlices(internalName, node, added.keySet());
         Set<String> unsited = new HashSet<>();
         List<String> why = new ArrayList<>();
-        Set<String> sitedMixins = new HashSet<>();
         List<String> sited = new ArrayList<>();
         List<InsnList> pure = new ArrayList<>();
         for (Map.Entry<String, String> field : added.entrySet()) {
@@ -120,7 +141,13 @@ final class FieldSites {
                 why.add(field.getValue() + ": no mixin of the mod");
                 continue;
             }
-            if (!moveToMethod(internalName, node, field.getKey(), field.getValue(), slice, mixin)) {
+            if (mode == Mode.RECORD) {
+                unsited.add(mixin);
+                why.add(field.getValue() + ": set up in the constructors of a rebuilt class");
+                continue;
+            }
+            if (!moveToMethod(internalName, node, field.getKey(), field.getValue(), slice, mixin,
+                    mode == Mode.REBUILD)) {
                 unsited.add(mixin);
                 why.add(field.getValue() + ": " + lastRefusal);
                 continue;
@@ -129,19 +156,24 @@ final class FieldSites {
             sitedMixins.add(mixin);
             sited.add(field.getValue());
         }
+        if (mode == Mode.REBUILD) {
+            return;
+        }
         sitedMixins.removeAll(unsited);
         if (unsited.isEmpty()) {
             UNSITED.remove(internalName);
         } else {
             UNSITED.put(internalName, Set.copyOf(unsited));
-            LOGGER.info("[Hotwire] {} sets up fields of {} that no site switches: it rebuilds for them ({})",
+            LOGGER.atLevel(mode == Mode.LOAD ? Level.INFO : Level.DEBUG).log(
+                    "[Hotwire] {} sets up fields of {} that no site switches: it rebuilds for them ({})",
                     internalName, unsited, why);
         }
         if (sitedMixins.isEmpty()) {
             SITED.remove(internalName);
         } else {
             SITED.put(internalName, Set.copyOf(sitedMixins));
-            LOGGER.info("[Hotwire] {} sets up {} through sites", internalName, sited);
+            LOGGER.atLevel(mode == Mode.LOAD ? Level.INFO : Level.DEBUG).log("[Hotwire] {} sets up {} through sites",
+                    internalName, mode == Mode.LOAD ? sited : sitedMixins);
         }
         if (unsited.isEmpty()) {
             String unknown = findUnknown(internalName, node, original, pure);
@@ -207,6 +239,8 @@ final class FieldSites {
             case TypeInsnNode type when type.desc.startsWith(CALLBACKS) -> null;
             case TypeInsnNode type -> type.getOpcode() + " " + type.desc;
             case InvokeDynamicInsnNode dynamic when HandlerGuards.isSite(dynamic.bsm) -> null;
+
+            case InvokeDynamicInsnNode dynamic when dynamic.desc.endsWith(OPERATION) -> null;
             case InvokeDynamicInsnNode dynamic -> "invokedynamic " + dynamic.name + dynamic.desc;
             case MultiANewArrayInsnNode array -> "multianewarray " + array.desc;
             case LdcInsnNode ldc when ldc.cst instanceof Type type -> "ldc " + type.getDescriptor();
@@ -287,8 +321,9 @@ final class FieldSites {
     private static String lastRefusal = "";
 
     @SuppressWarnings("ReferenceEquality")
+
     private static boolean moveToMethod(String internalName, ClassNode node, String key, String name,
-            InsnList slice, String mixin) {
+            InsnList slice, String mixin, boolean existingOnly) {
         List<AbstractInsnNode> sliceInsns = findRealInsns(slice);
         lastRefusal = "";
 
@@ -334,8 +369,26 @@ final class FieldSites {
             lastRefusal = "no constructor stores it";
             return false;
         }
+        MethodNode had = null;
+        for (MethodNode method : node.methods) {
+            if (method.name.equals(name + INIT) && method.desc.equals("()V")
+                    && (method.access & Opcodes.ACC_STATIC) == 0) {
+                had = method;
+            }
+        }
+        if (existingOnly && had == null) {
+            lastRefusal = "the running class has no method for the setup";
+            return false;
+        }
         MethodNode setUp = new MethodNode(Opcodes.ACC_PRIVATE | Opcodes.ACC_SYNTHETIC, name + INIT, "()V", null,
                 null);
+        if (had != null) {
+            setUp = new MethodNode(had.access, had.name, had.desc, had.signature,
+                    had.exceptions.toArray(String[]::new));
+            setUp.visibleAnnotations = had.visibleAnnotations;
+            setUp.invisibleAnnotations = had.invisibleAnnotations;
+            node.methods.set(node.methods.indexOf(had), setUp);
+        }
         for (AbstractInsnNode insn : sliceInsns) {
             setUp.instructions.add(insn.clone(Map.of()));
         }
@@ -343,7 +396,9 @@ final class FieldSites {
 
         setUp.maxLocals = 1;
         setUp.maxStack = constructors.getFirst().maxStack;
-        node.methods.add(setUp);
+        if (had == null) {
+            node.methods.add(setUp);
+        }
         for (int at = 0; at < ranges.size(); at++) {
             MethodNode method = constructors.get(at);
             AbstractInsnNode start = ranges.get(at)[0];
@@ -403,8 +458,12 @@ final class FieldSites {
         return false;
     }
 
-    static void note(String mixin, String className, MethodHandle setUp) {
-        INITS.computeIfAbsent(mixin, any -> new CopyOnWriteArrayList<>()).add(new Init(className, setUp));
+    static void note(String mixin, String className, String name, MethodHandle setUp) {
+        List<Init> inits = INITS.computeIfAbsent(mixin, any -> new CopyOnWriteArrayList<>());
+        synchronized (inits) {
+            inits.removeIf(init -> init.className().equals(className) && init.name().equals(name));
+            inits.add(new Init(className, name, setUp));
+        }
     }
 
     private static boolean hasOtherOff(String className, String mixin) {

@@ -436,7 +436,6 @@ public final class HandlerGuards {
 
     public static void recordFrom(String internalName, byte[] bytes) {
         REBUILT.add(internalName);
-        FieldSites.forgetExamined(internalName);
         DIRECT_MODS.remove(internalName);
         STAGED.remove(internalName);
         STAGED_PRESENT.remove(internalName);
@@ -455,6 +454,13 @@ public final class HandlerGuards {
                 }
             }
         }
+
+        Set<String> switched = new HashSet<>(present);
+        switched.removeIf(HandlerGuards::isNeverSwitched);
+        FieldSites.make(internalName, node, switched, () -> {
+            byte[] game = originals.apply(internalName);
+            return game == null ? null : ClassNodes.read(game, ClassReader.SKIP_DEBUG | ClassReader.SKIP_FRAMES);
+        }, new HashSet<>(), FieldSites.Mode.RECORD);
 
         ClassNode shipped = null;
         for (MethodNode method : node.methods) {
@@ -589,7 +595,8 @@ public final class HandlerGuards {
             throws ReflectiveOperationException {
         Class<?> owner = caller.lookupClass();
         String className = Type.getInternalName(owner);
-        FieldSites.note(mixin, className, caller.findSpecial(owner, name, MethodType.methodType(void.class), owner));
+        FieldSites.note(mixin, className, name,
+                caller.findSpecial(owner, name, MethodType.methodType(void.class), owner));
         return link(caller, name, type, mixin, OWN, () -> MethodHandles.insertArguments(MethodHandles.lookup()
                 .findStatic(OffWindowObjects.class, "onMade", MethodType.methodType(void.class, Object.class,
                         String.class)), 1, className).asType(type));

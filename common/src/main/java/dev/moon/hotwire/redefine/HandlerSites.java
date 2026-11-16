@@ -65,11 +65,10 @@ final class HandlerSites {
         if (!merged.isEmpty()) {
             markFinalWrites(internalName, node, shipped);
             OverwriteSites.make(internalName, node, mixinOfHandler, shipped, guarded, atLoad);
-            if (atLoad) {
-                Set<String> switched = new HashSet<>(merged);
-                switched.removeIf(HandlerGuards::isNeverSwitched);
-                FieldSites.make(internalName, node, switched, shipped, guarded);
-            }
+            Set<String> switched = new HashSet<>(merged);
+            switched.removeIf(HandlerGuards::isNeverSwitched);
+            FieldSites.make(internalName, node, switched, shipped, guarded,
+                    atLoad ? FieldSites.Mode.LOAD : FieldSites.Mode.REBUILD);
         }
         if (mixinOfHandler.isEmpty()) {
             return markStaged(internalName, guarded);
