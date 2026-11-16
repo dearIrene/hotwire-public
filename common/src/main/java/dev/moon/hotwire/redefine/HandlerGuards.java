@@ -62,8 +62,6 @@ public final class HandlerGuards {
 
     static final Set<String> UNFLIPPABLE = ConcurrentHashMap.newKeySet();
 
-    private static final Map<String, Set<String>> UNFLIPPABLE_AT = new ConcurrentHashMap<>();
-    private static final Map<String, Map<String, String>> UNFLIPPABLE_WHY = new ConcurrentHashMap<>();
     static final Handle BOOTSTRAP = new Handle(Opcodes.H_INVOKESTATIC,
             Type.getInternalName(HandlerGuards.class), "bootstrap",
             MethodType.methodType(CallSite.class, MethodHandles.Lookup.class, String.class, MethodType.class,
@@ -104,17 +102,6 @@ public final class HandlerGuards {
     private static final Map<String, Map<MutableCallSite, Guard>> GUARDS = new HashMap<>();
     private static final Set<String> OFF = new HashSet<>();
 
-    private static final Map<String, Set<String>> GUARDED = new ConcurrentHashMap<>();
-    static final Map<String, Set<String>> STAGED = new ConcurrentHashMap<>();
-
-    private static final Map<String, Set<String>> PRESENT = new ConcurrentHashMap<>();
-    static final Map<String, Set<String>> STAGED_PRESENT = new ConcurrentHashMap<>();
-    private static final Map<String, Set<String>> DIRECT_MODS = new ConcurrentHashMap<>();
-
-    private static final Map<String, Set<String>> PUT_IN = new ConcurrentHashMap<>();
-
-    private static final Map<String, Set<String>> BEHAVING = new ConcurrentHashMap<>();
-
     private static final AtomicLong CHUNK_FLIPS = new AtomicLong();
     private static final List<String> CHUNK_HOSTS = List.of("chunk", "renderer/block/", "color/block/", "/model/",
             "terrain", "/mesh");
@@ -122,8 +109,6 @@ public final class HandlerGuards {
     private static final List<String> CHUNK_MIXINS = List.of("chunk", "blockmodel", "bakedmodel", "blockrender",
             "blockcolor", "quad", "mesh", "terrain", "fluidrender", "section", "blockstatemodel", "light");
     private static final Object LOCK = new Object();
-
-    private static final Set<String> REBUILT = ConcurrentHashMap.newKeySet();
 
     static volatile Set<String> neverSwitched = Set.of();
 
@@ -151,7 +136,7 @@ public final class HandlerGuards {
     }
 
     public static boolean isGuarded(String internalName) {
-        return GUARDED.containsKey(internalName);
+        return getGuardedOrNull(internalName) != null;
     }
 
     public static @Nullable String findModInHandlerName(String name) {
@@ -168,7 +153,7 @@ public final class HandlerGuards {
     private static void noteDirect(String internalName, String handlerName) {
         String mod = findModInHandlerName(handlerName);
         if (mod != null) {
-            DIRECT_MODS.computeIfAbsent(internalName, name -> ConcurrentHashMap.newKeySet()).add(mod);
+            ClassState.of(internalName).directMods.add(mod);
         }
     }
 
@@ -177,7 +162,9 @@ public final class HandlerGuards {
     }
 
     static Set<String> findBehavingAt(String internalName) {
-        return BEHAVING.getOrDefault(internalName, Set.of());
+        ClassState state = ClassState.find(internalName);
+        Set<String> behaving = state == null ? null : state.behaving;
+        return behaving == null ? Set.of() : behaving;
     }
 
     public static Set<String> findBehavingAt(String internalName, Set<String> owns) {
@@ -205,11 +192,7 @@ public final class HandlerGuards {
             }
             behaving = OwnMethods.note(internalName, node, working);
         }
-        if (behaving.isEmpty()) {
-            BEHAVING.remove(internalName);
-        } else {
-            BEHAVING.put(internalName, behaving);
-        }
+        ClassState.of(internalName).behaving = behaving.isEmpty() ? null : behaving;
     }
 
     private static Set<String> findBehaving(ClassNode node) {
@@ -250,8 +233,9 @@ public final class HandlerGuards {
     }
 
     public static Set<String> findDirectModsAt(String internalName) {
-        Set<String> direct = DIRECT_MODS.getOrDefault(internalName, Set.of());
-        Set<String> putIn = PUT_IN.get(internalName);
+        ClassState state = ClassState.find(internalName);
+        Set<String> direct = state == null ? Set.of() : state.directMods;
+        Set<String> putIn = state == null ? null : state.putIn;
         if (putIn == null) {
             return direct;
         }
@@ -267,7 +251,9 @@ public final class HandlerGuards {
 
     public static List<String> findPutInAt(String internalName, String mod) {
         List<String> owners = new ArrayList<>();
-        for (String owner : PUT_IN.getOrDefault(internalName, Set.of())) {
+        ClassState state = ClassState.find(internalName);
+        Set<String> putIn = state == null ? null : state.putIn;
+        for (String owner : putIn == null ? Set.<String>of() : putIn) {
             if (mod.equals(TripwireSites.findModOfClass(owner))) {
                 owners.add(owner.substring(owner.lastIndexOf('/') + 1));
             }
@@ -310,11 +296,7 @@ public final class HandlerGuards {
                 }
             }
         }
-        if (owners.isEmpty()) {
-            PUT_IN.remove(internalName);
-        } else {
-            PUT_IN.put(internalName, Set.copyOf(owners));
-        }
+        ClassState.of(internalName).putIn = owners.isEmpty() ? null : Set.copyOf(owners);
     }
 
     private static boolean containsAny(String name, List<String> parts) {
@@ -342,25 +324,38 @@ public final class HandlerGuards {
     }
 
     public static boolean isWritten(String internalName) {
-        return PRESENT.containsKey(internalName);
+        ClassState state = ClassState.find(internalName);
+        return state != null && state.present != null;
     }
 
     public static Set<String> getPresentMixins(String internalName) {
-        return PRESENT.getOrDefault(internalName, Set.of());
+        ClassState state = ClassState.find(internalName);
+        Set<String> present = state == null ? null : state.present;
+        return present == null ? Set.of() : present;
     }
 
     public static Set<String> getGuardedMixins(String internalName) {
-        return GUARDED.getOrDefault(internalName, Set.of());
+        Set<String> guarded = getGuardedOrNull(internalName);
+        return guarded == null ? Set.of() : guarded;
+    }
+
+    private static @Nullable Set<String> getGuardedOrNull(String internalName) {
+        ClassState state = ClassState.find(internalName);
+        return state == null ? null : state.guarded;
     }
 
     public static boolean isRebuilt(String internalName) {
-        return REBUILT.contains(internalName);
+        ClassState state = ClassState.find(internalName);
+        return state != null && state.rebuilt;
     }
 
     public static void forget(String internalName) {
-        GUARDED.remove(internalName);
-        PRESENT.remove(internalName);
-        PUT_IN.remove(internalName);
+        ClassState state = ClassState.find(internalName);
+        if (state != null) {
+            state.guarded = null;
+            state.present = null;
+            state.putIn = null;
+        }
         FieldSites.forgetExamined(internalName);
     }
 
@@ -368,17 +363,19 @@ public final class HandlerGuards {
 
     static void markUnflippable(String internalName, String mixin, String why) {
         UNFLIPPABLE.add(mixin);
-        UNFLIPPABLE_AT.computeIfAbsent(internalName, name -> ConcurrentHashMap.newKeySet()).add(mixin);
-        UNFLIPPABLE_WHY.computeIfAbsent(internalName, name -> new ConcurrentHashMap<>())
-                .merge(mixin, why, (had, more) -> had.contains(more) ? had : had + ", " + more);
+        ClassState state = ClassState.of(internalName);
+        state.unflippable.add(mixin);
+        state.unflippableWhy.merge(mixin, why, (had, more) -> had.contains(more) ? had : had + ", " + more);
     }
 
     public static Map<String, String> findWhyUnflippableAt(String internalName) {
-        return UNFLIPPABLE_WHY.getOrDefault(internalName, Map.of());
+        ClassState state = ClassState.find(internalName);
+        return state == null ? Map.of() : state.unflippableWhy;
     }
 
     public static Set<String> findUnflippableAt(String internalName) {
-        return UNFLIPPABLE_AT.getOrDefault(internalName, Set.of());
+        ClassState state = ClassState.find(internalName);
+        return state == null ? Set.of() : state.unflippable;
     }
 
     public static boolean isFlippable(String mixin) {
@@ -398,9 +395,12 @@ public final class HandlerGuards {
     static byte @Nullable [] rewriteOrThrow(String internalName, byte[] bytes, boolean written) {
         if (!ClassBytes.mentions(bytes, MERGED_BYTES)) {
             if (bytes.length >= 8 && ((bytes[6] & 0xFF) << 8 | (bytes[7] & 0xFF)) >= Opcodes.V1_7) {
-                STAGED_PRESENT.put(internalName, Set.of());
+                ClassState.of(internalName).setStagedPresent(Set.of());
             }
-            BEHAVING.remove(internalName);
+            ClassState unmixed = ClassState.find(internalName);
+            if (unmixed != null) {
+                unmixed.behaving = null;
+            }
             OwnMethods.forget(internalName);
             commitStaged(internalName);
             return null;
@@ -421,14 +421,14 @@ public final class HandlerGuards {
         Set<String> behaving = new HashSet<>(findBehavingAt(internalName));
         behaving.addAll(findBehaving(node));
         if (!behaving.isEmpty()) {
-            BEHAVING.put(internalName, Set.copyOf(behaving));
+            ClassState.of(internalName).behaving = Set.copyOf(behaving);
         }
         for (MethodNode method : node.methods) {
             String mixin = findMerged(method);
             int mark = method.name.indexOf('$');
             if (mixin != null && mark > 0 && (KINDS.containsKey(method.name.substring(0, mark))
                     || method.name.startsWith("redirect$"))) {
-                UNFLIPPABLE_AT.computeIfAbsent(internalName, name -> ConcurrentHashMap.newKeySet()).add(mixin);
+                ClassState.of(internalName).unflippable.add(mixin);
             }
             for (AbstractInsnNode insn : method.instructions) {
                 if (insn instanceof MethodInsnNode call && call.owner.equals(internalName)) {
@@ -439,10 +439,11 @@ public final class HandlerGuards {
     }
 
     public static void recordFrom(String internalName, byte[] bytes) {
-        REBUILT.add(internalName);
-        DIRECT_MODS.remove(internalName);
-        STAGED.remove(internalName);
-        STAGED_PRESENT.remove(internalName);
+        ClassState state = ClassState.of(internalName);
+        state.rebuilt = true;
+        state.directMods.clear();
+        state.takeStaged();
+        state.takeStagedPresent();
         ClassNode node = ClassNodes.read(bytes, ClassReader.SKIP_FRAMES);
         Set<String> present = new HashSet<>();
         Set<String> guarded = new HashSet<>();
@@ -510,22 +511,22 @@ public final class HandlerGuards {
         }
         noteBehaving(internalName, node, true);
         notePutIn(internalName, node);
-        PRESENT.put(internalName, Set.copyOf(present));
-        if (guarded.isEmpty()) {
-            GUARDED.remove(internalName);
-        } else {
-            GUARDED.put(internalName, Set.copyOf(guarded));
-        }
+        state.present = Set.copyOf(present);
+        state.guarded = guarded.isEmpty() ? null : Set.copyOf(guarded);
     }
 
     public static void commitStaged(String internalName) {
-        Set<String> staged = STAGED.remove(internalName);
-        if (staged != null) {
-            GUARDED.put(internalName, staged);
+        ClassState state = ClassState.find(internalName);
+        if (state == null) {
+            return;
         }
-        Set<String> present = STAGED_PRESENT.remove(internalName);
+        Set<String> staged = state.takeStaged();
+        if (staged != null) {
+            state.guarded = staged;
+        }
+        Set<String> present = state.takeStagedPresent();
         if (present != null) {
-            PRESENT.put(internalName, present);
+            state.present = present;
         }
     }
 

@@ -46,7 +46,7 @@ final class HandlerSites {
             }
         }
 
-        HandlerGuards.STAGED_PRESENT.put(internalName, Set.copyOf(merged));
+        ClassState.of(internalName).setStagedPresent(Set.copyOf(merged));
         Set<String> guarded = new HashSet<>();
 
         ClassNode[] original = new ClassNode[1];
@@ -263,7 +263,7 @@ final class HandlerSites {
         if (guarded.isEmpty()) {
             return false;
         }
-        HandlerGuards.STAGED.put(internalName, Set.copyOf(guarded));
+        ClassState.of(internalName).setStaged(Set.copyOf(guarded));
         return true;
     }
 

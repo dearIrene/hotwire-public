@@ -40,11 +40,6 @@ final class FieldSites {
     private static final Logger LOGGER = LoggerFactory.getLogger(FieldSites.class);
 
     private static final Map<String, List<Init>> INITS = new ConcurrentHashMap<>();
-
-    private static final Map<String, Set<String>> UNSITED = new ConcurrentHashMap<>();
-    private static final Map<String, Set<String>> SITED = new ConcurrentHashMap<>();
-
-    private static final Map<String, Set<String>> EXAMINED = new ConcurrentHashMap<>();
     private static final String OFF_WINDOW = Type.getInternalName(OffWindowObjects.class);
     private static final String OPERATION = "/wrapoperation/Operation;";
     private static final String CALLBACKS = "org/spongepowered/asm/mixin/injection/callback/";
@@ -61,12 +56,13 @@ final class FieldSites {
             Supplier<@Nullable ClassNode> shipped, Set<String> guarded, Mode mode) {
         Set<String> merged = new HashSet<>(everyMixin);
         merged.removeIf(HandlerGuards::isNeverSwitched);
+        ClassState state = ClassState.of(internalName);
         if (mode != Mode.REBUILD) {
-            EXAMINED.remove(internalName);
+            state.examined = null;
         }
         if (mode == Mode.RECORD) {
-            SITED.remove(internalName);
-            UNSITED.remove(internalName);
+            state.sited = null;
+            state.unsited = null;
         }
         ClassNode original = shipped.get();
         if (merged.isEmpty() || original == null) {
@@ -183,25 +179,21 @@ final class FieldSites {
             return;
         }
         sitedMixins.removeAll(unsited);
-        if (unsited.isEmpty()) {
-            UNSITED.remove(internalName);
-        } else {
-            UNSITED.put(internalName, Set.copyOf(unsited));
+        state.unsited = unsited.isEmpty() ? null : Set.copyOf(unsited);
+        if (!unsited.isEmpty()) {
             LOGGER.atLevel(mode == Mode.LOAD ? Level.INFO : Level.DEBUG).log(
                     "[Hotwire] {} sets up fields of {} that no site switches: it rebuilds for them ({})",
                     internalName, unsited, why);
         }
-        if (sitedMixins.isEmpty()) {
-            SITED.remove(internalName);
-        } else {
-            SITED.put(internalName, Set.copyOf(sitedMixins));
+        state.sited = sitedMixins.isEmpty() ? null : Set.copyOf(sitedMixins);
+        if (!sitedMixins.isEmpty()) {
             LOGGER.atLevel(mode == Mode.LOAD ? Level.INFO : Level.DEBUG).log("[Hotwire] {} sets up {} through sites",
                     internalName, mode == Mode.LOAD ? sited : sitedMixins);
         }
         if (unsited.isEmpty()) {
             String unknown = findUnknown(internalName, node, original, pure);
             if (unknown == null) {
-                EXAMINED.put(internalName, Set.copyOf(merged));
+                state.examined = Set.copyOf(merged);
             } else {
                 LOGGER.debug("[Hotwire] {} rebuilds for its field setups: its constructors hold {}", internalName,
                         unknown);
@@ -274,17 +266,24 @@ final class FieldSites {
     }
 
     static void forgetExamined(String internalName) {
-        EXAMINED.remove(internalName);
+        ClassState state = ClassState.find(internalName);
+        if (state != null) {
+            state.examined = null;
+        }
     }
 
     static boolean isSitedFor(String internalName, Set<String> owns) {
-        Set<String> sitedHere = SITED.getOrDefault(internalName, Set.of());
-        Set<String> unsitedHere = UNSITED.getOrDefault(internalName, Set.of());
+        ClassState state = ClassState.find(internalName);
+        Set<String> sited = state == null ? null : state.sited;
+        Set<String> unsited = state == null ? null : state.unsited;
+        Set<String> examined = state == null ? null : state.examined;
+        Set<String> sitedHere = sited == null ? Set.of() : sited;
+        Set<String> unsitedHere = unsited == null ? Set.of() : unsited;
         boolean any = false;
         for (String mixin : sitedHere) {
             any |= owns.contains(mixin.replace('.', '/'));
         }
-        for (String mixin : EXAMINED.getOrDefault(internalName, Set.of())) {
+        for (String mixin : examined == null ? Set.<String>of() : examined) {
             any |= owns.contains(mixin.replace('.', '/'));
         }
         for (String mixin : unsitedHere) {
