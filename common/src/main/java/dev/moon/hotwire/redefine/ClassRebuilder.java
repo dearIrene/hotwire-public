@@ -30,6 +30,7 @@ import java.util.function.Function;
 import java.util.function.Predicate;
 import java.util.function.Supplier;
 import org.jspecify.annotations.Nullable;
+import org.objectweb.asm.Type;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -214,7 +215,7 @@ public final class ClassRebuilder {
         Map<String, Class<?>> byName = new LinkedHashMap<>();
         Map<String, byte[]> readable = new HashMap<>(classes);
         originals.forEach((type, bytes) -> {
-            String name = type.getName().replace('.', '/');
+            String name = Type.getInternalName(type);
             byName.put(name, type);
             readable.put(name, bytes);
         });
@@ -391,7 +392,7 @@ public final class ClassRebuilder {
         Set<String> newlyBuilt = new TreeSet<>();
         List<String> numbersAlone = new ArrayList<>();
         splits.forEach((type, split) -> {
-            String name = type.getName().replace('.', '/');
+            String name = Type.getInternalName(type);
             byte[] original = originals.get(type);
             byte[] running = Objects.requireNonNull(current.get(name));
             List<String> was = BatchShapes.findConstructors(running, original);
@@ -460,7 +461,7 @@ public final class ClassRebuilder {
                 ClassSplit.Result split = entry.getValue();
                 Linker.installInBatch(type, split);
 
-                if (!Arrays.equals(split.target(), prepared.before().get(type.getName().replace('.', '/')))) {
+                if (!Arrays.equals(split.target(), prepared.before().get(Type.getInternalName(type)))) {
                     definitions.add(new ClassDefinition(type, split.target()));
                 } else {
                     LOGGER.info("[Hotwire] {} is left as the JVM runs it: its rebuild is the same bytes",
@@ -515,6 +516,10 @@ public final class ClassRebuilder {
             throw new RebuildException("could not redefine " + prepared.splits().keySet() + ": " + why, e)
                     .withBlamed(named);
         }
+
+        Map<String, byte[]> mixedBefore = new HashMap<>(this.mixedNow);
+        mixedBefore.keySet().retainAll(prepared.mixed().keySet());
+        this.lastApplied = new LastApply(prepared, previous, carriedBefore, mixedBefore);
         Set<Class<?>> redefinedTypes = new HashSet<>();
         definitions.forEach(definition -> redefinedTypes.add(definition.getDefinitionClass()));
         prepared.splits().forEach((type, split) -> {
@@ -524,19 +529,16 @@ public final class ClassRebuilder {
             this.loadedBytes.remember(type, split.target());
             if (HandlerGuards.ENABLED) {
                 try {
-                    HandlerGuards.recordFrom(type.getName().replace('.', '/'), split.target());
-                    HandlerGuards.recordSidecar(type.getName().replace('.', '/'), split.sidecar());
+                    HandlerGuards.recordFrom(Type.getInternalName(type), split.target());
+                    HandlerGuards.recordSidecar(Type.getInternalName(type), split.sidecar());
                 } catch (RuntimeException e) {
                     LOGGER.error("[Hotwire] the handler guards could not read {} as rebuilt", type.getName(), e);
                 }
             }
-            this.carrying.put(type, prepared.carried().getOrDefault(type.getName().replace('.', '/'), Set.of()));
+            this.carrying.put(type, prepared.carried().getOrDefault(Type.getInternalName(type), Set.of()));
             RebuildEvidence.checkRunsAsGiven(type, split.target(), this.loaded);
         });
-        Map<String, byte[]> mixedBefore = new HashMap<>(this.mixedNow);
-        mixedBefore.keySet().retainAll(prepared.mixed().keySet());
         this.mixedNow.putAll(prepared.mixed());
-        this.lastApplied = new LastApply(prepared, previous, carriedBefore, mixedBefore);
         long end = System.nanoTime();
         LOGGER.info("[Hotwire] Rebuilt {} classes ({} already so): mix {} ms, split {} ms, sidecars {} ms, "
                 + "redefine {} ms, after {} ms", prepared.splits().size(),
@@ -553,14 +555,13 @@ public final class ClassRebuilder {
         this.staticsToStart.clear();
         LastApply last = this.lastApplied;
         if (last == null || last.prepared() != prepared) {
-            throw new RebuildException("only the rebuild just applied can be undone",
-                    new IllegalStateException(String.valueOf(prepared.splits().keySet())));
+            throw new RebuildException("only the rebuild just applied can be undone");
         }
         this.lastApplied = null;
         last.snapshots().forEach(Linker::restore);
         Map<Class<?>, byte[]> back = new LinkedHashMap<>();
         prepared.splits().keySet().forEach(type -> back.put(type,
-                Objects.requireNonNull(prepared.before().get(type.getName().replace('.', '/')), type.getName())));
+                Objects.requireNonNull(prepared.before().get(Type.getInternalName(type)), type.getName())));
         this.redefine(back);
         last.carried().forEach((type, carried) -> {
             if (carried == null) {
@@ -580,7 +581,7 @@ public final class ClassRebuilder {
     }
 
     public Set<String> launchMixins(Class<?> type, byte[] current, byte @Nullable [] original) {
-        Set<String> atLoad = this.launchAtLoad.get(type.getName().replace('.', '/'));
+        Set<String> atLoad = this.launchAtLoad.get(Type.getInternalName(type));
         return atLoad != null ? atLoad : this.atLaunch.computeIfAbsent(type, t -> AppliedMixins.of(current, original));
     }
 
@@ -647,8 +648,7 @@ public final class ClassRebuilder {
         try {
             List<MixinCopy.MixResult> parts = this.mixes.mix(targets, classes, resources, configs, stop);
             if (stop.getAsBoolean()) {
-                throw new RebuildException("the rebuild worked out ahead gave way to a switch",
-                        new IllegalStateException(String.valueOf(targets.size())));
+                throw new RebuildException("the rebuild worked out ahead gave way to a switch");
             }
 
             Map<String, byte[]> mixed = new LinkedHashMap<>();
