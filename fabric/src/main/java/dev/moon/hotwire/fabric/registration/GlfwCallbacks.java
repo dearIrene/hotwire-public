@@ -299,6 +299,28 @@ public final class GlfwCallbacks {
                 }
             }
         }
+        return findWrappedInStatics(mods.getClass(), type, mod);
+    }
+
+    private static @Nullable Object findWrappedInStatics(Class<?> callback, Class<?> type, String mod) {
+        int lambda = callback.isHidden() ? callback.getName().indexOf("$$Lambda") : -1;
+        if (lambda < 0) {
+            return null;
+        }
+        try {
+            Class<?> host = Class.forName(callback.getName().substring(0, lambda), false, callback.getClassLoader());
+            for (FieldSlots.Slot field : Fields.getDeclared(host)) {
+                if (!field.isStatic() || field.getType().isPrimitive()) {
+                    continue;
+                }
+                Object value = field.get(null);
+                Object java = unwrap(value instanceof Callback pointer ? Callback.get(pointer.address()) : value);
+                if (type.isInstance(java) && !mod.equals(GameRegistrations.findModOrShipper(java.getClass()))) {
+                    return java;
+                }
+            }
+        } catch (ReflectiveOperationException | RuntimeException | LinkageError e) {
+        }
         return null;
     }
 }
