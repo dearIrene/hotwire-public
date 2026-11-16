@@ -633,6 +633,7 @@ public final class HotwireEngine implements ModScreenGame, AutoCloseable {
         if (plan.isEmpty()) {
             return;
         }
+        LOGGER.info("[Hotwire] the profile {} is offered for the server joined: {}", name, plan.describe());
         Notices.show(Notice.ofAsk(Lang.get("hotwire.profiles.offer", name),
                 Lang.get("hotwire.profiles.offer_how", plan.describe()))
                 .withAction(new Notice.Action(Lang.get("hotwire.profiles.offer_apply"),
