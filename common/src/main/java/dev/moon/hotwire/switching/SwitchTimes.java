@@ -18,6 +18,7 @@ public final class SwitchTimes {
     private static int depth;
 
     private static @Nullable Thread owner;
+    private static @Nullable Stops stops;
 
     private SwitchTimes() {
     }
@@ -28,6 +29,7 @@ public final class SwitchTimes {
             PARTS.clear();
             began = System.nanoTime();
             last = began;
+            stops = Stops.begin();
             watch(owner, ++watched);
         }
     }
@@ -114,6 +116,10 @@ public final class SwitchTimes {
         }
         if (--depth > 0) {
             return;
+        }
+        if (stops != null) {
+            stops.end(what);
+            stops = null;
         }
         LOGGER.info("[Hotwire] {} took {} ms: {}", what, (last - began) / 1_000_000, String.join(", ", PARTS));
     }

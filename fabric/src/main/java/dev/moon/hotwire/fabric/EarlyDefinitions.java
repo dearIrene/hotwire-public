@@ -13,6 +13,7 @@ import dev.moon.hotwire.redefine.HandlerGuards;
 import dev.moon.hotwire.redefine.LoadedClassBytes;
 import dev.moon.hotwire.redefine.OpenGameClasses;
 import dev.moon.hotwire.redefine.SiteCache;
+import dev.moon.hotwire.redefine.TripwireSites;
 import dev.moon.hotwire.report.StartTimes;
 import java.io.IOException;
 import java.io.InputStream;
@@ -94,6 +95,17 @@ public final class EarlyDefinitions implements PreLaunchEntrypoint {
 
                     long began = System.nanoTime();
                     byte[] made = HandlerGuards.ENABLED ? SiteCache.rewrite(name, bytes) : null;
+                    String mod = HandlerGuards.ENABLED ? TripwireSites.findModOfClass(name) : null;
+                    if (mod != null) {
+                        try {
+                            byte[] armed = TripwireSites.arm(name, made == null ? bytes : made, mod);
+                            if (armed != null) {
+                                made = armed;
+                            }
+                        } catch (RuntimeException | LinkageError e) {
+                            LOGGER.debug("[Hotwire] {} loads without its mod's flag: {}", name, e.toString());
+                        }
+                    }
                     long rewritten = System.nanoTime();
                     byte[] recorded = made == null ? bytes : made;
                     boolean written = LoadedClassBytes.recordDefinedInGame(name, recorded, loader);
@@ -111,6 +123,7 @@ public final class EarlyDefinitions implements PreLaunchEntrypoint {
             found.addTransformer(watcher);
             instrumentation = found;
             early = watcher;
+            EarlyModsReader.start();
             GameClassIndex.begin(found, game);
             if (HandlerGuards.ENABLED && !DevSetups.get().inSetup() && game.getParent() instanceof URLClassLoader jars
                     && Boolean.parseBoolean(System.getProperty("hotwire.siteCache", "true"))) {

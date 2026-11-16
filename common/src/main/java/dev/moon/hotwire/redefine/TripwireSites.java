@@ -318,6 +318,12 @@ public final class TripwireSites {
         ARMED.remove(internalName);
     }
 
+    static void forgetUnlessSited(String internalName, byte[] bytes) {
+        if (!ClassBytes.mentions(bytes, HOLDER_PREFIX)) {
+            ARMED.remove(internalName);
+        }
+    }
+
     public static int countArmed(String mod) {
         int count = 0;
         for (String of : ARMED.values()) {

@@ -22,6 +22,7 @@ import org.slf4j.LoggerFactory;
 final class EarlyModsReader {
     private static final Logger LOGGER = LoggerFactory.getLogger(EarlyModsReader.class);
     private static volatile @Nullable CompletableFuture<EarlyRead> ahead;
+    private static boolean started;
 
     private EarlyModsReader() {
     }
@@ -32,17 +33,20 @@ final class EarlyModsReader {
     private record EarlyRead(String folder, InstalledMods installed) {
     }
 
-    static void start() {
-        if (DevSetups.get().inSetup()) {
+    static synchronized void start() {
+        if (started || DevSetups.get().inSetup()) {
             return;
         }
+        started = true;
         FabricLoader loader = FabricLoader.getInstance();
         CompletableFuture<EarlyRead> reading = new CompletableFuture<>();
         Thread reader = new Thread(() -> {
             long began = System.nanoTime();
             try {
                 String folder = describe(ModsFolder.find(loader));
-                reading.complete(new EarlyRead(folder, EngineStart.readInstalledMods(loader)));
+                InstalledMods installed = EngineStart.readInstalledMods(loader);
+                reading.complete(new EarlyRead(folder, installed));
+                EngineStart.registerTripwireClasses(installed, loader);
             } catch (IOException | RuntimeException e) {
                 reading.completeExceptionally(e);
             }

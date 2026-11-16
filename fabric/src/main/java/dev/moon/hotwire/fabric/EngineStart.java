@@ -269,6 +269,20 @@ final class EngineStart {
         return new ModJar(jar.name(), jar.manifest(), jar.patches(), nested, jar.nestedNotMods(), jar.accessWidener());
     }
 
+    static void registerTripwireClasses(InstalledMods installed, FabricLoader loader) {
+        if (!HandlerGuards.ENABLED) {
+            return;
+        }
+        Set<String> loadedIds = new HashSet<>();
+        loader.getAllMods().forEach(mod -> loadedIds.add(mod.getMetadata().getId()));
+        MixinConfigs.of(installed.getGraphJars(), loadedIds).forEach((id, mod) -> {
+            if (ModPolicy.isSwitchable(id)) {
+                TripwireSites.registerClasses(id, mod.owns().stream()
+                        .filter(name -> !GameLibraries.has(name, null)).collect(Collectors.toSet()));
+            }
+        });
+    }
+
     static HotwireEngine.JvmParts bind(InstalledMods installed, Progress progress, GameReports reports,
             UpdateFolders folders, UpdateQueue queue, Path gameDir, ModIcons icons) throws JvmAccessException {
         StartTimes.Laps laps = StartTimes.startLaps("engine bind: ");

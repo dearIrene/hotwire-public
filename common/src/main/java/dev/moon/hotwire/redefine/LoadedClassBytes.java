@@ -89,14 +89,14 @@ public final class LoadedClassBytes {
     void remember(Class<?> type, byte[] bytes) {
         this.knownBytes.put(Type.getInternalName(type), bytes);
         HandlerGuards.forget(Type.getInternalName(type));
-        TripwireSites.forget(Type.getInternalName(type));
+        TripwireSites.forgetUnlessSited(Type.getInternalName(type), bytes);
     }
 
     void rememberAll(Map<Class<?>, byte[]> classes) {
         classes.forEach((type, bytes) -> this.knownBytes.put(Type.getInternalName(type), bytes));
-        classes.keySet().forEach(type -> {
+        classes.forEach((type, bytes) -> {
             HandlerGuards.forget(Type.getInternalName(type));
-            TripwireSites.forget(Type.getInternalName(type));
+            TripwireSites.forgetUnlessSited(Type.getInternalName(type), bytes);
         });
     }
 

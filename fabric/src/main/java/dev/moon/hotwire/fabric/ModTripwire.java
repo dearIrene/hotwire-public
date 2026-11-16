@@ -17,6 +17,7 @@ import java.security.CodeSource;
 import java.security.ProtectionDomain;
 import java.util.ArrayList;
 import java.util.Collection;
+import java.util.Collections;
 import java.util.HashMap;
 import java.util.HashSet;
 import java.util.LinkedHashMap;
@@ -25,6 +26,7 @@ import java.util.Map;
 import java.util.Optional;
 import java.util.Set;
 import java.util.TreeMap;
+import java.util.WeakHashMap;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.ExecutionException;
 import java.util.concurrent.ExecutorService;
@@ -192,9 +194,32 @@ public final class ModTripwire {
 
         private boolean making;
 
+        private record Unsent(List<String> ids, Map<Class<?>, byte[]> wired, Map<Class<?>, ArmedClass> arming) {
+        }
+
+        private @Nullable Unsent unsent;
+
         synchronized void open() {
+            this.dropUnsent();
             this.open = true;
             this.making = true;
+        }
+
+        private void dropUnsent() {
+            if (this.unsent != null) {
+                forgetSites(this.unsent.wired().keySet());
+                this.unsent = null;
+            }
+        }
+
+        synchronized @Nullable Unsent takeUnsent(Collection<String> ids) {
+            Unsent built = this.unsent;
+            if (built == null || !List.copyOf(ids).equals(built.ids())) {
+                this.dropUnsent();
+                return null;
+            }
+            this.unsent = null;
+            return built;
         }
 
         synchronized void endMaking() {
@@ -228,7 +253,11 @@ public final class ModTripwire {
 
         synchronized void close() {
             this.open = false;
-            forgetSites(this.wired.keySet());
+            this.dropUnsent();
+            if (!this.wired.isEmpty()) {
+                this.unsent = new Unsent(List.copyOf(this.wiredFor), new LinkedHashMap<>(this.wired),
+                        new HashMap<>(this.arming));
+            }
             this.wired.clear();
             this.arming.clear();
             this.back.clear();
@@ -352,6 +381,8 @@ public final class ModTripwire {
         }
     }
 
+    private final Set<Class<?>> siteless = Collections.synchronizedSet(Collections.newSetFromMap(new WeakHashMap<>()));
+
     @SuppressWarnings("ReferenceEquality")
 
     private int wire(Collection<String> asked, Set<String> rebuilt, boolean ride, Predicate<Class<?>> only)
@@ -373,7 +404,7 @@ public final class ModTripwire {
             }
             this.loadedAtArm.put(type, mod);
             if (!type.isHidden() && this.instrumentation.isModifiableClass(type) && !this.armed.containsKey(type)
-                    && !TripwireSites.isArmed(Type.getInternalName(type))) {
+                    && !TripwireSites.isArmed(Type.getInternalName(type)) && !this.siteless.contains(type)) {
                 owned.put(type, mod);
             }
         });
@@ -385,6 +416,12 @@ public final class ModTripwire {
         }
         this.instrumentation.removeTransformer(this.loading);
         this.instrumentation.addTransformer(this.loading);
+        Ride.Unsent built = ride ? null : this.ride.takeUnsent(ids);
+        if (built != null) {
+            LOGGER.debug("[Hotwire] {} classes of {} are wired as built ahead of the switch", built.wired().size(),
+                    ids);
+            return this.finishWiring(ids, built.wired(), built.arming()) + bySites;
+        }
         LOGGER.debug("[Hotwire] {} classes of {} are wired now: {}", owned.size(), ids,
                 owned.keySet().stream().map(Class::getName).toList());
 
@@ -408,6 +445,8 @@ public final class ModTripwire {
                     wired = Tripwire.arm(bytes, mod);
                     if (wired != null) {
                         arming.put(type, new ArmedClass(mod, bytes, wired));
+                    } else {
+                        this.siteless.add(type);
                     }
                 }
                 if (wired != null) {
