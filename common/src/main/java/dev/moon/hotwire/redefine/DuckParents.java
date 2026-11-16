@@ -1,5 +1,6 @@
 package dev.moon.hotwire.redefine;
 
+import dev.moon.hotwire.classfile.GameNames;
 import java.util.ArrayDeque;
 import java.util.Collection;
 import java.util.Deque;
@@ -37,6 +38,6 @@ final class DuckParents {
 
     private static boolean isShared(String name) {
         return name.startsWith("java/") || name.startsWith("javax/") || name.startsWith("jdk/")
-                || name.startsWith("net/minecraft/") || name.startsWith("com/mojang/");
+                || GameNames.isGameInternal(name);
     }
 }

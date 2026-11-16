@@ -1,5 +1,6 @@
 package dev.moon.hotwire.switching;
 
+import dev.moon.hotwire.classfile.GameNames;
 import dev.moon.hotwire.mixin_copy.AppliedMixins;
 import dev.moon.hotwire.redefine.ClassArrivals;
 import dev.moon.hotwire.redefine.ClassRebuilder;
@@ -44,7 +45,7 @@ final class LoadTimeMixer {
             if (inGame != null) {
                 ClassArrivals.note(name, inGame);
             }
-            if ((name.startsWith("net/minecraft/") || name.startsWith("com/mojang/"))
+            if (GameNames.isGameInternal(name)
                     && this.applier.getPatchedNames().contains(name)) {
                 rebuilder.getLoadedBytes().onLoaded(name, bytes);
             } else if (inGame != null) {

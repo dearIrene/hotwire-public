@@ -1,5 +1,6 @@
 package dev.moon.hotwire.fabric.registration;
 
+import dev.moon.hotwire.classfile.GameNames;
 import dev.moon.hotwire.fabric.HotwireClient;
 import dev.moon.hotwire.fabric.ModPolicy;
 import dev.moon.hotwire.fabric.dev.DevMod;
@@ -257,7 +258,7 @@ public final class Owners {
     static boolean isNestedLibrary(Class<?> type) {
         String name = type.getName();
         return Objects.equals(type.getClassLoader(), Owners.class.getClassLoader())
-                && !name.startsWith("net.minecraft.") && !name.startsWith("com.mojang.")
+                && !GameNames.isGame(name)
                 && !name.startsWith("dev.moon.hotwire.");
     }
 

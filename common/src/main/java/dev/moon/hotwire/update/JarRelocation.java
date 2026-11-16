@@ -5,6 +5,7 @@ import com.google.gson.JsonElement;
 import com.google.gson.JsonObject;
 import com.google.gson.JsonParser;
 import com.google.gson.JsonPrimitive;
+import dev.moon.hotwire.classfile.GameNames;
 import dev.moon.hotwire.concurrent.Parallel;
 import dev.moon.hotwire.jar.JarNames;
 import dev.moon.hotwire.jar.ZipBytes;
@@ -425,7 +426,7 @@ public final class JarRelocation {
             String name = entry.getKey();
             if (name.endsWith(CLASS_SUFFIX) && !name.startsWith(META_INF)) {
                 String internal = name.substring(0, name.length() - CLASS_SUFFIX.length());
-                if (internal.startsWith("net/minecraft/") || internal.startsWith("com/mojang/")
+                if (GameNames.isGameInternal(internal)
                         || this.pinned.has(internal)) {
                     continue;
                 }

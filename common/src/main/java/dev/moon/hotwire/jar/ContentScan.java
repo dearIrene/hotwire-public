@@ -1,5 +1,6 @@
 package dev.moon.hotwire.jar;
 
+import dev.moon.hotwire.classfile.GameNames;
 import java.io.ByteArrayInputStream;
 import java.io.IOException;
 import java.io.InputStream;
@@ -219,7 +220,7 @@ public final class ContentScan {
 
     private static boolean isRegistering(MethodInsnNode call) {
         boolean named = call.name.startsWith("register") || call.name.equals("create");
-        return named && (call.owner.equals(REGISTRY) || (!call.owner.startsWith("net/minecraft/")
+        return named && (call.owner.equals(REGISTRY) || (!GameNames.isMinecraftInternal(call.owner)
                 && NEVER_REGISTER.stream().noneMatch(call.owner::startsWith)));
     }
 
@@ -238,7 +239,7 @@ public final class ContentScan {
                 return found;
             }
             String up = superOf.get(at);
-            at = up != null ? up : at.startsWith("net/minecraft/") ? gameSuperOf.apply(at) : null;
+            at = up != null ? up : GameNames.isMinecraftInternal(at) ? gameSuperOf.apply(at) : null;
         }
         known.put(name, null);
         return null;

@@ -1,5 +1,6 @@
 package dev.moon.hotwire.fabric.registration;
 
+import dev.moon.hotwire.classfile.GameNames;
 import dev.moon.hotwire.config.Flags;
 import dev.moon.hotwire.fabric.mixin.core.fabric.base.event.ArrayBackedEventAccessor;
 import dev.moon.hotwire.redefine.FieldSlots;
@@ -64,7 +65,7 @@ public final class ElementLook {
         Set<Object> sets = Collections.newSetFromMap(new IdentityHashMap<>());
         for (FieldSlots.Slot field : Fields.getReferenceFields(manager.getClass(), false)) {
             Object value = CollectionParts.read(field, manager);
-            if (value != null && value.getClass().getName().startsWith("net.minecraft.")
+            if (value != null && GameNames.isMinecraft(value.getClass().getName())
                     && value.getClass().getSimpleName().contains("Model")) {
                 sets.add(value);
             }

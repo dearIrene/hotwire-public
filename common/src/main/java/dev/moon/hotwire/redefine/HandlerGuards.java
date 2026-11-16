@@ -1,6 +1,7 @@
 package dev.moon.hotwire.redefine;
 
 import dev.moon.hotwire.classfile.ClassNodes;
+import dev.moon.hotwire.classfile.GameNames;
 import dev.moon.hotwire.config.Flags;
 import java.lang.invoke.CallSite;
 import java.lang.invoke.MethodHandle;
@@ -294,7 +295,7 @@ public final class HandlerGuards {
                         : insn instanceof FieldInsnNode field ? field.owner : null;
 
                 if (owner == null || owner.equals(internalName) || owner.startsWith("java/")
-                        || owner.startsWith("net/minecraft/") || owner.startsWith("com/mojang/")
+                        || GameNames.isGameInternal(owner)
                         || owner.contains("/mixinextras/") || !checked.add(owner)) {
                     continue;
                 }

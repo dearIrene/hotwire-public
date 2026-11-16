@@ -1,5 +1,6 @@
 package dev.moon.hotwire.fabric.rebuild;
 
+import dev.moon.hotwire.classfile.GameNames;
 import dev.moon.hotwire.fabric.add.FailedAddJars;
 import dev.moon.hotwire.fabric.add.LivePlugins;
 import dev.moon.hotwire.fabric.registration.Fields;
@@ -285,8 +286,8 @@ public final class GameClasses implements SwitchApplier.Game {
     public static List<Object> findLongLived() {
         Minecraft client = Minecraft.getInstance();
         List<Object> found = new ArrayList<>(List.of(client));
-        found.addAll(Fields.findBelow(client, LONG_LIVED_DEPTH, type -> (type.getName().startsWith("net.minecraft.")
-                || type.getName().startsWith("com.mojang.")) && !isWorldRoot(type)));
+        found.addAll(Fields.findBelow(client, LONG_LIVED_DEPTH,
+                type -> GameNames.isGame(type.getName()) && !isWorldRoot(type)));
 
         ClientPacketListener connection = client.getConnection();
         if (connection != null) {

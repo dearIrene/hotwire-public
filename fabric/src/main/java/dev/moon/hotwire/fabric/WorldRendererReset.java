@@ -1,5 +1,6 @@
 package dev.moon.hotwire.fabric;
 
+import dev.moon.hotwire.classfile.GameNames;
 import dev.moon.hotwire.fabric.registration.GameHold;
 import java.lang.reflect.Field;
 import java.lang.reflect.Modifier;
@@ -76,7 +77,7 @@ final class WorldRendererReset {
 
     private static boolean isGame(Class<?> type) {
         String name = type.getName();
-        return name.startsWith("net.minecraft.") || name.startsWith("com.mojang.");
+        return GameNames.isGame(name);
     }
 
     private static boolean isJdk(Class<?> type) {

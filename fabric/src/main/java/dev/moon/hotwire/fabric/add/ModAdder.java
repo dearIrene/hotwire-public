@@ -95,7 +95,7 @@ public final class ModAdder {
 
     public static String describe(Result result) {
         return switch (result) {
-            case Result.Added added -> added.name() + " is in.";
+            case Result.Added added -> Lang.get("hotwire.add.is_in", added.name());
             case Result.Queued queued -> queued.message();
             case Result.Refused refused -> refused.reason();
             case Result.Failed failed -> failed.reason();

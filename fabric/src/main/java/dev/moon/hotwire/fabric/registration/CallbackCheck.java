@@ -1,5 +1,6 @@
 package dev.moon.hotwire.fabric.registration;
 
+import dev.moon.hotwire.classfile.GameNames;
 import dev.moon.hotwire.redefine.FieldSlots;
 import java.util.ArrayList;
 import java.util.Collection;
@@ -53,6 +54,6 @@ final class CallbackCheck {
     }
 
     private static boolean isGame(Class<?> type) {
-        return type.getName().startsWith("net.minecraft.") || type.getName().startsWith("com.mojang.");
+        return GameNames.isGame(type.getName());
     }
 }

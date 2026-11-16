@@ -1,5 +1,6 @@
 package dev.moon.hotwire.fabric.registration;
 
+import dev.moon.hotwire.classfile.GameNames;
 import dev.moon.hotwire.fabric.HotwireClient;
 import dev.moon.hotwire.fabric.add.LoaderModList;
 import java.util.ArrayList;
@@ -108,7 +109,7 @@ final class LookRoots {
         patched.forEach(one -> holders.addAll(findGameObjectsBelow(one, 1)));
 
         patched.forEach(one -> holders.addAll(Fields.findInCollectionsOf(one,
-                type -> type.getName().startsWith("net.minecraft."))));
+                type -> GameNames.isMinecraft(type.getName()))));
         return holders;
     }
 
@@ -134,6 +135,6 @@ final class LookRoots {
     }
 
     static List<Object> findGameObjectsBelow(Object holder, int steps) {
-        return Fields.findBelow(holder, steps, type -> type.getName().startsWith("net.minecraft."));
+        return Fields.findBelow(holder, steps, type -> GameNames.isMinecraft(type.getName()));
     }
 }

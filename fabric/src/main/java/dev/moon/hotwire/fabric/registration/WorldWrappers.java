@@ -1,5 +1,6 @@
 package dev.moon.hotwire.fabric.registration;
 
+import dev.moon.hotwire.classfile.GameNames;
 import dev.moon.hotwire.redefine.FieldSlots;
 import dev.moon.hotwire.registration.RegistrationJournal;
 import dev.moon.hotwire.switching.SwitchTimes;
@@ -114,7 +115,7 @@ public final class WorldWrappers {
     private static List<FieldSlots.Slot> findGameFields(Class<?> type) {
         List<FieldSlots.Slot> fields = new ArrayList<>();
         for (Class<?> at = type; at != null && at != Object.class; at = at.getSuperclass()) {
-            if (!at.getName().startsWith("net.minecraft.")) {
+            if (!GameNames.isMinecraft(at.getName())) {
                 continue;
             }
             for (FieldSlots.Slot field : Fields.getDeclared(at)) {

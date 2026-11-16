@@ -1,5 +1,6 @@
 package dev.moon.hotwire.fabric.registration;
 
+import dev.moon.hotwire.classfile.GameNames;
 import dev.moon.hotwire.config.Flags;
 import dev.moon.hotwire.redefine.FieldSlots;
 import dev.moon.hotwire.redefine.Tripwire;
@@ -474,7 +475,7 @@ final class CollectionReferences implements FixedLists.Walk {
                 continue;
             }
             long ownerBegan = System.nanoTime();
-            boolean game = owner.getName().startsWith("net.minecraft.") || owner.getName().startsWith("com.mojang.");
+            boolean game = GameNames.isGame(owner.getName());
 
             this.readingStaticsOf = Owners.findModOrShipper(owner);
             this.reader = notes == null ? TakeReach.GAME : TakeReach.findReaders(owner, TakeReach.GAME);
@@ -1159,7 +1160,7 @@ final class CollectionReferences implements FixedLists.Walk {
         }
         for (FieldSlots.Slot field : Fields.getReferenceFields(type, false)) {
             Object captured = CollectionParts.read(field, item);
-            if (captured != null && captured.getClass().getName().startsWith("net.minecraft.")
+            if (captured != null && GameNames.isMinecraft(captured.getClass().getName())
                     && this.visit(captured)) {
                 this.lookInto(captured);
             }

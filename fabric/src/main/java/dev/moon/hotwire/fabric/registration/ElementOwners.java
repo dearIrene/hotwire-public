@@ -1,5 +1,6 @@
 package dev.moon.hotwire.fabric.registration;
 
+import dev.moon.hotwire.classfile.GameNames;
 import dev.moon.hotwire.fabric.ModPolicy;
 import dev.moon.hotwire.redefine.FieldSlots;
 import dev.moon.hotwire.redefine.Tripwire;
@@ -54,7 +55,7 @@ final class ElementOwners {
         String mod = Owners.findModOf(type);
         return !type.isHidden() && !type.isRecord() && !Proxy.isProxyClass(type)
                 && (mod == null || mod.equals("minecraft"))
-                && (name.startsWith("net.minecraft.") || name.startsWith("com.mojang."));
+                && GameNames.isGame(name);
     }
 
     @Nullable String findOwnerAmong(Object value) {

@@ -1,6 +1,7 @@
 package dev.moon.hotwire.redefine;
 
 import dev.moon.hotwire.classfile.ClassNodes;
+import dev.moon.hotwire.classfile.GameNames;
 import java.lang.reflect.Field;
 import java.util.ArrayList;
 import java.util.Comparator;
@@ -270,7 +271,7 @@ public final class InitHookReplay {
     }
 
     static boolean isGameClass(String name) {
-        return name.startsWith("net/minecraft/") || name.startsWith("com/mojang/");
+        return GameNames.isGameInternal(name);
     }
 
     private static ClassNode findLastMix(byte @Nullable [] previous, ClassNode runs) {

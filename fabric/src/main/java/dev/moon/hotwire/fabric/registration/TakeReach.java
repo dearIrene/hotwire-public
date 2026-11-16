@@ -1,5 +1,6 @@
 package dev.moon.hotwire.fabric.registration;
 
+import dev.moon.hotwire.classfile.GameNames;
 import java.io.Serializable;
 import java.lang.constant.Constable;
 import java.lang.constant.ConstantDesc;
@@ -45,7 +46,7 @@ final class TakeReach {
         String mod = Owners.findModOrShipper(type);
         String name = type.getName();
         if ((mod == null || mod.equals("minecraft"))
-                && (name.startsWith("net.minecraft.") || name.startsWith("com.mojang."))) {
+                && GameNames.isGame(name)) {
             return GAME;
         }
         return mod == null ? reachedBy : share(Set.of(mod));

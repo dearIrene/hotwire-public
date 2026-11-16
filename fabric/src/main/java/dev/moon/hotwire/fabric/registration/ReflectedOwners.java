@@ -1,5 +1,6 @@
 package dev.moon.hotwire.fabric.registration;
 
+import dev.moon.hotwire.classfile.GameNames;
 import java.util.HashSet;
 import java.util.Map;
 import java.util.Set;
@@ -121,7 +122,7 @@ final class ReflectedOwners {
 
     private static void addName(String name, Set<String> into) {
         if (!name.startsWith("java.") && !name.startsWith("javax.") && !name.startsWith("jdk.")
-                && !name.startsWith("sun.") && !name.startsWith("net.minecraft.") && !name.startsWith("com.mojang.")) {
+                && !name.startsWith("sun.") && !GameNames.isGame(name)) {
             into.add(name.intern());
         }
     }

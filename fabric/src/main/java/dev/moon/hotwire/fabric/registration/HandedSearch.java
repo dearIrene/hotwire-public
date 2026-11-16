@@ -1,5 +1,6 @@
 package dev.moon.hotwire.fabric.registration;
 
+import dev.moon.hotwire.classfile.GameNames;
 import dev.moon.hotwire.fabric.ModPolicy;
 import dev.moon.hotwire.redefine.FieldSlots;
 import java.util.ArrayDeque;
@@ -114,7 +115,7 @@ record HandedSearch(Set<Object> handed, Set<String> consumers, Collection<Class<
         }
         String name = value.getClass().getName();
         return open && !name.startsWith("java.") && !name.startsWith("javax.") && !name.startsWith("jdk.")
-                && !name.startsWith("sun.") && !name.startsWith("net.minecraft.") && !name.startsWith("com.mojang.");
+                && !name.startsWith("sun.") && !GameNames.isGame(name);
     }
 
     private static boolean isContainer(Object value) {

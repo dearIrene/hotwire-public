@@ -1,5 +1,6 @@
 package dev.moon.hotwire.fabric.registration;
 
+import dev.moon.hotwire.classfile.GameNames;
 import dev.moon.hotwire.redefine.FieldSlots;
 import dev.moon.hotwire.redefine.FinalWrites;
 import java.util.ArrayList;
@@ -123,7 +124,7 @@ final class ModelWrappers {
                 }
             }
             default -> {
-                boolean game = value.getClass().getName().startsWith("net.minecraft.") && depth <= GAME_DEPTH;
+                boolean game = GameNames.isMinecraft(value.getClass().getName()) && depth <= GAME_DEPTH;
                 if (game || (mod != null && !value.getClass().getName().startsWith("java."))) {
                     this.walkFields(value, depth);
                 }

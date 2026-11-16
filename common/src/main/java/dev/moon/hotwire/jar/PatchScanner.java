@@ -4,6 +4,7 @@ import com.google.gson.JsonElement;
 import com.google.gson.JsonObject;
 import com.google.gson.JsonParseException;
 import com.google.gson.JsonParser;
+import dev.moon.hotwire.classfile.GameNames;
 import dev.moon.hotwire.jar.ModManifest.MixinConfigRef;
 import java.io.IOException;
 import java.io.InputStream;
@@ -299,7 +300,7 @@ final class PatchScanner {
 
     private static void collectNamedIfInTheGame(Mixin mixin, byte[] bytes, Set<String> into) {
         if (!mixin.targets().isEmpty() && mixin.targets().stream().allMatch(
-                target -> target.startsWith("net/minecraft/") || target.startsWith("com/mojang/"))) {
+                GameNames::isGameInternal)) {
             collectNamedClasses(bytes, into);
         }
     }

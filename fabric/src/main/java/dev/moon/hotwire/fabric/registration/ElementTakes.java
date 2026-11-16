@@ -1,5 +1,6 @@
 package dev.moon.hotwire.fabric.registration;
 
+import dev.moon.hotwire.classfile.GameNames;
 import dev.moon.hotwire.config.Flags;
 import dev.moon.hotwire.registration.Fingerprints;
 import dev.moon.hotwire.registration.GuavaCaches;
@@ -355,8 +356,7 @@ final class ElementTakes {
     private static boolean isGameClass(Object item) {
         Class<?> type = item.getClass();
         String name = type.getName();
-        return !type.isHidden() && !type.isRecord() && (name.startsWith("net.minecraft.")
-                || name.startsWith("com.mojang."));
+        return !type.isHidden() && !type.isRecord() && GameNames.isGame(name);
     }
 
     static void takeFromMap(Map<Object, Object> entries, Object key, Object value, List<Removal> out) {

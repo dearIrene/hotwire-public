@@ -1,6 +1,7 @@
 package dev.moon.hotwire.fabric.registration;
 
 import com.google.common.collect.MapMaker;
+import dev.moon.hotwire.classfile.GameNames;
 import dev.moon.hotwire.fabric.HotwireClient;
 import dev.moon.hotwire.fabric.mixin.core.world.item.CreativeModeTabsAccessor;
 import dev.moon.hotwire.jvm.LoadedClassList;
@@ -164,6 +165,42 @@ public final class FieldReferences {
         LoadedClasses scan = this.peekAhead(mods);
         SwitchTimes.mark("look: classes");
         this.removeElements(mods, on, scan, Map.of(), false);
+    }
+
+    public int takeStillCalled(String mod, String calledFrame, Predicate<String> on) {
+        String calledName = CalledSearch.findClassOf(calledFrame);
+        List<String> mods = List.of(mod);
+        LoadedClasses scan = this.peekAhead(mods);
+        Class<?> called = scan.byName().get(calledName.replace('.', '/'));
+        if (called == null) {
+            return 0;
+        }
+        Predicate<Class<?>> others = getOthers(mods, on);
+
+        LookRoots.Roots roots;
+        GameHold hold = GameHold.begin(Minecraft.getInstance());
+        try {
+            roots = this.roots.find(mods, on, scan, new HashSet<>(this.mixinTargets.apply(mod)), List.of(), others,
+                    false);
+        } finally {
+            hold.release();
+        }
+        long start = System.nanoTime();
+        CalledSearch.Holders found = CalledSearch.find(called, roots.holders(), roots.statics());
+        LOGGER.info("[Hotwire] {}'s {} was still called: {} objects and {} classes hold one, of {} looked at in {} ms",
+                mod, calledName, found.holders().size(), found.statics().size(), found.looked(),
+                (System.nanoTime() - start) / 1_000_000);
+        if (found.holders().isEmpty() && found.statics().isEmpty()) {
+            return 0;
+        }
+        hold = GameHold.begin(Minecraft.getInstance());
+        try {
+            this.elements.takeOut(mods, found.holders().stream().filter(one -> others.test(one.getClass())).toList(),
+                    found.statics(), HandedSearch.NONE);
+        } finally {
+            hold.release();
+        }
+        return found.holders().size() + found.statics().size();
     }
 
     public void finishEveryLook() {
@@ -491,7 +528,7 @@ public final class FieldReferences {
     private static boolean makes(FieldSlots.Slot field) {
         String owner = field.getDeclaringClass().getName();
         Class<?> type = field.getType();
-        return !owner.startsWith("net.minecraft.") && !owner.startsWith("com.mojang.") && type.isInterface()
+        return !GameNames.isGame(owner) && type.isInterface()
                 && Arrays.stream(type.getMethods()).filter(method -> Modifier.isAbstract(method.getModifiers()))
                         .count() == 1;
     }
@@ -526,7 +563,7 @@ public final class FieldReferences {
         List<Object> near = LookRoots.findGameObjectsBelow(game, LookRoots.GAME_STEPS);
 
         List<Object> deep = Fields.findBelow(game, LookRoots.PATCHED_STEPS,
-                type -> type.getName().startsWith("net.minecraft.") || type.getName().startsWith("com.mojang."));
+                type -> GameNames.isGame(type.getName()));
         List<Object> graph = new ArrayList<>(deep);
         graph.add(game);
         List<Object> connected = NetworkHandlers.findPipelineObjects();

@@ -1,5 +1,6 @@
 package dev.moon.hotwire.fabric.registration;
 
+import dev.moon.hotwire.classfile.GameNames;
 import dev.moon.hotwire.redefine.FieldSlots;
 import java.util.HashSet;
 import java.util.Set;
@@ -113,7 +114,7 @@ final class ValueOwners {
 
     static boolean isGame(Object part) {
         String name = part.getClass().getName();
-        return (name.startsWith("net.minecraft.") || name.startsWith("com.mojang.")) && !part.getClass().isHidden();
+        return GameNames.isGame(name) && !part.getClass().isHidden();
     }
 
     static @Nullable String findIdOwner(Object value) {

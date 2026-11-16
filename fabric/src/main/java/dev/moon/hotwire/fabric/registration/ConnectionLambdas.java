@@ -1,5 +1,6 @@
 package dev.moon.hotwire.fabric.registration;
 
+import dev.moon.hotwire.classfile.GameNames;
 import dev.moon.hotwire.redefine.FieldSlots;
 import dev.moon.hotwire.redefine.Linker;
 import io.netty.channel.Channel;
@@ -137,7 +138,7 @@ public final class ConnectionLambdas {
                 return true;
             }
             String name = one.getClass().getName();
-            if (!seen.add(one) || name.startsWith("java.") || name.startsWith("net.minecraft.")) {
+            if (!seen.add(one) || name.startsWith("java.") || GameNames.isMinecraft(name)) {
                 continue;
             }
             for (FieldSlots.Slot field : Fields.getReferenceFields(one.getClass(), false)) {
@@ -161,7 +162,7 @@ public final class ConnectionLambdas {
 
     private static boolean isFollowed(Object one) {
         String name = one.getClass().getName();
-        return (name.startsWith("net.minecraft.") || name.startsWith("com.mojang."))
+        return GameNames.isGame(name)
                 && !(one instanceof PacketListener) && !(one instanceof HolderLookup.Provider)
                 && !(one instanceof Registry<?>) && !(one instanceof Level) && !(one instanceof Entity)
                 && !(one instanceof BlockableEventLoop<?>);

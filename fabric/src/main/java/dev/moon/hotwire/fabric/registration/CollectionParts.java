@@ -1,6 +1,7 @@
 package dev.moon.hotwire.fabric.registration;
 
 import com.google.common.collect.ImmutableCollection;
+import dev.moon.hotwire.classfile.GameNames;
 import dev.moon.hotwire.classfile.PlainTypes;
 import dev.moon.hotwire.redefine.FieldSlots;
 import java.lang.ref.WeakReference;
@@ -170,6 +171,6 @@ public final class CollectionParts {
     static boolean isGameObject(Object value) {
         String name = value.getClass().getName();
         return !(value instanceof Collection<?>) && !(value instanceof Map<?, ?>) && !(value instanceof Object[])
-                && (name.startsWith("net.minecraft.") || name.startsWith("com.mojang."));
+                && GameNames.isGame(name);
     }
 }

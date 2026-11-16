@@ -58,6 +58,7 @@ import java.util.List;
 import java.util.Locale;
 import java.util.Map;
 import java.util.Set;
+import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
 import java.util.concurrent.atomic.AtomicBoolean;
@@ -94,6 +95,9 @@ public final class SwitchRunner {
     private volatile Consumer<ModSwitcher.Result> afterOff = result -> { };
     private long flipsSeen = HandlerGuards.getChunkFlips();
     private volatile Consumer<List<String>> beforeOn = order -> { };
+    private static final int MOST_SEARCHES = 8;
+
+    private final Map<String, Integer> searchesFor = new ConcurrentHashMap<>();
 
     @SuppressWarnings("ThreadPriorityCheck")
     private final ExecutorService looking = Executors.newSingleThreadExecutor(
@@ -158,6 +162,25 @@ public final class SwitchRunner {
         }
         List<Long> sorted = took.stream().sorted().toList();
         return took + ", median " + sorted.get(sorted.size() / 2) + " ms";
+    }
+
+    public void takeStillCalled(String mod, List<String> first) {
+        if (first.isEmpty() || this.searchesFor.merge(mod, 1, Integer::sum) > MOST_SEARCHES) {
+            return;
+        }
+        String called = first.getFirst();
+        this.looking.execute(() -> {
+            if (this.switcher.isBusy() || this.switcher.isOn(mod)) {
+                return;
+            }
+            try {
+                if (this.fieldReferences.takeStillCalled(mod, called, this.switcher::isOn) > 0) {
+                    Tripwire.listenAgain(mod);
+                }
+            } catch (RuntimeException | LinkageError e) {
+                LOGGER.warn("[Hotwire] what still holds {}'s {} could not be taken out", mod, called, e);
+            }
+        });
     }
 
     public void lookAheadForAll() {

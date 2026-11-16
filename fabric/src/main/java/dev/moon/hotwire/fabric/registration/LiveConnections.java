@@ -1,5 +1,6 @@
 package dev.moon.hotwire.fabric.registration;
 
+import dev.moon.hotwire.classfile.GameNames;
 import dev.moon.hotwire.redefine.FieldSlots;
 import dev.moon.hotwire.redefine.FinalWrites;
 import io.netty.channel.Channel;
@@ -139,7 +140,7 @@ public final class LiveConnections {
         return !(value instanceof Object[]) && !(value instanceof Map<?, ?>) && !(value instanceof PacketListener)
                 && !(value instanceof Level) && !(value instanceof Entity) && !(value instanceof Minecraft)
                 && !(value instanceof MinecraftServer) && !(value instanceof Channel)
-                && (name.startsWith("net.minecraft.") || name.startsWith("com.mojang.")
+                && (GameNames.isGame(name)
                 || name.startsWith("net.fabricmc."));
     }
 

@@ -104,8 +104,8 @@ final class JarRequests {
                     && Minecraft.getInstance().level != null
                     && (this.changes.setsUpOnJoin(jar) || (!more && this.storeJars.takeReopenWanted()))) {
                 boolean own = Minecraft.getInstance().getSingleplayerServer() != null;
-                this.engine.showMessage(added.name() + " is in." + this.changes.copyIntoMods(jar) + (own ? ""
-                        : " It finishes setting up as you join a world: rejoin the server to have all of it."), false);
+                this.engine.showMessage(Lang.get("hotwire.add.is_in", added.name()) + this.changes.copyIntoMods(jar)
+                        + (own ? "" : " " + Lang.get("hotwire.add.rejoin_for_all")), false);
                 if (own && more) {
                     this.storeJars.markReopenWanted();
                 } else if (own) {
@@ -114,7 +114,8 @@ final class JarRequests {
                 }
             } else {
                 this.engine.showMessage(switch (result) {
-                    case ModAdder.Result.Added added -> added.name() + " is in." + this.changes.copyIntoMods(jar);
+                    case ModAdder.Result.Added added -> Lang.get("hotwire.add.is_in", added.name())
+                            + this.changes.copyIntoMods(jar);
                     case ModAdder.Result.Queued queued -> queued.message();
                     case ModAdder.Result.Refused refused -> refused.reason();
                     case ModAdder.Result.Failed failed -> failed.reason();

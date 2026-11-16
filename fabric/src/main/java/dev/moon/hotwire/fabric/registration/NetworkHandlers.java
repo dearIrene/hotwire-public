@@ -1,5 +1,6 @@
 package dev.moon.hotwire.fabric.registration;
 
+import dev.moon.hotwire.classfile.GameNames;
 import dev.moon.hotwire.fabric.mixin.core.network.ConnectionAccessor;
 import dev.moon.hotwire.registration.RegistrationJournal;
 import io.netty.channel.Channel;
@@ -128,10 +129,10 @@ public final class NetworkHandlers {
         List<Object> found = new ArrayList<>();
         for (Channel channel : findChannels()) {
             for (Map.Entry<String, ChannelHandler> handler : channel.pipeline()) {
-                if (handler.getValue().getClass().getName().startsWith("net.minecraft.")) {
+                if (GameNames.isMinecraft(handler.getValue().getClass().getName())) {
                     found.add(handler.getValue());
                     found.addAll(Fields.findBelow(handler.getValue(), 2,
-                            type -> type.getName().startsWith("net.minecraft.")));
+                            type -> GameNames.isMinecraft(type.getName())));
                 }
             }
         }

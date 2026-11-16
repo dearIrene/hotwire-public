@@ -72,6 +72,8 @@ final class OffCodeNotice {
                     String.join(" < ", first));
         }
 
+        engine.findJvmParts().ifPresent(parts -> parts.runner().takeStillCalled(mod, first));
+
         String user = findUser(engine, installed, mod, first);
         SeenUses seen = ModPolicy.getSeenUses();
         if (user != null && seen != null) {

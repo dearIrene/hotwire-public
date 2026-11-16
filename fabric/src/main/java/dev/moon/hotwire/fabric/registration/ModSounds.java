@@ -1,6 +1,7 @@
 package dev.moon.hotwire.fabric.registration;
 
 import com.google.common.collect.MapMaker;
+import dev.moon.hotwire.classfile.GameNames;
 import dev.moon.hotwire.redefine.FieldSlots;
 import java.util.ArrayList;
 import java.util.Collection;
@@ -37,7 +38,7 @@ public final class ModSounds {
         GameHold.onGameAndWait(() -> {
             SoundManager manager = game.getSoundManager();
             List<SoundInstance> theirs = new ArrayList<>();
-            for (Object engine : Fields.findBelow(manager, 1, type -> type.getName().startsWith("net.minecraft."))) {
+            for (Object engine : Fields.findBelow(manager, 1, type -> GameNames.isMinecraft(type.getName()))) {
                 for (FieldSlots.Slot field : Fields.getDeclared(engine.getClass())) {
                     try {
                         if (!field.isStatic() && field.get(engine) instanceof Map<?, ?> playing) {

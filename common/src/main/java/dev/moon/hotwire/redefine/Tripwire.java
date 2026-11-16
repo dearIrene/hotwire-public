@@ -520,6 +520,10 @@ public final class Tripwire {
         return WAITING.getOrDefault(mod, Set.of()).size();
     }
 
+    public static void listenAgain(String mod) {
+        FIRST.remove(mod);
+    }
+
     public static void onFirstCall(Consumer<String> listener) {
         firstCall = listener;
     }
