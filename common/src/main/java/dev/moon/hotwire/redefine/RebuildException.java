@@ -20,21 +20,29 @@ public final class RebuildException extends Exception {
     private transient List<RebuildException> parts = List.of();
     private transient Set<String> blamedClasses = Set.of();
 
-    public RebuildException(@Nullable String message, Throwable cause) {
+    public RebuildException(String message) {
+        this(message, null, false);
+    }
+
+    public RebuildException(String message, boolean reopenFixes) {
+        this(message, null, reopenFixes);
+    }
+
+    public RebuildException(@Nullable String message, @Nullable Throwable cause) {
         this(message, cause, false);
     }
 
-    public RebuildException(@Nullable String message, Throwable cause, boolean reopenFixes) {
+    public RebuildException(@Nullable String message, @Nullable Throwable cause, boolean reopenFixes) {
         this(message, cause, reopenFixes, false, false, false);
     }
 
-    private RebuildException(@Nullable String message, Throwable cause, boolean reopenFixes, boolean mixSaved,
-            boolean worldBuilt, boolean restartOnly) {
+    private RebuildException(@Nullable String message, @Nullable Throwable cause, boolean reopenFixes,
+            boolean mixSaved, boolean worldBuilt, boolean restartOnly) {
         this(message, cause, reopenFixes, mixSaved, worldBuilt, restartOnly, Set.of());
     }
 
-    private RebuildException(@Nullable String message, Throwable cause, boolean reopenFixes, boolean mixSaved,
-            boolean worldBuilt, boolean restartOnly, Set<String> losing) {
+    private RebuildException(@Nullable String message, @Nullable Throwable cause, boolean reopenFixes,
+            boolean mixSaved, boolean worldBuilt, boolean restartOnly, Set<String> losing) {
         super(message, cause);
         this.losing = Set.copyOf(losing);
         this.reopenFixes = reopenFixes;
@@ -44,15 +52,23 @@ public final class RebuildException extends Exception {
     }
 
     static RebuildException ofMixSaved(int classes) {
-        return new RebuildException("the mix was saved for the switch cache",
-                new IllegalStateException(String.valueOf(classes)), false, true, false, false);
+        return new RebuildException("the mix of " + classes + " classes was saved for the switch cache", null,
+                false, true, false, false);
     }
 
-    public static RebuildException ofWorldBuilt(String message, Throwable cause) {
+    public static RebuildException ofWorldBuilt(String message) {
+        return ofWorldBuilt(message, null);
+    }
+
+    public static RebuildException ofWorldBuilt(String message, @Nullable Throwable cause) {
         return new RebuildException(message, cause, true, false, true, false);
     }
 
-    public static RebuildException ofRestartOnly(String message, Throwable cause) {
+    public static RebuildException ofRestartOnly(String message) {
+        return ofRestartOnly(message, null);
+    }
+
+    public static RebuildException ofRestartOnly(String message, @Nullable Throwable cause) {
         return new RebuildException(message, cause, false, false, false, true);
     }
 
@@ -92,7 +108,11 @@ public final class RebuildException extends Exception {
         return this.blamedClasses;
     }
 
-    public static RebuildException ofLosing(String message, Throwable cause, Set<String> mods) {
+    public static RebuildException ofLosing(String message, Set<String> mods) {
+        return ofLosing(message, null, mods);
+    }
+
+    public static RebuildException ofLosing(String message, @Nullable Throwable cause, Set<String> mods) {
         return new RebuildException(message, cause, false, false, false, false, mods);
     }
 

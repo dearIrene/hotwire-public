@@ -25,7 +25,7 @@ final class BatchVerifier {
     static Set<String> findNamed(Set<Class<?>> classes, List<String> problems) {
         Set<String> named = new HashSet<>();
         for (Class<?> type : classes) {
-            String internal = type.getName().replace('.', '/');
+            String internal = Type.getInternalName(type);
             for (String problem : problems) {
                 if (startsWithClass(problem, type.getName()) || startsWithClass(problem, internal)) {
                     named.add(internal);
@@ -95,7 +95,7 @@ final class BatchVerifier {
             return null;
         } catch (VerifyError e) {
             String message = String.valueOf(e.getMessage());
-            return message.contains("'" + type.getName().replace('.', '/') + "+0x") ? null
+            return message.contains("'" + Type.getInternalName(type) + "+0x") ? null
                     : type.getName() + ": " + message;
         } catch (LinkageError e) {
             return type.getName() + " did not link: " + e;

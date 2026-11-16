@@ -15,6 +15,7 @@ import java.util.concurrent.TimeUnit;
 import java.util.function.BooleanSupplier;
 import java.util.function.Predicate;
 import org.jspecify.annotations.Nullable;
+import org.objectweb.asm.Type;
 
 public final class OffWindowObjects {
     static final int CAP = 1 << 17;
@@ -202,7 +203,7 @@ public final class OffWindowObjects {
     static Set<String> findMadeWithout(Set<Class<?>> types) {
         Set<String> names = new TreeSet<>();
         for (Class<?> type : types) {
-            String name = type.getName().replace('.', '/');
+            String name = Type.getInternalName(type);
             if (OffWindowObjects.countAlive(name) > 0) {
                 names.add(name);
             }

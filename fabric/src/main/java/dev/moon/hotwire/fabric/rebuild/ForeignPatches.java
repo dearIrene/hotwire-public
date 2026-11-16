@@ -27,6 +27,7 @@ import net.fabricmc.loader.api.FabricLoader;
 import net.fabricmc.loader.api.ModContainer;
 import net.fabricmc.loader.api.metadata.ModOrigin;
 import org.jspecify.annotations.Nullable;
+import org.objectweb.asm.Type;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -123,7 +124,7 @@ public final class ForeignPatches {
     public static Function<Class<?>, @Nullable String> makeOwnerFinder(List<ModJar> jars) {
         Map<String, ModJar> byId = indexById(jars);
         return type -> {
-            String name = type.getName().replace('.', '/');
+            String name = Type.getInternalName(type);
             for (ModJar jar : byId.values()) {
                 if (jar.patches().owns().contains(name)) {
                     return jar.manifest().id();
@@ -169,11 +170,11 @@ public final class ForeignPatches {
             if (type.getClassLoader() != this.game || type.isHidden()) {
                 continue;
             }
-            boolean ours = !this.fromFamily(type) && !off.contains(type.getName().replace('.', '/'));
+            boolean ours = !this.fromFamily(type) && !off.contains(Type.getInternalName(type));
             (ours ? read : others).add(type);
         }
         for (Class<?> type : Parallel.filter(read, type -> this.pools.names(type, named::contains))) {
-            classes.add(type.getName().replace('.', '/'));
+            classes.add(Type.getInternalName(type));
         }
 
         List<String> leftOut = new ArrayList<>();

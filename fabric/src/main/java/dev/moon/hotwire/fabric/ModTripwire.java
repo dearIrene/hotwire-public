@@ -35,6 +35,7 @@ import java.util.function.Consumer;
 import java.util.function.Function;
 import java.util.function.Predicate;
 import org.jspecify.annotations.Nullable;
+import org.objectweb.asm.Type;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -313,7 +314,7 @@ public final class ModTripwire {
     // notice must not be removed under any circumstance.
 
     private static void forgetSites(Collection<Class<?>> types) {
-        types.forEach(type -> TripwireSites.forget(type.getName().replace('.', '/')));
+        types.forEach(type -> TripwireSites.forget(Type.getInternalName(type)));
     }
 
     void unwire(Collection<String> ids) {
@@ -358,7 +359,7 @@ public final class ModTripwire {
         List<String> ids = asked.stream().filter(ModPolicy::isSwitchable).toList();
         Map<Class<?>, String> owned = new LinkedHashMap<>();
         this.tripwireOwners.findOwned(ids).forEach((type, mod) -> {
-            if (rebuilt.contains(type.getName().replace('.', '/'))) {
+            if (rebuilt.contains(Type.getInternalName(type))) {
                 return;
             }
             String source = findSourceOf(type.getProtectionDomain());
@@ -372,7 +373,7 @@ public final class ModTripwire {
             }
             this.loadedAtArm.put(type, mod);
             if (!type.isHidden() && this.instrumentation.isModifiableClass(type) && !this.armed.containsKey(type)
-                    && !TripwireSites.isArmed(type.getName().replace('.', '/'))) {
+                    && !TripwireSites.isArmed(Type.getInternalName(type))) {
                 owned.put(type, mod);
             }
         });
@@ -393,7 +394,7 @@ public final class ModTripwire {
             Map<Class<?>, byte[]> wiredAll = new LinkedHashMap<>();
             Map<Class<?>, ArmedClass> arming = new HashMap<>();
             owned.forEach((type, mod) -> {
-                String name = type.getName().replace('.', '/');
+                String name = Type.getInternalName(type);
                 byte[] bytes = current.get(name);
                 if (bytes == null) {
                     return;
@@ -433,7 +434,7 @@ public final class ModTripwire {
         });
         wiredAll.keySet().forEach(type -> {
             if (!took.contains(type) && !arming.containsKey(type)) {
-                TripwireSites.forget(type.getName().replace('.', '/'));
+                TripwireSites.forget(Type.getInternalName(type));
             }
         });
 
@@ -590,7 +591,7 @@ public final class ModTripwire {
 
             String source = type.isHidden() ? null : findSourceOf(type.getProtectionDomain());
             String watchedAs = source == null ? null : this.sources.get(source);
-            if (watchedAs == null || Tripwire.hasSeenLoad(watchedAs, type.getName().replace('.', '/'))) {
+            if (watchedAs == null || Tripwire.hasSeenLoad(watchedAs, Type.getInternalName(type))) {
                 loaded.computeIfAbsent(mod, any -> new ArrayList<>()).add(type.getName());
             }
         });

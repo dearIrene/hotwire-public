@@ -8,6 +8,7 @@ import java.util.Map;
 import java.util.Optional;
 import java.util.concurrent.ConcurrentHashMap;
 import org.jspecify.annotations.Nullable;
+import org.objectweb.asm.Type;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -46,7 +47,7 @@ public final class DueCoroutines {
 
     public static boolean isBodyClass(Class<?> type) {
         Class<?> parent = type.getSuperclass();
-        return parent != null && isBody(parent.getName().replace('.', '/'), "invokeSuspend",
+        return parent != null && isBody(Type.getInternalName(parent), "invokeSuspend",
                 "(Ljava/lang/Object;)Ljava/lang/Object;");
     }
 

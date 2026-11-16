@@ -14,6 +14,7 @@ import java.util.concurrent.ConcurrentHashMap;
 import org.jspecify.annotations.Nullable;
 import org.objectweb.asm.ClassReader;
 import org.objectweb.asm.Opcodes;
+import org.objectweb.asm.Type;
 import org.objectweb.asm.tree.AbstractInsnNode;
 import org.objectweb.asm.tree.ClassNode;
 import org.objectweb.asm.tree.FieldInsnNode;
@@ -126,7 +127,7 @@ final class LazyFields {
         if (loader == null) {
             return null;
         }
-        try (InputStream in = loader.getResourceAsStream(type.getName().replace('.', '/') + ".class")) {
+        try (InputStream in = loader.getResourceAsStream(Type.getInternalName(type) + ".class")) {
             if (in == null) {
                 return null;
             }

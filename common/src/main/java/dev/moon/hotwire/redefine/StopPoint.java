@@ -6,8 +6,7 @@ public final class StopPoint {
 
     public static void check() throws RebuildException {
         if (ClassRebuilder.STOP.get().getAsBoolean()) {
-            throw new RebuildException("the rebuild worked out ahead gave way to a switch",
-                    new IllegalStateException("between two of its steps"));
+            throw new RebuildException("the rebuild worked out ahead gave way to a switch");
         }
     }
 }

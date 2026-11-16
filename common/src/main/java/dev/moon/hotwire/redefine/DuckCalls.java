@@ -18,6 +18,7 @@ import java.util.concurrent.atomic.AtomicInteger;
 import java.util.concurrent.atomic.AtomicReference;
 import java.util.function.Function;
 import org.jspecify.annotations.Nullable;
+import org.objectweb.asm.Type;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -171,7 +172,7 @@ final class DuckCalls {
         }
         while (!open.isEmpty()) {
             for (Class<?> parent : open.remove().getInterfaces()) {
-                if (all.add(parent.getName().replace('.', '/'))) {
+                if (all.add(Type.getInternalName(parent))) {
                     open.add(parent);
                 }
             }

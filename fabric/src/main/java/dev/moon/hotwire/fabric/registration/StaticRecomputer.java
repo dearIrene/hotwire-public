@@ -23,6 +23,7 @@ import java.util.Set;
 import java.util.function.Function;
 import java.util.function.Predicate;
 import org.jspecify.annotations.Nullable;
+import org.objectweb.asm.Type;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -179,7 +180,7 @@ final class StaticRecomputer {
                 }
             }
         }
-        return named.getDeclaringClass().getName().replace('.', '/') + "." + named.getName();
+        return Type.getInternalName(named.getDeclaringClass()) + "." + named.getName();
     }
 
     private boolean reaches(Object start, String mod, Set<Object> replaced, Set<String> generated) {

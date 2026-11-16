@@ -22,6 +22,7 @@ import org.objectweb.asm.Label;
 import org.objectweb.asm.MethodVisitor;
 import org.objectweb.asm.Opcodes;
 import org.objectweb.asm.RecordComponentVisitor;
+import org.objectweb.asm.Type;
 import org.objectweb.asm.TypePath;
 import org.objectweb.asm.tree.AbstractInsnNode;
 import org.objectweb.asm.tree.ClassNode;
@@ -38,8 +39,8 @@ import org.objectweb.asm.tree.TypeInsnNode;
 import org.objectweb.asm.tree.VarInsnNode;
 
 final class BatchShapes {
-    private static final String MADE = OffWindowObjects.class.getName().replace('.', '/');
-    private static final String LAMBDA_SITES = LambdaSites.class.getName().replace('.', '/');
+    private static final String MADE = Type.getInternalName(OffWindowObjects.class);
+    private static final String LAMBDA_SITES = Type.getInternalName(LambdaSites.class);
 
     private static final Map<byte[], ClassNode> CONSTRUCTORS = Collections.synchronizedMap(new WeakHashMap<>());
     private static final Pattern MERGED = Pattern.compile("\\b(?:md|fd)[0-9a-f]{6}\\$");

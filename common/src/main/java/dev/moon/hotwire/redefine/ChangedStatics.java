@@ -254,7 +254,7 @@ final class ChangedStatics {
                     continue;
                 }
 
-                if (!InitHookReplay.isGameClass(type.getName().replace('.', '/')) && old != null
+                if (!InitHookReplay.isGameClass(Type.getInternalName(type)) && old != null
                         && Objects.equals(Tripwire.findOwner(old.getClass()), Tripwire.findOwner(type))) {
                     continue;
                 }

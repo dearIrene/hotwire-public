@@ -13,6 +13,7 @@ import java.util.function.Consumer;
 import java.util.function.IntSupplier;
 import java.util.function.Supplier;
 import org.jspecify.annotations.Nullable;
+import org.objectweb.asm.Type;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -105,7 +106,7 @@ final class RebuildSteps {
 
     private static Set<String> getRebuilt(ClassRebuilder.PreparedRebuild prepared) {
         Set<String> rebuilt = new HashSet<>();
-        prepared.splits().keySet().forEach(type -> rebuilt.add(type.getName().replace('.', '/')));
+        prepared.splits().keySet().forEach(type -> rebuilt.add(Type.getInternalName(type)));
         return rebuilt;
     }
 

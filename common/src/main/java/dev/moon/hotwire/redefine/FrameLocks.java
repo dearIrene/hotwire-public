@@ -8,6 +8,7 @@ import java.util.Map;
 import java.util.concurrent.ConcurrentHashMap;
 import org.objectweb.asm.ClassReader;
 import org.objectweb.asm.Opcodes;
+import org.objectweb.asm.Type;
 import org.objectweb.asm.tree.AbstractInsnNode;
 import org.objectweb.asm.tree.ClassNode;
 import org.objectweb.asm.tree.MethodInsnNode;
@@ -35,7 +36,7 @@ final class FrameLocks {
     }
 
     private static boolean readFree(Class<?> type, String name, String descriptor) {
-        try (InputStream in = type.getResourceAsStream("/" + type.getName().replace('.', '/') + ".class")) {
+        try (InputStream in = type.getResourceAsStream("/" + Type.getInternalName(type) + ".class")) {
             if (in == null) {
                 return false;
             }

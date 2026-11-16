@@ -36,7 +36,7 @@ import org.slf4j.LoggerFactory;
 
 public final class AccessBridge {
     private static final Logger LOGGER = LoggerFactory.getLogger(AccessBridge.class);
-    private static final String OPENED = OpenedMembers.class.getName().replace('.', '/');
+    private static final String OPENED = Type.getInternalName(OpenedMembers.class);
     private static final String BOOTSTRAP = "Ljava/lang/invoke/MethodHandles$Lookup;Ljava/lang/String;"
             + "Ljava/lang/invoke/MethodType;";
     private static final Handle OPEN = new Handle(Opcodes.H_INVOKESTATIC, OPENED, "open",
@@ -94,7 +94,7 @@ public final class AccessBridge {
         }
         try {
             MethodHandles.privateLookupIn(opened, MethodHandles.lookup()).defineClass(
-                    buildAccessor(opened.getName().replace('.', '/')));
+                    buildAccessor(Type.getInternalName(opened)));
         } catch (IllegalAccessException | LinkageError e) {
             LOGGER.info("[Hotwire] the accessor of {} was not defined again", opened.getName(), e);
         }

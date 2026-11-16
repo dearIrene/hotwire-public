@@ -17,6 +17,7 @@ import java.util.List;
 import java.util.Map;
 import java.util.Set;
 import org.jspecify.annotations.Nullable;
+import org.objectweb.asm.Type;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -119,7 +120,7 @@ final class UpdateClashes {
             for (Class<?> one : loaded) {
                 if (one != owner && owner.isAssignableFrom(one) && !one.isInterface()
                         && !Modifier.isAbstract(one.getModifiers())
-                        && !goingIn.contains(one.getName().replace('.', '/')) && !isPatched(one, patched)
+                        && !goingIn.contains(Type.getInternalName(one)) && !isPatched(one, patched)
                         && !hasMethodBody(one, parts[1], parts[2])) {
                     return one.getName() + " has no " + parts[1] + ", which " + parts[0] + " now asks of it";
                 }
@@ -130,7 +131,7 @@ final class UpdateClashes {
 
     static boolean isPatched(Class<?> type, Set<String> patched) {
         for (Class<?> at = type; at != null; at = at.getSuperclass()) {
-            if (patched.contains(at.getName().replace('.', '/'))) {
+            if (patched.contains(Type.getInternalName(at))) {
                 return true;
             }
         }

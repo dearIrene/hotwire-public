@@ -22,6 +22,7 @@ import java.util.function.Function;
 import java.util.function.Predicate;
 import java.util.stream.Stream;
 import org.jspecify.annotations.Nullable;
+import org.objectweb.asm.Type;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -114,7 +115,7 @@ final class LoadedCheckAnswers {
                 if (!others.test(one.type())) {
                     continue;
                 }
-                byte[] bytes = this.originalBytes.apply(one.type().getName().replace('.', '/'));
+                byte[] bytes = this.originalBytes.apply(Type.getInternalName(one.type()));
                 if (bytes != null) {
                     this.match(one.type(), bytes, one.ask(), mod, off, changed);
                 }
@@ -182,7 +183,7 @@ final class LoadedCheckAnswers {
             if (pools.getMembers(type).stream().noneMatch(member -> ASKS.contains(member[1]))) {
                 continue;
             }
-            byte[] bytes = this.originalBytes.apply(type.getName().replace('.', '/'));
+            byte[] bytes = this.originalBytes.apply(Type.getInternalName(type));
             if (bytes == null) {
                 continue;
             }
@@ -242,7 +243,7 @@ final class LoadedCheckAnswers {
                 if (mod == null || !mods.contains(mod)) {
                     continue;
                 }
-                bytes = bytes != null ? bytes : this.originalBytes.apply(type.getName().replace('.', '/'));
+                bytes = bytes != null ? bytes : this.originalBytes.apply(Type.getInternalName(type));
                 if (bytes == null) {
                     return;
                 }

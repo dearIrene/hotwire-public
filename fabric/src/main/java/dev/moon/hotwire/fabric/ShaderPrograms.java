@@ -27,6 +27,7 @@ import net.minecraft.server.packs.resources.SimpleReloadInstance;
 import net.minecraft.util.Unit;
 *///?}
 import org.jspecify.annotations.Nullable;
+import org.objectweb.asm.Type;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -72,7 +73,7 @@ final class ShaderPrograms {
     }
 
     private static Set<String> nameAll(Class<?>... types) {
-        return Arrays.stream(types).map(type -> type.getName().replace('.', '/'))
+        return Arrays.stream(types).map(type -> Type.getInternalName(type))
                 .collect(Collectors.toUnmodifiableSet());
     }
 

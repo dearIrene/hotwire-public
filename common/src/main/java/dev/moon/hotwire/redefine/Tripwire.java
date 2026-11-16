@@ -31,6 +31,7 @@ import org.jspecify.annotations.Nullable;
 import org.objectweb.asm.ClassReader;
 import org.objectweb.asm.ClassWriter;
 import org.objectweb.asm.Opcodes;
+import org.objectweb.asm.Type;
 import org.objectweb.asm.tree.ClassNode;
 import org.objectweb.asm.tree.InsnList;
 import org.objectweb.asm.tree.LdcInsnNode;
@@ -91,7 +92,7 @@ public final class Tripwire {
 
     private static final ThreadLocal<Boolean> HOTWIRE_WORK = ThreadLocal.withInitial(() -> false);
 
-    private static final String SELF = Tripwire.class.getName().replace('.', '/');
+    private static final String SELF = Type.getInternalName(Tripwire.class);
 
     private static final Set<Class<?>> LINKERS = Set.of(Tripwire.class, TripwireSites.class, Linker.class,
             DuckCalls.class, MovedSites.class);
@@ -418,7 +419,7 @@ public final class Tripwire {
             }
 
             Class<?> host = type.isHidden() ? type.getNestHost() : type;
-            if (mod.equals(of) || mod.equals(TripwireSites.findModOfClass(host.getName().replace('.', '/')))) {
+            if (mod.equals(of) || mod.equals(TripwireSites.findModOfClass(Type.getInternalName(host)))) {
                 unsafe |= frame.getMethodName().equals("<clinit>") || (mine == 0 && isSynchronizedMethod(frame));
                 mine++;
                 gameBelow = false;

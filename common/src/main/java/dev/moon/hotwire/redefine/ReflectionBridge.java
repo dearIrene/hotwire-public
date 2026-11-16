@@ -6,6 +6,7 @@ import java.util.Set;
 import org.objectweb.asm.ClassReader;
 import org.objectweb.asm.ClassWriter;
 import org.objectweb.asm.Opcodes;
+import org.objectweb.asm.Type;
 import org.objectweb.asm.tree.AbstractInsnNode;
 import org.objectweb.asm.tree.ClassNode;
 import org.objectweb.asm.tree.MethodInsnNode;
@@ -15,7 +16,7 @@ public final class ReflectionBridge {
     private static final String CLASS = "java/lang/Class";
     private static final String METHOD = "java/lang/reflect/Method";
     private static final String FIELD = "java/lang/reflect/Field";
-    private static final String BRIDGE = SidecarReflection.class.getName().replace('.', '/');
+    private static final String BRIDGE = Type.getInternalName(SidecarReflection.class);
 
     static final Map<String, String> CALLS = Map.ofEntries(
             Map.entry(CLASS + ".getDeclaredMethod", "(Ljava/lang/Class;Ljava/lang/String;[Ljava/lang/Class;)"

@@ -21,6 +21,7 @@ import java.util.function.ToLongFunction;
 import org.jspecify.annotations.Nullable;
 import org.objectweb.asm.ClassReader;
 import org.objectweb.asm.Opcodes;
+import org.objectweb.asm.Type;
 import org.objectweb.asm.tree.AbstractInsnNode;
 import org.objectweb.asm.tree.ClassNode;
 import org.objectweb.asm.tree.FieldInsnNode;
@@ -358,7 +359,7 @@ public final class ConstructedFields {
             Function<String, byte @Nullable []> launchOf) {
         Map<Class<?>, List<String>> found = new ConcurrentHashMap<>();
         Parallel.forEach(targets.entrySet(), entry -> {
-            String name = entry.getKey().getName().replace('.', '/');
+            String name = Type.getInternalName(entry.getKey());
             byte[] running = current.get(name);
             if (running != null && liveObjects.test(entry.getKey())) {
                 List<String> lines = new ArrayList<>();

@@ -38,7 +38,7 @@ import org.objectweb.asm.tree.VarInsnNode;
 
 public final class InitHookReplay {
     static final String ON_OBJECTS = "hotwire$passedHooks";
-    private static final String START_ARGUMENTS = StartArguments.class.getName().replace('.', '/');
+    private static final String START_ARGUMENTS = Type.getInternalName(StartArguments.class);
     static final String ON_CLASS = "hotwire$passedStaticHooks";
 
     static final String LATE_ON_OBJECTS = "hotwire$passedLoadHooks";

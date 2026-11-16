@@ -21,6 +21,7 @@ import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.ConcurrentLinkedDeque;
 import java.util.function.Function;
 import org.jspecify.annotations.Nullable;
+import org.objectweb.asm.Type;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -122,7 +123,7 @@ public final class Linker {
         INSTANCE_METHODS.put(side.lookupClass(), Set.copyOf(instanceMethods));
         MOVED_BY_TARGET.put(target, Set.copyOf(moved));
         MovedSites.reset(MOVED, MOVED_BY_TARGET.values());
-        String internal = target.getName().replace('.', '/');
+        String internal = Type.getInternalName(target);
         for (String one : moved) {
             if (one.startsWith(Adoption.CONSTRUCT + "(Ljava/lang/Object;")) {
                 ADDED_CONSTRUCTORS.add(internal + "<init>(" + one.substring(Adoption.CONSTRUCT.length()
@@ -215,7 +216,7 @@ public final class Linker {
 
     static Set<String> getMovedOf(String internalName) {
         for (Map.Entry<Class<?>, Set<String>> entry : MOVED_BY_TARGET.entrySet()) {
-            if (entry.getKey().getName().replace('.', '/').equals(internalName)) {
+            if (Type.getInternalName(entry.getKey()).equals(internalName)) {
                 return entry.getValue();
             }
         }
@@ -551,7 +552,7 @@ public final class Linker {
     public static CallSite bootstrapDuckLambda(MethodHandles.Lookup caller, String name, MethodType factory,
             MethodType erased, MethodHandle target, MethodType instantiated) throws ReflectiveOperationException {
         MethodHandleInfo info = caller.revealDirect(target);
-        String owner = info.getDeclaringClass().getName().replace('.', '/');
+        String owner = Type.getInternalName(info.getDeclaringClass());
         MethodHandle body = target;
         if (info.getReferenceKind() == MethodHandleInfo.REF_invokeInterface && EVER_DUCKS.contains(owner)) {
             MethodType shape = info.getMethodType();

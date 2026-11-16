@@ -24,6 +24,7 @@ import org.objectweb.asm.ClassReader;
 import org.objectweb.asm.ClassVisitor;
 import org.objectweb.asm.FieldVisitor;
 import org.objectweb.asm.Opcodes;
+import org.objectweb.asm.Type;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -82,7 +83,7 @@ public final class FieldHolders {
                 };
             }
         }, ClassReader.SKIP_CODE);
-        ADDED_BY_NAME.put(target.getName().replace('.', '/'), Set.copyOf(names));
+        ADDED_BY_NAME.put(Type.getInternalName(target), Set.copyOf(names));
         MethodHandles.Lookup lookup = host.defineHiddenClass(holderBytes, true,
                 MethodHandles.Lookup.ClassOption.NESTMATE);
         Class<?> type = lookup.lookupClass();

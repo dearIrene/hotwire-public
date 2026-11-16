@@ -755,7 +755,7 @@ public final class ModSwitcher {
             if (this.isWorldBound(plan)) {
                 throw RebuildException.ofWorldBuilt(plan.order() + " changed how this world's objects are built when"
                         + " it last switched: they are the world's, so it changes with the world saved and opened"
-                        + " again", new IllegalStateException(String.valueOf(plan.order())));
+                        + " again");
             }
             this.checkReopenFirst(plan, onAfter);
 
@@ -859,8 +859,7 @@ public final class ModSwitcher {
             Set<String> holding = going.isEmpty() ? Set.of() : this.inRegistries.apply(going);
             if (!holding.isEmpty()) {
                 throw RebuildException.ofRestartOnly(holding + " keep objects of theirs inside the game's registries,"
-                        + " which hold the game's own data: only a restart takes them out",
-                        new IllegalStateException(String.valueOf(holding)));
+                        + " which hold the game's own data: only a restart takes them out");
             }
         } catch (RuntimeException | LinkageError e) {
             throw new RebuildException("the switch threw: " + e, e);

@@ -12,6 +12,7 @@ import java.util.Optional;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.function.Function;
 import org.jspecify.annotations.Nullable;
+import org.objectweb.asm.Type;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -67,7 +68,7 @@ final class InterfaceDefaults {
                     if (!Modifier.isStatic(field.getModifiers()) || field.getType() != face) {
                         continue;
                     }
-                    byte[] original = this.originalBytes.apply(type.getName().replace('.', '/'));
+                    byte[] original = this.originalBytes.apply(Type.getInternalName(type));
                     Optional<Object> made = original == null ? Optional.empty()
                             : InitialValues.ofStatic(type, original, field.getName(), face.descriptorString());
                     if (made.isPresent() && faceMod.equals(findOwnerOf(made.get()))) {

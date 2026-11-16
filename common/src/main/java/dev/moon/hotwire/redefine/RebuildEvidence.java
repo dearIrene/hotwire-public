@@ -19,6 +19,7 @@ import java.util.concurrent.ConcurrentHashMap;
 import java.util.function.Predicate;
 import org.jspecify.annotations.Nullable;
 import org.objectweb.asm.Opcodes;
+import org.objectweb.asm.Type;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -144,7 +145,7 @@ final class RebuildEvidence {
     static String describeFieldDifferences(ClassRebuilder.PreparedRebuild prepared, LoadedClassBytes loadedBytes,
             Instrumentation instrumentation) {
         Map<String, Class<?>> byName = new LinkedHashMap<>();
-        prepared.splits().keySet().forEach(type -> byName.put(type.getName().replace('.', '/'), type));
+        prepared.splits().keySet().forEach(type -> byName.put(Type.getInternalName(type), type));
         Map<String, byte[]> fresh = new ConcurrentHashMap<>();
         List<String> differences = new ArrayList<>();
         byName.forEach((name, type) -> {
@@ -157,7 +158,7 @@ final class RebuildEvidence {
             refused.forEach((one, why) -> differences.add(one + " cannot be read back from the JVM (" + why + ")"));
         });
         prepared.splits().forEach((type, split) -> {
-            String name = type.getName().replace('.', '/');
+            String name = Type.getInternalName(type);
             byte[] jvm = fresh.containsKey(name) ? fresh.get(name) : loadedBytes.findKnown(type);
             List<String> ours = listFields(split.target());
             Set<String> missing = new TreeSet<>(listMethods(jvm));

@@ -57,6 +57,7 @@ import java.util.stream.Stream;
 import net.minecraft.client.Minecraft;
 import net.minecraft.client.gui.screens.Screen;
 import org.jspecify.annotations.Nullable;
+import org.objectweb.asm.Type;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -455,7 +456,7 @@ public final class HotwireApiImpl implements HotwireApi {
     }
 
     private static @Nullable String findMergedModOf(Class<?> type, StackWalker.StackFrame frame) {
-        String internal = type.getName().replace('.', '/');
+        String internal = Type.getInternalName(type);
         if (HandlerGuards.isWritten(internal) && HandlerGuards.getPresentMixins(internal).isEmpty()) {
             return CrashGuard.findMergedModByName(frame.getMethodName());
         }

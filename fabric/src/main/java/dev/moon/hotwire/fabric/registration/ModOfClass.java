@@ -18,6 +18,7 @@ import net.fabricmc.loader.api.FabricLoader;
 import net.fabricmc.loader.api.ModContainer;
 import net.fabricmc.loader.api.metadata.ModOrigin;
 import org.jspecify.annotations.Nullable;
+import org.objectweb.asm.Type;
 
 public final class ModOfClass {
     private static final String DISABLED = ".disabled";
@@ -47,7 +48,7 @@ public final class ModOfClass {
         String mod = this.lookUp(type);
         Path jar = mod == null ? null : findJarOf(type);
         Path name = jar == null ? null : jar.getFileName();
-        boolean game = name != null && GameLibraries.has(type.getName().replace('.', '/'), name.toString());
+        boolean game = name != null && GameLibraries.has(Type.getInternalName(type), name.toString());
         into.mod = game ? null : mod;
         into.learned = before;
     }

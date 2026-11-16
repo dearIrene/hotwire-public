@@ -60,12 +60,17 @@ public final class CacheStore {
     private volatile long capBytes;
     private final Object lock = new Object();
 
+    private final Object writing = new Object();
+
     private final Map<CacheKey, Place> places = new HashMap<>();
 
     private final Map<Integer, FileChannel> packs = new HashMap<>();
-    private final Map<CacheKey, byte[]> pending = new TreeMap<>();
-    private final Map<CacheKey, Byte> pendingFlags = new HashMap<>();
-    private final Map<CacheKey, Integer> pendingChecks = new HashMap<>();
+
+    @SuppressWarnings("ArrayRecordComponent")
+    private record WaitingEntry(byte[] packed, byte flags, int check) {
+    }
+
+    private final Map<CacheKey, WaitingEntry> pending = new TreeMap<>();
     private int generation;
 
     private int start;
@@ -118,11 +123,10 @@ public final class CacheStore {
 
     public byte @Nullable [] get(CacheKey key, byte @Nullable [] dictionary) {
         synchronized (this.lock) {
-            byte[] waiting = this.pending.get(key);
+            WaitingEntry waiting = this.pending.get(key);
             if (waiting != null) {
-                byte flags = this.pendingFlags.getOrDefault(key, (byte) 0);
-                byte[] value = expand(waiting, (flags & WITH_DICTIONARY) != 0 ? dictionary : null);
-                if (value == null || check(value) != this.pendingChecks.getOrDefault(key, 0)) {
+                byte[] value = expand(waiting.packed(), (waiting.flags() & WITH_DICTIONARY) != 0 ? dictionary : null);
+                if (value == null || check(value) != waiting.check()) {
                     this.misses++;
                     return null;
                 }
@@ -152,9 +156,9 @@ public final class CacheStore {
 
     public int findSize(CacheKey key) {
         synchronized (this.lock) {
-            byte[] waiting = this.pending.get(key);
+            WaitingEntry waiting = this.pending.get(key);
             if (waiting != null) {
-                return waiting.length + 5;
+                return waiting.packed().length + 5;
             }
             Place place = this.places.get(key);
             return place == null ? 0 : place.length() + 5;
@@ -167,9 +171,8 @@ public final class CacheStore {
             if (this.places.containsKey(key) || this.pending.containsKey(key)) {
                 return 0;
             }
-            this.pending.put(key, packed);
-            this.pendingFlags.put(key, (byte) (VALUE_CHECKED | (dictionary == null ? 0 : WITH_DICTIONARY)));
-            this.pendingChecks.put(key, check(value));
+            this.pending.put(key, new WaitingEntry(packed,
+                    (byte) (VALUE_CHECKED | (dictionary == null ? 0 : WITH_DICTIONARY)), check(value)));
         }
         return packed.length + 5;
     }
@@ -177,8 +180,6 @@ public final class CacheStore {
     public void remove(CacheKey key) {
         synchronized (this.lock) {
             this.pending.remove(key);
-            this.pendingFlags.remove(key);
-            this.pendingChecks.remove(key);
             if (this.places.remove(key) != null) {
                 this.used = true;
             }
@@ -226,19 +227,22 @@ public final class CacheStore {
             if (!trimming && this.pending.isEmpty() && !this.used) {
                 return;
             }
+        }
+
+        synchronized (this.writing) {
             try (FileChannel lockFile = FileChannel.open(this.folder.resolve(this.kind + ".lock"),
                     StandardOpenOption.CREATE, StandardOpenOption.WRITE)) {
                 FileLock fileLock = lockFile.lock();
                 try {
-                    this.mergeHead();
-                    if (trimming && sumBytes(this.places) <= this.capBytes) {
-                        return;
+                    synchronized (this.lock) {
+                        this.mergeHead();
+                        if (trimming && sumBytes(this.places) <= this.capBytes) {
+                            return;
+                        }
+                        this.write(false);
+                        this.pending.clear();
+                        this.used = false;
                     }
-                    this.write(false);
-                    this.pending.clear();
-                    this.pendingFlags.clear();
-                    this.pendingChecks.clear();
-                    this.used = false;
                 } finally {
                     fileLock.release();
                 }
@@ -249,18 +253,18 @@ public final class CacheStore {
     }
 
     public void clear() {
-        synchronized (this.lock) {
+        synchronized (this.writing) {
             try (FileChannel lockFile = FileChannel.open(this.folder.resolve(this.kind + ".lock"),
                     StandardOpenOption.CREATE, StandardOpenOption.WRITE)) {
                 FileLock fileLock = lockFile.lock();
                 try {
-                    this.mergeHead();
-                    this.places.clear();
-                    this.pending.clear();
-                    this.pendingFlags.clear();
-                    this.pendingChecks.clear();
-                    this.write(true);
-                    this.used = false;
+                    synchronized (this.lock) {
+                        this.mergeHead();
+                        this.places.clear();
+                        this.pending.clear();
+                        this.write(true);
+                        this.used = false;
+                    }
                 } finally {
                     fileLock.release();
                 }
@@ -382,8 +386,8 @@ public final class CacheStore {
         Map<CacheKey, Place> written = new HashMap<>(this.places);
         written.values().removeIf(this::isStale);
         long total = sumBytes(written);
-        for (byte[] packed : this.pending.values()) {
-            total += packed.length + 5;
+        for (WaitingEntry waiting : this.pending.values()) {
+            total += waiting.packed().length + 5;
         }
         boolean full = total > this.capBytes;
         Set<Integer> named = new HashSet<>();
@@ -417,11 +421,11 @@ public final class CacheStore {
                     at += raw.length;
                 }
             }
-            for (Map.Entry<CacheKey, byte[]> entry : this.pending.entrySet()) {
-                byte[] value = entry.getValue();
+            for (Map.Entry<CacheKey, WaitingEntry> entry : this.pending.entrySet()) {
+                byte[] value = entry.getValue().packed();
                 ByteBuffer entryHeader = ByteBuffer.allocate(5)
-                        .putInt(this.pendingChecks.getOrDefault(entry.getKey(), 0))
-                        .put(this.pendingFlags.getOrDefault(entry.getKey(), (byte) 0));
+                        .putInt(entry.getValue().check())
+                        .put(entry.getValue().flags());
                 written.put(entry.getKey(), new Place(next, at, value.length, this.start, this.user));
                 pack.write(entryHeader.array());
                 pack.write(value);

@@ -7,6 +7,7 @@ import java.util.List;
 import java.util.Map;
 import java.util.Optional;
 import org.jspecify.annotations.Nullable;
+import org.objectweb.asm.Type;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -39,7 +40,7 @@ final class FieldGiveBacks {
                     continue;
                 }
                 Class<?> declaring = field.getDeclaringClass();
-                byte[] original = this.owner.originalBytes.apply(declaring.getName().replace('.', '/'));
+                byte[] original = this.owner.originalBytes.apply(Type.getInternalName(declaring));
                 String descriptor = field.getType().descriptorString();
 
                 if (original != null && !ClassFileSummary.isDeclaredBy(original, field.getName(), descriptor)) {

@@ -32,7 +32,7 @@ import org.slf4j.LoggerFactory;
 public final class TripwireSites {
     private static final Logger LOGGER = LoggerFactory.getLogger(TripwireSites.class);
 
-    static final String HOLDER_PREFIX = TripwireSites.class.getName().replace('.', '/') + "$Mod";
+    static final String HOLDER_PREFIX = Type.getInternalName(TripwireSites.class) + "$Mod";
     static final String OFF = "off";
     static final String HIT = "hit";
     static final String SKIP = "skip";
@@ -143,7 +143,7 @@ public final class TripwireSites {
         try {
             for (Class<?> type = Class.forName(superName.replace('/', '.'), false, null); type != null;
                     type = type.getSuperclass()) {
-                if (PASSING_BODIES.contains(type.getName().replace('.', '/') + "." + name + desc)) {
+                if (PASSING_BODIES.contains(Type.getInternalName(type) + "." + name + desc)) {
                     return true;
                 }
             }
@@ -226,7 +226,7 @@ public final class TripwireSites {
             }
 
             Class<?> host = type.isHidden() ? type.getNestHost() : type;
-            if (!mod.equals(ARMED.get(host.getName().replace('.', '/')))) {
+            if (!mod.equals(ARMED.get(Type.getInternalName(host)))) {
                 return false;
             }
             if (!type.isHidden() && isGated(frame.getMethodName(), frame.getMethodType().toMethodDescriptorString())) {
@@ -364,7 +364,7 @@ public final class TripwireSites {
     }
 
     private static byte[] makeHolder(String holder, String mod) {
-        String tripwire = Tripwire.class.getName().replace('.', '/');
+        String tripwire = Type.getInternalName(Tripwire.class);
         ClassWriter writer = new ClassWriter(ClassWriter.COMPUTE_MAXS);
         writer.visit(Opcodes.V21, Opcodes.ACC_PUBLIC | Opcodes.ACC_FINAL | Opcodes.ACC_SUPER, holder, null,
                 "java/lang/Object", null);
@@ -390,7 +390,7 @@ public final class TripwireSites {
         defer.visitLdcInsn(mod);
         defer.visitVarInsn(Opcodes.ALOAD, 0);
         defer.visitVarInsn(Opcodes.ALOAD, 1);
-        defer.visitMethodInsn(Opcodes.INVOKESTATIC, DueCoroutines.class.getName().replace('.', '/'), "addDue",
+        defer.visitMethodInsn(Opcodes.INVOKESTATIC, Type.getInternalName(DueCoroutines.class), "addDue",
                 "(Ljava/lang/String;Ljava/lang/Object;Ljava/lang/Object;)Ljava/lang/Object;", false);
         defer.visitInsn(Opcodes.ARETURN);
         defer.visitMaxs(0, 0);

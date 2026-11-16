@@ -16,6 +16,7 @@ import java.util.function.Consumer;
 import org.jspecify.annotations.Nullable;
 import org.objectweb.asm.ClassWriter;
 import org.objectweb.asm.Opcodes;
+import org.objectweb.asm.Type;
 import org.objectweb.asm.tree.ClassNode;
 import org.objectweb.asm.tree.InsnList;
 import org.objectweb.asm.tree.InsnNode;
@@ -26,7 +27,7 @@ import org.slf4j.LoggerFactory;
 public final class OffWindowReplay {
     private static final Logger LOGGER = LoggerFactory.getLogger(OffWindowReplay.class);
     static final String METHOD = "hotwire$replayMade";
-    private static final String RECORD = OffWindowObjects.class.getName().replace('.', '/');
+    private static final String RECORD = Type.getInternalName(OffWindowObjects.class);
 
     static final class Addition {
         private final byte[] bytes;
@@ -116,7 +117,7 @@ public final class OffWindowReplay {
     }
 
     public static int run(Class<?> type, Set<String> fields) {
-        String name = type.getName().replace('.', '/');
+        String name = Type.getInternalName(type);
         MethodHandles.Lookup side = Linker.findCurrentLookup(type);
         List<Object> live = OffWindowObjects.getLive(name);
         if (side == null || live.isEmpty()) {

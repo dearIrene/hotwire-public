@@ -11,6 +11,7 @@ import java.util.Map;
 import java.util.Set;
 import java.util.function.Function;
 import org.jspecify.annotations.Nullable;
+import org.objectweb.asm.Type;
 
 record LoadedClasses(Map<String, Class<?>> byName, Map<String, Set<String>> used,
         Map<String, List<Class<?>>> classesOf) {
@@ -25,7 +26,7 @@ record LoadedClasses(Map<String, Class<?>> byName, Map<String, Set<String>> used
             String mod = GameRegistrations.findModOf(type);
             String shipper = mod == null && GameRegistrations.isNestedLibrary(type)
                     ? GameRegistrations.findShippedBy(type) : null;
-            return new Kind(type.getName().replace('.', '/'), mod, mod != null ? mod
+            return new Kind(Type.getInternalName(type), mod, mod != null ? mod
                     : shipper != null ? NESTED + shipper : null);
         }
     };

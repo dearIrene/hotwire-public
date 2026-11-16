@@ -25,6 +25,7 @@ import java.util.function.Function;
 import java.util.function.IntSupplier;
 import java.util.function.Predicate;
 import org.jspecify.annotations.Nullable;
+import org.objectweb.asm.Type;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -74,7 +75,7 @@ public final class InitHookRuns {
 
     private static boolean isOfAny(Class<?> type, Set<String> targets) {
         for (Class<?> at = type; at != null; at = at.getSuperclass()) {
-            if (targets.contains(at.getName().replace('.', '/'))) {
+            if (targets.contains(Type.getInternalName(at))) {
                 return true;
             }
         }
@@ -241,7 +242,7 @@ public final class InitHookRuns {
         if (due.lateOnObjects().isEmpty() && due.lateOnClass().isEmpty()) {
             return 0;
         }
-        String name = type.getName().replace('.', '/');
+        String name = Type.getInternalName(type);
         MethodHandles.Lookup side = Linker.findCurrentLookup(type);
         if (side == null) {
             LOGGER.error("[Hotwire] {} has no sidecar for the load hooks it missed: {}", name, due.lateOnObjects());
@@ -292,7 +293,7 @@ public final class InitHookRuns {
             if ((unset.isEmpty() && !lateOnWorld) || (world && !inWorld)) {
                 continue;
             }
-            String name = type.getName().replace('.', '/');
+            String name = Type.getInternalName(type);
             if (!alive.test(type)) {
                 LOGGER.info("[Hotwire] no object of {} is alive: its hooks have none made before them", name);
                 continue;
@@ -316,7 +317,7 @@ public final class InitHookRuns {
     }
 
     private static int run(Class<?> type, Due due, List<Object> objects, boolean onObjects) {
-        String name = type.getName().replace('.', '/');
+        String name = Type.getInternalName(type);
         Set<String> keys = onObjects ? due.onObjects() : due.onClass();
         if (onObjects && !due.missed().isEmpty() && !objects.isEmpty()) {
             List<Object> without = new ArrayList<>();

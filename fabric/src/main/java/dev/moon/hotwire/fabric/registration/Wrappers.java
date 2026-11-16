@@ -16,6 +16,7 @@ import java.util.Map;
 import java.util.Set;
 import java.util.function.Function;
 import org.jspecify.annotations.Nullable;
+import org.objectweb.asm.Type;
 
 final class Wrappers {
     static final int DEPTH = 9;
@@ -320,7 +321,7 @@ final class Wrappers {
             this.targets = all;
             this.targetsFor = this.mods;
         }
-        return this.targets.contains(field.getDeclaringClass().getName().replace('.', '/'));
+        return this.targets.contains(Type.getInternalName(field.getDeclaringClass()));
     }
 
     private boolean isOfTheMods(Class<?> type) {

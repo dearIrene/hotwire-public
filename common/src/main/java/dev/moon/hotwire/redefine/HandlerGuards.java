@@ -63,32 +63,32 @@ public final class HandlerGuards {
     private static final Map<String, Set<String>> UNFLIPPABLE_AT = new ConcurrentHashMap<>();
     private static final Map<String, Map<String, String>> UNFLIPPABLE_WHY = new ConcurrentHashMap<>();
     static final Handle BOOTSTRAP = new Handle(Opcodes.H_INVOKESTATIC,
-            HandlerGuards.class.getName().replace('.', '/'), "bootstrap",
+            Type.getInternalName(HandlerGuards.class), "bootstrap",
             MethodType.methodType(CallSite.class, MethodHandles.Lookup.class, String.class, MethodType.class,
                     String.class, int.class, int.class, int.class).toMethodDescriptorString(), false);
 
     static final Handle BOOTSTRAP_CONSTRUCTOR = new Handle(Opcodes.H_INVOKESTATIC,
-            HandlerGuards.class.getName().replace('.', '/'), "bootstrapConstructor",
+            Type.getInternalName(HandlerGuards.class), "bootstrapConstructor",
             MethodType.methodType(CallSite.class, MethodHandles.Lookup.class, String.class, MethodType.class,
                     String.class, int.class).toMethodDescriptorString(), false);
     static final Handle BOOTSTRAP_REDIRECT = new Handle(Opcodes.H_INVOKESTATIC,
-            HandlerGuards.class.getName().replace('.', '/'), "bootstrapRedirect",
+            Type.getInternalName(HandlerGuards.class), "bootstrapRedirect",
             MethodType.methodType(CallSite.class, MethodHandles.Lookup.class, String.class, MethodType.class,
                     String.class, int.class, int.class, String.class, String.class, String.class)
                     .toMethodDescriptorString(), false);
 
     static final Handle BOOTSTRAP_REDIRECT_FORGETTING = new Handle(Opcodes.H_INVOKESTATIC,
-            HandlerGuards.class.getName().replace('.', '/'), "bootstrapRedirectForgetting",
+            Type.getInternalName(HandlerGuards.class), "bootstrapRedirectForgetting",
             MethodType.methodType(CallSite.class, MethodHandles.Lookup.class, String.class, MethodType.class,
                     String.class, int.class, int.class, String.class, String.class, String.class, String.class)
                     .toMethodDescriptorString(), false);
 
     static final Handle BOOTSTRAP_FIELD = new Handle(Opcodes.H_INVOKESTATIC,
-            HandlerGuards.class.getName().replace('.', '/'), "bootstrapField",
+            Type.getInternalName(HandlerGuards.class), "bootstrapField",
             MethodType.methodType(CallSite.class, MethodHandles.Lookup.class, String.class, MethodType.class,
                     String.class).toMethodDescriptorString(), false);
     static final Handle BOOTSTRAP_OVERWRITE = new Handle(Opcodes.H_INVOKESTATIC,
-            HandlerGuards.class.getName().replace('.', '/'), "bootstrapOverwrite",
+            Type.getInternalName(HandlerGuards.class), "bootstrapOverwrite",
             MethodType.methodType(CallSite.class, MethodHandles.Lookup.class, String.class, MethodType.class,
                     String.class, int.class, String.class).toMethodDescriptorString(), false);
 
@@ -588,7 +588,7 @@ public final class HandlerGuards {
     public static CallSite bootstrapField(MethodHandles.Lookup caller, String name, MethodType type, String mixin)
             throws ReflectiveOperationException {
         Class<?> owner = caller.lookupClass();
-        String className = owner.getName().replace('.', '/');
+        String className = Type.getInternalName(owner);
         FieldSites.note(mixin, className, caller.findSpecial(owner, name, MethodType.methodType(void.class), owner));
         return link(caller, name, type, mixin, OWN, () -> MethodHandles.insertArguments(MethodHandles.lookup()
                 .findStatic(OffWindowObjects.class, "onMade", MethodType.methodType(void.class, Object.class,
@@ -619,7 +619,7 @@ public final class HandlerGuards {
         } catch (ReflectiveOperationException | RuntimeException e) {
             LOGGER.warn("[Hotwire] {}.{} {} has no stand-in and answers nothing while off: {}", owner.getName(),
                     name, type, e.toString());
-            markUnflippable(owner.getName().replace('.', '/'), mixin, "stand-in failed to link");
+            markUnflippable(Type.getInternalName(owner), mixin, "stand-in failed to link");
             standIn = MethodHandles.empty(type);
         }
         synchronized (LOCK) {

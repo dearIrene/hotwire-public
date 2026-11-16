@@ -17,7 +17,7 @@ import org.objectweb.asm.tree.MethodNode;
 import org.objectweb.asm.tree.TypeInsnNode;
 
 public final class DuckBridge {
-    private static final String LINKER = Linker.class.getName().replace('.', '/');
+    private static final String LINKER = Type.getInternalName(Linker.class);
     private static final String BOOTSTRAP = "Ljava/lang/invoke/MethodHandles$Lookup;Ljava/lang/String;"
             + "Ljava/lang/invoke/MethodType;";
     private static final Handle IS_INSTANCE = new Handle(Opcodes.H_INVOKESTATIC, LINKER, "bootstrapIsInstance",

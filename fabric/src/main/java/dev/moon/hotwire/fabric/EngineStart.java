@@ -121,6 +121,7 @@ import net.minecraft.server.level.ServerLevel;
 import net.minecraft.server.packs.resources.SimpleReloadInstance;
 import net.minecraft.world.entity.Entity;
 import org.jspecify.annotations.Nullable;
+import org.objectweb.asm.Type;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -636,7 +637,7 @@ final class EngineStart {
                 if (type.isHidden()) {
                     return null;
                 }
-                String internal = type.getName().replace('.', '/');
+                String internal = Type.getInternalName(type);
                 byte[] known = loadedBytes.findKnown(type);
                 if (known == null) {
                     known = loadedBytes.findAsLoaded(internal);

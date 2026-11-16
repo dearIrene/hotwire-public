@@ -17,6 +17,7 @@ import java.util.Map;
 import java.util.Objects;
 import java.util.Set;
 import org.jspecify.annotations.Nullable;
+import org.objectweb.asm.Type;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -59,7 +60,7 @@ final class FinalReaders {
             readers.addAll(Arrays.asList(field.getDeclaringClass().getNestMembers()));
 
             if (!Modifier.isPrivate(field.getModifiers())) {
-                fields.computeIfAbsent(field.getDeclaringClass().getName().replace('.', '/'), owner -> new HashSet<>())
+                fields.computeIfAbsent(Type.getInternalName(field.getDeclaringClass()), owner -> new HashSet<>())
                         .add(field.getName());
             }
         }

@@ -34,6 +34,7 @@ import java.util.regex.Pattern;
 import java.util.stream.Collectors;
 import java.util.stream.Stream;
 import org.jspecify.annotations.Nullable;
+import org.objectweb.asm.Type;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -66,15 +67,15 @@ final class LiveObjects {
         hooked.keySet().removeIf(recomputed);
 
         Set<String> byReload = new TreeSet<>();
-        hooked.keySet().removeIf(type -> game.isMadeByReload(type) && byReload.add(type.getName().replace('.', '/')));
+        hooked.keySet().removeIf(type -> game.isMadeByReload(type) && byReload.add(Type.getInternalName(type)));
 
         List<RebuildException> standing = new ArrayList<>();
         List<String> entries = findRegistryEntries(hooked, game);
         if (!entries.isEmpty()) {
             standing.add(RebuildException.ofRestartOnly("the " + what
                     + " changes how entries of the game's registries are"
-                    + " made: " + entries + ". Those are made once, when the game starts, so it takes a restart",
-                    new IllegalStateException(String.join(", ", entries))).withBlamed(Stream.concat(
+                    + " made: " + entries + ". Those are made once, when the game starts, so it takes a restart")
+                    .withBlamed(Stream.concat(
                     entries.stream().map(entry -> entry.substring(0, entry.lastIndexOf('.')).replace('.', '/')),
                     findMakersOf(entries, hooked)).collect(Collectors.toSet())));
         }
@@ -102,9 +103,9 @@ final class LiveObjects {
                 rebuilder::findLaunchBytes, current);
         Map<Class<?>, byte[]> targets = new LinkedHashMap<>();
         retained.forEach((type, split) -> targets.put(type, prepared.mixed().getOrDefault(
-                type.getName().replace('.', '/'), split.target())));
+                Type.getInternalName(type), split.target())));
 
-        targets.keySet().removeIf(type -> game.isMadeByReload(type) && byReload.add(type.getName().replace('.', '/')));
+        targets.keySet().removeIf(type -> game.isMadeByReload(type) && byReload.add(Type.getInternalName(type)));
         ClassRebuilder.PreparedRebuild out = reloading;
         if (!byReload.isEmpty()) {
             LOGGER.info("[Hotwire] objects of {} a reload makes anew meet their new hooks then", byReload);
@@ -145,7 +146,7 @@ final class LiveObjects {
         }
         List<String> worldFills = new ArrayList<>();
         for (Class<?> type : prepared.splits().keySet()) {
-            String name = type.getName().replace('.', '/');
+            String name = Type.getInternalName(type);
             byte[] running = current.get(name);
             if (running == null) {
                 continue;
@@ -160,7 +161,7 @@ final class LiveObjects {
         if (!worldFills.isEmpty()) {
             throw RebuildException.ofWorldBuilt("the " + what + " would leave the mod's objects in the game's own"
                     + " fields of objects this world built: " + worldFills + ". The world is saved and opened again,"
-                    + " which builds them anew",new IllegalStateException(String.join(", ", worldFills)));
+                    + " which builds them anew");
         }
     }
 
@@ -186,7 +187,7 @@ final class LiveObjects {
                 }
                 Class<?> of = value == null ? null : value.getClass().isHidden() ? value.getClass().getNestHost()
                         : value.getClass();
-                if (of != null && offClass.test(of.getName().replace('.', '/'))) {
+                if (of != null && offClass.test(Type.getInternalName(of))) {
                     return true;
                 }
             }
@@ -229,7 +230,7 @@ final class LiveObjects {
             Map<String, byte[]> current) {
         Set<String> reload = new TreeSet<>();
         retained.forEach((type, split) -> {
-            String name = type.getName().replace('.', '/');
+            String name = Type.getInternalName(type);
 
             byte[] mixed = prepared.mixed().getOrDefault(name, split.target());
             byte[] original = originalOf.apply(name);
@@ -259,7 +260,7 @@ final class LiveObjects {
 
     static void noteReloaded(ClassRebuilder.PreparedRebuild prepared, Function<String, byte @Nullable []> launchOf) {
         Map<String, byte[]> targets = new HashMap<>();
-        prepared.splits().forEach((type, split) -> targets.put(type.getName().replace('.', '/'), split.target()));
+        prepared.splits().forEach((type, split) -> targets.put(Type.getInternalName(type), split.target()));
         for (String name : prepared.pausedReloads()) {
             byte[] mixed = prepared.mixed().getOrDefault(name, targets.get(name));
             byte[] launched = launchOf.apply(name);
@@ -319,7 +320,7 @@ final class LiveObjects {
         ReplacedStatics.runInOneWalk(onGameThread, () -> {
             failed.addAndGet(InitHookRuns.run(findHooked(prepared)));
             prepared.splits().keySet().forEach(type -> {
-                Set<String> fields = prepared.replayed().get(type.getName().replace('.', '/'));
+                Set<String> fields = prepared.replayed().get(Type.getInternalName(type));
                 if (fields != null) {
                     failed.addAndGet(OffWindowReplay.run(type, fields));
                 }
@@ -342,7 +343,7 @@ final class LiveObjects {
         if (!back.isEmpty() && game.isInWorld()) {
             throw new RebuildException(back + " come back to what other mods or the game held in its place while it"
                     + " was off, and this world's objects were made from that: they are the world's, so it changes"
-                    + " with the world saved and opened again", new IllegalStateException(String.valueOf(back)), true);
+                    + " with the world saved and opened again", true);
         }
     }
 
@@ -357,7 +358,7 @@ final class LiveObjects {
         if (!stay.isEmpty()) {
             throw new RebuildException(stay + " left code of theirs in what this world's connection runs for every"
                     + " packet, and only a new connection is made without it: it is the world's, so it changes with"
-                    + " the world saved and opened again", new IllegalStateException(String.valueOf(stay)), true);
+                    + " the world saved and opened again", true);
         }
     }
 

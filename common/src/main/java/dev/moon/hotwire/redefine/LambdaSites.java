@@ -15,6 +15,7 @@ import org.objectweb.asm.ClassWriter;
 import org.objectweb.asm.Handle;
 import org.objectweb.asm.MethodVisitor;
 import org.objectweb.asm.Opcodes;
+import org.objectweb.asm.Type;
 import org.objectweb.asm.tree.AbstractInsnNode;
 import org.objectweb.asm.tree.ClassNode;
 import org.objectweb.asm.tree.InvokeDynamicInsnNode;
@@ -22,7 +23,7 @@ import org.objectweb.asm.tree.MethodNode;
 
 public final class LambdaSites {
     private static final String JDK = "java/lang/invoke/LambdaMetafactory";
-    private static final String OWN = LambdaSites.class.getName().replace('.', '/');
+    private static final String OWN = Type.getInternalName(LambdaSites.class);
     private static final String JDK_NAME = "metafactory";
     private static final String NAME = "linkLambda";
     private static final String DESCRIPTOR = "(Ljava/lang/invoke/MethodHandles$Lookup;Ljava/lang/String;"

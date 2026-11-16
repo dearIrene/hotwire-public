@@ -11,8 +11,8 @@ import org.objectweb.asm.tree.MethodNode;
 import org.objectweb.asm.tree.VarInsnNode;
 
 final class BodyMarks {
-    private static final String LINKER = Linker.class.getName().replace('.', '/');
-    private static final String HOLDERS = FieldHolders.class.getName().replace('.', '/');
+    private static final String LINKER = Type.getInternalName(Linker.class);
+    private static final String HOLDERS = Type.getInternalName(FieldHolders.class);
     private static final String CALLBACK_INFO = "org/spongepowered/asm/mixin/injection/callback/CallbackInfo";
     private static final String CALLBACK_INFO_RETURNABLE = CALLBACK_INFO + "Returnable";
 

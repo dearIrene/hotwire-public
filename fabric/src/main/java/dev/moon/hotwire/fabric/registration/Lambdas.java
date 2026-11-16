@@ -8,6 +8,7 @@ import java.lang.instrument.Instrumentation;
 import java.lang.reflect.Method;
 import java.util.Optional;
 import org.jspecify.annotations.Nullable;
+import org.objectweb.asm.Type;
 
 final class Lambdas {
     private final Instrumentation instrumentation;
@@ -58,7 +59,7 @@ final class Lambdas {
         if (opened == null) {
             return null;
         }
-        String hostName = host.getName().replace('.', '/');
+        String hostName = Type.getInternalName(host);
         for (String[] member : opened.getMembers(lambda)) {
             if (member[0].equals(hostName) || member[1].startsWith("<")) {
                 continue;
@@ -101,7 +102,7 @@ final class Lambdas {
         if (opened == null) {
             return null;
         }
-        String hostName = host.getName().replace('.', '/');
+        String hostName = Type.getInternalName(host);
         for (String[] member : opened.getMembers(lambda)) {
             if (member[0].equals(hostName) && !member[1].startsWith("<")) {
                 return member[1];

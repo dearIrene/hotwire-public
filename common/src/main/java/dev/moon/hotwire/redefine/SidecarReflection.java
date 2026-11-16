@@ -12,6 +12,7 @@ import java.util.Arrays;
 import java.util.List;
 import java.util.Objects;
 import org.jspecify.annotations.Nullable;
+import org.objectweb.asm.Type;
 
 public final class SidecarReflection {
     private SidecarReflection() {
@@ -271,7 +272,7 @@ public final class SidecarReflection {
     private static final ClassValue<String> INTERNAL = new ClassValue<>() {
         @Override
         protected String computeValue(Class<?> type) {
-            return type.getName().replace('.', '/');
+            return Type.getInternalName(type);
         }
     };
 

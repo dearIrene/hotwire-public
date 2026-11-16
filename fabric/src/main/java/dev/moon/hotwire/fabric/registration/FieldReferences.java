@@ -43,6 +43,7 @@ import net.minecraft.core.registries.BuiltInRegistries;
 import net.minecraft.world.entity.Entity;
 import net.minecraft.world.item.CreativeModeTab;
 import org.jspecify.annotations.Nullable;
+import org.objectweb.asm.Type;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -497,7 +498,7 @@ public final class FieldReferences {
         }
         for (ReplacedStatics.StaticWrite one : ReplacedStatics.takeWritten()) {
             replaced.put(one.old(), one.made());
-            names.add(one.field().getDeclaringClass().getName().replace('.', '/') + "." + one.field().getName());
+            names.add(Type.getInternalName(one.field().getDeclaringClass()) + "." + one.field().getName());
         }
         if (replaced.isEmpty()) {
             return;

@@ -38,7 +38,7 @@ public final class PlainTypes {
     }
 
     public static boolean isPlainValue(Class<?> type) {
-        return PLAIN.contains(type.getName().replace('.', '/'));
+        return PLAIN.contains(Type.getInternalName(type));
     }
 
     public static boolean holdsPlainOnly(String desc, @Nullable String signature) {

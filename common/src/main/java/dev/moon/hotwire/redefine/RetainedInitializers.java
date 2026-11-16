@@ -24,7 +24,7 @@ import org.objectweb.asm.tree.TypeInsnNode;
 import org.objectweb.asm.tree.VarInsnNode;
 
 final class RetainedInitializers {
-    private static final String MADE = OffWindowObjects.class.getName().replace('.', '/');
+    private static final String MADE = Type.getInternalName(OffWindowObjects.class);
     private static final List<String> PURE_OWNERS = List.of("java/", "javax/", "net/minecraft/", "com/mojang/",
             "it/unimi/dsi/", "com/google/", "org/joml/");
 

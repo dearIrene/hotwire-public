@@ -37,7 +37,7 @@ public final class ShutOverrides {
     private record Shut(String owner, String method, String mod) {
     }
 
-    private static final String SHUT = ShutOverrides.class.getName().replace('.', '/');
+    private static final String SHUT = Type.getInternalName(ShutOverrides.class);
     private static final String RENAMED = "hotwire$override$";
     private static final String ORIGINAL = "hotwire$original$";
     private static final Logger LOGGER = LoggerFactory.getLogger(ShutOverrides.class);
@@ -226,7 +226,7 @@ public final class ShutOverrides {
         int open = method.indexOf('(');
         String name = method.substring(0, open);
         for (Class<?> at = type; at != null; at = at.getSuperclass()) {
-            Shut shut = findShut(method, at.getName().replace('.', '/'));
+            Shut shut = findShut(method, Type.getInternalName(at));
             if (shut == null) {
                 continue;
             }

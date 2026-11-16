@@ -289,8 +289,8 @@ public final class SwitchRunner {
             String why = content.isEmpty() ? "the world's entities hold objects of " + inEntities
                     : "the game's registries hold " + content;
             LOGGER.info("[Hotwire] the off of {} waits for the next start: {}", ids, why);
-            return new CheckedResult(new ModSwitcher.Result.Failed(plan, RebuildException.ofRestartOnly(why,
-                    new IllegalStateException(why))), new Report.OffCheck.NotRun(), List.of());
+            return new CheckedResult(new ModSwitcher.Result.Failed(plan, RebuildException.ofRestartOnly(why)),
+                    new Report.OffCheck.NotRun(), List.of());
         }
 
         if (!wired.isEmpty()) {

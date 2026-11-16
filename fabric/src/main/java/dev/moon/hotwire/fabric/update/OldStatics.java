@@ -12,6 +12,7 @@ import java.util.Set;
 import java.util.function.Function;
 import java.util.function.Predicate;
 import org.jspecify.annotations.Nullable;
+import org.objectweb.asm.Type;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -27,7 +28,7 @@ public final class OldStatics {
         List<Runnable> back = new ArrayList<>();
         List<String> fields = new ArrayList<>();
         for (Class<?> owner : loaded) {
-            String name = owner.getName().replace('.', '/');
+            String name = Type.getInternalName(owner);
             if (!Objects.equals(owner.getClassLoader(), game) || owner.isHidden() || leaving.contains(name)
                     || name.startsWith("dev/moon/hotwire/") || GameRegistrations.isOfOffMod(owner)
                     || !initialized.test(owner)) {
@@ -41,7 +42,7 @@ public final class OldStatics {
                     }
                     field.setAccessible(true);
                     Object old = field.get(null);
-                    if (old == null || !leaving.contains(old.getClass().getName().replace('.', '/'))) {
+                    if (old == null || !leaving.contains(Type.getInternalName(old.getClass()))) {
                         continue;
                     }
                     byte[] original = originalBytes.apply(name);

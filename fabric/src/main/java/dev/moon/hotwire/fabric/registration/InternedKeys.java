@@ -12,13 +12,14 @@ import java.util.Set;
 import net.minecraft.core.Registry;
 import net.minecraft.resources.Identifier;
 import net.minecraft.resources.ResourceKey;
+import org.objectweb.asm.Type;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 public final class InternedKeys {
     private static final Logger LOGGER = LoggerFactory.getLogger(InternedKeys.class);
 
-    private static final String KEY_CLASS = ResourceKey.class.getName().replace('.', '/');
+    private static final String KEY_CLASS = Type.getInternalName(ResourceKey.class);
 
     private InternedKeys() {
     }

@@ -32,6 +32,7 @@ import java.util.function.Consumer;
 import java.util.function.Predicate;
 import java.util.function.Supplier;
 import org.jspecify.annotations.Nullable;
+import org.objectweb.asm.Type;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -397,8 +398,7 @@ public final class SwitchApplier {
                 return made;
             }
             if (round == 16) {
-                throw new RebuildException("the classes " + switched + " override kept growing past 16 rounds",
-                        new IllegalStateException(String.valueOf(switched)));
+                throw new RebuildException("the classes " + switched + " override kept growing past 16 rounds");
             }
         }
     }
@@ -743,7 +743,7 @@ public final class SwitchApplier {
         Map<String, Set<String>> atLaunch = new HashMap<>();
         Set<String> rebuilt = new HashSet<>();
         before.forEach((type, old) -> {
-            String name = type.getName().replace('.', '/');
+            String name = Type.getInternalName(type);
             byte[] bytes = Objects.requireNonNull(current.get(name));
             rebuilt.add(name);
 
@@ -778,7 +778,6 @@ public final class SwitchApplier {
                 decided::isAskedAgain, replacing);
         if (!lost.isEmpty()) {
             throw RebuildException.ofLosing("the " + what + " would drop patches of mods that stay on: " + lost,
-                    new IllegalStateException(String.join(", ", lost)),
                             this.carriedMixins.findOwnersOf(lost, on));
         }
 

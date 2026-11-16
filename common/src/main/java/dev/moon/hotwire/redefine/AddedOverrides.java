@@ -37,7 +37,7 @@ public final class AddedOverrides {
     }
 
     static final String INHERITED = "hotwire$inherited$";
-    private static final String SELF = AddedOverrides.class.getName().replace('.', '/');
+    private static final String SELF = Type.getInternalName(AddedOverrides.class);
     private static final Handle BOOTSTRAP = new Handle(Opcodes.H_INVOKESTATIC, SELF, "bootstrap",
             "(Ljava/lang/invoke/MethodHandles$Lookup;Ljava/lang/String;Ljava/lang/invoke/MethodType;"
                     + "Ljava/lang/String;)Ljava/lang/invoke/CallSite;", false);
@@ -271,7 +271,7 @@ public final class AddedOverrides {
         String owner = key.substring(0, dot);
         String method = key.substring(dot + 1);
         for (Class<?> at = type; at != null; at = at.getSuperclass()) {
-            String name = at.getName().replace('.', '/');
+            String name = Type.getInternalName(at);
             if (name.equals(owner)) {
                 return null;
             }

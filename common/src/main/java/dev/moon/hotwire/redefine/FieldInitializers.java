@@ -36,7 +36,7 @@ import org.slf4j.LoggerFactory;
 
 @SuppressWarnings("ReferenceEquality")
 final class FieldInitializers {
-    private static final String FIELD_HOLDERS = FieldHolders.class.getName().replace('.', '/');
+    private static final String FIELD_HOLDERS = Type.getInternalName(FieldHolders.class);
     private static final Logger LOGGER = LoggerFactory.getLogger(FieldInitializers.class);
     static final String INIT_INSTANCE = "hotwire$initInstance";
     static final String INIT_STATICS = "hotwire$initStatics";

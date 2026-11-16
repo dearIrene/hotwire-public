@@ -18,6 +18,7 @@ import java.util.WeakHashMap;
 import java.util.concurrent.ConcurrentHashMap;
 import org.jspecify.annotations.Nullable;
 import org.objectweb.asm.ClassReader;
+import org.objectweb.asm.Type;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -86,21 +87,21 @@ public final class LoadedClassBytes {
     }
 
     void remember(Class<?> type, byte[] bytes) {
-        this.knownBytes.put(type.getName().replace('.', '/'), bytes);
-        HandlerGuards.forget(type.getName().replace('.', '/'));
-        TripwireSites.forget(type.getName().replace('.', '/'));
+        this.knownBytes.put(Type.getInternalName(type), bytes);
+        HandlerGuards.forget(Type.getInternalName(type));
+        TripwireSites.forget(Type.getInternalName(type));
     }
 
     void rememberAll(Map<Class<?>, byte[]> classes) {
-        classes.forEach((type, bytes) -> this.knownBytes.put(type.getName().replace('.', '/'), bytes));
+        classes.forEach((type, bytes) -> this.knownBytes.put(Type.getInternalName(type), bytes));
         classes.keySet().forEach(type -> {
-            HandlerGuards.forget(type.getName().replace('.', '/'));
-            TripwireSites.forget(type.getName().replace('.', '/'));
+            HandlerGuards.forget(Type.getInternalName(type));
+            TripwireSites.forget(Type.getInternalName(type));
         });
     }
 
     public byte @Nullable [] findKnown(Class<?> type) {
-        return this.knownBytes.find(type.getName().replace('.', '/'));
+        return this.knownBytes.find(Type.getInternalName(type));
     }
 
     public Map<String, byte[]> readCurrent(Collection<Class<?>> types) throws RebuildException {
@@ -112,11 +113,11 @@ public final class LoadedClassBytes {
         List<Class<?>> rest = new ArrayList<>();
         Map<String, byte[]> above = new LinkedHashMap<>();
         for (Class<?> type : types) {
-            byte[] bytes = this.knownBytes.has(type.getName().replace('.', '/')) ? null : readAboveGame(type);
+            byte[] bytes = this.knownBytes.has(Type.getInternalName(type)) ? null : readAboveGame(type);
             if (bytes == null) {
                 rest.add(type);
             } else {
-                above.put(type.getName().replace('.', '/'), bytes);
+                above.put(Type.getInternalName(type), bytes);
             }
         }
         Map<String, byte[]> out = new LinkedHashMap<>(above);
@@ -135,7 +136,7 @@ public final class LoadedClassBytes {
         if (!above) {
             return null;
         }
-        String name = type.getName().replace('.', '/');
+        String name = Type.getInternalName(type);
         try (InputStream in = loader.getResourceAsStream(name + ".class")) {
             if (in == null) {
                 return null;
@@ -144,10 +145,10 @@ public final class LoadedClassBytes {
             ClassReader header = new ClassReader(bytes);
             Class<?> parent = type.getSuperclass();
             String superName = type.isInterface() || parent == null ? "java/lang/Object"
-                    : parent.getName().replace('.', '/');
+                    : Type.getInternalName(parent);
             List<String> interfaces = new ArrayList<>();
             for (Class<?> face : type.getInterfaces()) {
-                interfaces.add(face.getName().replace('.', '/'));
+                interfaces.add(Type.getInternalName(face));
             }
             boolean same = header.getClassName().equals(name) && superName.equals(header.getSuperName())
                     && interfaces.equals(List.of(header.getInterfaces()));
@@ -163,7 +164,7 @@ public final class LoadedClassBytes {
         Map<String, Class<?>> byName = new LinkedHashMap<>();
         Map<String, String> refused = new LinkedHashMap<>();
         for (Class<?> type : types) {
-            String name = type.getName().replace('.', '/');
+            String name = Type.getInternalName(type);
             byte[] known = this.knownBytes.find(name);
             if (known == null) {
                 boolean asLoaded = this.loadedAs.remove(name);
@@ -199,8 +200,7 @@ public final class LoadedClassBytes {
         if (refusedOut != null) {
             refusedOut.addAll(named);
         } else if (!named.isEmpty()) {
-            throw new RebuildException("the JVM could not give back the bytes of " + named,
-                    new IllegalStateException(named.toString()));
+            throw new RebuildException("the JVM could not give back the bytes of " + named);
         }
         long end = System.nanoTime();
 

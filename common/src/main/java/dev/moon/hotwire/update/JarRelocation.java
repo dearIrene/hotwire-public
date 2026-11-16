@@ -56,7 +56,7 @@ public final class JarRelocation {
     private static final String CLASS_SUFFIX = ".class";
     private static final String SERVICES = "META-INF/services/";
     private static final String META_INF = "META-INF/";
-    private static final String LIVE_NAMES = LiveNames.class.getName().replace('.', '/');
+    private static final String LIVE_NAMES = Type.getInternalName(LiveNames.class);
 
     private final Set<String> classes = new HashSet<>();
     private final Set<String> packages = new HashSet<>();

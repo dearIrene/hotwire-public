@@ -18,6 +18,7 @@ import java.util.Map;
 import java.util.Objects;
 import java.util.Set;
 import org.jspecify.annotations.Nullable;
+import org.objectweb.asm.Type;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -106,10 +107,10 @@ final class DuckRebridge {
             together = Map.of();
         }
         for (Class<?> type : candidates) {
-            byte[] bytes = together.get(type.getName().replace('.', '/'));
+            byte[] bytes = together.get(Type.getInternalName(type));
             try {
                 if (bytes == null) {
-                    bytes = rebuilder.getLoadedBytes().readCurrent(List.of(type)).get(type.getName().replace('.', '/'));
+                    bytes = rebuilder.getLoadedBytes().readCurrent(List.of(type)).get(Type.getInternalName(type));
                 }
             } catch (RebuildException | RuntimeException | LinkageError e) {
                 unread.add(type.getName() + " (" + e + ")");
@@ -240,12 +241,12 @@ final class DuckRebridge {
             for (Class<?> up = type.getSuperclass(); up != null; up = up.getSuperclass()) {
                 Set<String> names = namesOf.get(up);
                 if (names != null) {
-                    names.add(type.getName().replace('.', '/'));
+                    names.add(Type.getInternalName(type));
                 }
             }
             for (Class<?> target : interfaces) {
                 if (type != target && target.isAssignableFrom(type)) {
-                    Objects.requireNonNull(namesOf.get(target)).add(type.getName().replace('.', '/'));
+                    Objects.requireNonNull(namesOf.get(target)).add(Type.getInternalName(type));
                 }
             }
         }
@@ -256,7 +257,7 @@ final class DuckRebridge {
     }
 
     private static void addSupertypes(Class<?> type, Set<String> into) {
-        if (into.add(type.getName().replace('.', '/'))) {
+        if (into.add(Type.getInternalName(type))) {
             for (Class<?> up : type.getInterfaces()) {
                 addSupertypes(up, into);
             }
