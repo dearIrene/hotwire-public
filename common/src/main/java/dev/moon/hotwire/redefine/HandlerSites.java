@@ -98,14 +98,18 @@ final class HandlerSites {
                     }
 
                     if (!call.name.startsWith("handler$")) {
-                        HandlerGuards.markUnflippable(internalName, mixin, "a value changed in a constructor");
-                        continue;
+                        if (isArraySize(call)) {
+                            HandlerGuards.markUnflippable(internalName, mixin,
+                                    "an array's size changed in a constructor");
+                            continue;
+                        }
+                    } else {
+                        if (!HandlerGuards.UNFLIPPABLE.contains(mixin)) {
+                            LOGGER.info("[Hotwire] {}'s constructor calls a handler of {}: its on rebuilds, its off"
+                                    + " flips", internalName, mixin);
+                        }
+                        HandlerGuards.markUnflippable(internalName, mixin, HandlerGuards.IN_CONSTRUCTOR);
                     }
-                    if (!HandlerGuards.UNFLIPPABLE.contains(mixin)) {
-                        LOGGER.info("[Hotwire] {}'s constructor calls a handler of {}: its on rebuilds, its off flips",
-                                internalName, mixin);
-                    }
-                    HandlerGuards.markUnflippable(internalName, mixin, HandlerGuards.IN_CONSTRUCTOR);
                 }
                 boolean isStatic = call.getOpcode() == Opcodes.INVOKESTATIC;
                 int how = isStatic ? HandlerGuards.STATIC : call.getOpcode() == Opcodes.INVOKESPECIAL
@@ -172,6 +176,7 @@ final class HandlerSites {
                     continue;
                 }
                 method.instructions.set(call, method.name.equals("<init>") && !isStatic
+                        && call.name.startsWith("handler$")
                         ? new InvokeDynamicInsnNode(call.name, desc, HandlerGuards.BOOTSTRAP_CONSTRUCTOR, mixin, how)
                         : new InvokeDynamicInsnNode(call.name, desc, HandlerGuards.BOOTSTRAP, mixin, how, kind,
                                 index.getAsInt() + (isStatic ? 0 : 1)));
@@ -179,6 +184,15 @@ final class HandlerSites {
             }
         }
         return markStaged(internalName, guarded);
+    }
+
+    private static boolean isArraySize(MethodInsnNode call) {
+        AbstractInsnNode next = call.getNext();
+        while (next != null && next.getOpcode() < 0) {
+            next = next.getNext();
+        }
+        return next != null && (next.getOpcode() == Opcodes.NEWARRAY || next.getOpcode() == Opcodes.ANEWARRAY
+                || next.getOpcode() == Opcodes.MULTIANEWARRAY);
     }
 
     private static String findUnset(ClassNode node, MethodInsnNode call, @Nullable ClassNode shipped) {
