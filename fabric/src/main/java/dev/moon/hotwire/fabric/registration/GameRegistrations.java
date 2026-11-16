@@ -71,7 +71,8 @@ public final class GameRegistrations {
     }
 
     private static boolean isOfNestedLibrary(Class<?> type) {
-        return findModOf(type) == null && findNestedModOf(type) != null && findOwnNested(type) == null;
+        String nested = findNestedModOf(type);
+        return findModOf(type) == null && nested != null && (findOwnNested(type) == null || shared.contains(nested));
     }
 
     public static @Nullable String findNestedModOf(Class<?> type) {

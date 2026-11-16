@@ -1,5 +1,6 @@
 package dev.moon.hotwire.config;
 
+import dev.moon.hotwire.ui.Lang;
 import java.io.IOException;
 import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
@@ -40,14 +41,14 @@ public final class ProfileStore {
 
         public String describe() {
             if (this.isEmpty()) {
-                return "already exactly this";
+                return Lang.get("hotwire.setup.plan_same");
             }
             List<String> parts = new ArrayList<>();
             if (!this.turnOff.isEmpty()) {
-                parts.add(this.turnOff.size() + " off");
+                parts.add(Lang.get("hotwire.setup.plan_off", this.turnOff.size()));
             }
             if (!this.turnOn.isEmpty()) {
-                parts.add(this.turnOn.size() + " on");
+                parts.add(Lang.get("hotwire.setup.plan_on", this.turnOn.size()));
             }
             return String.join(", ", parts);
         }
