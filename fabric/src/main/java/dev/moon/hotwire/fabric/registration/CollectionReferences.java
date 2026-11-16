@@ -838,12 +838,7 @@ final class CollectionReferences implements FixedLists.Walk {
             if ((value instanceof Collection<?> || value instanceof Map<?, ?> || value instanceof Object[])
                     && !field.isPlainOnly() && this.visit(value)) {
                 LazyFields.noteHolder(value, holder);
-                this.collect(value);
-
-                if (value instanceof List<?> list && list.size() <= LARGEST && CollectionParts.isFixedSize(list)
-                        && field.getType().isAssignableFrom(List.class)) {
-                    FixedLists.removeFromField(this, field, holder);
-                }
+                this.collectField(field, holder, value);
             } else if (value != null && Wrappers.isLookedInto(value) && !isOneConfigNode(value.getClass())
                     && !ElementLook.isLeftToOthers(value) && this.visit(value)) {
                 Set<String> was = this.enter(value);
@@ -854,13 +849,38 @@ final class CollectionReferences implements FixedLists.Walk {
                         Object innerValue = CollectionParts.read(inner, value);
                         if ((innerValue instanceof Collection<?> || innerValue instanceof Map<?, ?>
                                 || innerValue instanceof Object[]) && !inner.isPlainOnly() && this.visit(innerValue)) {
-                            this.collect(innerValue);
+                            this.collectField(inner, value, innerValue);
                         }
                     }
                 } finally {
                     this.checkReport.leave();
                     this.reader = was;
                 }
+            }
+        }
+    }
+
+    private void collectField(FieldSlots.Slot field, Object holder, Object value) {
+        boolean fixed = value instanceof List<?> list && list.size() <= LARGEST && CollectionParts.isFixedSize(list)
+                && field.getType().isAssignableFrom(List.class);
+        CollectionNotes notes = fixed && ElementLook.isLooking() && CollectionParts.isGameObject(holder)
+                ? this.look.getNotes() : null;
+        if (notes != null && !NO_PRINTS && notes.isReadBy(value, this.reader) && notes.isUnchanged(value)) {
+            return;
+        }
+        if (notes != null) {
+            notes.begin(value, CollectionNotes.Origin.of(this.readingStaticsOf), this.reader);
+        }
+        boolean completed = false;
+        try {
+            this.collect(value);
+            if (fixed) {
+                FixedLists.removeFromField(this, field, holder);
+            }
+            completed = true;
+        } finally {
+            if (notes != null) {
+                notes.end(value, completed);
             }
         }
     }

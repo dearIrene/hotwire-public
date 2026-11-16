@@ -364,7 +364,13 @@ public final class FieldReferences {
                 this.elements.takeOut(List.copyOf(mods), entities, Set.of(), HandedSearch.NONE);
                 return;
             }
-            List<Object> holders = findHolders(entities, targets);
+
+            Set<String> patched = new HashSet<>(targets);
+            for (String mod : mods) {
+                this.findTalksTo(mod, used.getOrDefault(mod, Set.of()), loaded, mods, on)
+                        .forEach(other -> patched.addAll(this.mixinTargets.apply(other)));
+            }
+            List<Object> holders = findHolders(entities, patched);
             Set<Class<?>> statics = new LinkedHashSet<>();
 
             targets.stream().map(name -> loaded.get(name.replace('.', '/'))).filter(Objects::nonNull).filter(others)
