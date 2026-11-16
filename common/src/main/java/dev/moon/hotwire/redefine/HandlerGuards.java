@@ -133,6 +133,7 @@ public final class HandlerGuards {
     public static void leaveHandlersOf(Set<String> mods, Set<String> mixins) {
         neverSwitched = Set.copyOf(mods);
         neverSwitchedMixins = Set.copyOf(mixins);
+        SiteInputs.writeNeverSwitched(mods, mixins);
     }
 
     static boolean isNeverSwitched(String mixin) {
@@ -140,11 +141,11 @@ public final class HandlerGuards {
     }
 
     public static void readOriginalsWith(Function<String, byte @Nullable []> reader) {
-        originals = reader;
+        originals = SiteInputs.writeAsked(reader);
     }
 
     public static void readOverwritersWith(Function<String, Set<String>> reader) {
-        overwriters = reader;
+        overwriters = SiteInputs.writeTold(reader);
     }
 
     public static boolean isGuarded(String internalName) {
@@ -383,6 +384,7 @@ public final class HandlerGuards {
     }
 
     public static byte @Nullable [] rewrite(String internalName, byte[] bytes) {
+        SiteInputs.writeMixed(internalName, bytes);
         try {
             return rewriteOrThrow(internalName, bytes, true);
         } catch (RuntimeException | LinkageError e) {

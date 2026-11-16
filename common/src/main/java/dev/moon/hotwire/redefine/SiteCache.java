@@ -76,6 +76,7 @@ public final class SiteCache {
     }
 
     public static byte @Nullable [] rewrite(String internalName, byte[] bytes) {
+        SiteInputs.writeMixed(internalName, bytes);
         SiteCache cache = active;
         if (cache == null || !ClassBytes.mentions(bytes, HandlerGuards.MERGED_BYTES)) {
             return HandlerGuards.rewrite(internalName, bytes);

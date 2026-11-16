@@ -48,6 +48,7 @@ public final class TripwireSites {
 
     public static void registerClasses(String mod, Set<String> classes) {
         classes.forEach(name -> MOD_BY_CLASS.putIfAbsent(name, mod));
+        SiteInputs.writeClasses(mod, classes);
     }
 
     public static @Nullable String findModOfClass(String internalName) {
