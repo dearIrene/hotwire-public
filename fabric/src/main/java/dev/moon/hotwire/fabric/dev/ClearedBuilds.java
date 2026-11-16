@@ -2,6 +2,7 @@ package dev.moon.hotwire.fabric.dev;
 
 import dev.moon.hotwire.concurrent.Tasks;
 import dev.moon.hotwire.config.AtomicFiles;
+import dev.moon.hotwire.dev.SavedBuild;
 import dev.moon.hotwire.ui.CacheFill;
 import dev.moon.hotwire.ui.Lang;
 import dev.moon.hotwire.ui.Notice;

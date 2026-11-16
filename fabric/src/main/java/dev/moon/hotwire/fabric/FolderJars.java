@@ -1,5 +1,8 @@
 package dev.moon.hotwire.fabric;
 
+import dev.moon.hotwire.engine.InstalledMods;
+import dev.moon.hotwire.engine.ModPolicy;
+import dev.moon.hotwire.engine.ModsFolderWatch;
 import dev.moon.hotwire.jar.ModJarException;
 import dev.moon.hotwire.jar.ModJarReader;
 import dev.moon.hotwire.jar.ModManifest;

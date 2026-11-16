@@ -1,0 +1,231 @@
+package dev.moon.hotwire.registration;
+
+import dev.moon.hotwire.classfile.GameNames;
+import dev.moon.hotwire.redefine.FieldSlots;
+import dev.moon.hotwire.seam.ClassKinds;
+import dev.moon.hotwire.seam.Game;
+import java.util.HashSet;
+import java.util.Set;
+import java.util.function.Function;
+import org.jspecify.annotations.Nullable;
+
+public final class ValueOwners {
+    private ValueOwners() {
+    }
+
+    private static volatile Function<Class<?>, @Nullable String> lambdaOwner = type -> null;
+
+    static void setLambdaOwners(Function<Class<?>, @Nullable String> owner) {
+        lambdaOwner = owner;
+    }
+
+    static @Nullable String findLambdaOwner(Class<?> type) {
+        return lambdaOwner.apply(type);
+    }
+
+    public static boolean isLambda(Object item) {
+        Class<?> type = item.getClass();
+        return type.isHidden() && type.getName().contains("$$Lambda");
+    }
+
+    static @Nullable String findForwardedTo(Object item) {
+        Class<?> type = item.getClass();
+        if (!type.isHidden() || !type.getName().contains("$$Lambda")) {
+            return null;
+        }
+        String owner = null;
+        try {
+            for (FieldSlots.Slot field : Fields.getReferenceFields(type, false)) {
+                Object part = field.get(item);
+                if (part == null || isPlain(part) || isGame(part)) {
+                    continue;
+                }
+                String of = findOwnerOfValue(part);
+                if (of == null || (owner != null && !owner.equals(of))) {
+                    return null;
+                }
+                owner = of;
+            }
+        } catch (ReflectiveOperationException | RuntimeException e) {
+            return null;
+        }
+        return owner;
+    }
+
+    static @Nullable String findOwnerOfValue(Object value) {
+        String id = findIdOwner(value);
+        if (id != null) {
+            return id;
+        }
+        Class<?> type = value instanceof Class<?> named ? named : value.getClass();
+        String mod = Owners.findModOf(type);
+        if (mod == null && type.isHidden()) {
+            mod = lambdaOwner.apply(type);
+        }
+        if (mod != null || value instanceof Class<?> || !type.isHidden()) {
+            return mod;
+        }
+        for (FieldSlots.Slot field : Fields.getDeclared(type)) {
+            if (field.isStatic() || field.getType().isPrimitive()) {
+                continue;
+            }
+            try {
+                Object captured = field.get(value);
+                @SuppressWarnings("ReferenceEquality")
+                boolean itself = captured == value;
+                String of = captured == null || itself ? null : Owners.findModOf(captured.getClass());
+                if (of == null && captured != null && captured.getClass().isHidden()) {
+                    of = lambdaOwner.apply(captured.getClass());
+                }
+                if (of != null && (mod == null || mod.equals(of))) {
+                    mod = of;
+                } else if (of != null) {
+                    return null;
+                }
+            } catch (ReflectiveOperationException | RuntimeException e) {
+            }
+        }
+        return mod;
+    }
+
+    static boolean forwardsTo(String mod, Object item) {
+        Class<?> type = item.getClass();
+
+        if (!type.isHidden() || !type.getName().contains("$$Lambda") || isOwnedClass(mod, type)) {
+            return false;
+        }
+        int mods = 0;
+        try {
+            for (FieldSlots.Slot field : Fields.getReferenceFields(type, false)) {
+                Object part = field.get(item);
+                if (part == null || isPlain(part) || isGame(part)) {
+                    continue;
+                }
+                if (!isOwnedBy(mod, part)) {
+                    return false;
+                }
+                mods++;
+            }
+        } catch (ReflectiveOperationException | RuntimeException e) {
+            return false;
+        }
+        return mods > 0;
+    }
+
+    static boolean isGame(Object part) {
+        String name = part.getClass().getName();
+        return GameNames.isGame(name) && !part.getClass().isHidden();
+    }
+
+    static @Nullable String findIdOwner(Object value) {
+        String space = ClassKinds.findNamespaceOf(value, Game.ID | Game.KEY);
+        return space == null || space.equals("minecraft") ? null : space;
+    }
+
+    static boolean isPlain(Object part) {
+        return part instanceof String || part instanceof Number || part instanceof Boolean
+                || part instanceof Character || part instanceof Enum<?>;
+    }
+
+    static boolean isOwnedBy(String mod, Object value) {
+        Class<?> type = value instanceof Class<?> named ? named : value.getClass();
+        return isOwnedClass(mod, type) || mod.equals(findIdOwner(value))
+                || (!(value instanceof Class<?>) && type.isHidden() && hasOwnedCapture(mod, value));
+    }
+
+    static void addOwners(Object value, Set<String> into) {
+        Class<?> type = value instanceof Class<?> named ? named : value.getClass();
+        addOwnedClass(type, into);
+        String id = findIdOwner(value);
+        if (id != null) {
+            into.add(id);
+        }
+        if (!(value instanceof Class<?>) && type.isHidden()) {
+            addCapturedOwners(value, into);
+        }
+    }
+
+    static Set<String> findForwardedToAll(Object item) {
+        Class<?> type = item.getClass();
+        if (!type.isHidden() || !type.getName().contains("$$Lambda")) {
+            return Set.of();
+        }
+        Set<String> common = null;
+        try {
+            for (FieldSlots.Slot field : Fields.getReferenceFields(type, false)) {
+                Object part = field.get(item);
+                if (part == null || isPlain(part) || isGame(part)) {
+                    continue;
+                }
+                Set<String> owners = new HashSet<>();
+                addOwners(part, owners);
+                if (common == null) {
+                    common = owners;
+                } else {
+                    common.retainAll(owners);
+                }
+                if (common.isEmpty()) {
+                    return Set.of();
+                }
+            }
+        } catch (ReflectiveOperationException | RuntimeException e) {
+            return Set.of();
+        }
+        if (common == null) {
+            return Set.of();
+        }
+        Set<String> own = new HashSet<>();
+        addOwnedClass(type, own);
+        common.removeAll(own);
+        return common;
+    }
+
+    private static void addOwnedClass(Class<?> type, Set<String> into) {
+        String mod = Owners.findModOf(type);
+        if (mod != null) {
+            into.add(mod);
+        }
+        String made = type.isHidden() ? lambdaOwner.apply(type) : null;
+        if (made != null) {
+            into.add(made);
+        }
+    }
+
+    @SuppressWarnings("ReferenceEquality")
+    private static void addCapturedOwners(Object lambda, Set<String> into) {
+        for (FieldSlots.Slot field : Fields.getDeclared(lambda.getClass())) {
+            if (field.isStatic() || field.getType().isPrimitive()) {
+                continue;
+            }
+            try {
+                Object captured = field.get(lambda);
+                if (captured != null && captured != lambda) {
+                    addOwnedClass(captured.getClass(), into);
+                }
+            } catch (ReflectiveOperationException | RuntimeException e) {
+            }
+        }
+    }
+
+    private static boolean isOwnedClass(String mod, Class<?> type) {
+        return mod.equals(Owners.findModOf(type))
+                || (type.isHidden() && mod.equals(lambdaOwner.apply(type)));
+    }
+
+    @SuppressWarnings("ReferenceEquality")
+    private static boolean hasOwnedCapture(String mod, Object lambda) {
+        for (FieldSlots.Slot field : Fields.getDeclared(lambda.getClass())) {
+            if (field.isStatic() || field.getType().isPrimitive()) {
+                continue;
+            }
+            try {
+                Object captured = field.get(lambda);
+                if (captured != null && captured != lambda && isOwnedClass(mod, captured.getClass())) {
+                    return true;
+                }
+            } catch (ReflectiveOperationException | RuntimeException e) {
+            }
+        }
+        return false;
+    }
+}

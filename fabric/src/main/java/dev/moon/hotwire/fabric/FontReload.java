@@ -1,8 +1,8 @@
 package dev.moon.hotwire.fabric;
 
-import dev.moon.hotwire.fabric.registration.Fields;
 import dev.moon.hotwire.redefine.FieldSlots;
 import dev.moon.hotwire.redefine.Tripwire;
+import dev.moon.hotwire.registration.Fields;
 import java.util.Collection;
 import java.util.List;
 import java.util.concurrent.CompletableFuture;

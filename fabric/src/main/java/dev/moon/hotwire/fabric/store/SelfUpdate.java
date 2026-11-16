@@ -1,7 +1,7 @@
 package dev.moon.hotwire.fabric.store;
 
-import dev.moon.hotwire.fabric.LoadedMods;
-import dev.moon.hotwire.fabric.ModPolicy;
+import dev.moon.hotwire.engine.LoadedMods;
+import dev.moon.hotwire.engine.ModPolicy;
 import dev.moon.hotwire.modrinth.Downloads;
 import dev.moon.hotwire.modrinth.ModrinthClient;
 import dev.moon.hotwire.update.HotwireChanges;

@@ -1,8 +1,8 @@
 package dev.moon.hotwire.fabric.store;
 
+import dev.moon.hotwire.engine.InstalledMods;
+import dev.moon.hotwire.engine.ModPolicy;
 import dev.moon.hotwire.fabric.CacheLimit;
-import dev.moon.hotwire.fabric.InstalledMods;
-import dev.moon.hotwire.fabric.ModPolicy;
 import dev.moon.hotwire.jar.FileHashes;
 import dev.moon.hotwire.jar.ModJarException;
 import dev.moon.hotwire.jar.ModJarReader;

@@ -2,8 +2,8 @@ package dev.moon.hotwire.fabric;
 
 import com.mojang.blaze3d.platform.InputConstants;
 import dev.moon.hotwire.config.HotwireSettings;
-import dev.moon.hotwire.fabric.registration.Owners;
 import dev.moon.hotwire.fabric.screen.HotwireScreen;
+import dev.moon.hotwire.registration.Owners;
 import dev.moon.hotwire.ui.Lang;
 import dev.moon.hotwire.ui.Notice;
 import dev.moon.hotwire.ui.Notices;

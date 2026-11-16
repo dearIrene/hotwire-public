@@ -4,8 +4,11 @@ import dev.moon.hotwire.fabric.mixin.core.fabric.base.event.ArrayBackedEventAcce
 import dev.moon.hotwire.fabric.mixin.core.fabric.base.event.EventAccessor;
 import dev.moon.hotwire.fabric.mixin.core.fabric.base.event.EventPhaseDataAccessor;
 import dev.moon.hotwire.redefine.Tripwire;
+import dev.moon.hotwire.registration.Owners;
+import dev.moon.hotwire.registration.RecorderSupport;
 import dev.moon.hotwire.registration.Registration;
 import dev.moon.hotwire.registration.SequenceOrder;
+import dev.moon.hotwire.registration.StandIns;
 import java.lang.ref.WeakReference;
 import java.util.ArrayList;
 import java.util.Arrays;

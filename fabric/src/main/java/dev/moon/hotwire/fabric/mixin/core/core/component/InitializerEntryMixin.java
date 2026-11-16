@@ -3,7 +3,7 @@ package dev.moon.hotwire.fabric.mixin.core.core.component;
 //? if >=26.1 {
 import com.llamalad7.mixinextras.injector.wrapmethod.WrapMethod;
 import com.llamalad7.mixinextras.injector.wrapoperation.Operation;
-import dev.moon.hotwire.fabric.registration.OffEntries;
+import dev.moon.hotwire.registration.OffEntries;
 import net.minecraft.core.HolderLookup;
 import net.minecraft.core.component.DataComponentMap;
 import net.minecraft.resources.ResourceKey;

@@ -1,6 +1,8 @@
 package dev.moon.hotwire.fabric;
 
-import dev.moon.hotwire.fabric.add.AddFirstLook;
+import dev.moon.hotwire.add.AddFirstLook;
+import dev.moon.hotwire.engine.InstalledMods;
+import dev.moon.hotwire.engine.ModPolicy;
 import dev.moon.hotwire.fabric.add.ModAdder;
 import dev.moon.hotwire.jar.FileHashes;
 import dev.moon.hotwire.jar.ModJarException;

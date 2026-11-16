@@ -1,5 +1,6 @@
 package dev.moon.hotwire.fabric;
 
+import dev.moon.hotwire.engine.LoadedMods;
 import dev.moon.hotwire.ui.Lang;
 import dev.moon.hotwire.ui.Palette;
 import net.minecraft.client.Minecraft;

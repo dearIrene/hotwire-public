@@ -2,6 +2,9 @@ package dev.moon.hotwire.fabric.registration;
 
 import dev.moon.hotwire.classfile.GameNames;
 import dev.moon.hotwire.fabric.mixin.core.network.ConnectionAccessor;
+import dev.moon.hotwire.registration.Fields;
+import dev.moon.hotwire.registration.GameRegistrations;
+import dev.moon.hotwire.registration.Owners;
 import dev.moon.hotwire.registration.RegistrationJournal;
 import io.netty.channel.Channel;
 import io.netty.channel.ChannelHandler;

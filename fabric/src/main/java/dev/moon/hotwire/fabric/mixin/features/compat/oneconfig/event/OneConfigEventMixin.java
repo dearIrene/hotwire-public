@@ -1,6 +1,6 @@
 package dev.moon.hotwire.fabric.mixin.features.compat.oneconfig.event;
 
-import dev.moon.hotwire.fabric.registration.OneConfigEventRecorder;
+import dev.moon.hotwire.registration.OneConfigEventRecorder;
 import org.spongepowered.asm.mixin.Mixin;
 import org.spongepowered.asm.mixin.Pseudo;
 import org.spongepowered.asm.mixin.injection.At;

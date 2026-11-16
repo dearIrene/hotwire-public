@@ -1,5 +1,6 @@
 package dev.moon.hotwire.fabric.add;
 
+import dev.moon.hotwire.add.YumiStarts;
 import dev.moon.hotwire.fabric.LifecycleListeners;
 import dev.moon.hotwire.fabric.registration.GameHold;
 import dev.moon.hotwire.fabric.screen.HoldFrame;

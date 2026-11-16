@@ -1,6 +1,6 @@
 package dev.moon.hotwire.fabric.update;
 
-import dev.moon.hotwire.fabric.ModPolicy;
+import dev.moon.hotwire.engine.ModPolicy;
 import dev.moon.hotwire.fabric.dev.DevSession;
 import dev.moon.hotwire.jar.ContentScan;
 import dev.moon.hotwire.jar.FileHashes;
@@ -19,10 +19,12 @@ import dev.moon.hotwire.ui.Lang;
 import dev.moon.hotwire.ui.Progress;
 import dev.moon.hotwire.ui.UpdateMethod;
 import dev.moon.hotwire.ui.UpdatePreview;
+import dev.moon.hotwire.update.CarriedUpdates;
 import dev.moon.hotwire.update.JarDiff;
 import dev.moon.hotwire.update.JarIntake;
 import dev.moon.hotwire.update.JarLinks;
 import dev.moon.hotwire.update.NextStart;
+import dev.moon.hotwire.update.PlanCache;
 import dev.moon.hotwire.update.UpdateContext;
 import dev.moon.hotwire.update.UpdateDiffer;
 import dev.moon.hotwire.update.UpdatePlan;

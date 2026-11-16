@@ -2,6 +2,7 @@ package dev.moon.hotwire.fabric.screen;
 
 import dev.moon.hotwire.ui.ModScreen;
 import dev.moon.hotwire.ui.Root;
+import dev.moon.hotwire.ui.ScreenOpenTimer;
 import java.nio.file.Path;
 import java.util.List;
 import java.util.function.Supplier;

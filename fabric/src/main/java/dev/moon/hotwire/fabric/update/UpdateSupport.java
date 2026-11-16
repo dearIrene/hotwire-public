@@ -1,9 +1,9 @@
 package dev.moon.hotwire.fabric.update;
 
 import dev.moon.hotwire.config.Flags;
-import dev.moon.hotwire.fabric.InstalledMods;
-import dev.moon.hotwire.fabric.LoadedMods;
-import dev.moon.hotwire.fabric.ModPolicy;
+import dev.moon.hotwire.engine.InstalledMods;
+import dev.moon.hotwire.engine.LoadedMods;
+import dev.moon.hotwire.engine.ModPolicy;
 import dev.moon.hotwire.fabric.ResourceReload;
 import dev.moon.hotwire.fabric.add.ModAdder;
 import dev.moon.hotwire.fabric.rebuild.GameClasses;

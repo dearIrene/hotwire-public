@@ -4,6 +4,7 @@ import com.mojang.serialization.Decoder;
 import com.mojang.serialization.Encoder;
 import com.mojang.serialization.MapDecoder;
 import com.mojang.serialization.MapEncoder;
+import dev.moon.hotwire.registration.Owners;
 import java.lang.reflect.Method;
 import java.lang.reflect.Modifier;
 import java.util.ArrayList;

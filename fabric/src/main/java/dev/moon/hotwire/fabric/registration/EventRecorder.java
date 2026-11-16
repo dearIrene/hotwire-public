@@ -1,5 +1,6 @@
 package dev.moon.hotwire.fabric.registration;
 
+import dev.moon.hotwire.registration.RecorderSupport;
 import org.jspecify.annotations.Nullable;
 
 public final class EventRecorder {

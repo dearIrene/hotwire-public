@@ -1,6 +1,8 @@
 package dev.moon.hotwire.fabric.registration;
 
 import dev.moon.hotwire.redefine.FieldSlots;
+import dev.moon.hotwire.registration.Fields;
+import dev.moon.hotwire.registration.Lambdas;
 import java.lang.instrument.Instrumentation;
 import java.util.Map;
 import java.util.Optional;

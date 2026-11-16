@@ -2,6 +2,7 @@ package dev.moon.hotwire.fabric.registration;
 
 import dev.moon.hotwire.fabric.mixin.core.fabric.client.keybinding.KeyBindingRegistryImplAccessor;
 import dev.moon.hotwire.fabric.mixin.core.fabric.client.keymapping.KeyMappingRegistryImplAccessor;
+import dev.moon.hotwire.registration.RecorderSupport;
 import java.util.List;
 import net.minecraft.client.KeyMapping;
 import net.minecraft.client.Minecraft;

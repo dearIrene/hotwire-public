@@ -1,7 +1,7 @@
 package dev.moon.hotwire.fabric;
 
 import dev.moon.hotwire.concurrent.Tasks;
-import dev.moon.hotwire.fabric.report.LoggedFaults;
+import dev.moon.hotwire.report.LoggedFaults;
 import dev.moon.hotwire.ui.Lang;
 import java.util.Set;
 import java.util.concurrent.ConcurrentHashMap;

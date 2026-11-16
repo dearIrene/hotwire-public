@@ -2,6 +2,8 @@ package dev.moon.hotwire.fabric.registration;
 
 import dev.moon.hotwire.fabric.ModViews;
 import dev.moon.hotwire.redefine.Tripwire;
+import dev.moon.hotwire.registration.GameRegistrations;
+import dev.moon.hotwire.registration.Owners;
 import dev.moon.hotwire.registration.RegistrationJournal;
 import dev.moon.hotwire.update.LiveNames;
 import java.lang.reflect.Field;

@@ -1,10 +1,13 @@
 package dev.moon.hotwire.fabric;
 
-import dev.moon.hotwire.fabric.add.LoaderModList;
+import dev.moon.hotwire.add.LoaderModList;
+import dev.moon.hotwire.engine.InstalledMods;
+import dev.moon.hotwire.engine.ModPolicy;
+import dev.moon.hotwire.engine.SeenUses;
 import dev.moon.hotwire.fabric.add.WorldReopen;
-import dev.moon.hotwire.fabric.registration.Owners;
 import dev.moon.hotwire.plan.ModGraph;
 import dev.moon.hotwire.redefine.Tripwire;
+import dev.moon.hotwire.registration.Owners;
 import dev.moon.hotwire.ui.Lang;
 import dev.moon.hotwire.ui.ModScreen;
 import dev.moon.hotwire.ui.ReopenPanel;

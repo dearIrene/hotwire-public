@@ -1,10 +1,10 @@
 package dev.moon.hotwire.fabric;
 
-import dev.moon.hotwire.fabric.registration.Fields;
 import dev.moon.hotwire.fabric.screen.HotwireScreen;
-import dev.moon.hotwire.fabric.screen.ScreenOpenTimer;
-import dev.moon.hotwire.fabric.update.SwapAtClose;
+import dev.moon.hotwire.registration.Fields;
 import dev.moon.hotwire.ui.ModScreen;
+import dev.moon.hotwire.ui.ScreenOpenTimer;
+import dev.moon.hotwire.update.SwapAtClose;
 import dev.moon.hotwire.update.UpdateOffer;
 import dev.moon.hotwire.update.UrgentUpdate;
 import java.io.IOException;

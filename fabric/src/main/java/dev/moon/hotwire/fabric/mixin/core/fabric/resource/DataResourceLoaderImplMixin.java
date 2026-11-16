@@ -1,6 +1,6 @@
 package dev.moon.hotwire.fabric.mixin.core.fabric.resource;
 
-import dev.moon.hotwire.fabric.registration.ReloaderRecorder;
+import dev.moon.hotwire.registration.ReloaderRecorder;
 import java.util.function.Function;
 import net.minecraft.core.HolderLookup;
 import net.minecraft.resources.Identifier;

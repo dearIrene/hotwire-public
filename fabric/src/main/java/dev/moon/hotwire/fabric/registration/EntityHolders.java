@@ -1,6 +1,9 @@
 package dev.moon.hotwire.fabric.registration;
 
+import dev.moon.hotwire.registration.CollectionParts;
 import dev.moon.hotwire.registration.MergedMembers;
+import dev.moon.hotwire.registration.Owners;
+import dev.moon.hotwire.registration.Wrappers;
 import java.lang.reflect.Field;
 import java.lang.reflect.Modifier;
 import java.util.ArrayList;

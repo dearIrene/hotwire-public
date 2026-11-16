@@ -1,10 +1,12 @@
 package dev.moon.hotwire.fabric.rebuild;
 
+import dev.moon.hotwire.add.FailedAddJars;
 import dev.moon.hotwire.classfile.GameNames;
-import dev.moon.hotwire.fabric.add.FailedAddJars;
 import dev.moon.hotwire.fabric.add.LivePlugins;
-import dev.moon.hotwire.fabric.registration.Fields;
-import dev.moon.hotwire.fabric.registration.Owners;
+import dev.moon.hotwire.rebuild.KnotInternals;
+import dev.moon.hotwire.rebuild.PreMixinReads;
+import dev.moon.hotwire.registration.Fields;
+import dev.moon.hotwire.registration.Owners;
 import dev.moon.hotwire.switching.SwitchApplier;
 import java.io.IOException;
 import java.io.InputStream;

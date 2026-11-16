@@ -3,7 +3,7 @@ package dev.moon.hotwire.fabric;
 import dev.moon.hotwire.api.ModLifecycleListener;
 import dev.moon.hotwire.api.Registration;
 import dev.moon.hotwire.fabric.registration.GameHold;
-import dev.moon.hotwire.fabric.registration.Owners;
+import dev.moon.hotwire.registration.Owners;
 import dev.moon.hotwire.switching.Listeners;
 import java.util.ArrayList;
 import java.util.List;

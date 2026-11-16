@@ -1,0 +1,441 @@
+package dev.moon.hotwire.add;
+
+import dev.moon.hotwire.jar.ModManifest;
+import dev.moon.hotwire.jvm.PrivateField;
+import java.io.IOException;
+import java.io.InputStream;
+import java.lang.reflect.Constructor;
+import java.lang.reflect.Field;
+import java.lang.reflect.Method;
+import java.lang.reflect.Modifier;
+import java.nio.file.Path;
+import java.util.ArrayList;
+import java.util.Collection;
+import java.util.Collections;
+import java.util.Comparator;
+import java.util.HashMap;
+import java.util.IdentityHashMap;
+import java.util.LinkedHashMap;
+import java.util.List;
+import java.util.Map;
+import java.util.Objects;
+import java.util.Set;
+import java.util.function.Predicate;
+import java.util.zip.ZipEntry;
+import java.util.zip.ZipFile;
+import net.fabricmc.loader.api.LanguageAdapter;
+import net.fabricmc.loader.api.ModContainer;
+import net.fabricmc.loader.impl.FabricLoaderImpl;
+import net.fabricmc.loader.impl.ModContainerImpl;
+import net.fabricmc.loader.impl.discovery.ModCandidateImpl;
+import net.fabricmc.loader.impl.entrypoint.EntrypointStorage;
+import net.fabricmc.loader.impl.launch.FabricLauncher;
+import net.fabricmc.loader.impl.launch.FabricLauncherBase;
+import net.fabricmc.loader.impl.metadata.DependencyOverrides;
+import net.fabricmc.loader.impl.metadata.EntrypointMetadata;
+import net.fabricmc.loader.impl.metadata.LoaderModMetadata;
+import net.fabricmc.loader.impl.metadata.ModMetadataParser;
+import net.fabricmc.loader.impl.metadata.ParseMetadataException;
+import net.fabricmc.loader.impl.metadata.VersionOverrides;
+import org.jspecify.annotations.Nullable;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
+
+public final class LoaderModList {
+    private static final Logger LOGGER = LoggerFactory.getLogger(LoaderModList.class);
+    private static final PrivateField MODS = PrivateField.of(FabricLoaderImpl.class, "mods");
+    private static final PrivateField MOD_MAP = PrivateField.of(FabricLoaderImpl.class, "modMap");
+    private static final PrivateField ENTRYPOINT_STORAGE = PrivateField.of(FabricLoaderImpl.class, "entrypointStorage");
+    private static final PrivateField ADAPTERS = PrivateField.of(FabricLoaderImpl.class, "adapterMap");
+    private static final PrivateField ENTRY_MAP = PrivateField.of(EntrypointStorage.class, "entryMap");
+    private static final Method CREATE_PLAIN = createPlain();
+
+    private LoaderModList() {
+    }
+
+    private static Method createPlain() {
+        try {
+            Method method = ModCandidateImpl.class.getDeclaredMethod("createPlain", List.class,
+                    LoaderModMetadata.class, boolean.class, Collection.class);
+            method.setAccessible(true);
+            return method;
+        } catch (NoSuchMethodException e) {
+            throw new IllegalStateException("this Fabric Loader has no ModCandidateImpl.createPlain", e);
+        }
+    }
+
+    @SuppressWarnings("unchecked")
+    public static ModContainerImpl register(Path jar) {
+        FabricLoaderImpl loader = FabricLoaderImpl.INSTANCE;
+        LoaderModMetadata metadata = parse(jar, loader);
+        ModContainerImpl container = makeContainer(jar, metadata);
+
+        List<ModContainerImpl> mods = new ArrayList<>(MODS.get(loader, List.class));
+        Map<String, ModContainerImpl> byId = MOD_MAP.get(loader, Map.class);
+        EntrypointStorage entrypoints = ENTRYPOINT_STORAGE.get(loader, EntrypointStorage.class);
+        Map<String, LanguageAdapter> adapters = ADAPTERS.get(loader, Map.class);
+        synchronized (loader) {
+            mods.add(container);
+            MODS.set(loader, mods);
+            byId.put(metadata.getId(), container);
+
+            metadata.getProvides().forEach(provided -> byId.putIfAbsent(provided, container));
+
+            metadata.getLanguageAdapterDefinitions().forEach((name, type) -> {
+                if (!adapters.containsKey(name)) {
+                    try {
+                        adapters.put(name, Class.forName(type, true,
+                                FabricLauncherBase.getLauncher().getTargetClassLoader())
+                                .asSubclass(LanguageAdapter.class).getDeclaredConstructor().newInstance());
+                    } catch (ReflectiveOperationException | LinkageError e) {
+                        mods.remove(container);
+                        byId.remove(metadata.getId(), container);
+                        throw new IllegalStateException("the loader could not make the " + name
+                                + " language adapter of " + metadata.getId() + ": " + e, e);
+                    }
+                }
+            });
+            for (String key : metadata.getEntrypointKeys()) {
+                for (EntrypointMetadata entrypoint : metadata.getEntrypoints(key)) {
+                    try {
+                        entrypoints.add(container, key, entrypoint, adapters);
+                    } catch (Exception e) {
+                        mods.remove(container);
+                        byId.remove(metadata.getId(), container);
+                        throw new IllegalStateException("the loader could not take the " + key + " entrypoint "
+                                + entrypoint.getValue() + " of " + metadata.getId() + ": " + e.getMessage(), e);
+                    }
+                }
+            }
+        }
+        return container;
+    }
+
+    @SuppressWarnings("unchecked")
+    public static void replace(String id, Path jar) {
+        FabricLoaderImpl loader = FabricLoaderImpl.INSTANCE;
+        LoaderModMetadata metadata = parse(jar, loader);
+        ModContainerImpl container = makeContainer(jar, metadata);
+
+        List<ModContainerImpl> mods = new ArrayList<>(MODS.get(loader, List.class));
+        Map<String, ModContainerImpl> byId = MOD_MAP.get(loader, Map.class);
+        EntrypointStorage entrypoints = ENTRYPOINT_STORAGE.get(loader, EntrypointStorage.class);
+        Map<String, LanguageAdapter> adapters = ADAPTERS.get(loader, Map.class);
+        Map<String, List<Object>> entryMap = ENTRY_MAP.get(entrypoints, Map.class);
+        synchronized (loader) {
+            HiddenMod hidden = HIDDEN.get(id);
+            if (hidden != null) {
+                HIDDEN.put(id, new HiddenMod(container, findHiddenEntries(hidden, container, metadata, adapters)));
+                swapOrder(hidden.container(), container);
+                return;
+            }
+            ModContainerImpl old = byId.get(id);
+            int at = old == null ? -1 : mods.indexOf(old);
+            if (old != null && at >= 0) {
+                mods.set(at, container);
+                swapOrder(old, container);
+            } else {
+                mods.add(container);
+            }
+            MODS.set(loader, mods);
+            byId.put(id, container);
+            for (String key : metadata.getEntrypointKeys()) {
+                for (EntrypointMetadata entrypoint : metadata.getEntrypoints(key)) {
+                    if (hasEntry(entryMap.getOrDefault(key, List.of()), id, entrypoint.getValue())) {
+                        continue;
+                    }
+                    try {
+                        entrypoints.add(container, key, entrypoint, adapters);
+                    } catch (Exception e) {
+                        LOGGER.warn("[Hotwire] the loader could not take the new {} entrypoint {} of {}", key,
+                                entrypoint.getValue(), id, e);
+                    }
+                }
+            }
+        }
+    }
+
+    @SuppressWarnings("unchecked")
+    private static Map<String, List<Object>> findHiddenEntries(HiddenMod hidden, ModContainerImpl container,
+            LoaderModMetadata metadata, Map<String, LanguageAdapter> adapters) {
+        Map<String, List<Object>> entries = new HashMap<>();
+        hidden.entries().forEach((key, list) -> entries.put(key, new ArrayList<>(list)));
+        EntrypointStorage aside;
+        try {
+            Constructor<EntrypointStorage> make = EntrypointStorage.class.getDeclaredConstructor();
+            make.setAccessible(true);
+            aside = make.newInstance();
+        } catch (ReflectiveOperationException e) {
+            LOGGER.warn("[Hotwire] the new entrypoints of {} wait for its next start: {}", metadata.getId(),
+                    e.toString());
+            return entries;
+        }
+        String id = metadata.getId();
+        for (String key : metadata.getEntrypointKeys()) {
+            for (EntrypointMetadata entrypoint : metadata.getEntrypoints(key)) {
+                if (hasEntry(entries.getOrDefault(key, List.of()), id, entrypoint.getValue())) {
+                    continue;
+                }
+                try {
+                    aside.add(container, key, entrypoint, adapters);
+                } catch (Exception e) {
+                    LOGGER.warn("[Hotwire] the loader could not take the new {} entrypoint {} of {}", key,
+                            entrypoint.getValue(), id, e);
+                }
+            }
+        }
+        ENTRY_MAP.get(aside, Map.class).forEach((key, made) -> entries.computeIfAbsent((String) key,
+                any -> new ArrayList<>()).addAll((List<Object>) made));
+        return entries;
+    }
+
+    private static void swapOrder(ModContainerImpl old, ModContainerImpl now) {
+        int at = MODS_ORDER.indexOf(old);
+        if (at >= 0) {
+            MODS_ORDER.set(at, now);
+        }
+    }
+
+    private static boolean hasEntry(List<Object> entries, String id, String value) {
+        for (Object entry : entries) {
+            ModContainerImpl of = findContainerOf(entry);
+            if (of != null && of.getMetadata().getId().equals(id) && value.equals(findValueOf(entry))) {
+                return true;
+            }
+        }
+        return false;
+    }
+
+    private static @Nullable String findValueOf(Object entry) {
+        try {
+            Field value = entry.getClass().getDeclaredField("value");
+            value.setAccessible(true);
+            return String.valueOf(value.get(entry));
+        } catch (ReflectiveOperationException e) {
+            return null;
+        }
+    }
+
+    private static ModContainerImpl makeContainer(Path jar, LoaderModMetadata metadata) {
+        try {
+            ModCandidateImpl candidate = (ModCandidateImpl) CREATE_PLAIN.invoke(null, List.of(jar), metadata, false,
+                    List.of());
+            return new ModContainerImpl(candidate);
+        } catch (ReflectiveOperationException e) {
+            throw new IllegalStateException("the loader could not make a container for " + metadata.getId(), e);
+        }
+    }
+
+    private record HiddenMod(ModContainerImpl container, Map<String, List<Object>> entries) {
+    }
+
+    private static final Map<String, HiddenMod> HIDDEN = new HashMap<>();
+
+    private static final List<ModContainerImpl> MODS_ORDER = new ArrayList<>();
+    private static final Map<String, List<Object>> ENTRIES_ORDER = new HashMap<>();
+
+    @SuppressWarnings("unchecked")
+    public static void hide(Collection<String> ids) {
+        FabricLoaderImpl loader = FabricLoaderImpl.INSTANCE;
+
+        List<ModContainerImpl> mods = new ArrayList<>(MODS.get(loader, List.class));
+        Map<String, ModContainerImpl> byId = MOD_MAP.get(loader, Map.class);
+        EntrypointStorage storage = ENTRYPOINT_STORAGE.get(loader, EntrypointStorage.class);
+        Map<String, List<Object>> entryMap = ENTRY_MAP.get(storage, Map.class);
+        synchronized (loader) {
+            Map<String, String> asked = new HashMap<>();
+            for (String id : ids) {
+                ModContainerImpl container = byId.get(id);
+                if (container != null && !HIDDEN.containsKey(id)) {
+                    asked.put(container.getMetadata().getId(), id);
+                }
+            }
+            if (asked.isEmpty()) {
+                return;
+            }
+            if (MODS_ORDER.isEmpty()) {
+                MODS_ORDER.addAll(mods);
+            }
+            entryMap.forEach((key, entries) -> ENTRIES_ORDER.putIfAbsent(key, List.copyOf(entries)));
+
+            Map<String, Map<String, List<Object>>> removed = new HashMap<>();
+            entryMap.forEach((key, entries) -> {
+                List<Object> mine = new ArrayList<>();
+                for (Object entry : entries) {
+                    ModContainerImpl of = findContainerOf(entry);
+                    String id = of == null ? null : asked.get(of.getMetadata().getId());
+                    if (id != null) {
+                        mine.add(entry);
+                        removed.computeIfAbsent(id, any -> new HashMap<>())
+                                .computeIfAbsent(key, any -> new ArrayList<>()).add(entry);
+                    }
+                }
+                if (!mine.isEmpty()) {
+                    entries.removeAll(mine);
+                }
+            });
+            asked.values().forEach(id -> {
+                ModContainerImpl container = Objects.requireNonNull(byId.remove(id));
+                mods.remove(container);
+                HIDDEN.put(id, new HiddenMod(container, removed.getOrDefault(id, new HashMap<>())));
+            });
+            MODS.set(loader, mods);
+        }
+    }
+
+    private static final Set<String> OWN_KEYS = Set.of("main", "client", "server", "preLaunch");
+
+    @SuppressWarnings("unchecked")
+    public static Set<Object> findHanded(Collection<String> mods) {
+        FabricLoaderImpl loader = FabricLoaderImpl.INSTANCE;
+        EntrypointStorage storage = ENTRYPOINT_STORAGE.get(loader, EntrypointStorage.class);
+        Map<String, List<Object>> entryMap = ENTRY_MAP.get(storage, Map.class);
+        Set<Object> out = Collections.newSetFromMap(new IdentityHashMap<>());
+        synchronized (loader) {
+            entryMap.forEach((key, entries) -> addMade(key, entries, mods, out));
+            for (String mod : mods) {
+                HiddenMod hidden = HIDDEN.get(mod);
+                if (hidden != null) {
+                    hidden.entries().forEach((key, entries) -> addMade(key, entries, mods, out));
+                }
+            }
+        }
+        return out;
+    }
+
+    private static void addMade(String key, List<Object> entries, Collection<String> mods, Set<Object> out) {
+        if (OWN_KEYS.contains(key)) {
+            return;
+        }
+        for (Object entry : entries) {
+            ModContainerImpl container = findContainerOf(entry);
+            if (container == null || !mods.contains(container.getMetadata().getId())) {
+                continue;
+            }
+            for (Field field : entry.getClass().getDeclaredFields()) {
+                if (Modifier.isStatic(field.getModifiers())) {
+                    continue;
+                }
+                try {
+                    field.setAccessible(true);
+                    Object value = field.get(entry);
+                    if (value instanceof Map<?, ?> made && field.getName().equals("instanceMap")) {
+                        made.values().forEach(one -> {
+                            if (one != null) {
+                                out.add(one);
+                            }
+                        });
+                    } else if (value != null && field.getName().equals("object")) {
+                        out.add(value);
+                    }
+                } catch (ReflectiveOperationException | RuntimeException e) {
+                }
+            }
+        }
+    }
+
+    public static void unregister(String id) {
+        hide(List.of(id));
+        synchronized (HIDDEN) {
+            HIDDEN.remove(id);
+        }
+    }
+
+    public static Map<String, ModContainer> getHiddenContainers() {
+        synchronized (FabricLoaderImpl.INSTANCE) {
+            Map<String, ModContainer> out = new LinkedHashMap<>();
+            HIDDEN.forEach((id, hidden) -> out.put(id, hidden.container()));
+            return out;
+        }
+    }
+
+    @SuppressWarnings("unchecked")
+    public static @Nullable String findNewLanguageAdapter(Collection<ModManifest> manifests,
+            Predicate<String> quiet) {
+        Map<String, LanguageAdapter> adapters = ADAPTERS.get(FabricLoaderImpl.INSTANCE, Map.class);
+        FabricLauncher launcher = FabricLauncherBase.getLauncher();
+        for (ModManifest manifest : manifests) {
+            for (Map.Entry<String, String> adapter : manifest.languageAdapters().entrySet()) {
+                String type = adapter.getValue();
+                boolean known = launcher.isClassLoaded(type)
+                        || launcher.getTargetClassLoader().getResource(type.replace('.', '/') + ".class") != null;
+                if (!adapters.containsKey(adapter.getKey()) && (known || !quiet.test(type))) {
+                    return adapter.getKey();
+                }
+            }
+        }
+        return null;
+    }
+
+    public static boolean isHidden(String id) {
+        synchronized (FabricLoaderImpl.INSTANCE) {
+            return HIDDEN.containsKey(id);
+        }
+    }
+
+    public static Set<String> getHidden() {
+        FabricLoaderImpl loader = FabricLoaderImpl.INSTANCE;
+        synchronized (loader) {
+            return Set.copyOf(HIDDEN.keySet());
+        }
+    }
+
+    @SuppressWarnings("unchecked")
+    public static void show(String id) {
+        FabricLoaderImpl loader = FabricLoaderImpl.INSTANCE;
+
+        List<ModContainerImpl> mods = new ArrayList<>(MODS.get(loader, List.class));
+        Map<String, ModContainerImpl> byId = MOD_MAP.get(loader, Map.class);
+        EntrypointStorage storage = ENTRYPOINT_STORAGE.get(loader, EntrypointStorage.class);
+        Map<String, List<Object>> entryMap = ENTRY_MAP.get(storage, Map.class);
+        synchronized (loader) {
+            HiddenMod hidden = HIDDEN.remove(id);
+            if (hidden == null) {
+                return;
+            }
+            mods.add(hidden.container());
+            sortAs(mods, MODS_ORDER);
+            MODS.set(loader, mods);
+            byId.put(id, hidden.container());
+            hidden.entries().forEach((key, entries) -> {
+                List<Object> all = entryMap.computeIfAbsent(key, k -> new ArrayList<>());
+                all.addAll(entries);
+                sortAs(all, ENTRIES_ORDER.getOrDefault(key, List.of()));
+            });
+        }
+    }
+
+    private static <T> void sortAs(List<T> list, List<T> order) {
+        IdentityHashMap<T, Integer> at = new IdentityHashMap<>();
+        for (int index = 0; index < order.size(); index++) {
+            at.put(order.get(index), index);
+        }
+        list.sort(Comparator.comparingInt(item -> at.getOrDefault(item, Integer.MAX_VALUE)));
+    }
+
+    private static @Nullable ModContainerImpl findContainerOf(Object entry) {
+        try {
+            Method getModContainer = entry.getClass().getMethod("getModContainer");
+            getModContainer.setAccessible(true);
+            return (ModContainerImpl) getModContainer.invoke(entry);
+        } catch (ReflectiveOperationException e) {
+            return null;
+        }
+    }
+
+    private static LoaderModMetadata parse(Path jar, FabricLoaderImpl loader) {
+        try (ZipFile zip = new ZipFile(jar.toFile())) {
+            ZipEntry entry = zip.getEntry("fabric.mod.json");
+            if (entry == null) {
+                throw new IllegalStateException(jar.getFileName() + " has no fabric.mod.json");
+            }
+            try (InputStream in = zip.getInputStream(entry)) {
+                return ModMetadataParser.parseMetadata(in, jar.toString(), List.of(), new VersionOverrides(),
+                        new DependencyOverrides(loader.getConfigDir()), loader.isDevelopmentEnvironment());
+            }
+        } catch (IOException | ParseMetadataException e) {
+            throw new IllegalStateException("the loader could not read " + jar.getFileName() + ": " + e.getMessage(),
+                    e);
+        }
+    }
+}

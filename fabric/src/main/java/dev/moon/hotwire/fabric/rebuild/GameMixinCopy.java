@@ -2,7 +2,7 @@ package dev.moon.hotwire.fabric.rebuild;
 
 import com.google.common.collect.ImmutableList;
 import com.google.gson.Gson;
-import dev.moon.hotwire.fabric.add.FailedAddJars;
+import dev.moon.hotwire.add.FailedAddJars;
 import dev.moon.hotwire.mixin_copy.ExtensionFolder;
 import dev.moon.hotwire.mixin_copy.MixinCopy;
 import java.net.URISyntaxException;

@@ -2,6 +2,8 @@ package dev.moon.hotwire.fabric;
 
 import dev.moon.hotwire.config.AtomicFiles;
 import dev.moon.hotwire.config.Flags;
+import dev.moon.hotwire.engine.LoadedMods;
+import dev.moon.hotwire.engine.ModPolicy;
 import dev.moon.hotwire.update.UrgentUpdate;
 import java.io.IOException;
 import java.nio.file.Files;

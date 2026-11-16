@@ -1,7 +1,7 @@
 package dev.moon.hotwire.fabric.rebuild;
 
-import dev.moon.hotwire.fabric.LoadedMods;
-import dev.moon.hotwire.fabric.ModPolicy;
+import dev.moon.hotwire.engine.LoadedMods;
+import dev.moon.hotwire.engine.ModPolicy;
 import dev.moon.hotwire.jar.ModJar;
 import dev.moon.hotwire.jar.ModManifest;
 import dev.moon.hotwire.mixin_copy.MixinCopy;

@@ -1,0 +1,60 @@
+package dev.moon.hotwire.update;
+
+import dev.moon.hotwire.jar.FileHashes;
+import dev.moon.hotwire.jar.ModJar;
+import dev.moon.hotwire.jar.ModJarException;
+import dev.moon.hotwire.jar.ModJarReader;
+import java.io.IOException;
+import java.nio.file.Path;
+import java.util.Map;
+import java.util.concurrent.ConcurrentHashMap;
+
+public final class PlanCache {
+    private static final int MOST = 2048;
+
+    private final Map<String, ModJar> reads = new ConcurrentHashMap<>();
+    private final Map<String, JarDiff> diffs = new ConcurrentHashMap<>();
+
+    public ModJar read(Path jar) throws ModJarException {
+        String key = hash(jar);
+        ModJar known = this.reads.get(key);
+        if (known != null) {
+            return known;
+        }
+        ModJar read = ModJarReader.read(jar);
+        this.store(this.reads, key, read);
+        return read;
+    }
+
+    public JarDiff compare(Path running, Path incoming) throws ModJarException {
+        String key = hash(running) + " " + hash(incoming);
+        JarDiff known = this.diffs.get(key);
+        if (known != null) {
+            return known;
+        }
+        JarDiff diff = UpdateDiffer.compare(running, incoming);
+        this.store(this.diffs, key, diff);
+        return diff;
+    }
+
+    public void clear() {
+        this.reads.clear();
+        this.diffs.clear();
+    }
+
+    private <T> void store(Map<String, T> into, String key, T value) {
+        if (into.size() >= MOST) {
+            into.keySet().stream().findAny().ifPresent(into::remove);
+        }
+        into.put(key, value);
+    }
+
+    private static String hash(Path jar) throws ModJarException {
+        try {
+            return FileHashes.findSha256(jar);
+        } catch (IOException e) {
+            throw new ModJarException(ModJarException.Reason.UNREADABLE, String.valueOf(jar.getFileName()),
+                    "it could not be read as a jar", e);
+        }
+    }
+}

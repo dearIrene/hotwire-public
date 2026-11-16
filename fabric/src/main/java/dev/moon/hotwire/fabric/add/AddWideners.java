@@ -1,5 +1,7 @@
 package dev.moon.hotwire.fabric.add;
 
+import dev.moon.hotwire.add.JarUseReader;
+import dev.moon.hotwire.add.LoaderClassTweaker;
 import dev.moon.hotwire.jar.AccessWidenerText;
 import dev.moon.hotwire.jar.ModJar;
 import dev.moon.hotwire.jar.WidenerUses;

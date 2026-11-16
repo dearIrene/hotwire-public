@@ -1,8 +1,9 @@
 package dev.moon.hotwire.fabric.update;
 
-import dev.moon.hotwire.fabric.ModPolicy;
+import dev.moon.hotwire.engine.ModPolicy;
 import dev.moon.hotwire.jar.ModManifest;
 import dev.moon.hotwire.switching.ModMixins;
+import dev.moon.hotwire.update.CarriedUpdates;
 import dev.moon.hotwire.update.JarLinks;
 import dev.moon.hotwire.update.UpdatePlan;
 import dev.moon.hotwire.update.UpdatePlan.UpdateNotice;

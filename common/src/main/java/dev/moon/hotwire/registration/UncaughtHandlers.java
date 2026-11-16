@@ -1,0 +1,58 @@
+package dev.moon.hotwire.registration;
+
+import dev.moon.hotwire.redefine.FieldSlots;
+import java.util.Collection;
+import org.jspecify.annotations.Nullable;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
+
+public final class UncaughtHandlers {
+    private static final Logger LOGGER = LoggerFactory.getLogger(UncaughtHandlers.class);
+
+    private record Swap(Thread.UncaughtExceptionHandler mods, Thread.@Nullable UncaughtExceptionHandler inner)
+            implements RegistrationJournal.Take {
+        @Override
+        @SuppressWarnings("ReferenceEquality")
+        public void restore() {
+            if (Thread.getDefaultUncaughtExceptionHandler() == this.inner) {
+                Thread.setDefaultUncaughtExceptionHandler(this.mods);
+            }
+        }
+
+        @Override
+        public String describe() {
+            return "the JVM's handler of uncaught throws, " + this.mods.getClass().getName();
+        }
+    }
+
+    private UncaughtHandlers() {
+    }
+
+    public static synchronized void takeOut(Collection<String> mods) {
+        Thread.UncaughtExceptionHandler current = Thread.getDefaultUncaughtExceptionHandler();
+        String mod = current == null ? null : Owners.findModOf(current.getClass());
+        if (current == null || mod == null || !mods.contains(mod)) {
+            return;
+        }
+        Thread.UncaughtExceptionHandler inner = findWrapped(current);
+        Thread.setDefaultUncaughtExceptionHandler(inner);
+        GameRegistrations.getJournal().addTake(mod, new Swap(current, inner));
+        LOGGER.info("[Hotwire] the JVM's handler of uncaught throws is {} again instead of {}'s",
+                inner == null ? "none" : inner.getClass().getName(), mod);
+    }
+
+    @SuppressWarnings("ReferenceEquality")
+    private static Thread.@Nullable UncaughtExceptionHandler findWrapped(Thread.UncaughtExceptionHandler mods) {
+        for (FieldSlots.Slot field : Fields.getDeclared(mods.getClass())) {
+            try {
+                if (!field.isStatic() && field.get(mods) instanceof Thread.UncaughtExceptionHandler inner
+                        && inner != mods) {
+                    return inner;
+                }
+            } catch (ReflectiveOperationException | RuntimeException e) {
+                return null;
+            }
+        }
+        return null;
+    }
+}

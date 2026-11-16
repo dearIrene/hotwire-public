@@ -4,6 +4,7 @@ import dev.moon.hotwire.redefine.Tripwire;
 //? if <26.3 {
 /*import net.minecraft.world.level.levelgen.feature.ConfiguredFeature;
 *///?}
+import dev.moon.hotwire.registration.Owners;
 import net.minecraft.world.level.levelgen.placement.PlacedFeature;
 import net.minecraft.world.level.levelgen.placement.PlacementModifier;
 

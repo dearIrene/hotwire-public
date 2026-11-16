@@ -1,5 +1,7 @@
 package dev.moon.hotwire.fabric;
 
+import dev.moon.hotwire.engine.InstalledMods;
+import dev.moon.hotwire.engine.ModPolicy;
 import dev.moon.hotwire.fabric.add.ModAdder;
 import dev.moon.hotwire.fabric.store.ModStore;
 import dev.moon.hotwire.fabric.store.UpdateCheck;

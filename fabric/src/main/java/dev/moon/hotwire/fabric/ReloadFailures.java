@@ -1,10 +1,10 @@
 package dev.moon.hotwire.fabric;
 
 import com.google.common.collect.MapMaker;
-import dev.moon.hotwire.fabric.add.LoaderModList;
-import dev.moon.hotwire.fabric.registration.Fields;
+import dev.moon.hotwire.add.LoaderModList;
 import dev.moon.hotwire.fabric.registration.ReloadedLists;
 import dev.moon.hotwire.redefine.FieldSlots;
+import dev.moon.hotwire.registration.Fields;
 import java.lang.ref.WeakReference;
 import java.util.Collection;
 import java.util.Collections;

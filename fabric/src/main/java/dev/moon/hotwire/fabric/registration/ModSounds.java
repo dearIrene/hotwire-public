@@ -3,6 +3,8 @@ package dev.moon.hotwire.fabric.registration;
 import com.google.common.collect.MapMaker;
 import dev.moon.hotwire.classfile.GameNames;
 import dev.moon.hotwire.redefine.FieldSlots;
+import dev.moon.hotwire.registration.Fields;
+import dev.moon.hotwire.registration.Owners;
 import java.util.ArrayList;
 import java.util.Collection;
 import java.util.Collections;

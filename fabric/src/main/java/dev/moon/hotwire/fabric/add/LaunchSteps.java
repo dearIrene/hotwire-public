@@ -1,8 +1,10 @@
 package dev.moon.hotwire.fabric.add;
 
-import dev.moon.hotwire.fabric.registration.GameRegistrations;
+import dev.moon.hotwire.add.EntrypointLists;
+import dev.moon.hotwire.add.HostLists;
 import dev.moon.hotwire.fabric.registration.ModLifecycle;
 import dev.moon.hotwire.fabric.registration.OffModCommands;
+import dev.moon.hotwire.registration.GameRegistrations;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;

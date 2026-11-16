@@ -2,6 +2,10 @@ package dev.moon.hotwire.fabric.registration;
 
 import dev.moon.hotwire.classfile.GameNames;
 import dev.moon.hotwire.redefine.FieldSlots;
+import dev.moon.hotwire.registration.CollectionParts;
+import dev.moon.hotwire.registration.Fields;
+import dev.moon.hotwire.registration.GameRegistrations;
+import dev.moon.hotwire.registration.Owners;
 import dev.moon.hotwire.registration.RegistrationJournal;
 import dev.moon.hotwire.switching.SwitchTimes;
 import java.util.ArrayList;

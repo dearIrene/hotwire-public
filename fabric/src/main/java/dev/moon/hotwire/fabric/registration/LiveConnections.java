@@ -2,6 +2,8 @@ package dev.moon.hotwire.fabric.registration;
 
 import dev.moon.hotwire.classfile.GameNames;
 import dev.moon.hotwire.redefine.FieldSlots;
+import dev.moon.hotwire.registration.Fields;
+import dev.moon.hotwire.registration.StaticCopies;
 import io.netty.channel.Channel;
 import java.lang.reflect.InaccessibleObjectException;
 import java.util.ArrayDeque;

@@ -2,6 +2,7 @@ package dev.moon.hotwire.fabric.registration;
 
 import dev.moon.hotwire.fabric.mixin.core.fabric.base.event.ArrayBackedEventAccessor;
 import dev.moon.hotwire.redefine.FieldSlots;
+import dev.moon.hotwire.registration.Fields;
 import java.util.Set;
 import java.util.function.Function;
 import java.util.function.Predicate;

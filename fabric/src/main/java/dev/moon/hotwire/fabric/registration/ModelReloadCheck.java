@@ -1,6 +1,11 @@
 package dev.moon.hotwire.fabric.registration;
 
 import dev.moon.hotwire.redefine.FieldSlots;
+import dev.moon.hotwire.registration.CollectionParts;
+import dev.moon.hotwire.registration.Fields;
+import dev.moon.hotwire.registration.ModelWrappers;
+import dev.moon.hotwire.registration.Owners;
+import dev.moon.hotwire.registration.Wrappers;
 import java.lang.reflect.Modifier;
 import java.util.ArrayList;
 import java.util.Arrays;

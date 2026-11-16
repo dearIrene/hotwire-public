@@ -1,6 +1,7 @@
 package dev.moon.hotwire.fabric.registration;
 
 import dev.moon.hotwire.fabric.mixin.core.client.OptionsAccessor;
+import dev.moon.hotwire.registration.RecorderSupport;
 import dev.moon.hotwire.registration.Registration;
 import dev.moon.hotwire.registration.SequenceOrder;
 import java.util.ArrayList;

@@ -3,6 +3,8 @@ package dev.moon.hotwire.fabric.registration;
 import com.mojang.serialization.Codec;
 import com.mojang.serialization.Dynamic;
 import dev.moon.hotwire.redefine.Tripwire;
+import dev.moon.hotwire.registration.GameRegistrations;
+import dev.moon.hotwire.registration.Owners;
 import dev.moon.hotwire.registration.RegistrationJournal;
 import java.util.Collection;
 import java.util.HashMap;

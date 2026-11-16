@@ -1,6 +1,9 @@
 package dev.moon.hotwire.fabric;
 
 import dev.moon.hotwire.cache.CacheStore;
+import dev.moon.hotwire.engine.DevSetups;
+import dev.moon.hotwire.engine.InstalledMods;
+import dev.moon.hotwire.engine.ModsFolder;
 import dev.moon.hotwire.jar.JarNames;
 import dev.moon.hotwire.jar.JarScans;
 import dev.moon.hotwire.jar.ModIndex;

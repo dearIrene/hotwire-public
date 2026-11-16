@@ -1,7 +1,7 @@
 package dev.moon.hotwire.fabric.update;
 
 import dev.moon.hotwire.concurrent.Parallel;
-import dev.moon.hotwire.fabric.ModPolicy;
+import dev.moon.hotwire.engine.ModPolicy;
 import dev.moon.hotwire.jar.ModJarReader;
 import dev.moon.hotwire.jar.ModManifest;
 import dev.moon.hotwire.jar.ZipBytes;

@@ -1,7 +1,7 @@
 package dev.moon.hotwire.fabric;
 
-import dev.moon.hotwire.fabric.add.LoaderModList;
-import dev.moon.hotwire.fabric.registration.Owners;
+import dev.moon.hotwire.add.LoaderModList;
+import dev.moon.hotwire.registration.Owners;
 //? if >=26.1 {
 import net.fabricmc.fabric.api.client.rendering.v1.ClientTooltipComponentCallback;
 //?} else {

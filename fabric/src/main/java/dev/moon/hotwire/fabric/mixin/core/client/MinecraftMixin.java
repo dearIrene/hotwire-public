@@ -10,9 +10,9 @@ import dev.moon.hotwire.fabric.RenderPassEnd;
 //? if >=1.21.2 {
 import dev.moon.hotwire.fabric.ResourceReload;
 //?}
+import dev.moon.hotwire.add.TickEnd;
 import dev.moon.hotwire.fabric.BackgroundReload;
 import dev.moon.hotwire.fabric.OngoingReload;
-import dev.moon.hotwire.fabric.add.TickEnd;
 import dev.moon.hotwire.fabric.registration.GameHold;
 import dev.moon.hotwire.fabric.registration.WorldTintCaches;
 import dev.moon.hotwire.redefine.StartArguments;

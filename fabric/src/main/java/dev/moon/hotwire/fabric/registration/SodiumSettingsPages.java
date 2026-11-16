@@ -1,6 +1,7 @@
 package dev.moon.hotwire.fabric.registration;
 
-import dev.moon.hotwire.fabric.add.LoaderModList;
+import dev.moon.hotwire.add.LoaderModList;
+import dev.moon.hotwire.registration.GameRegistrations;
 import dev.moon.hotwire.registration.RegistrationJournal;
 import java.lang.reflect.Constructor;
 import java.lang.reflect.Field;

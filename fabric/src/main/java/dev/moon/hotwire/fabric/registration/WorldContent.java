@@ -1,5 +1,6 @@
 package dev.moon.hotwire.fabric.registration;
 
+import dev.moon.hotwire.registration.Owners;
 import java.util.Collection;
 import java.util.HashMap;
 import java.util.LinkedHashMap;

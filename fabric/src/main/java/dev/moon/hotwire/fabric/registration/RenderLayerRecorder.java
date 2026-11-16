@@ -1,5 +1,6 @@
 package dev.moon.hotwire.fabric.registration;
 
+import dev.moon.hotwire.registration.RecorderSupport;
 import java.util.List;
 import net.minecraft.client.renderer.entity.layers.RenderLayer;
 

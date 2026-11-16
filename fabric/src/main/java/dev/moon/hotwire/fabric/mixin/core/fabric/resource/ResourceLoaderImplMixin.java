@@ -1,6 +1,6 @@
 package dev.moon.hotwire.fabric.mixin.core.fabric.resource;
 
-import dev.moon.hotwire.fabric.registration.ReloaderRecorder;
+import dev.moon.hotwire.registration.ReloaderRecorder;
 import net.minecraft.resources.Identifier;
 import net.minecraft.server.packs.resources.PreparableReloadListener;
 import org.spongepowered.asm.mixin.Mixin;

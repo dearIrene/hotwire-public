@@ -21,7 +21,7 @@ import org.objectweb.asm.MethodVisitor;
 import org.objectweb.asm.Opcodes;
 import org.objectweb.asm.Type;
 
-final class Lambdas {
+public final class Lambdas {
     private static final Handle CLASS_DATA = new Handle(Opcodes.H_INVOKESTATIC, "java/lang/invoke/MethodHandles",
             "classData",
             "(Ljava/lang/invoke/MethodHandles$Lookup;Ljava/lang/String;Ljava/lang/Class;)Ljava/lang/Object;", false);

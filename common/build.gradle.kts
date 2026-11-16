@@ -32,6 +32,8 @@ dependencies {
     testRuntimeOnly(mixinExtras)
 }
 
+tasks.named<JavaCompile>("compileJava") { options.compilerArgs.add("-Xlint:-classfile") }
+
 for (task in listOf("compileMixinCopyJava", "compileMixinFixturesJava")) {
     tasks.named<JavaCompile>(task) { options.errorprone.disable("NullAway") }
 }
@@ -59,6 +61,9 @@ dependencies {
     compileOnly("org.ow2.asm:asm-commons:9.8")
     compileOnly("org.ow2.asm:asm-analysis:9.8")
     compileOnly("com.google.guava:guava:32.1.2-jre")
+
+    compileOnly("net.fabricmc:fabric-loader:${property("loader_version")}")
+    compileOnly("org.apache.logging.log4j:log4j-core:2.22.1")
 
     testImplementation("org.slf4j:slf4j-api:2.0.17")
     testImplementation("com.google.code.gson:gson:2.14.0")

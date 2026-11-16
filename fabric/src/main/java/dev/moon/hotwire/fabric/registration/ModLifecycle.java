@@ -3,6 +3,8 @@ package dev.moon.hotwire.fabric.registration;
 import com.mojang.brigadier.CommandDispatcher;
 import dev.moon.hotwire.fabric.LifecycleListeners;
 import dev.moon.hotwire.plan.SwitchPlan;
+import dev.moon.hotwire.registration.ArchitecturyEventRegistration;
+import dev.moon.hotwire.registration.Owners;
 import dev.moon.hotwire.registration.RegistrationJournal;
 import dev.moon.hotwire.switching.ModSwitcher;
 import java.lang.ref.WeakReference;

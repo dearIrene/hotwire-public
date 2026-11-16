@@ -1,6 +1,7 @@
 package dev.moon.hotwire.fabric.add;
 
-import dev.moon.hotwire.fabric.registration.Owners;
+import dev.moon.hotwire.add.LoaderModList;
+import dev.moon.hotwire.registration.Owners;
 import java.io.IOException;
 import java.io.UncheckedIOException;
 import java.lang.reflect.Field;

@@ -3,6 +3,7 @@ package dev.moon.hotwire.fabric;
 import dev.moon.hotwire.config.HotwireSettings;
 import dev.moon.hotwire.dev.DevExtras;
 import dev.moon.hotwire.dev.DevMixin;
+import dev.moon.hotwire.engine.InstalledMods;
 import dev.moon.hotwire.fabric.dev.DevSession;
 import dev.moon.hotwire.fabric.update.ModUpdater;
 import dev.moon.hotwire.fabric.update.UpdateSupport;

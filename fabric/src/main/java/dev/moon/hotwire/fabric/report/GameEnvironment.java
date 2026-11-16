@@ -1,8 +1,8 @@
 package dev.moon.hotwire.fabric.report;
 
+import dev.moon.hotwire.engine.InstalledMods;
+import dev.moon.hotwire.engine.LoadedMods;
 import dev.moon.hotwire.fabric.HotwireClient;
-import dev.moon.hotwire.fabric.InstalledMods;
-import dev.moon.hotwire.fabric.LoadedMods;
 import dev.moon.hotwire.jar.FileHashes;
 import dev.moon.hotwire.jar.ModManifest;
 import dev.moon.hotwire.plan.ModGraph;

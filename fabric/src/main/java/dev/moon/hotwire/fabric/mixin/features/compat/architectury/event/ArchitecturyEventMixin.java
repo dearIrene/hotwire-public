@@ -1,6 +1,6 @@
 package dev.moon.hotwire.fabric.mixin.features.compat.architectury.event;
 
-import dev.moon.hotwire.fabric.registration.ArchitecturyEventRecorder;
+import dev.moon.hotwire.registration.ArchitecturyEventRecorder;
 import org.spongepowered.asm.mixin.Mixin;
 import org.spongepowered.asm.mixin.Pseudo;
 import org.spongepowered.asm.mixin.injection.At;

@@ -1,6 +1,8 @@
 package dev.moon.hotwire.fabric.registration;
 
 import dev.moon.hotwire.fabric.mixin.core.client.renderer.entity.EntityRenderersAccessor;
+import dev.moon.hotwire.registration.GameRegistrations;
+import dev.moon.hotwire.registration.Owners;
 import dev.moon.hotwire.registration.RegistrationJournal;
 import java.util.Collection;
 import java.util.List;

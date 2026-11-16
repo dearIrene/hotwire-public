@@ -2,6 +2,7 @@ package dev.moon.hotwire.fabric.registration;
 
 //? if >=1.21.2 && <1.21.6 {
 /*import dev.moon.hotwire.fabric.mixin.core.fabric.client.rendering.LayeredDrawerWrapperImplAccessor;
+import dev.moon.hotwire.registration.RecorderSupport;
 import java.util.List;
 import net.fabricmc.fabric.api.client.rendering.v1.IdentifiedLayer;
 import net.fabricmc.fabric.impl.client.rendering.SubLayer;

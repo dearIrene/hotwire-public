@@ -2,10 +2,10 @@ package dev.moon.hotwire.fabric.mixin.core.client.multiplayer;
 
 import com.llamalad7.mixinextras.injector.wrapmethod.WrapMethod;
 import com.llamalad7.mixinextras.injector.wrapoperation.Operation;
-import dev.moon.hotwire.fabric.registration.ClientPacketListenerExtension;
 import dev.moon.hotwire.fabric.registration.CommandRecorder;
 import dev.moon.hotwire.fabric.registration.LoginMoment;
 import dev.moon.hotwire.redefine.StartArguments;
+import dev.moon.hotwire.registration.ClientPacketListenerExtension;
 import net.minecraft.client.multiplayer.ClientPacketListener;
 import net.minecraft.network.protocol.game.ClientboundCommandsPacket;
 import net.minecraft.network.protocol.game.ClientboundLoginPacket;

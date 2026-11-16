@@ -1,8 +1,8 @@
 package dev.moon.hotwire.fabric.store;
 
+import dev.moon.hotwire.engine.InstalledMods;
+import dev.moon.hotwire.engine.LoadedMods;
 import dev.moon.hotwire.fabric.CacheLimit;
-import dev.moon.hotwire.fabric.InstalledMods;
-import dev.moon.hotwire.fabric.LoadedMods;
 import dev.moon.hotwire.modrinth.Downloads;
 import dev.moon.hotwire.modrinth.LocalJars;
 import dev.moon.hotwire.modrinth.ModrinthClient;

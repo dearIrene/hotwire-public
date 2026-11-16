@@ -1,9 +1,9 @@
 package dev.moon.hotwire.fabric.add;
 
 import dev.moon.hotwire.fabric.mixin.core.core.MappedRegistryAccessor;
-import dev.moon.hotwire.fabric.registration.Fields;
 import dev.moon.hotwire.fabric.registration.InternedKeys;
 import dev.moon.hotwire.redefine.FieldSlots;
+import dev.moon.hotwire.registration.Fields;
 import java.util.ArrayList;
 import java.util.Collections;
 import java.util.IdentityHashMap;

@@ -1,7 +1,7 @@
 package dev.moon.hotwire.fabric.report;
 
 import com.sun.management.OperatingSystemMXBean;
-import dev.moon.hotwire.fabric.LoadedMods;
+import dev.moon.hotwire.engine.LoadedMods;
 import java.lang.management.GarbageCollectorMXBean;
 import java.lang.management.ManagementFactory;
 import java.util.ArrayList;

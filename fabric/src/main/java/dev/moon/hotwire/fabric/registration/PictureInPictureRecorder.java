@@ -1,6 +1,7 @@
 package dev.moon.hotwire.fabric.registration;
 
 //? if >=1.21.6 {
+import dev.moon.hotwire.registration.RecorderSupport;
 import java.util.Map;
 //?}
 //? if >=26.2 {

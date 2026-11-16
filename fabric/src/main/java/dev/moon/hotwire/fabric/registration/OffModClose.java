@@ -1,6 +1,7 @@
 package dev.moon.hotwire.fabric.registration;
 
 import dev.moon.hotwire.redefine.Tripwire;
+import dev.moon.hotwire.registration.GameRegistrations;
 import dev.moon.hotwire.registration.RegistrationJournal;
 import net.fabricmc.fabric.api.client.event.lifecycle.v1.ClientLifecycleEvents;
 import net.minecraft.client.Minecraft;

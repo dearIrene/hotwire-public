@@ -2,6 +2,8 @@ package dev.moon.hotwire.fabric.registration;
 
 //? if >=1.21.6 {
 import dev.moon.hotwire.registration.CallerOwner;
+import dev.moon.hotwire.registration.GameRegistrations;
+import dev.moon.hotwire.registration.RecorderSupport;
 import java.util.HashSet;
 import java.util.Set;
 import java.util.function.Function;

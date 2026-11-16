@@ -1,9 +1,11 @@
 package dev.moon.hotwire.fabric.add;
 
+import dev.moon.hotwire.add.AddFirstLook;
+import dev.moon.hotwire.add.JoinHooks;
 import dev.moon.hotwire.classfile.ClassHeader;
 import dev.moon.hotwire.config.AtomicFiles;
-import dev.moon.hotwire.fabric.InstalledMods;
-import dev.moon.hotwire.fabric.ModPolicy;
+import dev.moon.hotwire.engine.InstalledMods;
+import dev.moon.hotwire.engine.ModPolicy;
 import dev.moon.hotwire.fabric.rebuild.GameClasses;
 import dev.moon.hotwire.fabric.rebuild.MixinConfigs;
 import dev.moon.hotwire.fabric.report.GameReports;

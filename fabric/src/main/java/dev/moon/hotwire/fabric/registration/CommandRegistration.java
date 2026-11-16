@@ -4,6 +4,7 @@ import com.mojang.brigadier.CommandDispatcher;
 import com.mojang.brigadier.tree.CommandNode;
 import com.mojang.brigadier.tree.RootCommandNode;
 import dev.moon.hotwire.fabric.mixin.core.brigadier.tree.CommandNodeAccessor;
+import dev.moon.hotwire.registration.ClientPacketListenerExtension;
 import dev.moon.hotwire.registration.Registration;
 import java.lang.ref.WeakReference;
 import java.util.concurrent.atomic.AtomicBoolean;

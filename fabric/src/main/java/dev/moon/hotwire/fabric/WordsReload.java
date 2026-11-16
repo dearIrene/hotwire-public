@@ -1,7 +1,7 @@
 package dev.moon.hotwire.fabric;
 
-import dev.moon.hotwire.fabric.registration.Fields;
 import dev.moon.hotwire.redefine.FieldSlots;
+import dev.moon.hotwire.registration.Fields;
 import java.io.IOException;
 import java.nio.file.Path;
 import java.util.zip.ZipFile;

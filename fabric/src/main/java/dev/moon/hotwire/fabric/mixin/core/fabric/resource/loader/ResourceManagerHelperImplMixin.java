@@ -1,7 +1,7 @@
 package dev.moon.hotwire.fabric.mixin.core.fabric.resource.loader;
 
 //? if <1.21.10 {
-/*import dev.moon.hotwire.fabric.registration.ReloaderRecorder;
+/*import dev.moon.hotwire.registration.ReloaderRecorder;
 import org.spongepowered.asm.mixin.injection.At;
 import org.spongepowered.asm.mixin.injection.Inject;
 import org.spongepowered.asm.mixin.injection.callback.CallbackInfo;

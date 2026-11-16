@@ -1,5 +1,7 @@
 package dev.moon.hotwire.fabric.registration;
 
+import dev.moon.hotwire.registration.RecorderSupport;
+
 public final class ReceiverRecorder {
     private ReceiverRecorder() {
     }

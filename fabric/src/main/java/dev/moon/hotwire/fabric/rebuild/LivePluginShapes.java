@@ -1,9 +1,9 @@
 package dev.moon.hotwire.fabric.rebuild;
 
 import dev.moon.hotwire.fabric.add.LivePlugins;
-import dev.moon.hotwire.fabric.registration.Owners;
 import dev.moon.hotwire.jvm.PrivateField;
 import dev.moon.hotwire.redefine.Tripwire;
+import dev.moon.hotwire.registration.Owners;
 import java.util.Collection;
 import java.util.List;
 import java.util.Map;

@@ -1,6 +1,7 @@
 package dev.moon.hotwire.fabric.dev;
 
 import com.sun.management.ThreadMXBean;
+import dev.moon.hotwire.dev.CompareSampler;
 import dev.moon.hotwire.dev.DevCompare;
 import dev.moon.hotwire.dev.DevWhy;
 import dev.moon.hotwire.dev.WhySides;
