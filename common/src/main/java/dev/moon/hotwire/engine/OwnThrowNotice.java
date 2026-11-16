@@ -1,14 +1,15 @@
-package dev.moon.hotwire.fabric;
+package dev.moon.hotwire.engine;
 
 import dev.moon.hotwire.concurrent.Tasks;
 import dev.moon.hotwire.report.LoggedFaults;
 import dev.moon.hotwire.ui.Lang;
+import dev.moon.hotwire.ui.Notices;
 import java.util.Set;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.function.BiConsumer;
 import java.util.function.Function;
 
-final class OwnThrowNotice {
+public final class OwnThrowNotice {
     private static final int MOST = 20;
     private static final Set<String> TOLD = ConcurrentHashMap.newKeySet();
 
@@ -16,7 +17,7 @@ final class OwnThrowNotice {
     }
 
     @SuppressWarnings("FutureReturnValueIgnored")
-    static void install(Tasks tasks, BiConsumer<String, Boolean> say, Function<String, String> writeReport) {
+    public static void install(Tasks tasks, BiConsumer<String, Boolean> say, Function<String, String> writeReport) {
         LoggedFaults.onOwnThrow((said, thrown) -> {
             String kind = thrown.getClass().getName() + " at " + LoggedFaults.findOwnFrame(thrown);
             if (TOLD.size() >= MOST || !TOLD.add(kind)) {
@@ -27,7 +28,7 @@ final class OwnThrowNotice {
                     "Hotwire's own code threw inside the game, which went on past it: " + what), where -> {
                         String line = Lang.get("hotwire.own_fault", what, where);
                         say.accept(line, true);
-                        ModViews.showNotice(Lang.get("hotwire.own_fault.title"), line);
+                        Notices.show(Lang.get("hotwire.own_fault.title"), line);
                     });
         });
     }

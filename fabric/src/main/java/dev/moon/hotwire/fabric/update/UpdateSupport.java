@@ -31,6 +31,7 @@ import dev.moon.hotwire.ui.UpdateMethod;
 import dev.moon.hotwire.ui.UpdatePreview;
 import dev.moon.hotwire.update.JarRelocation;
 import dev.moon.hotwire.update.LiveNames;
+import dev.moon.hotwire.update.ModUpdater;
 import dev.moon.hotwire.update.PinnedClasses;
 import dev.moon.hotwire.update.UpdateContext;
 import dev.moon.hotwire.update.UpdateFolders;
@@ -135,7 +136,7 @@ public final class UpdateSupport implements ModUpdater.Engine, ModAdder.CarriedL
         this.folders = folders;
         this.queue = queue;
         this.reports = reports;
-        this.updater = new ModUpdater(this);
+        this.updater = new ModUpdater(this, stay -> new LiveUpdates(this, stay));
     }
 
     public boolean canUpdate(Path jar) {
@@ -213,7 +214,7 @@ public final class UpdateSupport implements ModUpdater.Engine, ModAdder.CarriedL
             try {
                 String refusal = this.updater.getCopies().findRestartRefusal(group, given);
                 SwitchTimes.mark("copies: refusals");
-                if (ASKS_OVER_CAP && this.updater.getCopies().isOverCap(group)) {
+                if (Flags.ASK_OVER_CAP && this.updater.getCopies().isOverCap(group)) {
                     this.askOverCap(group, given);
                 }
                 LiveCopies copies = refusal == null ? this.writeCopies(group, given) : null;
@@ -277,8 +278,6 @@ public final class UpdateSupport implements ModUpdater.Engine, ModAdder.CarriedL
         return copies.liveIds().keySet().stream().anyMatch(refusal::contains)
                 || copies.liveIds().values().stream().anyMatch(refusal::contains);
     }
-
-    static final boolean ASKS_OVER_CAP = Flags.ASK_OVER_CAP;
 
     private void askOverCap(Set<String> group, Map<String, Path> given) {
         String refusal = this.updater.getCopies().findRefusalUnderCap(group, given);

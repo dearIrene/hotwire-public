@@ -8,7 +8,6 @@ import dev.moon.hotwire.fabric.screen.HotwireScreen;
 import dev.moon.hotwire.redefine.FieldSlots;
 import dev.moon.hotwire.registration.Fields;
 import dev.moon.hotwire.registration.Owners;
-import dev.moon.hotwire.ui.Notice;
 import dev.moon.hotwire.ui.Notices;
 import java.util.ArrayList;
 import java.util.Collection;
@@ -211,7 +210,7 @@ public final class ModViews {
         Minecraft minecraft = Minecraft.getInstance();
         minecraft.execute(() -> {
             if (minecraft.player == null) {
-                showNotice("Hotwire", line);
+                Notices.show("Hotwire", line);
                 return;
             }
             MutableComponent text = Component.literal("[Hotwire] " + line)
@@ -225,10 +224,6 @@ public final class ModViews {
             /*minecraft.player.displayClientMessage(text, false);
             *///?}
         });
-    }
-
-    public static void showNotice(String title, String line) {
-        Notices.show(title.equals("Hotwire") ? Notice.ofDone(line, "") : Notice.ofBad(title, line));
     }
 
     private static <T> int remove(Collection<T> entries, Collection<String> ids, Function<T, Object> toastOf) {
@@ -247,7 +242,7 @@ public final class ModViews {
         return owner != null && ids.contains(owner);
     }
 
-    static void runSoon(Runnable opening) {
+    public static void runSoon(Runnable opening) {
         Minecraft client = Minecraft.getInstance();
         //? if >=1.21.2 {
         client.schedule(opening);

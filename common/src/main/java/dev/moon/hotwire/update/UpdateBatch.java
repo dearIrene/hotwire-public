@@ -1,4 +1,4 @@
-package dev.moon.hotwire.fabric.update;
+package dev.moon.hotwire.update;
 
 import dev.moon.hotwire.concurrent.Parallel;
 import dev.moon.hotwire.engine.ModPolicy;
@@ -11,8 +11,6 @@ import dev.moon.hotwire.switching.SwitchTimes;
 import dev.moon.hotwire.ui.Lang;
 import dev.moon.hotwire.ui.Progress;
 import dev.moon.hotwire.ui.UpdateMethod;
-import dev.moon.hotwire.update.JarLinks;
-import dev.moon.hotwire.update.UpdatePlan;
 import java.io.IOException;
 import java.io.InputStream;
 import java.nio.file.Path;
@@ -38,9 +36,9 @@ final class UpdateBatch {
     private static final Logger LOGGER = LoggerFactory.getLogger(UpdateBatch.class);
 
     private final ModUpdater updater;
-    private final LiveUpdates live;
+    private final ModUpdater.Live live;
 
-    UpdateBatch(ModUpdater updater, LiveUpdates live) {
+    UpdateBatch(ModUpdater updater, ModUpdater.Live live) {
         this.updater = updater;
         this.live = live;
     }

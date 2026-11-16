@@ -1,13 +1,13 @@
 package dev.moon.hotwire.fabric.store;
 
+import dev.moon.hotwire.engine.CacheLimit;
 import dev.moon.hotwire.engine.InstalledMods;
 import dev.moon.hotwire.engine.LoadedMods;
-import dev.moon.hotwire.fabric.CacheLimit;
 import dev.moon.hotwire.modrinth.Downloads;
-import dev.moon.hotwire.modrinth.LocalJars;
 import dev.moon.hotwire.modrinth.ModrinthClient;
 import dev.moon.hotwire.modrinth.StoreCache;
 import dev.moon.hotwire.modrinth.StoreModel;
+import dev.moon.hotwire.store.UpdateCheck;
 import dev.moon.hotwire.ui.Canvas;
 import dev.moon.hotwire.ui.Lang;
 import dev.moon.hotwire.update.UpdateOffer;
@@ -51,7 +51,7 @@ public final class ModStore {
         this.check = check;
         Path game = FabricLoader.getInstance().getGameDir();
         this.gameVersion = findVersionOf("minecraft");
-        ModrinthClient client = makeClient();
+        ModrinthClient client = LoadedMods.makeStoreClient();
         StoreCache cache = new StoreCache(CacheLimit.findStoreFolder().resolve("answers"),
                 (long) CacheLimit.readStore() << 20);
         this.model = new StoreModel(client, cache, id -> installed.isInstalled(id)
@@ -61,11 +61,6 @@ public final class ModStore {
             return id == null ? null : icons.apply(id);
         });
         this.downloads = game.resolve("hotwire").resolve("store");
-    }
-
-    public static ModrinthClient makeClient() {
-        return new ModrinthClient(findVersionOf("hotwire"), LOADER, findVersionOf("minecraft"),
-                new LocalJars(FabricLoader.getInstance().getGameDir(), LocalJars.findLauncherHomes()));
     }
 
     public StoreModel getModel() {

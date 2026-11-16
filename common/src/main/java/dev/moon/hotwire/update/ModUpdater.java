@@ -1,7 +1,7 @@
-package dev.moon.hotwire.fabric.update;
+package dev.moon.hotwire.update;
 
+import dev.moon.hotwire.dev.DevSession;
 import dev.moon.hotwire.engine.ModPolicy;
-import dev.moon.hotwire.fabric.dev.DevSession;
 import dev.moon.hotwire.jar.ContentScan;
 import dev.moon.hotwire.jar.FileHashes;
 import dev.moon.hotwire.jar.JarLookup;
@@ -19,19 +19,7 @@ import dev.moon.hotwire.ui.Lang;
 import dev.moon.hotwire.ui.Progress;
 import dev.moon.hotwire.ui.UpdateMethod;
 import dev.moon.hotwire.ui.UpdatePreview;
-import dev.moon.hotwire.update.CarriedUpdates;
-import dev.moon.hotwire.update.JarDiff;
-import dev.moon.hotwire.update.JarIntake;
-import dev.moon.hotwire.update.JarLinks;
-import dev.moon.hotwire.update.NextStart;
-import dev.moon.hotwire.update.PlanCache;
-import dev.moon.hotwire.update.UpdateContext;
-import dev.moon.hotwire.update.UpdateDiffer;
-import dev.moon.hotwire.update.UpdatePlan;
 import dev.moon.hotwire.update.UpdatePlan.UpdateTier;
-import dev.moon.hotwire.update.UpdatePlanner;
-import dev.moon.hotwire.update.UpdateQueue;
-import dev.moon.hotwire.update.UpdateText;
 import java.io.IOException;
 import java.io.InputStream;
 import java.nio.file.Files;
@@ -82,7 +70,7 @@ public final class ModUpdater {
     public record NewJar(Path jar, ModJar read) {
     }
 
-    interface Engine {
+    public interface Engine {
         ModGraph getGraph();
 
         Progress getProgress();
@@ -134,7 +122,7 @@ public final class ModUpdater {
     final Engine engine;
 
     private final IdChangedUpdate idChanged;
-    private final LiveUpdates live;
+    private final Live live;
     private final PlanCache plans = new PlanCache();
 
     private final Map<String, Optional<String>> wideners = new ConcurrentHashMap<>();
@@ -142,12 +130,20 @@ public final class ModUpdater {
     private final Map<String, Map<String, Set<String>>> usersNames = new ConcurrentHashMap<>();
     private final Set<Path> afterWorld = ConcurrentHashMap.newKeySet();
 
-    public ModUpdater(Engine engine) {
+    public interface Stay {
+        String queue(ModManifest manifest, Path running, Path incoming, UpdatePlan plan);
+    }
+
+    public interface Live {
+        List<Result> apply(List<SortResult.Planned> updates);
+    }
+
+    public ModUpdater(Engine engine, Function<Stay, Live> live) {
         this.engine = engine;
         this.updateClashes = new UpdateClashes(engine);
         this.updateCopies = new UpdateCopies(engine);
         this.idChanged = new IdChangedUpdate(engine, this::queueSwap);
-        this.live = new LiveUpdates(engine, this::queueToStay);
+        this.live = live.apply(this::queueToStay);
         this.carried = new CarriedUpdates(engine::findVersionOf, engine::readRunningOf, engine::getStagingFolder,
                 this::findRejection, VERSION_ORDER, this::planFrom,
                         this::withWidenerChecked,
@@ -181,7 +177,7 @@ public final class ModUpdater {
         }
     }
 
-    boolean canUpdate(Path jar) {
+    public boolean canUpdate(Path jar) {
         ModManifest manifest = JarLookup.findManifest(jar);
         return manifest != null && this.engine.findRunningJarOf(manifest.id()) != null;
     }
@@ -247,15 +243,15 @@ public final class ModUpdater {
                 manifest.version(), fileName, getMethodOf(whole.plan().tier()), lines);
     }
 
-    byte @Nullable [] findReadable(String internalName) {
+    public byte @Nullable [] findReadable(String internalName) {
         return this.engine.getApplier().getRebuilder().copy().findReadable(internalName);
     }
 
-    void tryAfterWorld(Path picked) {
+    public void tryAfterWorld(Path picked) {
         this.afterWorld.add(picked);
     }
 
-    List<Path> takeAfterWorld() {
+    public List<Path> takeAfterWorld() {
         List<Path> jars = List.copyOf(this.afterWorld);
         this.afterWorld.removeAll(jars);
         return jars;
@@ -267,7 +263,7 @@ public final class ModUpdater {
         return ids;
     }
 
-    Map<String, String> dropUnstartable() {
+    public Map<String, String> dropUnstartable() {
         Map<String, String> dropped = new HashMap<>();
         ModGraph graph = this.engine.getGraph();
         NextStart.Game game = new NextStart.Game() {
@@ -434,11 +430,11 @@ public final class ModUpdater {
         }
     }
 
-    Path findJarToRun(Path picked) {
+    public Path findJarToRun(Path picked) {
         return this.unwrap(picked);
     }
 
-    UpdateCopies getCopies() {
+    public UpdateCopies getCopies() {
         return this.updateCopies;
     }
 
@@ -563,12 +559,12 @@ public final class ModUpdater {
         return new SortResult.Planned(manifest, running, jar, read, whole);
     }
 
-    Optional<String> findCarriedRefusal(List<Path> libraries) {
+    public Optional<String> findCarriedRefusal(List<Path> libraries) {
         return this.planCarried(libraries).stream().filter(SortResult.Refused.class::isInstance)
                 .map(sorted -> ((SortResult.Refused) sorted).result().reason()).findFirst();
     }
 
-    Optional<String> updateCarried(List<Path> libraries) {
+    public Optional<String> updateCarried(List<Path> libraries) {
         List<SortResult.Planned> planned = new ArrayList<>();
         for (SortResult sorted : this.planCarried(libraries)) {
             if (sorted instanceof SortResult.Planned one) {
@@ -659,7 +655,7 @@ public final class ModUpdater {
         }
     }
 
-    record Whole(UpdatePlan plan, List<CarriedUpdates.Library> bundled, boolean adoptsConfigs,
+    public record Whole(UpdatePlan plan, List<CarriedUpdates.Library> bundled, boolean adoptsConfigs,
             @Nullable String refusal, List<Path> toAdd, List<Path> leftOut, @Nullable String loader) {
         Whole(UpdatePlan plan, List<CarriedUpdates.Library> bundled, boolean adoptsConfigs) {
             this(plan, bundled, adoptsConfigs, null, List.of(), List.of(), null);

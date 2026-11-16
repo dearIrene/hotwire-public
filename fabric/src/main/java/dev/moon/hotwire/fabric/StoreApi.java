@@ -11,6 +11,7 @@ import dev.moon.hotwire.api.StoreProject;
 import dev.moon.hotwire.api.StoreQuery;
 import dev.moon.hotwire.api.StoreVersion;
 import dev.moon.hotwire.api.SwitchResult;
+import dev.moon.hotwire.engine.LoadedMods;
 import dev.moon.hotwire.fabric.add.ModAdder;
 import dev.moon.hotwire.fabric.screen.WebLinks;
 import dev.moon.hotwire.fabric.store.ModStore;
@@ -58,7 +59,7 @@ final class StoreApi {
     private static ModrinthClient getClient() {
         ModrinthClient made = client;
         if (made == null) {
-            made = ModStore.makeClient();
+            made = LoadedMods.makeStoreClient();
             client = made;
         }
         return made;

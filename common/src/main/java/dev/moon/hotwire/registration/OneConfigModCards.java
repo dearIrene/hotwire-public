@@ -1,8 +1,6 @@
-package dev.moon.hotwire.fabric.registration;
+package dev.moon.hotwire.registration;
 
-import dev.moon.hotwire.registration.GameRegistrations;
-import dev.moon.hotwire.registration.Owners;
-import dev.moon.hotwire.registration.RegistrationJournal;
+import dev.moon.hotwire.seam.Games;
 import dev.moon.hotwire.update.LiveNames;
 import java.lang.reflect.Field;
 import java.lang.reflect.Method;
@@ -46,7 +44,7 @@ public final class OneConfigModCards {
     }
 
     public static void takeOut(Collection<String> mods) {
-        GameHold.onGameBeforeFrameAndWait(() -> takeOutNow(mods), "mod cards taken out");
+        Games.getNow().runBeforeFrameAndWait(() -> takeOutNow(mods), "mod cards taken out");
     }
 
     private static void takeOutNow(Collection<String> mods) {

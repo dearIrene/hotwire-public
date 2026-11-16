@@ -1,15 +1,23 @@
-package dev.moon.hotwire.fabric;
+package dev.moon.hotwire.engine;
 
 import dev.moon.hotwire.cache.CacheBudget;
 import dev.moon.hotwire.config.AtomicFiles;
+import dev.moon.hotwire.config.Flags;
 import java.io.IOException;
 import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
+import java.nio.file.InvalidPathException;
 import java.nio.file.Path;
+import java.util.ArrayList;
+import java.util.List;
+import net.fabricmc.loader.api.FabricLoader;
+import org.jspecify.annotations.Nullable;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 public final class CacheLimit {
+    public static final long JAR_SCANS_BYTES = 64L << 20;
+    private static volatile @Nullable Path cacheFolder;
     private static final Logger LOGGER = LoggerFactory.getLogger(CacheLimit.class);
     static final int DEFAULT_MEGABYTES = 64;
     static final int MOST_MEGABYTES = 1024;
@@ -22,7 +30,7 @@ public final class CacheLimit {
     }
 
     @SuppressWarnings("ThreadPriorityCheck")
-    static void fitLater(Path versionFolder, long limitBytes) {
+    public static void fitLater(Path versionFolder, long limitBytes) {
         Path root = versionFolder.toAbsolutePath().getParent();
         if (root != null) {
             Thread.ofPlatform().name("hotwire-cache-budget").daemon().priority(Thread.MIN_PRIORITY).start(
@@ -30,7 +38,7 @@ public final class CacheLimit {
         }
     }
 
-    static int read(Path versionFolder) {
+    public static int read(Path versionFolder) {
         Path file = findFile(versionFolder);
         try {
             if (Files.isRegularFile(file)) {
@@ -42,7 +50,7 @@ public final class CacheLimit {
         return DEFAULT_MEGABYTES;
     }
 
-    static void write(Path versionFolder, int megabytes) {
+    public static void write(Path versionFolder, int megabytes) {
         Path file = findFile(versionFolder);
         try {
             Files.createDirectories(file.getParent());
@@ -53,8 +61,8 @@ public final class CacheLimit {
     }
 
     public static Path findStoreFolder() {
-        Path versions = EngineStart.findCacheFolder().toAbsolutePath().getParent();
-        return (versions != null ? versions : EngineStart.findCacheFolder()).resolve("store");
+        Path versions = findCacheFolder().toAbsolutePath().getParent();
+        return (versions != null ? versions : findCacheFolder()).resolve("store");
     }
 
     public static int readStore() {
@@ -65,12 +73,56 @@ public final class CacheLimit {
         write(findStoreFolder().resolve("limit"), megabytes);
     }
 
-    static int clamp(int megabytes) {
+    public static int clamp(int megabytes) {
         return Math.max(LEAST_MEGABYTES, Math.min(MOST_MEGABYTES, megabytes));
     }
 
     private static Path findFile(Path versionFolder) {
         Path root = versionFolder.toAbsolutePath().getParent();
         return (root != null ? root : versionFolder).resolve(FILE);
+    }
+
+    public static Path findCacheFolder() {
+        Path found = cacheFolder;
+        if (found == null) {
+            String game = LoadedMods.findVersion("minecraft", "unknown");
+            List<Path> bases = new ArrayList<>();
+
+            String chosen = Flags.CACHE_FOLDER;
+            if (chosen != null) {
+                bases.add(Path.of(chosen));
+            }
+            String local = System.getenv("LOCALAPPDATA");
+            String xdg = System.getenv("XDG_CACHE_HOME");
+            Path home = Path.of(System.getProperty("user.home"));
+            if (local != null) {
+                bases.add(Path.of(local));
+            } else if (System.getProperty("os.name", "").startsWith("Mac")) {
+                bases.add(home.resolve("Library/Caches"));
+            }
+            if (xdg != null) {
+                bases.add(Path.of(xdg));
+            }
+            bases.add(home.resolve(".cache"));
+            found = FabricLoader.getInstance().getGameDir().resolve("hotwire").resolve("cache").resolve(game);
+            for (Path base : bases) {
+                Path at = base.resolve("hotwire").resolve(game);
+                if (isWritable(at)) {
+                    found = at;
+                    break;
+                }
+            }
+            cacheFolder = found;
+        }
+        return found;
+    }
+
+    private static boolean isWritable(Path folder) {
+        try {
+            Files.createDirectories(folder);
+            return Files.isWritable(folder);
+        } catch (IOException | SecurityException | InvalidPathException e) {
+            return false;
+        }
     }
 }

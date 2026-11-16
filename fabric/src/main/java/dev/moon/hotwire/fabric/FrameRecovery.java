@@ -4,6 +4,7 @@ import com.mojang.blaze3d.systems.RenderSystem;
 import dev.moon.hotwire.fabric.screen.HotwireScreen;
 import dev.moon.hotwire.report.Causes;
 import dev.moon.hotwire.ui.Lang;
+import dev.moon.hotwire.ui.Notices;
 //? if >=26.2 {
 import com.mojang.renderpearl.api.textures.GpuTextureView;
 import org.slf4j.Logger;
@@ -31,7 +32,7 @@ public final class FrameRecovery {
             for (StackTraceElement frame : at.getStackTrace()) {
                 if (frame.getClassName().startsWith("dev.moon.hotwire.ui.")) {
                     ModViews.show(null);
-                    ModViews.showNotice(Lang.get("hotwire.crash.title"), Lang.get("hotwire.screen.closed_after_fault"));
+                    Notices.show(Lang.get("hotwire.crash.title"), Lang.get("hotwire.screen.closed_after_fault"));
                     return true;
                 }
             }

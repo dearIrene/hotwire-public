@@ -1,5 +1,8 @@
 package dev.moon.hotwire.engine;
 
+import dev.moon.hotwire.classfile.GameNames;
+import dev.moon.hotwire.modrinth.LocalJars;
+import dev.moon.hotwire.modrinth.ModrinthClient;
 import net.fabricmc.loader.api.FabricLoader;
 import org.jspecify.annotations.Nullable;
 
@@ -20,5 +23,11 @@ public final class LoadedMods {
     public static String findVersion(String id, String absent) {
         String version = findVersion(id);
         return version == null ? absent : version;
+    }
+
+    public static ModrinthClient makeStoreClient() {
+        return new ModrinthClient(findVersion(GameNames.HOTWIRE, "unknown"), "fabric",
+                findVersion("minecraft", "unknown"),
+                new LocalJars(FabricLoader.getInstance().getGameDir(), LocalJars.findLauncherHomes()));
     }
 }

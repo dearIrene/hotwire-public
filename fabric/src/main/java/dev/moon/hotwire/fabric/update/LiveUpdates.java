@@ -23,6 +23,7 @@ import dev.moon.hotwire.switching.SwitchTimes;
 import dev.moon.hotwire.ui.Lang;
 import dev.moon.hotwire.ui.Progress;
 import dev.moon.hotwire.update.CarriedUpdates;
+import dev.moon.hotwire.update.ModUpdater;
 import dev.moon.hotwire.update.UpdateDiffer;
 import dev.moon.hotwire.update.UpdatePlan;
 import dev.moon.hotwire.update.UpdatePlan.ClassAction;
@@ -58,12 +59,8 @@ import net.minecraft.client.Minecraft;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
-public final class LiveUpdates {
+public final class LiveUpdates implements ModUpdater.Live {
     private static final Logger LOGGER = LoggerFactory.getLogger(LiveUpdates.class);
-
-    interface Stay {
-        String queue(ModManifest manifest, Path running, Path incoming, UpdatePlan plan);
-    }
 
     private record Ready(ModUpdater.SortResult.Planned planned, Map<String, byte[]> entries, Map<String,
             byte[]> changed,
@@ -78,16 +75,17 @@ public final class LiveUpdates {
     }
 
     private final ModUpdater.Engine engine;
-    private final Stay stay;
+    private final ModUpdater.Stay stay;
 
     private final Set<String> registered = new HashSet<>();
 
-    LiveUpdates(ModUpdater.Engine engine, Stay stay) {
+    public LiveUpdates(ModUpdater.Engine engine, ModUpdater.Stay stay) {
         this.engine = engine;
         this.stay = stay;
     }
 
-    List<ModUpdater.Result> apply(List<ModUpdater.SortResult.Planned> updates) {
+    @Override
+    public List<ModUpdater.Result> apply(List<ModUpdater.SortResult.Planned> updates) {
         ModUpdater.Result[] results = new ModUpdater.Result[updates.size()];
         List<Ready> ready = new ArrayList<>();
         List<Integer> at = new ArrayList<>();

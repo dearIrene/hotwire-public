@@ -1,11 +1,9 @@
-package dev.moon.hotwire.fabric;
+package dev.moon.hotwire.engine;
 
-import dev.moon.hotwire.engine.InstalledMods;
-import dev.moon.hotwire.engine.ModPolicy;
-import dev.moon.hotwire.engine.ModsFolderWatch;
 import dev.moon.hotwire.jar.ModJarException;
 import dev.moon.hotwire.jar.ModJarReader;
 import dev.moon.hotwire.jar.ModManifest;
+import dev.moon.hotwire.seam.Games;
 import dev.moon.hotwire.ui.JarHost;
 import dev.moon.hotwire.ui.Lang;
 import dev.moon.hotwire.ui.Notice;
@@ -22,7 +20,7 @@ import org.jspecify.annotations.Nullable;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
-final class FolderJars implements AutoCloseable {
+public final class FolderJars implements AutoCloseable {
     private static final Logger LOGGER = LoggerFactory.getLogger(FolderJars.class);
 
     private final InstalledMods installed;
@@ -33,7 +31,7 @@ final class FolderJars implements AutoCloseable {
     private final Deque<Path> waiting = new ArrayDeque<>();
     private final @Nullable ModsFolderWatch watch;
 
-    FolderJars(Path mods, InstalledMods installed, UpdateQueue queue, Progress progress,
+    public FolderJars(Path mods, InstalledMods installed, UpdateQueue queue, Progress progress,
             Supplier<@Nullable JarHost> host) {
         this.installed = installed;
         this.queue = queue;
@@ -70,7 +68,7 @@ final class FolderJars implements AutoCloseable {
         }
         LOGGER.info("[Hotwire] {} was put in the mods folder: {} is offered as an add", jar.getFileName(),
                 manifest.name());
-        ModViews.runSoon(() -> {
+        Games.getNow().runSoon(() -> {
             synchronized (this.waiting) {
                 if (!this.waiting.contains(jar)) {
                     this.waiting.add(jar);
@@ -84,7 +82,7 @@ final class FolderJars implements AutoCloseable {
         return true;
     }
 
-    boolean offerNext() {
+    public boolean offerNext() {
         JarHost shown = this.host.get();
         if (shown == null) {
             return false;

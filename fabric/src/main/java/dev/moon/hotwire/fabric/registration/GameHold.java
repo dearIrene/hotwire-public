@@ -162,7 +162,7 @@ public final class GameHold {
         }
     }
 
-    static void onGameBeforeFrameAndWait(Runnable work, String what) {
+    public static void onGameBeforeFrameAndWait(Runnable work, String what) {
         try {
             await(onGameBeforeNextFrame(work, Minecraft.getInstance()), BEFORE_FRAME_SECONDS, "Render thread", what);
         } catch (InterruptedException e) {

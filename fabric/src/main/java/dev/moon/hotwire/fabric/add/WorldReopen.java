@@ -7,6 +7,7 @@ import dev.moon.hotwire.fabric.mixin.core.network.ConnectionAccessor;
 import dev.moon.hotwire.fabric.mixin.core.util.thread.BlockableEventLoopAccessor;
 import dev.moon.hotwire.jvm.JarChannels;
 import dev.moon.hotwire.ui.Lang;
+import dev.moon.hotwire.ui.Notices;
 import io.netty.channel.Channel;
 import java.io.IOException;
 import java.nio.channels.FileChannel;
@@ -99,12 +100,12 @@ public final class WorldReopen {
             size = access.makeWorldBackup();
         } catch (IOException | RuntimeException e) {
             LOGGER.warn("[Hotwire] the world {} could not be backed up", level, e);
-            ModViews.showNotice("Hotwire", Lang.get("hotwire.reopen.backup_failed", e.getMessage()));
+            Notices.show("Hotwire", Lang.get("hotwire.reopen.backup_failed", e.getMessage()));
             openOrSay(client, level);
             throw new IllegalStateException(Lang.get("hotwire.reopen.backup_failed", e.getMessage()), e);
         }
         LOGGER.info("[Hotwire] the world {} was backed up, {} MB", level, size / (1024 * 1024));
-        ModViews.showNotice("Hotwire", Lang.get("hotwire.reopen.backed_up", level));
+        Notices.show("Hotwire", Lang.get("hotwire.reopen.backed_up", level));
     }
 
     public static ModAdder.Result add(Supplier<ModAdder.Result> add) {
@@ -175,7 +176,7 @@ public final class WorldReopen {
             open(client, level);
         } catch (IllegalStateException e) {
             LOGGER.warn("[Hotwire] the world {} did not open again: {}", level, e.getMessage());
-            ModViews.showNotice("Hotwire", Lang.get("hotwire.reopen.not_reopened", e.getMessage()));
+            Notices.show("Hotwire", Lang.get("hotwire.reopen.not_reopened", e.getMessage()));
         }
     }
 

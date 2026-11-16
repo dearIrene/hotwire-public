@@ -1,7 +1,6 @@
-package dev.moon.hotwire.fabric.report;
+package dev.moon.hotwire.report;
 
-import dev.moon.hotwire.fabric.registration.GameHold;
-import dev.moon.hotwire.report.FreezeBlame;
+import dev.moon.hotwire.seam.Games;
 import java.io.IOException;
 import java.lang.management.ManagementFactory;
 import java.lang.management.ThreadInfo;
@@ -16,8 +15,8 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 public final class FreezeDump {
-    static final String FILE = "last-freeze.txt";
-    static final String PAUSE_FILE = "last-pause.txt";
+    public static final String FILE = "last-freeze.txt";
+    public static final String PAUSE_FILE = "last-pause.txt";
     private static final Logger LOGGER = LoggerFactory.getLogger(FreezeDump.class);
     private static final long LOOK_EVERY_MS = 5_000;
     private static final long FROZEN_AFTER_MS = 30_000;
@@ -61,7 +60,7 @@ public final class FreezeDump {
     private static String describe(ThreadInfo[] threads) {
         long ended = switchEnded;
         String switched = "Hotwire changed no mod this session.";
-        if (underWay || GameHold.isGamePaused()) {
+        if (underWay || Games.getNow().isGamePaused()) {
             switched = "A switch of Hotwire's was under way: " + lastSwitch + ".";
         } else if (ended != 0) {
             switched = "Hotwire's last switch (" + lastSwitch + ") ended " + (System.nanoTime() - ended) / 1_000_000_000
@@ -95,7 +94,7 @@ public final class FreezeDump {
         }
     }
 
-    static boolean isRecent(Path file) {
+    public static boolean isRecent(Path file) {
         try {
             return Files.isRegularFile(file)
                     && Files.getLastModifiedTime(file).toInstant().isAfter(Instant.now().minus(RECENT));
@@ -105,13 +104,13 @@ public final class FreezeDump {
     }
 
     private static void watch(Path logs) {
-        long frames = GameHold.countFrames();
+        long frames = Games.getNow().countFrames();
         long since = System.nanoTime();
         int stuck = 0;
         try {
             while (!Thread.currentThread().isInterrupted()) {
                 Thread.sleep(LOOK_EVERY_MS);
-                long now = GameHold.countFrames();
+                long now = Games.getNow().countFrames();
                 if (now != frames) {
                     frames = now;
                     since = System.nanoTime();
@@ -137,7 +136,7 @@ public final class FreezeDump {
     private static boolean isWaitingOnDriver() {
         long ended = switchEnded;
         boolean shortlyAfter = ended != 0 && (System.nanoTime() - ended) / 1_000_000 <= AFTER_SWITCH_MS;
-        if (closing || GameHold.isGamePaused() || !(underWay || shortlyAfter)) {
+        if (closing || Games.getNow().isGamePaused() || !(underWay || shortlyAfter)) {
             return false;
         }
         for (ThreadInfo thread : ManagementFactory.getThreadMXBean().dumpAllThreads(false, false)) {

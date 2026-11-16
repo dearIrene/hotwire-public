@@ -1,8 +1,9 @@
-package dev.moon.hotwire.fabric.store;
+package dev.moon.hotwire.store;
 
+import dev.moon.hotwire.engine.CacheLimit;
 import dev.moon.hotwire.engine.InstalledMods;
+import dev.moon.hotwire.engine.LoadedMods;
 import dev.moon.hotwire.engine.ModPolicy;
-import dev.moon.hotwire.fabric.CacheLimit;
 import dev.moon.hotwire.jar.FileHashes;
 import dev.moon.hotwire.jar.ModJarException;
 import dev.moon.hotwire.jar.ModJarReader;
@@ -37,7 +38,7 @@ public final class UpdateCheck {
     private static final Logger LOGGER = LoggerFactory.getLogger(UpdateCheck.class);
 
     private final InstalledMods installed;
-    private final ModrinthClient client = ModStore.makeClient();
+    private final ModrinthClient client = LoadedMods.makeStoreClient();
     private final Path folder = FabricLoader.getInstance().getGameDir().resolve("hotwire").resolve("store");
 
     private volatile Set<String> installedProjects = Set.of();

@@ -1,7 +1,6 @@
-package dev.moon.hotwire.fabric.dev;
+package dev.moon.hotwire.dev;
 
-import dev.moon.hotwire.dev.DevMod;
-import dev.moon.hotwire.dev.IdeOpener;
+import dev.moon.hotwire.seam.Games;
 import dev.moon.hotwire.ui.Lang;
 import dev.moon.hotwire.ui.Notice;
 import dev.moon.hotwire.ui.Notices;
@@ -9,7 +8,6 @@ import java.io.IOException;
 import java.nio.file.Path;
 import java.util.ArrayList;
 import java.util.List;
-import net.minecraft.client.Minecraft;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -40,8 +38,7 @@ final class SourceOpener {
             Notices.show(Notice.ofDone(Lang.get("hotwire.dev.opened", label), ""));
         } else {
             String place = file + ":" + line;
-            Minecraft game = Minecraft.getInstance();
-            game.execute(() -> game.keyboardHandler.setClipboard(place));
+            Games.getNow().copyToClipboard(place);
             Notices.show(Notice.ofOn(Lang.get("hotwire.dev.copied"), place));
         }
     }

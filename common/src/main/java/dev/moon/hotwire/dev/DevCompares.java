@@ -1,8 +1,7 @@
-package dev.moon.hotwire.fabric.dev;
+package dev.moon.hotwire.dev;
 
 import dev.moon.hotwire.concurrent.Tasks;
-import dev.moon.hotwire.dev.DevCompare;
-import dev.moon.hotwire.fabric.CrashGuard;
+import dev.moon.hotwire.registration.MergedMembers;
 import dev.moon.hotwire.ui.Lang;
 import java.util.Collection;
 import java.util.List;
@@ -27,7 +26,7 @@ final class DevCompares {
 
     private @Nullable String findMixin(String id, String type, String method) {
         List<Class<?>> found = this.loaded.apply(Set.of(type));
-        return found.isEmpty() ? null : CrashGuard.findMixinOf(found.getFirst(), method, id);
+        return found.isEmpty() ? null : MergedMembers.findMixinIn(found.getFirst(), method, id);
     }
 
     void start(SessionMod mod, int b) {

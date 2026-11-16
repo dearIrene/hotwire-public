@@ -2,20 +2,20 @@ package dev.moon.hotwire.fabric;
 
 import dev.moon.hotwire.cache.CacheBudget;
 import dev.moon.hotwire.cache.CacheStore;
-import dev.moon.hotwire.config.Flags;
 import dev.moon.hotwire.config.HotwireSettings;
 import dev.moon.hotwire.dev.DevMod;
+import dev.moon.hotwire.dev.DevSession;
+import dev.moon.hotwire.engine.CacheLimit;
 import dev.moon.hotwire.engine.DevSetups;
 import dev.moon.hotwire.engine.InstalledMods;
-import dev.moon.hotwire.engine.LoadedMods;
 import dev.moon.hotwire.engine.ModPolicy;
 import dev.moon.hotwire.engine.ModTripwire;
 import dev.moon.hotwire.engine.ModsFolder;
+import dev.moon.hotwire.engine.OwnThrowNotice;
 import dev.moon.hotwire.engine.RestartOnlyFile;
 import dev.moon.hotwire.engine.SeenUses;
 import dev.moon.hotwire.fabric.add.AddSupport;
 import dev.moon.hotwire.fabric.add.HiddenPacks;
-import dev.moon.hotwire.fabric.dev.DevSession;
 import dev.moon.hotwire.fabric.rebuild.ForeignPatches;
 import dev.moon.hotwire.fabric.rebuild.GameClasses;
 import dev.moon.hotwire.fabric.rebuild.GameMixinCopy;
@@ -33,7 +33,6 @@ import dev.moon.hotwire.fabric.registration.MixinPlugins;
 import dev.moon.hotwire.fabric.registration.ModLifecycle;
 import dev.moon.hotwire.fabric.registration.NetworkHandlers;
 import dev.moon.hotwire.fabric.registration.OffModCommands;
-import dev.moon.hotwire.fabric.registration.OneConfigSaves;
 import dev.moon.hotwire.fabric.registration.RegistryEntries;
 import dev.moon.hotwire.fabric.registration.RegistryHolders;
 import dev.moon.hotwire.fabric.report.GameReports;
@@ -79,6 +78,7 @@ import dev.moon.hotwire.registration.GeneratedWrappers;
 import dev.moon.hotwire.registration.MergedMembers;
 import dev.moon.hotwire.registration.ModLocks;
 import dev.moon.hotwire.registration.ModThreadFinder;
+import dev.moon.hotwire.registration.OneConfigSaves;
 import dev.moon.hotwire.registration.Owners;
 import dev.moon.hotwire.registration.QuietThreads;
 import dev.moon.hotwire.registration.StaticCopies;
@@ -106,7 +106,6 @@ import java.lang.instrument.ClassFileTransformer;
 import java.lang.instrument.Instrumentation;
 import java.nio.file.FileSystems;
 import java.nio.file.Files;
-import java.nio.file.InvalidPathException;
 import java.nio.file.Path;
 import java.util.ArrayList;
 import java.util.HashMap;
@@ -149,10 +148,7 @@ final class EngineStart {
     }
 
     private static final Logger LOGGER = LoggerFactory.getLogger(EngineStart.class);
-    private static volatile @Nullable Path cacheFolder;
     private static final StackWalker STACK = StackWalker.getInstance();
-
-    static final long JAR_SCANS_BYTES = 64L << 20;
 
     private static final String RELOAD_TASKS = SimpleReloadInstance.class.getName();
 
@@ -343,11 +339,11 @@ final class EngineStart {
         laps.endLap("applier and Mixin copy");
         applier.getRebuilder().resolveArgsWith(mixin::getArgsClassFor);
         laps.endLap("args classes");
-        long limit = (long) CacheLimit.read(findCacheFolder()) << 20;
+        long limit = (long) CacheLimit.read(CacheLimit.findCacheFolder()) << 20;
         applier.getRebuilder().getCache().cacheIn(
-                CacheStore.open(findCacheFolder().resolve("mixed"), "mixed",
-                        CacheBudget.findOwnCap(findCacheFolder(), limit)), LivePluginShapes::ask);
-        CacheLimit.fitLater(findCacheFolder(), limit);
+                CacheStore.open(CacheLimit.findCacheFolder().resolve("mixed"), "mixed",
+                        CacheBudget.findOwnCap(CacheLimit.findCacheFolder(), limit)), LivePluginShapes::ask);
+        CacheLimit.fitLater(CacheLimit.findCacheFolder(), limit);
         laps.endLap("open the switch cache");
         applier.getRebuilder().getHooks()
                 .sendGeneratedTo(new GeneratedClasses(gameDir.resolve("hotwire").resolve("generated")) ::write);
@@ -564,50 +560,6 @@ final class EngineStart {
         });
         named.removeIf(id -> id.equals(mod) || !installed.isInstalled(id));
         return named;
-    }
-
-    public static Path findCacheFolder() {
-        Path found = cacheFolder;
-        if (found == null) {
-            String game = LoadedMods.findVersion("minecraft", "unknown");
-            List<Path> bases = new ArrayList<>();
-
-            String chosen = Flags.CACHE_FOLDER;
-            if (chosen != null) {
-                bases.add(Path.of(chosen));
-            }
-            String local = System.getenv("LOCALAPPDATA");
-            String xdg = System.getenv("XDG_CACHE_HOME");
-            Path home = Path.of(System.getProperty("user.home"));
-            if (local != null) {
-                bases.add(Path.of(local));
-            } else if (System.getProperty("os.name", "").startsWith("Mac")) {
-                bases.add(home.resolve("Library/Caches"));
-            }
-            if (xdg != null) {
-                bases.add(Path.of(xdg));
-            }
-            bases.add(home.resolve(".cache"));
-            found = FabricLoader.getInstance().getGameDir().resolve("hotwire").resolve("cache").resolve(game);
-            for (Path base : bases) {
-                Path at = base.resolve("hotwire").resolve(game);
-                if (isWritable(at)) {
-                    found = at;
-                    break;
-                }
-            }
-            cacheFolder = found;
-        }
-        return found;
-    }
-
-    private static boolean isWritable(Path folder) {
-        try {
-            Files.createDirectories(folder);
-            return Files.isWritable(folder);
-        } catch (IOException | SecurityException | InvalidPathException e) {
-            return false;
-        }
     }
 
     private static String getNamespace(String key) {

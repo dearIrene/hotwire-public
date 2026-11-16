@@ -1,7 +1,9 @@
 package dev.moon.hotwire.seam;
 
+import java.nio.file.Path;
 import java.util.List;
 import java.util.Set;
+import java.util.function.Function;
 import org.jspecify.annotations.Nullable;
 
 public interface Game {
@@ -40,6 +42,24 @@ public interface Game {
 
     boolean isOnGameThread();
 
+    void runOnGame(Runnable work);
+
+    void copyToClipboard(String text);
+
+    int getFrameRate();
+
+    double findServerTickMillis();
+
+    void openFolder(Path folder);
+
+    String describeFlipKey();
+
+    void setFlipKey(int code);
+
+    void setOriginalsFallback(Function<String, byte @Nullable []> reader);
+
+    boolean isShippedUnderOtherNames();
+
     void runOnGameAndWait(Runnable work);
 
     Runnable hold();
@@ -47,6 +67,14 @@ public interface Game {
     void runUnheld(Runnable work);
 
     boolean isHoldOverBudget();
+
+    boolean isGamePaused();
+
+    long countFrames();
+
+    void runBeforeFrameAndWait(Runnable work, String what);
+
+    void runSoon(Runnable work);
 
     void drawHoldFrame();
 }

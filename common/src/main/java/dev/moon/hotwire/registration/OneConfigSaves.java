@@ -1,7 +1,6 @@
-package dev.moon.hotwire.fabric.registration;
+package dev.moon.hotwire.registration;
 
 import dev.moon.hotwire.api.ModLifecycleListener;
-import dev.moon.hotwire.registration.Owners;
 import dev.moon.hotwire.update.LiveNames;
 import java.lang.reflect.Field;
 import java.lang.reflect.Method;

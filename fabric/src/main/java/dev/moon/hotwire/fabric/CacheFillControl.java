@@ -2,6 +2,7 @@ package dev.moon.hotwire.fabric;
 
 import com.google.common.base.Splitter;
 import dev.moon.hotwire.cache.CacheBudget;
+import dev.moon.hotwire.engine.CacheLimit;
 import dev.moon.hotwire.redefine.CachedMixes;
 import dev.moon.hotwire.report.ActionJournal;
 import dev.moon.hotwire.switching.SwitchCacheFiller;
@@ -58,7 +59,7 @@ final class CacheFillControl implements CacheHost {
     private long findLimitBytes() {
         long known = this.limitBytes;
         if (known < 0) {
-            known = (long) CacheLimit.read(EngineStart.findCacheFolder()) << 20;
+            known = (long) CacheLimit.read(CacheLimit.findCacheFolder()) << 20;
             this.limitBytes = known;
         }
         return known;
@@ -147,7 +148,7 @@ final class CacheFillControl implements CacheHost {
     }
 
     private List<CacheVersion> readVersions() {
-        Path here = EngineStart.findCacheFolder();
+        Path here = CacheLimit.findCacheFolder();
         List<CacheVersion> found = new ArrayList<>();
         try (Stream<Path> folders = Files.list(here.getParent())) {
             for (Path folder : folders.filter(Files::isDirectory).toList()) {
@@ -172,7 +173,7 @@ final class CacheFillControl implements CacheHost {
     public void clearCache(@Nullable String version) {
         ActionJournal.Entry journal = ActionJournal.get().begin(ActionJournal.Action.FILL,
                 version == null ? "clear" : "clear:" + version);
-        Path here = EngineStart.findCacheFolder();
+        Path here = CacheLimit.findCacheFolder();
         if (version == null || version.equals(here.getFileName().toString())) {
             HotwireEngine.JvmParts found = this.parts.get();
             if (found != null) {
@@ -224,7 +225,7 @@ final class CacheFillControl implements CacheHost {
         if (found == null) {
             return;
         }
-        Path here = EngineStart.findCacheFolder();
+        Path here = CacheLimit.findCacheFolder();
         long limit = (long) CacheLimit.clamp(megabytes) << 20;
         CacheLimit.write(here, megabytes);
         this.limitBytes = limit;

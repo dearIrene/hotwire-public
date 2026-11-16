@@ -1,10 +1,8 @@
-package dev.moon.hotwire.fabric.dev;
+package dev.moon.hotwire.dev;
 
 import com.sun.management.ThreadMXBean;
-import dev.moon.hotwire.dev.CompareSampler;
-import dev.moon.hotwire.dev.DevCompare;
-import dev.moon.hotwire.dev.DevWhy;
-import dev.moon.hotwire.dev.WhySides;
+import dev.moon.hotwire.seam.Game;
+import dev.moon.hotwire.seam.Games;
 import java.lang.management.ManagementFactory;
 import java.util.List;
 import java.util.Set;
@@ -13,8 +11,6 @@ import java.util.concurrent.TimeUnit;
 import java.util.function.BiFunction;
 import java.util.function.IntSupplier;
 import java.util.function.Supplier;
-import net.minecraft.client.Minecraft;
-import net.minecraft.server.MinecraftServer;
 import org.jspecify.annotations.Nullable;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -106,7 +102,7 @@ final class CompareWindow {
     }
 
     private void measure() {
-        Minecraft game = Minecraft.getInstance();
+        Game game = Games.getNow();
         long last = System.nanoTime();
         long madeBefore = this.findMade();
         int counted = -1;
@@ -130,10 +126,9 @@ final class CompareWindow {
             counted = counts ? side : -1;
             this.sides.mark(System.currentTimeMillis(), counts ? side : -1);
             if (counts) {
-                MinecraftServer server = game.getSingleplayerServer();
-                double tickMillis = server == null ? 0 : server.getAverageTickTimeNanos() / 1_000_000.0;
+                double tickMillis = game.findServerTickMillis();
                 synchronized (this) {
-                    this.sums[side][0] += game.getFps() * span;
+                    this.sums[side][0] += game.getFrameRate() * span;
                     this.sums[side][1] += tickMillis * span;
                     this.sums[side][2] += (made - madeBefore) / (1024.0 * 1024.0);
                     this.seconds[side] += span;

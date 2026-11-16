@@ -57,4 +57,20 @@ public final class MergedMembers {
         }
         return null;
     }
+
+    public static @Nullable String findMixinIn(Class<?> type, String method, String mod) {
+        Method[] methods;
+        try {
+            methods = type.getDeclaredMethods();
+        } catch (LinkageError e) {
+            return null;
+        }
+        for (Method declared : methods) {
+            String mixin = declared.getName().equals(method) ? findMixinOf(declared) : null;
+            if (mixin != null && mod.equals(findModOfMixin(mixin))) {
+                return mixin;
+            }
+        }
+        return null;
+    }
 }

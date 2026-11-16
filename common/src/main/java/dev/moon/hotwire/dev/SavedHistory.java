@@ -1,9 +1,7 @@
-package dev.moon.hotwire.fabric.dev;
+package dev.moon.hotwire.dev;
 
 import com.google.gson.Gson;
 import dev.moon.hotwire.config.AtomicFiles;
-import dev.moon.hotwire.dev.DevBuildInfo;
-import dev.moon.hotwire.dev.DevDelta;
 import java.io.IOException;
 import java.nio.file.Files;
 import java.nio.file.Path;

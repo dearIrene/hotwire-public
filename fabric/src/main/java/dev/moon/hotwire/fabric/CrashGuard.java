@@ -1,10 +1,10 @@
 package dev.moon.hotwire.fabric;
 
 import dev.moon.hotwire.concurrent.Tasks;
+import dev.moon.hotwire.dev.DevSession;
 import dev.moon.hotwire.engine.InstalledMods;
 import dev.moon.hotwire.engine.ModPolicy;
 import dev.moon.hotwire.fabric.add.WorldReopen;
-import dev.moon.hotwire.fabric.dev.DevSession;
 import dev.moon.hotwire.fabric.registration.GameHold;
 import dev.moon.hotwire.fabric.report.GameReports;
 import dev.moon.hotwire.registration.CallerOwner;
@@ -18,6 +18,7 @@ import dev.moon.hotwire.switching.ModSwitcher;
 import dev.moon.hotwire.switching.PlayerMessages;
 import dev.moon.hotwire.switching.SwitchHistory;
 import dev.moon.hotwire.ui.Lang;
+import dev.moon.hotwire.ui.Notices;
 import java.lang.reflect.Method;
 import java.util.ArrayList;
 import java.util.Arrays;
@@ -77,12 +78,12 @@ public final class CrashGuard {
                         Lang.get("hotwire.report.file.mod_crash", name), why), where -> {
                     String line = Lang.get("hotwire.crash.off_held", name, where);
                     say.accept(line, true);
-                    ModViews.showNotice(Lang.get("hotwire.crash.title"), line);
+                    Notices.show(Lang.get("hotwire.crash.title"), line);
                 });
                 return;
             }
 
-            ModViews.showNotice(Lang.get(byAntiCrash ? "hotwire.anti_crash.title" : "hotwire.crash.title"),
+            Notices.show(Lang.get(byAntiCrash ? "hotwire.anti_crash.title" : "hotwire.crash.title"),
                     Lang.get("hotwire.anti_crash.turning_off", name));
             endWhenThrown(made[0], caught.mod(), tasks.submit("turning off " + caught.mod() + " after its crash",
                     () -> turnOffAfterCrash(caught.mod(), () -> switching.turnOff(List.of(caught.mod()))), reported -> {
@@ -166,7 +167,7 @@ public final class CrashGuard {
         LOGGER.info("[Hotwire] the crash net caught {}'s crash; {}", name, off ? "it is off for this session"
                 : "it could not go off");
         say.accept(line, true);
-        ModViews.showNotice(title, line);
+        Notices.show(title, line);
     }
 
     static String findWhat(Throwable thrown) {
@@ -201,26 +202,10 @@ public final class CrashGuard {
                 return new Place(element.getClassName(), element.getLineNumber(), element.getFileName() + ":"
                         + element.getLineNumber() + " in " + element.getMethodName());
             }
-            String mixin = findMixinOf(type, element.getMethodName(), mod);
+            String mixin = MergedMembers.findMixinIn(type, element.getMethodName(), mod);
             if (mixin != null) {
                 return new Place(mixin, element.getLineNumber(), mixin.substring(mixin.lastIndexOf('.') + 1)
                         + ".java:" + element.getLineNumber() + " in " + type.getSimpleName());
-            }
-        }
-        return null;
-    }
-
-    public static @Nullable String findMixinOf(Class<?> type, String method, String mod) {
-        Method[] methods;
-        try {
-            methods = type.getDeclaredMethods();
-        } catch (LinkageError e) {
-            return null;
-        }
-        for (Method declared : methods) {
-            String mixin = declared.getName().equals(method) ? MergedMembers.findMixinOf(declared) : null;
-            if (mixin != null && mod.equals(MergedMembers.findModOfMixin(mixin))) {
-                return mixin;
             }
         }
         return null;

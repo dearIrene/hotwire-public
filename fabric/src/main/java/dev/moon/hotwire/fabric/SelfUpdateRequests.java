@@ -2,9 +2,9 @@ package dev.moon.hotwire.fabric;
 
 import dev.moon.hotwire.api.SwitchResult;
 import dev.moon.hotwire.fabric.add.ModAdder;
-import dev.moon.hotwire.fabric.store.SelfUpdate;
 import dev.moon.hotwire.modrinth.Downloads;
 import dev.moon.hotwire.modrinth.ModrinthClient;
+import dev.moon.hotwire.store.SelfUpdate;
 import dev.moon.hotwire.ui.Lang;
 import dev.moon.hotwire.ui.ModScreen;
 import dev.moon.hotwire.update.PendingChange;

@@ -1,20 +1,16 @@
-package dev.moon.hotwire.fabric.update;
+package dev.moon.hotwire.update;
 
 import dev.moon.hotwire.classfile.ClassNodes;
+import dev.moon.hotwire.classfile.GameNames;
 import dev.moon.hotwire.concurrent.Parallel;
 import dev.moon.hotwire.config.Flags;
 import dev.moon.hotwire.engine.ModPolicy;
-import dev.moon.hotwire.fabric.HotwireClient;
 import dev.moon.hotwire.jar.JarLookup;
 import dev.moon.hotwire.jar.JarNames;
 import dev.moon.hotwire.jar.ModManifest;
 import dev.moon.hotwire.mixin_copy.MixinClassInfo;
 import dev.moon.hotwire.redefine.RebuildException;
 import dev.moon.hotwire.switching.SwitchTimes;
-import dev.moon.hotwire.update.JarLinks;
-import dev.moon.hotwire.update.JarRelocation;
-import dev.moon.hotwire.update.OwnPatch;
-import dev.moon.hotwire.update.PinnedClasses;
 import java.io.IOException;
 import java.nio.file.Path;
 import java.util.ArrayDeque;
@@ -47,7 +43,7 @@ import org.objectweb.asm.tree.MethodNode;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
-final class UpdateCopies {
+public final class UpdateCopies {
     private static final Logger LOGGER = LoggerFactory.getLogger(UpdateCopies.class);
     private final ModUpdater.Engine engine;
     private final Set<String> refusedCopies = ConcurrentHashMap.newKeySet();
@@ -113,11 +109,11 @@ final class UpdateCopies {
         }
     }
 
-    UpdateCopies(ModUpdater.Engine engine) {
+    public UpdateCopies(ModUpdater.Engine engine) {
         this.engine = engine;
     }
 
-    List<Set<String>> findRestartGroups(Collection<String> waiting, Map<String, Path> given,
+    public List<Set<String>> findRestartGroups(Collection<String> waiting, Map<String, Path> given,
             Function<String, List<String>> leavingWith) {
         this.patchersOf.clear();
         this.ownPatched.clear();
@@ -149,7 +145,7 @@ final class UpdateCopies {
         return users;
     }
 
-    PinnedClasses findPinned(Set<String> group, Set<String> offs) {
+    public PinnedClasses findPinned(Set<String> group, Set<String> offs) {
         Set<String> leaving = this.findLeavingClasses(offs);
         Set<Path> jars = new HashSet<>();
         for (String id : group) {
@@ -175,7 +171,7 @@ final class UpdateCopies {
         return new PinnedClasses(named);
     }
 
-    void putPinned(Map<String, byte[]> bodies) {
+    public void putPinned(Map<String, byte[]> bodies) {
         if (bodies.isEmpty()) {
             return;
         }
@@ -186,7 +182,7 @@ final class UpdateCopies {
         }
     }
 
-    Set<String> findLeavingClasses(Set<String> offs) {
+    public Set<String> findLeavingClasses(Set<String> offs) {
         Set<String> classes = new HashSet<>();
 
         Predicate<String> goes = nested -> offs.contains(this.engine.getGraph().resolve(nested));
@@ -204,7 +200,7 @@ final class UpdateCopies {
         return classes;
     }
 
-    <T> T runWithUnchanged(Supplier<T> work) {
+    public <T> T runWithUnchanged(Supplier<T> work) {
         ModPolicy.setStayingThrough(this.unchanged);
         try {
             return work.get();
@@ -328,22 +324,22 @@ final class UpdateCopies {
     }
 
     private boolean isSureToWait(Set<String> group, Map<String, Path> given) {
-        return (this.isOverCap(group) && !UpdateSupport.ASKS_OVER_CAP) || group.stream()
+        return (this.isOverCap(group) && !Flags.ASK_OVER_CAP) || group.stream()
                 .anyMatch(id -> !ModPolicy.isSwitchable(id) && this.findJarOf(id, given) != null);
     }
 
-    @Nullable String findRestartRefusal(Set<String> group, Map<String, Path> given) {
+    public @Nullable String findRestartRefusal(Set<String> group, Map<String, Path> given) {
         if (this.isOverCap(group)) {
             return "with " + group.size() + " mods going together, it takes a restart";
         }
         return this.findRefusalUnderCap(group, given);
     }
 
-    boolean isOverCap(Set<String> group) {
+    public boolean isOverCap(Set<String> group) {
         return group.size() > MOST_IN_A_COPY_GROUP;
     }
 
-    @Nullable String findRefusalUnderCap(Set<String> group, Map<String, Path> given) {
+    public @Nullable String findRefusalUnderCap(Set<String> group, Map<String, Path> given) {
         this.chooseFor(group, given);
         Map<String, ModManifest> manifests = new LinkedHashMap<>();
         Map<String, String> coming = new HashMap<>();
@@ -402,7 +398,7 @@ final class UpdateCopies {
         return null;
     }
 
-    List<Path> findRestartJars(Set<String> group, Map<String, Path> given) {
+    public List<Path> findRestartJars(Set<String> group, Map<String, Path> given) {
         this.chooseFor(group, given);
         Set<String> carried = new HashSet<>();
         group.forEach(id -> carried.addAll(this.findCarriedGoing(id, given).keySet()));
@@ -425,7 +421,7 @@ final class UpdateCopies {
         return jars;
     }
 
-    Set<String> findRestartOffs(Set<String> group, Map<String, Path> given) {
+    public Set<String> findRestartOffs(Set<String> group, Map<String, Path> given) {
         this.chooseFor(group, given);
         return this.findOffs(group, given);
     }
@@ -459,7 +455,7 @@ final class UpdateCopies {
         return offs;
     }
 
-    boolean takesCarried(String id, String version) {
+    public boolean takesCarried(String id, String version) {
         if (!ModPolicy.isSwitchable(id)) {
             return false;
         }
@@ -470,7 +466,7 @@ final class UpdateCopies {
         return runs == null || !this.engine.satisfies(runs, List.of(">=" + version));
     }
 
-    boolean patchesNamed(Set<String> group, String refusal) {
+    public boolean patchesNamed(Set<String> group, String refusal) {
         Set<String> named = new HashSet<>();
         Matcher slashed = SLASHED_NAME.matcher(refusal);
         while (slashed.find()) {
@@ -564,11 +560,11 @@ final class UpdateCopies {
         return needed;
     }
 
-    synchronized List<OwnPatch> getOwnPatches() {
+    public synchronized List<OwnPatch> getOwnPatches() {
         if (this.ownPatches == null) {
             try {
                 this.ownPatches = OwnPatch.readAll(UpdateCopies.class.getClassLoader(),
-                        HotwireClient.ID + ".mixins.json");
+                        GameNames.HOTWIRE + ".mixins.json");
             } catch (IOException | RuntimeException e) {
                 LOGGER.warn("[Hotwire] Hotwire's own mixins could not be read", e);
                 this.ownPatches = List.of();

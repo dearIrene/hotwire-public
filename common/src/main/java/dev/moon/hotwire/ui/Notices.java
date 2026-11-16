@@ -27,6 +27,10 @@ public final class Notices {
     private Notices() {
     }
 
+    public static void show(String title, String line) {
+        show(title.equals("Hotwire") ? Notice.ofDone(line, "") : Notice.ofBad(title, line));
+    }
+
     public static synchronized void show(Notice notice) {
         if (notice.title().isBlank()) {
             return;

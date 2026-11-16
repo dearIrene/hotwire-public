@@ -5,9 +5,10 @@ import dev.moon.hotwire.cache.CacheStore;
 import dev.moon.hotwire.config.AtomicFiles;
 import dev.moon.hotwire.config.Flags;
 import dev.moon.hotwire.config.HotwireSettings;
+import dev.moon.hotwire.dev.DevSession;
+import dev.moon.hotwire.engine.CacheLimit;
 import dev.moon.hotwire.engine.DevSetups;
 import dev.moon.hotwire.engine.GameClassIndex;
-import dev.moon.hotwire.fabric.dev.DevSession;
 import dev.moon.hotwire.jar.ZipBytes;
 import dev.moon.hotwire.jvm.JvmAccess;
 import dev.moon.hotwire.jvm.JvmAccessException;
@@ -162,7 +163,7 @@ public final class EarlyDefinitions implements PreLaunchEntrypoint {
                 stamp.add(file.size()).add(content);
                 told.add(jar.getFileName() + " " + file.size() + " " + Long.toHexString(content));
             }
-            Path folder = EngineStart.findCacheFolder().resolve("sites");
+            Path folder = CacheLimit.findCacheFolder().resolve("sites");
             tellChanged(folder.resolve("sites.jars"), told);
             SiteCache.open(CacheStore.open(folder, "sites", SITES_CAP), stamp.build(),
                     folder.resolve("sites.distrust"));

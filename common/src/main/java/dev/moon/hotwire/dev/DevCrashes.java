@@ -1,9 +1,5 @@
-package dev.moon.hotwire.fabric.dev;
+package dev.moon.hotwire.dev;
 
-import dev.moon.hotwire.dev.DevBuildInfo;
-import dev.moon.hotwire.dev.DevClassChange;
-import dev.moon.hotwire.dev.DevCrash;
-import dev.moon.hotwire.dev.DevEvent;
 import dev.moon.hotwire.ui.Lang;
 import dev.moon.hotwire.ui.Notice;
 import dev.moon.hotwire.ui.Notices;

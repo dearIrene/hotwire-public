@@ -2,6 +2,7 @@ package dev.moon.hotwire.fabric;
 
 import dev.moon.hotwire.fabric.mixin.core.fabric.base.event.ArrayBackedEventAccessor;
 import dev.moon.hotwire.fabric.mixin.core.world.item.CreativeModeTabsAccessor;
+import dev.moon.hotwire.fabric.rebuild.GameClasses;
 import dev.moon.hotwire.fabric.registration.GameHold;
 import dev.moon.hotwire.fabric.registration.InternedKeys;
 import dev.moon.hotwire.fabric.registration.LevelEntities;
@@ -9,10 +10,13 @@ import dev.moon.hotwire.fabric.registration.ModSounds;
 import dev.moon.hotwire.fabric.registration.NetworkHandlers;
 import dev.moon.hotwire.fabric.registration.RegisteredContent;
 import dev.moon.hotwire.fabric.screen.HoldFrame;
+import dev.moon.hotwire.fabric.screen.WebLinks;
 import dev.moon.hotwire.seam.Game;
 import io.netty.channel.Channel;
+import java.nio.file.Path;
 import java.util.List;
 import java.util.Set;
+import java.util.function.Function;
 import net.minecraft.client.Minecraft;
 import net.minecraft.client.resources.model.ModelManager;
 import net.minecraft.core.Holder;
@@ -123,6 +127,57 @@ public final class GameSide implements Game {
     }
 
     @Override
+    public void runOnGame(Runnable work) {
+        Minecraft.getInstance().execute(work);
+    }
+
+    @Override
+    public void copyToClipboard(String text) {
+        Minecraft game = Minecraft.getInstance();
+        game.execute(() -> game.keyboardHandler.setClipboard(text));
+    }
+
+    @Override
+    public int getFrameRate() {
+        return Minecraft.getInstance().getFps();
+    }
+
+    @Override
+    public double findServerTickMillis() {
+        MinecraftServer server = Minecraft.getInstance().getSingleplayerServer();
+        return server == null ? 0 : server.getAverageTickTimeNanos() / 1_000_000.0;
+    }
+
+    @Override
+    public void openFolder(Path folder) {
+        WebLinks.openFolder(folder);
+    }
+
+    @Override
+    public String describeFlipKey() {
+        return OpenKey.describeFlipKey();
+    }
+
+    @Override
+    public void setFlipKey(int code) {
+        OpenKey.setFlipKey(code);
+    }
+
+    @Override
+    public void setOriginalsFallback(Function<String, byte @Nullable []> reader) {
+        GameClasses.setOriginalsFallback(reader);
+    }
+
+    @Override
+    public boolean isShippedUnderOtherNames() {
+        //? if >=26.1 {
+        return false;
+        //?} else {
+        /*return true;
+        *///?}
+    }
+
+    @Override
     public void runOnGameAndWait(Runnable work) {
         GameHold.onGameAndWait(work);
     }
@@ -145,5 +200,25 @@ public final class GameSide implements Game {
     @Override
     public void drawHoldFrame() {
         HoldFrame.drawIfDue();
+    }
+
+    @Override
+    public boolean isGamePaused() {
+        return GameHold.isGamePaused();
+    }
+
+    @Override
+    public long countFrames() {
+        return GameHold.countFrames();
+    }
+
+    @Override
+    public void runBeforeFrameAndWait(Runnable work, String what) {
+        GameHold.onGameBeforeFrameAndWait(work, what);
+    }
+
+    @Override
+    public void runSoon(Runnable work) {
+        ModViews.runSoon(work);
     }
 }

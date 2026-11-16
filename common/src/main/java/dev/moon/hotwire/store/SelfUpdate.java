@@ -1,4 +1,4 @@
-package dev.moon.hotwire.fabric.store;
+package dev.moon.hotwire.store;
 
 import dev.moon.hotwire.engine.LoadedMods;
 import dev.moon.hotwire.engine.ModPolicy;
@@ -21,7 +21,7 @@ public final class SelfUpdate {
     public static final String PROJECT = "irenehotwire";
     private static final Logger LOGGER = LoggerFactory.getLogger(SelfUpdate.class);
 
-    private final ModrinthClient client = ModStore.makeClient();
+    private final ModrinthClient client = LoadedMods.makeStoreClient();
     private final Downloads downloads = new Downloads();
     private final Path folder = FabricLoader.getInstance().getGameDir().resolve("hotwire").resolve("store");
     private volatile ModrinthClient.@Nullable Version newer;

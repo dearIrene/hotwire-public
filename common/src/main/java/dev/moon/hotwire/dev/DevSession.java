@@ -1,43 +1,16 @@
-package dev.moon.hotwire.fabric.dev;
+package dev.moon.hotwire.dev;
 
 import dev.moon.hotwire.concurrent.Tasks;
 import dev.moon.hotwire.config.AtomicFiles;
-import dev.moon.hotwire.dev.BuildNotes;
-import dev.moon.hotwire.dev.BuildSources;
-import dev.moon.hotwire.dev.BuildWords;
-import dev.moon.hotwire.dev.DevBridge;
-import dev.moon.hotwire.dev.DevBuild;
-import dev.moon.hotwire.dev.DevBuildInfo;
-import dev.moon.hotwire.dev.DevClassChange;
-import dev.moon.hotwire.dev.DevCompare;
-import dev.moon.hotwire.dev.DevCrash;
-import dev.moon.hotwire.dev.DevEvent;
-import dev.moon.hotwire.dev.DevExtras;
-import dev.moon.hotwire.dev.DevHost;
-import dev.moon.hotwire.dev.DevLink;
-import dev.moon.hotwire.dev.DevMixin;
-import dev.moon.hotwire.dev.DevMod;
-import dev.moon.hotwire.dev.DevModView;
-import dev.moon.hotwire.dev.DevState;
-import dev.moon.hotwire.dev.DevWatch;
-import dev.moon.hotwire.dev.IdeOpener;
-import dev.moon.hotwire.dev.LineDiff;
-import dev.moon.hotwire.dev.ProjectBranches;
-import dev.moon.hotwire.dev.SavedBuild;
-import dev.moon.hotwire.dev.SourceGit;
-import dev.moon.hotwire.dev.StartSources;
-import dev.moon.hotwire.dev.WorldLeaks;
-import dev.moon.hotwire.fabric.OpenKey;
-import dev.moon.hotwire.fabric.rebuild.GameClasses;
-import dev.moon.hotwire.fabric.screen.WebLinks;
-import dev.moon.hotwire.fabric.update.ModUpdater;
 import dev.moon.hotwire.redefine.ClassRebuilder;
+import dev.moon.hotwire.seam.Games;
 import dev.moon.hotwire.ui.BuildMark;
 import dev.moon.hotwire.ui.Lang;
 import dev.moon.hotwire.ui.Notice;
 import dev.moon.hotwire.ui.Notices;
 import dev.moon.hotwire.ui.UpdateMethod;
 import dev.moon.hotwire.ui.UpdatePreview;
+import dev.moon.hotwire.update.ModUpdater;
 import java.io.IOException;
 import java.nio.charset.StandardCharsets;
 import java.nio.file.DirectoryStream;
@@ -60,7 +33,6 @@ import java.util.TreeSet;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.TimeUnit;
 import net.fabricmc.loader.api.FabricLoader;
-import net.minecraft.client.Minecraft;
 import org.jspecify.annotations.Nullable;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -117,12 +89,6 @@ public final class DevSession implements DevHost, AutoCloseable {
     }
 
     private static final int NAME_MOST = 40;
-
-    //? if >=26.1 {
-    private static final boolean DEV_NAMES_ONLY = false;
-    //?} else {
-    /*private static final boolean DEV_NAMES_ONLY = true;
-    *///?}
 
     private static final long MOST_ROOM_NEEDED = 64L * 1024 * 1024;
 
@@ -442,12 +408,12 @@ public final class DevSession implements DevHost, AutoCloseable {
 
     @Override
     public String getCompareKey() {
-        return OpenKey.describeFlipKey();
+        return Games.getNow().describeFlipKey();
     }
 
     @Override
     public void setCompareKey(int key) {
-        OpenKey.setFlipKey(key);
+        Games.getNow().setFlipKey(key);
     }
 
     private @Nullable Path findJar(SessionMod mod, int build) {
@@ -467,8 +433,7 @@ public final class DevSession implements DevHost, AutoCloseable {
 
     @Override
     public void copy(String text, String what) {
-        Minecraft game = Minecraft.getInstance();
-        game.execute(() -> game.keyboardHandler.setClipboard(text));
+        Games.getNow().copyToClipboard(text);
         Notices.show(Notice.ofOn(Lang.get("hotwire.dev.copied.code"), what));
     }
 
@@ -601,7 +566,7 @@ public final class DevSession implements DevHost, AutoCloseable {
             }
             Path log = FabricLoader.getInstance().getGameDir().resolve("logs").resolve("latest.log");
             DevLink.set(new DevBridge(session, () -> log, projects));
-            GameClasses.setOriginalsFallback(DevSession::readRunningClass);
+            Games.getNow().setOriginalsFallback(DevSession::readRunningClass);
             LOGGER.info("[Hotwire] developer mode watches the build folders of {}", STARTS.keySet());
             return session;
         } catch (IOException e) {
@@ -1270,9 +1235,10 @@ public final class DevSession implements DevHost, AutoCloseable {
             Notices.show(Notice.ofBad(Lang.get("hotwire.dev.saved_jar.failed", build), String.valueOf(e.getMessage())));
             return null;
         }
-        Notices.show(Notice.ofDone(Lang.get("hotwire.dev.saved_jar", build), Lang.get(DEV_NAMES_ONLY
-                ? "hotwire.dev.saved_jar.dev_only" : "hotwire.dev.saved_jar.line", out.getFileName())));
-        WebLinks.openFolder(out.getParent());
+        String line = Games.getNow().isShippedUnderOtherNames() ? "hotwire.dev.saved_jar.dev_only"
+                : "hotwire.dev.saved_jar.line";
+        Notices.show(Notice.ofDone(Lang.get("hotwire.dev.saved_jar", build), Lang.get(line, out.getFileName())));
+        Games.getNow().openFolder(out.getParent());
         return out.toString();
     }
 

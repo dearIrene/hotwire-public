@@ -2,6 +2,7 @@ package dev.moon.hotwire.fabric.report;
 
 import dev.moon.hotwire.fabric.screen.WebLinks;
 import dev.moon.hotwire.report.ActionJournal;
+import dev.moon.hotwire.report.FreezeDump;
 import dev.moon.hotwire.report.GameLog;
 import dev.moon.hotwire.report.TidyLog;
 import dev.moon.hotwire.ui.Lang;
