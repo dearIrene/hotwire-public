@@ -16,18 +16,18 @@ public final class OffFeatures {
             return false;
         }
         //? if >=26.3 {
-        if (GameRegistrations.isOfOffMod(placed.feature().value().getClass())) {
+        if (Owners.isOfOffMod(placed.feature().value().getClass())) {
             return true;
         }
         //?} else {
         /*ConfiguredFeature<?, ?> configured = placed.feature().value();
-        if (GameRegistrations.isOfOffMod(configured.feature().getClass())
-                || GameRegistrations.isOfOffMod(configured.config().getClass())) {
+        if (Owners.isOfOffMod(configured.feature().getClass())
+                || Owners.isOfOffMod(configured.config().getClass())) {
             return true;
         }
         *///?}
         for (PlacementModifier modifier : placed.placement()) {
-            if (GameRegistrations.isOfOffMod(modifier.getClass())) {
+            if (Owners.isOfOffMod(modifier.getClass())) {
                 return true;
             }
         }

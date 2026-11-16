@@ -1,6 +1,7 @@
 package dev.moon.hotwire.fabric.registration;
 
 import dev.moon.hotwire.fabric.mixin.core.network.ConnectionAccessor;
+import dev.moon.hotwire.registration.RegistrationJournal;
 import io.netty.channel.Channel;
 import io.netty.channel.ChannelHandler;
 import io.netty.channel.ChannelHandlerAdapter;
@@ -27,7 +28,7 @@ public final class NetworkHandlers {
     private static final @Nullable VarHandle ADDED = findAddedHandle();
 
     private record Removal(Channel channel, String name, ChannelHandler handler, @Nullable String previous,
-            @Nullable String next) implements OffRemovals.Entry {
+            @Nullable String next) implements RegistrationJournal.Take {
         @Override
         public void restore() {
             ChannelPipeline pipeline = this.channel.pipeline();
@@ -66,7 +67,7 @@ public final class NetworkHandlers {
             List<String> names = pipeline.names();
             for (int i = 0; i < names.size(); i++) {
                 ChannelHandler handler = pipeline.get(names.get(i));
-                String mod = handler == null ? null : GameRegistrations.findModOf(handler.getClass());
+                String mod = handler == null ? null : Owners.findModOf(handler.getClass());
                 if (handler == null || mod == null || !mods.contains(mod)) {
                     continue;
                 }
@@ -75,7 +76,8 @@ public final class NetworkHandlers {
                 } catch (NoSuchElementException closedMeanwhile) {
                     continue;
                 }
-                OffRemovals.add(mod, new Removal(channel, names.get(i), handler, i > 0 ? names.get(i - 1) : null,
+                GameRegistrations.getJournal().addTake(mod, new Removal(channel, names.get(i), handler,
+                        i > 0 ? names.get(i - 1) : null,
                         i + 1 < names.size() ? names.get(i + 1) : null));
                 LOGGER.info("[Hotwire] {}'s network handler {} is taken out of {}", mod, names.get(i), channel);
             }
@@ -83,7 +85,8 @@ public final class NetworkHandlers {
     }
 
     public static boolean hasLostConnection(String mod) {
-        return OffRemovals.hasAny(mod, one -> one instanceof Removal removal && !removal.channel().isOpen());
+        return GameRegistrations.getJournal().hasTake(mod,
+                one -> one instanceof Removal removal && !removal.channel().isOpen());
     }
 
     static List<Channel> findChannels() {

@@ -1,6 +1,6 @@
 package dev.moon.hotwire.fabric;
 
-import dev.moon.hotwire.fabric.registration.GameRegistrations;
+import dev.moon.hotwire.fabric.registration.Owners;
 import dev.moon.hotwire.jar.JarPaths;
 import dev.moon.hotwire.jar.ModJar;
 import dev.moon.hotwire.jar.ModManifest;
@@ -83,7 +83,7 @@ public final class InstalledMods {
     }
 
     private static ModGraph tell(ModGraph made) {
-        GameRegistrations.useShared(made.findSharedNested());
+        Owners.useShared(made.findSharedNested());
         return made;
     }
 

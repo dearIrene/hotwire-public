@@ -1,6 +1,6 @@
 package dev.moon.hotwire.fabric;
 
-import dev.moon.hotwire.fabric.registration.GameRegistrations;
+import dev.moon.hotwire.fabric.registration.Owners;
 import dev.moon.hotwire.ui.Lang;
 import dev.moon.hotwire.update.LiveNames;
 import java.lang.reflect.Constructor;
@@ -112,7 +112,7 @@ final class ConfigScreens {
         } catch (ClassNotFoundException | NoSuchMethodException | LinkageError e) {
             return;
         }
-        String menu = GameRegistrations.findModOrShipper(api);
+        String menu = Owners.findModOrShipper(api);
         if (menu != null && !this.on.test(menu)) {
             return;
         }
@@ -174,7 +174,7 @@ final class ConfigScreens {
                 | RuntimeException e) {
             return;
         }
-        String oneConfig = GameRegistrations.findModOrShipper(create.getDeclaringClass());
+        String oneConfig = Owners.findModOrShipper(create.getDeclaringClass());
         if (oneConfig != null && !this.on.test(oneConfig)) {
             return;
         }
@@ -188,7 +188,7 @@ final class ConfigScreens {
             return;
         }
         for (Object config : set) {
-            String id = GameRegistrations.findModOrShipper(config.getClass());
+            String id = Owners.findModOrShipper(config.getClass());
             if (id == null || into.containsKey(id) || !this.on.test(id)) {
                 continue;
             }

@@ -21,7 +21,6 @@ import dev.moon.hotwire.fabric.registration.ModSounds;
 import dev.moon.hotwire.fabric.registration.ModelReloadCheck;
 import dev.moon.hotwire.fabric.registration.NetworkHandlers;
 import dev.moon.hotwire.fabric.registration.OffModCommands;
-import dev.moon.hotwire.fabric.registration.OffRemovals;
 import dev.moon.hotwire.fabric.registration.OneConfigHuds;
 import dev.moon.hotwire.fabric.registration.OneConfigModCards;
 import dev.moon.hotwire.fabric.registration.RegistryCheck;
@@ -587,7 +586,7 @@ public final class SwitchRunner {
                 this.fieldReferences.putBackElements(order);
                 this.fieldReferences.takeRevealedBy(order);
                 GameTasks.onBack(order);
-                OffRemovals.restore(order, this.switcher::isOn);
+                GameRegistrations.getJournal().putBackTakes(order, this.switcher::isOn, GameHold::run);
                 EntityAttachments.giveBack(order);
 
                 WindowCursor.chooseAgainFor(this.switcher.findPatchedBy(order));

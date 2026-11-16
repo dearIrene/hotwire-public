@@ -1,6 +1,6 @@
 package dev.moon.hotwire.fabric.add;
 
-import dev.moon.hotwire.fabric.registration.GameRegistrations;
+import dev.moon.hotwire.fabric.registration.Owners;
 import java.io.IOException;
 import java.io.UncheckedIOException;
 import java.lang.reflect.Field;
@@ -146,7 +146,7 @@ public final class HiddenPacks {
         Set<String> hidden = LoaderModList.getHidden();
         Map<String, Set<String>> providers = new HashMap<>();
         Minecraft.getInstance().getResourceManager().listPacks()
-                .filter(pack -> !hidden.contains(GameRegistrations.findModOf(pack.getClass())))
+                .filter(pack -> !hidden.contains(Owners.findModOf(pack.getClass())))
                 .forEach(pack -> pack.getNamespaces(PackType.CLIENT_RESOURCES).forEach(namespace ->
                         providers.computeIfAbsent(namespace, any -> new HashSet<>()).add(pack.packId())));
         return providers;

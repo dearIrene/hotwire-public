@@ -50,7 +50,7 @@ public final class MixinPlugins {
             }
             Field field = findField(handle.getClass(), "plugin");
             if (field != null && get(field, handle) instanceof IMixinConfigPlugin own) {
-                String mod = GameRegistrations.findModOf(own.getClass());
+                String mod = Owners.findModOf(own.getClass());
                 if (mod != null && left.contains(mod)) {
                     try {
                         field.set(handle, new EmptyPlugin());
@@ -92,7 +92,7 @@ public final class MixinPlugins {
             List<Extension> mine = new ArrayList<>();
             for (int at = 0; at < all.size(); at++) {
                 Object extension = all.get(at);
-                if (mod.equals(GameRegistrations.findModOf(extension.getClass()))) {
+                if (mod.equals(Owners.findModOf(extension.getClass()))) {
                     mine.add(new Extension(extension, at, active.contains(extension)));
                 }
             }

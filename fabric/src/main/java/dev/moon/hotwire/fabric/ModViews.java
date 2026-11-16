@@ -5,7 +5,7 @@ import dev.moon.hotwire.fabric.mixin.core.client.gui.components.toasts.ToastInst
 import dev.moon.hotwire.fabric.mixin.core.client.gui.components.toasts.ToastManagerAccessor;
 import dev.moon.hotwire.fabric.registration.Fields;
 import dev.moon.hotwire.fabric.registration.GameHold;
-import dev.moon.hotwire.fabric.registration.GameRegistrations;
+import dev.moon.hotwire.fabric.registration.Owners;
 import dev.moon.hotwire.fabric.screen.HotwireScreen;
 import dev.moon.hotwire.redefine.FieldSlots;
 import dev.moon.hotwire.ui.Notice;
@@ -73,7 +73,7 @@ public final class ModViews {
             List<Object> particles = item instanceof Particle ? List.of(item)
                     : item instanceof Collection<?> collection ? List.copyOf(collection) : findContentsOf(item);
             for (Object particle : particles) {
-                String mod = particle instanceof Particle ? GameRegistrations.findModOf(particle.getClass()) : null;
+                String mod = particle instanceof Particle ? Owners.findModOf(particle.getClass()) : null;
                 if (mod != null && mods.contains(mod)) {
                     return true;
                 }
@@ -243,7 +243,7 @@ public final class ModViews {
     }
 
     private static boolean isShownBy(Object shown, Collection<String> ids) {
-        String owner = GameRegistrations.findModOf(shown.getClass());
+        String owner = Owners.findModOf(shown.getClass());
         return owner != null && ids.contains(owner);
     }
 

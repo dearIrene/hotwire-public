@@ -22,7 +22,7 @@ import dev.moon.hotwire.api.SwitchPreview;
 import dev.moon.hotwire.api.SwitchProgress;
 import dev.moon.hotwire.api.SwitchResult;
 import dev.moon.hotwire.fabric.add.ModAdder;
-import dev.moon.hotwire.fabric.registration.GameRegistrations;
+import dev.moon.hotwire.fabric.registration.Owners;
 import dev.moon.hotwire.fabric.screen.PromptGameScreen;
 import dev.moon.hotwire.modrinth.Downloads;
 import dev.moon.hotwire.plan.SwitchPlan;
@@ -425,7 +425,7 @@ public final class HotwireApiImpl implements HotwireApi {
             String mod = findModOf(frame);
             if (mod != null && ModPolicy.isHotwire(mod)) {
                 hotwire = true;
-            } else if (GameRegistrations.isRecordedMod(mod)) {
+            } else if (Owners.isRecordedMod(mod)) {
                 mods.add(mod);
             }
         }
@@ -452,7 +452,7 @@ public final class HotwireApiImpl implements HotwireApi {
     private static @Nullable String findModOf(StackWalker.StackFrame frame) {
         Class<?> type = frame.getDeclaringClass();
         String merged = frame.getMethodName().indexOf('$') < 0 ? null : findMergedModOf(type, frame);
-        return merged != null ? merged : GameRegistrations.findModOrShipper(type);
+        return merged != null ? merged : Owners.findModOrShipper(type);
     }
 
     private static @Nullable String findMergedModOf(Class<?> type, StackWalker.StackFrame frame) {
@@ -477,7 +477,7 @@ public final class HotwireApiImpl implements HotwireApi {
 
     @Override
     public Registration addListener(Consumer<SwitchResult> listener) {
-        return LISTENERS.add(listener, GameRegistrations.findModOrShipper(listener.getClass()));
+        return LISTENERS.add(listener, Owners.findModOrShipper(listener.getClass()));
     }
 
     @Override

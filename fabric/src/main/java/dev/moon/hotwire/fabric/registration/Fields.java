@@ -98,7 +98,7 @@ public final class Fields {
                 ClassLoader game = Fields.class.getClassLoader();
                 for (Class<?> type : LoadedClassList.of(instrumentation)) {
                     if (Objects.equals(type.getClassLoader(), game) && !type.isHidden() && !type.isArray()
-                            && !GameRegistrations.isOfOffMod(type)) {
+                            && !Owners.isOfOffMod(type)) {
                         getReferenceFields(type, true);
                     }
                 }

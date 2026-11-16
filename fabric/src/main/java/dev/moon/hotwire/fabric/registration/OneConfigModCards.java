@@ -1,5 +1,6 @@
 package dev.moon.hotwire.fabric.registration;
 
+import dev.moon.hotwire.registration.RegistrationJournal;
 import dev.moon.hotwire.update.LiveNames;
 import java.lang.reflect.Field;
 import java.lang.reflect.Method;
@@ -17,7 +18,7 @@ public final class OneConfigModCards {
     private static final String REGISTRY = "org.polyfrost.oneconfig.internal.ui.api.ConfigRegistry";
     private static final String CARD = "org.polyfrost.oneconfig.internal.ui.api.ConfigData";
 
-    private record Card(Object registry, Object card, String id) implements OffRemovals.Entry {
+    private record Card(Object registry, Object card, String id) implements RegistrationJournal.Take {
         @Override
         public void restore() {
             try {
@@ -34,8 +35,8 @@ public final class OneConfigModCards {
         }
 
         @Override
-        public OffRemovals.Where getWhere() {
-            return OffRemovals.Where.GAME_BEFORE_FRAME;
+        public RegistrationJournal.Where getWhere() {
+            return RegistrationJournal.Where.GAME_BEFORE_FRAME;
         }
     }
 
@@ -43,7 +44,7 @@ public final class OneConfigModCards {
     }
 
     public static void takeOut(Collection<String> mods) {
-        OffRemovals.onGame(() -> takeOutNow(mods), "mod cards taken out");
+        GameHold.onGameBeforeFrameAndWait(() -> takeOutNow(mods), "mod cards taken out");
     }
 
     private static void takeOutNow(Collection<String> mods) {
@@ -62,7 +63,7 @@ public final class OneConfigModCards {
                 Object tree = registry.getClass().getMethod("findTree", String.class).invoke(registry, id);
                 String mod = tree == null ? null : findModOf(tree);
                 if (mod != null && mods.contains(mod)) {
-                    OffRemovals.add(mod, new Card(registry, card, id));
+                    GameRegistrations.getJournal().addTake(mod, new Card(registry, card, id));
                     registry.getClass().getMethod("unregister", String.class).invoke(registry, id);
                     LOGGER.info("[Hotwire] {}'s OneConfig mod card {} is taken out while it is off", mod, id);
                 }
@@ -76,7 +77,7 @@ public final class OneConfigModCards {
         try {
             Class<?> registry = LiveNames.findRunning(REGISTRY, OneConfigModCards.class.getClassLoader());
 
-            return GameRegistrations.isOfOffMod(registry) ? null : registry.getField("INSTANCE").get(null);
+            return Owners.isOfOffMod(registry) ? null : registry.getField("INSTANCE").get(null);
         } catch (ClassNotFoundException | NoSuchFieldException | IllegalAccessException | LinkageError e) {
             return null;
         }
@@ -95,7 +96,7 @@ public final class OneConfigModCards {
             String type = LiveNames.findOwnName(node.getClass().getName());
             if ("org.polyfrost.oneconfig.api.config.v1.Property$Field".equals(type)) {
                 Object owner = read(node, node.getClass().getName(), "owner");
-                mod = owner == null ? null : GameRegistrations.findModOf(owner.getClass());
+                mod = owner == null ? null : Owners.findModOf(owner.getClass());
             } else if ("org.polyfrost.oneconfig.api.config.v1.Tree".equals(type)) {
                 mod = findModOf(node);
             }

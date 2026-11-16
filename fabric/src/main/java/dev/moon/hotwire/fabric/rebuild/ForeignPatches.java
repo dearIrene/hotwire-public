@@ -2,7 +2,7 @@ package dev.moon.hotwire.fabric.rebuild;
 
 import dev.moon.hotwire.concurrent.Parallel;
 import dev.moon.hotwire.fabric.ModPolicy;
-import dev.moon.hotwire.fabric.registration.ModOfClass;
+import dev.moon.hotwire.fabric.registration.Owners;
 import dev.moon.hotwire.jar.JarPaths;
 import dev.moon.hotwire.jar.ModJar;
 import dev.moon.hotwire.jvm.LoadedClassList;
@@ -69,7 +69,7 @@ public final class ForeignPatches {
         for (ModContainer mod : loader.getAllMods()) {
             if (this.isInFamily(loader, mod)) {
                 for (Path root : mod.getRootPaths()) {
-                    Path jar = ModOfClass.findJarOf(root);
+                    Path jar = Owners.findJarOf(root);
                     if (jar != null) {
                         this.familyJars.addAll(JarPaths.findKeysOf(jar));
                     }

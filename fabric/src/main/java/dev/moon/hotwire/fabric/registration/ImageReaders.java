@@ -1,5 +1,6 @@
 package dev.moon.hotwire.fabric.registration;
 
+import dev.moon.hotwire.registration.RegistrationJournal;
 import java.util.ArrayList;
 import java.util.Collection;
 import java.util.Iterator;
@@ -11,7 +12,7 @@ import org.slf4j.LoggerFactory;
 public final class ImageReaders {
     private static final Logger LOGGER = LoggerFactory.getLogger(ImageReaders.class);
 
-    private record Removal(Object provider, Class<?> category) implements OffRemovals.Entry {
+    private record Removal(Object provider, Class<?> category) implements RegistrationJournal.Take {
         @Override
         public void restore() {
             putInto(IIORegistry.getDefaultInstance(), this.provider, this.category);
@@ -33,10 +34,10 @@ public final class ImageReaders {
             List<Object> providers = new ArrayList<>();
             registry.getServiceProviders(category, false).forEachRemaining(providers::add);
             for (Object provider : providers) {
-                String mod = GameRegistrations.findCodeMod(provider.getClass());
+                String mod = Owners.findCodeMod(provider.getClass());
                 if (mod != null && mods.contains(mod)) {
                     takeOutOf(registry, provider, category);
-                    OffRemovals.add(mod, new Removal(provider, category));
+                    GameRegistrations.getJournal().addTake(mod, new Removal(provider, category));
                     LOGGER.info("[Hotwire] {}'s {} is taken out of Java's image registry", mod,
                             provider.getClass().getSimpleName());
                 }

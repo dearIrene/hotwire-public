@@ -4,6 +4,7 @@ import com.mojang.brigadier.CommandDispatcher;
 import com.mojang.brigadier.tree.CommandNode;
 import dev.moon.hotwire.fabric.mixin.core.brigadier.tree.CommandNodeAccessor;
 import dev.moon.hotwire.plan.ModGraph;
+import dev.moon.hotwire.registration.RegistrationJournal;
 import java.util.ArrayList;
 import java.util.Collection;
 import java.util.HashMap;
@@ -27,7 +28,7 @@ public final class OffModCommands {
     private static final int DEPTH = 8;
 
     private record Removal(CommandDispatcher<?> dispatcher, CommandNode<?> parent, CommandNode<?> node,
-            Set<String> mods, boolean client) implements OffRemovals.Entry {
+            Set<String> mods, boolean client) implements RegistrationJournal.Take {
         @Override
         public void restore() {
             if (this.parent.getChild(this.node.getName()) == null) {
@@ -178,12 +179,13 @@ public final class OffModCommands {
         CommandNodeAccessor from = (CommandNodeAccessor) parent;
         from.hotwire$getChildren().remove(node.getName());
         from.hotwire$getLiterals().remove(node.getName());
-        OffRemovals.add(mods.iterator().next(), new Removal(dispatcher, parent, node, mods, client));
+        GameRegistrations.getJournal().addTake(mods.iterator().next(),
+                new Removal(dispatcher, parent, node, mods, client));
         removedNames.add((parent == dispatcher.getRoot() ? "/" : "/" + parent.getName() + " ") + node.getName());
     }
 
     private static Set<String> findMods(CommandNode<?> node) {
-        Set<String> mods = CommandRecorder.findModsRun(node).stream().filter(GameRegistrations::isRecordedMod)
+        Set<String> mods = CommandRecorder.findModsRun(node).stream().filter(Owners::isRecordedMod)
                 .collect(Collectors.toSet());
         Set<String> owners = mods.stream().filter(mod -> mods.stream().noneMatch(user -> isDependentOf(user, mod)))
                 .collect(Collectors.toSet());

@@ -1,7 +1,7 @@
 package dev.moon.hotwire.fabric.rebuild;
 
 import dev.moon.hotwire.fabric.add.LivePlugins;
-import dev.moon.hotwire.fabric.registration.GameRegistrations;
+import dev.moon.hotwire.fabric.registration.Owners;
 import dev.moon.hotwire.jvm.PrivateField;
 import dev.moon.hotwire.redefine.Tripwire;
 import java.util.Collection;
@@ -62,7 +62,7 @@ public final class LivePluginShapes {
     public static void rememberAnswers(Collection<String> mods) {
         for (Object config : findConfigs()) {
             IMixinConfigPlugin plugin = config instanceof IMixinConfig one ? one.getPlugin() : null;
-            String owner = plugin == null ? null : GameRegistrations.findModOf(plugin.getClass());
+            String owner = plugin == null ? null : Owners.findModOf(plugin.getClass());
 
             if (plugin != null && owner != null && config instanceof IMixinConfig live
                     && !Tripwire.isOfOffMod(plugin.getClass()) && mods.contains(owner)) {

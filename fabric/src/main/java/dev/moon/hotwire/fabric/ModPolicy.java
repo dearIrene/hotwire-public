@@ -2,7 +2,7 @@ package dev.moon.hotwire.fabric;
 
 import com.google.common.base.Splitter;
 import com.google.common.collect.Sets;
-import dev.moon.hotwire.fabric.registration.GameRegistrations;
+import dev.moon.hotwire.fabric.registration.Owners;
 import dev.moon.hotwire.jar.ModManifest;
 import dev.moon.hotwire.plan.KnownUses;
 import dev.moon.hotwire.plan.ModGraph;
@@ -161,7 +161,7 @@ public final class ModPolicy {
 
         Set<String> own = new HashSet<>(graph.findSharedNested());
         own.addAll(planner.findNestedStayingOn());
-        GameRegistrations.useShared(own);
+        Owners.useShared(own);
         return planner;
     }
 

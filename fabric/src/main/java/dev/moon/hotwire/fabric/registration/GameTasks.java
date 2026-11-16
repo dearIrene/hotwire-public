@@ -3,6 +3,7 @@ package dev.moon.hotwire.fabric.registration;
 import dev.moon.hotwire.fabric.mixin.core.server.TickTaskAccessor;
 import dev.moon.hotwire.fabric.mixin.core.util.thread.BlockableEventLoopAccessor;
 import dev.moon.hotwire.redefine.FieldSlots;
+import dev.moon.hotwire.registration.RegistrationJournal;
 import java.util.ArrayList;
 import java.util.Collection;
 import java.util.HashMap;
@@ -22,7 +23,7 @@ import org.slf4j.LoggerFactory;
 public final class GameTasks {
     private static final Logger LOGGER = LoggerFactory.getLogger(GameTasks.class);
 
-    private record Removal(BlockableEventLoop<?> loop, Runnable task) implements OffRemovals.Entry {
+    private record Removal(BlockableEventLoop<?> loop, Runnable task) implements RegistrationJournal.Take {
         @Override
         public void restore() {
             this.loop.execute(this.task);
@@ -76,7 +77,7 @@ public final class GameTasks {
         }
         synchronized (GameTasks.class) {
             if (WAITING.merge(mod, 1, Integer::sum) <= MOST) {
-                OffRemovals.add(mod, new Removal(loop, task));
+                GameRegistrations.getJournal().addTake(mod, new Removal(loop, task));
             }
             if (SAID.add(task.getClass())) {
                 LOGGER.info("[Hotwire] {}'s task {} waits for its on; it holds {}", mod, task.getClass().getName(),
@@ -132,10 +133,10 @@ public final class GameTasks {
     private static @Nullable String findOwnerOf(Object task, int depth) {
         Object submitted = FutureWork.find(task);
         if (submitted != null) {
-            return GameRegistrations.findModOrShipper(submitted.getClass());
+            return Owners.findModOrShipper(submitted.getClass());
         }
 
-        String mod = GameRegistrations.findModOrShipper(task.getClass());
+        String mod = Owners.findModOrShipper(task.getClass());
 
         if (depth == 0 || (mod != null && MODS_OFF.contains(mod)) || CollectionParts.isGameObject(task)) {
             return mod;
@@ -168,7 +169,7 @@ public final class GameTasks {
                 Runnable task = unwrap(queued);
                 String mod = findOwnerOf(task, findDepthFor(loop));
                 if (mod != null && mods.contains(mod) && pending.remove(queued)) {
-                    OffRemovals.add(mod, new Removal(loop, task));
+                    GameRegistrations.getJournal().addTake(mod, new Removal(loop, task));
                     WAITING.merge(mod, 1, Integer::sum);
                 }
             }

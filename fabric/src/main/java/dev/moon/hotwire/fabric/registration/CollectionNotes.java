@@ -417,7 +417,7 @@ final class CollectionNotes {
             if (container == null) {
                 continue;
             }
-            byte kind = kinds.computeIfAbsent(container.getClass(), type -> GameRegistrations.isOfOffMod(type)
+            byte kind = kinds.computeIfAbsent(container.getClass(), type -> Owners.isOfOffMod(type)
                     ? OFF : isImmutable(type) ? SAME : LookWorkers.isPlain(type) ? PLAIN : PRINT);
             if (kind == OFF) {
                 continue;

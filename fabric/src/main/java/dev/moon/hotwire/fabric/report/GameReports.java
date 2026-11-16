@@ -4,7 +4,7 @@ import dev.moon.hotwire.config.AtomicFiles;
 import dev.moon.hotwire.fabric.HotwireClient;
 import dev.moon.hotwire.fabric.LoadedMods;
 import dev.moon.hotwire.fabric.add.ModAdder;
-import dev.moon.hotwire.fabric.registration.GameRegistrations;
+import dev.moon.hotwire.fabric.registration.Owners;
 import dev.moon.hotwire.fabric.update.ModUpdater;
 import dev.moon.hotwire.fabric.update.SwapAtClose;
 import dev.moon.hotwire.plan.SwitchPlan;
@@ -239,7 +239,7 @@ public final class GameReports {
         CrashSection.Detail trace = CrashSection.describeTrace(frames, messages, reports.rebuiltBy::get, switched,
                 name -> {
                     try {
-                        return GameRegistrations.findModOf(Class.forName(name, false, game));
+                        return Owners.findModOf(Class.forName(name, false, game));
                     } catch (ClassNotFoundException | LinkageError e) {
                         return null;
                     }
@@ -539,7 +539,7 @@ public final class GameReports {
         Set<String> spans = new TreeSet<>();
         for (String frame : frames) {
             try {
-                String mod = GameRegistrations.findModOf(Class.forName(frame, false, game));
+                String mod = Owners.findModOf(Class.forName(frame, false, game));
                 if (mod != null) {
                     mods.add(mod);
                 }

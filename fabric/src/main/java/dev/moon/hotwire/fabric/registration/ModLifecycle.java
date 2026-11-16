@@ -245,7 +245,7 @@ public final class ModLifecycle {
                 return id;
             }
         }
-        String nested = GameRegistrations.findNestedModOf(type);
+        String nested = Owners.findNestedModOf(type);
         return nested != null ? nested : id;
     }
 

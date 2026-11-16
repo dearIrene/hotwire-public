@@ -396,7 +396,7 @@ public final class ElementLook {
     @Nullable List<Runnable> open(List<String> walked) {
         Mode mode = MODE.get();
         if (mode.isLook()) {
-            this.notes.startLook(NEW_WORLD.get(), GameRegistrations.findOwnersVersion(), walked, WHOLE.get());
+            this.notes.startLook(NEW_WORLD.get(), Owners.findVersion(), walked, WHOLE.get());
             return null;
         }
         if (this.isReadyFor(walked)) {

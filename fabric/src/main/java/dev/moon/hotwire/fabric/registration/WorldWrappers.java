@@ -1,6 +1,7 @@
 package dev.moon.hotwire.fabric.registration;
 
 import dev.moon.hotwire.redefine.FieldSlots;
+import dev.moon.hotwire.registration.RegistrationJournal;
 import dev.moon.hotwire.switching.SwitchTimes;
 import java.util.ArrayList;
 import java.util.Collection;
@@ -23,7 +24,7 @@ public final class WorldWrappers {
     private static final Logger LOGGER = LoggerFactory.getLogger(WorldWrappers.class);
 
     private record UnwrappedField(Entity entity, FieldSlots.Slot field, Object wrapper, Object inner)
-            implements OffRemovals.Entry {
+            implements RegistrationJournal.Take {
         @Override
         @SuppressWarnings("ReferenceEquality")
         public void restore() {
@@ -38,8 +39,9 @@ public final class WorldWrappers {
         }
 
         @Override
-        public OffRemovals.Where getWhere() {
-            return this.entity.level() instanceof ServerLevel ? OffRemovals.Where.SERVER : OffRemovals.Where.GAME;
+        public RegistrationJournal.Where getWhere() {
+            return this.entity.level() instanceof ServerLevel ? RegistrationJournal.Where.SERVER
+                    : RegistrationJournal.Where.GAME;
         }
 
         @Override
@@ -75,7 +77,7 @@ public final class WorldWrappers {
         for (Entity entity : entities) {
             for (FieldSlots.Slot field : fieldsOf.computeIfAbsent(entity.getClass(), WorldWrappers::findGameFields)) {
                 Object value = CollectionParts.read(field, entity);
-                String mod = value == null ? null : GameRegistrations.findCodeMod(value.getClass());
+                String mod = value == null ? null : Owners.findCodeMod(value.getClass());
                 if (value == null || mod == null || !mods.contains(mod)) {
                     continue;
                 }
@@ -86,7 +88,7 @@ public final class WorldWrappers {
                             describeFields(value));
                 }
                 if (inner != null && write(field, entity, inner)) {
-                    OffRemovals.add(mod, new UnwrappedField(entity, field, value, inner));
+                    GameRegistrations.getJournal().addTake(mod, new UnwrappedField(entity, field, value, inner));
                     COUNTS.merge(mod, 1, Integer::sum);
                 }
             }
@@ -134,7 +136,7 @@ public final class WorldWrappers {
                 Object value = field.isStatic() ? null : CollectionParts.read(field, wrapper);
                 out.add(at.getSimpleName() + "." + field.getName() + ": " + field.getType().getName() + " = "
                         + (value == null ? "null" : value.getClass().getName() + " ("
-                        + GameRegistrations.findModOf(value.getClass()) + ")"));
+                        + Owners.findModOf(value.getClass()) + ")"));
             }
         }
         return out.toString();
@@ -143,7 +145,7 @@ public final class WorldWrappers {
     private static @Nullable Object findWrapped(Object wrapper, Class<?> type, String mod) {
         Object found = null;
         for (Class<?> at = wrapper.getClass(); at != null && at != Object.class; at = at.getSuperclass()) {
-            if (!mod.equals(GameRegistrations.findCodeMod(at))) {
+            if (!mod.equals(Owners.findCodeMod(at))) {
                 continue;
             }
             for (FieldSlots.Slot field : Fields.getDeclared(at)) {
@@ -152,7 +154,7 @@ public final class WorldWrappers {
                 }
                 try {
                     Object value = field.get(wrapper);
-                    if (value != null && !mod.equals(GameRegistrations.findCodeMod(value.getClass()))) {
+                    if (value != null && !mod.equals(Owners.findCodeMod(value.getClass()))) {
                         if (found != null) {
                             return null;
                         }

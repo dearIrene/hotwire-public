@@ -1,7 +1,7 @@
 package dev.moon.hotwire.fabric;
 
 import dev.moon.hotwire.fabric.add.LoaderModList;
-import dev.moon.hotwire.fabric.registration.GameRegistrations;
+import dev.moon.hotwire.fabric.registration.Owners;
 //? if >=26.1 {
 import net.fabricmc.fabric.api.client.rendering.v1.ClientTooltipComponentCallback;
 //?} else {
@@ -25,7 +25,7 @@ final class OffTooltips {
     }
 
     private static @Nullable ClientTooltipComponent findFor(TooltipComponent data) {
-        String mod = GameRegistrations.findModOf(data.getClass());
+        String mod = Owners.findModOf(data.getClass());
         return mod != null && LoaderModList.isHidden(mod)
                 ? ClientTooltipComponent.create(FormattedCharSequence.EMPTY) : null;
     }

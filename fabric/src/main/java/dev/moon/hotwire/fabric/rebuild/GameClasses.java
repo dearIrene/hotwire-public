@@ -3,7 +3,7 @@ package dev.moon.hotwire.fabric.rebuild;
 import dev.moon.hotwire.fabric.add.FailedAddJars;
 import dev.moon.hotwire.fabric.add.LivePlugins;
 import dev.moon.hotwire.fabric.registration.Fields;
-import dev.moon.hotwire.fabric.registration.GameRegistrations;
+import dev.moon.hotwire.fabric.registration.Owners;
 import dev.moon.hotwire.switching.SwitchApplier;
 import java.io.IOException;
 import java.io.InputStream;
@@ -275,7 +275,7 @@ public final class GameClasses implements SwitchApplier.Game {
             } catch (ClassNotFoundException | LinkageError e) {
                 continue;
             }
-            if (!mod.equals(GameRegistrations.findModOf(type))) {
+            if (!mod.equals(Owners.findModOf(type))) {
                 return this.isWorldObject(type);
             }
         }

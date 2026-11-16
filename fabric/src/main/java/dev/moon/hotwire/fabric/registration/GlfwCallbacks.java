@@ -3,6 +3,7 @@ package dev.moon.hotwire.fabric.registration;
 import dev.moon.hotwire.jvm.LoadedClassList;
 import dev.moon.hotwire.redefine.FieldSlots;
 import dev.moon.hotwire.redefine.HandlerGuards;
+import dev.moon.hotwire.registration.RegistrationJournal;
 import java.lang.instrument.Instrumentation;
 import java.lang.reflect.Method;
 import java.lang.reflect.Modifier;
@@ -25,7 +26,7 @@ public final class GlfwCallbacks {
     private static final Logger LOGGER = LoggerFactory.getLogger(GlfwCallbacks.class);
     private static final List<Method> SETTERS = findSetters();
 
-    private record WrapperRemoval(Method setter, Object mods, Object inner) implements OffRemovals.Entry {
+    private record WrapperRemoval(Method setter, Object mods, Object inner) implements RegistrationJournal.Take {
         @Override
         @SuppressWarnings("ReferenceEquality")
         public void restore() {
@@ -41,13 +42,13 @@ public final class GlfwCallbacks {
         }
 
         @Override
-        public OffRemovals.Where getWhere() {
-            return OffRemovals.Where.GAME;
+        public RegistrationJournal.Where getWhere() {
+            return RegistrationJournal.Where.GAME;
         }
     }
 
     private record FieldRemoval(FieldSlots.Slot field, Object holder, Object mods, @Nullable Object inner)
-            implements OffRemovals.Entry {
+            implements RegistrationJournal.Take {
         @Override
         @SuppressWarnings("ReferenceEquality")
         public void restore() {
@@ -66,8 +67,8 @@ public final class GlfwCallbacks {
         }
 
         @Override
-        public OffRemovals.Where getWhere() {
-            return OffRemovals.Where.GAME;
+        public RegistrationJournal.Where getWhere() {
+            return RegistrationJournal.Where.GAME;
         }
     }
     private static final int BELOW = 3;
@@ -106,7 +107,7 @@ public final class GlfwCallbacks {
                     continue;
                 }
                 Object current = read(setter, window);
-                String mod = current == null ? null : GameRegistrations.findModOrShipper(current.getClass());
+                String mod = current == null ? null : Owners.findModOrShipper(current.getClass());
                 if (current == null || mod == null || !mods.contains(mod)) {
                     LOGGER.debug("[Hotwire] {} holds {} ({})", setter.getName(), current, mod);
                     continue;
@@ -114,7 +115,7 @@ public final class GlfwCallbacks {
                 Object inner = findWrapped(current, setter.getParameterTypes()[1], mod, WRAP_DEPTH);
 
                 if (inner != null && set(setter, window, inner)) {
-                    OffRemovals.add(mod, new WrapperRemoval(setter, current, inner));
+                    GameRegistrations.getJournal().addTake(mod, new WrapperRemoval(setter, current, inner));
                     LOGGER.info("[Hotwire] the window's {} is {} again instead of {}'s", setter.getName()
                             .replace("glfwSet", "").replace("Callback", " callback"),
                             inner.getClass().getName(), mod);
@@ -143,9 +144,9 @@ public final class GlfwCallbacks {
             return objects;
         }
 
-        Predicate<Class<?>> own = type -> holder.equals(GameRegistrations.findModOf(type));
+        Predicate<Class<?>> own = type -> holder.equals(Owners.findModOf(type));
         for (Class<?> owner : LoadedClassList.of(found)) {
-            if (owner.isArray() || owner.isHidden() || !holder.equals(GameRegistrations.findModOf(owner))) {
+            if (owner.isArray() || owner.isHidden() || !holder.equals(Owners.findModOf(owner))) {
                 continue;
             }
             for (FieldSlots.Slot field : Fields.getReferenceFields(owner, true)) {
@@ -181,7 +182,7 @@ public final class GlfwCallbacks {
                     Object value = field.get(object);
                     Object java = value == null ? null
                             : unwrap(value instanceof Callback callback ? Callback.get(callback.address()) : value);
-                    String mod = java == null ? null : GameRegistrations.findModOrShipper(java.getClass());
+                    String mod = java == null ? null : Owners.findModOrShipper(java.getClass());
                     if (value == null || java == null) {
                         continue;
                     }
@@ -200,7 +201,7 @@ public final class GlfwCallbacks {
                     }
                     field.set(object, inner);
                     out++;
-                    OffRemovals.add(mod, new FieldRemoval(field, object, value, inner));
+                    GameRegistrations.getJournal().addTake(mod, new FieldRemoval(field, object, value, inner));
                     LOGGER.info("[Hotwire] {}.{} of {} holds {} again instead of {}'s", object.getClass().getName(),
                             field.getName(), holder, inner == null ? "nothing" : inner.getClass().getName(), mod);
                 } catch (ReflectiveOperationException | RuntimeException e) {
@@ -286,7 +287,7 @@ public final class GlfwCallbacks {
                     if (java == null) {
                         continue;
                     }
-                    boolean theirs = mod.equals(GameRegistrations.findModOrShipper(java.getClass()));
+                    boolean theirs = mod.equals(Owners.findModOrShipper(java.getClass()));
                     if (type.isInstance(java) && !theirs) {
                         return java;
                     }
@@ -315,7 +316,7 @@ public final class GlfwCallbacks {
                 }
                 Object value = field.get(null);
                 Object java = unwrap(value instanceof Callback pointer ? Callback.get(pointer.address()) : value);
-                if (type.isInstance(java) && !mod.equals(GameRegistrations.findModOrShipper(java.getClass()))) {
+                if (type.isInstance(java) && !mod.equals(Owners.findModOrShipper(java.getClass()))) {
                     return java;
                 }
             }

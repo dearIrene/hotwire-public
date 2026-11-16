@@ -37,6 +37,7 @@ import dev.moon.hotwire.fabric.registration.ModLocks;
 import dev.moon.hotwire.fabric.registration.NetworkHandlers;
 import dev.moon.hotwire.fabric.registration.OffModCommands;
 import dev.moon.hotwire.fabric.registration.OneConfigSaves;
+import dev.moon.hotwire.fabric.registration.Owners;
 import dev.moon.hotwire.fabric.registration.QuietThreads;
 import dev.moon.hotwire.fabric.registration.RegistryEntries;
 import dev.moon.hotwire.fabric.registration.RegistryHolders;
@@ -371,7 +372,7 @@ final class EngineStart {
 
         laps.endLap("foreign patches");
         OffChecker offChecker = new OffChecker(GameRegistrations.getJournal(), () -> {
-            ModThreadFinder threads = ModThreadFinder.ofLiveThreads(GameRegistrations::findModOrShipper,
+            ModThreadFinder threads = ModThreadFinder.ofLiveThreads(Owners::findModOrShipper,
                     classes::findLoadedNamed, Tripwire::isLinking);
             SwitchTimes.mark("off check: threads");
             return id -> {

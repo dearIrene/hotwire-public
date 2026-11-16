@@ -19,8 +19,6 @@ import org.jspecify.annotations.Nullable;
 import org.objectweb.asm.Type;
 
 final class Wrappers {
-    static final int DEPTH = 9;
-
     private static final int ELEMENTS = 64;
 
     private static final int NONE_OPEN = Integer.MAX_VALUE;
@@ -100,7 +98,7 @@ final class Wrappers {
         ArrayList<Object> next = walk.second;
         level.add(item);
         int budget = BUDGET;
-        for (int depth = 0; depth <= DEPTH && !level.isEmpty(); depth++) {
+        for (int depth = 0; depth <= LookRoots.WRAPPER_STEPS && !level.isEmpty(); depth++) {
             for (int at = 0; at < level.size(); at++) {
                 Object value = level.get(at);
                 if (value == null || !walk.see(value)) {
@@ -108,12 +106,12 @@ final class Wrappers {
                 }
 
                 if (value instanceof Class<?> type) {
-                    addOwner(found, GameRegistrations.findModOf(type));
+                    addOwner(found, Owners.findModOf(type));
                     addOwner(found, type.isHidden() ? ValueOwners.findLambdaOwner(type) : null);
                     continue;
                 }
                 if (value instanceof Enum<?> constant) {
-                    addOwner(found, GameRegistrations.findModOf(constant.getDeclaringClass()));
+                    addOwner(found, Owners.findModOf(constant.getDeclaringClass()));
                     continue;
                 }
                 if (ValueOwners.isPlain(value)) {
@@ -123,14 +121,14 @@ final class Wrappers {
                 if (hidden) {
                     addOwner(found, ValueOwners.findLambdaOwner(value.getClass()));
                 }
-                addOwner(found, GameRegistrations.findModOf(value.getClass()));
+                addOwner(found, Owners.findModOf(value.getClass()));
                 addOwner(found, ValueOwners.findIdOwner(value));
                 boolean container = value instanceof Collection<?> || value instanceof Map<?, ?>
                         || value instanceof Object[];
                 if (!container && !hidden && !isOfAMod(value) && Fields.getRecordParts(value.getClass()).isEmpty()) {
                     continue;
                 }
-                if (container && GameRegistrations.isRecordedMod(GameRegistrations.findModOf(value.getClass()))) {
+                if (container && Owners.isRecordedMod(Owners.findModOf(value.getClass()))) {
                     continue;
                 }
                 if (--budget < 0) {
@@ -174,7 +172,7 @@ final class Wrappers {
         this.reach(item, this.barren);
         if (this.budget <= 0) {
             this.overBudget++;
-            this.barren.put(item, DEPTH);
+            this.barren.put(item, LookRoots.WRAPPER_STEPS);
             return null;
         }
         return this.reached ? this.reachedMod : null;
@@ -182,7 +180,7 @@ final class Wrappers {
 
     @SuppressWarnings("ReferenceEquality")
     private int reach(@Nullable Object value, IdentityHashMap<Object, Integer> known) {
-        int further = DEPTH - this.open.size();
+        int further = LookRoots.WRAPPER_STEPS - this.open.size();
 
         if (value instanceof Enum<?> constant) {
             String owner = findThereFor(constant.getDeclaringClass(), this.mods);
@@ -220,7 +218,7 @@ final class Wrappers {
             return NONE_OPEN;
         }
 
-        if (container && GameRegistrations.isRecordedMod(GameRegistrations.findModOf(value.getClass()))) {
+        if (container && Owners.isRecordedMod(Owners.findModOf(value.getClass()))) {
             return NONE_OPEN;
         }
         if (further <= 0 || this.budget <= 0) {
@@ -325,7 +323,7 @@ final class Wrappers {
     }
 
     private boolean isOfTheMods(Class<?> type) {
-        String mod = GameRegistrations.findModOf(type);
+        String mod = Owners.findModOf(type);
         return mod != null && findRanks(this.mods).containsKey(mod);
     }
 
@@ -370,9 +368,9 @@ final class Wrappers {
     }
 
     static boolean isOfAnotherMod(Class<?> type) {
-        String mod = GameRegistrations.findModOf(type);
-        return mod == null ? GameRegistrations.findShippedBy(type) != null
-                : GameRegistrations.isRecordedMod(mod) || GameRegistrations.isLibrary(mod);
+        String mod = Owners.findModOf(type);
+        return mod == null ? Owners.findShippedBy(type) != null
+                : Owners.isRecordedMod(mod) || Owners.isLibrary(mod);
     }
 
     static boolean isLookedInto(Object value) {
@@ -475,7 +473,7 @@ final class Wrappers {
     }
 
     static boolean makesValues(Map<?, ?> map) {
-        return GameRegistrations.findModOf(map.getClass()) != null;
+        return Owners.findModOf(map.getClass()) != null;
     }
 
     static Collection<?> readValues(Map<?, ?> map) {
@@ -539,7 +537,7 @@ final class Wrappers {
     static @Nullable String findThereFor(Object value, List<String> mods) {
         Map<String, Integer> ranks = findRanks(mods);
         Class<?> type = value instanceof Class<?> named ? named : value.getClass();
-        String owner = GameRegistrations.findModOf(type);
+        String owner = Owners.findModOf(type);
         if (owner != null && ranks.containsKey(owner)) {
             return owner;
         }
@@ -569,8 +567,8 @@ final class Wrappers {
     }
 
     static boolean isOfAMod(Class<?> type) {
-        String mod = GameRegistrations.findModOf(type);
-        return mod == null ? GameRegistrations.findShippedBy(type) != null
+        String mod = Owners.findModOf(type);
+        return mod == null ? Owners.findShippedBy(type) != null
                 : !mod.equals("minecraft") && !mod.equals("java");
     }
 }

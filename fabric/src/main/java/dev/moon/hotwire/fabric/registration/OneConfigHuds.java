@@ -2,6 +2,7 @@ package dev.moon.hotwire.fabric.registration;
 
 import dev.moon.hotwire.fabric.ModViews;
 import dev.moon.hotwire.redefine.Tripwire;
+import dev.moon.hotwire.registration.RegistrationJournal;
 import dev.moon.hotwire.update.LiveNames;
 import java.lang.reflect.Field;
 import java.lang.reflect.Method;
@@ -25,7 +26,7 @@ public final class OneConfigHuds {
     private static final String EDITOR = "org.polyfrost.oneconfig.internal.ui.compose.impls.HudEditorUIScreen";
 
     private record Removal(Class<?> manager, List<Map.Entry<Integer, Object>> huds, Map<Object, Object> providers)
-            implements OffRemovals.Entry {
+            implements RegistrationJournal.Take {
         @Override
         public void restore() {
             List<Object> all = findHuds(this.manager);
@@ -44,8 +45,8 @@ public final class OneConfigHuds {
         }
 
         @Override
-        public OffRemovals.Where getWhere() {
-            return OffRemovals.Where.GAME_BEFORE_FRAME;
+        public RegistrationJournal.Where getWhere() {
+            return RegistrationJournal.Where.GAME_BEFORE_FRAME;
         }
 
         @Override
@@ -110,7 +111,7 @@ public final class OneConfigHuds {
                 continue;
             }
 
-            OffRemovals.add(mod, new Removal(manager, removed, kinds));
+            GameRegistrations.getJournal().addTake(mod, new Removal(manager, removed, kinds));
             for (int i = removed.size() - 1; i >= 0; i--) {
                 huds.remove((int) removed.get(i).getKey());
                 dropRuntime(removed.get(i).getValue());
@@ -126,7 +127,7 @@ public final class OneConfigHuds {
     }
 
     private static boolean isOfMod(Object hud, String mod) {
-        if (mod.equals(GameRegistrations.findModOf(hud.getClass()))) {
+        if (mod.equals(Owners.findModOf(hud.getClass()))) {
             return true;
         }
 
@@ -178,7 +179,7 @@ public final class OneConfigHuds {
         try {
             Class<?> manager = LiveNames.findRunning(MANAGER, OneConfigHuds.class.getClassLoader());
 
-            return GameRegistrations.isOfOffMod(manager) ? null : manager;
+            return Owners.isOfOffMod(manager) ? null : manager;
         } catch (ClassNotFoundException | LinkageError e) {
             return null;
         }

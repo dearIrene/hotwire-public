@@ -107,7 +107,7 @@ final class EventRegistration implements Registration {
     }
 
     static void rebuildInvoker(ArrayBackedEventAccessor event) {
-        if (!GameRegistrations.isOfOffMod(event.hotwire$getInvokerFactory().getClass())) {
+        if (!Owners.isOfOffMod(event.hotwire$getInvokerFactory().getClass())) {
             Tripwire.runAsHotwire(() -> event.hotwire$rebuildInvoker(countTotal(event)));
             return;
         }

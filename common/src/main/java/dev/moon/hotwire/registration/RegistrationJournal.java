@@ -1,19 +1,52 @@
 package dev.moon.hotwire.registration;
 
 import java.util.ArrayList;
+import java.util.Collection;
+import java.util.Collections;
+import java.util.EnumMap;
 import java.util.HashMap;
 import java.util.HashSet;
+import java.util.IdentityHashMap;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
 import java.util.TreeMap;
 import java.util.function.Predicate;
+import org.jspecify.annotations.Nullable;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 public final class RegistrationJournal {
     public record Entry(long sequence, String owner, Registration registration) {
+    }
+
+    public enum Where { ANY, GAME, SERVER, GAME_BEFORE_FRAME }
+
+    public interface Take {
+        void restore();
+
+        String describe();
+
+        default Where getWhere() {
+            return Where.ANY;
+        }
+
+        default Set<String> getNeeds() {
+            return Set.of();
+        }
+
+        default boolean isStale() {
+            return false;
+        }
+
+        default @Nullable Runnable getAfterBatch() {
+            return null;
+        }
+    }
+
+    public interface Threads {
+        void run(Where where, int count, Runnable work);
     }
 
     private static final Logger LOGGER = LoggerFactory.getLogger(RegistrationJournal.class);
@@ -25,6 +58,9 @@ public final class RegistrationJournal {
     private int recordsSincePrune;
     private final Set<Entry> removed = new HashSet<>();
     private long nextSequence;
+
+    private final Map<String, List<Take>> takes = new LinkedHashMap<>();
+
     public synchronized long record(String owner, Registration registration) {
         if (++this.recordsSincePrune >= PRUNE_EVERY) {
             this.recordsSincePrune = 0;
@@ -123,5 +159,90 @@ public final class RegistrationJournal {
 
     private static Predicate<Entry> matchOwner(String mod) {
         return entry -> entry.owner().equals(mod);
+    }
+
+    public void addTake(String mod, Take take) {
+        synchronized (this.takes) {
+            this.takes.computeIfAbsent(mod, any -> new ArrayList<>()).add(take);
+        }
+    }
+
+    public void dropStaleTakes() {
+        synchronized (this.takes) {
+            this.takes.values().forEach(of -> of.removeIf(Take::isStale));
+        }
+    }
+
+    public boolean hasTake(String mod, Predicate<Take> test) {
+        synchronized (this.takes) {
+            return this.takes.getOrDefault(mod, List.of()).stream().anyMatch(test);
+        }
+    }
+
+    public void putBackTakes(Collection<String> mods, Predicate<String> isOn, Threads threads) {
+        List<String> order;
+        synchronized (this.takes) {
+            order = new ArrayList<>(this.takes.keySet());
+        }
+        order.retainAll(mods);
+        Map<Where, List<Take>> due = new EnumMap<>(Where.class);
+        for (String mod : order.reversed()) {
+            List<Take> mine;
+            synchronized (this.takes) {
+                mine = this.takes.remove(mod);
+            }
+            if (mine == null) {
+                continue;
+            }
+            List<Take> remaining = new ArrayList<>();
+            for (Take take : mine.reversed()) {
+                if (take.isStale()) {
+                    continue;
+                }
+                if (take.getNeeds().stream().anyMatch(other -> !mods.contains(other) && !isOn.test(other))) {
+                    remaining.add(take);
+                    continue;
+                }
+                due.computeIfAbsent(take.getWhere(), any -> new ArrayList<>()).add(take);
+            }
+            if (!remaining.isEmpty()) {
+                synchronized (this.takes) {
+                    this.takes.put(mod, new ArrayList<>(remaining.reversed()));
+                }
+            }
+        }
+
+        synchronized (this.takes) {
+            for (Map.Entry<String, List<Take>> rest : this.takes.entrySet()) {
+                if (!isOn.test(rest.getKey()) && !mods.contains(rest.getKey())) {
+                    continue;
+                }
+                for (Take take : List.copyOf(rest.getValue())) {
+                    if (!take.getNeeds().isEmpty()
+                            && take.getNeeds().stream().allMatch(other -> mods.contains(other) || isOn.test(other))
+                            && rest.getValue().remove(take) && !take.isStale()) {
+                        due.computeIfAbsent(take.getWhere(), any -> new ArrayList<>()).add(take);
+                    }
+                }
+            }
+            this.takes.values().removeIf(List::isEmpty);
+        }
+        due.forEach((where, batch) -> threads.run(where, batch.size(), () -> putBackAll(batch)));
+    }
+
+    private static void putBackAll(List<Take> batch) {
+        Set<Runnable> after = Collections.newSetFromMap(new IdentityHashMap<>());
+        for (Take take : batch) {
+            try {
+                take.restore();
+            } catch (RuntimeException | LinkageError e) {
+                LOGGER.warn("[Hotwire] {} could not be put back", take.describe(), e);
+            }
+            Runnable once = take.getAfterBatch();
+            if (once != null) {
+                after.add(once);
+            }
+        }
+        after.forEach(Runnable::run);
     }
 }

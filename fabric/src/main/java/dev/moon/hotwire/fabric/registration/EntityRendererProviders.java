@@ -1,6 +1,7 @@
 package dev.moon.hotwire.fabric.registration;
 
 import dev.moon.hotwire.fabric.mixin.core.client.renderer.entity.EntityRenderersAccessor;
+import dev.moon.hotwire.registration.RegistrationJournal;
 import java.util.Collection;
 import java.util.List;
 import java.util.Map;
@@ -14,7 +15,7 @@ public final class EntityRendererProviders {
     private static final EntityRendererProvider<Entity> NOTHING = NoopRenderer::new;
     private static final AtomicBoolean CHANGED = new AtomicBoolean();
 
-    private record Removal(EntityType<?> type, EntityRendererProvider<?> provider) implements OffRemovals.Entry {
+    private record Removal(EntityType<?> type, EntityRendererProvider<?> provider) implements RegistrationJournal.Take {
         @Override
         @SuppressWarnings("ReferenceEquality")
         public void restore() {
@@ -39,9 +40,9 @@ public final class EntityRendererProviders {
         boolean changed = false;
         for (EntityType<?> type : List.copyOf(providers.keySet())) {
             EntityRendererProvider<?> provider = providers.get(type);
-            String mod = provider == null ? null : GameRegistrations.findModOf(provider.getClass());
+            String mod = provider == null ? null : Owners.findModOf(provider.getClass());
             if (provider != null && mod != null && mods.contains(mod)) {
-                OffRemovals.add(mod, new Removal(type, provider));
+                GameRegistrations.getJournal().addTake(mod, new Removal(type, provider));
                 providers.put(type, NOTHING);
                 changed = true;
             }

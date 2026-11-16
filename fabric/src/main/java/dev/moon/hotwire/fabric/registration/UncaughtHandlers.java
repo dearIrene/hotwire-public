@@ -1,6 +1,7 @@
 package dev.moon.hotwire.fabric.registration;
 
 import dev.moon.hotwire.redefine.FieldSlots;
+import dev.moon.hotwire.registration.RegistrationJournal;
 import java.util.Collection;
 import org.jspecify.annotations.Nullable;
 import org.slf4j.Logger;
@@ -10,7 +11,7 @@ public final class UncaughtHandlers {
     private static final Logger LOGGER = LoggerFactory.getLogger(UncaughtHandlers.class);
 
     private record Swap(Thread.UncaughtExceptionHandler mods, Thread.@Nullable UncaughtExceptionHandler inner)
-            implements OffRemovals.Entry {
+            implements RegistrationJournal.Take {
         @Override
         @SuppressWarnings("ReferenceEquality")
         public void restore() {
@@ -30,13 +31,13 @@ public final class UncaughtHandlers {
 
     public static synchronized void takeOut(Collection<String> mods) {
         Thread.UncaughtExceptionHandler current = Thread.getDefaultUncaughtExceptionHandler();
-        String mod = current == null ? null : GameRegistrations.findModOf(current.getClass());
+        String mod = current == null ? null : Owners.findModOf(current.getClass());
         if (current == null || mod == null || !mods.contains(mod)) {
             return;
         }
         Thread.UncaughtExceptionHandler inner = findWrapped(current);
         Thread.setDefaultUncaughtExceptionHandler(inner);
-        OffRemovals.add(mod, new Swap(current, inner));
+        GameRegistrations.getJournal().addTake(mod, new Swap(current, inner));
         LOGGER.info("[Hotwire] the JVM's handler of uncaught throws is {} again instead of {}'s",
                 inner == null ? "none" : inner.getClass().getName(), mod);
     }

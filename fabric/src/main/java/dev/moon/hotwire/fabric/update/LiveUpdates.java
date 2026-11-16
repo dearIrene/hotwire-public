@@ -7,7 +7,7 @@ import dev.moon.hotwire.fabric.add.AddAssets;
 import dev.moon.hotwire.fabric.add.LaunchSteps;
 import dev.moon.hotwire.fabric.add.LoaderModList;
 import dev.moon.hotwire.fabric.add.OpenOneConfig;
-import dev.moon.hotwire.fabric.registration.GameRegistrations;
+import dev.moon.hotwire.fabric.registration.Owners;
 import dev.moon.hotwire.jar.JarLookup;
 import dev.moon.hotwire.jar.ModJar;
 import dev.moon.hotwire.jar.ModJarException;
@@ -476,7 +476,7 @@ public final class LiveUpdates {
     private static void joinModList(String id, Path jar) {
         runAfterReplace(id, "the loader's mod list", () -> LoaderModList.replace(id, jar));
 
-        GameRegistrations.learnJar(jar, id);
+        Owners.learnJar(jar, id);
     }
 
     private static void runAfterReplace(String id, String what, Runnable step) {

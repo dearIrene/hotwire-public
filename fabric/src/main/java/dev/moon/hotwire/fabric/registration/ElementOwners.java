@@ -51,7 +51,7 @@ final class ElementOwners {
         Class<?> type = item.getClass();
         String name = type.getName();
 
-        String mod = GameRegistrations.findModOf(type);
+        String mod = Owners.findModOf(type);
         return !type.isHidden() && !type.isRecord() && !Proxy.isProxyClass(type)
                 && (mod == null || mod.equals("minecraft"))
                 && (name.startsWith("net.minecraft.") || name.startsWith("com.mojang."));
@@ -72,12 +72,12 @@ final class ElementOwners {
 
     @Nullable String findOwnOwner(Object value) {
         Class<?> type = value instanceof Class<?> named ? named : value.getClass();
-        String mod = GameRegistrations.findModOf(type);
+        String mod = Owners.findModOf(type);
         if (mod != null && this.modSet.contains(mod)) {
             return mod;
         }
 
-        String code = mod == null ? GameRegistrations.findCodeMod(type) : null;
+        String code = mod == null ? Owners.findCodeMod(type) : null;
         if (code != null && this.modSet.contains(code)) {
             return code;
         }
@@ -94,7 +94,7 @@ final class ElementOwners {
             return null;
         }
 
-        String madeBy = ValueOwners.isLambda(item) ? GameRegistrations.findModOrShipper(item.getClass().getNestHost())
+        String madeBy = ValueOwners.isLambda(item) ? Owners.findModOrShipper(item.getClass().getNestHost())
                 : null;
         if (madeBy != null && !this.modSet.contains(madeBy) && ModPolicy.isSwitchable(madeBy)
                 && ValueOwners.findForwardedTo(item) == null) {
@@ -138,7 +138,7 @@ final class ElementOwners {
             return captured;
         }
 
-        String nested = GameRegistrations.findNestedModOf(item.getClass());
+        String nested = Owners.findNestedModOf(item.getClass());
         return nested != null && this.modSet.contains(nested) ? nested : null;
     }
 
@@ -192,8 +192,8 @@ final class ElementOwners {
             }
             return found;
         }
-        String library = GameRegistrations.findModOf(item.getClass());
-        boolean nested = library == null && GameRegistrations.findShippedBy(item.getClass()) != null;
+        String library = Owners.findModOf(item.getClass());
+        boolean nested = library == null && Owners.findShippedBy(item.getClass()) != null;
         if (!nested && (library == null || !this.libraryOfSome.contains(library))) {
             return Set.of();
         }
@@ -221,9 +221,9 @@ final class ElementOwners {
         }
         Class<?> type = value instanceof Member member ? member.getDeclaringClass()
                 : value instanceof Class<?> named ? named : value.getClass();
-        String mod = GameRegistrations.findModOf(type);
-        mod = mod != null ? mod : GameRegistrations.findCodeMod(type);
-        mod = mod != null ? mod : GameRegistrations.findNestedModOf(type);
+        String mod = Owners.findModOf(type);
+        mod = mod != null ? mod : Owners.findCodeMod(type);
+        mod = mod != null ? mod : Owners.findNestedModOf(type);
         mod = mod != null || !type.isHidden() ? mod : ValueOwners.findLambdaOwner(type);
         if (mod != null) {
             found.add(mod);
@@ -231,13 +231,13 @@ final class ElementOwners {
     }
 
     private @Nullable String findRegisteredBy(Object item) {
-        String library = GameRegistrations.findModOf(item.getClass());
-        boolean nested = library == null && GameRegistrations.findShippedBy(item.getClass()) != null;
+        String library = Owners.findModOf(item.getClass());
+        boolean nested = library == null && Owners.findShippedBy(item.getClass()) != null;
         if (!nested && (library == null || !this.libraryOfSome.contains(library))) {
             return null;
         }
 
-        String self = nested ? GameRegistrations.findNestedModOf(item.getClass()) : library;
+        String self = nested ? Owners.findNestedModOf(item.getClass()) : library;
         for (FieldSlots.Slot field : Fields.getReferenceFields(item.getClass(), false)) {
             try {
                 Object inner = field.get(item);
@@ -281,7 +281,7 @@ final class ElementOwners {
     }
 
     boolean isStayingModsType(@Nullable Object key) {
-        String mod = key instanceof Class<?> type ? GameRegistrations.findModOf(type) : null;
+        String mod = key instanceof Class<?> type ? Owners.findModOf(type) : null;
         return mod != null && !this.modSet.contains(mod);
     }
 
@@ -308,7 +308,7 @@ final class ElementOwners {
         if (mod != null || !nested) {
             return mod;
         }
-        String of = GameRegistrations.findNestedModOf(type != null ? type
+        String of = Owners.findNestedModOf(type != null ? type
                 : value instanceof Class<?> named ? named : value.getClass());
         return of != null && this.modSet.contains(of) ? of : null;
     }
@@ -322,7 +322,7 @@ final class ElementOwners {
             return null;
         }
         boolean any = first instanceof Class<?> || first.getClass().isHidden();
-        String ofClass = any ? null : GameRegistrations.findModOf(first.getClass());
+        String ofClass = any ? null : Owners.findModOf(first.getClass());
         String ofId = any ? null : ValueOwners.findIdOwner(first);
         Set<String> wholly = Wrappers.findWhollyOfAll(item);
         if (!any) {

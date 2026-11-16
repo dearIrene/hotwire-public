@@ -4,7 +4,7 @@ import dev.moon.hotwire.concurrent.Tasks;
 import dev.moon.hotwire.fabric.add.WorldReopen;
 import dev.moon.hotwire.fabric.dev.DevSession;
 import dev.moon.hotwire.fabric.registration.GameHold;
-import dev.moon.hotwire.fabric.registration.GameRegistrations;
+import dev.moon.hotwire.fabric.registration.Owners;
 import dev.moon.hotwire.fabric.report.GameReports;
 import dev.moon.hotwire.redefine.HandlerGuards;
 import dev.moon.hotwire.registration.CallerOwner;
@@ -205,7 +205,7 @@ public final class CrashGuard {
             } catch (ClassNotFoundException | LinkageError e) {
                 continue;
             }
-            if (mod.equals(GameRegistrations.findModOf(type))) {
+            if (mod.equals(Owners.findModOf(type))) {
                 return new Place(element.getClassName(), element.getLineNumber(), element.getFileName() + ":"
                         + element.getLineNumber() + " in " + element.getMethodName());
             }
@@ -274,7 +274,7 @@ public final class CrashGuard {
                 }
             }
         }
-        CallerOwner.Owner owner = GameRegistrations.findOwnerOf(frames);
+        CallerOwner.Owner owner = Owners.findOwnerOf(frames);
         if (owner != null) {
             return owner.mod();
         }
@@ -313,7 +313,7 @@ public final class CrashGuard {
     }
 
     private static boolean canLeave(@Nullable String mod) {
-        return mod != null && GameRegistrations.isRecordedMod(mod) && ModPolicy.isSwitchable(mod);
+        return mod != null && Owners.isRecordedMod(mod) && ModPolicy.isSwitchable(mod);
     }
 
     private static List<StackTraceElement> findFramesAbove(Throwable thrown) {
@@ -348,7 +348,7 @@ public final class CrashGuard {
             } catch (ClassNotFoundException | LinkageError e) {
                 continue;
             }
-            if (GameRegistrations.isRecordedMod(GameRegistrations.findModOf(type))) {
+            if (Owners.isRecordedMod(Owners.findModOf(type))) {
                 return "";
             }
             Method[] methods;
@@ -361,7 +361,7 @@ public final class CrashGuard {
             for (Method method : methods) {
                 if (method.getName().equals(element.getMethodName())) {
                     String mod = findMergedMod(method);
-                    if (GameRegistrations.isRecordedMod(mod)) {
+                    if (Owners.isRecordedMod(mod)) {
                         if (!gameInside || !isWrapper(element.getMethodName())) {
                             return mod;
                         }

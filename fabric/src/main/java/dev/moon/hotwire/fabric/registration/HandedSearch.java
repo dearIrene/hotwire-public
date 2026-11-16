@@ -20,8 +20,6 @@ record HandedSearch(Set<Object> handed, Set<String> consumers, Collection<Class<
 
     private static final int BUDGET = 200_000;
 
-    private static final int LARGEST = 100_000;
-
     private static final Set<String> NOT_CONSUMERS = ModPolicy.BUILT_IN;
 
     HandedSearch {
@@ -35,7 +33,7 @@ record HandedSearch(Set<Object> handed, Set<String> consumers, Collection<Class<
     static Set<String> findConsumers(Collection<Object> handed) {
         Set<String> out = new HashSet<>();
         for (Object one : handed) {
-            String own = GameRegistrations.findModOf(one.getClass());
+            String own = Owners.findModOf(one.getClass());
             Deque<Class<?>> next = new ArrayDeque<>(List.of(one.getClass()));
             Set<Class<?>> seen = new HashSet<>();
             while (!next.isEmpty()) {
@@ -43,7 +41,7 @@ record HandedSearch(Set<Object> handed, Set<String> consumers, Collection<Class<
                 if (!seen.add(type)) {
                     continue;
                 }
-                String mod = GameRegistrations.findModOf(type);
+                String mod = Owners.findModOf(type);
                 if (mod != null && !mod.equals(own) && !NOT_CONSUMERS.contains(mod)) {
                     out.add(mod);
                 }
@@ -109,8 +107,8 @@ record HandedSearch(Set<Object> handed, Set<String> consumers, Collection<Class<
         if (value instanceof Class<?> || ValueOwners.isPlain(value)) {
             return false;
         }
-        String mod = GameRegistrations.findModOf(value.getClass());
-        boolean open = mod == null || this.consumers.contains(mod) || !GameRegistrations.isRecordedMod(mod);
+        String mod = Owners.findModOf(value.getClass());
+        boolean open = mod == null || this.consumers.contains(mod) || !Owners.isRecordedMod(mod);
         if (isContainer(value)) {
             return open;
         }
@@ -125,9 +123,9 @@ record HandedSearch(Set<Object> handed, Set<String> consumers, Collection<Class<
 
     private static List<?> findElementsOf(Object one) {
         return switch (one) {
-            case Collection<?> all -> all.size() <= LARGEST ? new ArrayList<>(all) : List.of();
-            case Map<?, ?> map -> map.size() <= LARGEST ? new ArrayList<>(map.values()) : List.of();
-            case Object[] array -> array.length <= LARGEST ? Arrays.asList(array) : List.of();
+            case Collection<?> all -> all.size() <= LookRoots.LARGEST ? new ArrayList<>(all) : List.of();
+            case Map<?, ?> map -> map.size() <= LookRoots.LARGEST ? new ArrayList<>(map.values()) : List.of();
+            case Object[] array -> array.length <= LookRoots.LARGEST ? Arrays.asList(array) : List.of();
             default -> List.of();
         };
     }

@@ -43,7 +43,7 @@ public final class ModSounds {
                         if (!field.isStatic() && field.get(engine) instanceof Map<?, ?> playing) {
                             for (Object key : List.copyOf(playing.keySet())) {
                                 if (key instanceof SoundInstance sound
-                                        && mods.contains(GameRegistrations.findModOf(sound.getClass()))) {
+                                        && mods.contains(Owners.findModOf(sound.getClass()))) {
                                     theirs.add(sound);
                                 }
                             }

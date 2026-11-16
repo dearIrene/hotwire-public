@@ -20,7 +20,7 @@ final class PlacedWrappers {
                 }
                 try {
                     Object value = field.get(object);
-                    String mod = value == null ? null : GameRegistrations.findModOf(value.getClass());
+                    String mod = value == null ? null : Owners.findModOf(value.getClass());
                     if (value != null && mod != null) {
                         out.add(new Wrapper(field, object, value, mod));
                     }

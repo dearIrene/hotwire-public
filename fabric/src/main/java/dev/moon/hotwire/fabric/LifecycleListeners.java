@@ -3,7 +3,7 @@ package dev.moon.hotwire.fabric;
 import dev.moon.hotwire.api.ModLifecycleListener;
 import dev.moon.hotwire.api.Registration;
 import dev.moon.hotwire.fabric.registration.GameHold;
-import dev.moon.hotwire.fabric.registration.GameRegistrations;
+import dev.moon.hotwire.fabric.registration.Owners;
 import dev.moon.hotwire.switching.Listeners;
 import java.util.ArrayList;
 import java.util.List;
@@ -33,7 +33,7 @@ public final class LifecycleListeners {
     }
 
     static Registration add(ModLifecycleListener listener) {
-        return LISTENERS.add(listener, GameRegistrations.findModOrShipper(listener.getClass()));
+        return LISTENERS.add(listener, Owners.findModOrShipper(listener.getClass()));
     }
 
     static Registration add(String modId, ModLifecycleListener listener) {
@@ -72,7 +72,7 @@ public final class LifecycleListeners {
                     listener.finishUpdate(ids);
                 }
             }
-        }, GameRegistrations.findModOrShipper(listener.getClass()));
+        }, Owners.findModOrShipper(listener.getClass()));
     }
 
     public static boolean isListening(@Nullable String mod) {

@@ -142,7 +142,7 @@ public final class GeneratedWrappers {
 
     private static Set<String> getMethodsOf(String face, String mod) {
         Class<?> type = findLoaded(face.replace('/', '.'));
-        if (type == null || mod.equals(GameRegistrations.findModOf(type))) {
+        if (type == null || mod.equals(Owners.findModOf(type))) {
             return Set.of();
         }
         Set<String> methods = new HashSet<>();

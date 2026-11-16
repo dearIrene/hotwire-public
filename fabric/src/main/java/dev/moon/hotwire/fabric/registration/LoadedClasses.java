@@ -23,9 +23,9 @@ record LoadedClasses(Map<String, Class<?>> byName, Map<String, Set<String>> used
     private static final ClassValue<Kind> KINDS = new ClassValue<>() {
         @Override
         protected Kind computeValue(Class<?> type) {
-            String mod = GameRegistrations.findModOf(type);
-            String shipper = mod == null && GameRegistrations.isNestedLibrary(type)
-                    ? GameRegistrations.findShippedBy(type) : null;
+            String mod = Owners.findModOf(type);
+            String shipper = mod == null && Owners.isNestedLibrary(type)
+                    ? Owners.findShippedBy(type) : null;
             return new Kind(Type.getInternalName(type), mod, mod != null ? mod
                     : shipper != null ? NESTED + shipper : null);
         }

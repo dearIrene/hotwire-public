@@ -31,8 +31,6 @@ import org.slf4j.LoggerFactory;
 final class CollectionReferences implements FixedLists.Walk {
     private static final Logger LOGGER = LoggerFactory.getLogger(CollectionReferences.class);
 
-    private static final int LARGEST = 100_000;
-
     static final int WRAPPERS_IN = 512;
     private final Map<String, List<Removal>> removals = new HashMap<>();
     private final StaticRecomputer.Writer writer;
@@ -315,8 +313,6 @@ final class CollectionReferences implements FixedLists.Walk {
         });
     }
 
-    private static final int WRAPPED_BELOW = 3;
-
     private void readStatic(FieldSlots.Slot field, Object value, boolean game) {
         if ((field.isPlainOnly() && (value instanceof Collection<?> || value instanceof Map<?, ?>
                 || value instanceof Object[])) || CollectionParts.holdsNoTake(value)) {
@@ -335,17 +331,17 @@ final class CollectionReferences implements FixedLists.Walk {
             this.checkReport.enter("static " + field.getDeclaringClass().getName() + "." + field.getName());
         }
         try {
-            if (game && value instanceof Map<?, ?> map && map.size() <= LARGEST) {
+            if (game && value instanceof Map<?, ?> map && map.size() <= LookRoots.LARGEST) {
                 this.readChanging(map, now -> NamespacedMaps.removeFrom(this, (Map<?, ?>) now));
             }
             this.collect(value);
-            if (value instanceof List<?> list && list.size() <= LARGEST && CollectionParts.isFixedSize(list)
+            if (value instanceof List<?> list && list.size() <= LookRoots.LARGEST && CollectionParts.isFixedSize(list)
                     && field.getType().isAssignableFrom(List.class)) {
                 FixedLists.removeFromField(this, field, null);
             }
 
             if (game && CollectionParts.isGameObject(value)) {
-                this.noteWrappedInside(value, WRAPPED_BELOW);
+                this.noteWrappedInside(value, LookRoots.WRAPPED_STEPS);
             }
 
             if (!(value instanceof Collection<?>) && !(value instanceof Map<?, ?>) && !(value instanceof Object[])
@@ -392,7 +388,7 @@ final class CollectionReferences implements FixedLists.Walk {
     private void takeWrappedIn(Collection<Object> holders) {
         for (Object holder : holders) {
             if (CollectionParts.isGameObject(holder) && this.owners.findOwnerAmong(holder) == null) {
-                this.noteWrappedInside(holder, WRAPPED_BELOW);
+                this.noteWrappedInside(holder, LookRoots.WRAPPED_STEPS);
             }
         }
     }
@@ -444,7 +440,7 @@ final class CollectionReferences implements FixedLists.Walk {
             if (this.owners.findOwnerAmong(holder) == null) {
                 this.lookInto(holder);
                 if (CollectionParts.isGameObject(holder)) {
-                    this.noteWrappedInside(holder, WRAPPED_BELOW);
+                    this.noteWrappedInside(holder, LookRoots.WRAPPED_STEPS);
                 }
             }
             this.report.timeHolder(holder.getClass(), holderBegan);
@@ -464,7 +460,7 @@ final class CollectionReferences implements FixedLists.Walk {
         List<Class<?>> ordered = new ArrayList<>(statics.size());
         List<Class<?>> ofMods = new ArrayList<>();
         for (Class<?> owner : statics) {
-            (GameRegistrations.findModOf(owner) == null ? ordered : ofMods).add(owner);
+            (Owners.findModOf(owner) == null ? ordered : ofMods).add(owner);
         }
         ordered.addAll(ofMods);
         int unchanged = 0;
@@ -479,7 +475,7 @@ final class CollectionReferences implements FixedLists.Walk {
             long ownerBegan = System.nanoTime();
             boolean game = owner.getName().startsWith("net.minecraft.") || owner.getName().startsWith("com.mojang.");
 
-            this.readingStaticsOf = GameRegistrations.findModOrShipper(owner);
+            this.readingStaticsOf = Owners.findModOrShipper(owner);
             this.reader = notes == null ? TakeReach.GAME : TakeReach.findReaders(owner, TakeReach.GAME);
             for (FieldSlots.Slot field : Fields.getReferenceFields(owner, true)) {
                 Object value = CollectionParts.read(field, null);
@@ -636,7 +632,7 @@ final class CollectionReferences implements FixedLists.Walk {
 
     private boolean isOwnPlain(String mod, Object item) {
         return !this.inSmall && mod.equals(this.readingStaticsOf) && Fields.getRecordParts(item.getClass()).isEmpty()
-                && !ValueOwners.isLambda(item) && mod.equals(GameRegistrations.findModOrShipper(item.getClass()));
+                && !ValueOwners.isLambda(item) && mod.equals(Owners.findModOrShipper(item.getClass()));
     }
 
     private @Nullable Class<?> ownClassAsked;
@@ -861,8 +857,8 @@ final class CollectionReferences implements FixedLists.Walk {
     }
 
     private void collectField(FieldSlots.Slot field, Object holder, Object value) {
-        boolean fixed = value instanceof List<?> list && list.size() <= LARGEST && CollectionParts.isFixedSize(list)
-                && field.getType().isAssignableFrom(List.class);
+        boolean fixed = value instanceof List<?> list && list.size() <= LookRoots.LARGEST
+                && CollectionParts.isFixedSize(list) && field.getType().isAssignableFrom(List.class);
         CollectionNotes notes = fixed && ElementLook.isLooking() && CollectionParts.isGameObject(holder)
                 ? this.look.getNotes() : null;
         if (notes != null && !NO_PRINTS && notes.isReadBy(value, this.reader) && notes.isUnchanged(value)) {
@@ -885,14 +881,13 @@ final class CollectionReferences implements FixedLists.Walk {
         }
     }
 
-    private static final int DEEPEST = 64;
     private int depth;
 
     private void collect(Object value) {
         ElementLook.stopIfAsked();
         if (CollectionParts.holdsPrimitivesOnly(value) || CollectionParts.holdsNoTake(value)
                 || this.owners.findOwnerAmong(value) != null
-                || GameRegistrations.isOfOffMod(value.getClass()) || this.depth >= DEEPEST) {
+                || Owners.isOfOffMod(value.getClass()) || this.depth >= LookRoots.NESTED_STEPS) {
             return;
         }
         this.depth++;
@@ -937,7 +932,7 @@ final class CollectionReferences implements FixedLists.Walk {
                 default -> false;
             };
             switch (value) {
-                case List<?> list when list.size() <= LARGEST -> {
+                case List<?> list when list.size() <= LookRoots.LARGEST -> {
                     List<Object> items = (List<Object>) list;
                     boolean fixed = CollectionParts.isFixedSize(items);
                     for (int index = items.size() - 1; index >= 0; index--) {
@@ -962,12 +957,12 @@ final class CollectionReferences implements FixedLists.Walk {
                             this.followLambda(item);
                             if (!(item instanceof Collection<?>) && !(item instanceof Map<?, ?>)
                                     && !Wrappers.isOfAnotherMod(item.getClass())) {
-                                this.noteWrappedInside(item, WRAPPED_BELOW);
+                                this.noteWrappedInside(item, LookRoots.WRAPPED_STEPS);
                             }
                         }
                     }
                 }
-                case Collection<?> collection when collection.size() <= LARGEST -> {
+                case Collection<?> collection when collection.size() <= LookRoots.LARGEST -> {
                     Collection<Object> items = (Collection<Object>) collection;
                     for (Object item : Wrappers.readItems(items)) {
                         if (item != null && this.isOwnPlainByClass(item)) {
@@ -986,7 +981,7 @@ final class CollectionReferences implements FixedLists.Walk {
                         }
                     }
                 }
-                case Object[] array when array.length <= LARGEST -> {
+                case Object[] array when array.length <= LookRoots.LARGEST -> {
                     Class<?> slot = array.getClass().getComponentType();
                     for (int index = 0; index < array.length; index++) {
                         Object item = array[index];
@@ -1012,7 +1007,7 @@ final class CollectionReferences implements FixedLists.Walk {
                         }
                     }
                 }
-                case Map<?, ?> map when map.size() <= LARGEST -> {
+                case Map<?, ?> map when map.size() <= LookRoots.LARGEST -> {
                     Map<Object, Object> entries = (Map<Object, Object>) map;
                     for (Map.Entry<Object, Object> entry : Wrappers.copyEntries(entries)) {
                         Object key = entry.getKey();
@@ -1059,10 +1054,10 @@ final class CollectionReferences implements FixedLists.Walk {
                             }
                         } else if (element != null && !(element instanceof Collection<?>)
                                 && !(element instanceof Map<?, ?>) && !Wrappers.isOfAnotherMod(element.getClass())) {
-                            this.noteWrappedInside(element, WRAPPED_BELOW);
+                            this.noteWrappedInside(element, LookRoots.WRAPPED_STEPS);
                         } else if (element instanceof Collection<?> nested) {
                             this.collect(nested);
-                            if (nested instanceof List<?> list && list.size() <= LARGEST
+                            if (nested instanceof List<?> list && list.size() <= LookRoots.LARGEST
                                     && CollectionParts.isFixedSize(list)) {
                                 FixedLists.removeFromValue(this, entries, key);
                             }
@@ -1120,7 +1115,7 @@ final class CollectionReferences implements FixedLists.Walk {
                     || value instanceof Map<?, ?> || value.getClass().isArray()) {
                 continue;
             }
-            String mod = GameRegistrations.findModOrShipper(value.getClass());
+            String mod = Owners.findModOrShipper(value.getClass());
             if (mod == null && steps > 1 && !Wrappers.isOfAnotherMod(value.getClass()) && this.visit(value)) {
                 this.noteWrappedInside(value, steps - 1);
                 continue;

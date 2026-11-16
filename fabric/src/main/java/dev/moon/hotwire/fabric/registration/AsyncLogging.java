@@ -137,7 +137,7 @@ public final class AsyncLogging {
         try {
             Class<?> ring = Class.forName("com.lmax.disruptor.RingBuffer", false,
                     AsyncLogger.class.getClassLoader());
-            return GameRegistrations.findModOf(ring);
+            return Owners.findModOf(ring);
         } catch (ClassNotFoundException | LinkageError e) {
             return null;
         }
@@ -192,7 +192,7 @@ public final class AsyncLogging {
             List<Filter> each = filter instanceof CompositeFilter composite ? List.of(composite.getFiltersArray())
                     : filter == null ? List.of() : List.of(filter);
             for (Filter one : each) {
-                if (mod.equals(GameRegistrations.findModOf(one.getClass()))) {
+                if (mod.equals(Owners.findModOf(one.getClass()))) {
                     holder.removeFilter(one);
                     off.add(new RemovedFilter(holder, one));
                 }
@@ -207,14 +207,14 @@ public final class AsyncLogging {
         for (boolean out : new boolean[] {true, false}) {
             PrintStream wrapper = out ? System.out : System.err;
             PrintStream original = wrapper;
-            while (mod.equals(GameRegistrations.findModOf(original.getClass()))) {
+            while (mod.equals(Owners.findModOf(original.getClass()))) {
                 PrintStream inner = this.findWrapped(original);
                 if (inner == null) {
                     break;
                 }
                 original = inner;
             }
-            if (original != wrapper && !mod.equals(GameRegistrations.findModOf(original.getClass()))) {
+            if (original != wrapper && !mod.equals(Owners.findModOf(original.getClass()))) {
                 if (out) {
                     System.setOut(original);
                 } else {

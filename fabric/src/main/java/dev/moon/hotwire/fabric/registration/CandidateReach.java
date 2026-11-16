@@ -35,7 +35,7 @@ final class CandidateReach {
 
     Set<String> find(Object item) {
         this.asked++;
-        return this.named.computeIfAbsent(this.reach(item, Wrappers.DEPTH), this::toNames);
+        return this.named.computeIfAbsent(this.reach(item, LookRoots.WRAPPER_STEPS), this::toNames);
     }
 
     String describe() {
@@ -49,12 +49,12 @@ final class CandidateReach {
         }
 
         if (value instanceof Class<?> type) {
-            BitSet own = this.add(null, GameRegistrations.findModOf(type));
+            BitSet own = this.add(null, Owners.findModOf(type));
             own = this.add(own, type.isHidden() ? ValueOwners.findLambdaOwner(type) : null);
             return own == null ? NONE : this.share(own);
         }
         if (value instanceof Enum<?> constant) {
-            BitSet own = this.add(null, GameRegistrations.findModOf(constant.getDeclaringClass()));
+            BitSet own = this.add(null, Owners.findModOf(constant.getDeclaringClass()));
             return own == null ? NONE : this.share(own);
         }
         if (ValueOwners.isPlain(value)) {
@@ -99,7 +99,7 @@ final class CandidateReach {
         }
         BitSet answer = all == null ? NONE : this.share(all);
         if (known == null) {
-            known = new BitSet[Wrappers.DEPTH + 1];
+            known = new BitSet[LookRoots.WRAPPER_STEPS + 1];
             this.reached.put(value, known);
         }
         known[left] = answer;
@@ -115,9 +115,9 @@ final class CandidateReach {
             boolean hidden = type.isHidden();
             boolean container = Collection.class.isAssignableFrom(type) || Map.class.isAssignableFrom(type)
                     || Object[].class.isAssignableFrom(type);
-            String mod = GameRegistrations.findModOf(type);
+            String mod = Owners.findModOf(type);
             boolean readInto = (container || hidden || Wrappers.isOfAMod(type)
-                    || !Fields.getRecordParts(type).isEmpty()) && !(container && GameRegistrations.isRecordedMod(mod));
+                    || !Fields.getRecordParts(type).isEmpty()) && !(container && Owners.isRecordedMod(mod));
             BitSet own = this.add(null, hidden ? ValueOwners.findLambdaOwner(type) : null);
             own = this.add(own, mod);
             kind = new Kind(readInto, own == null ? NONE : this.share(own));

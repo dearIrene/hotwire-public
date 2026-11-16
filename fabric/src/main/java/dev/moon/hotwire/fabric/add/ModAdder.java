@@ -9,6 +9,7 @@ import dev.moon.hotwire.fabric.ResourceReload;
 import dev.moon.hotwire.fabric.registration.GameHold;
 import dev.moon.hotwire.fabric.registration.GameRegistrations;
 import dev.moon.hotwire.fabric.registration.ModLifecycle;
+import dev.moon.hotwire.fabric.registration.Owners;
 import dev.moon.hotwire.jar.ContentScan;
 import dev.moon.hotwire.jar.JarLookup;
 import dev.moon.hotwire.jar.ModJar;
@@ -679,7 +680,7 @@ public final class ModAdder {
             });
             this.addWideners.openLoaded(part.jar(), part.path());
             if (leaving.isEmpty()) {
-                GameRegistrations.learnJar(part.path(), id);
+                Owners.learnJar(part.path(), id);
             }
             this.engine.getApplier().learn(id, ModMixins.of(part.jar(), this.engine.getSide()));
             undo.addUndo(() -> this.engine.getApplier().forget(id));
@@ -699,7 +700,7 @@ public final class ModAdder {
                 if (failed != null) {
                     return failed;
                 }
-                GameRegistrations.learnJar(part.path(), part.jar().manifest().id());
+                Owners.learnJar(part.path(), part.jar().manifest().id());
             }
         }
         undo.addUndo(this.engine.getSwitcher().learn(graph, planner, ids));

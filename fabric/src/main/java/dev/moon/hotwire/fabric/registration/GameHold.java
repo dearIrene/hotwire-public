@@ -3,6 +3,7 @@ package dev.moon.hotwire.fabric.registration;
 import dev.moon.hotwire.fabric.ModViews;
 import dev.moon.hotwire.fabric.screen.HoldFrame;
 import dev.moon.hotwire.redefine.Tripwire;
+import dev.moon.hotwire.registration.RegistrationJournal;
 import java.time.Duration;
 import java.util.ArrayList;
 import java.util.Arrays;
@@ -30,6 +31,7 @@ import org.slf4j.LoggerFactory;
 
 public final class GameHold {
     private static final Logger LOGGER = LoggerFactory.getLogger(GameHold.class);
+    private static final int BEFORE_FRAME_SECONDS = 5;
     private static final Duration LIMIT = Duration.ofSeconds(60);
     private static final Duration REACH = Duration.ofSeconds(10);
     private static final ThreadLocal<Boolean> HOLDING = ThreadLocal.withInitial(() -> false);
@@ -144,6 +146,30 @@ public final class GameHold {
         return Thread.getAllStackTraces().entrySet().stream().filter(entry -> entry.getKey().getName().equals(thread))
                 .findFirst().<Object>map(entry -> Arrays.asList(entry.getValue()).subList(0,
                         Math.min(14, entry.getValue().length))).orElse("no such thread: it has ended");
+    }
+
+    public static void run(RegistrationJournal.Where where, int count, Runnable work) {
+        switch (where) {
+            case GAME_BEFORE_FRAME -> onGameBeforeFrameAndWait(work, count + " entries put back");
+            case GAME -> onGameAndWait(work);
+            case SERVER -> {
+                MinecraftServer server = Minecraft.getInstance().getSingleplayerServer();
+                if (server != null) {
+                    onServerAndWait(server, work);
+                }
+            }
+            default -> work.run();
+        }
+    }
+
+    static void onGameBeforeFrameAndWait(Runnable work, String what) {
+        try {
+            await(onGameBeforeNextFrame(work, Minecraft.getInstance()), BEFORE_FRAME_SECONDS, "Render thread", what);
+        } catch (InterruptedException e) {
+            Thread.currentThread().interrupt();
+        } catch (ExecutionException | TimeoutException e) {
+            LOGGER.warn("[Hotwire] {} could not be done on the game thread", what, e);
+        }
     }
 
     public static void onGameAndWait(Runnable work) {

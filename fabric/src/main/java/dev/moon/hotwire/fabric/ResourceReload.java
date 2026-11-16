@@ -6,8 +6,8 @@ package dev.moon.hotwire.fabric;
 import dev.moon.hotwire.fabric.add.HiddenPacks;
 import dev.moon.hotwire.fabric.add.LoaderModList;
 import dev.moon.hotwire.fabric.registration.GameHold;
-import dev.moon.hotwire.fabric.registration.GameRegistrations;
 import dev.moon.hotwire.fabric.registration.ModelReloadCheck;
+import dev.moon.hotwire.fabric.registration.Owners;
 import dev.moon.hotwire.fabric.registration.ReloadedLists;
 import dev.moon.hotwire.fabric.report.FreezeDump;
 import dev.moon.hotwire.fabric.screen.HoldFrame;
@@ -506,7 +506,7 @@ public final class ResourceReload {
 
     private static boolean hasPackOf(Collection<String> mods) {
         return Minecraft.getInstance().getResourceManager().listPacks().anyMatch(pack -> {
-            String mod = GameRegistrations.findModOf(pack.getClass());
+            String mod = Owners.findModOf(pack.getClass());
             return mod != null && mods.contains(mod);
         });
     }

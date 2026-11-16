@@ -5,9 +5,9 @@ import dev.moon.hotwire.fabric.add.LoadStatusViews;
 //?}
 import dev.moon.hotwire.fabric.dev.DevSession;
 import dev.moon.hotwire.fabric.registration.EntityAttachments;
+import dev.moon.hotwire.fabric.registration.GameRegistrations;
 import dev.moon.hotwire.fabric.registration.OffModClose;
 import dev.moon.hotwire.fabric.registration.OffModCommands;
-import dev.moon.hotwire.fabric.registration.OffRemovals;
 import dev.moon.hotwire.fabric.report.FreezeDump;
 import dev.moon.hotwire.fabric.report.HotwireLog;
 import dev.moon.hotwire.modrinth.Downloads;
@@ -135,7 +135,7 @@ public final class HotwireClient implements ClientModInitializer {
                     && leaving.getSettings().isDevLeaksOn(DevSetups.get().inSetup())) {
                 DevSession.watchLeftWorld(client.level);
             }
-            OffRemovals.dropStale();
+            GameRegistrations.getJournal().dropStaleTakes();
 
             client.execute(() -> {
                 HotwireEngine started = engine;

@@ -42,7 +42,7 @@ final class TakeReach {
     }
 
     static Set<String> findReaders(Class<?> type, Set<String> reachedBy) {
-        String mod = GameRegistrations.findModOrShipper(type);
+        String mod = Owners.findModOrShipper(type);
         String name = type.getName();
         if ((mod == null || mod.equals("minecraft"))
                 && (name.startsWith("net.minecraft.") || name.startsWith("com.mojang."))) {
@@ -93,7 +93,7 @@ final class TakeReach {
         if (type == null || NOTHING_TO_CALL.contains(type)) {
             return true;
         }
-        String mod = GameRegistrations.findModOrShipper(type);
+        String mod = Owners.findModOrShipper(type);
         if (mod == null) {
             return false;
         }

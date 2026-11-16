@@ -57,7 +57,7 @@ final class ValueOwners {
             return id;
         }
         Class<?> type = value instanceof Class<?> named ? named : value.getClass();
-        String mod = GameRegistrations.findModOf(type);
+        String mod = Owners.findModOf(type);
         if (mod == null && type.isHidden()) {
             mod = lambdaOwner.apply(type);
         }
@@ -72,7 +72,7 @@ final class ValueOwners {
                 Object captured = field.get(value);
                 @SuppressWarnings("ReferenceEquality")
                 boolean itself = captured == value;
-                String of = captured == null || itself ? null : GameRegistrations.findModOf(captured.getClass());
+                String of = captured == null || itself ? null : Owners.findModOf(captured.getClass());
                 if (of == null && captured != null && captured.getClass().isHidden()) {
                     of = lambdaOwner.apply(captured.getClass());
                 }
@@ -182,7 +182,7 @@ final class ValueOwners {
     }
 
     private static void addOwnedClass(Class<?> type, Set<String> into) {
-        String mod = GameRegistrations.findModOf(type);
+        String mod = Owners.findModOf(type);
         if (mod != null) {
             into.add(mod);
         }
@@ -209,7 +209,7 @@ final class ValueOwners {
     }
 
     private static boolean isOwnedClass(String mod, Class<?> type) {
-        return mod.equals(GameRegistrations.findModOf(type))
+        return mod.equals(Owners.findModOf(type))
                 || (type.isHidden() && mod.equals(lambdaOwner.apply(type)));
     }
 

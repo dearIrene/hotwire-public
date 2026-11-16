@@ -26,7 +26,7 @@ final class RecorderSupport {
     static CallerOwner.@Nullable Owner findOwner() {
         List<CallerOwner.Frame> stack = STACK.walk(frames -> frames.<CallerOwner.Frame>map(frame ->
                 new CallerOwner.Frame(frame.getDeclaringClass(), frame.getMethodName())).toList());
-        return GameRegistrations.getOwners().findFrames(stack);
+        return Owners.getCallers().findFrames(stack);
     }
 
     static boolean isFirst(Object key) {
@@ -55,8 +55,8 @@ final class RecorderSupport {
     static boolean record(Object key, Registration registration) {
         CallerOwner.Owner owner = findOwner();
         if (owner == null) {
-            String mod = GameRegistrations.findModOf(key.getClass());
-            if (mod != null && GameRegistrations.isRecordedMod(mod)) {
+            String mod = Owners.findModOf(key.getClass());
+            if (mod != null && Owners.isRecordedMod(mod)) {
                 recordAs(mod, key, registration);
                 return true;
             }

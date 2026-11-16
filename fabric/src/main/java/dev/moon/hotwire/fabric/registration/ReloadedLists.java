@@ -1,6 +1,7 @@
 package dev.moon.hotwire.fabric.registration;
 
 import dev.moon.hotwire.redefine.FieldSlots;
+import dev.moon.hotwire.registration.RegistrationJournal;
 import dev.moon.hotwire.registration.ReloadedEntryNeeds;
 import java.util.ArrayList;
 import java.util.Collection;
@@ -30,7 +31,7 @@ public final class ReloadedLists {
             "net.fabricmc.fabric.impl.client.rendering.EntityModelLayerImpl");
 
     private record Removal(Object list, Object entry, @Nullable Object value, Set<String> needs)
-            implements OffRemovals.Entry {
+            implements RegistrationJournal.Take {
         @Override
         @SuppressWarnings("unchecked")
         public void restore() {
@@ -69,7 +70,8 @@ public final class ReloadedLists {
                     needs.add(definer);
                 }
                 if (!needs.isEmpty() && remove(list, entry)) {
-                    OffRemovals.add(needs.iterator().next(), new Removal(list, entry, value, needs));
+                    GameRegistrations.getJournal().addTake(needs.iterator().next(),
+                            new Removal(list, entry, value, needs));
                     needs.forEach(mod -> counts.merge(mod, 1, Integer::sum));
                 }
             }
@@ -89,7 +91,8 @@ public final class ReloadedLists {
                         : !ReloadedListHolders.canBeMade(value == null ? entry : value, resources);
                 if (unmade && remove(list, entry)) {
                     Set<String> needs = findNeedsOf(entry, value, off);
-                    OffRemovals.add(needs.iterator().next(), new Removal(list, entry, value, needs));
+                    GameRegistrations.getJournal().addTake(needs.iterator().next(),
+                            new Removal(list, entry, value, needs));
                     found.add(String.valueOf(entry));
                 }
             }
@@ -175,7 +178,7 @@ public final class ReloadedLists {
     }
 
     private static @Nullable String findModOf(PackResources pack, Set<String> off) {
-        String mod = GameRegistrations.findModOf(pack.getClass());
+        String mod = Owners.findModOf(pack.getClass());
         if (mod != null) {
             return off.contains(mod) ? mod : null;
         }
@@ -186,7 +189,7 @@ public final class ReloadedLists {
         Map<Object, String> madeBy = new HashMap<>();
         for (Map<?, ?> registry : findLayerRegistries()) {
             for (Map.Entry<?, ?> entry : List.copyOf(registry.entrySet())) {
-                String mod = entry.getValue() == null ? null : GameRegistrations.findModOf(entry.getValue().getClass());
+                String mod = entry.getValue() == null ? null : Owners.findModOf(entry.getValue().getClass());
                 if (mod != null && off.contains(mod)) {
                     findLayersIn(entry.getKey()).forEach(layer -> madeBy.put(layer, mod));
                 }

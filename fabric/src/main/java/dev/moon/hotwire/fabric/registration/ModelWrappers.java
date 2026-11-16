@@ -81,7 +81,7 @@ final class ModelWrappers {
         if (value == null || depth > MOST_DEPTH) {
             return;
         }
-        String mod = GameRegistrations.findModOf(value.getClass());
+        String mod = Owners.findModOf(value.getClass());
         if (mod != null && this.mods.contains(mod)) {
             Object inner = this.findWrapped(value);
             if (inner != null && slot.isInstance(inner)) {
@@ -140,7 +140,7 @@ final class ModelWrappers {
                     continue;
                 }
                 Object value = CollectionParts.read(field, wrapper);
-                String mod = value == null ? null : GameRegistrations.findModOf(value.getClass());
+                String mod = value == null ? null : Owners.findModOf(value.getClass());
                 if (value != null && (mod == null || !this.mods.contains(mod))) {
                     found.add(value);
                 }

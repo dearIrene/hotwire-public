@@ -1,6 +1,6 @@
 package dev.moon.hotwire.fabric;
 
-import dev.moon.hotwire.fabric.registration.GameRegistrations;
+import dev.moon.hotwire.fabric.registration.Owners;
 import dev.moon.hotwire.jvm.LoadedClassList;
 import dev.moon.hotwire.redefine.HotwireLoaders;
 import dev.moon.hotwire.redefine.RebuildException;
@@ -69,13 +69,13 @@ final class TripwireOwners {
             if (type.isArray() || type.isPrimitive() || !HotwireLoaders.seesHotwire(type.getClassLoader())) {
                 continue;
             }
-            String mod = GameRegistrations.findModOf(type);
+            String mod = Owners.findModOf(type);
             if (mod == null) {
                 mod = findSplitOwner(type);
             }
 
             if (mod == null) {
-                mod = GameRegistrations.findNestedModOf(type);
+                mod = Owners.findNestedModOf(type);
             }
             if (mod != null && ids.contains(mod)) {
                 owned.put(type, mod);
@@ -91,7 +91,7 @@ final class TripwireOwners {
             return null;
         }
         try {
-            return GameRegistrations.findModOf(Class.forName(name.substring(0, split), false, type.getClassLoader()));
+            return Owners.findModOf(Class.forName(name.substring(0, split), false, type.getClassLoader()));
         } catch (ClassNotFoundException | LinkageError e) {
             return null;
         }

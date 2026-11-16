@@ -50,7 +50,7 @@ final class TakeCandidates {
             }
             return this.share(this.count(all, element));
         }
-        add(all, GameRegistrations.findModOf(type));
+        add(all, Owners.findModOf(type));
         add(all, type.isHidden() ? ValueOwners.findLambdaOwner(type) : null);
         if (!Fields.getRecordParts(element.getClass()).isEmpty()) {
             add(all, Wrappers.findWhollyOwner(element));

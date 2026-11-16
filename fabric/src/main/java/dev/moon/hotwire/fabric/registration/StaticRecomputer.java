@@ -194,7 +194,7 @@ final class StaticRecomputer {
                     continue;
                 }
                 if (replaced.contains(one) || generated.contains(type.getName())
-                        || mod.equals(GameRegistrations.findModOf(type))
+                        || mod.equals(Owners.findModOf(type))
                         || (type.isHidden() && mod.equals(this.lambdaOwner.apply(type)))) {
                     return true;
                 }

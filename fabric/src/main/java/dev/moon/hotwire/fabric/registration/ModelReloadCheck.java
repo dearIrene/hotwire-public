@@ -160,7 +160,7 @@ public final class ModelReloadCheck {
         if (value == null || !seen.add(value) || found.containsAll(mods)) {
             return;
         }
-        String owner = owners.computeIfAbsent(value.getClass(), GameRegistrations::findModOf);
+        String owner = owners.computeIfAbsent(value.getClass(), Owners::findModOf);
         if (owner != null && mods.contains(owner)) {
             if (found.add(owner)) {
                 LOGGER.info("[Hotwire] the game's models hold {}'s {} at {}", owner, value.getClass().getName(),
@@ -194,7 +194,7 @@ public final class ModelReloadCheck {
                     if (at++ >= limit) {
                         break;
                     }
-                    String of = owners.computeIfAbsent(item.getClass(), GameRegistrations::findModOf);
+                    String of = owners.computeIfAbsent(item.getClass(), Owners::findModOf);
                     if (of != null && mods.contains(of)) {
                         if (found.add(of)) {
                             LOGGER.info("[Hotwire] the game's models hold {}'s {} at {} > {}", of,

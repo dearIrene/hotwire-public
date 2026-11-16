@@ -1,6 +1,6 @@
 package dev.moon.hotwire.fabric.update;
 
-import dev.moon.hotwire.fabric.registration.GameRegistrations;
+import dev.moon.hotwire.fabric.registration.Owners;
 import dev.moon.hotwire.redefine.InitialValues;
 import java.lang.reflect.Field;
 import java.lang.reflect.Modifier;
@@ -30,7 +30,7 @@ public final class OldStatics {
         for (Class<?> owner : loaded) {
             String name = Type.getInternalName(owner);
             if (!Objects.equals(owner.getClassLoader(), game) || owner.isHidden() || leaving.contains(name)
-                    || name.startsWith("dev/moon/hotwire/") || GameRegistrations.isOfOffMod(owner)
+                    || name.startsWith("dev/moon/hotwire/") || Owners.isOfOffMod(owner)
                     || !initialized.test(owner)) {
                 continue;
             }

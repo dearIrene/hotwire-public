@@ -65,7 +65,7 @@ final class Lambdas {
                 continue;
             }
             try {
-                String mod = GameRegistrations.findModOf(Class.forName(member[0].replace('/', '.'), false,
+                String mod = Owners.findModOf(Class.forName(member[0].replace('/', '.'), false,
                         lambda.getClassLoader()));
                 if (mod != null) {
                     return mod;
@@ -84,7 +84,7 @@ final class Lambdas {
             }
             try {
                 Object value = field.get(lambda);
-                if (value != null && !mod.equals(GameRegistrations.findModOf(value.getClass()))) {
+                if (value != null && !mod.equals(Owners.findModOf(value.getClass()))) {
                     if (found != null) {
                         return null;
                     }

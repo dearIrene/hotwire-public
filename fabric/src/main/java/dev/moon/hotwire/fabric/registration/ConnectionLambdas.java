@@ -52,10 +52,10 @@ public final class ConnectionLambdas {
         Deque<Object> next = new ArrayDeque<>();
         for (Channel channel : NetworkHandlers.findChannels()) {
             for (Map.Entry<String, ChannelHandler> handler : channel.pipeline()) {
-                String owner = GameRegistrations.findModOf(handler.getValue().getClass());
+                String owner = Owners.findModOf(handler.getValue().getClass());
                 if (handler.getValue() instanceof Connection connection) {
                     seen.add(connection);
-                } else if (owner != null && GameRegistrations.isRecordedMod(owner)
+                } else if (owner != null && Owners.isRecordedMod(owner)
                         && (channel instanceof EmbeddedChannel || isWriting(handler.getValue()))) {
                     if (mods.add(owner)) {
                         LOGGER.info("[Hotwire] a connection's packets run through {}'s handler {}", owner,

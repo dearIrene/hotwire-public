@@ -1,6 +1,7 @@
 package dev.moon.hotwire.fabric.registration;
 
 import dev.moon.hotwire.fabric.add.LoaderModList;
+import dev.moon.hotwire.registration.RegistrationJournal;
 import java.lang.reflect.Constructor;
 import java.lang.reflect.Field;
 import java.lang.reflect.Method;
@@ -24,7 +25,7 @@ public final class SodiumSettingsPages {
     private static final String MANAGER = ROOT + "client.config.ConfigManager";
     private static final AtomicBoolean BUILD_DUE = new AtomicBoolean();
 
-    private record PageRemoval(String mod) implements OffRemovals.Entry {
+    private record PageRemoval(String mod) implements RegistrationJournal.Take {
         @Override
         public void restore() {
             if (BUILD_DUE.compareAndSet(false, true)) {
@@ -41,8 +42,8 @@ public final class SodiumSettingsPages {
         }
 
         @Override
-        public OffRemovals.Where getWhere() {
-            return OffRemovals.Where.GAME_BEFORE_FRAME;
+        public RegistrationJournal.Where getWhere() {
+            return RegistrationJournal.Where.GAME_BEFORE_FRAME;
         }
     }
 
@@ -50,7 +51,7 @@ public final class SodiumSettingsPages {
     }
 
     public static void takeOut(Collection<String> mods) {
-        OffRemovals.onGame(() -> takeOutNow(mods), "settings pages left out");
+        GameHold.onGameBeforeFrameAndWait(() -> takeOutNow(mods), "settings pages left out");
     }
 
     private static void takeOutNow(Collection<String> mods) {
@@ -71,7 +72,7 @@ public final class SodiumSettingsPages {
             return;
         }
         if (!theirs.isEmpty() && buildAgain(Set.copyOf(mods))) {
-            theirs.forEach(mod -> OffRemovals.add(mod, new PageRemoval(mod)));
+            theirs.forEach(mod -> GameRegistrations.getJournal().addTake(mod, new PageRemoval(mod)));
             LOGGER.info("[Hotwire] Sodium's settings were built again without {}", theirs);
         }
     }

@@ -90,12 +90,12 @@ public final class EntityHolders {
     }
 
     private static @Nullable String findOwner(Class<?> type, Map<Class<?>, Optional<String>> owners) {
-        return owners.computeIfAbsent(type, one -> Optional.ofNullable(GameRegistrations.findModOf(one)))
+        return owners.computeIfAbsent(type, one -> Optional.ofNullable(Owners.findModOf(one)))
                 .orElse(null);
     }
 
     private static @Nullable String findCodeMod(Class<?> type, Map<Class<?>, Optional<String>> codeMods) {
-        return codeMods.computeIfAbsent(type, one -> Optional.ofNullable(GameRegistrations.findCodeMod(one)))
+        return codeMods.computeIfAbsent(type, one -> Optional.ofNullable(Owners.findCodeMod(one)))
                 .orElse(null);
     }
 

@@ -35,7 +35,7 @@ public final class RegistryEntries {
             int count = 0;
             int idle = 0;
             for (Object value : registry) {
-                if (value == null || !mod.equals(GameRegistrations.findModOf(value.getClass()))) {
+                if (value == null || !mod.equals(Owners.findModOf(value.getClass()))) {
                     continue;
                 }
                 if (passive.computeIfAbsent(value.getClass(), type -> isPassive(type, mod))) {
@@ -56,7 +56,7 @@ public final class RegistryEntries {
     }
 
     private static boolean isPassive(Class<?> type, String mod) {
-        for (Class<?> at = type; at != null && mod.equals(GameRegistrations.findModOf(at)); at = at.getSuperclass()) {
+        for (Class<?> at = type; at != null && mod.equals(Owners.findModOf(at)); at = at.getSuperclass()) {
             for (Method method : at.getDeclaredMethods()) {
                 if (!method.isSynthetic() && !Modifier.isStatic(method.getModifiers())
                         && !isCodec(method.getReturnType())) {

@@ -35,7 +35,7 @@ final class FieldGiveBacks {
                     }
                     continue;
                 }
-                if (value == null || (!mod.equals(GameRegistrations.findModOf(value.getClass()))
+                if (value == null || (!mod.equals(Owners.findModOf(value.getClass()))
                         && !(looksInto && CallbackCheck.callsInto(value, mod, this.owner.lambdas::findModOf)))) {
                     continue;
                 }
@@ -57,11 +57,11 @@ final class FieldGiveBacks {
                 Optional<Object> own = original == null ? Optional.empty() : holder == null
                         ? InitialValues.ofStatic(declaring, original, field.getName(), descriptor)
                         : InitialValues.ofInstance(declaring, original, holder, field.getName(), descriptor);
-                if ((own.isEmpty() || mod.equals(GameRegistrations.findModOf(own.get().getClass())))
+                if ((own.isEmpty() || mod.equals(Owners.findModOf(own.get().getClass())))
                         && StandIns.fits(field.getType())) {
                     own = Optional.of(StandIns.of(field.getType()));
                 }
-                if (own.isEmpty() || mod.equals(GameRegistrations.findModOf(own.get().getClass()))) {
+                if (own.isEmpty() || mod.equals(Owners.findModOf(own.get().getClass()))) {
                     retained.add(new FieldReferences.RemainingReference(field, holder, value));
                     continue;
                 }

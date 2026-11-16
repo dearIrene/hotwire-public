@@ -2,7 +2,6 @@ package dev.moon.hotwire.fabric.registration;
 
 import com.google.common.collect.MapMaker;
 import dev.moon.hotwire.fabric.HotwireClient;
-import dev.moon.hotwire.fabric.add.LoaderModList;
 import dev.moon.hotwire.fabric.mixin.core.world.item.CreativeModeTabsAccessor;
 import dev.moon.hotwire.jvm.LoadedClassList;
 import dev.moon.hotwire.redefine.ClassArrivals;
@@ -26,10 +25,8 @@ import java.util.HashMap;
 import java.util.HashSet;
 import java.util.IdentityHashMap;
 import java.util.Iterator;
-import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Map;
-import java.util.Objects;
 import java.util.Set;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.ConcurrentHashMap;
@@ -60,9 +57,6 @@ public final class FieldReferences {
     record RemainingReference(FieldSlots.Slot field, @Nullable Object holder, Object value) {
     }
 
-    private static final int GAME_DEPTH = 2;
-    private static final int TARGETS_DEPTH = 4;
-
     private final Instrumentation instrumentation;
     final Function<String, byte @Nullable []> originalBytes;
     private final Function<String, byte @Nullable []> readOnce;
@@ -83,6 +77,7 @@ public final class FieldReferences {
     private final Function<String, Set<String>> mixinTargets;
     final Lambdas lambdas;
     private final Function<String, Set<String>> handedTo;
+    private final LookRoots roots;
     private boolean askedForInitializedCheck;
     private @Nullable MethodHandle initializedCheck;
     private @Nullable Object unsafe;
@@ -97,6 +92,7 @@ public final class FieldReferences {
         this.mixinTargets = mixinTargets;
         Wrappers.readTargetsWith(mixinTargets);
         this.handedTo = handedTo;
+        this.roots = new LookRoots(mixinTargets, handedTo, this::isInitialized);
         this.lambdas = new Lambdas(instrumentation);
         this.recomputer = new StaticRecomputer(rebuilder, this.lambdas::findModOf, generatedBy);
         this.loadedChecks = new LoadedCheckAnswers(instrumentation, originalBytes, this::write);
@@ -277,8 +273,8 @@ public final class FieldReferences {
     private final Set<Class<?>> notSetUp = Collections.newSetFromMap(new MapMaker().weakKeys().makeMap());
 
     private static boolean isStaying(Class<?> owner, Predicate<String> on) {
-        String mod = GameRegistrations.findModOf(owner);
-        return mod == null || (!mod.equals(HotwireClient.ID) && (!GameRegistrations.isRecordedMod(mod)
+        String mod = Owners.findModOf(owner);
+        return mod == null || (!mod.equals(HotwireClient.ID) && (!Owners.isRecordedMod(mod)
                 || on.test(mod)));
     }
 
@@ -338,7 +334,6 @@ public final class FieldReferences {
     private void removeElements(Collection<String> mods, Predicate<String> on, LoadedClasses scan,
             Map<String, List<Replacement>> planned, boolean every) {
         Map<String, Class<?>> loaded = scan.byName();
-        Map<String, Set<String>> used = scan.used();
         Map<String, List<Class<?>>> classesOf = scan.classesOf();
         Predicate<Class<?>> others = getOthers(every ? Set.of() : mods, on);
         Map<String, String> modOfName = new HashMap<>();
@@ -364,95 +359,11 @@ public final class FieldReferences {
                 this.elements.takeOut(List.copyOf(mods), entities, Set.of(), HandedSearch.NONE);
                 return;
             }
-
-            Set<String> patched = new HashSet<>(targets);
-            for (String mod : mods) {
-                this.findTalksTo(mod, used.getOrDefault(mod, Set.of()), loaded, mods, on)
-                        .forEach(other -> patched.addAll(this.mixinTargets.apply(other)));
-            }
-            List<Object> holders = findHolders(entities, patched);
-            Set<Class<?>> statics = new LinkedHashSet<>();
-
-            targets.stream().map(name -> loaded.get(name.replace('.', '/'))).filter(Objects::nonNull).filter(others)
-                    .forEach(statics::add);
-
-            List<String> staying = classesOf.keySet().stream().filter(other -> (every || !mods.contains(other))
-                    && !other.equals(HotwireClient.ID) && (GameRegistrations.isLibrary(other)
-                            || (on.test(other) && GameRegistrations.isRecordedMod(other)))).toList();
-
-            Map<String, List<Class<?>>> initialized = new HashMap<>();
-
-            Set<String> listed = new HashSet<>();
-            Function<String, List<Class<?>>> initializedOf = group -> initialized.computeIfAbsent(group,
-                    key -> classesOf.getOrDefault(key, List.of()).stream().filter(this::isInitialized).toList());
-            for (String mod : mods) {
-                Set<String> names = used.getOrDefault(mod, Set.of());
-                names.stream().map(loaded::get).filter(Objects::nonNull).filter(others).forEach(statics::add);
-
-                Set<String> talked = this.findTalksTo(mod, names, loaded, mods, on);
-
-                List<String> talksTo = List.copyOf(talked);
-                staying.forEach(talked::add);
-                for (String other : talked) {
-                    if (listed.add(other)) {
-                        statics.addAll(initializedOf.apply(other));
-                    }
-                }
-                for (String other : talksTo) {
-                    if (listed.add(LoadedClasses.NESTED + other)) {
-                        statics.addAll(initializedOf.apply(LoadedClasses.NESTED + other));
-                    }
-                }
-            }
-
-            Set<Object> handed = LoaderModList.findHanded(mods);
-            Set<String> consumers = HandedSearch.findConsumers(handed);
-            List<Class<?>> consumerClasses = new ArrayList<>();
-            consumers.forEach(consumer -> consumerClasses.addAll(initializedOf.apply(consumer)));
-            HandedSearch search = new HandedSearch(handed, consumers, consumerClasses);
-            this.elements.takeOut(List.copyOf(mods), holders.stream()
-                    .filter(one -> others.test(one.getClass())).toList(), statics, search);
+            LookRoots.Roots roots = this.roots.find(mods, on, scan, targets, entities, others, every);
+            this.elements.takeOut(List.copyOf(mods), roots.holders(), roots.statics(), roots.handed());
         } finally {
             hold.release();
         }
-    }
-
-    private static List<Object> findHolders(List<Object> entities, Set<String> targets) {
-        Object game = Minecraft.getInstance();
-        List<Object> holders = new ArrayList<>(List.of(game));
-        holders.addAll(findGameObjectsBelow(game, 1));
-        holders.addAll(entities);
-        findGameObjectsBelow(game, TARGETS_DEPTH).stream()
-                .filter(one -> SuperclassNames.containsAny(one.getClass(), targets)).forEach(holders::add);
-
-        List<Object> patched = holders.stream()
-                .filter(one -> SuperclassNames.containsAny(one.getClass(), targets)).toList();
-        patched.forEach(one -> holders.addAll(findGameObjectsBelow(one, 1)));
-
-        patched.forEach(one -> holders.addAll(Fields.findInCollectionsOf(one,
-                type -> type.getName().startsWith("net.minecraft."))));
-        return holders;
-    }
-
-    private Set<String> findTalksTo(String mod, Set<String> names, Map<String, Class<?>> loaded,
-            Collection<String> mods, Predicate<String> on) {
-        Set<String> owners = new HashSet<>();
-        Set<String> candidates = new HashSet<>(this.handedTo.apply(mod));
-        for (String name : names) {
-            Class<?> type = loaded.get(name);
-            String owner = type == null ? null : GameRegistrations.findModOf(type);
-            if (owner != null) {
-                candidates.add(owner);
-            }
-        }
-        for (String owner : candidates) {
-            if (!owner.equals(mod) && !mods.contains(owner)
-                    && ((GameRegistrations.isRecordedMod(owner) && on.test(owner))
-                    || GameRegistrations.isLibrary(owner))) {
-                owners.add(owner);
-            }
-        }
-        return owners;
     }
 
     public void rehash(Set<Class<?>> changed) {
@@ -560,10 +471,10 @@ public final class FieldReferences {
     private static Predicate<Class<?>> getOthers(Collection<String> mods, Predicate<String> on) {
         Set<String> going = Set.copyOf(mods);
         return owner -> {
-            String ownerMod = GameRegistrations.findModOf(owner);
+            String ownerMod = Owners.findModOf(owner);
             return !owner.getName().startsWith("java.") && (ownerMod == null || (!going.contains(ownerMod)
                     && !ownerMod.equals(HotwireClient.ID)
-                    && (!GameRegistrations.isRecordedMod(ownerMod) || on.test(ownerMod))));
+                    && (!Owners.isRecordedMod(ownerMod) || on.test(ownerMod))));
         };
     }
 
@@ -612,10 +523,10 @@ public final class FieldReferences {
         Map<String, List<Replacement>> planned = new HashMap<>();
 
         Object game = Minecraft.getInstance();
-        List<Object> near = findGameObjectsBelow(game, GAME_DEPTH);
+        List<Object> near = LookRoots.findGameObjectsBelow(game, LookRoots.GAME_STEPS);
 
-        List<Object> deep = Fields.findBelow(game, TARGETS_DEPTH, type -> type.getName().startsWith("net.minecraft.")
-                || type.getName().startsWith("com.mojang."));
+        List<Object> deep = Fields.findBelow(game, LookRoots.PATCHED_STEPS,
+                type -> type.getName().startsWith("net.minecraft.") || type.getName().startsWith("com.mojang."));
         List<Object> graph = new ArrayList<>(deep);
         graph.add(game);
         List<Object> connected = NetworkHandlers.findPipelineObjects();
@@ -701,10 +612,6 @@ public final class FieldReferences {
 
     private static boolean isEntity(@Nullable Class<?> type) {
         return type != null && Entity.class.isAssignableFrom(type);
-    }
-
-    private static List<Object> findGameObjectsBelow(Object holder, int steps) {
-        return Fields.findBelow(holder, steps, type -> type.getName().startsWith("net.minecraft."));
     }
 
 }

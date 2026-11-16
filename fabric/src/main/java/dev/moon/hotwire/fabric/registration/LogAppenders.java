@@ -1,6 +1,7 @@
 package dev.moon.hotwire.fabric.registration;
 
 import dev.moon.hotwire.redefine.FinalWrites;
+import dev.moon.hotwire.registration.RegistrationJournal;
 import java.lang.reflect.Field;
 import java.util.Collection;
 import java.util.Collections;
@@ -38,7 +39,7 @@ public final class LogAppenders {
         return name.isEmpty() ? config.getRootLogger() : config.getLoggerConfig(name);
     }
 
-    private record Removal(String logger, Appender appender) implements OffRemovals.Entry {
+    private record Removal(String logger, Appender appender) implements RegistrationJournal.Take {
         @Override
         public void restore() {
             findLogger(this.logger).addAppender(this.appender, null, null);
@@ -55,7 +56,7 @@ public final class LogAppenders {
         }
     }
 
-    private record FilterRemoval(String logger, Filter filter) implements OffRemovals.Entry {
+    private record FilterRemoval(String logger, Filter filter) implements RegistrationJournal.Take {
         @Override
         public void restore() {
             findLogger(this.logger).addFilter(this.filter);
@@ -72,7 +73,7 @@ public final class LogAppenders {
         }
     }
 
-    private record PolicyRemoval(RewriteAppender appender, Object policy) implements OffRemovals.Entry {
+    private record PolicyRemoval(RewriteAppender appender, Object policy) implements RegistrationJournal.Take {
         @Override
         @SuppressWarnings("ReferenceEquality")
         public void restore() {
@@ -116,10 +117,10 @@ public final class LogAppenders {
                 if (appender instanceof RewriteAppender rewrite) {
                     takeOutPolicy(rewrite, mods);
                 }
-                String mod = GameRegistrations.findCodeMod(appender.getClass());
+                String mod = Owners.findCodeMod(appender.getClass());
                 if (mod != null && mods.contains(mod)) {
                     logger.removeAppender(appender.getName());
-                    OffRemovals.add(mod, new Removal(logger.getName(), appender));
+                    GameRegistrations.getJournal().addTake(mod, new Removal(logger.getName(), appender));
                     LOGGER.info("[Hotwire] {}'s log appender {} is taken off {}", mod, appender.getName(),
                             logger.getName().isEmpty() ? "the root logger" : logger.getName());
                 }
@@ -134,10 +135,10 @@ public final class LogAppenders {
         List<Filter> filters = filter instanceof CompositeFilter composite ? List.of(composite.getFiltersArray())
                 : filter == null ? List.of() : List.of(filter);
         for (Filter one : filters) {
-            String mod = GameRegistrations.findCodeMod(one.getClass());
+            String mod = Owners.findCodeMod(one.getClass());
             if (mod != null && mods.contains(mod)) {
                 logger.removeFilter(one);
-                OffRemovals.add(mod, new FilterRemoval(logger.getName(), one));
+                GameRegistrations.getJournal().addTake(mod, new FilterRemoval(logger.getName(), one));
                 LOGGER.info("[Hotwire] {}'s log filter is taken off {}", mod,
                         logger.getName().isEmpty() ? "the root logger" : logger.getName());
             }
@@ -157,10 +158,10 @@ public final class LogAppenders {
             if (policy == null) {
                 return;
             }
-            String mod = GameRegistrations.findCodeMod(policy.getClass());
+            String mod = Owners.findCodeMod(policy.getClass());
             if (mod != null && mods.contains(mod)) {
                 FinalWrites.write(slot, appender, UNCHANGED);
-                OffRemovals.add(mod, new PolicyRemoval(appender, policy));
+                GameRegistrations.getJournal().addTake(mod, new PolicyRemoval(appender, policy));
                 LOGGER.info("[Hotwire] {}'s rewrite of every log line gives way to lines as they come", mod);
             }
         } catch (ReflectiveOperationException | RuntimeException e) {

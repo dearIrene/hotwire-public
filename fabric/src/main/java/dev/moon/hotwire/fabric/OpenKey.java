@@ -2,7 +2,7 @@ package dev.moon.hotwire.fabric;
 
 import com.mojang.blaze3d.platform.InputConstants;
 import dev.moon.hotwire.config.HotwireSettings;
-import dev.moon.hotwire.fabric.registration.GameRegistrations;
+import dev.moon.hotwire.fabric.registration.Owners;
 import dev.moon.hotwire.fabric.screen.HotwireScreen;
 import dev.moon.hotwire.ui.Lang;
 import dev.moon.hotwire.ui.Notice;
@@ -99,7 +99,7 @@ public final class OpenKey {
             return;
         }
         String keyName = made.getTranslatedKeyMessage().getString();
-        String mod = GameRegistrations.findModOf(shown.getClass());
+        String mod = Owners.findModOf(shown.getClass());
         String name = mod == null ? shown.getClass().getSimpleName() : FabricLoader.getInstance().getModContainer(mod)
                 .map(container -> container.getMetadata().getName()).orElse(mod);
         LOGGER.info("[Hotwire] {} opens {}'s {} over Hotwire; said in a card", keyName, name,

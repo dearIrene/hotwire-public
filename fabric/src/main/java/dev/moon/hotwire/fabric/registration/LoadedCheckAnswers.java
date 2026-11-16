@@ -239,7 +239,7 @@ final class LoadedCheckAnswers {
                 if (value == null || Modifier.isFinal(field.getModifiers())) {
                     continue;
                 }
-                String mod = GameRegistrations.findModOf(findOwner(value));
+                String mod = Owners.findModOf(findOwner(value));
                 if (mod == null || !mods.contains(mod)) {
                     continue;
                 }

@@ -29,7 +29,7 @@ final class InterfaceDefaults {
 
     Optional<Object> find(Object value, String mod) {
         for (Class<?> face : value.getClass().getInterfaces()) {
-            String faceMod = GameRegistrations.findModOf(face);
+            String faceMod = Owners.findModOf(face);
             if (faceMod != null && !faceMod.equals(mod)) {
                 Optional<Object> start = this.found.computeIfAbsent(face, any -> this.findStartOf(face, faceMod));
                 if (start.isPresent()) {
@@ -43,10 +43,10 @@ final class InterfaceDefaults {
     static @Nullable String findOwnerOf(Object value) {
         Class<?> type = value.getClass();
         if (!type.isHidden()) {
-            return GameRegistrations.findModOf(type);
+            return Owners.findModOf(type);
         }
         String owner = ValueOwners.findLambdaOwner(type);
-        return owner != null ? owner : GameRegistrations.findModOf(type.getNestHost());
+        return owner != null ? owner : Owners.findModOf(type.getNestHost());
     }
 
     private Optional<Object> findStartOf(Class<?> face, String faceMod) {
@@ -60,7 +60,7 @@ final class InterfaceDefaults {
     private Optional<Object> findStartOf(Class<?> face, String faceMod, List<String> tried) {
         for (Class<?> type : LoadedClassList.of(this.instrumentation)) {
             if (type.isArray() || type.isPrimitive() || type.isHidden()
-                    || !faceMod.equals(GameRegistrations.findModOf(type))) {
+                    || !faceMod.equals(Owners.findModOf(type))) {
                 continue;
             }
             try {

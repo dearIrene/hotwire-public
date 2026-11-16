@@ -2,7 +2,7 @@ package dev.moon.hotwire.fabric;
 
 import dev.moon.hotwire.fabric.add.LoaderModList;
 import dev.moon.hotwire.fabric.add.WorldReopen;
-import dev.moon.hotwire.fabric.registration.GameRegistrations;
+import dev.moon.hotwire.fabric.registration.Owners;
 import dev.moon.hotwire.plan.ModGraph;
 import dev.moon.hotwire.redefine.Tripwire;
 import dev.moon.hotwire.ui.Lang;
@@ -33,7 +33,7 @@ final class OffCodeNotice {
     }
 
     static void install(HotwireEngine engine, InstalledMods installed) {
-        Tripwire.setOwners(GameRegistrations::findModOrShipper);
+        Tripwire.setOwners(Owners::findModOrShipper);
         Tripwire.setOffCheck(LoaderModList::isHidden);
         Tripwire.setGameThreads(() -> {
             Minecraft client = Minecraft.getInstance();
@@ -125,7 +125,7 @@ final class OffCodeNotice {
             if (loader == null || loader.equals(ClassLoader.getPlatformClassLoader())) {
                 continue;
             }
-            if (!mod.equals(GameRegistrations.findModOrShipper(type))) {
+            if (!mod.equals(Owners.findModOrShipper(type))) {
                 return false;
             }
             any = true;
@@ -156,14 +156,14 @@ final class OffCodeNotice {
                 continue;
             }
 
-            String owner = GameRegistrations.findModOrShipper(type);
+            String owner = Owners.findModOrShipper(type);
             if (mod.equals(owner)) {
                 entered = type;
                 enteredMethod = method.substring(dot + 1);
                 continue;
             }
 
-            String nested = GameRegistrations.findNestedModOf(type);
+            String nested = Owners.findNestedModOf(type);
             boolean isUser = owner != null && ModPolicy.isSwitchable(owner) && engine.isOn(owner)
                     && !isLibraryOf(installed.getGraph(), mod, owner)
                     && (nested == null || !isLibraryOf(installed.getGraph(), mod, nested))
@@ -203,7 +203,7 @@ final class OffCodeNotice {
             if (!seen.add(one)) {
                 continue;
             }
-            if (one != type && !mod.equals(GameRegistrations.findModOf(one))) {
+            if (one != type && !mod.equals(Owners.findModOf(one))) {
                 for (Method declared : one.getDeclaredMethods()) {
                     if (declared.getName().equals(method)) {
                         return true;

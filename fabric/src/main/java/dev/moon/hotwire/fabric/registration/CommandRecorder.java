@@ -68,10 +68,10 @@ public final class CommandRecorder {
     private static @Nullable String findOwner(Set<String> runs, @Nullable String caller) {
         List<String> libraries = new ArrayList<>();
         for (String mod : runs) {
-            if (!GameRegistrations.isRecordedMod(mod) || mod.equals(caller)) {
+            if (!Owners.isRecordedMod(mod) || mod.equals(caller)) {
                 continue;
             }
-            if (!GameRegistrations.getOwners().isLibrary(mod)) {
+            if (!Owners.getCallers().isLibrary(mod)) {
                 return mod;
             }
             libraries.add(mod);
@@ -111,7 +111,7 @@ public final class CommandRecorder {
     }
 
     private static @Nullable String findCodeMod(Class<?> type) {
-        return GameRegistrations.findCodeMod(type);
+        return Owners.findCodeMod(type);
     }
 
     private static void addModsOf(Object code, Set<String> mods) {

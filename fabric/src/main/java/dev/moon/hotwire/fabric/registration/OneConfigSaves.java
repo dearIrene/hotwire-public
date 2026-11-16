@@ -26,7 +26,7 @@ public final class OneConfigSaves implements ModLifecycleListener {
     @Override
     public void prepareOff(List<String> ids) {
         Class<?> manager = findManager();
-        if (manager == null || this.listening.test(GameRegistrations.findModOrShipper(manager))) {
+        if (manager == null || this.listening.test(Owners.findModOrShipper(manager))) {
             return;
         }
         int saved = 0;
@@ -56,7 +56,7 @@ public final class OneConfigSaves implements ModLifecycleListener {
     private static @Nullable String findOwner(Object tree, @Nullable String id, @Nullable Map<?, ?> configs)
             throws ReflectiveOperationException {
         Object config = configs == null || id == null ? null : configs.get(id);
-        String mod = config == null ? null : GameRegistrations.findModOf(config.getClass());
+        String mod = config == null ? null : Owners.findModOf(config.getClass());
         if (mod == null) {
             mod = OneConfigModCards.findModOf(tree);
         }
@@ -67,7 +67,7 @@ public final class OneConfigSaves implements ModLifecycleListener {
         try {
             Class<?> manager = LiveNames.findRunning(MANAGER, OneConfigSaves.class.getClassLoader());
 
-            return GameRegistrations.isOfOffMod(manager) ? null : manager;
+            return Owners.isOfOffMod(manager) ? null : manager;
         } catch (ClassNotFoundException | LinkageError e) {
             return null;
         }

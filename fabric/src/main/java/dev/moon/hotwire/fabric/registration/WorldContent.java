@@ -64,7 +64,7 @@ public final class WorldContent {
             String namespace = key == null ? "minecraft" : key.getNamespace();
             String owner = !"minecraft".equals(namespace) && loader.isModLoaded(namespace) ? namespace
                     : owners.computeIfAbsent(value.getClass(),
-                            type -> Optional.ofNullable(GameRegistrations.findModOf(type))).orElse(null);
+                            type -> Optional.ofNullable(Owners.findModOf(type))).orElse(null);
             if (owner != null && !"minecraft".equals(owner) && !isClientOnly(loader, owner)) {
                 index.computeIfAbsent(owner, mod -> new TreeSet<>()).add(kind);
             }

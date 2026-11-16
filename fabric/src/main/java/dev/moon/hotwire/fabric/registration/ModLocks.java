@@ -29,7 +29,7 @@ public final class ModLocks {
         Set<Integer> locks = new HashSet<>();
         Set<Object> seen = Collections.newSetFromMap(new IdentityHashMap<>());
         for (Class<?> type : LoadedClassList.of(this.instrumentation)) {
-            if (type.isArray() || type.isHidden() || !mod.equals(GameRegistrations.findModOf(type))
+            if (type.isArray() || type.isHidden() || !mod.equals(Owners.findModOf(type))
                     || !this.initialized.test(type)) {
                 continue;
             }
@@ -40,7 +40,7 @@ public final class ModLocks {
                     continue;
                 }
                 this.add(value, locks);
-                if (mod.equals(GameRegistrations.findModOf(value.getClass()))) {
+                if (mod.equals(Owners.findModOf(value.getClass()))) {
                     for (FieldSlots.Slot inner : Fields.getReferenceFields(value.getClass(), false)) {
                         Object innerValue = CollectionParts.read(inner, value);
                         if (innerValue != null && seen.add(innerValue)) {
