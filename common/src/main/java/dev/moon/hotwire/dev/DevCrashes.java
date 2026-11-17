@@ -63,7 +63,7 @@ final class DevCrashes {
                     Lang.get("hotwire.dev.crash.at", kind, place), 1, Integer::sum);
             parent = mod.parents.get(build);
             Integer to = parent;
-            back = session.engine.isAutoRollBackOn() && to != null && build != 0
+            back = session.settings.isAutoRollBackOn() && to != null && build != 0
                     && mod.saved.stream().anyMatch(saved -> saved.number() == to) && mod.autoRolled.add(build);
         }
 

@@ -1,5 +1,6 @@
 package dev.moon.hotwire.dev;
 
+import dev.moon.hotwire.config.HotwireSettings;
 import dev.moon.hotwire.ui.Lang;
 import dev.moon.hotwire.ui.MergeWords;
 import dev.moon.hotwire.ui.Notice;
@@ -26,8 +27,10 @@ final class DevBuildEdits {
 
     private final Path folder;
     private final DevSession.Engine engine;
+    private final HotwireSettings settings;
 
-    DevBuildEdits(Path folder, DevSession.Engine engine) {
+    DevBuildEdits(Path folder, DevSession.Engine engine, HotwireSettings settings) {
+        this.settings = settings;
         this.folder = folder;
         this.engine = engine;
     }
@@ -84,7 +87,7 @@ final class DevBuildEdits {
     }
 
     private void dropOldest(SessionMod mod) {
-        int over = mod.saved.size() - this.engine.getSavedBuilds();
+        int over = mod.saved.size() - this.settings.getSavedBuilds();
         Iterator<SavedBuild> oldest = mod.saved.descendingIterator();
         while (over > 0 && oldest.hasNext()) {
             int number = oldest.next().number();

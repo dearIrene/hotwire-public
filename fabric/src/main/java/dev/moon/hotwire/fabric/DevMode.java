@@ -41,7 +41,7 @@ final class DevMode implements DevControls {
                     System.getProperty("java.version"), setup.jvm());
         }
         this.session = settings.isDevReloadOn(setup.inSetup())
-                ? DevSession.start(DevSetups.getBuildFolder(), tasks, engine) : null;
+                ? DevSession.start(DevSetups.getBuildFolder(), tasks, engine, settings) : null;
         DevSession running = this.session;
         if (running != null) {
             NoticeHud.markWith(this::findMarkLines, settings::getBuildMarkAt);

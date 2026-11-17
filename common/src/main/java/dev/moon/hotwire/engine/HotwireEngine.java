@@ -128,7 +128,7 @@ public final class HotwireEngine implements ModScreenGame, AutoCloseable {
         this.pending = new PendingChanges(queue, folders);
         this.bound = bound;
         this.dev = units.makeDevControls(settings, this.tasks, new DevEngine(this::findParts, this::getSwitchRefusal,
-                installed, settings), this.engineScreens::makeDeveloperSettings);
+                installed), this.engineScreens::makeDeveloperSettings);
 
         if (bound instanceof Bound.Ready ready) {
             ready.parts().instrumentation().addTransformer(ready.parts().loadTimeMixer());

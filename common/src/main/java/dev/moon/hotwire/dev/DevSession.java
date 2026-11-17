@@ -2,6 +2,7 @@ package dev.moon.hotwire.dev;
 
 import dev.moon.hotwire.concurrent.Tasks;
 import dev.moon.hotwire.config.AtomicFiles;
+import dev.moon.hotwire.config.HotwireSettings;
 import dev.moon.hotwire.redefine.ClassRebuilder;
 import dev.moon.hotwire.seam.Games;
 import dev.moon.hotwire.ui.BuildMark;
@@ -11,6 +12,7 @@ import dev.moon.hotwire.ui.Notices;
 import dev.moon.hotwire.ui.UpdateMethod;
 import dev.moon.hotwire.ui.UpdatePreview;
 import dev.moon.hotwire.update.ModUpdater;
+import dev.moon.hotwire.update.UpdateSupport;
 import java.io.IOException;
 import java.nio.charset.StandardCharsets;
 import java.nio.file.DirectoryStream;
@@ -65,19 +67,7 @@ public final class DevSession implements DevHost, AutoCloseable {
 
         ModUpdater.Result updateInPlace(Path jar);
 
-        String describe(ModUpdater.Result result);
-
         Restart restart(String id);
-
-        boolean isEveryReloadShown();
-
-        boolean isAutoRollBackOn();
-
-        boolean isHistorySaved();
-
-        int getSavedBuilds();
-
-        DevExtras getExtras();
 
         List<Class<?>> findLoaded(Set<String> names);
 
@@ -96,6 +86,7 @@ public final class DevSession implements DevHost, AutoCloseable {
     private final Path folder;
     private final Tasks tasks;
     final Engine engine;
+    final HotwireSettings settings;
     private final DevWatch watch;
     private final DevBuildEdits edits;
     private final DevCompares compares;
@@ -105,11 +96,12 @@ public final class DevSession implements DevHost, AutoCloseable {
 
     private final Map<Path, Set<String>> changedAtStart = new ConcurrentHashMap<>();
 
-    private DevSession(Path folder, Tasks tasks, Engine engine) throws IOException {
+    private DevSession(Path folder, Tasks tasks, Engine engine, HotwireSettings settings) throws IOException {
         this.folder = folder;
         this.tasks = tasks;
         this.engine = engine;
-        this.edits = new DevBuildEdits(folder, engine);
+        this.settings = settings;
+        this.edits = new DevBuildEdits(folder, engine, settings);
         this.compares = new DevCompares(tasks, this::putIn, engine::findLoaded);
         this.branches = new ProjectBranches(tasks);
         this.cleared = new ClearedBuilds(folder, tasks, this::saveHistory);
@@ -428,7 +420,8 @@ public final class DevSession implements DevHost, AutoCloseable {
 
     @Override
     public DevExtras getExtras() {
-        return this.engine.getExtras();
+        return new DevExtras(this.settings.isCompareTickShown(), this.settings.isCompareMemoryShown(),
+                this.settings.isCopyRowsShown(), this.settings.isSizesShown());
     }
 
     @Override
@@ -500,7 +493,7 @@ public final class DevSession implements DevHost, AutoCloseable {
 
     @SuppressWarnings("FutureReturnValueIgnored")
     void saveHistory(SessionMod mod) {
-        if (!this.engine.isHistorySaved()) {
+        if (!this.settings.isHistorySaved()) {
             return;
         }
         this.tasks.submit("keeping the builds of " + mod.mod.id(), () -> {
@@ -547,12 +540,12 @@ public final class DevSession implements DevHost, AutoCloseable {
         }
     }
 
-    public static @Nullable DevSession start(Path folder, Tasks tasks, Engine engine) {
+    public static @Nullable DevSession start(Path folder, Tasks tasks, Engine engine, HotwireSettings settings) {
         if (STARTS.isEmpty()) {
             return null;
         }
         try {
-            DevSession session = new DevSession(folder, tasks, engine);
+            DevSession session = new DevSession(folder, tasks, engine, settings);
             current = session;
 
             List<Path> projects = new ArrayList<>();
@@ -808,7 +801,7 @@ public final class DevSession implements DevHost, AutoCloseable {
                                 (updateDone - planDone) / 1_000_000, (end - updateDone) / 1_000_000);
                     } else {
                         mod.codeNumber = -1;
-                        this.fail(mod, List.of(this.engine.describe(result)));
+                        this.fail(mod, List.of(UpdateSupport.describe(result)));
                     }
                 } else if (preview instanceof UpdatePreview.Ready ready) {
                     mod.codeNumber = -1;
@@ -845,7 +838,7 @@ public final class DevSession implements DevHost, AutoCloseable {
         mod.addEvent(new DevEvent(System.currentTimeMillis(), kind, title, lines, in ? mod.runningNumber : -1));
         LOGGER.info("[Hotwire] {}: {} {}", mod.mod.id(), title, detail);
         boolean problem = kind == DevEvent.Kind.FAILED || kind == DevEvent.Kind.NEEDS_RESTART;
-        if (problem || this.engine.isEveryReloadShown()) {
+        if (problem || this.settings.isEveryReloadShown()) {
             Notices.show(switch (kind) {
                 case FAILED -> Notice.ofBad(title, detail);
                 case NEEDS_RESTART -> Notice.ofAsk(title, detail);
@@ -1036,7 +1029,7 @@ public final class DevSession implements DevHost, AutoCloseable {
             this.saveHistory(mod);
             return true;
         }
-        this.fail(mod, List.of(this.engine.describe(result)));
+        this.fail(mod, List.of(UpdateSupport.describe(result)));
         return false;
     }
 
