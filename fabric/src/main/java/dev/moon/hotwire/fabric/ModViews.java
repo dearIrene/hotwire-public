@@ -1,10 +1,10 @@
 package dev.moon.hotwire.fabric;
 
-import com.mojang.blaze3d.platform.InputConstants;
 import dev.moon.hotwire.fabric.mixin.core.client.gui.components.toasts.ToastInstanceAccessor;
 import dev.moon.hotwire.fabric.mixin.core.client.gui.components.toasts.ToastManagerAccessor;
 import dev.moon.hotwire.fabric.registration.GameHold;
 import dev.moon.hotwire.fabric.screen.HotwireScreen;
+import dev.moon.hotwire.fabric.version.Spellings;
 import dev.moon.hotwire.redefine.FieldSlots;
 import dev.moon.hotwire.registration.Fields;
 import dev.moon.hotwire.registration.Owners;
@@ -16,11 +16,6 @@ import java.util.Map;
 import java.util.Objects;
 import java.util.Set;
 import java.util.function.Function;
-//? if >=26.1 {
-import net.fabricmc.fabric.api.client.keymapping.v1.KeyMappingHelper;
-//?} else {
-/*import net.fabricmc.fabric.api.client.keybinding.v1.KeyBindingHelper;
-*///?}
 import net.minecraft.ChatFormatting;
 import net.minecraft.client.KeyMapping;
 import net.minecraft.client.Minecraft;
@@ -43,19 +38,11 @@ public final class ModViews {
     }
 
     public static @Nullable Screen openScreen() {
-        //? if >=26.2 {
-        return Minecraft.getInstance().gui.screen();
-        //?} else {
-        /*return Minecraft.getInstance().screen;
-        *///?}
+        return Spellings.openScreen();
     }
 
     public static @Nullable Overlay openOverlay() {
-        //? if >=26.2 {
-        return Minecraft.getInstance().gui.overlay();
-        //?} else {
-        /*return Minecraft.getInstance().getOverlay();
-        *///?}
+        return Spellings.openOverlay();
     }
 
     public static void clearParticlesOf(Collection<String> mods) {
@@ -98,12 +85,7 @@ public final class ModViews {
     }
 
     public static @Nullable LoadingOverlay findLoadingOverlay() {
-        Minecraft game = Minecraft.getInstance();
-        //? if >=26.2 {
-        Object holder = game.gui;
-        //?} else {
-        /*Object holder = game;
-        *///?}
+        Object holder = Spellings.getScreenHolder();
         for (FieldSlots.Slot field : Fields.getDeclared(holder.getClass())) {
             try {
                 if (!field.isStatic() && Overlay.class.isAssignableFrom(field.getType())) {
@@ -121,11 +103,7 @@ public final class ModViews {
     }
 
     public static void showOverlay(@Nullable Overlay overlay) {
-        //? if >=26.2 {
-        Minecraft.getInstance().gui.setOverlay(overlay);
-        //?} else {
-        /*Minecraft.getInstance().setOverlay(overlay);
-        *///?}
+        Spellings.showOverlay(overlay);
     }
 
     public static void rebuild() {
@@ -133,11 +111,7 @@ public final class ModViews {
         if (screen == null || screen instanceof HotwireScreen) {
             return;
         }
-        //? if >=1.21.11 {
-        screen.resize(screen.width, screen.height);
-        //?} else {
-        /*screen.resize(Minecraft.getInstance(), screen.width, screen.height);
-        *///?}
+        Spellings.resize(screen);
     }
 
     static void reopenScreen() {
@@ -162,15 +136,10 @@ public final class ModViews {
     }
 
     public static void show(@Nullable Screen screen) {
-        //? if >=26.2 {
-        Minecraft.getInstance().gui.setScreen(screen);
-        //?} else {
-        /*Minecraft.getInstance().setScreen(screen);
-        *///?}
+        Spellings.show(screen);
     }
 
     static List<String> close(Collection<String> ids) {
-        Minecraft minecraft = Minecraft.getInstance();
         List<String> closed = new ArrayList<>();
         Screen screen = openScreen();
         if (screen != null && isShownBy(screen, ids)) {
@@ -182,13 +151,7 @@ public final class ModViews {
             closed.add("the overlay " + overlay.getClass().getSimpleName());
             closeOverlay();
         }
-        //? if >=26.2 {
-        ToastManagerAccessor toasts = (ToastManagerAccessor) minecraft.gui.toastManager();
-        //?} else if >=1.21.4 {
-        /*ToastManagerAccessor toasts = (ToastManagerAccessor) minecraft.getToastManager();
-        *///?} else {
-        /*ToastManagerAccessor toasts = (ToastManagerAccessor) minecraft.getToasts();
-        *///?}
+        ToastManagerAccessor toasts = Spellings.getToasts();
         int gone = 0;
         gone += remove(toasts.hotwire$getVisible(), ids, entry -> ((ToastInstanceAccessor) entry).hotwire$getToast());
         gone += remove(toasts.hotwire$getQueued(), ids, toast -> toast);
@@ -218,11 +181,7 @@ public final class ModViews {
             if (!hint.isEmpty()) {
                 text = text.append(Component.literal(" " + hint).withStyle(ChatFormatting.RED));
             }
-            //? if >=26.1 {
-            minecraft.player.sendSystemMessage(text);
-            //?} else {
-            /*minecraft.player.displayClientMessage(text, false);
-            *///?}
+            Spellings.tellPlayer(minecraft.player, text);
         });
     }
 
@@ -243,40 +202,15 @@ public final class ModViews {
     }
 
     public static void runSoon(Runnable opening) {
-        Minecraft client = Minecraft.getInstance();
-        //? if >=1.21.2 {
-        client.schedule(opening);
-        //?} else {
-        /*client.tell(opening);
-        *///?}
+        Spellings.runSoon(opening);
     }
 
     static List<KeyMapping> registerKeys(Map<String, Integer> defaults) {
         Identifier id = Identifier.fromNamespaceAndPath(HotwireClient.ID, HotwireClient.ID);
-        //? if >=1.21.10 {
-        KeyMapping.Category category = KeyMapping.Category.register(id);
-        //?} else {
-        /*String category = "key.category." + id.toLanguageKey();
-        *///?}
-        List<KeyMapping> made = new ArrayList<>();
-        for (Map.Entry<String, Integer> key : defaults.entrySet()) {
-            made.add(new KeyMapping(key.getKey(), key.getValue(), category));
-        }
-        for (KeyMapping key : made) {
-            //? if >=26.1 {
-            KeyMappingHelper.registerKeyMapping(key);
-            //?} else {
-            /*KeyBindingHelper.registerKeyBinding(key);
-            *///?}
-        }
-        return made;
+        return Spellings.registerKeys(id, defaults);
     }
 
     static void setKey(KeyMapping mapping, int code) {
-        //? if >=26.3 {
-        mapping.setKey(InputConstants.Type.KEYBOARD.getOrCreate(code));
-        //?} else {
-        /*mapping.setKey(InputConstants.Type.KEYSYM.getOrCreate(code));
-        *///?}
+        Spellings.setKey(mapping, code);
     }
 }

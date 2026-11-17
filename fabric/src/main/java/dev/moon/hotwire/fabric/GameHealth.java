@@ -1,5 +1,6 @@
 package dev.moon.hotwire.fabric;
 
+import dev.moon.hotwire.fabric.version.Spellings;
 import java.util.ArrayList;
 import java.util.List;
 import net.minecraft.core.Registry;
@@ -28,11 +29,7 @@ final class GameHealth {
             problems.add("the " + what + " registry no longer knows " + entry);
             return;
         }
-        //? if >=1.21.11 {
-        ResourceKey<T> made = ResourceKey.create(registry.key(), key.identifier());
-        //?} else {
-        /*ResourceKey<T> made = ResourceKey.create(registry.key(), key.location());
-        *///?}
+        ResourceKey<T> made = ResourceKey.create(registry.key(), Spellings.getKeyId(key));
         if (made != key) {
             problems.add("a new key for " + key + " is not the one the " + what + " registry holds");
         }

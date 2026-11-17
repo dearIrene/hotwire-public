@@ -1,5 +1,6 @@
 package dev.moon.hotwire.fabric.registration;
 
+import dev.moon.hotwire.fabric.version.Spellings;
 import dev.moon.hotwire.redefine.FieldHolders;
 import java.lang.reflect.Field;
 import java.lang.reflect.Modifier;
@@ -66,11 +67,7 @@ public final class InternedKeys {
     }
 
     public static Identifier findIdOf(ResourceKey<?> key) {
-        //? if >=1.21.11 {
-        return key.identifier();
-        //?} else {
-        /*return key.location();
-        *///?}
+        return Spellings.getKeyId(key);
     }
 
     @SuppressWarnings("unchecked")
