@@ -141,16 +141,7 @@ final class BuildPicker {
     }
 
     static int findFirstPick(DevModView mod) {
-        Integer parent = mod.parents().get(mod.runningBuild());
-        if (parent != null && parent != mod.runningBuild() && (parent == 0 || mod.savedBuilds().contains(parent))) {
-            return parent;
-        }
-        for (int build : mod.savedBuilds()) {
-            if (build != mod.runningBuild()) {
-                return build;
-            }
-        }
-        return 0;
+        return DevOverview.findBuildBefore(mod).orElse(0);
     }
 
     @Nullable String findOtherBranch(DevModView mod, int build) {

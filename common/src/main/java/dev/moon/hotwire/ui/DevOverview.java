@@ -102,7 +102,7 @@ final class DevOverview {
         }
     }
 
-    private static OptionalInt findBuildBefore(DevModView mod) {
+    static OptionalInt findBuildBefore(DevModView mod) {
         Integer parent = mod.parents().get(mod.runningBuild());
         if (parent != null && (parent == 0 || mod.savedBuilds().contains(parent)) && parent != mod.runningBuild()) {
             return OptionalInt.of(parent);
