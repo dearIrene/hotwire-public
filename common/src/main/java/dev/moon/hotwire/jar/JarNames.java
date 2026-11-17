@@ -69,8 +69,8 @@ public final class JarNames {
         if (records != null && key != null) {
             ByteArrayOutputStream bytes = new ByteArrayOutputStream();
             try (DataOutputStream out = new DataOutputStream(bytes)) {
-                writeSet(out, names.named());
-                writeSet(out, names.withNested());
+                JarScans.writeAll(out, names.named());
+                JarScans.writeAll(out, names.withNested());
             }
             records.put(key, bytes.toByteArray(), null);
         }
@@ -138,13 +138,6 @@ public final class JarNames {
             }
         }
         return named;
-    }
-
-    private static void writeSet(DataOutputStream out, Set<String> names) throws IOException {
-        out.writeInt(names.size());
-        for (String name : names) {
-            out.writeUTF(name);
-        }
     }
 
     private static Set<String> readSet(DataInputStream in) throws IOException {

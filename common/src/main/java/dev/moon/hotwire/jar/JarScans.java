@@ -202,7 +202,7 @@ public final class JarScans {
         return new ModJar(name, manifest, patches, nested, notMods, widener);
     }
 
-    private static void writeAll(DataOutputStream out, Collection<String> names) throws IOException {
+    static void writeAll(DataOutputStream out, Collection<String> names) throws IOException {
         out.writeInt(names.size());
         for (String name : names) {
             out.writeUTF(name);
