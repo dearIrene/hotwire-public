@@ -8,11 +8,6 @@ import java.util.Set;
 public record UpdateContext(ModState state, Set<String> loadedClasses, Map<String, Set<String>> patchedBy,
         Set<String> dependents, Map<String, List<String>> unmet, Comparator<String> versionOrder,
         boolean takesShapes) {
-    public UpdateContext(ModState state, Set<String> loadedClasses, Map<String, Set<String>> patchedBy,
-            Set<String> dependents, Map<String, List<String>> unmet, Comparator<String> versionOrder) {
-        this(state, loadedClasses, patchedBy, dependents, unmet, versionOrder, false);
-    }
-
     public UpdateContext {
         loadedClasses = Set.copyOf(loadedClasses);
         patchedBy = Map.copyOf(patchedBy);

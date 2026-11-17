@@ -22,10 +22,6 @@ public final class ModIndex {
     private final Map<Path, CacheEntry> cache = new ConcurrentHashMap<>();
     private final @Nullable JarScans scans;
 
-    public ModIndex(Executor readers) {
-        this(readers, null);
-    }
-
     public ModIndex(Executor readers, @Nullable JarScans scans) {
         this.readers = readers;
         this.scans = scans;

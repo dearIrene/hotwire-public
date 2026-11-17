@@ -7,11 +7,6 @@ import java.util.Set;
 public record JarDiff(ModManifest running, ModManifest incoming, List<ClassDiff> classes,
         List<String> changedResources, List<String> opens, List<String> abstractsGained,
         List<String> constructorChains) {
-    public JarDiff(ModManifest running, ModManifest incoming, List<ClassDiff> classes,
-            List<String> changedResources) {
-        this(running, incoming, classes, changedResources, List.of(), List.of(), List.of());
-    }
-
     public JarDiff {
         classes = List.copyOf(classes);
         changedResources = List.copyOf(changedResources);
