@@ -19,4 +19,10 @@ public final class Bands {
         HudElements.remove(id);
         //?}
     }
+
+    public static void releaseLoadStatusView() {
+        //? if >=26.1 {
+        LoadStatusView.release();
+        //?}
+    }
 }

@@ -1,7 +1,7 @@
 package dev.moon.hotwire.fabric.mixin.core.client.multiplayer;
 
 //? if >=26.1 {
-import dev.moon.hotwire.fabric.add.LoadStatusViews;
+import dev.moon.hotwire.fabric.version.LoadStatusView;
 import net.minecraft.client.multiplayer.LevelLoadTracker;
 import net.minecraft.server.level.progress.ChunkLoadStatusView;
 import org.spongepowered.asm.mixin.injection.At;
@@ -18,7 +18,7 @@ public abstract class LevelLoadTrackerMixin {
     @Inject(method = "setServerChunkStatusView", at = @At("RETURN"), require = 0)
     private void hotwire$noteView(ChunkLoadStatusView view, CallbackInfo ci) {
         if (view != null) {
-            LoadStatusViews.note((LevelLoadTracker) (Object) this);
+            LoadStatusView.note((LevelLoadTracker) (Object) this);
         }
     }
     //?}
