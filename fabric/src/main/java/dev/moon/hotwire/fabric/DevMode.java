@@ -15,6 +15,7 @@ import dev.moon.hotwire.ui.Notice;
 import dev.moon.hotwire.ui.Notices;
 import java.io.IOException;
 import java.util.List;
+import java.util.function.Consumer;
 import java.util.function.UnaryOperator;
 import net.fabricmc.loader.api.FabricLoader;
 import net.minecraft.client.gui.screens.Screen;
@@ -54,34 +55,28 @@ final class DevMode implements DevControls {
         return running == null || !this.settings.isBuildMarkOn() ? List.of() : running.findMarkLines();
     }
 
-    @Override
-    public void reloadAll() {
+    private void runInSession(Consumer<DevSession> work) {
         DevSession running = this.session;
         if (running == null) {
             Notices.show(Notice.ofAsk(Lang.get("hotwire.dev.window.title"), Lang.get("hotwire.dev.window.off")));
         } else {
-            running.getDevMods().forEach(mod -> running.reloadNow(mod.id()));
+            work.accept(running);
         }
+    }
+
+    @Override
+    public void reloadAll() {
+        this.runInSession(running -> running.getDevMods().forEach(mod -> running.reloadNow(mod.id())));
     }
 
     @Override
     public void stepBack() {
-        DevSession running = this.session;
-        if (running == null) {
-            Notices.show(Notice.ofAsk(Lang.get("hotwire.dev.window.title"), Lang.get("hotwire.dev.window.off")));
-        } else {
-            running.stepBack();
-        }
+        this.runInSession(DevSession::stepBack);
     }
 
     @Override
     public void flip() {
-        DevSession running = this.session;
-        if (running == null) {
-            Notices.show(Notice.ofAsk(Lang.get("hotwire.dev.window.title"), Lang.get("hotwire.dev.window.off")));
-        } else {
-            running.flip();
-        }
+        this.runInSession(DevSession::flip);
     }
 
     @Override
