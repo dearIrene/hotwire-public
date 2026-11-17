@@ -1,5 +1,6 @@
 package dev.moon.hotwire.redefine;
 
+import dev.moon.hotwire.seam.Games;
 import java.lang.management.GarbageCollectorMXBean;
 import java.lang.management.ManagementFactory;
 import java.lang.ref.Reference;
@@ -12,8 +13,6 @@ import java.util.Set;
 import java.util.TreeSet;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.TimeUnit;
-import java.util.function.BooleanSupplier;
-import java.util.function.Predicate;
 import org.jspecify.annotations.Nullable;
 import org.objectweb.asm.Type;
 
@@ -22,9 +21,6 @@ public final class OffWindowObjects {
     private static final Map<String, ClassRecord> MADE = new ConcurrentHashMap<>();
 
     private static final Set<String> RECORDING = ConcurrentHashMap.newKeySet();
-
-    private static volatile BooleanSupplier reloading = () -> false;
-    private static volatile Predicate<Object> isRetired = made -> false;
 
     private static final long COLLECTION_WAIT_NANOS = TimeUnit.SECONDS.toNanos(2);
 
@@ -56,21 +52,13 @@ public final class OffWindowObjects {
         }
     }
 
-    public static void setRetired(Predicate<Object> retired) {
-        isRetired = retired;
-    }
-
     public static boolean isOfClosedWorld(Object made) {
-        return isRetired.test(made);
+        return Games.getNow().isOfClosedWorld(made);
     }
 
     private static boolean isGone(Reference<Object> reference) {
         Object made = reference.get();
-        return made == null || isRetired.test(made);
-    }
-
-    public static void setReloading(BooleanSupplier now) {
-        reloading = now;
+        return made == null || Games.getNow().isOfClosedWorld(made);
     }
 
     public static void onMade(Object made, String className) {
@@ -91,7 +79,7 @@ public final class OffWindowObjects {
         }
         Reference<Object> reference = new WeakReference<>(made, of.gone);
         of.live.add(reference);
-        if (reloading.getAsBoolean()) {
+        if (Games.getNow().isReloadMaking()) {
             of.reloaded.add(reference);
         } else {
             of.isMadeElsewhere = true;

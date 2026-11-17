@@ -76,6 +76,18 @@ public interface Game {
 
     Runnable runAtNextHold(Runnable work);
 
+    List<Object> findLongLived();
+
+    Set<String> getStartupMethods(String className);
+
+    Set<String> getJoinMethods(String className);
+
+    Set<String> getLoadFinishedMethods(String className);
+
+    boolean isOfClosedWorld(Object made);
+
+    boolean isReloadMaking();
+
     Reloads getReloads();
 
     boolean isGamePaused();

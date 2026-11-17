@@ -24,6 +24,7 @@ import java.util.function.Function;
 import java.util.function.Supplier;
 import net.minecraft.client.Minecraft;
 import net.minecraft.client.gui.screens.Screen;
+import net.minecraft.client.multiplayer.ClientLevel;
 import net.minecraft.client.resources.model.ModelManager;
 import net.minecraft.client.server.IntegratedServer;
 import net.minecraft.core.Holder;
@@ -32,6 +33,8 @@ import net.minecraft.core.registries.BuiltInRegistries;
 import net.minecraft.resources.Identifier;
 import net.minecraft.resources.ResourceKey;
 import net.minecraft.server.MinecraftServer;
+import net.minecraft.server.level.ServerLevel;
+import net.minecraft.server.packs.resources.SimpleReloadInstance;
 import net.minecraft.world.entity.Entity;
 import net.minecraft.world.item.CreativeModeTab;
 import net.minecraft.world.level.Level;
@@ -39,6 +42,9 @@ import org.jspecify.annotations.Nullable;
 import org.spongepowered.asm.mixin.transformer.ClassInfo;
 
 public final class GameSide implements Game {
+    private static final StackWalker STACK = StackWalker.getInstance();
+
+    private static final String RELOAD_TASKS = SimpleReloadInstance.class.getName();
     private final GameReloads reloads = new GameReloads();
     @Override
     public int findBitsOf(Class<?> type) {
@@ -282,5 +288,43 @@ public final class GameSide implements Game {
     @Override
     public void openLink(String link) {
         WebLinks.open(link);
+    }
+
+    @Override
+    public List<Object> findLongLived() {
+        return GameClasses.findLongLived();
+    }
+
+    @Override
+    public Set<String> getStartupMethods(String className) {
+        return GameClasses.getStartupMethods(className);
+    }
+
+    @Override
+    public Set<String> getJoinMethods(String className) {
+        return GameClasses.getJoinMethods(className);
+    }
+
+    @Override
+    public Set<String> getLoadFinishedMethods(String className) {
+        return GameClasses.getLoadFinishedMethods(className);
+    }
+
+    @Override
+    @SuppressWarnings("ReferenceEquality")
+    public boolean isOfClosedWorld(Object made) {
+        return switch (made) {
+            case MinecraftServer server -> server.isStopped();
+            case ServerLevel level -> level.getServer().isStopped();
+            case ClientLevel level -> level != Minecraft.getInstance().level;
+            case Entity entity -> entity.level() != null && this.isOfClosedWorld(entity.level());
+            default -> false;
+        };
+    }
+
+    @Override
+    public boolean isReloadMaking() {
+        return ModViews.findLoadingOverlay() != null
+                && STACK.walk(frames -> frames.anyMatch(frame -> frame.getClassName().startsWith(RELOAD_TASKS)));
     }
 }

@@ -2,6 +2,7 @@ package dev.moon.hotwire.redefine;
 
 import dev.moon.hotwire.classfile.ClassNodes;
 import dev.moon.hotwire.classfile.GameNames;
+import dev.moon.hotwire.seam.Games;
 import java.lang.reflect.Field;
 import java.util.ArrayList;
 import java.util.Comparator;
@@ -15,7 +16,6 @@ import java.util.concurrent.ConcurrentHashMap;
 import java.util.function.BiConsumer;
 import java.util.function.Function;
 import java.util.function.Predicate;
-import java.util.function.Supplier;
 import org.jspecify.annotations.Nullable;
 import org.objectweb.asm.ClassReader;
 import org.objectweb.asm.ClassVisitor;
@@ -47,13 +47,6 @@ public final class InitHookReplay {
     private static final String CALLBACK = "org/spongepowered/asm/mixin/injection/callback/CallbackInfo";
 
     static final Set<String> RUN = ConcurrentHashMap.newKeySet();
-
-    private static volatile Supplier<List<Object>> longLived = List::of;
-    private static volatile Function<String, Set<String>> startup = name -> Set.of();
-
-    private static volatile Function<String, Set<String>> joining = name -> Set.of();
-
-    private static volatile Function<String, Set<String>> loadFinished = name -> Set.of();
     private static volatile Function<String, Set<String>> succeeded = key -> Set.of();
     private static volatile StaticWriter statics = (field, value) -> {
         throw new IllegalAccessException("no writer of statics is set");
@@ -108,23 +101,12 @@ public final class InitHookReplay {
     private InitHookReplay() {
     }
 
-    public static void answerWith(Supplier<List<Object>> objects, Function<String, Set<String>> methods,
-            Function<String, Set<String>> joins) {
-        longLived = objects;
-        startup = methods;
-        joining = joins;
-    }
-
     static List<Object> getLongLived() {
-        return longLived.get();
+        return Games.getNow().findLongLived();
     }
 
     static StaticWriter getStatics() {
         return statics;
-    }
-
-    public static void answerLoadFinishedWith(Function<String, Set<String>> methods) {
-        loadFinished = methods;
     }
 
     public static void writeStaticsWith(StaticWriter writer) {
@@ -141,8 +123,8 @@ public final class InitHookReplay {
 
     static Addition add(String name, byte[] mixed, byte[] running, byte @Nullable [] first,
             byte @Nullable [] previous, byte @Nullable [] original) {
-        Set<String> once = startup.apply(name);
-        Set<String> joins = joining.apply(name);
+        Set<String> once = Games.getNow().getStartupMethods(name);
+        Set<String> joins = Games.getNow().getJoinMethods(name);
         Set<String> fresh = findKeys(mixed, name, once);
         if (fresh.isEmpty() && joins.isEmpty()) {
             return addStaticsOnly(mixed, original, running, previous);
@@ -186,7 +168,7 @@ public final class InitHookReplay {
         Set<String> classKeys = new LinkedHashSet<>();
         Set<String> lateObjectKeys = new LinkedHashSet<>();
         Set<String> lateClassKeys = new LinkedHashSet<>();
-        Set<String> late = loadFinished.apply(name);
+        Set<String> late = Games.getNow().getLoadFinishedMethods(name);
         List<String> missed = new ArrayList<>();
         Set<String> unset = new TreeSet<>();
         Set<String> caughtUp = new TreeSet<>();
