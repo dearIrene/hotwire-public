@@ -90,6 +90,17 @@ public record DevMod(String id, String name, List<Path> folders) {
         return List.copyOf(found);
     }
 
+    List<Path> findProjects() {
+        List<Path> projects = new ArrayList<>();
+        for (Path folder : this.folders) {
+            Path project = findProject(folder);
+            if (project != null && !projects.contains(project)) {
+                projects.add(project);
+            }
+        }
+        return projects;
+    }
+
     public List<Path> findSourceRoots() {
         Set<Path> roots = new LinkedHashSet<>();
         for (Path folder : this.folders) {

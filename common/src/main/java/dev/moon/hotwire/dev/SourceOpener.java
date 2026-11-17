@@ -6,8 +6,6 @@ import dev.moon.hotwire.ui.Notice;
 import dev.moon.hotwire.ui.Notices;
 import java.io.IOException;
 import java.nio.file.Path;
-import java.util.ArrayList;
-import java.util.List;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -18,16 +16,9 @@ final class SourceOpener {
     }
 
     static void open(DevMod mod, String type, int line, String label) {
-        List<Path> projects = new ArrayList<>();
-        for (Path folder : mod.folders()) {
-            Path project = DevMod.findProject(folder);
-            if (project != null && !projects.contains(project)) {
-                projects.add(project);
-            }
-        }
         Path file;
         try {
-            file = IdeOpener.findSource(projects, type);
+            file = IdeOpener.findSource(mod.findProjects(), type);
         } catch (IOException e) {
             LOGGER.debug("[Hotwire] the project could not be searched for {}", type, e);
             file = null;

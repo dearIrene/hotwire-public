@@ -128,7 +128,7 @@ public final class DevSession implements DevHost, AutoCloseable {
 
     private void readChangedAtStart() {
         Set<Path> projects = new HashSet<>();
-        this.mods.values().forEach(mod -> projects.addAll(this.findProjects(mod)));
+        this.mods.values().forEach(mod -> projects.addAll(mod.mod.findProjects()));
         for (Path project : projects) {
             this.tasks.run("reading git for " + project.getFileName(), () -> {
                 Set<String> changed = SourceGit.readChanged(project);
@@ -239,7 +239,7 @@ public final class DevSession implements DevHost, AutoCloseable {
     }
 
     private void noteDiffs(SessionMod mod, int number, Map<String, byte[]> was) {
-        List<Path> projects = this.findProjects(mod);
+        List<Path> projects = mod.mod.findProjects();
         if (projects.isEmpty()) {
             return;
         }
@@ -311,7 +311,7 @@ public final class DevSession implements DevHost, AutoCloseable {
             return null;
         }
         try {
-            Path file = IdeOpener.findSource(this.findProjects(mod), type);
+            Path file = IdeOpener.findSource(mod.mod.findProjects(), type);
             Integer parent;
             DevBuildInfo info;
             synchronized (mod) {
@@ -456,17 +456,6 @@ public final class DevSession implements DevHost, AutoCloseable {
         int from = Math.max(0, span.get(0) - 1);
         int to = Math.min(lines.size(), span.get(1));
         return from >= to ? List.of() : lines.subList(from, to);
-    }
-
-    private List<Path> findProjects(SessionMod mod) {
-        List<Path> projects = new ArrayList<>();
-        for (Path folder : mod.mod.folders()) {
-            Path project = DevMod.findProject(folder);
-            if (project != null && !projects.contains(project)) {
-                projects.add(project);
-            }
-        }
-        return projects;
     }
 
     private void noteGit(SessionMod mod, int number) {
