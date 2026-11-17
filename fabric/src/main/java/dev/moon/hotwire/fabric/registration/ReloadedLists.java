@@ -1,5 +1,6 @@
 package dev.moon.hotwire.fabric.registration;
 
+import dev.moon.hotwire.fabric.version.ReloadedListHolders;
 import dev.moon.hotwire.redefine.FieldSlots;
 import dev.moon.hotwire.registration.Fields;
 import dev.moon.hotwire.registration.GameRegistrations;

@@ -1,7 +1,7 @@
 package dev.moon.hotwire.fabric.mixin.core.client.renderer.feature;
 
 //? if >=26.2 {
-import dev.moon.hotwire.fabric.add.AddedFeatureRenderers;
+import dev.moon.hotwire.fabric.version.AddedFeatureRenderers;
 import net.minecraft.client.renderer.feature.FeatureRenderer;
 import net.minecraft.client.renderer.feature.FeatureRendererMap;
 import net.minecraft.client.renderer.feature.FeatureRendererType;

@@ -1,4 +1,4 @@
-package dev.moon.hotwire.fabric.registration;
+package dev.moon.hotwire.fabric.version;
 
 //? if >=26.3 {
 import com.mojang.renderpearl.api.pipeline.RenderPipeline;
@@ -31,13 +31,13 @@ import net.minecraft.resources.FileToIdConverter;
 import net.minecraft.client.renderer.texture.atlas.SpriteSources;
 import net.minecraft.server.packs.resources.ResourceManager;
 
-final class ReloadedListHolders {
+public final class ReloadedListHolders {
     //? if >=26.3 {
-    static final List<Class<?>> HOLDERS = List.of(ModelLayers.class, RenderPipelines.class, ItemModels.class,
+    public static final List<Class<?>> HOLDERS = List.of(ModelLayers.class, RenderPipelines.class, ItemModels.class,
             ConditionalItemModelProperties.class, RangeSelectItemModelProperties.class, SelectItemModelProperties.class,
             ItemTintSources.class, SpecialModelRenderers.class, SpriteSources.class);
 
-    static boolean canBeMade(Object made, ResourceManager resources) {
+    public static boolean canBeMade(Object made, ResourceManager resources) {
         if (made instanceof RenderPipeline pipeline) {
             return pipeline.getShaders().entrySet().stream().allMatch(shader -> resources.getResource(
                     shader.getKey().idConverter().idToFile(shader.getValue())).isPresent());
@@ -45,11 +45,11 @@ final class ReloadedListHolders {
         return true;
     }
     //?} else if >=1.21.5 {
-    /*static final List<Class<?>> HOLDERS = List.of(ModelLayers.class, RenderPipelines.class, ItemModels.class,
+    /*public static final List<Class<?>> HOLDERS = List.of(ModelLayers.class, RenderPipelines.class, ItemModels.class,
             ConditionalItemModelProperties.class, RangeSelectItemModelProperties.class, SelectItemModelProperties.class,
             ItemTintSources.class, SpecialModelRenderers.class, SpriteSources.class);
 
-    static boolean canBeMade(Object made, ResourceManager resources) {
+    public static boolean canBeMade(Object made, ResourceManager resources) {
         if (made instanceof RenderPipeline pipeline) {
             return resources.getResource(ShaderType.VERTEX.idConverter().idToFile(pipeline.getVertexShader()))
                     .isPresent() && resources.getResource(ShaderType.FRAGMENT.idConverter().idToFile(
@@ -58,21 +58,21 @@ final class ReloadedListHolders {
         return true;
     }
     *///?} else if >=1.21.4 {
-    /*static final List<Class<?>> HOLDERS = List.of(ModelLayers.class, CoreShaders.class, ItemModels.class,
+    /*public static final List<Class<?>> HOLDERS = List.of(ModelLayers.class, CoreShaders.class, ItemModels.class,
             ConditionalItemModelProperties.class, RangeSelectItemModelProperties.class, SelectItemModelProperties.class,
             ItemTintSources.class, SpecialModelRenderers.class, SpriteSources.class);
 
-    static boolean canBeMade(Object made, ResourceManager resources) {
+    public static boolean canBeMade(Object made, ResourceManager resources) {
         if (made instanceof ShaderProgram program) {
             return resources.getResource(FileToIdConverter.json("shaders").idToFile(program.configId())).isPresent();
         }
         return true;
     }
     *///?} else {
-    /*static final List<Class<?>> HOLDERS = List.of(ModelLayers.class, SpriteSources.class);
+    /*public static final List<Class<?>> HOLDERS = List.of(ModelLayers.class, SpriteSources.class);
 
     @SuppressWarnings("UnusedVariable") // the same question as later versions ask
-    static boolean canBeMade(Object made, ResourceManager resources) {
+    public static boolean canBeMade(Object made, ResourceManager resources) {
         return true;
     }
     *///?}

@@ -1,5 +1,6 @@
 package dev.moon.hotwire.fabric;
 
+import dev.moon.hotwire.fabric.version.ReloadBands;
 import dev.moon.hotwire.redefine.FieldSlots;
 import dev.moon.hotwire.registration.Fields;
 import java.util.ArrayList;
@@ -8,15 +9,6 @@ import java.util.Map;
 import java.util.concurrent.CompletableFuture;
 import java.util.function.Predicate;
 import net.minecraft.client.Minecraft;
-import net.minecraft.client.gui.font.FontManager;
-//? if <26.1 {
-/*import net.minecraft.client.renderer.LevelRenderer;
-*///?}
-import net.minecraft.client.renderer.texture.TextureManager;
-import net.minecraft.client.resources.language.LanguageManager;
-//? if <26.1 {
-/*import net.minecraft.client.resources.model.ModelManager;
-*///?}
 import net.minecraft.client.resources.sounds.Sound;
 import net.minecraft.client.sounds.SoundManager;
 import net.minecraft.server.packs.resources.PreparableReloadListener;
@@ -25,19 +17,11 @@ import net.minecraft.server.packs.resources.ResourceManager;
 import org.jspecify.annotations.Nullable;
 
 final class ReloadListeners {
-    //? if >=26.1 {
-    private static final List<Class<?>> BESIDE_RENDERERS = List.of(SoundManager.class, FontManager.class,
-            LanguageManager.class, TextureManager.class);
-    //?} else {
-    /*private static final List<Class<?>> BESIDE_RENDERERS = List.of(ModelManager.class, SoundManager.class,
-            FontManager.class, LanguageManager.class, TextureManager.class, LevelRenderer.class);
-    *///?}
-
     private ReloadListeners() {
     }
 
     static boolean runWithoutHeavy(Minecraft game, Runnable reload) {
-        return runDropping(game, one -> BESIDE_RENDERERS.stream().anyMatch(type -> type.isInstance(one)),
+        return runDropping(game, one -> ReloadBands.HEAVY_LISTENERS.stream().anyMatch(type -> type.isInstance(one)),
                 () -> OngoingReload.runPartial(reload));
     }
 

@@ -1,9 +1,7 @@
 package dev.moon.hotwire.fabric.registration;
 
+import dev.moon.hotwire.fabric.version.FeatureBands;
 import dev.moon.hotwire.redefine.Tripwire;
-//? if <26.3 {
-/*import net.minecraft.world.level.levelgen.feature.ConfiguredFeature;
-*///?}
 import dev.moon.hotwire.registration.Owners;
 import net.minecraft.world.level.levelgen.placement.PlacedFeature;
 import net.minecraft.world.level.levelgen.placement.PlacementModifier;
@@ -16,17 +14,9 @@ public final class OffFeatures {
         if (!Tripwire.isAnyWatched()) {
             return false;
         }
-        //? if >=26.3 {
-        if (Owners.isOfOffMod(placed.feature().value().getClass())) {
+        if (FeatureBands.hasOffFeature(placed)) {
             return true;
         }
-        //?} else {
-        /*ConfiguredFeature<?, ?> configured = placed.feature().value();
-        if (Owners.isOfOffMod(configured.feature().getClass())
-                || Owners.isOfOffMod(configured.config().getClass())) {
-            return true;
-        }
-        *///?}
         for (PlacementModifier modifier : placed.placement()) {
             if (Owners.isOfOffMod(modifier.getClass())) {
                 return true;

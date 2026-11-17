@@ -1,6 +1,7 @@
 package dev.moon.hotwire.fabric.add;
 
 import dev.moon.hotwire.add.LoaderModList;
+import dev.moon.hotwire.fabric.version.ReloadBands;
 import dev.moon.hotwire.fabric.version.Spellings;
 import dev.moon.hotwire.registration.Owners;
 import java.io.IOException;
@@ -98,12 +99,6 @@ public final class HiddenPacks {
                 && Minecraft.getInstance().getResourceManager().listPacks().anyMatch(trimmed::contains);
     }
 
-    //? if >=1.21.5 {
-    private static final boolean SHADERS_READ_LATE = true;
-    //?} else {
-    /*private static final boolean SHADERS_READ_LATE = false;
-    *///?}
-
     private static boolean isOwned(String namespace, Set<String> hidden) {
         return namespace.equals("minecraft") || namespace.equals("realms") || hidden.contains(namespace)
                 || FabricLoader.getInstance().isModLoaded(namespace);
@@ -172,7 +167,8 @@ public final class HiddenPacks {
                         continue;
                     }
                     String name = inside.toString().replace(file.getFileSystem().getSeparator(), "/");
-                    if (!SHADERS_READ_LATE && (name.contains("/shaders/") || name.contains("/post_effect/"))) {
+                    if (!ReloadBands.SHADERS_READ_LATE
+                            && (name.contains("/shaders/") || name.contains("/post_effect/"))) {
                         return Optional.empty();
                     }
                     named.add(inside.getName(0).toString());

@@ -1,4 +1,4 @@
-package dev.moon.hotwire.fabric.add;
+package dev.moon.hotwire.fabric.version;
 
 //? if >=26.2 {
 import java.lang.reflect.Field;
@@ -9,18 +9,14 @@ import net.minecraft.client.renderer.feature.FeatureRenderer;
 import org.jspecify.annotations.Nullable;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
-//?}
 
 public final class AddedFeatureRenderers {
-    //? if >=26.2 {
     private static final Logger LOGGER = LoggerFactory.getLogger(AddedFeatureRenderers.class);
     private static final String REGISTRY = "net.fabricmc.fabric.impl.client.rendering.FeatureRendererRegistryImpl";
-    //?}
 
     private AddedFeatureRenderers() {
     }
 
-    //? if >=26.2 {
     public static @Nullable FeatureRenderer<?> make(Object type) {
         try {
             Field list = Class.forName(REGISTRY).getDeclaredField("featureRenderers");
@@ -42,5 +38,11 @@ public final class AddedFeatureRenderers {
         }
         return null;
     }
-    //?}
 }
+//?} else {
+/*// Before 26.2 the game has no feature renderers.
+public final class AddedFeatureRenderers {
+    private AddedFeatureRenderers() {
+    }
+}
+*///?}
