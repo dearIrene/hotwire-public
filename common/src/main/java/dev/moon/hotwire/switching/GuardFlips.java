@@ -80,7 +80,7 @@ final class GuardFlips {
         Set<String> rebuild = new TreeSet<>();
         Set<String> flipped = new TreeSet<>();
 
-        Map<String, String> why = new TreeMap<>();
+        Map<String, String> whys = new TreeMap<>();
         for (String id : switched) {
             ModMixins mixins = this.mods.get(id);
             if (mixins == null || !this.onAtLaunch.contains(id)
@@ -105,46 +105,25 @@ final class GuardFlips {
                 }
 
                 own.addAll(here);
-
-                Map<String, String> whyStuck = HandlerGuards.findWhyUnflippableAt(target);
-                boolean stuck = HandlerGuards.findUnflippableAt(target).stream()
-                        .filter(mixin -> mixins.owns().contains(mixin.replace('.', '/')))
-                        .anyMatch(mixin -> !HandlerGuards.IN_CONSTRUCTOR.equals(whyStuck.get(mixin)));
-                boolean present = HandlerGuards.getPresentMixins(target).stream()
-                        .anyMatch(mixin -> mixins.owns().contains(mixin.replace('.', '/')));
-                stuck |= HandlerGuards.findDirectModsAt(target).contains(id)
-                        || HandlerGuards.findBehavingAt(target, mixins.owns()).stream()
-                                .anyMatch(mixin -> mixins.owns().contains(mixin.replace('.', '/')));
-
-                stuck |= mixins.fieldsSetUp().contains(target) && !HandlerGuards.isFieldSitedFor(target, mixins.owns());
-                if (stuck || replaced.contains(target) || mixins.rebuildOnly().contains(target)
-                        || !HandlerGuards.isWritten(target) || (!present && !here.isEmpty())) {
+                Why why = this.findWhy(id, target, mixins, replaced, onAfter, !here.isEmpty());
+                if (why != null) {
                     rebuild.add(target);
-                    if (said && stuck) {
+                    if (said && why == Why.STUCK) {
                         LOGGER.info("[Hotwire] {} cannot flip in {}: {}{}", id, target, findWhys(id, target, mixins),
                                 HandlerGuards.isRebuilt(target) ? " (rebuilt since it loaded)" : "");
                     }
                     if (said) {
-                        why.put(target, stuck ? "sites that cannot flip" : replaced.contains(target) ? "replaced"
-                                : mixins.rebuildOnly().contains(target) ? "fields set up or an injector unknown"
-                                : !HandlerGuards.isWritten(target) ? "not written as it loaded" : "mixins not in it");
+                        whys.put(target, why.words);
                     }
-                } else if (!present && onAfter.contains(id) && !this.mixedWith.test(target, id)) {
-                    rebuild.add(target);
-                    if (said) {
-                        why.put(target, "loaded or rebuilt without them");
-                    }
-                } else {
-                    if (!here.isEmpty()) {
-                        flipped.add(target);
-                    }
+                } else if (!here.isEmpty()) {
+                    flipped.add(target);
                 }
             }
             flips.put(id, own);
         }
-        if (said && !why.isEmpty()) {
+        if (said && !whys.isEmpty()) {
             Map<String, List<String>> byWhy = new TreeMap<>();
-            why.forEach((target, reason) -> byWhy.computeIfAbsent(reason, any -> new ArrayList<>()).add(target));
+            whys.forEach((target, reason) -> byWhy.computeIfAbsent(reason, any -> new ArrayList<>()).add(target));
             byWhy.forEach((reason, targets) -> LOGGER.info("[Hotwire] {} rebuilds {} classes for {}: {}", switched,
                     targets.size(), reason, targets.stream().limit(6).toList()));
         }
@@ -161,27 +140,96 @@ final class GuardFlips {
         return new Plan(flips, rebuild, flipped);
     }
 
+    private enum Why {
+        STUCK("sites that cannot flip"),
+        REPLACED("replaced"),
+        REBUILD_ONLY("fields set up or an injector unknown"),
+
+        NOT_WRITTEN("not written as it loaded"),
+        NOT_IN_IT("mixins not in it"),
+
+        WITHOUT("loaded or rebuilt without them");
+
+        private final String words;
+
+        Why(String words) {
+            this.words = words;
+        }
+    }
+
+    private @Nullable Why findWhy(String id, String target, ModMixins mixins, Set<String> replaced,
+            Set<String> onAfter, boolean sited) {
+        if (findStuck(id, target, mixins, false).blocks()) {
+            return Why.STUCK;
+        }
+        if (replaced.contains(target)) {
+            return Why.REPLACED;
+        }
+        if (mixins.rebuildOnly().contains(target)) {
+            return Why.REBUILD_ONLY;
+        }
+        if (!HandlerGuards.isWritten(target)) {
+            return Why.NOT_WRITTEN;
+        }
+        boolean present = HandlerGuards.getPresentMixins(target).stream()
+                .anyMatch(mixin -> mixins.owns().contains(mixin.replace('.', '/')));
+        if (!present && sited) {
+            return Why.NOT_IN_IT;
+        }
+        return !present && onAfter.contains(id) && !this.mixedWith.test(target, id) ? Why.WITHOUT : null;
+    }
+
+    private record Stuck(boolean blocks, List<String> lines) {
+    }
+
+    private static Stuck findStuck(String id, String target, ModMixins mixins, boolean said) {
+        List<String> lines = new ArrayList<>();
+        Map<String, String> reasons = HandlerGuards.findWhyUnflippableAt(target);
+        boolean blocks = false;
+        for (String mixin : HandlerGuards.findUnflippableAt(target)) {
+            blocks |= mixins.owns().contains(mixin.replace('.', '/'))
+                    && !HandlerGuards.IN_CONSTRUCTOR.equals(reasons.get(mixin));
+        }
+        if (said) {
+            reasons.forEach((mixin, reason) -> {
+                if (mixins.owns().contains(mixin.replace('.', '/'))) {
+                    lines.add(mixin.substring(mixin.lastIndexOf('.') + 1) + ": " + reason);
+                }
+            });
+        }
+        if (!blocks || said) {
+            if (HandlerGuards.findDirectModsAt(target).contains(id)) {
+                blocks = true;
+                if (said) {
+                    lines.add("code of its own called straight " + HandlerGuards.findPutInAt(target, id));
+                }
+            }
+        }
+        if (!blocks || said) {
+            for (String mixin : HandlerGuards.findBehavingAt(target, mixins.owns())) {
+                if (mixins.owns().contains(mixin.replace('.', '/'))) {
+                    blocks = true;
+                    if (said) {
+                        Set<String> names = HandlerGuards.findBehavingNamesAt(target, mixin, mixins.owns());
+                        lines.add(mixin.substring(mixin.lastIndexOf('.') + 1) + ": methods of its own the game calls"
+                                + (names.isEmpty() ? "" : " (" + String.join(" ", names) + ")"));
+                    }
+                }
+            }
+        }
+
+        if ((!blocks || said) && mixins.fieldsSetUp().contains(target)
+                && !HandlerGuards.isFieldSitedFor(target, mixins.owns())) {
+            blocks = true;
+            if (said) {
+                lines.add(FIELD_SETUP);
+            }
+        }
+        return new Stuck(blocks, lines);
+    }
+
     static List<String> findWhys(String id, String target, ModMixins mixins) {
-        List<String> whys = new ArrayList<>();
-        HandlerGuards.findWhyUnflippableAt(target).forEach((mixin, reason) -> {
-            if (mixins.owns().contains(mixin.replace('.', '/'))) {
-                whys.add(mixin.substring(mixin.lastIndexOf('.') + 1) + ": " + reason);
-            }
-        });
-        if (HandlerGuards.findDirectModsAt(target).contains(id)) {
-            whys.add("code of its own called straight " + HandlerGuards.findPutInAt(target, id));
-        }
-        for (String mixin : HandlerGuards.findBehavingAt(target, mixins.owns())) {
-            if (mixins.owns().contains(mixin.replace('.', '/'))) {
-                Set<String> names = HandlerGuards.findBehavingNamesAt(target, mixin, mixins.owns());
-                whys.add(mixin.substring(mixin.lastIndexOf('.') + 1) + ": methods of its own the game calls"
-                        + (names.isEmpty() ? "" : " (" + String.join(" ", names) + ")"));
-            }
-        }
-        if (mixins.fieldsSetUp().contains(target) && !HandlerGuards.isFieldSitedFor(target, mixins.owns())) {
-            whys.add(FIELD_SETUP);
-        }
-        return whys;
+        return findStuck(id, target, mixins, true).lines();
     }
 
     int setSites(Plan plan, Set<String> onAfter) {

@@ -119,12 +119,13 @@ final class OverwriteSites {
     }
 
     private static @Nullable String findOtherOverwrite(String internalName, MethodNode method, String mixin) {
+        String first = null;
         for (String other : HandlerGuards.overwriters.apply(internalName + '.' + method.name + method.desc)) {
-            if (!other.equals(mixin)) {
-                return other;
+            if (!other.equals(mixin) && (first == null || other.compareTo(first) < 0)) {
+                first = other;
             }
         }
-        return null;
+        return first;
     }
 
     private static MethodNode copy(MethodNode from, String name, boolean isStatic) {
