@@ -90,7 +90,7 @@ public final class Line extends Part {
         float last = 0;
         for (int i = 0; i < this.parts.size(); i++) {
             last = Math.clamp((this.rising - Math.min(i, RISE_MOST) * RISE_BEAT) / RISE_SPAN, 0, 1);
-            float curve = 1 - (1 - last) * (1 - last) * (1 - last);
+            float curve = Entrance.ease(last);
             this.parts.get(i).setAlpha(curve);
             this.parts.get(i).setLift((1 - curve) * RISE);
         }

@@ -60,8 +60,7 @@ public final class EasedValue {
         if (this.timed) {
             this.elapsed += dt;
             float t = Math.min(1, this.elapsed / this.rate);
-            float curve = 1 - (1 - t) * (1 - t) * (1 - t);
-            this.value = this.from + (this.target - this.from) * curve;
+            this.value = this.from + (this.target - this.from) * Entrance.ease(t);
             if (t >= 1) {
                 this.value = this.target;
             }
