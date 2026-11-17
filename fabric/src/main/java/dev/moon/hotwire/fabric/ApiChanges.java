@@ -9,11 +9,13 @@ import dev.moon.hotwire.api.PendingTask;
 import dev.moon.hotwire.api.Reason;
 import dev.moon.hotwire.api.SwitchPreview;
 import dev.moon.hotwire.api.SwitchResult;
+import dev.moon.hotwire.engine.JvmParts;
 import dev.moon.hotwire.fabric.screen.ModIcons;
 import dev.moon.hotwire.jar.JarLookup;
 import dev.moon.hotwire.jar.ModManifest;
 import dev.moon.hotwire.modrinth.Downloads;
 import dev.moon.hotwire.plan.SwitchPlan;
+import dev.moon.hotwire.seam.Games;
 import dev.moon.hotwire.store.UpdateCheck;
 import dev.moon.hotwire.switching.CallerBlocks;
 import dev.moon.hotwire.switching.ModSwitcher;
@@ -35,7 +37,6 @@ import java.util.Set;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.atomic.AtomicInteger;
 import java.util.stream.Collectors;
-import net.minecraft.client.Minecraft;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -115,7 +116,7 @@ final class ApiChanges {
         }
 
         if (!request.on().isEmpty()) {
-            HotwireEngine.JvmParts parts = engine.findJvmParts().orElseThrow();
+            JvmParts parts = engine.findJvmParts().orElseThrow();
             List<String> back = request.on().stream().filter(engine.getDisabled()::isDisabledSinceStart).toList();
             if (!back.isEmpty()) {
                 lines.add(Lang.get("hotwire.api.back_from_jar", PlayerMessages.joinNames(back, engine::nameOfMod)));
@@ -149,7 +150,7 @@ final class ApiChanges {
             (manifest != null && engine.findJarOf(manifest.id()) != null ? jars : adding).add(jar);
         }
         for (ChangeRequest.Add project : request.add()) {
-            StoreApiAdd.StoreJars fetched = StoreApiAdd.fetchJars(project.idOrSlug(), project.versionId()).join();
+            StoreApiAdd.ProjectJars fetched = StoreApiAdd.fetchJars(project.idOrSlug(), project.versionId()).join();
             adding.addAll(fetched.jars());
             if (fetched.jars().isEmpty()) {
                 lines.add(fetched.why());
@@ -212,7 +213,7 @@ final class ApiChanges {
         boolean reopen = false;
         boolean oneWay = request.off().isEmpty() != request.on().isEmpty();
         if (can && oneWay && request.update().isEmpty() && request.add().isEmpty() && request.jars().isEmpty()) {
-            HotwireEngine.JvmParts parts = engine.findJvmParts().orElseThrow();
+            JvmParts parts = engine.findJvmParts().orElseThrow();
             boolean off = !request.off().isEmpty();
             SwitchPlan planned = off ? parts.runner().getSwitcher().planOff(request.off())
                     : parts.runner().getSwitcher().planOn(request.on());
@@ -267,7 +268,7 @@ final class ApiChanges {
             Path jar = jars.get(at);
             AddMode mode = modes.get(at);
             CompletableFuture<ModAdder.Result> added = new CompletableFuture<>();
-            Minecraft.getInstance().execute(() -> engine.add(jar, mode, added::complete));
+            Games.getNow().runOnGame(() -> engine.add(jar, mode, added::complete));
             switch (added.join()) {
                 case ModAdder.Result.Added one -> made.now().addAll(one.ids());
                 case ModAdder.Result.Queued queued -> made.later().add(queued.id());
@@ -448,7 +449,7 @@ final class ApiChanges {
                 boolean off = !this.request.off().isEmpty();
                 List<String> ids = off ? this.request.off() : this.request.on();
                 CompletableFuture<SwitchResult> made = new CompletableFuture<>();
-                Minecraft.getInstance().execute(() -> found.switchWithReopenFor(off, ids).whenComplete((result,
+                Games.getNow().runOnGame(() -> found.switchWithReopenFor(off, ids).whenComplete((result,
                         error) -> {
                     if (error != null) {
                         made.complete(new SwitchResult(SwitchResult.Kind.FAILED, List.of(),

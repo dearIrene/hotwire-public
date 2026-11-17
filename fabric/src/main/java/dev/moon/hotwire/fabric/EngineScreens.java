@@ -1,5 +1,7 @@
 package dev.moon.hotwire.fabric;
 
+import dev.moon.hotwire.engine.JvmParts;
+import dev.moon.hotwire.engine.StoreUpdates;
 import dev.moon.hotwire.fabric.screen.HotwireScreen;
 import dev.moon.hotwire.registration.Fields;
 import dev.moon.hotwire.ui.ModScreen;
@@ -53,7 +55,7 @@ public final class EngineScreens {
             this.owner.storeJars.startCheck();
             this.owner.selfUpdate.start();
         }
-        HotwireEngine.JvmParts parts = this.owner.findParts();
+        JvmParts parts = this.owner.findParts();
         if (parts != null) {
             Fields.preloadStatics(parts.instrumentation());
             parts.runner().lookAheadForAll();

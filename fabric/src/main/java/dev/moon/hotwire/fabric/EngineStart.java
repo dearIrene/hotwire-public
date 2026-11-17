@@ -10,6 +10,7 @@ import dev.moon.hotwire.engine.CrashGuard;
 import dev.moon.hotwire.engine.DevSetups;
 import dev.moon.hotwire.engine.EarlyModsReader;
 import dev.moon.hotwire.engine.InstalledMods;
+import dev.moon.hotwire.engine.JvmParts;
 import dev.moon.hotwire.engine.LifecycleListeners;
 import dev.moon.hotwire.engine.ModPolicy;
 import dev.moon.hotwire.engine.ModTripwire;
@@ -85,6 +86,7 @@ import dev.moon.hotwire.report.GameReports;
 import dev.moon.hotwire.report.HotwireLog;
 import dev.moon.hotwire.report.LoggedFaults;
 import dev.moon.hotwire.report.StartTimes;
+import dev.moon.hotwire.seam.Games;
 import dev.moon.hotwire.switching.BestTimes;
 import dev.moon.hotwire.switching.BetweenFrames;
 import dev.moon.hotwire.switching.ModMixins;
@@ -157,7 +159,7 @@ final class EngineStart {
         return STACK.walk(frames -> frames.anyMatch(frame -> frame.getClassName().startsWith(RELOAD_TASKS)));
     }
 
-    static HotwireEngine.JvmParts bind(InstalledMods installed, Progress progress, GameReports reports,
+    static JvmParts bind(InstalledMods installed, Progress progress, GameReports reports,
             UpdateFolders folders, UpdateQueue queue, Path gameDir, ModIcons icons) throws JvmAccessException {
         StartTimes.Laps laps = StartTimes.startLaps("engine bind: ");
         Instrumentation instrumentation = JvmAccess.getInstrumentation(findHotwireJarIfKnown(),
@@ -315,7 +317,7 @@ final class EngineStart {
                         fieldReferences::isInitialized, classes::findOriginalBytes), new UpdateGameSide());
         adds.getAdder().setCarriedLibraries(updates);
         laps.endLap("runner, adds, updates");
-        return new HotwireEngine.JvmParts(runner, adds, updates, instrumentation, loadTimeMixer, classes);
+        return new JvmParts(runner, adds, updates, instrumentation, loadTimeMixer, classes);
     }
 
     private static BiFunction<Set<String>, Set<String>, Set<String>> findForeignPatches(
@@ -465,7 +467,7 @@ final class EngineStart {
         laps.endLap("settings, folders, icons");
         HotwireEngine engine;
         try {
-            HotwireEngine.JvmParts parts = bind(installed, progress, reports, folders, queue, gameDir, icons);
+            JvmParts parts = bind(installed, progress, reports, folders, queue, gameDir, icons);
             laps.endLap("bind, in all");
             engine = new HotwireEngine(installed, progress, reports, folders, queue, settings, icons,
                     new HotwireEngine.Bound.Ready(parts));
@@ -486,12 +488,12 @@ final class EngineStart {
                 if (known == null) {
                     known = loadedBytes.findAsLoaded(internal);
                 }
-                return known != null ? known : parts.classes().readOriginalBytes(internal);
+                return known != null ? known : ((GameClasses) parts.classes()).readOriginalBytes(internal);
             });
             Fields.preloadStatics(parts.instrumentation());
             laps.endLap("fields");
 
-            parts.runner().getSwitcher().getFiller().watchPlaying(CacheFillControl::isPlaying);
+            parts.runner().getSwitcher().getFiller().watchPlaying(Games.getNow()::isPlaying);
             if (settings.isAutoFillOn()) {
                 parts.runner().getSwitcher().getFiller().fillAll();
             } else {
@@ -520,13 +522,13 @@ final class EngineStart {
             started.refreshScreen();
         };
         CrashGuard.install(installed, engine.getTasks(), () -> {
-            HotwireEngine.JvmParts parts = started.findParts();
+            JvmParts parts = started.findParts();
             return parts == null ? null : parts.runner();
         }, say, started::writeReport, () -> started.getSettings().isAntiCrashOn(),
                 id -> DevSession.isDevMod(id) && started.getSettings().isDevCatchOn(DevSetups.get().inSetup()));
         OwnThrowNotice.install(engine.getTasks(), say,
                 why -> started.writeReport(Lang.get("hotwire.report.file.hotwire_error"), why));
-        HotwireEngine.JvmParts ready = started.findParts();
+        JvmParts ready = started.findParts();
         if (ready != null) {
             ready.runner().setAfterOff(result -> {
                 started.getDisabled().disableAfter(result);

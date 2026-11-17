@@ -6,13 +6,13 @@ import dev.moon.hotwire.api.StoreProject;
 import dev.moon.hotwire.api.StoreQuery;
 import dev.moon.hotwire.api.SwitchResult;
 import dev.moon.hotwire.modrinth.Downloads;
+import dev.moon.hotwire.seam.Games;
 import dev.moon.hotwire.store.ModStore;
 import dev.moon.hotwire.ui.Lang;
 import java.nio.file.Path;
 import java.util.List;
 import java.util.concurrent.CompletableFuture;
 import java.util.function.Function;
-import net.minecraft.client.Minecraft;
 
 final class StoreApiAdd {
     interface Then<T> {
@@ -26,13 +26,13 @@ final class StoreApiAdd {
     private StoreApiAdd() {
     }
 
-    record StoreJars(List<Path> jars, String why) {
+    record ProjectJars(List<Path> jars, String why) {
     }
 
-    static CompletableFuture<StoreJars> fetchJars(String idOrSlug, String versionId) {
-        CompletableFuture<StoreJars> made = new CompletableFuture<>();
-        fetch(idOrSlug, versionId, made, (engine, name, jars) -> made.complete(new StoreJars(List.copyOf(jars), "")),
-                why -> new StoreJars(List.of(), why));
+    static CompletableFuture<ProjectJars> fetchJars(String idOrSlug, String versionId) {
+        CompletableFuture<ProjectJars> made = new CompletableFuture<>();
+        fetch(idOrSlug, versionId, made, (engine, name, jars) -> made.complete(new ProjectJars(List.copyOf(jars), "")),
+                why -> new ProjectJars(List.of(), why));
         return made;
     }
 
@@ -63,7 +63,7 @@ final class StoreApiAdd {
                         return;
                     }
                     StoreProject project = found.get();
-                    Minecraft.getInstance().execute(() -> {
+                    Games.getNow().runOnGame(() -> {
                         ModStore store = engine.findStore();
                         if (!store.getModel().getClient().isBrowsingOwn()) {
                             made.complete(refusal.apply(Lang.get("hotwire.api.add.browsing")));

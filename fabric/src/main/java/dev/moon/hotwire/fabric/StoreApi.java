@@ -13,12 +13,13 @@ import dev.moon.hotwire.api.StoreQuery;
 import dev.moon.hotwire.api.StoreVersion;
 import dev.moon.hotwire.api.SwitchResult;
 import dev.moon.hotwire.engine.LoadedMods;
-import dev.moon.hotwire.fabric.screen.WebLinks;
 import dev.moon.hotwire.modrinth.CachedAsks;
 import dev.moon.hotwire.modrinth.Downloads;
 import dev.moon.hotwire.modrinth.ModrinthClient;
 import dev.moon.hotwire.modrinth.StoreCategories;
 import dev.moon.hotwire.modrinth.StoreModel;
+import dev.moon.hotwire.seam.Game;
+import dev.moon.hotwire.seam.Games;
 import dev.moon.hotwire.store.ModStore;
 import dev.moon.hotwire.switching.Waits;
 import dev.moon.hotwire.ui.AddMode;
@@ -36,7 +37,6 @@ import java.util.concurrent.CompletionException;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.Executor;
 import net.fabricmc.loader.api.FabricLoader;
-import net.minecraft.client.Minecraft;
 import org.jspecify.annotations.Nullable;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -102,7 +102,7 @@ final class StoreApi {
             return null;
         }
         ModStore made = engine.getStore();
-        return made != null ? made : CompletableFuture.supplyAsync(engine::findStore, Minecraft.getInstance()).join();
+        return made != null ? made : CompletableFuture.supplyAsync(engine::findStore, Games.getNow()::runOnGame).join();
     }
 
     private static @Nullable CachedAsks findAsks(@Nullable ModStore store) {
@@ -189,7 +189,7 @@ final class StoreApi {
             return ended;
         }
         String id = IDS.getOrDefault(idOrSlug, idOrSlug);
-        Minecraft.getInstance().execute(() -> {
+        Games.getNow().runOnGame(() -> {
             try {
                 StoreModel.Packs packs = store.getModel().getPacks();
                 StoreModel.PackState before = packs.find(toKind(kind), id);
@@ -218,12 +218,12 @@ final class StoreApi {
             }
             StoreProject project = found.get();
             StoreModel.Packs packs = store.getModel().getPacks();
-            Minecraft game = Minecraft.getInstance();
-            game.execute(() -> {
+            Game game = Games.getNow();
+            game.runOnGame(() -> {
                 Downloads.markNextQuiet();
                 packs.fetch(toKind(kind), project.id(), versionId, project.name());
                 waits.awaitTrue(() -> packs.find(toKind(kind), project.id()) != StoreModel.PackState.DOWNLOADING)
-                        .thenRun(() -> game.execute(() -> ended.complete(switch (packs.find(toKind(kind),
+                        .thenRun(() -> game.runOnGame(() -> ended.complete(switch (packs.find(toKind(kind),
                                 project.id())) {
                             case ON, OFF -> new SwitchResult(SwitchResult.Kind.DONE, List.of(),
                                     Lang.get("hotwire.store.pack.downloaded", project.name()));
@@ -262,7 +262,7 @@ final class StoreApi {
             LOGGER.warn("[Hotwire] the downloads folder {} could not be made: {}", folder, e.toString());
             return;
         }
-        Minecraft.getInstance().execute(() -> WebLinks.openFolder(folder));
+        Games.getNow().runOnGame(() -> Games.getNow().openFolder(folder));
     }
 
     static CompletableFuture<SwitchResult> saveToDownloads(StoreQuery browsing, String idOrSlug, String versionId) {

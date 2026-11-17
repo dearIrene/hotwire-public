@@ -40,6 +40,7 @@ import java.util.OptionalInt;
 import java.util.Set;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.function.Function;
+import java.util.function.Supplier;
 import java.util.zip.ZipEntry;
 import java.util.zip.ZipFile;
 import net.fabricmc.loader.api.FabricLoader;
@@ -62,6 +63,7 @@ public final class AddSupport implements ModAdder.Engine {
     private final UpdateFolders folders;
     private final UpdateQueue queue;
     private final ModAdder adder;
+    private final AddGame game;
     private final IconSource icons;
     private final Function<List<String>, ModSwitcher.Result> takeOut;
     private final Map<String, PendingChange.Copied> copied = new ConcurrentHashMap<>();
@@ -82,6 +84,7 @@ public final class AddSupport implements ModAdder.Engine {
         this.addedJarsFolder = gameDir.resolve("hotwire").resolve("added");
         this.folders = folders;
         this.queue = queue;
+        this.game = game;
         this.adder = new ModAdder(this, game);
     }
 
@@ -240,6 +243,10 @@ public final class AddSupport implements ModAdder.Engine {
             this.afterAdd.run();
         }
         return result;
+    }
+
+    public ModAdder.Result addAroundReopen(Supplier<ModAdder.Result> add) {
+        return this.game.addAroundReopen(add);
     }
 
     public static void endJournal(ActionJournal.Entry journal, ModAdder.Result result) {

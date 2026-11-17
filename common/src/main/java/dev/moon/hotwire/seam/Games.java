@@ -12,6 +12,10 @@ public final class Games {
         game = side;
     }
 
+    public static boolean isStarted() {
+        return game != null;
+    }
+
     public static Game getNow() {
         Game side = game;
         if (side == null) {

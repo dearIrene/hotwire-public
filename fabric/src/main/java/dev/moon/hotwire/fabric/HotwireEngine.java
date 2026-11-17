@@ -1,23 +1,28 @@
 package dev.moon.hotwire.fabric;
 
-import dev.moon.hotwire.add.AddSupport;
 import dev.moon.hotwire.add.ModAdder;
 import dev.moon.hotwire.api.SwitchResult;
 import dev.moon.hotwire.concurrent.Tasks;
 import dev.moon.hotwire.config.HotwireSettings;
 import dev.moon.hotwire.config.ProfileStore;
+import dev.moon.hotwire.engine.CacheFillControl;
 import dev.moon.hotwire.engine.CloseGuard;
+import dev.moon.hotwire.engine.DevEngine;
 import dev.moon.hotwire.engine.DevSetups;
+import dev.moon.hotwire.engine.DisabledMods;
 import dev.moon.hotwire.engine.FolderJars;
 import dev.moon.hotwire.engine.InstalledModCatalog;
 import dev.moon.hotwire.engine.InstalledMods;
+import dev.moon.hotwire.engine.JvmParts;
 import dev.moon.hotwire.engine.LoadedMods;
+import dev.moon.hotwire.engine.ModChanges;
 import dev.moon.hotwire.engine.ModPolicy;
+import dev.moon.hotwire.engine.ModRows;
 import dev.moon.hotwire.engine.ModTripwire;
 import dev.moon.hotwire.engine.NextStartQueue;
-import dev.moon.hotwire.engine.SwitchRunner;
+import dev.moon.hotwire.engine.StoreJars;
+import dev.moon.hotwire.engine.StoreUpdates;
 import dev.moon.hotwire.fabric.add.WorldReopen;
-import dev.moon.hotwire.fabric.rebuild.GameClasses;
 import dev.moon.hotwire.fabric.registration.ModLifecycle;
 import dev.moon.hotwire.fabric.screen.HotwireScreen;
 import dev.moon.hotwire.fabric.screen.ModIcons;
@@ -65,11 +70,8 @@ import dev.moon.hotwire.update.SwapAtClose;
 import dev.moon.hotwire.update.UpdateFolders;
 import dev.moon.hotwire.update.UpdateOffer;
 import dev.moon.hotwire.update.UpdateQueue;
-import dev.moon.hotwire.update.UpdateSupport;
 import dev.moon.hotwire.update.UrgentUpdate;
 import java.io.IOException;
-import java.lang.instrument.ClassFileTransformer;
-import java.lang.instrument.Instrumentation;
 import java.nio.file.Path;
 import java.util.ArrayList;
 import java.util.List;
@@ -92,10 +94,6 @@ import org.slf4j.LoggerFactory;
 
 public final class HotwireEngine implements ModScreenGame, AutoCloseable {
     private final EngineScreens engineScreens = new EngineScreens(this);
-
-    record JvmParts(SwitchRunner runner, AddSupport adds, UpdateSupport updates,
-            Instrumentation instrumentation, ClassFileTransformer loadTimeMixer, GameClasses classes) {
-    }
 
     sealed interface Bound {
         record Ready(JvmParts parts) implements Bound {

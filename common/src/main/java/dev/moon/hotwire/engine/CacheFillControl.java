@@ -1,10 +1,10 @@
-package dev.moon.hotwire.fabric;
+package dev.moon.hotwire.engine;
 
 import com.google.common.base.Splitter;
 import dev.moon.hotwire.cache.CacheBudget;
-import dev.moon.hotwire.engine.CacheLimit;
 import dev.moon.hotwire.redefine.CachedMixes;
 import dev.moon.hotwire.report.ActionJournal;
+import dev.moon.hotwire.seam.Games;
 import dev.moon.hotwire.switching.SwitchCacheFiller;
 import dev.moon.hotwire.ui.CacheFill;
 import dev.moon.hotwire.ui.CacheHost;
@@ -22,17 +22,16 @@ import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.function.Supplier;
 import java.util.stream.Stream;
-import net.minecraft.client.Minecraft;
 import org.jspecify.annotations.Nullable;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
-final class CacheFillControl implements CacheHost {
+public final class CacheFillControl implements CacheHost {
     private static final Logger LOGGER = LoggerFactory.getLogger(CacheFillControl.class);
     private static final long FILL_READ_NANOS = 250_000_000L;
     private static final long VERSIONS_READ_NANOS = 1_000_000_000L;
 
-    private final Supplier<HotwireEngine.@Nullable JvmParts> parts;
+    private final Supplier<@Nullable JvmParts> parts;
 
     private volatile @Nullable CacheFill known;
     private volatile long knownAt;
@@ -49,7 +48,7 @@ final class CacheFillControl implements CacheHost {
     private volatile long limitBytes = -1;
     private volatile long oldJarsBytes;
 
-    CacheFillControl(Supplier<HotwireEngine.@Nullable JvmParts> parts, Supplier<StoreCacheView> store,
+    public CacheFillControl(Supplier<@Nullable JvmParts> parts, Supplier<StoreCacheView> store,
             Supplier<PendingChanges> updates) {
         this.parts = parts;
         this.store = store;
@@ -98,7 +97,7 @@ final class CacheFillControl implements CacheHost {
     }
 
     private @Nullable CacheFill findFill() {
-        HotwireEngine.JvmParts found = this.parts.get();
+        JvmParts found = this.parts.get();
         if (found == null) {
             return null;
         }
@@ -175,7 +174,7 @@ final class CacheFillControl implements CacheHost {
                 version == null ? "clear" : "clear:" + version);
         Path here = CacheLimit.findCacheFolder();
         if (version == null || version.equals(here.getFileName().toString())) {
-            HotwireEngine.JvmParts found = this.parts.get();
+            JvmParts found = this.parts.get();
             if (found != null) {
                 found.runner().getSwitcher().getFiller().restart();
                 found.adds().getApplier().getRebuilder().getCache().clear();
@@ -204,14 +203,14 @@ final class CacheFillControl implements CacheHost {
 
     @Override
     public void fillCache(boolean go) {
-        HotwireEngine.JvmParts found = this.parts.get();
+        JvmParts found = this.parts.get();
         if (found == null) {
             return;
         }
 
         ActionJournal.Entry journal = ActionJournal.get().begin(ActionJournal.Action.FILL, go ? "start" : "pause");
         if (go) {
-            found.runner().getSwitcher().getFiller().watchPlaying(CacheFillControl::isPlaying);
+            found.runner().getSwitcher().getFiller().watchPlaying(Games.getNow()::isPlaying);
             found.runner().getSwitcher().getFiller().fillAll();
         } else {
             found.runner().getSwitcher().getFiller().pause(true);
@@ -221,7 +220,7 @@ final class CacheFillControl implements CacheHost {
 
     @Override
     public void setCacheLimit(int megabytes) {
-        HotwireEngine.JvmParts found = this.parts.get();
+        JvmParts found = this.parts.get();
         if (found == null) {
             return;
         }
@@ -239,10 +238,5 @@ final class CacheFillControl implements CacheHost {
             }
             this.versionsAt = 0;
         });
-    }
-
-    static boolean isPlaying() {
-        Minecraft client = Minecraft.getInstance();
-        return client.level != null && ModViews.openScreen() == null && client.isWindowActive();
     }
 }

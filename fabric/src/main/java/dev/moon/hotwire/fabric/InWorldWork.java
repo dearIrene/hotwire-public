@@ -1,5 +1,6 @@
 package dev.moon.hotwire.fabric;
 
+import dev.moon.hotwire.engine.JvmParts;
 import dev.moon.hotwire.registration.Fields;
 import java.time.Duration;
 import java.util.concurrent.CompletableFuture;
@@ -16,7 +17,7 @@ final class InWorldWork {
 
     static void lookAheadSoon(HotwireEngine engine) {
         CompletableFuture.delayedExecutor(LOOK_DELAY.toSeconds(), TimeUnit.SECONDS).execute(() -> {
-            HotwireEngine.JvmParts parts = engine.findParts();
+            JvmParts parts = engine.findParts();
             if (parts != null && Minecraft.getInstance().level != null) {
                 parts.runner().lookAheadForAll();
 
@@ -30,7 +31,7 @@ final class InWorldWork {
             return;
         }
         CompletableFuture.delayedExecutor(FILL_DELAY.toSeconds(), TimeUnit.SECONDS).execute(() -> {
-            HotwireEngine.JvmParts parts = engine.findParts();
+            JvmParts parts = engine.findParts();
             if (parts != null && Minecraft.getInstance().level != null) {
                 parts.runner().getSwitcher().getFiller().fillLoadedSince();
             }

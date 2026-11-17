@@ -2,8 +2,10 @@ package dev.moon.hotwire.fabric;
 
 import dev.moon.hotwire.add.ModAdder;
 import dev.moon.hotwire.api.SwitchResult;
+import dev.moon.hotwire.engine.StoreJars;
 import dev.moon.hotwire.modrinth.Downloads;
 import dev.moon.hotwire.modrinth.ModrinthClient;
+import dev.moon.hotwire.seam.Games;
 import dev.moon.hotwire.store.SelfUpdate;
 import dev.moon.hotwire.ui.Lang;
 import dev.moon.hotwire.ui.ModScreen;
@@ -35,7 +37,7 @@ final class SelfUpdateRequests {
     }
 
     void start() {
-        this.check.start(found -> Minecraft.getInstance().execute(() -> {
+        this.check.start(found -> Games.getNow().runOnGame(() -> {
             ModScreen current = this.screen.get();
             if (current != null) {
                 current.showNewerHotwire();
@@ -46,7 +48,7 @@ final class SelfUpdateRequests {
                 this.waiting = null;
                 this.updateAtNextStart(asked, null);
             }
-        }), urgent -> Minecraft.getInstance().execute(() -> UrgentNotice.onChecked(urgent)));
+        }), urgent -> Games.getNow().runOnGame(() -> UrgentNotice.onChecked(urgent)));
     }
 
     void checkAgain() {
@@ -94,7 +96,7 @@ final class SelfUpdateRequests {
         Thread.ofPlatform().name("hotwire-self-update-fetch").daemon().start(() -> {
             try {
                 Path jar = this.check.fetch(newer);
-                Minecraft.getInstance().execute(() -> {
+                Games.getNow().runOnGame(() -> {
                     ModAdder.Result queued = this.jars.queueForNextStart(List.of(jar), List.of(SelfUpdate.PROJECT),
                             pending).getFirst();
                     ModScreen current = this.screen.get();
@@ -110,7 +112,7 @@ final class SelfUpdateRequests {
                 });
             } catch (IOException e) {
                 if (!(e instanceof Downloads.DownloadStop)) {
-                    Minecraft.getInstance().execute(() -> this.say.accept(
+                    Games.getNow().runOnGame(() -> this.say.accept(
                             Lang.get("hotwire.store.download_failed", "Hotwire", e.getMessage()), true));
                 }
                 if (done != null) {

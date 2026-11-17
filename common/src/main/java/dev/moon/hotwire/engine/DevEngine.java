@@ -1,11 +1,9 @@
-package dev.moon.hotwire.fabric;
+package dev.moon.hotwire.engine;
 
 import dev.moon.hotwire.config.HotwireSettings;
 import dev.moon.hotwire.dev.DevExtras;
 import dev.moon.hotwire.dev.DevMixin;
 import dev.moon.hotwire.dev.DevSession;
-import dev.moon.hotwire.engine.InstalledMods;
-import dev.moon.hotwire.engine.SwitchRunner;
 import dev.moon.hotwire.jar.ModJar;
 import dev.moon.hotwire.report.Report;
 import dev.moon.hotwire.switching.CheckedResult;
@@ -27,13 +25,13 @@ import java.util.TreeSet;
 import java.util.function.Supplier;
 import org.jspecify.annotations.Nullable;
 
-final class DevEngine implements DevSession.Engine {
-    private final Supplier<HotwireEngine.@Nullable JvmParts> parts;
+public final class DevEngine implements DevSession.Engine {
+    private final Supplier<@Nullable JvmParts> parts;
     private final Supplier<String> refusal;
     private final InstalledMods installed;
     private final HotwireSettings settings;
 
-    DevEngine(Supplier<HotwireEngine.@Nullable JvmParts> parts, Supplier<String> refusal, InstalledMods installed,
+    public DevEngine(Supplier<@Nullable JvmParts> parts, Supplier<String> refusal, InstalledMods installed,
             HotwireSettings settings) {
         this.parts = parts;
         this.refusal = refusal;
@@ -43,14 +41,14 @@ final class DevEngine implements DevSession.Engine {
 
     @Override
     public UpdatePreview preview(Path jar) {
-        HotwireEngine.JvmParts found = this.parts.get();
+        JvmParts found = this.parts.get();
         return found == null ? new UpdatePreview.Refused(String.valueOf(jar.getFileName()), this.refusal.get())
                 : found.updates().getUpdater().preview(jar);
     }
 
     @Override
     public ModUpdater.Result updateInPlace(Path jar) {
-        HotwireEngine.JvmParts found = this.parts.get();
+        JvmParts found = this.parts.get();
         return found == null ? new ModUpdater.Result.Refused(this.refusal.get())
                 : found.updates().update(jar, UpdateMethod.IN_PLACE);
     }
@@ -62,7 +60,7 @@ final class DevEngine implements DevSession.Engine {
 
     @Override
     public DevSession.Restart restart(String id) {
-        HotwireEngine.JvmParts found = this.parts.get();
+        JvmParts found = this.parts.get();
         if (found == null) {
             return new DevSession.Restart(this.refusal.get(), List.of());
         }
@@ -79,7 +77,7 @@ final class DevEngine implements DevSession.Engine {
 
     @Override
     public List<Class<?>> findLoaded(Set<String> names) {
-        HotwireEngine.JvmParts found = this.parts.get();
+        JvmParts found = this.parts.get();
         if (found == null) {
             return List.of();
         }
@@ -96,7 +94,7 @@ final class DevEngine implements DevSession.Engine {
 
     @Override
     public boolean isInitialized(Class<?> type) {
-        HotwireEngine.JvmParts found = this.parts.get();
+        JvmParts found = this.parts.get();
         return found != null && found.runner().isInitialized(type);
     }
 
@@ -123,7 +121,7 @@ final class DevEngine implements DevSession.Engine {
     @Override
     @SuppressWarnings("ReferenceEquality")
     public List<String> redefineElsewhere(Map<String, byte[]> classes) {
-        HotwireEngine.JvmParts found = this.parts.get();
+        JvmParts found = this.parts.get();
         if (found == null) {
             return List.of();
         }

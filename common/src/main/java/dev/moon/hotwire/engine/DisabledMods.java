@@ -1,10 +1,9 @@
-package dev.moon.hotwire.fabric;
+package dev.moon.hotwire.engine;
 
 import dev.moon.hotwire.add.ModAdder;
 import dev.moon.hotwire.config.HotwireSettings;
-import dev.moon.hotwire.engine.DisabledJars;
-import dev.moon.hotwire.engine.InstalledMods;
 import dev.moon.hotwire.plan.ModGraph;
+import dev.moon.hotwire.seam.Games;
 import dev.moon.hotwire.switching.ModSwitcher;
 import dev.moon.hotwire.ui.Lang;
 import dev.moon.hotwire.update.PendingChange;
@@ -21,14 +20,13 @@ import java.util.concurrent.TimeUnit;
 import java.util.concurrent.TimeoutException;
 import java.util.function.BiConsumer;
 import java.util.function.Consumer;
-import net.minecraft.client.Minecraft;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
-final class DisabledMods {
+public final class DisabledMods {
     private static final Logger LOGGER = LoggerFactory.getLogger(DisabledMods.class);
 
-    interface Adder {
+    public interface Adder {
         void add(Path jar, Consumer<ModAdder.Result> then);
     }
 
@@ -44,7 +42,7 @@ final class DisabledMods {
 
     private final List<PendingChange.OffAtStart> offAtStart;
 
-    DisabledMods(InstalledMods installed, HotwireSettings settings, Path modsFolder,
+    public DisabledMods(InstalledMods installed, HotwireSettings settings, Path modsFolder,
             BiConsumer<String, Boolean> say, Adder adder) {
         this.installed = installed;
         this.offAtStart = installed.getOffAtStart();
@@ -54,11 +52,11 @@ final class DisabledMods {
         this.adder = adder;
     }
 
-    boolean isRenaming() {
+    public boolean isRenaming() {
         return !this.renames.isDone();
     }
 
-    void close() {
+    public void close() {
         this.awaitRenames();
         this.renaming.shutdown();
         for (PendingChange.OffAtStart off : this.offAtStart) {
@@ -78,7 +76,7 @@ final class DisabledMods {
         }
     }
 
-    void turnOffAtNextStart(List<String> order, String who) {
+    public void turnOffAtNextStart(List<String> order, String who) {
         Path mods = this.modsFolder.toAbsolutePath().normalize();
         Set<String> waiting = this.findWaitingAtStart();
         List<String> ids = order.stream().filter(id -> {
@@ -91,7 +89,7 @@ final class DisabledMods {
         }
     }
 
-    void cancelOffAtNextStart(String id) {
+    public void cancelOffAtNextStart(String id) {
         this.offAtStart.removeIf(off -> off.ids().contains(id));
         boolean dropped = true;
         while (dropped) {
@@ -107,7 +105,7 @@ final class DisabledMods {
         }
     }
 
-    List<PendingChange.OffAtStart> getOffAtStart() {
+    public List<PendingChange.OffAtStart> getOffAtStart() {
         return List.copyOf(this.offAtStart);
     }
 
@@ -117,11 +115,11 @@ final class DisabledMods {
         return waiting;
     }
 
-    boolean isDisabledSinceStart(String id) {
+    public boolean isDisabledSinceStart(String id) {
         return this.installed.isDisabledSinceStart(id);
     }
 
-    void restore(List<String> order) {
+    public void restore(List<String> order) {
         this.awaitRenames();
         for (String id : order) {
             Path disabledJar = this.installed.isDisabled(id) ? this.installed.findFolderJarOf(id) : null;
@@ -139,7 +137,7 @@ final class DisabledMods {
         }
     }
 
-    CompletableFuture<ModAdder.Result> enableByAdd(String id) {
+    public CompletableFuture<ModAdder.Result> enableByAdd(String id) {
         this.awaitRenames();
         CompletableFuture<ModAdder.Result> ended = new CompletableFuture<>();
         Path disabledJar = this.installed.findJarOf(id);
@@ -166,7 +164,7 @@ final class DisabledMods {
         return ended;
     }
 
-    void disableAfter(ModSwitcher.Result result) {
+    public void disableAfter(ModSwitcher.Result result) {
         if (!(result instanceof ModSwitcher.Result.Done done)
                 || this.settings.getOffLasts() != HotwireSettings.OffLasts.UNTIL_ON) {
             return;
@@ -202,7 +200,7 @@ final class DisabledMods {
         }
         if (!failed.isEmpty()) {
             String said = Lang.get("hotwire.switch.kept_off_failed", failed);
-            Minecraft.getInstance().execute(() -> this.say.accept(said, true));
+            Games.getNow().runOnGame(() -> this.say.accept(said, true));
         }
     }
 

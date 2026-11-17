@@ -1,6 +1,5 @@
-package dev.moon.hotwire.fabric;
+package dev.moon.hotwire.engine;
 
-import dev.moon.hotwire.engine.InstalledMods;
 import dev.moon.hotwire.jar.ModManifest;
 import dev.moon.hotwire.plan.ModGraph;
 import dev.moon.hotwire.ui.list.Badges;
@@ -17,21 +16,21 @@ import java.util.function.Supplier;
 import java.util.stream.Collectors;
 import org.jspecify.annotations.Nullable;
 
-final class ModRows {
+public final class ModRows {
     private final InstalledMods installed;
     private final Predicate<String> isOn;
     private final PendingChanges pending;
-    private final Supplier<HotwireEngine.@Nullable JvmParts> parts;
+    private final Supplier<@Nullable JvmParts> parts;
 
-    ModRows(InstalledMods installed, Predicate<String> isOn, PendingChanges pending,
-            Supplier<HotwireEngine.@Nullable JvmParts> parts) {
+    public ModRows(InstalledMods installed, Predicate<String> isOn, PendingChanges pending,
+            Supplier<@Nullable JvmParts> parts) {
         this.installed = installed;
         this.isOn = isOn;
         this.pending = pending;
         this.parts = parts;
     }
 
-    List<ModStatus> getMods() {
+    public List<ModStatus> getMods() {
         List<ModStatus> out = new ArrayList<>();
         ModGraph graph = this.installed.getGraph();
         for (String id : this.installed.getTopLevel()) {
@@ -49,7 +48,7 @@ final class ModRows {
         return out;
     }
 
-    Badges getBadges() {
+    public Badges getBadges() {
         return new Badges() {
             @Override
 
@@ -64,28 +63,28 @@ final class ModRows {
         };
     }
 
-    List<PendingChange> getPendingChanges() {
+    public List<PendingChange> getPendingChanges() {
         List<PendingChange> out = new ArrayList<>();
         for (PendingChange change : this.pending.list()) {
             if (!(change instanceof PendingChange.Revertable back) || this.installed.findJarOf(back.modId()) != null) {
                 out.add(change);
             }
         }
-        HotwireEngine.JvmParts found = this.parts.get();
+        JvmParts found = this.parts.get();
         if (found != null) {
             out.addAll(found.adds().getCopied());
         }
         return out;
     }
 
-    void removeCopy(String id) throws IOException {
-        HotwireEngine.JvmParts found = this.parts.get();
+    public void removeCopy(String id) throws IOException {
+        JvmParts found = this.parts.get();
         if (found != null) {
             found.adds().removeCopy(id);
         }
     }
 
-    void revertAtNextStart(String id) throws IOException {
+    public void revertAtNextStart(String id) throws IOException {
         Path jar = this.installed.findFolderJarOf(id);
         if (jar == null) {
             throw new IllegalStateException(id + " is not installed, so there is nothing to revert.");

@@ -1,6 +1,7 @@
-package dev.moon.hotwire.fabric;
+package dev.moon.hotwire.engine;
 
 import dev.moon.hotwire.modrinth.Downloads;
+import dev.moon.hotwire.seam.Games;
 import dev.moon.hotwire.store.UpdateCheck;
 import dev.moon.hotwire.ui.Lang;
 import dev.moon.hotwire.ui.Progress;
@@ -27,11 +28,10 @@ import java.util.function.BiConsumer;
 import java.util.function.Consumer;
 import java.util.function.Function;
 import net.fabricmc.loader.api.FabricLoader;
-import net.minecraft.client.Minecraft;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
-final class StoreUpdates {
+public final class StoreUpdates {
     private static final Logger LOGGER = LoggerFactory.getLogger(StoreUpdates.class);
 
     private static final int FETCHES = 8;
@@ -43,8 +43,8 @@ final class StoreUpdates {
 
     private static final int REFUSALS_SAID = 5;
 
-    record Ran(List<ModUpdater.Result> results, long fetchMillis, long updateMillis) {
-        String describe() {
+    public record Ran(List<ModUpdater.Result> results, long fetchMillis, long updateMillis) {
+        public String describe() {
             long now = this.results.stream().filter(ModUpdater.Result.Updated.class::isInstance).count();
             long later = this.results.stream().filter(ModUpdater.Result.Queued.class::isInstance).count();
             return this.results.size() + " jars: " + now + " in place, " + later + " next start, "
@@ -70,7 +70,7 @@ final class StoreUpdates {
         void show(List<String> first, List<String> now, List<String> later, List<String> not);
     }
 
-    StoreUpdates(UpdateCheck check, ModChanges changes, Progress progress, BiConsumer<String, Boolean> say,
+    public StoreUpdates(UpdateCheck check, ModChanges changes, Progress progress, BiConsumer<String, Boolean> say,
             Summary summary) {
         this.summary = summary;
         this.check = check;
@@ -79,7 +79,7 @@ final class StoreUpdates {
         this.say = say;
     }
 
-    CompletableFuture<Ran> getLast() {
+    public CompletableFuture<Ran> getLast() {
         return this.last;
     }
 
@@ -122,7 +122,7 @@ final class StoreUpdates {
                 List<Path> in = firstJars;
                 List<ModUpdater.Result> inMade = firstMade;
                 long now = inMade.stream().filter(ModUpdater.Result.Updated.class::isInstance).count();
-                Minecraft.getInstance().execute(() -> {
+                Games.getNow().runOnGame(() -> {
                     if (now > 0) {
                         this.say.accept(Lang.get("hotwire.updates.first_in", now, offers.size()), false);
                     }
@@ -147,10 +147,10 @@ final class StoreUpdates {
             List<ModUpdater.Result> firstResults = firstMade;
             LOGGER.info("[Hotwire] Update all fetched {} of {} jars in {} ms; {} come with mods they need", jars.size()
                     + needed.size(), offers.size(), fetchMillis, needed.size());
-            Minecraft.getInstance().execute(landed);
+            Games.getNow().runOnGame(landed);
             this.progress.stepUpdating(1);
             long applying = System.nanoTime();
-            this.changes.updateAll(jars).whenComplete((results, failed) -> Minecraft.getInstance().execute(() -> {
+            this.changes.updateAll(jars).whenComplete((results, failed) -> Games.getNow().runOnGame(() -> {
                 long updateMillis = (System.nanoTime() - applying) / 1_000_000;
                 this.progress.endAdding();
                 List<ModUpdater.Result> made = new ArrayList<>(firstResults);
@@ -220,7 +220,7 @@ final class StoreUpdates {
         }
     }
 
-    List<List<Path>> fetchAll(List<UpdateOffer> offers, Function<UpdateOffer, List<Path>> fetch) {
+    public List<List<Path>> fetchAll(List<UpdateOffer> offers, Function<UpdateOffer, List<Path>> fetch) {
         return collect(this.beginFetches(offers, fetch));
     }
 
@@ -273,7 +273,7 @@ final class StoreUpdates {
         try {
             return this.check.fetchWithNeeds(offer, said -> LOGGER.info("[Hotwire] {}", said));
         } catch (IOException e) {
-            Minecraft.getInstance().execute(() -> this.say.accept(Lang.get("hotwire.store.download_failed",
+            Games.getNow().runOnGame(() -> this.say.accept(Lang.get("hotwire.store.download_failed",
                     offer.name(), e.getMessage() == null ? e.toString() : e.getMessage()), true));
             return List.of();
         }

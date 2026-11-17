@@ -17,6 +17,7 @@ import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.CountDownLatch;
 import java.util.function.Function;
 import java.util.function.IntSupplier;
+import java.util.function.Supplier;
 import net.minecraft.client.Minecraft;
 import org.jspecify.annotations.Nullable;
 
@@ -56,6 +57,11 @@ public final class AddGameSide implements AddGame {
     @Override
     public List<String> runStartListeners(String id, RegistrationJournal journal) {
         return ModLifecycle.start(id, journal, Minecraft.getInstance());
+    }
+
+    @Override
+    public ModAdder.Result addAroundReopen(Supplier<ModAdder.Result> add) {
+        return WorldReopen.add(add);
     }
 
     @Override

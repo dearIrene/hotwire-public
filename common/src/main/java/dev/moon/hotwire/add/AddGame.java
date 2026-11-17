@@ -12,6 +12,7 @@ import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.CountDownLatch;
 import java.util.function.Function;
 import java.util.function.IntSupplier;
+import java.util.function.Supplier;
 import org.jspecify.annotations.Nullable;
 
 public interface AddGame {
@@ -40,6 +41,8 @@ public interface AddGame {
             Function<String, @Nullable Class<?>> findLoaded);
 
     List<String> runStartListeners(String id, RegistrationJournal journal);
+
+    ModAdder.Result addAroundReopen(Supplier<ModAdder.Result> add);
 
     MixinCopy.Decorations readDecorations(List<ModJar> jars);
 }

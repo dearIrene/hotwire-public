@@ -22,6 +22,7 @@ import dev.moon.hotwire.api.StoreQuery;
 import dev.moon.hotwire.api.SwitchPreview;
 import dev.moon.hotwire.api.SwitchProgress;
 import dev.moon.hotwire.api.SwitchResult;
+import dev.moon.hotwire.engine.JvmParts;
 import dev.moon.hotwire.engine.LifecycleListeners;
 import dev.moon.hotwire.engine.ModPolicy;
 import dev.moon.hotwire.fabric.screen.PromptGameScreen;
@@ -30,6 +31,7 @@ import dev.moon.hotwire.plan.SwitchPlan;
 import dev.moon.hotwire.redefine.HandlerGuards;
 import dev.moon.hotwire.registration.MergedMembers;
 import dev.moon.hotwire.registration.Owners;
+import dev.moon.hotwire.seam.Games;
 import dev.moon.hotwire.switching.CallerBlocks;
 import dev.moon.hotwire.switching.Listeners;
 import dev.moon.hotwire.switching.ModSwitcher;
@@ -57,7 +59,6 @@ import java.util.concurrent.atomic.AtomicInteger;
 import java.util.function.Consumer;
 import java.util.function.Predicate;
 import java.util.stream.Stream;
-import net.minecraft.client.Minecraft;
 import net.minecraft.client.gui.screens.Screen;
 import org.jspecify.annotations.Nullable;
 import org.objectweb.asm.Type;
@@ -85,13 +86,21 @@ public final class HotwireApiImpl implements HotwireApi {
     @SuppressWarnings("FutureReturnValueIgnored")
     static <T> CompletableFuture<T> onGame(CompletableFuture<T> made) {
         CompletableFuture<T> ended = new CompletableFuture<>();
-        made.whenComplete((value, error) -> Minecraft.getInstance().execute(() -> {
-            if (error != null) {
-                ended.completeExceptionally(error);
+        made.whenComplete((value, error) -> {
+            Runnable end = () -> {
+                if (error != null) {
+                    ended.completeExceptionally(error);
+                } else {
+                    ended.complete(value);
+                }
+            };
+
+            if (Games.isStarted()) {
+                Games.getNow().runOnGame(end);
             } else {
-                ended.complete(value);
+                end.run();
             }
-        }));
+        });
         return ended;
     }
 
@@ -165,7 +174,7 @@ public final class HotwireApiImpl implements HotwireApi {
         if (engine == null) {
             done.complete(SwitchResult.ofRefusal(Reason.NOT_READY, Lang.get("hotwire.api.starting")));
         } else {
-            Minecraft.getInstance().execute(() -> engine.updateHotwireAtNextStart(done));
+            Games.getNow().runOnGame(() -> engine.updateHotwireAtNextStart(done));
         }
         return onGameAsResult(done);
     }
@@ -264,7 +273,7 @@ public final class HotwireApiImpl implements HotwireApi {
         if (engine == null || engine.isFirstOpenAccepted()) {
             return false;
         }
-        Minecraft.getInstance().execute(() -> openPrompt(engine));
+        Games.getNow().runOnGame(() -> openPrompt(engine));
         return true;
     }
 
@@ -307,13 +316,13 @@ public final class HotwireApiImpl implements HotwireApi {
 
             @Override
             public void accept() {
-                Minecraft.getInstance().execute(engine::acceptFirstOpen);
+                Games.getNow().runOnGame(engine::acceptFirstOpen);
             }
 
             @Override
             public void acceptAndOpenHotwire() {
                 this.accept();
-                Minecraft.getInstance().execute(engine::open);
+                Games.getNow().runOnGame(engine::open);
             }
         };
     }
@@ -392,7 +401,7 @@ public final class HotwireApiImpl implements HotwireApi {
     public void openScreen() {
         HotwireEngine engine = HotwireClient.findEngine();
         if (engine != null) {
-            Minecraft.getInstance().execute(engine::open);
+            Games.getNow().runOnGame(engine::open);
         }
     }
 
@@ -520,7 +529,7 @@ public final class HotwireApiImpl implements HotwireApi {
 
     static void endIfFailed(CompletableFuture<SwitchResult> ended, @Nullable Throwable error, Predicate<String> on) {
         if (error != null && !ended.isDone()) {
-            Minecraft.getInstance().execute(() -> endSwitch(ended, new SwitchResult(SwitchResult.Kind.FAILED,
+            Games.getNow().runOnGame(() -> endSwitch(ended, new SwitchResult(SwitchResult.Kind.FAILED,
                     List.of(), Lang.get("hotwire.failed", error)), on));
         }
     }
@@ -551,7 +560,7 @@ public final class HotwireApiImpl implements HotwireApi {
         if (engine == null) {
             return new SwitchPreview(false, Reason.NOT_READY, List.of(), Lang.get("hotwire.api.starting"));
         }
-        HotwireEngine.JvmParts parts = engine.findJvmParts().orElse(null);
+        JvmParts parts = engine.findJvmParts().orElse(null);
         if (parts == null) {
             return new SwitchPreview(false, Reason.NOT_READY, List.of(), engine.getSwitchRefusal());
         }
@@ -588,10 +597,10 @@ public final class HotwireApiImpl implements HotwireApi {
     static CompletableFuture<SwitchResult> switchFor(boolean off, List<String> asked,
             CallerBlocks.Callers callers) {
         CompletableFuture<SwitchResult> ended = new CompletableFuture<>();
-        Minecraft.getInstance().execute(() -> {
+        Games.getNow().runOnGame(() -> {
             try {
                 HotwireEngine engine = HotwireClient.findEngine();
-                HotwireEngine.JvmParts parts = engine == null ? null : engine.findJvmParts().orElse(null);
+                JvmParts parts = engine == null ? null : engine.findJvmParts().orElse(null);
                 if (engine == null || parts == null) {
                     ended.complete(SwitchResult.ofRefusal(Reason.NOT_READY, engine == null
                             ? Lang.get("hotwire.api.starting") : engine.getSwitchRefusal()));

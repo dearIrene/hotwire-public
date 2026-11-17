@@ -2,6 +2,9 @@ package dev.moon.hotwire.fabric;
 
 import dev.moon.hotwire.add.ModAdder;
 import dev.moon.hotwire.concurrent.Tasks;
+import dev.moon.hotwire.engine.JvmParts;
+import dev.moon.hotwire.engine.ModChanges;
+import dev.moon.hotwire.engine.StoreJars;
 import dev.moon.hotwire.fabric.add.WorldReopen;
 import dev.moon.hotwire.fabric.screen.ModFileChooser;
 import dev.moon.hotwire.ui.AddMode;
@@ -135,7 +138,7 @@ final class JarRequests {
 
     @SuppressWarnings("FutureReturnValueIgnored")
     void update(Path jar, UpdateMethod method) {
-        HotwireEngine.JvmParts parts = this.engine.findJvmParts().orElse(null);
+        JvmParts parts = this.engine.findJvmParts().orElse(null);
         if (parts == null) {
             ModAdder.Result queued = this.changes.queueAddAlone(jar);
             boolean ok = queued instanceof ModAdder.Result.Queued;

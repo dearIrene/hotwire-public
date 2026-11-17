@@ -88,5 +88,7 @@ public interface Game {
 
     void drawHoldFrame();
 
+    boolean isPlaying();
+
     Optional<String> findReopenRefusal();
 }

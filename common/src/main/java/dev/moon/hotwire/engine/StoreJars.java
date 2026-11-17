@@ -1,11 +1,10 @@
-package dev.moon.hotwire.fabric;
+package dev.moon.hotwire.engine;
 
 import dev.moon.hotwire.add.ModAdder;
-import dev.moon.hotwire.engine.InstalledMods;
-import dev.moon.hotwire.engine.ModPolicy;
 import dev.moon.hotwire.jar.JarLookup;
 import dev.moon.hotwire.jar.ModManifest;
 import dev.moon.hotwire.modrinth.Downloads;
+import dev.moon.hotwire.seam.Games;
 import dev.moon.hotwire.store.ModStore;
 import dev.moon.hotwire.store.UpdateCheck;
 import dev.moon.hotwire.ui.JarHost;
@@ -32,12 +31,11 @@ import java.util.Set;
 import java.util.function.BiConsumer;
 import java.util.function.Supplier;
 import java.util.stream.Collectors;
-import net.minecraft.client.Minecraft;
 import org.jspecify.annotations.Nullable;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
-final class StoreJars {
+public final class StoreJars {
     private static final Logger LOGGER = LoggerFactory.getLogger(StoreJars.class);
 
     private record StoreJar(Path jar, boolean update) {
@@ -71,7 +69,7 @@ final class StoreJars {
     private final StoreUpdates all;
     private final Runnable refresh;
 
-    StoreJars(InstalledMods installed, ModChanges changes, Supplier<@Nullable JarHost> host,
+    public StoreJars(InstalledMods installed, ModChanges changes, Supplier<@Nullable JarHost> host,
             Supplier<@Nullable ModScreen> screen, Supplier<@Nullable ModStore> store, BiConsumer<String, Boolean> say,
             Progress progress, Runnable refresh) {
         this.installed = installed;
@@ -90,23 +88,23 @@ final class StoreJars {
         });
     }
 
-    StoreUpdates getAll() {
+    public StoreUpdates getAll() {
         return this.all;
     }
 
-    UpdateCheck getCheck() {
+    public UpdateCheck getCheck() {
         return this.check;
     }
 
-    List<UpdateOffer> getOffers() {
+    public List<UpdateOffer> getOffers() {
         return this.offers;
     }
 
-    boolean isChecked() {
+    public boolean isChecked() {
         return this.checked;
     }
 
-    boolean checkAgain() {
+    public boolean checkAgain() {
         long limited = this.check.findWaitSeconds();
         if (limited > 0) {
             this.say.accept(Lang.get("hotwire.updates.rate_limited", limited), true);
@@ -127,13 +125,13 @@ final class StoreJars {
         return true;
     }
 
-    void startCheck() {
+    public void startCheck() {
         if (this.started) {
             return;
         }
         this.started = true;
         this.lastStarted = System.nanoTime();
-        this.check.start(found -> Minecraft.getInstance().execute(() -> {
+        this.check.start(found -> Games.getNow().runOnGame(() -> {
             this.offers = found;
             this.checked = true;
             if (this.again) {
@@ -154,7 +152,7 @@ final class StoreJars {
         }));
     }
 
-    void updateAll(List<UpdateOffer> asked) {
+    public void updateAll(List<UpdateOffer> asked) {
         if (asked.size() > 1) {
             this.reportDownloads();
             ModScreen shown = this.screen.get();
@@ -201,8 +199,8 @@ final class StoreJars {
             String failure = null;
             for (UpdateOffer offer : this.check.orderByNeeds(asked, this.offers)) {
                 try {
-                    List<Path> fetched = this.check.fetchWithNeeds(offer, said -> Minecraft.getInstance()
-                            .execute(() -> this.say.accept(said, false)));
+                    List<Path> fetched = this.check.fetchWithNeeds(offer, said -> Games.getNow()
+                            .runOnGame(() -> this.say.accept(said, false)));
                     for (int i = 0; i < fetched.size(); i++) {
                         jars.add(new StoreJar(fetched.get(i), i == fetched.size() - 1));
                     }
@@ -212,7 +210,7 @@ final class StoreJars {
                 }
             }
             String why = failure;
-            Minecraft.getInstance().execute(() -> {
+            Games.getNow().runOnGame(() -> {
                 if (why != null) {
                     this.say.accept(why, true);
                 }
@@ -223,7 +221,7 @@ final class StoreJars {
         });
     }
 
-    boolean updateById(String id) {
+    public boolean updateById(String id) {
         for (UpdateOffer offer : this.offers) {
             if (offer.id().equals(id)) {
                 this.updateAll(List.of(offer));
@@ -233,7 +231,7 @@ final class StoreJars {
         return false;
     }
 
-    void queue(List<Path> jars, boolean update, List<String> projects) {
+    public void queue(List<Path> jars, boolean update, List<String> projects) {
         this.queued.clear();
         this.reopenWanted = false;
         this.reopenWait = false;
@@ -244,13 +242,13 @@ final class StoreJars {
         this.offerNext();
     }
 
-    void remember(List<Path> jars, List<String> projects) {
+    public void remember(List<Path> jars, List<String> projects) {
         for (int i = 0; i < jars.size(); i++) {
             this.projects.put(jars.get(i), projects.get(i));
         }
     }
 
-    List<Downloads.Job> findDownloads() {
+    public List<Downloads.Job> findDownloads() {
         return this.check.getDownloads().snapshot();
     }
 
@@ -261,7 +259,8 @@ final class StoreJars {
         }
     }
 
-    List<ModAdder.Result> queueForNextStart(List<Path> jars, List<String> projects, List<PendingChange> pending) {
+    public List<ModAdder.Result> queueForNextStart(List<Path> jars, List<String> projects,
+            List<PendingChange> pending) {
         List<ModAdder.Result> results = new ArrayList<>();
         for (int i = 0; i < jars.size(); i++) {
             this.projects.put(jars.get(i), projects.get(i));
@@ -284,15 +283,15 @@ final class StoreJars {
         return results;
     }
 
-    boolean hasQueued() {
+    public boolean hasQueued() {
         return !this.queued.isEmpty();
     }
 
-    void waitForReopen() {
+    public void waitForReopen() {
         this.reopenWait = true;
     }
 
-    void endReopenWait(boolean offer) {
+    public void endReopenWait(boolean offer) {
         boolean waited = this.reopenWait;
         this.reopenWait = false;
         if (waited && offer) {
@@ -300,17 +299,17 @@ final class StoreJars {
         }
     }
 
-    void markReopenWanted() {
+    public void markReopenWanted() {
         this.reopenWanted = true;
     }
 
-    boolean takeReopenWanted() {
+    public boolean takeReopenWanted() {
         boolean wanted = this.reopenWanted;
         this.reopenWanted = false;
         return wanted;
     }
 
-    void clear() {
+    public void clear() {
         this.queued.clear();
         this.reopenWanted = false;
         this.projects.clear();
@@ -338,7 +337,7 @@ final class StoreJars {
         }
     }
 
-    void dropOffer(ModUpdater.Result result) {
+    public void dropOffer(ModUpdater.Result result) {
         String id = switch (result) {
             case ModUpdater.Result.Updated updated -> updated.id();
             case ModUpdater.Result.Queued queuedUpdate -> queuedUpdate.id();
@@ -354,7 +353,7 @@ final class StoreJars {
         }
     }
 
-    void markQueued(Path jar, List<PendingChange> pending) {
+    public void markQueued(Path jar, List<PendingChange> pending) {
         String project = this.projects.remove(jar);
         ModStore made = this.store.get();
         if (project != null && made != null) {
@@ -363,7 +362,7 @@ final class StoreJars {
         this.dropUnqueued(pending);
     }
 
-    void dropUnqueued(List<PendingChange> pending) {
+    public void dropUnqueued(List<PendingChange> pending) {
         ModStore made = this.store.get();
         if (made != null) {
             made.getModel().dropUnqueued(pending.stream().filter(PendingChange.Update.class::isInstance)
@@ -371,7 +370,7 @@ final class StoreJars {
         }
     }
 
-    void markInstalled(Path jar) {
+    public void markInstalled(Path jar) {
         String project = this.projects.remove(jar);
         ModStore made = this.store.get();
         if (project != null && made != null) {
@@ -384,7 +383,7 @@ final class StoreJars {
     }
 
     @SuppressWarnings("FutureReturnValueIgnored")
-    void offerNext() {
+    public void offerNext() {
         JarHost current = this.host.get();
         if (this.reopenWait) {
             return;
@@ -406,8 +405,8 @@ final class StoreJars {
             current.onJarPicked(next.jar(), next.update());
             return;
         }
-        this.changes.dryRunUpdate(next.jar()).whenComplete((preview, failed) -> Minecraft.getInstance()
-                .execute(() -> {
+        this.changes.dryRunUpdate(next.jar()).whenComplete((preview, failed) -> Games.getNow()
+                .runOnGame(() -> {
                     if (failed == null && preview instanceof UpdatePreview.Refused && this.hasNeedsToMeet(next)) {
                         return;
                     }
@@ -479,8 +478,8 @@ final class StoreJars {
             carried.forEach(library -> front.add(new StoreJar(library, false)));
             for (String id : needs) {
                 try {
-                    List<Path> jars = this.check.fetchById(id, known, said -> Minecraft.getInstance()
-                            .execute(() -> this.say.accept(said, false)));
+                    List<Path> jars = this.check.fetchById(id, known, said -> Games.getNow()
+                            .runOnGame(() -> this.say.accept(said, false)));
                     for (int i = 0; i < jars.size(); i++) {
                         boolean update = i == jars.size() - 1 && this.installed.isInstalled(id);
                         front.add(new StoreJar(jars.get(i), update));
@@ -494,7 +493,7 @@ final class StoreJars {
                             e.toString());
                 }
             }
-            Minecraft.getInstance().execute(() -> {
+            Games.getNow().runOnGame(() -> {
                 this.queued.addFirst(asked);
                 for (int i = front.size() - 1; i >= 0; i--) {
                     this.queued.addFirst(front.get(i));

@@ -5,6 +5,7 @@ import dev.moon.hotwire.engine.InstalledMods;
 import dev.moon.hotwire.engine.ModPolicy;
 import dev.moon.hotwire.engine.SeenUses;
 import dev.moon.hotwire.fabric.add.WorldReopen;
+import dev.moon.hotwire.fabric.rebuild.GameClasses;
 import dev.moon.hotwire.plan.ModGraph;
 import dev.moon.hotwire.redefine.Tripwire;
 import dev.moon.hotwire.registration.Owners;
@@ -93,7 +94,8 @@ final class OffCodeNotice {
             return;
         }
         ModScreen current = engine.findScreen();
-        boolean fromWorld = engine.findJvmParts().map(parts -> parts.classes().isReachedFromWorld(mod, first))
+        boolean fromWorld = engine.findJvmParts()
+                .map(parts -> ((GameClasses) parts.classes()).isReachedFromWorld(mod, first))
                 .orElse(false);
         if (current != null && fromWorld && WorldReopen.findRefusal().isEmpty()) {
             current.offerReopen(new ReopenPanel.Offer(true, List.of(), installed.nameOf(mod),

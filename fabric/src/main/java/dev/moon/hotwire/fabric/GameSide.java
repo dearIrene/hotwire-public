@@ -252,4 +252,10 @@ public final class GameSide implements Game {
     public Optional<String> findReopenRefusal() {
         return WorldReopen.findRefusal();
     }
+
+    @Override
+    public boolean isPlaying() {
+        Minecraft client = Minecraft.getInstance();
+        return client.level != null && ModViews.openScreen() == null && client.isWindowActive();
+    }
 }
