@@ -67,13 +67,15 @@ public final class AddSupport implements ModAdder.Engine {
     private final IconSource icons;
     private final Function<List<String>, ModSwitcher.Result> takeOut;
     private final Map<String, PendingChange.Copied> copied = new ConcurrentHashMap<>();
-    private volatile Runnable afterAdd = () -> { };
+
+    private final Runnable afterAdd;
 
     private final Map<String, Path> copiedFrom = new ConcurrentHashMap<>();
 
     public AddSupport(InstalledMods installed, SwitchApplier applier, ModSwitcher switcher,
             SwitchApplier.Game classes, GameReports reports, Path gameDir, UpdateFolders folders, UpdateQueue queue,
-            IconSource icons, AddGame game, Function<List<String>, ModSwitcher.Result> takeOut) {
+            IconSource icons, AddGame game, Function<List<String>, ModSwitcher.Result> takeOut, Runnable afterAdd) {
+        this.afterAdd = afterAdd;
         this.installed = installed;
         this.takeOut = takeOut;
         this.icons = icons;
@@ -86,10 +88,6 @@ public final class AddSupport implements ModAdder.Engine {
         this.queue = queue;
         this.game = game;
         this.adder = new ModAdder(this, game);
-    }
-
-    public void setAfterAdd(Runnable afterAdd) {
-        this.afterAdd = afterAdd;
     }
 
     public AddPreview preview(Path jar) {

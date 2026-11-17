@@ -302,8 +302,7 @@ final class EngineStart {
                 mixin::getGeneratedBy), new GameSwitchUnits(new MixinPlugins(mixin::getConfigObjects,
                         mixin.getProcessor())), installed, chain);
         AddSupport adds = new AddSupport(installed, applier, switcher, classes, reports, gameDir, folders, queue,
-                icons, new AddGameSide(), ids -> runner.turnOff(ids).result());
-        adds.setAfterAdd(runner::lookAheadForAll);
+                icons, new AddGameSide(), ids -> runner.turnOff(ids).result(), runner::lookAheadForAll);
         UpdateSupport updates = new UpdateSupport(installed, applier, switcher, classes, folders, queue, reports,
                 icons, adds.getAdder(), ids -> SwitchRunner.runQuietly(() -> runner.turnOff(ids)).result(),
                 ids -> SwitchRunner.runQuietly(() -> runner.turnOn(ids)).result(),
@@ -527,7 +526,7 @@ final class EngineStart {
             ready.runner().setAfterOff(result -> {
                 started.getDisabled().disableAfter(result);
 
-                Minecraft.getInstance().execute(started::checkQueue);
+                Games.getNow().runOnGame(started::checkQueue);
             });
             ready.runner().setBeforeOn(started.getDisabled()::restore);
         }
