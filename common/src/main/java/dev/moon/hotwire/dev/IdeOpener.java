@@ -16,12 +16,9 @@ import java.nio.file.attribute.BasicFileAttributes;
 import java.time.Duration;
 import java.util.EnumSet;
 import java.util.List;
-import java.util.Set;
 import org.jspecify.annotations.Nullable;
 
 public final class IdeOpener {
-    private static final Set<String> SKIPPED = Set.of("build", "out", "bin", "run", ".gradle", ".git", ".idea",
-            "node_modules");
     private static final int DEEPEST = 12;
     private static final int FIRST_PORT = 63_342;
     private static final int PORTS = 10;
@@ -39,7 +36,7 @@ public final class IdeOpener {
                 @Override
                 public FileVisitResult preVisitDirectory(Path dir, BasicFileAttributes attributes) {
                     Path name = dir.getFileName();
-                    return !dir.equals(project) && name != null && SKIPPED.contains(name.toString())
+                    return !dir.equals(project) && name != null && BuildSources.SKIPPED.contains(name.toString())
                             ? FileVisitResult.SKIP_SUBTREE : FileVisitResult.CONTINUE;
                 }
 

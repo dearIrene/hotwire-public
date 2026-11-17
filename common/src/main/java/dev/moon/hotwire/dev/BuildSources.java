@@ -27,7 +27,7 @@ import java.util.zip.GZIPOutputStream;
 import org.jspecify.annotations.Nullable;
 
 public final class BuildSources {
-    private static final Set<String> SKIPPED = Set.of("build", "out", "bin", "run", ".gradle", ".git", ".idea",
+    static final Set<String> SKIPPED = Set.of("build", "out", "bin", "run", ".gradle", ".git", ".idea",
             "node_modules");
 
     public record Entry(String hash, long size, long time, String path) {
