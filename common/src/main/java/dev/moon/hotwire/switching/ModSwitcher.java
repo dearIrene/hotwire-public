@@ -128,7 +128,7 @@ public final class ModSwitcher {
 
     private final Lifecycle lifecycle;
     private final Predicate<String> reopenToTurnOn;
-    private final WorldCalls calledByWorld = new WorldCalls();
+    private final WorldCalls calledByWorld;
     private final Function<Set<String>, Set<String>> inRegistries;
 
     final AtomicInteger switches = new AtomicInteger();
@@ -146,7 +146,7 @@ public final class ModSwitcher {
     public ModSwitcher(ModGraph graph, SwitchPlanner planner, SwitchApplier applier, Progress progress,
             RegistrationJournal registrations, Lifecycle lifecycle, Checks checks) {
         this.reopenToTurnOn = checks.reopenToTurnOn();
-        this.calledByWorld.answerWith(checks.calledByWorld());
+        this.calledByWorld = new WorldCalls(checks.calledByWorld());
         this.inRegistries = checks.inRegistries();
         this.restartOnly.putAll(checks.restartKnown());
         this.restartLearned = checks.restartLearned();

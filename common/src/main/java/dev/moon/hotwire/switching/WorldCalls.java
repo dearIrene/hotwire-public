@@ -11,10 +11,10 @@ final class WorldCalls {
     }
 
     private static final long FRESH_NANOS = 10_000_000_000L;
-    private volatile Supplier<Set<String>> walk = Set::of;
+    private final Supplier<Set<String>> walk;
     private volatile @Nullable EarlyAnswer ahead;
 
-    void answerWith(Supplier<Set<String>> mods) {
+    WorldCalls(Supplier<Set<String>> mods) {
         this.walk = mods;
     }
 
