@@ -1,13 +1,8 @@
 package dev.moon.hotwire.fabric.mixin.core;
 
-import dev.moon.hotwire.report.Causes;
-import dev.moon.hotwire.report.CrashSection;
 import dev.moon.hotwire.report.GameReports;
 import java.nio.file.Path;
-import java.util.ArrayList;
-import java.util.LinkedHashSet;
 import java.util.List;
-import java.util.Set;
 import net.minecraft.CrashReport;
 import net.minecraft.ReportType;
 import net.minecraft.SystemReport;
@@ -29,42 +24,14 @@ public abstract class CrashReportMixin {
     @Inject(method = "saveToFile(Ljava/nio/file/Path;Lnet/minecraft/ReportType;Ljava/util/List;)Z", at = @At("RETURN"),
             require = 0)
     private void hotwire$onSaved(Path file, ReportType type, List<String> lines, CallbackInfoReturnable<Boolean> cir) {
-        if (!cir.getReturnValueZ()) {
-            return;
-        }
-        CrashSection.Detail trace = this.describeTrace();
-        boolean cleared = CrashSection.isCleared(trace.value());
-        if (GameReports.countRepeat(file, cleared)) {
-            return;
-        }
-        GameReports.logCrashDecision(trace);
-        if (!cleared) {
-            GameReports.tellCrashSaved(file);
+        if (cir.getReturnValueZ()) {
+            GameReports.onCrashSaved(file, this.getException());
         }
     }
 
     @Inject(method = "<init>", at = @At("TAIL"))
     private void hotwire$addSection(CallbackInfo ci) {
-        for (CrashSection.Detail detail : GameReports.getCrashSection().details()) {
-            this.getSystemReport().setDetail(CrashSection.TITLE + ": " + detail.name(), detail.value());
-        }
-        CrashSection.Detail trace = this.describeTrace();
-        this.getSystemReport().setDetail(CrashSection.TITLE + ": " + trace.name(), trace.value());
-
-        if (!CrashSection.isCleared(trace.value())) {
-            this.getSystemReport().setDetail("!!! If you are reading this, Hotwire caused this crash", trace.value());
-        }
-    }
-
-    private CrashSection.Detail describeTrace() {
-        Set<String> frames = new LinkedHashSet<>();
-        List<String> messages = new ArrayList<>();
-        for (Throwable at : Causes.list(this.getException())) {
-            for (StackTraceElement frame : at.getStackTrace()) {
-                frames.add(frame.getClassName());
-            }
-            messages.add(at.toString());
-        }
-        return GameReports.describeTrace(frames, messages);
+        GameReports.listCrashDetails(this.getException())
+                .forEach((name, value) -> this.getSystemReport().setDetail(name, value));
     }
 }

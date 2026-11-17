@@ -2,6 +2,7 @@ package dev.moon.hotwire.fabric.mixin.core.server;
 
 import com.llamalad7.mixinextras.injector.wrapoperation.Operation;
 import com.llamalad7.mixinextras.injector.wrapoperation.WrapOperation;
+import dev.moon.hotwire.concurrent.Tasks;
 import dev.moon.hotwire.engine.CrashGuard;
 import dev.moon.hotwire.fabric.OngoingReload;
 import dev.moon.hotwire.fabric.mixin.core.util.thread.BlockableEventLoopAccessor;
@@ -10,12 +11,9 @@ import dev.moon.hotwire.switching.CrashPolicy;
 /*import java.util.function.BooleanSupplier;
 *///?}
 import java.util.Collection;
-import java.util.Queue;
 import java.util.concurrent.CompletableFuture;
 import net.minecraft.network.protocol.status.ServerStatus;
 import net.minecraft.server.MinecraftServer;
-import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
 import org.spongepowered.asm.mixin.Mixin;
 import org.spongepowered.asm.mixin.Shadow;
 import org.spongepowered.asm.mixin.injection.At;
@@ -25,7 +23,6 @@ import org.spongepowered.asm.mixin.injection.callback.CallbackInfoReturnable;
 
 @Mixin(MinecraftServer.class)
 public abstract class MinecraftServerMixin {
-    private static final Logger LOGGER = LoggerFactory.getLogger("Hotwire");
     @Shadow
     private ServerStatus status;
 
@@ -79,15 +76,7 @@ public abstract class MinecraftServerMixin {
     }
 
     @Inject(method = "onServerExit", at = @At("HEAD"))
-    @SuppressWarnings("checkstyle:IllegalCatch")
     private void hotwire$runWhatIsLeft(CallbackInfo ci) {
-        Queue<Runnable> pending = ((BlockableEventLoopAccessor) this).hotwire$getPending();
-        for (Runnable task = pending.poll(); task != null; task = pending.poll()) {
-            try {
-                task.run();
-            } catch (RuntimeException | Error e) {
-                LOGGER.warn("[Hotwire] a task left on the stopped server threw", e);
-            }
-        }
+        Tasks.runLeft(((BlockableEventLoopAccessor) this).hotwire$getPending());
     }
 }

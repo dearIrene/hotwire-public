@@ -25,6 +25,7 @@ import java.util.Collection;
 import java.util.HashMap;
 import java.util.HashSet;
 import java.util.LinkedHashMap;
+import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;
@@ -216,6 +217,44 @@ public final class GameReports {
     public static @Nullable LastRebuild findLastRebuild(String binaryName) {
         GameReports reports = current;
         return reports == null ? null : reports.lastRebuilt.get(binaryName.replace('.', '/'));
+    }
+
+    public static CrashSection.Detail describeTrace(Throwable crash) {
+        Set<String> frames = new LinkedHashSet<>();
+        List<String> messages = new ArrayList<>();
+        for (Throwable at : Causes.list(crash)) {
+            for (StackTraceElement frame : at.getStackTrace()) {
+                frames.add(frame.getClassName());
+            }
+            messages.add(at.toString());
+        }
+        return describeTrace(frames, messages);
+    }
+
+    public static Map<String, String> listCrashDetails(Throwable crash) {
+        Map<String, String> details = new LinkedHashMap<>();
+        for (CrashSection.Detail detail : getCrashSection().details()) {
+            details.put(CrashSection.TITLE + ": " + detail.name(), detail.value());
+        }
+        CrashSection.Detail trace = describeTrace(crash);
+        details.put(CrashSection.TITLE + ": " + trace.name(), trace.value());
+
+        if (!CrashSection.isCleared(trace.value())) {
+            details.put("!!! If you are reading this, Hotwire caused this crash", trace.value());
+        }
+        return details;
+    }
+
+    public static void onCrashSaved(Path file, Throwable crash) {
+        CrashSection.Detail trace = describeTrace(crash);
+        boolean cleared = CrashSection.isCleared(trace.value());
+        if (countRepeat(file, cleared)) {
+            return;
+        }
+        logCrashDecision(trace);
+        if (!cleared) {
+            tellCrashSaved(file);
+        }
     }
 
     public static CrashSection.Detail describeTrace(Collection<String> frames, Collection<String> messages) {

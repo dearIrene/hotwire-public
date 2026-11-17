@@ -1,5 +1,6 @@
 package dev.moon.hotwire.concurrent;
 
+import java.util.Queue;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.CompletionException;
 import java.util.concurrent.Executor;
@@ -14,6 +15,17 @@ import org.slf4j.LoggerFactory;
 
 public final class Tasks implements AutoCloseable {
     private static final Logger LOGGER = LoggerFactory.getLogger(Tasks.class);
+
+    @SuppressWarnings("checkstyle:IllegalCatch")
+    public static void runLeft(Queue<Runnable> pending) {
+        for (Runnable task = pending.poll(); task != null; task = pending.poll()) {
+            try {
+                task.run();
+            } catch (RuntimeException | Error e) {
+                LOGGER.warn("[Hotwire] a task left on the stopped server threw", e);
+            }
+        }
+    }
 
     private final ExecutorService workers;
     private final Executor gameThread;
