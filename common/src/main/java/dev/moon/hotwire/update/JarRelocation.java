@@ -108,11 +108,6 @@ public final class JarRelocation {
     }
 
     public static List<Path> write(List<Path> jars, Path folder, String tag, BiPredicate<String, String> takesCarried,
-            Function<String, byte @Nullable []> running) throws IOException {
-        return write(jars, folder, tag, takesCarried, running, List.of(), new PinnedClasses(Set.of()));
-    }
-
-    public static List<Path> write(List<Path> jars, Path folder, String tag, BiPredicate<String, String> takesCarried,
             Function<String, byte @Nullable []> running, List<OwnPatch> patches, PinnedClasses pinned)
             throws IOException {
         Files.createDirectories(folder);
