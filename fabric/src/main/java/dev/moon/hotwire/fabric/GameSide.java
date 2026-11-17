@@ -15,6 +15,7 @@ import dev.moon.hotwire.fabric.screen.WebLinks;
 import dev.moon.hotwire.fabric.version.Spellings;
 import dev.moon.hotwire.seam.Game;
 import dev.moon.hotwire.seam.Reloads;
+import dev.moon.hotwire.seam.SharedChange;
 import io.netty.channel.Channel;
 import java.nio.file.Path;
 import java.util.List;
@@ -276,6 +277,11 @@ public final class GameSide implements Game {
     @Override
     public void tellOthers(String line) {
         OtherPlayers.tell(line);
+    }
+
+    @Override
+    public void offerOthers(List<SharedChange> changes) {
+        SharedChanges.send(changes);
     }
 
     @Override

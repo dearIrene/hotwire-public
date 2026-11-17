@@ -8,6 +8,7 @@ import dev.moon.hotwire.plan.SwitchPlan;
 import dev.moon.hotwire.report.ActionJournal;
 import dev.moon.hotwire.report.Report;
 import dev.moon.hotwire.seam.Games;
+import dev.moon.hotwire.seam.SharedChange;
 import dev.moon.hotwire.switching.CheckedResult;
 import dev.moon.hotwire.switching.ModSwitcher;
 import dev.moon.hotwire.switching.PlayerMessages;
@@ -136,7 +137,8 @@ final class SwitchRequests {
                 this.followInProfile(result.result());
             }
             if (result.result() instanceof ModSwitcher.Result.Done done) {
-                this.engine.tellOthersOf(done.plan().order());
+                this.engine.shareWithOthers(off ? SharedChange.Kind.OFF : SharedChange.Kind.ON, done.plan().order(),
+                        "");
             }
             ModScreen current = this.screen.get();
             if (quiet) {

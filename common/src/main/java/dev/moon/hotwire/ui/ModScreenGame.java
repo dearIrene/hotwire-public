@@ -2,6 +2,7 @@ package dev.moon.hotwire.ui;
 
 import dev.moon.hotwire.config.ProfileStore;
 import dev.moon.hotwire.modrinth.Downloads;
+import dev.moon.hotwire.seam.SharedChange;
 import dev.moon.hotwire.switching.SwitchHistory;
 import dev.moon.hotwire.ui.list.Badges;
 import dev.moon.hotwire.ui.list.ModCatalog;
@@ -90,6 +91,16 @@ public interface ModScreenGame {
 
     default String describeOthers() {
         return "";
+    }
+
+    default List<SharedChange> findHostChanges() {
+        return List.of();
+    }
+
+    default void matchHost() {
+    }
+
+    default void dropHostChanges() {
     }
 
     default void cancelReopen() {

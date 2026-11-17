@@ -370,6 +370,10 @@ public final class StoreJars {
         }
     }
 
+    public @Nullable String findProjectOf(Path jar) {
+        return this.projects.get(jar);
+    }
+
     public void markInstalled(Path jar) {
         String project = this.projects.remove(jar);
         ModStore made = this.store.get();

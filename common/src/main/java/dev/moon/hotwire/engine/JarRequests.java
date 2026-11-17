@@ -3,6 +3,7 @@ package dev.moon.hotwire.engine;
 import dev.moon.hotwire.add.ModAdder;
 import dev.moon.hotwire.concurrent.Tasks;
 import dev.moon.hotwire.seam.Games;
+import dev.moon.hotwire.seam.SharedChange;
 import dev.moon.hotwire.ui.AddMode;
 import dev.moon.hotwire.ui.AddPreview;
 import dev.moon.hotwire.ui.JarHost;
@@ -85,8 +86,10 @@ final class JarRequests {
             }
             then.accept(result);
             if (result instanceof ModAdder.Result.Added added) {
+                String project = this.storeJars.findProjectOf(jar);
                 this.storeJars.markInstalled(jar);
-                this.engine.tellOthersOf(added.ids());
+                this.engine.shareWithOthers(SharedChange.Kind.ADD, added.ids().subList(0, 1),
+                        project == null ? "" : project);
             }
             JarHost current = this.engine.findHost();
             if (reopens) {

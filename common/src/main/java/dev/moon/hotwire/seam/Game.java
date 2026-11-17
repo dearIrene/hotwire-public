@@ -123,4 +123,6 @@ public interface Game {
     boolean isUsedByOthers(String mod);
 
     void tellOthers(String line);
+
+    void offerOthers(List<SharedChange> changes);
 }

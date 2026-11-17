@@ -9,6 +9,7 @@ import java.util.Map;
 import java.util.Set;
 import java.util.function.Function;
 import net.fabricmc.fabric.api.client.command.v2.FabricClientCommandSource;
+import net.fabricmc.fabric.api.networking.v1.PayloadTypeRegistry;
 import net.fabricmc.loader.api.ModContainer;
 import net.minecraft.client.KeyMapping;
 import net.minecraft.client.Minecraft;
@@ -19,6 +20,7 @@ import net.minecraft.client.gui.screens.inventory.tooltip.ClientTooltipComponent
 import net.minecraft.client.multiplayer.ClientLevel;
 import net.minecraft.client.player.LocalPlayer;
 import net.minecraft.core.Registry;
+import net.minecraft.network.RegistryFriendlyByteBuf;
 import net.minecraft.network.chat.ClickEvent;
 import net.minecraft.network.chat.Component;
 import net.minecraft.resources.Identifier;
@@ -140,6 +142,14 @@ public final class Spellings {
         player.sendSystemMessage(text);
         //?} else {
         /*player.displayClientMessage(text, false);
+        *///?}
+    }
+
+    public static PayloadTypeRegistry<RegistryFriendlyByteBuf> findToGameRegistry() {
+        //? if >=26.1 {
+        return PayloadTypeRegistry.clientboundPlay();
+        //?} else {
+        /*return PayloadTypeRegistry.playS2C();
         *///?}
     }
 

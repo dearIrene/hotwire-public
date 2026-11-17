@@ -72,6 +72,12 @@ public final class HotwireClient implements ClientModInitializer {
         GameLog.LOGGER.info("[Hotwire] {} loaded; H or /hotwire opens it, and its Report button writes what went wrong"
                 + " to hotwire/reports", LoadedMods.findVersion(ID, "unknown"));
         ClientWarning.register();
+        SharedChanges.register(told -> {
+            HotwireEngine started = engine;
+            if (started != null) {
+                started.onHostChanged(told);
+            }
+        });
         if (FabricLoader.getInstance().isModLoaded("fabric-data-attachment-api-v1")) {
             EntityAttachments.register();
         }

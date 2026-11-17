@@ -17,6 +17,7 @@ import dev.moon.hotwire.report.GameReports;
 import dev.moon.hotwire.report.ReportZips;
 import dev.moon.hotwire.seam.Game;
 import dev.moon.hotwire.seam.Games;
+import dev.moon.hotwire.seam.SharedChange;
 import dev.moon.hotwire.store.ModStore;
 import dev.moon.hotwire.store.UpdateCheck;
 import dev.moon.hotwire.switching.CheckedResult;
@@ -81,6 +82,7 @@ public final class HotwireEngine implements ModScreenGame, AutoCloseable {
     private static final Logger LOGGER = LoggerFactory.getLogger(HotwireEngine.class);
 
     private final InstalledMods installed;
+    private final HostOffers hostOffers;
     private final Bound bound;
     final Progress progress;
     final ReportZips zips;
@@ -116,6 +118,7 @@ public final class HotwireEngine implements ModScreenGame, AutoCloseable {
     public HotwireEngine(InstalledMods installed, Progress progress, GameReports reports, UpdateFolders folders,
             UpdateQueue queue, HotwireSettings settings, IconSource icons, Bound bound, EngineGame units) {
         this.units = units;
+        this.hostOffers = new HostOffers(this, installed);
         this.installed = installed;
         this.configScreens = units.makeSettingsScreens(this::isOn, this::nameOfMod,
                 text -> this.showMessage(text, true));
@@ -569,13 +572,43 @@ public final class HotwireEngine implements ModScreenGame, AutoCloseable {
         return others == 1 ? Lang.get("hotwire.shared.reopen_other") : Lang.get("hotwire.shared.reopen_others", others);
     }
 
-    void tellOthersOf(Collection<String> mods) {
+    void shareWithOthers(SharedChange.Kind kind, List<String> mods, String project) {
         Game game = Games.getNow();
+        if (game.countOthers() == 0) {
+            return;
+        }
         List<String> theirs = mods.stream().filter(game::isUsedByOthers).toList();
         if (!theirs.isEmpty()) {
             game.tellOthers(Lang.get("hotwire.shared.others_changed", PlayerMessages.joinNames(theirs,
                     this::nameOfMod)));
         }
+        List<SharedChange> changes = new ArrayList<>();
+        for (String mod : mods) {
+            SharedChange change = SharedChange.of(kind, mod, project, "");
+            if (change != null) {
+                changes.add(change);
+            }
+        }
+        game.offerOthers(changes);
+    }
+
+    public void onHostChanged(List<SharedChange> told) {
+        this.hostOffers.take(told);
+    }
+
+    @Override
+    public List<SharedChange> findHostChanges() {
+        return this.hostOffers.getWaiting();
+    }
+
+    @Override
+    public void matchHost() {
+        this.hostOffers.match();
+    }
+
+    @Override
+    public void dropHostChanges() {
+        this.hostOffers.clear();
     }
 
     @Override
@@ -678,6 +711,7 @@ public final class HotwireEngine implements ModScreenGame, AutoCloseable {
     }
 
     public void forgetWorld() {
+        this.hostOffers.clear();
         JvmParts parts = this.findParts();
         if (parts != null) {
             parts.runner().getSwitcher().forgetWorld();

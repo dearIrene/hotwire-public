@@ -2,6 +2,7 @@ package dev.moon.hotwire.ui;
 
 import dev.moon.hotwire.config.ProfileStore;
 import dev.moon.hotwire.modrinth.StoreModel;
+import dev.moon.hotwire.seam.SharedChange;
 import dev.moon.hotwire.update.PendingChange;
 import dev.moon.hotwire.update.UpdateOffer;
 import dev.moon.hotwire.update.UrgentUpdate;
@@ -45,6 +46,7 @@ public final class ModScreen implements JarHost {
     private final AlsoOffPanel alsoOffPanel;
     private final ProfilesPanel profilesPanel;
     private final CarriedPanel carriedPanel;
+    private final HostPanel hostPanel;
     final SettingsPage settings;
     private final ReportPage report;
 
@@ -114,6 +116,13 @@ public final class ModScreen implements JarHost {
             this.closePanels();
             this.turnOffAsking(ids);
         }, this::callOff, game::findIcon, game.getCatalog()::name);
+        this.hostPanel = new HostPanel(() -> {
+            this.closePanels();
+            game.matchHost();
+        }, () -> {
+            this.closePanels();
+            game.dropHostChanges();
+        }, game.getCatalog()::name);
         this.tour = new TourPanel(game::markTourSeen);
 
         this.firstOpen = new FirstOpenPanel(() -> {
@@ -135,7 +144,7 @@ public final class ModScreen implements JarHost {
 
         this.panels = List.of(this.findBroken, this.addPanel, this.updatePanel, this.progress,
                 this.reopenPanel, this.carriedPanel, this.alsoOffPanel, this.firstOpen, this.tour,
-                this.selfUpdate, this.profilesPanel);
+                this.selfUpdate, this.profilesPanel, this.hostPanel);
         this.panels.forEach(this.root.getModal()::add);
         this.root.getModal().add(this.closePanel);
         this.root.getModal().add(this.updateSummary);
@@ -145,6 +154,7 @@ public final class ModScreen implements JarHost {
             this.presentTour();
         }
         this.showNewerHotwire();
+        this.offerHostChanges();
         this.findBroken.resume();
         this.root.focus(this.mods.search);
         this.pendingCount = game.getPendingChanges().size();
@@ -591,6 +601,13 @@ public final class ModScreen implements JarHost {
             return;
         }
         this.reopenPanel.open(offer);
+    }
+
+    public void offerHostChanges() {
+        List<SharedChange> changes = this.game.findHostChanges();
+        if (!changes.isEmpty() && !this.root.isModalOpen()) {
+            this.hostPanel.open(changes);
+        }
     }
 
     boolean isIdle() {
