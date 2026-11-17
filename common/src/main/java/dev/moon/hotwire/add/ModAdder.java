@@ -23,7 +23,6 @@ import dev.moon.hotwire.registration.Owners;
 import dev.moon.hotwire.report.StageTimes;
 import dev.moon.hotwire.seam.Games;
 import dev.moon.hotwire.seam.Reloads;
-import dev.moon.hotwire.switching.BetweenFrames;
 import dev.moon.hotwire.switching.ModMixins;
 import dev.moon.hotwire.switching.ModSwitcher;
 import dev.moon.hotwire.switching.PlayerMessages;
@@ -747,11 +746,11 @@ public final class ModAdder {
                 IntSupplier setUp = () -> InitHookRuns.runLoadFinishedAfter(
                         () -> {
                             this.game.openPacks(parts.values());
-                            BetweenFrames.draw();
+                            Games.getNow().drawHoldFrame();
                             return this.engine.getApplier().getCatchUps().run();
                         }, () -> {
                             this.engine.showAddStep(4);
-                            BetweenFrames.draw();
+                            Games.getNow().drawHoldFrame();
                             this.game.reloadForAssets(parts.values());
                         }, this.reloads::runAfterReload);
                 this.engine.showAddStep(3);

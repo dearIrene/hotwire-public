@@ -11,6 +11,7 @@ import dev.moon.hotwire.redefine.Linker;
 import dev.moon.hotwire.redefine.RebuildException;
 import dev.moon.hotwire.redefine.ReplacedStatics;
 import dev.moon.hotwire.redefine.StopPoint;
+import dev.moon.hotwire.seam.Games;
 import java.lang.instrument.ClassFileTransformer;
 import java.util.ArrayList;
 import java.util.Collection;
@@ -28,7 +29,6 @@ import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.ConcurrentSkipListMap;
 import java.util.function.BiConsumer;
 import java.util.function.BiFunction;
-import java.util.function.Consumer;
 import java.util.function.Predicate;
 import java.util.function.Supplier;
 import org.jspecify.annotations.Nullable;
@@ -148,7 +148,7 @@ public final class SwitchApplier {
 
     private final Set<String> updatedLive = ConcurrentHashMap.newKeySet();
 
-    private volatile Supplier<Runnable> redefinitionHold = () -> () -> { };
+    private volatile Supplier<Runnable> redefinitionHold = () -> Games.getNow().hold();
 
     public void holdRedefinitionWith(Supplier<Runnable> hold) {
         this.redefinitionHold = hold;
@@ -164,7 +164,6 @@ public final class SwitchApplier {
 
     private final CarriedMixins carriedMixins;
     private volatile GameObjectRebuilder objectRebuilder = (newlyBuilt, rebuilt, reloadFor) -> { };
-    private volatile Consumer<Runnable> onGameThread = Runnable::run;
     private volatile Supplier<List<String>> health = List::of;
     private volatile BiConsumer<Set<String>, Set<Class<?>>> afterRebuild = (rebuilt, rehashed) -> { };
 
@@ -174,10 +173,6 @@ public final class SwitchApplier {
     public void checkHealthWith(Supplier<List<String>> check, BiConsumer<Set<String>, Set<Class<?>>> afterRebuild) {
         this.health = check;
         this.afterRebuild = afterRebuild;
-    }
-
-    public void runOnGameThreadWith(Consumer<Runnable> run) {
-        this.onGameThread = run;
     }
 
     void rebuildObjectsOf(Set<String> flipped) {
@@ -212,8 +207,8 @@ public final class SwitchApplier {
             }
             beforeChange.run();
             Runnable rebuildObjects = RebuildSteps.apply(this.rebuilder, prepared, this.health, this.afterRebuild,
-                    this.onGameThread, this.objectRebuilder, this.game.isInWorld(), this.catchUps.findHolder(),
-                    flipped);
+                    Games.getNow()::runOnGameAndWait, this.objectRebuilder, this.game.isInWorld(),
+                    this.catchUps.findHolder(), flipped);
             try {
                 whilePaused.run();
             } catch (RuntimeException | LinkageError e) {

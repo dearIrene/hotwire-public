@@ -1,5 +1,6 @@
 package dev.moon.hotwire.switching;
 
+import dev.moon.hotwire.seam.Games;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.function.Consumer;
@@ -33,7 +34,7 @@ public final class WaitingCatchUps {
         int failed = 0;
         for (IntSupplier catchUp : this.waiting) {
             failed += catchUp.getAsInt();
-            BetweenFrames.draw();
+            Games.getNow().drawHoldFrame();
         }
         this.waiting.clear();
         return failed;

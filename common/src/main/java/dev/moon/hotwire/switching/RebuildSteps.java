@@ -4,6 +4,7 @@ import dev.moon.hotwire.redefine.ClassRebuilder;
 import dev.moon.hotwire.redefine.OffWindowObjects;
 import dev.moon.hotwire.redefine.RebuildException;
 import dev.moon.hotwire.redefine.Tripwire;
+import dev.moon.hotwire.seam.Games;
 import java.util.ArrayList;
 import java.util.HashSet;
 import java.util.List;
@@ -73,11 +74,11 @@ final class RebuildSteps {
         } else {
             catchUpLater.accept(() -> {
                 int later = LiveObjects.replay(prepared, onGameThread);
-                BetweenFrames.draw();
+                Games.getNow().drawHoldFrame();
                 Tripwire.releaseComingOn();
                 rebuilder.startStatics();
                 rebuildObjects.run();
-                BetweenFrames.draw();
+                Games.getNow().drawHoldFrame();
                 return later;
             });
         }

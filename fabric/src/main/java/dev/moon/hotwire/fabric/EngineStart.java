@@ -29,7 +29,6 @@ import dev.moon.hotwire.fabric.rebuild.MixinConfigs;
 import dev.moon.hotwire.fabric.rebuild.MixinInternals;
 import dev.moon.hotwire.fabric.registration.ConnectionLambdas;
 import dev.moon.hotwire.fabric.registration.EventInvokers;
-import dev.moon.hotwire.fabric.registration.GameHold;
 import dev.moon.hotwire.fabric.registration.GlfwCallbacks;
 import dev.moon.hotwire.fabric.registration.InternedKeys;
 import dev.moon.hotwire.fabric.registration.LiveConnections;
@@ -40,7 +39,6 @@ import dev.moon.hotwire.fabric.registration.OffModCommands;
 import dev.moon.hotwire.fabric.registration.RegistryEntries;
 import dev.moon.hotwire.fabric.registration.RegistryHolders;
 import dev.moon.hotwire.fabric.report.MachineDetails;
-import dev.moon.hotwire.fabric.screen.HoldFrame;
 import dev.moon.hotwire.fabric.screen.ModIcons;
 import dev.moon.hotwire.fabric.screen.RootScreen;
 import dev.moon.hotwire.fabric.update.UpdateGameSide;
@@ -89,7 +87,6 @@ import dev.moon.hotwire.report.LoggedFaults;
 import dev.moon.hotwire.report.StartTimes;
 import dev.moon.hotwire.seam.Games;
 import dev.moon.hotwire.switching.BestTimes;
-import dev.moon.hotwire.switching.BetweenFrames;
 import dev.moon.hotwire.switching.ModMixins;
 import dev.moon.hotwire.switching.ModSwitcher;
 import dev.moon.hotwire.switching.OffChecker;
@@ -221,16 +218,13 @@ final class EngineStart {
         applier.orderConfigsAs(mixin.getConfigs());
         ClassFileTransformer loadTimeMixer = applier.makeLoadTimeMixer();
         TransformerChain.setMixedAsItLoads(name -> applier.isMixedAsItLoads(name.replace('.', '/')));
-        applier.holdRedefinitionWith(() -> GameHold.begin(Minecraft.getInstance())::release);
         applier.rebuildObjectsWith(ResourceReload::isRebuiltWhilePaused, new PausedRebuilds());
         InitHookRuns.skipRebuiltWith(ResourceReload::isRebuiltWhilePaused);
         InitHookReplay.answerLoadFinishedWith(GameClasses::getLoadFinishedMethods);
         InitHookReplay.nameSucceededWith(LiveNames::findOwnKeys);
-        BetweenFrames.drawWith(HoldFrame::drawIfDue);
         OffWindowObjects.setReloading(() -> ModViews.findLoadingOverlay() != null && isReloadMaking());
         InitHookReplay.answerWith(GameClasses::findLongLived, GameClasses::getStartupMethods,
                 GameClasses::getJoinMethods);
-        applier.runOnGameThreadWith(GameHold::onGameAndWait);
         MergedMembers.setMixinOwners(applier.getCarriedMixins()::findModShipping);
         OffModCommands.readUsesFrom(installed::getGraph);
         HiddenPacks.readContainersWith(id -> installed.getGraph().getContainers(id));
@@ -281,7 +275,6 @@ final class EngineStart {
                         .map(jar -> jar.patches().patches()).orElse(Set.of()), mod -> findHandedTo(mod, installed),
                 mixin::getGeneratedBy);
         InitHookReplay.writeStaticsWith(fieldReferences::writeStatic);
-        HandlerGuards.replayWith(GameHold::onGameAndWait);
         OffWindowObjects.setRetired(EngineStart::isOfClosedWorld);
         StaticCopies.readClassesWith(instrumentation);
         ReplacedStatics.swapWith(replaced -> {
