@@ -23,16 +23,12 @@ public record Notice(Kind kind, String title, String detail, String key, float p
     public record Action(String label, Runnable run) {
     }
 
-    public Notice(Kind kind, String title, String detail, String key, float progress, float restSeconds) {
-        this(kind, title, detail, key, progress, restSeconds, 0, false, null);
-    }
-
     public Notice(Kind kind, String title, String detail, String key) {
-        this(kind, title, detail, key, -1, 0);
+        this(kind, title, detail, key, -1);
     }
 
     public Notice(Kind kind, String title, String detail, String key, float progress) {
-        this(kind, title, detail, key, progress, 0);
+        this(kind, title, detail, key, progress, 0, 0, false, null);
     }
 
     public Notice makeResting(float seconds) {
