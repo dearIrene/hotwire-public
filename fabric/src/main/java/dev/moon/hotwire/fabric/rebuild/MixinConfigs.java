@@ -1,9 +1,5 @@
 package dev.moon.hotwire.fabric.rebuild;
 
-import dev.moon.hotwire.engine.LoadedMods;
-import dev.moon.hotwire.engine.ModPolicy;
-import dev.moon.hotwire.jar.ModJar;
-import dev.moon.hotwire.jar.ModManifest;
 import dev.moon.hotwire.mixin_copy.MixinCopy;
 import dev.moon.hotwire.switching.ModMixins;
 import java.util.ArrayList;
@@ -22,39 +18,6 @@ public final class MixinConfigs {
     private static final Logger LOGGER = LoggerFactory.getLogger(MixinConfigs.class);
 
     private MixinConfigs() {
-    }
-
-    public static Map<String, ModMixins> of(List<ModJar> jars) {
-        Set<String> ids = new HashSet<>();
-        jars.forEach(jar -> collectIds(jar, ids));
-        return of(jars, ids);
-    }
-
-    private static void collectIds(ModJar jar, Set<String> into) {
-        into.add(jar.manifest().id());
-        jar.nested().forEach(nested -> collectIds(nested, into));
-    }
-
-    public static Map<String, ModMixins> of(List<ModJar> jars, Set<String> loaded) {
-        ModManifest.Environment side = ModPolicy.getSide();
-        Map<String, ModMixins> mixins = new HashMap<>();
-        Map<String, ModMixins> otherVersions = new HashMap<>();
-        jars.forEach(jar -> add(jar, side, loaded, mixins, otherVersions));
-        otherVersions.forEach(mixins::putIfAbsent);
-        return mixins;
-    }
-
-    private static void add(ModJar jar, ModManifest.Environment side, Set<String> loaded,
-            Map<String, ModMixins> into, Map<String, ModMixins> otherVersions) {
-        String id = jar.manifest().id();
-        if (!loaded.contains(id)) {
-            LOGGER.info("[Hotwire] {} is in {} but the game did not load it; its mixins are left out", id, jar.name());
-            return;
-        }
-        String running = LoadedMods.findVersion(id);
-        (running == null || running.equals(jar.manifest().version()) ? into : otherVersions)
-                .putIfAbsent(id, ModMixins.of(jar, side));
-        jar.nested().forEach(nested -> add(nested, side, loaded, into, otherVersions));
     }
 
     public static Map<String, ModMixins> withCodeAdded(Map<String, ModMixins> mixins, List<Object> live) {

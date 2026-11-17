@@ -8,6 +8,7 @@ import dev.moon.hotwire.config.HotwireSettings;
 import dev.moon.hotwire.dev.DevSession;
 import dev.moon.hotwire.engine.CacheLimit;
 import dev.moon.hotwire.engine.DevSetups;
+import dev.moon.hotwire.engine.EarlyModsReader;
 import dev.moon.hotwire.engine.GameClassIndex;
 import dev.moon.hotwire.jar.ZipBytes;
 import dev.moon.hotwire.jvm.JvmAccess;

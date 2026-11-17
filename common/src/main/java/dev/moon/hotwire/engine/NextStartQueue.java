@@ -1,9 +1,7 @@
-package dev.moon.hotwire.fabric;
+package dev.moon.hotwire.engine;
 
 import dev.moon.hotwire.add.AddFirstLook;
-import dev.moon.hotwire.engine.InstalledMods;
-import dev.moon.hotwire.engine.ModPolicy;
-import dev.moon.hotwire.fabric.add.ModAdder;
+import dev.moon.hotwire.add.ModAdder;
 import dev.moon.hotwire.jar.FileHashes;
 import dev.moon.hotwire.jar.ModJarException;
 import dev.moon.hotwire.jar.ModJarReader;
@@ -20,18 +18,18 @@ import java.util.List;
 import java.util.Optional;
 import org.jspecify.annotations.Nullable;
 
-final class NextStartQueue {
+public final class NextStartQueue {
     private final InstalledMods installed;
     private final UpdateQueue queue;
     private final UpdateFolders folders;
 
-    NextStartQueue(InstalledMods installed, UpdateQueue queue, UpdateFolders folders) {
+    public NextStartQueue(InstalledMods installed, UpdateQueue queue, UpdateFolders folders) {
         this.installed = installed;
         this.queue = queue;
         this.folders = folders;
     }
 
-    ModAdder.Result queue(Path jar) {
+    public ModAdder.Result queue(Path jar) {
         Optional<String> plain = AddFirstLook.findRefusal(jar);
         if (plain.isPresent()) {
             return new ModAdder.Result.Refused(plain.get());
@@ -60,7 +58,7 @@ final class NextStartQueue {
         }
     }
 
-    AddPreview previewAdd(Path jar) {
+    public AddPreview previewAdd(Path jar) {
         Optional<String> plain = AddFirstLook.findRefusal(jar);
         ModManifest manifest = this.read(jar);
         if (plain.isPresent() || manifest == null) {
@@ -70,7 +68,7 @@ final class NextStartQueue {
         return AddPreview.ofLater(manifest.name(), manifest.version(), List.of(Lang.get("hotwire.next_start.why")));
     }
 
-    UpdatePreview previewUpdate(Path jar) {
+    public UpdatePreview previewUpdate(Path jar) {
         ModManifest manifest = this.read(jar);
         if (manifest == null) {
             return new UpdatePreview.Unreadable(String.valueOf(jar.getFileName()));

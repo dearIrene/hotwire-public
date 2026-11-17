@@ -18,7 +18,6 @@ import dev.moon.hotwire.fabric.registration.ReloadedLists;
 import dev.moon.hotwire.fabric.registration.WindowCursor;
 import dev.moon.hotwire.fabric.registration.WorldContent;
 import dev.moon.hotwire.fabric.registration.WorldWrappers;
-import dev.moon.hotwire.fabric.update.LiveUpdates;
 import dev.moon.hotwire.registration.GameRegistrations;
 import dev.moon.hotwire.seam.SwitchUnits;
 import java.util.Collection;
@@ -195,10 +194,5 @@ final class GameSwitchUnits implements SwitchUnits {
     @Override
     public List<String> closeViews(Collection<String> mods) {
         return ModViews.close(mods);
-    }
-
-    @Override
-    public void runWaitingEntrypoints(Predicate<String> on) {
-        LiveUpdates.runWaitingEntrypoints(on);
     }
 }

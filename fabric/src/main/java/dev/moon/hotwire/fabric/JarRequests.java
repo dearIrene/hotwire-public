@@ -1,10 +1,9 @@
 package dev.moon.hotwire.fabric;
 
+import dev.moon.hotwire.add.ModAdder;
 import dev.moon.hotwire.concurrent.Tasks;
-import dev.moon.hotwire.fabric.add.ModAdder;
 import dev.moon.hotwire.fabric.add.WorldReopen;
 import dev.moon.hotwire.fabric.screen.ModFileChooser;
-import dev.moon.hotwire.fabric.update.UpdateSupport;
 import dev.moon.hotwire.ui.AddMode;
 import dev.moon.hotwire.ui.AddPreview;
 import dev.moon.hotwire.ui.JarHost;
@@ -13,6 +12,7 @@ import dev.moon.hotwire.ui.Progress;
 import dev.moon.hotwire.ui.ReopenPanel;
 import dev.moon.hotwire.ui.UpdateMethod;
 import dev.moon.hotwire.update.ModUpdater;
+import dev.moon.hotwire.update.UpdateSupport;
 import java.nio.file.Path;
 import java.util.List;
 import java.util.function.Consumer;

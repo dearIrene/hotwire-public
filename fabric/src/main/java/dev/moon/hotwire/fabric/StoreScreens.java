@@ -4,10 +4,10 @@ import dev.moon.hotwire.engine.CacheLimit;
 import dev.moon.hotwire.engine.InstalledMods;
 import dev.moon.hotwire.fabric.screen.ModIcons;
 import dev.moon.hotwire.fabric.screen.WebLinks;
-import dev.moon.hotwire.fabric.store.ModStore;
 import dev.moon.hotwire.fabric.store.PackFolders;
 import dev.moon.hotwire.modrinth.StoreCache;
 import dev.moon.hotwire.modrinth.StoreModel;
+import dev.moon.hotwire.store.ModStore;
 import dev.moon.hotwire.ui.Lang;
 import dev.moon.hotwire.ui.ModScreen;
 import dev.moon.hotwire.ui.StoreCacheView;
@@ -45,7 +45,7 @@ final class StoreScreens {
     ModStore findStore() {
         ModStore made = this.store;
         if (made == null) {
-            made = new ModStore(this.installed, this.jars.getCheck(), this.icons::of);
+            made = new ModStore(this.installed, this.jars.getCheck(), this.icons::of, this.icons);
             made.checkInstalled();
             PackFolders packs = new PackFolders(made.getModel().getClient(), made.getModel().getDownloads(),
                     this.engine::showMessage);

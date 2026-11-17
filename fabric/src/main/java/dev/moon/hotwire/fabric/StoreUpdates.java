@@ -1,6 +1,5 @@
 package dev.moon.hotwire.fabric;
 
-import dev.moon.hotwire.fabric.update.UpdateSupport;
 import dev.moon.hotwire.modrinth.Downloads;
 import dev.moon.hotwire.store.UpdateCheck;
 import dev.moon.hotwire.ui.Lang;
@@ -8,6 +7,7 @@ import dev.moon.hotwire.ui.Progress;
 import dev.moon.hotwire.update.EarlyUpdates;
 import dev.moon.hotwire.update.ModUpdater;
 import dev.moon.hotwire.update.UpdateOffer;
+import dev.moon.hotwire.update.UpdateSupport;
 import java.io.IOException;
 import java.io.UncheckedIOException;
 import java.nio.file.Path;

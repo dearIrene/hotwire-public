@@ -2,6 +2,7 @@ package dev.moon.hotwire.seam;
 
 import java.nio.file.Path;
 import java.util.List;
+import java.util.Optional;
 import java.util.Set;
 import java.util.function.Function;
 import java.util.function.Supplier;
@@ -86,4 +87,6 @@ public interface Game {
     void runSoon(Runnable work);
 
     void drawHoldFrame();
+
+    Optional<String> findReopenRefusal();
 }

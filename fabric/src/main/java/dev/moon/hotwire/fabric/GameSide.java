@@ -17,6 +17,7 @@ import dev.moon.hotwire.seam.Reloads;
 import io.netty.channel.Channel;
 import java.nio.file.Path;
 import java.util.List;
+import java.util.Optional;
 import java.util.Set;
 import java.util.function.Function;
 import java.util.function.Supplier;
@@ -245,5 +246,10 @@ public final class GameSide implements Game {
     @Override
     public void runSoon(Runnable work) {
         ModViews.runSoon(work);
+    }
+
+    @Override
+    public Optional<String> findReopenRefusal() {
+        return WorldReopen.findRefusal();
     }
 }

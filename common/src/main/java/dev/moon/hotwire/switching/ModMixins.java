@@ -1,17 +1,24 @@
 package dev.moon.hotwire.switching;
 
+import dev.moon.hotwire.engine.LoadedMods;
+import dev.moon.hotwire.engine.ModPolicy;
 import dev.moon.hotwire.jar.CalledNames;
 import dev.moon.hotwire.jar.ModJar;
 import dev.moon.hotwire.jar.ModManifest;
 import java.util.ArrayList;
+import java.util.HashMap;
 import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
 public record ModMixins(List<String> configs, Map<String, Set<String>> targetsOf, Set<String> owns,
         boolean callbacksOnly, Set<String> rebuildOnly, CalledNames calledNames, Set<String> fieldsSetUp,
         Map<String, Set<String>> overwrites) {
+    private static final Logger LOGGER = LoggerFactory.getLogger(ModMixins.class);
+
     public ModMixins {
         rebuildOnly = Set.copyOf(rebuildOnly);
         fieldsSetUp = Set.copyOf(fieldsSetUp);
@@ -65,5 +72,38 @@ public record ModMixins(List<String> configs, Map<String, Set<String>> targetsOf
 
     Set<String> getTargetsOf(String config) {
         return this.targetsOf.getOrDefault(config, Set.of());
+    }
+
+    public static Map<String, ModMixins> readAll(List<ModJar> jars) {
+        Set<String> ids = new HashSet<>();
+        jars.forEach(jar -> collectIds(jar, ids));
+        return readAll(jars, ids);
+    }
+
+    private static void collectIds(ModJar jar, Set<String> into) {
+        into.add(jar.manifest().id());
+        jar.nested().forEach(nested -> collectIds(nested, into));
+    }
+
+    public static Map<String, ModMixins> readAll(List<ModJar> jars, Set<String> loaded) {
+        ModManifest.Environment side = ModPolicy.getSide();
+        Map<String, ModMixins> mixins = new HashMap<>();
+        Map<String, ModMixins> otherVersions = new HashMap<>();
+        jars.forEach(jar -> add(jar, side, loaded, mixins, otherVersions));
+        otherVersions.forEach(mixins::putIfAbsent);
+        return mixins;
+    }
+
+    private static void add(ModJar jar, ModManifest.Environment side, Set<String> loaded,
+            Map<String, ModMixins> into, Map<String, ModMixins> otherVersions) {
+        String id = jar.manifest().id();
+        if (!loaded.contains(id)) {
+            LOGGER.info("[Hotwire] {} is in {} but the game did not load it; its mixins are left out", id, jar.name());
+            return;
+        }
+        String running = LoadedMods.findVersion(id);
+        (running == null || running.equals(jar.manifest().version()) ? into : otherVersions)
+                .putIfAbsent(id, of(jar, side));
+        jar.nested().forEach(nested -> add(nested, side, loaded, into, otherVersions));
     }
 }

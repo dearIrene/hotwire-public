@@ -23,4 +23,10 @@ public interface Reloads {
     void restoreTrimmed(Collection<String> mods);
 
     void reloadResources(Collection<String> newlyBuilt, Collection<String> mods, boolean off);
+
+    void runAfterReload(Runnable then);
+
+    void runWaitingReload();
+
+    void leaveReloadToNext(boolean leaves);
 }

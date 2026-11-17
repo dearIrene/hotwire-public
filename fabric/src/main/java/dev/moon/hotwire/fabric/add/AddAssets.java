@@ -1,5 +1,6 @@
 package dev.moon.hotwire.fabric.add;
 
+import dev.moon.hotwire.add.ModAdder;
 import dev.moon.hotwire.fabric.BackgroundReload;
 import dev.moon.hotwire.fabric.ResourceReload;
 import dev.moon.hotwire.fabric.WordsReload;
@@ -15,24 +16,19 @@ import java.util.List;
 import java.util.Map;
 import java.util.Set;
 import java.util.stream.Collectors;
-import java.util.zip.ZipFile;
 import net.minecraft.client.Minecraft;
 import net.minecraft.server.packs.PackType;
 import net.minecraft.server.packs.repository.PackRepository;
 import net.minecraft.server.packs.resources.MultiPackResourceManager;
 import net.minecraft.server.packs.resources.ReloadableResourceManager;
 import org.jspecify.annotations.Nullable;
-import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
 
 public final class AddAssets {
-    private static final Logger LOGGER = LoggerFactory.getLogger(AddAssets.class);
-
     private AddAssets() {
     }
 
     static void reloadForAssets(Collection<ModAdder.Part> parts) {
-        List<ModAdder.Part> shipping = parts.stream().filter(part -> shipsAssets(part.path())).toList();
+        List<ModAdder.Part> shipping = parts.stream().filter(part -> ZipBytes.shipsAssets(part.path())).toList();
         if (shipping.isEmpty()) {
             return;
         }
@@ -45,7 +41,7 @@ public final class AddAssets {
     }
 
     static void openPacks(Collection<ModAdder.Part> parts) {
-        if (parts.stream().noneMatch(part -> shipsAssets(part.path()))
+        if (parts.stream().noneMatch(part -> ZipBytes.shipsAssets(part.path()))
                 || !(Minecraft.getInstance().getResourceManager() instanceof ReloadableResourceManager manager)) {
             return;
         }
@@ -55,7 +51,7 @@ public final class AddAssets {
     public static void reloadForUpdated(Map<String, Path> jars, Map<String, Path> running, Runnable then) {
         Map<String, Set<String>> changed = new LinkedHashMap<>();
         jars.forEach((id, jar) -> {
-            if (shipsAssets(jar)) {
+            if (ZipBytes.shipsAssets(jar)) {
                 changed.put(id, findChangedAssets(running.get(id), jar));
             }
         });
@@ -100,15 +96,6 @@ public final class AddAssets {
             return ZipBytes.findChangedEntries(running, jar, "assets/");
         } catch (IOException e) {
             return EVERY_ASSET;
-        }
-    }
-
-    public static boolean shipsAssets(Path jar) {
-        try (ZipFile zip = new ZipFile(jar.toFile())) {
-            return zip.stream().anyMatch(entry -> entry.getName().startsWith("assets/"));
-        } catch (IOException e) {
-            LOGGER.warn("[Hotwire] {} could not be read for assets; resources reload to be safe", jar, e);
-            return true;
         }
     }
 }

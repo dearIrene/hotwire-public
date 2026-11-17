@@ -78,6 +78,7 @@ public final class Picture implements Canvas.Image {
         return this.texture;
     }
 
+    @Override
     public void release() {
         Identifier made = this.texture;
         if (made != null) {

@@ -1,5 +1,6 @@
 package dev.moon.hotwire.fabric;
 
+import dev.moon.hotwire.add.ModAdder;
 import dev.moon.hotwire.api.ApiStatus;
 import dev.moon.hotwire.api.ChangePlan;
 import dev.moon.hotwire.api.ChangeRequest;
@@ -23,7 +24,6 @@ import dev.moon.hotwire.api.SwitchProgress;
 import dev.moon.hotwire.api.SwitchResult;
 import dev.moon.hotwire.engine.LifecycleListeners;
 import dev.moon.hotwire.engine.ModPolicy;
-import dev.moon.hotwire.fabric.add.ModAdder;
 import dev.moon.hotwire.fabric.screen.PromptGameScreen;
 import dev.moon.hotwire.modrinth.Downloads;
 import dev.moon.hotwire.plan.SwitchPlan;

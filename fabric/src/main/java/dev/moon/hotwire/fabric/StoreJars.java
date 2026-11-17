@@ -1,12 +1,12 @@
 package dev.moon.hotwire.fabric;
 
+import dev.moon.hotwire.add.ModAdder;
 import dev.moon.hotwire.engine.InstalledMods;
 import dev.moon.hotwire.engine.ModPolicy;
-import dev.moon.hotwire.fabric.add.ModAdder;
-import dev.moon.hotwire.fabric.store.ModStore;
 import dev.moon.hotwire.jar.JarLookup;
 import dev.moon.hotwire.jar.ModManifest;
 import dev.moon.hotwire.modrinth.Downloads;
+import dev.moon.hotwire.store.ModStore;
 import dev.moon.hotwire.store.UpdateCheck;
 import dev.moon.hotwire.ui.JarHost;
 import dev.moon.hotwire.ui.Lang;

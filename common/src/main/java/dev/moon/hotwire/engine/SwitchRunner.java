@@ -35,6 +35,7 @@ import dev.moon.hotwire.ui.Lang;
 import dev.moon.hotwire.ui.Notice;
 import dev.moon.hotwire.ui.Notices;
 import dev.moon.hotwire.ui.Progress;
+import dev.moon.hotwire.update.LiveUpdates;
 import java.lang.management.ManagementFactory;
 import java.lang.management.ThreadMXBean;
 import java.util.ArrayList;
@@ -252,7 +253,7 @@ public final class SwitchRunner {
             this.units.onCommandsWatched();
 
             if (!off && result != null) {
-                this.units.runWaitingEntrypoints(this.switcher::isOn);
+                LiveUpdates.runWaitingEntrypoints(this.switcher::isOn);
                 runWaitingSetups(this.switcher::isOn);
                 SwitchTimes.mark("waiting setups");
             }

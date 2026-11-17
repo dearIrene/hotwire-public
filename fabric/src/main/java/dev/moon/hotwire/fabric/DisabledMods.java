@@ -1,9 +1,9 @@
 package dev.moon.hotwire.fabric;
 
+import dev.moon.hotwire.add.ModAdder;
 import dev.moon.hotwire.config.HotwireSettings;
 import dev.moon.hotwire.engine.DisabledJars;
 import dev.moon.hotwire.engine.InstalledMods;
-import dev.moon.hotwire.fabric.add.ModAdder;
 import dev.moon.hotwire.plan.ModGraph;
 import dev.moon.hotwire.switching.ModSwitcher;
 import dev.moon.hotwire.ui.Lang;

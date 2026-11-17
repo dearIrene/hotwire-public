@@ -1,5 +1,6 @@
 package dev.moon.hotwire.fabric;
 
+import dev.moon.hotwire.add.ModAdder;
 import dev.moon.hotwire.api.Reason;
 import dev.moon.hotwire.api.StoreCategory;
 import dev.moon.hotwire.api.StoreDownload;
@@ -12,14 +13,13 @@ import dev.moon.hotwire.api.StoreQuery;
 import dev.moon.hotwire.api.StoreVersion;
 import dev.moon.hotwire.api.SwitchResult;
 import dev.moon.hotwire.engine.LoadedMods;
-import dev.moon.hotwire.fabric.add.ModAdder;
 import dev.moon.hotwire.fabric.screen.WebLinks;
-import dev.moon.hotwire.fabric.store.ModStore;
 import dev.moon.hotwire.modrinth.CachedAsks;
 import dev.moon.hotwire.modrinth.Downloads;
 import dev.moon.hotwire.modrinth.ModrinthClient;
 import dev.moon.hotwire.modrinth.StoreCategories;
 import dev.moon.hotwire.modrinth.StoreModel;
+import dev.moon.hotwire.store.ModStore;
 import dev.moon.hotwire.switching.Waits;
 import dev.moon.hotwire.ui.AddMode;
 import dev.moon.hotwire.ui.Lang;

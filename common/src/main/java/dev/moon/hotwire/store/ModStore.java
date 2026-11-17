@@ -1,4 +1,4 @@
-package dev.moon.hotwire.fabric.store;
+package dev.moon.hotwire.store;
 
 import dev.moon.hotwire.engine.CacheLimit;
 import dev.moon.hotwire.engine.InstalledMods;
@@ -7,8 +7,10 @@ import dev.moon.hotwire.modrinth.Downloads;
 import dev.moon.hotwire.modrinth.ModrinthClient;
 import dev.moon.hotwire.modrinth.StoreCache;
 import dev.moon.hotwire.modrinth.StoreModel;
-import dev.moon.hotwire.store.UpdateCheck;
+import dev.moon.hotwire.seam.Game;
+import dev.moon.hotwire.seam.Games;
 import dev.moon.hotwire.ui.Canvas;
+import dev.moon.hotwire.ui.ImageDecoder;
 import dev.moon.hotwire.ui.Lang;
 import dev.moon.hotwire.update.UpdateOffer;
 import java.io.IOException;
@@ -32,7 +34,6 @@ import java.util.function.BiConsumer;
 import java.util.function.Consumer;
 import java.util.function.Function;
 import net.fabricmc.loader.api.FabricLoader;
-import net.minecraft.client.Minecraft;
 import org.jspecify.annotations.Nullable;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -47,7 +48,8 @@ public final class ModStore {
     private final String gameVersion;
     private final Path downloads;
 
-    public ModStore(InstalledMods installed, UpdateCheck check, Function<String, Canvas.@Nullable Image> icons) {
+    public ModStore(InstalledMods installed, UpdateCheck check, Function<String, Canvas.@Nullable Image> icons,
+            ImageDecoder decoder) {
         this.check = check;
         Path game = FabricLoader.getInstance().getGameDir();
         this.gameVersion = findVersionOf("minecraft");
@@ -59,7 +61,7 @@ public final class ModStore {
         this.icons = new StoreIconLoader(this.model, cache, project -> {
             String id = check.getIdByProject().get(project);
             return id == null ? null : icons.apply(id);
-        });
+        }, decoder);
         this.downloads = game.resolve("hotwire").resolve("store");
     }
 
@@ -112,7 +114,7 @@ public final class ModStore {
 
     public void fetch(String projectId, String versionId, String title, BiConsumer<List<Path>, List<String>> onJars,
             Consumer<String> onFailure) {
-        Minecraft client = Minecraft.getInstance();
+        Game client = Games.getNow();
 
         Thread.ofPlatform().name("hotwire-store-fetch").daemon().start(() -> {
             List<ModrinthClient.Version> versions;
@@ -120,7 +122,7 @@ public final class ModStore {
                 versions = this.model.getClient().findVersions(ModrinthClient.Kind.MOD, projectId);
             } catch (IOException | RuntimeException e) {
                 String why = Lang.get("hotwire.store.failed", e.getMessage());
-                client.execute(() -> onFailure.accept(why));
+                client.runOnGame(() -> onFailure.accept(why));
                 return;
             }
             ModrinthClient.Version wanted = versions.stream()
@@ -128,7 +130,7 @@ public final class ModStore {
                     .orElse(null);
             if (wanted == null) {
                 String why = Lang.get("hotwire.store.no_version", title);
-                client.execute(() -> onFailure.accept(why));
+                client.runOnGame(() -> onFailure.accept(why));
                 return;
             }
             this.fetchFor(wanted, title, onJars, onFailure);
@@ -137,19 +139,19 @@ public final class ModStore {
 
     private void fetchFor(ModrinthClient.Version wanted, String title,
             BiConsumer<List<Path>, List<String>> onJars, Consumer<String> onFailure) {
-        Minecraft client = Minecraft.getInstance();
+        Game client = Games.getNow();
         try {
             List<ModrinthClient.Version> all = new ArrayList<>(this.findNeeded(wanted, new HashSet<>()));
             all.add(wanted);
             List<Path> jars = this.fetchAll(all);
             List<String> projects = all.stream().map(ModrinthClient.Version::projectId).toList();
-            client.execute(() -> onJars.accept(jars, projects));
+            client.runOnGame(() -> onJars.accept(jars, projects));
         } catch (Downloads.DownloadStop e) {
             LOGGER.info("[Hotwire] the download of {} was stopped", title);
-            client.execute(() -> onFailure.accept(""));
+            client.runOnGame(() -> onFailure.accept(""));
         } catch (IOException e) {
             LOGGER.info("[Hotwire] the store could not get {}: {}", title, e.toString());
-            client.execute(() -> onFailure.accept(Lang.get("hotwire.store.download_failed", title,
+            client.runOnGame(() -> onFailure.accept(Lang.get("hotwire.store.download_failed", title,
                     e.getMessage())));
         }
     }

@@ -33,6 +33,8 @@ public interface Canvas {
     }
 
     interface Image {
+        default void release() {
+        }
     }
 
     enum Cursor { RESIZE_EW, RESIZE_NS, RESIZE_ALL }

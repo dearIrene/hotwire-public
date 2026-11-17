@@ -108,6 +108,7 @@ public final class GameClasses implements SwitchApplier.Game {
         fallback = reader;
     }
 
+    @Override
     public void forgetOriginalBytes() {
         this.originals.clear();
     }

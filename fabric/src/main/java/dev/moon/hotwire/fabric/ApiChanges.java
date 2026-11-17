@@ -1,5 +1,6 @@
 package dev.moon.hotwire.fabric;
 
+import dev.moon.hotwire.add.ModAdder;
 import dev.moon.hotwire.api.ChangePlan;
 import dev.moon.hotwire.api.ChangeRequest;
 import dev.moon.hotwire.api.ModUpdate;
@@ -8,7 +9,6 @@ import dev.moon.hotwire.api.PendingTask;
 import dev.moon.hotwire.api.Reason;
 import dev.moon.hotwire.api.SwitchPreview;
 import dev.moon.hotwire.api.SwitchResult;
-import dev.moon.hotwire.fabric.add.ModAdder;
 import dev.moon.hotwire.fabric.screen.ModIcons;
 import dev.moon.hotwire.jar.JarLookup;
 import dev.moon.hotwire.jar.ModManifest;

@@ -359,14 +359,6 @@ public final class GameHold {
         return FRAME_EDGES.get();
     }
 
-    public static void awaitFrames(int frames, Duration wait) throws InterruptedException {
-        long until = FRAME_EDGES.get() + frames;
-        long deadline = System.nanoTime() + wait.toNanos();
-        while (FRAME_EDGES.get() < until && System.nanoTime() < deadline) {
-            Thread.sleep(1);
-        }
-    }
-
     public void releaseGame() {
         if (this.game != null) {
             this.game.countDown();

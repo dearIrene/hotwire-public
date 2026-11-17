@@ -42,6 +42,9 @@ public final class SwitchApplier {
 
         byte @Nullable [] findOriginalBytes(String internalName);
 
+        default void forgetOriginalBytes() {
+        }
+
         default byte @Nullable [] findClassFile(String internalName) {
             return this.findOriginalBytes(internalName);
         }

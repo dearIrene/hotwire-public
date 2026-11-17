@@ -1,18 +1,20 @@
 package dev.moon.hotwire.fabric.add;
 
+import dev.moon.hotwire.add.AddGame;
 import dev.moon.hotwire.fabric.registration.GameHold;
 import net.minecraft.client.Minecraft;
 import org.jspecify.annotations.Nullable;
 
-final class LateHold {
+final class LateHold implements AddGame.Hold {
     private @Nullable GameHold hold;
 
-    Runnable begin() {
+    @Override
+    public Runnable begin() {
         this.get();
         return () -> { };
     }
 
-    GameHold get() {
+    private GameHold get() {
         GameHold now = this.hold;
         if (now == null) {
             now = GameHold.begin(Minecraft.getInstance());
@@ -21,7 +23,18 @@ final class LateHold {
         return now;
     }
 
-    void release() {
+    @Override
+    public void releaseGame() {
+        this.get().releaseGame();
+    }
+
+    @Override
+    public void pauseGame() {
+        this.get().pauseGame(Minecraft.getInstance());
+    }
+
+    @Override
+    public void release() {
         GameHold now = this.hold;
         if (now != null) {
             now.release();

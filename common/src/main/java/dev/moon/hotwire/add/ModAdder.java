@@ -1,19 +1,9 @@
-package dev.moon.hotwire.fabric.add;
+package dev.moon.hotwire.add;
 
-import dev.moon.hotwire.add.AddDependencies;
-import dev.moon.hotwire.add.AddFirstLook;
-import dev.moon.hotwire.add.AddUndo;
-import dev.moon.hotwire.add.FailedAddJars;
-import dev.moon.hotwire.add.LoaderClassTweaker;
-import dev.moon.hotwire.add.LoaderModList;
 import dev.moon.hotwire.concurrent.Parallel;
 import dev.moon.hotwire.engine.CrashGuard;
 import dev.moon.hotwire.engine.LifecycleListeners;
 import dev.moon.hotwire.engine.ModPolicy;
-import dev.moon.hotwire.fabric.BackgroundReload;
-import dev.moon.hotwire.fabric.ResourceReload;
-import dev.moon.hotwire.fabric.registration.GameHold;
-import dev.moon.hotwire.fabric.registration.ModLifecycle;
 import dev.moon.hotwire.jar.ContentScan;
 import dev.moon.hotwire.jar.JarLookup;
 import dev.moon.hotwire.jar.ModJar;
@@ -31,6 +21,8 @@ import dev.moon.hotwire.redefine.RebuildException;
 import dev.moon.hotwire.registration.GameRegistrations;
 import dev.moon.hotwire.registration.Owners;
 import dev.moon.hotwire.report.StageTimes;
+import dev.moon.hotwire.seam.Games;
+import dev.moon.hotwire.seam.Reloads;
 import dev.moon.hotwire.switching.BetweenFrames;
 import dev.moon.hotwire.switching.ModMixins;
 import dev.moon.hotwire.switching.ModSwitcher;
@@ -72,7 +64,6 @@ import java.util.zip.ZipEntry;
 import java.util.zip.ZipFile;
 import net.fabricmc.loader.api.FabricLoader;
 import net.fabricmc.loader.impl.launch.FabricLauncherBase;
-import net.minecraft.client.Minecraft;
 import org.jspecify.annotations.Nullable;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -140,12 +131,10 @@ public final class ModAdder {
 
         Path getAddedJarsFolder();
 
-        MixinCopy.Decorations getDecorationsFor(List<ModJar> jars);
-
         boolean isInWorld();
     }
 
-    record Part(Path path, ModJar jar) {
+    public record Part(Path path, ModJar jar) {
     }
 
     public interface CarriedLibraries {
@@ -174,9 +163,12 @@ public final class ModAdder {
     private static final Duration BACKGROUND_WAIT = Duration.ofSeconds(8);
 
     final Engine engine;
+    private final AddGame game;
+    private final Reloads reloads = Games.getNow().getReloads();
 
-    public ModAdder(Engine engine) {
+    public ModAdder(Engine engine, AddGame game) {
         this.engine = engine;
+        this.game = game;
         this.addWideners = new AddWideners(engine);
     }
 
@@ -307,7 +299,7 @@ public final class ModAdder {
                     widened, onLoaded));
         }
         if (decision instanceof AddDecision.Reopen reopen) {
-            Optional<String> cannot = WorldReopen.findRefusal();
+            Optional<String> cannot = Games.getNow().findReopenRefusal();
             if (cannot.isPresent()) {
                 return makeRefusal(name, version, reopen.content().isEmpty()
                         ? Lang.get("hotwire.add.starts_refused", name, cannot.get())
@@ -326,6 +318,14 @@ public final class ModAdder {
                 && parts.stream().anyMatch(part -> !part.manifest().cardinalComponents().isEmpty());
     }
 
+    private static void awaitFrames(int frames, Duration wait) throws InterruptedException {
+        long until = Games.getNow().countFrames() + frames;
+        long deadline = System.nanoTime() + wait.toNanos();
+        while (Games.getNow().countFrames() < until && System.nanoTime() < deadline) {
+            Thread.sleep(1);
+        }
+    }
+
     private static void awaitBackgroundWork() throws InterruptedException {
         long until = System.nanoTime() + BACKGROUND_WAIT.toNanos();
         while (!ForkJoinPool.commonPool().isQuiescent() && System.nanoTime() < until) {
@@ -340,7 +340,7 @@ public final class ModAdder {
         for (Path jarPath : jarPaths) {
             String found = ContentScan.findStartOnlyMixin(this.scanOwn(jarPath), target -> {
                 Class<?> loaded = this.engine.findLoaded(target);
-                return loaded != null && NetworkSetups.isOf(loaded);
+                return loaded != null && this.game.isNetworkClass(loaded);
             });
             if (found != null) {
                 return new StartOnly(jarPath, found);
@@ -694,7 +694,7 @@ public final class ModAdder {
         List<String> ids = List.copyOf(parts.keySet());
 
         this.engine.forgetClassReads();
-        this.engine.getApplier().getRebuilder().copy().learn(this.engine.getDecorationsFor(jars));
+        this.engine.getApplier().getRebuilder().copy().learn(this.game.readDecorations(jars));
         String refusedBefore = beforeOn.apply(Set.copyOf(ids));
         if (refusedBefore != null) {
             return new Result.Refused(refusedBefore + undo.run());
@@ -711,10 +711,10 @@ public final class ModAdder {
         }
         undo.addUndo(this.engine.getSwitcher().learn(graph, planner, ids));
 
-        parts.values().forEach(part -> LivePlugins.run(part.jar().manifest(), part.path()));
+        parts.values().forEach(part -> this.game.runPlugins(part.jar().manifest(), part.path()));
 
-        LateHold hold = new LateHold();
-        ResourceReload.awaitAssets(ids);
+        AddGame.Hold hold = this.game.makeHold();
+        this.reloads.awaitAssets(ids);
 
         LifecycleListeners.beginStarting(ids);
 
@@ -737,7 +737,7 @@ public final class ModAdder {
                     this.engine.getApplier().holdRedefinitionWith(before);
                     this.engine.getApplier().getCatchUps().hold(false);
                 }
-                hold.get();
+                hold.begin();
                 if (PlayerMessages.isBad(switched)) {
                     return new Result.Failed(PlayerMessages.describe(switched, nameOf) + undo.run(),
                             switched instanceof ModSwitcher.Result.Failed failed ? failed.cause()
@@ -746,30 +746,30 @@ public final class ModAdder {
 
                 IntSupplier setUp = () -> InitHookRuns.runLoadFinishedAfter(
                         () -> {
-                            AddAssets.openPacks(parts.values());
+                            this.game.openPacks(parts.values());
                             BetweenFrames.draw();
                             return this.engine.getApplier().getCatchUps().run();
                         }, () -> {
                             this.engine.showAddStep(4);
                             BetweenFrames.draw();
-                            AddAssets.reloadForAssets(parts.values());
-                        }, BackgroundReload::runAfterReload);
+                            this.game.reloadForAssets(parts.values());
+                        }, this.reloads::runAfterReload);
                 this.engine.showAddStep(3);
-                CompletableFuture<Map<String, List<String>>> started = AddStart.queue(ids, grew, backedOut,
+                CompletableFuture<Map<String, List<String>>> started = this.game.queueEntrypoints(ids, grew, backedOut,
                         this.engine.getSide(), setUp, this.engine::findLoaded);
-                hold.get().releaseGame();
+                hold.releaseGame();
                 Map<String, List<String>> clientStarted = started.get(ENTRYPOINT_WAIT.toMillis(),
                         TimeUnit.MILLISECONDS);
                 SwitchTimes.mark("add: entrypoints");
 
-                GameHold.awaitFrames(FRAMES_BEFORE_SERVER, FRAMES_WAIT);
+                awaitFrames(FRAMES_BEFORE_SERVER, FRAMES_WAIT);
                 if (clientStarted.values().stream().anyMatch(ran -> !ran.isEmpty())) {
                     awaitBackgroundWork();
                 }
 
                 for (String id : ids) {
                     List<String> ran = new ArrayList<>(clientStarted.getOrDefault(id, List.of()));
-                    ran.addAll(ModLifecycle.start(id, GameRegistrations.getJournal(), Minecraft.getInstance()));
+                    ran.addAll(this.game.runStartListeners(id, GameRegistrations.getJournal()));
                     if (!ran.isEmpty()) {
                         LOGGER.info("[Hotwire] {} started with the running server: {}", id, ran);
                     }
@@ -777,11 +777,11 @@ public final class ModAdder {
             } catch (ExecutionException | TimeoutException | RuntimeException e) {
                 Throwable cause = e instanceof ExecutionException && e.getCause() != null ? e.getCause() : e;
                 if (!(e instanceof ExecutionException)) {
-                    hold.get().pauseGame(Minecraft.getInstance());
+                    hold.pauseGame();
                 }
                 return this.backOut(ids, name, cause, grew, undo, e);
             } catch (InterruptedException e) {
-                hold.get().pauseGame(Minecraft.getInstance());
+                hold.pauseGame();
                 Result back = this.backOut(ids, name, e, grew, undo, e);
                 Thread.currentThread().interrupt();
                 return back;
@@ -795,7 +795,7 @@ public final class ModAdder {
             return new Result.Added(ids, name, switched);
         } finally {
             LifecycleListeners.endStarting(ids);
-            ResourceReload.endAssetWait();
+            this.reloads.endAssetWait();
             SwitchTimes.end("the add of " + ids);
         }
     }

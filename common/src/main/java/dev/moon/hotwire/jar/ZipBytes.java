@@ -20,8 +20,11 @@ import java.util.zip.Inflater;
 import java.util.zip.ZipException;
 import java.util.zip.ZipFile;
 import org.jspecify.annotations.Nullable;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
 public final class ZipBytes {
+    private static final Logger LOGGER = LoggerFactory.getLogger(ZipBytes.class);
     private static final int END_OF_DIRECTORY = 0x06054b50;
     private static final int DIRECTORY_ENTRY = 0x02014b50;
     private static final int LOCAL_HEADER = 0x04034b50;
@@ -201,5 +204,14 @@ public final class ZipBytes {
             }
         }
         throw new ZipException("no end of central directory");
+    }
+
+    public static boolean shipsAssets(Path jar) {
+        try (ZipFile zip = new ZipFile(jar.toFile())) {
+            return zip.stream().anyMatch(entry -> entry.getName().startsWith("assets/"));
+        } catch (IOException e) {
+            LOGGER.warn("[Hotwire] {} could not be read for assets; resources reload to be safe", jar, e);
+            return true;
+        }
     }
 }

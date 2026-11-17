@@ -1,13 +1,14 @@
 package dev.moon.hotwire.fabric;
 
+import dev.moon.hotwire.add.AddSupport;
 import dev.moon.hotwire.cache.CacheBudget;
 import dev.moon.hotwire.cache.CacheStore;
 import dev.moon.hotwire.config.HotwireSettings;
-import dev.moon.hotwire.dev.DevMod;
 import dev.moon.hotwire.dev.DevSession;
 import dev.moon.hotwire.engine.CacheLimit;
 import dev.moon.hotwire.engine.CrashGuard;
 import dev.moon.hotwire.engine.DevSetups;
+import dev.moon.hotwire.engine.EarlyModsReader;
 import dev.moon.hotwire.engine.InstalledMods;
 import dev.moon.hotwire.engine.LifecycleListeners;
 import dev.moon.hotwire.engine.ModPolicy;
@@ -17,7 +18,7 @@ import dev.moon.hotwire.engine.OwnThrowNotice;
 import dev.moon.hotwire.engine.RestartOnlyFile;
 import dev.moon.hotwire.engine.SeenUses;
 import dev.moon.hotwire.engine.SwitchRunner;
-import dev.moon.hotwire.fabric.add.AddSupport;
+import dev.moon.hotwire.fabric.add.AddGameSide;
 import dev.moon.hotwire.fabric.add.HiddenPacks;
 import dev.moon.hotwire.fabric.rebuild.GameClasses;
 import dev.moon.hotwire.fabric.rebuild.GameMixinCopy;
@@ -40,12 +41,7 @@ import dev.moon.hotwire.fabric.report.MachineDetails;
 import dev.moon.hotwire.fabric.screen.HoldFrame;
 import dev.moon.hotwire.fabric.screen.ModIcons;
 import dev.moon.hotwire.fabric.screen.RootScreen;
-import dev.moon.hotwire.fabric.update.UpdateSupport;
-import dev.moon.hotwire.jar.JarScans;
-import dev.moon.hotwire.jar.ModIndex;
-import dev.moon.hotwire.jar.ModJar;
-import dev.moon.hotwire.jar.ModJarException;
-import dev.moon.hotwire.jar.ModJarReader;
+import dev.moon.hotwire.fabric.update.UpdateGameSide;
 import dev.moon.hotwire.jar.ModManifest;
 import dev.moon.hotwire.jvm.JarChannels;
 import dev.moon.hotwire.jvm.JvmAccess;
@@ -106,6 +102,7 @@ import dev.moon.hotwire.update.OldStatics;
 import dev.moon.hotwire.update.SwapAtClose;
 import dev.moon.hotwire.update.UpdateFolders;
 import dev.moon.hotwire.update.UpdateQueue;
+import dev.moon.hotwire.update.UpdateSupport;
 import java.io.IOException;
 import java.lang.instrument.ClassFileTransformer;
 import java.lang.instrument.Instrumentation;
@@ -113,7 +110,6 @@ import java.nio.file.FileSystems;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.util.ArrayList;
-import java.util.HashMap;
 import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
@@ -125,9 +121,6 @@ import java.util.stream.Collectors;
 import java.util.stream.Stream;
 import java.util.zip.ZipFile;
 import net.fabricmc.loader.api.FabricLoader;
-import net.fabricmc.loader.api.ModContainer;
-import net.fabricmc.loader.api.metadata.CustomValue;
-import net.fabricmc.loader.api.metadata.ModMetadata;
 import net.fabricmc.loader.impl.metadata.LoaderModMetadata;
 import net.minecraft.client.Minecraft;
 import net.minecraft.client.multiplayer.ClientLevel;
@@ -164,137 +157,6 @@ final class EngineStart {
         return STACK.walk(frames -> frames.anyMatch(frame -> frame.getClassName().startsWith(RELOAD_TASKS)));
     }
 
-    private static boolean isLibrary(ModMetadata mod) {
-        CustomValue menu = mod.getCustomValue("modmenu");
-        CustomValue badges = menu != null && menu.getType() == CustomValue.CvType.OBJECT
-                ? menu.getAsObject().get("badges") : null;
-        if (badges != null && badges.getType() == CustomValue.CvType.ARRAY) {
-            for (CustomValue badge : badges.getAsArray()) {
-                if (badge.getType() == CustomValue.CvType.STRING && badge.getAsString().equals("library")) {
-                    return true;
-                }
-            }
-        }
-        return mod.containsCustomValue("fabric-loom:generated");
-    }
-
-    private static boolean isNewer(Path file, Path than) {
-        try {
-            return Files.getLastModifiedTime(file).compareTo(Files.getLastModifiedTime(than)) > 0;
-        } catch (IOException e) {
-            return false;
-        }
-    }
-
-    static InstalledMods readInstalledMods(FabricLoader loader) throws IOException {
-        Path mods = ModsFolder.find(loader);
-        EarlyModsReader.Read ahead = EarlyModsReader.open();
-        JarScans scans = ahead.scans();
-        ModIndex.Snapshot snapshot = ahead.index().scan(mods);
-
-        for (ModIndex.Failure failure : snapshot.failures()) {
-            ModJarException why = failure.reason();
-            if (why.getReason() != ModJarException.Reason.NOT_A_MOD) {
-                LOGGER.warn("[Hotwire] not read from the mods folder: {}{}", why.getMessage(),
-                        why.getCause() == null ? "" : " (" + why.getCause() + ")");
-            }
-        }
-        List<ModJar> jars = new ArrayList<>();
-        Map<String, Path> jarOf = new HashMap<>();
-        Set<String> topLevel = new HashSet<>();
-        Map<String, ModJar> disabled = new HashMap<>();
-        for (ModIndex.Entry entry : snapshot.mods()) {
-            if (!entry.disabled()) {
-                String id = entry.jar().manifest().id();
-                jars.add(entry.jar());
-                topLevel.add(id);
-                jarOf.put(id, entry.file());
-            }
-        }
-
-        Map<String, Path> disabledFile = new HashMap<>();
-        for (ModIndex.Entry entry : snapshot.mods()) {
-            String id = entry.jar().manifest().id();
-            if (!entry.disabled() || jarOf.containsKey(id) || loader.isModLoaded(id) || ModPolicy.isHotwire(id)) {
-                continue;
-            }
-            Path before = disabledFile.get(id);
-            if (before == null || isNewer(entry.file(), before)) {
-                disabledFile.put(id, entry.file());
-                disabled.put(id, entry.jar());
-            }
-        }
-        disabledFile.forEach((id, file) -> {
-            topLevel.add(id);
-            jarOf.put(id, file);
-        });
-        for (ModContainer container : loader.getAllMods()) {
-            String id = container.getMetadata().getId();
-            Path jar = InstalledMods.findLoadedFrom(container, mods);
-            if (jar == null || jarOf.containsKey(id) || jarOf.containsValue(jar) || !ModPolicy.isSwitchable(id)) {
-                continue;
-            }
-            try {
-                ModJar read = ModJarReader.read(jar, scans);
-                jars.add(read);
-                jarOf.put(id, jar);
-
-                if (!isLibrary(container.getMetadata())) {
-                    topLevel.add(id);
-                }
-                LOGGER.info("[Hotwire] {} runs from {}, outside the mods folder", id, jar.getFileName());
-            } catch (ModJarException e) {
-                LOGGER.warn("[Hotwire] {} runs from {}, which could not be read: {}", id, jar, e.getMessage());
-            }
-        }
-
-        boolean withHistory = DevSetups.get().inSetup() && new HotwireSettings(FabricLoader.getInstance().getConfigDir()
-                .resolve("hotwire/settings.json")).isHistorySaved();
-        if (DevSetups.get().inSetup()) {
-            for (DevMod mod : DevMod.find()) {
-                if (jarOf.containsKey(mod.id())) {
-                    continue;
-                }
-                try {
-                    Path jar = DevSession.takeStart(mod, DevSetups.getBuildFolder(), withHistory);
-                    jars.add(ModJarReader.read(jar, scans));
-                    topLevel.add(mod.id());
-                    jarOf.put(mod.id(), jar);
-                    LOGGER.info("[Hotwire] {} runs from its build folders {}", mod.id(), mod.folders());
-                } catch (IOException | ModJarException e) {
-                    LOGGER.warn("[Hotwire] {}'s build folders could not be read: {}", mod.id(), e.toString());
-                }
-            }
-        }
-        scans.flush();
-        jars.replaceAll(jar -> dropUnloadedTwins(jar, loader));
-        return new InstalledMods(jars, jarOf, topLevel, disabled);
-    }
-
-    private static ModJar dropUnloadedTwins(ModJar jar, FabricLoader loader) {
-        Map<String, Long> count = jar.nested().stream()
-                .collect(Collectors.groupingBy(nested -> nested.manifest().id(), Collectors.counting()));
-        List<ModJar> nested = jar.nested().stream().filter(one -> count.getOrDefault(one.manifest().id(), 0L) == 1
-                || loader.getModContainer(one.manifest().id()).map(mod -> mod.getMetadata().getVersion()
-                        .getFriendlyString().equals(one.manifest().version())).orElse(true))
-                .map(one -> dropUnloadedTwins(one, loader)).toList();
-        return new ModJar(jar.name(), jar.manifest(), jar.patches(), nested, jar.nestedNotMods(), jar.accessWidener());
-    }
-
-    static void registerTripwireClasses(InstalledMods installed, FabricLoader loader) {
-        if (!HandlerGuards.ENABLED) {
-            return;
-        }
-        Set<String> loadedIds = new HashSet<>();
-        loader.getAllMods().forEach(mod -> loadedIds.add(mod.getMetadata().getId()));
-        MixinConfigs.of(installed.getGraphJars(), loadedIds).forEach((id, mod) -> {
-            if (ModPolicy.isSwitchable(id)) {
-                TripwireSites.registerClasses(id, mod.owns().stream()
-                        .filter(name -> !GameLibraries.has(name, null)).collect(Collectors.toSet()));
-            }
-        });
-    }
-
     static HotwireEngine.JvmParts bind(InstalledMods installed, Progress progress, GameReports reports,
             UpdateFolders folders, UpdateQueue queue, Path gameDir, ModIcons icons) throws JvmAccessException {
         StartTimes.Laps laps = StartTimes.startLaps("engine bind: ");
@@ -311,7 +173,7 @@ final class EngineStart {
         Set<String> loadedIds = new HashSet<>();
         FabricLoader.getInstance().getAllMods().forEach(mod -> loadedIds.add(mod.getMetadata().getId()));
         Map<String, ModMixins> mixins = MixinConfigs.withCodeAdded(
-                MixinConfigs.of(installed.getGraphJars(), loadedIds), mixin.getConfigObjects());
+                ModMixins.readAll(installed.getGraphJars(), loadedIds), mixin.getConfigObjects());
 
         SiteCache.finish();
         laps.endLap("wait for the call sites' notes");
@@ -444,13 +306,13 @@ final class EngineStart {
                 mixin::getGeneratedBy), new GameSwitchUnits(new MixinPlugins(mixin::getConfigObjects,
                         mixin.getProcessor())), installed, chain);
         AddSupport adds = new AddSupport(installed, applier, switcher, classes, reports, gameDir, folders, queue,
-                icons, ids -> runner.turnOff(ids).result());
+                icons, new AddGameSide(), ids -> runner.turnOff(ids).result());
         adds.setAfterAdd(runner::lookAheadForAll);
         UpdateSupport updates = new UpdateSupport(installed, applier, switcher, classes, folders, queue, reports,
                 icons, adds.getAdder(), ids -> SwitchRunner.runQuietly(() -> runner.turnOff(ids)).result(),
                 ids -> SwitchRunner.runQuietly(() -> runner.turnOn(ids)).result(),
                 leaving -> OldStatics.takeOut(leaving, LoadedClassList.of(instrumentation),
-                        fieldReferences::isInitialized, classes::findOriginalBytes));
+                        fieldReferences::isInitialized, classes::findOriginalBytes), new UpdateGameSide());
         adds.getAdder().setCarriedLibraries(updates);
         laps.endLap("runner, adds, updates");
         return new HotwireEngine.JvmParts(runner, adds, updates, instrumentation, loadTimeMixer, classes);

@@ -1,13 +1,10 @@
-package dev.moon.hotwire.fabric.update;
+package dev.moon.hotwire.update;
 
+import dev.moon.hotwire.add.ModAdder;
 import dev.moon.hotwire.config.Flags;
 import dev.moon.hotwire.engine.InstalledMods;
 import dev.moon.hotwire.engine.LoadedMods;
 import dev.moon.hotwire.engine.ModPolicy;
-import dev.moon.hotwire.fabric.ResourceReload;
-import dev.moon.hotwire.fabric.add.ModAdder;
-import dev.moon.hotwire.fabric.rebuild.GameClasses;
-import dev.moon.hotwire.fabric.screen.ModIcons;
 import dev.moon.hotwire.jar.ModJar;
 import dev.moon.hotwire.jar.ModJarException;
 import dev.moon.hotwire.jar.ModManifest;
@@ -19,6 +16,8 @@ import dev.moon.hotwire.report.ActionJournal;
 import dev.moon.hotwire.report.Causes;
 import dev.moon.hotwire.report.GameReports;
 import dev.moon.hotwire.report.Report;
+import dev.moon.hotwire.seam.Games;
+import dev.moon.hotwire.seam.Reloads;
 import dev.moon.hotwire.switching.ModMixins;
 import dev.moon.hotwire.switching.ModSwitcher;
 import dev.moon.hotwire.switching.PlayerMessages;
@@ -26,19 +25,11 @@ import dev.moon.hotwire.switching.SwitchApplier;
 import dev.moon.hotwire.switching.SwitchHistory;
 import dev.moon.hotwire.switching.SwitchTimes;
 import dev.moon.hotwire.ui.Canvas;
+import dev.moon.hotwire.ui.IconSource;
 import dev.moon.hotwire.ui.Progress;
 import dev.moon.hotwire.ui.UpdateMethod;
 import dev.moon.hotwire.ui.UpdatePreview;
-import dev.moon.hotwire.update.JarRelocation;
-import dev.moon.hotwire.update.LiveNames;
-import dev.moon.hotwire.update.ModUpdater;
-import dev.moon.hotwire.update.PinnedClasses;
-import dev.moon.hotwire.update.UpdateContext;
-import dev.moon.hotwire.update.UpdateFolders;
-import dev.moon.hotwire.update.UpdatePlan;
 import dev.moon.hotwire.update.UpdatePlan.UpdateTier;
-import dev.moon.hotwire.update.UpdateQueue;
-import dev.moon.hotwire.update.UpdateText;
 import java.io.IOException;
 import java.io.UncheckedIOException;
 import java.nio.file.Files;
@@ -58,7 +49,6 @@ import java.util.function.Function;
 import java.util.stream.Collectors;
 import java.util.stream.Stream;
 import net.fabricmc.loader.api.FabricLoader;
-import net.minecraft.client.Minecraft;
 import org.jspecify.annotations.Nullable;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -73,12 +63,14 @@ public final class UpdateSupport implements ModUpdater.Engine, ModAdder.CarriedL
     private final Function<List<String>, ModSwitcher.Result> wholeOn;
 
     private final Function<Set<String>, Runnable> oldStatics;
-    private final GameClasses classes;
+    private final SwitchApplier.Game classes;
     private final UpdateFolders folders;
     private final UpdateQueue queue;
     private final GameReports reports;
     private final ModUpdater updater;
-    private final ModIcons icons;
+    private final IconSource icons;
+    private final UpdateGame game;
+    private final Reloads reloads = Games.getNow().getReloads();
 
     private final ModAdder adder;
 
@@ -120,10 +112,12 @@ public final class UpdateSupport implements ModUpdater.Engine, ModAdder.CarriedL
         this.adder.openWidenerOfUpdate(read);
     }
 
-    public UpdateSupport(InstalledMods installed, SwitchApplier applier, ModSwitcher switcher, GameClasses classes,
-            UpdateFolders folders, UpdateQueue queue, GameReports reports, ModIcons icons, ModAdder adder,
-            Function<List<String>, ModSwitcher.Result> off, Function<List<String>, ModSwitcher.Result> on,
-            Function<Set<String>, Runnable> oldStatics) {
+    public UpdateSupport(InstalledMods installed, SwitchApplier applier, ModSwitcher switcher,
+            SwitchApplier.Game classes, UpdateFolders folders, UpdateQueue queue, GameReports reports,
+            IconSource icons, ModAdder adder, Function<List<String>, ModSwitcher.Result> off,
+            Function<List<String>, ModSwitcher.Result> on, Function<Set<String>, Runnable> oldStatics,
+            UpdateGame game) {
+        this.game = game;
         this.adder = adder;
         this.wholeOff = off;
         this.wholeOn = on;
@@ -136,7 +130,7 @@ public final class UpdateSupport implements ModUpdater.Engine, ModAdder.CarriedL
         this.folders = folders;
         this.queue = queue;
         this.reports = reports;
-        this.updater = new ModUpdater(this, stay -> new LiveUpdates(this, stay));
+        this.updater = new ModUpdater(this, stay -> new LiveUpdates(this, stay, game));
     }
 
     public boolean canUpdate(Path jar) {
@@ -268,7 +262,7 @@ public final class UpdateSupport implements ModUpdater.Engine, ModAdder.CarriedL
     }
 
     private void tryAfterWorld(Set<String> group, List<String> waiting, Map<String, Path> given) {
-        if (Minecraft.getInstance().level != null) {
+        if (Games.getNow().getWorld() != null) {
             group.stream().filter(waiting::contains).map(given::get).filter(Objects::nonNull)
                     .forEach(this.updater::tryAfterWorld);
         }
@@ -363,7 +357,7 @@ public final class UpdateSupport implements ModUpdater.Engine, ModAdder.CarriedL
             return refusal;
         });
         if (!refused.isEmpty()) {
-            ResourceReload.runWaitingReload();
+            this.reloads.runWaitingReload();
             LOGGER.info("[Hotwire] {} stay until the next start: {}", liveIds.keySet(), refused.getFirst());
             return refused.getFirst();
         }
@@ -380,11 +374,11 @@ public final class UpdateSupport implements ModUpdater.Engine, ModAdder.CarriedL
                 this.noteRebuilt(this.wholeOn.apply(List.copyOf(offs)), "turned on again after their copies");
                 noteInHistory(offs, false);
             }
-            ResourceReload.runWaitingReload();
+            this.reloads.runWaitingReload();
             return added instanceof ModAdder.Result.Failed failed ? String.valueOf(failed.cause().getMessage())
                     : String.valueOf(added);
         }
-        ResourceReload.runWaitingReload();
+        this.reloads.runWaitingReload();
         offs.forEach(this.installed::onRunningFromCopy);
         noteInHistory(offs, false);
         liveIds.forEach((id, live) -> this.installed.onCopyOf(live, id));
@@ -414,7 +408,7 @@ public final class UpdateSupport implements ModUpdater.Engine, ModAdder.CarriedL
     }
 
     private @Nullable String turnOffNow(Set<String> offs, Set<String> ons, boolean[] wentOff) {
-        if (this.afterWorld && Minecraft.getInstance().level != null) {
+        if (this.afterWorld && Games.getNow().getWorld() != null) {
             this.copyTriesLeft = 0;
             return "a world opened meanwhile";
         }
@@ -442,11 +436,11 @@ public final class UpdateSupport implements ModUpdater.Engine, ModAdder.CarriedL
         Set<String> leaving = this.updater.getCopies().findLeavingClasses(offs);
         ModSwitcher.Result off;
 
-        ResourceReload.leaveReloadToNext(true);
+        this.reloads.leaveReloadToNext(true);
         try {
             off = this.wholeOff.apply(List.copyOf(offs));
         } finally {
-            ResourceReload.leaveReloadToNext(false);
+            this.reloads.leaveReloadToNext(false);
         }
         if (!(off instanceof ModSwitcher.Result.Done)) {
             return off instanceof ModSwitcher.Result.Failed failed ? String.valueOf(failed.cause().getMessage())
@@ -454,7 +448,7 @@ public final class UpdateSupport implements ModUpdater.Engine, ModAdder.CarriedL
         }
         wentOff[0] = true;
         noteInHistory(offs, true);
-        Runnable payloadsBack = OldPayloads.takeOut(offs);
+        Runnable payloadsBack = this.game.takeOutOldPayloads(offs);
         Runnable staticsBack = this.oldStatics.apply(leaving);
         this.oldPayloadsBack = () -> {
             payloadsBack.run();

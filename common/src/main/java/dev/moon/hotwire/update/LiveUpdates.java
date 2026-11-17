@@ -1,31 +1,26 @@
-package dev.moon.hotwire.fabric.update;
+package dev.moon.hotwire.update;
 
 import dev.moon.hotwire.add.LoaderModList;
 import dev.moon.hotwire.add.OpenOneConfig;
 import dev.moon.hotwire.engine.LifecycleListeners;
 import dev.moon.hotwire.engine.ModPolicy;
-import dev.moon.hotwire.fabric.ResourceReload;
-import dev.moon.hotwire.fabric.add.AddAssets;
-import dev.moon.hotwire.fabric.add.LaunchSteps;
 import dev.moon.hotwire.jar.JarLookup;
 import dev.moon.hotwire.jar.ModJar;
 import dev.moon.hotwire.jar.ModJarException;
 import dev.moon.hotwire.jar.ModManifest;
+import dev.moon.hotwire.jar.ZipBytes;
 import dev.moon.hotwire.mixin_copy.MixinCopy;
 import dev.moon.hotwire.redefine.ConstructedFields;
 import dev.moon.hotwire.redefine.InitHookRuns;
 import dev.moon.hotwire.redefine.Linker;
 import dev.moon.hotwire.redefine.RebuildException;
 import dev.moon.hotwire.registration.Owners;
+import dev.moon.hotwire.seam.Games;
 import dev.moon.hotwire.switching.ModMixins;
 import dev.moon.hotwire.switching.SwitchApplier;
 import dev.moon.hotwire.switching.SwitchTimes;
 import dev.moon.hotwire.ui.Lang;
 import dev.moon.hotwire.ui.Progress;
-import dev.moon.hotwire.update.CarriedUpdates;
-import dev.moon.hotwire.update.ModUpdater;
-import dev.moon.hotwire.update.UpdateDiffer;
-import dev.moon.hotwire.update.UpdatePlan;
 import dev.moon.hotwire.update.UpdatePlan.ClassAction;
 import dev.moon.hotwire.update.UpdatePlan.UpdateNotice;
 import java.nio.file.Path;
@@ -55,7 +50,6 @@ import net.fabricmc.loader.api.FabricLoader;
 import net.fabricmc.loader.api.entrypoint.EntrypointContainer;
 import net.fabricmc.loader.api.entrypoint.PreLaunchEntrypoint;
 import net.fabricmc.loader.impl.launch.FabricLauncherBase;
-import net.minecraft.client.Minecraft;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -79,7 +73,10 @@ public final class LiveUpdates implements ModUpdater.Live {
 
     private final Set<String> registered = new HashSet<>();
 
-    public LiveUpdates(ModUpdater.Engine engine, ModUpdater.Stay stay) {
+    private final UpdateGame game;
+
+    public LiveUpdates(ModUpdater.Engine engine, ModUpdater.Stay stay, UpdateGame game) {
+        this.game = game;
         this.engine = engine;
         this.stay = stay;
     }
@@ -244,7 +241,7 @@ public final class LiveUpdates implements ModUpdater.Live {
             });
 
             ConstructedFields.startUpdating(changed.keySet());
-            boolean ships = ready.stream().anyMatch(one -> AddAssets.shipsAssets(one.planned().jar()));
+            boolean ships = ready.stream().anyMatch(one -> ZipBytes.shipsAssets(one.planned().jar()));
             List<IntSupplier> late = ships ? InitHookRuns.beginWaitingLate() : List.of();
             SwitchApplier.ApplyResult applied;
             try {
@@ -266,7 +263,7 @@ public final class LiveUpdates implements ModUpdater.Live {
             String updated = String.join(", ", paths.keySet());
             Map<String, Path> running = new LinkedHashMap<>();
             ready.forEach(one -> running.put(one.manifest().id(), one.planned().running()));
-            AddAssets.reloadForUpdated(paths, running, () -> {
+            this.game.reloadForUpdated(paths, running, () -> {
                 int failed = late.stream().mapToInt(IntSupplier::getAsInt).sum();
                 if (failed > 0) {
                     LOGGER.warn("[Hotwire] {} of the late hooks of {} failed after its new assets loaded", failed,
@@ -280,7 +277,8 @@ public final class LiveUpdates implements ModUpdater.Live {
                 shown.count(ready.get(i).manifest().name(), i, ready.size() * 2);
                 started.add(this.start(ready.get(i)));
             }
-            this.runLaunchSteps(ready.stream().map(one -> one.manifest().id()).toList());
+            this.game.runLaunchSteps(ready.stream().map(one -> one.manifest().id()).toList(),
+                    this.engine.getClasses()::findLoaded);
             List<ModUpdater.Result> results = new ArrayList<>();
             for (int i = 0; i < ready.size(); i++) {
                 Ready one = ready.get(i);
@@ -311,7 +309,7 @@ public final class LiveUpdates implements ModUpdater.Live {
             }
             return failed;
         } finally {
-            ResourceReload.forgetPausedReload();
+            Games.getNow().getReloads().forgetPausedReload();
         }
     }
 
@@ -349,18 +347,6 @@ public final class LiveUpdates implements ModUpdater.Live {
         }
         SwitchTimes.mark("update: entrypoints");
         return started.toString();
-    }
-
-    private void runLaunchSteps(List<String> ids) {
-        try {
-            Minecraft.getInstance().submit(() -> LaunchSteps.run("the update of " + ids,
-                    LaunchSteps.planAfterStart(ids, this.engine.getClasses()::findLoaded, new LinkedHashMap<>()),
-                    Set.of("host lists", "entrypoint lists", "client-started listeners"))).get(30, TimeUnit.SECONDS);
-        } catch (InterruptedException e) {
-            Thread.currentThread().interrupt();
-        } catch (ExecutionException | TimeoutException e) {
-            LOGGER.warn("[Hotwire] the launch steps of {} did not run after their update", ids, e);
-        }
     }
 
     private ModUpdater.Result finish(Ready one, SwitchApplier.ApplyResult applied, String started) {
@@ -425,7 +411,7 @@ public final class LiveUpdates implements ModUpdater.Live {
             LOGGER.info("[Hotwire] {}'s new entrypoints {} are none Hotwire runs itself", id, added);
         }
         CompletableFuture<String> ran = new CompletableFuture<>();
-        Minecraft.getInstance().execute(() -> {
+        Games.getNow().runOnGame(() -> {
             List<String> ids = List.of(id);
             boolean ok = false;
             OpenOneConfig configs = OpenOneConfig.open();

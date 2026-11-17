@@ -1,10 +1,9 @@
-package dev.moon.hotwire.fabric.store;
+package dev.moon.hotwire.store;
 
-import dev.moon.hotwire.fabric.screen.ModIcons;
-import dev.moon.hotwire.fabric.screen.Picture;
 import dev.moon.hotwire.modrinth.StoreCache;
 import dev.moon.hotwire.modrinth.StoreModel;
 import dev.moon.hotwire.ui.Canvas;
+import dev.moon.hotwire.ui.ImageDecoder;
 import dev.moon.hotwire.ui.StoreIcons;
 import java.io.IOException;
 import java.util.LinkedHashMap;
@@ -34,13 +33,16 @@ public final class StoreIconLoader implements StoreIcons {
     @SuppressWarnings("ThreadPriorityCheck")
     private final ExecutorService fetchers = Executors.newFixedThreadPool(FETCHERS, Thread.ofPlatform()
             .name("hotwire-store-icons-", 0).daemon().priority(Thread.MIN_PRIORITY).factory());
-    private final Map<String, CompletableFuture<Optional<ModIcons.Icon>>> icons = new ConcurrentHashMap<>();
+    private final ImageDecoder decoder;
+    private final Map<String, CompletableFuture<Optional<Canvas.Image>>> icons = new ConcurrentHashMap<>();
 
     private final LinkedHashMap<String, Boolean> seen = new LinkedHashMap<>(MOST_LIVE, 0.75f, true);
-    private final Map<String, CompletableFuture<Optional<Picture>>> pictures = new ConcurrentHashMap<>();
+    private final Map<String, CompletableFuture<Optional<PagePicture>>> pictures = new ConcurrentHashMap<>();
     private final LinkedHashMap<String, Boolean> picturesSeen = new LinkedHashMap<>(MOST_PICTURES, 0.75f, true);
 
-    public StoreIconLoader(StoreModel model, StoreCache cache, Function<String, Canvas.@Nullable Image> local) {
+    public StoreIconLoader(StoreModel model, StoreCache cache, Function<String, Canvas.@Nullable Image> local,
+            ImageDecoder decoder) {
+        this.decoder = decoder;
         this.model = model;
         this.cache = cache;
         this.local = local;
@@ -59,9 +61,9 @@ public final class StoreIconLoader implements StoreIcons {
         if (this.seen.size() > MOST_LIVE) {
             String oldest = this.seen.keySet().iterator().next();
             this.seen.remove(oldest);
-            CompletableFuture<Optional<ModIcons.Icon>> gone = this.icons.remove(oldest);
+            CompletableFuture<Optional<Canvas.Image>> gone = this.icons.remove(oldest);
             if (gone != null) {
-                gone.getNow(Optional.empty()).ifPresent(ModIcons.Icon::release);
+                gone.getNow(Optional.empty()).ifPresent(Canvas.Image::release);
             }
         }
         return this.icons.computeIfAbsent(url, this::load).getNow(Optional.empty()).orElse(null);
@@ -73,21 +75,20 @@ public final class StoreIconLoader implements StoreIcons {
         if (this.picturesSeen.size() > MOST_PICTURES) {
             String oldest = this.picturesSeen.keySet().iterator().next();
             this.picturesSeen.remove(oldest);
-            CompletableFuture<Optional<Picture>> gone = this.pictures.remove(oldest);
+            CompletableFuture<Optional<PagePicture>> gone = this.pictures.remove(oldest);
             if (gone != null) {
-                gone.getNow(Optional.empty()).ifPresent(Picture::release);
+                gone.getNow(Optional.empty()).ifPresent(picture -> picture.image().release());
             }
         }
-        return this.pictures.computeIfAbsent(url, this::loadPicture).getNow(Optional.empty())
-                .map(picture -> new PagePicture(picture, picture.getWidth(), picture.getHeight())).orElse(null);
+        return this.pictures.computeIfAbsent(url, this::loadPicture).getNow(Optional.empty()).orElse(null);
     }
 
-    private CompletableFuture<Optional<Picture>> loadPicture(String url) {
-        CompletableFuture<Optional<Picture>> future = new CompletableFuture<>();
+    private CompletableFuture<Optional<PagePicture>> loadPicture(String url) {
+        CompletableFuture<Optional<PagePicture>> future = new CompletableFuture<>();
         this.fetchers.execute(() -> {
             try {
                 byte[] bytes = this.model.getClient().fetchPicture(url);
-                future.complete(Picture.decode("store-" + Integer.toHexString(url.hashCode()), url, bytes));
+                future.complete(this.decoder.decodePicture("store-" + Integer.toHexString(url.hashCode()), url, bytes));
             } catch (IOException | RuntimeException e) {
                 LOGGER.info("[Hotwire] the store could not get a picture: {}", e.toString());
                 future.complete(Optional.empty());
@@ -96,8 +97,8 @@ public final class StoreIconLoader implements StoreIcons {
         return future;
     }
 
-    private CompletableFuture<Optional<ModIcons.Icon>> load(String url) {
-        CompletableFuture<Optional<ModIcons.Icon>> future = new CompletableFuture<>();
+    private CompletableFuture<Optional<Canvas.Image>> load(String url) {
+        CompletableFuture<Optional<Canvas.Image>> future = new CompletableFuture<>();
         this.fetchers.execute(() -> {
             try {
                 Optional<byte[]> bytes = this.cache.find(StoreCache.Kind.PICTURE, url).map(StoreCache.Entry::bytes);
@@ -106,7 +107,7 @@ public final class StoreIconLoader implements StoreIcons {
                     bytes.ifPresent(got -> this.cache.save(StoreCache.Kind.PICTURE, url, got));
                 }
                 String name = "store-" + Integer.toHexString(url.hashCode());
-                future.complete(bytes.flatMap(got -> ModIcons.decodeFor(name, url, got)));
+                future.complete(bytes.flatMap(got -> this.decoder.decodeIcon(name, url, got)));
             } catch (IOException | RuntimeException e) {
                 LOGGER.info("[Hotwire] the store could not get an icon: {}", e.toString());
                 future.complete(Optional.empty());

@@ -70,6 +70,4 @@ public interface SwitchUnits {
     void redrawChunks();
 
     List<String> closeViews(Collection<String> mods);
-
-    void runWaitingEntrypoints(Predicate<String> on);
 }

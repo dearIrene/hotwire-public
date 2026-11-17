@@ -1,17 +1,18 @@
 package dev.moon.hotwire.fabric;
 
+import dev.moon.hotwire.add.AddSupport;
+import dev.moon.hotwire.add.ModAdder;
 import dev.moon.hotwire.concurrent.Tasks;
 import dev.moon.hotwire.engine.InstalledMods;
-import dev.moon.hotwire.fabric.add.AddSupport;
-import dev.moon.hotwire.fabric.add.ModAdder;
+import dev.moon.hotwire.engine.NextStartQueue;
 import dev.moon.hotwire.fabric.add.WorldReopen;
-import dev.moon.hotwire.fabric.update.UpdateSupport;
 import dev.moon.hotwire.jar.ModJarException;
 import dev.moon.hotwire.report.ActionJournal;
 import dev.moon.hotwire.ui.AddPreview;
 import dev.moon.hotwire.ui.UpdatePreview;
 import dev.moon.hotwire.update.ModUpdater;
 import dev.moon.hotwire.update.UpdatePlan;
+import dev.moon.hotwire.update.UpdateSupport;
 import java.nio.file.Path;
 import java.util.List;
 import java.util.Map;

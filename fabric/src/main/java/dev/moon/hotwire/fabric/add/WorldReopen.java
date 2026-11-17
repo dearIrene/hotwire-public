@@ -1,5 +1,6 @@
 package dev.moon.hotwire.fabric.add;
 
+import dev.moon.hotwire.add.ModAdder;
 import dev.moon.hotwire.add.TickEnd;
 import dev.moon.hotwire.fabric.ModViews;
 import dev.moon.hotwire.fabric.ResourceReload;

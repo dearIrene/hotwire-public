@@ -1,21 +1,15 @@
-package dev.moon.hotwire.fabric.add;
+package dev.moon.hotwire.add;
 
-import dev.moon.hotwire.add.AddFirstLook;
-import dev.moon.hotwire.add.JoinHooks;
 import dev.moon.hotwire.classfile.ClassHeader;
 import dev.moon.hotwire.config.AtomicFiles;
 import dev.moon.hotwire.engine.InstalledMods;
 import dev.moon.hotwire.engine.ModPolicy;
-import dev.moon.hotwire.fabric.rebuild.GameClasses;
-import dev.moon.hotwire.fabric.rebuild.MixinConfigs;
-import dev.moon.hotwire.fabric.screen.ModIcons;
 import dev.moon.hotwire.jar.FileHashes;
 import dev.moon.hotwire.jar.ModJar;
 import dev.moon.hotwire.jar.ModJarException;
 import dev.moon.hotwire.jar.ModJarReader;
 import dev.moon.hotwire.jar.ModManifest;
 import dev.moon.hotwire.jar.ZipBytes;
-import dev.moon.hotwire.mixin_copy.MixinCopy;
 import dev.moon.hotwire.plan.ModGraph;
 import dev.moon.hotwire.plan.SwitchPlanner;
 import dev.moon.hotwire.redefine.OpenGameClasses;
@@ -26,6 +20,7 @@ import dev.moon.hotwire.switching.ModSwitcher;
 import dev.moon.hotwire.switching.SwitchApplier;
 import dev.moon.hotwire.ui.AddMode;
 import dev.moon.hotwire.ui.AddPreview;
+import dev.moon.hotwire.ui.IconSource;
 import dev.moon.hotwire.ui.Lang;
 import dev.moon.hotwire.update.PendingChange;
 import dev.moon.hotwire.update.UpdateFolders;
@@ -50,7 +45,6 @@ import java.util.zip.ZipFile;
 import net.fabricmc.loader.api.FabricLoader;
 import net.fabricmc.loader.api.ModContainer;
 import net.fabricmc.loader.api.metadata.ModOrigin;
-import net.minecraft.client.Minecraft;
 import org.jspecify.annotations.Nullable;
 import org.objectweb.asm.ClassReader;
 import org.objectweb.asm.Opcodes;
@@ -62,22 +56,22 @@ public final class AddSupport implements ModAdder.Engine {
     private final InstalledMods installed;
     private final SwitchApplier applier;
     private final ModSwitcher switcher;
-    private final GameClasses classes;
+    private final SwitchApplier.Game classes;
     private final GameReports reports;
     private final Path addedJarsFolder;
     private final UpdateFolders folders;
     private final UpdateQueue queue;
     private final ModAdder adder;
-    private final ModIcons icons;
+    private final IconSource icons;
     private final Function<List<String>, ModSwitcher.Result> takeOut;
     private final Map<String, PendingChange.Copied> copied = new ConcurrentHashMap<>();
     private volatile Runnable afterAdd = () -> { };
 
     private final Map<String, Path> copiedFrom = new ConcurrentHashMap<>();
 
-    public AddSupport(InstalledMods installed, SwitchApplier applier, ModSwitcher switcher, GameClasses classes,
-            GameReports reports, Path gameDir, UpdateFolders folders, UpdateQueue queue, ModIcons icons,
-            Function<List<String>, ModSwitcher.Result> takeOut) {
+    public AddSupport(InstalledMods installed, SwitchApplier applier, ModSwitcher switcher,
+            SwitchApplier.Game classes, GameReports reports, Path gameDir, UpdateFolders folders, UpdateQueue queue,
+            IconSource icons, AddGame game, Function<List<String>, ModSwitcher.Result> takeOut) {
         this.installed = installed;
         this.takeOut = takeOut;
         this.icons = icons;
@@ -88,7 +82,7 @@ public final class AddSupport implements ModAdder.Engine {
         this.addedJarsFolder = gameDir.resolve("hotwire").resolve("added");
         this.folders = folders;
         this.queue = queue;
-        this.adder = new ModAdder(this);
+        this.adder = new ModAdder(this, game);
     }
 
     public void setAfterAdd(Runnable afterAdd) {
@@ -275,11 +269,6 @@ public final class AddSupport implements ModAdder.Engine {
     }
 
     @Override
-    public MixinCopy.Decorations getDecorationsFor(List<ModJar> added) {
-        return MixinConfigs.readDecorations(MixinConfigs.of(added));
-    }
-
-    @Override
     public Path getAddedJarsFolder() {
         return this.addedJarsFolder;
     }
@@ -344,8 +333,7 @@ public final class AddSupport implements ModAdder.Engine {
 
     @Override
     public boolean isInWorld() {
-        Minecraft client = Minecraft.getInstance();
-        return client.level != null || client.hasSingleplayerServer();
+        return this.classes.isInWorld();
     }
 
     @Override

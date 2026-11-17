@@ -10,7 +10,9 @@ import dev.moon.hotwire.jar.ModManifest;
 import dev.moon.hotwire.modrinth.WebpLossless;
 import dev.moon.hotwire.ui.Canvas;
 import dev.moon.hotwire.ui.IconPixels;
+import dev.moon.hotwire.ui.IconSource;
 import dev.moon.hotwire.ui.OtherImages;
+import dev.moon.hotwire.ui.StoreIcons;
 import dev.moon.hotwire.ui.SvgIcon;
 import java.io.ByteArrayInputStream;
 import java.io.IOException;
@@ -40,7 +42,18 @@ import org.jspecify.annotations.Nullable;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
-public final class ModIcons implements AutoCloseable {
+public final class ModIcons implements AutoCloseable, IconSource {
+    @Override
+    public Optional<Canvas.Image> decodeIcon(String name, String url, byte[] bytes) {
+        return decodeFor(name, url, bytes).map(icon -> icon);
+    }
+
+    @Override
+    public Optional<StoreIcons.PagePicture> decodePicture(String name, String url, byte[] bytes) {
+        return Picture.decode(name, url, bytes)
+                .map(picture -> new StoreIcons.PagePicture(picture, picture.getWidth(), picture.getHeight()));
+    }
+
     private static final Logger LOGGER = LoggerFactory.getLogger(ModIcons.class);
 
     private record Source(String id, @Nullable Path jar, String path) {
@@ -107,6 +120,7 @@ public final class ModIcons implements AutoCloseable {
             });
         }
 
+        @Override
         public void release() {
             this.textures.values().forEach(Minecraft.getInstance().getTextureManager()::release);
             this.textures.clear();
@@ -191,6 +205,7 @@ public final class ModIcons implements AutoCloseable {
         this.installed = installed;
     }
 
+    @Override
     public Canvas.@Nullable Image of(String id) {
         Source source = this.getSourceOf(id);
         Source was = this.sources.put(id, source);
@@ -203,6 +218,7 @@ public final class ModIcons implements AutoCloseable {
         return this.read(source).getNow(Optional.empty()).orElse(null);
     }
 
+    @Override
     public Canvas.@Nullable Image ofJar(Path jar) {
         ModManifest manifest;
         try {
