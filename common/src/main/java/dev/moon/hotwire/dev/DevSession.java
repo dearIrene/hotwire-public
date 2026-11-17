@@ -147,7 +147,7 @@ public final class DevSession implements DevHost, AutoCloseable {
         Path first = dir.resolve("build-0.jar");
         if (history == null) {
             SavedHistory.forget(dir);
-            deleteBuildsBut(first, first.resolveSibling(first.getFileName() + ".idx"));
+            deleteBuildsBut(first, DevBuild.indexOf(first));
             DevBuild before = DevBuild.readIndex(first);
             DevBuild build = DevBuild.take(mod.folders(), first, before);
             STARTS.put(mod.id(), new Start(mod, build, 0, null, null, StartSources.adopt(mod, folder, 0, build)));
@@ -159,8 +159,7 @@ public final class DevSession implements DevHost, AutoCloseable {
         DevBuild build = DevBuild.take(mod.folders(), dir.resolve("build-" + next + ".jar"), before);
         if (before != null && build != before && before.diff(build).isEmpty()) {
             AtomicFiles.moveInto(build.getJar(), before.getJar());
-            AtomicFiles.moveInto(build.getJar().resolveSibling(build.getJar().getFileName() + ".idx"),
-                    before.getJar().resolveSibling(before.getJar().getFileName() + ".idx"));
+            AtomicFiles.moveInto(DevBuild.indexOf(build.getJar()), DevBuild.indexOf(before.getJar()));
             build = Objects.requireNonNull(DevBuild.readIndex(before.getJar()));
             before = build;
         }
@@ -168,7 +167,7 @@ public final class DevSession implements DevHost, AutoCloseable {
         List<Path> staying = new ArrayList<>(List.of(first, build.getJar()));
         history.builds().forEach(one -> staying.add(dir.resolve(one.jar())));
         List<Path> indexed = new ArrayList<>(staying);
-        indexed.forEach(jar -> staying.add(jar.resolveSibling(jar.getFileName() + ".idx")));
+        indexed.forEach(jar -> staying.add(DevBuild.indexOf(jar)));
         deleteBuildsBut(staying.toArray(Path[]::new));
         int number = build == before ? history.running() : next;
         STARTS.put(mod.id(), new Start(mod, build, number, history, build == before ? null : before,
@@ -498,7 +497,7 @@ public final class DevSession implements DevHost, AutoCloseable {
         }
         this.tasks.submit("keeping the builds of " + mod.mod.id(), () -> {
             DevBuild running = mod.running;
-            Path index = running.getJar().resolveSibling(running.getJar().getFileName() + ".idx");
+            Path index = DevBuild.indexOf(running.getJar());
             try {
                 if (!Files.isRegularFile(index)) {
                     running.writeIndex();
@@ -850,7 +849,7 @@ public final class DevSession implements DevHost, AutoCloseable {
 
     private static void dropUnused(Path jar) {
         deleteQuietly(jar);
-        deleteQuietly(jar.resolveSibling(jar.getFileName() + ".idx"));
+        deleteQuietly(DevBuild.indexOf(jar));
     }
 
     static void deleteQuietly(Path file) {

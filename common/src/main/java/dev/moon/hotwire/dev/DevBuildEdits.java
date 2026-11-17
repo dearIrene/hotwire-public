@@ -62,7 +62,7 @@ final class DevBuildEdits {
             this.dropOldest(mod);
             for (SavedBuild saved : mod.saved) {
                 staying.add(saved.jar());
-                staying.add(saved.jar().resolveSibling(saved.jar().getFileName() + ".idx"));
+                staying.add(DevBuild.indexOf(saved.jar()));
             }
 
             forgetGone(mod, number);
@@ -76,10 +76,10 @@ final class DevBuildEdits {
 
         Path start = built.getJar().resolveSibling("build-0.jar");
         staying.add(built.getJar());
-        staying.add(built.getJar().resolveSibling(built.getJar().getFileName() + ".idx"));
+        staying.add(DevBuild.indexOf(built.getJar()));
         for (Path launch : List.of(start, mod.startJar)) {
             staying.add(launch);
-            staying.add(launch.resolveSibling(launch.getFileName() + ".idx"));
+            staying.add(DevBuild.indexOf(launch));
         }
         DevSession.deleteBuildsBut(staying.toArray(Path[]::new));
         LOGGER.info("[Hotwire] {} runs build {} now (was {})", mod.mod.id(), built.getJar().getFileName(),
@@ -214,7 +214,7 @@ final class DevBuildEdits {
                 merged = DevBuild.combine(base, from, plan.gone(), jar);
             } catch (IOException e) {
                 DevSession.deleteQuietly(jar);
-                DevSession.deleteQuietly(jar.resolveSibling(jar.getFileName() + ".idx"));
+                DevSession.deleteQuietly(DevBuild.indexOf(jar));
                 LOGGER.warn("[Hotwire] builds {} of {} could not be merged", plan.builds(), mod.mod.id(), e);
                 this.tellMergeFailed(mod, Lang.get("hotwire.dev.merge.unwritten"));
                 return;
@@ -275,7 +275,7 @@ final class DevBuildEdits {
             Path jar = jars.get(build);
             if (jar != null) {
                 DevSession.deleteQuietly(jar);
-                DevSession.deleteQuietly(jar.resolveSibling(jar.getFileName() + ".idx"));
+                DevSession.deleteQuietly(DevBuild.indexOf(jar));
             }
         }
         List<String> lines = new ArrayList<>();
@@ -353,7 +353,7 @@ final class DevBuildEdits {
         }
         int number = mod.builds + 1;
         Path jar = this.folder.resolve(mod.mod.id()).resolve("build-" + number + ".jar");
-        Path index = jar.resolveSibling(jar.getFileName() + ".idx");
+        Path index = DevBuild.indexOf(jar);
         try {
             if (running) {
                 mod.running.writeIndex();
@@ -362,7 +362,7 @@ final class DevBuildEdits {
             if (Files.isRegularFile(from)) {
                 link(from, jar);
             }
-            link(from.resolveSibling(from.getFileName() + ".idx"), index);
+            link(DevBuild.indexOf(from), index);
 
             DevBuild copied = DevBuild.readIndex(jar);
             if (copied != null) {

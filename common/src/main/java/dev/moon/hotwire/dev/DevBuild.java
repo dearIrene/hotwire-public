@@ -371,6 +371,10 @@ public final class DevBuild {
         return storeOf(this.jar);
     }
 
+    static Path indexOf(Path jar) {
+        return jar.resolveSibling(jar.getFileName() + INDEX);
+    }
+
     private static Path storeOf(Path jar) {
         Path folder = jar.toAbsolutePath().getParent();
         if ("cleared".equals(String.valueOf(folder.getFileName()))) {
@@ -579,11 +583,11 @@ public final class DevBuild {
         lines.add(HEADER + this.added);
         this.files.forEach((name, seen) -> lines.add(seen.size() + " " + seen.modified() + " " + seen.crc() + " "
                 + (seen.hash() == null ? "-" : seen.hash()) + " " + name));
-        AtomicFiles.writeString(this.jar.resolveSibling(this.jar.getFileName() + INDEX), String.join("\n", lines));
+        AtomicFiles.writeString(indexOf(this.jar), String.join("\n", lines));
     }
 
     public static @Nullable DevBuild readIndex(Path jar) {
-        return readIndexAt(jar.resolveSibling(jar.getFileName() + INDEX), jar);
+        return readIndexAt(indexOf(jar), jar);
     }
 
     private static @Nullable DevBuild readIndexAt(Path index, Path jar) {

@@ -139,9 +139,9 @@ final class ClearedBuilds {
         if (Files.isRegularFile(jar)) {
             AtomicFiles.moveInto(jar, to);
         }
-        Path index = jar.resolveSibling(jar.getFileName() + ".idx");
+        Path index = DevBuild.indexOf(jar);
         if (Files.isRegularFile(index)) {
-            AtomicFiles.moveInto(index, to.resolveSibling(to.getFileName() + ".idx"));
+            AtomicFiles.moveInto(index, DevBuild.indexOf(to));
         }
     }
 
