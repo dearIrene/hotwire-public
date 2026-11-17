@@ -27,8 +27,4 @@ public final class LastSwitch {
         }
         return made;
     }
-
-    public static void clear() {
-        last = null;
-    }
 }
