@@ -3,6 +3,7 @@ package dev.moon.hotwire.redefine;
 import java.lang.ref.WeakReference;
 import java.util.concurrent.atomic.AtomicReferenceArray;
 import java.util.function.BiConsumer;
+import java.util.function.Predicate;
 import org.jspecify.annotations.Nullable;
 
 final class WeakIdentityMap {
@@ -51,14 +52,30 @@ final class WeakIdentityMap {
         }
         Table now = this.table;
         if ((this.used + 1) * 2 > now.keys().length()) {
-            now = this.rebuild(now);
+            now = this.rebuild(now, any -> false);
         }
         place(now, key, value);
         this.used++;
         return null;
     }
 
-    private Table rebuild(Table old) {
+    synchronized int removeIf(Predicate<Object> gone) {
+        Table now = this.table;
+        int named = 0;
+        for (int at = 0; at < now.keys().length(); at++) {
+            WeakReference<Object> slot = now.keys().get(at);
+            Object key = slot == null ? null : slot.get();
+            if (key != null && gone.test(key)) {
+                named++;
+            }
+        }
+        if (named > 0) {
+            this.rebuild(now, gone);
+        }
+        return named;
+    }
+
+    private Table rebuild(Table old, Predicate<Object> gone) {
         int live = 0;
         for (int at = 0; at < old.keys().length(); at++) {
             WeakReference<Object> slot = old.keys().get(at);
@@ -76,7 +93,7 @@ final class WeakIdentityMap {
             WeakReference<Object> slot = old.keys().get(at);
             Object key = slot == null ? null : slot.get();
             Object value = old.values().get(at);
-            if (key != null && value != null) {
+            if (key != null && value != null && !gone.test(key)) {
                 place(fresh, key, value);
                 placed++;
             }

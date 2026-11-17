@@ -12,6 +12,7 @@ import dev.moon.hotwire.fabric.ResourceReload;
 import dev.moon.hotwire.add.TickEnd;
 import dev.moon.hotwire.fabric.BackgroundReload;
 import dev.moon.hotwire.fabric.OngoingReload;
+import dev.moon.hotwire.fabric.registration.ClosedWorldHolders;
 import dev.moon.hotwire.fabric.registration.GameHold;
 import dev.moon.hotwire.fabric.registration.WorldTintCaches;
 import dev.moon.hotwire.redefine.StartArguments;
@@ -105,5 +106,6 @@ public abstract class MinecraftMixin {
         BackgroundReload.tick();
         OngoingReload.tick();
         WorldTintCaches.tick(game);
+        ClosedWorldHolders.tick(game);
     }
 }

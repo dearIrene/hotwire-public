@@ -18,6 +18,7 @@ import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.atomic.AtomicReference;
 import java.util.function.BiConsumer;
 import java.util.function.Consumer;
+import java.util.function.Predicate;
 import org.jspecify.annotations.Nullable;
 import org.objectweb.asm.AnnotationVisitor;
 import org.objectweb.asm.ClassReader;
@@ -122,6 +123,16 @@ public final class FieldHolders {
         holder.previous().set(new Holder(last.type(), last.lookup(), new WeakIdentityMap(),
                 new AtomicReference<>(before), last.initInstance(), new MapMaker().weakKeys().makeMap(),
                 last.restarted()));
+    }
+
+    public static int forgetInstances(Predicate<Object> gone) {
+        int count = 0;
+        for (Linker.Link link : Linker.LINKS.values()) {
+            for (Holder holder = link.holder; holder != null; holder = holder.previous().get()) {
+                count += holder.instances().removeIf(gone);
+            }
+        }
+        return count;
     }
 
     public static String describeStatics(Class<?> target) {
