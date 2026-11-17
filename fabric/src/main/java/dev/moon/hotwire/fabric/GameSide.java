@@ -12,6 +12,7 @@ import dev.moon.hotwire.fabric.registration.NetworkHandlers;
 import dev.moon.hotwire.fabric.registration.RegisteredContent;
 import dev.moon.hotwire.fabric.screen.HoldFrame;
 import dev.moon.hotwire.fabric.screen.WebLinks;
+import dev.moon.hotwire.fabric.version.Spellings;
 import dev.moon.hotwire.seam.Game;
 import dev.moon.hotwire.seam.Reloads;
 import io.netty.channel.Channel;
@@ -182,11 +183,7 @@ public final class GameSide implements Game {
 
     @Override
     public boolean isShippedUnderOtherNames() {
-        //? if >=26.1 {
-        return false;
-        //?} else {
-        /*return true;
-        *///?}
+        return Spellings.isShippedUnderOtherNames();
     }
 
     @Override

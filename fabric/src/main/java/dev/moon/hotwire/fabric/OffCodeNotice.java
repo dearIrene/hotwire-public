@@ -7,6 +7,7 @@ import dev.moon.hotwire.engine.ModPolicy;
 import dev.moon.hotwire.engine.SeenUses;
 import dev.moon.hotwire.fabric.add.WorldReopen;
 import dev.moon.hotwire.fabric.rebuild.GameClasses;
+import dev.moon.hotwire.fabric.version.Spellings;
 import dev.moon.hotwire.plan.ModGraph;
 import dev.moon.hotwire.redefine.Tripwire;
 import dev.moon.hotwire.registration.Owners;
@@ -48,11 +49,7 @@ final class OffCodeNotice {
         Tripwire.setLibraries(mod -> installed.getGraph().getUses(mod));
         Tripwire.setGameIds(ModPolicy.BUILT_IN);
 
-        //? if >=1.21.2 {
-        Tripwire.onFirstCall(mod -> Minecraft.getInstance().schedule(() -> onOffCodeCalled(engine, installed, mod)));
-        //?} else {
-        /*Tripwire.onFirstCall(mod -> Minecraft.getInstance().tell(() -> onOffCodeCalled(engine, installed, mod)));
-        *///?}
+        Tripwire.onFirstCall(mod -> Spellings.runSoon(() -> onOffCodeCalled(engine, installed, mod)));
     }
 
     private static void onOffCodeCalled(HotwireEngine engine, InstalledMods installed, String mod) {

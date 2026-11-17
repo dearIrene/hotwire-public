@@ -1,8 +1,5 @@
 package dev.moon.hotwire.fabric;
 
-//? if >=26.1 {
-import dev.moon.hotwire.fabric.add.LoadStatusViews;
-//?}
 import dev.moon.hotwire.classfile.GameNames;
 import dev.moon.hotwire.dev.DevSession;
 import dev.moon.hotwire.engine.DevSetups;
@@ -10,6 +7,7 @@ import dev.moon.hotwire.engine.EarlyModsReader;
 import dev.moon.hotwire.engine.EngineApi;
 import dev.moon.hotwire.engine.HotwireEngine;
 import dev.moon.hotwire.engine.LoadedMods;
+import dev.moon.hotwire.fabric.add.LoadStatusViews;
 import dev.moon.hotwire.fabric.registration.EntityAttachments;
 import dev.moon.hotwire.fabric.registration.OffModClose;
 import dev.moon.hotwire.fabric.registration.OffModCommands;
@@ -121,9 +119,7 @@ public final class HotwireClient implements ClientModInitializer {
 
         InitHookRuns.catchUpLaterWhile(() -> Minecraft.getInstance().level == null);
 
-        //? if >=26.1 {
         ServerLifecycleEvents.SERVER_STOPPED.register(server -> LoadStatusViews.release());
-        //?}
         ServerLifecycleEvents.SERVER_STARTING.register(server -> ActionJournal.get().note(ActionJournal.Action.OPEN,
                 ""));
         ClientPlayConnectionEvents.JOIN.register((handler, sender, client) -> {

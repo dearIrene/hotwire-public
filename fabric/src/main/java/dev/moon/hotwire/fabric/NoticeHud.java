@@ -6,6 +6,7 @@ import dev.moon.hotwire.fabric.screen.DevGameScreen;
 import dev.moon.hotwire.fabric.screen.GuiCanvas;
 import dev.moon.hotwire.fabric.screen.HotwireScreen;
 import dev.moon.hotwire.fabric.version.Bands;
+import dev.moon.hotwire.fabric.version.Spellings;
 import dev.moon.hotwire.ui.BuildMark;
 import dev.moon.hotwire.ui.CompareHud;
 import dev.moon.hotwire.ui.NoticeLayer;
@@ -52,8 +53,7 @@ public final class NoticeHud {
     }
 
     private static void addWhenShown() {
-        Minecraft minecraft = Minecraft.getInstance();
-        minecraft.execute(() -> {
+        Spellings.runSoon(() -> {
             if (!added) {
                 added = true;
                 addLayer();
@@ -66,7 +66,7 @@ public final class NoticeHud {
         Screen screen = ModViews.openScreen();
         if (screen instanceof HotwireScreen || screen instanceof DevGameScreen) {
             if (Notices.getShowing().isEmpty()) {
-                minecraft.execute(NoticeHud::takeOut);
+                Spellings.runSoon(NoticeHud::takeOut);
             }
             return;
         }
@@ -78,7 +78,7 @@ public final class NoticeHud {
         }
         LAYER.draw(canvas, width, height, System.nanoTime());
         if (LAYER.isEmpty() && !marking) {
-            minecraft.execute(NoticeHud::takeOut);
+            Spellings.runSoon(NoticeHud::takeOut);
         }
     }
 

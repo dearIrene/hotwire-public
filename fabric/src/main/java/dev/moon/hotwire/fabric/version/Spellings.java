@@ -19,6 +19,7 @@ import net.minecraft.client.gui.screens.inventory.tooltip.ClientTooltipComponent
 import net.minecraft.client.multiplayer.ClientLevel;
 import net.minecraft.client.player.LocalPlayer;
 import net.minecraft.core.Registry;
+import net.minecraft.network.chat.ClickEvent;
 import net.minecraft.network.chat.Component;
 import net.minecraft.resources.Identifier;
 import net.minecraft.resources.ResourceKey;
@@ -139,6 +140,22 @@ public final class Spellings {
         player.sendSystemMessage(text);
         //?} else {
         /*player.displayClientMessage(text, false);
+        *///?}
+    }
+
+    public static ClickEvent makeCommandClick(String command) {
+        //? if >=1.21.5 {
+        return new ClickEvent.RunCommand(command);
+        //?} else {
+        /*return new ClickEvent(ClickEvent.Action.RUN_COMMAND, command);
+        *///?}
+    }
+
+    public static boolean isShippedUnderOtherNames() {
+        //? if >=26.1 {
+        return false;
+        //?} else {
+        /*return true;
         *///?}
     }
 

@@ -1,6 +1,7 @@
 package dev.moon.hotwire.fabric;
 
 import dev.moon.hotwire.engine.LoadedMods;
+import dev.moon.hotwire.fabric.version.Spellings;
 import dev.moon.hotwire.ui.Lang;
 import dev.moon.hotwire.ui.Palette;
 import net.minecraft.client.Minecraft;
@@ -39,11 +40,7 @@ public final class UpdateChat {
             line.append(Component.literal(String.valueOf(text.charAt(at)))
                     .withStyle(style.withColor(TextColor.fromRgb(color & 0xFFFFFF))));
         }
-        //? if >=26.1 {
-        minecraft.player.sendSystemMessage(line);
-        //?} else {
-        /*minecraft.player.displayClientMessage(line, false);
-        *///?}
+        Spellings.tellPlayer(minecraft.player, line);
     }
 
     private static String stripBuild(String version) {
@@ -52,11 +49,7 @@ public final class UpdateChat {
     }
 
     private static ClickEvent openScreen() {
-        //? if >=1.21.5 {
-        return new ClickEvent.RunCommand("/hotwire");
-        //?} else {
-        /*return new ClickEvent(ClickEvent.Action.RUN_COMMAND, "/hotwire");
-        *///?}
+        return Spellings.makeCommandClick("/hotwire");
     }
 
     private static int blend(int from, int to, float fraction) {
