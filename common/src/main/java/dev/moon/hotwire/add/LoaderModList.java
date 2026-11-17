@@ -90,6 +90,7 @@ public final class LoaderModList {
                     } catch (ReflectiveOperationException | LinkageError e) {
                         mods.remove(container);
                         byId.remove(metadata.getId(), container);
+                        metadata.getProvides().forEach(provided -> byId.remove(provided, container));
                         throw new IllegalStateException("the loader could not make the " + name
                                 + " language adapter of " + metadata.getId() + ": " + e, e);
                     }
@@ -102,6 +103,7 @@ public final class LoaderModList {
                     } catch (Exception e) {
                         mods.remove(container);
                         byId.remove(metadata.getId(), container);
+                        metadata.getProvides().forEach(provided -> byId.remove(provided, container));
                         throw new IllegalStateException("the loader could not take the " + key + " entrypoint "
                                 + entrypoint.getValue() + " of " + metadata.getId() + ": " + e.getMessage(), e);
                     }
@@ -276,6 +278,8 @@ public final class LoaderModList {
             });
             asked.values().forEach(id -> {
                 ModContainerImpl container = Objects.requireNonNull(byId.remove(id));
+
+                container.getMetadata().getProvides().forEach(provided -> byId.remove(provided, container));
                 mods.remove(container);
                 HIDDEN.put(id, new HiddenMod(container, removed.getOrDefault(id, new HashMap<>())));
             });
@@ -336,7 +340,7 @@ public final class LoaderModList {
 
     public static void unregister(String id) {
         hide(List.of(id));
-        synchronized (HIDDEN) {
+        synchronized (FabricLoaderImpl.INSTANCE) {
             HIDDEN.remove(id);
         }
     }
@@ -397,6 +401,8 @@ public final class LoaderModList {
             sortAs(mods, MODS_ORDER);
             MODS.set(loader, mods);
             byId.put(id, hidden.container());
+            hidden.container().getMetadata().getProvides()
+                    .forEach(provided -> byId.putIfAbsent(provided, hidden.container()));
             hidden.entries().forEach((key, entries) -> {
                 List<Object> all = entryMap.computeIfAbsent(key, k -> new ArrayList<>());
                 all.addAll(entries);

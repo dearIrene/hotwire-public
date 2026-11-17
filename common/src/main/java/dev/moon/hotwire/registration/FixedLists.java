@@ -186,6 +186,8 @@ final class FixedLists {
         if (!(CollectionParts.read(field, holder) instanceof List<?> now) || !isPlainList(now)) {
             return null;
         }
+
+        boolean outer = walk.isInSmall();
         walk.setInSmall(now.size() <= CollectionReferences.WRAPPERS_IN);
         List<Object> retained = new ArrayList<>();
         Map<String, List<Removal>> out = new LinkedHashMap<>();
@@ -199,6 +201,7 @@ final class FixedLists {
                 retained.add(item);
             }
         }
+        walk.setInSmall(outer);
 
         if (retained.isEmpty() && now.stream().allMatch(item -> item instanceof Enum<?>)) {
             return null;

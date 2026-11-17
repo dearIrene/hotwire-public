@@ -188,6 +188,10 @@ public final class ZipBytes {
                 }
                 read += n;
             }
+
+            if (read < out.length) {
+                throw new ZipException(name + " ends early");
+            }
             return out;
         } catch (DataFormatException e) {
             throw new ZipException(name + " is not valid deflate data: " + e.getMessage());

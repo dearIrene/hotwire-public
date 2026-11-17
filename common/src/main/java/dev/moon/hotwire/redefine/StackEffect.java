@@ -4,7 +4,9 @@ import org.jspecify.annotations.Nullable;
 import org.objectweb.asm.Opcodes;
 import org.objectweb.asm.Type;
 import org.objectweb.asm.tree.AbstractInsnNode;
+import org.objectweb.asm.tree.FieldInsnNode;
 import org.objectweb.asm.tree.InvokeDynamicInsnNode;
+import org.objectweb.asm.tree.LabelNode;
 import org.objectweb.asm.tree.LdcInsnNode;
 import org.objectweb.asm.tree.MethodInsnNode;
 import org.objectweb.asm.tree.MultiANewArrayInsnNode;
@@ -17,6 +19,9 @@ final class StackEffect {
         int opcode = insn.getOpcode();
         if (opcode < 0) {
             return 0;
+        }
+        if (opcode == Opcodes.DUP2 || opcode == Opcodes.POP2) {
+            return findPairEffect(insn);
         }
         return switch (insn.getType()) {
             case AbstractInsnNode.METHOD_INSN -> {
@@ -43,6 +48,52 @@ final class StackEffect {
         };
     }
 
+    private static @Nullable Integer findPairEffect(AbstractInsnNode insn) {
+        AbstractInsnNode before = insn.getPrevious();
+        while (before != null && before.getOpcode() < 0 && !(before instanceof LabelNode)) {
+            before = before.getPrevious();
+        }
+        Boolean wide = before == null ? null : findPushedWide(before);
+        if (wide == null) {
+            return null;
+        }
+        int values = wide ? 1 : 2;
+        return insn.getOpcode() == Opcodes.POP2 ? -values : values;
+    }
+
+    private static @Nullable Boolean findPushedWide(AbstractInsnNode insn) {
+        int opcode = insn.getOpcode();
+        return switch (insn.getType()) {
+            case AbstractInsnNode.METHOD_INSN -> findWide(Type.getReturnType(((MethodInsnNode) insn).desc));
+            case AbstractInsnNode.INVOKE_DYNAMIC_INSN ->
+                    findWide(Type.getReturnType(((InvokeDynamicInsnNode) insn).desc));
+            case AbstractInsnNode.FIELD_INSN -> (opcode == Opcodes.GETSTATIC || opcode == Opcodes.GETFIELD)
+                    ? findWide(Type.getType(((FieldInsnNode) insn).desc)) : null;
+            case AbstractInsnNode.LDC_INSN -> ((LdcInsnNode) insn).cst instanceof Long
+                    || ((LdcInsnNode) insn).cst instanceof Double;
+            default -> switch (opcode) {
+                case Opcodes.LCONST_0, Opcodes.LCONST_1, Opcodes.DCONST_0, Opcodes.DCONST_1, Opcodes.LLOAD,
+                        Opcodes.DLOAD, Opcodes.LALOAD, Opcodes.DALOAD, Opcodes.LADD, Opcodes.DADD, Opcodes.LSUB,
+                        Opcodes.DSUB, Opcodes.LMUL, Opcodes.DMUL, Opcodes.LDIV, Opcodes.DDIV, Opcodes.LREM,
+                        Opcodes.DREM, Opcodes.LNEG, Opcodes.DNEG, Opcodes.LSHL, Opcodes.LSHR, Opcodes.LUSHR,
+                        Opcodes.LAND, Opcodes.LOR, Opcodes.LXOR, Opcodes.I2L, Opcodes.I2D, Opcodes.F2L, Opcodes.F2D,
+                        Opcodes.L2D, Opcodes.D2L -> true;
+                case Opcodes.ACONST_NULL, Opcodes.ICONST_M1, Opcodes.ICONST_0, Opcodes.ICONST_1, Opcodes.ICONST_2,
+                        Opcodes.ICONST_3, Opcodes.ICONST_4, Opcodes.ICONST_5, Opcodes.FCONST_0, Opcodes.FCONST_1,
+                        Opcodes.FCONST_2, Opcodes.BIPUSH, Opcodes.SIPUSH, Opcodes.ILOAD, Opcodes.FLOAD, Opcodes.ALOAD,
+                        Opcodes.IALOAD, Opcodes.FALOAD, Opcodes.AALOAD, Opcodes.BALOAD, Opcodes.CALOAD,
+                        Opcodes.SALOAD, Opcodes.IADD, Opcodes.ISUB, Opcodes.IMUL, Opcodes.IDIV, Opcodes.IREM,
+                        Opcodes.INEG, Opcodes.ISHL, Opcodes.ISHR, Opcodes.IUSHR, Opcodes.IAND, Opcodes.IOR,
+                        Opcodes.IXOR, Opcodes.L2I, Opcodes.ARRAYLENGTH, Opcodes.CHECKCAST -> false;
+                default -> null;
+            };
+        };
+    }
+
+    private static @Nullable Boolean findWide(Type type) {
+        return type.getSort() == Type.VOID ? null : Boolean.valueOf(type.getSize() == 2);
+    }
+
     private static @Nullable Integer findJumpEffect(int opcode) {
         return switch (opcode) {
             case Opcodes.GOTO -> 0;
@@ -66,7 +117,6 @@ final class StackEffect {
                     Opcodes.FCONST_0, Opcodes.FCONST_1, Opcodes.FCONST_2, Opcodes.DCONST_0, Opcodes.DCONST_1,
                     Opcodes.BIPUSH, Opcodes.SIPUSH, Opcodes.ILOAD, Opcodes.LLOAD, Opcodes.FLOAD, Opcodes.DLOAD,
                     Opcodes.ALOAD, Opcodes.NEW, Opcodes.DUP -> 1;
-            case Opcodes.DUP2 -> 2;
             case Opcodes.DUP_X1, Opcodes.DUP_X2 -> 1;
             case Opcodes.IADD, Opcodes.LADD, Opcodes.FADD, Opcodes.DADD, Opcodes.ISUB, Opcodes.LSUB, Opcodes.FSUB,
                     Opcodes.DSUB, Opcodes.IMUL, Opcodes.LMUL, Opcodes.FMUL, Opcodes.DMUL, Opcodes.IDIV, Opcodes.LDIV,
@@ -78,7 +128,6 @@ final class StackEffect {
                             Opcodes.MONITORENTER,
                     Opcodes.MONITOREXIT, Opcodes.ISTORE, Opcodes.LSTORE, Opcodes.FSTORE, Opcodes.DSTORE,
                     Opcodes.ASTORE -> -1;
-            case Opcodes.POP2 -> -2;
             case Opcodes.IASTORE, Opcodes.LASTORE, Opcodes.FASTORE, Opcodes.DASTORE, Opcodes.AASTORE, Opcodes.BASTORE,
                     Opcodes.CASTORE, Opcodes.SASTORE -> -3;
             default -> null;

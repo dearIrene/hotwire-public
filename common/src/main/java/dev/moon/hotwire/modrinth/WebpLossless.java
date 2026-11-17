@@ -47,6 +47,10 @@ public final class WebpLossless {
         while (at + 8 <= bytes.length) {
             String chunk = new String(bytes, at, 4, StandardCharsets.US_ASCII);
             int size = readInt(bytes, at + 4);
+
+            if (size < 0) {
+                throw new IOException("a WebP chunk of no size a file has");
+            }
             int body = at + 8;
             if (chunk.equals("VP8L")) {
                 return new Decoder(bytes, body, Math.min(size, bytes.length - body)).read();
@@ -212,6 +216,8 @@ public final class WebpLossless {
                 throw new IOException("a lossless WebP of a version this reader does not know");
             }
             Transform[] transforms = new Transform[4];
+
+            int[] widths = new int[4];
             int count = 0;
             int seen = 0;
             int imageWidth = this.width;
@@ -221,6 +227,7 @@ public final class WebpLossless {
                     throw new IOException("a transform repeated");
                 }
                 seen |= 1 << kind;
+                widths[count] = imageWidth;
                 transforms[count++] = switch (kind) {
                     case 0, 1 -> {
                         int blockBits = this.bits.read(3) + 2;
@@ -251,7 +258,7 @@ public final class WebpLossless {
             }
             int[] pixels = this.readImage(imageWidth, this.height, true);
             for (int i = count - 1; i >= 0; i--) {
-                pixels = this.takeOff(transforms[i], pixels, i == count - 1 ? imageWidth : this.width);
+                pixels = this.takeOff(transforms[i], pixels, widths[i]);
             }
             IconPixels made = IconPixels.of(this.width, this.height, pixels);
             if (made == null) {
@@ -426,15 +433,14 @@ public final class WebpLossless {
 
         private int[] takeOff(Transform transform, int[] pixels, int width) {
             return switch (transform.getKind()) {
-                case 0 -> this.takePredictionOff(transform, pixels);
-                case 1 -> this.takeColourOff(transform, pixels);
+                case 0 -> this.takePredictionOff(transform, pixels, width);
+                case 1 -> this.takeColourOff(transform, pixels, width);
                 case 2 -> takeSubtractGreenOff(pixels);
-                default -> this.takeIndexingOff(transform, pixels, width);
+                default -> this.takeIndexingOff(transform, pixels);
             };
         }
 
-        private int[] takePredictionOff(Transform transform, int[] pixels) {
-            int w = this.width;
+        private int[] takePredictionOff(Transform transform, int[] pixels, int w) {
             int h = this.height;
             int blockBits = transform.getBitsPerBlock();
             int[] out = pixels.clone();
@@ -513,8 +519,7 @@ public final class WebpLossless {
                     | clamp((a & 0xff) + ((a & 0xff) - (b & 0xff)) / 2);
         }
 
-        private int[] takeColourOff(Transform transform, int[] pixels) {
-            int w = this.width;
+        private int[] takeColourOff(Transform transform, int[] pixels, int w) {
             int blockBits = transform.getBitsPerBlock();
             int[] out = new int[pixels.length];
             for (int y = 0; y < this.height; y++) {
@@ -545,8 +550,9 @@ public final class WebpLossless {
             return out;
         }
 
-        private int[] takeIndexingOff(Transform transform, int[] pixels, int packedWidth) {
+        private int[] takeIndexingOff(Transform transform, int[] pixels) {
             int perByte = transform.getBitsPerBlock();
+            int packedWidth = countBlocks(this.width, perByte);
             int[] palette = transform.getData();
             int[] out = new int[this.width * this.height];
             int perPixel = 8 >> perByte;
