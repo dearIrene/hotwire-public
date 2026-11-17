@@ -6,7 +6,7 @@ import dev.moon.hotwire.engine.CrashGuard;
 import dev.moon.hotwire.fabric.CrashReports;
 import dev.moon.hotwire.fabric.FrameRecovery;
 import dev.moon.hotwire.fabric.ReloadFailures;
-import dev.moon.hotwire.fabric.RenderPassEnd;
+import dev.moon.hotwire.fabric.version.Frames;
 //? if >=1.21.2 {
 import dev.moon.hotwire.fabric.ResourceReload;
 //?}
@@ -41,7 +41,7 @@ public abstract class MinecraftMixin {
         try {
             original.call(game, advance);
         } catch (RuntimeException | Error e) {
-            RenderPassEnd.run();
+            Frames.endRenderPass();
             if (FrameRecovery.closeThrowingScreen(e)) {
                 CrashGuard.handle(e, CrashPolicy.Site.FRAME);
                 FrameRecovery.end(game);
