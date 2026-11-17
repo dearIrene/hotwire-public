@@ -52,10 +52,10 @@ public final class GameMixinCopy {
                     byte[] bytes = made != null ? made : originalOf.apply(internal);
                     return FailedAddJars.removeHiddenInterfaces(bytes);
                 },
-                FabricLoader.getInstance().getEnvironmentType().name(), decorations);
+                FabricLoader.getInstance().getEnvironmentType().name(), decorations,
+                LivePluginShapes::findByPackage, LivePluginShapes::findMixin);
         copy.foldInto(new ExtensionFolder(findLaunchedExtensions()));
         LivePluginShapes.bind(mixin);
-        copy.runPluginsLiveWith(LivePluginShapes::findByPackage, LivePluginShapes::findMixin);
         copy.remapWith(mixin.findObfuscationContext());
         copy.setLevel(MixinEnvironment.getCompatibilityLevel().name());
         LOGGER.info("[Hotwire] Mixin's copy resolves refmaps in the game's context {}", mixin.findObfuscationContext());

@@ -90,8 +90,8 @@ public final class MixinCopy implements AutoCloseable {
     private final Function<String, byte @Nullable []> more;
     private volatile ExtensionFolder folding = ExtensionFolder.NONE;
 
-    private volatile Function<String, @Nullable Object> livePlugins = mixinPackage -> null;
-    private volatile BiFunction<String, String, @Nullable Object> liveMixins = (target, mixin) -> null;
+    private final Function<String, @Nullable Object> livePlugins;
+    private final BiFunction<String, String, @Nullable Object> liveMixins;
 
     private final Map<String, SoftReference<byte[]>> read = new ConcurrentHashMap<>();
     private final Map<String, byte[]> replaced = new ConcurrentHashMap<>();
@@ -115,7 +115,11 @@ public final class MixinCopy implements AutoCloseable {
     private static final int MAX_REUSABLE = 1;
 
     public MixinCopy(List<Path> mixinJars, ClassLoader live, List<String> sharedPackages, String sessionId,
-            Function<String, byte @Nullable []> more, String side, Decorations decorations) {
+            Function<String, byte @Nullable []> more, String side, Decorations decorations,
+            Function<String, @Nullable Object> livePlugins,
+            BiFunction<String, String, @Nullable Object> liveMixins) {
+        this.livePlugins = livePlugins;
+        this.liveMixins = liveMixins;
         this.side = side;
         this.decorations = decorations;
         this.more = name -> {
@@ -324,12 +328,6 @@ public final class MixinCopy implements AutoCloseable {
     public Map<String, byte[]> mix(Set<String> targets, Map<String, byte[]> classes, Map<String, byte[]> resources,
             List<String> configs) throws MixinCopyException {
         return this.mixAll(targets, classes, resources, configs).classes();
-    }
-
-    public void runPluginsLiveWith(Function<String, @Nullable Object> plugins,
-            BiFunction<String, String, @Nullable Object> mixins) {
-        this.livePlugins = plugins;
-        this.liveMixins = mixins;
     }
 
     public void remapWith(@Nullable String obfuscationContext) {
