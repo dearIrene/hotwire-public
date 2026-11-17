@@ -370,11 +370,6 @@ public final class ModAdder {
         });
     }
 
-    private static String describeStartOnly(String kind, String name) {
-        return kind.equals("attributes") ? Lang.get("hotwire.add.later.attributes", name)
-                : Lang.get("hotwire.add.later.codecs", name);
-    }
-
     private String describeBecause(String asked, Path jar, String key) {
         String reason = this.findName(jar);
         String why = Lang.get(key, reason);
@@ -581,10 +576,9 @@ public final class ModAdder {
         }
         StartOnly startOnlyMixin = this.findStartOnlyMixin(brought);
         if (startOnlyMixin != null) {
-            String reason = this.findName(startOnlyMixin.jar());
-            String why = describeStartOnly(startOnlyMixin.kind(), reason);
-            return new AddDecision.Later(reason.equals(name) ? why : Lang.get("hotwire.add.needs_it", name, reason)
-                    + " " + why);
+            return new AddDecision.Later(this.describeBecause(name, startOnlyMixin.jar(),
+                    startOnlyMixin.kind().equals("attributes") ? "hotwire.add.later.attributes"
+                            : "hotwire.add.later.codecs"));
         }
         for (Part part : parts.values()) {
             Optional<String> missing = AddDependencies.findMissingRefusal(part.jar());
