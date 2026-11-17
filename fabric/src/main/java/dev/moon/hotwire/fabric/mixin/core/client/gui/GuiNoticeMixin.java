@@ -2,7 +2,9 @@ package dev.moon.hotwire.fabric.mixin.core.client.gui;
 
 //? if <1.21.6 {
 /*import dev.moon.hotwire.fabric.NoticeHud;
+import dev.moon.hotwire.fabric.screen.GuiCanvas;
 import net.minecraft.client.DeltaTracker;
+import net.minecraft.client.Minecraft;
 import net.minecraft.client.gui.GuiGraphics;
 import org.spongepowered.asm.mixin.injection.At;
 import org.spongepowered.asm.mixin.injection.Inject;
@@ -16,7 +18,9 @@ public abstract class GuiNoticeMixin {
     //? if <1.21.6 {
     /*@Inject(method = "render", at = @At("TAIL"), require = 0)
     private void hotwire$drawNotices(GuiGraphics graphics, DeltaTracker delta, CallbackInfo info) {
-        NoticeHud.drawOver(graphics);
+        if (NoticeHud.isAdded()) {
+            NoticeHud.draw(new GuiCanvas(graphics, Minecraft.getInstance().font));
+        }
     }
     *///?}
 }

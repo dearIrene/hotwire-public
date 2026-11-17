@@ -3,7 +3,7 @@ package dev.moon.hotwire.fabric.mixin.core.fabric.client.rendering;
 //? if >=26.1 {
 import com.llamalad7.mixinextras.injector.wrapoperation.Operation;
 import com.llamalad7.mixinextras.injector.wrapoperation.WrapOperation;
-import dev.moon.hotwire.fabric.registration.PictureInPictureRecorder;
+import dev.moon.hotwire.fabric.version.PictureInPicture;
 import net.fabricmc.fabric.api.client.rendering.v1.PictureInPictureRendererRegistry;
 import net.minecraft.client.gui.render.pip.PictureInPictureRenderer;
 import org.spongepowered.asm.mixin.injection.At;
@@ -19,7 +19,7 @@ public abstract class PictureInPictureRendererRegistryImplMixin {
     //? if >=26.1 {
     @Inject(method = "register", at = @At("HEAD"), cancellable = true)
     private static void hotwire$registerLate(PictureInPictureRendererRegistry.Factory factory, CallbackInfo ci) {
-        if (PictureInPictureRecorder.registerLate(factory)) {
+        if (PictureInPicture.registerLate(factory)) {
             ci.cancel();
         }
     }
@@ -28,7 +28,7 @@ public abstract class PictureInPictureRendererRegistryImplMixin {
             + "v1/PictureInPictureRendererRegistry$Factory;createRenderer"))
     private static PictureInPictureRenderer<?> hotwire$recordContext(PictureInPictureRendererRegistry.Factory factory,
             PictureInPictureRendererRegistry.Context context, Operation<PictureInPictureRenderer<?>> create) {
-        PictureInPictureRecorder.onMade(context);
+        PictureInPicture.onMade(context);
         return create.call(factory, context);
     }
     //?}

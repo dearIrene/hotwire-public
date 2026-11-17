@@ -5,17 +5,13 @@ import dev.moon.hotwire.dev.DevExtras;
 import dev.moon.hotwire.fabric.screen.DevGameScreen;
 import dev.moon.hotwire.fabric.screen.GuiCanvas;
 import dev.moon.hotwire.fabric.screen.HotwireScreen;
+import dev.moon.hotwire.fabric.version.Bands;
 import dev.moon.hotwire.ui.BuildMark;
 import dev.moon.hotwire.ui.CompareHud;
 import dev.moon.hotwire.ui.NoticeLayer;
 import dev.moon.hotwire.ui.Notices;
 import java.util.List;
 import java.util.function.Supplier;
-//? if >=1.21.6 {
-import net.fabricmc.fabric.api.client.rendering.v1.hud.HudElementRegistry;
-//?} else {
-/*import net.minecraft.client.gui.GuiGraphics;
-*///?}
 import net.minecraft.client.Minecraft;
 import net.minecraft.client.gui.screens.Screen;
 import org.jspecify.annotations.Nullable;
@@ -65,7 +61,7 @@ public final class NoticeHud {
         });
     }
 
-    private static void draw(GuiCanvas canvas) {
+    public static void draw(GuiCanvas canvas) {
         Minecraft minecraft = Minecraft.getInstance();
         Screen screen = ModViews.openScreen();
         if (screen instanceof HotwireScreen || screen instanceof DevGameScreen) {
@@ -93,29 +89,15 @@ public final class NoticeHud {
         }
     }
 
-    //? if >=1.21.6 {
     private static void addLayer() {
-        try {
-            HudElementRegistry.addLast(HotwireClient.NOTICES, (graphics, delta) -> draw(new GuiCanvas(graphics,
-                    Minecraft.getInstance().font)));
-        } catch (IllegalArgumentException e) {
-        }
+        Bands.addHudLayer(HotwireClient.NOTICES, NoticeHud::draw);
     }
 
     private static void removeLayer() {
-        HudElementRegistry.removeElement(HotwireClient.NOTICES);
-    }
-    //?} else {
-    /*private static void addLayer() {
+        Bands.removeHudLayer(HotwireClient.NOTICES);
     }
 
-    private static void removeLayer() {
+    public static boolean isAdded() {
+        return added;
     }
-
-    public static void drawOver(GuiGraphics graphics) {
-        if (added) {
-            draw(new GuiCanvas(graphics, Minecraft.getInstance().font));
-        }
-    }
-    *///?}
 }

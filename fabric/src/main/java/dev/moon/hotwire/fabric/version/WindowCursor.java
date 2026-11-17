@@ -1,13 +1,11 @@
-package dev.moon.hotwire.fabric.registration;
+package dev.moon.hotwire.fabric.version;
 
+import java.util.Set;
 //? if >=1.21.9 {
 import com.mojang.blaze3d.platform.Window;
 import com.mojang.blaze3d.platform.cursor.CursorType;
 import dev.moon.hotwire.redefine.FieldSlots;
 import dev.moon.hotwire.registration.Fields;
-//?}
-import java.util.Set;
-//? if >=1.21.9 {
 import net.minecraft.client.Minecraft;
 //?}
 
