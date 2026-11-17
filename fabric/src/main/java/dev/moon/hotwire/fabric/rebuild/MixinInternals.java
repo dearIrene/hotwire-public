@@ -2,9 +2,9 @@ package dev.moon.hotwire.fabric.rebuild;
 
 import dev.moon.hotwire.jvm.PrivateField;
 import dev.moon.hotwire.mixin_copy.MixinCopy;
+import dev.moon.hotwire.rebuild.TransformerChain;
 import java.io.IOException;
 import java.lang.reflect.Field;
-import java.lang.reflect.Modifier;
 import java.util.ArrayList;
 import java.util.ConcurrentModificationException;
 import java.util.HashMap;
@@ -24,8 +24,6 @@ import org.spongepowered.asm.service.ISyntheticClassInfo;
 import org.spongepowered.asm.service.MixinService;
 
 public final class MixinInternals {
-    private static final String TRANSFORMER = "org.spongepowered.asm.mixin.transformer.IMixinTransformer";
-
     private final String sessionId;
     private final List<String> configs;
     private final Object argsGenerator;
@@ -176,7 +174,7 @@ public final class MixinInternals {
     private static Object unwrap(Object transformer) {
         Object current = transformer;
         for (int depth = 0; depth < 4; depth++) {
-            if (isMixins(current)) {
+            if (TransformerChain.isMixins(current)) {
                 return current;
             }
             Object inner = findInnerTransformer(current);
@@ -189,55 +187,10 @@ public final class MixinInternals {
                 ));
     }
 
-    private static boolean hasField(Class<?> type, String name) {
-        for (Class<?> at = type; at != null; at = at.getSuperclass()) {
-            for (Field field : at.getDeclaredFields()) {
-                if (field.getName().equals(name)) {
-                    return true;
-                }
-            }
-        }
-        return false;
-    }
-
-    static boolean isMixins(Object transformer) {
-        return hasField(transformer.getClass(), "processor");
-    }
-
     private static @Nullable Object findInnerTransformer(Object wrapper) {
-        Field field = findInnerField(wrapper);
+        Field field = TransformerChain.findInnerField(wrapper);
         return field == null ? null : PrivateField.of(field.getDeclaringClass(), field.getName()).get(wrapper,
                 Object.class);
-    }
-
-    @SuppressWarnings("ReferenceEquality")
-    static @Nullable Field findInnerField(Object wrapper) {
-        for (Class<?> at = wrapper.getClass(); at != null; at = at.getSuperclass()) {
-            for (Field field : at.getDeclaredFields()) {
-                if (!Modifier.isStatic(field.getModifiers()) && isTransformer(field.getType())) {
-                    Object inner = PrivateField.of(at, field.getName()).get(wrapper, Object.class);
-                    if (inner != wrapper) {
-                        field.setAccessible(true);
-                        return field;
-                    }
-                }
-            }
-        }
-        return null;
-    }
-
-    private static boolean isTransformer(Class<?> type) {
-        for (Class<?> at = type; at != null; at = at.getSuperclass()) {
-            if (at.getName().equals(TRANSFORMER)) {
-                return true;
-            }
-            for (Class<?> face : at.getInterfaces()) {
-                if (isTransformer(face)) {
-                    return true;
-                }
-            }
-        }
-        return false;
     }
 
     @Nullable String findObfuscationContext() {

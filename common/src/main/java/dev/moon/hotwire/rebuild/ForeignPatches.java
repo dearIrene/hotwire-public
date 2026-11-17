@@ -1,11 +1,10 @@
-package dev.moon.hotwire.fabric.rebuild;
+package dev.moon.hotwire.rebuild;
 
 import dev.moon.hotwire.concurrent.Parallel;
 import dev.moon.hotwire.engine.ModPolicy;
 import dev.moon.hotwire.jar.JarPaths;
 import dev.moon.hotwire.jar.ModJar;
 import dev.moon.hotwire.jvm.LoadedClassList;
-import dev.moon.hotwire.rebuild.ConstantPools;
 import dev.moon.hotwire.registration.Owners;
 import java.lang.instrument.Instrumentation;
 import java.net.URISyntaxException;

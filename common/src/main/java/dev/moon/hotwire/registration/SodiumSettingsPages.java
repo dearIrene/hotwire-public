@@ -1,8 +1,7 @@
-package dev.moon.hotwire.fabric.registration;
+package dev.moon.hotwire.registration;
 
 import dev.moon.hotwire.add.LoaderModList;
-import dev.moon.hotwire.registration.GameRegistrations;
-import dev.moon.hotwire.registration.RegistrationJournal;
+import dev.moon.hotwire.seam.Games;
 import java.lang.reflect.Constructor;
 import java.lang.reflect.Field;
 import java.lang.reflect.Method;
@@ -15,7 +14,6 @@ import java.util.Set;
 import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.function.Function;
 import java.util.function.Supplier;
-import net.minecraft.client.Minecraft;
 import org.jspecify.annotations.Nullable;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -30,7 +28,7 @@ public final class SodiumSettingsPages {
         @Override
         public void restore() {
             if (BUILD_DUE.compareAndSet(false, true)) {
-                Minecraft.getInstance().execute(() -> {
+                Games.getNow().runOnGame(() -> {
                     BUILD_DUE.set(false);
                     buildAgain(Set.of());
                 });
@@ -52,7 +50,7 @@ public final class SodiumSettingsPages {
     }
 
     public static void takeOut(Collection<String> mods) {
-        GameHold.onGameBeforeFrameAndWait(() -> takeOutNow(mods), "settings pages left out");
+        Games.getNow().runBeforeFrameAndWait(() -> takeOutNow(mods), "settings pages left out");
     }
 
     private static void takeOutNow(Collection<String> mods) {

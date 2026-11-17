@@ -21,6 +21,7 @@ import dev.moon.hotwire.api.StoreQuery;
 import dev.moon.hotwire.api.SwitchPreview;
 import dev.moon.hotwire.api.SwitchProgress;
 import dev.moon.hotwire.api.SwitchResult;
+import dev.moon.hotwire.engine.LifecycleListeners;
 import dev.moon.hotwire.engine.ModPolicy;
 import dev.moon.hotwire.fabric.add.ModAdder;
 import dev.moon.hotwire.fabric.screen.PromptGameScreen;

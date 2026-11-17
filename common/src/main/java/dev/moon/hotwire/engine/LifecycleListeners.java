@@ -1,26 +1,22 @@
-package dev.moon.hotwire.fabric;
+package dev.moon.hotwire.engine;
 
 import dev.moon.hotwire.api.ModLifecycleListener;
 import dev.moon.hotwire.api.Registration;
-import dev.moon.hotwire.fabric.registration.GameHold;
 import dev.moon.hotwire.registration.Owners;
+import dev.moon.hotwire.seam.Games;
 import dev.moon.hotwire.switching.Listeners;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Set;
 import java.util.concurrent.ConcurrentHashMap;
-import java.util.concurrent.ExecutionException;
-import java.util.concurrent.TimeoutException;
 import java.util.function.Consumer;
 import java.util.function.Predicate;
-import net.minecraft.client.Minecraft;
 import org.jspecify.annotations.Nullable;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 public final class LifecycleListeners {
     private static final Logger LOGGER = LoggerFactory.getLogger(LifecycleListeners.class);
-    private static final long WAIT_SECONDS = 5;
     private static final Listeners<ModLifecycleListener> LISTENERS = new Listeners<>();
 
     private static final Set<String> TOLD_OFF = ConcurrentHashMap.newKeySet();
@@ -32,11 +28,11 @@ public final class LifecycleListeners {
     private LifecycleListeners() {
     }
 
-    static Registration add(ModLifecycleListener listener) {
+    public static Registration add(ModLifecycleListener listener) {
         return LISTENERS.add(listener, Owners.findModOrShipper(listener.getClass()));
     }
 
-    static Registration add(String modId, ModLifecycleListener listener) {
+    public static Registration add(String modId, ModLifecycleListener listener) {
         return LISTENERS.add(new ModLifecycleListener() {
             @Override
             public void prepareOff(List<String> ids) {
@@ -79,7 +75,7 @@ public final class LifecycleListeners {
         return LISTENERS.isListening(mod);
     }
 
-    static void setIsOn(Predicate<String> on) {
+    public static void setIsOn(Predicate<String> on) {
         isOn = on;
     }
 
@@ -165,18 +161,10 @@ public final class LifecycleListeners {
                     what, (began - asked) / 1_000_000, (System.nanoTime() - began) / 1_000_000,
                     System.currentTimeMillis());
         };
-        Minecraft client = Minecraft.getInstance();
-        if (client.isSameThread()) {
+        if (Games.getNow().isOnGameThread()) {
             each.run();
             return;
         }
-        try {
-            GameHold.await(GameHold.onGameBeforeNextFrame(each, client), WAIT_SECONDS, "Render thread",
-                    "the lifecycle listeners' " + what);
-        } catch (InterruptedException e) {
-            Thread.currentThread().interrupt();
-        } catch (ExecutionException | TimeoutException e) {
-            LOGGER.warn("[Hotwire] the lifecycle listeners' {} did not end in {} s", what, WAIT_SECONDS, e);
-        }
+        Games.getNow().runBeforeFrameAndWait(each, "the lifecycle listeners' " + what);
     }
 }

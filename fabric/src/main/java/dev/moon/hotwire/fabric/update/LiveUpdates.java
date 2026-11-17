@@ -1,12 +1,12 @@
 package dev.moon.hotwire.fabric.update;
 
 import dev.moon.hotwire.add.LoaderModList;
+import dev.moon.hotwire.add.OpenOneConfig;
+import dev.moon.hotwire.engine.LifecycleListeners;
 import dev.moon.hotwire.engine.ModPolicy;
-import dev.moon.hotwire.fabric.LifecycleListeners;
 import dev.moon.hotwire.fabric.ResourceReload;
 import dev.moon.hotwire.fabric.add.AddAssets;
 import dev.moon.hotwire.fabric.add.LaunchSteps;
-import dev.moon.hotwire.fabric.add.OpenOneConfig;
 import dev.moon.hotwire.jar.JarLookup;
 import dev.moon.hotwire.jar.ModJar;
 import dev.moon.hotwire.jar.ModJarException;

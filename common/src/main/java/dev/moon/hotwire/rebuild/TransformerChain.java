@@ -1,4 +1,4 @@
-package dev.moon.hotwire.fabric.rebuild;
+package dev.moon.hotwire.rebuild;
 
 import dev.moon.hotwire.jvm.PrivateField;
 import dev.moon.hotwire.redefine.Tripwire;
@@ -6,6 +6,7 @@ import java.lang.reflect.Field;
 import java.lang.reflect.InvocationHandler;
 import java.lang.reflect.InvocationTargetException;
 import java.lang.reflect.Method;
+import java.lang.reflect.Modifier;
 import java.lang.reflect.Proxy;
 import java.util.ArrayList;
 import java.util.Collection;
@@ -21,10 +22,12 @@ import net.fabricmc.loader.impl.launch.FabricLauncherBase;
 import org.jspecify.annotations.Nullable;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
-import org.spongepowered.asm.mixin.transformer.throwables.IllegalClassLoadError;
 
 public final class TransformerChain {
     private static final Logger LOGGER = LoggerFactory.getLogger(TransformerChain.class);
+    private static final String TRANSFORMER = "org.spongepowered.asm.mixin.transformer.IMixinTransformer";
+    private static final String CLASS_LOAD_REFUSAL =
+            "org.spongepowered.asm.mixin.transformer.throwables.IllegalClassLoadError";
 
     private static final ThreadLocal<@Nullable String> ALONE = new ThreadLocal<>();
 
@@ -59,8 +62,8 @@ public final class TransformerChain {
             List<Field> inners = new ArrayList<>();
             List<String> owners = new ArrayList<>();
             Object at = Objects.requireNonNull(head.get(knot), "no transformer in Knot");
-            while (!MixinInternals.isMixins(at)) {
-                Field inner = MixinInternals.findInnerField(at);
+            while (!isMixins(at)) {
+                Field inner = findInnerField(at);
                 if (inner == null || wrappers.size() == 4) {
                     LOGGER.warn("[Hotwire] Knot's transformer {} wraps no Mixin Hotwire can find; a mod's transformer"
                             + " runs as it is", at.getClass().getName());
@@ -188,7 +191,7 @@ public final class TransformerChain {
             try {
                 result = method.invoke(next, args);
             } catch (InvocationTargetException e) {
-                if (next == TransformerChain.this.mixins && e.getCause() instanceof IllegalClassLoadError
+                if (next == TransformerChain.this.mixins && isClassLoadRefusal(e.getCause())
                         && method.getName().equals("transformClassBytes") && args != null
                         && mixedAsItLoads.test((String) args[0])) {
                     return args[2];
@@ -210,5 +213,59 @@ public final class TransformerChain {
             }
             return TransformerChain.this.mixins;
         }
+    }
+
+    private static boolean isClassLoadRefusal(@Nullable Throwable thrown) {
+        for (Class<?> at = thrown == null ? null : thrown.getClass(); at != null; at = at.getSuperclass()) {
+            if (at.getName().equals(CLASS_LOAD_REFUSAL)) {
+                return true;
+            }
+        }
+        return false;
+    }
+
+    public static boolean hasField(Class<?> type, String name) {
+        for (Class<?> at = type; at != null; at = at.getSuperclass()) {
+            for (Field field : at.getDeclaredFields()) {
+                if (field.getName().equals(name)) {
+                    return true;
+                }
+            }
+        }
+        return false;
+    }
+
+    public static boolean isMixins(Object transformer) {
+        return hasField(transformer.getClass(), "processor");
+    }
+
+    @SuppressWarnings("ReferenceEquality")
+    public static @Nullable Field findInnerField(Object wrapper) {
+        for (Class<?> at = wrapper.getClass(); at != null; at = at.getSuperclass()) {
+            for (Field field : at.getDeclaredFields()) {
+                if (!Modifier.isStatic(field.getModifiers()) && isTransformer(field.getType())) {
+                    Object inner = PrivateField.of(at, field.getName()).get(wrapper, Object.class);
+                    if (inner != wrapper) {
+                        field.setAccessible(true);
+                        return field;
+                    }
+                }
+            }
+        }
+        return null;
+    }
+
+    public static boolean isTransformer(Class<?> type) {
+        for (Class<?> at = type; at != null; at = at.getSuperclass()) {
+            if (at.getName().equals(TRANSFORMER)) {
+                return true;
+            }
+            for (Class<?> face : at.getInterfaces()) {
+                if (isTransformer(face)) {
+                    return true;
+                }
+            }
+        }
+        return false;
     }
 }
