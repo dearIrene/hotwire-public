@@ -62,7 +62,9 @@ final class ProfileMenu {
 
     void refresh(List<String> relevant, Predicate<String> on) {
         List<Popup.Item> items = new ArrayList<>();
-        String current = null;
+
+        String noted = this.profiles.getCurrent();
+        String current = noted != null && this.profiles.planFor(noted, relevant, on).isEmpty() ? noted : null;
         List<String> names = this.profiles.getNames();
         if (names.isEmpty()) {
             items.add(new Popup.Item(Lang.get("hotwire.setup.none"), Palette.FAINT, null));
@@ -71,6 +73,7 @@ final class ProfileMenu {
             ProfileStore.ProfilePlan plan = this.profiles.planFor(name, relevant, on);
             if (plan.isEmpty() && current == null) {
                 current = name;
+                this.note(name);
             }
             boolean now = name.equals(current);
             items.add(new Popup.Item(name + "  " + (now ? Lang.get("hotwire.setup.current") : plan.describe()),
@@ -85,10 +88,20 @@ final class ProfileMenu {
     private void apply(String name) {
         ProfileStore.ProfilePlan plan = this.profiles.planFor(name, this.screen.getRelevantIds(), this.screen::isOn);
         if (plan.isEmpty()) {
+            this.note(name);
             this.screen.showMessage("'" + name + "' is already what is loaded.", false);
+            this.screen.refilter();
             return;
         }
         this.screen.applyProfile(name, plan);
+    }
+
+    private void note(String name) {
+        try {
+            this.profiles.setCurrent(name);
+        } catch (IOException e) {
+            this.screen.showMessage(Lang.get("hotwire.profiles.failed", e.getMessage()), true);
+        }
     }
 
     private void startNaming() {

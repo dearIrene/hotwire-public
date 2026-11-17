@@ -4,6 +4,7 @@ import dev.moon.hotwire.add.ModAdder;
 import dev.moon.hotwire.api.SwitchResult;
 import dev.moon.hotwire.concurrent.Tasks;
 import dev.moon.hotwire.config.HotwireSettings;
+import dev.moon.hotwire.plan.SwitchPlan;
 import dev.moon.hotwire.report.ActionJournal;
 import dev.moon.hotwire.report.Report;
 import dev.moon.hotwire.seam.Games;
@@ -14,6 +15,7 @@ import dev.moon.hotwire.switching.SwitchHistory;
 import dev.moon.hotwire.ui.Lang;
 import dev.moon.hotwire.ui.ModScreen;
 import dev.moon.hotwire.ui.ReopenPanel;
+import java.io.IOException;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Optional;
@@ -131,6 +133,7 @@ final class SwitchRequests {
 
             if (!quiet && !ids.isEmpty()) {
                 SwitchHistory.get().recordDone(result.result(), SwitchHistory.Cause.PLAYER, "");
+                this.followInProfile(result.result());
             }
             ModScreen current = this.screen.get();
             if (quiet) {
@@ -167,6 +170,17 @@ final class SwitchRequests {
             EngineApi.endSwitch(ended, EngineApi.toResult(result.result(), said), this.engine::isOn);
         }).whenComplete((done, error) -> EngineApi.endIfFailed(ended, error, this.engine::isOn));
         return ended;
+    }
+
+    private void followInProfile(ModSwitcher.Result result) {
+        if (result instanceof ModSwitcher.Result.Done done) {
+            try {
+                this.engine.profiles.follow(done.plan().order(),
+                        done.plan().direction() == SwitchPlan.Direction.OFF);
+            } catch (IOException e) {
+                LOGGER.warn("[Hotwire] the switch could not be written into the profile", e);
+            }
+        }
     }
 
     private String describeWhyAtStart(List<String> order, SwitchRunner runner) {
@@ -218,6 +232,7 @@ final class SwitchRequests {
                     + PlayerMessages.describe(done.check())).orElse(Lang.get("hotwire.reopen.world_open_again"));
             this.say.show(said, result.map(done -> PlayerMessages.isBad(done.result())).orElse(false), "");
             result.ifPresent(done -> SwitchHistory.get().recordDone(done.result(), SwitchHistory.Cause.PLAYER, ""));
+            result.ifPresent(done -> this.followInProfile(done.result()));
             this.engine.refreshScreen();
             EngineApi.endSwitch(ended, result.map(done -> EngineApi.toResult(done.result(), said))
                     .orElse(new SwitchResult(SwitchResult.Kind.DONE, List.of(), said)), this.engine::isOn);

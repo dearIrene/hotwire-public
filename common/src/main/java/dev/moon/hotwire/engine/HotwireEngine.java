@@ -571,6 +571,11 @@ public final class HotwireEngine implements ModScreenGame, AutoCloseable {
 
     @Override
     public void applyProfile(String name, ProfileStore.ProfilePlan plan) {
+        try {
+            this.profiles.setCurrent(name);
+        } catch (IOException e) {
+            LOGGER.warn("[Hotwire] the profile picked could not be written down", e);
+        }
         this.switches.run(runner -> {
             CheckedResult off = runner.turnOff(plan.turnOff());
             SwitchHistory.get().recordDone(off.result(), SwitchHistory.Cause.PROFILE, name);

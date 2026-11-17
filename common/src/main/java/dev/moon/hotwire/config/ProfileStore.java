@@ -7,6 +7,7 @@ import java.nio.file.Files;
 import java.nio.file.Path;
 import java.nio.file.StandardCopyOption;
 import java.util.ArrayList;
+import java.util.Collection;
 import java.util.Collections;
 import java.util.LinkedHashMap;
 import java.util.LinkedHashSet;
@@ -59,6 +60,9 @@ public final class ProfileStore {
     private final Map<String, Set<String>> profiles = new LinkedHashMap<>();
 
     private final Map<String, Set<String>> servers = new LinkedHashMap<>();
+
+    private @Nullable String current;
+    private static final String CURRENT = "#current";
     private boolean loaded;
 
     private boolean unread;
@@ -84,7 +88,29 @@ public final class ProfileStore {
             return;
         }
         this.profiles.put(cleaned, new LinkedHashSet<>(modsOn));
+        this.current = cleaned;
         this.write();
+    }
+
+    public synchronized @Nullable String getCurrent() {
+        this.load();
+        return this.current != null && this.profiles.containsKey(this.current) ? this.current : null;
+    }
+
+    public synchronized void setCurrent(String name) throws IOException {
+        this.load();
+        if (this.profiles.containsKey(name) && !name.equals(this.current)) {
+            this.current = name;
+            this.write();
+        }
+    }
+
+    public synchronized void follow(Collection<String> switched, boolean off) throws IOException {
+        String name = this.getCurrent();
+        Set<String> mods = name == null ? null : this.profiles.get(name);
+        if (mods != null && (off ? mods.removeAll(switched) : mods.addAll(switched))) {
+            this.write();
+        }
     }
 
     public synchronized boolean rename(String from, String to) throws IOException {
@@ -98,6 +124,9 @@ public final class ProfileStore {
         this.profiles.forEach((name, mods) -> rebuilt.put(name.equals(from) ? wanted : name, mods));
         this.profiles.clear();
         this.profiles.putAll(rebuilt);
+        if (from.equals(this.current)) {
+            this.current = wanted;
+        }
         Set<String> moved = this.servers.remove(from);
         if (moved != null) {
             this.servers.put(wanted, moved);
@@ -110,6 +139,9 @@ public final class ProfileStore {
         this.load();
         this.profiles.remove(name);
         this.servers.remove(name);
+        if (name.equals(this.current)) {
+            this.current = null;
+        }
         this.write();
     }
 
@@ -211,6 +243,10 @@ public final class ProfileStore {
     private void parse(String line) {
         String trimmed = line.strip();
         int split = trimmed.indexOf('=');
+        if (split > 0 && trimmed.substring(0, split).strip().equals(CURRENT)) {
+            this.current = trimmed.substring(split + 1).strip();
+            return;
+        }
         if (trimmed.startsWith("#") || split <= 0) {
             return;
         }
@@ -247,6 +283,9 @@ public final class ProfileStore {
             this.unread = false;
         }
         List<String> lines = new ArrayList<>(HEAD);
+        if (this.current != null && this.profiles.containsKey(this.current)) {
+            lines.add(CURRENT + " = " + this.current);
+        }
         this.profiles.forEach((name, mods) -> lines.add(name + " = " + String.join(", ", mods)));
         this.servers.forEach((name, of) -> {
             if (!of.isEmpty() && this.profiles.containsKey(name)) {
