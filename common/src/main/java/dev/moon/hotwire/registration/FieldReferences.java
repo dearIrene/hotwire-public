@@ -519,7 +519,8 @@ public final class FieldReferences {
     }
 
     public boolean hasRemovedFrom(String mod) {
-        return this.replacements.getOrDefault(mod, List.of()).stream().anyMatch(one -> makes(one.field()));
+        return this.replacements.getOrDefault(mod, List.of()).stream().anyMatch(one -> makes(one.field()))
+                || this.loadedChecks.hasMadeWithout(mod);
     }
 
     private static boolean makes(FieldSlots.Slot field) {

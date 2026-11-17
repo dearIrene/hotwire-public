@@ -33,7 +33,7 @@ final class LoadedCheckAnswers {
     private static final Set<String> LOOKUPS = Set.of("forName", "loadClass", "getMethod", "getDeclaredMethod",
             "getField", "getDeclaredField");
 
-    private record ClearedFlag(FieldSlots.Slot field, Object old, @Nullable Object put) {
+    private record ClearedFlag(FieldSlots.Slot field, Object old, @Nullable Object put, boolean made) {
     }
 
     private final Instrumentation instrumentation;
@@ -220,7 +220,8 @@ final class LoadedCheckAnswers {
             this.writer.write(field, null, now);
             changed.add(type.getSimpleName() + "." + field.getName());
             if (ask.kind() == LoadedChecks.Kind.SET_ONCE && old != null) {
-                this.cleared.computeIfAbsent(mod, any -> new ArrayList<>()).add(new ClearedFlag(field, old, now));
+                this.cleared.computeIfAbsent(mod, any -> new ArrayList<>())
+                        .add(new ClearedFlag(field, old, now, false));
             }
         } catch (NoSuchElementException e) {
             LOGGER.debug("[Hotwire] {}.{} is left as it is: its setup needs {} present", type.getName(),
@@ -255,10 +256,12 @@ final class LoadedCheckAnswers {
                 }
 
                 Object nothing = StandIns.fits(field.getType()) ? StandIns.of(field.getType()) : null;
+                boolean made = false;
 
                 if (nothing == null) {
                     Object own = this.defaults.find(value, mod).orElse(null);
                     nothing = own != null && field.getType().isInstance(own) ? own : null;
+                    made = nothing != null;
                 }
                 if (nothing == null && !ClassFileSummary.isOnlyReadTestedForNull(bytes, field.getName(), descriptor)) {
                     LOGGER.info("[Hotwire] {}.{} keeps what it looked up: its class reads it with no test for null",
@@ -267,7 +270,8 @@ final class LoadedCheckAnswers {
                 }
                 this.writer.write(field, null, nothing);
                 changed.add(type.getSimpleName() + "." + field.getName());
-                this.cleared.computeIfAbsent(mod, any -> new ArrayList<>()).add(new ClearedFlag(field, value, nothing));
+                this.cleared.computeIfAbsent(mod, any -> new ArrayList<>())
+                        .add(new ClearedFlag(field, value, nothing, made));
             } catch (IllegalAccessException | RuntimeException e) {
                 LOGGER.warn("[Hotwire] {}.{} keeps what it looked up: {}", type.getName(), field.getName(),
                         e.toString());
@@ -281,6 +285,10 @@ final class LoadedCheckAnswers {
             case Class<?> type -> type;
             default -> value.getClass();
         };
+    }
+
+    boolean hasMadeWithout(String mod) {
+        return this.cleared.getOrDefault(mod, List.of()).stream().anyMatch(ClearedFlag::made);
     }
 
     private void giveBack(String mod, List<String> changed) {

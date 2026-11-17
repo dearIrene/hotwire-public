@@ -179,17 +179,18 @@ public final class HandlerGuards {
 
     private static void noteBehaving(String internalName, ClassNode node, boolean rebuilt) {
         Map<MethodNode, String> working = findWorking(node);
+
+        for (MethodNode method : node.methods) {
+            String mixin = (method.access & Opcodes.ACC_BRIDGE) != 0 ? findMerged(method) : null;
+            if (mixin != null) {
+                working.put(method, mixin);
+            }
+        }
         Set<String> behaving;
         if (rebuilt) {
             OwnMethods.forget(internalName);
             behaving = Set.copyOf(working.values());
         } else {
-            for (MethodNode method : node.methods) {
-                String mixin = (method.access & Opcodes.ACC_BRIDGE) != 0 ? findMerged(method) : null;
-                if (mixin != null) {
-                    working.put(method, mixin);
-                }
-            }
             behaving = OwnMethods.note(internalName, node, working);
         }
         ClassState.of(internalName).behaving = behaving.isEmpty() ? null : behaving;
