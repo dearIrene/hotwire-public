@@ -300,7 +300,7 @@ final class BuildPicker {
             }
         } else if (this.modes.getChosen() == COMPARE) {
             if (this.picked != shownMod.runningBuild() && shownMod.hasBuild(this.picked)) {
-                this.host.startCompare(id, shownMod.runningBuild(), this.picked);
+                this.host.startCompare(id, this.picked);
             }
         } else if (this.isRestoring()) {
             if (!shownMod.hasBuild(this.picked) || this.picked == shownMod.codeBuild()) {

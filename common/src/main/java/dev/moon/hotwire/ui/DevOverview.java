@@ -73,7 +73,7 @@ final class DevOverview {
         String id = shownMod.id();
         switch (name) {
             case "back" -> this.host.revertTo(id, this.before);
-            case "ab" -> this.host.startCompare(id, this.running, this.before);
+            case "ab" -> this.host.startCompare(id, this.before);
             case "switch" -> this.host.switchCompare(id);
             case "stop" -> this.host.stopCompare(id);
             case "reload" -> this.host.reloadNow(id);

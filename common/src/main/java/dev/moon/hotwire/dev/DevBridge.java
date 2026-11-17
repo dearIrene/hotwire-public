@@ -511,7 +511,7 @@ public final class DevBridge implements Function<String, String> {
                 if (build < 0 || !mod.hasBuild(build) || build == mod.runningBuild()) {
                     return fail("start takes a kept build other than the running one; builds lists them");
                 }
-                this.host.startCompare(mod.id(), mod.runningBuild(), build);
+                this.host.startCompare(mod.id(), build);
             }
             case "switch" -> this.host.switchCompare(mod.id());
             case "stop" -> this.host.stopCompare(mod.id());

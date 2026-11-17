@@ -32,7 +32,7 @@ public interface DevHost {
     default void restoreCleared(String id) {
     }
 
-    default void startCompare(String id, int a, int b) {
+    default void startCompare(String id, int b) {
     }
 
     default void switchCompare(String id) {

@@ -373,7 +373,7 @@ public final class DevSession implements DevHost, AutoCloseable {
     }
 
     @Override
-    public void startCompare(String id, int asked, int b) {
+    public void startCompare(String id, int b) {
         SessionMod mod = this.mods.get(id);
         if (mod != null) {
             this.compares.start(mod, b);
