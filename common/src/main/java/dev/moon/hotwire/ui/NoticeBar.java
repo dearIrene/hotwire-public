@@ -109,11 +109,21 @@ final class NoticeBar extends Element {
             }
             return;
         }
-        String title = MessageLine.getFirstSentence(flat);
+        String title = getFirstSentence(flat);
         String detail = hint.isEmpty() ? flat.substring(title.length()).strip() : hint;
         Notice notice = (failure ? Notice.ofBad(title, detail) : Notice.ofDone(title, detail)).withAction(action);
         this.lastSaid = notice;
         Notices.show(notice);
+    }
+
+    private static String getFirstSentence(String flat) {
+        int end = flat.indexOf(". ");
+        return end > 20 ? flat.substring(0, end + 1) : flat;
+    }
+
+    private static List<String> wrap(Canvas canvas, String text, int width, int most) {
+        List<String> lines = Text.findLines(canvas, text, width);
+        return lines.size() > most ? new ArrayList<>(lines.subList(0, most)) : lines;
     }
 
     @Override
@@ -228,8 +238,8 @@ final class NoticeBar extends Element {
             card.width = Math.max(NARROWEST, Math.min(WIDEST, 3 + PAD * 3 + Math.max(
                     canvas.measureText(notice.title()), detailed ? canvas.measureText(notice.detail()) : 0)));
             int w = card.width;
-            List<String> titleLines = MessageLine.wrap(canvas, notice.title(), w - 3 - PAD * 3, TITLE_LINES);
-            List<String> detailLines = detailed ? MessageLine.wrap(canvas, notice.detail(), w - 3 - PAD * 3,
+            List<String> titleLines = wrap(canvas, notice.title(), w - 3 - PAD * 3, TITLE_LINES);
+            List<String> detailLines = detailed ? wrap(canvas, notice.detail(), w - 3 - PAD * 3,
                     DETAIL_LINES) : List.of();
             card.height = 15 + titleLines.size() * LINE + (detailed ? 3 + detailLines.size() * LINE : 0)
                     + (action == null ? 0 : 3 + LINE);
