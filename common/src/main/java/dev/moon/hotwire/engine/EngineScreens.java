@@ -1,9 +1,7 @@
-package dev.moon.hotwire.fabric;
+package dev.moon.hotwire.engine;
 
-import dev.moon.hotwire.engine.JvmParts;
-import dev.moon.hotwire.engine.StoreUpdates;
-import dev.moon.hotwire.fabric.screen.HotwireScreen;
 import dev.moon.hotwire.registration.Fields;
+import dev.moon.hotwire.seam.Games;
 import dev.moon.hotwire.ui.ModScreen;
 import dev.moon.hotwire.ui.ScreenOpenTimer;
 import dev.moon.hotwire.update.SwapAtClose;
@@ -14,8 +12,6 @@ import java.io.UncheckedIOException;
 import java.nio.file.Path;
 import java.util.List;
 import java.util.concurrent.CompletableFuture;
-import net.minecraft.client.Minecraft;
-import net.minecraft.client.gui.screens.Screen;
 import org.jspecify.annotations.Nullable;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -28,21 +24,21 @@ public final class EngineScreens {
         this.owner = owner;
     }
 
-    public Screen makeScreen(@Nullable Screen back) {
+    public Object makeScreen(@Nullable Object back) {
         ScreenOpenTimer timer = new ScreenOpenTimer();
-        return new HotwireScreen(() -> this.buildScreen(back, timer), timer);
+        return this.owner.units.wrapScreen(() -> this.buildScreen(back, timer), timer);
     }
 
-    public Screen makeDeveloperSettings(@Nullable Screen back) {
+    public Object makeDeveloperSettings(@Nullable Object back) {
         ScreenOpenTimer timer = new ScreenOpenTimer();
-        return new HotwireScreen(() -> {
+        return this.owner.units.wrapScreen(() -> {
             ModScreen opened = this.buildScreen(back, timer);
             opened.openDeveloperSettings();
             return opened;
         }, timer);
     }
 
-    private ModScreen buildScreen(@Nullable Screen back, ScreenOpenTimer timer) {
+    private ModScreen buildScreen(@Nullable Object back, ScreenOpenTimer timer) {
         for (String remaining : SwapAtClose.getUnfinished(this.owner.updateQueue)) {
             this.owner.showMessage(remaining, true);
         }
@@ -76,15 +72,15 @@ public final class EngineScreens {
     void onWorldClosed(boolean closed) {
         this.owner.progress.setWorldClosed(closed);
         ModScreen current = this.owner.screen;
-        if (closed && current != null && !Minecraft.getInstance().isSameThread()) {
-            Minecraft.getInstance().submit(() -> ModViews.show(new HotwireScreen(current, new ScreenOpenTimer())))
-                    .join();
+        if (closed && current != null && !Games.getNow().isOnGameThread()) {
+            Games.getNow().runOnGameAndWait(() -> Games.getNow().showScreen(
+                    this.owner.units.wrapScreen(current, new ScreenOpenTimer())));
             LOGGER.info("[Hotwire] the world is closed for the work; Hotwire's screen is up until it opens"
                     + " again");
         }
     }
 
-    void openOnUrgentUpdate(UrgentUpdate urgent) {
+    public void openOnUrgentUpdate(UrgentUpdate urgent) {
         this.owner.open();
         ModScreen current = this.owner.screen;
         if (current != null) {

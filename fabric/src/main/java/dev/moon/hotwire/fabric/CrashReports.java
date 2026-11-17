@@ -2,6 +2,7 @@ package dev.moon.hotwire.fabric;
 
 import dev.moon.hotwire.concurrent.Tasks;
 import dev.moon.hotwire.config.Flags;
+import dev.moon.hotwire.engine.CrashNotice;
 import dev.moon.hotwire.fabric.screen.CrashPopup;
 import dev.moon.hotwire.report.GameReports;
 import dev.moon.hotwire.report.ReportZips;

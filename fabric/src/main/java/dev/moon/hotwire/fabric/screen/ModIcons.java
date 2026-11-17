@@ -231,6 +231,7 @@ public final class ModIcons implements AutoCloseable, IconSource {
     }
 
     @SuppressWarnings("FutureReturnValueIgnored")
+    @Override
     public void readAhead(Collection<String> ids) {
         ids.forEach(id -> this.read(this.sources.computeIfAbsent(id, this::getSourceOf)));
     }

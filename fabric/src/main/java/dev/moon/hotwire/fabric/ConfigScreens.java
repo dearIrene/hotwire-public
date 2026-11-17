@@ -1,5 +1,6 @@
 package dev.moon.hotwire.fabric;
 
+import dev.moon.hotwire.engine.SettingsScreens;
 import dev.moon.hotwire.registration.Owners;
 import dev.moon.hotwire.ui.Lang;
 import dev.moon.hotwire.update.LiveNames;
@@ -22,7 +23,7 @@ import org.jspecify.annotations.Nullable;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
-final class ConfigScreens {
+final class ConfigScreens implements SettingsScreens {
     private static final Logger LOGGER = LoggerFactory.getLogger(ConfigScreens.class);
     private static final String MENU_API = "com.terraformersmc.modmenu.api.ModMenuApi";
     private static final String MENU_FACTORY = "com.terraformersmc.modmenu.api.ConfigScreenFactory";
@@ -54,11 +55,13 @@ final class ConfigScreens {
         this.sayBad = sayBad;
     }
 
-    Set<String> findOpenable() {
+    @Override
+    public Set<String> findOpenable() {
         return Set.copyOf(this.findScreens().keySet());
     }
 
-    boolean open(String id) {
+    @Override
+    public boolean open(String id) {
         Screen hotwire = ModViews.openScreen();
         SettingsScreen settings = this.findScreens().get(id);
         if (hotwire == null || settings == null) {

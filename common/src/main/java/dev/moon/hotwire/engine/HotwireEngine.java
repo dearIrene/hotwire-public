@@ -1,42 +1,21 @@
-package dev.moon.hotwire.fabric;
+package dev.moon.hotwire.engine;
 
 import dev.moon.hotwire.add.ModAdder;
 import dev.moon.hotwire.api.SwitchResult;
+import dev.moon.hotwire.classfile.GameNames;
 import dev.moon.hotwire.concurrent.Tasks;
 import dev.moon.hotwire.config.HotwireSettings;
 import dev.moon.hotwire.config.ProfileStore;
-import dev.moon.hotwire.engine.CacheFillControl;
-import dev.moon.hotwire.engine.CloseGuard;
-import dev.moon.hotwire.engine.DevEngine;
-import dev.moon.hotwire.engine.DevSetups;
-import dev.moon.hotwire.engine.DisabledMods;
-import dev.moon.hotwire.engine.FolderJars;
-import dev.moon.hotwire.engine.InstalledModCatalog;
-import dev.moon.hotwire.engine.InstalledMods;
-import dev.moon.hotwire.engine.JvmParts;
-import dev.moon.hotwire.engine.LoadedMods;
-import dev.moon.hotwire.engine.ModChanges;
-import dev.moon.hotwire.engine.ModPolicy;
-import dev.moon.hotwire.engine.ModRows;
-import dev.moon.hotwire.engine.ModTripwire;
-import dev.moon.hotwire.engine.NextStartQueue;
-import dev.moon.hotwire.engine.StoreJars;
-import dev.moon.hotwire.engine.StoreUpdates;
-import dev.moon.hotwire.fabric.add.WorldReopen;
-import dev.moon.hotwire.fabric.registration.ModLifecycle;
-import dev.moon.hotwire.fabric.screen.HotwireScreen;
-import dev.moon.hotwire.fabric.screen.ModIcons;
-import dev.moon.hotwire.fabric.screen.WebLinks;
 import dev.moon.hotwire.modrinth.Downloads;
 import dev.moon.hotwire.plan.ModGraph;
 import dev.moon.hotwire.redefine.LoadedClassBytes;
 import dev.moon.hotwire.redefine.Tripwire;
-import dev.moon.hotwire.registration.GameRegistrations;
 import dev.moon.hotwire.report.ActionJournal;
 import dev.moon.hotwire.report.GameEnvironment;
 import dev.moon.hotwire.report.GameLog;
 import dev.moon.hotwire.report.GameReports;
 import dev.moon.hotwire.report.ReportZips;
+import dev.moon.hotwire.seam.Games;
 import dev.moon.hotwire.store.ModStore;
 import dev.moon.hotwire.store.UpdateCheck;
 import dev.moon.hotwire.switching.CheckedResult;
@@ -47,6 +26,7 @@ import dev.moon.hotwire.ui.AddMode;
 import dev.moon.hotwire.ui.AddPreview;
 import dev.moon.hotwire.ui.CacheHost;
 import dev.moon.hotwire.ui.Canvas;
+import dev.moon.hotwire.ui.IconSource;
 import dev.moon.hotwire.ui.JarHost;
 import dev.moon.hotwire.ui.Lang;
 import dev.moon.hotwire.ui.LastSwitch;
@@ -81,13 +61,6 @@ import java.util.Set;
 import java.util.concurrent.CompletableFuture;
 import java.util.function.Consumer;
 import net.fabricmc.loader.api.FabricLoader;
-import net.minecraft.client.Minecraft;
-import net.minecraft.client.gui.screens.Screen;
-import net.minecraft.client.multiplayer.ServerData;
-import net.minecraft.client.resources.sounds.SimpleSoundInstance;
-import net.minecraft.client.server.IntegratedServer;
-import net.minecraft.sounds.SoundEvent;
-import net.minecraft.sounds.SoundEvents;
 import org.jspecify.annotations.Nullable;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -95,7 +68,7 @@ import org.slf4j.LoggerFactory;
 public final class HotwireEngine implements ModScreenGame, AutoCloseable {
     private final EngineScreens engineScreens = new EngineScreens(this);
 
-    sealed interface Bound {
+    public sealed interface Bound {
         record Ready(JvmParts parts) implements Bound {
         }
 
@@ -114,22 +87,22 @@ public final class HotwireEngine implements ModScreenGame, AutoCloseable {
     private final PendingChanges pending;
     final ProfileStore profiles;
     private final HotwireSettings settings;
-    private final DevMode dev;
-    final Tasks tasks = new Tasks(1, Minecraft.getInstance());
+    final EngineGame units;
+    private final DevControls dev;
+    final Tasks tasks = new Tasks(1, Games.getNow()::runOnGame);
     @Nullable ModScreen screen;
 
-    @Nullable Screen under;
+    @Nullable Object under;
     final StoreJars storeJars;
     final SelfUpdateRequests selfUpdate;
     final StoreScreens stores;
     private final JarRequests jars;
     private final ModRows rows;
-    private final ModIcons icons;
+    private final IconSource icons;
     private final ModChanges changes;
     private final CacheFillControl cacheFill = new CacheFillControl(this::findParts, this::findStoreCacheView,
             this::getPending);
-    private final ConfigScreens configScreens = new ConfigScreens(this::isOn, this::nameOfMod,
-            text -> this.showMessage(text, true));
+    private final SettingsScreens configScreens;
     private final DisabledMods disabled;
     private final SwitchRequests switches;
     private final FolderJars folderJars;
@@ -138,9 +111,12 @@ public final class HotwireEngine implements ModScreenGame, AutoCloseable {
         return this.pending;
     }
 
-    HotwireEngine(InstalledMods installed, Progress progress, GameReports reports, UpdateFolders folders,
-            UpdateQueue queue, HotwireSettings settings, ModIcons icons, Bound bound) {
+    public HotwireEngine(InstalledMods installed, Progress progress, GameReports reports, UpdateFolders folders,
+            UpdateQueue queue, HotwireSettings settings, IconSource icons, Bound bound, EngineGame units) {
+        this.units = units;
         this.installed = installed;
+        this.configScreens = units.makeSettingsScreens(this::isOn, this::nameOfMod,
+                text -> this.showMessage(text, true));
         PlayerMessages.setListed(installed::isTopLevel);
         this.icons = icons;
         this.settings = settings;
@@ -151,20 +127,19 @@ public final class HotwireEngine implements ModScreenGame, AutoCloseable {
         this.updateQueue = queue;
         this.pending = new PendingChanges(queue, folders);
         this.bound = bound;
-        this.dev = new DevMode(settings, this.tasks, new DevEngine(this::findParts, this::getSwitchRefusal, installed,
-                settings));
-        this.dev.setSettingsScreen(this.engineScreens::makeDeveloperSettings);
+        this.dev = units.makeDevControls(settings, this.tasks, new DevEngine(this::findParts, this::getSwitchRefusal,
+                installed, settings), this.engineScreens::makeDeveloperSettings);
 
         if (bound instanceof Bound.Ready ready) {
             ready.parts().instrumentation().addTransformer(ready.parts().loadTimeMixer());
-            EarlyDefinitions.stop();
+            units.stopEarlyLoads();
         }
         this.changes = new ModChanges(this.findParts(), this.getSwitchRefusal(), installed, this.tasks,
                 new NextStartQueue(installed, queue, folders));
         this.storeJars = new StoreJars(installed, this.changes, this::findHost, () -> this.screen,
                 this::getStore, this::showMessage, progress, this::refreshScreen);
         this.stores = new StoreScreens(this, installed, this.storeJars, icons);
-        this.selfUpdate = new SelfUpdateRequests(this.storeJars, () -> this.screen, this::showMessage);
+        this.selfUpdate = new SelfUpdateRequests(this.storeJars, () -> this.screen, this::showMessage, units);
 
         if (settings.isUpdateCheckOn()) {
             this.selfUpdate.start();
@@ -172,7 +147,7 @@ public final class HotwireEngine implements ModScreenGame, AutoCloseable {
         this.jars = new JarRequests(this, this.changes, progress, this.tasks, this.storeJars);
         this.rows = new ModRows(installed, this::isOn, this.pending, this::findParts);
 
-        WorldReopen.tellClosedTo(closed -> {
+        units.tellWorldClosedTo(closed -> {
             this.engineScreens.onWorldClosed(closed);
             if (!closed) {
                 this.forgetWorld();
@@ -186,7 +161,7 @@ public final class HotwireEngine implements ModScreenGame, AutoCloseable {
         this.folderJars = new FolderJars(folders.mods(), installed, queue, progress, this::findHost);
     }
 
-    void cleanUpdateFolders() {
+    public void cleanUpdateFolders() {
         try {
             Path hotwire = FabricLoader.getInstance().getGameDir().resolve("hotwire");
             SwapAtClose.saveLastLogs(this.updateFolders.swapper(), hotwire.resolve("logs"));
@@ -202,8 +177,8 @@ public final class HotwireEngine implements ModScreenGame, AutoCloseable {
     }
 
     public void open() {
-        Screen current = ModViews.openScreen();
-        ModViews.show(this.engineScreens.makeScreen(current instanceof HotwireScreen ? this.under : current));
+        Games.getNow().showScreen(this.engineScreens.makeScreen(Games.getNow().isHotwireShown() ? this.under
+                : this.units.findOpenScreen()));
 
         this.storeJars.offerNext();
         this.folderJars.offerNext();
@@ -226,7 +201,7 @@ public final class HotwireEngine implements ModScreenGame, AutoCloseable {
         this.storeJars.updateAll(offers);
     }
 
-    List<String> findSwitchable() {
+    public List<String> findSwitchable() {
         return this.installed.getGraph().getIds().stream().filter(ModPolicy::isSwitchable).toList();
     }
 
@@ -248,7 +223,7 @@ public final class HotwireEngine implements ModScreenGame, AutoCloseable {
 
     @Override
     public void close() {
-        CrashReports.markClosing();
+        this.units.markClosing();
         this.dev.close();
         this.folderJars.close();
         JvmParts parts = this.findParts();
@@ -257,7 +232,7 @@ public final class HotwireEngine implements ModScreenGame, AutoCloseable {
         this.disabled.close();
 
         Tripwire.releaseAll();
-        ModLifecycle.onGameStopping(off, GameRegistrations.getJournal(), Minecraft.getInstance());
+        this.units.runGameStopping(off);
         CloseGuard.watch(Thread.currentThread(), !off.isEmpty());
         if (parts != null) {
             parts.instrumentation().removeTransformer(parts.loadTimeMixer());
@@ -274,7 +249,7 @@ public final class HotwireEngine implements ModScreenGame, AutoCloseable {
         };
     }
 
-    @Nullable JvmParts findParts() {
+    public @Nullable JvmParts findParts() {
         return this.bound instanceof Bound.Ready ready ? ready.parts() : null;
     }
 
@@ -282,7 +257,7 @@ public final class HotwireEngine implements ModScreenGame, AutoCloseable {
         return this.bound instanceof Bound.Refused refused ? refused.why() : "";
     }
 
-    @Nullable ModScreen findScreen() {
+    public @Nullable ModScreen findScreen() {
         return this.screen;
     }
 
@@ -294,36 +269,36 @@ public final class HotwireEngine implements ModScreenGame, AutoCloseable {
         return this.isOn(id);
     }
 
-    HotwireSettings getSettings() {
+    public HotwireSettings getSettings() {
         return this.settings;
     }
 
-    boolean isOn(String id) {
+    public boolean isOn(String id) {
         JvmParts parts = this.findParts();
         return !this.installed.isDisabled(id) && (parts == null || parts.runner().getSwitcher().isOn(id));
     }
 
     boolean isWorldLocked() {
-        return this.settings.getInWorld() == HotwireSettings.InWorld.OFF && Minecraft.getInstance().level != null;
+        return this.settings.getInWorld() == HotwireSettings.InWorld.OFF && Games.getNow().getWorld() != null;
     }
 
-    void showMessage(String text, boolean bad) {
+    public void showMessage(String text, boolean bad) {
         this.showMessage(text, bad, "");
     }
 
-    void showMessage(String text, boolean bad, String hint) {
+    public void showMessage(String text, boolean bad, String hint) {
         GameLog.LOGGER.info("[Hotwire] told the player: {}", text);
         ModScreen current = this.screen;
-        if (current != null && ModViews.isHotwireShown()) {
+        if (current != null && Games.getNow().isHotwireShown()) {
             current.showMessage(text, bad, hint);
         } else {
-            ModViews.showChat(text, bad, hint);
+            this.units.showChat(text, bad, hint);
         }
     }
 
     void showSwitched(String text, String hint, boolean off, List<String> switched) {
         ModScreen current = this.screen;
-        if (current != null && ModViews.isHotwireShown()) {
+        if (current != null && Games.getNow().isHotwireShown()) {
             GameLog.LOGGER.info("[Hotwire] told the player: {}", text);
             current.showSwitched(text, hint, off, switched);
         } else {
@@ -332,7 +307,7 @@ public final class HotwireEngine implements ModScreenGame, AutoCloseable {
         }
     }
 
-    void refreshScreen() {
+    public void refreshScreen() {
         ModScreen current = this.screen;
         if (current != null) {
             current.onSwitched();
@@ -355,7 +330,7 @@ public final class HotwireEngine implements ModScreenGame, AutoCloseable {
         return this.requireSwitching().runner().measureLooks(times, gapMillis);
     }
 
-    Optional<JvmParts> findJvmParts() {
+    public Optional<JvmParts> findJvmParts() {
         return Optional.ofNullable(this.findParts());
     }
 
@@ -374,7 +349,7 @@ public final class HotwireEngine implements ModScreenGame, AutoCloseable {
 
     @Override
     public void backUpBeforeReopen(boolean backup) {
-        WorldReopen.setBackupNext(backup);
+        this.units.setBackupNext(backup);
     }
 
     @Override
@@ -471,14 +446,7 @@ public final class HotwireEngine implements ModScreenGame, AutoCloseable {
         if (!this.settings.isSoundOn()) {
             return;
         }
-        SoundEvent sound = switch (cue) {
-            case ONE_OFF -> SoundEvents.ELDER_GUARDIAN_CURSE;
-            case ONE_ON, MOD -> SoundEvents.EXPERIENCE_ORB_PICKUP;
-            case BATCH_END -> SoundEvents.PLAYER_LEVELUP;
-            case ADDED -> SoundEvents.END_PORTAL_FRAME_FILL;
-        };
-        Minecraft.getInstance().getSoundManager().play(SimpleSoundInstance.forUI(sound, pitch,
-                cue == LoadingScreen.Cue.MOD ? 0.35f : 0.6f));
+        this.units.playSound(cue, pitch);
     }
 
     @Override
@@ -519,7 +487,7 @@ public final class HotwireEngine implements ModScreenGame, AutoCloseable {
         return this.selfUpdate.findChanges();
     }
 
-    void showUpdateInChat() {
+    public void showUpdateInChat() {
         if (this.getSettings().isUpdateCheckOn()) {
             this.selfUpdate.showInChat();
         }
@@ -535,7 +503,7 @@ public final class HotwireEngine implements ModScreenGame, AutoCloseable {
     }
 
     private static String getMajorVersion() {
-        String version = LoadedMods.findVersion(HotwireClient.ID, "0");
+        String version = LoadedMods.findVersion(GameNames.HOTWIRE, "0");
         return version.split("[.+-]", 2)[0];
     }
 
@@ -583,7 +551,7 @@ public final class HotwireEngine implements ModScreenGame, AutoCloseable {
         return parts == null ? List.of() : parts.runner().getSwitcher().previewOff(ids);
     }
 
-    void onWorldOpened() {
+    public void onWorldOpened() {
         JvmParts parts = this.findParts();
         if (parts != null) {
             parts.runner().onWorldOpened();
@@ -617,15 +585,10 @@ public final class HotwireEngine implements ModScreenGame, AutoCloseable {
 
     @Override
     public @Nullable String findJoinedAddress() {
-        Minecraft game = Minecraft.getInstance();
-        ServerData server = game.getCurrentServer();
-        if (server != null) {
-            return server.ip;
-        }
-        return game.hasSingleplayerServer() ? ProfileStore.SINGLEPLAYER : null;
+        return this.units.findJoinedAddress();
     }
 
-    void offerProfileHere() {
+    public void offerProfileHere() {
         String address = this.findJoinedAddress();
         String name = address == null ? null : this.profiles.findFor(address);
         if (name == null) {
@@ -655,7 +618,7 @@ public final class HotwireEngine implements ModScreenGame, AutoCloseable {
 
     @Override
     public void openLink(String link) {
-        WebLinks.open(link);
+        Games.getNow().openLink(link);
     }
 
     @Override
@@ -670,40 +633,39 @@ public final class HotwireEngine implements ModScreenGame, AutoCloseable {
 
     @Override
     public void copyText(String text) {
-        Minecraft game = Minecraft.getInstance();
-        game.execute(() -> game.keyboardHandler.setClipboard(text));
+        Games.getNow().copyToClipboard(text);
     }
 
-    String writeReport(String title, String why) {
+    public String writeReport(String title, String why) {
         return this.zips.write(title, why);
     }
 
-    Tasks getTasks() {
+    public Tasks getTasks() {
         return this.tasks;
     }
 
-    ReportZips getZips() {
+    public ReportZips getZips() {
         return this.zips;
     }
 
-    DisabledMods getDisabled() {
+    public DisabledMods getDisabled() {
         return this.disabled;
     }
 
-    void forgetWorld() {
+    public void forgetWorld() {
         JvmParts parts = this.findParts();
         if (parts != null) {
             parts.runner().getSwitcher().forgetWorld();
         }
     }
 
-    boolean isWorldClosedForWork() {
+    public boolean isWorldClosedForWork() {
         return this.progress.isWorldClosed();
     }
 
     @Override
     public @Nullable UrgentUpdate findUrgentHotwire() {
-        return UrgentNotice.find();
+        return this.units.findUrgent();
     }
 
     @Override
@@ -728,12 +690,11 @@ public final class HotwireEngine implements ModScreenGame, AutoCloseable {
 
     @Override
     public void closeGame() {
-        IntegratedServer server = Minecraft.getInstance().getSingleplayerServer();
-        if (this.progress.isBusy() || ApiChanges.isRunning() || (server != null && server.isCurrentlySaving())) {
+        if (this.progress.isBusy() || ApiChanges.isRunning() || Games.getNow().isServerSaving()) {
             this.showMessage(Lang.get("hotwire.close.wait"), true);
             return;
         }
-        Minecraft.getInstance().stop();
+        this.units.stopGame();
     }
 
     @Override
@@ -748,7 +709,7 @@ public final class HotwireEngine implements ModScreenGame, AutoCloseable {
     ModScreen findReopenHost() {
         ModScreen current = this.screen;
         if (current == null) {
-            ModViews.show(this.engineScreens.makeScreen(this.under));
+            Games.getNow().showScreen(this.engineScreens.makeScreen(this.under));
             current = Objects.requireNonNull(this.screen);
         }
         return current;
@@ -799,16 +760,16 @@ public final class HotwireEngine implements ModScreenGame, AutoCloseable {
         if (this.progress.isWorldClosed()) {
             return;
         }
-        Screen back = this.under;
+        Object back = this.under;
         this.screen = null;
         this.under = null;
         this.storeJars.clear();
         this.showBack(back);
     }
 
-    void showBack(@Nullable Screen back) {
+    void showBack(@Nullable Object back) {
         JvmParts parts = this.findParts();
-        ModViews.showBack(back, parts == null ? Set.of() : parts.runner().getSwitcher().getOff());
+        this.units.showBack(back, parts == null ? Set.of() : parts.runner().getSwitcher().getOff());
     }
 
     @Override
@@ -854,7 +815,7 @@ public final class HotwireEngine implements ModScreenGame, AutoCloseable {
         this.storeJars.dropUnqueued(this.getPendingChanges());
     }
 
-    void checkQueue() {
+    public void checkQueue() {
         JvmParts parts = this.findParts();
         if (parts != null) {
             parts.updates().checkQueue().values().forEach(why -> this.showMessage(why, true));

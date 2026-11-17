@@ -1,5 +1,6 @@
 package dev.moon.hotwire.fabric;
 
+import dev.moon.hotwire.engine.HotwireEngine;
 import dev.moon.hotwire.engine.JvmParts;
 import dev.moon.hotwire.registration.Fields;
 import java.time.Duration;

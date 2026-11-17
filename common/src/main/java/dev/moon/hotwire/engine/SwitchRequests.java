@@ -1,18 +1,12 @@
-package dev.moon.hotwire.fabric;
+package dev.moon.hotwire.engine;
 
 import dev.moon.hotwire.add.ModAdder;
 import dev.moon.hotwire.api.SwitchResult;
 import dev.moon.hotwire.concurrent.Tasks;
 import dev.moon.hotwire.config.HotwireSettings;
-import dev.moon.hotwire.engine.DisabledMods;
-import dev.moon.hotwire.engine.InstalledMods;
-import dev.moon.hotwire.engine.JvmParts;
-import dev.moon.hotwire.engine.SwitchRunner;
-import dev.moon.hotwire.fabric.add.WorldReopen;
-import dev.moon.hotwire.fabric.registration.EntityHolders;
-import dev.moon.hotwire.fabric.registration.WorldContent;
 import dev.moon.hotwire.report.ActionJournal;
 import dev.moon.hotwire.report.Report;
+import dev.moon.hotwire.seam.Games;
 import dev.moon.hotwire.switching.CheckedResult;
 import dev.moon.hotwire.switching.ModSwitcher;
 import dev.moon.hotwire.switching.PlayerMessages;
@@ -24,13 +18,10 @@ import java.util.ArrayList;
 import java.util.List;
 import java.util.Optional;
 import java.util.Set;
-import java.util.TreeSet;
 import java.util.concurrent.CompletableFuture;
 import java.util.function.Function;
 import java.util.function.Supplier;
 import java.util.stream.Collectors;
-import net.minecraft.client.Minecraft;
-import net.minecraft.client.server.IntegratedServer;
 import org.jspecify.annotations.Nullable;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -81,7 +72,7 @@ final class SwitchRequests {
     private static SwitchResult findBroughtBack(List<CompletableFuture<ModAdder.Result>> adds) {
         List<String> brought = new ArrayList<>();
         for (CompletableFuture<ModAdder.Result> add : adds) {
-            SwitchResult one = HotwireApiImpl.toResult(add.join());
+            SwitchResult one = EngineApi.toResult(add.join());
             if (one.kind() != SwitchResult.Kind.DONE) {
                 return one;
             }
@@ -118,11 +109,10 @@ final class SwitchRequests {
             return this.refuse(Lang.get("hotwire.switch.world_locked"), quiet);
         }
 
-        IntegratedServer server = Minecraft.getInstance().getSingleplayerServer();
-        if (server != null && server.isCurrentlySaving()) {
+        if (Games.getNow().isServerSaving()) {
             return this.refuse(Lang.get("hotwire.switch.saving"), quiet);
         }
-        CompletableFuture<SwitchResult> ended = HotwireApiImpl.beginSwitch();
+        CompletableFuture<SwitchResult> ended = EngineApi.beginSwitch();
         this.tasks.submit("switch", () -> work.apply(parts.runner()), result -> {
             boolean untilOn = off && result.result() instanceof ModSwitcher.Result.Done
                     && this.settings.getOffLasts() == HotwireSettings.OffLasts.UNTIL_ON;
@@ -152,15 +142,15 @@ final class SwitchRequests {
                 List<String> order = new ArrayList<>(ids.stream().filter(failed.plan().order()::contains).toList());
                 failed.plan().order().stream().filter(id -> !order.contains(id)).forEach(order::add);
                 current.offerReopen(ReopenPanel.Offer.ofNextStart(order, PlayerMessages.joinNames(order,
-                        this.installed::nameOf), describeWhyAtStart(order)));
+                        this.installed::nameOf), this.describeWhyAtStart(order)));
             } else if (!ids.isEmpty() && result.result() instanceof ModSwitcher.Result.Failed failed
                     && failed.cause().reopenFixes() && current != null
-                    && (WorldReopen.isLeftOnly() || WorldReopen.findRefusal().isEmpty())) {
+                    && (this.engine.units.isWorldLeftOnly() || Games.getNow().findReopenRefusal().isEmpty())) {
                 LOGGER.info("[Hotwire] {}", said);
-                String where = WorldReopen.isLeftOnly() ? "server" : "world";
+                String where = this.engine.units.isWorldLeftOnly() ? "server" : "world";
                 current.offerReopen(new ReopenPanel.Offer(off, ids, null, PlayerMessages.joinNames(ids,
                         this.installed::nameOf), Lang.get("hotwire.reopen.why." + (off ? "off_" : "on_") + where),
-                        WorldReopen.isLeftOnly()));
+                        this.engine.units.isWorldLeftOnly()));
             } else {
                 boolean lasting = off && result.result() instanceof ModSwitcher.Result.Done done
                         && !done.plan().order().isEmpty() && !untilOn;
@@ -174,16 +164,15 @@ final class SwitchRequests {
                 }
             }
             this.engine.refreshScreen();
-            HotwireApiImpl.endSwitch(ended, HotwireApiImpl.toResult(result.result(), said), this.engine::isOn);
-        }).whenComplete((done, error) -> HotwireApiImpl.endIfFailed(ended, error, this.engine::isOn));
+            EngineApi.endSwitch(ended, EngineApi.toResult(result.result(), said), this.engine::isOn);
+        }).whenComplete((done, error) -> EngineApi.endIfFailed(ended, error, this.engine::isOn));
         return ended;
     }
 
-    private static String describeWhyAtStart(List<String> order) {
-        Set<String> kinds = new TreeSet<>();
-        WorldContent.find(order).values().forEach(kinds::addAll);
+    private String describeWhyAtStart(List<String> order) {
+        Set<String> kinds = this.engine.units.findWorldContentKinds(order);
         if (kinds.isEmpty()) {
-            return Lang.get(EntityHolders.find(order).isEmpty() ? "hotwire.reopen.why.restart_only"
+            return Lang.get(!this.engine.units.hasEntityHolders(order) ? "hotwire.reopen.why.restart_only"
                     : "hotwire.reopen.why.world_data");
         }
         List<String> named = List.copyOf(kinds);
@@ -216,7 +205,7 @@ final class SwitchRequests {
 
     @SuppressWarnings("FutureReturnValueIgnored")
     CompletableFuture<SwitchResult> switchWithReopen(SwitchRunner runner, boolean off, List<String> ids) {
-        CompletableFuture<SwitchResult> ended = HotwireApiImpl.beginSwitch();
+        CompletableFuture<SwitchResult> ended = EngineApi.beginSwitch();
         this.tasks.submit("save and switch", () -> {
             try {
                 return Optional.ofNullable(runSwitchWithReopen(runner, off, ids));
@@ -230,9 +219,9 @@ final class SwitchRequests {
             this.say.show(said, result.map(done -> PlayerMessages.isBad(done.result())).orElse(false), "");
             result.ifPresent(done -> SwitchHistory.get().recordDone(done.result(), SwitchHistory.Cause.PLAYER, ""));
             this.engine.refreshScreen();
-            HotwireApiImpl.endSwitch(ended, result.map(done -> HotwireApiImpl.toResult(done.result(), said))
+            EngineApi.endSwitch(ended, result.map(done -> EngineApi.toResult(done.result(), said))
                     .orElse(new SwitchResult(SwitchResult.Kind.DONE, List.of(), said)), this.engine::isOn);
-        }).whenComplete((done, error) -> HotwireApiImpl.endIfFailed(ended, error, this.engine::isOn));
+        }).whenComplete((done, error) -> EngineApi.endIfFailed(ended, error, this.engine::isOn));
         return ended;
     }
 
@@ -242,7 +231,7 @@ final class SwitchRequests {
                 : ActionJournal.Action.REOPEN_ON, ids);
         @Nullable CheckedResult result;
         try {
-            result = WorldReopen.runAround(() -> {
+            result = Games.getNow().reopenAround(() -> {
                 if (ids.isEmpty()) {
                     return null;
                 }

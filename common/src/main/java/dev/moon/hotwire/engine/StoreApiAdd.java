@@ -1,4 +1,4 @@
-package dev.moon.hotwire.fabric;
+package dev.moon.hotwire.engine;
 
 import dev.moon.hotwire.api.Reason;
 import dev.moon.hotwire.api.StoreKind;
@@ -47,7 +47,7 @@ final class StoreApiAdd {
     @SuppressWarnings("FutureReturnValueIgnored")
     private static <T> void fetch(String idOrSlug, String versionId, CompletableFuture<T> made, Taker then,
             Function<String, T> refusal) {
-        HotwireEngine engine = HotwireClient.findEngine();
+        HotwireEngine engine = EngineApi.findEngine();
         String why = engine == null ? Lang.get("hotwire.api.starting") : !engine.canAdd() ? engine.getSwitchRefusal()
                 : !engine.isFirstOpenAccepted() ? Lang.get("hotwire.api.add.no_prompt") : null;
         if (why != null || engine == null) {

@@ -1,12 +1,8 @@
-package dev.moon.hotwire.fabric;
+package dev.moon.hotwire.engine;
 
 import dev.moon.hotwire.add.ModAdder;
 import dev.moon.hotwire.concurrent.Tasks;
-import dev.moon.hotwire.engine.JvmParts;
-import dev.moon.hotwire.engine.ModChanges;
-import dev.moon.hotwire.engine.StoreJars;
-import dev.moon.hotwire.fabric.add.WorldReopen;
-import dev.moon.hotwire.fabric.screen.ModFileChooser;
+import dev.moon.hotwire.seam.Games;
 import dev.moon.hotwire.ui.AddMode;
 import dev.moon.hotwire.ui.AddPreview;
 import dev.moon.hotwire.ui.JarHost;
@@ -19,7 +15,6 @@ import dev.moon.hotwire.update.UpdateSupport;
 import java.nio.file.Path;
 import java.util.List;
 import java.util.function.Consumer;
-import net.minecraft.client.Minecraft;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -42,7 +37,7 @@ final class JarRequests {
 
     void pick(String ask, boolean update) {
         this.engine.showMessage(ask, false);
-        ModFileChooser.choose(jar -> {
+        this.engine.units.chooseJar(jar -> {
             JarHost host = this.engine.findHost();
             if (host != null) {
                 host.onJarPicked(jar, update);
@@ -84,7 +79,7 @@ final class JarRequests {
 
             boolean more = this.storeJars.hasQueued();
             boolean reopens = mode == AddMode.NOW && ModAdder.isWorldBuilt(result)
-                    && WorldReopen.findRefusal().isEmpty() && this.engine.findHost() != null;
+                    && Games.getNow().findReopenRefusal().isEmpty() && this.engine.findHost() != null;
             if (reopens && more) {
                 this.storeJars.waitForReopen();
             }
@@ -104,9 +99,9 @@ final class JarRequests {
                 current.offerAdd(jar, this.changes.dryRunAdd(jar).thenApply(preview -> AddPreview.ofLater(
                         preview.name(), preview.version(), why)));
             } else if (result instanceof ModAdder.Result.Added added && current != null
-                    && Minecraft.getInstance().level != null
+                    && Games.getNow().getWorld() != null
                     && (this.changes.setsUpOnJoin(jar) || (!more && this.storeJars.takeReopenWanted()))) {
-                boolean own = Minecraft.getInstance().getSingleplayerServer() != null;
+                boolean own = Games.getNow().hasOwnServer();
                 this.engine.showMessage(Lang.get("hotwire.add.is_in", added.name()) + this.changes.copyIntoMods(jar)
                         + (own ? "" : " " + Lang.get("hotwire.add.rejoin_for_all")), false);
                 if (own && more) {

@@ -1,4 +1,4 @@
-package dev.moon.hotwire.fabric;
+package dev.moon.hotwire.engine;
 
 import dev.moon.hotwire.config.AtomicFiles;
 import java.io.IOException;
@@ -17,7 +17,7 @@ public final class CrashNotice {
     private CrashNotice() {
     }
 
-    static void save(String where) {
+    public static void save(String where) {
         Path note = findNote();
         try {
             AtomicFiles.writeString(note, where);
@@ -26,7 +26,7 @@ public final class CrashNotice {
         }
     }
 
-    static void readAtStart() {
+    public static void readAtStart() {
         Path note = findNote();
         try {
             if (Files.isRegularFile(note)) {
@@ -38,17 +38,17 @@ public final class CrashNotice {
         }
     }
 
-    static void setDue(String where) {
+    public static void setDue(String where) {
         due = Optional.of(where);
     }
 
-    static void showNow(String where) {
+    public static void showNow(String where) {
         try {
             Files.deleteIfExists(findNote());
         } catch (IOException e) {
             LOGGER.warn("[Hotwire] the crash notice could not be dropped", e);
         }
-        HotwireEngine engine = HotwireClient.findEngine();
+        HotwireEngine engine = EngineApi.findEngine();
         if (engine != null) {
             engine.getScreens().openOnCrashReport(where);
         }
@@ -56,7 +56,7 @@ public final class CrashNotice {
 
     public static void showIfDue() {
         Optional<String> words = due;
-        HotwireEngine engine = HotwireClient.findEngine();
+        HotwireEngine engine = EngineApi.findEngine();
         if (words.isEmpty() || engine == null) {
             return;
         }

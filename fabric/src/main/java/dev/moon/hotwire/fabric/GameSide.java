@@ -22,7 +22,9 @@ import java.util.Set;
 import java.util.function.Function;
 import java.util.function.Supplier;
 import net.minecraft.client.Minecraft;
+import net.minecraft.client.gui.screens.Screen;
 import net.minecraft.client.resources.model.ModelManager;
+import net.minecraft.client.server.IntegratedServer;
 import net.minecraft.core.Holder;
 import net.minecraft.core.Registry;
 import net.minecraft.core.registries.BuiltInRegistries;
@@ -257,5 +259,31 @@ public final class GameSide implements Game {
     public boolean isPlaying() {
         Minecraft client = Minecraft.getInstance();
         return client.level != null && ModViews.openScreen() == null && client.isWindowActive();
+    }
+
+    @Override
+    public void showScreen(@Nullable Object screen) {
+        ModViews.show((Screen) screen);
+    }
+
+    @Override
+    public boolean isHotwireShown() {
+        return ModViews.isHotwireShown();
+    }
+
+    @Override
+    public boolean isServerSaving() {
+        IntegratedServer server = Minecraft.getInstance().getSingleplayerServer();
+        return server != null && server.isCurrentlySaving();
+    }
+
+    @Override
+    public boolean hasOwnServer() {
+        return Minecraft.getInstance().getSingleplayerServer() != null;
+    }
+
+    @Override
+    public void openLink(String link) {
+        WebLinks.open(link);
     }
 }

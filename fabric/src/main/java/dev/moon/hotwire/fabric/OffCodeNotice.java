@@ -1,6 +1,7 @@
 package dev.moon.hotwire.fabric;
 
 import dev.moon.hotwire.add.LoaderModList;
+import dev.moon.hotwire.engine.HotwireEngine;
 import dev.moon.hotwire.engine.InstalledMods;
 import dev.moon.hotwire.engine.ModPolicy;
 import dev.moon.hotwire.engine.SeenUses;

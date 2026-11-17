@@ -1,4 +1,4 @@
-package dev.moon.hotwire.fabric;
+package dev.moon.hotwire.engine;
 
 import dev.moon.hotwire.add.ModAdder;
 import dev.moon.hotwire.api.Reason;
@@ -12,7 +12,6 @@ import dev.moon.hotwire.api.StoreProject;
 import dev.moon.hotwire.api.StoreQuery;
 import dev.moon.hotwire.api.StoreVersion;
 import dev.moon.hotwire.api.SwitchResult;
-import dev.moon.hotwire.engine.LoadedMods;
 import dev.moon.hotwire.modrinth.CachedAsks;
 import dev.moon.hotwire.modrinth.Downloads;
 import dev.moon.hotwire.modrinth.ModrinthClient;
@@ -97,7 +96,7 @@ final class StoreApi {
     }
 
     static @Nullable ModStore findStore() {
-        HotwireEngine engine = HotwireClient.findEngine();
+        HotwireEngine engine = EngineApi.findEngine();
         if (engine == null) {
             return null;
         }
@@ -110,7 +109,7 @@ final class StoreApi {
     }
 
     private static @Nullable ModStore findStoreIfMade() {
-        HotwireEngine engine = HotwireClient.findEngine();
+        HotwireEngine engine = EngineApi.findEngine();
         return engine == null ? null : engine.getStore();
     }
 
@@ -200,7 +199,7 @@ final class StoreApi {
                                 List.of(), Lang.get(now == StoreModel.PackState.ON ? "hotwire.store.pack.turned_on"
                                         : "hotwire.store.pack.turned_off", idOrSlug)));
             } catch (RuntimeException e) {
-                ended.complete(HotwireApiImpl.toFailure(e));
+                ended.complete(EngineApi.toFailure(e));
             }
         });
         return ended;
@@ -243,7 +242,7 @@ final class StoreApi {
             jars.forEach(jar -> engine.add(jar, AddMode.NEXT_START, results::add));
             for (ModAdder.Result result : results) {
                 if (!(result instanceof ModAdder.Result.Queued)) {
-                    return HotwireApiImpl.toResult(result);
+                    return EngineApi.toResult(result);
                 }
             }
             return new SwitchResult(SwitchResult.Kind.DONE, List.of(), Lang.get("hotwire.api.add.next_start", name));

@@ -1,4 +1,4 @@
-package dev.moon.hotwire.fabric;
+package dev.moon.hotwire.engine;
 
 import dev.moon.hotwire.add.ModAdder;
 import dev.moon.hotwire.api.ChangePlan;
@@ -9,8 +9,6 @@ import dev.moon.hotwire.api.PendingTask;
 import dev.moon.hotwire.api.Reason;
 import dev.moon.hotwire.api.SwitchPreview;
 import dev.moon.hotwire.api.SwitchResult;
-import dev.moon.hotwire.engine.JvmParts;
-import dev.moon.hotwire.fabric.screen.ModIcons;
 import dev.moon.hotwire.jar.JarLookup;
 import dev.moon.hotwire.jar.ModManifest;
 import dev.moon.hotwire.modrinth.Downloads;
@@ -53,7 +51,7 @@ final class ApiChanges {
 
     static CompletableFuture<ModUpdates> checkUpdates() {
         CompletableFuture<ModUpdates> made = new CompletableFuture<>();
-        HotwireEngine engine = HotwireClient.findEngine();
+        HotwireEngine engine = EngineApi.findEngine();
         if (engine == null) {
             made.complete(new ModUpdates(List.of(), Lang.get("hotwire.api.starting")));
             return made;
@@ -95,7 +93,7 @@ final class ApiChanges {
     }
 
     private static Plan work(ChangeRequest request, CallerBlocks.Callers callers) throws IOException {
-        HotwireEngine engine = HotwireClient.findEngine();
+        HotwireEngine engine = EngineApi.findEngine();
         if (engine == null || engine.findJvmParts().isEmpty()) {
             String why = engine == null ? Lang.get("hotwire.api.starting") : engine.getSwitchRefusal();
             return new Plan(false, Reason.NOT_READY, List.of(why), request, List.of(), callers,
@@ -106,7 +104,7 @@ final class ApiChanges {
         boolean can = true;
         List<String> goingOff = List.of();
         if (!request.off().isEmpty()) {
-            SwitchPreview preview = HotwireApiImpl.preview(true, request.off(), callers);
+            SwitchPreview preview = EngineApi.preview(true, request.off(), callers);
             goingOff = preview.switched();
             lines.add(preview.message());
             if (!preview.possible()) {
@@ -292,7 +290,7 @@ final class ApiChanges {
     }
 
     static List<PendingTask> findPending() {
-        HotwireEngine engine = HotwireClient.findEngine();
+        HotwireEngine engine = EngineApi.findEngine();
         return engine == null ? List.of() : engine.getPendingChanges().stream()
                 .map(change -> new PendingTask(change.modId(), change.name(), switch (change) {
                     case PendingChange.Update update -> PendingTask.Kind.UPDATE;
@@ -303,7 +301,7 @@ final class ApiChanges {
     }
 
     static boolean cancelPending(String modId) {
-        HotwireEngine engine = HotwireClient.findEngine();
+        HotwireEngine engine = EngineApi.findEngine();
         if (engine == null) {
             return false;
         }
@@ -317,14 +315,14 @@ final class ApiChanges {
     }
 
     static Optional<byte[]> findIcon(String id) {
-        HotwireEngine engine = HotwireClient.findEngine();
+        HotwireEngine engine = EngineApi.findEngine();
         Path jar = engine == null ? null : engine.findJarOf(id);
         ModManifest manifest = jar == null ? null : JarLookup.findManifest(jar);
-        if (jar == null || manifest == null) {
+        if (engine == null || jar == null || manifest == null) {
             return Optional.empty();
         }
         try {
-            return ModIcons.readFile(jar, id, manifest.icon());
+            return engine.units.readIconFile(jar, id, manifest.icon());
         } catch (IOException e) {
             LOGGER.warn("[Hotwire] the icon of {} could not be read", id, e);
             return Optional.empty();
@@ -379,11 +377,11 @@ final class ApiChanges {
         @Override
         public CompletableFuture<SwitchResult> acceptAtNextStart() {
             CompletableFuture<SwitchResult> ended = new CompletableFuture<>();
-            HotwireEngine engine = HotwireClient.findEngine();
+            HotwireEngine engine = EngineApi.findEngine();
             if (engine == null || !this.canWaitForNextStart()) {
                 ended.complete(new SwitchResult(SwitchResult.Kind.REFUSED, List.of(),
                         Lang.get("hotwire.api.no_wait")));
-                return HotwireApiImpl.onGame(ended);
+                return EngineApi.onGame(ended);
             }
             Thread.ofPlatform().name("hotwire-api-queue").daemon().start(() -> {
                 ChangeOutcome updates = readUpdates(this.jars.stream().map(jar -> engine.getChanges().queueUpdate(jar))
@@ -398,7 +396,7 @@ final class ApiChanges {
                         List.of(), bad.isEmpty() ? Lang.get("hotwire.api.change_done") : String.join(" ", bad),
                         List.of(), later));
             });
-            return HotwireApiImpl.onGameAsResult(ended);
+            return EngineApi.onGameAsResult(ended);
         }
 
         @Override
@@ -422,7 +420,7 @@ final class ApiChanges {
             if (!this.can) {
                 ended.complete(SwitchResult.ofRefusal(this.reason == Reason.NONE ? Reason.REFUSED : this.reason,
                         String.join(" ", this.lines)));
-                return HotwireApiImpl.onGame(ended);
+                return EngineApi.onGame(ended);
             }
             RUNNING.incrementAndGet();
             Thread.ofPlatform().name("hotwire-api-change").daemon().start(() -> {
@@ -436,7 +434,7 @@ final class ApiChanges {
                     RUNNING.decrementAndGet();
                 }
             });
-            return HotwireApiImpl.onGame(ended);
+            return EngineApi.onGame(ended);
         }
 
         @SuppressWarnings("FutureReturnValueIgnored")
@@ -444,7 +442,7 @@ final class ApiChanges {
             List<String> switched = new ArrayList<>();
             List<String> now = new ArrayList<>();
             List<String> later = new ArrayList<>();
-            HotwireEngine found = HotwireClient.findEngine();
+            HotwireEngine found = EngineApi.findEngine();
             if (this.reopen && this.adding.isEmpty() && found != null) {
                 boolean off = !this.request.off().isEmpty();
                 List<String> ids = off ? this.request.off() : this.request.on();
@@ -463,7 +461,7 @@ final class ApiChanges {
             for (boolean off : List.of(true, false)) {
                 List<String> ids = off ? this.request.off() : this.request.on();
                 if (!ids.isEmpty()) {
-                    SwitchResult result = HotwireApiImpl.switchFor(off, ids, this.callers).join();
+                    SwitchResult result = EngineApi.switchFor(off, ids, this.callers).join();
                     if (result.kind() != SwitchResult.Kind.DONE) {
                         return new SwitchResult(result.kind(), switched, result.message(), now, later);
                     }
@@ -471,7 +469,7 @@ final class ApiChanges {
                     now.addAll(result.switched());
                 }
             }
-            HotwireEngine engine = HotwireClient.findEngine();
+            HotwireEngine engine = EngineApi.findEngine();
             if (!this.jars.isEmpty() && engine != null) {
                 ChangeOutcome updates = readUpdates(engine.getChanges().updateAllNow(this.jars));
                 now.addAll(updates.now());

@@ -88,6 +88,16 @@ public interface Game {
 
     void drawHoldFrame();
 
+    void showScreen(@Nullable Object screen);
+
+    boolean isHotwireShown();
+
+    boolean isServerSaving();
+
+    boolean hasOwnServer();
+
+    void openLink(String link);
+
     boolean isPlaying();
 
     Optional<String> findReopenRefusal();

@@ -1,8 +1,8 @@
-package dev.moon.hotwire.fabric;
+package dev.moon.hotwire.engine;
 
 import dev.moon.hotwire.add.ModAdder;
 import dev.moon.hotwire.api.SwitchResult;
-import dev.moon.hotwire.engine.StoreJars;
+import dev.moon.hotwire.classfile.GameNames;
 import dev.moon.hotwire.modrinth.Downloads;
 import dev.moon.hotwire.modrinth.ModrinthClient;
 import dev.moon.hotwire.seam.Games;
@@ -17,7 +17,6 @@ import java.util.List;
 import java.util.concurrent.CompletableFuture;
 import java.util.function.BiConsumer;
 import java.util.function.Supplier;
-import net.minecraft.client.Minecraft;
 import org.jspecify.annotations.Nullable;
 
 final class SelfUpdateRequests {
@@ -25,12 +24,15 @@ final class SelfUpdateRequests {
     private final StoreJars jars;
     private final Supplier<@Nullable ModScreen> screen;
     private final BiConsumer<String, Boolean> say;
+    private final EngineGame units;
 
     private boolean toldInChat;
 
     private @Nullable List<PendingChange> waiting;
 
-    SelfUpdateRequests(StoreJars jars, Supplier<@Nullable ModScreen> screen, BiConsumer<String, Boolean> say) {
+    SelfUpdateRequests(StoreJars jars, Supplier<@Nullable ModScreen> screen, BiConsumer<String, Boolean> say,
+            EngineGame units) {
+        this.units = units;
         this.jars = jars;
         this.screen = screen;
         this.say = say;
@@ -48,7 +50,7 @@ final class SelfUpdateRequests {
                 this.waiting = null;
                 this.updateAtNextStart(asked, null);
             }
-        }), urgent -> Games.getNow().runOnGame(() -> UrgentNotice.onChecked(urgent)));
+        }), urgent -> Games.getNow().runOnGame(() -> this.units.tellUrgent(urgent)));
     }
 
     void checkAgain() {
@@ -57,18 +59,14 @@ final class SelfUpdateRequests {
     }
 
     void showInChat() {
-        UrgentUpdate urgent = UrgentNotice.find();
+        UrgentUpdate urgent = this.units.findUrgent();
         String newer = this.findNewer();
-        if (this.toldInChat || (newer.isEmpty() && urgent == null) || Minecraft.getInstance().player == null) {
+        if (this.toldInChat || (newer.isEmpty() && urgent == null)
+                || !this.units.showUpdateInChat(urgent != null ? urgent.version() : newer, urgent != null)) {
             this.start();
             return;
         }
         this.toldInChat = true;
-        if (urgent != null) {
-            UpdateChat.showUrgent(urgent.version());
-        } else {
-            UpdateChat.show(newer);
-        }
     }
 
     String findNewer() {
@@ -106,8 +104,8 @@ final class SelfUpdateRequests {
                     if (done != null) {
                         done.complete(queued instanceof ModAdder.Result.Queued
                                 ? new SwitchResult(SwitchResult.Kind.DONE, List.of(), ModAdder.describe(queued),
-                                        List.of(), List.of(HotwireClient.ID))
-                                : HotwireApiImpl.toResult(queued));
+                                        List.of(), List.of(GameNames.HOTWIRE))
+                                : EngineApi.toResult(queued));
                     }
                 });
             } catch (IOException e) {

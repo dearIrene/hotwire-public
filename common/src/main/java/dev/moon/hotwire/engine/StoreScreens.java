@@ -1,14 +1,10 @@
-package dev.moon.hotwire.fabric;
+package dev.moon.hotwire.engine;
 
-import dev.moon.hotwire.engine.CacheLimit;
-import dev.moon.hotwire.engine.InstalledMods;
-import dev.moon.hotwire.engine.StoreJars;
-import dev.moon.hotwire.fabric.screen.ModIcons;
-import dev.moon.hotwire.fabric.screen.WebLinks;
-import dev.moon.hotwire.fabric.store.PackFolders;
 import dev.moon.hotwire.modrinth.StoreCache;
 import dev.moon.hotwire.modrinth.StoreModel;
+import dev.moon.hotwire.seam.Games;
 import dev.moon.hotwire.store.ModStore;
+import dev.moon.hotwire.ui.IconSource;
 import dev.moon.hotwire.ui.Lang;
 import dev.moon.hotwire.ui.ModScreen;
 import dev.moon.hotwire.ui.StoreCacheView;
@@ -23,20 +19,19 @@ import java.util.Locale;
 import java.util.Map;
 import java.util.Objects;
 import java.util.Set;
-import net.minecraft.client.gui.screens.Screen;
 import org.jspecify.annotations.Nullable;
 
 final class StoreScreens {
     private final HotwireEngine engine;
     private final InstalledMods installed;
     private final StoreJars jars;
-    private final ModIcons icons;
+    private final IconSource icons;
 
     private final Set<String> fetching = new HashSet<>();
     private @Nullable ModStore store;
-    private @Nullable PackFolders packs;
+    private StoreModel.@Nullable Packs packs;
 
-    StoreScreens(HotwireEngine engine, InstalledMods installed, StoreJars jars, ModIcons icons) {
+    StoreScreens(HotwireEngine engine, InstalledMods installed, StoreJars jars, IconSource icons) {
         this.engine = engine;
         this.installed = installed;
         this.icons = icons;
@@ -48,7 +43,8 @@ final class StoreScreens {
         if (made == null) {
             made = new ModStore(this.installed, this.jars.getCheck(), this.icons::of, this.icons);
             made.checkInstalled();
-            PackFolders packs = new PackFolders(made.getModel().getClient(), made.getModel().getDownloads(),
+            StoreModel.Packs packs = this.engine.units.makePacks(made.getModel().getClient(),
+                    made.getModel().getDownloads(),
                     this.engine::showMessage);
             made.getModel().setPacks(packs);
             this.packs = packs;
@@ -110,10 +106,10 @@ final class StoreScreens {
 
     @Nullable StorePage findShown() {
         ModScreen screen = this.engine.screen;
-        return screen != null && ModViews.isHotwireShown() ? screen.findShownStore() : null;
+        return screen != null && Games.getNow().isHotwireShown() ? screen.findShownStore() : null;
     }
 
-    void openStoreNow(String words, @Nullable Screen back) {
+    void openStoreNow(String words, @Nullable Object back) {
         ModStore made = this.findStore();
         if (!words.isEmpty()) {
             made.getModel().setWords(words);
@@ -121,16 +117,16 @@ final class StoreScreens {
         this.openStore(made, back);
     }
 
-    void addFromStoreNow(String projectId, String versionId, @Nullable Screen back) {
+    void addFromStoreNow(String projectId, String versionId, @Nullable Object back) {
         ModStore made = this.store;
         if (made != null) {
             this.addFromStore(made, back, projectId, versionId, projectId);
         }
     }
 
-    void openStore(ModStore made, @Nullable Screen back) {
-        if (this.engine.screen == null || !ModViews.isHotwireShown()) {
-            ModViews.show(this.engine.getScreens().makeScreen(back));
+    void openStore(ModStore made, @Nullable Object back) {
+        if (this.engine.screen == null || !Games.getNow().isHotwireShown()) {
+            Games.getNow().showScreen(this.engine.getScreens().makeScreen(back));
         }
         Objects.requireNonNull(this.engine.screen).showStore(made.getModel(), new StorePage.Game() {
             @Override
@@ -150,7 +146,7 @@ final class StoreScreens {
 
             @Override
             public void openLink(String link) {
-                WebLinks.open(link);
+                Games.getNow().openLink(link);
             }
         }, made.getIcons(), made.getLoader(), made.getGameVersion());
     }
@@ -185,7 +181,7 @@ final class StoreScreens {
                     Files.copy(jar, folder.resolve(jar.getFileName()), StandardCopyOption.REPLACE_EXISTING);
                 }
                 this.engine.showMessage(Lang.get("hotwire.store.saved", title, folder), false);
-                WebLinks.openFolder(folder);
+                Games.getNow().openFolder(folder);
             } catch (IOException e) {
                 this.engine.showMessage(Lang.get("hotwire.store.download_failed", title, e.getMessage()), true);
             }
@@ -200,13 +196,13 @@ final class StoreScreens {
     }
 
     private void fetchPack(ModStore made, String projectId, String versionId, String title) {
-        PackFolders packs = this.packs;
+        StoreModel.Packs packs = this.packs;
         if (packs != null) {
             packs.fetch(made.getModel().getKind(), projectId, versionId, title);
         }
     }
 
-    private void addFromStore(ModStore made, @Nullable Screen back, String projectId, String versionId,
+    private void addFromStore(ModStore made, @Nullable Object back, String projectId, String versionId,
             String title) {
         this.engine.showMessage(Lang.get("hotwire.store.downloading", title), false);
         if (this.isShowingPacks(made)) {
@@ -224,8 +220,8 @@ final class StoreScreens {
             if (fetched.size() > 1) {
                 this.engine.showMessage(Lang.get("hotwire.store.getting_with", title, fetched.size() - 1), false);
             }
-            if (!ModViews.isHotwireShown()) {
-                ModViews.show(this.engine.getScreens().makeScreen(back));
+            if (!Games.getNow().isHotwireShown()) {
+                Games.getNow().showScreen(this.engine.getScreens().makeScreen(back));
             }
             this.jars.queue(fetched, update, projects);
         }, failure -> {

@@ -7,6 +7,8 @@ import dev.moon.hotwire.classfile.GameNames;
 import dev.moon.hotwire.dev.DevSession;
 import dev.moon.hotwire.engine.DevSetups;
 import dev.moon.hotwire.engine.EarlyModsReader;
+import dev.moon.hotwire.engine.EngineApi;
+import dev.moon.hotwire.engine.HotwireEngine;
 import dev.moon.hotwire.engine.LoadedMods;
 import dev.moon.hotwire.fabric.registration.EntityAttachments;
 import dev.moon.hotwire.fabric.registration.OffModClose;
@@ -63,6 +65,7 @@ public final class HotwireClient implements ClientModInitializer {
     public void onInitializeClient() {
         StartTimes.mark("Hotwire's client start begins");
         Games.start(new GameSide());
+        EngineApi.start(HotwireClient::findEngine);
         long began = System.nanoTime();
         HotwireLog.install(FabricLoader.getInstance().getGameDir().resolve("hotwire").resolve("logs"));
         ActionJournal.open(FabricLoader.getInstance().getGameDir().resolve("hotwire").resolve("logs"),

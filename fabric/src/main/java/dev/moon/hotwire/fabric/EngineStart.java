@@ -9,6 +9,7 @@ import dev.moon.hotwire.engine.CacheLimit;
 import dev.moon.hotwire.engine.CrashGuard;
 import dev.moon.hotwire.engine.DevSetups;
 import dev.moon.hotwire.engine.EarlyModsReader;
+import dev.moon.hotwire.engine.HotwireEngine;
 import dev.moon.hotwire.engine.InstalledMods;
 import dev.moon.hotwire.engine.JvmParts;
 import dev.moon.hotwire.engine.LifecycleListeners;
@@ -470,7 +471,7 @@ final class EngineStart {
             JvmParts parts = bind(installed, progress, reports, folders, queue, gameDir, icons);
             laps.endLap("bind, in all");
             engine = new HotwireEngine(installed, progress, reports, folders, queue, settings, icons,
-                    new HotwireEngine.Bound.Ready(parts));
+                    new HotwireEngine.Bound.Ready(parts), new EngineGameSide());
             laps.endLap("make the engine");
             HotwireEngine made = engine;
             ElementLook.useMods(made::findSwitchable);
@@ -506,7 +507,7 @@ final class EngineStart {
             writeStartFailure(gameDir, e);
             engine = new HotwireEngine(installed, progress, reports, folders, queue, settings, icons,
                     new HotwireEngine.Bound.Refused(Lang.get(isLunar() ? "hotwire.switch.lunar"
-                            : "hotwire.switch.no_instrument")));
+                            : "hotwire.switch.no_instrument")), new EngineGameSide());
 
             Path hotwire = findSwapperJar(folders);
             if (hotwire != null) {

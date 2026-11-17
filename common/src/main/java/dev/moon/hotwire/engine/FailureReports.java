@@ -1,4 +1,4 @@
-package dev.moon.hotwire.fabric;
+package dev.moon.hotwire.engine;
 
 import dev.moon.hotwire.redefine.RebuildException;
 import dev.moon.hotwire.ui.ModScreen;
