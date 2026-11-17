@@ -1,6 +1,7 @@
 package dev.moon.hotwire.redefine;
 
 import dev.moon.hotwire.classfile.ClassHeader;
+import dev.moon.hotwire.jvm.JvmAccess;
 import java.lang.instrument.Instrumentation;
 import java.lang.invoke.CallSite;
 import java.lang.invoke.LambdaMetafactory;
@@ -30,15 +31,8 @@ public final class FieldSlots {
     }
 
     private static volatile Predicate<Class<?>> setUp = type -> true;
-
-    private static volatile @Nullable Instrumentation opener;
-
     public static void readStaticsWhen(Predicate<Class<?>> isSetUp) {
         setUp = isSetUp;
-    }
-
-    public static void readByPlaceWith(Instrumentation instrumentation) {
-        opener = instrumentation;
     }
 
     static boolean readsByPlace() {
@@ -54,7 +48,8 @@ public final class FieldSlots {
             PlaceReader get = null;
             PlaceReader getVolatile = null;
             MethodHandle find = null;
-            Instrumentation open = opener;
+
+            Instrumentation open = JvmAccess.findCurrent();
             try {
                 if (open != null) {
                     open.redefineModule(Object.class.getModule(), Set.of(), Map.of("jdk.internal.misc",
@@ -249,7 +244,7 @@ public final class FieldSlots {
         }
 
         private long findPlace() {
-            if (opener == null) {
+            if (JvmAccess.findCurrent() == null) {
                 return UNASKED;
             }
             Field reflected = this.field;

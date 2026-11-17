@@ -23,7 +23,13 @@ import org.jspecify.annotations.Nullable;
 public final class JvmAccess {
     static final String AGENT = AgentMain.class.getName();
 
+    private static volatile @Nullable Instrumentation current;
+
     private JvmAccess() {
+    }
+
+    public static @Nullable Instrumentation findCurrent() {
+        return current;
     }
 
     public static synchronized Instrumentation getInstrumentation(@Nullable Path jar, Path spare)
@@ -64,6 +70,7 @@ public final class JvmAccess {
     public static synchronized Instrumentation getInstrumentation(Path jar) throws JvmAccessException {
         Instrumentation running = findRunningInstrumentation();
         if (running != null) {
+            current = running;
             return running;
         }
         checkAgentJar(jar);
@@ -97,6 +104,7 @@ public final class JvmAccess {
         if (!running.isRedefineClassesSupported()) {
             throw new JvmAccessException(Reason.NO_REDEFINITION, "this JVM cannot redefine classes", null);
         }
+        current = running;
         return running;
     }
 

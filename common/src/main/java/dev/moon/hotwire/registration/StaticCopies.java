@@ -1,5 +1,6 @@
 package dev.moon.hotwire.registration;
 
+import dev.moon.hotwire.jvm.JvmAccess;
 import dev.moon.hotwire.jvm.LoadedClassList;
 import dev.moon.hotwire.redefine.FieldSlots;
 import dev.moon.hotwire.redefine.FinalWrites;
@@ -30,17 +31,12 @@ public final class StaticCopies {
 
     private static final int STEPS = 2;
     private static final int MOST = 100_000;
-    private static volatile @Nullable Instrumentation instrumentation;
 
     private StaticCopies() {
     }
 
-    public static void readClassesWith(Instrumentation reader) {
-        instrumentation = reader;
-    }
-
     public static void swap(IdentityHashMap<Object, Object> replaced) {
-        Instrumentation reader = instrumentation;
+        Instrumentation reader = JvmAccess.findCurrent();
         if (reader == null) {
             return;
         }

@@ -29,7 +29,6 @@ import dev.moon.hotwire.fabric.rebuild.MixinConfigs;
 import dev.moon.hotwire.fabric.rebuild.MixinInternals;
 import dev.moon.hotwire.fabric.registration.ConnectionLambdas;
 import dev.moon.hotwire.fabric.registration.EventInvokers;
-import dev.moon.hotwire.fabric.registration.GlfwCallbacks;
 import dev.moon.hotwire.fabric.registration.InternedKeys;
 import dev.moon.hotwire.fabric.registration.LiveConnections;
 import dev.moon.hotwire.fabric.registration.MixinPlugins;
@@ -161,7 +160,6 @@ final class EngineStart {
         Instrumentation instrumentation = JvmAccess.getInstrumentation(findHotwireJarIfKnown(),
                 gameDir.resolve("hotwire").resolve("agent"));
         JarChannels.open(instrumentation);
-        GlfwCallbacks.useInstrumentation(instrumentation);
         LOGGER.info("[Hotwire] {} open jars read on through an interrupt", JarChannels.makeUninterruptible());
         laps.endLap("reach the JVM, open jars");
         KnotInternals knot = KnotInternals.bind();
@@ -272,14 +270,12 @@ final class EngineStart {
                 mixin::getGeneratedBy);
         InitHookReplay.writeStaticsWith(fieldReferences::writeStatic);
         OffWindowObjects.setRetired(EngineStart::isOfClosedWorld);
-        StaticCopies.readClassesWith(instrumentation);
         ReplacedStatics.swapWith(replaced -> {
             LiveConnections.swap(replaced);
             StaticCopies.swap(replaced);
         });
         FinalWrites.writeWith(fieldReferences::writeFinal);
         FieldSlots.readStaticsWhen(fieldReferences::isInitialized);
-        FieldSlots.readByPlaceWith(instrumentation);
         laps.endLap("field references, statics");
         switcher.reopenToTurnOnWith(mod -> fieldReferences.hasRemovedFrom(mod)
                 || NetworkHandlers.hasLostConnection(mod));

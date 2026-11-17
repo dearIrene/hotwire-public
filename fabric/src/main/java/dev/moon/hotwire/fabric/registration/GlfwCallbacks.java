@@ -1,6 +1,7 @@
 package dev.moon.hotwire.fabric.registration;
 
 import dev.moon.hotwire.fabric.version.Spellings;
+import dev.moon.hotwire.jvm.JvmAccess;
 import dev.moon.hotwire.jvm.LoadedClassList;
 import dev.moon.hotwire.redefine.FieldSlots;
 import dev.moon.hotwire.redefine.HandlerGuards;
@@ -78,13 +79,8 @@ public final class GlfwCallbacks {
     private static final int BELOW = 3;
 
     private static final int WRAP_DEPTH = 4;
-    private static volatile @Nullable Instrumentation instrumentation;
 
     private GlfwCallbacks() {
-    }
-
-    public static void useInstrumentation(Instrumentation found) {
-        instrumentation = found;
     }
 
     public static synchronized void takeOut(Collection<String> mods) {
@@ -141,7 +137,7 @@ public final class GlfwCallbacks {
     }
 
     private static List<Object> findObjectsOf(String holder) {
-        Instrumentation found = instrumentation;
+        Instrumentation found = JvmAccess.findCurrent();
         List<Object> objects = new ArrayList<>();
         if (found == null) {
             LOGGER.warn("[Hotwire] {}'s objects cannot be looked through: no instrumentation yet", holder);
