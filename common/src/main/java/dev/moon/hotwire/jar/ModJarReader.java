@@ -92,8 +92,9 @@ public final class ModJarReader {
             long soFar = 0;
             for (ZipEntry entry = zip.getNextEntry(); entry != null; entry = zip.getNextEntry()) {
                 names.add(entry.getName());
-                if (entry.getName().endsWith(".json") || entry.getName().endsWith(".jar")
-                        || entry.getName().endsWith(".class")) {
+
+                if (entry.getName().endsWith(".json") || !(entry.getName().startsWith("assets/")
+                        || entry.getName().startsWith("data/"))) {
                     byte[] bytes = ZipBytes.readEntry(zip);
                     soFar = ZipBytes.countRead(soFar, bytes);
                     entries.put(entry.getName(), bytes);
