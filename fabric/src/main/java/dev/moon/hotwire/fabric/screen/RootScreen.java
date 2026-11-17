@@ -101,6 +101,13 @@ public abstract class RootScreen extends Screen {
         this.drawn = true;
         this.drawFrame(new GuiCanvas(graphics, this.font), System.nanoTime(), mouseX, mouseY);
     }
+
+    @Override
+    public void extractBackground(GuiGraphicsExtractor graphics, int mouseX, int mouseY, float partialTick) {
+        if (this.isBackgroundShown()) {
+            super.extractBackground(graphics, mouseX, mouseY, partialTick);
+        }
+    }
     //?} else {
     /*// Hotwire's own frame alone, drawn while a switch holds the game (HoldFrame): no other mod's screen hooks run.
     public void drawInHold(GuiGraphics graphics) {
@@ -113,7 +120,18 @@ public abstract class RootScreen extends Screen {
         this.drawn = true;
         this.drawFrame(new GuiCanvas(graphics, this.font), System.nanoTime(), mouseX, mouseY);
     }
+
+    @Override
+    public void renderBackground(GuiGraphics graphics, int mouseX, int mouseY, float partialTick) {
+        if (this.isBackgroundShown()) {
+            super.renderBackground(graphics, mouseX, mouseY, partialTick);
+        }
+    }
     *///?}
+
+    protected boolean isBackgroundShown() {
+        return true;
+    }
 
     @Override
     public boolean mouseScrolled(double x, double y, double scrollX, double scrollY) {

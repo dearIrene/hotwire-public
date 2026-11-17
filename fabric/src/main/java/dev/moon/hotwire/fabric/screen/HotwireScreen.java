@@ -7,11 +7,6 @@ import java.nio.file.Path;
 import java.util.List;
 import java.util.function.Supplier;
 import net.minecraft.client.Minecraft;
-//? if >=26.1 {
-import net.minecraft.client.gui.GuiGraphicsExtractor;
-//?} else {
-/*import net.minecraft.client.gui.GuiGraphics;
-*///?}
 import org.jspecify.annotations.Nullable;
 
 public final class HotwireScreen extends RootScreen {
@@ -66,21 +61,10 @@ public final class HotwireScreen extends RootScreen {
         this.findScreen().leave(() -> super.onClose());
     }
 
-    //? if >=26.1 {
     @Override
-    public void extractBackground(GuiGraphicsExtractor graphics, int mouseX, int mouseY, float partialTick) {
-        if (Minecraft.getInstance().level == null) {
-            super.extractBackground(graphics, mouseX, mouseY, partialTick);
-        }
+    protected boolean isBackgroundShown() {
+        return Minecraft.getInstance().level == null;
     }
-    //?} else {
-    /*@Override
-    public void renderBackground(GuiGraphics graphics, int mouseX, int mouseY, float partialTick) {
-        if (Minecraft.getInstance().level == null) {
-            super.renderBackground(graphics, mouseX, mouseY, partialTick);
-        }
-    }
-    *///?}
 
     @Override
     public void onFilesDrop(List<Path> files) {

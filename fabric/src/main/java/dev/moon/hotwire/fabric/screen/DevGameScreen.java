@@ -6,11 +6,6 @@ import dev.moon.hotwire.ui.DevWindow;
 import dev.moon.hotwire.ui.NoticeLayer;
 import dev.moon.hotwire.ui.Root;
 import net.minecraft.client.Minecraft;
-//? if >=26.1 {
-import net.minecraft.client.gui.GuiGraphicsExtractor;
-//?} else {
-/*import net.minecraft.client.gui.GuiGraphics;
-*///?}
 
 public final class DevGameScreen extends RootScreen {
     private final Root root = new Root();
@@ -98,13 +93,8 @@ public final class DevGameScreen extends RootScreen {
         return false;
     }
 
-    //? if >=26.1 {
     @Override
-    public void extractBackground(GuiGraphicsExtractor graphics, int mouseX, int mouseY, float partialTick) {
+    protected boolean isBackgroundShown() {
+        return false;
     }
-    //?} else {
-    /*@Override
-    public void renderBackground(GuiGraphics graphics, int mouseX, int mouseY, float partialTick) {
-    }
-    *///?}
 }
