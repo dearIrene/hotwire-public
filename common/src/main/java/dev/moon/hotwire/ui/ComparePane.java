@@ -102,7 +102,10 @@ final class ComparePane {
     private static CodeBlock.Code makeMeasure(String key, double a, double b, boolean higherIsBetter) {
         double change = DevCompare.findChange(a, b);
         int ink = Palette.DIM;
-        if (higherIsBetter ? change > 0.02 : change < -0.02) {
+
+        if (a <= 0 || b <= 0) {
+            ink = Palette.DIM;
+        } else if (higherIsBetter ? change > 0.02 : change < -0.02) {
             ink = Palette.GOOD;
         } else if (higherIsBetter ? change < -0.02 : change > 0.02) {
             ink = Palette.BAD;

@@ -5,6 +5,7 @@ import dev.moon.hotwire.modrinth.StoreCategories;
 import dev.moon.hotwire.modrinth.StoreModel;
 import java.util.ArrayList;
 import java.util.List;
+import java.util.Locale;
 import org.jspecify.annotations.Nullable;
 
 public final class StorePage {
@@ -229,7 +230,7 @@ public final class StorePage {
 
     static String describeDownloads(long downloads) {
         if (downloads >= 1_000_000) {
-            return String.format("%.1fM", downloads / 1_000_000d).replace(".0M", "M");
+            return String.format(Locale.ROOT, "%.1fM", downloads / 1_000_000d).replace(".0M", "M");
         }
         return downloads >= 1_000 ? downloads / 1_000 + "K" : String.valueOf(downloads);
     }
