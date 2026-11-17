@@ -132,10 +132,6 @@ public final class ModrinthClient {
         this(new LiveTransport(hotwireVersion), loader, gameVersion, local);
     }
 
-    public ModrinthClient(Transport transport, String loader, String gameVersion) {
-        this(transport, loader, gameVersion, LocalJars.NONE);
-    }
-
     public ModrinthClient(Transport transport, String loader, String gameVersion, LocalJars local) {
         this.transport = transport;
         this.loader = loader;
