@@ -1,5 +1,6 @@
 package dev.moon.hotwire.fabric;
 
+import dev.moon.hotwire.fabric.add.WorldReopen;
 import dev.moon.hotwire.fabric.mixin.core.fabric.base.event.ArrayBackedEventAccessor;
 import dev.moon.hotwire.fabric.mixin.core.world.item.CreativeModeTabsAccessor;
 import dev.moon.hotwire.fabric.rebuild.GameClasses;
@@ -12,11 +13,13 @@ import dev.moon.hotwire.fabric.registration.RegisteredContent;
 import dev.moon.hotwire.fabric.screen.HoldFrame;
 import dev.moon.hotwire.fabric.screen.WebLinks;
 import dev.moon.hotwire.seam.Game;
+import dev.moon.hotwire.seam.Reloads;
 import io.netty.channel.Channel;
 import java.nio.file.Path;
 import java.util.List;
 import java.util.Set;
 import java.util.function.Function;
+import java.util.function.Supplier;
 import net.minecraft.client.Minecraft;
 import net.minecraft.client.resources.model.ModelManager;
 import net.minecraft.core.Holder;
@@ -32,6 +35,7 @@ import org.jspecify.annotations.Nullable;
 import org.spongepowered.asm.mixin.transformer.ClassInfo;
 
 public final class GameSide implements Game {
+    private final GameReloads reloads = new GameReloads();
     @Override
     public int findBitsOf(Class<?> type) {
         int bits = 0;
@@ -79,6 +83,11 @@ public final class GameSide implements Game {
     @Override
     public @Nullable Object getWorld() {
         return Minecraft.getInstance().level;
+    }
+
+    @Override
+    public <T> T reopenAround(Supplier<T> work) throws InterruptedException {
+        return WorldReopen.runAround(work);
     }
 
     @Override
@@ -195,6 +204,22 @@ public final class GameSide implements Game {
     @Override
     public boolean isHoldOverBudget() {
         return GameHold.isOverBudget();
+    }
+
+    @Override
+    public <T> T runUnbudgeted(Supplier<T> work) {
+        return GameHold.runUnbudgeted(work);
+    }
+
+    @Override
+    public Runnable runAtNextHold(Runnable work) {
+        GameHold.runAtNextHold(work);
+        return GameHold::dropNextHold;
+    }
+
+    @Override
+    public Reloads getReloads() {
+        return this.reloads;
     }
 
     @Override

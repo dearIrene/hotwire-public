@@ -1,22 +1,10 @@
-package dev.moon.hotwire.fabric.report;
+package dev.moon.hotwire.report;
 
+import dev.moon.hotwire.classfile.GameNames;
 import dev.moon.hotwire.config.AtomicFiles;
 import dev.moon.hotwire.engine.LoadedMods;
-import dev.moon.hotwire.fabric.HotwireClient;
-import dev.moon.hotwire.fabric.add.ModAdder;
 import dev.moon.hotwire.plan.SwitchPlan;
 import dev.moon.hotwire.registration.Owners;
-import dev.moon.hotwire.report.ActionJournal;
-import dev.moon.hotwire.report.CrashSection;
-import dev.moon.hotwire.report.Diagnosis;
-import dev.moon.hotwire.report.FreezeBlame;
-import dev.moon.hotwire.report.FreezeDump;
-import dev.moon.hotwire.report.HotwireLog;
-import dev.moon.hotwire.report.Report;
-import dev.moon.hotwire.report.ReportBundle;
-import dev.moon.hotwire.report.ReportWriter;
-import dev.moon.hotwire.report.SwitchFaults;
-import dev.moon.hotwire.report.TidyLog;
 import dev.moon.hotwire.switching.ModSwitcher;
 import dev.moon.hotwire.switching.SwitchApplier;
 import dev.moon.hotwire.update.ModUpdater;
@@ -57,11 +45,9 @@ import java.util.function.Function;
 import java.util.stream.Collectors;
 import java.util.stream.Stream;
 import net.fabricmc.loader.api.FabricLoader;
-import net.minecraft.client.Minecraft;
 import org.jspecify.annotations.Nullable;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
-import org.spongepowered.asm.launch.MixinBootstrap;
 
 public final class GameReports {
     private static final DateTimeFormatter SPAN = DateTimeFormatter.ofPattern("HH:mm:ss");
@@ -74,6 +60,7 @@ public final class GameReports {
     private final Path folder;
     private final Report.Machine machine;
     private final Function<String, String> nameOf;
+    private final ReportDetails details;
 
     private final Set<String> added = new CopyOnWriteArraySet<>();
 
@@ -105,13 +92,14 @@ public final class GameReports {
             Thread.ofPlatform().name("hotwire-reports").daemon().factory());
     private final Instant began = Instant.now();
 
-    public GameReports(Function<String, String> nameOf) {
+    public GameReports(Function<String, String> nameOf, ReportDetails details) {
+        this.details = details;
         FabricLoader loader = FabricLoader.getInstance();
         this.folder = loader.getGameDir().resolve("hotwire").resolve("reports");
         this.nameOf = nameOf;
-        this.machine = new Report.Machine(LoadedMods.findVersion(HotwireClient.ID, "unknown"),
+        this.machine = new Report.Machine(LoadedMods.findVersion(GameNames.HOTWIRE, "unknown"),
                 LoadedMods.findVersion("minecraft", "unknown"), LoadedMods.findVersion("fabricloader", "unknown"),
-                MixinBootstrap.VERSION, Runtime.version().toString(),
+                details.getMixinVersion(), Runtime.version().toString(),
                 System.getProperty("os.name", "") + " " + System.getProperty("os.version", ""),
                 "launcher agent", Map.of());
         current = this;
@@ -282,22 +270,17 @@ public final class GameReports {
         return report;
     }
 
-    public synchronized void onAdded(ModAdder.Result result, String jar, long millis) {
-        Report report = switch (result) {
-            case ModAdder.Result.Added added -> {
-                this.added.addAll(added.ids());
-                yield Report.of(Report.Operation.ADD, this.machine, this.getNames(added.ids()), added.ids(),
-                        getApplyResult(added.switched()), List.of(new Report.Timing("add", millis)),
-                        added.switched() instanceof ModSwitcher.Result.Failed failed
-                                ? Report.Failure.of("switch on", null, failed.cause()) : null);
-            }
-            case ModAdder.Result.Queued queued -> null;
-            case ModAdder.Result.Refused refused -> null;
-            case ModAdder.Result.Failed failed -> Report.of(Report.Operation.ADD, this.machine, Map.of(), List.of(jar),
-                    new SwitchApplier.ApplyResult(List.of(), List.of(), List.of()),
-                    List.of(new Report.Timing("add", millis)), Report.Failure.of("add", null, failed.cause()));
-        };
-        this.store(report);
+    public synchronized void onAdded(List<String> ids, ModSwitcher.Result switched, long millis) {
+        this.added.addAll(ids);
+        this.store(Report.of(Report.Operation.ADD, this.machine, this.getNames(ids), ids, getApplyResult(switched),
+                List.of(new Report.Timing("add", millis)), switched instanceof ModSwitcher.Result.Failed failed
+                        ? Report.Failure.of("switch on", null, failed.cause()) : null));
+    }
+
+    public synchronized void onAddFailed(String jar, Throwable cause, long millis) {
+        this.store(Report.of(Report.Operation.ADD, this.machine, Map.of(), List.of(jar),
+                new SwitchApplier.ApplyResult(List.of(), List.of(), List.of()),
+                List.of(new Report.Timing("add", millis)), Report.Failure.of("add", null, cause)));
     }
 
     public synchronized void onUpdated(ModUpdater.Result result, long millis) {
@@ -473,7 +456,7 @@ public final class GameReports {
 
         String told = froze ? read(logs.resolve(FreezeDump.FILE)).lines().limit(3).collect(Collectors.joining(" "))
                 + " " + why : why;
-        texts.put("latest.log", TidyLog.write(told, WHEN.format(now), MachineDetails.read(), mods,
+        texts.put("latest.log", TidyLog.write(told, WHEN.format(now), this.details.describeMachine(), mods,
                 Files.isRegularFile(log) ? getTail(read(log)) : "(the game wrote no log)\n"));
         HotwireLog.flush();
 
@@ -498,7 +481,7 @@ public final class GameReports {
             texts.put("hotwire-updates.json", read(pending));
         }
 
-        for (String name : List.of(HotwireClient.START_FAILURE, SwapAtClose.LAST_LOGS)) {
+        for (String name : List.of(HotwireLog.START_FAILURE, SwapAtClose.LAST_LOGS)) {
             if (Files.isRegularFile(logs.resolve(name))) {
                 texts.put("hotwire-" + name, read(logs.resolve(name)));
             }
@@ -515,8 +498,8 @@ public final class GameReports {
                 texts.put("hotwire-" + name, getTail(read(logs.resolve(name))));
             }
         }
-        if (Files.isRegularFile(logs.resolve(HotwireClient.STARTUP))) {
-            texts.put("hotwire-" + HotwireClient.STARTUP, read(logs.resolve(HotwireClient.STARTUP)));
+        if (Files.isRegularFile(logs.resolve(HotwireLog.STARTUP))) {
+            texts.put("hotwire-" + HotwireLog.STARTUP, read(logs.resolve(HotwireLog.STARTUP)));
         }
         ActionJournal.get().flush();
         for (String name : lastSession ? List.of(ActionJournal.FILE, ActionJournal.LAST)
@@ -533,7 +516,7 @@ public final class GameReports {
         this.listSince(game, ".log").stream().filter(file -> file.getFileName().toString().startsWith("hs_err"))
                 .forEach(file -> texts.put("jvm-crashes/" + file.getFileName(), read(file)));
         Path zip = ReportBundle.write(this.folder, now, title, this.machine.hotwireVersion(), texts,
-                Set.of(Minecraft.getInstance().getUser().getName()));
+                Set.of(this.details.getPlayerName()));
         return zip;
     }
 

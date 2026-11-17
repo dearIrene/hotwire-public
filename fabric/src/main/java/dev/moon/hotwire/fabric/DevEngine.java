@@ -5,9 +5,11 @@ import dev.moon.hotwire.dev.DevExtras;
 import dev.moon.hotwire.dev.DevMixin;
 import dev.moon.hotwire.dev.DevSession;
 import dev.moon.hotwire.engine.InstalledMods;
+import dev.moon.hotwire.engine.SwitchRunner;
 import dev.moon.hotwire.fabric.update.UpdateSupport;
 import dev.moon.hotwire.jar.ModJar;
 import dev.moon.hotwire.report.Report;
+import dev.moon.hotwire.switching.CheckedResult;
 import dev.moon.hotwire.switching.ModSwitcher;
 import dev.moon.hotwire.switching.PlayerMessages;
 import dev.moon.hotwire.ui.UpdateMethod;
@@ -64,7 +66,7 @@ final class DevEngine implements DevSession.Engine {
         if (found == null) {
             return new DevSession.Restart(this.refusal.get(), List.of());
         }
-        SwitchRunner.CheckedResult checked = SwitchRunner.runQuietly(() -> found.runner().turnOff(List.of(id)));
+        CheckedResult checked = SwitchRunner.runQuietly(() -> found.runner().turnOff(List.of(id)));
         if (!(checked.result() instanceof ModSwitcher.Result.Done done)) {
             return new DevSession.Restart(PlayerMessages.describe(checked.result(), this.installed::nameOf), List.of());
         }

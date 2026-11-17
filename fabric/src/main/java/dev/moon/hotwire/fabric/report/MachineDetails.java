@@ -2,22 +2,33 @@ package dev.moon.hotwire.fabric.report;
 
 import com.sun.management.OperatingSystemMXBean;
 import dev.moon.hotwire.engine.LoadedMods;
+import dev.moon.hotwire.report.ReportDetails;
 import java.lang.management.GarbageCollectorMXBean;
 import java.lang.management.ManagementFactory;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.stream.Collectors;
+import net.minecraft.client.Minecraft;
+import org.spongepowered.asm.launch.MixinBootstrap;
 import oshi.SystemInfo;
 import oshi.hardware.GraphicsCard;
 import oshi.hardware.HardwareAbstractionLayer;
 
-final class MachineDetails {
+public final class MachineDetails implements ReportDetails {
     private static final long MIB = 1024L * 1024L;
 
-    private MachineDetails() {
+    @Override
+    public String getMixinVersion() {
+        return MixinBootstrap.VERSION;
     }
 
-    static List<String> read() {
+    @Override
+    public String getPlayerName() {
+        return Minecraft.getInstance().getUser().getName();
+    }
+
+    @Override
+    public List<String> describeMachine() {
         List<String> out = new ArrayList<>();
         out.add("Hotwire: " + findVersionOf("hotwire"));
         out.add("Minecraft: " + findVersionOf("minecraft"));

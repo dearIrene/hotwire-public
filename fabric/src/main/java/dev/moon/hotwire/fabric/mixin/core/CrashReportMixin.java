@@ -1,8 +1,8 @@
 package dev.moon.hotwire.fabric.mixin.core;
 
-import dev.moon.hotwire.fabric.report.GameReports;
 import dev.moon.hotwire.report.Causes;
 import dev.moon.hotwire.report.CrashSection;
+import dev.moon.hotwire.report.GameReports;
 import java.nio.file.Path;
 import java.util.ArrayList;
 import java.util.LinkedHashSet;

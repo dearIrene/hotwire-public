@@ -8,7 +8,6 @@ import dev.moon.hotwire.engine.InstalledMods;
 import dev.moon.hotwire.engine.ModPolicy;
 import dev.moon.hotwire.fabric.rebuild.GameClasses;
 import dev.moon.hotwire.fabric.rebuild.MixinConfigs;
-import dev.moon.hotwire.fabric.report.GameReports;
 import dev.moon.hotwire.fabric.screen.ModIcons;
 import dev.moon.hotwire.jar.FileHashes;
 import dev.moon.hotwire.jar.ModJar;
@@ -21,6 +20,7 @@ import dev.moon.hotwire.plan.ModGraph;
 import dev.moon.hotwire.plan.SwitchPlanner;
 import dev.moon.hotwire.redefine.OpenGameClasses;
 import dev.moon.hotwire.report.ActionJournal;
+import dev.moon.hotwire.report.GameReports;
 import dev.moon.hotwire.report.Report;
 import dev.moon.hotwire.switching.ModSwitcher;
 import dev.moon.hotwire.switching.SwitchApplier;
@@ -231,7 +231,12 @@ public final class AddSupport implements ModAdder.Engine {
             this.reports.onEnded();
         }
         endJournal(journal, result);
-        this.reports.onAdded(result, String.valueOf(jar.getFileName()), (System.nanoTime() - start) / 1_000_000);
+        long millis = (System.nanoTime() - start) / 1_000_000;
+        if (result instanceof ModAdder.Result.Added added) {
+            this.reports.onAdded(added.ids(), added.switched(), millis);
+        } else if (result instanceof ModAdder.Result.Failed failed) {
+            this.reports.onAddFailed(String.valueOf(jar.getFileName()), failed.cause(), millis);
+        }
         if (result instanceof ModAdder.Result.Added added) {
             try {
                 this.installed.onAdded(jar, ModJarReader.read(jar), added.ids());

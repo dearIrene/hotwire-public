@@ -4,12 +4,14 @@ import dev.moon.hotwire.api.SwitchResult;
 import dev.moon.hotwire.concurrent.Tasks;
 import dev.moon.hotwire.config.HotwireSettings;
 import dev.moon.hotwire.engine.InstalledMods;
+import dev.moon.hotwire.engine.SwitchRunner;
 import dev.moon.hotwire.fabric.add.ModAdder;
 import dev.moon.hotwire.fabric.add.WorldReopen;
 import dev.moon.hotwire.fabric.registration.EntityHolders;
 import dev.moon.hotwire.fabric.registration.WorldContent;
 import dev.moon.hotwire.report.ActionJournal;
 import dev.moon.hotwire.report.Report;
+import dev.moon.hotwire.switching.CheckedResult;
 import dev.moon.hotwire.switching.ModSwitcher;
 import dev.moon.hotwire.switching.PlayerMessages;
 import dev.moon.hotwire.switching.SwitchHistory;
@@ -99,12 +101,12 @@ final class SwitchRequests {
     }
 
     @SuppressWarnings("FutureReturnValueIgnored")
-    void run(Function<SwitchRunner, SwitchRunner.CheckedResult> work) {
+    void run(Function<SwitchRunner, CheckedResult> work) {
         this.run(work, false, List.of(), false, false);
     }
 
     @SuppressWarnings("FutureReturnValueIgnored")
-    private CompletableFuture<SwitchResult> run(Function<SwitchRunner, SwitchRunner.CheckedResult> work, boolean off,
+    private CompletableFuture<SwitchResult> run(Function<SwitchRunner, CheckedResult> work, boolean off,
             List<String> ids, boolean quiet, boolean undoable) {
         HotwireEngine.JvmParts parts = this.engine.findJvmParts().orElse(null);
         if (parts == null) {
@@ -202,7 +204,7 @@ final class SwitchRequests {
     // notice must not be removed under any circumstance.
 
     @SuppressWarnings("FutureReturnValueIgnored")
-    SwitchRunner.CheckedResult switchNow(SwitchRunner runner, boolean off, List<String> ids) {
+    CheckedResult switchNow(SwitchRunner runner, boolean off, List<String> ids) {
         List<String> disabledIds = off ? List.of() : ids.stream().filter(this.disabled::isDisabledSinceStart).toList();
 
         disabledIds.forEach(this.disabled::enableByAdd);
@@ -232,11 +234,11 @@ final class SwitchRequests {
         return ended;
     }
 
-    static SwitchRunner.@Nullable CheckedResult runSwitchWithReopen(SwitchRunner runner, boolean off, List<String> ids)
+    static @Nullable CheckedResult runSwitchWithReopen(SwitchRunner runner, boolean off, List<String> ids)
             throws InterruptedException {
         ActionJournal.Entry journal = ActionJournal.get().begin(off ? ActionJournal.Action.REOPEN_OFF
                 : ActionJournal.Action.REOPEN_ON, ids);
-        SwitchRunner.@Nullable CheckedResult result;
+        @Nullable CheckedResult result;
         try {
             result = WorldReopen.runAround(() -> {
                 if (ids.isEmpty()) {

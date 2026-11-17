@@ -1,7 +1,7 @@
 package dev.moon.hotwire.fabric.mixin.core.world.level;
 
 import com.llamalad7.mixinextras.sugar.Local;
-import dev.moon.hotwire.fabric.CrashGuard;
+import dev.moon.hotwire.engine.CrashGuard;
 import dev.moon.hotwire.switching.CrashPolicy;
 import net.minecraft.world.level.Level;
 import org.spongepowered.asm.mixin.Mixin;

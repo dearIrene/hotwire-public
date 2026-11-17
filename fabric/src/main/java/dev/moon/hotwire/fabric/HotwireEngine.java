@@ -12,14 +12,12 @@ import dev.moon.hotwire.engine.InstalledMods;
 import dev.moon.hotwire.engine.LoadedMods;
 import dev.moon.hotwire.engine.ModPolicy;
 import dev.moon.hotwire.engine.ModTripwire;
+import dev.moon.hotwire.engine.SwitchRunner;
 import dev.moon.hotwire.fabric.add.AddSupport;
 import dev.moon.hotwire.fabric.add.ModAdder;
 import dev.moon.hotwire.fabric.add.WorldReopen;
 import dev.moon.hotwire.fabric.rebuild.GameClasses;
 import dev.moon.hotwire.fabric.registration.ModLifecycle;
-import dev.moon.hotwire.fabric.report.GameEnvironment;
-import dev.moon.hotwire.fabric.report.GameReports;
-import dev.moon.hotwire.fabric.report.ReportZips;
 import dev.moon.hotwire.fabric.screen.HotwireScreen;
 import dev.moon.hotwire.fabric.screen.ModIcons;
 import dev.moon.hotwire.fabric.screen.WebLinks;
@@ -31,8 +29,12 @@ import dev.moon.hotwire.redefine.LoadedClassBytes;
 import dev.moon.hotwire.redefine.Tripwire;
 import dev.moon.hotwire.registration.GameRegistrations;
 import dev.moon.hotwire.report.ActionJournal;
+import dev.moon.hotwire.report.GameEnvironment;
 import dev.moon.hotwire.report.GameLog;
+import dev.moon.hotwire.report.GameReports;
+import dev.moon.hotwire.report.ReportZips;
 import dev.moon.hotwire.store.UpdateCheck;
+import dev.moon.hotwire.switching.CheckedResult;
 import dev.moon.hotwire.switching.ModSwitcher;
 import dev.moon.hotwire.switching.PlayerMessages;
 import dev.moon.hotwire.switching.SwitchHistory;
@@ -346,7 +348,7 @@ public final class HotwireEngine implements ModScreenGame, AutoCloseable {
         return this.changes;
     }
 
-    public SwitchRunner.CheckedResult switchNow(boolean off, List<String> ids) {
+    public CheckedResult switchNow(boolean off, List<String> ids) {
         return this.switches.switchNow(this.requireSwitching().runner(), off, ids);
     }
 
@@ -386,7 +388,7 @@ public final class HotwireEngine implements ModScreenGame, AutoCloseable {
         return this.switches.switchWithReopen(this.requireSwitching().runner(), off, ids);
     }
 
-    public SwitchRunner.@Nullable CheckedResult runSwitchWithReopen(boolean off, List<String> ids)
+    public @Nullable CheckedResult runSwitchWithReopen(boolean off, List<String> ids)
             throws InterruptedException {
         return SwitchRequests.runSwitchWithReopen(this.requireSwitching().runner(), off, ids);
     }
@@ -603,12 +605,12 @@ public final class HotwireEngine implements ModScreenGame, AutoCloseable {
     @Override
     public void applyProfile(String name, ProfileStore.ProfilePlan plan) {
         this.switches.run(runner -> {
-            SwitchRunner.CheckedResult off = runner.turnOff(plan.turnOff());
+            CheckedResult off = runner.turnOff(plan.turnOff());
             SwitchHistory.get().recordDone(off.result(), SwitchHistory.Cause.PROFILE, name);
             if (PlayerMessages.isBad(off.result()) || plan.turnOn().isEmpty()) {
                 return off;
             }
-            SwitchRunner.CheckedResult on = runner.turnOn(plan.turnOn());
+            CheckedResult on = runner.turnOn(plan.turnOn());
             SwitchHistory.get().recordDone(on.result(), SwitchHistory.Cause.PROFILE, name);
             return on;
         });

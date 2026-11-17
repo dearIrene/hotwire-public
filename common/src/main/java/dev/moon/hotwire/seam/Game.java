@@ -4,6 +4,7 @@ import java.nio.file.Path;
 import java.util.List;
 import java.util.Set;
 import java.util.function.Function;
+import java.util.function.Supplier;
 import org.jspecify.annotations.Nullable;
 
 public interface Game {
@@ -23,6 +24,8 @@ public interface Game {
     Object getRoot();
 
     @Nullable Object getWorld();
+
+    <T> T reopenAround(Supplier<T> work) throws InterruptedException;
 
     Object getModelManager();
 
@@ -67,6 +70,12 @@ public interface Game {
     void runUnheld(Runnable work);
 
     boolean isHoldOverBudget();
+
+    <T> T runUnbudgeted(Supplier<T> work);
+
+    Runnable runAtNextHold(Runnable work);
+
+    Reloads getReloads();
 
     boolean isGamePaused();
 

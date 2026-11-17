@@ -52,13 +52,11 @@ public final class HotwireClient implements ClientModInitializer {
     public static final Identifier NOTICES = Identifier.fromNamespaceAndPath(ID, "notices");
     private static final Logger LOGGER = LoggerFactory.getLogger(HotwireClient.class);
 
-    public static final String START_FAILURE = "start-failure.txt";
     private static final String START_FAILED = "Hotwire did not start; hotwire/logs/start-failure.txt says why";
     private static @Nullable HotwireEngine engine;
 
     private static boolean startFailed;
     private static final String TITLE = "title screen";
-    public static final String STARTUP = "startup.txt";
 
     @Override
     public void onInitializeClient() {
@@ -186,7 +184,8 @@ public final class HotwireClient implements ClientModInitializer {
         }
         StartTimes.mark(TITLE);
         ActionJournal.get().note(ActionJournal.Action.TITLE, "");
-        Path file = FabricLoader.getInstance().getGameDir().resolve("hotwire").resolve("logs").resolve(STARTUP);
+        Path file = FabricLoader.getInstance().getGameDir().resolve("hotwire").resolve("logs")
+                .resolve(HotwireLog.STARTUP);
         String about = "Hotwire " + LoadedMods.findVersion(ID, "unknown") + " on Minecraft "
                 + LoadedMods.findVersion("minecraft", "unknown") + ", " + FabricLoader.getInstance().getAllMods().size()
                 + " mods loaded";

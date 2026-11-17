@@ -1,10 +1,7 @@
-package dev.moon.hotwire.fabric.report;
+package dev.moon.hotwire.report;
 
-import dev.moon.hotwire.fabric.screen.WebLinks;
-import dev.moon.hotwire.report.ActionJournal;
-import dev.moon.hotwire.report.FreezeDump;
-import dev.moon.hotwire.report.GameLog;
-import dev.moon.hotwire.report.TidyLog;
+import dev.moon.hotwire.config.Flags;
+import dev.moon.hotwire.seam.Games;
 import dev.moon.hotwire.ui.Lang;
 import dev.moon.hotwire.ui.list.ModStatus;
 import java.io.IOException;
@@ -12,7 +9,9 @@ import java.nio.file.Files;
 import java.nio.file.Path;
 import java.util.ArrayList;
 import java.util.List;
+import java.util.Locale;
 import java.util.Optional;
+import java.util.concurrent.TimeUnit;
 import java.util.function.Predicate;
 import java.util.function.Supplier;
 import net.fabricmc.loader.api.FabricLoader;
@@ -114,14 +113,34 @@ public final class ReportZips {
         Path zip = this.last;
         Path folder = zip == null ? null : zip.toAbsolutePath().getParent();
         if (folder != null) {
-            WebLinks.openFolderBeforeExit(folder);
+            openFolderBeforeExit(folder);
+        }
+    }
+
+    private static void openFolderBeforeExit(Path folder) {
+        if (Flags.ONECLIENT) {
+            return;
+        }
+        String os = System.getProperty("os.name", "").toLowerCase(Locale.ROOT);
+        String opener = "xdg-open";
+        if (os.contains("win")) {
+            opener = "explorer";
+        } else if (os.contains("mac")) {
+            opener = "open";
+        }
+        try {
+            new ProcessBuilder(List.of(opener, folder.toString())).start().waitFor(2, TimeUnit.SECONDS);
+        } catch (IOException e) {
+            LOGGER.warn("[Hotwire] {} could not open {}: {}", opener, folder, e.toString());
+        } catch (InterruptedException e) {
+            Thread.currentThread().interrupt();
         }
     }
 
     private static void reveal(Path zip) {
         Path folder = zip.toAbsolutePath().getParent();
         if (folder != null) {
-            WebLinks.openFolder(folder);
+            Games.getNow().openFolder(folder);
         }
     }
 }

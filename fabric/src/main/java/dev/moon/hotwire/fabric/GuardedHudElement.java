@@ -1,6 +1,7 @@
 package dev.moon.hotwire.fabric;
 
 //? if >=1.21.6 {
+import dev.moon.hotwire.engine.CrashGuard;
 import dev.moon.hotwire.switching.CrashPolicy;
 import net.fabricmc.fabric.api.client.rendering.v1.hud.HudElement;
 import net.minecraft.client.DeltaTracker;

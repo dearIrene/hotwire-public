@@ -23,6 +23,9 @@ import org.jspecify.annotations.Nullable;
 public final class HotwireLog extends AbstractAppender {
     public static final String FILE = "latest.log";
     public static final String LAST = "previous.log";
+
+    public static final String START_FAILURE = "start-failure.txt";
+    public static final String STARTUP = "startup.txt";
     private static final String PACKAGE = "dev.moon.hotwire";
     private static final DateTimeFormatter TIME = DateTimeFormatter.ofPattern("HH:mm:ss")
             .withZone(ZoneId.systemDefault());

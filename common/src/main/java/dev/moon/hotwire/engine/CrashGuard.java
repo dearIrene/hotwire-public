@@ -1,18 +1,16 @@
-package dev.moon.hotwire.fabric;
+package dev.moon.hotwire.engine;
 
 import dev.moon.hotwire.concurrent.Tasks;
 import dev.moon.hotwire.dev.DevSession;
-import dev.moon.hotwire.engine.InstalledMods;
-import dev.moon.hotwire.engine.ModPolicy;
-import dev.moon.hotwire.fabric.add.WorldReopen;
-import dev.moon.hotwire.fabric.registration.GameHold;
-import dev.moon.hotwire.fabric.report.GameReports;
 import dev.moon.hotwire.registration.CallerOwner;
 import dev.moon.hotwire.registration.MergedMembers;
 import dev.moon.hotwire.registration.Owners;
 import dev.moon.hotwire.report.ActionJournal;
 import dev.moon.hotwire.report.Causes;
+import dev.moon.hotwire.report.GameReports;
 import dev.moon.hotwire.report.Report;
+import dev.moon.hotwire.seam.Games;
+import dev.moon.hotwire.switching.CheckedResult;
 import dev.moon.hotwire.switching.CrashPolicy;
 import dev.moon.hotwire.switching.ModSwitcher;
 import dev.moon.hotwire.switching.PlayerMessages;
@@ -53,7 +51,7 @@ public final class CrashGuard {
 
     @SuppressWarnings("FutureReturnValueIgnored")
 
-    static void install(InstalledMods installed, Tasks tasks, Supplier<@Nullable SwitchRunner> runner,
+    public static void install(InstalledMods installed, Tasks tasks, Supplier<@Nullable SwitchRunner> runner,
             BiConsumer<String, Boolean> say, BiFunction<String, String, String> writeReport,
             BooleanSupplier antiCrash, Predicate<String> inDevelopment) {
         CrashPolicy[] made = new CrashPolicy[1];
@@ -73,7 +71,7 @@ public final class CrashGuard {
                 return;
             }
             String why = name + " threw at " + caught.site() + ": " + caught.thrown();
-            if (!switching.getSwitcher().isOn(caught.mod())) {
+            if (!switching.isOn(caught.mod())) {
                 tasks.submit("report of " + caught.mod() + "'s crash", () -> writeReport.apply(
                         Lang.get("hotwire.report.file.mod_crash", name), why), where -> {
                     String line = Lang.get("hotwire.crash.off_held", name, where);
@@ -86,13 +84,13 @@ public final class CrashGuard {
             Notices.show(Lang.get(byAntiCrash ? "hotwire.anti_crash.title" : "hotwire.crash.title"),
                     Lang.get("hotwire.anti_crash.turning_off", name));
             endWhenThrown(made[0], caught.mod(), tasks.submit("turning off " + caught.mod() + " after its crash",
-                    () -> turnOffAfterCrash(caught.mod(), () -> switching.turnOff(List.of(caught.mod()))), reported -> {
+                    () -> turnOffAfterCrash(caught.mod(), () -> switching.turnOffQuietly(caught.mod())), reported -> {
                         if (isWorldBuilt(reported.result())) {
                             endWhenThrown(made[0], caught.mod(), tasks.submit("saving the world and turning off "
                                     + caught.mod() + " after its crash", () -> turnOffAfterCrash(caught.mod(), () -> {
                                         try {
-                                            return WorldReopen.runAround(
-                                                    () -> switching.turnOff(List.of(caught.mod())));
+                                            return Games.getNow().reopenAround(
+                                                    () -> switching.turnOffQuietly(caught.mod()));
                                         } catch (InterruptedException e) {
                                             Thread.currentThread().interrupt();
                                             throw new IllegalStateException("the off was interrupted while the"
@@ -124,12 +122,12 @@ public final class CrashGuard {
         });
     }
 
-    private static SwitchRunner.CheckedResult turnOffAfterCrash(String mod,
-            Supplier<SwitchRunner.CheckedResult> off) {
+    private static CheckedResult turnOffAfterCrash(String mod,
+            Supplier<CheckedResult> off) {
         ActionJournal.Entry journal = ActionJournal.get().begin(ActionJournal.Action.CRASH_OFF, mod);
-        SwitchRunner.CheckedResult result;
+        CheckedResult result;
         try {
-            result = SwitchRunner.runQuietly(() -> GameHold.runUnbudgeted(off));
+            result = Games.getNow().runUnbudgeted(off);
         } catch (RuntimeException e) {
             journal.endThrown();
             throw e;
@@ -211,7 +209,7 @@ public final class CrashGuard {
         return null;
     }
 
-    static void onBackOn(Collection<String> ids) {
+    public static void onBackOn(Collection<String> ids) {
         CrashPolicy made = policy;
         if (made != null) {
             ids.forEach(id -> made.onOffFinished(id, true));

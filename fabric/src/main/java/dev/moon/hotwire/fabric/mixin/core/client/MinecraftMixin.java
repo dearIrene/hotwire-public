@@ -2,7 +2,7 @@ package dev.moon.hotwire.fabric.mixin.core.client;
 
 import com.llamalad7.mixinextras.injector.wrapoperation.Operation;
 import com.llamalad7.mixinextras.injector.wrapoperation.WrapOperation;
-import dev.moon.hotwire.fabric.CrashGuard;
+import dev.moon.hotwire.engine.CrashGuard;
 import dev.moon.hotwire.fabric.CrashReports;
 import dev.moon.hotwire.fabric.FrameRecovery;
 import dev.moon.hotwire.fabric.ReloadFailures;

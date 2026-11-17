@@ -6,6 +6,7 @@ import dev.moon.hotwire.config.HotwireSettings;
 import dev.moon.hotwire.dev.DevMod;
 import dev.moon.hotwire.dev.DevSession;
 import dev.moon.hotwire.engine.CacheLimit;
+import dev.moon.hotwire.engine.CrashGuard;
 import dev.moon.hotwire.engine.DevSetups;
 import dev.moon.hotwire.engine.InstalledMods;
 import dev.moon.hotwire.engine.LifecycleListeners;
@@ -15,6 +16,7 @@ import dev.moon.hotwire.engine.ModsFolder;
 import dev.moon.hotwire.engine.OwnThrowNotice;
 import dev.moon.hotwire.engine.RestartOnlyFile;
 import dev.moon.hotwire.engine.SeenUses;
+import dev.moon.hotwire.engine.SwitchRunner;
 import dev.moon.hotwire.fabric.add.AddSupport;
 import dev.moon.hotwire.fabric.add.HiddenPacks;
 import dev.moon.hotwire.fabric.rebuild.GameClasses;
@@ -34,7 +36,7 @@ import dev.moon.hotwire.fabric.registration.NetworkHandlers;
 import dev.moon.hotwire.fabric.registration.OffModCommands;
 import dev.moon.hotwire.fabric.registration.RegistryEntries;
 import dev.moon.hotwire.fabric.registration.RegistryHolders;
-import dev.moon.hotwire.fabric.report.GameReports;
+import dev.moon.hotwire.fabric.report.MachineDetails;
 import dev.moon.hotwire.fabric.screen.HoldFrame;
 import dev.moon.hotwire.fabric.screen.ModIcons;
 import dev.moon.hotwire.fabric.screen.RootScreen;
@@ -83,6 +85,8 @@ import dev.moon.hotwire.registration.OneConfigSaves;
 import dev.moon.hotwire.registration.Owners;
 import dev.moon.hotwire.registration.QuietThreads;
 import dev.moon.hotwire.registration.StaticCopies;
+import dev.moon.hotwire.report.GameReports;
+import dev.moon.hotwire.report.HotwireLog;
 import dev.moon.hotwire.report.LoggedFaults;
 import dev.moon.hotwire.report.StartTimes;
 import dev.moon.hotwire.switching.BestTimes;
@@ -437,8 +441,8 @@ final class EngineStart {
         SwitchRunner runner = new SwitchRunner(switcher, offChecker, reports, tripwire, fieldReferences,
                 new AsyncLogging(applier.getRebuilder(), instrumentation),
                 new GeneratedWrappers(applier.getRebuilder(),
-                mixin::getGeneratedBy), new MixinPlugins(mixin::getConfigObjects,
-                        mixin.getProcessor()), chain);
+                mixin::getGeneratedBy), new GameSwitchUnits(new MixinPlugins(mixin::getConfigObjects,
+                        mixin.getProcessor())), installed, chain);
         AddSupport adds = new AddSupport(installed, applier, switcher, classes, reports, gameDir, folders, queue,
                 icons, ids -> runner.turnOff(ids).result());
         adds.setAfterAdd(runner::lookAheadForAll);
@@ -483,7 +487,7 @@ final class EngineStart {
 
     private static void forgetStartFailure(Path gameDir) {
         try {
-            Files.deleteIfExists(gameDir.resolve("hotwire").resolve("logs").resolve(HotwireClient.START_FAILURE));
+            Files.deleteIfExists(gameDir.resolve("hotwire").resolve("logs").resolve(HotwireLog.START_FAILURE));
         } catch (IOException | RuntimeException e) {
             LOGGER.debug("[Hotwire] the last start's failure could not be deleted: {}", e.toString());
         }
@@ -495,7 +499,7 @@ final class EngineStart {
         try {
             Path logs = gameDir.resolve("hotwire").resolve("logs");
             Files.createDirectories(logs);
-            Files.writeString(logs.resolve(HotwireClient.START_FAILURE), trace.toString());
+            Files.writeString(logs.resolve(HotwireLog.START_FAILURE), trace.toString());
         } catch (IOException | RuntimeException e) {
             LOGGER.warn("[Hotwire] the start's failure could not be written down", e);
         }
@@ -576,7 +580,7 @@ final class EngineStart {
         laps.endLap("read the installed mods");
         Progress progress = new Progress();
         LoggedFaults.install();
-        GameReports reports = new GameReports(installed::nameOf);
+        GameReports reports = new GameReports(installed::nameOf, new MachineDetails());
         UpdateFolders folders = UpdateFolders.ofMods(ModsFolder.find(loader));
         UpdateQueue queue = new UpdateQueue(folders.queueFile());
         HotwireSettings settings = new HotwireSettings(loader.getConfigDir().resolve("hotwire/settings.json"));

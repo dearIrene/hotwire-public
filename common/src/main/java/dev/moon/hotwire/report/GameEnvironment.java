@@ -1,13 +1,12 @@
-package dev.moon.hotwire.fabric.report;
+package dev.moon.hotwire.report;
 
+import dev.moon.hotwire.classfile.GameNames;
 import dev.moon.hotwire.engine.InstalledMods;
 import dev.moon.hotwire.engine.LoadedMods;
-import dev.moon.hotwire.fabric.HotwireClient;
 import dev.moon.hotwire.jar.FileHashes;
 import dev.moon.hotwire.jar.ModManifest;
 import dev.moon.hotwire.plan.ModGraph;
-import dev.moon.hotwire.report.ActionJournal;
-import dev.moon.hotwire.report.EnvironmentFile;
+import dev.moon.hotwire.seam.Games;
 import java.io.IOException;
 import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
@@ -19,7 +18,6 @@ import java.util.Map;
 import java.util.TreeMap;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.TimeUnit;
-import net.minecraft.client.Minecraft;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -78,11 +76,11 @@ public final class GameEnvironment {
     }
 
     public String describe() {
-        if (!Minecraft.getInstance().isSameThread()) {
+        if (!Games.getNow().isOnGameThread()) {
             this.hashJars("as a report was written");
         }
         List<String> details = List.of("Minecraft: " + LoadedMods.findVersion("minecraft", "unknown"),
-                "Hotwire: " + LoadedMods.findVersion(HotwireClient.ID, "unknown"),
+                "Hotwire: " + LoadedMods.findVersion(GameNames.HOTWIRE, "unknown"),
                 "Fabric Loader: " + LoadedMods.findVersion("fabricloader", "unknown"),
                 "Java: " + System.getProperty("java.version") + ", " + System.getProperty("java.vendor"),
                 "OS: " + System.getProperty("os.name") + " (" + System.getProperty("os.arch") + ")",
