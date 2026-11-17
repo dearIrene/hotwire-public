@@ -95,9 +95,9 @@ final class DevMode implements DevControls {
                 case OTHER -> "hotwire.settings.developer.other_java";
             }), setup.isFull(), this.settings.getDevWindow(), this.settings::setDevWindow,
                     this.settings.getDevScale(), this.settings::setDevScale, this.settings.getDevSeeThrough(),
-                    this.settings::setDevSeeThrough, () -> ModViews.show(null));
+                    this.settings::setDevSeeThrough, () -> ModViews.show(null),
 
-            shown.setSettings(() -> ModViews.show((Screen) this.settingsScreen.apply(ModViews.openScreen())));
+                    () -> ModViews.show((Screen) this.settingsScreen.apply(ModViews.openScreen())));
             shown.setMcp(FabricLoader.getInstance().isModLoaded("hotwire-mcp"),
                     () -> WebLinks.open("https://github.com/moonshee/hotwire/releases"));
             this.window = shown;

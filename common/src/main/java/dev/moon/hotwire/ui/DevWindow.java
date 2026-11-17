@@ -71,7 +71,7 @@ public final class DevWindow extends Element {
     private int gameScale = 1;
     private int mostScale = 1;
     private double seeThrough;
-    private Runnable openSettings = () -> { };
+    private final Runnable openSettings;
     private int screenWidth = 854;
     private int placedX;
     private int placedY;
@@ -79,7 +79,7 @@ public final class DevWindow extends Element {
     @SuppressWarnings("this-escape")
     public DevWindow(DevHost host, String runtime, boolean fullRuntime, double @Nullable [] saved,
             Consumer<double[]> onPlaced, int scale, IntConsumer onScale, double seeThrough,
-            DoubleConsumer onSeeThrough, Runnable onClose) {
+            DoubleConsumer onSeeThrough, Runnable onClose, Runnable openSettings) {
         this.host = host;
         this.saved = saved == null ? null : saved.clone();
         this.onPlaced = onPlaced;
@@ -89,6 +89,7 @@ public final class DevWindow extends Element {
         DevCards.setSeeThrough(seeThrough);
         this.onSeeThrough = onSeeThrough;
         this.onClose = onClose;
+        this.openSettings = openSettings;
         this.picker = new BuildPicker(host, () -> this.rail.press(OVERVIEW));
         this.overview = new DevOverview(host, runtime, fullRuntime, this::openBuilds);
         this.lists = new DevHistory(host, this::openBuilds);
@@ -215,10 +216,6 @@ public final class DevWindow extends Element {
     public void setScaleRange(int game, int most) {
         this.gameScale = Math.max(1, game);
         this.mostScale = Math.max(1, most);
-    }
-
-    public void setSettings(Runnable open) {
-        this.openSettings = open;
     }
 
     public void setMcp(boolean installed, Runnable getIt) {
