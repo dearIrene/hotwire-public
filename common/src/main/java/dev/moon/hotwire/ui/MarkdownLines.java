@@ -20,12 +20,7 @@ final class MarkdownLines {
 
         Line(String text, int indent, int color, int above, String picture) {
             this(text, indent, color, above, picture, List.of());
-        }
-
-        Line(String text, int indent, int color, int above) {
-            this(text, indent, color, above, "");
-        }
-    }
+        }    }
 
     record Span(int from, int to, boolean bold, String url) {
     }

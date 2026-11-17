@@ -178,10 +178,6 @@ public class Element {
         return false;
     }
 
-    final @Nullable Element press(double px, double py, int button) {
-        return this.press(px, py, button, 0);
-    }
-
     final @Nullable Element press(double px, double py, int button, int modifiers) {
         if (!this.open() || !this.contains(px, py)) {
             return null;
