@@ -561,7 +561,7 @@ public final class HotwireEngine implements ModScreenGame, AutoCloseable {
             return;
         }
         if (parts != null) {
-            parts.runner().getSwitcher().prepareAhead(ids, off);
+            parts.runner().prepareAhead(ids, off);
         }
     }
 

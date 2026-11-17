@@ -254,6 +254,13 @@ public final class SwitchRunner {
         });
     }
 
+    public void prepareAhead(List<String> ids, boolean off) {
+        if (off && !this.units.findWorldContent(this.switcher.planOff(ids).order()).isEmpty()) {
+            return;
+        }
+        this.switcher.prepareAhead(ids, off);
+    }
+
     public void lookAheadForAll() {
         this.looking.execute(() -> {
             this.forgetClosedWorld();
