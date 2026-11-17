@@ -86,7 +86,7 @@ final class SearchSquares extends Part {
             float there = this.there[index];
             int lit = Colors.mix(Palette.ON, Palette.ACCENT, index / (float) Math.max(1, count - 1));
             boolean found = this.looks.get(index) == Look.FOUND;
-            int ink = Colors.mix(Palette.TRACK, Colors.mix(Palette.OFF, found ? Palette.ACCENT : lit, this.on[index]),
+            int ink = Colors.mix(Palette.TRACK, Colors.mix(Palette.FAINT, found ? Palette.ACCENT : lit, this.on[index]),
                     there);
             int inset = Math.round(side * (1 - GONE_SIZE) / 2 * (1 - there));
             if (found) {

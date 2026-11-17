@@ -8,7 +8,6 @@ public final class Palette {
     public static final int ACCENT = 0xFFFF7CC3;
     public static final int ACCENT_SOFT = 0xFF9B7BD6;
     public static final int ON = 0xFFB48CFF;
-    public static final int OFF = 0xFF5F557A;
     public static final int TEXT = 0xFFEBE6F6;
     public static final int DIM = 0xFF8F82B0;
     public static final int FAINT = 0xFF5F557A;
@@ -25,8 +24,6 @@ public final class Palette {
     public static final int OFF_TINT = 0xFFFF5A6E;
     public static final int TRACK = 0xFF231B36;
     static final int SCRIM = 0xC00B0912;
-
-    public static final int ON_ACCENT = 0xFF140B1A;
 
     private Palette() {
     }
