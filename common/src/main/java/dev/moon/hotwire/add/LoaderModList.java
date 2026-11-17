@@ -14,6 +14,7 @@ import java.util.Collection;
 import java.util.Collections;
 import java.util.Comparator;
 import java.util.HashMap;
+import java.util.HashSet;
 import java.util.IdentityHashMap;
 import java.util.LinkedHashMap;
 import java.util.List;
@@ -380,7 +381,7 @@ public final class LoaderModList {
     public static Set<String> getHidden() {
         FabricLoaderImpl loader = FabricLoaderImpl.INSTANCE;
         synchronized (loader) {
-            return Set.copyOf(HIDDEN.keySet());
+            return Collections.unmodifiableSet(new HashSet<>(HIDDEN.keySet()));
         }
     }
 
