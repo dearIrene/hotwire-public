@@ -20,12 +20,10 @@ public final class StartSources {
 
     public static void takeEarly(Path folder) {
         for (DevMod mod : DevMod.find()) {
-            Path project = mod.findSourceProject();
-            if (project == null) {
+            BuildSources sources = BuildSources.findFor(mod, folder);
+            if (sources == null) {
                 continue;
             }
-            BuildSources sources = new BuildSources(folder.resolve(mod.id()).resolve("sources"), project,
-                    mod.findSourceRoots());
             try {
                 sources.takeAs(EARLY);
                 EARLY_SOURCES.put(mod.id(), sources);
@@ -39,12 +37,10 @@ public final class StartSources {
         BuildSources sources = EARLY_SOURCES.remove(mod.id());
         try {
             if (sources == null) {
-                Path project = mod.findSourceProject();
-                if (project == null) {
+                sources = BuildSources.findFor(mod, folder);
+                if (sources == null) {
                     return null;
                 }
-                sources = new BuildSources(folder.resolve(mod.id()).resolve("sources"), project,
-                        mod.findSourceRoots());
                 sources.takeAs(EARLY);
             }
             List<String> stale = sources.adopt(EARLY, number, build.findNewestClass());

@@ -45,6 +45,12 @@ public final class BuildSources {
         this.roots = roots.stream().map(root -> root.toAbsolutePath().normalize()).toList();
     }
 
+    static @Nullable BuildSources findFor(DevMod mod, Path folder) {
+        Path project = mod.findSourceProject();
+        return project == null ? null
+                : new BuildSources(folder.resolve(mod.id()).resolve("sources"), project, mod.findSourceRoots());
+    }
+
     public Path getProject() {
         return this.project;
     }

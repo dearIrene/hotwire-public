@@ -85,13 +85,7 @@ final class SessionMod {
 
     SessionMod(DevMod mod, DevBuild running, Path folder, @Nullable BuildSources sources) {
         this.mod = mod;
-        Path project = mod.findSourceProject();
-        if (sources != null || project == null) {
-            this.buildSources = sources;
-        } else {
-            this.buildSources = new BuildSources(folder.resolve(mod.id()).resolve("sources"), project,
-                    mod.findSourceRoots());
-        }
+        this.buildSources = sources != null ? sources : BuildSources.findFor(mod, folder);
         this.running = running;
         this.startJar = running.getJar();
         this.starts = mod.findStartClasses();
