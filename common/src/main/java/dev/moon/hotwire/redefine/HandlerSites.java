@@ -81,109 +81,122 @@ final class HandlerSites {
                 if (mixin == null || mixin.equals(mixinOfHandler.get(method.name + method.desc))) {
                     continue;
                 }
-                String handlerMod = HandlerGuards.findModInHandlerName(call.name);
-                if (handlerMod != null && HandlerGuards.neverSwitched.contains(handlerMod)) {
-                    continue;
+                Outcome outcome = classify(internalName, node, method, call, mixin, shipped, nulls);
+                if (outcome.refusal() != null) {
+                    HandlerGuards.markUnflippable(internalName, mixin, outcome.refusal());
                 }
-                if (method.name.equals("<clinit>")) {
-                    HandlerGuards.markUnflippable(internalName, mixin, "handler in the class's setup");
-                    continue;
-                }
-                if (method.name.equals("<init>")) {
-                    String gameField = findGameFieldSet(node, call, shipped.get());
-                    if (gameField != null) {
-                        HandlerGuards.markUnflippable(internalName, mixin, "handler in a constructor that sets "
-                                + gameField);
-                        continue;
-                    }
-
-                    if (!call.name.startsWith("handler$")) {
-                        if (isArraySize(call)) {
-                            HandlerGuards.markUnflippable(internalName, mixin,
-                                    "an array's size changed in a constructor");
-                            continue;
-                        }
-                    } else {
-                        if (!HandlerGuards.UNFLIPPABLE.contains(mixin)) {
-                            LOGGER.info("[Hotwire] {}'s constructor calls a handler of {}: its on rebuilds, its off"
-                                    + " flips", internalName, mixin);
-                        }
-                        HandlerGuards.markUnflippable(internalName, mixin, HandlerGuards.IN_CONSTRUCTOR);
-                    }
-                }
-                boolean isStatic = call.getOpcode() == Opcodes.INVOKESTATIC;
-                int how = isStatic ? HandlerGuards.STATIC : call.getOpcode() == Opcodes.INVOKESPECIAL
-                        ? HandlerGuards.OWN : HandlerGuards.VIRTUAL;
-                String prefix = call.name.substring(0, call.name.indexOf('$'));
-                Integer kind = HandlerGuards.KINDS.get(prefix);
-                if (kind == null && !prefix.equals("redirect")) {
-                    continue;
-                }
-                String desc = isStatic ? call.desc : "(L" + internalName + ";" + call.desc.substring(1);
-                String why = "";
-                if (kind == null) {
-                    ClassNode before = shipped.get();
-                    RedirectStandIns.Target target = before == null ? null
-                            : RedirectStandIns.find(before, node, method, call.desc);
-                    if (target == null && !HandlerGuards.UNFLIPPABLE.contains(mixin)) {
-                        why = " (" + RedirectStandIns.explainMiss(before, node, method, call.desc) + ")";
-                    }
-                    if (target != null) {
-                        String unset = findUnset(node, call, before);
-                        method.instructions.set(call, unset.isEmpty()
-                                ? new InvokeDynamicInsnNode(call.name, desc, HandlerGuards.BOOTSTRAP_REDIRECT,
-                                mixin, how, target.opcode(), target.owner(), target.name(), target.desc())
-                                : new InvokeDynamicInsnNode(call.name, desc,
-                                HandlerGuards.BOOTSTRAP_REDIRECT_FORGETTING, mixin, how, target.opcode(),
-                                target.owner(), target.name(), target.desc(), unset));
-                        guarded.add(mixin);
-                        continue;
-                    }
-                }
-                OptionalInt index = kind == null ? OptionalInt.empty() : switch (kind) {
-                    case HandlerStandIns.AS_IT_WAS -> HandlerStandIns.findAsItWas(call);
-                    case HandlerStandIns.OPERATION -> HandlerStandIns.findOperation(call.desc);
-                    default -> OptionalInt.of(0);
-                };
-                if (kind != null && kind == HandlerStandIns.OPERATION && index.isPresent()
-                        && nulls.isNull(method, call, index.getAsInt())) {
-                    ClassNode was = shipped.get();
-                    Type[] arguments = Type.getArgumentTypes(call.desc);
-                    String shape = Type.getMethodDescriptor(Type.getReturnType(call.desc),
-                            Arrays.copyOf(arguments, index.getAsInt()));
-                    RedirectStandIns.Target target = was == null ? null
-                            : RedirectStandIns.find(was, node, method, shape);
-                    if (target == null) {
-                        if (!HandlerGuards.UNFLIPPABLE.contains(mixin)) {
-                            LOGGER.info("[Hotwire] {}.{} runs its operation inside itself and what it wraps is not"
-                                    + " told: {} is rebuilt, not flipped", internalName, call.name, mixin);
-                        }
-                        HandlerGuards.markUnflippable(internalName, mixin, "operation inside the wrapper");
-                        continue;
-                    }
-                    method.instructions.set(call,
-                            new InvokeDynamicInsnNode(call.name, desc, HandlerGuards.BOOTSTRAP_REDIRECT,
-                            mixin, how, target.opcode(), target.owner(), target.name(), target.desc()));
+                if (outcome.site() != null) {
+                    method.instructions.set(call, outcome.site());
                     guarded.add(mixin);
-                    continue;
                 }
-                if (index.isEmpty()) {
-                    if (!HandlerGuards.UNFLIPPABLE.contains(mixin)) {
-                        LOGGER.info("[Hotwire] {}.{} has no stand-in{}: {} is rebuilt, not flipped", internalName,
-                                call.name, why, mixin);
-                    }
-                    HandlerGuards.markUnflippable(internalName, mixin, "no stand-in" + why);
-                    continue;
-                }
-                method.instructions.set(call, method.name.equals("<init>") && !isStatic
-                        && call.name.startsWith("handler$")
-                        ? new InvokeDynamicInsnNode(call.name, desc, HandlerGuards.BOOTSTRAP_CONSTRUCTOR, mixin, how)
-                        : new InvokeDynamicInsnNode(call.name, desc, HandlerGuards.BOOTSTRAP, mixin, how, kind,
-                                index.getAsInt() + (isStatic ? 0 : 1)));
-                guarded.add(mixin);
             }
         }
         return markStaged(internalName, guarded);
+    }
+
+    private record Outcome(@Nullable String refusal, @Nullable InvokeDynamicInsnNode site) {
+        static final Outcome LEFT = new Outcome(null, null);
+
+        static Outcome refuse(String why) {
+            return new Outcome(why, null);
+        }
+
+        static Outcome put(InvokeDynamicInsnNode site) {
+            return new Outcome(null, site);
+        }
+    }
+
+    private static Outcome classify(String internalName, ClassNode node, MethodNode method, MethodInsnNode call,
+            String mixin, Supplier<@Nullable ClassNode> shipped, NullArguments nulls) {
+        String handlerMod = HandlerGuards.findModInHandlerName(call.name);
+        if (handlerMod != null && HandlerGuards.neverSwitched.contains(handlerMod)) {
+            return Outcome.LEFT;
+        }
+        if (method.name.equals("<clinit>")) {
+            return Outcome.refuse("handler in the class's setup");
+        }
+        if (method.name.equals("<init>")) {
+            String gameField = findGameFieldSet(node, call, shipped.get());
+            if (gameField != null) {
+                return Outcome.refuse("handler in a constructor that sets " + gameField);
+            }
+
+            if (!call.name.startsWith("handler$")) {
+                if (isArraySize(call)) {
+                    return Outcome.refuse("an array's size changed in a constructor");
+                }
+            } else {
+                if (!HandlerGuards.UNFLIPPABLE.contains(mixin)) {
+                    LOGGER.info("[Hotwire] {}'s constructor calls a handler of {}: its on rebuilds, its off"
+                            + " flips", internalName, mixin);
+                }
+
+                HandlerGuards.markUnflippable(internalName, mixin, HandlerGuards.IN_CONSTRUCTOR);
+            }
+        }
+        boolean isStatic = call.getOpcode() == Opcodes.INVOKESTATIC;
+        int how = isStatic ? HandlerGuards.STATIC : call.getOpcode() == Opcodes.INVOKESPECIAL
+                ? HandlerGuards.OWN : HandlerGuards.VIRTUAL;
+        String prefix = call.name.substring(0, call.name.indexOf('$'));
+        Integer kind = HandlerGuards.KINDS.get(prefix);
+        if (kind == null && !prefix.equals("redirect")) {
+            return Outcome.LEFT;
+        }
+        String desc = isStatic ? call.desc : "(L" + internalName + ";" + call.desc.substring(1);
+        String why = "";
+        if (kind == null) {
+            ClassNode before = shipped.get();
+            RedirectStandIns.Target target = before == null ? null
+                    : RedirectStandIns.find(before, node, method, call.desc);
+            if (target == null && !HandlerGuards.UNFLIPPABLE.contains(mixin)) {
+                why = " (" + RedirectStandIns.explainMiss(before, node, method, call.desc) + ")";
+            }
+            if (target != null) {
+                String unset = findUnset(node, call, before);
+                return Outcome.put(unset.isEmpty()
+                        ? new InvokeDynamicInsnNode(call.name, desc, HandlerGuards.BOOTSTRAP_REDIRECT,
+                        mixin, how, target.opcode(), target.owner(), target.name(), target.desc())
+                        : new InvokeDynamicInsnNode(call.name, desc,
+                        HandlerGuards.BOOTSTRAP_REDIRECT_FORGETTING, mixin, how, target.opcode(),
+                        target.owner(), target.name(), target.desc(), unset));
+            }
+        }
+        OptionalInt index = kind == null ? OptionalInt.empty() : switch (kind) {
+            case HandlerStandIns.AS_IT_WAS -> HandlerStandIns.findAsItWas(call);
+            case HandlerStandIns.OPERATION -> HandlerStandIns.findOperation(call.desc);
+            default -> OptionalInt.of(0);
+        };
+        if (kind != null && kind == HandlerStandIns.OPERATION && index.isPresent()
+                && nulls.isNull(method, call, index.getAsInt())) {
+            ClassNode was = shipped.get();
+            Type[] arguments = Type.getArgumentTypes(call.desc);
+            String shape = Type.getMethodDescriptor(Type.getReturnType(call.desc),
+                    Arrays.copyOf(arguments, index.getAsInt()));
+            RedirectStandIns.Target target = was == null ? null
+                    : RedirectStandIns.find(was, node, method, shape);
+            if (target == null) {
+                if (!HandlerGuards.UNFLIPPABLE.contains(mixin)) {
+                    LOGGER.info("[Hotwire] {}.{} runs its operation inside itself and what it wraps is not"
+                            + " told: {} is rebuilt, not flipped", internalName, call.name, mixin);
+                }
+                return Outcome.refuse("operation inside the wrapper");
+            }
+            return Outcome.put(new InvokeDynamicInsnNode(call.name, desc,
+                    HandlerGuards.BOOTSTRAP_REDIRECT, mixin, how, target.opcode(), target.owner(), target.name(),
+                    target.desc()));
+        }
+        if (index.isEmpty()) {
+            if (!HandlerGuards.UNFLIPPABLE.contains(mixin)) {
+                LOGGER.info("[Hotwire] {}.{} has no stand-in{}: {} is rebuilt, not flipped", internalName,
+                        call.name, why, mixin);
+            }
+            return Outcome.refuse("no stand-in" + why);
+        }
+        return Outcome.put(method.name.equals("<init>") && !isStatic
+                && call.name.startsWith("handler$")
+                ? new InvokeDynamicInsnNode(call.name, desc, HandlerGuards.BOOTSTRAP_CONSTRUCTOR, mixin, how)
+                : new InvokeDynamicInsnNode(call.name, desc, HandlerGuards.BOOTSTRAP, mixin, how, kind,
+                        index.getAsInt() + (isStatic ? 0 : 1)));
     }
 
     private static boolean isArraySize(MethodInsnNode call) {
