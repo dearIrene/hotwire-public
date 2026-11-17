@@ -33,7 +33,7 @@ public final class ModScreen implements JarHost {
     final Tabs rail = Kit.tabs(Tabs.Look.RAIL, this::pickRail);
     private final Deck deck;
     private final Part tree;
-    private final NoticeBar message = new NoticeBar();
+    private final NoticeBar message = new NoticeBar(this.root::openDownloads);
     private final UpdatesPage updates;
     final LoadingScreen progress;
     private final AddPanel addPanel;
@@ -139,7 +139,6 @@ public final class ModScreen implements JarHost {
         this.panels.forEach(this.root.getModal()::add);
         this.root.getModal().add(this.closePanel);
         this.root.getModal().add(this.updateSummary);
-        this.message.openDownloadsWith(this.root::openDownloads);
         if (!game.isFirstOpenAccepted() || ModifiedClients.takePromptDue()) {
             this.firstOpen.present();
         } else {

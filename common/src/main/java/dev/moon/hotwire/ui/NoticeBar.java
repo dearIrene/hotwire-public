@@ -57,11 +57,15 @@ final class NoticeBar extends Element {
 
     private final List<Card> cards = new ArrayList<>();
 
-    private @Nullable Runnable onDownload;
+    private final @Nullable Runnable onDownload;
 
     private @Nullable Notice lastSaid;
 
     private boolean actionsShown = true;
+
+    NoticeBar(@Nullable Runnable onDownload) {
+        this.onDownload = onDownload;
+    }
 
     void hideActions() {
         this.actionsShown = false;
@@ -79,10 +83,6 @@ final class NoticeBar extends Element {
 
     boolean isEmpty() {
         return this.cards.isEmpty();
-    }
-
-    void openDownloadsWith(Runnable open) {
-        this.onDownload = open;
     }
 
     private boolean opensDownloads(Card card) {

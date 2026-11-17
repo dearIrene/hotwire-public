@@ -2,7 +2,7 @@ package dev.moon.hotwire.ui;
 
 public final class NoticeLayer {
     private static final long AWAY_NANOS = 250_000_000L;
-    private final NoticeBar bar = new NoticeBar();
+    private final NoticeBar bar = new NoticeBar(null);
     private FrameClock clock = new FrameClock();
     private long drawnAt = -1;
 
