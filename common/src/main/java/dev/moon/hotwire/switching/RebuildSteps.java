@@ -12,7 +12,6 @@ import java.util.Set;
 import java.util.function.BiConsumer;
 import java.util.function.Consumer;
 import java.util.function.IntSupplier;
-import java.util.function.Supplier;
 import org.jspecify.annotations.Nullable;
 import org.objectweb.asm.Type;
 import org.slf4j.Logger;
@@ -28,13 +27,12 @@ final class RebuildSteps {
     // removed under any circumstance.
 
     static Runnable apply(ClassRebuilder rebuilder, ClassRebuilder.PreparedRebuild prepared,
-            Supplier<List<String>> health, BiConsumer<Set<String>, Set<Class<?>>> afterRebuild,
-            Consumer<Runnable> onGameThread, GameObjectRebuilder objectRebuilder, boolean inWorld,
+            BiConsumer<Set<String>, Set<Class<?>>> afterRebuild, Consumer<Runnable> onGameThread, boolean inWorld,
             @Nullable Consumer<IntSupplier> catchUpLater, Set<String> flipped) throws RebuildException {
         LiveObjects.checkWhilePaused(prepared);
         SwitchTimes.mark("check paused");
 
-        List<String> already = health.get();
+        List<String> already = Games.getNow().findHealthProblems();
         Set<String> rebuilt = getRebuilt(prepared);
         Set<Class<?>> rehashed = getRehashed(prepared);
         rebuilder.apply(prepared);
@@ -47,7 +45,7 @@ final class RebuildSteps {
         }
         SwitchTimes.mark("after rebuild");
 
-        List<String> broken = new ArrayList<>(health.get());
+        List<String> broken = new ArrayList<>(Games.getNow().findHealthProblems());
         broken.removeAll(already);
         SwitchTimes.mark("health");
         if (!broken.isEmpty()) {
@@ -62,7 +60,7 @@ final class RebuildSteps {
         Set<String> changed = new HashSet<>(rebuilt);
         changed.addAll(flipped);
         Runnable rebuildObjects = () -> {
-            objectRebuilder.rebuild(prepared.newlyBuilt(), changed, prepared.pausedReloads());
+            Games.getNow().getReloads().rebuildObjects(prepared.newlyBuilt(), changed, prepared.pausedReloads());
 
             prepared.pausedReloads().forEach(OffWindowObjects::forget);
             LiveObjects.noteReloaded(prepared, rebuilder::findLaunchBytes);

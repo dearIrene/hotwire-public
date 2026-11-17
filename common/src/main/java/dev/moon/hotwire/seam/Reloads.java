@@ -2,6 +2,7 @@ package dev.moon.hotwire.seam;
 
 import java.util.Collection;
 import java.util.List;
+import java.util.Set;
 
 public interface Reloads {
     void awaitIdle();
@@ -27,6 +28,12 @@ public interface Reloads {
     void runAfterReload(Runnable then);
 
     boolean isRebuiltWhilePaused(Class<?> type);
+
+    void announceRebuild(Set<String> newlyBuilt, Set<String> reloadFor);
+
+    void closeBuilt(Set<String> newlyBuilt);
+
+    void rebuildObjects(Set<String> newlyBuilt, Set<String> rebuilt, Set<String> reloadFor);
 
     void runWaitingReload();
 

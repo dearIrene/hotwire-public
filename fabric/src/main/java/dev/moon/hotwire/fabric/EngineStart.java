@@ -190,7 +190,6 @@ final class EngineStart {
         applier.orderConfigsAs(mixin.getConfigs());
         ClassFileTransformer loadTimeMixer = applier.makeLoadTimeMixer();
         TransformerChain.setMixedAsItLoads(name -> applier.isMixedAsItLoads(name.replace('.', '/')));
-        applier.rebuildObjectsWith(new PausedRebuilds());
         InitHookReplay.nameSucceededWith(LiveNames::findOwnKeys);
         OffModCommands.readUsesFrom(installed::getGraph);
         HiddenPacks.readContainersWith(id -> installed.getGraph().getContainers(id));
@@ -253,7 +252,7 @@ final class EngineStart {
         LifecycleListeners.add(new OneConfigSaves(LifecycleListeners::isListening));
         laps.endLap("switcher");
         Tripwire.setOwnLocks(new ModLocks(instrumentation, fieldReferences::isInitialized)::of);
-        applier.checkHealthWith(GameHealth::findProblems, (rebuilt, rehashed) -> {
+        applier.putRightAfterRebuildWith((rebuilt, rehashed) -> {
             InternedKeys.refresh(rebuilt);
             fieldReferences.rehash(rehashed);
             EventInvokers.rebuild(rebuilt, classes::findLoaded, fieldReferences::isInitialized);

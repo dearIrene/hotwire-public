@@ -327,4 +327,9 @@ public final class GameSide implements Game {
         return ModViews.findLoadingOverlay() != null
                 && STACK.walk(frames -> frames.anyMatch(frame -> frame.getClassName().startsWith(RELOAD_TASKS)));
     }
+
+    @Override
+    public List<String> findHealthProblems() {
+        return GameHealth.findProblems();
+    }
 }

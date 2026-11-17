@@ -88,6 +88,8 @@ public interface Game {
 
     boolean isReloadMaking();
 
+    List<String> findHealthProblems();
+
     Reloads getReloads();
 
     boolean isGamePaused();

@@ -163,23 +163,16 @@ public final class SwitchApplier {
     }
 
     private final CarriedMixins carriedMixins;
-    private volatile GameObjectRebuilder objectRebuilder = (newlyBuilt, rebuilt, reloadFor) -> { };
-    private volatile Supplier<List<String>> health = List::of;
     private volatile BiConsumer<Set<String>, Set<Class<?>>> afterRebuild = (rebuilt, rehashed) -> { };
 
     private final WaitingCatchUps catchUps = new WaitingCatchUps();
 
-    public void checkHealthWith(Supplier<List<String>> check, BiConsumer<Set<String>, Set<Class<?>>> afterRebuild) {
-        this.health = check;
+    public void putRightAfterRebuildWith(BiConsumer<Set<String>, Set<Class<?>>> afterRebuild) {
         this.afterRebuild = afterRebuild;
     }
 
     void rebuildObjectsOf(Set<String> flipped) {
-        this.objectRebuilder.rebuild(Set.of(), flipped, Set.of());
-    }
-
-    public void rebuildObjectsWith(GameObjectRebuilder rebuilder) {
-        this.objectRebuilder = rebuilder;
+        Games.getNow().getReloads().rebuildObjects(Set.of(), flipped, Set.of());
     }
 
     public WaitingCatchUps getCatchUps() {
@@ -194,19 +187,18 @@ public final class SwitchApplier {
     void applyWhilePaused(ClassRebuilder.PreparedRebuild prepared, Runnable beforeChange, Runnable whilePaused,
             Set<String> flipped) throws RebuildException {
         LiveObjects.checkWhilePaused(prepared);
-        this.objectRebuilder.announce(prepared.newlyBuilt(), prepared.pausedReloads());
+        Games.getNow().getReloads().announceRebuild(prepared.newlyBuilt(), prepared.pausedReloads());
         Runnable release = this.redefinitionHold.get();
         SwitchTimes.mark("pause game");
         long pausedAt = System.nanoTime();
         try {
             if (this.catchUps.findHolder() == null) {
-                this.objectRebuilder.closeBuilt(prepared.newlyBuilt());
+                Games.getNow().getReloads().closeBuilt(prepared.newlyBuilt());
                 SwitchTimes.mark("close objects");
             }
             beforeChange.run();
-            Runnable rebuildObjects = RebuildSteps.apply(this.rebuilder, prepared, this.health, this.afterRebuild,
-                    Games.getNow()::runOnGameAndWait, this.objectRebuilder, this.game.isInWorld(),
-                    this.catchUps.findHolder(), flipped);
+            Runnable rebuildObjects = RebuildSteps.apply(this.rebuilder, prepared, this.afterRebuild,
+                    Games.getNow()::runOnGameAndWait, this.game.isInWorld(), this.catchUps.findHolder(), flipped);
             try {
                 whilePaused.run();
             } catch (RuntimeException | LinkageError e) {

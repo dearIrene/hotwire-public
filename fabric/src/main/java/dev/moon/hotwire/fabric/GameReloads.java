@@ -1,10 +1,17 @@
 package dev.moon.hotwire.fabric;
 
+import dev.moon.hotwire.fabric.registration.GameHold;
 import dev.moon.hotwire.seam.Reloads;
+import dev.moon.hotwire.switching.SwitchTimes;
 import java.util.Collection;
 import java.util.List;
+import java.util.Set;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
 final class GameReloads implements Reloads {
+    private static final Logger LOGGER = LoggerFactory.getLogger(GameReloads.class);
+
     @Override
     public void awaitIdle() {
         ResourceReload.awaitIdle();
@@ -73,5 +80,28 @@ final class GameReloads implements Reloads {
     @Override
     public boolean isRebuiltWhilePaused(Class<?> type) {
         return ResourceReload.isRebuiltWhilePaused(type);
+    }
+
+    @Override
+    public void announceRebuild(Set<String> newlyBuilt, Set<String> reloadFor) {
+        String words = ResourceReload.describePaused(newlyBuilt, reloadFor);
+        if (words == null) {
+            return;
+        }
+        SwitchTimes.tellWords(words);
+        LOGGER.info("[Hotwire] said before the game stands still: {}", words);
+
+        GameHold.onGameAndWait(() -> { });
+        GameHold.onGameAndWait(() -> { });
+    }
+
+    @Override
+    public void closeBuilt(Set<String> newlyBuilt) {
+        ResourceReload.closeWorldRenderer(newlyBuilt);
+    }
+
+    @Override
+    public void rebuildObjects(Set<String> newlyBuilt, Set<String> rebuilt, Set<String> reloadFor) {
+        ResourceReload.rebuildRenderers(newlyBuilt, rebuilt, reloadFor);
     }
 }
