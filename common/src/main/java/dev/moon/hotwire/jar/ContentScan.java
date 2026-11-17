@@ -245,10 +245,6 @@ public final class ContentScan {
         return null;
     }
 
-    public static boolean hasEnumMixin(Classes classes) {
-        return hasEnumMixin(classes, target -> true);
-    }
-
     public static boolean hasEnumMixin(Classes classes, Predicate<String> isLoaded) {
         for (byte[] bytes : classes.bytes().values()) {
             ClassReader reader = new ClassReader(bytes);
@@ -411,10 +407,6 @@ public final class ContentScan {
             return true;
         }
         return false;
-    }
-
-    public static @Nullable String findStartOnlyMixin(Classes classes) {
-        return findStartOnlyMixin(classes, target -> target.startsWith("net/minecraft/network/"));
     }
 
     public static @Nullable String findStartOnlyMixin(Classes classes, Predicate<String> isNetworkSetUp) {

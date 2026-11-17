@@ -4,26 +4,19 @@ public final class ModJarException extends Exception {
     private static final long serialVersionUID = 1L;
 
     private final Reason reason;
-    private final String jar;
 
     public ModJarException(Reason reason, String jar, String detail) {
         super(jar + ": " + detail);
         this.reason = reason;
-        this.jar = jar;
     }
 
     public ModJarException(Reason reason, String jar, String detail, Throwable cause) {
         super(jar + ": " + detail, cause);
         this.reason = reason;
-        this.jar = jar;
     }
 
     public Reason getReason() {
         return this.reason;
-    }
-
-    String getJar() {
-        return this.jar;
     }
 
     public enum Reason {
