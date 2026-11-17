@@ -40,12 +40,14 @@ import java.lang.management.ManagementFactory;
 import java.lang.management.ThreadMXBean;
 import java.util.ArrayList;
 import java.util.Collection;
+import java.util.Deque;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Locale;
 import java.util.Map;
 import java.util.Set;
 import java.util.concurrent.ConcurrentHashMap;
+import java.util.concurrent.ConcurrentLinkedDeque;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
 import java.util.concurrent.atomic.AtomicBoolean;
@@ -535,21 +537,33 @@ public final class SwitchRunner {
         try {
             SwitchPlan coming = this.switcher.planOn(ids);
             SwitchTimes.mark("plan");
-            AtomicBoolean putBack = new AtomicBoolean();
+
+            Deque<Consumer<List<String>>> undo = new ConcurrentLinkedDeque<>();
             Runnable dropPutBack = () -> { };
             boolean toReopen = !coming.isRefused() && this.switcher.isOnForReopen(coming.order());
             if (!coming.isRefused() && !toReopen) {
                 this.tripwire.offerDisarm(coming.order());
+
+                undo.push(stillOff -> {
+                    Tripwire.hold(stillOff);
+                    this.tripwire.watchNow(stillOff);
+                });
                 SwitchTimes.mark("disarm");
                 this.beforeOn.accept(coming.order());
                 SwitchTimes.mark("before on");
 
                 coming.order().forEach(LoaderModList::show);
+                undo.push(LoaderModList::hide);
                 this.units.putBackPlugins(coming.order());
+                undo.push(this.units::takeOutPlugins);
                 SwitchTimes.mark("plugins back");
                 dropPutBack = Games.getNow().runAtNextHold(() -> {
                     this.fieldReferences.putBackElements(coming.order());
-                    putBack.set(true);
+
+                    undo.push(stillOff -> Games.getNow().runUnbudgeted(() -> {
+                        this.fieldReferences.takeOutElementsAgain(stillOff, this.switcher::isOn);
+                        return null;
+                    }));
                 });
             }
             SwitchTimes.mark("put back queued");
@@ -578,17 +592,9 @@ public final class SwitchRunner {
                         return null;
                     });
                 } else {
-                    if (putBack.get()) {
-                        Games.getNow().runUnbudgeted(() -> {
-                            this.fieldReferences.takeOutElementsAgain(stillOff, this.switcher::isOn);
-                            return null;
-                        });
+                    for (Consumer<List<String>> one = undo.poll(); one != null; one = undo.poll()) {
+                        one.accept(stillOff);
                     }
-                    this.units.takeOutPlugins(stillOff);
-                    LoaderModList.hide(stillOff);
-
-                    Tripwire.hold(stillOff);
-                    this.tripwire.watchNow(stillOff);
                 }
             }
             SwitchTimes.mark("taken out again");
