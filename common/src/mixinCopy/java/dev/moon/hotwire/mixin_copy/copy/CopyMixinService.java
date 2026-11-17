@@ -24,6 +24,7 @@ import java.util.concurrent.ConcurrentHashMap;
 import java.util.function.BiConsumer;
 import java.util.function.BiFunction;
 import java.util.function.Function;
+import java.util.regex.Pattern;
 import org.jspecify.annotations.Nullable;
 import org.objectweb.asm.ClassReader;
 import org.objectweb.asm.ClassWriter;
@@ -185,27 +186,13 @@ public final class CopyMixinService extends MixinServiceAbstract
     }
 
     static byte @Nullable [] findConfigOf(String mixinPackage) {
-        byte[] wanted = ("\"package\":\"" + mixinPackage + "\"").getBytes(StandardCharsets.UTF_8);
-        byte[] spaced = ("\"package\": \"" + mixinPackage + "\"").getBytes(StandardCharsets.UTF_8);
+        Pattern wanted = Pattern.compile("\"package\"\\s*:\\s*\"" + Pattern.quote(mixinPackage) + "\"");
         for (byte[] bytes : resources.values()) {
-            if (contains(bytes, wanted) || contains(bytes, spaced)) {
+            if (wanted.matcher(new String(bytes, StandardCharsets.UTF_8)).find()) {
                 return bytes;
             }
         }
         return null;
-    }
-
-    private static boolean contains(byte[] bytes, byte[] wanted) {
-        outer:
-        for (int at = 0; at <= bytes.length - wanted.length; at++) {
-            for (int in = 0; in < wanted.length; in++) {
-                if (bytes[at + in] != wanted[in]) {
-                    continue outer;
-                }
-            }
-            return true;
-        }
-        return false;
     }
 
     static void transformLive(Object plugin, String target, ClassNode node, String mixin) {
