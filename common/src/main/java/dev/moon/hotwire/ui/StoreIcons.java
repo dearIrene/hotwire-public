@@ -10,11 +10,4 @@ public interface StoreIcons {
     default @Nullable PagePicture findPicture(String url) {
         return null;
     }
-
-    StoreIcons NONE = new StoreIcons() {
-        @Override
-        public Canvas.@Nullable Image find(String projectId, String url) {
-            return null;
-        }
-    };
 }
