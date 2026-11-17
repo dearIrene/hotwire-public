@@ -130,7 +130,7 @@ public final class SwitchApplier {
     private final LaunchDecisions decisions;
     private final List<String> unowned;
 
-    private volatile List<String> launchOrder = List.of();
+    private final List<String> launchOrder;
 
     private volatile OnState on;
 
@@ -218,7 +218,13 @@ public final class SwitchApplier {
 
     public SwitchApplier(ClassRebuilder rebuilder, Game game, Map<String, ModMixins> mods, Set<String> onAtLaunch,
             List<String> unowned) {
+        this(rebuilder, game, mods, onAtLaunch, unowned, List.of());
+    }
+
+    public SwitchApplier(ClassRebuilder rebuilder, Game game, Map<String, ModMixins> mods, Set<String> onAtLaunch,
+            List<String> unowned, List<String> launchOrder) {
         this.rebuilder = rebuilder;
+        this.launchOrder = List.copyOf(launchOrder);
         this.game = game;
         this.mods = new ConcurrentSkipListMap<>(mods);
         this.carriedMixins = new CarriedMixins(this.mods, game);
@@ -248,12 +254,6 @@ public final class SwitchApplier {
 
     public void rebuildAlsoWith(BiFunction<Set<String>, Set<String>, Set<String>> also) {
         this.alsoRebuilt = also;
-    }
-
-    public void orderConfigsAs(List<String> launchOrder) {
-        this.launchOrder = List.copyOf(launchOrder);
-        OnState now = this.on;
-        this.on = new OnState(this.getConfigsOf(now.mods()), now.mods(), now.watched(), now.late());
     }
 
     public synchronized void learn(String id, ModMixins mixins) {

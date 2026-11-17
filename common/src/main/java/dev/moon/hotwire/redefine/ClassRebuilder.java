@@ -136,11 +136,7 @@ public final class ClassRebuilder {
         StoredArguments.readParentsWith(bytesOf);
     }
 
-    private volatile Function<String, @Nullable String> argsClassOf = shape -> null;
-
-    public void resolveArgsWith(Function<String, @Nullable String> argsClassOf) {
-        this.argsClassOf = argsClassOf;
-    }
+    private final Function<String, @Nullable String> argsClassOf;
 
     private final RebuildHooks hooks = new RebuildHooks();
 
@@ -155,6 +151,12 @@ public final class ClassRebuilder {
     }
 
     public ClassRebuilder(Instrumentation instrumentation, MixinCopy copy) {
+        this(instrumentation, copy, shape -> null);
+    }
+
+    public ClassRebuilder(Instrumentation instrumentation, MixinCopy copy,
+            Function<String, @Nullable String> argsClassOf) {
+        this.argsClassOf = argsClassOf;
         this.instrumentation = instrumentation;
         this.loadedBytes = new LoadedClassBytes(instrumentation);
         this.copy = copy;

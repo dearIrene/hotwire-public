@@ -172,12 +172,11 @@ final class EngineStart {
         HandlerGuards.readOriginalsWith(classes::findOriginalBytes);
         SwitchApplier applier = new SwitchApplier(
                 new ClassRebuilder(instrumentation, GameMixinCopy.create(mixin, MixinConfigs.readDecorations(
-                        mixins, mixin), classes::findOriginalBytes)),
-                classes, mixins, mixins.keySet(), MixinConfigs.findUnowned(mixin.getConfigs(), mixins));
+                        mixins, mixin), classes::findOriginalBytes), mixin::getArgsClassFor),
+                classes, mixins, mixins.keySet(), MixinConfigs.findUnowned(mixin.getConfigs(), mixins),
+                mixin.getConfigs());
         HandlerGuards.readOverwritersWith(applier.getCarriedMixins()::findOverwriters);
         laps.endLap("applier and Mixin copy");
-        applier.getRebuilder().resolveArgsWith(mixin::getArgsClassFor);
-        laps.endLap("args classes");
         long limit = (long) CacheLimit.read(CacheLimit.findCacheFolder()) << 20;
         applier.getRebuilder().getCache().cacheIn(
                 CacheStore.open(CacheLimit.findCacheFolder().resolve("mixed"), "mixed",
@@ -187,7 +186,6 @@ final class EngineStart {
         applier.getRebuilder().getHooks()
                 .sendGeneratedTo(new GeneratedClasses(gameDir.resolve("hotwire").resolve("generated")) ::write);
         laps.endLap("clear the generated classes");
-        applier.orderConfigsAs(mixin.getConfigs());
         ClassFileTransformer loadTimeMixer = applier.makeLoadTimeMixer();
         TransformerChain.setMixedAsItLoads(name -> applier.isMixedAsItLoads(name.replace('.', '/')));
         InitHookReplay.nameSucceededWith(LiveNames::findOwnKeys);
