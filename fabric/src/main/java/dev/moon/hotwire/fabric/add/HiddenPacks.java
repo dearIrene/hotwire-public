@@ -1,6 +1,7 @@
 package dev.moon.hotwire.fabric.add;
 
 import dev.moon.hotwire.add.LoaderModList;
+import dev.moon.hotwire.fabric.version.Spellings;
 import dev.moon.hotwire.registration.Owners;
 import java.io.IOException;
 import java.io.UncheckedIOException;
@@ -29,13 +30,6 @@ import net.minecraft.server.packs.PackType;
 import org.jspecify.annotations.Nullable;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
-//? if >=1.21.11 {
-import net.fabricmc.fabric.api.resource.v1.pack.PackActivationType;
-import net.fabricmc.fabric.impl.resource.pack.ModNioPackResources;
-//?} else {
-/*import net.fabricmc.fabric.api.resource.ResourcePackActivationType;
-import net.fabricmc.fabric.impl.resource.loader.ModNioResourcePack;
-*///?}
 
 public final class HiddenPacks {
     private static final Logger LOGGER = LoggerFactory.getLogger(HiddenPacks.class);
@@ -67,7 +61,7 @@ public final class HiddenPacks {
                 continue;
             }
             Set<String> foreign = findForeign(id, named.get(), providers);
-            Object pack = create(id, hidden.getValue(), subPath, type);
+            Object pack = Spellings.makeHiddenPack(id, hidden.getValue(), subPath, type);
             if (pack == null || (!foreign.isEmpty() && !trim(pack, foreign))) {
                 continue;
             }
@@ -102,17 +96,6 @@ public final class HiddenPacks {
         mods.stream().map(TRIMMED::get).filter(Objects::nonNull).forEach(trimmed::add);
         return !trimmed.isEmpty()
                 && Minecraft.getInstance().getResourceManager().listPacks().anyMatch(trimmed::contains);
-    }
-
-    @SuppressWarnings("NullAway")
-    private static @Nullable Object create(String id, ModContainer container, @Nullable String subPath,
-            PackType type) {
-        //? if >=1.21.11 {
-        return ModNioPackResources.create(id, container, subPath, type, PackActivationType.ALWAYS_ENABLED, true);
-        //?} else {
-        /*return ModNioResourcePack.create(id, container, subPath, type, ResourcePackActivationType.ALWAYS_ENABLED,
-                true);
-        *///?}
     }
 
     //? if >=1.21.5 {

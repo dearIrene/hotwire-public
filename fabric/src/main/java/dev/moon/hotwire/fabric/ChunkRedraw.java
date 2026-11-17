@@ -1,5 +1,6 @@
 package dev.moon.hotwire.fabric;
 
+import dev.moon.hotwire.fabric.version.Spellings;
 import net.minecraft.client.Minecraft;
 
 final class ChunkRedraw {
@@ -10,19 +11,7 @@ final class ChunkRedraw {
         Minecraft game = Minecraft.getInstance();
         game.execute(() -> {
             if (game.level != null) {
-                //? if >=26.2 {
-                game.levelExtractor.allChanged();
-                //?} else {
-                /*int reach = (game.options.getEffectiveRenderDistance() + 1) * 16;
-                if (game.player == null) {
-                    return;
-                }
-                int x = game.player.getBlockX();
-                int z = game.player.getBlockZ();
-                int bottom = game.level.dimensionType().minY();
-                game.levelRenderer.setBlocksDirty(x - reach, bottom, z - reach, x + reach,
-                        bottom + game.level.dimensionType().height() - 1, z + reach);
-                *///?}
+                Spellings.redrawChunks(game, game.level);
             }
         });
     }

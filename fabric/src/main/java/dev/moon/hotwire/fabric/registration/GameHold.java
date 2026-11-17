@@ -2,6 +2,7 @@ package dev.moon.hotwire.fabric.registration;
 
 import dev.moon.hotwire.fabric.ModViews;
 import dev.moon.hotwire.fabric.screen.HoldFrame;
+import dev.moon.hotwire.fabric.version.Spellings;
 import dev.moon.hotwire.redefine.Tripwire;
 import dev.moon.hotwire.registration.RegistrationJournal;
 import java.time.Duration;
@@ -212,11 +213,7 @@ public final class GameHold {
 
     private static void schedule(MinecraftServer server, Runnable work) {
         TickTask task = new TickTask(server.getTickCount() - 4, work);
-        //? if >=1.21.2 {
-        server.schedule(task);
-        //?} else {
-        /*server.tell(task);
-        *///?}
+        Spellings.runOnServerSoon(server, task);
     }
 
     private static void runPausedWork() {

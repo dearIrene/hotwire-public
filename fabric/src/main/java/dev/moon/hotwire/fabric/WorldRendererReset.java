@@ -2,6 +2,7 @@ package dev.moon.hotwire.fabric;
 
 import dev.moon.hotwire.classfile.GameNames;
 import dev.moon.hotwire.fabric.registration.GameHold;
+import dev.moon.hotwire.fabric.version.Spellings;
 import java.lang.reflect.Field;
 import java.lang.reflect.Modifier;
 import java.util.ArrayDeque;
@@ -113,11 +114,7 @@ final class WorldRendererReset {
     }
 
     private static void setLevel(Minecraft game, @Nullable ClientLevel level) {
-        //? if >=26.2 {
-        game.levelExtractor.setLevel(level);
-        //?} else {
-        /*game.levelRenderer.setLevel(level);
-        *///?}
+        Spellings.setRendererLevel(game, level);
     }
 
     static void run() {
@@ -129,10 +126,6 @@ final class WorldRendererReset {
         if (game.level == null) {
             return;
         }
-        //? if >=26.2 {
-        game.levelExtractor.allChanged();
-        //?} else {
-        /*game.levelRenderer.allChanged();
-        *///?}
+        Spellings.markAllChanged(game);
     }
 }

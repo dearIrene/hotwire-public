@@ -3,6 +3,7 @@ package dev.moon.hotwire.fabric.rebuild;
 import dev.moon.hotwire.add.FailedAddJars;
 import dev.moon.hotwire.classfile.GameNames;
 import dev.moon.hotwire.fabric.add.LivePlugins;
+import dev.moon.hotwire.fabric.version.Spellings;
 import dev.moon.hotwire.rebuild.KnotInternals;
 import dev.moon.hotwire.rebuild.PreMixinReads;
 import dev.moon.hotwire.registration.Fields;
@@ -261,7 +262,7 @@ public final class GameClasses implements SwitchApplier.Game {
 
     @Override
     public boolean isMadeByReload(Class<?> type) {
-        return RenderPipelines.isPipeline(type) || PackResources.class.isAssignableFrom(type);
+        return Spellings.isCompiledPipeline(type) || PackResources.class.isAssignableFrom(type);
     }
 
     public boolean isReachedFromWorld(String mod, List<String> frames) {
@@ -313,36 +314,20 @@ public final class GameClasses implements SwitchApplier.Game {
             case "com/mojang/blaze3d/systems/RenderSystem" -> Set.of("initRenderer");
 
             case "net/minecraft/client/main/Main" -> Set.of("main");
-            //? if >=26.1 {
-            case "net/minecraft/client/Minecraft" -> Set.of("onResourceLoadFinished", "onGameLoadFinished",
-                    "buildInitialScreens");
-            //?} else {
-            /*case "net/minecraft/class_310" -> Set.of("method_53465", "method_51736", "method_53527");
-            *///?}
+            case Spellings.MINECRAFT_CLASS -> Spellings.LOAD_FINISHED_METHODS;
             default -> Set.of();
         };
     }
 
     public static Set<String> getLoadFinishedMethods(String internalName) {
-        //? if >=26.1 {
-        return internalName.equals("net/minecraft/client/Minecraft") ? Set.of("onResourceLoadFinished",
-                "onGameLoadFinished", "buildInitialScreens") : Set.of();
-        //?} else {
-        /*return internalName.equals("net/minecraft/class_310") ? Set.of("method_53465", "method_51736", "method_53527")
-                : Set.of();
-        *///?}
+        return internalName.equals(Spellings.MINECRAFT_CLASS) ? Spellings.LOAD_FINISHED_METHODS : Set.of();
     }
 
     public static Set<String> getJoinMethods(String internalName) {
         if (Minecraft.getInstance().getConnection() == null) {
             return Set.of();
         }
-        //? if >=26.1 {
-        return internalName.equals("net/minecraft/client/multiplayer/ClientPacketListener") ? Set.of("handleLogin")
-                : Set.of();
-        //?} else {
-        /*return internalName.equals("net/minecraft/class_634") ? Set.of("method_11120") : Set.of();
-        *///?}
+        return internalName.equals(Spellings.PACKET_LISTENER_CLASS) ? Spellings.JOIN_METHODS : Set.of();
     }
 
     @Override

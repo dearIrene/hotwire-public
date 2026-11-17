@@ -1,8 +1,5 @@
 package dev.moon.hotwire.fabric;
 
-//? if <1.21.5 {
-/*import com.mojang.blaze3d.systems.RenderSystem;
-*///?}
 import dev.moon.hotwire.add.LoaderModList;
 import dev.moon.hotwire.engine.ModSoundFiles;
 import dev.moon.hotwire.fabric.add.HiddenPacks;
@@ -10,6 +7,7 @@ import dev.moon.hotwire.fabric.registration.GameHold;
 import dev.moon.hotwire.fabric.registration.ModelReloadCheck;
 import dev.moon.hotwire.fabric.registration.ReloadedLists;
 import dev.moon.hotwire.fabric.screen.HoldFrame;
+import dev.moon.hotwire.fabric.version.Spellings;
 import dev.moon.hotwire.redefine.Tripwire;
 import dev.moon.hotwire.registration.Owners;
 import dev.moon.hotwire.report.FreezeDump;
@@ -399,9 +397,7 @@ public final class ResourceReload {
     static void awaitWhilePaused(Minecraft game, BooleanSupplier done) {
         long deadline = System.nanoTime() + PAUSED_WAIT.toNanos();
         game.managedBlock(() -> {
-            //? if <1.21.5 {
-            /*RenderSystem.replayQueue();
-            *///?}
+            Spellings.replayRenderQueue();
             HoldFrame.drawIfDue();
             return done.getAsBoolean() || System.nanoTime() > deadline;
         });
@@ -513,14 +509,9 @@ public final class ResourceReload {
     }
 
     public static void layOutChat() {
-        Minecraft game = Minecraft.getInstance();
         for (int tries = 0; tries < LAYOUT_TRIES; tries++) {
             try {
-                //? if >=26.2 {
-                game.gui.hud.getChat().rescaleChat();
-                //?} else {
-                /*game.gui.getChat().rescaleChat();
-                *///?}
+                Spellings.getChat().rescaleChat();
                 return;
             } catch (ConcurrentModificationException e) {
                 LOGGER.info("[Hotwire] another thread wrote to the chat as it was laid out");

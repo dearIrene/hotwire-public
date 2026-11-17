@@ -1,5 +1,6 @@
 package dev.moon.hotwire.fabric.registration;
 
+import dev.moon.hotwire.fabric.version.Spellings;
 import dev.moon.hotwire.jvm.LoadedClassList;
 import dev.moon.hotwire.redefine.FieldSlots;
 import dev.moon.hotwire.redefine.HandlerGuards;
@@ -19,7 +20,6 @@ import java.util.List;
 import java.util.Map;
 import java.util.Set;
 import java.util.function.Predicate;
-import net.minecraft.client.Minecraft;
 import org.jspecify.annotations.Nullable;
 import org.lwjgl.system.Callback;
 import org.lwjgl.system.CallbackI;
@@ -216,11 +216,7 @@ public final class GlfwCallbacks {
     }
 
     private static long findWindow() {
-        //? if >=1.21.9 {
-        return Minecraft.getInstance().getWindow().handle();
-        //?} else {
-        /*return Minecraft.getInstance().getWindow().getWindow();
-        *///?}
+        return Spellings.getWindowHandle();
     }
 
     private static List<Method> findSetters() {

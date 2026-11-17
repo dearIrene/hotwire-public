@@ -1,12 +1,8 @@
 package dev.moon.hotwire.fabric;
 
 import dev.moon.hotwire.add.LoaderModList;
+import dev.moon.hotwire.fabric.version.Spellings;
 import dev.moon.hotwire.registration.Owners;
-//? if >=26.1 {
-import net.fabricmc.fabric.api.client.rendering.v1.ClientTooltipComponentCallback;
-//?} else {
-/*import net.fabricmc.fabric.api.client.rendering.v1.TooltipComponentCallback;
-*///?}
 import net.minecraft.client.gui.screens.inventory.tooltip.ClientTooltipComponent;
 import net.minecraft.util.FormattedCharSequence;
 import net.minecraft.world.inventory.tooltip.TooltipComponent;
@@ -17,11 +13,7 @@ final class OffTooltips {
     }
 
     static void register() {
-        //? if >=26.1 {
-        ClientTooltipComponentCallback.EVENT.register(OffTooltips::findFor);
-        //?} else {
-        /*TooltipComponentCallback.EVENT.register(OffTooltips::findFor);
-        *///?}
+        Spellings.registerTooltips(OffTooltips::findFor);
     }
 
     private static @Nullable ClientTooltipComponent findFor(TooltipComponent data) {

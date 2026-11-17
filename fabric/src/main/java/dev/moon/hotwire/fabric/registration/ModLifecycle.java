@@ -2,6 +2,7 @@ package dev.moon.hotwire.fabric.registration;
 
 import com.mojang.brigadier.CommandDispatcher;
 import dev.moon.hotwire.engine.LifecycleListeners;
+import dev.moon.hotwire.fabric.version.Spellings;
 import dev.moon.hotwire.plan.SwitchPlan;
 import dev.moon.hotwire.registration.ArchitecturyEventRegistration;
 import dev.moon.hotwire.registration.Owners;
@@ -27,11 +28,6 @@ import net.fabricmc.fabric.api.client.command.v2.FabricClientCommandSource;
 import net.fabricmc.fabric.api.client.event.lifecycle.v1.ClientLifecycleEvents;
 import net.fabricmc.fabric.api.client.networking.v1.ClientPlayConnectionEvents;
 import net.fabricmc.fabric.api.client.networking.v1.ClientPlayNetworking;
-//? if >=26.1 {
-import net.fabricmc.fabric.api.event.lifecycle.v1.ServerLevelEvents;
-//?} else {
-/*import net.fabricmc.fabric.api.event.lifecycle.v1.ServerWorldEvents;
-*///?}
 import net.fabricmc.fabric.api.event.lifecycle.v1.ServerLifecycleEvents;
 import net.fabricmc.fabric.api.networking.v1.ServerPlayConnectionEvents;
 import net.fabricmc.fabric.api.networking.v1.ServerPlayNetworking;
@@ -181,27 +177,11 @@ public final class ModLifecycle {
     }
 
     private static Object findLevelEvent(boolean load) {
-        //? if >=26.1 {
-        return load ? ServerLevelEvents.LOAD : ServerLevelEvents.UNLOAD;
-        //?} else {
-        /*return load ? ServerWorldEvents.LOAD : ServerWorldEvents.UNLOAD;
-        *///?}
+        return Spellings.getLevelEvent(load);
     }
 
     private static void callLevel(Object listener, MinecraftServer server, ServerLevel level, boolean load) {
-        //? if >=26.1 {
-        if (load) {
-            ((ServerLevelEvents.Load) listener).onLevelLoad(server, level);
-        } else {
-            ((ServerLevelEvents.Unload) listener).onLevelUnload(server, level);
-        }
-        //?} else {
-        /*if (load) {
-            ((ServerWorldEvents.Load) listener).onWorldLoad(server, level);
-        } else {
-            ((ServerWorldEvents.Unload) listener).onWorldUnload(server, level);
-        }
-        *///?}
+        Spellings.runLevelListener(listener, server, level, load);
     }
 
     private static boolean listensTo(String id, RegistrationJournal journal, @Nullable Object... events) {

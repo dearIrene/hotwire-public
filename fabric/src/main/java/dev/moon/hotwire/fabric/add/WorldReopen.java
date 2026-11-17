@@ -6,6 +6,7 @@ import dev.moon.hotwire.fabric.ModViews;
 import dev.moon.hotwire.fabric.ResourceReload;
 import dev.moon.hotwire.fabric.mixin.core.network.ConnectionAccessor;
 import dev.moon.hotwire.fabric.mixin.core.util.thread.BlockableEventLoopAccessor;
+import dev.moon.hotwire.fabric.version.Spellings;
 import dev.moon.hotwire.jvm.JarChannels;
 import dev.moon.hotwire.ui.Lang;
 import dev.moon.hotwire.ui.Notices;
@@ -34,10 +35,6 @@ import java.util.function.Supplier;
 import java.util.stream.Collectors;
 import net.minecraft.client.Minecraft;
 import net.minecraft.client.gui.screens.DisconnectedScreen;
-//? if <1.21.8 {
-/*import net.minecraft.client.gui.screens.TitleScreen;
-*///?}
-import net.minecraft.client.multiplayer.ClientLevel;
 import net.minecraft.client.multiplayer.ClientPacketListener;
 import net.minecraft.client.server.IntegratedServer;
 import net.minecraft.world.level.storage.LevelResource;
@@ -141,9 +138,9 @@ public final class WorldReopen {
     }
 
     public static <T> T runAround(Supplier<T> add) throws InterruptedException {
-        //? if <1.21.5 {
-        /*ResourceReload.awaitIdle();
-        *///?}
+        if (Spellings.hasRenderQueue()) {
+            ResourceReload.awaitIdle();
+        }
         Minecraft client = Minecraft.getInstance();
         if (isLeftOnly()) {
             leave(client);
@@ -201,21 +198,7 @@ public final class WorldReopen {
             ResourceReload.layOutChat();
 
             try {
-                //? if >=1.21.10 {
-                client.disconnectFromWorld(ClientLevel.DEFAULT_QUIT_MESSAGE);
-                //?} elif >=1.21.8 {
-                /*ClientLevel level = client.level;
-                if (level != null) {
-                    level.disconnect(ClientLevel.DEFAULT_QUIT_MESSAGE);
-                }
-                client.disconnectWithSavingScreen();
-                *///?} else {
-                /*ClientLevel level = client.level;
-                if (level != null) {
-                    level.disconnect();
-                }
-                client.disconnect(new TitleScreen());
-                *///?}
+                Spellings.leaveWorld(client);
             } finally {
                 queueAtLeave = null;
             }

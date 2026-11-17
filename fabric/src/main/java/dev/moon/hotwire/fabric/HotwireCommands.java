@@ -2,12 +2,8 @@ package dev.moon.hotwire.fabric;
 
 import com.mojang.brigadier.CommandDispatcher;
 import com.mojang.brigadier.builder.LiteralArgumentBuilder;
+import dev.moon.hotwire.fabric.version.Spellings;
 import net.fabricmc.fabric.api.client.command.v2.FabricClientCommandSource;
-//? if >=26.1 {
-import net.fabricmc.fabric.api.client.command.v2.ClientCommands;
-//?} else {
-/*import net.fabricmc.fabric.api.client.command.v2.ClientCommandManager;
-*///?}
 
 final class HotwireCommands {
     private HotwireCommands() {
@@ -24,10 +20,6 @@ final class HotwireCommands {
     }
 
     private static LiteralArgumentBuilder<FabricClientCommandSource> makeLiteral(String name) {
-        //? if >=26.1 {
-        return ClientCommands.literal(name);
-        //?} else {
-        /*return ClientCommandManager.literal(name);
-        *///?}
+        return Spellings.makeCommandLiteral(name);
     }
 }

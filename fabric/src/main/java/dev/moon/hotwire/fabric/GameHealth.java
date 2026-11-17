@@ -33,11 +33,7 @@ final class GameHealth {
         if (made != key) {
             problems.add("a new key for " + key + " is not the one the " + what + " registry holds");
         }
-        //? if >=1.21.2 {
-        T found = registry.getValue(made);
-        //?} else {
-        /*T found = registry.get(made);
-        *///?}
+        T found = Spellings.findRegistryValue(registry, made);
         if (found != entry) {
             problems.add("the " + what + " registry no longer finds " + key + " by its key");
         }
