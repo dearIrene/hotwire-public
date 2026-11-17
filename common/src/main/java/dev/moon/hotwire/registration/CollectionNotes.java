@@ -601,6 +601,10 @@ public final class CollectionNotes {
         return known;
     }
 
+    synchronized boolean isReached(Object container) {
+        return this.notes.containsKey(container);
+    }
+
     synchronized boolean isOfWorld(Object container) {
         Note note = this.notes.get(container);
         return note != null && note.ofWorld;

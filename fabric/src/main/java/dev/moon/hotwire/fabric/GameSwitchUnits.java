@@ -65,8 +65,8 @@ final class GameSwitchUnits implements SwitchUnits {
     }
 
     @Override
-    public Map<String, String> findEntityHolders(Collection<String> mods) {
-        return EntityHolders.find(mods);
+    public Map<String, String> findEntityHolders(Collection<String> mods, Predicate<Object> reached) {
+        return EntityHolders.find(mods, reached);
     }
 
     @Override

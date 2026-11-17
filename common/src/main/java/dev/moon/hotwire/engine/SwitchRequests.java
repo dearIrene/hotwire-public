@@ -142,7 +142,7 @@ final class SwitchRequests {
                 List<String> order = new ArrayList<>(ids.stream().filter(failed.plan().order()::contains).toList());
                 failed.plan().order().stream().filter(id -> !order.contains(id)).forEach(order::add);
                 current.offerReopen(ReopenPanel.Offer.ofNextStart(order, PlayerMessages.joinNames(order,
-                        this.installed::nameOf), this.describeWhyAtStart(order)));
+                        this.installed::nameOf), this.describeWhyAtStart(order, parts.runner())));
             } else if (!ids.isEmpty() && result.result() instanceof ModSwitcher.Result.Failed failed
                     && failed.cause().reopenFixes() && current != null
                     && (this.engine.units.isWorldLeftOnly() || Games.getNow().findReopenRefusal().isEmpty())) {
@@ -169,10 +169,10 @@ final class SwitchRequests {
         return ended;
     }
 
-    private String describeWhyAtStart(List<String> order) {
+    private String describeWhyAtStart(List<String> order, SwitchRunner runner) {
         Set<String> kinds = this.engine.units.findWorldContentKinds(order);
         if (kinds.isEmpty()) {
-            return Lang.get(!this.engine.units.hasEntityHolders(order) ? "hotwire.reopen.why.restart_only"
+            return Lang.get(runner.findEntityHolders(order).isEmpty() ? "hotwire.reopen.why.restart_only"
                     : "hotwire.reopen.why.world_data");
         }
         List<String> named = List.copyOf(kinds);

@@ -8,7 +8,6 @@ import dev.moon.hotwire.engine.DevControls;
 import dev.moon.hotwire.engine.EngineGame;
 import dev.moon.hotwire.engine.SettingsScreens;
 import dev.moon.hotwire.fabric.add.WorldReopen;
-import dev.moon.hotwire.fabric.registration.EntityHolders;
 import dev.moon.hotwire.fabric.registration.ModLifecycle;
 import dev.moon.hotwire.fabric.registration.WorldContent;
 import dev.moon.hotwire.fabric.screen.HotwireScreen;
@@ -146,11 +145,6 @@ final class EngineGameSide implements EngineGame {
         Set<String> kinds = new TreeSet<>();
         WorldContent.find(mods).values().forEach(kinds::addAll);
         return kinds;
-    }
-
-    @Override
-    public boolean hasEntityHolders(List<String> mods) {
-        return !EntityHolders.find(mods).isEmpty();
     }
 
     @Override

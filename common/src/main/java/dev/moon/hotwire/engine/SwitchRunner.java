@@ -39,6 +39,7 @@ import dev.moon.hotwire.update.LiveUpdates;
 import java.lang.management.ManagementFactory;
 import java.lang.management.ThreadMXBean;
 import java.util.ArrayList;
+import java.util.Collection;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Locale;
@@ -111,6 +112,10 @@ public final class SwitchRunner {
 
             ElementLook.findAhead(fieldReferences, order, switcher::isOn);
         });
+    }
+
+    public Map<String, String> findEntityHolders(Collection<String> mods) {
+        return this.units.findEntityHolders(mods, this.fieldReferences::hasReached);
     }
 
     public ModTripwire getTripwire() {
@@ -300,7 +305,7 @@ public final class SwitchRunner {
         Map<String, List<String>> content = this.units.findWorldContent(wired);
         SwitchTimes.mark("plan: content");
 
-        Map<String, String> inEntities = content.isEmpty() ? this.units.findEntityHolders(wired) : Map.of();
+        Map<String, String> inEntities = content.isEmpty() ? this.findEntityHolders(wired) : Map.of();
         SwitchTimes.mark("plan: entities");
         if (!content.isEmpty() || !inEntities.isEmpty()) {
             String why = content.isEmpty() ? "the world's entities hold objects of " + inEntities

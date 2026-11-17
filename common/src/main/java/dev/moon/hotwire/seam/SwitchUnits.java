@@ -19,7 +19,7 @@ public interface SwitchUnits {
 
     Map<String, List<String>> findWorldContent(Collection<String> mods);
 
-    Map<String, String> findEntityHolders(Collection<String> mods);
+    Map<String, String> findEntityHolders(Collection<String> mods, Predicate<Object> reached);
 
     void rememberPluginAnswers(Collection<String> mods);
 

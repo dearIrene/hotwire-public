@@ -62,8 +62,6 @@ public interface EngineGame {
 
     Set<String> findWorldContentKinds(List<String> mods);
 
-    boolean hasEntityHolders(List<String> mods);
-
     StoreModel.Packs makePacks(ModrinthClient client, Downloads downloads, BiConsumer<String, Boolean> say);
 
     Object wrapPrompt(PromptScreen prompt);

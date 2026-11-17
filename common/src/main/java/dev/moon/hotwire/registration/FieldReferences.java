@@ -518,6 +518,10 @@ public final class FieldReferences {
         }
     }
 
+    public boolean hasReached(Object collection) {
+        return this.elements.look.getNotes().isReached(collection);
+    }
+
     public boolean hasRemovedFrom(String mod) {
         return this.replacements.getOrDefault(mod, List.of()).stream().anyMatch(one -> makes(one.field()))
                 || this.loadedChecks.hasMadeWithout(mod);
