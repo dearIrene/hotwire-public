@@ -3,7 +3,9 @@ package dev.moon.hotwire.update;
 import com.google.gson.JsonParseException;
 import java.io.File;
 import java.io.IOException;
+import java.io.InputStream;
 import java.net.URI;
+import java.net.URISyntaxException;
 import java.nio.file.DirectoryStream;
 import java.nio.file.Files;
 import java.nio.file.Path;
@@ -12,13 +14,19 @@ import java.security.CodeSource;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Optional;
+import java.util.zip.ZipEntry;
+import java.util.zip.ZipFile;
 import net.fabricmc.loader.api.FabricLoader;
+import org.jspecify.annotations.Nullable;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 public final class SwapAtClose {
     public static final String LAST_LOGS = "last-close.log";
     private static final Logger LOGGER = LoggerFactory.getLogger(SwapAtClose.class);
+    private static final String SWAPPER = "dev/moon/hotwire/update/JarSwapper.class";
+
+    private static final String CORE = "META-INF/jars/hotwire-core.jar";
 
     private final UpdateQueue queue;
     private final UpdateFolders folders;
@@ -54,8 +62,7 @@ public final class SwapAtClose {
             return;
         }
         try {
-            Files.createDirectories(this.swapperCopy.getParent());
-            Files.copy(this.hotwireJar, this.swapperCopy, StandardCopyOption.REPLACE_EXISTING);
+            copySwapper(this.hotwireJar, this.swapperCopy);
             new ProcessBuilder(java.get(), "-Xmx16m", "-XX:+UseSerialGC", "-XX:TieredStopAtLevel=1", "-cp",
                     this.getClassPath(), JarSwapper.class.getName(),
                     this.folders.queueFile().toString(), this.folders.mods().toString(),
@@ -79,9 +86,8 @@ public final class SwapAtClose {
             return;
         }
         try {
-            Files.createDirectories(this.swapperCopy.getParent());
             try {
-                Files.copy(this.hotwireJar, this.swapperCopy, StandardCopyOption.REPLACE_EXISTING);
+                copySwapper(this.hotwireJar, this.swapperCopy);
             } catch (IOException running) {
             }
             new ProcessBuilder(java.get(), "-Xmx16m", "-XX:+UseSerialGC", "-XX:TieredStopAtLevel=1", "-cp",
@@ -92,6 +98,51 @@ public final class SwapAtClose {
                     .start();
         } catch (IOException | RuntimeException e) {
             LOGGER.warn("[Hotwire] the close watch could not start: {}", e.toString());
+        }
+    }
+
+    static void copySwapper(Path hotwireJar, Path to) throws IOException {
+        Files.createDirectories(to.getParent());
+        Path own = findOwnJar();
+        if (own != null) {
+            Files.copy(own, to, StandardCopyOption.REPLACE_EXISTING);
+            return;
+        }
+        try (ZipFile outer = new ZipFile(hotwireJar.toFile())) {
+            ZipEntry core = outer.getEntry(CORE);
+            if (core != null) {
+                try (InputStream in = outer.getInputStream(core)) {
+                    Files.copy(in, to, StandardCopyOption.REPLACE_EXISTING);
+                }
+                return;
+            }
+        }
+        Files.copy(hotwireJar, to, StandardCopyOption.REPLACE_EXISTING);
+    }
+
+    public static boolean canRunFrom(Path jar) {
+        try (ZipFile zip = new ZipFile(jar.toFile())) {
+            return zip.getEntry(SWAPPER) != null || zip.getEntry(CORE) != null;
+        } catch (IOException e) {
+            return false;
+        }
+    }
+
+    private static @Nullable Path findOwnJar() {
+        CodeSource source = JarSwapper.class.getProtectionDomain().getCodeSource();
+        if (source == null || source.getLocation() == null) {
+            return null;
+        }
+        try {
+            Path home = Path.of(source.getLocation().toURI());
+            if (!Files.isRegularFile(home)) {
+                return null;
+            }
+            try (ZipFile zip = new ZipFile(home.toFile())) {
+                return zip.getEntry(SWAPPER) != null ? home : null;
+            }
+        } catch (URISyntaxException | IOException | RuntimeException e) {
+            return null;
         }
     }
 
