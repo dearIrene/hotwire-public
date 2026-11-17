@@ -227,12 +227,16 @@ public final class Linker {
         mixinOwner = owner;
     }
 
+    public static @Nullable String findMixinOwner(String mixin) {
+        return mixinOwner.apply(mixin);
+    }
+
     public static void onReached(String member, String mixin) {
         if (REACHED.add(member)) {
             LOGGER.info("[Hotwire] {} belongs to a mod that is off and was reached; its old body ran. The caller"
                     + " holds something of that mod, or was already running when the mod went off.", member);
         }
-        String mod = mixin.isEmpty() ? null : mixinOwner.apply(mixin.replace('.', '/'));
+        String mod = mixin.isEmpty() ? null : findMixinOwner(mixin.replace('.', '/'));
         if (mod != null) {
             Tripwire.onCounted(mod);
         }

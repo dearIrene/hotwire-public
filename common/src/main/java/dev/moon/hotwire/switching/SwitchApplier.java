@@ -168,7 +168,6 @@ public final class SwitchApplier {
     private volatile BiConsumer<Set<String>, Set<Class<?>>> afterRebuild = (rebuilt, rehashed) -> { };
 
     private final WaitingCatchUps catchUps = new WaitingCatchUps();
-    private volatile Predicate<Class<?>> rebuiltWhilePaused = type -> false;
 
     public void checkHealthWith(Supplier<List<String>> check, BiConsumer<Set<String>, Set<Class<?>>> afterRebuild) {
         this.health = check;
@@ -179,8 +178,7 @@ public final class SwitchApplier {
         this.objectRebuilder.rebuild(Set.of(), flipped, Set.of());
     }
 
-    public void rebuildObjectsWith(Predicate<Class<?>> rebuiltWhilePaused, GameObjectRebuilder rebuilder) {
-        this.rebuiltWhilePaused = rebuiltWhilePaused;
+    public void rebuildObjectsWith(GameObjectRebuilder rebuilder) {
         this.objectRebuilder = rebuilder;
     }
 
@@ -781,8 +779,7 @@ public final class SwitchApplier {
 
         ClassRebuilder.PreparedRebuild prepared;
         try {
-            prepared = LiveObjects.check(mixed, current, this.rebuiltWhilePaused,
-                this.game,
+            prepared = LiveObjects.check(mixed, current, Games.getNow().getReloads()::isRebuiltWhilePaused, this.game,
                 this::findOriginal, this.rebuilder, what, mixin -> {
                     String owner = this.carriedMixins.findModMaking(mixin, id -> true);
                     return owner != null && !on.contains(owner);

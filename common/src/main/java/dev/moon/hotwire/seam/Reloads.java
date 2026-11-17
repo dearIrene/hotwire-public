@@ -26,6 +26,8 @@ public interface Reloads {
 
     void runAfterReload(Runnable then);
 
+    boolean isRebuiltWhilePaused(Class<?> type);
+
     void runWaitingReload();
 
     void leaveReloadToNext(boolean leaves);

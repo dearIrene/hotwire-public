@@ -2,6 +2,7 @@ package dev.moon.hotwire.redefine;
 
 import com.google.common.collect.MapMaker;
 import dev.moon.hotwire.redefine.InitHookReplay.Due;
+import dev.moon.hotwire.seam.Games;
 import java.lang.invoke.MethodHandle;
 import java.lang.invoke.MethodHandleProxies;
 import java.lang.invoke.MethodHandles;
@@ -34,8 +35,6 @@ public final class InitHookRuns {
     private static volatile BooleanSupplier isLaterAllowed = () -> false;
 
     private static volatile @Nullable List<IntSupplier> waitingLate;
-
-    private static volatile Predicate<Class<?>> rebuilt = type -> false;
 
     private static final Map<Class<?>, Due> WAITING = new LinkedHashMap<>();
 
@@ -90,10 +89,6 @@ public final class InitHookRuns {
             }
         }
         return false;
-    }
-
-    public static void skipRebuiltWith(Predicate<Class<?>> builtAgain) {
-        rebuilt = builtAgain;
     }
 
     @SuppressWarnings("unchecked")
@@ -326,7 +321,7 @@ public final class InitHookRuns {
                     without.add(one);
                 }
             }
-            if (rebuilt.test(type)) {
+            if (Games.getNow().getReloads().isRebuiltWhilePaused(type)) {
                 LOGGER.info("[Hotwire] {} objects of {} were made before hooks that read their moment's arguments,"
                         + " and the switch builds its objects again with them: {}", objects.size(), name,
                         due.missed());

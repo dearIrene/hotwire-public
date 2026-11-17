@@ -69,4 +69,9 @@ final class GameReloads implements Reloads {
     public void leaveReloadToNext(boolean leaves) {
         ResourceReload.leaveReloadToNext(leaves);
     }
+
+    @Override
+    public boolean isRebuiltWhilePaused(Class<?> type) {
+        return ResourceReload.isRebuiltWhilePaused(type);
+    }
 }
