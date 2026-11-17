@@ -63,7 +63,7 @@ public final class ModSwitcher {
     private final Map<String, String> restartOnly = new ConcurrentHashMap<>();
 
     private static final int NAMED_ROUNDS = 4;
-    private volatile BiConsumer<String, String> restartLearned = (id, why) -> { };
+    private final BiConsumer<String, String> restartLearned;
 
     private static final Pattern HOOK_WORD = Pattern.compile("[$]([A-Za-z0-9_-]+)(?=[$])");
 
@@ -119,10 +119,17 @@ public final class ModSwitcher {
         }
     }
 
+    public record Checks(Predicate<String> reopenToTurnOn, Supplier<Set<String>> calledByWorld,
+            Function<Set<String>, Set<String>> inRegistries, Map<String, String> restartKnown,
+            BiConsumer<String, String> restartLearned) {
+        public static final Checks NONE = new Checks(id -> false, Set::of, mods -> Set.of(), Map.of(),
+                (id, why) -> { });
+    }
+
     private final Lifecycle lifecycle;
-    private volatile Predicate<String> reopenToTurnOn = id -> false;
+    private final Predicate<String> reopenToTurnOn;
     private final WorldCalls calledByWorld = new WorldCalls();
-    private volatile Function<Set<String>, Set<String>> inRegistries = mods -> Set.of();
+    private final Function<Set<String>, Set<String>> inRegistries;
 
     final AtomicInteger switches = new AtomicInteger();
 
@@ -133,6 +140,16 @@ public final class ModSwitcher {
 
     public ModSwitcher(ModGraph graph, SwitchPlanner planner, SwitchApplier applier, Progress progress,
             RegistrationJournal registrations, Lifecycle lifecycle) {
+        this(graph, planner, applier, progress, registrations, lifecycle, Checks.NONE);
+    }
+
+    public ModSwitcher(ModGraph graph, SwitchPlanner planner, SwitchApplier applier, Progress progress,
+            RegistrationJournal registrations, Lifecycle lifecycle, Checks checks) {
+        this.reopenToTurnOn = checks.reopenToTurnOn();
+        this.calledByWorld.answerWith(checks.calledByWorld());
+        this.inRegistries = checks.inRegistries();
+        this.restartOnly.putAll(checks.restartKnown());
+        this.restartLearned = checks.restartLearned();
         this.graph = graph;
         this.planner = planner;
         this.applier = applier;
@@ -246,18 +263,6 @@ public final class ModSwitcher {
                 || family.stream().anyMatch(this.reopenToTurnOn));
     }
 
-    public void reopenToTurnOnWith(Predicate<String> tookFrom) {
-        this.reopenToTurnOn = tookFrom;
-    }
-
-    public void reopenToTurnOffWith(Supplier<Set<String>> mods) {
-        this.calledByWorld.answerWith(mods);
-    }
-
-    public void restartToTurnOffWith(Function<Set<String>, Set<String>> holding) {
-        this.inRegistries = holding;
-    }
-
     public synchronized void replan(SwitchPlanner planner) {
         this.planner = planner;
     }
@@ -336,11 +341,6 @@ public final class ModSwitcher {
                 this.restartLearned.accept(this.graph.resolve(id), why);
             });
         }
-    }
-
-    public void setRestartMemory(Map<String, String> known, BiConsumer<String, String> learned) {
-        this.restartOnly.putAll(known);
-        this.restartLearned = learned;
     }
 
     public Map<String, String> getRestartOnly() {

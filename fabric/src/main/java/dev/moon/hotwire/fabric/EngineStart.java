@@ -222,16 +222,7 @@ final class EngineStart {
         ModPolicy.setSeenUses(new SeenUses(FabricLoader.getInstance().getConfigDir().resolve("hotwire/uses.json"),
                 id -> installed.find(id).map(ModManifest::version).orElse(null)));
         ModPolicy.setStaying(applier::patchesLiveBackend);
-        ModSwitcher switcher = new ModSwitcher(installed.getGraph(), ModPolicy.makePlannerFor(installed.getGraph()),
-                applier, progress, GameRegistrations.getJournal(),
-                ModLifecycle.makeLifecycle(GameRegistrations.getJournal(), Minecraft.getInstance()));
-        RestartOnlyFile restartOnly = new RestartOnlyFile(FabricLoader.getInstance().getConfigDir()
-                .resolve("hotwire/restart-only.json"), id -> installed.find(id).map(ModManifest::version).orElse(null));
-        switcher.setRestartMemory(restartOnly.findCurrent(), restartOnly::add);
-        LifecycleListeners.setIsOn(switcher::isOn);
-
-        LifecycleListeners.add(new OneConfigSaves(LifecycleListeners::isListening));
-        laps.endLap("off checker, seen uses, switcher");
+        laps.endLap("off checker, seen uses");
         ModTripwire tripwire = new ModTripwire(instrumentation, applier.getRebuilder(), classes::findLoaded);
         applier.addRider(tripwire.getRide());
         laps.endLap("tripwire");
@@ -248,10 +239,19 @@ final class EngineStart {
         FinalWrites.writeWith(fieldReferences::writeFinal);
         FieldSlots.readStaticsWhen(fieldReferences::isInitialized);
         laps.endLap("field references, statics");
-        switcher.reopenToTurnOnWith(mod -> fieldReferences.hasRemovedFrom(mod)
-                || NetworkHandlers.hasLostConnection(mod));
-        switcher.reopenToTurnOffWith(new ConnectionLambdas(instrumentation)::findMods);
-        switcher.restartToTurnOffWith(new RegistryHolders(instrumentation)::findOwnedBy);
+        RestartOnlyFile restartOnly = new RestartOnlyFile(FabricLoader.getInstance().getConfigDir()
+                .resolve("hotwire/restart-only.json"), id -> installed.find(id).map(ModManifest::version).orElse(null));
+        ModSwitcher switcher = new ModSwitcher(installed.getGraph(), ModPolicy.makePlannerFor(installed.getGraph()),
+                applier, progress, GameRegistrations.getJournal(),
+                ModLifecycle.makeLifecycle(GameRegistrations.getJournal(), Minecraft.getInstance()),
+                new ModSwitcher.Checks(mod -> fieldReferences.hasRemovedFrom(mod)
+                        || NetworkHandlers.hasLostConnection(mod), new ConnectionLambdas(instrumentation)::findMods,
+                        new RegistryHolders(instrumentation)::findOwnedBy, restartOnly.findCurrent(),
+                        restartOnly::add));
+        LifecycleListeners.setIsOn(switcher::isOn);
+
+        LifecycleListeners.add(new OneConfigSaves(LifecycleListeners::isListening));
+        laps.endLap("switcher");
         Tripwire.setOwnLocks(new ModLocks(instrumentation, fieldReferences::isInitialized)::of);
         applier.checkHealthWith(GameHealth::findProblems, (rebuilt, rehashed) -> {
             InternedKeys.refresh(rebuilt);
