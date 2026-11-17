@@ -257,37 +257,32 @@ public final class ModrinthClient {
     }
 
     public Map<String, Version> findNewest(Map<String, String> sha512ByName) throws IOException {
-        JsonObject body = new JsonObject();
-        JsonArray hashes = new JsonArray();
-        sha512ByName.values().forEach(hashes::add);
-        body.add("hashes", hashes);
-        body.addProperty("algorithm", "sha512");
+        JsonObject body = makeHashesBody(sha512ByName);
         JsonArray loaders = new JsonArray();
         loaders.add(this.loader);
         body.add("loaders", loaders);
         JsonArray versions = new JsonArray();
         versions.add(this.gameVersion);
         body.add("game_versions", versions);
-        JsonObject root = JsonParser.parseString(this.transport.post(API + "/version_files/update", body.toString()))
-                .getAsJsonObject();
-        Map<String, Version> out = new LinkedHashMap<>();
-        sha512ByName.forEach((name, hash) -> {
-            JsonElement found = root.get(hash);
-            if (found != null && found.isJsonObject()) {
-                out.put(name, readVersion(found.getAsJsonObject()));
-            }
-        });
-        return out;
+        return this.askByHashes("/version_files/update", body, sha512ByName);
     }
 
     public Map<String, Version> findByHashes(Map<String, String> sha512ByName) throws IOException {
+        return this.askByHashes("/version_files", makeHashesBody(sha512ByName), sha512ByName);
+    }
+
+    private static JsonObject makeHashesBody(Map<String, String> sha512ByName) {
         JsonObject body = new JsonObject();
         JsonArray hashes = new JsonArray();
         sha512ByName.values().forEach(hashes::add);
         body.add("hashes", hashes);
         body.addProperty("algorithm", "sha512");
-        JsonObject root = JsonParser.parseString(this.transport.post(API + "/version_files", body.toString()))
-                .getAsJsonObject();
+        return body;
+    }
+
+    private Map<String, Version> askByHashes(String path, JsonObject body, Map<String, String> sha512ByName)
+            throws IOException {
+        JsonObject root = JsonParser.parseString(this.transport.post(API + path, body.toString())).getAsJsonObject();
         Map<String, Version> out = new LinkedHashMap<>();
         sha512ByName.forEach((name, hash) -> {
             JsonElement found = root.get(hash);
