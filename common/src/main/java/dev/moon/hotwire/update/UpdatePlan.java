@@ -111,6 +111,7 @@ public record UpdatePlan(String modId, String runningVersion, String incomingVer
                 case AddedThisSession t -> UpdateTier.NEXT_START;
                 case UpdatedEarlierThisSession w -> UpdateTier.NEXT_START;
                 case NeverSwitched n -> UpdateTier.NEXT_START;
+                case UsedByOthers p -> UpdateTier.NEXT_START;
             };
         }
 
@@ -172,6 +173,9 @@ public record UpdatePlan(String modId, String runningVersion, String incomingVer
         }
 
         record NeverSwitched() implements UpdateBlocker {
+        }
+
+        record UsedByOthers() implements UpdateBlocker {
         }
     }
 }

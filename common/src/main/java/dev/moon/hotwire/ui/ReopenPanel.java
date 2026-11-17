@@ -3,6 +3,7 @@ package dev.moon.hotwire.ui;
 import java.nio.file.Path;
 import java.util.List;
 import java.util.function.Consumer;
+import java.util.function.Supplier;
 import org.jspecify.annotations.Nullable;
 
 public final class ReopenPanel extends Sheet {
@@ -43,11 +44,13 @@ public final class ReopenPanel extends Sheet {
 
     private static boolean backupWanted = true;
 
+    private final Supplier<String> others;
     private final Consumer<Offer> onConfirm;
     private final Runnable onCancel;
 
-    public ReopenPanel(Consumer<Offer> onConfirm, Runnable onCancel) {
+    public ReopenPanel(Supplier<String> others, Consumer<Offer> onConfirm, Runnable onCancel) {
         super(440, onCancel);
+        this.others = others;
         this.onConfirm = onConfirm;
         this.onCancel = onCancel;
     }
@@ -60,10 +63,12 @@ public final class ReopenPanel extends Sheet {
     private void fill(Offer offer) {
         this.title.set(findTitle(offer));
         String safe = offer.leaves() ? "hotwire.reopen.safe.server" : "hotwire.reopen.safe.world";
+        String shared = offer.isReopening() ? this.others.get() : "";
         this.body.clear().with(Kit.text(offer.who(), Palette.ACCENT).wrap(), Kit.dim(offer.why()).wrap(),
                 new Part().height(4), Kit.text(findPlan(offer)).wrap(),
                 Kit.text(Lang.get(offer.nextStart() ? "hotwire.reopen.safe.next_start" : safe),
                         offer.nextStart() ? Palette.WARN : Palette.ON).wrap(),
+                Kit.text(shared, Palette.WARN).wrap().show(!shared.isEmpty()),
                 Kit.dim(Lang.get("hotwire.reopen.backup_line")).wrap().show(offer.isReopening() && backupWanted));
         this.buttons.clear().with(Kit.push(Lang.get(backupWanted ? "hotwire.reopen.backup_on"
                 : "hotwire.reopen.backup_off"), () -> {

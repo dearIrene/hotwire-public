@@ -88,6 +88,10 @@ public interface ModScreenGame {
 
     void onDone();
 
+    default String describeOthers() {
+        return "";
+    }
+
     default void cancelReopen() {
     }
 

@@ -215,7 +215,11 @@ final class ApiChanges {
             boolean off = !request.off().isEmpty();
             SwitchPlan planned = off ? parts.runner().getSwitcher().planOff(request.off())
                     : parts.runner().getSwitcher().planOn(request.on());
-            if (parts.runner().getSwitcher().needsReopen(planned)) {
+            if (parts.runner().getSwitcher().needsReopen(planned) && Games.getNow().countOthers() > 0) {
+                can = false;
+                reason = Reason.REFUSED;
+                lines.add(Lang.get("hotwire.api.reopen_others"));
+            } else if (parts.runner().getSwitcher().needsReopen(planned)) {
                 reopen = true;
                 lines.add(Lang.get("hotwire.api.switch_reopen"));
                 if (reason == Reason.NONE) {

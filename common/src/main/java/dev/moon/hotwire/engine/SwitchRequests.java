@@ -135,6 +135,9 @@ final class SwitchRequests {
                 SwitchHistory.get().recordDone(result.result(), SwitchHistory.Cause.PLAYER, "");
                 this.followInProfile(result.result());
             }
+            if (result.result() instanceof ModSwitcher.Result.Done done) {
+                this.engine.tellOthersOf(done.plan().order());
+            }
             ModScreen current = this.screen.get();
             if (quiet) {
                 LOGGER.info("[Hotwire] for the mod that asked: {}", said);

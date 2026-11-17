@@ -15,6 +15,7 @@ import dev.moon.hotwire.report.GameEnvironment;
 import dev.moon.hotwire.report.GameLog;
 import dev.moon.hotwire.report.GameReports;
 import dev.moon.hotwire.report.ReportZips;
+import dev.moon.hotwire.seam.Game;
 import dev.moon.hotwire.seam.Games;
 import dev.moon.hotwire.store.ModStore;
 import dev.moon.hotwire.store.UpdateCheck;
@@ -54,6 +55,7 @@ import dev.moon.hotwire.update.UrgentUpdate;
 import java.io.IOException;
 import java.nio.file.Path;
 import java.util.ArrayList;
+import java.util.Collection;
 import java.util.List;
 import java.util.Objects;
 import java.util.Optional;
@@ -551,6 +553,28 @@ public final class HotwireEngine implements ModScreenGame, AutoCloseable {
         JvmParts parts = this.findParts();
         if (parts != null) {
             parts.runner().onWorldOpened();
+        }
+    }
+
+    @Override
+    public String describeOthers() {
+        Game game = Games.getNow();
+        if (!game.isWorldShared()) {
+            return "";
+        }
+        int others = game.countOthers();
+        if (others == 0) {
+            return Lang.get("hotwire.shared.reopen_ends");
+        }
+        return others == 1 ? Lang.get("hotwire.shared.reopen_other") : Lang.get("hotwire.shared.reopen_others", others);
+    }
+
+    void tellOthersOf(Collection<String> mods) {
+        Game game = Games.getNow();
+        List<String> theirs = mods.stream().filter(game::isUsedByOthers).toList();
+        if (!theirs.isEmpty()) {
+            game.tellOthers(Lang.get("hotwire.shared.others_changed", PlayerMessages.joinNames(theirs,
+                    this::nameOfMod)));
         }
     }
 

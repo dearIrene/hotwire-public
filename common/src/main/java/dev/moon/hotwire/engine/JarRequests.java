@@ -84,8 +84,9 @@ final class JarRequests {
                 this.storeJars.waitForReopen();
             }
             then.accept(result);
-            if (result instanceof ModAdder.Result.Added) {
+            if (result instanceof ModAdder.Result.Added added) {
                 this.storeJars.markInstalled(jar);
+                this.engine.tellOthersOf(added.ids());
             }
             JarHost current = this.engine.findHost();
             if (reopens) {

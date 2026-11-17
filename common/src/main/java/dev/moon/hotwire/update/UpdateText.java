@@ -143,6 +143,7 @@ public final class UpdateText {
             case UpdateBlocker.UpdatedEarlierThisSession updated -> say.apply("hotwire.update.blocker.updated",
                     new Object[0]);
             case UpdateBlocker.NeverSwitched never -> say.apply("hotwire.update.blocker.never", new Object[0]);
+            case UpdateBlocker.UsedByOthers others -> say.apply("hotwire.update.blocker.others", new Object[0]);
         };
     }
 

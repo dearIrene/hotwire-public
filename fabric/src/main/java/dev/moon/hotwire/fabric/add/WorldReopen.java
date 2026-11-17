@@ -3,6 +3,7 @@ package dev.moon.hotwire.fabric.add;
 import dev.moon.hotwire.add.ModAdder;
 import dev.moon.hotwire.add.TickEnd;
 import dev.moon.hotwire.fabric.ModViews;
+import dev.moon.hotwire.fabric.OtherPlayers;
 import dev.moon.hotwire.fabric.ResourceReload;
 import dev.moon.hotwire.fabric.mixin.core.network.ConnectionAccessor;
 import dev.moon.hotwire.fabric.mixin.core.util.thread.BlockableEventLoopAccessor;
@@ -70,9 +71,6 @@ public final class WorldReopen {
         IntegratedServer server = Minecraft.getInstance().getSingleplayerServer();
         if (server == null) {
             return Optional.of(Lang.get("hotwire.reopen.single_player_only"));
-        }
-        if (server.isPublished()) {
-            return Optional.of(Lang.get("hotwire.reopen.lan"));
         }
         return Optional.empty();
     }
@@ -186,6 +184,9 @@ public final class WorldReopen {
     public static void leave(Minecraft client) throws InterruptedException {
         JarChannels.makeUninterruptible();
         IntegratedServer leaving = client.getSingleplayerServer();
+        if (leaving != null && OtherPlayers.count() > 0) {
+            OtherPlayers.sendAway(leaving, Lang.get("hotwire.shared.others_closed"));
+        }
         ClientPacketListener listener = client.getConnection();
         Channel channel = listener == null ? null
                 : ((ConnectionAccessor) listener.getConnection()).hotwire$getChannel();

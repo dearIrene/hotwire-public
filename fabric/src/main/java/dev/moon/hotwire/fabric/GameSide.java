@@ -259,6 +259,26 @@ public final class GameSide implements Game {
     }
 
     @Override
+    public boolean isWorldShared() {
+        return OtherPlayers.isShared();
+    }
+
+    @Override
+    public int countOthers() {
+        return OtherPlayers.count();
+    }
+
+    @Override
+    public boolean isUsedByOthers(String mod) {
+        return OtherPlayers.count() > 0 && OtherPlayers.isReachedBy(mod);
+    }
+
+    @Override
+    public void tellOthers(String line) {
+        OtherPlayers.tell(line);
+    }
+
+    @Override
     public boolean isPlaying() {
         Minecraft client = Minecraft.getInstance();
         return client.level != null && ModViews.openScreen() == null && client.isWindowActive();

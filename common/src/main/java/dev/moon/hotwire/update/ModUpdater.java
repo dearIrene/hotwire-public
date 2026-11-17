@@ -11,6 +11,7 @@ import dev.moon.hotwire.jar.ModJarReader;
 import dev.moon.hotwire.jar.ModManifest;
 import dev.moon.hotwire.plan.ModGraph;
 import dev.moon.hotwire.redefine.HeapCensus;
+import dev.moon.hotwire.seam.Games;
 import dev.moon.hotwire.switching.SwitchApplier;
 import dev.moon.hotwire.switching.SwitchApplier.ApplyResult;
 import dev.moon.hotwire.switching.SwitchTimes;
@@ -990,6 +991,9 @@ public final class ModUpdater {
                 waits.add(new UpdatePlan.UpdateBlocker.DependencyQueued(mod, have));
             }
         });
+        if (Games.getNow().isUsedByOthers(id)) {
+            waits.add(new UpdatePlan.UpdateBlocker.UsedByOthers());
+        }
         UpdateContext context = new UpdateContext(this.engine.getStateOf(id), loaded,
                 this.engine.getApplier().getPatchersOf(names, this.engine.on(), id),
                         this.engine.getGraph()

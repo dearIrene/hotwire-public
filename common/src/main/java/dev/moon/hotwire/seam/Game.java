@@ -115,4 +115,12 @@ public interface Game {
     boolean isPlaying();
 
     Optional<String> findReopenRefusal();
+
+    boolean isWorldShared();
+
+    int countOthers();
+
+    boolean isUsedByOthers(String mod);
+
+    void tellOthers(String line);
 }
