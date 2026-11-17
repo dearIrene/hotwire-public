@@ -63,6 +63,8 @@ dependencies {
     compileOnly("com.google.guava:guava:32.1.2-jre")
 
     compileOnly("net.fabricmc:fabric-loader:${property("loader_version")}")
+
+    testRuntimeOnly("net.fabricmc:fabric-loader:${property("loader_version")}")
     compileOnly("org.apache.logging.log4j:log4j-core:2.22.1")
 
     testImplementation("org.slf4j:slf4j-api:2.0.17")
