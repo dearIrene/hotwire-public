@@ -46,25 +46,22 @@ final class DevCompares {
         mod.compare = null;
     }
 
-    @SuppressWarnings("FutureReturnValueIgnored")
     void flip(SessionMod mod) {
         CompareWindow window = mod.comparing;
         if (window == null) {
             return;
         }
         int other = mod.runningNumber == window.getA() ? window.getB() : window.getA();
-        this.tasks.submit("switching " + mod.mod.id() + " to build " + other + " for an A/B", () -> {
+        this.tasks.run("switching " + mod.mod.id() + " to build " + other + " for an A/B", () -> {
             synchronized (mod.taking) {
                 window.onSwitch();
                 if (!this.putIn.test(mod, other)) {
                     window.fail(Lang.get("hotwire.dev.compare.no_flip", other));
                 }
             }
-            return null;
         });
     }
 
-    @SuppressWarnings("FutureReturnValueIgnored")
     void stop(SessionMod mod) {
         CompareWindow window = mod.comparing;
         if (window == null) {
@@ -74,7 +71,7 @@ final class DevCompares {
         mod.compare = window.read(true);
         mod.comparing = null;
 
-        this.tasks.submit("back to the code's build of " + mod.mod.id() + " after an A/B", () -> {
+        this.tasks.run("back to the code's build of " + mod.mod.id() + " after an A/B", () -> {
             synchronized (mod.taking) {
                 if (mod.codeNumber >= 0 && mod.codeNumber != mod.runningNumber
                         && !this.putIn.test(mod, mod.codeNumber)) {
@@ -82,7 +79,6 @@ final class DevCompares {
                     mod.compare = window.read(true);
                 }
             }
-            return null;
         });
     }
 

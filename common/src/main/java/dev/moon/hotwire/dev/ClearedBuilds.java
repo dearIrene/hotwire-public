@@ -33,10 +33,9 @@ final class ClearedBuilds {
         this.saved = saved;
     }
 
-    @SuppressWarnings("FutureReturnValueIgnored")
     void clear(SessionMod mod, List<Integer> builds) {
         String id = mod.mod.id();
-        this.tasks.submit("clearing builds of " + id, () -> {
+        this.tasks.run("clearing builds of " + id, () -> {
             synchronized (mod.taking) {
                 Path bin = this.folder.resolve(id).resolve("cleared");
                 int done = 0;
@@ -79,14 +78,12 @@ final class ClearedBuilds {
                             Lang.get("hotwire.dev.cleared.back")));
                 }
             }
-            return null;
         });
     }
 
-    @SuppressWarnings("FutureReturnValueIgnored")
     void restore(SessionMod mod) {
         String id = mod.mod.id();
-        this.tasks.submit("bringing back builds of " + id, () -> {
+        this.tasks.run("bringing back builds of " + id, () -> {
             synchronized (mod.taking) {
                 List<SessionMod.ClearedBuild> back;
                 synchronized (mod) {
@@ -124,7 +121,6 @@ final class ClearedBuilds {
                 }
                 this.saved.accept(mod);
             }
-            return null;
         });
     }
 

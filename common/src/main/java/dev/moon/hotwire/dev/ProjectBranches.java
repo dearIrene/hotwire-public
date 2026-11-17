@@ -16,15 +16,13 @@ public final class ProjectBranches {
         this.tasks = tasks;
     }
 
-    @SuppressWarnings("FutureReturnValueIgnored")
     public String find(String id, List<Path> folders) {
         long now = System.currentTimeMillis();
         Long read = this.readAt.get(id);
         if (!folders.isEmpty() && (read == null || now - read > READ_EVERY_MILLIS)) {
             this.readAt.put(id, now);
-            this.tasks.submit("reading the branch of " + id, () -> {
+            this.tasks.run("reading the branch of " + id, () -> {
                 this.branches.put(id, SourceGit.readBranch(DevMod.findProject(folders.getFirst())));
-                return null;
             });
         }
         return this.branches.getOrDefault(id, "");

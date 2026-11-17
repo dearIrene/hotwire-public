@@ -126,17 +126,15 @@ public final class DevSession implements DevHost, AutoCloseable {
         this.readChangedAtStart();
     }
 
-    @SuppressWarnings("FutureReturnValueIgnored")
     private void readChangedAtStart() {
         Set<Path> projects = new HashSet<>();
         this.mods.values().forEach(mod -> projects.addAll(this.findProjects(mod)));
         for (Path project : projects) {
-            this.tasks.submit("reading git for " + project.getFileName(), () -> {
+            this.tasks.run("reading git for " + project.getFileName(), () -> {
                 Set<String> changed = SourceGit.readChanged(project);
                 if (changed != null) {
                     this.changedAtStart.put(project, changed);
                 }
-                return null;
             });
         }
     }
@@ -240,19 +238,18 @@ public final class DevSession implements DevHost, AutoCloseable {
         }
     }
 
-    @SuppressWarnings("FutureReturnValueIgnored")
     private void noteDiffs(SessionMod mod, int number, Map<String, byte[]> was) {
         List<Path> projects = this.findProjects(mod);
         if (projects.isEmpty()) {
             return;
         }
-        this.tasks.submit("reading the changed sources of build " + number + " of " + mod.mod.id(), () -> {
+        this.tasks.run("reading the changed sources of build " + number + " of " + mod.mod.id(), () -> {
             DevBuildInfo info;
             synchronized (mod) {
                 info = mod.infos.get(number);
             }
             if (info == null) {
-                return null;
+                return;
             }
             List<DevClassChange> found = new ArrayList<>();
             for (DevClassChange change : info.classes()) {
@@ -263,7 +260,6 @@ public final class DevSession implements DevHost, AutoCloseable {
                 mod.infos.computeIfPresent(number, (build, now) -> now.withClasses(found));
             }
             this.saveHistory(mod);
-            return null;
         });
     }
 
@@ -473,29 +469,26 @@ public final class DevSession implements DevHost, AutoCloseable {
         return projects;
     }
 
-    @SuppressWarnings("FutureReturnValueIgnored")
     private void noteGit(SessionMod mod, int number) {
         List<Path> folders = mod.mod.folders();
         if (folders.isEmpty()) {
             return;
         }
-        this.tasks.submit("reading git for build " + number + " of " + mod.mod.id(), () -> {
+        this.tasks.run("reading git for build " + number + " of " + mod.mod.id(), () -> {
             SourceGit.State git = SourceGit.read(DevMod.findProject(folders.getFirst()));
             if (git != null) {
                 synchronized (mod) {
                     mod.infos.computeIfPresent(number, (build, info) -> info.withGit(git.at(), git.uncommitted()));
                 }
             }
-            return null;
         });
     }
 
-    @SuppressWarnings("FutureReturnValueIgnored")
     void saveHistory(SessionMod mod) {
         if (!this.settings.isHistorySaved()) {
             return;
         }
-        this.tasks.submit("keeping the builds of " + mod.mod.id(), () -> {
+        this.tasks.run("keeping the builds of " + mod.mod.id(), () -> {
             DevBuild running = mod.running;
             Path index = DevBuild.indexOf(running.getJar());
             try {
@@ -510,7 +503,6 @@ public final class DevSession implements DevHost, AutoCloseable {
                 state = SavedHistory.capture(mod);
             }
             SavedHistory.write(this.folder.resolve(mod.mod.id()), state);
-            return null;
         });
     }
 
@@ -621,7 +613,6 @@ public final class DevSession implements DevHost, AutoCloseable {
         return false;
     }
 
-    @SuppressWarnings("FutureReturnValueIgnored")
     private void onBuilt(DevMod built) {
         SessionMod mod = this.mods.get(built.id());
         if (mod == null) {
@@ -632,9 +623,8 @@ public final class DevSession implements DevHost, AutoCloseable {
             mod.line = Lang.get("hotwire.dev.waiting");
             return;
         }
-        this.tasks.submit("taking " + built.id() + "'s build", () -> {
+        this.tasks.run("taking " + built.id() + "'s build", () -> {
             this.take(mod);
-            return null;
         });
     }
 
@@ -884,25 +874,22 @@ public final class DevSession implements DevHost, AutoCloseable {
     }
 
     @Override
-    @SuppressWarnings("FutureReturnValueIgnored")
     public void reloadNow(String id) {
         SessionMod mod = this.mods.get(id);
         if (mod != null) {
-            this.tasks.submit("taking " + id + "'s build", () -> {
+            this.tasks.run("taking " + id + "'s build", () -> {
                 this.take(mod);
-                return null;
             });
         }
     }
 
     @Override
-    @SuppressWarnings("FutureReturnValueIgnored")
     public void restartMod(String id) {
         SessionMod mod = this.mods.get(id);
         if (mod == null) {
             return;
         }
-        this.tasks.submit("restarting " + id, () -> {
+        this.tasks.run("restarting " + id, () -> {
             synchronized (mod.taking) {
                 long began = System.nanoTime();
                 mod.state = DevState.LOADING;
@@ -924,7 +911,6 @@ public final class DevSession implements DevHost, AutoCloseable {
                                     : Lang.get("hotwire.dev.left_over.count", done.leftOver().size()), lines);
                 }
             }
-            return null;
         });
     }
 
@@ -967,17 +953,15 @@ public final class DevSession implements DevHost, AutoCloseable {
     }
 
     @Override
-    @SuppressWarnings("FutureReturnValueIgnored")
     public void revertTo(String id, int build) {
         SessionMod mod = this.mods.get(id);
         if (mod == null) {
             return;
         }
-        this.tasks.submit("rolling " + id + " back to build " + build, () -> {
+        this.tasks.run("rolling " + id + " back to build " + build, () -> {
             synchronized (mod.taking) {
                 this.putIn(mod, build);
             }
-            return null;
         });
     }
 
@@ -1033,19 +1017,18 @@ public final class DevSession implements DevHost, AutoCloseable {
     }
 
     @Override
-    @SuppressWarnings("FutureReturnValueIgnored")
     public void restore(String id, int build) {
         SessionMod mod = this.mods.get(id);
         if (mod == null) {
             return;
         }
-        this.tasks.submit("restoring build " + build + " of " + id, () -> {
+        this.tasks.run("restoring build " + build + " of " + id, () -> {
             synchronized (mod.taking) {
                 BuildSources sources = mod.buildSources;
                 try {
                     if (sources == null || sources.read(build).isEmpty()) {
                         this.fail(mod, List.of(Lang.get("hotwire.dev.restore.no_sources", build)));
-                        return null;
+                        return;
                     }
                     String point = "before-restore-" + System.currentTimeMillis();
                     sources.takeAs(point);
@@ -1062,7 +1045,7 @@ public final class DevSession implements DevHost, AutoCloseable {
                     Set<String> notSeen = sources.readStale(String.valueOf(build));
                     mod.codeNumber = build;
                     if (build != mod.runningNumber && !this.putIn(mod, build)) {
-                        return null;
+                        return;
                     }
                     List<String> lines = new ArrayList<>();
                     lines.add(Lang.get("hotwire.dev.restored.undo"));
@@ -1077,23 +1060,21 @@ public final class DevSession implements DevHost, AutoCloseable {
                     this.fail(mod, List.of(Lang.get("hotwire.dev.restore.failed", String.valueOf(e.getMessage()))));
                 }
             }
-            return null;
         });
     }
 
     @Override
-    @SuppressWarnings("FutureReturnValueIgnored")
     public void restoreSavePoint(String id) {
         SessionMod mod = this.mods.get(id);
         if (mod == null || mod.savePoints.isEmpty()) {
             return;
         }
-        this.tasks.submit("undoing the restore of " + id, () -> {
+        this.tasks.run("undoing the restore of " + id, () -> {
             synchronized (mod.taking) {
                 BuildSources sources = mod.buildSources;
                 String point = mod.savePoints.peek();
                 if (sources == null || point == null) {
-                    return null;
+                    return;
                 }
                 try {
                     List<String> written = sources.restore(point);
@@ -1103,7 +1084,7 @@ public final class DevSession implements DevHost, AutoCloseable {
                     if (!isBuild) {
                         sources.delete(point);
                     } else if (mod.codeNumber != mod.runningNumber && !this.putIn(mod, mod.codeNumber)) {
-                        return null;
+                        return;
                     }
                     this.tell(mod, DevEvent.Kind.IN, Lang.get("hotwire.dev.undone", mod.mod.name()),
                             Lang.get("hotwire.dev.restored.files", written.size()),
@@ -1114,7 +1095,6 @@ public final class DevSession implements DevHost, AutoCloseable {
                     this.fail(mod, List.of(Lang.get("hotwire.dev.restore.failed", String.valueOf(e.getMessage()))));
                 }
             }
-            return null;
         });
     }
 
@@ -1129,33 +1109,29 @@ public final class DevSession implements DevHost, AutoCloseable {
     }
 
     @Override
-    @SuppressWarnings("FutureReturnValueIgnored")
     public void merge(String id, List<Integer> builds, boolean anyway) {
         SessionMod mod = this.mods.get(id);
         if (mod != null) {
-            this.tasks.submit("merging builds of " + id, () -> {
+            this.tasks.run("merging builds of " + id, () -> {
                 synchronized (mod.taking) {
                     this.edits.mergeNow(mod, builds, anyway);
                 }
                 this.saveHistory(mod);
-                return null;
             });
         }
     }
 
     @Override
-    @SuppressWarnings("FutureReturnValueIgnored")
     public void copyBuild(String id, int build) {
         SessionMod mod = this.mods.get(id);
         if (mod == null || build == 0) {
             return;
         }
-        this.tasks.submit("copying build " + build + " of " + id, () -> {
+        this.tasks.run("copying build " + build + " of " + id, () -> {
             synchronized (mod.taking) {
                 this.edits.copyNow(mod, build);
             }
             this.saveHistory(mod);
-            return null;
         });
     }
 
@@ -1242,15 +1218,13 @@ public final class DevSession implements DevHost, AutoCloseable {
     }
 
     @Override
-    @SuppressWarnings("FutureReturnValueIgnored")
     public void openPlace(String id, String type, int line, String label) {
         SessionMod mod = this.mods.get(id);
         if (mod == null) {
             return;
         }
-        this.tasks.submit("opening " + label, () -> {
+        this.tasks.run("opening " + label, () -> {
             SourceOpener.open(mod.mod, type, line, label);
-            return null;
         });
     }
 

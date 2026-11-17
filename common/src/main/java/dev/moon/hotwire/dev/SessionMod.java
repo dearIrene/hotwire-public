@@ -97,19 +97,17 @@ final class SessionMod {
         this.starts = mod.findStartClasses();
     }
 
-    @SuppressWarnings("FutureReturnValueIgnored")
     Map<Integer, Long> findSizes(Tasks tasks) {
         boolean known = this.sizes.containsKey(this.runningNumber)
                 && this.saved.stream().allMatch(build -> this.sizes.containsKey(build.number()));
         if (!known && !this.sizing) {
             this.sizing = true;
-            tasks.submit("sizing the builds of " + this.mod.id(), () -> {
+            tasks.run("sizing the builds of " + this.mod.id(), () -> {
                 try {
                     this.fillSizes();
                 } finally {
                     this.sizing = false;
                 }
-                return null;
             });
         }
         return Map.copyOf(this.sizes);

@@ -59,6 +59,14 @@ public final class Tasks implements AutoCloseable {
         });
     }
 
+    @SuppressWarnings("FutureReturnValueIgnored")
+    public void run(String name, Runnable work) {
+        this.submit(name, () -> {
+            work.run();
+            return null;
+        });
+    }
+
     public <T> CompletableFuture<Void> submit(String name, Supplier<T> work, Consumer<? super T> onGameThread) {
         return this.submit(name, work).thenAcceptAsync(result -> {
             try {
