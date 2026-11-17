@@ -80,7 +80,7 @@ public final class DownloadNotices {
         }
     }
 
-    private static String describeSize(Downloads.Job job) {
+    static String describeSize(Downloads.Job job) {
         double done = job.done() / 1_048_576.0;
         return job.total() > 0
                 ? String.format(Locale.ROOT, "%.1f of %.1f MB", done, job.total() / 1_048_576.0)

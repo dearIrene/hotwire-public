@@ -4,7 +4,6 @@ import dev.moon.hotwire.modrinth.Downloads;
 import java.util.ArrayList;
 import java.util.Comparator;
 import java.util.List;
-import java.util.Locale;
 
 final class DownloadsPanel extends Sheet {
     private static final int MOST_TALL = 210;
@@ -46,8 +45,7 @@ final class DownloadsPanel extends Sheet {
         return switch (job.state()) {
             case WAITING -> Lang.get("hotwire.downloads.waiting");
             case PAUSED -> Lang.get("hotwire.downloads.paused");
-            default -> job.total() > 0 ? String.format(Locale.ROOT, "%.1f of %.1f MB", job.done() / 1_048_576.0,
-                    job.total() / 1_048_576.0) : String.format(Locale.ROOT, "%.1f MB", job.done() / 1_048_576.0);
+            default -> DownloadNotices.describeSize(job);
         };
     }
 
