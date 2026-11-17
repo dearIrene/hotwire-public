@@ -65,6 +65,7 @@ import java.util.concurrent.Executors;
 import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.concurrent.atomic.AtomicInteger;
 import java.util.concurrent.atomic.AtomicReference;
+import java.util.function.BooleanSupplier;
 import java.util.function.Consumer;
 import java.util.function.Predicate;
 import java.util.function.Supplier;
@@ -170,12 +171,13 @@ public final class SwitchRunner {
             return;
         }
         String called = first.getFirst();
+        BooleanSupplier stale = () -> this.switcher.isBusy() || this.switcher.isOn(mod);
         this.looking.execute(() -> {
-            if (this.switcher.isBusy() || this.switcher.isOn(mod)) {
+            if (stale.getAsBoolean()) {
                 return;
             }
             try {
-                if (this.fieldReferences.takeStillCalled(mod, called, this.switcher::isOn) > 0) {
+                if (this.fieldReferences.takeStillCalled(mod, called, this.switcher::isOn, stale) > 0) {
                     Tripwire.listenAgain(mod);
                 }
             } catch (RuntimeException | LinkageError e) {

@@ -62,15 +62,18 @@ final class CalledSearch {
 
     private static void offer(@Nullable Object value, Object holder, Class<?> called, Set<Object> seen,
             Deque<Step> queue, Set<Object> holders, Set<Class<?>> classes) {
-        if (value == null || isPlain(value.getClass())) {
+        if (value == null) {
             return;
         }
-        if (called.isInstance(value)) {
+        if (isOfCalled(value.getClass(), called)) {
             if (holder instanceof Class<?> type) {
                 classes.add(type);
             } else {
                 holders.add(holder);
             }
+            return;
+        }
+        if (isPlain(value.getClass())) {
             return;
         }
 
@@ -100,6 +103,10 @@ final class CalledSearch {
         return type == String.class || type == Class.class || Number.class.isAssignableFrom(type)
                 || type == Boolean.class || type == Character.class || type.isEnum()
                 || (type.isArray() && type.getComponentType().isPrimitive());
+    }
+
+    static boolean isOfCalled(Class<?> type, Class<?> called) {
+        return called.isAssignableFrom(type) || (type.isHidden() && type.getNestHost() == called.getNestHost());
     }
 
     static String findClassOf(String frame) {

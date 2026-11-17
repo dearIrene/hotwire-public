@@ -34,6 +34,7 @@ import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicBoolean;
+import java.util.function.BooleanSupplier;
 import java.util.function.Function;
 import java.util.function.Predicate;
 import org.jspecify.annotations.Nullable;
@@ -163,10 +164,10 @@ public final class FieldReferences {
         this.removeElements(mods, on, scan, Map.of(), false);
     }
 
-    public int takeStillCalled(String mod, String calledFrame, Predicate<String> on) {
+    public int takeStillCalled(String mod, String calledFrame, Predicate<String> on, BooleanSupplier stale) {
         String calledName = CalledSearch.findClassOf(calledFrame);
         List<String> mods = List.of(mod);
-        LoadedClasses scan = this.peekAhead(mods);
+        LoadedClasses scan = this.findLoaded(mods);
         Class<?> called = scan.byName().get(calledName.replace('.', '/'));
         if (called == null) {
             return 0;
@@ -191,12 +192,12 @@ public final class FieldReferences {
         }
         hold = Games.getNow().hold();
         try {
-            this.elements.takeOut(mods, found.holders().stream().filter(one -> others.test(one.getClass())).toList(),
-                    found.statics(), HandedSearch.NONE);
+            return this.elements.takeFromHolders(mods,
+                    found.holders().stream().filter(one -> others.test(one.getClass())).toList(), found.statics(),
+                    stale);
         } finally {
             hold.run();
         }
-        return found.holders().size() + found.statics().size();
     }
 
     public void finishEveryLook() {

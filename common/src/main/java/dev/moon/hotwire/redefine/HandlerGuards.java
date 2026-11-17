@@ -153,7 +153,7 @@ public final class HandlerGuards {
     private static void noteDirect(String internalName, String handlerName) {
         String mod = findModInHandlerName(handlerName);
         if (mod != null) {
-            ClassState.of(internalName).directMods.add(mod);
+            ClassState.of(internalName).addDirectMod(mod);
         }
     }
 
@@ -234,7 +234,7 @@ public final class HandlerGuards {
 
     public static Set<String> findDirectModsAt(String internalName) {
         ClassState state = ClassState.find(internalName);
-        Set<String> direct = state == null ? Set.of() : state.directMods;
+        Set<String> direct = state == null ? Set.of() : state.getDirectMods();
         Set<String> putIn = state == null ? null : state.putIn;
         if (putIn == null) {
             return direct;
@@ -364,18 +364,17 @@ public final class HandlerGuards {
     static void markUnflippable(String internalName, String mixin, String why) {
         UNFLIPPABLE.add(mixin);
         ClassState state = ClassState.of(internalName);
-        state.unflippable.add(mixin);
-        state.unflippableWhy.merge(mixin, why, (had, more) -> had.contains(more) ? had : had + ", " + more);
+        state.addUnflippable(mixin, why);
     }
 
     public static Map<String, String> findWhyUnflippableAt(String internalName) {
         ClassState state = ClassState.find(internalName);
-        return state == null ? Map.of() : state.unflippableWhy;
+        return state == null ? Map.of() : state.getUnflippableWhy();
     }
 
     public static Set<String> findUnflippableAt(String internalName) {
         ClassState state = ClassState.find(internalName);
-        return state == null ? Set.of() : state.unflippable;
+        return state == null ? Set.of() : state.getUnflippable();
     }
 
     public static boolean isFlippable(String mixin) {
@@ -428,7 +427,7 @@ public final class HandlerGuards {
             int mark = method.name.indexOf('$');
             if (mixin != null && mark > 0 && (KINDS.containsKey(method.name.substring(0, mark))
                     || method.name.startsWith("redirect$"))) {
-                ClassState.of(internalName).unflippable.add(mixin);
+                ClassState.of(internalName).addUnflippable(mixin, null);
             }
             for (AbstractInsnNode insn : method.instructions) {
                 if (insn instanceof MethodInsnNode call && call.owner.equals(internalName)) {
@@ -441,7 +440,7 @@ public final class HandlerGuards {
     public static void recordFrom(String internalName, byte[] bytes) {
         ClassState state = ClassState.of(internalName);
         state.rebuilt = true;
-        state.directMods.clear();
+        state.clearDirectMods();
         state.takeStaged();
         state.takeStagedPresent();
         ClassNode node = ClassNodes.read(bytes, ClassReader.SKIP_FRAMES);

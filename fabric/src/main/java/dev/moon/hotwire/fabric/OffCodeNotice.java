@@ -64,6 +64,8 @@ final class OffCodeNotice {
                     String.join(" < ", first));
             return;
         }
+
+        engine.findJvmParts().ifPresent(parts -> parts.runner().takeStillCalled(mod, first));
         Object watch = Tripwire.findWatch(mod);
         if (ran && watch != null && isToldFor(mod, watch)) {
             return;
@@ -74,8 +76,6 @@ final class OffCodeNotice {
             LOGGER.info("[Hotwire] {} is off and was called all the same, and answered with nothing: {}", mod,
                     String.join(" < ", first));
         }
-
-        engine.findJvmParts().ifPresent(parts -> parts.runner().takeStillCalled(mod, first));
 
         String user = findUser(engine, installed, mod, first);
         SeenUses seen = ModPolicy.getSeenUses();

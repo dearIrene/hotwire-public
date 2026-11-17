@@ -25,6 +25,7 @@ import java.util.Set;
 import java.util.TreeMap;
 import java.util.TreeSet;
 import java.util.concurrent.ConcurrentHashMap;
+import java.util.function.BooleanSupplier;
 import java.util.function.Consumer;
 import java.util.function.Supplier;
 import org.jspecify.annotations.Nullable;
@@ -121,6 +122,31 @@ final class CollectionReferences implements FixedLists.Walk {
         } finally {
             this.endRemoval(mods);
         }
+    }
+
+    synchronized int takeFromHolders(List<String> mods, Collection<Object> holders, Collection<Class<?>> statics,
+            BooleanSupplier stale) {
+        if (stale.getAsBoolean()) {
+            return 0;
+        }
+        int[] count = new int[1];
+        Tripwire.runAsHotwire(() -> {
+            this.prepared = null;
+            try {
+                this.candidates.beginWalk();
+                try {
+                    this.walk(mods, holders, statics, HandedSearch.NONE);
+                } finally {
+                    this.candidates.endWalk();
+                }
+                for (List<Removal> out : this.mine.values()) {
+                    count[0] += out.size();
+                }
+            } finally {
+                this.endRemoval(mods);
+            }
+        });
+        return count[0];
     }
 
     private void endRemoval(List<String> mods) {

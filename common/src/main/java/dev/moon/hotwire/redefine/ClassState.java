@@ -15,14 +15,14 @@ final class ClassState {
     volatile @Nullable Set<String> present;
     private @Nullable Set<String> stagedPresent;
 
-    final Set<String> directMods = ConcurrentHashMap.newKeySet();
+    private volatile @Nullable Set<String> directMods;
 
     volatile @Nullable Set<String> putIn;
 
     volatile @Nullable Set<String> behaving;
 
-    final Set<String> unflippable = ConcurrentHashMap.newKeySet();
-    final Map<String, String> unflippableWhy = new ConcurrentHashMap<>();
+    private volatile @Nullable Set<String> unflippable;
+    private volatile @Nullable Map<String, String> unflippableWhy;
 
     volatile @Nullable Set<String> unsited;
     volatile @Nullable Set<String> sited;
@@ -40,6 +40,55 @@ final class ClassState {
 
     static @Nullable ClassState find(String internalName) {
         return ALL.get(internalName);
+    }
+
+    synchronized void addDirectMod(String mod) {
+        Set<String> mods = this.directMods;
+        if (mods == null) {
+            mods = ConcurrentHashMap.newKeySet();
+            this.directMods = mods;
+        }
+        mods.add(mod);
+    }
+
+    synchronized void clearDirectMods() {
+        Set<String> mods = this.directMods;
+        if (mods != null) {
+            mods.clear();
+        }
+    }
+
+    synchronized void addUnflippable(String mixin, @Nullable String why) {
+        Set<String> mixins = this.unflippable;
+        if (mixins == null) {
+            mixins = ConcurrentHashMap.newKeySet();
+            this.unflippable = mixins;
+        }
+        mixins.add(mixin);
+        if (why == null) {
+            return;
+        }
+        Map<String, String> reasons = this.unflippableWhy;
+        if (reasons == null) {
+            reasons = new ConcurrentHashMap<>();
+            this.unflippableWhy = reasons;
+        }
+        reasons.merge(mixin, why, (had, more) -> had.contains(more) ? had : had + ", " + more);
+    }
+
+    Set<String> getDirectMods() {
+        Set<String> mods = this.directMods;
+        return mods == null ? Set.of() : mods;
+    }
+
+    Set<String> getUnflippable() {
+        Set<String> mixins = this.unflippable;
+        return mixins == null ? Set.of() : mixins;
+    }
+
+    Map<String, String> getUnflippableWhy() {
+        Map<String, String> reasons = this.unflippableWhy;
+        return reasons == null ? Map.of() : reasons;
     }
 
     synchronized void setStaged(Set<String> mixins) {
