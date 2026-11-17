@@ -127,10 +127,13 @@ public final class ModIcons implements AutoCloseable, IconSource {
         }
     }
 
+    private static final ThreadPoolExecutor DECODER = makeWorker("hotwire-icon-decode");
+
     @SuppressWarnings("ThreadPriorityCheck")
-    private static final ThreadPoolExecutor DECODER = new ThreadPoolExecutor(0, 1, 30, TimeUnit.SECONDS,
-            new LinkedBlockingQueue<>(), Thread.ofPlatform().name("hotwire-icon-decode").daemon()
-                    .priority(Thread.MIN_PRIORITY).factory());
+    static ThreadPoolExecutor makeWorker(String name) {
+        return new ThreadPoolExecutor(0, 1, 30, TimeUnit.SECONDS, new LinkedBlockingQueue<>(),
+                Thread.ofPlatform().name(name).daemon().priority(Thread.MIN_PRIORITY).factory());
+    }
 
     private static Optional<Icon> makeIcon(String name, String path, byte[] encoded, int box) {
         IconPixels decoded = decode(path, encoded);
@@ -196,10 +199,7 @@ public final class ModIcons implements AutoCloseable, IconSource {
     private final Map<String, Source> sources = new ConcurrentHashMap<>();
     private final Map<Source, CompletableFuture<Optional<Icon>>> icons = new ConcurrentHashMap<>();
 
-    @SuppressWarnings("ThreadPriorityCheck")
-    private final ThreadPoolExecutor reader = new ThreadPoolExecutor(0, 1, 30, TimeUnit.SECONDS,
-            new LinkedBlockingQueue<>(), Thread.ofPlatform().name("hotwire-icons").daemon()
-                    .priority(Thread.MIN_PRIORITY).factory());
+    private final ThreadPoolExecutor reader = makeWorker("hotwire-icons");
 
     public ModIcons(InstalledMods installed) {
         this.installed = installed;

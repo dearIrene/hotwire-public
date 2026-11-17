@@ -7,9 +7,7 @@ import dev.moon.hotwire.ui.OtherImages;
 import java.io.IOException;
 import java.util.Optional;
 import java.util.concurrent.CompletableFuture;
-import java.util.concurrent.LinkedBlockingQueue;
 import java.util.concurrent.ThreadPoolExecutor;
-import java.util.concurrent.TimeUnit;
 import net.minecraft.client.Minecraft;
 import net.minecraft.resources.Identifier;
 import org.jspecify.annotations.Nullable;
@@ -18,10 +16,8 @@ import org.slf4j.LoggerFactory;
 
 public final class Picture implements Canvas.Image {
     private static final Logger LOGGER = LoggerFactory.getLogger(Picture.class);
-    @SuppressWarnings("ThreadPriorityCheck")
-    private static final ThreadPoolExecutor FITTER = new ThreadPoolExecutor(0, 1, 30, TimeUnit.SECONDS,
-            new LinkedBlockingQueue<>(), Thread.ofPlatform().name("hotwire-pictures").daemon()
-                    .priority(Thread.MIN_PRIORITY).factory());
+
+    private static final ThreadPoolExecutor FITTER = ModIcons.makeWorker("hotwire-pictures");
 
     private final String name;
     private final IconPixels pixels;
