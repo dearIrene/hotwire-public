@@ -94,7 +94,20 @@ final class DevBuildEdits {
             if (!mod.pinned.contains(number) && !mod.isInUse(number)) {
                 oldest.remove();
                 over--;
+                forgetSources(mod, number);
             }
+        }
+    }
+
+    private static void forgetSources(SessionMod mod, int number) {
+        if (mod.buildSources == null) {
+            return;
+        }
+        try {
+            mod.buildSources.forget(number);
+        } catch (IOException e) {
+            LOGGER.debug("[Hotwire] the stored sources of build {} of {} could not be removed", number, mod.mod.id(),
+                    e);
         }
     }
 
