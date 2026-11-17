@@ -265,10 +265,6 @@ public final class HotwireEngine implements ModScreenGame, AutoCloseable {
         return this.installed.findJarOf(id);
     }
 
-    public boolean isOnMod(String id) {
-        return this.isOn(id);
-    }
-
     public HotwireSettings getSettings() {
         return this.settings;
     }
