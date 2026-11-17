@@ -108,7 +108,7 @@ final class ModsPage implements ProfileMenu.Screen {
         }
         row.with(new Star(id).press((button, modifiers) -> this.toggleFavorite(id)),
                 new Flip(() -> this.wishes.getOrDefault(id, mod.on()), () -> this.toggle(mod))
-                        .pending(() -> this.wishes.containsKey(id)).active(() -> this.isSwitchable(id)));
+                        .pending(() -> this.wishes.containsKey(id)).active(() -> this.canSwitch(id)));
         return row.press(new RowPress(mod));
     }
 
@@ -136,7 +136,7 @@ final class ModsPage implements ProfileMenu.Screen {
         return tags.with(Tag.ofSide(this.game.getBadges().getEnvironmentOf(mod.id())));
     }
 
-    private boolean isSwitchable(String id) {
+    private boolean canSwitch(String id) {
         return !this.catalog.isProtected(id) && !this.catalog.isLocked(id);
     }
 
@@ -215,7 +215,7 @@ final class ModsPage implements ProfileMenu.Screen {
             items.add(new Popup.Item(Lang.get("hotwire.screen.unpick_all"), Palette.DIM, this::unpickAll));
         } else {
             items.add(new Popup.Item(Lang.get(mod.on() ? "hotwire.screen.turn_off" : "hotwire.screen.turn_on"),
-                    Palette.TEXT, idle && this.isSwitchable(id) ? () -> this.toggle(mod) : null));
+                    Palette.TEXT, idle && this.canSwitch(id) ? () -> this.toggle(mod) : null));
         }
         items.add(new Popup.Item(Lang.get("hotwire.row.details"), Palette.DIM, () -> this.showDetails(id)));
         if (this.hasSettings(id)) {
@@ -404,7 +404,7 @@ final class ModsPage implements ProfileMenu.Screen {
                 Kit.push(Lang.get(this.catalog.isFavorite(id) ? "hotwire.row.unfavorite" : "hotwire.row.favorite"),
                         () -> this.toggleFavorite(id)),
                 Kit.lead(Lang.get(on ? "hotwire.screen.turn_off" : "hotwire.screen.turn_on"),
-                        () -> this.toggle(mod)).active(this.isSwitchable(id)),
+                        () -> this.toggle(mod)).active(this.canSwitch(id)),
                 Kit.push(Lang.get("hotwire.button.close"), () -> this.showDetails(null)));
         if (anew) {
             this.detailsBody.rise();

@@ -78,6 +78,10 @@ public final class SwitchRunner {
     private final Reloads reloads = Games.getNow().getReloads();
     private final @Nullable TransformerChain chain;
 
+    private final List<Step> firstOut;
+    private final List<Step> lastOut;
+    private final List<Step> backIn;
+
     private volatile Consumer<ModSwitcher.Result> afterOff = result -> { };
     private long flipsSeen = HandlerGuards.getChunkFlips();
     private volatile Consumer<List<String>> beforeOn = order -> { };
@@ -102,6 +106,9 @@ public final class SwitchRunner {
         this.units = units;
         this.installed = installed;
         this.chain = chain;
+        this.firstOut = this.listFirstOut();
+        this.lastOut = this.listLastOut();
+        this.backIn = this.listBackIn();
 
         ElementLook.watchSwitches(switcher::isBusy);
         switcher.readAheadWith(order -> {
@@ -116,6 +123,76 @@ public final class SwitchRunner {
 
     public Map<String, String> findEntityHolders(Collection<String> mods) {
         return this.units.findEntityHolders(mods, this.fieldReferences::hasReached);
+    }
+
+    private record Step(Consumer<List<String>> work, @Nullable String mark) {
+        void run(List<String> ids) {
+            this.work.accept(ids);
+            if (this.mark != null) {
+                SwitchTimes.mark(this.mark);
+            }
+        }
+    }
+
+    private static Step step(Consumer<List<String>> work) {
+        return new Step(work, null);
+    }
+
+    private List<Step> listFirstOut() {
+        return List.of(
+
+                step(LoaderModList::hide),
+                step(this.units::takeOutPlugins),
+                step(ids -> {
+                    if (this.chain != null) {
+                        this.chain.passBy(ids);
+                    }
+                }),
+                step(CrashGuard::onSwitched),
+                step(LogAppenders::takeOut),
+                step(ImageReaders::takeOut),
+                new Step(this.units::takeOutSounds, "first removals"),
+                new Step(this.units::takeOutReloadedLists, "checked lists"),
+                new Step(ids -> this.units.chooseCursorAgainFor(this.switcher.findPatchedBy(ids)),
+                        "removals: cursor"),
+                step(this.units::takeOutHuds),
+                step(OneConfigModCards::takeOut),
+                new Step(SodiumSettingsPages::takeOut, "removals: huds"),
+                new Step(this.units::takeOutNetworkHandlers, "removals: network"),
+                new Step(this.units::takeOutRendererProviders, "removals: renderer providers"),
+                new Step(this.units::takeOutTasks, "removals: tasks"),
+                new Step(ids -> this.units.takeOutCommands(id -> ids.contains(id) || !this.switcher.isOn(id)),
+                        "removals: commands"),
+                new Step(this.logging::takeOut, "removals"));
+    }
+
+    private List<Step> listLastOut() {
+        return List.of(
+                step(this.units::takeOutWorldWrappers),
+                step(this.units::takeOutGlfwCallbacks),
+                step(UncaughtHandlers::takeOut),
+                new Step(this.units::takeOutAttachments, "world wrappers"),
+                new Step(this.wrappers::takeOut, "generated wrappers"),
+
+                new Step(ids -> this.fieldReferences.takeOut(ids, id -> !ids.contains(id) && this.switcher.isOn(id)),
+                        "field references"),
+                new Step(this.units::unwrapModels, "models"));
+    }
+
+    private List<Step> listBackIn() {
+        return List.of(
+                step(order -> order.forEach(LoaderModList::show)),
+
+                step(this.units::putBackPlugins),
+                step(this.fieldReferences::putBackElements),
+                step(this.fieldReferences::takeRevealedBy),
+                step(this.units::putBackTasks),
+                step(order -> this.units.putBackTakes(order, this.switcher::isOn)),
+                step(this.units::giveBackAttachments),
+                step(order -> this.units.chooseCursorAgainFor(this.switcher.findPatchedBy(order))),
+                step(this.logging::putBack),
+                new Step(this.wrappers::putBack, "put back"),
+                new Step(this.fieldReferences::putBack, "field references"));
     }
 
     public ModTripwire getTripwire() {
@@ -408,34 +485,7 @@ public final class SwitchRunner {
 
     private void takeOut(List<String> ids) {
         try {
-            LoaderModList.hide(ids);
-            this.units.takeOutPlugins(ids);
-            if (this.chain != null) {
-                this.chain.passBy(ids);
-            }
-            CrashGuard.onSwitched(ids);
-            LogAppenders.takeOut(ids);
-            ImageReaders.takeOut(ids);
-            this.units.takeOutSounds(ids);
-            SwitchTimes.mark("first removals");
-            this.units.takeOutReloadedLists(ids);
-            SwitchTimes.mark("checked lists");
-            this.units.chooseCursorAgainFor(this.switcher.findPatchedBy(ids));
-            SwitchTimes.mark("removals: cursor");
-            this.units.takeOutHuds(ids);
-            OneConfigModCards.takeOut(ids);
-            SodiumSettingsPages.takeOut(ids);
-            SwitchTimes.mark("removals: huds");
-            this.units.takeOutNetworkHandlers(ids);
-            SwitchTimes.mark("removals: network");
-            this.units.takeOutRendererProviders(ids);
-            SwitchTimes.mark("removals: renderer providers");
-            this.units.takeOutTasks(ids);
-            SwitchTimes.mark("removals: tasks");
-            this.units.takeOutCommands(id -> ids.contains(id) || !this.switcher.isOn(id));
-            SwitchTimes.mark("removals: commands");
-            this.logging.takeOut(ids);
-            SwitchTimes.mark("removals");
+            this.firstOut.forEach(step -> step.run(ids));
         } catch (RuntimeException | LinkageError e) {
             this.onTakeOutThrown(ids, e);
         }
@@ -448,18 +498,7 @@ public final class SwitchRunner {
         Tripwire.pause(true);
         SwitchTimes.mark("tripwire");
         try {
-            this.units.takeOutWorldWrappers(ids);
-            this.units.takeOutGlfwCallbacks(ids);
-            UncaughtHandlers.takeOut(ids);
-            this.units.takeOutAttachments(ids);
-            SwitchTimes.mark("world wrappers");
-            this.wrappers.takeOut(ids);
-            SwitchTimes.mark("generated wrappers");
-
-            this.fieldReferences.takeOut(ids, id -> !ids.contains(id) && this.switcher.isOn(id));
-            SwitchTimes.mark("field references");
-            this.units.unwrapModels(ids);
-            SwitchTimes.mark("models");
+            this.lastOut.forEach(step -> step.run(ids));
         } catch (RuntimeException | LinkageError e) {
             this.onTakeOutThrown(ids, e);
         }
@@ -603,22 +642,7 @@ public final class SwitchRunner {
         Runnable release = Games.getNow().hold();
         try {
             try {
-                order.forEach(LoaderModList::show);
-
-                this.units.putBackPlugins(order);
-                this.fieldReferences.putBackElements(order);
-                this.fieldReferences.takeRevealedBy(order);
-                this.units.putBackTasks(order);
-                this.units.putBackTakes(order, this.switcher::isOn);
-                this.units.giveBackAttachments(order);
-
-                this.units.chooseCursorAgainFor(this.switcher.findPatchedBy(order));
-                this.logging.putBack(order);
-
-                this.wrappers.putBack(order);
-                SwitchTimes.mark("put back");
-                this.fieldReferences.putBack(order);
-                SwitchTimes.mark("field references");
+                this.backIn.forEach(step -> step.run(order));
             } catch (RuntimeException | LinkageError e) {
                 LOGGER.error("[Hotwire] what {} had out could not all be put back", order, e);
             }
