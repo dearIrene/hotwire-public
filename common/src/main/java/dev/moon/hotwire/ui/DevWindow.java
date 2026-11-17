@@ -31,8 +31,6 @@ public final class DevWindow extends Element {
     private static final int FACE = Palette.PANEL | 0xFF000000;
     private static final float REFRESH_SECONDS = 0.25f;
 
-    private static final int ESCAPE = 256;
-
     public static final int PEEK_KEY = 342;
     private static final String CLOSE = "dev_close";
     private static final String MAXIMIZE = "dev_maximize";
@@ -327,7 +325,7 @@ public final class DevWindow extends Element {
     @Override
     protected boolean onKey(int key, int modifiers) {
         if (this.picker.isSettingKey()) {
-            this.picker.takeKey(key, ESCAPE);
+            this.picker.takeKey(key, TextField.ESCAPE);
             return true;
         }
         if (key == PEEK_KEY) {

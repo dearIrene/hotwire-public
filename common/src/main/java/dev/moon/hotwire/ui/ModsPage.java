@@ -20,7 +20,7 @@ final class ModsPage implements ProfileMenu.Screen {
     private static final int ROW = 26;
     private static final int DETAILS = 190;
     private static final int SHIFT = 1;
-    private static final long DOUBLE_NANOS = 350_000_000L;
+    static final long DOUBLE_NANOS = 350_000_000L;
 
     record ModRow(ModStatus mod, boolean child, String note) {
     }

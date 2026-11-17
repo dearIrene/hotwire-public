@@ -9,7 +9,6 @@ import java.util.function.Supplier;
 import org.jspecify.annotations.Nullable;
 
 public final class ProfilesPanel extends Sheet {
-    private static final long DOUBLE_NANOS = 350_000_000L;
     private static final int LIST_TALL = 132;
 
     private interface Change {
@@ -126,7 +125,7 @@ public final class ProfilesPanel extends Sheet {
             return;
         }
         long now = System.nanoTime();
-        boolean again = name.equals(this.pressed) && now - this.pressedAt < DOUBLE_NANOS;
+        boolean again = name.equals(this.pressed) && now - this.pressedAt < ModsPage.DOUBLE_NANOS;
         this.pressed = again ? null : name;
         this.pressedAt = now;
         this.picked = name;
