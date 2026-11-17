@@ -85,21 +85,6 @@ public final class GuiCanvas implements Canvas {
     }
 
     @Override
-    public void fillDown(int x0, int y0, int x1, int y1, int topArgb, int bottomArgb) {
-        int height = y1 - y0;
-        if (height <= 0 || x1 <= x0 || ((topArgb | bottomArgb) >>> 24) == 0) {
-            return;
-        }
-        int strips = Math.max(1, Math.min(height, (height + STRIP - 1) / STRIP));
-        for (int i = 0; i < strips; i++) {
-            int from = y0 + height * i / strips;
-            int to = y0 + height * (i + 1) / strips;
-            float t = (i + 0.5f) / strips;
-            this.fill(x0, from, x1, to, Colors.mix(topArgb, bottomArgb, t));
-        }
-    }
-
-    @Override
     public void fillAcross(int x0, int y0, int x1, int y1, int leftArgb, int rightArgb) {
         int width = x1 - x0;
         if (width <= 0 || y1 <= y0 || ((leftArgb | rightArgb) >>> 24) == 0) {

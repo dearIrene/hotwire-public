@@ -132,10 +132,6 @@ public final class LayoutAudit implements Canvas {
     }
 
     @Override
-    public void fillDown(int x0, int y0, int x1, int y1, int topArgb, int bottomArgb) {
-    }
-
-    @Override
     public boolean drawImage(Image image, int x, int y, int width, int height, float alpha) {
         return true;
     }

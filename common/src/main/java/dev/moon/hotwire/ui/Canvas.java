@@ -5,8 +5,6 @@ public interface Canvas {
 
     void fillAcross(int x0, int y0, int x1, int y1, int leftArgb, int rightArgb);
 
-    void fillDown(int x0, int y0, int x1, int y1, int topArgb, int bottomArgb);
-
     void drawText(String text, int x, int y, int argb);
 
     int measureText(String text);
