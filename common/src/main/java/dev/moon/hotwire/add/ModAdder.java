@@ -622,7 +622,8 @@ public final class ModAdder {
             Set<String> content = new LinkedHashSet<>();
             jarPaths.forEach(jarPath -> content.addAll(this.readContent(jarPath)));
 
-            if (parts.values().stream().anyMatch(part -> WorldData.hasWorldData(part.path()))) {
+            if (Games.getNow().hasOwnServer()
+                    && parts.values().stream().anyMatch(part -> WorldData.hasWorldData(part.path()))) {
                 content.add(Lang.get("hotwire.add.world_data"));
             }
             if (!content.isEmpty() || this.listensForClientStart(jarPaths)) {

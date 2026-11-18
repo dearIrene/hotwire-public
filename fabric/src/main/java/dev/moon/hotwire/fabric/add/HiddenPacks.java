@@ -28,6 +28,7 @@ import java.util.stream.Stream;
 import net.fabricmc.loader.api.FabricLoader;
 import net.fabricmc.loader.api.ModContainer;
 import net.minecraft.client.Minecraft;
+import net.minecraft.server.MinecraftServer;
 import net.minecraft.server.packs.PackType;
 import org.jspecify.annotations.Nullable;
 import org.slf4j.Logger;
@@ -42,6 +43,8 @@ public final class HiddenPacks {
 
     private static final Map<String, Object> TRIMMED = new ConcurrentHashMap<>();
     private static volatile Function<String, Set<String>> containersOf = id -> Set.of();
+
+    private static volatile Set<String> opening = Set.of();
 
     private HiddenPacks() {
     }
@@ -78,8 +81,14 @@ public final class HiddenPacks {
     }
 
     private static void addWorldData(@Nullable String subPath, List<Object> packs) {
-        for (Map.Entry<String, ModContainer> hidden : LoaderModList.getHiddenContainers().entrySet()) {
-            if (WorldContent.isWorldDataOnly(hidden.getValue())) {
+        Map<String, ModContainer> hiddenMods = LoaderModList.getHiddenContainers();
+        if (hiddenMods.isEmpty()) {
+            return;
+        }
+        Set<String> used = findWorldPacks();
+
+        for (Map.Entry<String, ModContainer> hidden : hiddenMods.entrySet()) {
+            if (used.contains(hidden.getKey()) && WorldContent.isWorldDataOnly(hidden.getValue())) {
                 Object pack = Spellings.makeHiddenPack(hidden.getKey(), hidden.getValue(), subPath,
                         PackType.SERVER_DATA);
                 if (pack != null) {
@@ -87,6 +96,19 @@ public final class HiddenPacks {
                 }
             }
         }
+    }
+
+    private static Set<String> findWorldPacks() {
+        Set<String> used = new HashSet<>(opening);
+        MinecraftServer server = Minecraft.getInstance().getSingleplayerServer();
+        if (server != null) {
+            used.addAll(server.getPackRepository().getSelectedIds());
+        }
+        return used;
+    }
+
+    public static void noteOpeningPacks(Collection<String> enabled) {
+        opening = Set.copyOf(enabled);
     }
 
     @SuppressWarnings("unchecked")

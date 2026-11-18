@@ -39,7 +39,7 @@ public final class WorldContent {
             SortedSet<String> kinds = new TreeSet<>(index.getOrDefault(mod, new TreeSet<>()));
             Optional<ModContainer> container = loader.getModContainer(mod);
             if (container.isPresent() && !isClientOnly(loader, mod)) {
-                if (hasWorldData(container.get()) && hasClasses(container.get())) {
+                if (hasWorldData(container.get()) && !isWorldDataOnly(container.get())) {
                     kinds.add("world data");
                 }
                 if (hasSavedComponents(loader, mod)) {
@@ -54,7 +54,7 @@ public final class WorldContent {
     }
 
     public static boolean isWorldDataOnly(ModContainer mod) {
-        return hasWorldData(mod) && !hasClasses(mod);
+        return hasWorldData(mod) && mod.getContainedMods().isEmpty() && !hasClasses(mod);
     }
 
     private static boolean hasWorldData(ModContainer mod) {

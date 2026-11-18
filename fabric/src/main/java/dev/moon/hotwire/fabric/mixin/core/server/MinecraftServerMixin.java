@@ -5,15 +5,19 @@ import com.llamalad7.mixinextras.injector.wrapoperation.WrapOperation;
 import dev.moon.hotwire.concurrent.Tasks;
 import dev.moon.hotwire.engine.CrashGuard;
 import dev.moon.hotwire.fabric.OngoingReload;
+import dev.moon.hotwire.fabric.add.HiddenPacks;
 import dev.moon.hotwire.fabric.mixin.core.util.thread.BlockableEventLoopAccessor;
 import dev.moon.hotwire.switching.CrashPolicy;
 //? if <1.21.11 {
 /*import java.util.function.BooleanSupplier;
 *///?}
 import java.util.Collection;
+import java.util.List;
 import java.util.concurrent.CompletableFuture;
 import net.minecraft.network.protocol.status.ServerStatus;
 import net.minecraft.server.MinecraftServer;
+import net.minecraft.server.packs.repository.PackRepository;
+import net.minecraft.world.level.WorldDataConfiguration;
 import org.spongepowered.asm.mixin.Mixin;
 import org.spongepowered.asm.mixin.Shadow;
 import org.spongepowered.asm.mixin.injection.At;
@@ -29,6 +33,18 @@ public abstract class MinecraftServerMixin {
     @Inject(method = "reloadResources", at = @At("RETURN"))
     private void hotwire$noteDataReload(Collection<String> packs, CallbackInfoReturnable<CompletableFuture<Void>> cir) {
         OngoingReload.onServerReload(cir.getReturnValue());
+    }
+
+    @Inject(method = "configurePackRepository", at = @At("HEAD"))
+    private static void hotwire$noteOpeningPacks(PackRepository packs, WorldDataConfiguration config, boolean initMode,
+            boolean safeMode, CallbackInfoReturnable<WorldDataConfiguration> cir) {
+        HiddenPacks.noteOpeningPacks(config.dataPacks().getEnabled());
+    }
+
+    @Inject(method = "configurePackRepository", at = @At("RETURN"))
+    private static void hotwire$forgetOpeningPacks(PackRepository packs, WorldDataConfiguration config,
+            boolean initMode, boolean safeMode, CallbackInfoReturnable<WorldDataConfiguration> cir) {
+        HiddenPacks.noteOpeningPacks(List.of());
     }
 
     //? if >=1.21.11 {
