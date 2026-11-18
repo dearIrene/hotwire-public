@@ -11,16 +11,16 @@ import java.util.function.Function;
 
 public final class OwnThrowNotice {
     private static final int MOST = 20;
-    private static final Set<String> TOLD = ConcurrentHashMap.newKeySet();
 
     private OwnThrowNotice() {
     }
 
     @SuppressWarnings("FutureReturnValueIgnored")
     public static void install(Tasks tasks, BiConsumer<String, Boolean> say, Function<String, String> writeReport) {
+        Set<String> told = ConcurrentHashMap.newKeySet();
         LoggedFaults.onOwnThrow((said, thrown) -> {
             String kind = thrown.getClass().getName() + " at " + LoggedFaults.findOwnFrame(thrown);
-            if (TOLD.size() >= MOST || !TOLD.add(kind)) {
+            if (told.size() >= MOST || !told.add(kind)) {
                 return;
             }
             String what = said + " (" + thrown + ")";

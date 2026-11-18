@@ -62,7 +62,7 @@ public final class ModTripwire {
 
     final Map<String, String> sources = new ConcurrentHashMap<>();
 
-    private static final Map<ProtectionDomain, Optional<String>> SOURCE_OF = new MapMaker().weakKeys().makeMap();
+    private final Map<ProtectionDomain, Optional<String>> sourceOf = new MapMaker().weakKeys().makeMap();
 
     private final Map<Class<?>, String> loadedAtArm = new HashMap<>();
 
@@ -82,7 +82,7 @@ public final class ModTripwire {
             if (name == null || loader == null || redefining != null || !HotwireLoaders.seesHotwire(loader)) {
                 return null;
             }
-            String source = findSourceOf(domain);
+            String source = ModTripwire.this.findSourceOf(domain);
             if (source == null || !ModTripwire.this.sources.containsKey(source)) {
                 return null;
             }
@@ -393,7 +393,7 @@ public final class ModTripwire {
             if (rebuilt.contains(Type.getInternalName(type))) {
                 return;
             }
-            String source = findSourceOf(type.getProtectionDomain());
+            String source = this.findSourceOf(type.getProtectionDomain());
             if (source != null) {
                 synchronized (this.sources) {
                     this.sources.put(source, mod);
@@ -628,7 +628,7 @@ public final class ModTripwire {
                 return;
             }
 
-            String source = type.isHidden() ? null : findSourceOf(type.getProtectionDomain());
+            String source = type.isHidden() ? null : this.findSourceOf(type.getProtectionDomain());
             String watchedAs = source == null ? null : this.sources.get(source);
             if (watchedAs == null || Tripwire.hasSeenLoad(watchedAs, Type.getInternalName(type))) {
                 loaded.computeIfAbsent(mod, any -> new ArrayList<>()).add(type.getName());
@@ -637,9 +637,9 @@ public final class ModTripwire {
         return loaded;
     }
 
-    private static @Nullable String findSourceOf(@Nullable ProtectionDomain domain) {
-        return domain == null ? null : SOURCE_OF.computeIfAbsent(domain, at -> Optional.ofNullable(readSourceOf(at)))
-                .orElse(null);
+    private @Nullable String findSourceOf(@Nullable ProtectionDomain domain) {
+        return domain == null ? null : this.sourceOf.computeIfAbsent(domain,
+                at -> Optional.ofNullable(readSourceOf(at))).orElse(null);
     }
 
     private static @Nullable String readSourceOf(ProtectionDomain domain) {

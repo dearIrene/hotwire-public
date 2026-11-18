@@ -66,7 +66,7 @@ public final class InstalledMods {
                 }
             }
         }
-        this.graph = tell(new ModGraph(this.jars, InstalledMods::isOfGame, LoadedMods::findVersion));
+        this.graph = tell(new ModGraph(this.jars, this::isOfGame, LoadedMods::findVersion));
         this.graph.getIds().forEach(id -> {
             List<String> called = this.graph.getCalls(id).stream().filter(ModPolicy::isSwitchable)
                     .filter(this.graph::isInstalledOnItsOwn).toList();
@@ -87,10 +87,10 @@ public final class InstalledMods {
         return made;
     }
 
-    private static final Map<String, Boolean> OF_GAME = new ConcurrentHashMap<>();
+    private final Map<String, Boolean> ofGame = new ConcurrentHashMap<>();
 
-    private static boolean isOfGame(String type) {
-        return OF_GAME.computeIfAbsent(type, SystemClassPath::has);
+    private boolean isOfGame(String type) {
+        return this.ofGame.computeIfAbsent(type, SystemClassPath::has);
     }
 
     public synchronized ModGraph getGraph() {
@@ -210,7 +210,7 @@ public final class InstalledMods {
             all = new ArrayList<>(this.jars);
             all.addAll(this.partsAdded);
         }
-        ModGraph made = tell(new ModGraph(all, InstalledMods::isOfGame, LoadedMods::findVersion));
+        ModGraph made = tell(new ModGraph(all, this::isOfGame, LoadedMods::findVersion));
         synchronized (this) {
             this.graph = made;
         }
@@ -232,7 +232,7 @@ public final class InstalledMods {
                 return last;
             }
         }
-        ModGraph made = new ModGraph(all, InstalledMods::isOfGame, LoadedMods::findVersion);
+        ModGraph made = new ModGraph(all, this::isOfGame, LoadedMods::findVersion);
         synchronized (this) {
             this.lastJarsWith = all;
             this.lastGraphWith = made;
