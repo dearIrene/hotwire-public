@@ -52,7 +52,7 @@ public final class OtherImages {
 
     private static int readInt(byte[] bytes, int at) {
         return (bytes[at] & 0xff) << 24 | (bytes[at + 1] & 0xff) << 16 | (bytes[at + 2] & 0xff) << 8
-                | bytes[at + 3] & 0xff;
+                | (bytes[at + 3] & 0xff);
     }
 
     private static BufferedImage read(byte[] bytes, long mostPixels) throws IOException {

@@ -54,8 +54,10 @@ public final class StoreDetail extends Sheet {
         this.game = game;
         this.popup = popup;
         this.words = new Markdown(icons).onLink(this::askToOpenFromPage);
-        this.page = Kit.scroll(Kit.column(Kit.row(this.link).press((button, modifiers) -> this.askToOpen(this.link,
-                this.link.get())), this.words, Kit.rule(),
+
+        Line linkRow = Kit.row(this.link);
+        linkRow.press((button, modifiers) -> this.askToOpen(linkRow, this.link.get()));
+        this.page = Kit.scroll(Kit.column(linkRow, this.words, Kit.rule(),
                 Kit.dim(Lang.get("hotwire.store.versions")), this.versions).gap(8)).capAt(PAGE_TALL);
         this.words.within(this.page);
         this.body.with(this.page);

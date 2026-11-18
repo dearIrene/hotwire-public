@@ -95,9 +95,9 @@ final class ApiChanges {
                     List.of(), List.of(), false);
         }
 
-        String refused = ApiConsent.findRefusal(engine, !request.add().isEmpty());
-        if (refused != null) {
-            return new Plan(false, Reason.REFUSED, List.of(refused), request, List.of(), callers, List.of(), List.of(),
+        String notAllowed = ApiConsent.findRefusal(engine, !request.add().isEmpty());
+        if (notAllowed != null) {
+            return new Plan(false, Reason.REFUSED, List.of(notAllowed), request, List.of(), callers, List.of(), List.of(),
                     false);
         }
         List<String> lines = new ArrayList<>();
