@@ -46,45 +46,43 @@ public final class GameTasks {
         }
     }
 
-    private static final Set<String> MODS_OFF = new HashSet<>();
-    private static final Map<String, Integer> WAITING = new HashMap<>();
     private static final int MOST = 1000;
 
-    private static final Set<Class<?>> SAID = new HashSet<>();
+    private final Set<String> modsOff = new HashSet<>();
+    private final Map<String, Integer> waiting = new HashMap<>();
 
-    private static volatile boolean isAnyOff;
+    private final Set<Class<?>> said = new HashSet<>();
 
-    private GameTasks() {
+    private volatile boolean isAnyOff;
+
+    public synchronized void takeOut(Collection<String> mods) {
+        this.modsOff.addAll(mods);
+        this.isAnyOff = true;
+        this.drain(mods);
     }
 
-    public static synchronized void takeOut(Collection<String> mods) {
-        MODS_OFF.addAll(mods);
-        isAnyOff = true;
-        drain(mods);
+    public synchronized void takeOutAgain(Collection<String> mods) {
+        this.drain(mods.stream().filter(this.modsOff::contains).toList());
     }
 
-    public static synchronized void takeOutAgain(Collection<String> mods) {
-        drain(mods.stream().filter(MODS_OFF::contains).toList());
-    }
-
-    public static boolean isSetAside(BlockableEventLoop<?> loop, Runnable queued) {
-        if (!isAnyOff) {
+    public boolean isSetAside(BlockableEventLoop<?> loop, Runnable queued) {
+        if (!this.isAnyOff) {
             return false;
         }
         Runnable task = unwrap(queued);
-        String mod = findOwnerOf(task, findDepthFor(loop));
-        if (mod == null || !MODS_OFF.contains(mod)) {
-            if (LOGGER.isDebugEnabled() && SAID.add(task.getClass())) {
+        String mod = this.findOwnerOf(task, findDepthFor(loop));
+        if (mod == null || !this.modsOff.contains(mod)) {
+            if (LOGGER.isDebugEnabled() && this.said.add(task.getClass())) {
                 LOGGER.debug("[Hotwire] a task of {} ({}) runs while mods are off; it holds {}", mod,
                         task.getClass().getName(), describeCaptures(task));
             }
             return false;
         }
-        synchronized (GameTasks.class) {
-            if (WAITING.merge(mod, 1, Integer::sum) <= MOST) {
+        synchronized (this) {
+            if (this.waiting.merge(mod, 1, Integer::sum) <= MOST) {
                 GameRegistrations.getJournal().addTake(mod, new Removal(loop, task));
             }
-            if (SAID.add(task.getClass())) {
+            if (this.said.add(task.getClass())) {
                 LOGGER.info("[Hotwire] {}'s task {} waits for its on; it holds {}", mod, task.getClass().getName(),
                         describeCaptures(task));
             }
@@ -135,7 +133,7 @@ public final class GameTasks {
         return found;
     }
 
-    private static @Nullable String findOwnerOf(Object task, int depth) {
+    private @Nullable String findOwnerOf(Object task, int depth) {
         Object submitted = FutureWork.find(task);
         if (submitted != null) {
             return Owners.findModOrShipper(submitted.getClass());
@@ -143,7 +141,7 @@ public final class GameTasks {
 
         String mod = Owners.findModOrShipper(task.getClass());
 
-        if (depth == 0 || (mod != null && MODS_OFF.contains(mod)) || CollectionParts.isGameObject(task)) {
+        if (depth == 0 || (mod != null && this.modsOff.contains(mod)) || CollectionParts.isGameObject(task)) {
             return mod;
         }
         for (FieldSlots.Slot field : Fields.getReferenceFields(task.getClass(), false)) {
@@ -155,8 +153,8 @@ public final class GameTasks {
             }
 
             String inner = captured == null || CollectionParts.isGameObject(captured)
-                    || !IS_WORK.get(captured.getClass()) ? null : findOwnerOf(captured, depth - 1);
-            if (inner != null && MODS_OFF.contains(inner)) {
+                    || !IS_WORK.get(captured.getClass()) ? null : this.findOwnerOf(captured, depth - 1);
+            if (inner != null && this.modsOff.contains(inner)) {
                 return inner;
             }
         }
@@ -167,30 +165,30 @@ public final class GameTasks {
         return queued instanceof TickTask tick ? ((TickTaskAccessor) tick).hotwire$getRunnable() : queued;
     }
 
-    private static void drain(Collection<String> mods) {
+    private void drain(Collection<String> mods) {
         for (BlockableEventLoop<?> loop : findLoops()) {
             Queue<Runnable> pending = ((BlockableEventLoopAccessor) loop).hotwire$getPending();
             for (Runnable queued : List.copyOf(pending)) {
                 Runnable task = unwrap(queued);
-                String mod = findOwnerOf(task, findDepthFor(loop));
+                String mod = this.findOwnerOf(task, findDepthFor(loop));
                 if (mod != null && mods.contains(mod) && pending.remove(queued)) {
                     GameRegistrations.getJournal().addTake(mod, new Removal(loop, task));
-                    WAITING.merge(mod, 1, Integer::sum);
+                    this.waiting.merge(mod, 1, Integer::sum);
                 }
             }
         }
         mods.forEach(mod -> {
-            int removed = WAITING.getOrDefault(mod, 0);
+            int removed = this.waiting.getOrDefault(mod, 0);
             if (removed > 0) {
                 LOGGER.info("[Hotwire] {} tasks {} had queued on the game's loops wait until its on", removed, mod);
             }
         });
     }
 
-    public static synchronized void onBack(Collection<String> mods) {
-        MODS_OFF.removeAll(mods);
-        mods.forEach(WAITING::remove);
-        isAnyOff = !MODS_OFF.isEmpty();
+    public synchronized void onBack(Collection<String> mods) {
+        this.modsOff.removeAll(mods);
+        mods.forEach(this.waiting::remove);
+        this.isAnyOff = !this.modsOff.isEmpty();
     }
 
     private static List<BlockableEventLoop<?>> findLoops() {

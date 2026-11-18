@@ -1,6 +1,6 @@
 package dev.moon.hotwire.fabric.mixin.core.fabric.networking;
 
-import dev.moon.hotwire.fabric.update.OldPayloads;
+import dev.moon.hotwire.fabric.GameParts;
 import net.minecraft.network.codec.StreamCodec;
 import net.minecraft.network.protocol.common.custom.CustomPacketPayload;
 import org.spongepowered.asm.mixin.Mixin;
@@ -15,6 +15,6 @@ public abstract class PayloadTypeRegistryImplMixin {
     @Inject(method = "register", at = @At("HEAD"))
     private void hotwire$makeWayForCopy(CustomPacketPayload.Type<?> type, StreamCodec<?, ?> codec,
             CallbackInfoReturnable<?> cir) {
-        OldPayloads.makeWayForCopy(this, type.id());
+        GameParts.getPayloads().makeWayForCopy(this, type.id());
     }
 }

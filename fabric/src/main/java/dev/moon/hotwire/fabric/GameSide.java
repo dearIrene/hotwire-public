@@ -8,7 +8,7 @@ import dev.moon.hotwire.fabric.rebuild.GameClasses;
 import dev.moon.hotwire.fabric.registration.GameHold;
 import dev.moon.hotwire.fabric.registration.InternedKeys;
 import dev.moon.hotwire.fabric.registration.LevelEntities;
-import dev.moon.hotwire.fabric.registration.ModSounds;
+
 import dev.moon.hotwire.fabric.registration.NetworkHandlers;
 import dev.moon.hotwire.fabric.registration.RegisteredContent;
 import dev.moon.hotwire.fabric.screen.HoldFrame;
@@ -129,7 +129,7 @@ public final class GameSide implements Game {
 
     @Override
     public boolean isStoppedSound(@Nullable Object sound) {
-        return ModSounds.isStopped(sound);
+        return GameParts.getSounds().isStopped(sound);
     }
 
     @Override

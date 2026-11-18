@@ -17,14 +17,11 @@ public final class OldPayloads {
     private static final PrivateField TYPES = PrivateField.of(PayloadTypeRegistryImpl.class, "packetTypes");
     private static final String COPIES = "hotwire_live.";
 
-    private static final List<Runnable> REPLACED = new CopyOnWriteArrayList<>();
-
-    private OldPayloads() {
-    }
+    private final List<Runnable> replaced = new CopyOnWriteArrayList<>();
 
     @SuppressWarnings("unchecked")
-    static Runnable takeOut(Set<String> mods) {
-        REPLACED.clear();
+    Runnable takeOut(Set<String> mods) {
+        this.replaced.clear();
         List<Runnable> back = new ArrayList<>();
         for (Field field : PayloadTypeRegistryImpl.class.getFields()) {
             if (!Modifier.isStatic(field.getModifiers()) || field.getType() != PayloadTypeRegistryImpl.class) {
@@ -46,20 +43,20 @@ public final class OldPayloads {
         }
         return () -> {
             back.forEach(Runnable::run);
-            REPLACED.forEach(Runnable::run);
-            REPLACED.clear();
+            this.replaced.forEach(Runnable::run);
+            this.replaced.clear();
         };
     }
 
     @SuppressWarnings("unchecked")
-    public static void makeWayForCopy(Object registry, Object id) {
+    public void makeWayForCopy(Object registry, Object id) {
         Map<Object, Object> types = TYPES.get(registry, Map.class);
         if (!types.containsKey(id) || !StackWalker.getInstance().walk(frames -> frames.anyMatch(
                 frame -> frame.getClassName().startsWith(COPIES)))) {
             return;
         }
         Object old = types.remove(id);
-        REPLACED.add(() -> types.put(id, old));
+        this.replaced.add(() -> types.put(id, old));
         LOGGER.info("[Hotwire] the packet type {} of an old version goes as its copy registers it", id);
     }
 }

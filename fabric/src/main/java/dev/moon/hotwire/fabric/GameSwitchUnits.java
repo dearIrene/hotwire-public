@@ -5,10 +5,10 @@ import dev.moon.hotwire.fabric.registration.EntityAttachments;
 import dev.moon.hotwire.fabric.registration.EntityHolders;
 import dev.moon.hotwire.fabric.registration.EntityRendererProviders;
 import dev.moon.hotwire.fabric.registration.GameHold;
-import dev.moon.hotwire.fabric.registration.GameTasks;
+
 import dev.moon.hotwire.fabric.registration.GlfwCallbacks;
 import dev.moon.hotwire.fabric.registration.MixinPlugins;
-import dev.moon.hotwire.fabric.registration.ModSounds;
+
 import dev.moon.hotwire.fabric.registration.ModelReloadCheck;
 import dev.moon.hotwire.fabric.registration.NetworkHandlers;
 import dev.moon.hotwire.fabric.registration.OffModCommands;
@@ -92,7 +92,7 @@ final class GameSwitchUnits implements SwitchUnits {
 
     @Override
     public void takeOutSounds(Collection<String> mods) {
-        ModSounds.takeOut(mods);
+        GameParts.getSounds().takeOut(mods);
     }
 
     @Override
@@ -127,17 +127,17 @@ final class GameSwitchUnits implements SwitchUnits {
 
     @Override
     public void takeOutTasks(Collection<String> mods) {
-        GameTasks.takeOut(mods);
+        GameParts.getTasks().takeOut(mods);
     }
 
     @Override
     public void takeOutTasksAgain(Collection<String> mods) {
-        GameTasks.takeOutAgain(mods);
+        GameParts.getTasks().takeOutAgain(mods);
     }
 
     @Override
     public void putBackTasks(Collection<String> mods) {
-        GameTasks.onBack(mods);
+        GameParts.getTasks().onBack(mods);
     }
 
     @Override

@@ -1,5 +1,6 @@
 package dev.moon.hotwire.fabric.update;
 
+import dev.moon.hotwire.fabric.GameParts;
 import dev.moon.hotwire.fabric.add.AddAssets;
 import dev.moon.hotwire.fabric.add.LaunchSteps;
 import dev.moon.hotwire.update.UpdateGame;
@@ -22,7 +23,7 @@ public final class UpdateGameSide implements UpdateGame {
 
     @Override
     public Runnable takeOutOldPayloads(Set<String> mods) {
-        return OldPayloads.takeOut(mods);
+        return GameParts.getPayloads().takeOut(mods);
     }
 
     @Override

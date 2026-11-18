@@ -1,15 +1,11 @@
 package dev.moon.hotwire.fabric.registration;
 
+import dev.moon.hotwire.fabric.GameParts;
 import dev.moon.hotwire.fabric.mixin.core.client.OptionsAccessor;
 import dev.moon.hotwire.registration.RecorderSupport;
 import dev.moon.hotwire.registration.Registration;
 import dev.moon.hotwire.registration.SequenceOrder;
-import java.util.ArrayList;
-import java.util.Arrays;
-import java.util.Collections;
-import java.util.IdentityHashMap;
 import java.util.List;
-import java.util.Set;
 import net.minecraft.client.KeyMapping;
 import net.minecraft.client.Minecraft;
 import net.minecraft.client.Options;
@@ -31,23 +27,12 @@ public final class KeyBindingRegistration implements Registration {
         return this.binding.getName();
     }
 
-    private static final Set<KeyMapping> REMOVED = Collections.synchronizedSet(
-            Collections.newSetFromMap(new IdentityHashMap<>()));
-
-    public static KeyMapping[] withRemoved(KeyMapping[] all) {
-        List<KeyMapping> out = new ArrayList<>(Arrays.asList(all));
-        synchronized (REMOVED) {
-            out.addAll(REMOVED);
-        }
-        return out.toArray(KeyMapping[]::new);
-    }
-
     @Override
     public void remove() {
         List<KeyMapping> modded = KeyBindingRecorder.getModded();
         synchronized (modded) {
             if (modded.remove(this.binding)) {
-                REMOVED.add(this.binding);
+                GameParts.getOffKeys().add(this.binding);
                 rebuildGameKeys();
             }
         }
@@ -61,7 +46,7 @@ public final class KeyBindingRegistration implements Registration {
             if (placed.size() != modded.size()) {
                 modded.clear();
                 modded.addAll(placed);
-                REMOVED.remove(this.binding);
+                GameParts.getOffKeys().remove(this.binding);
                 rebuildGameKeys();
             }
         }

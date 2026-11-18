@@ -1,8 +1,8 @@
 package dev.moon.hotwire.fabric.mixin.core.util.thread;
 
 import dev.moon.hotwire.fabric.BackgroundReload;
+import dev.moon.hotwire.fabric.GameParts;
 import dev.moon.hotwire.fabric.add.WorldReopen;
-import dev.moon.hotwire.fabric.registration.GameTasks;
 import java.util.Queue;
 import net.minecraft.client.Minecraft;
 import net.minecraft.util.thread.BlockableEventLoop;
@@ -31,7 +31,7 @@ public abstract class BlockableEventLoopMixin {
 
     @Inject(method = "doRunTask", at = @At("HEAD"), cancellable = true)
     private void hotwire$onRunTask(Runnable task, CallbackInfo ci) {
-        if (GameTasks.isSetAside((BlockableEventLoop<?>) (Object) this, task)) {
+        if (GameParts.getTasks().isSetAside((BlockableEventLoop<?>) (Object) this, task)) {
             ci.cancel();
         }
     }
