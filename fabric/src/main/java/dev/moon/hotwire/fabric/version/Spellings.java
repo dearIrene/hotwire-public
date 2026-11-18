@@ -227,6 +227,13 @@ public final class Spellings {
         *///?}
     }
 
+    public static void addKeyCategory(KeyMapping binding) {
+        //? if <1.21.9 {
+        /*dev.moon.hotwire.fabric.mixin.core.fabric.client.keybinding.KeyBindingRegistryImplAccessor
+                .hotwire$addCategory(binding.getCategory());
+        *///?}
+    }
+
     public static <T> @Nullable T findRegistryValue(Registry<T> registry, ResourceKey<T> key) {
         //? if >=1.21.2 {
         return registry.getValue(key);

@@ -2,6 +2,7 @@ package dev.moon.hotwire.fabric.registration;
 
 import dev.moon.hotwire.fabric.mixin.core.fabric.client.keybinding.KeyBindingRegistryImplAccessor;
 import dev.moon.hotwire.fabric.mixin.core.fabric.client.keymapping.KeyMappingRegistryImplAccessor;
+import dev.moon.hotwire.fabric.version.Spellings;
 import dev.moon.hotwire.registration.RecorderSupport;
 import java.util.List;
 import net.minecraft.client.KeyMapping;
@@ -22,6 +23,7 @@ public final class KeyBindingRecorder {
         List<KeyMapping> modded = getModded();
         synchronized (modded) {
             if (!modded.contains(binding)) {
+                Spellings.addKeyCategory(binding);
                 modded.add(binding);
                 KeyBindingRegistration.rebuildGameKeys();
             }

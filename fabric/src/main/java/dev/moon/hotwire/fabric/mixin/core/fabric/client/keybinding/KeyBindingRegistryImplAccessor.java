@@ -19,4 +19,11 @@ public interface KeyBindingRegistryImplAccessor {
     static KeyMapping[] hotwire$process(KeyMapping[] all) {
         throw new AssertionError("replaced by Mixin");
     }
+    //? if <1.21.9 {
+    /*
+    @Invoker("addCategory")
+    static boolean hotwire$addCategory(String category) {
+        throw new AssertionError("replaced by Mixin");
+    }
+    *///?}
 }
