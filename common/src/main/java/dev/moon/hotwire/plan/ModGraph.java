@@ -93,9 +93,19 @@ public final class ModGraph {
         }
         this.patches.forEach((mod, patched) -> {
             ModManifest manifest = this.mods.get(mod);
+            if (manifest == null) {
+                return;
+            }
+
+            Set<String> owners = new TreeSet<>();
             for (String in : patched.calls()) {
                 String owner = ownerOf.get(in);
-                if (manifest != null && owner != null && !owner.equals(mod) && !this.names(manifest, owner)
+                if (owner != null) {
+                    owners.add(owner);
+                }
+            }
+            for (String owner : owners) {
+                if (!owner.equals(mod) && !this.names(manifest, owner)
                         && !this.getContainers(mod).contains(owner) && !this.getContainers(owner).contains(mod)) {
                     this.calls.computeIfAbsent(mod, key -> new TreeSet<>()).add(owner);
 
