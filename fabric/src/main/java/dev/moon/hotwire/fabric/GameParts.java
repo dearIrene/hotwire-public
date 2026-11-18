@@ -2,6 +2,7 @@ package dev.moon.hotwire.fabric;
 
 import dev.moon.hotwire.fabric.add.HiddenPacks;
 import dev.moon.hotwire.fabric.registration.GameTasks;
+import dev.moon.hotwire.fabric.registration.ModLifecycle;
 import dev.moon.hotwire.fabric.registration.ModSounds;
 import dev.moon.hotwire.fabric.registration.OffKeyBindings;
 import dev.moon.hotwire.fabric.registration.OffModCommands;
@@ -16,6 +17,7 @@ public final class GameParts {
     private static final OffModCommands COMMANDS = new OffModCommands();
     private static final HiddenPacks PACKS = new HiddenPacks();
     private static final HudElements HUD = new HudElements();
+    private static final ModLifecycle LIFECYCLE = new ModLifecycle();
 
     private GameParts() {
     }
@@ -46,5 +48,9 @@ public final class GameParts {
 
     public static HudElements getHud() {
         return HUD;
+    }
+
+    public static ModLifecycle getLifecycle() {
+        return LIFECYCLE;
     }
 }

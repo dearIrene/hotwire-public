@@ -3,7 +3,7 @@ package dev.moon.hotwire.fabric.add;
 import dev.moon.hotwire.add.EntrypointLists;
 import dev.moon.hotwire.add.HostLists;
 import dev.moon.hotwire.fabric.GameParts;
-import dev.moon.hotwire.fabric.registration.ModLifecycle;
+
 import dev.moon.hotwire.registration.GameRegistrations;
 import java.util.ArrayList;
 import java.util.List;
@@ -32,7 +32,7 @@ public final class LaunchSteps {
                 new Step("client commands", GameParts.getCommands()::rebuildClientCommands),
                 new Step("client-started listeners", () -> {
                     for (String id : ids) {
-                        setUp.put(id, ModLifecycle.runSetup(id, GameRegistrations.getJournal(),
+                        setUp.put(id, GameParts.getLifecycle().runSetup(id, GameRegistrations.getJournal(),
                                 Minecraft.getInstance()));
                         LOGGER.info("[Hotwire] {}'s client-started listeners ran: {}", id, setUp.get(id));
                     }

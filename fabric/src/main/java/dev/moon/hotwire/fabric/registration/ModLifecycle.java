@@ -47,7 +47,7 @@ public final class ModLifecycle {
     private static final Logger LOGGER = LoggerFactory.getLogger(ModLifecycle.class);
     private static final Duration WAIT = Duration.ofSeconds(10);
 
-    private static final Map<String, CompletableFuture<?>> STUCK = new ConcurrentHashMap<>();
+    private final Map<String, CompletableFuture<?>> stuck = new ConcurrentHashMap<>();
 
     private record LastStop(@Nullable WeakReference<MinecraftServer> server, boolean ofServer, boolean ofPlayers,
             boolean ofClient, @Nullable Set<String> serverParts) {
@@ -58,14 +58,11 @@ public final class ModLifecycle {
     }
 
     private static final LastStop EVERYTHING = new LastStop(null, true, true, true, null);
-    private static final Map<String, LastStop> LAST_STOPS = new ConcurrentHashMap<>();
+    private final Map<String, LastStop> lastStops = new ConcurrentHashMap<>();
 
-    private ModLifecycle() {
-    }
-
-    public static List<String> stop(String id, RegistrationJournal journal, Minecraft client) {
+    public List<String> stop(String id, RegistrationJournal journal, Minecraft client) {
         if (LifecycleListeners.isUnstarted(id)) {
-            LAST_STOPS.remove(id);
+            this.lastStops.remove(id);
             LOGGER.info("[Hotwire] {} never started through; its stop listeners are not run", id);
             return List.of();
         }
@@ -80,7 +77,7 @@ public final class ModLifecycle {
         };
 
         if (listensTo(id, journal, ClientPlayConnectionEvents.DISCONNECT)) {
-            onThread(work -> GameHold.onGameBeforeNextFrame(work, client), () -> {
+            this.onThread(work -> GameHold.onGameBeforeNextFrame(work, client), () -> {
                 ClientPacketListener connection = client.getConnection();
                 if (connection != null) {
                     callEach(id, journal, ClientPlayConnectionEvents.DISCONNECT, ofClient, listener ->
@@ -92,7 +89,7 @@ public final class ModLifecycle {
                 ServerLifecycleEvents.SERVER_STOPPING, ServerLifecycleEvents.SERVER_STOPPED, findLevelEvent(false),
                 ArchitecturyEventRegistration.findLifecycleEvent("SERVER_STOPPING"),
                 ArchitecturyEventRegistration.findLifecycleEvent("SERVER_STOPPED"))) {
-            onThread(work -> GameHold.onServer(server, work), () -> {
+            this.onThread(work -> GameHold.onServer(server, work), () -> {
                 for (ServerPlayer player : List.copyOf(server.getPlayerList().getPlayers())) {
                     callEach(id, journal, ServerPlayConnectionEvents.DISCONNECT, ofPlayers, listener ->
                             ((ServerPlayConnectionEvents.Disconnect) listener).onPlayDisconnect(player.connection,
@@ -111,7 +108,7 @@ public final class ModLifecycle {
                 callArchitectury(id, journal, "SERVER_STOPPED", ofServer, new ArrayList<>(), server);
             }, "server");
         }
-        LAST_STOPS.put(id, new LastStop(server == null ? null : new WeakReference<>(server), !ofServer.isEmpty(),
+        this.lastStops.put(id, new LastStop(server == null ? null : new WeakReference<>(server), !ofServer.isEmpty(),
                 !ofPlayers.isEmpty(), !ofClient.isEmpty(), Set.copyOf(serverParts)));
         List<String> ran = new ArrayList<>(ofPlayers);
         ran.addAll(ofServer);
@@ -119,14 +116,14 @@ public final class ModLifecycle {
         return ran;
     }
 
-    public static List<String> start(String id, RegistrationJournal journal, Minecraft client) {
-        return start(id, journal, client, new ArrayList<>());
+    public List<String> start(String id, RegistrationJournal journal, Minecraft client) {
+        return this.start(id, journal, client, new ArrayList<>());
     }
 
-    private static List<String> start(String id, RegistrationJournal journal, Minecraft client, List<String> threw) {
+    private List<String> start(String id, RegistrationJournal journal, Minecraft client, List<String> threw) {
         List<String> ran = new ArrayList<>();
         MinecraftServer server = client.getSingleplayerServer();
-        LastStop before = LAST_STOPS.remove(id);
+        LastStop before = this.lastStops.remove(id);
         LastStop last = before != null && before.isOf(server) ? before : EVERYTHING;
 
         if (server != null && server.isRunning() && listensTo(id, journal, ServerLifecycleEvents.SERVER_STARTING,
@@ -136,7 +133,7 @@ public final class ModLifecycle {
             Set<String> parts = last.serverParts();
             Predicate<Object> stopped = parts == null ? listener -> true
                     : listener -> parts.contains(findPartOf(id, listener));
-            onThread(work -> GameHold.onServer(server, work), () -> {
+            this.onThread(work -> GameHold.onServer(server, work), () -> {
                 if (last.ofServer()) {
                     callEach(id, journal, ServerLifecycleEvents.SERVER_STARTING, ran, threw, listener ->
                             ((ServerLifecycleEvents.ServerStarting) listener).onServerStarting(server), stopped);
@@ -163,7 +160,7 @@ public final class ModLifecycle {
                 ClientCommandRegistrationCallback.EVENT)) {
             return ran;
         }
-        onThread(work -> GameHold.onGameBeforeNextFrame(work, client), () -> {
+        this.onThread(work -> GameHold.onGameBeforeNextFrame(work, client), () -> {
             ClientPacketListener connection = client.getConnection();
             if (connection == null) {
                 return;
@@ -186,9 +183,9 @@ public final class ModLifecycle {
         return ran;
     }
 
-    public static List<String> startAdded(String id, RegistrationJournal journal, Minecraft client) {
+    public List<String> startAdded(String id, RegistrationJournal journal, Minecraft client) {
         List<String> threw = new ArrayList<>();
-        List<String> ran = start(id, journal, client, threw);
+        List<String> ran = this.start(id, journal, client, threw);
         if (!threw.isEmpty()) {
             throw new IllegalStateException("its start listeners threw: " + String.join(", ", threw));
         }
@@ -304,9 +301,9 @@ public final class ModLifecycle {
         return ran;
     }
 
-    public static List<String> runSetup(String id, RegistrationJournal journal, Minecraft client) {
+    public List<String> runSetup(String id, RegistrationJournal journal, Minecraft client) {
         List<String> ran = new ArrayList<>();
-        onThread(work -> GameHold.onGameBeforeNextFrame(work, client), () -> {
+        this.onThread(work -> GameHold.onGameBeforeNextFrame(work, client), () -> {
             callEach(id, journal, ClientLifecycleEvents.CLIENT_STARTED, ran, listener ->
                     ((ClientLifecycleEvents.ClientStarted) listener).onClientStarted(client));
             callArchitectury(id, journal, "SETUP", ran, new ArrayList<>());
@@ -314,16 +311,16 @@ public final class ModLifecycle {
         return ran;
     }
 
-    private static void onThread(Function<Runnable, CompletableFuture<?>> submit, Runnable work,
+    private void onThread(Function<Runnable, CompletableFuture<?>> submit, Runnable work,
             String thread) {
         boolean paused = thread.equals("server") && GameHold.isServerPaused();
 
         CompletableFuture<?> running = paused ? GameHold.runOnPausedServer(work) : submit.apply(work);
-        CompletableFuture<?> stuck = STUCK.get(thread);
-        if (stuck != null && !stuck.isDone()) {
+        CompletableFuture<?> waiting = this.stuck.get(thread);
+        if (waiting != null && !waiting.isDone()) {
             return;
         }
-        STUCK.remove(thread);
+        this.stuck.remove(thread);
         try {
             GameHold.await(running, WAIT.toSeconds(), thread.equals("server") ? "Server thread" : "Render thread",
                     "a mod's lifecycle listeners");
@@ -332,18 +329,18 @@ public final class ModLifecycle {
         } catch (ExecutionException e) {
             LOGGER.warn("[Hotwire] the mod's lifecycle listeners failed on the {} thread", thread, e.getCause());
         } catch (TimeoutException e) {
-            STUCK.put(thread, running);
+            this.stuck.put(thread, running);
             LOGGER.warn("[Hotwire] the mod's lifecycle listeners did not finish on the {} thread in {} s; the rest"
                     + " run there without waiting until it answers", thread, WAIT.toSeconds());
         }
     }
 
-    public static ModSwitcher.Lifecycle makeLifecycle(RegistrationJournal journal,
+    public ModSwitcher.Lifecycle makeLifecycle(RegistrationJournal journal,
             Minecraft client) {
         return new ModSwitcher.Lifecycle() {
             @Override
             public void onStopping(String id) {
-                List<String> ran = stop(id, journal, client);
+                List<String> ran = ModLifecycle.this.stop(id, journal, client);
                 if (!ran.isEmpty()) {
                     LOGGER.info("[Hotwire] {} stopped through its own listeners: {}", id, ran);
                 }
@@ -351,7 +348,7 @@ public final class ModLifecycle {
 
             @Override
             public void onStarted(String id) {
-                List<String> ran = start(id, journal, client);
+                List<String> ran = ModLifecycle.this.start(id, journal, client);
                 if (!ran.isEmpty()) {
                     LOGGER.info("[Hotwire] {} started through its own listeners: {}", id, ran);
                 }

@@ -33,7 +33,7 @@ import dev.moon.hotwire.fabric.registration.EventInvokers;
 import dev.moon.hotwire.fabric.registration.InternedKeys;
 import dev.moon.hotwire.fabric.registration.LiveConnections;
 import dev.moon.hotwire.fabric.registration.MixinPlugins;
-import dev.moon.hotwire.fabric.registration.ModLifecycle;
+
 import dev.moon.hotwire.fabric.registration.NetworkHandlers;
 
 import dev.moon.hotwire.fabric.registration.RegistryEntries;
@@ -242,7 +242,7 @@ final class EngineStart {
                 .resolve("hotwire/restart-only.json"), id -> installed.find(id).map(ModManifest::version).orElse(null));
         ModSwitcher switcher = new ModSwitcher(installed.getGraph(), ModPolicy.makePlannerFor(installed.getGraph()),
                 applier, progress, GameRegistrations.getJournal(),
-                ModLifecycle.makeLifecycle(GameRegistrations.getJournal(), Minecraft.getInstance()),
+                GameParts.getLifecycle().makeLifecycle(GameRegistrations.getJournal(), Minecraft.getInstance()),
                 new ModSwitcher.Checks(mod -> fieldReferences.hasRemovedFrom(mod)
                         || NetworkHandlers.hasLostConnection(mod), new ConnectionLambdas(instrumentation)::findMods,
                         new RegistryHolders(instrumentation)::findOwnedBy, restartOnly.findCurrent(),

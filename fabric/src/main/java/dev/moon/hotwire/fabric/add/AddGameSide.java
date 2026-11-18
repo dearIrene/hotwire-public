@@ -2,8 +2,8 @@ package dev.moon.hotwire.fabric.add;
 
 import dev.moon.hotwire.add.AddGame;
 import dev.moon.hotwire.add.ModAdder;
+import dev.moon.hotwire.fabric.GameParts;
 import dev.moon.hotwire.fabric.rebuild.MixinConfigs;
-import dev.moon.hotwire.fabric.registration.ModLifecycle;
 import dev.moon.hotwire.jar.ModJar;
 import dev.moon.hotwire.jar.ModManifest;
 import dev.moon.hotwire.mixin_copy.MixinCopy;
@@ -56,7 +56,7 @@ public final class AddGameSide implements AddGame {
 
     @Override
     public List<String> runStartListeners(String id, RegistrationJournal journal) {
-        return ModLifecycle.startAdded(id, journal, Minecraft.getInstance());
+        return GameParts.getLifecycle().startAdded(id, journal, Minecraft.getInstance());
     }
 
     @Override
