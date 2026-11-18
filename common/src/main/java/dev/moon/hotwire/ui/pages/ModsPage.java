@@ -116,10 +116,9 @@ public final class ModsPage implements ProfileMenu.Screen {
                 AUTHOR)), Kit.text("❤", Palette.ACCENT)).gap(3)).gap(3).cross(Line.Cross.START);
         Part main = Kit.column(
                 Kit.row(title, Kit.space(), Kit.fit(this.search).width(80).height(20).grow(4).most(180)).gap(8),
-                Kit.row(this.counts, Kit.meter(() -> this.onPart).grow(1)).gap(8),
+                Kit.row(this.counts, Kit.meter(() -> this.onPart).grow(1), this.choose).gap(8),
                 Kit.row(Kit.fit(this.profiles.menu, this.profiles.naming).width(90).height(Push.HEIGHT).grow(4)
-                        .most(150), this.show, Kit.space(), this.choose.spare(), this.libraries.spare(),
-                        this.findBroken.spare()).gap(8),
+                        .most(150), this.show, Kit.space(), this.libraries.spare(), this.findBroken.spare()).gap(8),
                 this.empty, this.rows, this.pickBar, this.chooseBar).pad(12, 10).gap(8).grow(1);
         this.part = Kit.row(main, this.details).cross(Line.Cross.STRETCH);
         this.refilter();
