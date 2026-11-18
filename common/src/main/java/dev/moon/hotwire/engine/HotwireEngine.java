@@ -209,20 +209,8 @@ public final class HotwireEngine implements ModScreenGame, AutoCloseable {
         return this.installed.getGraph().getIds().stream().filter(ModPolicy::isSwitchable).toList();
     }
 
-    public void reloadDevNow() {
-        this.dev.reloadAll();
-    }
-
-    public void stepDevBack() {
-        this.dev.stepBack();
-    }
-
-    public void flipDevBuild() {
-        this.dev.flip();
-    }
-
-    public void openDevWindow() {
-        this.dev.openWindow();
+    public DevControls getDevControls() {
+        return this.dev;
     }
 
     @Override

@@ -113,9 +113,10 @@ public final class HotwireClient implements ClientModInitializer {
 
         OpenKey.register(HotwireClient::openSoonFromKey, () -> ModViews.runSoon(() -> getEngine().openStoreNow("")),
                 DevSetups.get().inSetup() ? new OpenKey.DevKeys(
-                        () -> ModViews.runSoon(() -> getEngine().openDevWindow()),
-                        () -> getEngine().reloadDevNow(), () -> getEngine().stepDevBack(),
-                        () -> getEngine().flipDevBuild()) : null);
+                        () -> ModViews.runSoon(() -> getEngine().getDevControls().openWindow()),
+                        () -> getEngine().getDevControls().reloadAll(),
+                        () -> getEngine().getDevControls().stepBack(),
+                        () -> getEngine().getDevControls().flip()) : null);
         OffTooltips.register();
 
         ClientLifecycleEvents.CLIENT_STARTED.register(client -> {
