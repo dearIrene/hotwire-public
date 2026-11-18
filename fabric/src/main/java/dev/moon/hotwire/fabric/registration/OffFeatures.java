@@ -38,6 +38,9 @@ public final class OffFeatures {
             return false;
         }
         for (Object part : ((StructureStartAccessor) (Object) start).hotwire$getParts()) {
+            if (part == null) {
+                continue;
+            }
             if (Owners.isOfOffMod(part.getClass())) {
                 return true;
             }
