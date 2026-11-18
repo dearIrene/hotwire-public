@@ -246,6 +246,12 @@ final class ChangedStatics {
         for (Map.Entry<String, String> entry : statics.entrySet()) {
             try {
                 Field field = type.getDeclaredField(entry.getKey());
+
+                if (!Modifier.isStatic(field.getModifiers())) {
+                    LOGGER.debug("[Hotwire] {}.{} is an instance field; no static to make again", type.getName(),
+                            entry.getKey());
+                    continue;
+                }
                 field.setAccessible(true);
                 Object old = field.get(null);
                 boolean changed = hasMethodOf(side, PREFIX + entry.getKey(), field.getType());
