@@ -7,6 +7,7 @@ import java.io.OutputStream;
 import java.nio.charset.StandardCharsets;
 import java.nio.file.FileVisitResult;
 import java.nio.file.Files;
+import java.nio.file.InvalidPathException;
 import java.nio.file.NoSuchFileException;
 import java.nio.file.Path;
 import java.nio.file.SimpleFileVisitor;
@@ -140,11 +141,32 @@ public final class BuildSources {
         for (String line : Files.readAllLines(list, StandardCharsets.UTF_8)) {
             String[] parts = line.split("\t", 4);
             if (parts.length == 4) {
+                if (!isHash(parts[0])) {
+                    throw new IOException("the list " + name + " names a damaged hash");
+                }
+                resolveInside(this.project, parts[3]);
                 files.put(parts[3], new Entry(parts[0], Long.parseLong(parts[1]), Long.parseLong(parts[2]),
                         parts[3]));
             }
         }
         return files;
+    }
+
+    static boolean isHash(String text) {
+        return text.length() >= 40 && text.chars().allMatch(HexFormat::isHexDigit);
+    }
+
+    static Path resolveInside(Path project, String path) throws IOException {
+        Path file;
+        try {
+            file = project.resolve(path).normalize();
+        } catch (InvalidPathException e) {
+            throw new IOException("a kept path is not a path: " + path, e);
+        }
+        if (path.isEmpty() || !file.startsWith(project) || file.equals(project)) {
+            throw new IOException("a kept path leaves the project: " + path);
+        }
+        return file;
     }
 
     public long readAdded(int number) throws IOException {
@@ -161,6 +183,9 @@ public final class BuildSources {
     }
 
     public byte[] readContents(String hash) throws IOException {
+        if (!isHash(hash)) {
+            throw new IOException("not a kept hash: " + hash);
+        }
         try (InputStream in = new GZIPInputStream(Files.newInputStream(this.store.resolve("objects")
                 .resolve(hash + ".gz")))) {
             return in.readAllBytes();
@@ -190,14 +215,15 @@ public final class BuildSources {
         if (target.isEmpty()) {
             throw new IOException("no sources were kept as " + name);
         }
-        Set<String> seen = new HashSet<>();
+
+        Map<String, Path> seen = new LinkedHashMap<>();
         Path builds = this.store.resolve("builds");
         try (Stream<Path> lists = Files.list(builds)) {
             for (Path list : lists.toList()) {
                 for (String line : Files.readAllLines(list, StandardCharsets.UTF_8)) {
                     String[] parts = line.split("\t", 4);
                     if (parts.length == 4) {
-                        seen.add(parts[3]);
+                        seen.put(parts[3], resolveInside(this.project, parts[3]));
                     }
                 }
             }
@@ -207,7 +233,7 @@ public final class BuildSources {
 
         Map<String, byte[]> toWrite = new LinkedHashMap<>();
         for (Entry entry : target.values()) {
-            Path file = this.project.resolve(entry.path());
+            Path file = resolveInside(this.project, entry.path());
             if (stale.contains(entry.path())
                     || (Files.isRegularFile(file) && hash(Files.readAllBytes(file)).equals(entry.hash()))) {
                 continue;
@@ -227,7 +253,7 @@ public final class BuildSources {
         }
         List<String> changed = new ArrayList<>();
         for (Map.Entry<String, byte[]> one : toWrite.entrySet()) {
-            Path file = this.project.resolve(one.getKey());
+            Path file = resolveInside(this.project, one.getKey());
             Files.createDirectories(file.getParent());
             Path part = file.resolveSibling(file.getFileName() + ".hotwire-part");
             try {
@@ -238,11 +264,10 @@ public final class BuildSources {
             }
             changed.add(one.getKey());
         }
-        for (String path : seen) {
-            Path file = this.project.resolve(path);
-            if (!target.containsKey(path) && Files.isRegularFile(file)) {
-                Files.delete(file);
-                changed.add(path);
+        for (Map.Entry<String, Path> path : seen.entrySet()) {
+            if (!target.containsKey(path.getKey()) && Files.isRegularFile(path.getValue())) {
+                Files.delete(path.getValue());
+                changed.add(path.getKey());
             }
         }
         this.last = null;

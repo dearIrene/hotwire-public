@@ -610,6 +610,10 @@ public final class DevBuild {
                     return null;
                 }
                 String hash = stored && !"-".equals(parts[3]) ? parts[3] : null;
+
+                if (hash != null && !BuildSources.isHash(hash)) {
+                    return null;
+                }
                 files.put(parts[stored ? 4 : 3], new FileSum(Long.parseLong(parts[0]), Long.parseLong(parts[1]),
                         Long.parseLong(parts[2]), hash));
             }
