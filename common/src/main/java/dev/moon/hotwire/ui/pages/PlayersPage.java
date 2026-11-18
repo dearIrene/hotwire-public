@@ -60,8 +60,8 @@ public final class PlayersPage {
                         Kit.dim(Lang.get("hotwire.players.share")),
                         Kit.check(game::isSharingMods, () -> game.setSharingMods(!game.isSharingMods()))).gap(8),
                 this.empty,
-                Kit.row(Kit.scroll(this.people).width(PEOPLE_WIDE), Kit.rule().width(1), detail).gap(10).grow(1)
-                        .cross(Line.Cross.STRETCH))
+                Kit.row(Kit.scroll(this.people).width(PEOPLE_WIDE), Kit.rule().width(1), detail).gap(10)
+                        .cross(Line.Cross.STRETCH).grow(1))
                 .pad(12, 10).gap(10).grow(1);
     }
 
