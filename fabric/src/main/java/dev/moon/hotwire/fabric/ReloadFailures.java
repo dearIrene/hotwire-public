@@ -26,38 +26,34 @@ import org.slf4j.LoggerFactory;
 public final class ReloadFailures {
     private static final Logger LOGGER = LoggerFactory.getLogger(ReloadFailures.class);
     private static final long RETRY_GAP_NANOS = 10_000_000_000L;
-    private static volatile long retriedForWaitAt = -RETRY_GAP_NANOS;
+    private volatile long retriedForWaitAt = -RETRY_GAP_NANOS;
 
-    private static final Set<ReloadInstance> RUN_AGAIN = Collections.newSetFromMap(new MapMaker().weakKeys()
-            .makeMap());
+    private final Set<ReloadInstance> ranAgain = Collections.newSetFromMap(new MapMaker().weakKeys().makeMap());
 
-    private static volatile WeakReference<LoadingOverlay> lastMade = new WeakReference<>(null);
+    private volatile WeakReference<LoadingOverlay> lastMade = new WeakReference<>(null);
 
-    private ReloadFailures() {
+    public void onOverlayMade(LoadingOverlay overlay) {
+        this.lastMade = new WeakReference<>(overlay);
     }
 
-    public static void onOverlayMade(LoadingOverlay overlay) {
-        lastMade = new WeakReference<>(overlay);
-    }
-
-    private static @Nullable LoadingOverlay findFailedOverlay() {
+    private @Nullable LoadingOverlay findFailedOverlay() {
         LoadingOverlay shown = ModViews.findLoadingOverlay();
-        return shown != null ? shown : lastMade.get();
+        return shown != null ? shown : this.lastMade.get();
     }
 
-    public static boolean runAgainOnFailure() {
+    public boolean runAgainOnFailure() {
         long now = System.nanoTime();
-        if (ResourceReload.isAwaitingAssets() && now - retriedForWaitAt > RETRY_GAP_NANOS) {
-            retriedForWaitAt = now;
+        if (ResourceReload.isAwaitingAssets() && now - this.retriedForWaitAt > RETRY_GAP_NANOS) {
+            this.retriedForWaitAt = now;
             LOGGER.info("[Hotwire] a resource reload failed while a mod's state is still coming; it runs again");
             Minecraft game = Minecraft.getInstance();
             ModViews.runSoon(() -> ResourceReload.startAgain(game));
             return true;
         }
-        LoadingOverlay failed = findFailedOverlay();
-        ReloadInstance reload = failed == null ? null : OngoingReload.findReloadOf(failed);
+        LoadingOverlay failed = this.findFailedOverlay();
+        ReloadInstance reload = failed == null ? null : GameParts.getOngoingReload().findReloadOf(failed);
         Set<String> off = LoaderModList.getHidden();
-        String reason = findWhyLeftToGame(failed, reload, off);
+        String reason = this.findWhyLeftToGame(failed, reload, off);
         if (reason != null || failed == null || reload == null) {
             LOGGER.info("[Hotwire] a resource reload failed; the game answers it, as {}", reason);
             return false;
@@ -70,10 +66,10 @@ public final class ReloadFailures {
         }
         LOGGER.warn("[Hotwire] a resource reload failed with {} off; what the resources could not make is out, and"
                 + " the reload runs again", off, cause);
-        return runAgain(Minecraft.getInstance(), failed, off) != null;
+        return this.runAgain(Minecraft.getInstance(), failed, off) != null;
     }
 
-    private static @Nullable String findWhyLeftToGame(@Nullable LoadingOverlay failed, @Nullable ReloadInstance reload,
+    private @Nullable String findWhyLeftToGame(@Nullable LoadingOverlay failed, @Nullable ReloadInstance reload,
             Set<String> off) {
         if (failed == null) {
             return "no loading overlay holds it";
@@ -84,11 +80,11 @@ public final class ReloadFailures {
         if (off.isEmpty()) {
             return "no mod is off";
         }
-        return RUN_AGAIN.contains(reload) ? "it is one Hotwire ran again" : null;
+        return this.ranAgain.contains(reload) ? "it is one Hotwire ran again" : null;
     }
 
     @SuppressWarnings("FutureReturnValueIgnored")
-    static @Nullable ReloadInstance runAgain(Minecraft game, LoadingOverlay failed, Collection<String> off) {
+    @Nullable ReloadInstance runAgain(Minecraft game, LoadingOverlay failed, Collection<String> off) {
         Consumer<Optional<Throwable>> onFinish = findOnFinish(failed);
         if (onFinish == null || !(game.getResourceManager() instanceof ReloadableResourceManager manager)) {
             LOGGER.error("[Hotwire] the failed resource reload cannot run again; the game answers it");
@@ -97,7 +93,7 @@ public final class ReloadFailures {
         ReloadInstance[] again = new ReloadInstance[1];
         ResourceReload.startUnprofiled(() -> again[0] = manager.createReload(ForkJoinPool.commonPool(), game,
                 CompletableFuture.completedFuture(Unit.INSTANCE), game.getResourcePackRepository().openAllSelected()));
-        RUN_AGAIN.add(again[0]);
+        this.ranAgain.add(again[0]);
 
         Consumer<Optional<Throwable>> once = makeOnce(onFinish);
         again[0].done().whenCompleteAsync((ended, thrown) -> once.accept(Optional.ofNullable(

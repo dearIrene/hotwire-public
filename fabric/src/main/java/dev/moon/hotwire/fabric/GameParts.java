@@ -4,6 +4,7 @@ import dev.moon.hotwire.fabric.add.HiddenPacks;
 import dev.moon.hotwire.fabric.registration.GameTasks;
 import dev.moon.hotwire.fabric.registration.ModLifecycle;
 import dev.moon.hotwire.fabric.registration.ModSounds;
+import dev.moon.hotwire.fabric.registration.ModelReloadCheck;
 import dev.moon.hotwire.fabric.registration.OffKeyBindings;
 import dev.moon.hotwire.fabric.registration.OffModCommands;
 import dev.moon.hotwire.fabric.update.OldPayloads;
@@ -18,6 +19,10 @@ public final class GameParts {
     private static final HiddenPacks PACKS = new HiddenPacks();
     private static final HudElements HUD = new HudElements();
     private static final ModLifecycle LIFECYCLE = new ModLifecycle();
+    private static final OngoingReload ONGOING_RELOAD = new OngoingReload();
+    private static final BackgroundReload BACKGROUND_RELOAD = new BackgroundReload();
+    private static final ReloadFailures RELOAD_FAILURES = new ReloadFailures();
+    private static final ModelReloadCheck MODEL_CHECK = new ModelReloadCheck();
 
     private GameParts() {
     }
@@ -52,5 +57,21 @@ public final class GameParts {
 
     public static ModLifecycle getLifecycle() {
         return LIFECYCLE;
+    }
+
+    public static OngoingReload getOngoingReload() {
+        return ONGOING_RELOAD;
+    }
+
+    public static BackgroundReload getBackgroundReload() {
+        return BACKGROUND_RELOAD;
+    }
+
+    public static ReloadFailures getReloadFailures() {
+        return RELOAD_FAILURES;
+    }
+
+    public static ModelReloadCheck getModelCheck() {
+        return MODEL_CHECK;
     }
 }

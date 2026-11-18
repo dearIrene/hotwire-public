@@ -17,22 +17,19 @@ public final class BackgroundReload {
     private record ReloadRun(ReloadInstance reload, Consumer<Optional<Throwable>> onFinish, long began) {
     }
 
-    private static volatile @Nullable ReloadRun running;
     private static final long LONGEST_BEFORE_CLOSE = 30_000_000_000L;
+    private volatile @Nullable ReloadRun running;
 
-    private static volatile @Nullable Runnable due;
+    private volatile @Nullable Runnable due;
 
-    private static final List<Runnable> AFTER = new CopyOnWriteArrayList<>();
+    private final List<Runnable> after = new CopyOnWriteArrayList<>();
 
-    private BackgroundReload() {
+    public boolean isBusy() {
+        return this.running != null || this.due != null;
     }
 
-    public static boolean isBusy() {
-        return running != null || due != null;
-    }
-
-    public static void finishBeforeTasksDrop(Minecraft game) {
-        ReloadRun now = running;
+    public void finishBeforeTasksDrop(Minecraft game) {
+        ReloadRun now = this.running;
         if (now == null || now.reload().isDone()) {
             return;
         }
@@ -43,62 +40,62 @@ public final class BackgroundReload {
             Spellings.replayRenderQueue();
             return now.reload().isDone() || System.nanoTime() > until;
         });
-        finishIfDone();
+        this.finishIfDone();
         LOGGER.info("[Hotwire] the world's close waited {} ms for the reload with the game drawing to end{}",
                 (System.nanoTime() - began) / 1_000_000, now.reload().isDone() ? "" : ", which did not");
     }
 
-    static void beginAfterHold(Runnable begin) {
-        due = begin;
+    void beginAfterHold(Runnable begin) {
+        this.due = begin;
     }
 
-    static boolean beginNow(Runnable begin) {
-        if (running != null) {
+    boolean beginNow(Runnable begin) {
+        if (this.running != null) {
             return false;
         }
         try {
-            if (!begin(begin)) {
+            if (!this.begin(begin)) {
                 return false;
             }
         } finally {
-            OngoingReload.markChanged();
+            GameParts.getOngoingReload().markChanged();
         }
-        due = null;
+        this.due = null;
         return true;
     }
 
-    static void dropDue() {
-        due = null;
+    void dropDue() {
+        this.due = null;
     }
 
-    public static void runAfterReload(Runnable then) {
-        if (!isBusy()) {
+    public void runAfterReload(Runnable then) {
+        if (!this.isBusy()) {
             then.run();
             return;
         }
-        AFTER.add(then);
+        this.after.add(then);
     }
 
-    private static void runAfter() {
-        List<Runnable> waiting = List.copyOf(AFTER);
-        AFTER.removeAll(waiting);
+    private void runAfter() {
+        List<Runnable> waiting = List.copyOf(this.after);
+        this.after.removeAll(waiting);
         waiting.forEach(Runnable::run);
     }
 
-    static boolean isDue() {
-        return due != null;
+    boolean isDue() {
+        return this.due != null;
     }
 
     @SuppressWarnings("ReferenceEquality")
-    static void forget(ReloadInstance reload) {
-        ReloadRun now = running;
+    void forget(ReloadInstance reload) {
+        ReloadRun now = this.running;
         if (now != null && now.reload() == reload) {
-            running = null;
+            this.running = null;
         }
     }
 
-    private static boolean begin(Runnable begin) {
-        OngoingReload.clearDoneOverlay();
+    private boolean begin(Runnable begin) {
+        GameParts.getOngoingReload().clearDoneOverlay();
         OngoingReload.Run run = OngoingReload.begin(begin);
         Consumer<Optional<Throwable>> onFinish = run == null ? null : run.onFinish;
         if (run == null || onFinish == null) {
@@ -106,35 +103,35 @@ public final class BackgroundReload {
         }
         run.adopted = true;
         ModViews.closeOverlay();
-        running = new ReloadRun(run.reload, onFinish, System.nanoTime());
+        this.running = new ReloadRun(run.reload, onFinish, System.nanoTime());
         return true;
     }
 
     @SuppressWarnings("FutureReturnValueIgnored")
-    public static void tick() {
-        Runnable begin = due;
-        if (begin != null && running == null) {
+    public void tick() {
+        Runnable begin = this.due;
+        if (begin != null && this.running == null) {
             try {
-                if (!begin(begin)) {
+                if (!this.begin(begin)) {
                     LOGGER.info("[Hotwire] the whole reload after the switch runs under its loading screen");
                     Minecraft game = Minecraft.getInstance();
-                    OngoingReload.awaitIdleLater(game).thenRunAsync(BackgroundReload::runAfter, game);
+                    GameParts.getOngoingReload().awaitIdleLater(game).thenRunAsync(this::runAfter, game);
                 }
             } finally {
-                due = null;
-                OngoingReload.markChanged();
+                this.due = null;
+                GameParts.getOngoingReload().markChanged();
             }
         }
-        finishIfDone();
+        this.finishIfDone();
     }
 
     @SuppressWarnings("checkstyle:IllegalCatch")
-    static void finishIfDone() {
-        ReloadRun now = running;
+    void finishIfDone() {
+        ReloadRun now = this.running;
         if (now == null || !now.reload().isDone()) {
             return;
         }
-        running = null;
+        this.running = null;
         try {
             now.reload().checkExceptions();
             now.onFinish().accept(Optional.empty());
@@ -143,6 +140,6 @@ public final class BackgroundReload {
         }
         LOGGER.info("[Hotwire] the resources were reloaded with the game drawing in {} ms",
                 (System.nanoTime() - now.began()) / 1_000_000);
-        runAfter();
+        this.runAfter();
     }
 }

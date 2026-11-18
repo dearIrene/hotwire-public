@@ -1,7 +1,7 @@
 package dev.moon.hotwire.fabric.add;
 
 import dev.moon.hotwire.add.ModAdder;
-import dev.moon.hotwire.fabric.BackgroundReload;
+import dev.moon.hotwire.fabric.GameParts;
 import dev.moon.hotwire.fabric.ResourceReload;
 import dev.moon.hotwire.fabric.WordsReload;
 import dev.moon.hotwire.fabric.mixin.core.client.ReloadableResourceManagerAccessor;
@@ -74,7 +74,7 @@ public final class AddAssets {
                     -> changed.getOrDefault(entry.getKey(), EVERY_ASSET).stream().allMatch(WordsReload::isWords));
             List<String> ids = shipping.stream().map(Map.Entry::getKey).toList();
             ResourceReload.reloadBeforeFrame(ids + " bring new assets", wordsAlone, ids);
-            BackgroundReload.runAfterReload(then);
+            GameParts.getBackgroundReload().runAfterReload(then);
         });
     }
 

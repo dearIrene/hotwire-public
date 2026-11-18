@@ -32,7 +32,7 @@ public abstract class MinecraftServerMixin {
 
     @Inject(method = "reloadResources", at = @At("RETURN"))
     private void hotwire$noteDataReload(Collection<String> packs, CallbackInfoReturnable<CompletableFuture<Void>> cir) {
-        OngoingReload.onServerReload(cir.getReturnValue());
+        GameParts.getOngoingReload().onServerReload(cir.getReturnValue());
     }
 
     @Inject(method = "configurePackRepository", at = @At("HEAD"))

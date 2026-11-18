@@ -5,14 +5,12 @@ import com.llamalad7.mixinextras.injector.wrapoperation.WrapOperation;
 import dev.moon.hotwire.engine.CrashGuard;
 import dev.moon.hotwire.fabric.CrashReports;
 import dev.moon.hotwire.fabric.FrameRecovery;
-import dev.moon.hotwire.fabric.ReloadFailures;
+import dev.moon.hotwire.fabric.GameParts;
 //? if >=1.21.2 {
 import dev.moon.hotwire.fabric.ResourceReload;
 //?}
 import dev.moon.hotwire.add.TickEnd;
-import dev.moon.hotwire.fabric.BackgroundReload;
 import dev.moon.hotwire.fabric.HotwireClient;
-import dev.moon.hotwire.fabric.OngoingReload;
 import dev.moon.hotwire.fabric.registration.ClosedWorldHolders;
 import dev.moon.hotwire.fabric.registration.GameHold;
 import dev.moon.hotwire.fabric.registration.WorldTintCaches;
@@ -60,7 +58,7 @@ public abstract class MinecraftMixin {
 
     @Inject(method = "rollbackResourcePacks", at = @At("HEAD"), cancellable = true)
     private void hotwire$runFailedReloadAgain(CallbackInfo ci) {
-        if (ReloadFailures.runAgainOnFailure()) {
+        if (GameParts.getReloadFailures().runAgainOnFailure()) {
             ci.cancel();
         }
     }
@@ -104,8 +102,8 @@ public abstract class MinecraftMixin {
             }
         }
         TickEnd.runDue();
-        BackgroundReload.tick();
-        OngoingReload.tick();
+        GameParts.getBackgroundReload().tick();
+        GameParts.getOngoingReload().tick();
         HotwireClient.tickPlayers();
         WorldTintCaches.tick(game);
         ClosedWorldHolders.tick(game);

@@ -1,7 +1,6 @@
 package dev.moon.hotwire.fabric.mixin.core.client.gui.screens;
 
-import dev.moon.hotwire.fabric.OngoingReload;
-import dev.moon.hotwire.fabric.ReloadFailures;
+import dev.moon.hotwire.fabric.GameParts;
 import dev.moon.hotwire.report.StartTimes;
 import java.util.Optional;
 import java.util.function.Consumer;
@@ -28,7 +27,8 @@ public abstract class LoadingOverlayMixin {
     @Inject(method = "<init>", at = @At("RETURN"))
     private void hotwire$remember(CallbackInfo ci) {
         StartTimes.mark("loading overlay shown");
-        this.onFinish = OngoingReload.onShown((LoadingOverlay) (Object) this, this.reload, this.onFinish);
-        ReloadFailures.onOverlayMade((LoadingOverlay) (Object) this);
+        this.onFinish = GameParts.getOngoingReload().onShown((LoadingOverlay) (Object) this, this.reload,
+                this.onFinish);
+        GameParts.getReloadFailures().onOverlayMade((LoadingOverlay) (Object) this);
     }
 }

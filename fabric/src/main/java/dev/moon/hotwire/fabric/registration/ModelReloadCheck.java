@@ -39,6 +39,9 @@ public final class ModelReloadCheck {
     private final Set<String> modelOwners = ConcurrentHashMap.newKeySet();
     private final Set<String> fontOwners = ConcurrentHashMap.newKeySet();
 
+    private final Set<String> modelsAtPause = ConcurrentHashMap.newKeySet();
+    private final Set<String> fontsAtPause = ConcurrentHashMap.newKeySet();
+
     private record EarlyOwners(Set<String> mods, List<Integer> made, Set<String> owners,
             List<ModelWrappers.Swap> swaps) {
         boolean standsFor(Collection<String> asked) {
@@ -140,6 +143,23 @@ public final class ModelReloadCheck {
 
     public void noteFonts(Collection<String> mods) {
         this.fontOwners.addAll(mods);
+    }
+
+    public void noteAtPause(Collection<String> hidden, @Nullable Object fonts) {
+        this.modelsAtPause.addAll(findModelOwners(hidden));
+        if (fonts != null) {
+            this.fontsAtPause.addAll(findFontOwners(fonts, hidden));
+        }
+    }
+
+    public void rememberAtPause(Collection<String> mods) {
+        this.noteModels(mods.stream().filter(this.modelsAtPause::contains).toList());
+        this.noteFonts(mods.stream().filter(this.fontsAtPause::contains).toList());
+    }
+
+    public void forgetPause() {
+        this.modelsAtPause.clear();
+        this.fontsAtPause.clear();
     }
 
     public boolean hasFontsAtOn(Collection<String> mods) {

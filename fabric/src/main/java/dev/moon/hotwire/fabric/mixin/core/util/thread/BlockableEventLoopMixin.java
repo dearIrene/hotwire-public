@@ -1,6 +1,5 @@
 package dev.moon.hotwire.fabric.mixin.core.util.thread;
 
-import dev.moon.hotwire.fabric.BackgroundReload;
 import dev.moon.hotwire.fabric.GameParts;
 import dev.moon.hotwire.fabric.add.WorldReopen;
 import java.util.Queue;
@@ -22,7 +21,7 @@ public abstract class BlockableEventLoopMixin {
     @Inject(method = "dropAllTasks", at = @At("HEAD"), cancellable = true)
     private void hotwire$onDropAll(CallbackInfo ci) {
         if ((Object) this instanceof Minecraft game) {
-            BackgroundReload.finishBeforeTasksDrop(game);
+            GameParts.getBackgroundReload().finishBeforeTasksDrop(game);
         }
         if (WorldReopen.dropEarlierTasks(this.pendingRunnables)) {
             ci.cancel();

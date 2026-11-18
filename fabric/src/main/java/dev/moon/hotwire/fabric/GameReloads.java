@@ -1,7 +1,7 @@
 package dev.moon.hotwire.fabric;
 
 import dev.moon.hotwire.fabric.registration.GameHold;
-import dev.moon.hotwire.fabric.registration.ModelReloadCheck;
+
 import dev.moon.hotwire.seam.Reloads;
 import dev.moon.hotwire.switching.SwitchTimes;
 import java.util.Collection;
@@ -15,8 +15,6 @@ final class GameReloads implements Reloads {
     private static final Logger LOGGER = LoggerFactory.getLogger(GameReloads.class);
 
     private final Set<String> packed = ConcurrentHashMap.newKeySet();
-
-    private final ModelReloadCheck owners = new ModelReloadCheck();
 
     @Override
     public void awaitIdle() {
@@ -65,12 +63,12 @@ final class GameReloads implements Reloads {
 
     @Override
     public void reloadResources(Collection<String> newlyBuilt, Collection<String> mods, boolean off) {
-        ResourceReload.reloadResources(newlyBuilt, mods, off, this.packed, this.owners);
+        ResourceReload.reloadResources(newlyBuilt, mods, off, this.packed);
     }
 
     @Override
     public void runAfterReload(Runnable then) {
-        BackgroundReload.runAfterReload(then);
+        GameParts.getBackgroundReload().runAfterReload(then);
     }
 
     @Override

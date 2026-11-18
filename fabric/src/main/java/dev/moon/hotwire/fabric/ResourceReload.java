@@ -20,7 +20,6 @@ import java.util.ConcurrentModificationException;
 import java.util.List;
 import java.util.Set;
 import java.util.concurrent.CompletableFuture;
-import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.ExecutionException;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.TimeoutException;
@@ -69,9 +68,6 @@ public final class ResourceReload {
     private static volatile boolean wholeAfterHold;
 
     private static volatile Set<String> packsAtPause = Set.of();
-
-    private static final Set<String> MODELS_AT_PAUSE = ConcurrentHashMap.newKeySet();
-    private static final Set<String> FONTS_AT_PAUSE = ConcurrentHashMap.newKeySet();
 
     private static volatile List<String> comingOn = List.of();
     private static volatile List<String> goingOff = List.of();
@@ -129,7 +125,7 @@ public final class ResourceReload {
         Minecraft game = Minecraft.getInstance();
         try {
             GameHold.onGameBeforeNextFrame(() -> {
-                OngoingReload.awaitBegun(game);
+                GameParts.getOngoingReload().awaitBegun(game);
                 if (world) {
                     WorldRendererReset.run();
                     HoldFrame.drawIfDue();
@@ -140,7 +136,7 @@ public final class ResourceReload {
                     if (!reloadAsked && !comingOn.isEmpty()) {
                         reloadedRenderers = true;
                         reloadedWhilePaused |= !renderersOnly;
-                        BackgroundReload.beginAfterHold(() -> {
+                        GameParts.getBackgroundReload().beginAfterHold(() -> {
                             Runnable start = () -> startUnprofiled(() -> game.reloadResourcePacks());
                             if (!renderersOnly || wholeAfterHold || !ReloadListeners.runWithoutHeavy(game, start)) {
                                 startWhole(game);
@@ -205,7 +201,7 @@ public final class ResourceReload {
             }
 
             reloadedRenderers = true;
-            BackgroundReload.beginAfterHold(() -> {
+            GameParts.getBackgroundReload().beginAfterHold(() -> {
                 Runnable start = () -> startUnprofiled(() -> game.reloadResourcePacks());
                 if (wholeAfterHold || !ReloadListeners.runWithoutHeavy(game, start)) {
                     startWhole(game);
@@ -214,7 +210,7 @@ public final class ResourceReload {
             return;
         }
         GameHold.onGameAndWait(() -> {
-            OngoingReload.awaitBegun(game);
+            GameParts.getOngoingReload().awaitBegun(game);
             reloadWhilePaused(game, false, false);
         });
     }
@@ -226,7 +222,7 @@ public final class ResourceReload {
             LOGGER.info("[Hotwire] {}: the reload that made the game's objects again brought them", why);
             return;
         }
-        if (OngoingReload.awaitBegun(game)) {
+        if (GameParts.getOngoingReload().awaitBegun(game)) {
             LOGGER.info("[Hotwire] {}: a reload already under way brought them", why);
             return;
         }
@@ -256,8 +252,7 @@ public final class ResourceReload {
         wholeAfterHold = false;
         added = List.of();
         packsAtPause = Set.of();
-        MODELS_AT_PAUSE.clear();
-        FONTS_AT_PAUSE.clear();
+        GameParts.getModelCheck().forgetPause();
     }
 
     static void onComingOn(List<String> mods) {
@@ -271,13 +266,13 @@ public final class ResourceReload {
         Minecraft game = Minecraft.getInstance();
         LOGGER.info("[Hotwire] the packs of {} come back whole with a reload after the hold, the game drawing", mods);
         wholeAfterHold = true;
-        BackgroundReload.beginAfterHold(() -> startWhole(game));
+        GameParts.getBackgroundReload().beginAfterHold(() -> startWhole(game));
     }
 
     public static void awaitIdle() {
         Minecraft game = Minecraft.getInstance();
         if (!game.isSameThread()) {
-            OngoingReload.awaitIdle(game);
+            GameParts.getOngoingReload().awaitIdle(game);
         }
     }
 
@@ -325,7 +320,7 @@ public final class ResourceReload {
         packsAtPause = getAvailablePacks();
         noteOwnersAtPause();
 
-        OngoingReload.clearDoneOverlay();
+        GameParts.getOngoingReload().clearDoneOverlay();
 
         if (comingOn.isEmpty()) {
             reloadedWhilePaused = true;
@@ -338,11 +333,11 @@ public final class ResourceReload {
                 LOGGER.info("[Hotwire] the off's resource reload is left to the switch that follows it");
                 return;
             }
-            BackgroundReload.beginAfterHold(() -> startWhole(game));
+            GameParts.getBackgroundReload().beginAfterHold(() -> startWhole(game));
             return;
         }
 
-        if (packsAlone && BackgroundReload.beginNow(() -> startWhole(game))) {
+        if (packsAlone && GameParts.getBackgroundReload().beginNow(() -> startWhole(game))) {
             reloadedWhilePaused = true;
             LOGGER.info("[Hotwire] the reload began with the game held and ends with it drawing: only packs made"
                     + " without a mod's setup waited for it");
@@ -386,7 +381,7 @@ public final class ResourceReload {
         LOGGER.info("[Hotwire] the resources were reloaded with the game held in {} ms{}",
                 (System.nanoTime() - began) / 1_000_000, isWhole ? "" : ", for the renderers alone");
         if (isWhole && wholeAfterHold) {
-            BackgroundReload.dropDue();
+            GameParts.getBackgroundReload().dropDue();
             wholeAfterHold = false;
         }
     }
@@ -410,7 +405,7 @@ public final class ResourceReload {
                 ReloadFailures.findFailure(failed));
         ReloadedLists.takeOutUnmade(off);
         LoadingOverlay overlay = ModViews.findLoadingOverlay();
-        ReloadInstance again = overlay == null ? null : ReloadFailures.runAgain(game, overlay, off);
+        ReloadInstance again = overlay == null ? null : GameParts.getReloadFailures().runAgain(game, overlay, off);
         if (again != null) {
             awaitWhilePaused(game, again);
         }
@@ -423,11 +418,7 @@ public final class ResourceReload {
             return;
         }
         try {
-            MODELS_AT_PAUSE.addAll(ModelReloadCheck.findModelOwners(hidden));
-            FontManager fonts = FontReload.findFontManager();
-            if (fonts != null) {
-                FONTS_AT_PAUSE.addAll(ModelReloadCheck.findFontOwners(fonts, hidden));
-            }
+            GameParts.getModelCheck().noteAtPause(hidden, FontReload.findFontManager());
         } catch (RuntimeException | LinkageError e) {
             LOGGER.warn("[Hotwire] what {} have in the game's models and fonts could not be read before the reload",
                     hidden, e);
@@ -435,23 +426,23 @@ public final class ResourceReload {
     }
 
     static void reloadResources(Collection<String> newlyBuilt, Collection<String> mods, boolean off,
-            Set<String> packed, ModelReloadCheck owners) {
+            Set<String> packed) {
         try {
-            reloadResourcesNow(newlyBuilt, mods, off, packed, owners);
+            reloadResourcesNow(newlyBuilt, mods, off, packed);
         } finally {
             ModelReloadCheck.forgetAhead();
         }
     }
 
     private static void reloadResourcesNow(Collection<String> newlyBuilt, Collection<String> mods, boolean off,
-            Set<String> packed, ModelReloadCheck owners) {
+            Set<String> packed) {
+        ModelReloadCheck owners = GameParts.getModelCheck();
         Set<String> available = getAvailablePacks();
         if (off) {
             Set<String> atPause = packsAtPause;
             mods.stream().filter(id -> available.contains(id) || atPause.contains(id)).forEach(packed::add);
 
-            owners.noteModels(mods.stream().filter(MODELS_AT_PAUSE::contains).toList());
-            owners.noteFonts(mods.stream().filter(FONTS_AT_PAUSE::contains).toList());
+            owners.rememberAtPause(mods);
         }
         List<String> packsGone = off ? List.of()
                 : mods.stream().filter(packed::remove).filter(id -> !available.contains(id)).toList();
@@ -611,7 +602,7 @@ public final class ResourceReload {
         waitingReload = null;
 
         Minecraft game = Minecraft.getInstance();
-        if (OngoingReload.awaitIdle(game)) {
+        if (GameParts.getOngoingReload().awaitIdle(game)) {
             LOGGER.info("[Hotwire] {}: a reload already under way brought them", why);
             return;
         }
@@ -632,7 +623,7 @@ public final class ResourceReload {
                 Thread.sleep(50);
             }
 
-            OngoingReload.awaitIdle(game);
+            GameParts.getOngoingReload().awaitIdle(game);
             if (!reload.isDone()) {
                 reportFailed(why, chosen);
                 return;
