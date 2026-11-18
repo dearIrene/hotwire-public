@@ -545,7 +545,8 @@ public final class MixinCopy implements AutoCloseable {
 
     private static synchronized Path copyJar() throws MixinCopyException {
         Path jar = copyJar;
-        if (jar != null) {
+
+        if (jar != null && Files.isRegularFile(jar)) {
             return jar;
         }
         try (InputStream in = MixinCopy.class.getResourceAsStream("mixin-copy.jar")) {
@@ -553,7 +554,7 @@ public final class MixinCopy implements AutoCloseable {
                 throw new MixinCopyException("Hotwire's jar has no mixin-copy.jar", null);
             }
             jar = MixinCopyJar.write(in.readAllBytes());
-        } catch (IOException | NoSuchAlgorithmException e) {
+        } catch (IOException e) {
             throw new MixinCopyException("mixin-copy.jar could not be written out: " + e.getMessage(), e);
         }
         copyJar = jar;

@@ -5,62 +5,45 @@ import java.nio.file.DirectoryStream;
 import java.nio.file.Files;
 import java.nio.file.LinkOption;
 import java.nio.file.Path;
-import java.nio.file.StandardCopyOption;
-import java.security.MessageDigest;
-import java.security.NoSuchAlgorithmException;
+import java.nio.file.StandardOpenOption;
+import java.nio.file.attribute.BasicFileAttributes;
 import java.time.Duration;
 import java.time.Instant;
-import java.util.Arrays;
-import java.util.HexFormat;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 final class MixinCopyJar {
     private static final Logger LOGGER = LoggerFactory.getLogger(MixinCopyJar.class);
     private static final String COPY_PREFIX = "hotwire-mixin-copy";
-    private static final int HASH_BYTES = 8;
+    private static final String JAR_NAME = "mixin-copy.jar";
 
     private static final Duration OLD_COPY = Duration.ofDays(1);
 
     private MixinCopyJar() {
     }
 
-    static Path write(byte[] bytes) throws IOException, NoSuchAlgorithmException {
-        Path folder = Path.of(System.getProperty("java.io.tmpdir"));
-        byte[] hash = MessageDigest.getInstance("SHA-256").digest(bytes);
-        Path jar = folder.resolve(COPY_PREFIX + "-" + HexFormat.of().formatHex(hash, 0, HASH_BYTES) + ".jar");
-
-        if (!isSame(jar, bytes)) {
-            Path part = Files.createTempFile(folder, COPY_PREFIX + "-part", ".tmp");
-            try {
-                Files.write(part, bytes);
-                Files.move(part, jar, StandardCopyOption.REPLACE_EXISTING);
-            } catch (IOException e) {
-                Files.deleteIfExists(part);
-                if (!isSame(jar, bytes)) {
-                    throw e;
-                }
-            }
-        }
-        removeOldCopies(folder, jar);
+    static Path write(byte[] bytes) throws IOException {
+        Path temp = Path.of(System.getProperty("java.io.tmpdir"));
+        removeOldCopies(temp);
+        Path jar = Files.createTempDirectory(temp, COPY_PREFIX + "-").resolve(JAR_NAME);
+        Files.write(jar, bytes, StandardOpenOption.CREATE_NEW);
         return jar;
     }
 
-    private static boolean isSame(Path jar, byte[] bytes) {
-        try {
-            return Files.isRegularFile(jar, LinkOption.NOFOLLOW_LINKS) && Files.size(jar) == bytes.length
-                    && Arrays.equals(Files.readAllBytes(jar), bytes);
-        } catch (IOException e) {
-            return false;
-        }
-    }
-
-    private static void removeOldCopies(Path folder, Path current) {
-        try (DirectoryStream<Path> copies = Files.newDirectoryStream(folder, COPY_PREFIX + "*.jar")) {
+    private static void removeOldCopies(Path temp) {
+        Instant old = Instant.now().minus(OLD_COPY);
+        try (DirectoryStream<Path> copies = Files.newDirectoryStream(temp, COPY_PREFIX + "*")) {
             for (Path copy : copies) {
                 try {
-                    if (!copy.equals(current)
-                            && Files.getLastModifiedTime(copy).toInstant().isBefore(Instant.now().minus(OLD_COPY))) {
+                    BasicFileAttributes attributes =
+                            Files.readAttributes(copy, BasicFileAttributes.class, LinkOption.NOFOLLOW_LINKS);
+                    if (attributes.lastModifiedTime().toInstant().isAfter(old)) {
+                        continue;
+                    }
+                    if (attributes.isDirectory()) {
+                        Files.deleteIfExists(copy.resolve(JAR_NAME));
+                        Files.deleteIfExists(copy);
+                    } else if (attributes.isRegularFile()) {
                         Files.deleteIfExists(copy);
                     }
                 } catch (IOException e) {
