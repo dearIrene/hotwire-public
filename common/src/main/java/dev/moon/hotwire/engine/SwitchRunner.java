@@ -6,6 +6,7 @@ import dev.moon.hotwire.rebuild.TransformerChain;
 import dev.moon.hotwire.redefine.HandlerGuards;
 import dev.moon.hotwire.redefine.InitHookRuns;
 import dev.moon.hotwire.redefine.RebuildException;
+import dev.moon.hotwire.redefine.SaveHooks;
 import dev.moon.hotwire.redefine.Tripwire;
 import dev.moon.hotwire.registration.AsyncLogging;
 import dev.moon.hotwire.registration.ElementLook;
@@ -292,8 +293,11 @@ public final class SwitchRunner {
     }
 
     public void prepareAhead(List<String> ids, boolean off) {
-        if (off && !this.units.findWorldContent(this.switcher.planOff(ids).order()).isEmpty()) {
-            return;
+        if (off) {
+            List<String> order = this.switcher.planOff(ids).order();
+            if (!this.units.findWorldContent(order).isEmpty() || !SaveHooks.findStopped(order).isEmpty()) {
+                return;
+            }
         }
         this.switcher.prepareAhead(ids, off);
     }
@@ -443,9 +447,18 @@ public final class SwitchRunner {
 
         Map<String, String> inEntities = content.isEmpty() ? this.findEntityHolders(wired) : Map.of();
         SwitchTimes.mark("plan: entities");
-        if (!content.isEmpty() || !inEntities.isEmpty()) {
-            String why = content.isEmpty() ? "the world's entities hold objects of " + inEntities
-                    : "the game's registries hold " + content;
+
+        Map<String, String> saveHooks = content.isEmpty() && inEntities.isEmpty() ? SaveHooks.findStopped(wired)
+                : Map.of();
+        if (!content.isEmpty() || !inEntities.isEmpty() || !saveHooks.isEmpty()) {
+            String why;
+            if (!content.isEmpty()) {
+                why = "the game's registries hold " + content;
+            } else if (!inEntities.isEmpty()) {
+                why = "the world's entities hold objects of " + inEntities;
+            } else {
+                why = "the world's saves would lose what their hooks write " + saveHooks;
+            }
             LOGGER.info("[Hotwire] the off of {} waits for the next start: {}", ids, why);
             return new CheckedResult(new ModSwitcher.Result.Failed(plan, RebuildException.ofRestartOnly(why)),
                     new Report.OffCheck.NotRun(), List.of());

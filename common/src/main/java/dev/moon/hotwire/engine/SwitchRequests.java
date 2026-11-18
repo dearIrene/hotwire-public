@@ -5,6 +5,7 @@ import dev.moon.hotwire.api.SwitchResult;
 import dev.moon.hotwire.concurrent.Tasks;
 import dev.moon.hotwire.config.HotwireSettings;
 import dev.moon.hotwire.plan.SwitchPlan;
+import dev.moon.hotwire.redefine.SaveHooks;
 import dev.moon.hotwire.report.ActionJournal;
 import dev.moon.hotwire.report.Report;
 import dev.moon.hotwire.seam.Games;
@@ -191,8 +192,8 @@ final class SwitchRequests {
     private String describeWhyAtStart(List<String> order, SwitchRunner runner) {
         Set<String> kinds = this.engine.units.findWorldContentKinds(order);
         if (kinds.isEmpty()) {
-            return Lang.get(runner.findEntityHolders(order).isEmpty() ? "hotwire.reopen.why.restart_only"
-                    : "hotwire.reopen.why.world_data");
+            boolean worldData = !runner.findEntityHolders(order).isEmpty() || !SaveHooks.findStopped(order).isEmpty();
+            return Lang.get(worldData ? "hotwire.reopen.why.world_data" : "hotwire.reopen.why.restart_only");
         }
         List<String> named = List.copyOf(kinds);
         String listed = named.size() == 1 ? named.getFirst() : String.join(", ", named.subList(0, named.size() - 1))

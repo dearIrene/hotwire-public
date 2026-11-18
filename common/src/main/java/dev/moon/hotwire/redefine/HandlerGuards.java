@@ -67,6 +67,11 @@ public final class HandlerGuards {
             MethodType.methodType(CallSite.class, MethodHandles.Lookup.class, String.class, MethodType.class,
                     String.class, int.class, int.class, int.class).toMethodDescriptorString(), false);
 
+    static final Handle BOOTSTRAP_SAVING = new Handle(Opcodes.H_INVOKESTATIC,
+            Live.NAME, "guardSaving",
+            MethodType.methodType(CallSite.class, MethodHandles.Lookup.class, String.class, MethodType.class,
+                    String.class, int.class, int.class, int.class).toMethodDescriptorString(), false);
+
     static final Handle BOOTSTRAP_CONSTRUCTOR = new Handle(Opcodes.H_INVOKESTATIC,
             Live.NAME, "guardConstructor",
             MethodType.methodType(CallSite.class, MethodHandles.Lookup.class, String.class, MethodType.class,
@@ -557,6 +562,12 @@ public final class HandlerGuards {
                 () -> HandlerStandIns.make(caller, type, kind, index, isStatic == STATIC ? 0 : 1));
     }
 
+    static CallSite bootstrapSaving(MethodHandles.Lookup caller, String name, MethodType type, String mixin,
+            int isStatic, int kind, int index) throws ReflectiveOperationException {
+        return link(caller, name, type, mixin, isStatic,
+                () -> HandlerStandIns.make(caller, type, kind, index, isStatic == STATIC ? 0 : 1), true);
+    }
+
     static CallSite bootstrapConstructor(MethodHandles.Lookup caller, String name, MethodType type,
             String mixin, int isStatic) throws ReflectiveOperationException {
         Class<?> owner = caller.lookupClass();
@@ -619,6 +630,11 @@ public final class HandlerGuards {
 
     private static CallSite link(MethodHandles.Lookup caller, String name, MethodType type, String mixin,
             int isStatic, StandInCall standIns) throws ReflectiveOperationException {
+        return link(caller, name, type, mixin, isStatic, standIns, false);
+    }
+
+    private static CallSite link(MethodHandles.Lookup caller, String name, MethodType type, String mixin,
+            int isStatic, StandInCall standIns, boolean saving) throws ReflectiveOperationException {
         Class<?> owner = caller.lookupClass();
         MethodHandle handler = isStatic == STATIC ? caller.findStatic(owner, name, type)
                 : isStatic == VIRTUAL ? caller.findVirtual(owner, name, type.dropParameterTypes(0, 1))
@@ -631,6 +647,9 @@ public final class HandlerGuards {
                     name, type, e.toString());
             markUnflippable(Type.getInternalName(owner), mixin, "stand-in failed to link");
             standIn = MethodHandles.empty(type);
+        }
+        if (saving) {
+            standIn = SaveHooks.wrap(handler, standIn, mixin);
         }
         synchronized (LOCK) {
             MutableCallSite site = new MutableCallSite(OFF.contains(mixin) ? standIn : handler);

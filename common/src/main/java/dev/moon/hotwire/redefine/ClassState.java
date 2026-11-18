@@ -3,6 +3,7 @@ package dev.moon.hotwire.redefine;
 import java.util.Map;
 import java.util.Set;
 import java.util.concurrent.ConcurrentHashMap;
+import java.util.function.BiConsumer;
 import org.jspecify.annotations.Nullable;
 
 final class ClassState {
@@ -23,6 +24,9 @@ final class ClassState {
 
     private volatile @Nullable Set<String> unflippable;
     private volatile @Nullable Map<String, String> unflippableWhy;
+
+    private volatile @Nullable Set<String> savesRun;
+    private volatile @Nullable Map<String, String> savesLost;
 
     volatile @Nullable Set<String> unsited;
     volatile @Nullable Set<String> sited;
@@ -74,6 +78,38 @@ final class ClassState {
             this.unflippableWhy = reasons;
         }
         reasons.merge(mixin, why, (had, more) -> had.contains(more) ? had : had + ", " + more);
+    }
+
+    synchronized void addSaveRun(String mixin) {
+        Set<String> mixins = this.savesRun;
+        if (mixins == null) {
+            mixins = ConcurrentHashMap.newKeySet();
+            this.savesRun = mixins;
+        }
+        mixins.add(mixin);
+    }
+
+    synchronized void addSaveLost(String mixin, String why) {
+        Map<String, String> mixins = this.savesLost;
+        if (mixins == null) {
+            mixins = new ConcurrentHashMap<>();
+            this.savesLost = mixins;
+        }
+        mixins.putIfAbsent(mixin, why);
+    }
+
+    Set<String> getSavesRun() {
+        Set<String> mixins = this.savesRun;
+        return mixins == null ? Set.of() : mixins;
+    }
+
+    Map<String, String> getSavesLost() {
+        Map<String, String> mixins = this.savesLost;
+        return mixins == null ? Map.of() : mixins;
+    }
+
+    static void visitAll(BiConsumer<String, ClassState> action) {
+        ALL.forEach(action);
     }
 
     Set<String> getDirectMods() {

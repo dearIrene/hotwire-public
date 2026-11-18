@@ -82,6 +82,9 @@ final class HandlerSites {
                     continue;
                 }
                 Outcome outcome = classify(internalName, node, method, call, mixin, shipped, nulls);
+                if (SaveHooks.isSaveMethod(method.name, method.desc)) {
+                    noteSaveHook(internalName, mixin, outcome);
+                }
                 if (outcome.refusal() != null) {
                     HandlerGuards.markUnflippable(internalName, mixin, outcome.refusal());
                 }
@@ -103,6 +106,19 @@ final class HandlerSites {
 
         static Outcome put(InvokeDynamicInsnNode site) {
             return new Outcome(null, site);
+        }
+    }
+
+    private static void noteSaveHook(String internalName, String mixin, Outcome outcome) {
+        InvokeDynamicInsnNode site = outcome.site();
+        String refusal = outcome.refusal();
+        if (site != null && site.bsm.equals(HandlerGuards.BOOTSTRAP)) {
+            site.bsm = HandlerGuards.BOOTSTRAP_SAVING;
+            SaveHooks.noteRun(internalName, mixin);
+        } else if (site != null) {
+            SaveHooks.noteLost(internalName, mixin, "a redirect");
+        } else if (refusal != null) {
+            SaveHooks.noteLost(internalName, mixin, refusal);
         }
     }
 
