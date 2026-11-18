@@ -150,6 +150,8 @@ public final class SwitchApplier {
 
     private final Set<String> updatedLive = ConcurrentHashMap.newKeySet();
 
+    private final Set<String> adopted = ConcurrentHashMap.newKeySet();
+
     private volatile Supplier<Runnable> redefinitionHold = () -> Games.getNow().hold();
 
     public void holdRedefinitionWith(Supplier<Runnable> hold) {
@@ -551,6 +553,14 @@ public final class SwitchApplier {
     Map<String, byte[]> decideAsLaunched(List<String> configs, String className, Set<String> launch,
             Predicate<String> on) throws RebuildException {
         return this.decisions.of(configs, Map.of(className, launch), on).configs();
+    }
+
+    public void adopt(String internalName) {
+        this.adopted.add(internalName);
+    }
+
+    Set<String> getAdopted() {
+        return Set.copyOf(this.adopted);
     }
 
     Set<String> getPatchedNames() {

@@ -128,7 +128,7 @@ final class AddWideners {
 
             adopted.forEach((inClass, owner) -> {
                 String loadsAs = moves.getOrDefault(inClass, inClass);
-                Linker.adopt(loadsAs);
+                this.engine.getApplier().adopt(loadsAs);
                 LOGGER.info("[Hotwire] {} is made by adoption: {}'s constructor stays closed", loadsAs, owner);
             });
             if (!moves.isEmpty()) {

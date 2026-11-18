@@ -111,7 +111,6 @@ public final class Linker {
     private static final Set<String> MOVED = ConcurrentHashMap.newKeySet();
 
     private static volatile WidenerUses.Openings openings = WidenerUses.Openings.NONE;
-    private static final Set<String> ADOPTED = ConcurrentHashMap.newKeySet();
     private static final Set<String> ADDED_CONSTRUCTORS = ConcurrentHashMap.newKeySet();
 
     private Linker() {
@@ -562,10 +561,6 @@ public final class Linker {
         return openings;
     }
 
-    public static void adopt(String internalName) {
-        ADOPTED.add(internalName);
-    }
-
     public static void addAddedConstructors(Set<String> keys) {
         ADDED_CONSTRUCTORS.addAll(keys);
     }
@@ -576,10 +571,6 @@ public final class Linker {
 
     public static Set<String> getAddedConstructors() {
         return Set.copyOf(ADDED_CONSTRUCTORS);
-    }
-
-    public static Set<String> getAdopted() {
-        return Set.copyOf(ADOPTED);
     }
 
     static CallSite bootstrapMethod(MethodHandles.Lookup caller, String name, MethodType type)

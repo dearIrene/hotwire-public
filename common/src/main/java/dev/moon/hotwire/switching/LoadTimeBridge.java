@@ -24,6 +24,7 @@ import java.util.Objects;
 import java.util.Set;
 import java.util.function.BiFunction;
 import java.util.function.Predicate;
+import java.util.function.Supplier;
 import org.jspecify.annotations.Nullable;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -36,6 +37,7 @@ final class LoadTimeBridge implements ClassFileTransformer {
     private final BiFunction<String, byte[], byte @Nullable []> mixWithoutOff;
     private final Predicate<String> stuckForOff;
     private final DefinitionWatcher defined;
+    private final Supplier<Set<String>> adopted;
 
     interface DefinitionWatcher {
         void accept(String name, byte[] bytes, @Nullable ClassLoader inGame);
@@ -45,12 +47,13 @@ final class LoadTimeBridge implements ClassFileTransformer {
 
     LoadTimeBridge(Predicate<String> differs, BiFunction<String, byte[], byte @Nullable []> mix,
             BiFunction<String, byte[], byte @Nullable []> mixWithoutOff, Predicate<String> stuckForOff,
-            DefinitionWatcher defined) {
+            DefinitionWatcher defined, Supplier<Set<String>> adopted) {
         this.differs = differs;
         this.mix = mix;
         this.mixWithoutOff = mixWithoutOff;
         this.stuckForOff = stuckForOff;
         this.defined = defined;
+        this.adopted = adopted;
     }
 
     @Override
@@ -112,7 +115,7 @@ final class LoadTimeBridge implements ClassFileTransformer {
 
         byte[] bridged = Adoption.rewrite(AccessBridge.eraseCallSites(ReflectionBridge.rewrite(DuckBridge.rewrite(
                 AccessBridge.rewrite(ShutOverrides.renameOverrides(base), Linker.getOpenings()),
-                Linker.getEverDucks())), Linker.getOpenings()), Linker.getAdopted());
+                Linker.getEverDucks())), Linker.getOpenings()), this.adopted.get());
         bridged = Adoption.rewriteAdded(bridged, Linker.getAddedConstructors());
         if (bridged != base) {
             bridged = OldClasses.raiseIfNeeded(bridged, loader);
