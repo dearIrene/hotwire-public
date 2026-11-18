@@ -10,7 +10,8 @@ public final class Tabs extends Part {
 
     static final int RAIL_WIDTH = 50;
     private static final int RAIL_TALL = 32;
-    private static final int RAIL_WORDED = 29;
+    private static final int RAIL_ROOMY = 29;
+    private static final int RAIL_WORDED = 26;
     private static final int RAIL_SHORT = 17;
     private static final int ICON = 9;
     private static final int WORD_GAP = 14;
@@ -46,6 +47,7 @@ public final class Tabs extends Part {
     private final EasedValue markSpan = EasedValue.ofSpeed(18);
     private int chosen;
     private boolean worded = true;
+    private int signTop = 4;
     private int placedOrigin = Integer.MIN_VALUE;
     private int placedSize;
 
@@ -147,6 +149,7 @@ public final class Tabs extends Part {
         } else if (this.look == Look.RAIL) {
             int room = (this.getHeight() - 8) / Math.max(1, this.tabs.size());
             this.worded = room >= RAIL_WORDED;
+            this.signTop = room >= RAIL_ROOMY ? 4 : 2;
             int tall = this.worded ? Math.min(RAIL_TALL, room) : RAIL_SHORT;
             int high = this.getY() + 4;
             int lows = (int) this.tabs.stream().filter(tab -> tab.low).count();
@@ -239,12 +242,12 @@ public final class Tabs extends Part {
             int badgeInk = Colors.fade(tab.badgeInk, alpha);
             if (this.look == Look.RAIL) {
                 int iconX = x + (RAIL_WIDTH - ICON) / 2;
-                int iconY = tab.at + (this.worded ? 4 : (RAIL_SHORT - ICON) / 2);
+                int iconY = tab.at + (this.worded ? this.signTop : (RAIL_SHORT - ICON) / 2);
                 if (tab.icon != null) {
                     canvas.drawIcon(tab.icon, iconX, iconY, ICON, ink);
                 }
                 if (this.worded) {
-                    canvas.drawText(tab.label, x + (RAIL_WIDTH - tab.labelWidth) / 2, tab.at + 18, ink);
+                    canvas.drawText(tab.label, x + (RAIL_WIDTH - tab.labelWidth) / 2, iconY + 14, ink);
                 }
                 if (!tab.badge.isEmpty()) {
                     canvas.drawText(tab.badge, iconX + ICON + 2, iconY - 2, badgeInk);

@@ -63,7 +63,7 @@ public final class ModScreen implements JarHost {
     private static final int CACHE = 5;
     private static final int HISTORY = 6;
     private static final int PLAYERS = 7;
-    private static final int REPORT = 8;
+    static final int REPORT = 8;
     private static final int SETTINGS = 9;
     private static final int TABS = SETTINGS + 1;
 

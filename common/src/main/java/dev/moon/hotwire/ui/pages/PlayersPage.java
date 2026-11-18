@@ -16,7 +16,6 @@ import dev.moon.hotwire.ui.widgets.Text;
 import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.List;
-import java.util.Locale;
 import java.util.Map;
 import java.util.UUID;
 import org.jspecify.annotations.Nullable;
@@ -121,9 +120,19 @@ public final class PlayersPage {
             if (ofKind.isEmpty()) {
                 continue;
             }
-            this.rows.with(Kit.dim(Lang.get("hotwire.players.group." + kind.name().toLowerCase(Locale.ROOT))));
+            this.rows.with(Kit.dim(Lang.get(findGroupKey(kind))));
             ofKind.forEach(one -> this.rows.with(this.makeRow(one)));
         }
+    }
+
+    private static String findGroupKey(Kind kind) {
+        return switch (kind) {
+            case ADD -> "hotwire.players.group.add";
+            case ON -> "hotwire.players.group.on";
+            case OFF -> "hotwire.players.group.off";
+            case VERSION -> "hotwire.players.group.version";
+            case NOT_ON_MODRINTH -> "hotwire.players.group.not_on_modrinth";
+        };
     }
 
     private Part makeRow(Difference one) {
