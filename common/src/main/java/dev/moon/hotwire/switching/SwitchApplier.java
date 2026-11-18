@@ -189,6 +189,9 @@ public final class SwitchApplier {
 
     void applyWhilePaused(ClassRebuilder.PreparedRebuild prepared, Runnable beforeChange, Runnable whilePaused,
             Set<String> flipped) throws RebuildException {
+        Games.getNow().getReloads().awaitIdle();
+        SwitchTimes.mark("reloads under way");
+
         LiveObjects.checkWhilePaused(prepared);
         Games.getNow().getReloads().announceRebuild(prepared.newlyBuilt(), prepared.pausedReloads());
         Runnable release = this.holdGame();
