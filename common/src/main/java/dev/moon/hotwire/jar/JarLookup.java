@@ -4,7 +4,9 @@ import java.io.IOException;
 import java.io.InputStream;
 import java.nio.file.Files;
 import java.nio.file.Path;
-import java.nio.file.StandardCopyOption;
+import java.security.MessageDigest;
+import java.security.NoSuchAlgorithmException;
+import java.util.HexFormat;
 import java.util.Map;
 import java.util.Objects;
 import java.util.Optional;
@@ -58,20 +60,25 @@ public final class JarLookup {
     }
 
     public static @Nullable Path copyEntryOnce(Path jar, String path, Path folder) throws IOException {
-        try (ZipFile zip = new ZipFile(jar.toFile())) {
-            ZipEntry entry = zip.getEntry(path);
-            if (entry == null) {
-                return null;
-            }
-            Path at = folder.resolve(Long.toHexString(entry.getCrc())).resolve(Path.of(path).getFileName());
-            if (Files.exists(at) && Files.size(at) == entry.getSize()) {
-                return at;
-            }
-            Files.createDirectories(Objects.requireNonNull(at.getParent()));
-            try (InputStream in = zip.getInputStream(entry)) {
-                Files.copy(in, at, StandardCopyOption.REPLACE_EXISTING);
-            }
+        byte[] bytes = readEntry(jar, path);
+        if (bytes == null) {
+            return null;
+        }
+        String hash = hashSha256(bytes);
+        Path at = folder.resolve(hash).resolve(Path.of(path).getFileName());
+        if (Files.exists(at) && Files.size(at) == bytes.length && hash.equals(hashSha256(Files.readAllBytes(at)))) {
             return at;
+        }
+        Files.createDirectories(Objects.requireNonNull(at.getParent()));
+        Files.write(at, bytes);
+        return at;
+    }
+
+    static String hashSha256(byte[] bytes) {
+        try {
+            return HexFormat.of().formatHex(MessageDigest.getInstance("SHA-256").digest(bytes));
+        } catch (NoSuchAlgorithmException e) {
+            throw new IllegalStateException("SHA-256 is missing from this JVM", e);
         }
     }
 }
