@@ -169,8 +169,11 @@ public class EngineApi implements HotwireApi {
     public CompletableFuture<SwitchResult> updateHotwire() {
         CompletableFuture<SwitchResult> done = new CompletableFuture<>();
         HotwireEngine engine = findEngine();
+        String refused = engine == null ? null : ApiConsent.findRefusal(engine, true);
         if (engine == null) {
             done.complete(SwitchResult.ofRefusal(Reason.NOT_READY, Lang.get("hotwire.api.starting")));
+        } else if (refused != null) {
+            done.complete(SwitchResult.ofRefusal(Reason.REFUSED, refused));
         } else {
             Games.getNow().runOnGame(() -> engine.updateHotwireAtNextStart(done));
         }
@@ -362,6 +365,12 @@ public class EngineApi implements HotwireApi {
 
     @Override
     public CompletableFuture<SwitchResult> fetchPack(StoreKind kind, String idOrSlug, String versionId) {
+        HotwireEngine engine = findEngine();
+        String refused = engine == null ? Lang.get("hotwire.api.starting") : ApiConsent.findRefusal(engine, true);
+        if (refused != null) {
+            return onGameAsResult(CompletableFuture.completedFuture(SwitchResult.ofRefusal(engine == null
+                    ? Reason.NOT_READY : Reason.REFUSED, refused)));
+        }
         return onGameAsResult(StoreApi.fetchPack(kind, idOrSlug, versionId, WAITS));
     }
 
@@ -602,6 +611,11 @@ public class EngineApi implements HotwireApi {
                 if (engine == null || parts == null) {
                     ended.complete(SwitchResult.ofRefusal(Reason.NOT_READY, engine == null
                             ? Lang.get("hotwire.api.starting") : engine.getSwitchRefusal()));
+                    return;
+                }
+                String refused = ApiConsent.findRefusal(engine, false);
+                if (refused != null) {
+                    ended.complete(SwitchResult.ofRefusal(Reason.REFUSED, refused));
                     return;
                 }
                 String self = off ? CallerBlocks.findRefusal(parts.runner().getSwitcher().planOff(asked), asked,

@@ -545,6 +545,7 @@
   "hotwire.api.in_request_row": "It's part of this request.",
   "hotwire.api.no_prompt": "%s did not show the opening prompt, tell the developer to update it.",
   "hotwire.api.add.no_prompt": "Hotwire's prompt hasn't been accepted yet.",
+  "hotwire.api.no_downloads_warning": "Hotwire's download warning hasn't been read yet, open Hotwire's store first.",
   "hotwire.api.add.not_found": "Modrinth has no mod called %s for this version.",
   "hotwire.api.add.next_start": "%s goes in at your next start.",
   "hotwire.api.pack.unchanged": "%s didn't change.",

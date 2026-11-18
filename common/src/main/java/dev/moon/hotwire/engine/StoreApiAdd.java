@@ -49,8 +49,14 @@ final class StoreApiAdd {
     private static <T> void fetch(String idOrSlug, String versionId, CompletableFuture<T> made, Taker then,
             Function<String, T> refusal) {
         HotwireEngine engine = EngineApi.findEngine();
-        String why = engine == null ? Lang.get("hotwire.api.starting") : !engine.canAdd() ? engine.getSwitchRefusal()
-                : !engine.isFirstOpenAccepted() ? Lang.get("hotwire.api.add.no_prompt") : null;
+        String why;
+        if (engine == null) {
+            why = Lang.get("hotwire.api.starting");
+        } else if (!engine.canAdd()) {
+            why = engine.getSwitchRefusal();
+        } else {
+            why = ApiConsent.findRefusal(engine, true);
+        }
         if (why != null || engine == null) {
             made.complete(refusal.apply(why == null ? "" : why));
             return;

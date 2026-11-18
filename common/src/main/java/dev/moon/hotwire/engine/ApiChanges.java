@@ -94,6 +94,11 @@ final class ApiChanges {
             return new Plan(false, Reason.NOT_READY, List.of(why), request, List.of(), callers,
                     List.of(), List.of(), false);
         }
+        String refused = ApiConsent.findRefusal(engine, !request.add().isEmpty() || !request.update().isEmpty());
+        if (refused != null) {
+            return new Plan(false, Reason.REFUSED, List.of(refused), request, List.of(), callers, List.of(), List.of(),
+                    false);
+        }
         List<String> lines = new ArrayList<>();
         Reason reason = Reason.NONE;
         boolean can = true;
