@@ -59,8 +59,6 @@ public final class ResourceReload {
     private static final Logger LOGGER = LoggerFactory.getLogger(ResourceReload.class);
     private static final int LAYOUT_TRIES = 3;
 
-    private static final Set<String> PACKED = ConcurrentHashMap.newKeySet();
-
     private static volatile boolean reloadedWhilePaused;
 
     private static volatile boolean leavingReload;
@@ -433,25 +431,27 @@ public final class ResourceReload {
         }
     }
 
-    static void reloadResources(Collection<String> newlyBuilt, Collection<String> mods, boolean off) {
+    static void reloadResources(Collection<String> newlyBuilt, Collection<String> mods, boolean off,
+            Set<String> packed) {
         try {
-            reloadResourcesNow(newlyBuilt, mods, off);
+            reloadResourcesNow(newlyBuilt, mods, off, packed);
         } finally {
             ModelReloadCheck.forgetAhead();
         }
     }
 
-    private static void reloadResourcesNow(Collection<String> newlyBuilt, Collection<String> mods, boolean off) {
+    private static void reloadResourcesNow(Collection<String> newlyBuilt, Collection<String> mods, boolean off,
+            Set<String> packed) {
         Set<String> available = getAvailablePacks();
         if (off) {
             Set<String> atPause = packsAtPause;
-            mods.stream().filter(id -> available.contains(id) || atPause.contains(id)).forEach(PACKED::add);
+            mods.stream().filter(id -> available.contains(id) || atPause.contains(id)).forEach(packed::add);
 
             ModelReloadCheck.noteModels(mods.stream().filter(MODELS_AT_PAUSE::contains).toList());
             ModelReloadCheck.noteFonts(mods.stream().filter(FONTS_AT_PAUSE::contains).toList());
         }
         List<String> packsGone = off ? List.of()
-                : mods.stream().filter(PACKED::remove).filter(id -> !available.contains(id)).toList();
+                : mods.stream().filter(packed::remove).filter(id -> !available.contains(id)).toList();
 
         boolean modelsAtOn = !off && ModelReloadCheck.bakeAtOn(mods);
         boolean fontsAtOn = !off && ModelReloadCheck.hasFontsAtOn(mods);
@@ -489,10 +489,10 @@ public final class ResourceReload {
         }
     }
 
-    static boolean hasPackGone(Collection<String> mods) {
+    static boolean hasPackGone(Collection<String> mods, Set<String> packed) {
         Set<String> available = getAvailablePacks();
         Set<String> atPause = packsAtPause;
-        List<String> gone = mods.stream().filter(id -> (PACKED.contains(id) || atPause.contains(id))
+        List<String> gone = mods.stream().filter(id -> (packed.contains(id) || atPause.contains(id))
                 && !available.contains(id)).toList();
         if (!gone.isEmpty()) {
             LOGGER.info("[Hotwire] the packs of {} left with a reload since their off: a reload brings them back",

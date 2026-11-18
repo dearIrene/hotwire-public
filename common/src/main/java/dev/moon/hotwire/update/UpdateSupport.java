@@ -43,7 +43,9 @@ import java.util.Objects;
 import java.util.Optional;
 import java.util.Set;
 import java.util.TreeSet;
+import java.util.concurrent.ConcurrentHashMap;
 import java.util.function.Function;
+import java.util.function.Predicate;
 import java.util.stream.Collectors;
 import java.util.stream.Stream;
 import net.fabricmc.loader.api.FabricLoader;
@@ -69,6 +71,8 @@ public final class UpdateSupport implements ModUpdater.Engine, ModAdder.CarriedL
     private final IconSource icons;
     private final UpdateGame game;
     private final Reloads reloads = Games.getNow().getReloads();
+
+    private final Map<String, Set<String>> waitingEntrypoints = new ConcurrentHashMap<>();
 
     private final ModAdder adder;
 
@@ -128,7 +132,11 @@ public final class UpdateSupport implements ModUpdater.Engine, ModAdder.CarriedL
         this.folders = folders;
         this.queue = queue;
         this.reports = reports;
-        this.updater = new ModUpdater(this, stay -> new LiveUpdates(this, stay, game));
+        this.updater = new ModUpdater(this, stay -> new LiveUpdates(this, stay, game, this.waitingEntrypoints));
+    }
+
+    public void runWaitingEntrypoints(Predicate<String> on) {
+        LiveUpdates.runWaitingEntrypoints(this.waitingEntrypoints, on);
     }
 
     public boolean canUpdate(Path jar) {

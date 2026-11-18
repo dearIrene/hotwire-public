@@ -37,7 +37,6 @@ import java.util.Optional;
 import java.util.Set;
 import java.util.TreeSet;
 import java.util.concurrent.CompletableFuture;
-import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.ExecutionException;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.TimeoutException;
@@ -75,10 +74,14 @@ public final class LiveUpdates implements ModUpdater.Live {
 
     private final UpdateGame game;
 
-    public LiveUpdates(ModUpdater.Engine engine, ModUpdater.Stay stay, UpdateGame game) {
+    private final Map<String, Set<String>> waiting;
+
+    public LiveUpdates(ModUpdater.Engine engine, ModUpdater.Stay stay, UpdateGame game,
+            Map<String, Set<String>> waiting) {
         this.game = game;
         this.engine = engine;
         this.stay = stay;
+        this.waiting = waiting;
     }
 
     @Override
@@ -341,9 +344,9 @@ public final class LiveUpdates implements ModUpdater.Live {
             LOGGER.info("[Hotwire] {} is {} now, carried by {}", carried.manifest().id(),
                     carried.manifest().version(), manifest.id());
         }
-        StringBuilder started = new StringBuilder(runAddedEntrypoints(manifest.id(), one.plan()));
+        StringBuilder started = new StringBuilder(this.runAddedEntrypoints(manifest.id(), one.plan()));
         for (CarriedUpdates.Library carried : one.planned().whole().bundled()) {
-            started.append(runAddedEntrypoints(carried.manifest().id(), carried.plan()));
+            started.append(this.runAddedEntrypoints(carried.manifest().id(), carried.plan()));
         }
         SwitchTimes.mark("update: entrypoints");
         return started.toString();
@@ -364,7 +367,7 @@ public final class LiveUpdates implements ModUpdater.Live {
                         : this.stay.queue(manifest, one.planned().running(), incoming, one.plan())) + started);
     }
 
-    private static String runAddedEntrypoints(String id, UpdatePlan plan) {
+    private String runAddedEntrypoints(String id, UpdatePlan plan) {
         Set<String> added = new HashSet<>();
         for (UpdateNotice notice : plan.notices()) {
             if (notice instanceof UpdateNotice.EntrypointRuns entrypoint) {
@@ -376,7 +379,7 @@ public final class LiveUpdates implements ModUpdater.Live {
         }
 
         if (LoaderModList.isHidden(id)) {
-            WAITING.merge(id, Set.copyOf(added), (was, more) -> {
+            this.waiting.merge(id, Set.copyOf(added), (was, more) -> {
                 Set<String> all = new HashSet<>(was);
                 all.addAll(more);
                 return Set.copyOf(all);
@@ -387,11 +390,9 @@ public final class LiveUpdates implements ModUpdater.Live {
         return runStart(id, added);
     }
 
-    private static final Map<String, Set<String>> WAITING = new ConcurrentHashMap<>();
-
-    public static void runWaitingEntrypoints(Predicate<String> on) {
-        for (String id : List.copyOf(WAITING.keySet())) {
-            Set<String> added = on.test(id) ? WAITING.remove(id) : null;
+    static void runWaitingEntrypoints(Map<String, Set<String>> waiting, Predicate<String> on) {
+        for (String id : List.copyOf(waiting.keySet())) {
+            Set<String> added = on.test(id) ? waiting.remove(id) : null;
             if (added != null) {
                 runStart(id, added);
             }

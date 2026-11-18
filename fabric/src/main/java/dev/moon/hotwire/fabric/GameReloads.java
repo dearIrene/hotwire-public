@@ -6,11 +6,14 @@ import dev.moon.hotwire.switching.SwitchTimes;
 import java.util.Collection;
 import java.util.List;
 import java.util.Set;
+import java.util.concurrent.ConcurrentHashMap;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 final class GameReloads implements Reloads {
     private static final Logger LOGGER = LoggerFactory.getLogger(GameReloads.class);
+
+    private final Set<String> packed = ConcurrentHashMap.newKeySet();
 
     @Override
     public void awaitIdle() {
@@ -49,7 +52,7 @@ final class GameReloads implements Reloads {
 
     @Override
     public boolean hasPackGone(Collection<String> mods) {
-        return ResourceReload.hasPackGone(mods);
+        return ResourceReload.hasPackGone(mods, this.packed);
     }
 
     @Override
@@ -59,7 +62,7 @@ final class GameReloads implements Reloads {
 
     @Override
     public void reloadResources(Collection<String> newlyBuilt, Collection<String> mods, boolean off) {
-        ResourceReload.reloadResources(newlyBuilt, mods, off);
+        ResourceReload.reloadResources(newlyBuilt, mods, off, this.packed);
     }
 
     @Override

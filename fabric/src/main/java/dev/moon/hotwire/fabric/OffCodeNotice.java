@@ -34,7 +34,7 @@ final class OffCodeNotice {
     private static final Set<String> CALL_PLUMBING = Set.of("java.lang.invoke", "java.lang.reflect",
             "jdk.internal.reflect");
 
-    private static final Map<String, Object> TOLD = new ConcurrentHashMap<>();
+    private final Map<String, Object> told = new ConcurrentHashMap<>();
 
     private OffCodeNotice() {
     }
@@ -50,10 +50,11 @@ final class OffCodeNotice {
         Tripwire.setLibraries(mod -> installed.getGraph().getUses(mod));
         Tripwire.setGameIds(ModPolicy.BUILT_IN);
 
-        Tripwire.onFirstCall(mod -> Spellings.runSoon(() -> onOffCodeCalled(engine, installed, mod)));
+        OffCodeNotice notice = new OffCodeNotice();
+        Tripwire.onFirstCall(mod -> Spellings.runSoon(() -> notice.onOffCodeCalled(engine, installed, mod)));
     }
 
-    private static void onOffCodeCalled(HotwireEngine engine, InstalledMods installed, String mod) {
+    private void onOffCodeCalled(HotwireEngine engine, InstalledMods installed, String mod) {
         if (engine.isOn(mod)) {
             return;
         }
@@ -70,7 +71,7 @@ final class OffCodeNotice {
             parts.runner().takeStillCalled(mod, first);
         }
         Object watch = Tripwire.findWatch(mod);
-        if (ran && watch != null && isToldFor(mod, watch)) {
+        if (ran && watch != null && this.isToldFor(mod, watch)) {
             return;
         }
         if (ran) {
@@ -108,8 +109,8 @@ final class OffCodeNotice {
     }
 
     @SuppressWarnings("ReferenceEquality")
-    private static boolean isToldFor(String mod, Object watch) {
-        return TOLD.put(mod, watch) == watch;
+    private boolean isToldFor(String mod, Object watch) {
+        return this.told.put(mod, watch) == watch;
     }
 
     private static boolean isOwnThreadAlone(String mod, List<String> frames) {

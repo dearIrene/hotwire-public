@@ -91,6 +91,8 @@ public final class SwitchRunner {
     private volatile Consumer<ModSwitcher.Result> afterOff = result -> { };
     private long flipsSeen = HandlerGuards.getChunkFlips();
     private volatile Consumer<List<String>> beforeOn = order -> { };
+
+    private volatile Consumer<Predicate<String>> waitingEntrypoints = on -> { };
     private static final int MOST_SEARCHES = 8;
 
     private final Map<String, Integer> searchesFor = new ConcurrentHashMap<>();
@@ -341,6 +343,10 @@ public final class SwitchRunner {
         this.beforeOn = beforeOn;
     }
 
+    public void setWaitingEntrypoints(Consumer<Predicate<String>> waitingEntrypoints) {
+        this.waitingEntrypoints = waitingEntrypoints;
+    }
+
     public CheckedResult turnOff(List<String> ids) {
         return this.runSwitch(ids, true);
     }
@@ -386,7 +392,7 @@ public final class SwitchRunner {
             this.units.onCommandsWatched();
 
             if (!off && result != null) {
-                LiveUpdates.runWaitingEntrypoints(this.switcher::isOn);
+                this.waitingEntrypoints.accept(this.switcher::isOn);
                 runWaitingSetups(this.switcher::isOn);
                 SwitchTimes.mark("waiting setups");
             }

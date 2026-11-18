@@ -269,6 +269,7 @@ final class EngineStart {
                 leaving -> OldStatics.takeOut(leaving, LoadedClassList.of(instrumentation),
                         fieldReferences::isInitialized, classes::findOriginalBytes), new UpdateGameSide());
         adds.getAdder().setCarriedLibraries(updates);
+        runner.setWaitingEntrypoints(updates::runWaitingEntrypoints);
         laps.endLap("runner, adds, updates");
         return new JvmParts(runner, adds, updates, instrumentation, loadTimeMixer, classes);
     }
