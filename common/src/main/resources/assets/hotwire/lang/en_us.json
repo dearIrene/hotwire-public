@@ -871,6 +871,8 @@
   "hotwire.off_code.restart": "Turn it back on to make it whole again, or restart the game to clear it.",
   "hotwire.off_code.used_by": "%1$s is off, but %2$s still runs its code. Turn %2$s off too to clear it. From now on it will go off with %1$s.",
   "hotwire.off_code.reopen": "Save and reopen your world to clear what it holds. Restart the game to clear all of it.",
+  "hotwire.off_save.title": "Some of an off mod's data wasn't saved",
+  "hotwire.off_save.failed": "%s is off, and its code failed while the world saved or loaded. The rest was saved, but some of its data may be lost. Turn it back on to keep the rest safe.",
   "hotwire.crash.title": "Hotwire caught a crash",
   "hotwire.crash.off_held": "%s is off, but a piece of it the game still had crashed. Hotwire kept the game going. Restart the game to clear it. %s",
   "hotwire.crash.turned_off": "%s crashed, so Hotwire turned it off. The game will carry on. %s",

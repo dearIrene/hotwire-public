@@ -73,6 +73,7 @@ import dev.moon.hotwire.registration.GameRegistrations;
 import dev.moon.hotwire.registration.GeneratedWrappers;
 import dev.moon.hotwire.registration.ModLocks;
 import dev.moon.hotwire.registration.ModThreadFinder;
+import dev.moon.hotwire.registration.OffModSaves;
 import dev.moon.hotwire.registration.OneConfigSaves;
 import dev.moon.hotwire.registration.Owners;
 import dev.moon.hotwire.registration.QuietThreads;
@@ -464,6 +465,7 @@ final class EngineStart {
         laps.endLap("clean the update folders");
         HotwireEngine started = engine;
         OffCodeNotice.install(started, installed);
+        OffModSaves.install(installed::nameOf);
         BiConsumer<String, Boolean> say = (line, bad) -> {
             started.showMessage(line, bad);
             started.refreshScreen();
