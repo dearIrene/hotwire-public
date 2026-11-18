@@ -3,6 +3,7 @@ package dev.moon.hotwire.update;
 import dev.moon.hotwire.jar.ModManifest;
 import dev.moon.hotwire.update.JarDiff.ClassChange;
 import dev.moon.hotwire.update.JarDiff.ClassDiff;
+import dev.moon.hotwire.update.JarDiff.ShapeChange;
 import dev.moon.hotwire.update.UpdatePlan.ClassAction;
 import dev.moon.hotwire.update.UpdatePlan.UpdateBlocker;
 import dev.moon.hotwire.update.UpdatePlan.UpdateNotice;
@@ -65,6 +66,10 @@ public final class UpdatePlanner {
             if (loaded && diffed.change() == ClassChange.SHAPE && !diffed.isCarried() && !game.takesShapes()) {
                 blockers.add(new UpdateBlocker.ShapeNotCarried(diffed.name(), diffed.shape()));
             }
+        }
+        if (!game.takesShapes()) {
+            diff.startedElsewhere().forEach(name -> blockers.add(new UpdateBlocker.ShapeNotCarried(name,
+                    Set.of(ShapeChange.STATIC_SET_ELSEWHERE))));
         }
         if (findTier(blockers) == UpdateTier.RESTART_MOD && !game.dependents().isEmpty()) {
             blockers.add(new UpdateBlocker.BoundByDependents(game.dependents()));

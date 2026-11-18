@@ -6,13 +6,14 @@ import java.util.Set;
 
 public record JarDiff(ModManifest running, ModManifest incoming, List<ClassDiff> classes,
         List<String> changedResources, List<String> opens, List<String> abstractsGained,
-        List<String> constructorChains) {
+        List<String> constructorChains, List<String> startedElsewhere) {
     public JarDiff {
         classes = List.copyOf(classes);
         changedResources = List.copyOf(changedResources);
         opens = List.copyOf(opens);
         abstractsGained = List.copyOf(abstractsGained);
         constructorChains = List.copyOf(constructorChains);
+        startedElsewhere = List.copyOf(startedElsewhere);
         if (!running.id().equals(incoming.id())) {
             throw new IllegalArgumentException("An update of " + running.id() + " was given a jar of "
                     + incoming.id());

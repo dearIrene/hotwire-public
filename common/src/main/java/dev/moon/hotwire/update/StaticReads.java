@@ -2,6 +2,7 @@ package dev.moon.hotwire.update;
 
 import dev.moon.hotwire.classfile.ClassNodes;
 import dev.moon.hotwire.jar.ZipBytes;
+import dev.moon.hotwire.update.JarDiff.ClassChange;
 import dev.moon.hotwire.update.JarDiff.ClassDiff;
 import dev.moon.hotwire.update.JarDiff.ShapeChange;
 import java.io.IOException;
@@ -58,6 +59,33 @@ final class StaticReads {
                         ClassNodes.read(now, ClassReader.SKIP_DEBUG | ClassReader.SKIP_FRAMES));
             }
         }
+        return reads.findSafe(incoming);
+    }
+
+    static List<String> findStartedElsewhere(List<ClassDiff> classes, Map<String, byte[]> incoming) {
+        StaticReads reads = new StaticReads();
+        List<String> found = new ArrayList<>();
+        for (ClassDiff diff : classes) {
+            byte[] now = incoming.get(diff.name() + ".class");
+            if (diff.change() == ClassChange.ADDED && now != null) {
+                ClassNode read = ClassNodes.read(now, ClassReader.SKIP_DEBUG | ClassReader.SKIP_FRAMES);
+                ClassNode none = new ClassNode();
+                none.name = read.name;
+                if (!ConstructorUses.findStaticsSetElsewhere(none, read).isEmpty()) {
+                    found.add(diff.name());
+                    reads.watch(none, read);
+                }
+            }
+        }
+        if (found.isEmpty()) {
+            return found;
+        }
+        found.removeAll(reads.findSafe(incoming));
+        return found;
+    }
+
+    private Set<String> findSafe(Map<String, byte[]> incoming) {
+        StaticReads reads = this;
         if (reads.safe.isEmpty()) {
             return Set.of();
         }
