@@ -35,9 +35,12 @@ import java.util.function.Consumer;
 import java.util.function.Supplier;
 import java.util.stream.Collectors;
 import net.minecraft.client.Minecraft;
+import net.minecraft.client.gui.screens.AlertScreen;
 import net.minecraft.client.gui.screens.DisconnectedScreen;
+import net.minecraft.client.gui.screens.Screen;
 import net.minecraft.client.multiplayer.ClientPacketListener;
 import net.minecraft.client.server.IntegratedServer;
+import net.minecraft.network.chat.Component;
 import net.minecraft.world.level.storage.LevelResource;
 import net.minecraft.world.level.storage.LevelStorageSource;
 import org.jspecify.annotations.Nullable;
@@ -171,13 +174,17 @@ public final class WorldReopen {
         halfStarted = before == null ? name : before + ", " + name;
     }
 
-    public static boolean refuseOpen() {
+    public static boolean refuseOpen(Runnable onFail) {
         String half = halfStarted;
         if (half == null) {
             return false;
         }
         LOGGER.warn("[Hotwire] a world was not opened: {} stays half started until the game restarts", half);
-        Notices.show("Hotwire", Lang.get("hotwire.reopen.half_started", half));
+        onFail.run();
+        Screen back = ModViews.openScreen();
+        Component title = Component.literal(Lang.get("hotwire.reopen.half_started.title"));
+        Component text = Component.literal(Lang.get("hotwire.reopen.half_started", half));
+        ModViews.show(new AlertScreen(() -> ModViews.show(back), title, text));
         return true;
     }
 

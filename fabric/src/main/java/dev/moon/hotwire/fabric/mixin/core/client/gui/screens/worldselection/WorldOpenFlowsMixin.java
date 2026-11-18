@@ -11,9 +11,8 @@ import org.spongepowered.asm.mixin.injection.callback.CallbackInfo;
 public abstract class WorldOpenFlowsMixin {
     @Inject(method = "openWorld", at = @At("HEAD"), cancellable = true)
     private void hotwire$refuseHalfStarted(String level, Runnable onFail, CallbackInfo ci) {
-        if (WorldReopen.refuseOpen()) {
+        if (WorldReopen.refuseOpen(onFail)) {
             ci.cancel();
-            onFail.run();
         }
     }
 }
