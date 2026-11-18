@@ -100,7 +100,7 @@ public final class LocalJars {
         homes.addAll(this.launcherHomes);
         Set<Path> out = new LinkedHashSet<>();
         for (Path home : homes) {
-            List<Path> instances = new ArrayList<>(list(home));
+            List<Path> instances = new ArrayList<>(isNearRoot(home) ? List.<Path>of() : list(home));
             instances.addFirst(home);
             for (Path instance : instances) {
                 for (String mods : MODS) {
@@ -112,6 +112,11 @@ public final class LocalJars {
             }
         }
         return List.copyOf(out);
+    }
+
+    static boolean isNearRoot(Path home) {
+        Path parent = home.toAbsolutePath().normalize().getParent();
+        return parent == null || parent.getParent() == null;
     }
 
     private static List<Path> list(Path folder) {
