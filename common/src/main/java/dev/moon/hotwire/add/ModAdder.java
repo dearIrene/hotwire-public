@@ -148,8 +148,6 @@ public final class ModAdder {
     private final Map<Path, ContentScan.Classes> scans = new ConcurrentHashMap<>();
     private final Map<Path, ContentScan.Classes> ownScans = new ConcurrentHashMap<>();
 
-    private volatile ZipBudget scanBudget = new ZipBudget();
-
     private final Map<Path, Set<String>> contents = new ConcurrentHashMap<>();
 
     private final Map<String, List<Path>> setAside = new ConcurrentHashMap<>();
@@ -352,7 +350,7 @@ public final class ModAdder {
     private ContentScan.Classes scan(Path jarPath) {
         return this.scans.computeIfAbsent(jarPath, path -> {
             try {
-                return ContentScan.readClasses(path, this.scanBudget);
+                return ContentScan.readClasses(path, new ZipBudget());
             } catch (IOException e) {
                 LOGGER.warn("[Hotwire] the classes of {} could not be read for what they hook and make", path, e);
                 return new ContentScan.Classes(Map.of(), Set.of());
@@ -363,7 +361,7 @@ public final class ModAdder {
     private ContentScan.Classes scanOwn(Path jarPath) {
         return this.ownScans.computeIfAbsent(jarPath, path -> {
             try {
-                return ContentScan.readOwnClasses(path, this.scanBudget);
+                return ContentScan.readOwnClasses(path, new ZipBudget());
             } catch (IOException e) {
                 LOGGER.warn("[Hotwire] the classes of {} could not be read for what they hook", path, e);
                 return new ContentScan.Classes(Map.of(), Set.of());
@@ -835,7 +833,6 @@ public final class ModAdder {
         this.scans.clear();
         this.ownScans.clear();
         this.contents.clear();
-        this.scanBudget = new ZipBudget();
     }
 
     public ModJar readJar(Path path) throws ModJarException {
