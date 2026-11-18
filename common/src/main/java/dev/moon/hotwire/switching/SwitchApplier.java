@@ -1,6 +1,7 @@
 package dev.moon.hotwire.switching;
 
 import dev.moon.hotwire.mixin_copy.ConfigTrim;
+import dev.moon.hotwire.rebuild.TransformerChain;
 import dev.moon.hotwire.redefine.AddedOverrides;
 import dev.moon.hotwire.redefine.BatchRider;
 import dev.moon.hotwire.redefine.ClassRebuilder;
@@ -11,6 +12,7 @@ import dev.moon.hotwire.redefine.Linker;
 import dev.moon.hotwire.redefine.RebuildException;
 import dev.moon.hotwire.redefine.ReplacedStatics;
 import dev.moon.hotwire.redefine.StopPoint;
+import dev.moon.hotwire.registration.ElementLook;
 import dev.moon.hotwire.seam.Games;
 import java.lang.instrument.ClassFileTransformer;
 import java.util.ArrayList;
@@ -159,6 +161,7 @@ public final class SwitchApplier {
     }
 
     Runnable holdGame() {
+        ElementLook.giveWay();
         return this.redefinitionHold.get();
     }
 
@@ -188,7 +191,7 @@ public final class SwitchApplier {
             Set<String> flipped) throws RebuildException {
         LiveObjects.checkWhilePaused(prepared);
         Games.getNow().getReloads().announceRebuild(prepared.newlyBuilt(), prepared.pausedReloads());
-        Runnable release = this.redefinitionHold.get();
+        Runnable release = this.holdGame();
         SwitchTimes.mark("pause game");
         long pausedAt = System.nanoTime();
         try {
@@ -443,6 +446,7 @@ public final class SwitchApplier {
 
     public synchronized ApplyResult replace(Collection<String> ids, Map<String, byte[]> classes, Set<String> on,
             Set<String> targets, Runnable joined) throws RebuildException {
+        TransformerChain.linkBeforeMixin();
         this.decisions.forget();
         Map<Class<?>, byte[]> originals = new LinkedHashMap<>();
         Map<Class<?>, byte[]> before = new LinkedHashMap<>();
@@ -595,7 +599,7 @@ public final class SwitchApplier {
         if (plan != null && plan.isSitesAlone()) {
             try {
                 beforeHold.run();
-                return this.guardFlips.flip(plan, switched, onAfter, this.redefinitionHold.get(),
+                return this.guardFlips.flip(plan, switched, onAfter, this.holdGame(),
                         whilePaused);
             } catch (RuntimeException | LinkageError e) {
                 sites.restore();
@@ -616,7 +620,7 @@ public final class SwitchApplier {
                 this.applyWhilePaused(prepared, beforeChange, sites.setBefore(whilePaused),
                         plan == null ? Set.of() : plan.flipped());
             } else {
-                Runnable release = this.redefinitionHold.get();
+                Runnable release = this.holdGame();
                 try {
                     sites.setBefore(whilePaused).run();
                 } catch (RuntimeException | LinkageError e) {
@@ -642,7 +646,7 @@ public final class SwitchApplier {
             this.duckRide.disarm();
             ClassRebuilder.PreparedRebuild prepared = dryRun.prepared();
 
-            Runnable release = this.redefinitionHold.get();
+            Runnable release = this.holdGame();
             try {
                 try {
                     if (!Collections.disjoint(switched, onAfter)) {

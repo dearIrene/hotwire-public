@@ -33,6 +33,8 @@ public final class TransformerChain {
 
     private static volatile Predicate<String> mixedAsItLoads = name -> false;
 
+    private static volatile @Nullable Runnable linkUnwrapped;
+
     private final List<Object> wrappers;
     private final List<String> owners;
     private final Object mixins;
@@ -50,6 +52,14 @@ public final class TransformerChain {
 
     public static void setMixedAsItLoads(Predicate<String> mixed) {
         mixedAsItLoads = mixed;
+    }
+
+    public static synchronized void linkBeforeMixin() {
+        Runnable link = linkUnwrapped;
+        if (link != null) {
+            linkUnwrapped = null;
+            link.run();
+        }
     }
 
     public static @Nullable TransformerChain bind(Function<Class<?>, @Nullable String> modOf) {
@@ -74,10 +84,21 @@ public final class TransformerChain {
                 owners.add(Objects.requireNonNullElse(modOf.apply(at.getClass()), ""));
                 at = Objects.requireNonNull(inner.get(at), "a wrapper wraps nothing");
             }
+            Class<?> face = head.getType();
             if (wrappers.isEmpty()) {
+                Object mixins = at;
+                linkUnwrapped = () -> {
+                    try {
+                        head.set(knot, new TransformerChain(List.of(), List.of(), mixins, face.getMethod(
+                                "transformClassBytes", String.class, String.class, byte[].class)).link(0, face));
+                        LOGGER.info("[Hotwire] Hotwire's link stands before Mixin from here on");
+                    } catch (ReflectiveOperationException | RuntimeException e) {
+                        LOGGER.warn("[Hotwire] no link could be put before Mixin; a mixin class an update brings"
+                                + " is refused as it loads: {}", e.toString());
+                    }
+                };
                 return null;
             }
-            Class<?> face = head.getType();
             TransformerChain chain = new TransformerChain(wrappers, owners, at, face.getMethod("transformClassBytes",
                     String.class, String.class, byte[].class));
             head.set(knot, chain.link(0, face));
