@@ -10,6 +10,7 @@ import dev.moon.hotwire.redefine.Tripwire;
 import dev.moon.hotwire.registration.AsyncLogging;
 import dev.moon.hotwire.registration.ElementLook;
 import dev.moon.hotwire.registration.FieldReferences;
+import dev.moon.hotwire.registration.Fields;
 import dev.moon.hotwire.registration.GameRegistrations;
 import dev.moon.hotwire.registration.GeneratedWrappers;
 import dev.moon.hotwire.registration.ImageReaders;
@@ -36,6 +37,7 @@ import dev.moon.hotwire.ui.Lang;
 import dev.moon.hotwire.ui.notices.Notice;
 import dev.moon.hotwire.ui.notices.Notices;
 import dev.moon.hotwire.update.LiveUpdates;
+import java.lang.instrument.Instrumentation;
 import java.lang.management.ManagementFactory;
 import java.lang.management.ThreadMXBean;
 import java.util.ArrayList;
@@ -97,6 +99,8 @@ public final class SwitchRunner {
     @SuppressWarnings("ThreadPriorityCheck")
     private final ExecutorService looking = Executors.newSingleThreadExecutor(
             Thread.ofPlatform().name("hotwire-look").daemon().priority(Thread.NORM_PRIORITY - 1).factory());
+
+    private final AtomicBoolean preloading = new AtomicBoolean();
 
     public SwitchRunner(ModSwitcher switcher, OffChecker offChecker, GameReports reports, ModTripwire tripwire,
             FieldReferences fieldReferences, AsyncLogging logging, GeneratedWrappers wrappers, SwitchUnits units,
@@ -290,6 +294,12 @@ public final class SwitchRunner {
             return;
         }
         this.switcher.prepareAhead(ids, off);
+    }
+
+    public void preloadStatics(Instrumentation instrumentation) {
+        if (this.preloading.compareAndSet(false, true)) {
+            Fields.preloadStatics(instrumentation, () -> this.preloading.set(false));
+        }
     }
 
     public void lookAheadForAll() {

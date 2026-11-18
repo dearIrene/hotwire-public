@@ -17,6 +17,7 @@ import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Set;
 import java.util.concurrent.CancellationException;
+import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.atomic.AtomicLong;
 import java.util.function.BooleanSupplier;
 import java.util.function.Predicate;
@@ -124,6 +125,8 @@ public final class ElementLook {
     private static final ThreadLocal<Boolean> NEW_WORLD = ThreadLocal.withInitial(() -> true);
 
     private final CollectionNotes notes = new CollectionNotes();
+
+    private final Set<String> unreadable = ConcurrentHashMap.newKeySet();
 
     public static void useMods(Supplier<List<String>> mods) {
         everyMod = mods;
@@ -358,6 +361,10 @@ public final class ElementLook {
 
     CollectionNotes getNotes() {
         return this.notes;
+    }
+
+    boolean addUnreadable(String className) {
+        return this.unreadable.add(className);
     }
 
     private List<Object> containersOfTakes = List.of();

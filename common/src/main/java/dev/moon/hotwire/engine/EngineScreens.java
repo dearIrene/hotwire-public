@@ -1,6 +1,5 @@
 package dev.moon.hotwire.engine;
 
-import dev.moon.hotwire.registration.Fields;
 import dev.moon.hotwire.seam.Games;
 import dev.moon.hotwire.ui.ModScreen;
 import dev.moon.hotwire.ui.ScreenOpenTimer;
@@ -53,7 +52,7 @@ public final class EngineScreens {
         }
         JvmParts parts = this.owner.findParts();
         if (parts != null) {
-            Fields.preloadStatics(parts.instrumentation());
+            parts.runner().preloadStatics(parts.instrumentation());
             parts.runner().lookAheadForAll();
         }
         return opened;

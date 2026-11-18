@@ -18,7 +18,6 @@ import java.util.Map;
 import java.util.Objects;
 import java.util.Set;
 import java.util.concurrent.ConcurrentHashMap;
-import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.function.Function;
 import java.util.function.Predicate;
 import org.jspecify.annotations.Nullable;
@@ -77,7 +76,6 @@ public final class Fields {
             return List.copyOf(out);
         }
     };
-    private static final AtomicBoolean PRELOADING = new AtomicBoolean();
 
     private Fields() {
     }
@@ -88,10 +86,7 @@ public final class Fields {
     }
 
     @SuppressWarnings("ThreadPriorityCheck")
-    public static void preloadStatics(Instrumentation instrumentation) {
-        if (!PRELOADING.compareAndSet(false, true)) {
-            return;
-        }
+    public static void preloadStatics(Instrumentation instrumentation, Runnable done) {
         Thread preloader = new Thread(() -> {
             StartTimes.Job job = StartTimes.begin("statics preload, own thread");
             try {
@@ -104,7 +99,7 @@ public final class Fields {
                 }
             } finally {
                 job.end();
-                PRELOADING.set(false);
+                done.run();
             }
         }, "hotwire-preload-fields");
         preloader.setDaemon(true);

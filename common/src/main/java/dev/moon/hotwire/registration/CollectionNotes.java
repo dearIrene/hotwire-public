@@ -52,11 +52,13 @@ public final class CollectionNotes {
 
     record Origin(@Nullable String staticsOf, boolean game, FieldSlots.@Nullable Slot field) {
         private static final Origin NONE = new Origin(null, false, null);
-        private static final Map<String, Origin> PLAIN = new ConcurrentHashMap<>();
+    }
 
-        static Origin of(@Nullable String staticsOf) {
-            return staticsOf == null ? NONE : PLAIN.computeIfAbsent(staticsOf, mod -> new Origin(mod, false, null));
-        }
+    private final Map<String, Origin> staticsOrigins = new ConcurrentHashMap<>();
+
+    Origin findStaticsOrigin(@Nullable String staticsOf) {
+        return staticsOf == null ? Origin.NONE
+                : this.staticsOrigins.computeIfAbsent(staticsOf, mod -> new Origin(mod, false, null));
     }
 
     private static final class Note extends WeakReference<Object> {

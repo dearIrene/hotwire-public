@@ -2,7 +2,6 @@ package dev.moon.hotwire.fabric;
 
 import dev.moon.hotwire.engine.HotwireEngine;
 import dev.moon.hotwire.engine.JvmParts;
-import dev.moon.hotwire.registration.Fields;
 import java.time.Duration;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.TimeUnit;
@@ -22,7 +21,7 @@ final class InWorldWork {
             if (parts != null && Minecraft.getInstance().level != null) {
                 parts.runner().lookAheadForAll();
 
-                Fields.preloadStatics(parts.instrumentation());
+                parts.runner().preloadStatics(parts.instrumentation());
             }
         });
     }

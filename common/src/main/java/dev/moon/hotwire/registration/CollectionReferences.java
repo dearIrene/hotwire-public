@@ -790,7 +790,7 @@ final class CollectionReferences implements FixedLists.Walk {
         CollectionNotes notes = ElementLook.isLooking() && !CollectionParts.isGameObject(holder) ? this.look.getNotes()
                 : null;
         if (notes != null) {
-            notes.begin(holder, CollectionNotes.Origin.of(this.readingStaticsOf), this.reader);
+            notes.begin(holder, notes.findStaticsOrigin(this.readingStaticsOf), this.reader);
             notes.markLookedInto(holder);
         }
         boolean completed = false;
@@ -895,7 +895,7 @@ final class CollectionReferences implements FixedLists.Walk {
             return;
         }
         if (notes != null) {
-            notes.begin(value, CollectionNotes.Origin.of(this.readingStaticsOf), this.reader);
+            notes.begin(value, notes.findStaticsOrigin(this.readingStaticsOf), this.reader);
         }
         boolean completed = false;
         try {
@@ -950,7 +950,7 @@ final class CollectionReferences implements FixedLists.Walk {
         boolean outer = this.inSmall;
         CollectionNotes notes = ElementLook.isLooking() ? this.look.getNotes() : null;
         if (notes != null) {
-            notes.begin(value, CollectionNotes.Origin.of(this.readingStaticsOf), this.reader);
+            notes.begin(value, notes.findStaticsOrigin(this.readingStaticsOf), this.reader);
         }
         Object collectingBefore = this.collecting;
         this.collecting = value;
@@ -1118,7 +1118,7 @@ final class CollectionReferences implements FixedLists.Walk {
         CollectionNotes notes = ElementLook.isLooking() ? this.look.getNotes() : null;
         Set<String> was = this.enter(holder);
         if (notes != null) {
-            notes.begin(holder, CollectionNotes.Origin.of(this.readingStaticsOf), this.getReader());
+            notes.begin(holder, notes.findStaticsOrigin(this.readingStaticsOf), this.getReader());
             notes.markWrapped(holder, steps);
         }
         try {

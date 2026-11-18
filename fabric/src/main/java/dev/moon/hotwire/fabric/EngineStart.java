@@ -435,7 +435,7 @@ final class EngineStart {
                 }
                 return known != null ? known : ((GameClasses) parts.classes()).readOriginalBytes(internal);
             });
-            Fields.preloadStatics(parts.instrumentation());
+            parts.runner().preloadStatics(parts.instrumentation());
             laps.endLap("fields");
 
             parts.runner().getSwitcher().getFiller().watchPlaying(Games.getNow()::isPlaying);

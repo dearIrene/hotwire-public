@@ -16,7 +16,6 @@ import java.util.List;
 import java.util.Map;
 import java.util.NoSuchElementException;
 import java.util.Set;
-import java.util.concurrent.ConcurrentHashMap;
 import java.util.function.Consumer;
 import org.jspecify.annotations.Nullable;
 import org.slf4j.Logger;
@@ -24,8 +23,6 @@ import org.slf4j.LoggerFactory;
 
 public final class CollectionParts {
     private static final Logger LOGGER = LoggerFactory.getLogger(CollectionParts.class);
-
-    private static final Set<String> UNREADABLE = ConcurrentHashMap.newKeySet();
 
     private static final int CHANGED_READS = 20;
 
@@ -129,7 +126,7 @@ public final class CollectionParts {
                 read.accept(value);
                 return;
             } catch (LinkageError e) {
-                if (UNREADABLE.add(value.getClass().getName())) {
+                if (look.addUnreadable(value.getClass().getName())) {
                     LOGGER.info("[Hotwire] {} cannot be read ({}); the removal passes it by",
                             value.getClass().getName(), e.toString());
                 }
@@ -160,7 +157,7 @@ public final class CollectionParts {
                 if (frames.length == 0 || frames[0].getClassName().startsWith("dev.moon.hotwire.")) {
                     throw e;
                 }
-                if (UNREADABLE.add(value.getClass().getName())) {
+                if (look.addUnreadable(value.getClass().getName())) {
                     LOGGER.info("[Hotwire] {} threw as it was read ({}); the removal passes it by",
                             value.getClass().getName(), e.toString());
                 }
