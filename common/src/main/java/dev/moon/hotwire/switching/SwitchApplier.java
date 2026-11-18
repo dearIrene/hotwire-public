@@ -123,6 +123,7 @@ public final class SwitchApplier {
 
     private static final Logger LOGGER = LoggerFactory.getLogger(SwitchApplier.class);
 
+    @SuppressWarnings("UnnecessaryLambda")
     private static final Supplier<Runnable> OWN_HOLD = () -> Games.getNow().hold();
 
     private final ClassRebuilder rebuilder;
