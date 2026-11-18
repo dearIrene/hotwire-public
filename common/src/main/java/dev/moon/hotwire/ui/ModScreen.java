@@ -261,11 +261,13 @@ public final class ModScreen implements JarHost {
         if (shop == null || shop.model != model) {
             if (shop != null) {
                 this.root.getModal().remove(shop.detail);
+                this.root.getModal().remove(shop.few);
             }
             shop = new StorePage(model, store, icons, loader, gameVersion, this.root, this::leave);
             this.store = shop;
             this.storeSlot.clear().with(shop.part);
             this.root.getModal().add(shop.detail).setBounds(0, 0, this.width, this.height);
+            this.root.getModal().add(shop.few).setBounds(0, 0, this.width, this.height);
         }
         this.turnTo(STORE, 6);
     }
@@ -308,6 +310,7 @@ public final class ModScreen implements JarHost {
         StorePage shop = this.store;
         if (shop != null) {
             shop.detail.setBounds(0, 0, width, height);
+            shop.few.setBounds(0, 0, width, height);
         }
     }
 

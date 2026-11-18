@@ -70,6 +70,8 @@ public final class StorePage {
     private List<StoreModel.Card> shown = List.of();
     private int across;
 
+    public final FewDownloadsSheet few = new FewDownloadsSheet();
+
     public StorePage(StoreModel model, Game game, StoreIcons icons, String loader, String gameVersion, Root root,
             Runnable onEscape) {
         this.model = model;
@@ -80,7 +82,7 @@ public final class StorePage {
         this.releases = List.of(gameVersion);
         model.findGameVersions(found -> this.releases = List.copyOf(found));
         this.popup = root.getMenus().add(new Popup());
-        this.detail = new StoreDetail(model, icons, game, this.popup);
+        this.detail = new StoreDetail(model, icons, game, this.popup, this.few);
         this.search = new TextField(Lang.get("hotwire.store.search"), model::setWords, () -> { }, onEscape);
         this.search.setText(model.getWords());
         KINDS.forEach(kind -> this.kinds.tab(Lang.get("hotwire.store.kind." + kind.getProjectType())));
@@ -233,18 +235,24 @@ public final class StorePage {
         return update == null ? "" : update.id();
     }
 
-    static List<Popup.Item> makeDownloads(StoreModel model, Game game, ModrinthClient.Hit hit, String versionId) {
+    static List<Popup.Item> makeDownloads(StoreModel model, Game game, ModrinthClient.Hit hit, String versionId,
+            FewDownloadsSheet few) {
         String id = hit.projectId();
         StoreModel.Card card = model.getCardsByProject().get(id);
         boolean installed = model.isInstalledProject(id) || (card != null && card.installed());
         List<Popup.Item> items = new ArrayList<>();
         if (model.canAdd() && !installed && !model.isQueuedProject(id)) {
             items.add(new Popup.Item(Lang.get("hotwire.store.download.next_start"), Palette.TEXT,
-                    () -> game.queueFromStore(id, versionId, hit.title())));
+                    () -> few.run(hit, () -> game.queueFromStore(id, versionId, hit.title()))));
         }
         items.add(new Popup.Item(Lang.get("hotwire.store.download.to_folder"), Palette.TEXT,
-                () -> game.saveFromStore(id, versionId, hit.title())));
+                () -> few.run(hit, () -> game.saveFromStore(id, versionId, hit.title()))));
         return items;
+    }
+
+    static Part makeDownloadCount(long downloads) {
+        return Kit.text("\u2193 " + describeDownloads(downloads),
+                downloads < FewDownloadsSheet.FEW ? Palette.WARN : Palette.TEXT);
     }
 
     static String describeDownloads(long downloads) {
@@ -262,12 +270,12 @@ public final class StorePage {
             ModrinthClient.Hit hit = card.hit();
             Push[] square = new Push[1];
             square[0] = Kit.push("↓", () -> StorePage.this.openMenu(square[0], makeDownloads(StorePage.this.model,
-                    StorePage.this.game, hit, StorePage.this.findUpdateOf(card))));
+                    StorePage.this.game, hit, StorePage.this.findUpdateOf(card), StorePage.this.few)));
             square[0].show(!StorePage.this.model.isShowingPacks());
             this.inner = this.add(Kit.row(Kit.picture(() -> hit.iconUrl().isEmpty() ? null
                     : StorePage.this.icons.find(hit.projectId(), hit.iconUrl()), hit.title(), ICON),
-                    Kit.column(Kit.text(hit.title()), Kit.text(hit.author() + "  "
-                            + describeDownloads(hit.downloads()), Palette.FAINT), Kit.dim(hit.description()).lines(2),
+                    Kit.column(Kit.text(hit.title()), Kit.row(Kit.text(hit.author(), Palette.FAINT),
+                            makeDownloadCount(hit.downloads())).gap(8), Kit.dim(hit.description()).lines(2),
                             Kit.space(), Kit.row(Kit.space(), square[0], new Action(card)).gap(4)).gap(4).grow(1))
                     .gap(10).pad(10, 9).cross(Line.Cross.STRETCH));
             this.press((button, modifiers) -> StorePage.this.detail.open(hit));
@@ -332,8 +340,8 @@ public final class StorePage {
         private Part make(String state) {
             StoreModel model = StorePage.this.model;
             ModrinthClient.Hit hit = this.card.hit();
-            Runnable add = () -> StorePage.this.game.addFromStore(hit.projectId(),
-                    StorePage.this.findUpdateOf(this.card), hit.title());
+            Runnable add = () -> StorePage.this.few.run(hit, () -> StorePage.this.game.addFromStore(
+                    hit.projectId(), StorePage.this.findUpdateOf(this.card), hit.title()));
             return switch (state) {
                 case "add" -> Kit.lead(Lang.get("hotwire.store.add"), add);
                 case "update" -> Kit.lead(Lang.get("hotwire.store.update"), add);

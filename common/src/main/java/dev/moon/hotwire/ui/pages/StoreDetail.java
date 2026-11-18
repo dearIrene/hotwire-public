@@ -26,6 +26,7 @@ public final class StoreDetail extends Sheet {
     private final StoreModel model;
     private final StoreIcons icons;
     private final StorePage.Game game;
+    private final FewDownloadsSheet few;
     private final Popup popup;
     private final Markdown words;
     private final Text link = Kit.text("", Palette.PATH);
@@ -41,8 +42,9 @@ public final class StoreDetail extends Sheet {
     private String state = "";
 
     @SuppressWarnings("this-escape")
-    StoreDetail(StoreModel model, StoreIcons icons, StorePage.Game game, Popup popup) {
+    StoreDetail(StoreModel model, StoreIcons icons, StorePage.Game game, Popup popup, FewDownloadsSheet few) {
         super(520, null);
+        this.few = few;
         this.model = model;
         this.icons = icons;
         this.game = game;
@@ -93,7 +95,7 @@ public final class StoreDetail extends Sheet {
             ModrinthClient.Version update = this.model.getUpdates().get(shown.projectId());
             this.popup.openAt(this.download.getPointerX(), this.download.getPointerY(), this.getWidth(),
                     this.getHeight(), StorePage.makeDownloads(this.model, this.game, shown,
-                            update == null ? "" : update.id()));
+                            update == null ? "" : update.id(), this.few));
         }
     }
 
@@ -119,7 +121,8 @@ public final class StoreDetail extends Sheet {
     private Push makeLead(ModrinthClient.Hit shown, String state) {
         String id = shown.projectId();
         ModrinthClient.Version update = this.model.getUpdates().get(id);
-        Runnable add = () -> this.game.addFromStore(id, update == null ? "" : update.id(), shown.title());
+        Runnable add = () -> this.few.run(shown, () -> this.game.addFromStore(id, update == null ? ""
+                : update.id(), shown.title()));
         return switch (state) {
             case "add" -> Kit.lead(Lang.get("hotwire.store.add"), add);
             case "update" -> Kit.lead(Lang.get("hotwire.store.update"), add);
@@ -172,9 +175,11 @@ public final class StoreDetail extends Sheet {
         return Kit.row(Kit.dim(name).grow(1), Kit.text(needs, Palette.FAINT).spare(),
                 Kit.push(Lang.get("hotwire.store.add_this"), () -> {
                     if (this.model.canAdd()) {
-                        this.game.addFromStore(shown.projectId(), version.id(), shown.title());
+                        this.few.run(shown, () -> this.game.addFromStore(shown.projectId(), version.id(),
+                                shown.title()));
                     } else {
-                        this.game.saveFromStore(shown.projectId(), version.id(), shown.title());
+                        this.few.run(shown, () -> this.game.saveFromStore(shown.projectId(), version.id(),
+                                shown.title()));
                     }
                 })).gap(8).cross(Line.Cross.CENTER);
     }
