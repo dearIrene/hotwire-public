@@ -609,6 +609,7 @@ public final class ModrinthClient {
                 long wait = openAgainAt - System.nanoTime();
 
                 if (wait > 0 && !built.uri().getHost().startsWith("cdn.")) {
+                    LOGGER.info("[Hotwire] a request to Modrinth waits {} ms for its API's window", wait / 1_000_000);
                     Thread.sleep(Math.min(wait / 1_000_000, 60_000));
                 }
                 HttpResponse<T> response = HTTP.send(built, handler);

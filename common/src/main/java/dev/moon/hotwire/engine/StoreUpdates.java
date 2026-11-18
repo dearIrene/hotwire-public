@@ -13,8 +13,11 @@ import java.io.IOException;
 import java.io.UncheckedIOException;
 import java.nio.file.Path;
 import java.util.ArrayList;
+import java.util.Comparator;
 import java.util.HashSet;
+import java.util.IdentityHashMap;
 import java.util.List;
+import java.util.Objects;
 import java.util.Set;
 import java.util.TreeSet;
 import java.util.concurrent.CompletableFuture;
@@ -228,10 +231,13 @@ public final class StoreUpdates {
     private Fetches beginFetches(List<UpdateOffer> offers, Function<UpdateOffer, List<Path>> fetch) {
         ExecutorService pool = Executors.newFixedThreadPool(FETCHES,
                 Thread.ofPlatform().name("hotwire-updates-fetch-", 1).daemon().factory());
-        List<Future<List<Path>>> futures = new ArrayList<>();
+        IdentityHashMap<UpdateOffer, Future<List<Path>>> begun = new IdentityHashMap<>();
         AtomicInteger landed = new AtomicInteger();
-        for (UpdateOffer offer : offers) {
-            futures.add(pool.submit(() -> {
+
+        List<UpdateOffer> bySize = new ArrayList<>(offers);
+        bySize.sort(Comparator.comparingLong(UpdateOffer::size).reversed());
+        for (UpdateOffer offer : bySize) {
+            begun.put(offer, pool.submit(() -> {
                 List<Path> jars = fetch.apply(offer);
                 int in = landed.incrementAndGet();
                 if (!this.early) {
@@ -242,6 +248,10 @@ public final class StoreUpdates {
                 }
                 return jars;
             }));
+        }
+        List<Future<List<Path>>> futures = new ArrayList<>();
+        for (UpdateOffer offer : offers) {
+            futures.add(Objects.requireNonNull(begun.get(offer)));
         }
         return new Fetches(pool, futures);
     }
