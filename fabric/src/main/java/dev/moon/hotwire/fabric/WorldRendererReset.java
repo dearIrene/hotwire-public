@@ -1,7 +1,7 @@
 package dev.moon.hotwire.fabric;
 
 import dev.moon.hotwire.classfile.GameNames;
-import dev.moon.hotwire.fabric.registration.GameHold;
+
 import dev.moon.hotwire.fabric.version.Spellings;
 import java.lang.reflect.Field;
 import java.lang.reflect.Modifier;
@@ -94,7 +94,7 @@ final class WorldRendererReset {
         }
         closed = true;
         setLevel(game, null);
-        GameHold.runNextAtFrameEdge(WorldRendererReset::open);
+        GameParts.getHoldWork().runNextAtFrameEdge(WorldRendererReset::open);
         LOGGER.info("[Hotwire] the world's renderer was closed before the classes that built it change");
     }
 

@@ -2,6 +2,7 @@ package dev.moon.hotwire.fabric;
 
 import dev.moon.hotwire.fabric.add.HiddenPacks;
 import dev.moon.hotwire.fabric.registration.GameTasks;
+import dev.moon.hotwire.fabric.registration.HoldWork;
 import dev.moon.hotwire.fabric.registration.ModLifecycle;
 import dev.moon.hotwire.fabric.registration.ModSounds;
 import dev.moon.hotwire.fabric.registration.ModelReloadCheck;
@@ -23,6 +24,7 @@ public final class GameParts {
     private static final BackgroundReload BACKGROUND_RELOAD = new BackgroundReload();
     private static final ReloadFailures RELOAD_FAILURES = new ReloadFailures();
     private static final ModelReloadCheck MODEL_CHECK = new ModelReloadCheck();
+    private static final HoldWork HOLD_WORK = new HoldWork();
 
     private GameParts() {
     }
@@ -73,5 +75,9 @@ public final class GameParts {
 
     public static ModelReloadCheck getModelCheck() {
         return MODEL_CHECK;
+    }
+
+    public static HoldWork getHoldWork() {
+        return HOLD_WORK;
     }
 }

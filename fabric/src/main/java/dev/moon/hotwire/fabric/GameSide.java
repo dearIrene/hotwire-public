@@ -227,8 +227,8 @@ public final class GameSide implements Game {
 
     @Override
     public Runnable runAtNextHold(Runnable work) {
-        GameHold.runAtNextHold(work);
-        return GameHold::dropNextHold;
+        GameParts.getHoldWork().runAtNextHold(work);
+        return GameParts.getHoldWork()::dropNextHold;
     }
 
     @Override
@@ -253,7 +253,7 @@ public final class GameSide implements Game {
 
     @Override
     public long countFrames() {
-        return GameHold.countFrames();
+        return GameParts.getHoldWork().countFrames();
     }
 
     @Override

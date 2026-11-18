@@ -1,6 +1,7 @@
 package dev.moon.hotwire.fabric.registration;
 
 import dev.moon.hotwire.config.Flags;
+import dev.moon.hotwire.fabric.GameParts;
 import dev.moon.hotwire.fabric.ModViews;
 import dev.moon.hotwire.fabric.screen.HoldFrame;
 import dev.moon.hotwire.fabric.version.Spellings;
@@ -10,10 +11,8 @@ import java.time.Duration;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.List;
-import java.util.Queue;
 import java.util.concurrent.BlockingQueue;
 import java.util.concurrent.CompletableFuture;
-import java.util.concurrent.ConcurrentLinkedQueue;
 import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.ExecutionException;
 import java.util.concurrent.Future;
@@ -21,7 +20,6 @@ import java.util.concurrent.LinkedBlockingQueue;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.TimeoutException;
 import java.util.concurrent.atomic.AtomicBoolean;
-import java.util.concurrent.atomic.AtomicLong;
 import java.util.function.BooleanSupplier;
 import java.util.function.Supplier;
 import net.minecraft.client.Minecraft;
@@ -67,20 +65,8 @@ public final class GameHold {
 
     private static final BlockingQueue<Runnable> PAUSED_WORK = new LinkedBlockingQueue<>();
     private static final BlockingQueue<Runnable> PAUSED_GAME_WORK = new LinkedBlockingQueue<>();
-    private static final Queue<Runnable> AT_NEXT_HOLD = new ConcurrentLinkedQueue<>();
-
-    private static final Queue<Runnable> AT_FRAME_EDGE = new ConcurrentLinkedQueue<>();
-    private static final AtomicLong FRAME_EDGES = new AtomicLong();
 
     private static final Duration EDGE = Duration.ofMillis(250);
-
-    public static void runAtNextHold(Runnable work) {
-        AT_NEXT_HOLD.add(work);
-    }
-
-    public static void dropNextHold() {
-        AT_NEXT_HOLD.clear();
-    }
 
     public static void releaseForCrash() {
         lastCrash = new Object();
@@ -290,9 +276,7 @@ public final class GameHold {
             }
             LiveConnections.drain();
             pausedSince = System.nanoTime();
-            for (Runnable work = AT_NEXT_HOLD.poll(); work != null; work = AT_NEXT_HOLD.poll()) {
-                work.run();
-            }
+            GameParts.getHoldWork().runNextHoldWork();
             begun = true;
         } finally {
             if (!begun) {
@@ -352,7 +336,7 @@ public final class GameHold {
             CountDownLatch latch = this.pause();
             AtomicBoolean decided = new AtomicBoolean();
             this.game = latch;
-            AT_FRAME_EDGE.add(() -> {
+            GameParts.getHoldWork().runNextAtFrameEdge(() -> {
                 if (decided.compareAndSet(false, true)) {
                     gamePaused = true;
                     try {
@@ -367,30 +351,10 @@ public final class GameHold {
             });
 
             if (!awaitEdge(paused)) {
-                client.execute(GameHold::runAtFrameEdge);
+                client.execute(GameParts.getHoldWork()::runAtFrameEdge);
             }
             this.onReached(paused, decided, "game");
         }
-    }
-
-    @SuppressWarnings("checkstyle:IllegalCatch")
-    public static void runAtFrameEdge() {
-        FRAME_EDGES.incrementAndGet();
-        for (Runnable hold = AT_FRAME_EDGE.poll(); hold != null; hold = AT_FRAME_EDGE.poll()) {
-            try {
-                hold.run();
-            } catch (RuntimeException e) {
-                LOGGER.error("[Hotwire] the game thread's hold threw", e);
-            }
-        }
-    }
-
-    public static void runNextAtFrameEdge(Runnable work) {
-        AT_FRAME_EDGE.add(work);
-    }
-
-    public static long countFrames() {
-        return FRAME_EDGES.get();
     }
 
     public void releaseGame() {

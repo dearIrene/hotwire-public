@@ -36,7 +36,7 @@ public abstract class MinecraftMixin {
     @WrapOperation(method = "run", at = @At(value = "INVOKE", target = "Lnet/minecraft/client/Minecraft;runTick(Z)V"))
     @SuppressWarnings("checkstyle:IllegalCatch")
     private void hotwire$catchFrameThrow(Minecraft game, boolean advance, Operation<Void> original) {
-        GameHold.runAtFrameEdge();
+        GameParts.getHoldWork().runAtFrameEdge();
         try {
             original.call(game, advance);
         } catch (RuntimeException | Error e) {

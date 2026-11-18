@@ -3,6 +3,7 @@ package dev.moon.hotwire.fabric.add;
 import dev.moon.hotwire.add.OpenOneConfig;
 import dev.moon.hotwire.add.YumiStarts;
 import dev.moon.hotwire.engine.LifecycleListeners;
+import dev.moon.hotwire.fabric.GameParts;
 import dev.moon.hotwire.fabric.registration.GameHold;
 import dev.moon.hotwire.fabric.screen.HoldFrame;
 import dev.moon.hotwire.jar.ModManifest;
@@ -61,7 +62,7 @@ final class AddStart {
         LOGGER.info("[Hotwire] the start of {} runs {} entrypoints", ids, starts.size());
         CompletableFuture<Map<String, List<String>>> started = new CompletableFuture<>();
 
-        GameHold.runNextAtFrameEdge(() -> {
+        GameParts.getHoldWork().runNextAtFrameEdge(() -> {
             OpenRegistries registries = OpenRegistries.open();
             OpenOneConfig configs;
             try {

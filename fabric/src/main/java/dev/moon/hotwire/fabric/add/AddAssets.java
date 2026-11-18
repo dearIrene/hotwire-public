@@ -5,7 +5,7 @@ import dev.moon.hotwire.fabric.GameParts;
 import dev.moon.hotwire.fabric.ResourceReload;
 import dev.moon.hotwire.fabric.WordsReload;
 import dev.moon.hotwire.fabric.mixin.core.client.ReloadableResourceManagerAccessor;
-import dev.moon.hotwire.fabric.registration.GameHold;
+
 import dev.moon.hotwire.jar.ZipBytes;
 import dev.moon.hotwire.registration.GameRegistrations;
 import java.io.IOException;
@@ -66,7 +66,7 @@ public final class AddAssets {
             then.run();
             return;
         }
-        GameHold.runNextAtFrameEdge(() -> {
+        GameParts.getHoldWork().runNextAtFrameEdge(() -> {
             if (Minecraft.getInstance().getResourceManager() instanceof ReloadableResourceManager manager) {
                 reopenPacks(manager);
             }
