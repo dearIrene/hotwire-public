@@ -22,6 +22,7 @@ import dev.moon.hotwire.engine.SeenUses;
 import dev.moon.hotwire.engine.SwitchRunner;
 import dev.moon.hotwire.fabric.add.AddGameSide;
 import dev.moon.hotwire.fabric.add.HiddenPacks;
+import dev.moon.hotwire.fabric.add.LivePlugins;
 import dev.moon.hotwire.fabric.rebuild.GameClasses;
 import dev.moon.hotwire.fabric.rebuild.GameMixinCopy;
 import dev.moon.hotwire.fabric.rebuild.LivePluginShapes;
@@ -191,7 +192,7 @@ final class EngineStart {
         TransformerChain.setMixedAsItLoads(name -> applier.isMixedAsItLoads(name.replace('.', '/')));
         InitHookReplay.nameSucceededWith(LiveNames::findOwnKeys);
         GameParts.getCommands().readUsesFrom(installed::getGraph);
-        HiddenPacks.readContainersWith(id -> installed.getGraph().getContainers(id));
+        GameParts.getPacks().readContainersWith(id -> installed.getGraph().getContainers(id));
         Linker.setMixinOwners(applier.getCarriedMixins()::findModShipping);
         laps.endLap("load-time mixer, hooks");
         TransformerChain chain = TransformerChain.bind(ForeignPatches.makeOwnerFinder(installed.getGraphJars()));

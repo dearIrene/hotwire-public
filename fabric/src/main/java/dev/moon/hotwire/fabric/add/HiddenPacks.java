@@ -37,22 +37,19 @@ import org.slf4j.LoggerFactory;
 public final class HiddenPacks {
     private static final Logger LOGGER = LoggerFactory.getLogger(HiddenPacks.class);
 
-    private static final Map<String, Optional<Set<String>>> NAMESPACES = new ConcurrentHashMap<>();
+    private final Map<String, Optional<Set<String>>> namespaces = new ConcurrentHashMap<>();
 
-    private static final Map<String, Set<String>> SAID = new ConcurrentHashMap<>();
+    private final Map<String, Set<String>> said = new ConcurrentHashMap<>();
 
-    private static final Map<String, Object> TRIMMED = new ConcurrentHashMap<>();
-    private static volatile Function<String, Set<String>> containersOf = id -> Set.of();
+    private final Map<String, Object> trimmed = new ConcurrentHashMap<>();
+    private volatile Function<String, Set<String>> containersOf = id -> Set.of();
 
-    private static volatile Set<String> opening = Set.of();
-
-    private HiddenPacks() {
-    }
+    private volatile Set<String> opening = Set.of();
 
     @SuppressWarnings("unchecked")
-    public static void addHidden(PackType type, @Nullable String subPath, List<?> packs) {
+    public void addHidden(PackType type, @Nullable String subPath, List<?> packs) {
         if (type == PackType.SERVER_DATA) {
-            addWorldData(subPath, (List<Object>) packs);
+            this.addWorldData(subPath, (List<Object>) packs);
             return;
         }
         Map<String, ModContainer> hiddenMods = LoaderModList.getHiddenContainers();
@@ -62,30 +59,31 @@ public final class HiddenPacks {
         Map<String, Set<String>> providers = findProviders();
         for (Map.Entry<String, ModContainer> hidden : hiddenMods.entrySet()) {
             String id = hidden.getKey();
-            Optional<Set<String>> named = NAMESPACES.computeIfAbsent(id, any -> readNamespaces(id, hidden.getValue()));
+            Optional<Set<String>> named = this.namespaces.computeIfAbsent(id,
+                    any -> readNamespaces(id, hidden.getValue()));
             if (named.isEmpty()) {
                 continue;
             }
-            Set<String> foreign = findForeign(id, named.get(), providers);
+            Set<String> foreign = this.findForeign(id, named.get(), providers);
             Object pack = Spellings.makeHiddenPack(id, hidden.getValue(), subPath, type);
             if (pack == null || (!foreign.isEmpty() && !trim(pack, foreign))) {
                 continue;
             }
             if (foreign.isEmpty()) {
-                TRIMMED.remove(id);
+                this.trimmed.remove(id);
             } else {
-                TRIMMED.put(id, pack);
+                this.trimmed.put(id, pack);
             }
             ((List<Object>) packs).add(pack);
         }
     }
 
-    private static void addWorldData(@Nullable String subPath, List<Object> packs) {
+    private void addWorldData(@Nullable String subPath, List<Object> packs) {
         Map<String, ModContainer> hiddenMods = LoaderModList.getHiddenContainers();
         if (hiddenMods.isEmpty()) {
             return;
         }
-        Set<String> used = findWorldPacks();
+        Set<String> used = this.findWorldPacks();
 
         for (Map.Entry<String, ModContainer> hidden : hiddenMods.entrySet()) {
             if (used.contains(hidden.getKey()) && WorldContent.isWorldDataOnly(hidden.getValue())) {
@@ -98,8 +96,8 @@ public final class HiddenPacks {
         }
     }
 
-    private static Set<String> findWorldPacks() {
-        Set<String> used = new HashSet<>(opening);
+    private Set<String> findWorldPacks() {
+        Set<String> used = new HashSet<>(this.opening);
         MinecraftServer server = Minecraft.getInstance().getSingleplayerServer();
         if (server != null) {
             used.addAll(server.getPackRepository().getSelectedIds());
@@ -107,8 +105,8 @@ public final class HiddenPacks {
         return used;
     }
 
-    public static void noteOpeningPacks(Collection<String> enabled) {
-        opening = Set.copyOf(enabled);
+    public void noteOpeningPacks(Collection<String> enabled) {
+        this.opening = Set.copyOf(enabled);
     }
 
     @SuppressWarnings("unchecked")
@@ -128,11 +126,11 @@ public final class HiddenPacks {
     }
 
     @SuppressWarnings("ReferenceEquality")
-    public static boolean isTrimmedListed(Collection<String> mods) {
-        Set<Object> trimmed = Collections.newSetFromMap(new IdentityHashMap<>());
-        mods.stream().map(TRIMMED::get).filter(Objects::nonNull).forEach(trimmed::add);
-        return !trimmed.isEmpty()
-                && Minecraft.getInstance().getResourceManager().listPacks().anyMatch(trimmed::contains);
+    public boolean isTrimmedListed(Collection<String> mods) {
+        Set<Object> theirs = Collections.newSetFromMap(new IdentityHashMap<>());
+        mods.stream().map(this.trimmed::get).filter(Objects::nonNull).forEach(theirs::add);
+        return !theirs.isEmpty()
+                && Minecraft.getInstance().getResourceManager().listPacks().anyMatch(theirs::contains);
     }
 
     private static boolean isOwned(String namespace, Set<String> hidden) {
@@ -140,21 +138,21 @@ public final class HiddenPacks {
                 || FabricLoader.getInstance().isModLoaded(namespace);
     }
 
-    private static boolean isFamily(String namespace, String id) {
-        return isInside(id, namespace, new HashSet<>()) || isInside(namespace, id, new HashSet<>());
+    private boolean isFamily(String namespace, String id) {
+        return this.isInside(id, namespace, new HashSet<>()) || this.isInside(namespace, id, new HashSet<>());
     }
 
-    private static boolean isInside(String mod, String container, Set<String> seen) {
-        for (String up : containersOf.apply(mod)) {
-            if (up.equals(container) || (seen.add(up) && isInside(up, container, seen))) {
+    private boolean isInside(String mod, String container, Set<String> seen) {
+        for (String up : this.containersOf.apply(mod)) {
+            if (up.equals(container) || (seen.add(up) && this.isInside(up, container, seen))) {
                 return true;
             }
         }
         return false;
     }
 
-    public static void readContainersWith(Function<String, Set<String>> containers) {
-        containersOf = containers;
+    public void readContainersWith(Function<String, Set<String>> containers) {
+        this.containersOf = containers;
     }
 
     private static Map<String, Set<String>> findProviders() {
@@ -167,17 +165,17 @@ public final class HiddenPacks {
         return providers;
     }
 
-    private static Set<String> findForeign(String id, Set<String> named, Map<String, Set<String>> providers) {
+    private Set<String> findForeign(String id, Set<String> named, Map<String, Set<String>> providers) {
         Set<String> hidden = LoaderModList.getHidden();
         Set<String> foreign = new TreeSet<>();
         for (String namespace : named) {
             boolean provided = providers.getOrDefault(namespace, Set.of()).stream().anyMatch(by -> !by.equals(id));
             if (!namespace.equals(id) && provided && isOwned(namespace, hidden)
-                    && !isFamily(namespace, id)) {
+                    && !this.isFamily(namespace, id)) {
                 foreign.add(namespace);
             }
         }
-        if (!foreign.equals(SAID.put(id, foreign))) {
+        if (!foreign.equals(this.said.put(id, foreign))) {
             if (!foreign.isEmpty()) {
                 LOGGER.info("[Hotwire] {}'s pack stays listed while the mod is off, without what it puts in {}", id,
                         foreign);

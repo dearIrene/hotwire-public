@@ -1,7 +1,7 @@
 package dev.moon.hotwire.fabric.mixin.core.fabric.resource.pack;
 
 //? if >=1.21.11 {
-import dev.moon.hotwire.fabric.add.HiddenPacks;
+import dev.moon.hotwire.fabric.GameParts;
 import java.util.ArrayList;
 import java.util.List;
 import net.fabricmc.fabric.api.resource.v1.pack.ModPackResources;
@@ -23,7 +23,7 @@ public abstract class ModPackResourcesUtilMixin {
     private static void hotwire$addHiddenPacks(FabricLoader loader, PackType type, @Nullable String subPath,
             CallbackInfoReturnable<List<ModPackResources>> cir) {
         List<ModPackResources> packs = new ArrayList<>(cir.getReturnValue());
-        HiddenPacks.addHidden(type, subPath, packs);
+        GameParts.getPacks().addHidden(type, subPath, packs);
         if (packs.size() != cir.getReturnValue().size()) {
             cir.setReturnValue(packs);
         }

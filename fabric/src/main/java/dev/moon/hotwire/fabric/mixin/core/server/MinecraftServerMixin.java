@@ -4,8 +4,8 @@ import com.llamalad7.mixinextras.injector.wrapoperation.Operation;
 import com.llamalad7.mixinextras.injector.wrapoperation.WrapOperation;
 import dev.moon.hotwire.concurrent.Tasks;
 import dev.moon.hotwire.engine.CrashGuard;
+import dev.moon.hotwire.fabric.GameParts;
 import dev.moon.hotwire.fabric.OngoingReload;
-import dev.moon.hotwire.fabric.add.HiddenPacks;
 import dev.moon.hotwire.fabric.mixin.core.util.thread.BlockableEventLoopAccessor;
 import dev.moon.hotwire.switching.CrashPolicy;
 //? if <1.21.11 {
@@ -38,13 +38,13 @@ public abstract class MinecraftServerMixin {
     @Inject(method = "configurePackRepository", at = @At("HEAD"))
     private static void hotwire$noteOpeningPacks(PackRepository packs, WorldDataConfiguration config, boolean initMode,
             boolean safeMode, CallbackInfoReturnable<WorldDataConfiguration> cir) {
-        HiddenPacks.noteOpeningPacks(config.dataPacks().getEnabled());
+        GameParts.getPacks().noteOpeningPacks(config.dataPacks().getEnabled());
     }
 
     @Inject(method = "configurePackRepository", at = @At("RETURN"))
     private static void hotwire$forgetOpeningPacks(PackRepository packs, WorldDataConfiguration config,
             boolean initMode, boolean safeMode, CallbackInfoReturnable<WorldDataConfiguration> cir) {
-        HiddenPacks.noteOpeningPacks(List.of());
+        GameParts.getPacks().noteOpeningPacks(List.of());
     }
 
     //? if >=1.21.11 {

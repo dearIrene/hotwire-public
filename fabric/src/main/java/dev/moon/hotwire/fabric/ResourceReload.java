@@ -2,7 +2,7 @@ package dev.moon.hotwire.fabric;
 
 import dev.moon.hotwire.add.LoaderModList;
 import dev.moon.hotwire.engine.ModSoundFiles;
-import dev.moon.hotwire.fabric.add.HiddenPacks;
+
 import dev.moon.hotwire.fabric.registration.GameHold;
 import dev.moon.hotwire.fabric.registration.ModelReloadCheck;
 import dev.moon.hotwire.fabric.registration.ReloadedLists;
@@ -265,7 +265,7 @@ public final class ResourceReload {
     }
 
     static void restoreTrimmed(Collection<String> mods) {
-        if (!HiddenPacks.isTrimmedListed(mods)) {
+        if (!GameParts.getPacks().isTrimmedListed(mods)) {
             return;
         }
         Minecraft game = Minecraft.getInstance();
