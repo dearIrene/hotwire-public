@@ -147,7 +147,7 @@ public final class GameHold {
     private static Object getStackOf(String thread) {
         return Thread.getAllStackTraces().entrySet().stream().filter(entry -> entry.getKey().getName().equals(thread))
                 .findFirst().<Object>map(entry -> Arrays.asList(entry.getValue()).subList(0,
-                        Math.min(14, entry.getValue().length))).orElse("no such thread: it has ended");
+                        Math.min(40, entry.getValue().length))).orElse("no such thread: it has ended");
     }
 
     public static void run(RegistrationJournal.Where where, int count, Runnable work) {
