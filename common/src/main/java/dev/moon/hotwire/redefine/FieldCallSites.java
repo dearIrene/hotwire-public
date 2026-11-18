@@ -7,16 +7,11 @@ import java.lang.invoke.MutableCallSite;
 import java.lang.ref.WeakReference;
 import java.util.ArrayList;
 import java.util.List;
-import java.util.Map;
 import java.util.Queue;
-import java.util.concurrent.ConcurrentHashMap;
-import java.util.concurrent.ConcurrentLinkedQueue;
 
 final class FieldCallSites {
-    private record Bound(WeakReference<MutableCallSite> site, String name, MethodType type, int kind) {
+    record Bound(WeakReference<MutableCallSite> site, String name, MethodType type, int kind) {
     }
-
-    private static final Map<Class<?>, Queue<Bound>> BOUND = new ConcurrentHashMap<>();
 
     private FieldCallSites() {
     }
@@ -25,8 +20,13 @@ final class FieldCallSites {
             throws ReflectiveOperationException {
         Class<?> holder = FieldHolders.findHolderClassOf(target);
         MutableCallSite site = new MutableCallSite(Linker.findCastFieldHandle(target, name, type, kind));
-        BOUND.computeIfAbsent(target, key -> new ConcurrentLinkedQueue<>()).add(new Bound(new WeakReference<>(site),
-                name, type, kind));
+        Bound entry = new Bound(new WeakReference<>(site), name, type, kind);
+
+        Linker.LINKS.compute(target, (key, now) -> {
+            Linker.Link link = now == null ? new Linker.Link() : now;
+            link.fieldSites.add(entry);
+            return link;
+        });
 
         for (Class<?> now = FieldHolders.findHolderClassOf(target); now != holder;
                 now = FieldHolders.findHolderClassOf(target)) {
@@ -40,10 +40,11 @@ final class FieldCallSites {
     }
 
     static void rebind(Class<?> target) {
-        Queue<Bound> bound = BOUND.get(target);
-        if (bound == null) {
+        Linker.Link link = Linker.LINKS.get(target);
+        if (link == null) {
             return;
         }
+        Queue<Bound> bound = link.fieldSites;
         bound.removeIf(entry -> entry.site().get() == null);
         List<MutableCallSite> changed = new ArrayList<>();
         for (Bound entry : bound) {

@@ -8,13 +8,13 @@ import java.lang.reflect.Field;
 import java.lang.reflect.Modifier;
 import java.util.ArrayDeque;
 import java.util.Collection;
-import java.util.Collections;
 import java.util.Deque;
 import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
 import java.util.concurrent.ConcurrentHashMap;
+import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.concurrent.atomic.AtomicReference;
 import java.util.function.BiConsumer;
 import java.util.function.Consumer;
@@ -34,7 +34,7 @@ public final class FieldHolders {
 
     record Holder(Class<?> type, MethodHandles.Lookup lookup, WeakIdentityMap instances,
             AtomicReference<@Nullable Holder> previous, @Nullable BiConsumer<Object, Object> initInstance,
-            Map<Object, Boolean> awaiting, Set<String> restarted) {
+            Map<Object, Boolean> awaiting, Set<String> restarted, AtomicBoolean started, AtomicBoolean starting) {
     }
 
     private static @Nullable Holder findHolder(Class<?> target) {
@@ -52,10 +52,6 @@ public final class FieldHolders {
     private static final Map<Class<?>, Class<?>> TARGET_OF = new MapMaker().weakKeys().makeMap();
 
     private static final Map<Field, Field> NOW = new ConcurrentHashMap<>();
-
-    private static final Set<Class<?>> STARTED = Collections.newSetFromMap(new MapMaker().weakKeys().makeMap());
-
-    private static final Set<Class<?>> STARTING = ConcurrentHashMap.newKeySet();
 
     private record Fill(Class<?> type, Object instance, Object made) {
     }
@@ -95,7 +91,8 @@ public final class FieldHolders {
                 MethodHandles.Lookup.ClassOption.NESTMATE);
         Class<?> type = lookup.lookupClass();
         Holder holder = new Holder(type, lookup, new WeakIdentityMap(), new AtomicReference<>(previous),
-                initInstance(lookup, type, target), new MapMaker().weakKeys().makeMap(), Set.copyOf(restarted));
+                initInstance(lookup, type, target), new MapMaker().weakKeys().makeMap(), Set.copyOf(restarted),
+                new AtomicBoolean(), new AtomicBoolean());
         Linker.link(target).holder = holder;
         TARGET_OF.put(type, target);
         NOW.clear();
@@ -119,10 +116,10 @@ public final class FieldHolders {
             }
         });
 
-        Holder before = STARTED.contains(last.type()) ? null : last.previous().get();
+        Holder before = last.started().get() ? null : last.previous().get();
         holder.previous().set(new Holder(last.type(), last.lookup(), new WeakIdentityMap(),
                 new AtomicReference<>(before), last.initInstance(), new MapMaker().weakKeys().makeMap(),
-                last.restarted()));
+                last.restarted(), last.started(), last.starting()));
     }
 
     public static int forgetInstances(Predicate<Object> gone) {
@@ -154,8 +151,7 @@ public final class FieldHolders {
                 out.append(" <- ");
             }
             out.append(at.type().getName().replaceAll(".*[$]hotwire[$]fields", "holder"))
-                    .append(STARTED.contains(at.type()) ? " started" : STARTING.contains(at.type()) ? " starting"
-                            : " unstarted");
+                    .append(at.started().get() ? " started" : at.starting().get() ? " starting" : " unstarted");
             for (Field field : at.type().getDeclaredFields()) {
                 if (Modifier.isStatic(field.getModifiers())) {
                     try {
@@ -256,12 +252,12 @@ public final class FieldHolders {
     }
 
     static void startStatics(Holder holder) {
-        if (STARTED.contains(holder.type())) {
+        if (holder.started().get()) {
             return;
         }
 
         synchronized (holder.type()) {
-            if (STARTED.contains(holder.type()) || !STARTING.add(holder.type())) {
+            if (holder.started().get() || !holder.starting().compareAndSet(false, true)) {
                 return;
             }
             try {
@@ -272,12 +268,12 @@ public final class FieldHolders {
                     if (last != null) {
                         startStatics(last);
                         copyStatics(last.type(), holder.type(), holder.restarted());
-                        STARTED.add(holder.type());
+                        holder.started().set(true);
                     }
                 }
-                STARTED.add(holder.type());
+                holder.started().set(true);
             } finally {
-                STARTING.remove(holder.type());
+                holder.starting().set(false);
             }
         }
     }

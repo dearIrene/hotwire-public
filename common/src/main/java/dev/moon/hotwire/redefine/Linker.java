@@ -55,10 +55,12 @@ public final class Linker {
         volatile @Nullable Map<Object, Boolean> retrying;
         volatile boolean saidFailed;
 
+        final Deque<FieldCallSites.Bound> fieldSites = new ConcurrentLinkedDeque<>();
+
         private boolean isEmpty() {
             return this.sidecar == null && !this.pending && this.moved == null && this.stubbed.isEmpty()
                     && this.earlier.isEmpty() && this.holder == null && this.catchUp == null
-                    && this.retrying == null;
+                    && this.retrying == null && this.fieldSites.isEmpty();
         }
     }
 
