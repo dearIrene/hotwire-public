@@ -135,12 +135,19 @@ public final class LiveConnections {
         return null;
     }
 
+    private static final ClassValue<Boolean> FOLLOWED = new ClassValue<>() {
+        @Override
+        protected Boolean computeValue(Class<?> type) {
+            String name = type.getName();
+            return !Object[].class.isAssignableFrom(type) && !Map.class.isAssignableFrom(type)
+                    && !PacketListener.class.isAssignableFrom(type) && !Level.class.isAssignableFrom(type)
+                    && !Entity.class.isAssignableFrom(type) && !Minecraft.class.isAssignableFrom(type)
+                    && !MinecraftServer.class.isAssignableFrom(type) && !Channel.class.isAssignableFrom(type)
+                    && (GameNames.isGame(name) || name.startsWith("net.fabricmc."));
+        }
+    };
+
     private static boolean isFollowed(Object value) {
-        String name = value.getClass().getName();
-        return !(value instanceof Object[]) && !(value instanceof Map<?, ?>) && !(value instanceof PacketListener)
-                && !(value instanceof Level) && !(value instanceof Entity) && !(value instanceof Minecraft)
-                && !(value instanceof MinecraftServer) && !(value instanceof Channel)
-                && (GameNames.isGame(name)
-                || name.startsWith("net.fabricmc."));
+        return FOLLOWED.get(value.getClass());
     }
 }
