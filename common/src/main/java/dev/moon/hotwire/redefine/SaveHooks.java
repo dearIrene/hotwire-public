@@ -61,6 +61,7 @@ public final class SaveHooks {
                 .asCollector(Object[].class, type.parameterCount()).asType(type);
     }
 
+    @SuppressWarnings("UnusedMethod")
     private static @Nullable Object run(MethodHandle handler, MethodHandle standIn, String mixin, AtomicBoolean said,
             Object[] arguments) throws Throwable {
         boolean before = Tripwire.markHotwireWork(true);
