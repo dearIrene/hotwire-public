@@ -42,38 +42,62 @@ import org.slf4j.LoggerFactory;
 
 public final class EarlyDefinitions implements PreLaunchEntrypoint {
     private static final Logger LOGGER = LoggerFactory.getLogger(EarlyDefinitions.class);
-    private static volatile @Nullable Instrumentation instrumentation;
-    private static volatile @Nullable ClassFileTransformer early;
     private static final long SITES_CAP = 24L << 20;
+
+    private static @Nullable Early early;
 
     @Override
     public void onPreLaunch() {
         StartTimes.mark("Hotwire's pre-launch begins");
         long began = System.nanoTime();
-        this.watch();
+        makeOnce(true);
         StartTimes.add("pre-launch", began);
         StartTimes.mark("Hotwire's pre-launch ends");
     }
 
-    @SuppressWarnings("ReferenceEquality")
-    private void watch() {
-        HotwireLog.install(FabricLoader.getInstance().getGameDir().resolve("hotwire").resolve("logs"));
+    static Early get() {
+        return makeOnce(false);
+    }
 
-        if (DevSetups.get().inSetup()) {
+    private static synchronized Early makeOnce(boolean watching) {
+        Early made = early;
+        if (made == null) {
+            made = make(watching);
+            early = made;
+        }
+        return made;
+    }
+
+    private static Early make(boolean watching) {
+        FabricLoader loader = FabricLoader.getInstance();
+        HotwireLog.install(loader.getGameDir().resolve("hotwire").resolve("logs"));
+
+        if (watching && DevSetups.get().inSetup()) {
             DevSession.takeEarlySources(DevSetups.getBuildFolder());
         }
 
-        if (Flags.findGuards() == null && new HotwireSettings(FabricLoader.getInstance()
-                .getConfigDir().resolve("hotwire/settings.json")).isRebuildEverySwitch(FabricLoader.getInstance()
-                .isDevelopmentEnvironment())) {
-            System.setProperty("hotwire.guards", "false");
+        HotwireSettings settings = new HotwireSettings(loader.getConfigDir().resolve("hotwire/settings.json"));
+        Early watched = null;
+        if (watching) {
+            if (Flags.findGuards() == null && settings.isRebuildEverySwitch(loader.isDevelopmentEnvironment())) {
+                System.setProperty("hotwire.guards", "false");
+            }
+            watched = watch(loader, settings);
         }
+
+        return watched != null ? watched : new Early(null, null, settings, EarlyModsReader.start(loader, settings));
+    }
+
+    @SuppressWarnings("ReferenceEquality")
+    private static @Nullable Early watch(FabricLoader fabric, HotwireSettings settings) {
         ClassLoader game = EarlyDefinitions.class.getClassLoader();
+
+        Early reached = null;
         try {
-            Path jar = FabricLoader.getInstance().getModContainer("hotwire")
+            Path jar = fabric.getModContainer("hotwire")
                     .flatMap(mod -> mod.getOrigin().getPaths().stream().findFirst()).orElse(null);
             if (jar == null) {
-                return;
+                return null;
             }
             long reach = System.nanoTime();
             Instrumentation found = JvmAccess.getInstrumentation(jar);
@@ -126,9 +150,7 @@ public final class EarlyDefinitions implements PreLaunchEntrypoint {
 
             found.addTransformer(new OpenGameClasses(game));
             found.addTransformer(watcher);
-            instrumentation = found;
-            early = watcher;
-            EarlyModsReader.start();
+            reached = new Early(found, watcher, settings, EarlyModsReader.start(fabric, settings));
             GameClassIndex.begin(found, game);
             if (HandlerGuards.ENABLED && !DevSetups.get().inSetup() && game.getParent() instanceof URLClassLoader jars
                     && Flags.SITE_CACHE) {
@@ -137,6 +159,7 @@ public final class EarlyDefinitions implements PreLaunchEntrypoint {
         } catch (JvmAccessException | RuntimeException | LinkageError e) {
             LOGGER.debug("[Hotwire] classes are not kept from the start: {}", e.toString());
         }
+        return reached;
     }
 
     private static void openSites(URL[] path) {
@@ -188,13 +211,12 @@ public final class EarlyDefinitions implements PreLaunchEntrypoint {
         AtomicFiles.write(file, String.join("\n", jars).getBytes(StandardCharsets.UTF_8));
     }
 
-    static void stop() {
-        Instrumentation found = instrumentation;
-        ClassFileTransformer watcher = early;
+    static void stop(Early made) {
+        Instrumentation found = made.instrumentation();
+        ClassFileTransformer watcher = made.watcher();
         if (found != null && watcher != null) {
             found.removeTransformer(watcher);
         }
         SiteCache.finish();
-        early = null;
     }
 }

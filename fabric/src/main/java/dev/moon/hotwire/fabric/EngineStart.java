@@ -8,7 +8,6 @@ import dev.moon.hotwire.dev.DevSession;
 import dev.moon.hotwire.engine.CacheLimit;
 import dev.moon.hotwire.engine.CrashGuard;
 import dev.moon.hotwire.engine.DevSetups;
-import dev.moon.hotwire.engine.EarlyModsReader;
 import dev.moon.hotwire.engine.HotwireEngine;
 import dev.moon.hotwire.engine.InstalledMods;
 import dev.moon.hotwire.engine.JvmParts;
@@ -131,11 +130,12 @@ final class EngineStart {
     private EngineStart() {
     }
 
-    static JvmParts bind(InstalledMods installed, Progress progress, GameReports reports,
-            UpdateFolders folders, UpdateQueue queue, Path gameDir, ModIcons icons) throws JvmAccessException {
+    static JvmParts bind(InstalledMods installed, Progress progress, GameReports reports, UpdateFolders folders,
+            UpdateQueue queue, Path gameDir, ModIcons icons, @Nullable Instrumentation reached)
+            throws JvmAccessException {
         StartTimes.Laps laps = StartTimes.startLaps("engine bind: ");
-        Instrumentation instrumentation = JvmAccess.getInstrumentation(findHotwireJarIfKnown(),
-                gameDir.resolve("hotwire").resolve("agent"));
+        Instrumentation instrumentation = reached != null ? reached : JvmAccess.getInstrumentation(
+                findHotwireJarIfKnown(), gameDir.resolve("hotwire").resolve("agent"));
         JarChannels.open(instrumentation);
         LOGGER.info("[Hotwire] {} open jars read on through an interrupt", JarChannels.makeUninterruptible());
         laps.endLap("reach the JVM, open jars");
@@ -385,18 +385,18 @@ final class EngineStart {
         return colon < 0 ? key : key.substring(0, colon);
     }
 
-    static HotwireEngine start() throws IOException {
+    static HotwireEngine start(Early early) throws IOException {
         FabricLoader loader = FabricLoader.getInstance();
         Path gameDir = loader.getGameDir();
         StartTimes.Laps laps = StartTimes.startLaps("engine start: ");
-        InstalledMods installed = EarlyModsReader.take(loader);
+        HotwireSettings settings = early.settings();
+        InstalledMods installed = early.mods().take(loader, settings);
         laps.endLap("read the installed mods");
         Progress progress = new Progress();
         LoggedFaults.install();
         GameReports reports = new GameReports(installed::nameOf, new MachineDetails());
         UpdateFolders folders = UpdateFolders.ofMods(ModsFolder.find(loader));
         UpdateQueue queue = new UpdateQueue(folders.queueFile());
-        HotwireSettings settings = new HotwireSettings(loader.getConfigDir().resolve("hotwire/settings.json"));
         SwitchHistory.open(loader.getConfigDir().resolve("hotwire/history.json"));
         BestTimes.open(loader.getConfigDir().resolve("hotwire/records.txt"));
         BestTimes.listen(beaten -> {
@@ -416,10 +416,11 @@ final class EngineStart {
         laps.endLap("settings, folders, icons");
         HotwireEngine engine;
         try {
-            JvmParts parts = bind(installed, progress, reports, folders, queue, gameDir, icons);
+            JvmParts parts = bind(installed, progress, reports, folders, queue, gameDir, icons,
+                    early.instrumentation());
             laps.endLap("bind, in all");
             engine = new HotwireEngine(installed, progress, reports, folders, queue, settings, icons,
-                    new HotwireEngine.Bound.Ready(parts), new EngineGameSide());
+                    new HotwireEngine.Bound.Ready(parts), new EngineGameSide(early));
             laps.endLap("make the engine");
             HotwireEngine made = engine;
             ElementLook.useMods(made::findSwitchable);
@@ -455,7 +456,7 @@ final class EngineStart {
             writeStartFailure(gameDir, e);
             engine = new HotwireEngine(installed, progress, reports, folders, queue, settings, icons,
                     new HotwireEngine.Bound.Refused(Lang.get(isLunar() ? "hotwire.switch.lunar"
-                            : "hotwire.switch.no_instrument")), new EngineGameSide());
+                            : "hotwire.switch.no_instrument")), new EngineGameSide(early));
 
             Path hotwire = findSwapperJar(folders);
             if (hotwire != null) {

@@ -40,10 +40,11 @@ import org.slf4j.LoggerFactory;
 
 public final class EarlyModsReader {
     private static final Logger LOGGER = LoggerFactory.getLogger(EarlyModsReader.class);
-    private static volatile @Nullable CompletableFuture<EarlyRead> ahead;
-    private static boolean started;
 
-    private EarlyModsReader() {
+    private volatile @Nullable CompletableFuture<EarlyRead> ahead;
+
+    private EarlyModsReader(@Nullable CompletableFuture<EarlyRead> ahead) {
+        this.ahead = ahead;
     }
 
     record Read(JarScans scans, ModIndex index) {
@@ -52,18 +53,16 @@ public final class EarlyModsReader {
     private record EarlyRead(String folder, InstalledMods installed) {
     }
 
-    public static synchronized void start() {
-        if (started || DevSetups.get().inSetup()) {
-            return;
+    public static EarlyModsReader start(FabricLoader loader, HotwireSettings settings) {
+        if (DevSetups.get().inSetup()) {
+            return new EarlyModsReader(null);
         }
-        started = true;
-        FabricLoader loader = FabricLoader.getInstance();
         CompletableFuture<EarlyRead> reading = new CompletableFuture<>();
         Thread reader = new Thread(() -> {
             long began = System.nanoTime();
             try {
                 String folder = describe(ModsFolder.find(loader));
-                InstalledMods installed = readInstalledMods(loader);
+                InstalledMods installed = readInstalledMods(loader, settings);
                 reading.complete(new EarlyRead(folder, installed));
                 registerTripwireClasses(installed, loader);
             } catch (IOException | RuntimeException e) {
@@ -72,13 +71,13 @@ public final class EarlyModsReader {
             StartTimes.add("read the installed mods ahead, own thread", began);
         }, "hotwire-mods");
         reader.setDaemon(true);
-        ahead = reading;
         reader.start();
+        return new EarlyModsReader(reading);
     }
 
-    public static InstalledMods take(FabricLoader loader) throws IOException {
-        CompletableFuture<EarlyRead> reading = ahead;
-        ahead = null;
+    public InstalledMods take(FabricLoader loader, HotwireSettings settings) throws IOException {
+        CompletableFuture<EarlyRead> reading = this.ahead;
+        this.ahead = null;
         if (reading != null) {
             try {
                 EarlyRead read = reading.join();
@@ -90,7 +89,7 @@ public final class EarlyModsReader {
                 LOGGER.debug("[Hotwire] the mods folder was not read ahead: {}", String.valueOf(e.getCause()));
             }
         }
-        return readInstalledMods(loader);
+        return readInstalledMods(loader, settings);
     }
 
     private static String describe(Path mods) throws IOException {
@@ -127,7 +126,7 @@ public final class EarlyModsReader {
         }
     }
 
-    static InstalledMods readInstalledMods(FabricLoader loader) throws IOException {
+    static InstalledMods readInstalledMods(FabricLoader loader, HotwireSettings settings) throws IOException {
         Path mods = ModsFolder.find(loader);
         Read ahead = open();
         JarScans scans = ahead.scans();
@@ -189,8 +188,7 @@ public final class EarlyModsReader {
             }
         }
 
-        boolean withHistory = DevSetups.get().inSetup() && new HotwireSettings(FabricLoader.getInstance().getConfigDir()
-                .resolve("hotwire/settings.json")).isHistorySaved();
+        boolean withHistory = DevSetups.get().inSetup() && settings.isHistorySaved();
         if (DevSetups.get().inSetup()) {
             for (DevMod mod : DevMod.find()) {
                 if (jarOf.containsKey(mod.id())) {

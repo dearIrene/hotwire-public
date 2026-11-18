@@ -3,7 +3,6 @@ package dev.moon.hotwire.fabric;
 import dev.moon.hotwire.classfile.GameNames;
 import dev.moon.hotwire.dev.DevSession;
 import dev.moon.hotwire.engine.DevSetups;
-import dev.moon.hotwire.engine.EarlyModsReader;
 import dev.moon.hotwire.engine.EngineApi;
 import dev.moon.hotwire.engine.HotwireEngine;
 import dev.moon.hotwire.engine.LoadedMods;
@@ -79,10 +78,10 @@ public final class HotwireClient implements ClientModInitializer {
         Games.start(new GameSide());
         EngineApi.start(HotwireClient::findEngine);
         long began = System.nanoTime();
-        HotwireLog.install(FabricLoader.getInstance().getGameDir().resolve("hotwire").resolve("logs"));
+
+        EarlyDefinitions.get();
         ActionJournal.open(FabricLoader.getInstance().getGameDir().resolve("hotwire").resolve("logs"),
                 HotwireClient::findPlace);
-        EarlyModsReader.start();
         GameLog.LOGGER.info("[Hotwire] {} loaded; H or /hotwire opens it, and its Report button writes what went wrong"
                 + " to hotwire/reports", LoadedMods.findVersion(ID, "unknown"));
         ClientWarning.register();
@@ -326,7 +325,7 @@ public final class HotwireClient implements ClientModInitializer {
             StartTimes.mark("Hotwire's engine start begins");
             long began = System.nanoTime();
             try {
-                started = EngineStart.start();
+                started = EngineStart.start(EarlyDefinitions.get());
             } catch (IOException | RuntimeException e) {
                 startFailed = true;
                 LOGGER.error("[Hotwire] could not start; the game goes on without it", e);

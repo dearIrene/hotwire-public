@@ -46,6 +46,12 @@ import net.minecraft.sounds.SoundEvents;
 import org.jspecify.annotations.Nullable;
 
 final class EngineGameSide implements EngineGame {
+    private final Early early;
+
+    EngineGameSide(Early early) {
+        this.early = early;
+    }
+
     @Override
     public @Nullable Object findOpenScreen() {
         return ModViews.openScreen();
@@ -177,7 +183,7 @@ final class EngineGameSide implements EngineGame {
 
     @Override
     public void stopEarlyLoads() {
-        EarlyDefinitions.stop();
+        EarlyDefinitions.stop(this.early);
     }
 
     @Override
