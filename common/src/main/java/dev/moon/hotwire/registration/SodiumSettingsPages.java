@@ -22,14 +22,15 @@ public final class SodiumSettingsPages {
     private static final Logger LOGGER = LoggerFactory.getLogger(SodiumSettingsPages.class);
     private static final String ROOT = "net.caffeinemc.mods.sodium.";
     private static final String MANAGER = ROOT + "client.config.ConfigManager";
-    private static final AtomicBoolean BUILD_DUE = new AtomicBoolean();
 
-    private record PageRemoval(String mod) implements RegistrationJournal.Take {
+    private final AtomicBoolean buildDue = new AtomicBoolean();
+
+    private record PageRemoval(String mod, AtomicBoolean buildDue) implements RegistrationJournal.Take {
         @Override
         public void restore() {
-            if (BUILD_DUE.compareAndSet(false, true)) {
+            if (this.buildDue.compareAndSet(false, true)) {
                 Games.getNow().runOnGame(() -> {
-                    BUILD_DUE.set(false);
+                    this.buildDue.set(false);
                     buildAgain(Set.of());
                 });
             }
@@ -46,14 +47,11 @@ public final class SodiumSettingsPages {
         }
     }
 
-    private SodiumSettingsPages() {
+    public void takeOut(Collection<String> mods) {
+        Games.getNow().runBeforeFrameAndWait(() -> this.takeOutNow(mods), "settings pages left out");
     }
 
-    public static void takeOut(Collection<String> mods) {
-        Games.getNow().runBeforeFrameAndWait(() -> takeOutNow(mods), "settings pages left out");
-    }
-
-    private static void takeOutNow(Collection<String> mods) {
+    private void takeOutNow(Collection<String> mods) {
         Class<?> manager = findManager();
         if (manager == null) {
             return;
@@ -71,7 +69,7 @@ public final class SodiumSettingsPages {
             return;
         }
         if (!theirs.isEmpty() && buildAgain(Set.copyOf(mods))) {
-            theirs.forEach(mod -> GameRegistrations.getJournal().addTake(mod, new PageRemoval(mod)));
+            theirs.forEach(mod -> GameRegistrations.getJournal().addTake(mod, new PageRemoval(mod, this.buildDue)));
             LOGGER.info("[Hotwire] Sodium's settings were built again without {}", theirs);
         }
     }

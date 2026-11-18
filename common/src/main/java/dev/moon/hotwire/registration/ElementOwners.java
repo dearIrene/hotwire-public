@@ -25,8 +25,9 @@ final class ElementOwners {
     private final ModNames names;
 
     private final Wrappers wrappers = new Wrappers();
+    private final ReflectedOwners reflected;
 
-    ElementOwners(List<String> mods, Set<Object> registered) {
+    ElementOwners(List<String> mods, Set<Object> registered, ReflectedOwners reflected) {
         this.mods = List.copyOf(mods);
         this.modSet = Set.copyOf(mods);
         Set<String> libraries = new HashSet<>();
@@ -34,6 +35,7 @@ final class ElementOwners {
         this.libraryOfSome = Set.copyOf(libraries);
         this.registered = registered;
         this.names = new ModNames(mods);
+        this.reflected = reflected;
     }
 
     boolean isRegistered(@Nullable Object value) {
@@ -67,7 +69,7 @@ final class ElementOwners {
         if (isGameObject(value)) {
             return null;
         }
-        String named = ReflectedOwners.findOwnerOf(value instanceof Class<?> type ? type : value.getClass());
+        String named = this.reflected.findOwnerOf(value instanceof Class<?> type ? type : value.getClass());
         return named != null && this.modSet.contains(named) ? named : null;
     }
 

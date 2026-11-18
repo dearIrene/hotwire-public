@@ -23,11 +23,11 @@ final class ReflectedOwners {
 
     private static volatile Function<String, byte @Nullable []> bytesOf = name -> null;
 
-    private static volatile Map<String, String> modOfName = Map.of();
+    private volatile Map<String, String> modOfName = Map.of();
 
-    private static volatile Map<Class<?>, String> answers = new ConcurrentHashMap<>();
+    private volatile Map<Class<?>, String> answers = new ConcurrentHashMap<>();
 
-    private static volatile Map<Class<?>, Set<String>> allAnswers = new ConcurrentHashMap<>();
+    private volatile Map<Class<?>, Set<String>> allAnswers = new ConcurrentHashMap<>();
 
     private static final ClassValue<Set<String>> NAMED = new ClassValue<>() {
         @Override
@@ -43,41 +43,38 @@ final class ReflectedOwners {
         }
     };
 
-    private ReflectedOwners() {
-    }
-
     static void readBytesWith(Function<String, byte @Nullable []> bytes) {
         bytesOf = bytes;
     }
 
-    static void useNames(Map<String, String> names) {
-        modOfName = Map.copyOf(names);
-        answers = new ConcurrentHashMap<>();
-        allAnswers = new ConcurrentHashMap<>();
+    void useNames(Map<String, String> names) {
+        this.modOfName = Map.copyOf(names);
+        this.answers = new ConcurrentHashMap<>();
+        this.allAnswers = new ConcurrentHashMap<>();
     }
 
-    static @Nullable String findOwnerOf(Class<?> type) {
-        if (modOfName.isEmpty() || type.isArray() || type.isPrimitive()) {
+    @Nullable String findOwnerOf(Class<?> type) {
+        if (this.modOfName.isEmpty() || type.isArray() || type.isPrimitive()) {
             return null;
         }
-        String answer = answers.computeIfAbsent(type, ReflectedOwners::findAfresh);
+        String answer = this.answers.computeIfAbsent(type, this::findAfresh);
         return answer.isEmpty() ? null : answer;
     }
 
-    static Set<String> findAllOwnersOf(Class<?> type) {
-        if (modOfName.isEmpty() || type.isArray() || type.isPrimitive()) {
+    Set<String> findAllOwnersOf(Class<?> type) {
+        if (this.modOfName.isEmpty() || type.isArray() || type.isPrimitive()) {
             return Set.of();
         }
-        return allAnswers.computeIfAbsent(type, ReflectedOwners::findAllAfresh);
+        return this.allAnswers.computeIfAbsent(type, this::findAllAfresh);
     }
 
-    private static Set<String> findAllAfresh(Class<?> type) {
-        if (!Wrappers.isOfAnotherMod(type) || !namesAnyInUse(type)) {
+    private Set<String> findAllAfresh(Class<?> type) {
+        if (!Wrappers.isOfAnotherMod(type) || !this.namesAnyInUse(type)) {
             return Set.of();
         }
         Set<String> mods = new HashSet<>();
         for (String name : NAMED.get(type)) {
-            String mod = modOfName.get(name);
+            String mod = this.modOfName.get(name);
             if (mod != null) {
                 mods.add(mod);
             }
@@ -85,12 +82,12 @@ final class ReflectedOwners {
         return Set.copyOf(mods);
     }
 
-    private static String findAfresh(Class<?> type) {
-        if (!Wrappers.isOfAnotherMod(type) || !namesAnyInUse(type)) {
+    private String findAfresh(Class<?> type) {
+        if (!Wrappers.isOfAnotherMod(type) || !this.namesAnyInUse(type)) {
             return "";
         }
         for (String name : NAMED.get(type)) {
-            String mod = modOfName.get(name);
+            String mod = this.modOfName.get(name);
             if (mod != null) {
                 return mod;
             }
@@ -98,8 +95,8 @@ final class ReflectedOwners {
         return "";
     }
 
-    private static boolean namesAnyInUse(Class<?> type) {
-        Map<String, String> inUse = modOfName;
+    private boolean namesAnyInUse(Class<?> type) {
+        Map<String, String> inUse = this.modOfName;
         for (String name : POOLED.get(type)) {
             if (inUse.containsKey(name)) {
                 return true;

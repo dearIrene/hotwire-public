@@ -19,6 +19,11 @@ final class TakeCandidates {
     private @Nullable CandidateReach reach;
 
     private int lastReached;
+    private final ReflectedOwners reflected;
+
+    TakeCandidates(ReflectedOwners reflected) {
+        this.reflected = reflected;
+    }
 
     void forgetObjects() {
         this.reach = null;
@@ -32,7 +37,7 @@ final class TakeCandidates {
             return null;
         }
         Class<?> type = element instanceof Class<?> named ? named : element.getClass();
-        Set<String> all = new HashSet<>(ReflectedOwners.findAllOwnersOf(type));
+        Set<String> all = new HashSet<>(this.reflected.findAllOwnersOf(type));
         if (deep && !(element instanceof Class<?>) && Wrappers.isAsked(type)) {
             CandidateReach walk = this.reach;
             if (walk != null) {

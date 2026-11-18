@@ -44,7 +44,9 @@ final class CollectionReferences implements FixedLists.Walk {
     private Set<String> reader = TakeReach.GAME;
     List<String> mods = List.of();
 
-    private ElementOwners owners = new ElementOwners(List.of(), Set.of());
+    final ReflectedOwners reflected = new ReflectedOwners();
+
+    private ElementOwners owners = new ElementOwners(List.of(), Set.of(), this.reflected);
     private Map<String, List<Removal>> mine = Map.of();
 
     @Nullable String readingStaticsOf;
@@ -64,7 +66,7 @@ final class CollectionReferences implements FixedLists.Walk {
     private static final boolean NO_PRINTS = Flags.NO_FINGERPRINTS;
     private boolean inSmall;
 
-    final TakeCandidates candidates = new TakeCandidates();
+    final TakeCandidates candidates = new TakeCandidates(this.reflected);
 
     synchronized void forgetPrepared() {
         this.prepared = null;
@@ -95,7 +97,7 @@ final class CollectionReferences implements FixedLists.Walk {
         this.prepared = null;
 
         if (ready == null) {
-            this.owners = new ElementOwners(List.of(), Set.of());
+            this.owners = new ElementOwners(List.of(), Set.of(), this.reflected);
         }
         List<Runnable> ahead = ready != null ? List.of() : this.look.open(mods);
         try {
@@ -168,7 +170,7 @@ final class CollectionReferences implements FixedLists.Walk {
         this.seen = new IdentityHashMap<>();
         this.readThrough = Collections.newSetFromMap(new IdentityHashMap<>());
         this.mods = List.of();
-        this.owners = new ElementOwners(List.of(), Set.of());
+        this.owners = new ElementOwners(List.of(), Set.of(), this.reflected);
 
         this.ownClassAsked = null;
         this.ownStaticsAsked = null;
@@ -441,7 +443,7 @@ final class CollectionReferences implements FixedLists.Walk {
         this.readThrough = Collections.newSetFromMap(new IdentityHashMap<>());
         this.reader = TakeReach.GAME;
         this.mods = List.copyOf(mods);
-        this.owners = new ElementOwners(mods, Games.getNow().getRegistered());
+        this.owners = new ElementOwners(mods, Games.getNow().getRegistered(), this.reflected);
         Map<String, List<Removal>> mine = new LinkedHashMap<>();
         mods.forEach(mod -> mine.put(mod, new ArrayList<>()));
         this.mine = mine;

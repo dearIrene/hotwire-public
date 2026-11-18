@@ -81,6 +81,7 @@ public final class SwitchRunner {
     private final SwitchUnits units;
     private final InstalledMods installed;
     private final Reloads reloads = Games.getNow().getReloads();
+    private final SodiumSettingsPages sodiumPages = new SodiumSettingsPages();
     private final @Nullable TransformerChain chain;
 
     private final List<Step> firstOut;
@@ -166,7 +167,7 @@ public final class SwitchRunner {
                         "removals: cursor"),
                 step(this.units::takeOutHuds),
                 step(OneConfigModCards::takeOut),
-                new Step(SodiumSettingsPages::takeOut, "removals: huds"),
+                new Step(this.sodiumPages::takeOut, "removals: huds"),
                 new Step(this.units::takeOutNetworkHandlers, "removals: network"),
                 new Step(this.units::takeOutRendererProviders, "removals: renderer providers"),
                 new Step(this.units::takeOutTasks, "removals: tasks"),

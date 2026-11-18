@@ -374,7 +374,7 @@ public final class FieldReferences {
         Predicate<Class<?>> others = getOthers(every ? Set.of() : mods, on);
         Map<String, String> modOfName = new HashMap<>();
         mods.forEach(mod -> classesOf.getOrDefault(mod, List.of()).forEach(type -> modOfName.put(type.getName(), mod)));
-        ReflectedOwners.useNames(modOfName);
+        this.elements.reflected.useNames(modOfName);
 
         if (!ElementLook.isLooking()) {
             ElementLook.giveWay();
