@@ -96,7 +96,7 @@ public final class HotwireClient implements ClientModInitializer {
         }
         FreezeDump.start(FabricLoader.getInstance().getGameDir().resolve("hotwire").resolve("logs"));
         NoticeHud.register();
-        Downloads.onEveryChange(DownloadNotices::show);
+        Downloads.onEveryChange(new DownloadNotices()::show);
 
         Lang.useEnglishFrom(() -> FabricLoader.getInstance().getModContainer(ID)
                 .flatMap(mod -> mod.findPath("assets/hotwire/lang/en_us.json")).map(path -> {

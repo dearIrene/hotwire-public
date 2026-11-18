@@ -13,70 +13,67 @@ public final class DownloadNotices {
 
     private static final int PAUSE_MARK = 1000;
 
-    private static final Map<Integer, Integer> HOLDING = new HashMap<>();
-    private static final Set<Integer> GONE = new HashSet<>();
+    private final Map<Integer, Integer> holding = new HashMap<>();
+    private final Set<Integer> gone = new HashSet<>();
     private static volatile boolean quiet;
-
-    private DownloadNotices() {
-    }
 
     public static void setQuiet(boolean shownElsewhere) {
         quiet = shownElsewhere;
     }
 
-    public static synchronized void show(Downloads.Job job) {
+    public synchronized void show(Downloads.Job job) {
         String key = "download " + job.id();
         switch (job.state()) {
             case WAITING -> {
             }
             case GETTING, PAUSED -> {
                 if (!quiet) {
-                    showGetting(job, key);
+                    this.showGetting(job, key);
                 }
             }
             case STOPPED -> {
-                boolean inHand = HOLDING.remove(job.id()) != null;
-                GONE.remove(job.id());
+                boolean inHand = this.holding.remove(job.id()) != null;
+                this.gone.remove(job.id());
                 if (inHand) {
                     Notices.show(new Notice(Notice.Kind.ASK, job.name(), Lang.get("hotwire.notice.download_stopped"),
                             key));
                 }
             }
             case DONE -> {
-                boolean inHand = HOLDING.remove(job.id()) != null;
-                GONE.remove(job.id());
+                boolean inHand = this.holding.remove(job.id()) != null;
+                this.gone.remove(job.id());
                 if (inHand && !quiet) {
                     Notices.show(new Notice(Notice.Kind.DONE, job.name(), Lang.get("hotwire.notice.downloaded"),
                             key));
                 }
             }
             case FAILED -> {
-                HOLDING.remove(job.id());
-                GONE.remove(job.id());
+                this.holding.remove(job.id());
+                this.gone.remove(job.id());
                 Notices.show(new Notice(Notice.Kind.BAD, job.name(), Lang.get("hotwire.notice.download_failed"),
                         key));
             }
         }
     }
 
-    private static void showGetting(Downloads.Job job, String key) {
+    private void showGetting(Downloads.Job job, String key) {
         boolean paused = job.state() == Downloads.State.PAUSED;
         int percent = (int) (job.getFraction() * 100) + (paused ? PAUSE_MARK : 0);
-        Integer last = HOLDING.get(job.id());
-        if ((last != null && last == percent) || GONE.contains(job.id())) {
+        Integer last = this.holding.get(job.id());
+        if ((last != null && last == percent) || this.gone.contains(job.id())) {
             return;
         }
         Notice card = Notice.ofDownload(job.name(), Lang.get(paused ? "hotwire.notice.download_paused"
                 : "hotwire.notice.downloading", describeSize(job)), key, (float) job.getFraction(), job.id(), paused);
         if (last != null) {
             if (Notices.replace(card)) {
-                HOLDING.put(job.id(), percent);
+                this.holding.put(job.id(), percent);
             } else {
-                HOLDING.remove(job.id());
-                GONE.add(job.id());
+                this.holding.remove(job.id());
+                this.gone.add(job.id());
             }
-        } else if (HOLDING.size() < ROOM) {
-            HOLDING.put(job.id(), percent);
+        } else if (this.holding.size() < ROOM) {
+            this.holding.put(job.id(), percent);
             Notices.show(card);
         }
     }
