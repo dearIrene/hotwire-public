@@ -63,7 +63,7 @@ final class RebuildSteps {
             Games.getNow().getReloads().rebuildObjects(prepared.newlyBuilt(), changed, prepared.pausedReloads());
 
             prepared.pausedReloads().forEach(OffWindowObjects::forget);
-            LiveObjects.noteReloaded(prepared, rebuilder::findLaunchBytes);
+            LiveObjects.noteReloaded(prepared, rebuilder);
         };
         if (catchUpLater == null) {
             notSetUp = LiveObjects.replay(prepared, onGameThread);

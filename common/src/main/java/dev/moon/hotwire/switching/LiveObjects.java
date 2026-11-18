@@ -99,8 +99,8 @@ final class LiveObjects {
         }
         Map<Class<?>, ClassSplit.Result> retained = new LinkedHashMap<>(prepared.splits());
         retained.keySet().removeIf(recomputed);
-        ClassRebuilder.PreparedRebuild reloading = withReloading(prepared, retained, game, originalOf,
-                rebuilder::findLaunchBytes, current);
+        ClassRebuilder.PreparedRebuild reloading = withReloading(prepared, retained, game, originalOf, rebuilder,
+                current);
         Map<Class<?>, byte[]> targets = new LinkedHashMap<>();
         retained.forEach((type, split) -> targets.put(type, prepared.mixed().getOrDefault(
                 Type.getInternalName(type), split.target())));
@@ -226,7 +226,7 @@ final class LiveObjects {
 
     private static ClassRebuilder.PreparedRebuild withReloading(ClassRebuilder.PreparedRebuild prepared,
             Map<Class<?>, ClassSplit.Result> retained, SwitchApplier.Game game,
-            Function<String, byte @Nullable []> originalOf, Function<String, byte @Nullable []> launchOf,
+            Function<String, byte @Nullable []> originalOf, ClassRebuilder rebuilder,
             Map<String, byte[]> current) {
         Set<String> reload = new TreeSet<>();
         retained.forEach((type, split) -> {
@@ -234,12 +234,12 @@ final class LiveObjects {
 
             byte[] mixed = prepared.mixed().getOrDefault(name, split.target());
             byte[] original = originalOf.apply(name);
-            byte[] launched = launchOf.apply(name);
+            byte[] launched = rebuilder.findLaunchBytes(name);
 
             Set<String> sinceLaunch = launched == null || OffWindowObjects.isMadeElsewhere(name) ? Set.of()
                     : ConstructedFields.findSetOutsideConstructors(mixed, launched);
             boolean madeWithout = OffWindowObjects.countAliveFromReload(name) > 0
-                    || !OffWindowObjects.isReloadedWith(name, sinceLaunch);
+                    || !rebuilder.isReloadedWith(name, sinceLaunch);
             byte[] running = current.get(name);
             byte[] base = running != null ? running : original;
             Set<String> missing = base == null || game.isWorldObject(type) || !madeWithout ? Set.of()
@@ -258,14 +258,14 @@ final class LiveObjects {
         return prepared.withPausedReloads(classes);
     }
 
-    static void noteReloaded(ClassRebuilder.PreparedRebuild prepared, Function<String, byte @Nullable []> launchOf) {
+    static void noteReloaded(ClassRebuilder.PreparedRebuild prepared, ClassRebuilder rebuilder) {
         Map<String, byte[]> targets = new HashMap<>();
         prepared.splits().forEach((type, split) -> targets.put(Type.getInternalName(type), split.target()));
         for (String name : prepared.pausedReloads()) {
             byte[] mixed = prepared.mixed().getOrDefault(name, targets.get(name));
-            byte[] launched = launchOf.apply(name);
+            byte[] launched = rebuilder.findLaunchBytes(name);
             if (mixed != null && launched != null) {
-                OffWindowObjects.noteReloadedWith(name, ConstructedFields.findSetOutsideConstructors(mixed, launched));
+                rebuilder.noteReloadedWith(name, ConstructedFields.findSetOutsideConstructors(mixed, launched));
             }
         }
     }

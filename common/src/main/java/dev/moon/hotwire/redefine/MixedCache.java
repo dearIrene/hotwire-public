@@ -102,6 +102,8 @@ final class MixedCache {
     private final Set<CacheKey> counted = ConcurrentHashMap.newKeySet();
 
     private final Map<CacheKey, Unwritten> unwritten = new ConcurrentHashMap<>();
+
+    private final Map<byte[], CacheKey> handedShapes = Collections.synchronizedMap(new WeakHashMap<>());
     @SuppressWarnings("ThreadPriorityCheck")
     private final ExecutorService writer = Executors.newSingleThreadExecutor(
             Thread.ofPlatform().name("hotwire-cache").daemon().priority(Thread.MIN_PRIORITY).factory());
@@ -114,8 +116,6 @@ final class MixedCache {
     }
 
     private static final String KEYS = "mixed class 12";
-
-    private static final Map<byte[], CacheKey> SHAPES = Collections.synchronizedMap(new WeakHashMap<>());
 
     private static final @Nullable String KEY_DUMP = Flags.CACHE_KEY_DUMP;
     private final AtomicLong missedNoEntry = new AtomicLong();
@@ -528,7 +528,7 @@ final class MixedCache {
             for (String type : ClassHeader.of(next.removeLast()).findAbove()) {
                 byte[] bytes = classes.get(type);
                 if (bytes != null && !targets.contains(type) && seen.add(type)) {
-                    CacheKey shape = findShape(bytes);
+                    CacheKey shape = this.findShape(bytes);
                     handed.add(type).add(shape.high()).add(shape.low());
                     next.add(bytes);
                 }
@@ -537,8 +537,8 @@ final class MixedCache {
         return handed.build();
     }
 
-    static CacheKey findShape(byte[] bytes) {
-        CacheKey known = MixedCache.SHAPES.get(bytes);
+    CacheKey findShape(byte[] bytes) {
+        CacheKey known = this.handedShapes.get(bytes);
         if (known != null) {
             return known;
         }
@@ -554,7 +554,7 @@ final class MixedCache {
         members.sort(null);
         members.forEach(shape::add);
         CacheKey made = shape.build();
-        MixedCache.SHAPES.put(bytes, made);
+        this.handedShapes.put(bytes, made);
         return made;
     }
 

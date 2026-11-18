@@ -72,6 +72,8 @@ public final class ClassRebuilder {
 
     private final DefinedClasses launch = new DefinedClasses();
 
+    private final Map<String, Set<String>> reloadedWith = new ConcurrentHashMap<>();
+
     private final DefinedClasses firstDefined = new DefinedClasses();
 
     private volatile boolean toLaunch;
@@ -94,6 +96,18 @@ public final class ClassRebuilder {
 
     public byte @Nullable [] findLaunchBytes(String internalName) {
         return this.launch.find(internalName);
+    }
+
+    public void noteReloadedWith(String className, Set<String> fields) {
+        this.reloadedWith.merge(className, Set.copyOf(fields), (had, more) -> {
+            Set<String> all = new TreeSet<>(had);
+            all.addAll(more);
+            return Set.copyOf(all);
+        });
+    }
+
+    public boolean isReloadedWith(String className, Set<String> fields) {
+        return this.reloadedWith.getOrDefault(className, Set.of()).containsAll(fields);
     }
 
     public void launchChanged() {
