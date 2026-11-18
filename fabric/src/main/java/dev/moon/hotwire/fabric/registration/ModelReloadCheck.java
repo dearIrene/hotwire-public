@@ -35,8 +35,9 @@ public final class ModelReloadCheck {
 
     private static final int ARRAY_LOOKED_AT = 64;
     private static final Logger LOGGER = LoggerFactory.getLogger(ModelReloadCheck.class);
-    private static final Set<String> MODEL_OWNERS = ConcurrentHashMap.newKeySet();
-    private static final Set<String> FONT_OWNERS = ConcurrentHashMap.newKeySet();
+
+    private final Set<String> modelOwners = ConcurrentHashMap.newKeySet();
+    private final Set<String> fontOwners = ConcurrentHashMap.newKeySet();
 
     private record EarlyOwners(Set<String> mods, List<Integer> made, Set<String> owners,
             List<ModelWrappers.Swap> swaps) {
@@ -46,9 +47,6 @@ public final class ModelReloadCheck {
     }
 
     private static volatile @Nullable EarlyOwners modelsAhead;
-
-    private ModelReloadCheck() {
-    }
 
     public static void unwrapModels(Collection<String> mods) {
         EarlyOwners ahead = modelsAhead;
@@ -95,11 +93,11 @@ public final class ModelReloadCheck {
         return made;
     }
 
-    public static boolean hasModelsOf(Collection<String> mods) {
+    public boolean hasModelsOf(Collection<String> mods) {
         EarlyOwners ahead = modelsAhead;
         modelsAhead = null;
         Set<String> found = ahead != null && ahead.standsFor(mods) ? ahead.owners() : findModelOwners(mods);
-        noteModels(found);
+        this.noteModels(found);
         return !found.isEmpty();
     }
 
@@ -123,13 +121,13 @@ public final class ModelReloadCheck {
         return found;
     }
 
-    public static void noteModels(Collection<String> mods) {
-        MODEL_OWNERS.addAll(mods);
+    public void noteModels(Collection<String> mods) {
+        this.modelOwners.addAll(mods);
     }
 
-    public static boolean hasFontsOf(Object fonts, Collection<String> mods) {
+    public boolean hasFontsOf(Object fonts, Collection<String> mods) {
         Set<String> found = findFontOwners(fonts, mods);
-        noteFonts(found);
+        this.noteFonts(found);
         return !found.isEmpty();
     }
 
@@ -140,22 +138,22 @@ public final class ModelReloadCheck {
         return found;
     }
 
-    public static void noteFonts(Collection<String> mods) {
-        FONT_OWNERS.addAll(mods);
+    public void noteFonts(Collection<String> mods) {
+        this.fontOwners.addAll(mods);
     }
 
-    public static boolean hasFontsAtOn(Collection<String> mods) {
+    public boolean hasFontsAtOn(Collection<String> mods) {
         boolean any = false;
         for (String mod : mods) {
-            any |= FONT_OWNERS.remove(mod);
+            any |= this.fontOwners.remove(mod);
         }
         return any;
     }
 
-    public static boolean bakeAtOn(Collection<String> mods) {
+    public boolean bakeAtOn(Collection<String> mods) {
         boolean any = false;
         for (String mod : mods) {
-            any |= MODEL_OWNERS.remove(mod);
+            any |= this.modelOwners.remove(mod);
         }
         return any;
     }

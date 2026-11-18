@@ -435,35 +435,35 @@ public final class ResourceReload {
     }
 
     static void reloadResources(Collection<String> newlyBuilt, Collection<String> mods, boolean off,
-            Set<String> packed) {
+            Set<String> packed, ModelReloadCheck owners) {
         try {
-            reloadResourcesNow(newlyBuilt, mods, off, packed);
+            reloadResourcesNow(newlyBuilt, mods, off, packed, owners);
         } finally {
             ModelReloadCheck.forgetAhead();
         }
     }
 
     private static void reloadResourcesNow(Collection<String> newlyBuilt, Collection<String> mods, boolean off,
-            Set<String> packed) {
+            Set<String> packed, ModelReloadCheck owners) {
         Set<String> available = getAvailablePacks();
         if (off) {
             Set<String> atPause = packsAtPause;
             mods.stream().filter(id -> available.contains(id) || atPause.contains(id)).forEach(packed::add);
 
-            ModelReloadCheck.noteModels(mods.stream().filter(MODELS_AT_PAUSE::contains).toList());
-            ModelReloadCheck.noteFonts(mods.stream().filter(FONTS_AT_PAUSE::contains).toList());
+            owners.noteModels(mods.stream().filter(MODELS_AT_PAUSE::contains).toList());
+            owners.noteFonts(mods.stream().filter(FONTS_AT_PAUSE::contains).toList());
         }
         List<String> packsGone = off ? List.of()
                 : mods.stream().filter(packed::remove).filter(id -> !available.contains(id)).toList();
 
-        boolean modelsAtOn = !off && ModelReloadCheck.bakeAtOn(mods);
-        boolean fontsAtOn = !off && ModelReloadCheck.hasFontsAtOn(mods);
+        boolean modelsAtOn = !off && owners.bakeAtOn(mods);
+        boolean fontsAtOn = !off && owners.hasFontsAtOn(mods);
         if (reloadedWhilePaused) {
             return;
         }
-        boolean models = off ? ModelReloadCheck.hasModelsOf(mods) : modelsAtOn;
+        boolean models = off ? owners.hasModelsOf(mods) : modelsAtOn;
         FontManager manager = FontReload.findFontManager();
-        boolean fonts = manager != null && (off ? ModelReloadCheck.hasFontsOf(manager, mods) : fontsAtOn);
+        boolean fonts = manager != null && (off ? owners.hasFontsOf(manager, mods) : fontsAtOn);
 
         boolean ownPack = off && hasPackOf(mods);
         List<Class<?>> resources = findLoaded(newlyBuilt).stream()
