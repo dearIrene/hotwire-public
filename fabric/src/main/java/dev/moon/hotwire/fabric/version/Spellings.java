@@ -329,14 +329,6 @@ public final class Spellings {
         *///?}
     }
 
-    public static boolean hasRenderQueue() {
-        //? if <1.21.5 {
-        /*return true;
-        *///?} else {
-        return false;
-        //?}
-    }
-
     public static void replayRenderQueue() {
         //? if <1.21.5 {
         /*RenderSystem.replayQueue();

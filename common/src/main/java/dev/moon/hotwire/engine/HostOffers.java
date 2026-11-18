@@ -1,7 +1,7 @@
 package dev.moon.hotwire.engine;
 
-import dev.moon.hotwire.api.ChangePlan;
 import dev.moon.hotwire.api.ChangeRequest;
+import dev.moon.hotwire.api.Reason;
 import dev.moon.hotwire.api.SwitchResult;
 import dev.moon.hotwire.seam.Games;
 import dev.moon.hotwire.seam.SharedChange;
@@ -10,9 +10,11 @@ import dev.moon.hotwire.ui.Lang;
 import dev.moon.hotwire.ui.ModScreen;
 import dev.moon.hotwire.ui.Notice;
 import dev.moon.hotwire.ui.Notices;
+import java.util.ArrayList;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.concurrent.CompletableFuture;
 
 final class HostOffers {
     private final HotwireEngine engine;
@@ -25,15 +27,16 @@ final class HostOffers {
     }
 
     void take(List<SharedChange> told) {
-        boolean more = false;
+        boolean news = false;
         for (SharedChange change : told) {
-            if (!this.differs(change)) {
-                this.waiting.remove(change.mod());
-            } else if (this.waiting.containsKey(change.mod()) || this.waiting.size() < SharedChange.MOST) {
-                more |= !change.equals(this.waiting.put(change.mod(), change));
+            if (!this.waiting.containsKey(change.mod()) && this.waiting.size() >= SharedChange.MOST) {
+                this.waiting.values().removeIf(known -> !this.differs(known));
+            }
+            if (this.waiting.containsKey(change.mod()) || this.waiting.size() < SharedChange.MOST) {
+                news |= !change.equals(this.waiting.put(change.mod(), change)) && this.differs(change);
             }
         }
-        if (!more) {
+        if (!news) {
             return;
         }
         ModScreen shown = this.engine.screen;
@@ -45,8 +48,7 @@ final class HostOffers {
     }
 
     List<SharedChange> getWaiting() {
-        this.waiting.values().removeIf(change -> !this.differs(change));
-        return List.copyOf(this.waiting.values());
+        return this.waiting.values().stream().filter(this::differs).toList();
     }
 
     void clear() {
@@ -56,16 +58,33 @@ final class HostOffers {
     @SuppressWarnings("FutureReturnValueIgnored")
     void match() {
         ChangeRequest request = new ChangeRequest();
+        List<String> adds = new ArrayList<>();
         for (SharedChange change : this.getWaiting()) {
             request = switch (change.kind()) {
                 case ADD -> request.add(change.project(), change.version());
                 case ON -> request.on(change.mod());
                 case OFF -> request.off(change.mod());
             };
+            if (change.kind() == SharedChange.Kind.ADD) {
+                adds.add(change.mod());
+            }
         }
-        this.clear();
-        EngineApi.onGame(ApiChanges.plan(request, new CallerBlocks.Callers(List.of(), true)))
-                .thenCompose(ChangePlan::accept).thenAccept(result -> this.engine.showMessage(result.message(),
+
+        if (request.equals(new ChangeRequest())) {
+            return;
+        }
+
+        EngineApi.onGame(ApiChanges.plan(request, new CallerBlocks.Callers(List.of(), true)).thenApply(
+                plan -> Map.entry(plan, !plan.canApply() || ApiChanges.findAddedIds(plan).containsAll(adds))))
+                .thenCompose(planned -> {
+                    if (planned.getValue()) {
+                        return planned.getKey().accept();
+                    }
+                    planned.getKey().cancel();
+                    this.clear();
+                    return CompletableFuture.completedFuture(SwitchResult.ofRefusal(Reason.REFUSED,
+                            Lang.get("hotwire.host.other_mod")));
+                }).thenAccept(result -> this.engine.showMessage(result.message(),
                         result.kind() != SwitchResult.Kind.DONE));
     }
 

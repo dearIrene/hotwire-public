@@ -136,9 +136,6 @@ public final class WorldReopen {
     }
 
     public static <T> T runAround(Supplier<T> add) throws InterruptedException {
-        if (Spellings.hasRenderQueue()) {
-            ResourceReload.awaitIdle();
-        }
         Minecraft client = Minecraft.getInstance();
         if (isLeftOnly()) {
             leave(client);

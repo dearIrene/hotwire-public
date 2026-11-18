@@ -29,6 +29,7 @@ import java.io.IOException;
 import java.io.UncheckedIOException;
 import java.nio.file.Path;
 import java.util.ArrayList;
+import java.util.HashSet;
 import java.util.List;
 import java.util.Optional;
 import java.util.Set;
@@ -245,10 +246,16 @@ final class ApiChanges {
                     }
                 }
                 case SAVE_AND_REOPEN -> {
-                    lines.add(Lang.get("hotwire.api.add_reopen", preview.name()));
-                    reopen = true;
-                    if (reason == Reason.NONE) {
-                        reason = Reason.NEEDS_REOPEN;
+                    if (Games.getNow().countOthers() > 0) {
+                        can = false;
+                        reason = Reason.REFUSED;
+                        lines.add(Lang.get("hotwire.api.reopen_others"));
+                    } else {
+                        lines.add(Lang.get("hotwire.api.add_reopen", preview.name()));
+                        reopen = true;
+                        if (reason == Reason.NONE) {
+                            reason = Reason.NEEDS_REOPEN;
+                        }
                     }
                 }
                 default -> lines.add(Lang.get("hotwire.api.add_now", preview.name()));
@@ -362,6 +369,19 @@ final class ApiChanges {
 
     private static String describe(ModUpdater.Result result) {
         return result instanceof ModUpdater.Result.Refused refused ? refused.reason() : String.valueOf(result);
+    }
+
+    static Set<String> findAddedIds(ChangePlan plan) {
+        Set<String> ids = new HashSet<>();
+        if (plan instanceof Plan made) {
+            for (Path jar : made.adding()) {
+                ModManifest manifest = JarLookup.findManifest(jar);
+                if (manifest != null) {
+                    ids.add(manifest.id());
+                }
+            }
+        }
+        return ids;
     }
 
     private record Plan(boolean can, Reason reason, List<String> lines, ChangeRequest request,

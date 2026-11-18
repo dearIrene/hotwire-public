@@ -1,5 +1,6 @@
 package dev.moon.hotwire.fabric;
 
+import dev.moon.hotwire.fabric.version.Spellings;
 import java.util.List;
 import java.util.Optional;
 import java.util.concurrent.CopyOnWriteArrayList;
@@ -37,7 +38,11 @@ public final class BackgroundReload {
         }
         long began = System.nanoTime();
         long until = began + LONGEST_BEFORE_CLOSE;
-        game.managedBlock(() -> now.reload().isDone() || System.nanoTime() > until);
+
+        game.managedBlock(() -> {
+            Spellings.replayRenderQueue();
+            return now.reload().isDone() || System.nanoTime() > until;
+        });
         finishIfDone();
         LOGGER.info("[Hotwire] the world's close waited {} ms for the reload with the game drawing to end{}",
                 (System.nanoTime() - began) / 1_000_000, now.reload().isDone() ? "" : ", which did not");
