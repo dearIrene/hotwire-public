@@ -114,7 +114,6 @@ public final class BackgroundReload {
     public static void tick() {
         Runnable begin = due;
         if (begin != null && running == null) {
-            due = null;
             try {
                 if (!begin(begin)) {
                     LOGGER.info("[Hotwire] the whole reload after the switch runs under its loading screen");
@@ -122,6 +121,7 @@ public final class BackgroundReload {
                     OngoingReload.awaitIdleLater(game).thenRunAsync(BackgroundReload::runAfter, game);
                 }
             } finally {
+                due = null;
                 OngoingReload.markChanged();
             }
         }
