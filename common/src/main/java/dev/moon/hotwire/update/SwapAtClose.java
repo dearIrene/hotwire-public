@@ -63,11 +63,14 @@ public final class SwapAtClose {
         }
         try {
             copySwapper(this.hotwireJar, this.swapperCopy);
+            Files.write(this.folders.swapperFolders(), List.of(this.folders.queueFile().toAbsolutePath().toString(),
+                    this.folders.mods().toAbsolutePath().toString(),
+                    this.folders.replaced().toAbsolutePath().toString(),
+                    FabricLoader.getInstance().getGameDir().resolve("hotwire").resolve("store").toAbsolutePath()
+                            .toString()));
             new ProcessBuilder(java.get(), "-Xmx16m", "-XX:+UseSerialGC", "-XX:TieredStopAtLevel=1", "-cp",
-                    this.getClassPath(), JarSwapper.class.getName(),
-                    this.folders.queueFile().toString(), this.folders.mods().toString(),
-                    this.folders.replaced().toString(), Long.toString(ProcessHandle.current().pid()),
-                    FabricLoader.getInstance().getGameDir().resolve("hotwire").resolve("store").toString())
+                    this.copyClassPath(), JarSwapper.class.getName(), Long.toString(ProcessHandle.current().pid()))
+                    .directory(this.folders.swapper().toFile())
                     .redirectErrorStream(true)
                     .redirectOutput(this.folders.swapperLog().toFile())
                     .start();
@@ -91,8 +94,9 @@ public final class SwapAtClose {
             } catch (IOException running) {
             }
             new ProcessBuilder(java.get(), "-Xmx16m", "-XX:+UseSerialGC", "-XX:TieredStopAtLevel=1", "-cp",
-                    this.swapperCopy.toString(), CloseWatch.class.getName(),
+                    this.swapperCopy.getFileName().toString(), CloseWatch.class.getName(),
                     Long.toString(ProcessHandle.current().pid()))
+                    .directory(this.folders.swapper().toFile())
                     .redirectErrorStream(true)
                     .redirectOutput(this.folders.swapperLog().resolveSibling("close-watch.log").toFile())
                     .start();
@@ -146,13 +150,17 @@ public final class SwapAtClose {
         }
     }
 
-    private String getClassPath() {
+    private String copyClassPath() throws IOException {
         List<String> entries = new ArrayList<>();
-        entries.add(this.swapperCopy.toString());
-        for (Class<?> library : List.of(JsonParseException.class, Logger.class)) {
-            CodeSource source = library.getProtectionDomain().getCodeSource();
+        entries.add(this.swapperCopy.getFileName().toString());
+        List<Path> copies = this.folders.swapperLibraries();
+        List<Class<?>> libraries = List.of(JsonParseException.class, Logger.class);
+        for (int at = 0; at < libraries.size(); at++) {
+            CodeSource source = libraries.get(at).getProtectionDomain().getCodeSource();
             if (source != null) {
-                entries.add(Path.of(URI.create(source.getLocation().toString())).toString());
+                Files.copy(Path.of(URI.create(source.getLocation().toString())), copies.get(at),
+                        StandardCopyOption.REPLACE_EXISTING);
+                entries.add(copies.get(at).getFileName().toString());
             }
         }
         return String.join(File.pathSeparator, entries);

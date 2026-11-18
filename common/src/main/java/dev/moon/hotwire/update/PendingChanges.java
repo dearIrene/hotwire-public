@@ -101,8 +101,9 @@ public final class PendingChanges {
         clean(this.folders.staging(), wanted);
         clean(downloads, wanted);
         clean(added, wanted);
-        clean(this.folders.swapper(), Set.of(this.folders.swapperJar().toAbsolutePath(),
-                this.folders.swapperLog().toAbsolutePath()));
+        Set<Path> swapping = new HashSet<>();
+        this.folders.swapperFiles().forEach(file -> swapping.add(file.toAbsolutePath()));
+        clean(this.folders.swapper(), swapping);
         trimReplaced(this.queue, this.folders.replaced());
 
         Set<Path> recorded = new HashSet<>();

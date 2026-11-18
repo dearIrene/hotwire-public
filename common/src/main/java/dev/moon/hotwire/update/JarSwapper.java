@@ -29,11 +29,14 @@ public final class JarSwapper {
     private JarSwapper() {
     }
 
+    static final String FOLDERS = "folders-";
+
     public static void main(String[] args) throws IOException, InterruptedException {
-        Path queueFile = Path.of(args[0]);
-        Path mods = Path.of(args[1]);
-        Path replaced = Path.of(args[2]);
-        long pid = Long.parseLong(args[3]);
+        long pid = Long.parseLong(args[0]);
+        List<String> folders = Files.readAllLines(Path.of(FOLDERS + pid + ".txt"));
+        Path queueFile = Path.of(folders.get(0));
+        Path mods = Path.of(folders.get(1));
+        Path replaced = Path.of(folders.get(2));
         Optional<ProcessHandle> game = ProcessHandle.of(pid);
         if (game.isPresent()) {
             game.get().onExit().join();
@@ -41,8 +44,8 @@ public final class JarSwapper {
         UpdateQueue queue = new UpdateQueue(queueFile);
         swap(queue, mods, replaced);
 
-        if (args.length > 4 && queue.getEntries().isEmpty()) {
-            PendingChanges.clean(Path.of(args[4]), Set.of());
+        if (queue.getEntries().isEmpty()) {
+            PendingChanges.clean(Path.of(folders.get(3)), Set.of());
         }
     }
 
