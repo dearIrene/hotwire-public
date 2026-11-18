@@ -44,7 +44,6 @@ public final class Downloads {
     private static final long PAUSE_LOOK_MILLIS = 100;
 
     private static final AtomicInteger NEXT = new AtomicInteger();
-    private static final Map<Integer, Control> CONTROLS = new ConcurrentHashMap<>();
 
     private static final Set<Downloads> QUEUES = ConcurrentHashMap.newKeySet();
 
@@ -92,8 +91,22 @@ public final class Downloads {
         }
     }
 
+    private static @Nullable Control findControl(int id) {
+        for (Downloads queue : QUEUES) {
+            Control control = queue.controls.get(id);
+            if (control != null) {
+                return control;
+            }
+        }
+        return null;
+    }
+
+    private static List<Control> findAllControls() {
+        return QUEUES.stream().flatMap(queue -> queue.controls.values().stream()).toList();
+    }
+
     public static boolean pause(int id) {
-        Control control = CONTROLS.get(id);
+        Control control = findControl(id);
         if (control != null) {
             control.pause(true);
         }
@@ -101,7 +114,7 @@ public final class Downloads {
     }
 
     public static boolean resume(int id) {
-        Control control = CONTROLS.get(id);
+        Control control = findControl(id);
         if (control != null) {
             control.pause(false);
         }
@@ -109,7 +122,7 @@ public final class Downloads {
     }
 
     public static boolean stop(int id) {
-        Control control = CONTROLS.get(id);
+        Control control = findControl(id);
         if (control != null) {
             control.stopped = true;
         }
@@ -117,27 +130,27 @@ public final class Downloads {
     }
 
     public static void pauseAll() {
-        CONTROLS.keySet().forEach(Downloads::pause);
+        findAllControls().forEach(control -> control.pause(true));
     }
 
     public static void resumeAll() {
-        CONTROLS.keySet().forEach(Downloads::resume);
+        findAllControls().forEach(control -> control.pause(false));
     }
 
     public static void stopAll() {
-        CONTROLS.keySet().forEach(Downloads::stop);
+        findAllControls().forEach(control -> control.stopped = true);
     }
 
     public static boolean isAnyPaused() {
-        return CONTROLS.values().stream().anyMatch(control -> control.paused);
+        return findAllControls().stream().anyMatch(control -> control.paused);
     }
 
     public static List<Job> findAllUnderWay() {
-        return CONTROLS.values().stream().map(Control::find).toList();
+        return findAllControls().stream().map(Control::find).toList();
     }
 
     public Feed findFeed(int id) {
-        Control control = CONTROLS.get(id);
+        Control control = this.controls.get(id);
         return control != null ? control : new Control(id);
     }
 
@@ -157,12 +170,15 @@ public final class Downloads {
             new AtomicInteger();
     private static final AtomicInteger QUIET_NEXT =
             new AtomicInteger();
-    private static final Set<Integer> QUIET_JOBS = ConcurrentHashMap.newKeySet();
 
-    private static final List<String> TAGGING = new java.util.concurrent.CopyOnWriteArrayList<>();
-    private static final Map<Integer, String> TAGS = new ConcurrentHashMap<>();
+    private static final List<String> TAGGING = new CopyOnWriteArrayList<>();
 
     private final List<Job> jobs = new ArrayList<>();
+
+    private final Map<Integer, Control> controls = new ConcurrentHashMap<>();
+
+    private final Set<Integer> quietJobs = ConcurrentHashMap.newKeySet();
+    private final Map<Integer, String> tags = new ConcurrentHashMap<>();
 
     public static void onEveryChange(Consumer<Job> told) {
         whenChanged = told;
@@ -192,7 +208,13 @@ public final class Downloads {
     }
 
     public static String findTag(int id) {
-        return TAGS.getOrDefault(id, "");
+        for (Downloads queue : QUEUES) {
+            String tag = queue.tags.get(id);
+            if (tag != null) {
+                return tag;
+            }
+        }
+        return "";
     }
 
     public static void markNextQuiet() {
@@ -207,20 +229,20 @@ public final class Downloads {
         QUEUES.add(this);
         int id = NEXT.incrementAndGet();
         if (takeQuiet()) {
-            QUIET_JOBS.add(id);
+            this.quietJobs.add(id);
         }
         if (!TAGGING.isEmpty()) {
-            TAGS.put(id, TAGGING.getLast());
+            this.tags.put(id, TAGGING.getLast());
         }
         Job job = new Job(id, name, 0, total, State.WAITING, 0);
         this.jobs.add(job);
-        CONTROLS.put(id, new Control(id));
-        tell(job);
+        this.controls.put(id, new Control(id));
+        this.tell(job);
         return id;
     }
 
     public synchronized void start(int id) {
-        Control control = CONTROLS.get(id);
+        Control control = this.controls.get(id);
         State state = control != null && control.paused ? State.PAUSED : State.GETTING;
         this.set(id, job -> new Job(id, job.name(), job.done(), job.total(), state, 0));
     }
@@ -242,7 +264,7 @@ public final class Downloads {
                 if (job.total() <= 0 || done * 100 / job.total() != job.done() * 100 / job.total()) {
                     Job changed = new Job(id, job.name(), done, job.total(), job.state(), 0);
                     this.jobs.set(at, changed);
-                    tell(changed);
+                    this.tell(changed);
                 }
                 return;
             }
@@ -250,7 +272,7 @@ public final class Downloads {
     }
 
     public synchronized void end(int id, boolean ok) {
-        Control control = CONTROLS.remove(id);
+        Control control = this.controls.remove(id);
         State failed = control != null && control.stopped ? State.STOPPED : State.FAILED;
         this.set(id, job -> new Job(id, job.name(), ok ? job.total() : job.done(), job.total(),
                 ok ? State.DONE : failed, System.nanoTime()));
@@ -261,15 +283,15 @@ public final class Downloads {
             if (this.jobs.get(at).id() == id) {
                 Job changed = change.apply(this.jobs.get(at));
                 this.jobs.set(at, changed);
-                tell(changed);
+                this.tell(changed);
                 return;
             }
         }
     }
 
-    private static void tell(Job job) {
+    private void tell(Job job) {
         Consumer<Job> told = whenChanged;
-        if (told != null && !QUIET_JOBS.contains(job.id())) {
+        if (told != null && !this.quietJobs.contains(job.id())) {
             told.accept(job);
         }
     }
@@ -284,8 +306,8 @@ public final class Downloads {
         this.jobs.removeIf(job -> {
             boolean gone = job.isOver() && now - job.endedNanos() > SHOWN_AFTER_END_NANOS;
             if (gone) {
-                TAGS.remove(job.id());
-                QUIET_JOBS.remove(job.id());
+                this.tags.remove(job.id());
+                this.quietJobs.remove(job.id());
             }
             return gone;
         });
