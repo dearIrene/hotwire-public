@@ -153,6 +153,14 @@ public final class Spellings {
         *///?}
     }
 
+    public static PayloadTypeRegistry<RegistryFriendlyByteBuf> findToServerRegistry() {
+        //? if >=26.1 {
+        return PayloadTypeRegistry.serverboundPlay();
+        //?} else {
+        /*return PayloadTypeRegistry.playC2S();
+        *///?}
+    }
+
     public static ClickEvent makeCommandClick(String command) {
         //? if >=1.21.5 {
         return new ClickEvent.RunCommand(command);

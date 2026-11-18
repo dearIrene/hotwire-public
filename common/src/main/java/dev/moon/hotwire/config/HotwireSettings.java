@@ -196,6 +196,7 @@ public final class HotwireSettings {
         @Nullable String promptAcceptedFor;
         boolean keyCardShown;
         boolean tourSeen;
+        @Nullable Boolean shareMods;
         boolean downloadsWarned;
         @Nullable List<String> favorites = List.of();
 
@@ -233,6 +234,7 @@ public final class HotwireSettings {
     private volatile @Nullable String promptAcceptedFor;
     private volatile boolean keyCardShown;
     private volatile boolean tourSeen;
+    private volatile boolean shareMods = true;
     private volatile boolean downloadsWarned;
     private final Set<String> favorites = ConcurrentHashMap.newKeySet();
     private volatile List<String> searchSetup = List.of();
@@ -278,6 +280,7 @@ public final class HotwireSettings {
         this.devSeeThrough = saved.devSeeThrough == null ? 0 : Math.clamp(saved.devSeeThrough, 0, 1);
         this.keyCardShown = saved.keyCardShown;
         this.tourSeen = saved.tourSeen;
+        this.shareMods = saved.shareMods == null || saved.shareMods;
         this.downloadsWarned = saved.downloadsWarned;
         if (saved.favorites != null) {
             saved.favorites.stream().filter(Objects::nonNull).forEach(this.favorites::add);
@@ -469,6 +472,17 @@ public final class HotwireSettings {
         this.save();
     }
 
+    public boolean isSharingMods() {
+        return this.shareMods;
+    }
+
+    public void setSharingMods(boolean share) {
+        if (share != this.shareMods) {
+            this.shareMods = share;
+            this.save();
+        }
+    }
+
     public boolean isTourSeen() {
         return this.tourSeen;
     }
@@ -656,6 +670,7 @@ public final class HotwireSettings {
         saved.promptAcceptedFor = this.promptAcceptedFor;
         saved.keyCardShown = this.keyCardShown;
         saved.tourSeen = this.tourSeen;
+        saved.shareMods = this.shareMods ? null : Boolean.FALSE;
         saved.downloadsWarned = this.downloadsWarned;
         saved.favorites = this.favorites.stream().sorted().toList();
         saved.searchSetup = this.searchSetup.isEmpty() ? null : this.searchSetup;

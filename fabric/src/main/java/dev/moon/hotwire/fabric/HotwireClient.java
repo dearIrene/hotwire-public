@@ -23,6 +23,7 @@ import dev.moon.hotwire.report.GameLog;
 import dev.moon.hotwire.report.HotwireLog;
 import dev.moon.hotwire.report.StartTimes;
 import dev.moon.hotwire.seam.Games;
+import dev.moon.hotwire.seam.SharedMod;
 import dev.moon.hotwire.ui.Lang;
 import dev.moon.hotwire.ui.ModScreen;
 import dev.moon.hotwire.ui.notices.DownloadNotices;
@@ -30,6 +31,7 @@ import java.io.IOException;
 import java.lang.ref.WeakReference;
 import java.nio.file.Files;
 import java.nio.file.Path;
+import java.util.List;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.Executor;
 import java.util.concurrent.ForkJoinPool;
@@ -57,6 +59,13 @@ public final class HotwireClient implements ClientModInitializer {
     private static final String START_FAILED = "Hotwire did not start; hotwire/logs/start-failure.txt says why";
     private static @Nullable HotwireEngine engine;
 
+    private static final PlayerLists PLAYERS = new PlayerLists(HotwireClient::findOwnMods, heard -> {
+        HotwireEngine started = engine;
+        if (started != null) {
+            started.onPlayersChanged(heard);
+        }
+    });
+
     private static WeakReference<Connection> profiled = new WeakReference<>(null);
 
     private static boolean startFailed;
@@ -81,6 +90,7 @@ public final class HotwireClient implements ClientModInitializer {
                 started.onHostChanged(told);
             }
         });
+        PLAYERS.register();
         if (FabricLoader.getInstance().isModLoaded("fabric-data-attachment-api-v1")) {
             EntityAttachments.register();
         }
@@ -170,6 +180,25 @@ public final class HotwireClient implements ClientModInitializer {
         });
         StartTimes.add("client start", began);
         StartTimes.mark("Hotwire's client start ends");
+    }
+
+    public static void tickPlayers() {
+        PLAYERS.tick();
+    }
+
+    private static PlayerLists.@Nullable Own findOwnMods() {
+        HotwireEngine started = engine;
+        return started == null ? null : new PlayerLists.Own() {
+            @Override
+            public boolean isSharing() {
+                return started.isSharingMods();
+            }
+
+            @Override
+            public List<SharedMod> findMods() {
+                return started.findOwnMods();
+            }
+        };
     }
 
     @SuppressWarnings("ReferenceEquality")

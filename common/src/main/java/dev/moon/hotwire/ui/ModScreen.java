@@ -12,6 +12,7 @@ import dev.moon.hotwire.ui.pages.CachePage;
 import dev.moon.hotwire.ui.pages.HistoryPage;
 import dev.moon.hotwire.ui.pages.ModsPage;
 import dev.moon.hotwire.ui.pages.PendingPage;
+import dev.moon.hotwire.ui.pages.PlayersPage;
 import dev.moon.hotwire.ui.pages.ReportPage;
 import dev.moon.hotwire.ui.pages.SettingsPage;
 import dev.moon.hotwire.ui.pages.StorePage;
@@ -61,8 +62,9 @@ public final class ModScreen implements JarHost {
     private static final int PENDING = 4;
     private static final int CACHE = 5;
     private static final int HISTORY = 6;
-    private static final int REPORT = 7;
-    private static final int SETTINGS = 8;
+    private static final int PLAYERS = 7;
+    private static final int REPORT = 8;
+    private static final int SETTINGS = 9;
     private static final int TABS = SETTINGS + 1;
 
     final ModScreenGame game;
@@ -79,6 +81,7 @@ public final class ModScreen implements JarHost {
     private final UpdatePanel updatePanel;
     private final CachePage cache;
     private final HistoryPage history = new HistoryPage(ZoneId.systemDefault());
+    private final PlayersPage players;
     private final List<Element> panels;
     private final ReopenPanel reopenPanel;
     private final AlsoOffPanel alsoOffPanel;
@@ -124,6 +127,7 @@ public final class ModScreen implements JarHost {
                 .tab(Lang.get("hotwire.screen.pending_short"), Icons.PENDING, false)
                 .tab(Lang.get("hotwire.screen.switch_cache_short"), Icons.CACHE, false)
                 .tab(Lang.get("hotwire.screen.history_short"), Icons.HISTORY, false)
+                .tab(Lang.get("hotwire.screen.players_short"), Icons.PLAYERS, false)
                 .tab(Lang.get("hotwire.screen.report_short"), Icons.REPORT, true)
                 .tab(Lang.get("hotwire.screen.advanced_short"), Icons.SETTINGS, true);
         this.cache = new CachePage(game.getCaches());
@@ -155,9 +159,9 @@ public final class ModScreen implements JarHost {
             this.closePanels();
             this.turnOffAsking(ids);
         }, this::callOff, game::findIcon, game.getCatalog()::name);
-        this.hostPanel = new HostPanel(() -> {
+        this.hostPanel = new HostPanel(shown -> {
             this.closePanels();
-            this.runAfterWarning(game::matchHost);
+            this.runAfterWarning(() -> game.matchHost(shown));
         }, () -> {
             this.closePanels();
             game.dropHostChanges();
@@ -175,8 +179,9 @@ public final class ModScreen implements JarHost {
         this.settings = new SettingsPage(this::chooseSetting, game::openLink, this::leave);
         this.report = new ReportPage(game::report, game::showReportFile, game::openLink, game::findReportFile,
                 game::copyText);
+        this.players = new PlayersPage(game);
         this.deck = Kit.deck(this.mods.part, this.pending.part, this.report.part, this.settings.part,
-                this.cache.part, this.updates.part, this.storeSlot, this.history.part);
+                this.cache.part, this.updates.part, this.storeSlot, this.history.part, this.players.part);
         this.tree = Kit.row(this.rail, this.deck).cross(Line.Cross.STRETCH);
 
         this.root.getBase().add(this.tree);
@@ -208,6 +213,7 @@ public final class ModScreen implements JarHost {
         public static final String PENDING = "pending";
         static final String CACHE = "cache";
         static final String HISTORY = "dev_history";
+        static final String PLAYERS = "players";
         static final String REPORT = "report";
         static final String SETTINGS = "settings";
     }
@@ -230,6 +236,10 @@ public final class ModScreen implements JarHost {
             case HISTORY -> {
                 this.refreshHistory();
                 this.turnTo(HISTORY, 7);
+            }
+            case PLAYERS -> {
+                this.players.refresh();
+                this.turnTo(PLAYERS, 8);
             }
             case REPORT -> this.turnTo(REPORT, 2);
             case SETTINGS -> this.openSettings();
@@ -331,6 +341,11 @@ public final class ModScreen implements JarHost {
         if (this.deck.getAt() == 4) {
             this.cache.refresh(nowNanos);
         }
+        if (this.deck.getAt() == 8) {
+            this.players.refresh();
+        }
+        int others = this.game.findPlayers().size();
+        this.rail.setBadge(PLAYERS, others > 0 ? String.valueOf(others) : "", Palette.ON);
         StorePage shop = this.findShownStore();
         if (shop != null) {
             shop.refresh();
@@ -652,6 +667,11 @@ public final class ModScreen implements JarHost {
             return;
         }
         this.reopenPanel.open(offer);
+    }
+
+    public void confirmHost(List<String> lines, Runnable yes, Runnable no) {
+        this.closePanels();
+        this.hostPanel.confirm(lines, yes, no);
     }
 
     public void offerHostChanges() {

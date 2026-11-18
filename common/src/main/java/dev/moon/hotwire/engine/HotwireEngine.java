@@ -1,6 +1,7 @@
 package dev.moon.hotwire.engine;
 
 import dev.moon.hotwire.add.ModAdder;
+import dev.moon.hotwire.api.ChangeRequest;
 import dev.moon.hotwire.api.SwitchResult;
 import dev.moon.hotwire.classfile.GameNames;
 import dev.moon.hotwire.concurrent.Tasks;
@@ -18,7 +19,9 @@ import dev.moon.hotwire.report.GameReports;
 import dev.moon.hotwire.report.ReportZips;
 import dev.moon.hotwire.seam.Game;
 import dev.moon.hotwire.seam.Games;
+import dev.moon.hotwire.seam.PlayerMods;
 import dev.moon.hotwire.seam.SharedChange;
+import dev.moon.hotwire.seam.SharedMod;
 import dev.moon.hotwire.store.ModStore;
 import dev.moon.hotwire.store.UpdateCheck;
 import dev.moon.hotwire.switching.CheckedResult;
@@ -57,7 +60,9 @@ import java.io.IOException;
 import java.nio.file.Path;
 import java.util.ArrayList;
 import java.util.Collection;
+import java.util.HashMap;
 import java.util.List;
+import java.util.Map;
 import java.util.Objects;
 import java.util.Set;
 import java.util.concurrent.CompletableFuture;
@@ -585,14 +590,83 @@ public final class HotwireEngine implements ModScreenGame, AutoCloseable {
         this.hostOffers.take(told);
     }
 
+    private volatile List<PlayerMods> players = List.of();
+
+    public void onPlayersChanged(List<PlayerMods> heard) {
+        this.players = List.copyOf(heard);
+    }
+
+    @Override
+    public List<PlayerMods> findPlayers() {
+        return this.players;
+    }
+
+    @Override
+    public List<SharedMod> findOwnMods() {
+        Map<String, String> projectOf = new HashMap<>();
+        this.storeJars.getCheck().getIdByProject().forEach((project, id) -> projectOf.put(id, project));
+        ModCatalog catalog = this.getCatalog();
+        List<SharedMod> mine = new ArrayList<>();
+        for (ModStatus mod : this.getMods()) {
+            if (catalog.isHidden(mod.id()) || catalog.isLibrary(mod.id())) {
+                continue;
+            }
+            SharedMod shared = SharedMod.of(mod.id(), mod.on(), mod.version(), projectOf.getOrDefault(mod.id(), ""));
+            if (shared != null) {
+                mine.add(shared);
+            }
+        }
+        return mine;
+    }
+
+    @Override
+    public boolean isSharingMods() {
+        return this.settings.isSharingMods();
+    }
+
+    @Override
+    public void setSharingMods(boolean share) {
+        this.settings.setSharingMods(share);
+    }
+
+    @Override
+    public void matchPlayer(List<SharedMod> chosen) {
+        ChangeRequest request = new ChangeRequest();
+        List<String> adds = new ArrayList<>();
+        for (SharedMod mod : chosen) {
+            boolean here = this.installed.find(mod.mod()).isPresent();
+            if (!here && !mod.project().isEmpty()) {
+                request = request.add(mod.project(), "");
+                adds.add(mod.mod());
+            } else if (here && mod.on() != this.isOn(mod.mod())) {
+                request = mod.on() ? request.on(mod.mod()) : request.off(mod.mod());
+            }
+        }
+        this.hostOffers.apply(request, adds, (lines, yes, no) -> {
+            ModScreen open = this.screen;
+            if (open == null) {
+                no.run();
+            } else {
+                open.confirmHost(lines, yes, no);
+            }
+        }, () -> { });
+    }
+
     @Override
     public List<SharedChange> findHostChanges() {
         return this.hostOffers.getWaiting();
     }
 
     @Override
-    public void matchHost() {
-        this.hostOffers.match();
+    public void matchHost(List<SharedChange> shown) {
+        this.hostOffers.match(shown, (lines, yes, no) -> {
+            ModScreen open = this.screen;
+            if (open == null) {
+                no.run();
+            } else {
+                open.confirmHost(lines, yes, no);
+            }
+        });
     }
 
     @Override

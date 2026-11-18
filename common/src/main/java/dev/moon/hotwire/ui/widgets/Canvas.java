@@ -1,5 +1,7 @@
 package dev.moon.hotwire.ui.widgets;
 
+import java.util.UUID;
+
 public interface Canvas {
     void fill(int x0, int y0, int x1, int y1, int argb);
 
@@ -20,6 +22,10 @@ public interface Canvas {
     void pushScale(float scale, float centerX, float centerY);
 
     void popScale();
+
+    default boolean drawFace(UUID player, int x, int y, int side) {
+        return false;
+    }
 
     default void pushShift(float dx, float dy) {
     }

@@ -13,16 +13,21 @@ import dev.moon.hotwire.ui.widgets.Colors;
 *///?}
 import java.util.HashMap;
 import java.util.Map;
+import java.util.UUID;
 import net.minecraft.client.Minecraft;
 import net.minecraft.client.gui.Font;
+import net.minecraft.client.multiplayer.ClientPacketListener;
+import net.minecraft.client.multiplayer.PlayerInfo;
 import net.minecraft.locale.Language;
 import net.minecraft.network.chat.FormattedText;
 import net.minecraft.resources.Identifier;
 import net.minecraft.util.FormattedCharSequence;
 //? if >=26.1 {
 import net.minecraft.client.gui.GuiGraphicsExtractor;
+import net.minecraft.client.gui.components.PlayerFaceExtractor;
 //?} else {
 /*import net.minecraft.client.gui.GuiGraphics;
+import net.minecraft.client.gui.components.PlayerFaceRenderer;
 *///?}
 //? if >=1.21.6 {
 import net.minecraft.client.renderer.RenderPipelines;
@@ -156,6 +161,21 @@ public final class GuiCanvas implements Canvas {
         RenderSystem.setShaderColor(1, 1, 1, 1);
         RenderSystem.disableBlend();
         *///?}
+    }
+
+    @Override
+    public boolean drawFace(UUID player, int x, int y, int side) {
+        ClientPacketListener connection = Minecraft.getInstance().getConnection();
+        PlayerInfo info = connection == null ? null : connection.getPlayerInfo(player);
+        if (info == null) {
+            return false;
+        }
+        //? if >=26.1 {
+        PlayerFaceExtractor.extractRenderState(this.graphics, info.getSkin(), x, y, side);
+        //?} else {
+        /*PlayerFaceRenderer.draw(this.graphics, info.getSkin(), x, y, side);
+        *///?}
+        return true;
     }
 
     @Override

@@ -3,7 +3,9 @@ package dev.moon.hotwire.ui;
 import dev.moon.hotwire.config.ProfileStore;
 import dev.moon.hotwire.config.SettingsSection;
 import dev.moon.hotwire.modrinth.Downloads;
+import dev.moon.hotwire.seam.PlayerMods;
 import dev.moon.hotwire.seam.SharedChange;
+import dev.moon.hotwire.seam.SharedMod;
 import dev.moon.hotwire.switching.Progress;
 import dev.moon.hotwire.switching.SwitchHistory;
 import dev.moon.hotwire.ui.list.Badges;
@@ -105,7 +107,25 @@ public interface ModScreenGame {
         return List.of();
     }
 
-    default void matchHost() {
+    default List<PlayerMods> findPlayers() {
+        return List.of();
+    }
+
+    default List<SharedMod> findOwnMods() {
+        return List.of();
+    }
+
+    default boolean isSharingMods() {
+        return true;
+    }
+
+    default void setSharingMods(boolean share) {
+    }
+
+    default void matchPlayer(List<SharedMod> chosen) {
+    }
+
+    default void matchHost(List<SharedChange> shown) {
     }
 
     default void dropHostChanges() {
