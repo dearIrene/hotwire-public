@@ -115,7 +115,7 @@ final class SwitchRequests {
         if (Games.getNow().isServerSaving()) {
             return this.refuse(Lang.get("hotwire.switch.saving"), quiet);
         }
-        CompletableFuture<SwitchResult> ended = EngineApi.beginSwitch();
+        CompletableFuture<SwitchResult> ended = EngineApi.beginSwitch(this.engine);
         this.tasks.submit("switch", () -> work.apply(parts.runner()), result -> {
             boolean untilOn = off && result.result() instanceof ModSwitcher.Result.Done
                     && this.settings.getOffLasts() == HotwireSettings.OffLasts.UNTIL_ON;
@@ -172,8 +172,8 @@ final class SwitchRequests {
                 }
             }
             this.engine.refreshScreen();
-            EngineApi.endSwitch(ended, EngineApi.toResult(result.result(), said), this.engine::isOn);
-        }).whenComplete((done, error) -> EngineApi.endIfFailed(ended, error, this.engine::isOn));
+            EngineApi.endSwitch(this.engine, ended, EngineApi.toResult(result.result(), said));
+        }).whenComplete((done, error) -> EngineApi.endIfFailed(this.engine, ended, error));
         return ended;
     }
 
@@ -224,7 +224,7 @@ final class SwitchRequests {
 
     @SuppressWarnings("FutureReturnValueIgnored")
     CompletableFuture<SwitchResult> switchWithReopen(SwitchRunner runner, boolean off, List<String> ids) {
-        CompletableFuture<SwitchResult> ended = EngineApi.beginSwitch();
+        CompletableFuture<SwitchResult> ended = EngineApi.beginSwitch(this.engine);
         this.tasks.submit("save and switch", () -> {
             try {
                 return Optional.ofNullable(runSwitchWithReopen(runner, off, ids));
@@ -239,9 +239,9 @@ final class SwitchRequests {
             result.ifPresent(done -> SwitchHistory.get().recordDone(done.result(), SwitchHistory.Cause.PLAYER, ""));
             result.ifPresent(done -> this.followInProfile(done.result()));
             this.engine.refreshScreen();
-            EngineApi.endSwitch(ended, result.map(done -> EngineApi.toResult(done.result(), said))
-                    .orElse(new SwitchResult(SwitchResult.Kind.DONE, List.of(), said)), this.engine::isOn);
-        }).whenComplete((done, error) -> EngineApi.endIfFailed(ended, error, this.engine::isOn));
+            EngineApi.endSwitch(this.engine, ended, result.map(done -> EngineApi.toResult(done.result(), said))
+                    .orElse(new SwitchResult(SwitchResult.Kind.DONE, List.of(), said)));
+        }).whenComplete((done, error) -> EngineApi.endIfFailed(this.engine, ended, error));
         return ended;
     }
 

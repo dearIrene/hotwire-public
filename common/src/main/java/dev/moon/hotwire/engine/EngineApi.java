@@ -51,9 +51,7 @@ import java.util.Optional;
 import java.util.Set;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.ConcurrentHashMap;
-import java.util.concurrent.atomic.AtomicInteger;
 import java.util.function.Consumer;
-import java.util.function.Predicate;
 import java.util.function.Supplier;
 import java.util.stream.Stream;
 import org.jspecify.annotations.Nullable;
@@ -78,16 +76,10 @@ public class EngineApi implements HotwireApi {
     private static final Listeners<Consumer<SwitchResult>> LISTENERS = new Listeners<>();
     private static final Waits WAITS = new Waits();
 
-    private static final Map<CallerBlocks.Callers, ModRowCache> MODS_SEEN = new ConcurrentHashMap<>();
     private static final long MODS_FRESH_NANOS = 100_000_000L;
 
-    private static final AtomicInteger SWITCHING = new AtomicInteger();
-
-    private static final Set<String> PROMPTED = ConcurrentHashMap.newKeySet();
-    private static final Set<String> UNPROMPTED_TOLD = ConcurrentHashMap.newKeySet();
-
-    private record ModRowCache(long at, List<ModState> mods) {
-    }
+    private final Set<String> prompted = ConcurrentHashMap.newKeySet();
+    private final Set<String> unpromptedTold = ConcurrentHashMap.newKeySet();
 
     @SuppressWarnings("FutureReturnValueIgnored")
     static <T> CompletableFuture<T> onGame(CompletableFuture<T> made) {
@@ -134,7 +126,7 @@ public class EngineApi implements HotwireApi {
             return new ApiStatus(ApiStatus.State.UNAVAILABLE, 0, engine.getSwitchRefusal());
         }
         Progress.Snapshot now = engine.getProgress().snapshot();
-        if (now.running() || SWITCHING.get() > 0 || ApiChanges.isRunning()) {
+        if (now.running() || engine.api.switching.get() > 0 || engine.api.changing.get() > 0) {
             return new ApiStatus(ApiStatus.State.BUSY, now.running() ? now.getFraction() : 0,
                     now.running() ? now.describe() : "");
         }
@@ -193,7 +185,7 @@ public class EngineApi implements HotwireApi {
     @Override
     public CompletableFuture<ChangePlan> planChange(ChangeRequest request) {
         CallerBlocks.Callers callers = findCallers();
-        tellIfUnprompted(callers);
+        this.tellIfUnprompted(callers);
         return onGame(ApiChanges.plan(request, callers));
     }
 
@@ -215,11 +207,11 @@ public class EngineApi implements HotwireApi {
             return List.of();
         }
         CallerBlocks.Callers callers = findCallers();
-        ModRowCache seen = MODS_SEEN.get(callers);
+        ApiState.ModRowCache seen = engine.api.rowsSeen.get(callers);
         long now = System.nanoTime();
         if (seen == null || now - seen.at() > MODS_FRESH_NANOS) {
-            seen = new ModRowCache(now, makeRows(engine, callers));
-            MODS_SEEN.put(callers, seen);
+            seen = new ApiState.ModRowCache(now, makeRows(engine, callers));
+            engine.api.rowsSeen.put(callers, seen);
         }
         return seen.mods();
     }
@@ -258,14 +250,14 @@ public class EngineApi implements HotwireApi {
     @Override
     public CompletableFuture<SwitchResult> turnOff(Collection<String> ids) {
         CallerBlocks.Callers callers = findCallers();
-        tellIfUnprompted(callers);
+        this.tellIfUnprompted(callers);
         return switchFor(true, List.copyOf(ids), callers);
     }
 
     @Override
     public CompletableFuture<SwitchResult> turnOn(Collection<String> ids) {
         CallerBlocks.Callers callers = findCallers();
-        tellIfUnprompted(callers);
+        this.tellIfUnprompted(callers);
         return switchFor(false, List.copyOf(ids), callers);
     }
 
@@ -273,7 +265,7 @@ public class EngineApi implements HotwireApi {
     public boolean showPrompt() {
         String asker = findCallers().findAsker();
         if (asker != null) {
-            PROMPTED.add(asker);
+            this.prompted.add(asker);
         }
         HotwireEngine engine = findEngine();
         if (engine == null || engine.isFirstOpenAccepted()) {
@@ -287,7 +279,7 @@ public class EngineApi implements HotwireApi {
     public @Nullable OpeningPrompt findOpeningPrompt() {
         String asker = findCallers().findAsker();
         if (asker != null) {
-            PROMPTED.add(asker);
+            this.prompted.add(asker);
         }
         HotwireEngine engine = findEngine();
         if (engine == null || engine.isFirstOpenAccepted()) {
@@ -422,10 +414,10 @@ public class EngineApi implements HotwireApi {
         })));
     }
 
-    private static void tellIfUnprompted(CallerBlocks.Callers callers) {
+    private void tellIfUnprompted(CallerBlocks.Callers callers) {
         String asker = callers.findAsker();
         HotwireEngine engine = findEngine();
-        if (asker == null || engine == null || PROMPTED.contains(asker) || !UNPROMPTED_TOLD.add(asker)) {
+        if (asker == null || engine == null || this.prompted.contains(asker) || !this.unpromptedTold.add(asker)) {
             return;
         }
         LOGGER.warn("[Hotwire] {} switched mods without showing the opening prompt (HotwireApi.showPrompt)", asker);
@@ -521,22 +513,22 @@ public class EngineApi implements HotwireApi {
                 + why));
     }
 
-    static CompletableFuture<SwitchResult> beginSwitch() {
-        SWITCHING.incrementAndGet();
+    static CompletableFuture<SwitchResult> beginSwitch(HotwireEngine engine) {
+        engine.api.switching.incrementAndGet();
         return new CompletableFuture<>();
     }
 
-    static void endSwitch(CompletableFuture<SwitchResult> ended, SwitchResult result, Predicate<String> on) {
-        SWITCHING.decrementAndGet();
-        MODS_SEEN.clear();
+    static void endSwitch(HotwireEngine engine, CompletableFuture<SwitchResult> ended, SwitchResult result) {
+        engine.api.switching.decrementAndGet();
+        engine.api.rowsSeen.clear();
         ended.complete(result);
-        LISTENERS.tell("a switch's end", on, listener -> listener.accept(result));
+        LISTENERS.tell("a switch's end", engine::isOn, listener -> listener.accept(result));
     }
 
-    static void endIfFailed(CompletableFuture<SwitchResult> ended, @Nullable Throwable error, Predicate<String> on) {
+    static void endIfFailed(HotwireEngine engine, CompletableFuture<SwitchResult> ended, @Nullable Throwable error) {
         if (error != null && !ended.isDone()) {
-            Games.getNow().runOnGame(() -> endSwitch(ended, new SwitchResult(SwitchResult.Kind.FAILED,
-                    List.of(), Lang.get("hotwire.failed", error)), on));
+            Games.getNow().runOnGame(() -> endSwitch(engine, ended, new SwitchResult(SwitchResult.Kind.FAILED,
+                    List.of(), Lang.get("hotwire.failed", error))));
         }
     }
 

@@ -34,20 +34,14 @@ import java.util.List;
 import java.util.Optional;
 import java.util.Set;
 import java.util.concurrent.CompletableFuture;
-import java.util.concurrent.atomic.AtomicInteger;
 import java.util.stream.Collectors;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 final class ApiChanges {
     private static final Logger LOGGER = LoggerFactory.getLogger(ApiChanges.class);
-    private static final AtomicInteger RUNNING = new AtomicInteger();
 
     private ApiChanges() {
-    }
-
-    static boolean isRunning() {
-        return RUNNING.get() > 0;
     }
 
     static CompletableFuture<ModUpdates> checkUpdates() {
@@ -447,12 +441,14 @@ final class ApiChanges {
         @Override
         public CompletableFuture<SwitchResult> accept() {
             CompletableFuture<SwitchResult> ended = new CompletableFuture<>();
-            if (!this.can) {
+            HotwireEngine engine = EngineApi.findEngine();
+
+            if (!this.can || engine == null) {
                 ended.complete(SwitchResult.ofRefusal(this.reason == Reason.NONE ? Reason.REFUSED : this.reason,
                         String.join(" ", this.lines)));
                 return EngineApi.onGame(ended);
             }
-            RUNNING.incrementAndGet();
+            engine.api.changing.incrementAndGet();
             Thread.ofPlatform().name("hotwire-api-change").daemon().start(() -> {
                 try {
                     ended.complete(this.apply());
@@ -461,7 +457,7 @@ final class ApiChanges {
                     ended.complete(new SwitchResult(SwitchResult.Kind.FAILED, List.of(),
                             Lang.get("hotwire.api.plan_failed", e.toString())));
                 } finally {
-                    RUNNING.decrementAndGet();
+                    engine.api.changing.decrementAndGet();
                 }
             });
             return EngineApi.onGame(ended);

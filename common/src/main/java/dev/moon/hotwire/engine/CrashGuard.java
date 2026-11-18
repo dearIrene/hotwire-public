@@ -39,12 +39,13 @@ import org.slf4j.LoggerFactory;
 public final class CrashGuard {
     private static final Logger LOGGER = LoggerFactory.getLogger(CrashGuard.class);
     private static final int FRAMES = 512;
-    private static volatile @Nullable CrashPolicy policy;
 
-    private static final Set<String> SWITCHED = ConcurrentHashMap.newKeySet();
-    private static final List<String> CAUGHT = new CopyOnWriteArrayList<>();
+    private static volatile @Nullable Guard guard;
 
     private static final int MOST_CAUGHT = 200;
+
+    private record Guard(CrashPolicy policy, Set<String> switched, List<String> caught) {
+    }
 
     private CrashGuard() {
     }
@@ -55,16 +56,18 @@ public final class CrashGuard {
             BiConsumer<String, Boolean> say, BiFunction<String, String, String> writeReport,
             BooleanSupplier antiCrash, Predicate<String> inDevelopment) {
         CrashPolicy[] made = new CrashPolicy[1];
+        Set<String> switched = ConcurrentHashMap.newKeySet();
+        List<String> said = new CopyOnWriteArrayList<>();
         made[0] = new CrashPolicy(CrashGuard::findModBehind, id -> canLeave(id)
-                && (isTouched(installed, id) || antiCrash.getAsBoolean()), caught -> {
+                && (isTouched(installed, switched, id) || antiCrash.getAsBoolean()), caught -> {
             String name = installed.nameOf(caught.mod());
-            boolean byAntiCrash = !isTouched(installed, caught.mod());
+            boolean byAntiCrash = !isTouched(installed, switched, caught.mod());
             LOGGER.error("[Hotwire] {} threw at {} ({}); Hotwire keeps the game going and turns it off", name,
                     caught.site(), caught.mod(), caught.thrown());
-            if (CAUGHT.size() >= MOST_CAUGHT) {
-                CAUGHT.remove(0);
+            if (said.size() >= MOST_CAUGHT) {
+                said.remove(0);
             }
-            CAUGHT.add(caught.mod() + " at " + caught.site() + ": " + caught.thrown());
+            said.add(caught.mod() + " at " + caught.site() + ": " + caught.thrown());
             SwitchRunner switching = runner.get();
             if (switching == null) {
                 made[0].onOffFinished(caught.mod(), false);
@@ -110,7 +113,7 @@ public final class CrashGuard {
                     place == null ? findWhere(caught.thrown(), caught.mod()) : place.words(),
                     place == null ? "" : place.source(), place == null ? 0 : place.line());
         });
-        policy = made[0];
+        guard = new Guard(made[0], switched, said);
     }
 
     @SuppressWarnings("FutureReturnValueIgnored")
@@ -137,8 +140,8 @@ public final class CrashGuard {
         return result;
     }
 
-    private static boolean isTouched(InstalledMods installed, String mod) {
-        return installed.isAddedThisSession(mod) || SWITCHED.contains(mod);
+    private static boolean isTouched(InstalledMods installed, Set<String> switched, String mod) {
+        return installed.isAddedThisSession(mod) || switched.contains(mod);
     }
 
     private static boolean isWorldBuilt(ModSwitcher.Result result) {
@@ -210,14 +213,17 @@ public final class CrashGuard {
     }
 
     public static void onBackOn(Collection<String> ids) {
-        CrashPolicy made = policy;
+        Guard made = guard;
         if (made != null) {
-            ids.forEach(id -> made.onOffFinished(id, true));
+            ids.forEach(id -> made.policy().onOffFinished(id, true));
         }
     }
 
     public static void onSwitched(Collection<String> ids) {
-        SWITCHED.addAll(ids);
+        Guard made = guard;
+        if (made != null) {
+            made.switched().addAll(ids);
+        }
         lastSwitched = List.copyOf(ids);
         lastSwitchedAt = System.nanoTime();
     }
@@ -355,11 +361,12 @@ public final class CrashGuard {
     }
 
     public static boolean handle(Throwable thrown, CrashPolicy.Site site) {
-        CrashPolicy current = policy;
-        return current != null && current.handle(thrown, site);
+        Guard current = guard;
+        return current != null && current.policy().handle(thrown, site);
     }
 
     public static List<String> getCaught() {
-        return List.copyOf(CAUGHT);
+        Guard made = guard;
+        return made == null ? List.of() : List.copyOf(made.caught());
     }
 }

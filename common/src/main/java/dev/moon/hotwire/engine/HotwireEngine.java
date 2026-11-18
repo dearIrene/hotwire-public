@@ -98,6 +98,7 @@ public final class HotwireEngine implements ModScreenGame, AutoCloseable {
     final EngineGame units;
     private final DevControls dev;
     final Tasks tasks = new Tasks(1, Games.getNow()::runOnGame);
+    final ApiState api = new ApiState();
     @Nullable ModScreen screen;
 
     @Nullable Object under;
@@ -821,7 +822,7 @@ public final class HotwireEngine implements ModScreenGame, AutoCloseable {
 
     @Override
     public void closeGame() {
-        if (this.progress.isBusy() || ApiChanges.isRunning() || Games.getNow().isServerSaving()) {
+        if (this.progress.isBusy() || this.api.changing.get() > 0 || Games.getNow().isServerSaving()) {
             this.showMessage(Lang.get("hotwire.close.wait"), true);
             return;
         }
