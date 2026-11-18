@@ -20,8 +20,6 @@ import dev.moon.hotwire.engine.RestartOnlyFile;
 import dev.moon.hotwire.engine.SeenUses;
 import dev.moon.hotwire.engine.SwitchRunner;
 import dev.moon.hotwire.fabric.add.AddGameSide;
-import dev.moon.hotwire.fabric.add.HiddenPacks;
-import dev.moon.hotwire.fabric.add.LivePlugins;
 import dev.moon.hotwire.fabric.rebuild.GameClasses;
 import dev.moon.hotwire.fabric.rebuild.GameMixinCopy;
 import dev.moon.hotwire.fabric.rebuild.LivePluginShapes;

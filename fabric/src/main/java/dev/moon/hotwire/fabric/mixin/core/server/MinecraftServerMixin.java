@@ -5,7 +5,6 @@ import com.llamalad7.mixinextras.injector.wrapoperation.WrapOperation;
 import dev.moon.hotwire.concurrent.Tasks;
 import dev.moon.hotwire.engine.CrashGuard;
 import dev.moon.hotwire.fabric.GameParts;
-import dev.moon.hotwire.fabric.OngoingReload;
 import dev.moon.hotwire.fabric.mixin.core.util.thread.BlockableEventLoopAccessor;
 import dev.moon.hotwire.switching.CrashPolicy;
 //? if <1.21.11 {
