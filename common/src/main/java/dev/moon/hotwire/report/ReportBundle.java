@@ -57,6 +57,8 @@ public final class ReportBundle {
     private static final Pattern SERVER_JOIN = Pattern.compile(SERVER
             + ".*(?: joined the game| left the game| logged in with entity id| lost connection: )");
 
+    private static final Pattern SERVER_SYSTEM = Pattern.compile(SERVER + "(?:System chat: |\[System\] )");
+
     private static final Pattern ZIP = Pattern.compile("(?:Hotwire ([0-9]{4}-[0-9]{2}-[0-9]{2}"
             + " [0-9]{2}-[0-9]{2}-[0-9]{2})(?: .+)?|hotwire-(?:report|crash)-([0-9_-]+))\\.zip");
 
@@ -89,7 +91,8 @@ public final class ReportBundle {
     static String redact(String text, Set<String> personal) {
         List<String> retained = new ArrayList<>();
         for (String line : text.split("\n", -1)) {
-            if (!CHAT.matcher(line).find() && !SERVER_CHAT.matcher(line).find() && !isOtherJoin(line, personal)) {
+            if (!CHAT.matcher(line).find() && !SERVER_CHAT.matcher(line).find() && !SERVER_SYSTEM.matcher(line).find()
+                    && !isOtherJoin(line, personal)) {
                 retained.add(line);
             }
         }
