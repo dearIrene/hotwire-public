@@ -489,8 +489,8 @@ public final class StoreJars {
                         front.add(new StoreJar(jars.get(i), update));
                     }
                     if (jars.isEmpty()) {
-                        LOGGER.info("[Hotwire] {} needs {}, which Modrinth does not have for this game", asked.jar()
-                                .getFileName(), id);
+                        LOGGER.info("[Hotwire] {} needs {}, which the update check found no newer version of",
+                                asked.jar().getFileName(), id);
                     }
                 } catch (IOException e) {
                     LOGGER.info("[Hotwire] {} could not be fetched for {}: {}", id, asked.jar().getFileName(),

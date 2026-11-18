@@ -5,8 +5,6 @@ import dev.moon.hotwire.engine.InstalledMods;
 import dev.moon.hotwire.engine.LoadedMods;
 import dev.moon.hotwire.engine.ModPolicy;
 import dev.moon.hotwire.jar.FileHashes;
-import dev.moon.hotwire.jar.ModJarException;
-import dev.moon.hotwire.jar.ModJarReader;
 import dev.moon.hotwire.jar.ModManifest;
 import dev.moon.hotwire.modrinth.Downloads;
 import dev.moon.hotwire.modrinth.ModrinthClient;
@@ -353,49 +351,13 @@ public final class UpdateCheck {
         }
 
         String parent = this.installed.find(id).flatMap(ModManifest::menuParent).orElse(null);
-        if (parent != null && !parent.equals(id) && this.installed.find(parent).isPresent()) {
-            return this.fetchById(parent, offers, saying);
-        }
+        String wanted = parent != null && this.installed.find(parent).isPresent() ? parent : id;
         for (UpdateOffer offer : offers) {
-            if (offer.id().equals(id)) {
+            if (offer.id().equals(wanted)) {
                 return this.fetchWithNeeds(offer, saying);
             }
         }
-        List<ModrinthClient.Version> versions;
-        try {
-            versions = this.client.findVersions(ModrinthClient.Kind.MOD, id);
-        } catch (IOException e) {
-            LOGGER.info("[Hotwire] Modrinth has no project {}: {}", id, e.getMessage());
-            return List.of();
-        }
-        if (versions.isEmpty()) {
-            return List.of();
-        }
-        List<Path> jars = new ArrayList<>();
-        Set<String> seen = new HashSet<>();
-        ModrinthClient.Version newest = versions.getFirst();
-        saying.accept(Lang.get("hotwire.updates.getting_for_update", newest.name().isBlank() ? id : newest.name()));
-
-        Path jar = this.write(newest);
-        if (!isMod(jar, id)) {
-            LOGGER.info("[Hotwire] Modrinth's project {} is not the mod {}: left out", id, id);
-            Files.deleteIfExists(jar);
-            return List.of();
-        }
-        for (String needed : newest.requiredProjects()) {
-            this.fetchNeeded(needed, newest.name().isBlank() ? id : newest.name(), seen, jars, saying);
-        }
-        jars.add(jar);
-        return jars;
-    }
-
-    private static boolean isMod(Path jar, String id) {
-        try {
-            ModManifest manifest = ModJarReader.read(jar).manifest();
-            return manifest.id().equals(id) || manifest.provides().contains(id);
-        } catch (ModJarException e) {
-            return false;
-        }
+        return List.of();
     }
 
     public List<Path> fetchWithNeeds(UpdateOffer offer, Consumer<String> saying) throws IOException {

@@ -141,7 +141,8 @@ public final class ModStore {
             BiConsumer<List<Path>, List<String>> onJars, Consumer<String> onFailure) {
         Game client = Games.getNow();
         try {
-            List<ModrinthClient.Version> all = new ArrayList<>(this.findNeeded(wanted, new HashSet<>()));
+            List<ModrinthClient.Version> all = new ArrayList<>(findNeeded(wanted,
+                    new HashSet<>(Set.of(wanted.projectId())), this::findNewestNeeded));
             all.add(wanted);
             List<Path> jars = this.fetchAll(all);
             List<String> projects = all.stream().map(ModrinthClient.Version::projectId).toList();
@@ -149,47 +150,50 @@ public final class ModStore {
         } catch (Downloads.DownloadStop e) {
             LOGGER.info("[Hotwire] the download of {} was stopped", title);
             client.runOnGame(() -> onFailure.accept(""));
-        } catch (IOException e) {
+        } catch (IOException | RuntimeException e) {
             LOGGER.info("[Hotwire] the store could not get {}: {}", title, e.toString());
             client.runOnGame(() -> onFailure.accept(Lang.get("hotwire.store.download_failed", title,
                     e.getMessage())));
         }
     }
 
-    private List<ModrinthClient.Version> findNeeded(ModrinthClient.Version version, Set<String> seen)
-            throws IOException {
+    interface NeedLookup {
+        List<ModrinthClient.Version> find(String projectId) throws IOException;
+    }
+
+    static List<ModrinthClient.Version> findNeeded(ModrinthClient.Version version, Set<String> seen,
+            NeedLookup lookup) throws IOException {
         List<Callable<List<ModrinthClient.Version>>> asks = new ArrayList<>();
         for (String needed : version.requiredProjects()) {
-            if (!seen.contains(needed) && !this.model.isInstalledProject(needed)) {
-                asks.add(() -> {
-                    if (this.model.isInstalledProject(this.model.getClient().findProject(needed).slug())) {
-                        return List.of();
-                    }
-                    List<ModrinthClient.Version> versions = this.model.getClient()
-                            .findVersions(ModrinthClient.Kind.MOD, needed);
-                    if (!versions.isEmpty()) {
-                        return versions.subList(0, 1);
-                    }
-                    if (!this.model.getClient().isForThisLoader(needed)) {
-                        return List.of();
-                    }
-                    throw new IOException(Lang.get("hotwire.store.needs_no_version",
-                            this.model.getClient().findProject(needed).title()));
-                });
+            if (!seen.contains(needed)) {
+                asks.add(() -> lookup.find(needed));
             }
         }
         List<ModrinthClient.Version> out = new ArrayList<>();
 
         for (ModrinthClient.Version newest : runAtOnce(asks).stream().flatMap(List::stream).toList()) {
-            if (seen.contains(newest.projectId())) {
-                continue;
-            }
-            out.addAll(this.findNeeded(newest, seen));
             if (seen.add(newest.projectId())) {
+                out.addAll(findNeeded(newest, seen, lookup));
                 out.add(newest);
             }
         }
         return out;
+    }
+
+    private List<ModrinthClient.Version> findNewestNeeded(String needed) throws IOException {
+        if (this.model.isInstalledProject(needed)
+                || this.model.isInstalledProject(this.model.getClient().findProject(needed).slug())) {
+            return List.of();
+        }
+        List<ModrinthClient.Version> versions = this.model.getClient().findVersions(ModrinthClient.Kind.MOD, needed);
+        if (!versions.isEmpty()) {
+            return versions.subList(0, 1);
+        }
+        if (!this.model.getClient().isForThisLoader(needed)) {
+            return List.of();
+        }
+        throw new IOException(Lang.get("hotwire.store.needs_no_version",
+                this.model.getClient().findProject(needed).title()));
     }
 
     private static <T> List<T> runAtOnce(List<Callable<T>> tasks) throws IOException {

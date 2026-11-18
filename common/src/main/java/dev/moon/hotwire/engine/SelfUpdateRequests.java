@@ -95,7 +95,7 @@ final class SelfUpdateRequests {
             try {
                 Path jar = this.check.fetch(newer);
                 Games.getNow().runOnGame(() -> {
-                    ModAdder.Result queued = this.jars.queueForNextStart(List.of(jar), List.of(SelfUpdate.PROJECT),
+                    ModAdder.Result queued = this.jars.queueForNextStart(List.of(jar), List.of(newer.projectId()),
                             pending).getFirst();
                     ModScreen current = this.screen.get();
                     if (current != null && queued instanceof ModAdder.Result.Queued) {

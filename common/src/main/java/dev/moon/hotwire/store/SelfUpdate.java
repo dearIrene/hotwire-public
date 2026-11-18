@@ -1,24 +1,31 @@
 package dev.moon.hotwire.store;
 
+import dev.moon.hotwire.classfile.GameNames;
 import dev.moon.hotwire.engine.LoadedMods;
 import dev.moon.hotwire.engine.ModPolicy;
+import dev.moon.hotwire.jar.FileHashes;
+import dev.moon.hotwire.jar.JarLookup;
+import dev.moon.hotwire.jar.ModManifest;
 import dev.moon.hotwire.modrinth.Downloads;
 import dev.moon.hotwire.modrinth.ModrinthClient;
+import dev.moon.hotwire.ui.Lang;
 import dev.moon.hotwire.update.HotwireChanges;
 import dev.moon.hotwire.update.UrgentUpdate;
 import java.io.IOException;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.util.List;
+import java.util.Map;
 import java.util.Optional;
 import java.util.function.Consumer;
 import net.fabricmc.loader.api.FabricLoader;
+import net.fabricmc.loader.api.ModContainer;
+import net.fabricmc.loader.api.metadata.ModOrigin;
 import org.jspecify.annotations.Nullable;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 public final class SelfUpdate {
-    public static final String PROJECT = "irenehotwire";
     private static final Logger LOGGER = LoggerFactory.getLogger(SelfUpdate.class);
 
     private final ModrinthClient client = LoadedMods.makeStoreClient();
@@ -44,8 +51,13 @@ public final class SelfUpdate {
 
     private ModrinthClient.@Nullable Version find(Consumer<Optional<UrgentUpdate>> checked) {
         try {
-            List<ModrinthClient.Version> versions = this.client.findVersions(ModrinthClient.Kind.MOD, PROJECT);
-            String running = LoadedMods.findVersion("hotwire", "0");
+            String project = this.findOwnProject();
+            if (project == null) {
+                LOGGER.info("[Hotwire] this Hotwire jar is not one of Modrinth's, so no newer one is looked for");
+                return null;
+            }
+            List<ModrinthClient.Version> versions = this.client.findVersions(ModrinthClient.Kind.MOD, project);
+            String running = LoadedMods.findVersion(GameNames.HOTWIRE, "0");
             this.changes = HotwireChanges.join(versions, number -> ModPolicy.isNewer(number, running));
             checked.accept(Optional.ofNullable(UrgentUpdate.find(versions,
                     number -> ModPolicy.isNewer(number, running))));
@@ -58,6 +70,21 @@ public final class SelfUpdate {
             LOGGER.info("[Hotwire] could not ask Modrinth for a newer Hotwire: {}", e.toString());
             return null;
         }
+    }
+
+    private @Nullable String findOwnProject() throws IOException {
+        ModContainer own = FabricLoader.getInstance().getModContainer(GameNames.HOTWIRE).orElse(null);
+        if (own == null || own.getOrigin().getKind() != ModOrigin.Kind.PATH
+                || own.getOrigin().getPaths().size() != 1) {
+            return null;
+        }
+        Path jar = own.getOrigin().getPaths().getFirst();
+        if (!Files.isRegularFile(jar)) {
+            return null;
+        }
+        ModrinthClient.Version version = this.client.findByHashes(Map.of(GameNames.HOTWIRE,
+                FileHashes.findSha512(jar))).get(GameNames.HOTWIRE);
+        return version == null ? null : version.projectId();
     }
 
     public void allowAgain() {
@@ -76,6 +103,11 @@ public final class SelfUpdate {
         Path jar = version.resolveIn(this.folder);
         Files.createDirectories(jar.getParent());
         this.client.fetchTo(version, jar, this.downloads);
+        ModManifest manifest = JarLookup.findManifest(jar);
+        if (manifest == null || !manifest.id().equals(GameNames.HOTWIRE)) {
+            Files.deleteIfExists(jar);
+            throw new IOException(Lang.get("hotwire.self_update.not_hotwire"));
+        }
         return jar;
     }
 }
