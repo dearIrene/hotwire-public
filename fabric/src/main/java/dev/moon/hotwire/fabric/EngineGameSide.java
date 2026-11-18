@@ -104,8 +104,8 @@ final class EngineGameSide implements EngineGame {
     }
 
     @Override
-    public void setBackupNext(boolean backup) {
-        WorldReopen.setBackupNext(backup);
+    public void setBackupWanted(boolean backup) {
+        WorldReopen.setBackupWanted(backup);
     }
 
     @Override

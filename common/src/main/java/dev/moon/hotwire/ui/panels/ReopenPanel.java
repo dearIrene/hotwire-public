@@ -38,7 +38,7 @@ public final class ReopenPanel extends Sheet {
             return new Offer(this.off, this.ids, this.jar, this.who, this.why, this.leaves, this.nextStart, backup);
         }
 
-        boolean isReopening() {
+        public boolean isReopening() {
             return !this.leaves && !this.nextStart;
         }
 

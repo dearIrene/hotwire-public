@@ -44,7 +44,7 @@ public interface EngineGame {
 
     void tellWorldClosedTo(Consumer<Boolean> listener);
 
-    void setBackupNext(boolean backup);
+    void setBackupWanted(boolean backup);
 
     boolean isWorldLeftOnly();
 

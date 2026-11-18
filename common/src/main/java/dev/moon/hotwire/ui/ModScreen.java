@@ -141,7 +141,10 @@ public final class ModScreen implements JarHost {
         this.reopenPanel = new ReopenPanel(game::describeOthers, offer -> {
             this.closePanels();
             Path jar = offer.jar();
-            this.game.backUpBeforeReopen(offer.backup());
+
+            if (offer.isReopening()) {
+                this.game.backUpBeforeReopen(offer.backup());
+            }
             if (offer.nextStart()) {
                 this.game.turnOffAtNextStart(offer.ids());
             } else if (jar != null) {

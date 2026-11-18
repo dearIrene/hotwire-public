@@ -336,7 +336,7 @@ public final class HotwireEngine implements ModScreenGame, AutoCloseable {
 
     @Override
     public void backUpBeforeReopen(boolean backup) {
-        this.units.setBackupNext(backup);
+        this.units.setBackupWanted(backup);
     }
 
     @Override

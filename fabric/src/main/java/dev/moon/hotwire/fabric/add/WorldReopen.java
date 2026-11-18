@@ -2,6 +2,7 @@ package dev.moon.hotwire.fabric.add;
 
 import dev.moon.hotwire.add.ModAdder;
 import dev.moon.hotwire.add.TickEnd;
+import dev.moon.hotwire.add.WorldBackups;
 import dev.moon.hotwire.fabric.ModViews;
 import dev.moon.hotwire.fabric.OtherPlayers;
 import dev.moon.hotwire.fabric.ResourceReload;
@@ -55,6 +56,7 @@ public final class WorldReopen {
 
     private static final Duration SHUTDOWN_WAIT = Duration.ofMinutes(10);
     private static final Duration RELEASED_GRACE = Duration.ofSeconds(2);
+    private static final long MB = 1024 * 1024;
 
     private record QueueAtLeave(Queue<Runnable> queue, Set<Runnable> earlier) {
     }
@@ -85,28 +87,64 @@ public final class WorldReopen {
         return client.level != null && client.getSingleplayerServer() == null;
     }
 
-    private static volatile boolean backupNext;
+    private static volatile boolean backupWanted = true;
 
-    public static void setBackupNext(boolean backup) {
-        backupNext = backup;
+    public static void setBackupWanted(boolean backup) {
+        backupWanted = backup;
     }
 
-    private static void backUpIfAsked(Minecraft client, String level) throws InterruptedException {
-        if (!backupNext) {
+    private static Optional<String> findRoomRefusal(Minecraft client, String level, boolean backup) {
+        if (!backup) {
+            return Optional.empty();
+        }
+        LevelStorageSource saves = client.getLevelSource();
+        try {
+            long size = WorldBackups.findSize(saves.getBaseDir().resolve(level));
+            long free = WorldBackups.findFreeSpace(saves.getBackupPath());
+            if (free >= size) {
+                return Optional.empty();
+            }
+            LOGGER.warn("[Hotwire] the world {} takes {} MB and the disk has {} MB free, so it is not backed up",
+                    level, size / MB, free / MB);
+            return Optional.of(Lang.get("hotwire.reopen.backup_no_room", level, size / MB, free / MB));
+        } catch (IOException | RuntimeException e) {
+            LOGGER.warn("[Hotwire] the room for the world {}'s backup could not be measured: {}", level, e.toString());
+            return Optional.empty();
+        }
+    }
+
+    private static void backUpIfAsked(Minecraft client, String level, boolean backup) throws InterruptedException {
+        if (!backup) {
             return;
         }
-        backupNext = false;
+        Path backups = client.getLevelSource().getBackupPath();
         long size;
-        try (LevelStorageSource.LevelStorageAccess access = client.getLevelSource().createAccess(level)) {
-            size = access.makeWorldBackup();
+        try {
+            Set<Path> before = WorldBackups.list(backups);
+            try (LevelStorageSource.LevelStorageAccess access = client.getLevelSource().createAccess(level)) {
+                size = access.makeWorldBackup();
+            } catch (IOException | RuntimeException e) {
+                deleteFailedBackup(backups, before);
+                throw e;
+            }
         } catch (IOException | RuntimeException e) {
             LOGGER.warn("[Hotwire] the world {} could not be backed up", level, e);
             Notices.show("Hotwire", Lang.get("hotwire.reopen.backup_failed", e.getMessage()));
             openOrSay(client, level);
             throw new IllegalStateException(Lang.get("hotwire.reopen.backup_failed", e.getMessage()), e);
         }
-        LOGGER.info("[Hotwire] the world {} was backed up, {} MB", level, size / (1024 * 1024));
+        LOGGER.info("[Hotwire] the world {} was backed up, {} MB", level, size / MB);
         Notices.show("Hotwire", Lang.get("hotwire.reopen.backed_up", level));
+    }
+
+    private static void deleteFailedBackup(Path backups, Set<Path> before) {
+        try {
+            for (Path gone : WorldBackups.deleteNewZips(backups, before)) {
+                LOGGER.info("[Hotwire] deleted the failed backup {}", gone);
+            }
+        } catch (IOException e) {
+            LOGGER.warn("[Hotwire] the failed backup in {} could not be deleted", backups, e);
+        }
     }
 
     public static ModAdder.Result add(Supplier<ModAdder.Result> add) {
@@ -115,12 +153,18 @@ public final class WorldReopen {
             return new ModAdder.Result.Refused(cannot.get());
         }
         Minecraft client = Minecraft.getInstance();
+        boolean backup = backupWanted;
         try {
             String level = getFolderOf(Objects.requireNonNull(client.getSingleplayerServer()));
+            Optional<String> noRoom = findRoomRefusal(client, level, backup);
+            if (noRoom.isPresent()) {
+                Notices.show("Hotwire", noRoom.get());
+                return new ModAdder.Result.Refused(noRoom.get());
+            }
             leave(client);
             closedFor.accept(true);
             try {
-                backUpIfAsked(client, level);
+                backUpIfAsked(client, level, backup);
                 ModAdder.Result result = add.get();
                 if (result instanceof ModAdder.Result.Failed failed && failed.leftBehind()) {
                     return new ModAdder.Result.Failed(failed.reason() + " " + Lang.get("hotwire.reopen.stays_closed"),
@@ -151,10 +195,16 @@ public final class WorldReopen {
             throw new IllegalStateException("no single-player world is open");
         }
         String level = getFolderOf(server);
+        boolean backup = backupWanted;
+        Optional<String> noRoom = findRoomRefusal(client, level, backup);
+        if (noRoom.isPresent()) {
+            Notices.show("Hotwire", noRoom.get());
+            throw new IllegalStateException(noRoom.get());
+        }
         leave(client);
         closedFor.accept(true);
         try {
-            backUpIfAsked(client, level);
+            backUpIfAsked(client, level, backup);
             T result;
             try {
                 result = add.get();

@@ -437,6 +437,7 @@
   "hotwire.reopen.backup_line": "A copy of your world goes into the game's backups folder before anything changes.",
   "hotwire.reopen.backed_up": "%s is backed up. Find the copy under backups in your game folder.",
   "hotwire.reopen.backup_failed": "The backup failed, so nothing was changed: %s",
+  "hotwire.reopen.backup_no_room": "There isn't room on the disk to back up %s (%s MB, %s MB free), so nothing was changed. Free some space, or set Backup first to no.",
   "hotwire.update.lead.update": "Update ",
   "hotwire.update.lead.refused": "Can't update ",
   "hotwire.update.same_version": "You already have %s %s!",
