@@ -1,6 +1,7 @@
 package dev.moon.hotwire.fabric;
 
 import dev.moon.hotwire.fabric.version.Spellings;
+import dev.moon.hotwire.seam.PlayerListReader;
 import dev.moon.hotwire.seam.PlayerMods;
 import dev.moon.hotwire.seam.SharedMod;
 import java.util.ArrayList;
@@ -153,23 +154,6 @@ public final class PlayerLists {
         }
     }
 
-    private static @Nullable List<SharedMod> readMods(FriendlyByteBuf from) {
-        int count = from.readVarInt();
-        if (count < 0 || count > PlayerMods.MOST_MODS) {
-            return null;
-        }
-        List<SharedMod> mods = new ArrayList<>();
-        for (int at = 0; at < count; at++) {
-            SharedMod mod = SharedMod.of(from.readUtf(SharedMod.LONGEST), from.readBoolean(),
-                    from.readUtf(SharedMod.LONGEST), from.readUtf(SharedMod.LONGEST));
-            if (mod == null) {
-                return null;
-            }
-            mods.add(mod);
-        }
-        return mods;
-    }
-
     private static void writeMine(FriendlyByteBuf to, Mine mine) {
         to.writeBoolean(mine.sharing());
         writeMods(to, mine.mods());
@@ -177,12 +161,8 @@ public final class PlayerLists {
 
     private static Mine readMine(FriendlyByteBuf from) {
         try {
-            boolean sharing = from.readBoolean();
-            List<SharedMod> mods = readMods(from);
-            return mods == null || from.isReadable() || (!sharing && !mods.isEmpty()) ? new Mine(false, List.of())
-                    : new Mine(sharing, mods);
-        } catch (RuntimeException e) {
-            return new Mine(false, List.of());
+            List<SharedMod> mods = PlayerListReader.readShared(wrap(from));
+            return mods == null ? new Mine(false, List.of()) : new Mine(true, mods);
         } finally {
             from.skipBytes(from.readableBytes());
         }
@@ -192,7 +172,7 @@ public final class PlayerLists {
         to.writeVarInt(everyone.players().size());
         for (PlayerMods player : everyone.players()) {
             to.writeUUID(player.player());
-            to.writeUtf(player.name(), 16);
+            to.writeUtf(player.name(), PlayerMods.LONGEST_NAME);
             to.writeBoolean(player.sharing());
             writeMods(to, player.mods());
         }
@@ -200,27 +180,38 @@ public final class PlayerLists {
 
     private static Everyone readEveryone(FriendlyByteBuf from) {
         try {
-            int count = from.readVarInt();
-            if (count < 0 || count > PlayerMods.MOST_PLAYERS) {
-                return new Everyone(List.of());
-            }
-            List<PlayerMods> players = new ArrayList<>();
-            for (int at = 0; at < count; at++) {
-                UUID player = from.readUUID();
-                String name = from.readUtf(16);
-                boolean sharing = from.readBoolean();
-                List<SharedMod> mods = readMods(from);
-                PlayerMods one = mods == null ? null : PlayerMods.of(player, name, sharing, mods);
-                if (one == null) {
-                    return new Everyone(List.of());
-                }
-                players.add(one);
-            }
-            return new Everyone(from.isReadable() ? List.of() : List.copyOf(players));
-        } catch (RuntimeException e) {
-            return new Everyone(List.of());
+            return new Everyone(PlayerListReader.readPlayers(wrap(from)));
         } finally {
             from.skipBytes(from.readableBytes());
         }
+    }
+
+    private static PlayerListReader.Source wrap(FriendlyByteBuf from) {
+        return new PlayerListReader.Source() {
+            @Override
+            public int readVarInt() {
+                return from.readVarInt();
+            }
+
+            @Override
+            public boolean readBoolean() {
+                return from.readBoolean();
+            }
+
+            @Override
+            public String readUtf(int longest) {
+                return from.readUtf(longest);
+            }
+
+            @Override
+            public UUID readUuid() {
+                return from.readUUID();
+            }
+
+            @Override
+            public boolean isReadable() {
+                return from.isReadable();
+            }
+        };
     }
 }

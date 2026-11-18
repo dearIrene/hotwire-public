@@ -9,6 +9,8 @@ import org.jspecify.annotations.Nullable;
 public record PlayerMods(UUID player, String name, boolean sharing, List<SharedMod> mods) {
     public static final int MOST_MODS = 1024;
     public static final int MOST_PLAYERS = 32;
+
+    public static final int LONGEST_NAME = 16;
     private static final Pattern NAME = Pattern.compile("[A-Za-z0-9_]{1,16}");
 
     public PlayerMods {
