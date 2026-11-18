@@ -96,6 +96,7 @@ public final class StaticCopies {
     private static int walk(Class<?>[] types, IdentityHashMap<Object, Object> replaced, int steps,
             Predicate<String> walked, Set<Object> seen, CopyHolders holders) {
         int most = seen.size() + MOST;
+        long began = System.nanoTime();
         Deque<Object> step = new ArrayDeque<>();
         int swapped = 0;
         int count = 0;
@@ -106,8 +107,13 @@ public final class StaticCopies {
             swapped += swapFields(type, null, replaced, step);
             drawHoldFrame(++count);
         }
+        long read = System.nanoTime();
+        LOGGER.info("[Hotwire] copies: the statics of {} classes read in {} ms, {} objects to go through", count,
+                (read - began) / 1_000_000, step.size());
         for (int depth = 0; depth < steps && !step.isEmpty() && seen.size() < most; depth++) {
             boolean last = depth == steps - 1;
+            long stepBegan = System.nanoTime();
+            int stepSize = step.size();
             Deque<Object> next = new ArrayDeque<>();
             while (!step.isEmpty() && seen.size() < most) {
                 Object one = step.poll();
@@ -117,6 +123,8 @@ public final class StaticCopies {
                 drawHoldFrame(++count);
             }
             step = next;
+            LOGGER.info("[Hotwire] copies: step {} went through {} objects in {} ms", depth, stepSize,
+                    (System.nanoTime() - stepBegan) / 1_000_000);
         }
         return swapped;
     }
