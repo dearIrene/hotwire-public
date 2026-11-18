@@ -169,7 +169,8 @@ public class EngineApi implements HotwireApi {
     public CompletableFuture<SwitchResult> updateHotwire() {
         CompletableFuture<SwitchResult> done = new CompletableFuture<>();
         HotwireEngine engine = findEngine();
-        String refused = engine == null ? null : ApiConsent.findRefusal(engine, true);
+
+        String refused = engine == null ? null : ApiConsent.findRefusal(engine, false);
         if (engine == null) {
             done.complete(SwitchResult.ofRefusal(Reason.NOT_READY, Lang.get("hotwire.api.starting")));
         } else if (refused != null) {
