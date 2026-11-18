@@ -4,6 +4,7 @@ import dev.moon.hotwire.modrinth.ModrinthClient;
 import dev.moon.hotwire.modrinth.StoreModel;
 import dev.moon.hotwire.ui.Lang;
 import dev.moon.hotwire.ui.ModScreen;
+import dev.moon.hotwire.ui.widgets.Element;
 import dev.moon.hotwire.ui.widgets.Kit;
 import dev.moon.hotwire.ui.widgets.Line;
 import dev.moon.hotwire.ui.widgets.Markdown;
@@ -16,12 +17,15 @@ import dev.moon.hotwire.ui.widgets.Sheet;
 import dev.moon.hotwire.ui.widgets.StoreIcons;
 import dev.moon.hotwire.ui.widgets.Text;
 import dev.moon.hotwire.ui.widgets.TextField;
+import java.util.ArrayList;
 import java.util.List;
 import org.jspecify.annotations.Nullable;
 
 public final class StoreDetail extends Sheet {
     private static final int MOST_VERSIONS = 8;
     private static final int PAGE_TALL = 250;
+
+    private static final int ADDRESS_LINE = 60;
 
     private final StoreModel model;
     private final StoreIcons icons;
@@ -49,8 +53,8 @@ public final class StoreDetail extends Sheet {
         this.icons = icons;
         this.game = game;
         this.popup = popup;
-        this.words = new Markdown(icons).onLink(game::openLink);
-        this.page = Kit.scroll(Kit.column(Kit.row(this.link).press((button, modifiers) -> this.game.openLink(
+        this.words = new Markdown(icons).onLink(this::askToOpenFromPage);
+        this.page = Kit.scroll(Kit.column(Kit.row(this.link).press((button, modifiers) -> this.askToOpen(this.link,
                 this.link.get())), this.words, Kit.rule(),
                 Kit.dim(Lang.get("hotwire.store.versions")), this.versions).gap(8)).capAt(PAGE_TALL);
         this.words.within(this.page);
@@ -87,6 +91,20 @@ public final class StoreDetail extends Sheet {
             this.game.openLink("https://modrinth.com/project/" + (shown.slug().isEmpty() ? shown.projectId()
                     : shown.slug()));
         }
+    }
+
+    private void askToOpen(Element at, String url) {
+        List<Popup.Item> items = new ArrayList<>();
+        for (int from = 0; from < url.length(); from += ADDRESS_LINE) {
+            items.add(new Popup.Item(url.substring(from, Math.min(url.length(), from + ADDRESS_LINE)), Palette.DIM,
+                    null));
+        }
+        items.add(new Popup.Item(Lang.get("hotwire.store.open_link"), Palette.TEXT, () -> this.game.openLink(url)));
+        this.popup.openAt(at.getPointerX(), at.getPointerY(), this.getWidth(), this.getHeight(), items);
+    }
+
+    private void askToOpenFromPage(String url) {
+        this.askToOpen(this.words, url);
     }
 
     private void openDownloads() {
