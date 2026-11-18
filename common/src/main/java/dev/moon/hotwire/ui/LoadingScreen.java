@@ -6,7 +6,9 @@ import dev.moon.hotwire.ui.widgets.Colors;
 import dev.moon.hotwire.ui.widgets.EasedValue;
 import dev.moon.hotwire.ui.widgets.Palette;
 import dev.moon.hotwire.ui.widgets.Part;
+import java.util.HashMap;
 import java.util.List;
+import java.util.Map;
 import java.util.function.Function;
 import org.jspecify.annotations.Nullable;
 
@@ -34,6 +36,12 @@ public final class LoadingScreen extends Part {
 
     private static final float IN = 0.9f;
     private static final int RISE = 12;
+
+    private static final double DOWNLOADS_PART = 0.8;
+
+    private static final int CARD = 124;
+    private static final double POP_NANOS = 4.5e8;
+    private static final double SOFT_ENDS = 56;
 
     private final Progress progress;
     private final Sounds sounds;
@@ -64,6 +72,17 @@ public final class LoadingScreen extends Part {
     private int gone;
     private long begunAt;
     private float took;
+
+    private final EasedValue strip = EasedValue.ofSpeed(3);
+    private int frontier;
+    private Map<String, Double> underWay = Map.of();
+    private final Map<String, String> shortNames = new HashMap<>();
+    private final Map<String, String> shortVersions = new HashMap<>();
+
+    private int stopLeft;
+    private int stopTop;
+    private int stopRight;
+    private int stopBottom;
 
     @SuppressWarnings("this-escape")
     LoadingScreen(Progress progress, Sounds sounds) {
@@ -118,8 +137,9 @@ public final class LoadingScreen extends Part {
             return;
         }
         boolean coming = this.wanted && this.shown.getValue() < IN;
-        this.bar.to(coming ? 0 : (float) (now.running() ? now.getFraction() : 1));
+        this.bar.to(coming ? 0 : (float) (now.running() ? this.findFraction(now) : 1));
         this.bar.step(dt);
+        this.stepReel(dt);
 
         String subject = now.subject();
         if (subject.equals(this.name)) {
@@ -168,6 +188,10 @@ public final class LoadingScreen extends Part {
         this.wanted = true;
         this.setVisible(true);
         this.bar.snap(0);
+        this.strip.snap(0);
+        this.frontier = 0;
+        this.shortNames.clear();
+        this.shortVersions.clear();
         this.name = "";
         this.nameIn.snap(0);
         this.tailAt.snap(0);
@@ -233,6 +257,13 @@ public final class LoadingScreen extends Part {
             canvas.pushScale(scale, from, middle);
             this.paintMain(canvas, now, from, middle, from + wide, in);
             canvas.popScale();
+            this.stopRight = this.stopLeft;
+            if (this.progress.isUpdating() && now.at() <= 0 && !this.progress.getReel().isEmpty()) {
+                this.paintReel(canvas, x + 22, bottom - 64, right - 22, in);
+                if (this.progress.canStop()) {
+                    this.paintStop(canvas, (x + right) / 2, bottom - 30, in);
+                }
+            }
             return;
         }
         float ended = this.ended.getValue();
@@ -281,6 +312,114 @@ public final class LoadingScreen extends Part {
         canvas.drawText(canvas.clip(this.words + counted, right - left - canvas.measureText(far) - 10), left, lineY,
                 Colors.fade(Palette.DIM, alpha * this.wordsIn.getValue()));
         this.paintWorldClosed(canvas, left, lineY + 20, alpha);
+    }
+
+    private double findFraction(Progress.Snapshot now) {
+        double fetched = this.progress.findFetched();
+        if (!this.progress.isUpdating() || fetched < 0) {
+            return now.getFraction();
+        }
+        if (now.at() <= 0) {
+            return DOWNLOADS_PART * fetched;
+        }
+        int steps = Math.max(2, now.labels().size());
+        return DOWNLOADS_PART + (1 - DOWNLOADS_PART) * Math.max(0, now.getFraction() * steps - 1) / (steps - 1);
+    }
+
+    private void stepReel(float dt) {
+        List<Progress.ReelItem> reel = this.progress.getReel();
+        if (reel.isEmpty()) {
+            this.underWay = Map.of();
+            return;
+        }
+        while (this.frontier < reel.size() && this.progress.findLandedAt(reel.get(this.frontier).id()) != 0) {
+            this.frontier++;
+        }
+        this.strip.to(this.frontier);
+        this.strip.step(dt);
+        this.underWay = this.progress.findUnderWay();
+    }
+
+    private void paintReel(Canvas canvas, int left, int top, int right, float alpha) {
+        List<Progress.ReelItem> reel = this.progress.getReel();
+        if (reel.isEmpty() || alpha < 0.01f) {
+            return;
+        }
+        double start = left + (right - left) / 3.0 - this.strip.getValue() * CARD;
+        int from = Math.max(0, (int) Math.floor((left - start) / CARD));
+        long clock = System.nanoTime();
+        canvas.pushClip(left, top - 4, right, top + 26);
+        for (int at = from; at < reel.size(); at++) {
+            double cardStart = start + at * (double) CARD;
+            if (cardStart > right) {
+                break;
+            }
+            int cardX = (int) Math.floor(cardStart);
+            double fromEnd = Math.min(cardStart + CARD / 2.0 - left, right - cardStart - CARD / 2.0) / SOFT_ENDS;
+            float soft = alpha * (float) Math.clamp(fromEnd, 0, 1);
+            if (soft < 0.01f) {
+                continue;
+            }
+            canvas.pushShift((float) (cardStart - cardX), 0);
+            this.paintCard(canvas, reel.get(at), cardX, top, soft, clock);
+            canvas.popShift();
+        }
+        canvas.popClip();
+    }
+
+    private void paintCard(Canvas canvas, Progress.ReelItem item, int cardX, int top, float soft, long clock) {
+        long landedAt = this.progress.findLandedAt(item.id());
+        Double share = landedAt == 0 ? this.underWay.get(item.file()) : null;
+        float pop = landedAt == 0 ? 0 : (float) Math.clamp(1 - (clock - landedAt) / POP_NANOS, 0, 1);
+        float lit = 0.4f;
+        int ink = Palette.DIM;
+        if (landedAt != 0) {
+            lit = 1;
+            ink = Colors.mix(Palette.TEXT, Palette.ACCENT, pop);
+        } else if (share != null) {
+            lit = 0.85f;
+            ink = Palette.TEXT;
+        }
+        int lift = Math.round(pop * pop * 3);
+        int textX = cardX;
+        Canvas.Image icon = this.icons.apply(item.id());
+        if (icon != null && canvas.drawImage(icon, cardX, top + 1 - lift, 16, 16, soft * lit)) {
+            textX += 21;
+        }
+        int room = cardX + CARD - 12 - textX;
+        String name = this.shortNames.get(item.id());
+        if (name == null) {
+            name = canvas.clip(item.name(), room);
+            this.shortNames.put(item.id(), name);
+        }
+        String version = this.shortVersions.get(item.id());
+        if (version == null) {
+            version = canvas.clip(item.version(), room);
+            this.shortVersions.put(item.id(), version);
+        }
+        canvas.drawText(name, textX, top - lift, Colors.fade(ink, soft));
+        canvas.drawText(version, textX, top + 10 - lift, Colors.fade(landedAt != 0 ? Palette.ACCENT : Palette.FAINT,
+                soft));
+        if (share != null) {
+            int lineRight = cardX + CARD - 12;
+            int lineY = top + 21;
+            canvas.fill(textX, lineY, lineRight, lineY + 1, Colors.fade(Palette.ON, soft * 0.22f));
+            canvas.fillAcross(textX, lineY, textX + (int) Math.round((lineRight - textX) * share), lineY + 1,
+                    Colors.fade(Palette.ON, soft), Colors.fade(Palette.ACCENT, soft));
+        }
+    }
+
+    private void paintStop(Canvas canvas, int centerX, int top, float alpha) {
+        String word = Lang.get("hotwire.progress.stop_downloads");
+        int wide = canvas.measureText(word) + 18;
+        this.stopLeft = centerX - wide / 2;
+        this.stopRight = this.stopLeft + wide;
+        this.stopTop = top;
+        this.stopBottom = top + 16;
+        canvas.fill(this.stopLeft - 1, top - 1, this.stopRight + 1, this.stopBottom + 1,
+                Colors.fade(Palette.PANEL_EDGE, alpha));
+        canvas.fill(this.stopLeft, top, this.stopRight, this.stopBottom, Colors.fade(FACE, alpha));
+        canvas.drawText(word, this.stopLeft + 9, top + 4, Colors.fade(Palette.TEXT, alpha));
     }
 
     private void paintWorldClosed(Canvas canvas, int left, int y, float alpha) {
@@ -377,6 +516,12 @@ public final class LoadingScreen extends Part {
 
     @Override
     protected boolean onClick(double px, double py, int button, int modifiers) {
+        double localX = px - this.getX();
+        double localY = py - this.getY();
+        if (button == 0 && this.stopRight > this.stopLeft && localX >= this.stopLeft && localX < this.stopRight
+                && localY >= this.stopTop && localY < this.stopBottom) {
+            this.progress.stopDownloads();
+        }
         return true;
     }
 }

@@ -5,6 +5,9 @@ import java.util.ArrayList;
 import java.util.Collections;
 import java.util.List;
 import java.util.Map;
+import java.util.concurrent.ConcurrentHashMap;
+import java.util.function.DoubleSupplier;
+import java.util.function.Supplier;
 import org.jspecify.annotations.Nullable;
 
 public final class Progress {
@@ -79,6 +82,73 @@ public final class Progress {
             List.of(), List.of());
 
     private volatile boolean worldClosed;
+
+    public record ReelItem(String id, String name, String version, String file) {
+    }
+
+    private volatile List<ReelItem> reel = List.of();
+
+    private final Map<String, Long> landed = new ConcurrentHashMap<>();
+
+    private volatile Supplier<Map<String, Double>> underWay = Map::of;
+
+    private volatile @Nullable DoubleSupplier fetched;
+
+    private volatile @Nullable Runnable stopper;
+
+    public void showDownloads(List<ReelItem> items, DoubleSupplier share, Supplier<Map<String, Double>> each,
+            Runnable stop) {
+        this.landed.clear();
+        this.reel = List.copyOf(items);
+        this.fetched = share;
+        this.underWay = each;
+        this.stopper = stop;
+    }
+
+    public void markLanded(String id) {
+        this.landed.putIfAbsent(id, System.nanoTime());
+    }
+
+    public void endDownloads() {
+        this.reel = List.of();
+        this.fetched = null;
+        this.underWay = Map::of;
+        this.stopper = null;
+    }
+
+    public List<ReelItem> getReel() {
+        return this.reel;
+    }
+
+    public long findLandedAt(String id) {
+        Long at = this.landed.get(id);
+        return at == null ? 0 : at;
+    }
+
+    public Map<String, Double> findUnderWay() {
+        return this.underWay.get();
+    }
+
+    public double findFetched() {
+        DoubleSupplier share = this.fetched;
+        return share == null ? -1 : share.getAsDouble();
+    }
+
+    public boolean canStop() {
+        return this.stopper != null;
+    }
+
+    public void stopDownloads() {
+        Runnable stop = this.stopper;
+        this.stopper = null;
+        if (stop != null) {
+            stop.run();
+        }
+    }
+
+    public boolean isUpdating() {
+        return this.updating;
+    }
 
     public Snapshot snapshot() {
         return this.now;
@@ -161,6 +231,7 @@ public final class Progress {
 
     public synchronized void endAdding() {
         this.updating = false;
+        this.endDownloads();
         Snapshot was = this.now;
         this.now = new Snapshot(was.run(), was.subject(), was.labels(), was.labels().size(), "", 0, 0, false, false,
                 false, was.mods(), was.modsDone(), was.queue(), was.ticks());

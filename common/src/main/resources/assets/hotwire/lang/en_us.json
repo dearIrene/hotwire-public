@@ -412,6 +412,7 @@
   "hotwire.panel.more_in_log": "There's more in the game's log.",
   "hotwire.progress.planning": "Planning",
   "hotwire.progress.world_closed": "Your world is saved and closed for this.",
+  "hotwire.progress.stop_downloads": "Cancel",
   "hotwire.progress.world_opens": "It will reopen by itself. Do NOT leave or close the game!",
   "hotwire.progress.switching_off": "Switching off",
   "hotwire.progress.reporting": "Reporting",

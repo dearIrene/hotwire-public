@@ -14,9 +14,11 @@ import java.io.UncheckedIOException;
 import java.nio.file.Path;
 import java.util.ArrayList;
 import java.util.Comparator;
+import java.util.HashMap;
 import java.util.HashSet;
 import java.util.IdentityHashMap;
 import java.util.List;
+import java.util.Map;
 import java.util.Objects;
 import java.util.Set;
 import java.util.TreeSet;
@@ -26,7 +28,9 @@ import java.util.concurrent.ExecutionException;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
 import java.util.concurrent.Future;
+import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.concurrent.atomic.AtomicInteger;
+import java.util.concurrent.atomic.AtomicLong;
 import java.util.function.BiConsumer;
 import java.util.function.Consumer;
 import java.util.function.Function;
@@ -99,8 +103,31 @@ public final class StoreUpdates {
         this.progress.count(Lang.get("hotwire.progress.update.getting"), 0, offers.size());
         CompletableFuture<Ran> ran = new CompletableFuture<>();
         this.last = ran;
+        AtomicBoolean stopped = new AtomicBoolean();
+        long total = Math.max(1, offers.stream().mapToLong(UpdateOffer::size).sum());
+        AtomicLong landedBytes = new AtomicLong();
+
+        this.progress.showDownloads(offers.stream().sorted(Comparator.comparingLong(UpdateOffer::size).reversed())
+                .map(offer -> new Progress.ReelItem(offer.id(), offer.name(), offer.newVersion(), offer.fileName()))
+                .toList(), () -> Math.min(1, (landedBytes.get() + Downloads.findAllUnderWay().stream()
+                .filter(job -> !job.isOver()).mapToLong(Downloads.Job::done).sum()) / (double) total),
+                StoreUpdates::findUnderWay, () -> {
+                    stopped.set(true);
+                    Downloads.stopAll();
+                    LOGGER.info("[Hotwire] Update all: the player stopped the downloads still coming");
+                });
         Thread.ofPlatform().name("hotwire-updates-fetch").daemon().start(() -> {
-            Fetches fetches = this.beginFetches(offers, this::fetch);
+            Fetches fetches = this.beginFetches(offers, offer -> {
+                if (stopped.get()) {
+                    return List.of();
+                }
+                List<Path> jars = this.fetch(offer, stopped);
+                if (!jars.isEmpty()) {
+                    landedBytes.addAndGet(offer.size());
+                    this.progress.markLanded(offer.id());
+                }
+                return jars;
+            });
             List<Integer> apart = this.awaitApart(offers, fetches.futures(), began);
             List<Path> firstJars = apart.stream().map(at -> fetches.futures().get(at).resultNow().getFirst()).toList();
             List<ModUpdater.Result> firstMade = List.of();
@@ -135,6 +162,7 @@ public final class StoreUpdates {
                 });
             }
             List<List<Path>> fetched = collect(fetches);
+            this.progress.endDownloads();
             long fetchMillis = (System.nanoTime() - began) / 1_000_000;
             List<Path> jars = new ArrayList<>();
             List<Path> needed = new ArrayList<>();
@@ -279,12 +307,24 @@ public final class StoreUpdates {
         return out;
     }
 
-    private List<Path> fetch(UpdateOffer offer) {
+    private static Map<String, Double> findUnderWay() {
+        Map<String, Double> each = new HashMap<>();
+        for (Downloads.Job job : Downloads.findAllUnderWay()) {
+            if (!job.isOver()) {
+                each.put(job.name(), job.getFraction());
+            }
+        }
+        return each;
+    }
+
+    private List<Path> fetch(UpdateOffer offer, AtomicBoolean stopped) {
         try {
             return this.check.fetchWithNeeds(offer, said -> LOGGER.info("[Hotwire] {}", said));
         } catch (IOException e) {
-            Games.getNow().runOnGame(() -> this.say.accept(Lang.get("hotwire.store.download_failed",
-                    offer.name(), e.getMessage() == null ? e.toString() : e.getMessage()), true));
+            if (!stopped.get()) {
+                Games.getNow().runOnGame(() -> this.say.accept(Lang.get("hotwire.store.download_failed",
+                        offer.name(), e.getMessage() == null ? e.toString() : e.getMessage()), true));
+            }
             return List.of();
         }
     }
