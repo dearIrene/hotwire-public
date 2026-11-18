@@ -55,11 +55,18 @@ final class HostOffers {
         this.waiting.clear();
     }
 
-    @SuppressWarnings("FutureReturnValueIgnored")
-    void match() {
+    interface Confirm {
+        void ask(List<String> lines, Runnable yes, Runnable no);
+    }
+
+    void match(List<SharedChange> shown, Confirm confirm) {
         ChangeRequest request = new ChangeRequest();
         List<String> adds = new ArrayList<>();
-        for (SharedChange change : this.getWaiting()) {
+        List<SharedChange> waiting = this.getWaiting();
+        for (SharedChange change : shown) {
+            if (!waiting.contains(change)) {
+                continue;
+            }
             request = switch (change.kind()) {
                 case ADD -> request.add(change.project(), change.version());
                 case ON -> request.on(change.mod());
@@ -70,6 +77,11 @@ final class HostOffers {
             }
         }
 
+        this.apply(request, adds, confirm, this::clear);
+    }
+
+    @SuppressWarnings("FutureReturnValueIgnored")
+    void apply(ChangeRequest request, List<String> adds, Confirm confirm, Runnable onOtherMod) {
         if (request.equals(new ChangeRequest())) {
             return;
         }
@@ -77,11 +89,24 @@ final class HostOffers {
         EngineApi.onGame(ApiChanges.plan(request, new CallerBlocks.Callers(List.of(), true)).thenApply(
                 plan -> Map.entry(plan, !plan.canApply() || ApiChanges.findAddedIds(plan).containsAll(adds))))
                 .thenCompose(planned -> {
-                    if (planned.getValue()) {
+                    if (planned.getValue() && (adds.isEmpty() || !planned.getKey().canApply())) {
                         return planned.getKey().accept();
                     }
+                    if (planned.getValue()) {
+                        CompletableFuture<Boolean> said = new CompletableFuture<>();
+                        confirm.ask(planned.getKey().getLines(), () -> said.complete(true),
+                                () -> said.complete(false));
+                        return said.thenCompose(yes -> {
+                            if (yes) {
+                                return planned.getKey().accept();
+                            }
+                            planned.getKey().cancel();
+                            return CompletableFuture.completedFuture(SwitchResult.ofRefusal(Reason.REFUSED,
+                                    Lang.get("hotwire.host.not_matched")));
+                        });
+                    }
                     planned.getKey().cancel();
-                    this.clear();
+                    onOtherMod.run();
                     return CompletableFuture.completedFuture(SwitchResult.ofRefusal(Reason.REFUSED,
                             Lang.get("hotwire.host.other_mod")));
                 }).thenAccept(result -> this.engine.showMessage(result.message(),

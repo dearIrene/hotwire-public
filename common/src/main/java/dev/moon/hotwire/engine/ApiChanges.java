@@ -151,6 +151,12 @@ final class ApiChanges {
         for (ChangeRequest.Add project : request.add()) {
             StoreApiAdd.ProjectJars fetched = StoreApiAdd.fetchJars(project.idOrSlug(), project.versionId()).join();
             adding.addAll(fetched.jars());
+
+            if (!fetched.jars().isEmpty()) {
+                lines.add(Lang.get("hotwire.api.add_from", fetched.name(), "modrinth.com/mod/" + fetched.slug(),
+                        Long.toString(fetched.downloads()), fetched.jars().stream()
+                                .map(jar -> String.valueOf(jar.getFileName())).collect(Collectors.joining(", "))));
+            }
             if (fetched.jars().isEmpty()) {
                 lines.add(fetched.why());
                 can = false;

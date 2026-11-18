@@ -20,26 +20,27 @@ final class StoreApiAdd {
     }
 
     private interface Taker {
-        void take(HotwireEngine engine, String name, List<Path> jars);
+        void take(HotwireEngine engine, StoreProject project, List<Path> jars);
     }
 
     private StoreApiAdd() {
     }
 
-    record ProjectJars(List<Path> jars, String why) {
+    record ProjectJars(List<Path> jars, String why, String name, String slug, long downloads) {
     }
 
     static CompletableFuture<ProjectJars> fetchJars(String idOrSlug, String versionId) {
         CompletableFuture<ProjectJars> made = new CompletableFuture<>();
-        fetch(idOrSlug, versionId, made, (engine, name, jars) -> made.complete(new ProjectJars(List.copyOf(jars), "")),
-                why -> new ProjectJars(List.of(), why));
+        fetch(idOrSlug, versionId, made, (engine, project, jars) -> made.complete(new ProjectJars(List.copyOf(jars),
+                "", project.name(), project.slug(), project.downloads())),
+                why -> new ProjectJars(List.of(), why, "", "", 0));
         return made;
     }
 
     static CompletableFuture<SwitchResult> fetchThen(String idOrSlug, String versionId, Then<SwitchResult> then) {
         CompletableFuture<SwitchResult> made = new CompletableFuture<>();
-        fetch(idOrSlug, versionId, made, (engine, name, jars) -> {
-            made.complete(then.run(engine, name, jars));
+        fetch(idOrSlug, versionId, made, (engine, project, jars) -> {
+            made.complete(then.run(engine, project.name(), jars));
         }, why -> SwitchResult.ofRefusal(Reason.REFUSED, why));
         return made;
     }
@@ -72,7 +73,7 @@ final class StoreApiAdd {
                         store.fetch(project.id(), versionId, project.name(),
                                 (jars, projects) -> {
                                     engine.storeJars.remember(jars, projects);
-                                    then.take(engine, project.name(), jars);
+                                    then.take(engine, project, jars);
                                 },
                                 failed -> made.complete(refusal.apply(failed)));
                     });
