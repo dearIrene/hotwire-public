@@ -8,6 +8,7 @@ import com.google.gson.JsonPrimitive;
 import dev.moon.hotwire.classfile.GameNames;
 import dev.moon.hotwire.concurrent.Parallel;
 import dev.moon.hotwire.jar.JarNames;
+import dev.moon.hotwire.jar.ZipBudget;
 import dev.moon.hotwire.jar.ZipBytes;
 import java.io.ByteArrayInputStream;
 import java.io.ByteArrayOutputStream;
@@ -287,7 +288,7 @@ public final class JarRelocation {
         }
         for (JsonElement one : jars) {
             byte[] bytes = entries.get(one.getAsJsonObject().get("file").getAsString());
-            Map<String, byte[]> nested = bytes == null ? Map.of() : readAll(bytes);
+            Map<String, byte[]> nested = bytes == null ? Map.of() : readNested(entries, bytes);
             if (nested.containsKey(MANIFEST) && nestedGoes.test(readManifest(nested).get("id").getAsString())) {
                 collectClassesOf(nested, nestedGoes, into);
             }
@@ -334,7 +335,7 @@ public final class JarRelocation {
         }
         for (JsonElement one : jars) {
             byte[] bytes = entries.get(one.getAsJsonObject().get("file").getAsString());
-            Map<String, byte[]> nested = bytes == null ? Map.of() : readAll(bytes);
+            Map<String, byte[]> nested = bytes == null ? Map.of() : readNested(entries, bytes);
             if (!nested.containsKey(MANIFEST)) {
                 continue;
             }
@@ -360,7 +361,7 @@ public final class JarRelocation {
             }
             Map<String, byte[]> nested = opened.get(bytes);
             if (nested == null) {
-                nested = readAll(bytes);
+                nested = readNested(entries, bytes);
                 opened.put(bytes, nested);
             }
             if (!nested.containsKey(MANIFEST)) {
@@ -388,7 +389,7 @@ public final class JarRelocation {
             for (JsonElement one : jars) {
                 String file = one.getAsJsonObject().get("file").getAsString();
                 byte[] bytes = entries.get(file);
-                Map<String, byte[]> nested = bytes == null ? Map.of() : readAll(bytes);
+                Map<String, byte[]> nested = bytes == null ? Map.of() : readNested(entries, bytes);
                 if (nested.containsKey(MANIFEST)) {
                     JsonObject manifest = readManifest(nested);
 
@@ -624,7 +625,8 @@ public final class JarRelocation {
         for (JsonElement one : jars) {
             String file = one.getAsJsonObject().get("file").getAsString();
             byte[] bytes = entries.get(file);
-            Map<String, byte[]> nested = bytes == null || goingAlong.contains(file) ? Map.of() : readAll(bytes);
+            Map<String, byte[]> nested = bytes == null || goingAlong.contains(file) ? Map.of()
+                    : readNested(entries, bytes);
             if (nested.containsKey(MANIFEST)) {
                 String id = readManifest(nested).get("id").getAsString();
                 if (!depends.has(id)) {
@@ -867,14 +869,21 @@ public final class JarRelocation {
     }
 
     private static final class JarEntries extends AbstractMap<String, byte[]> {
-        private final ZipBytes zip;
+        private final Set<String> all;
+        private final EntrySource source;
         private final List<String> names = new ArrayList<>();
 
         private final Map<String, byte[]> nestedJars = new HashMap<>();
 
-        JarEntries(byte[] jar) throws IOException {
-            this.zip = new ZipBytes(jar);
-            for (String name : this.zip.getNames()) {
+        private final int depth;
+        private final ZipBudget budget;
+
+        JarEntries(Set<String> all, EntrySource source, int depth, ZipBudget budget) {
+            this.all = all;
+            this.source = source;
+            this.depth = depth;
+            this.budget = budget;
+            for (String name : all) {
                 if (!name.endsWith("/")) {
                     this.names.add(name);
                 }
@@ -883,7 +892,7 @@ public final class JarRelocation {
 
         private byte[] read(String name) {
             try {
-                return Objects.requireNonNull(this.zip.read(name));
+                return Objects.requireNonNull(this.source.read(name));
             } catch (IOException e) {
                 throw new UncheckedIOException(e);
             }
@@ -891,7 +900,7 @@ public final class JarRelocation {
 
         @Override
         public boolean containsKey(Object name) {
-            return this.zip.getNames().contains(name) && !String.valueOf(name).endsWith("/");
+            return this.all.contains(name) && !String.valueOf(name).endsWith("/");
         }
 
         @Override
@@ -938,22 +947,31 @@ public final class JarRelocation {
         }
     }
 
-    private static Map<String, byte[]> readAll(Path jar) throws IOException {
-        try {
-            return new JarEntries(Files.readAllBytes(jar));
-        } catch (ZipException e) {
-            return readAllOfFile(jar);
-        }
+    @FunctionalInterface
+    private interface EntrySource {
+        byte @Nullable [] read(String name) throws IOException;
     }
 
-    private static Map<String, byte[]> readAllOfFile(Path jar) throws IOException {
+    private static Map<String, byte[]> readAll(Path jar) throws IOException {
+        ZipBudget budget = new ZipBudget();
+        ZipBytes zip;
+        try {
+            zip = new ZipBytes(Files.readAllBytes(jar));
+        } catch (ZipException e) {
+            Map<String, byte[]> read = readAllOfFile(jar, budget);
+            return new JarEntries(read.keySet(), read::get, 0, budget);
+        }
+        return new JarEntries(zip.getNames(), name -> zip.read(name, budget), 0, budget);
+    }
+
+    private static Map<String, byte[]> readAllOfFile(Path jar, ZipBudget budget) throws IOException {
         Map<String, byte[]> entries = new LinkedHashMap<>();
         try (ZipFile zip = new ZipFile(jar.toFile())) {
             for (Enumeration<? extends ZipEntry> all = zip.entries(); all.hasMoreElements(); ) {
                 ZipEntry entry = all.nextElement();
                 if (!entry.isDirectory()) {
                     try (InputStream in = zip.getInputStream(entry)) {
-                        entries.put(entry.getName(), in.readAllBytes());
+                        entries.put(entry.getName(), budget.read(in));
                     }
                 }
             }
@@ -961,20 +979,31 @@ public final class JarRelocation {
         return entries;
     }
 
-    private static Map<String, byte[]> readAll(byte[] jar) throws IOException {
-        try {
-            return new JarEntries(jar);
-        } catch (ZipException e) {
-            return readAllOfStream(jar);
+    private static Map<String, byte[]> readNested(Map<String, byte[]> parent, byte[] jar) throws IOException {
+        if (parent instanceof JarEntries from) {
+            return readAll(jar, from.depth + 1, from.budget);
         }
+        return readAll(jar, 1, new ZipBudget());
     }
 
-    private static Map<String, byte[]> readAllOfStream(byte[] jar) throws IOException {
+    private static Map<String, byte[]> readAll(byte[] jar, int depth, ZipBudget budget) throws IOException {
+        ZipBudget.checkDepth(depth);
+        ZipBytes zip;
+        try {
+            zip = new ZipBytes(jar);
+        } catch (ZipException e) {
+            Map<String, byte[]> read = readAllOfStream(jar, budget);
+            return new JarEntries(read.keySet(), read::get, depth, budget);
+        }
+        return new JarEntries(zip.getNames(), name -> zip.read(name, budget), depth, budget);
+    }
+
+    private static Map<String, byte[]> readAllOfStream(byte[] jar, ZipBudget budget) throws IOException {
         Map<String, byte[]> entries = new LinkedHashMap<>();
         try (ZipInputStream zip = new ZipInputStream(new ByteArrayInputStream(jar))) {
             for (ZipEntry entry = zip.getNextEntry(); entry != null; entry = zip.getNextEntry()) {
                 if (!entry.isDirectory()) {
-                    entries.put(entry.getName(), zip.readAllBytes());
+                    entries.put(entry.getName(), budget.read(zip));
                 }
             }
         }

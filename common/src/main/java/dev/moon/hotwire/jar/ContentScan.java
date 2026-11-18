@@ -531,35 +531,42 @@ public final class ContentScan {
     }
 
     public static Classes readClasses(Path jar) throws IOException {
-        return readClasses(jar, 0);
+        return readClasses(jar, new ZipBudget());
+    }
+
+    public static Classes readClasses(Path jar, ZipBudget budget) throws IOException {
+        return readClasses(jar, 0, budget);
     }
 
     public static Classes readOwnClasses(Path jar) throws IOException {
-        return readClasses(jar, ModJarReader.MAX_DEPTH);
+        return readOwnClasses(jar, new ZipBudget());
     }
 
-    private static Classes readClasses(Path jar, int depth) throws IOException {
+    public static Classes readOwnClasses(Path jar, ZipBudget budget) throws IOException {
+        return readClasses(jar, ModJarReader.MAX_DEPTH, budget);
+    }
+
+    private static Classes readClasses(Path jar, int depth, ZipBudget budget) throws IOException {
         Map<String, byte[]> classes = new HashMap<>();
         Set<String> entrypoints = new HashSet<>();
         try (InputStream in = Files.newInputStream(jar)) {
-            collect(in, classes, entrypoints, depth, new long[1]);
+            collect(in, classes, entrypoints, depth, budget);
         }
         return new Classes(classes, entrypoints);
     }
 
     private static void collect(InputStream in, Map<String, byte[]> into, Set<String> entrypoints, int depth,
-            long[] soFar) throws IOException {
+            ZipBudget budget) throws IOException {
         ZipInputStream zip = new ZipInputStream(in);
         for (ZipEntry entry = zip.getNextEntry(); entry != null; entry = zip.getNextEntry()) {
             String name = entry.getName();
             if (name.endsWith(".class") && !name.startsWith("META-INF/")) {
-                byte[] bytes = ZipBytes.readEntry(zip);
-                soFar[0] = ZipBytes.countRead(soFar[0], bytes);
+                byte[] bytes = budget.read(zip);
                 into.putIfAbsent(name.substring(0, name.length() - ".class".length()), bytes);
             } else if (name.equals("fabric.mod.json")) {
-                addEntrypoints(ZipBytes.readEntry(zip), entrypoints);
+                addEntrypoints(budget.read(zip), entrypoints);
             } else if (name.startsWith("META-INF/services/") && !name.endsWith("/")) {
-                for (String line : new String(ZipBytes.readEntry(zip), StandardCharsets.UTF_8).lines().toList()) {
+                for (String line : new String(budget.read(zip), StandardCharsets.UTF_8).lines().toList()) {
                     int comment = line.indexOf('#');
                     String provider = (comment < 0 ? line : line.substring(0, comment)).strip();
                     if (!provider.isEmpty()) {
@@ -567,7 +574,7 @@ public final class ContentScan {
                     }
                 }
             } else if (name.endsWith(".jar") && depth < ModJarReader.MAX_DEPTH) {
-                collect(new ByteArrayInputStream(ZipBytes.readEntry(zip)), into, entrypoints, depth + 1, soFar);
+                collect(new ByteArrayInputStream(budget.read(zip)), into, entrypoints, depth + 1, budget);
             }
         }
     }

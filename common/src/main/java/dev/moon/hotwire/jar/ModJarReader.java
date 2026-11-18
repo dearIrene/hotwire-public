@@ -50,10 +50,11 @@ public final class ModJarReader {
                 return known;
             }
             List<String> names = zip.stream().map(ZipEntry::getName).toList();
+            ZipBudget budget = new ZipBudget();
             JarScans.Scan scanned = build(name, 0, names, entry -> {
                 ZipEntry found = zip.getEntry(entry);
-                return found == null ? null : readBytes(zip, found);
-            });
+                return found == null ? null : readBytes(zip, found, budget);
+            }, budget);
             if (scans != null && key != null) {
                 scans.save(key, scanned);
                 scans.saveStamp(jar, stamp, key);
@@ -64,7 +65,8 @@ public final class ModJarReader {
         }
     }
 
-    private static JarScans.Scan readNested(byte[] jar, String name, int depth) throws ModJarException {
+    private static JarScans.Scan readNested(byte[] jar, String name, int depth, ZipBudget budget)
+            throws ModJarException {
         if (depth > MAX_DEPTH) {
             throw new ModJarException(Reason.NESTED_TOO_DEEP, name, "its jars are nested more than " + MAX_DEPTH
                     + " deep");
@@ -73,41 +75,38 @@ public final class ModJarReader {
         try {
             zip = new ZipBytes(jar);
         } catch (ZipBytes.Zip64Exception zip64) {
-            return readNestedStreaming(jar, name, depth);
+            return readNestedStreaming(jar, name, depth, budget);
         } catch (IOException e) {
             throw new ModJarException(Reason.UNREADABLE, name, "it could not be read as a jar", e);
         }
         try {
-            return build(name, depth, zip.getNames(), zip::read);
+            return build(name, depth, zip.getNames(), entry -> zip.read(entry, budget), budget);
         } catch (IOException e) {
             throw new ModJarException(Reason.UNREADABLE, name, "it could not be read as a jar", e);
         }
     }
 
-    private static JarScans.Scan readNestedStreaming(byte[] jar, String name, int depth)
+    private static JarScans.Scan readNestedStreaming(byte[] jar, String name, int depth, ZipBudget budget)
             throws ModJarException {
         Map<String, byte[]> entries = new HashMap<>();
         List<String> names = new ArrayList<>();
         try (ZipInputStream zip = new ZipInputStream(new ByteArrayInputStream(jar))) {
-            long soFar = 0;
             for (ZipEntry entry = zip.getNextEntry(); entry != null; entry = zip.getNextEntry()) {
                 names.add(entry.getName());
 
                 if (entry.getName().endsWith(".json") || !(entry.getName().startsWith("assets/")
                         || entry.getName().startsWith("data/"))) {
-                    byte[] bytes = ZipBytes.readEntry(zip);
-                    soFar = ZipBytes.countRead(soFar, bytes);
-                    entries.put(entry.getName(), bytes);
+                    entries.put(entry.getName(), budget.read(zip));
                 }
             }
-            return build(name, depth, names, entries::get);
+            return build(name, depth, names, entries::get, budget);
         } catch (IOException e) {
             throw new ModJarException(Reason.UNREADABLE, name, "it could not be read as a jar", e);
         }
     }
 
-    private static JarScans.Scan build(String name, int depth, Collection<String> names, EntryReader entries)
-            throws ModJarException, IOException {
+    private static JarScans.Scan build(String name, int depth, Collection<String> names, EntryReader entries,
+            ZipBudget budget) throws ModJarException, IOException {
         byte[] manifestBytes = entries.read(MANIFEST);
         if (manifestBytes == null) {
             throw new ModJarException(Reason.NOT_A_MOD, name, "it has no " + MANIFEST);
@@ -122,12 +121,12 @@ public final class ModJarReader {
             }
             declared.put(path, bytes);
         }
-        ModPatches patches = PatchScanner.scan(manifest, names, withNested(entries, declared.values()));
+        ModPatches patches = PatchScanner.scan(manifest, names, withNested(entries, declared.values(), budget));
         List<JarScans.Scan> mods = new ArrayList<>();
         List<String> notMods = new ArrayList<>();
         for (Map.Entry<String, byte[]> nested : declared.entrySet()) {
             try {
-                mods.add(readNested(nested.getValue(), name + "!/" + nested.getKey(), depth + 1));
+                mods.add(readNested(nested.getValue(), name + "!/" + nested.getKey(), depth + 1, budget));
             } catch (ModJarException e) {
                 if (e.getReason() != Reason.NOT_A_MOD) {
                     throw e;
@@ -158,7 +157,7 @@ public final class ModJarReader {
         }
     }
 
-    private static EntryReader withNested(EntryReader own, Collection<byte[]> nested) {
+    private static EntryReader withNested(EntryReader own, Collection<byte[]> nested, ZipBudget budget) {
         List<ZipBytes> opened = new ArrayList<>();
         boolean[] open = {false};
         return entry -> {
@@ -176,7 +175,7 @@ public final class ModJarReader {
                 }
             }
             for (ZipBytes jar : opened) {
-                byte[] found = jar.read(entry);
+                byte[] found = jar.read(entry, budget);
                 if (found != null) {
                     return found;
                 }
@@ -185,9 +184,9 @@ public final class ModJarReader {
         };
     }
 
-    private static byte[] readBytes(ZipFile zip, ZipEntry entry) throws IOException {
+    private static byte[] readBytes(ZipFile zip, ZipEntry entry, ZipBudget budget) throws IOException {
         try (InputStream in = zip.getInputStream(entry)) {
-            return ZipBytes.readEntry(in);
+            return budget.read(in);
         }
     }
 

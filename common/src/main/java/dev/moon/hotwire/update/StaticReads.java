@@ -1,6 +1,7 @@
 package dev.moon.hotwire.update;
 
 import dev.moon.hotwire.classfile.ClassNodes;
+import dev.moon.hotwire.jar.ZipBudget;
 import dev.moon.hotwire.jar.ZipBytes;
 import dev.moon.hotwire.update.JarDiff.ClassChange;
 import dev.moon.hotwire.update.JarDiff.ClassDiff;
@@ -91,7 +92,7 @@ final class StaticReads {
         }
         List<byte[]> all = new ArrayList<>();
         try {
-            collectClasses(incoming, all);
+            collectClasses(incoming, all, 0, new ZipBudget());
         } catch (IOException unread) {
             return Set.of();
         }
@@ -119,19 +120,21 @@ final class StaticReads {
         return false;
     }
 
-    private static void collectClasses(Map<String, byte[]> entries, List<byte[]> into) throws IOException {
+    private static void collectClasses(Map<String, byte[]> entries, List<byte[]> into, int depth, ZipBudget budget)
+            throws IOException {
         for (Map.Entry<String, byte[]> entry : entries.entrySet()) {
             if (entry.getKey().endsWith(".class")) {
                 into.add(entry.getValue());
             } else if (entry.getKey().endsWith(".jar")) {
+                ZipBudget.checkDepth(depth + 1);
                 ZipBytes nested = new ZipBytes(entry.getValue());
                 Map<String, byte[]> inside = new HashMap<>();
                 for (String name : nested.getNames()) {
                     if (name.endsWith(".class") || name.endsWith(".jar")) {
-                        inside.put(name, Objects.requireNonNull(nested.read(name)));
+                        inside.put(name, Objects.requireNonNull(nested.read(name, budget)));
                     }
                 }
-                collectClasses(inside, into);
+                collectClasses(inside, into, depth + 1, budget);
             }
         }
     }

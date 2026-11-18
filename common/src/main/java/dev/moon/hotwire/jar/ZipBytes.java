@@ -9,6 +9,7 @@ import java.nio.charset.StandardCharsets;
 import java.nio.file.Path;
 import java.nio.file.StandardOpenOption;
 import java.util.HashMap;
+import java.util.HashSet;
 import java.util.LinkedHashMap;
 import java.util.Map;
 import java.util.Objects;
@@ -58,6 +59,7 @@ public final class ZipBytes {
             throw new Zip64Exception("ZIP64 archives are not read in memory");
         }
         int at = (int) directoryStart;
+        Set<Long> starts = new HashSet<>();
         for (int i = 0; i < count; i++) {
             if (this.bytes.getInt(at) != DIRECTORY_ENTRY) {
                 throw new ZipException("broken central directory at " + at);
@@ -73,6 +75,10 @@ public final class ZipBytes {
                 throw new Zip64Exception("ZIP64 entries are not read in memory");
             }
             String name = new String(zip, at + 46, nameLength, StandardCharsets.UTF_8);
+
+            if (!starts.add(local)) {
+                throw new ZipException(name + " shares its place in the jar with another entry");
+            }
             this.entries.put(name, new Entry(method, (int) compressed, (int) size, (int) local));
             at += 46 + nameLength + extraLength + commentLength;
         }
@@ -144,18 +150,15 @@ public final class ZipBytes {
         return bytes;
     }
 
-    public static long countRead(long soFar, byte[] entry) throws IOException {
-        if (soFar + entry.length > MOST_SCAN_BYTES) {
-            throw new ZipException("entries of over " + MOST_SCAN_BYTES / (1024 * 1024) + " MB in all");
-        }
-        return soFar + entry.length;
-    }
-
     public Set<String> getNames() {
         return this.entries.keySet();
     }
 
     public byte @Nullable [] read(String name) throws IOException {
+        return this.read(name, new ZipBudget());
+    }
+
+    public byte @Nullable [] read(String name, ZipBudget budget) throws IOException {
         Entry entry = this.entries.get(name);
         if (entry == null) {
             return null;
@@ -169,6 +172,7 @@ public final class ZipBytes {
         if (entry.size() < 0 || entry.size() > MOST_ENTRY_BYTES) {
             throw new ZipException(name + " says it is " + Integer.toUnsignedLong(entry.size()) + " bytes");
         }
+        budget.count(entry.size());
         byte[] out = new byte[entry.size()];
         if (entry.method() == STORED) {
             this.bytes.get(start, out);

@@ -12,6 +12,7 @@ import dev.moon.hotwire.jar.ModJarReader;
 import dev.moon.hotwire.jar.ModManifest;
 import dev.moon.hotwire.jar.WidenerUses;
 import dev.moon.hotwire.jar.WorldData;
+import dev.moon.hotwire.jar.ZipBudget;
 import dev.moon.hotwire.jar.ZipBytes;
 import dev.moon.hotwire.mixin_copy.MixinCopy;
 import dev.moon.hotwire.plan.ModGraph;
@@ -148,6 +149,8 @@ public final class ModAdder {
     private final Map<Path, ContentScan.Classes> scans = new ConcurrentHashMap<>();
     private final Map<Path, ContentScan.Classes> ownScans = new ConcurrentHashMap<>();
 
+    private volatile ZipBudget scanBudget = new ZipBudget();
+
     private final Map<Path, Set<String>> contents = new ConcurrentHashMap<>();
 
     private final Map<String, List<Path>> setAside = new ConcurrentHashMap<>();
@@ -238,9 +241,7 @@ public final class ModAdder {
             preview = this.preview(jarPath, times);
             return preview;
         } finally {
-            this.scans.clear();
-            this.ownScans.clear();
-            this.contents.clear();
+            this.forgetScans();
 
             LOGGER.info("[Hotwire] the dry run of {} took {}{}", jarPath.getFileName(), times,
                     preview == null || preview.mode() == AddMode.NOW ? ""
@@ -352,7 +353,7 @@ public final class ModAdder {
     private ContentScan.Classes scan(Path jarPath) {
         return this.scans.computeIfAbsent(jarPath, path -> {
             try {
-                return ContentScan.readClasses(path);
+                return ContentScan.readClasses(path, this.scanBudget);
             } catch (IOException e) {
                 LOGGER.warn("[Hotwire] the classes of {} could not be read for what they hook and make", path, e);
                 return new ContentScan.Classes(Map.of(), Set.of());
@@ -363,7 +364,7 @@ public final class ModAdder {
     private ContentScan.Classes scanOwn(Path jarPath) {
         return this.ownScans.computeIfAbsent(jarPath, path -> {
             try {
-                return ContentScan.readOwnClasses(path);
+                return ContentScan.readOwnClasses(path, this.scanBudget);
             } catch (IOException e) {
                 LOGGER.warn("[Hotwire] the classes of {} could not be read for what they hook", path, e);
                 return new ContentScan.Classes(Map.of(), Set.of());
@@ -512,9 +513,7 @@ public final class ModAdder {
             return this.decide(jarPaths, parts, off, nameOf);
         } finally {
             if (!this.savingReads) {
-                this.scans.clear();
-                this.ownScans.clear();
-                this.contents.clear();
+                this.forgetScans();
             }
         }
     }
@@ -830,9 +829,14 @@ public final class ModAdder {
 
     public void forgetReadsAhead() {
         this.readsAhead.clear();
+        this.forgetScans();
+    }
+
+    private void forgetScans() {
         this.scans.clear();
         this.ownScans.clear();
         this.contents.clear();
+        this.scanBudget = new ZipBudget();
     }
 
     public ModJar readJar(Path path) throws ModJarException {

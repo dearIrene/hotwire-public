@@ -5,6 +5,7 @@ import dev.moon.hotwire.jar.ModJarException;
 import dev.moon.hotwire.jar.ModJarReader;
 import dev.moon.hotwire.jar.ModManifest;
 import dev.moon.hotwire.jar.ModManifestParser;
+import dev.moon.hotwire.jar.ZipBudget;
 import dev.moon.hotwire.update.JarDiff.ClassChange;
 import dev.moon.hotwire.update.JarDiff.ClassDiff;
 import dev.moon.hotwire.update.JarDiff.ShapeChange;
@@ -294,12 +295,13 @@ public final class UpdateDiffer {
 
     private static Map<String, byte[]> readEntries(ZipFile zip, Predicate<String> wanted) throws IOException {
         Map<String, byte[]> entries = new HashMap<>();
+        ZipBudget budget = new ZipBudget();
         for (ZipEntry entry : zip.stream().toList()) {
             if (entry.isDirectory() || !wanted.test(entry.getName())) {
                 continue;
             }
             try (InputStream in = zip.getInputStream(entry)) {
-                entries.put(entry.getName(), in.readAllBytes());
+                entries.put(entry.getName(), budget.read(in));
             }
         }
         return entries;

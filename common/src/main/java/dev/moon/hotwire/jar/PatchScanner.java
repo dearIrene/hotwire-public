@@ -286,11 +286,13 @@ final class PatchScanner {
             return;
         }
         char[] buffer = new char[reader.getMaxStringLength()];
+
+        Set<String> asked = new HashSet<>();
         for (int item = 1; item < reader.getItemCount(); item++) {
             int offset = reader.getItem(item);
             if (offset != 0 && bytes[offset - 1] == FIELD_ENTRY) {
                 String owner = reader.readClass(offset, buffer);
-                byte[] holder = owns.contains(owner) ? entries.read(owner + ".class") : null;
+                byte[] holder = owns.contains(owner) && asked.add(owner) ? entries.read(owner + ".class") : null;
                 if (holder != null) {
                     collectModIds(holder, into);
                 }
@@ -336,13 +338,14 @@ final class PatchScanner {
     static List<PluginQuestions> readPluginQuestions(Path jar, ModManifest manifest) throws IOException {
         List<PluginQuestions> out = new ArrayList<>();
         try (ZipFile zip = new ZipFile(jar.toFile())) {
+            ZipBudget budget = new ZipBudget();
             ModJarReader.EntryReader reader = entry -> {
                 ZipEntry found = zip.getEntry(entry);
                 if (found == null) {
                     return null;
                 }
                 try (InputStream in = zip.getInputStream(found)) {
-                    return ZipBytes.readEntry(in);
+                    return budget.read(in);
                 }
             };
             List<String> names = zip.stream().map(ZipEntry::getName).toList();

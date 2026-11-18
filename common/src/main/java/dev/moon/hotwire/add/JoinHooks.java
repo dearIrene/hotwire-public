@@ -1,6 +1,6 @@
 package dev.moon.hotwire.add;
 
-import dev.moon.hotwire.jar.ZipBytes;
+import dev.moon.hotwire.jar.ZipBudget;
 import dev.moon.hotwire.redefine.ClassBytes;
 import java.io.ByteArrayInputStream;
 import java.io.IOException;
@@ -30,23 +30,23 @@ public final class JoinHooks {
 
     public static boolean isIn(Path jar) {
         try (InputStream in = Files.newInputStream(jar)) {
-            return isIn(in, DEPTH);
+            return isIn(in, DEPTH, new ZipBudget());
         } catch (IOException e) {
             return false;
         }
     }
 
-    private static boolean isIn(InputStream jar, int depth) throws IOException {
+    private static boolean isIn(InputStream jar, int depth, ZipBudget budget) throws IOException {
         ZipInputStream zip = new ZipInputStream(jar);
         for (ZipEntry entry = zip.getNextEntry(); entry != null; entry = zip.getNextEntry()) {
             String name = entry.getName();
             if (name.endsWith(".class")) {
-                byte[] bytes = ZipBytes.readEntry(zip);
+                byte[] bytes = budget.read(zip);
                 if (ClassBytes.mentions(bytes, MIXIN) && targetsJoin(bytes)) {
                     return true;
                 }
             } else if (depth > 0 && name.endsWith(".jar")
-                    && isIn(new ByteArrayInputStream(ZipBytes.readEntry(zip)), depth - 1)) {
+                    && isIn(new ByteArrayInputStream(budget.read(zip)), depth - 1, budget)) {
                 return true;
             }
         }

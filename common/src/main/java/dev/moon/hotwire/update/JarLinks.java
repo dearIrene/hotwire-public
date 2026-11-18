@@ -1,6 +1,7 @@
 package dev.moon.hotwire.update;
 
 import dev.moon.hotwire.classfile.ClassHeader;
+import dev.moon.hotwire.jar.ZipBudget;
 import dev.moon.hotwire.jar.ZipBytes;
 import java.io.ByteArrayInputStream;
 import java.io.IOException;
@@ -37,25 +38,28 @@ public final class JarLinks {
     private JarLinks() {
     }
 
-    private static void visitClasses(InputStream jar, Consumer<byte[]> each) throws IOException {
+    private static void visitClasses(InputStream jar, Consumer<byte[]> each, int depth, ZipBudget budget)
+            throws IOException {
+        ZipBudget.checkDepth(depth);
         ZipInputStream zip = new ZipInputStream(jar);
         for (ZipEntry entry = zip.getNextEntry(); entry != null; entry = zip.getNextEntry()) {
             if (entry.getName().endsWith(CLASS_SUFFIX)) {
-                each.accept(zip.readAllBytes());
+                each.accept(budget.read(zip));
             } else if (entry.getName().endsWith(JAR_SUFFIX)) {
-                visitClasses(new ByteArrayInputStream(zip.readAllBytes()), each);
+                visitClasses(new ByteArrayInputStream(budget.read(zip)), each, depth + 1, budget);
             }
         }
     }
 
     public static Set<String> readClassNames(Path jar) throws IOException {
         Set<String> names = new HashSet<>();
+        ZipBudget budget = new ZipBudget();
         try (ZipFile zip = new ZipFile(jar.toFile())) {
             for (ZipEntry entry : Collections.list(zip.entries())) {
                 addClassName(entry.getName(), names);
                 if (entry.getName().endsWith(JAR_SUFFIX)) {
                     try (InputStream in = zip.getInputStream(entry)) {
-                        collectNames(in.readAllBytes(), names);
+                        collectNames(budget.read(in), names, 1, budget);
                     }
                 }
             }
@@ -63,27 +67,31 @@ public final class JarLinks {
         return names;
     }
 
-    private static void collectNames(byte[] jar, Set<String> into) throws IOException {
+    private static void collectNames(byte[] jar, Set<String> into, int depth, ZipBudget budget) throws IOException {
+        ZipBudget.checkDepth(depth);
+        ZipBytes zip;
         try {
-            ZipBytes zip = new ZipBytes(jar);
-            for (String name : zip.getNames()) {
-                addClassName(name, into);
-                byte[] nested = name.endsWith(JAR_SUFFIX) ? zip.read(name) : null;
-                if (nested != null) {
-                    collectNames(nested, into);
-                }
-            }
+            zip = new ZipBytes(jar);
         } catch (ZipException e) {
-            collectNamesOfStream(new ByteArrayInputStream(jar), into);
+            collectNamesOfStream(new ByteArrayInputStream(jar), into, depth, budget);
+            return;
+        }
+        for (String name : zip.getNames()) {
+            addClassName(name, into);
+            byte[] nested = name.endsWith(JAR_SUFFIX) ? zip.read(name, budget) : null;
+            if (nested != null) {
+                collectNames(nested, into, depth + 1, budget);
+            }
         }
     }
 
-    private static void collectNamesOfStream(InputStream jar, Set<String> into) throws IOException {
+    private static void collectNamesOfStream(InputStream jar, Set<String> into, int depth, ZipBudget budget)
+            throws IOException {
         ZipInputStream zip = new ZipInputStream(jar);
         for (ZipEntry entry = zip.getNextEntry(); entry != null; entry = zip.getNextEntry()) {
             addClassName(entry.getName(), into);
             if (entry.getName().endsWith(JAR_SUFFIX)) {
-                collectNames(zip.readAllBytes(), into);
+                collectNames(budget.read(zip), into, depth + 1, budget);
             }
         }
     }
@@ -107,7 +115,7 @@ public final class JarLinks {
                 if (!notLoaded.isEmpty()) {
                     collectOwn(reader, self, own, namedBy);
                 }
-            });
+            }, 0, new ZipBudget());
         }
         Set<String> out = new HashSet<>(notLoaded);
         boolean grew = !notLoaded.isEmpty();

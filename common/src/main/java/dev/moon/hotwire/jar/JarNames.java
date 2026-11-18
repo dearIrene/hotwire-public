@@ -97,10 +97,11 @@ public final class JarNames {
         Set<String> own = new HashSet<>();
         Set<String> namedNested = new HashSet<>();
         Set<String> ownNested = new HashSet<>();
+        ZipBudget budget = new ZipBudget();
         try (InputStream in = Files.newInputStream(jar)) {
             ZipInputStream zip = new ZipInputStream(in);
             for (ZipEntry entry = zip.getNextEntry(); entry != null; entry = zip.getNextEntry()) {
-                collect(entry.getName(), zip, named, own, namedNested, ownNested);
+                collect(entry.getName(), zip, named, own, namedNested, ownNested, 0, budget);
             }
         }
         Set<String> withNested = new HashSet<>(named);
@@ -112,17 +113,18 @@ public final class JarNames {
     }
 
     private static void collect(String name, ZipInputStream zip, Set<String> named, Set<String> own,
-            Set<String> namedNested, Set<String> ownNested) throws IOException {
+            Set<String> namedNested, Set<String> ownNested, int depth, ZipBudget budget) throws IOException {
         if (name.endsWith(CLASS_SUFFIX)) {
             own.add(name.substring(0, name.length() - CLASS_SUFFIX.length()));
             try {
-                named.addAll(readClassesNamed(ZipBytes.readEntry(zip)));
+                named.addAll(readClassesNamed(budget.read(zip)));
             } catch (RuntimeException unreadable) {
             }
         } else if (name.endsWith(JAR_SUFFIX)) {
-            ZipInputStream inner = new ZipInputStream(new ByteArrayInputStream(ZipBytes.readEntry(zip)));
+            ZipBudget.checkDepth(depth + 1);
+            ZipInputStream inner = new ZipInputStream(new ByteArrayInputStream(budget.read(zip)));
             for (ZipEntry entry = inner.getNextEntry(); entry != null; entry = inner.getNextEntry()) {
-                collect(entry.getName(), inner, namedNested, ownNested, namedNested, ownNested);
+                collect(entry.getName(), inner, namedNested, ownNested, namedNested, ownNested, depth + 1, budget);
             }
         }
     }

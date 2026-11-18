@@ -4,7 +4,7 @@ import dev.moon.hotwire.concurrent.Parallel;
 import dev.moon.hotwire.engine.ModPolicy;
 import dev.moon.hotwire.jar.ModJarReader;
 import dev.moon.hotwire.jar.ModManifest;
-import dev.moon.hotwire.jar.ZipBytes;
+import dev.moon.hotwire.jar.ZipBudget;
 import dev.moon.hotwire.redefine.RebuildException;
 import dev.moon.hotwire.switching.ModMixins;
 import dev.moon.hotwire.switching.Progress;
@@ -289,11 +289,12 @@ final class UpdateBatch {
 
     private static void addChangedTargets(Path jar, UpdatePlan plan, Set<String> into) {
         try (ZipFile zip = new ZipFile(jar.toFile())) {
+            ZipBudget budget = new ZipBudget();
             for (UpdatePlan.ClassAction action : plan.actions()) {
                 ZipEntry entry = zip.getEntry(action.className() + ".class");
                 if (entry != null) {
                     try (InputStream in = zip.getInputStream(entry)) {
-                        into.addAll(ModJarReader.readMixinTargets(ZipBytes.readEntry(in)));
+                        into.addAll(ModJarReader.readMixinTargets(budget.read(in)));
                     }
                 }
             }
