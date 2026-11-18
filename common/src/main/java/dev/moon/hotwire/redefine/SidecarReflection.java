@@ -182,6 +182,11 @@ public final class SidecarReflection {
         try {
             current.set(target, value);
         } catch (IllegalAccessException refused) {
+            int modifiers = current.getModifiers();
+            if (Modifier.isFinal(modifiers) && !Modifier.isStatic(modifiers) && current.trySetAccessible()) {
+                current.set(target, value);
+                return;
+            }
             MethodHandle setter = openAsCaller(refused, lookup -> lookup.unreflectSetter(current));
             runOpened(Modifier.isStatic(current.getModifiers()) ? Arrays.asList(value) : Arrays.asList(target, value),
                     setter);
