@@ -1,5 +1,6 @@
 package dev.moon.hotwire.redefine;
 
+import dev.moon.hotwire.classfile.ClassHeader;
 import dev.moon.hotwire.concurrent.Parallel;
 import dev.moon.hotwire.jvm.LoadedClassList;
 import dev.moon.hotwire.mixin_copy.AppliedMixins;
@@ -247,10 +248,37 @@ public final class ClassRebuilder {
         if (splitting.getMillis() > SLOW_SPLIT.toMillis()) {
             LOGGER.info("[Hotwire] the split of {} classes took {}", byName.size(), splitting);
         }
+
+        Set<String> unlinkable = BatchRider.findUnlinkable(splits.keySet());
+        if (!unlinkable.isEmpty()) {
+            throw RebuildException.ofRestartOnly("the JVM cannot link " + unlinkable + ", so they cannot change"
+                    + " while the game runs").withBlamed(unlinkable);
+        }
         PreparedRebuild prepared = new PreparedRebuild(splits, carried, mixing.getMillis(), splitting.getMillis(),
                 newlyBuilt, replayed, current, null, Set.of(), hooked, mixed);
         this.ahead.store(inputs, prepared);
         return prepared;
+    }
+
+    private Set<String> findFailedSetups(List<ClassDefinition> definitions) {
+        Set<String> failed = new TreeSet<>();
+        for (ClassDefinition definition : definitions) {
+            Class<?> type = definition.getDefinitionClass();
+            byte[] running = this.loadedBytes.findKnown(type);
+            if (running == null || FieldSlots.isSetUp(type)
+                    || ClassHeader.of(running).findMethod("<clinit>", "()V") == null) {
+                continue;
+            }
+            try {
+                this.instrumentation.redefineClasses(new ClassDefinition(type, running));
+            } catch (InternalError refused) {
+                failed.add(Type.getInternalName(type));
+                LOGGER.warn("[Hotwire] {}'s own setup failed, and the JVM changes it no more", type.getName());
+            } catch (ClassNotFoundException | UnmodifiableClassException | RuntimeException | LinkageError other) {
+                LOGGER.debug("[Hotwire] {} was not asked of the JVM: {}", type.getName(), other.toString());
+            }
+        }
+        return failed;
     }
 
     private Map<String, byte[]> mixAll(Set<String> names, Map<String, byte[]> current, Map<String, byte[]> readable,
@@ -513,6 +541,10 @@ public final class ClassRebuilder {
                     }
                 }
                 named = BatchVerifier.findNamed(made.keySet(), problems);
+            }
+            if (e instanceof InternalError && why != null && why.contains("invalid class")) {
+                named = this.findFailedSetups(definitions);
+                why = named.isEmpty() ? why : "the JVM changes no class whose own setup failed: " + named;
             }
             LOGGER.warn("[Hotwire] Redefining {} failed and nothing changed", prepared.splits().keySet(), e);
             throw new RebuildException("could not redefine " + prepared.splits().keySet() + ": " + why, e)

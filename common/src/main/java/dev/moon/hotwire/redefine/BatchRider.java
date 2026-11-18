@@ -10,8 +10,10 @@ import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
+import java.util.TreeSet;
 import java.util.WeakHashMap;
 import org.jspecify.annotations.Nullable;
+import org.objectweb.asm.Type;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -100,6 +102,19 @@ public interface BatchRider {
                         e.toString());
             }
         }
+    }
+
+    static Set<String> findUnlinkable(Set<Class<?>> types) {
+        Set<String> found = new TreeSet<>();
+        for (Class<?> type : types) {
+            try {
+                LOGGER.trace("[Hotwire] {} links, with {} methods", type.getName(), type.getDeclaredMethods().length);
+            } catch (LinkageError e) {
+                found.add(Type.getInternalName(type));
+                LOGGER.warn("[Hotwire] {} cannot link, and no switch can change it: {}", type.getName(), e.toString());
+            }
+        }
+        return found;
     }
 
     static void end(@Nullable BatchRider rider, Map<Class<?>, byte[]> riding, boolean took, boolean left) {

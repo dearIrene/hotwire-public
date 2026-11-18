@@ -35,6 +35,10 @@ public final class FieldSlots {
         setUp = isSetUp;
     }
 
+    static boolean isSetUp(Class<?> type) {
+        return setUp.test(type);
+    }
+
     static boolean readsByPlace() {
         return Places.GET != null;
     }
