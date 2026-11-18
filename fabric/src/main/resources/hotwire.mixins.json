@@ -31,6 +31,8 @@
     "core.world.level.saveddata.SavedDataMixin",
     "core.world.level.storage.SavedDataStorageMixin",
     "core.world.level.levelgen.placement.PlacedFeatureMixin",
+    "core.world.level.levelgen.structure.StructureMixin",
+    "core.world.level.levelgen.structure.StructureStartAccessor",
     "core.core.MappedRegistryAccessor",
     "core.core.MappedRegistryMixin",
     "core.core.component.InitializerEntryMixin",
