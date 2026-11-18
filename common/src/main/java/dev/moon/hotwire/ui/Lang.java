@@ -6,16 +6,17 @@ import java.io.IOException;
 import java.io.InputStream;
 import java.io.InputStreamReader;
 import java.nio.charset.StandardCharsets;
-import java.util.IllegalFormatException;
 import java.util.List;
-import java.util.Locale;
 import java.util.Map;
 import java.util.function.BiFunction;
 import java.util.function.Supplier;
+import java.util.regex.Matcher;
+import java.util.regex.Pattern;
 import org.jspecify.annotations.Nullable;
 
 public final class Lang {
     private static final String ENGLISH_FILE = "assets/hotwire/lang/en_us.json";
+    private static final Pattern BLANK = Pattern.compile("%(?:([1-9][0-9]?)\\$)?([sd%])");
     private static volatile BiFunction<String, @Nullable Object[], @Nullable String> translator = Lang::getEnglish;
 
     private static volatile @Nullable Map<String, String> english;
@@ -82,16 +83,41 @@ public final class Lang {
         return Map.of();
     }
 
-    @SuppressWarnings("AnnotateFormatMethod")
     public static String fill(String format, @Nullable Object... values) {
         if (values.length == 0) {
             return format;
         }
-        try {
-            return String.format(Locale.ROOT, format, values);
-        } catch (IllegalFormatException e) {
+        Matcher blank = BLANK.matcher(format);
+        StringBuilder out = new StringBuilder(format.length() + 16);
+        int sequence = 0;
+        int last = 0;
+        while (blank.find()) {
+            String number = blank.group(1);
+            String kind = blank.group(2);
+
+            if (format.indexOf('%', last) < blank.start() || (number != null && kind.equals("%"))) {
+                return format;
+            }
+            out.append(format, last, blank.start());
+            last = blank.end();
+            if (kind.equals("%")) {
+                out.append('%');
+                continue;
+            }
+            int index = number == null ? sequence++ : Integer.parseInt(number) - 1;
+            if (index >= values.length || (kind.equals("d") && !isWhole(values[index]))) {
+                return format;
+            }
+            out.append(values[index]);
+        }
+        if (format.indexOf('%', last) >= 0) {
             return format;
         }
+        return out.append(format, last, format.length()).toString();
+    }
+
+    private static boolean isWhole(@Nullable Object value) {
+        return value instanceof Integer || value instanceof Long || value instanceof Short || value instanceof Byte;
     }
 
 }
