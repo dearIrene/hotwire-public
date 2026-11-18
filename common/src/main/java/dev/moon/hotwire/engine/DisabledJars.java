@@ -1,6 +1,5 @@
 package dev.moon.hotwire.engine;
 
-import dev.moon.hotwire.mixin_copy.MixinCopy;
 import dev.moon.hotwire.rebuild.KnotInternals;
 import java.io.IOException;
 import java.nio.file.Files;
@@ -27,12 +26,12 @@ public final class DisabledJars {
         return disabled;
     }
 
-    public static Path enable(Path disabled) throws IOException {
+    public static Path enable(Path disabled, Runnable classPathChanged) throws IOException {
         KnotInternals.dropFromClassPath(disabled);
-        return restore(disabled, true);
+        return restore(disabled, true, classPathChanged);
     }
 
-    public static Path restore(Path disabled, boolean runs) throws IOException {
+    public static Path restore(Path disabled, boolean runs, Runnable classPathChanged) throws IOException {
         String name = String.valueOf(disabled.getFileName());
         Path jar = disabled.resolveSibling(name.substring(0, name.length() - SUFFIX.length()));
         if (!runs) {
@@ -41,7 +40,7 @@ public final class DisabledJars {
         KnotInternals.dropFromClassPath(disabled);
         Files.move(disabled, jar);
         FabricLauncherBase.getLauncher().addToClassPath(jar);
-        MixinCopy.markClassPathChanged();
+        classPathChanged.run();
         return jar;
     }
 }

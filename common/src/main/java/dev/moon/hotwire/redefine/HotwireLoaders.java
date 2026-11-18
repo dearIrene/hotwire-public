@@ -6,16 +6,13 @@ import java.util.WeakHashMap;
 import org.jspecify.annotations.Nullable;
 
 public final class HotwireLoaders {
-    private static final Map<ClassLoader, Boolean> SEEING = Collections.synchronizedMap(new WeakHashMap<>());
+    private final Map<ClassLoader, Boolean> seeing = Collections.synchronizedMap(new WeakHashMap<>());
 
-    private HotwireLoaders() {
-    }
-
-    public static boolean seesHotwire(@Nullable ClassLoader loader) {
+    public boolean seesHotwire(@Nullable ClassLoader loader) {
         if (loader == null) {
             return false;
         }
-        return SEEING.computeIfAbsent(loader, seen -> {
+        return this.seeing.computeIfAbsent(loader, seen -> {
             try {
                 return Class.forName(Linker.class.getName(), false, seen) == Linker.class;
             } catch (ClassNotFoundException | LinkageError e) {

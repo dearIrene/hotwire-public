@@ -158,6 +158,8 @@ public final class ClassRebuilder {
 
     private final Relocations relocations = new Relocations();
 
+    private final BatchShapes shapes = new BatchShapes();
+
     private volatile @Nullable BatchRider rider;
 
     public void setRider(@Nullable BatchRider rider) {
@@ -230,7 +232,7 @@ public final class ClassRebuilder {
             Map<String, byte[]> classes,
             Map<String, byte[]> resources, List<String> on, Predicate<String> mods) throws RebuildException {
         RebuildCache.Inputs inputs = new RebuildCache.Inputs(originals, current, classes, resources, on, this.toLaunch,
-                OffWindowObjects.findMadeWithout(originals.keySet()), MixinCopy.findClassPathChanges());
+                OffWindowObjects.findMadeWithout(originals.keySet()), this.copy.findClassPathChanges());
         PreparedRebuild cached = this.ahead.find(inputs);
         if (cached != null) {
             LOGGER.info("[Hotwire] the rebuild of {} classes was worked out ahead", originals.size());
@@ -264,7 +266,7 @@ public final class ClassRebuilder {
         mixed.forEach((name, bytes) -> carried.put(name, AppliedMixins.of(bytes, readable.get(name))));
         splitting.end("marks");
         Map<Class<?>, ClassSplit.Result> splits = this.splitAll(byName, current, mixed, anyClass, splitting);
-        Set<String> newlyBuilt = findNewlyBuilt(splits, originals, current);
+        Set<String> newlyBuilt = this.findNewlyBuilt(splits, originals, current);
         splitting.end("constructors");
         if (splitting.getMillis() > SLOW_SPLIT.toMillis()) {
             LOGGER.info("[Hotwire] the split of {} classes took {}", byName.size(), splitting);
@@ -311,8 +313,8 @@ public final class ClassRebuilder {
             byte[] launched = this.toLaunch ? this.launch.find(name) : null;
             byte[] running = current.get(name);
             if (launched != null && running != null
-                    && BatchShapes.findConstructors(launched, null)
-                    .equals(BatchShapes.findConstructors(running, null))) {
+                    && this.shapes.findConstructors(launched, null)
+                    .equals(this.shapes.findConstructors(running, null))) {
                 mixed.put(name, launched);
             } else {
                 toMix.add(name);
@@ -328,8 +330,8 @@ public final class ClassRebuilder {
         if (MIX_ONLY.get()) {
             mixed.forEach((name, bytes) -> {
                 byte[] running = current.get(name);
-                if (running != null && !BatchShapes.findConstructors(bytes, null)
-                        .equals(BatchShapes.findConstructors(running, null))) {
+                if (running != null && !this.shapes.findConstructors(bytes, null)
+                        .equals(this.shapes.findConstructors(running, null))) {
                     this.constructorsChanged.add(name);
                 }
             });
@@ -438,7 +440,7 @@ public final class ClassRebuilder {
         return splits;
     }
 
-    private static Set<String> findNewlyBuilt(Map<Class<?>, ClassSplit.Result> splits, Map<Class<?>, byte[]> originals,
+    private Set<String> findNewlyBuilt(Map<Class<?>, ClassSplit.Result> splits, Map<Class<?>, byte[]> originals,
             Map<String, byte[]> current) {
         Set<String> newlyBuilt = new TreeSet<>();
         List<String> numbersAlone = new ArrayList<>();
@@ -446,14 +448,14 @@ public final class ClassRebuilder {
             String name = Type.getInternalName(type);
             byte[] original = originals.get(type);
             byte[] running = Objects.requireNonNull(current.get(name));
-            List<String> was = BatchShapes.findConstructors(running, original);
-            List<String> now = BatchShapes.findConstructors(split.target(), original);
+            List<String> was = this.shapes.findConstructors(running, original);
+            List<String> now = this.shapes.findConstructors(split.target(), original);
             if (!was.equals(now)) {
                 newlyBuilt.add(name);
                 LOGGER.debug("[Hotwire] {} builds its objects another way; {}", name,
                         BatchShapes.describeFirstDifference(was, now));
-            } else if (!BatchShapes.findConstructors(running, original, false)
-                    .equals(BatchShapes.findConstructors(split.target(), original, false))) {
+            } else if (!this.shapes.findConstructors(running, original, false)
+                    .equals(this.shapes.findConstructors(split.target(), original, false))) {
                 numbersAlone.add(name);
             }
         });

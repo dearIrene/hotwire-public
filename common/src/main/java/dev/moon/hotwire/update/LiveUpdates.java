@@ -9,7 +9,6 @@ import dev.moon.hotwire.jar.ModJar;
 import dev.moon.hotwire.jar.ModJarException;
 import dev.moon.hotwire.jar.ModManifest;
 import dev.moon.hotwire.jar.ZipBytes;
-import dev.moon.hotwire.mixin_copy.MixinCopy;
 import dev.moon.hotwire.redefine.ConstructedFields;
 import dev.moon.hotwire.redefine.InitHookRuns;
 import dev.moon.hotwire.redefine.Linker;
@@ -206,7 +205,7 @@ public final class LiveUpdates implements ModUpdater.Live {
                         FabricLauncherBase.getLauncher().addToClassPath(carried.incoming()));
                 FabricLauncherBase.getLauncher().addToClassPath(one.planned().jar());
             });
-            MixinCopy.markClassPathChanged();
+            this.engine.getApplier().getRebuilder().copy().markClassPathChanged();
             Map<String, byte[]> changed = new LinkedHashMap<>();
             List<String> ids = new ArrayList<>();
             Set<String> targets = new TreeSet<>();

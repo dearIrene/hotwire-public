@@ -164,8 +164,13 @@ public final class HotwireEngine implements ModScreenGame, AutoCloseable {
                 this.forgetWorld();
             }
         });
+
+        Runnable classPathChanged = () -> { };
+        if (bound instanceof Bound.Ready ready) {
+            classPathChanged = ready.parts().adds().getApplier().getRebuilder().copy()::markClassPathChanged;
+        }
         this.disabled = new DisabledMods(installed, settings, folders.mods(), this::showMessage,
-                (jar, then) -> this.jars.add(jar, AddMode.NOW, false, then));
+                (jar, then) -> this.jars.add(jar, AddMode.NOW, false, then), classPathChanged);
         this.switches = new SwitchRequests(this, this.tasks, installed, settings, this.disabled, () -> this.screen,
                 this::showMessage);
         this.profiles = new ProfileStore(FabricLoader.getInstance().getConfigDir().resolve("hotwire/profiles.txt"));

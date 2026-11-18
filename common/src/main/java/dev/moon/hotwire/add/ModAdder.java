@@ -14,7 +14,6 @@ import dev.moon.hotwire.jar.WidenerUses;
 import dev.moon.hotwire.jar.WorldData;
 import dev.moon.hotwire.jar.ZipBudget;
 import dev.moon.hotwire.jar.ZipBytes;
-import dev.moon.hotwire.mixin_copy.MixinCopy;
 import dev.moon.hotwire.plan.ModGraph;
 import dev.moon.hotwire.plan.SwitchPlan;
 import dev.moon.hotwire.plan.SwitchPlanner;
@@ -663,7 +662,7 @@ public final class ModAdder {
 
             FailedAddJars.remove(part.path());
             FabricLauncherBase.getLauncher().addToClassPath(part.path());
-            MixinCopy.markClassPathChanged();
+            this.engine.getApplier().getRebuilder().copy().markClassPathChanged();
             undo.addPermanent(part.path().getFileName() + " stays on the class path");
             undo.addUndo(() -> {
                 FailedAddJars.add(part.path());

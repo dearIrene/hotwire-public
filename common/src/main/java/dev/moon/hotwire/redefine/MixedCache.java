@@ -136,7 +136,7 @@ final class MixedCache {
             return;
         }
         synchronized (this.afresh) {
-            int paths = MixinCopy.findClassPathChanges();
+            int paths = this.copy.findClassPathChanges();
             if (paths != this.afreshPaths) {
                 this.afresh.clear();
                 this.afreshPaths = paths;
@@ -623,7 +623,7 @@ final class MixedCache {
                     int space = aimed.indexOf(' ');
                     Boolean answer = this.answers.ask(config.name(), aimed.substring(0, space).replace('/', '.'),
                             aimed.substring(space + 1).replace('/', '.'));
-                    if (answer == null && this.afreshPaths == MixinCopy.findClassPathChanges()) {
+                    if (answer == null && this.afreshPaths == this.copy.findClassPathChanges()) {
                         answer = this.afresh.get(aimed.replace('/', '.'));
                     }
                     if (answer == null) {

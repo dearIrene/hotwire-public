@@ -75,11 +75,13 @@ public final class ModTripwire {
 
     private final Set<Class<?>> putBackByRide = ConcurrentHashMap.newKeySet();
     private final Ride ride = new Ride();
+
+    final HotwireLoaders loaders = new HotwireLoaders();
     private final ClassFileTransformer loading = new ClassFileTransformer() {
         @Override
         public byte @Nullable [] transform(@Nullable ClassLoader loader, @Nullable String name,
                 @Nullable Class<?> redefining, @Nullable ProtectionDomain domain, byte[] bytes) {
-            if (name == null || loader == null || redefining != null || !HotwireLoaders.seesHotwire(loader)) {
+            if (name == null || loader == null || redefining != null || !ModTripwire.this.loaders.seesHotwire(loader)) {
                 return null;
             }
             String source = ModTripwire.this.findSourceOf(domain);

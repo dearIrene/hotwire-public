@@ -1,7 +1,6 @@
 package dev.moon.hotwire.engine;
 
 import dev.moon.hotwire.jvm.LoadedClassList;
-import dev.moon.hotwire.redefine.HotwireLoaders;
 import dev.moon.hotwire.redefine.RebuildException;
 import dev.moon.hotwire.redefine.Tripwire;
 import dev.moon.hotwire.redefine.TripwireSites;
@@ -66,7 +65,7 @@ final class TripwireOwners {
     Map<Class<?>, String> findOwned(Collection<String> ids) {
         Map<Class<?>, String> owned = new LinkedHashMap<>();
         for (Class<?> type : LoadedClassList.of(this.owner.instrumentation)) {
-            if (type.isArray() || type.isPrimitive() || !HotwireLoaders.seesHotwire(type.getClassLoader())) {
+            if (type.isArray() || type.isPrimitive() || !this.owner.loaders.seesHotwire(type.getClassLoader())) {
                 continue;
             }
             String mod = Owners.findModOf(type);

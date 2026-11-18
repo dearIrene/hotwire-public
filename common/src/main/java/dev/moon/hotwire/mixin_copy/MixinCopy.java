@@ -99,7 +99,8 @@ public final class MixinCopy implements AutoCloseable {
     private static final ThreadLocal<Map<String, byte[]>> REPLACING = new ThreadLocal<>();
 
     private final Map<String, Integer> missing = new ConcurrentHashMap<>();
-    private static final AtomicInteger PATHS = new AtomicInteger();
+
+    private final AtomicInteger paths = new AtomicInteger();
 
     private static final String DEFAULT_REFMAP = "mixin.refmap.json";
 
@@ -135,12 +136,12 @@ public final class MixinCopy implements AutoCloseable {
         this.sessionId = sessionId;
     }
 
-    public static void markClassPathChanged() {
-        PATHS.incrementAndGet();
+    public void markClassPathChanged() {
+        this.paths.incrementAndGet();
     }
 
-    public static int findClassPathChanges() {
-        return PATHS.get();
+    public int findClassPathChanges() {
+        return this.paths.get();
     }
 
     private byte @Nullable [] findBytes(String name, Function<String, byte @Nullable []> more) {
@@ -158,7 +159,7 @@ public final class MixinCopy implements AutoCloseable {
         if (cached != null) {
             return cached;
         }
-        int paths = PATHS.get();
+        int paths = this.paths.get();
         if (Integer.valueOf(paths).equals(this.missing.get(name)) || this.folding.isFolded(name)) {
             return null;
         }
@@ -255,7 +256,7 @@ public final class MixinCopy implements AutoCloseable {
     }
 
     public int findReadChanges() {
-        return this.readChanges.get() + PATHS.get();
+        return this.readChanges.get() + this.paths.get();
     }
 
     public byte @Nullable [] findReadable(String name) {
@@ -480,7 +481,7 @@ public final class MixinCopy implements AutoCloseable {
         if (!name.equals(DEFAULT_REFMAP)) {
             return this.live.getResourceAsStream(name);
         }
-        int paths = PATHS.get();
+        int paths = this.paths.get();
         DefaultRefmap known = this.defaultRefmap;
         if (known == null || known.paths() != paths) {
             try (InputStream in = this.live.getResourceAsStream(name)) {

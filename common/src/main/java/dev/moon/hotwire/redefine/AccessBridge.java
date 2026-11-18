@@ -5,13 +5,11 @@ import dev.moon.hotwire.jar.WidenerUses;
 import java.lang.invoke.MethodHandles;
 import java.nio.charset.StandardCharsets;
 import java.util.ArrayList;
-import java.util.Collections;
 import java.util.HashMap;
 import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
-import java.util.WeakHashMap;
 import org.jspecify.annotations.Nullable;
 import org.objectweb.asm.ClassReader;
 import org.objectweb.asm.ClassWriter;
@@ -46,9 +44,6 @@ public final class AccessBridge {
     private static final int NAME_AND_TYPE = 12;
 
     private static final String ACCESSOR = "$hotwire$access";
-
-    private static final Set<Class<?>> ACCESSIBLE = Collections.synchronizedSet(
-            Collections.newSetFromMap(new WeakHashMap<>()));
 
     private AccessBridge() {
     }
@@ -88,9 +83,6 @@ public final class AccessBridge {
     }
 
     public static void open(Class<?> opened) {
-        if (!ACCESSIBLE.add(opened)) {
-            return;
-        }
         try {
             MethodHandles.privateLookupIn(opened, MethodHandles.lookup()).defineClass(
                     buildAccessor(Type.getInternalName(opened)));

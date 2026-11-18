@@ -40,8 +40,6 @@ import org.objectweb.asm.tree.VarInsnNode;
 
 final class BatchShapes {
     private static final String MADE = Type.getInternalName(OffWindowObjects.class);
-
-    private static final Map<byte[], ClassNode> CONSTRUCTORS = Collections.synchronizedMap(new WeakHashMap<>());
     private static final Pattern MERGED = Pattern.compile("\\b(?:md|fd)[0-9a-f]{6}\\$");
 
     private static final Pattern SESSION = Pattern.compile("_\\$(md|fd)\\$[0-9a-f]{6}\\$[0-9a-f]+");
@@ -49,8 +47,7 @@ final class BatchShapes {
     private static final Pattern ARGS = Pattern.compile("Args\\$\\d+");
     private static final Pattern COUNTED = Pattern.compile("(md#\\$[^\\s(;]*\\$(?:#|\\d+))\\$[0-9a-f]+");
 
-    private BatchShapes() {
-    }
+    private final Map<byte[], ClassNode> constructors = Collections.synchronizedMap(new WeakHashMap<>());
 
     private static String describeOperand(AbstractInsnNode insn, boolean masked) {
         return switch (insn) {
@@ -93,12 +90,12 @@ final class BatchShapes {
         return out;
     }
 
-    static List<String> findConstructors(byte[] bytes, byte @Nullable [] original) {
-        return findConstructors(bytes, original, true);
+    List<String> findConstructors(byte[] bytes, byte @Nullable [] original) {
+        return this.findConstructors(bytes, original, true);
     }
 
-    static List<String> findConstructors(byte[] bytes, byte @Nullable [] original, boolean masked) {
-        ClassNode node = readConstructors(bytes);
+    List<String> findConstructors(byte[] bytes, byte @Nullable [] original, boolean masked) {
+        ClassNode node = this.readConstructors(bytes);
         Set<String> own = new HashSet<>();
         if (original != null) {
             Set<String> had = ConstructedFields.readFields(original).keys();
@@ -124,8 +121,8 @@ final class BatchShapes {
         return out;
     }
 
-    private static ClassNode readConstructors(byte[] bytes) {
-        ClassNode known = CONSTRUCTORS.get(bytes);
+    private ClassNode readConstructors(byte[] bytes) {
+        ClassNode known = this.constructors.get(bytes);
         if (known != null) {
             return known;
         }
@@ -190,7 +187,7 @@ final class BatchShapes {
                 };
             }
         }, ClassReader.SKIP_DEBUG | ClassReader.SKIP_FRAMES);
-        CONSTRUCTORS.put(bytes, node);
+        this.constructors.put(bytes, node);
         return node;
     }
 

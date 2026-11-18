@@ -40,6 +40,8 @@ final class LoadTimeBridge implements ClassFileTransformer {
     private final Supplier<Set<String>> adopted;
     private final Relocations relocations;
 
+    private final HotwireLoaders loaders = new HotwireLoaders();
+
     interface DefinitionWatcher {
         void accept(String name, byte[] bytes, @Nullable ClassLoader inGame);
     }
@@ -73,7 +75,7 @@ final class LoadTimeBridge implements ClassFileTransformer {
         try {
             byte[] made = this.bridge(loader, className, domain, bytes);
             this.defined.accept(className, made == null ? bytes : made,
-                    loader != null && HotwireLoaders.seesHotwire(loader) ? loader : null);
+                    loader != null && this.loaders.seesHotwire(loader) ? loader : null);
             return made;
         } catch (RuntimeException | LinkageError e) {
             LOGGER.error("[Hotwire] {} loaded as the game made it, with the game's own mix and no bridge to what"
@@ -94,7 +96,7 @@ final class LoadTimeBridge implements ClassFileTransformer {
         if (base != bytes) {
             mixed = base;
         }
-        if (!HotwireLoaders.seesHotwire(loader) || isHotwireItself(className, domain)
+        if (!this.loaders.seesHotwire(loader) || isHotwireItself(className, domain)
                 || AccessBridge.isAccessor(className)) {
             return mixed;
         }

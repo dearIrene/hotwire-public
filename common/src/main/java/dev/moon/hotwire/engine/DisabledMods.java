@@ -36,6 +36,8 @@ public final class DisabledMods {
     private final BiConsumer<String, Boolean> say;
     private final Adder adder;
 
+    private final Runnable classPathChanged;
+
     private final ExecutorService renaming = Executors.newSingleThreadExecutor(
             Thread.ofPlatform().name("hotwire-renames").daemon().factory());
     private volatile CompletableFuture<Void> renames = CompletableFuture.completedFuture(null);
@@ -43,13 +45,14 @@ public final class DisabledMods {
     private final List<PendingChange.OffAtStart> offAtStart;
 
     public DisabledMods(InstalledMods installed, HotwireSettings settings, Path modsFolder,
-            BiConsumer<String, Boolean> say, Adder adder) {
+            BiConsumer<String, Boolean> say, Adder adder, Runnable classPathChanged) {
         this.installed = installed;
         this.offAtStart = installed.getOffAtStart();
         this.settings = settings;
         this.modsFolder = modsFolder;
         this.say = say;
         this.adder = adder;
+        this.classPathChanged = classPathChanged;
     }
 
     public boolean isRenaming() {
@@ -128,7 +131,7 @@ public final class DisabledMods {
             }
             try {
                 this.installed.onRestored(id, DisabledJars.restore(disabledJar,
-                        this.installed.isRunningFromFolderJar(id)));
+                        this.installed.isRunningFromFolderJar(id), this.classPathChanged));
                 LOGGER.info("[Hotwire] {} is restored for the on: {} has its name back", id,
                         disabledJar.getFileName());
             } catch (IOException e) {
@@ -151,7 +154,7 @@ public final class DisabledMods {
                 return;
             }
             try {
-                this.installed.onRestored(id, DisabledJars.enable(disabledJar));
+                this.installed.onRestored(id, DisabledJars.enable(disabledJar, this.classPathChanged));
             } catch (IOException e) {
                 LOGGER.warn("[Hotwire] {} is back on, but {} could not get its name back", id,
                         disabledJar.getFileName(), e);

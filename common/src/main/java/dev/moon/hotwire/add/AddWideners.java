@@ -9,11 +9,14 @@ import dev.moon.hotwire.redefine.Relocations;
 import dev.moon.hotwire.redefine.ShutOverrides;
 import dev.moon.hotwire.ui.Lang;
 import java.nio.file.Path;
+import java.util.Collections;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Objects;
 import java.util.Optional;
+import java.util.Set;
+import java.util.WeakHashMap;
 import java.util.function.Predicate;
 import org.jspecify.annotations.Nullable;
 import org.slf4j.Logger;
@@ -23,8 +26,17 @@ final class AddWideners {
     private static final Logger LOGGER = LoggerFactory.getLogger(AddWideners.class);
     private final ModAdder.Engine engine;
 
+    private final Set<Class<?>> accessible = Collections.synchronizedSet(
+            Collections.newSetFromMap(new WeakHashMap<>()));
+
     AddWideners(ModAdder.Engine engine) {
         this.engine = engine;
+    }
+
+    private void openAccessor(Class<?> type) {
+        if (this.accessible.add(type)) {
+            AccessBridge.open(type);
+        }
     }
 
     Optional<String> findWidenerRefusal(ModJar part, @Nullable Path path) {
@@ -94,7 +106,7 @@ final class AddWideners {
             for (String opened : openings.classes()) {
                 Class<?> type = this.engine.findLoaded(opened);
                 if (type != null) {
-                    AccessBridge.open(type);
+                    this.openAccessor(type);
                 }
             }
             LOGGER.info("[Hotwire] {}'s update opens {} classes and {} members through the bridge",
@@ -144,7 +156,7 @@ final class AddWideners {
                 for (String opened : openings.classes()) {
                     Class<?> type = this.engine.findLoaded(opened);
                     if (type != null) {
-                        AccessBridge.open(type);
+                        this.openAccessor(type);
                     }
                 }
                 LOGGER.info("[Hotwire] {} opens {} loaded classes and {} members for its own code through the bridge",
