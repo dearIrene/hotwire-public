@@ -244,15 +244,21 @@ final class DuckCalls {
             boolean throughReal) throws ReflectiveOperationException {
         Class<?> real = findReal(duck, receiver);
         MethodType type = MethodType.fromMethodDescriptorString(descriptor, receiver.getClassLoader());
+
+        boolean gained = false;
         if (throughReal && real != null && real.isAssignableFrom(receiver)) {
-            return MethodHandles.publicLookup().findVirtual(real, method, type);
+            try {
+                return MethodHandles.publicLookup().findVirtual(real, method, type);
+            } catch (NoSuchMethodException notOnTheInterface) {
+                gained = true;
+            }
         }
         Set<String> named = findWithParents(duck, real);
         for (Class<?> at = receiver; at != null; at = at.getSuperclass()) {
             MethodHandles.Lookup old = Linker.isPending(at) ? Linker.findLookupForOldCode(at) : null;
             MethodHandle found = old != null ? findIn(old, at, method, type) : null;
             MethodHandles.Lookup side = Linker.findCurrentLookup(at);
-            if (found == null && side != null && carriesAny(named, at)) {
+            if (found == null && side != null && (gained || carriesAny(named, at))) {
                 found = findIn(side, at, method, type);
             }
             if (found != null) {
