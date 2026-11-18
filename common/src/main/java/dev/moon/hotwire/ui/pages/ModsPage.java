@@ -27,6 +27,7 @@ import dev.moon.hotwire.ui.widgets.Text;
 import dev.moon.hotwire.ui.widgets.TextField;
 import java.util.ArrayList;
 import java.util.HashMap;
+import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Objects;
@@ -62,6 +63,13 @@ public final class ModsPage implements ProfileMenu.Screen {
     private final Push turnOff = Kit.push("", () -> this.switchPicked(false));
     private final Push turnOn = Kit.lead("", () -> this.switchPicked(true));
     private final Drawer pickBar;
+
+    private boolean choosing;
+    private final Map<String, Boolean> chosen = new LinkedHashMap<>();
+    private final Push choose = Kit.push(Lang.get("hotwire.choose.start"), this::beginChoosing);
+    private final Text chosenNote = Kit.text("");
+    private final Push chooseDone = Kit.lead(Lang.get("hotwire.choose.done"), this::applyChosen);
+    private final Drawer chooseBar;
     private final Line detailsBody = Kit.column().pad(10, 10).gap(6).face(Palette.PANEL);
     private final Drawer details;
 
@@ -93,9 +101,13 @@ public final class ModsPage implements ProfileMenu.Screen {
         this.profiles = new ProfileMenu(store, this, root, this.search, this.show, this.popup,
                 screen::openProfiles);
         this.rows = new Rows<ModRow>(shown -> shown.mod().id(), this::makeRow, ROW, 2)
-                .mark(shown -> this.model.getPicked().contains(shown.mod().id()));
+                .mark(shown -> this.choosing ? this.chosen.containsKey(shown.mod().id())
+                        : this.model.getPicked().contains(shown.mod().id()));
         root.getMenus().add(this.popup);
         this.pickBar = Kit.drawer(true, Kit.row(this.pickedNote, Kit.space(), this.turnOff, this.turnOn).gap(6)
+                .pad(8, 0).face(Palette.PANEL), Push.HEIGHT + 8);
+        this.chooseBar = Kit.drawer(true, Kit.row(this.chosenNote, Kit.space(),
+                Kit.push(Lang.get("hotwire.choose.cancel"), this::endChoosing), this.chooseDone).gap(6)
                 .pad(8, 0).face(Palette.PANEL), Push.HEIGHT + 8);
         this.detailsBody.grow(1);
         this.details = Kit.drawer(false, Kit.row(Kit.rule().width(1), this.detailsBody)
@@ -106,8 +118,9 @@ public final class ModsPage implements ProfileMenu.Screen {
                 Kit.row(title, Kit.space(), Kit.fit(this.search).width(80).height(20).grow(4).most(180)).gap(8),
                 Kit.row(this.counts, Kit.meter(() -> this.onPart).grow(1)).gap(8),
                 Kit.row(Kit.fit(this.profiles.menu, this.profiles.naming).width(90).height(Push.HEIGHT).grow(4)
-                        .most(150), this.show, Kit.space(), this.libraries.spare(), this.findBroken.spare()).gap(8),
-                this.empty, this.rows, this.pickBar).pad(12, 10).gap(8).grow(1);
+                        .most(150), this.show, Kit.space(), this.choose.spare(), this.libraries.spare(),
+                        this.findBroken.spare()).gap(8),
+                this.empty, this.rows, this.pickBar, this.chooseBar).pad(12, 10).gap(8).grow(1);
         this.part = Kit.row(main, this.details).cross(Line.Cross.STRETCH);
         this.refilter();
     }
@@ -126,7 +139,7 @@ public final class ModsPage implements ProfileMenu.Screen {
             row.with(Kit.push(Lang.get("hotwire.row.settings"), () -> this.openSettings(id)));
         }
         row.with(new Star(id).press((button, modifiers) -> this.toggleFavorite(id)),
-                new Flip(() -> this.wishes.getOrDefault(id, mod.on()), () -> this.toggle(mod))
+                new Flip(() -> this.findShownState(mod), () -> this.toggle(mod))
                         .pending(() -> this.wishes.containsKey(id)).active(() -> this.canSwitch(id)));
         return row.press(new RowPress(mod));
     }
@@ -192,6 +205,12 @@ public final class ModsPage implements ProfileMenu.Screen {
             if (button != 0) {
                 return;
             }
+            if (ModsPage.this.choosing) {
+                ModsPage.this.swept = id;
+                ModsPage.this.sweeping = !ModsPage.this.findShownState(this.mod);
+                ModsPage.this.setChoice(this.mod, ModsPage.this.sweeping);
+                return;
+            }
             boolean again = id.equals(ModsPage.this.pressed) && now - ModsPage.this.pressedAt < DOUBLE_NANOS;
             ModsPage.this.pressed = again ? null : id;
             ModsPage.this.pressedAt = now;
@@ -209,7 +228,11 @@ public final class ModsPage implements ProfileMenu.Screen {
             String id = under == null ? ModsPage.this.swept : under.mod().id();
             if (!Objects.equals(id, ModsPage.this.swept)) {
                 ModsPage.this.swept = id;
-                if (ModsPage.this.model.getPicked().contains(id) != ModsPage.this.sweeping) {
+                if (ModsPage.this.choosing) {
+                    if (under != null) {
+                        ModsPage.this.setChoice(under.mod(), ModsPage.this.sweeping);
+                    }
+                } else if (ModsPage.this.model.getPicked().contains(id) != ModsPage.this.sweeping) {
                     ModsPage.this.pick(Objects.requireNonNull(id), 0);
                 }
             }
@@ -268,12 +291,64 @@ public final class ModsPage implements ProfileMenu.Screen {
         boolean idle = this.screen.isIdle();
         this.turnOff.active(idle);
         this.turnOn.active(idle);
+        this.choose.active(idle);
+        this.chooseDone.active(idle && !this.chosen.isEmpty());
         this.findBroken.active(idle);
         ModRow pointed = this.rows.findPointed();
         this.ahead.askForPointer(pointed == null ? null : pointed.mod().id(), nowNanos, idle);
     }
 
+    private boolean findShownState(ModStatus mod) {
+        Boolean choice = this.choosing ? this.chosen.get(mod.id()) : null;
+        return choice != null ? choice : this.wishes.getOrDefault(mod.id(), mod.on());
+    }
+
+    private void setChoice(ModStatus mod, boolean on) {
+        if (!this.canSwitch(mod.id())) {
+            return;
+        }
+        if (on == mod.on()) {
+            this.chosen.remove(mod.id());
+        } else {
+            this.chosen.put(mod.id(), on);
+        }
+        this.refilter();
+    }
+
+    private void beginChoosing() {
+        if (!this.screen.isIdle()) {
+            this.screen.showMessage(Lang.get("hotwire.screen.still_switching"), false);
+            return;
+        }
+        this.choosing = true;
+        this.chosen.clear();
+        this.model.clear();
+        this.refilter();
+    }
+
+    private void endChoosing() {
+        this.choosing = false;
+        this.chosen.clear();
+        this.refilter();
+    }
+
+    private void applyChosen() {
+        if (this.chosen.isEmpty() || !this.screen.isIdle()) {
+            return;
+        }
+        List<String> off = new ArrayList<>();
+        List<String> on = new ArrayList<>();
+        this.chosen.forEach((id, wanted) -> (wanted ? on : off).add(id));
+        this.wishes.putAll(this.chosen);
+        this.endChoosing();
+        this.game.applyChoices(new ProfileStore.ProfilePlan(off, on));
+    }
+
     private void toggle(ModStatus mod) {
+        if (this.choosing) {
+            this.setChoice(mod, !this.findShownState(mod));
+            return;
+        }
         if (!this.screen.isIdle()) {
             this.screen.showMessage(Lang.get("hotwire.screen.still_switching"), false);
             return;
@@ -484,7 +559,12 @@ public final class ModsPage implements ProfileMenu.Screen {
         int ons = this.findPicked(false).size();
         this.turnOff.label(Lang.get("hotwire.screen.turn_off_count", off)).show(off > 0);
         this.turnOn.label(Lang.get("hotwire.screen.turn_on_count", ons)).show(ons > 0);
-        this.pickBar.open(picked > 0);
+        this.pickBar.open(picked > 0 && !this.choosing);
+        long turningOn = this.chosen.values().stream().filter(Boolean::booleanValue).count();
+        this.chosenNote.set(this.chosen.isEmpty() ? Lang.get("hotwire.choose.hint")
+                : Lang.get("hotwire.choose.count", turningOn, this.chosen.size() - turningOn));
+        this.choose.show(!this.choosing);
+        this.chooseBar.open(this.choosing);
         this.fillDetails(false);
     }
 }

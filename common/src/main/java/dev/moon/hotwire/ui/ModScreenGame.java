@@ -65,6 +65,9 @@ public interface ModScreenGame {
 
     void applyProfile(String name, ProfileStore.ProfilePlan plan);
 
+    default void applyChoices(ProfileStore.ProfilePlan plan) {
+    }
+
     default @Nullable String findJoinedAddress() {
         return null;
     }

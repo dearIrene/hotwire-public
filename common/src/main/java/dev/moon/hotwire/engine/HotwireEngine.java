@@ -618,14 +618,23 @@ public final class HotwireEngine implements ModScreenGame, AutoCloseable {
         } catch (IOException e) {
             LOGGER.warn("[Hotwire] the profile picked could not be written down", e);
         }
+        this.applyPlan(plan, SwitchHistory.Cause.PROFILE, name);
+    }
+
+    @Override
+    public void applyChoices(ProfileStore.ProfilePlan plan) {
+        this.applyPlan(plan, SwitchHistory.Cause.PLAYER, "");
+    }
+
+    private void applyPlan(ProfileStore.ProfilePlan plan, SwitchHistory.Cause cause, String by) {
         this.switches.run(runner -> {
             CheckedResult off = runner.turnOff(plan.turnOff());
-            SwitchHistory.get().recordDone(off.result(), SwitchHistory.Cause.PROFILE, name);
+            SwitchHistory.get().recordDone(off.result(), cause, by);
             if (PlayerMessages.isBad(off.result()) || plan.turnOn().isEmpty()) {
                 return off;
             }
             CheckedResult on = runner.turnOn(plan.turnOn());
-            SwitchHistory.get().recordDone(on.result(), SwitchHistory.Cause.PROFILE, name);
+            SwitchHistory.get().recordDone(on.result(), cause, by);
             return on;
         });
     }
