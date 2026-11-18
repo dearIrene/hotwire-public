@@ -11,6 +11,7 @@ import dev.moon.hotwire.jar.ModJarException;
 import dev.moon.hotwire.jar.ModJarReader;
 import dev.moon.hotwire.jar.ModManifest;
 import dev.moon.hotwire.jar.WidenerUses;
+import dev.moon.hotwire.jar.WorldData;
 import dev.moon.hotwire.jar.ZipBytes;
 import dev.moon.hotwire.mixin_copy.MixinCopy;
 import dev.moon.hotwire.plan.ModGraph;
@@ -620,6 +621,10 @@ public final class ModAdder {
             }
             Set<String> content = new LinkedHashSet<>();
             jarPaths.forEach(jarPath -> content.addAll(this.readContent(jarPath)));
+
+            if (parts.values().stream().anyMatch(part -> WorldData.hasWorldData(part.path()))) {
+                content.add(Lang.get("hotwire.add.world_data"));
+            }
             if (!content.isEmpty() || this.listensForClientStart(jarPaths)) {
                 return new AddDecision.Reopen(content, libraries);
             }

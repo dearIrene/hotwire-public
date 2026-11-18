@@ -1,6 +1,7 @@
 package dev.moon.hotwire.fabric.add;
 
 import dev.moon.hotwire.add.LoaderModList;
+import dev.moon.hotwire.fabric.registration.WorldContent;
 import dev.moon.hotwire.fabric.version.ReloadBands;
 import dev.moon.hotwire.fabric.version.Spellings;
 import dev.moon.hotwire.registration.Owners;
@@ -47,7 +48,8 @@ public final class HiddenPacks {
 
     @SuppressWarnings("unchecked")
     public static void addHidden(PackType type, @Nullable String subPath, List<?> packs) {
-        if (type != PackType.CLIENT_RESOURCES) {
+        if (type == PackType.SERVER_DATA) {
+            addWorldData(subPath, (List<Object>) packs);
             return;
         }
         Map<String, ModContainer> hiddenMods = LoaderModList.getHiddenContainers();
@@ -72,6 +74,18 @@ public final class HiddenPacks {
                 TRIMMED.put(id, pack);
             }
             ((List<Object>) packs).add(pack);
+        }
+    }
+
+    private static void addWorldData(@Nullable String subPath, List<Object> packs) {
+        for (Map.Entry<String, ModContainer> hidden : LoaderModList.getHiddenContainers().entrySet()) {
+            if (WorldContent.isWorldDataOnly(hidden.getValue())) {
+                Object pack = Spellings.makeHiddenPack(hidden.getKey(), hidden.getValue(), subPath,
+                        PackType.SERVER_DATA);
+                if (pack != null) {
+                    packs.add(pack);
+                }
+            }
         }
     }
 
