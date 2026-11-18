@@ -28,15 +28,9 @@ final class AgentJar {
         Files.createDirectories(folder);
         Path jar = folder.resolve("agent.jar");
         Path part = folder.resolve("agent.jar." + ProcessHandle.current().pid() + ".part");
-        Manifest manifest = new Manifest();
-        Attributes main = manifest.getMainAttributes();
-        main.put(Attributes.Name.MANIFEST_VERSION, "1.0");
-        main.putValue("Launcher-Agent-Class", JvmAccess.AGENT);
-        main.putValue("Can-Redefine-Classes", "true");
-        main.putValue("Can-Retransform-Classes", "true");
         try {
             try (OutputStream out = Files.newOutputStream(part);
-                    JarOutputStream zip = new JarOutputStream(out, manifest)) {
+                    JarOutputStream zip = new JarOutputStream(out, makeManifest())) {
                 zip.putNextEntry(new JarEntry(AGENT + ".class"));
                 zip.write(makeAgent());
                 zip.closeEntry();
@@ -55,6 +49,9 @@ final class AgentJar {
         byte[] agent = makeAgent();
         boolean found = false;
         try (JarFile file = new JarFile(jar.toFile())) {
+            if (!makeManifest().equals(file.getManifest())) {
+                throw new IOException(jar + " has a manifest Hotwire did not make");
+            }
             for (JarEntry entry : Collections.list(file.entries())) {
                 String name = entry.getName();
                 if (entry.isDirectory() || JarFile.MANIFEST_NAME.equals(name)) {
@@ -74,6 +71,16 @@ final class AgentJar {
         if (!found) {
             throw new IOException(jar + " holds no agent class");
         }
+    }
+
+    static Manifest makeManifest() {
+        Manifest manifest = new Manifest();
+        Attributes main = manifest.getMainAttributes();
+        main.put(Attributes.Name.MANIFEST_VERSION, "1.0");
+        main.putValue("Launcher-Agent-Class", JvmAccess.AGENT);
+        main.putValue("Can-Redefine-Classes", "true");
+        main.putValue("Can-Retransform-Classes", "true");
+        return manifest;
     }
 
     static byte[] makeAgent() {
