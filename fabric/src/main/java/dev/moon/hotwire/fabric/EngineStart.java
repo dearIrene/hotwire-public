@@ -34,7 +34,7 @@ import dev.moon.hotwire.fabric.registration.LiveConnections;
 import dev.moon.hotwire.fabric.registration.MixinPlugins;
 import dev.moon.hotwire.fabric.registration.ModLifecycle;
 import dev.moon.hotwire.fabric.registration.NetworkHandlers;
-import dev.moon.hotwire.fabric.registration.OffModCommands;
+
 import dev.moon.hotwire.fabric.registration.RegistryEntries;
 import dev.moon.hotwire.fabric.registration.RegistryHolders;
 import dev.moon.hotwire.fabric.report.MachineDetails;
@@ -190,7 +190,7 @@ final class EngineStart {
         ClassFileTransformer loadTimeMixer = applier.makeLoadTimeMixer();
         TransformerChain.setMixedAsItLoads(name -> applier.isMixedAsItLoads(name.replace('.', '/')));
         InitHookReplay.nameSucceededWith(LiveNames::findOwnKeys);
-        OffModCommands.readUsesFrom(installed::getGraph);
+        GameParts.getCommands().readUsesFrom(installed::getGraph);
         HiddenPacks.readContainersWith(id -> installed.getGraph().getContainers(id));
         Linker.setMixinOwners(applier.getCarriedMixins()::findModShipping);
         laps.endLap("load-time mixer, hooks");

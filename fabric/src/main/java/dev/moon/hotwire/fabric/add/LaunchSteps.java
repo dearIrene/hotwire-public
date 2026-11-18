@@ -2,8 +2,8 @@ package dev.moon.hotwire.fabric.add;
 
 import dev.moon.hotwire.add.EntrypointLists;
 import dev.moon.hotwire.add.HostLists;
+import dev.moon.hotwire.fabric.GameParts;
 import dev.moon.hotwire.fabric.registration.ModLifecycle;
-import dev.moon.hotwire.fabric.registration.OffModCommands;
 import dev.moon.hotwire.registration.GameRegistrations;
 import java.util.ArrayList;
 import java.util.List;
@@ -29,7 +29,7 @@ public final class LaunchSteps {
         return List.of(
                 new Step("host lists", () -> HostLists.join(ids)),
                 new Step("entrypoint lists", () -> EntrypointLists.join(ids, findLoaded)),
-                new Step("client commands", OffModCommands::rebuildClientCommands),
+                new Step("client commands", GameParts.getCommands()::rebuildClientCommands),
                 new Step("client-started listeners", () -> {
                     for (String id : ids) {
                         setUp.put(id, ModLifecycle.runSetup(id, GameRegistrations.getJournal(),

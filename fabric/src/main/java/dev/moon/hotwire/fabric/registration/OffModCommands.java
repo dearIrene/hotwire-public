@@ -2,8 +2,10 @@ package dev.moon.hotwire.fabric.registration;
 
 import com.mojang.brigadier.CommandDispatcher;
 import com.mojang.brigadier.tree.CommandNode;
+import dev.moon.hotwire.fabric.GameParts;
 import dev.moon.hotwire.fabric.mixin.core.brigadier.tree.CommandNodeAccessor;
 import dev.moon.hotwire.plan.ModGraph;
+import dev.moon.hotwire.registration.ClientPacketListenerExtension;
 import dev.moon.hotwire.registration.GameRegistrations;
 import dev.moon.hotwire.registration.Owners;
 import dev.moon.hotwire.registration.RegistrationJournal;
@@ -14,12 +16,16 @@ import java.util.List;
 import java.util.Map;
 import java.util.Set;
 import java.util.concurrent.ConcurrentHashMap;
+import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.function.Predicate;
 import java.util.function.Supplier;
 import java.util.stream.Collectors;
 import net.fabricmc.loader.api.FabricLoader;
 import net.fabricmc.loader.api.ModContainer;
 import net.fabricmc.loader.api.metadata.ModDependency;
+import net.minecraft.client.Minecraft;
+import net.minecraft.client.multiplayer.ClientPacketListener;
+import net.minecraft.client.server.IntegratedServer;
 import org.jspecify.annotations.Nullable;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -71,45 +77,46 @@ public final class OffModCommands {
 
         @Override
         public void run() {
-            CommandRegistration.resendCommands(this.client);
+            GameParts.getCommands().resendCommands(this.client);
         }
     }
-    private static volatile @Nullable Supplier<ModGraph> mods;
+    private volatile @Nullable Supplier<ModGraph> mods;
 
-    private static volatile Map<String, Set<String>> dependencies = Map.of();
+    private volatile Map<String, Set<String>> dependencies = Map.of();
 
-    private static volatile Predicate<String> offNow = id -> false;
-    private static final Set<String> SAID_STAYING = ConcurrentHashMap.newKeySet();
+    private volatile Predicate<String> offNow = id -> false;
+    private final Set<String> saidStaying = ConcurrentHashMap.newKeySet();
 
-    private OffModCommands() {
+    private final AtomicBoolean clientResendDue = new AtomicBoolean();
+    private final AtomicBoolean serverResendDue = new AtomicBoolean();
+
+    public void readOffFrom(Predicate<String> off) {
+        this.offNow = off;
     }
 
-    public static void readOffFrom(Predicate<String> off) {
-        offNow = off;
-    }
-
-    public static synchronized void takeOutBeforeSending(boolean client) {
+    public synchronized void takeOutBeforeSending(boolean client) {
         CommandDispatcher<?> dispatcher = CommandRegistration.findActiveDispatcher(client);
         if (dispatcher != null) {
-            takeOutOf(dispatcher, client);
+            this.takeOutOf(dispatcher, client);
         }
     }
 
-    public static synchronized void takeOutOf(CommandDispatcher<?> dispatcher, boolean client) {
+    public synchronized void takeOutOf(CommandDispatcher<?> dispatcher, boolean client) {
+        Predicate<String> off = this.offNow;
         List<String> removedNames = new ArrayList<>();
         for (CommandNode<?> command : List.copyOf(dispatcher.getRoot().getChildren())) {
-            takeOut(dispatcher, dispatcher.getRoot(), command, offNow, client, removedNames, DEPTH);
+            this.takeOut(dispatcher, dispatcher.getRoot(), command, off, client, removedNames, DEPTH);
 
             Set<String> all = CommandRecorder.findModsRun(command);
             if (dispatcher.getRoot().getChild(command.getName()) != null
-                    && SAID_STAYING.add(command.getName() + " " + all)) {
+                    && this.saidStaying.add(command.getName() + " " + all)) {
                 LOGGER.info("[Hotwire] /{} stays: it runs {} (off now: {}), its requirement {}", command.getName(),
-                        all, all.stream().filter(offNow).toList(), command.getRequirement().getClass().getName());
+                        all, all.stream().filter(off).toList(), command.getRequirement().getClass().getName());
             }
-            if (dispatcher.getRoot().getChild(command.getName()) != null && all.stream().anyMatch(offNow)
-                    && SAID_STAYING.add(command.getName())) {
+            if (dispatcher.getRoot().getChild(command.getName()) != null && all.stream().anyMatch(off)
+                    && this.saidStaying.add(command.getName())) {
                 LOGGER.info("[Hotwire] /{} runs off mods' code and stays: it runs {}, of which off {}",
-                        command.getName(), all, all.stream().filter(offNow).toList());
+                        command.getName(), all, all.stream().filter(off).toList());
             }
         }
         if (!removedNames.isEmpty()) {
@@ -118,22 +125,22 @@ public final class OffModCommands {
         }
     }
 
-    private static volatile Predicate<String> goingOff = id -> false;
+    private volatile Predicate<String> goingOff = id -> false;
 
-    public static boolean isGoingOff(String mod) {
-        return goingOff.test(mod);
+    public boolean isGoingOff(String mod) {
+        return this.goingOff.test(mod);
     }
 
-    public static void onWatched() {
-        goingOff = id -> false;
+    public void onWatched() {
+        this.goingOff = id -> false;
     }
 
-    public static void markGoingOff(Predicate<String> off) {
-        goingOff = off;
+    public void markGoingOff(Predicate<String> off) {
+        this.goingOff = off;
     }
 
-    public static synchronized void takeOut(Predicate<String> off) {
-        goingOff = off;
+    public synchronized void takeOut(Predicate<String> off) {
+        this.goingOff = off;
         for (boolean client : List.of(false, true)) {
             CommandDispatcher<?> dispatcher = CommandRegistration.findActiveDispatcher(client);
             if (dispatcher == null) {
@@ -141,20 +148,20 @@ public final class OffModCommands {
             }
             List<String> removedNames = new ArrayList<>();
             for (CommandNode<?> command : List.copyOf(dispatcher.getRoot().getChildren())) {
-                takeOut(dispatcher, dispatcher.getRoot(), command, off, client, removedNames, DEPTH);
+                this.takeOut(dispatcher, dispatcher.getRoot(), command, off, client, removedNames, DEPTH);
             }
             if (!removedNames.isEmpty()) {
                 LOGGER.info("[Hotwire] the {} commands {} run only off mods' code and go out",
                         client ? "client" : "server", removedNames);
-                CommandRegistration.resendCommands(client);
+                this.resendCommands(client);
             }
         }
     }
 
     @SuppressWarnings("ReferenceEquality")
-    private static void takeOut(CommandDispatcher<?> dispatcher, CommandNode<?> parent, CommandNode<?> node,
+    private void takeOut(CommandDispatcher<?> dispatcher, CommandNode<?> parent, CommandNode<?> node,
             Predicate<String> off, boolean client, Collection<String> removedNames, int depth) {
-        Set<String> mods = findMods(node);
+        Set<String> mods = this.findMods(node);
         if (depth == 0 || mods.isEmpty()) {
             return;
         }
@@ -167,12 +174,41 @@ public final class OffModCommands {
                     mods.stream().filter(off.negate()).toList());
         }
         for (CommandNode<?> part : List.copyOf(node.getChildren())) {
-            takeOut(dispatcher, node, part, off, client, removedNames, depth - 1);
+            this.takeOut(dispatcher, node, part, off, client, removedNames, depth - 1);
         }
     }
 
-    public static void rebuildClientCommands() {
-        CommandRegistration.resendCommands(true);
+    public void rebuildClientCommands() {
+        this.resendCommands(true);
+    }
+
+    public void resendCommands(boolean client) {
+        Minecraft mc = Minecraft.getInstance();
+
+        if (client && mc.getSingleplayerServer() != null) {
+            this.resendCommands(false);
+            return;
+        }
+        AtomicBoolean due = client ? this.clientResendDue : this.serverResendDue;
+        if (client) {
+            ClientPacketListener connection = mc.getConnection();
+            if (connection != null && due.compareAndSet(false, true)) {
+                mc.execute(() -> {
+                    due.set(false);
+                    this.takeOutBeforeSending(true);
+                    ((ClientPacketListenerExtension) connection).hotwire$resendCommands();
+                });
+            }
+            return;
+        }
+        IntegratedServer server = mc.getSingleplayerServer();
+        if (server != null && due.compareAndSet(false, true)) {
+            server.execute(() -> {
+                due.set(false);
+                this.takeOutBeforeSending(false);
+                server.getPlayerList().getPlayers().forEach(server.getCommands()::sendCommands);
+            });
+        }
     }
 
     @SuppressWarnings("ReferenceEquality")
@@ -186,31 +222,31 @@ public final class OffModCommands {
         removedNames.add((parent == dispatcher.getRoot() ? "/" : "/" + parent.getName() + " ") + node.getName());
     }
 
-    private static Set<String> findMods(CommandNode<?> node) {
+    private Set<String> findMods(CommandNode<?> node) {
         Set<String> mods = CommandRecorder.findModsRun(node).stream().filter(Owners::isRecordedMod)
                 .collect(Collectors.toSet());
-        Set<String> owners = mods.stream().filter(mod -> mods.stream().noneMatch(user -> isDependentOf(user, mod)))
-                .collect(Collectors.toSet());
+        Set<String> owners = mods.stream().filter(mod -> mods.stream().noneMatch(user -> this.isDependentOf(user,
+                mod))).collect(Collectors.toSet());
         return owners.isEmpty() ? mods : owners;
     }
 
-    public static void readUsesFrom(Supplier<ModGraph> graph) {
-        mods = graph;
+    public void readUsesFrom(Supplier<ModGraph> graph) {
+        this.mods = graph;
         Map<String, Set<String>> declared = new HashMap<>();
         for (ModContainer mod : FabricLoader.getInstance().getAllMods()) {
             declared.put(mod.getMetadata().getId(), mod.getMetadata().getDependencies().stream()
                     .filter(dependency -> dependency.getKind() == ModDependency.Kind.DEPENDS)
                     .map(ModDependency::getModId).collect(Collectors.toUnmodifiableSet()));
         }
-        dependencies = Map.copyOf(declared);
+        this.dependencies = Map.copyOf(declared);
     }
 
-    private static boolean isDependentOf(String user, String library) {
-        Supplier<ModGraph> graph = mods;
+    private boolean isDependentOf(String user, String library) {
+        Supplier<ModGraph> graph = this.mods;
         if (graph != null && graph.get().getUses(user).contains(library)) {
             return true;
         }
-        return dependencies.getOrDefault(user, Set.of()).contains(library);
+        return this.dependencies.getOrDefault(user, Set.of()).contains(library);
     }
 
     @SuppressWarnings("unchecked")

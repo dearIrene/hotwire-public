@@ -3,14 +3,12 @@ package dev.moon.hotwire.fabric.registration;
 import com.mojang.brigadier.CommandDispatcher;
 import com.mojang.brigadier.tree.CommandNode;
 import com.mojang.brigadier.tree.RootCommandNode;
+import dev.moon.hotwire.fabric.GameParts;
 import dev.moon.hotwire.fabric.mixin.core.brigadier.tree.CommandNodeAccessor;
-import dev.moon.hotwire.registration.ClientPacketListenerExtension;
 import dev.moon.hotwire.registration.Registration;
 import java.lang.ref.WeakReference;
-import java.util.concurrent.atomic.AtomicBoolean;
 import net.fabricmc.fabric.impl.command.client.ClientCommandInternals;
 import net.minecraft.client.Minecraft;
-import net.minecraft.client.multiplayer.ClientPacketListener;
 import net.minecraft.client.server.IntegratedServer;
 import org.jspecify.annotations.Nullable;
 import org.slf4j.Logger;
@@ -18,8 +16,6 @@ import org.slf4j.LoggerFactory;
 
 final class CommandRegistration implements Registration {
     private static final Logger LOGGER = LoggerFactory.getLogger(CommandRegistration.class);
-    private static final AtomicBoolean CLIENT_RESEND_DUE = new AtomicBoolean();
-    private static final AtomicBoolean SERVER_RESEND_DUE = new AtomicBoolean();
 
     private final WeakReference<RootCommandNode<?>> addedTo;
     private final String name;
@@ -71,7 +67,7 @@ final class CommandRegistration implements Registration {
         root.hotwire$getLiterals().remove(this.name);
         this.outOf = dispatcher;
         this.removed = node;
-        resendCommands(this.client);
+        GameParts.getCommands().resendCommands(this.client);
     }
 
     @Override
@@ -93,7 +89,7 @@ final class CommandRegistration implements Registration {
             throw new IllegalStateException("Another command took /" + this.name + " while it was off.");
         }
         addChild(dispatcher, node);
-        resendCommands(this.client);
+        GameParts.getCommands().resendCommands(this.client);
     }
 
     private @Nullable CommandNode<?> findIn(CommandDispatcher<?> dispatcher) {
@@ -112,34 +108,5 @@ final class CommandRegistration implements Registration {
         }
         IntegratedServer server = Minecraft.getInstance().getSingleplayerServer();
         return server == null ? null : server.getCommands().getDispatcher();
-    }
-
-    static void resendCommands(boolean client) {
-        Minecraft mc = Minecraft.getInstance();
-
-        if (client && mc.getSingleplayerServer() != null) {
-            resendCommands(false);
-            return;
-        }
-        AtomicBoolean due = client ? CLIENT_RESEND_DUE : SERVER_RESEND_DUE;
-        if (client) {
-            ClientPacketListener connection = mc.getConnection();
-            if (connection != null && due.compareAndSet(false, true)) {
-                mc.execute(() -> {
-                    due.set(false);
-                    OffModCommands.takeOutBeforeSending(true);
-                    ((ClientPacketListenerExtension) connection).hotwire$resendCommands();
-                });
-            }
-            return;
-        }
-        IntegratedServer server = mc.getSingleplayerServer();
-        if (server != null && due.compareAndSet(false, true)) {
-            server.execute(() -> {
-                due.set(false);
-                OffModCommands.takeOutBeforeSending(false);
-                server.getPlayerList().getPlayers().forEach(server.getCommands()::sendCommands);
-            });
-        }
     }
 }

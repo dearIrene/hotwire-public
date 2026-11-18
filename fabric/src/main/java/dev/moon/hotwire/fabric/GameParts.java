@@ -3,6 +3,7 @@ package dev.moon.hotwire.fabric;
 import dev.moon.hotwire.fabric.registration.GameTasks;
 import dev.moon.hotwire.fabric.registration.ModSounds;
 import dev.moon.hotwire.fabric.registration.OffKeyBindings;
+import dev.moon.hotwire.fabric.registration.OffModCommands;
 import dev.moon.hotwire.fabric.update.OldPayloads;
 
 public final class GameParts {
@@ -10,6 +11,7 @@ public final class GameParts {
     private static final ModSounds SOUNDS = new ModSounds();
     private static final OldPayloads PAYLOADS = new OldPayloads();
     private static final OffKeyBindings OFF_KEYS = new OffKeyBindings();
+    private static final OffModCommands COMMANDS = new OffModCommands();
 
     private GameParts() {
     }
@@ -28,5 +30,9 @@ public final class GameParts {
 
     public static OffKeyBindings getOffKeys() {
         return OFF_KEYS;
+    }
+
+    public static OffModCommands getCommands() {
+        return COMMANDS;
     }
 }

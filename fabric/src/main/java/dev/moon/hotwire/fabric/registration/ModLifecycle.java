@@ -2,6 +2,7 @@ package dev.moon.hotwire.fabric.registration;
 
 import com.mojang.brigadier.CommandDispatcher;
 import dev.moon.hotwire.engine.LifecycleListeners;
+import dev.moon.hotwire.fabric.GameParts;
 import dev.moon.hotwire.fabric.version.Spellings;
 import dev.moon.hotwire.plan.SwitchPlan;
 import dev.moon.hotwire.registration.ArchitecturyEventRegistration;
@@ -175,7 +176,7 @@ public final class ModLifecycle {
                 callEach(id, journal, ClientCommandRegistrationCallback.EVENT, ran, threw, listener ->
                         ((ClientCommandRegistrationCallback) listener).register(commands, context), listener -> true);
                 if (ran.size() > already) {
-                    CommandRegistration.resendCommands(true);
+                    GameParts.getCommands().resendCommands(true);
                 }
             }
             callEach(id, journal, ClientPlayConnectionEvents.JOIN, ran, threw, listener ->

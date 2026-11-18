@@ -11,7 +11,7 @@ import dev.moon.hotwire.fabric.registration.MixinPlugins;
 
 import dev.moon.hotwire.fabric.registration.ModelReloadCheck;
 import dev.moon.hotwire.fabric.registration.NetworkHandlers;
-import dev.moon.hotwire.fabric.registration.OffModCommands;
+
 import dev.moon.hotwire.fabric.registration.OneConfigHuds;
 import dev.moon.hotwire.fabric.registration.RegistryCheck;
 import dev.moon.hotwire.fabric.registration.ReloadedLists;
@@ -142,17 +142,17 @@ final class GameSwitchUnits implements SwitchUnits {
 
     @Override
     public void markCommandsGoingOff(Predicate<String> off) {
-        OffModCommands.markGoingOff(off);
+        GameParts.getCommands().markGoingOff(off);
     }
 
     @Override
     public void takeOutCommands(Predicate<String> off) {
-        OffModCommands.takeOut(off);
+        GameParts.getCommands().takeOut(off);
     }
 
     @Override
     public void onCommandsWatched() {
-        OffModCommands.onWatched();
+        GameParts.getCommands().onWatched();
     }
 
     @Override

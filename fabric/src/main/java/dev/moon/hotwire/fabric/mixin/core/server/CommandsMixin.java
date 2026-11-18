@@ -1,6 +1,6 @@
 package dev.moon.hotwire.fabric.mixin.core.server;
 
-import dev.moon.hotwire.fabric.registration.OffModCommands;
+import dev.moon.hotwire.fabric.GameParts;
 import net.minecraft.commands.Commands;
 import net.minecraft.server.level.ServerPlayer;
 import org.spongepowered.asm.mixin.Mixin;
@@ -12,6 +12,6 @@ import org.spongepowered.asm.mixin.injection.callback.CallbackInfo;
 public abstract class CommandsMixin {
     @Inject(method = "sendCommands", at = @At("HEAD"))
     private void hotwire$takeOffModsOut(ServerPlayer player, CallbackInfo ci) {
-        OffModCommands.takeOutOf(((Commands) (Object) this).getDispatcher(), false);
+        GameParts.getCommands().takeOutOf(((Commands) (Object) this).getDispatcher(), false);
     }
 }

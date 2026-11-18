@@ -10,7 +10,7 @@ import dev.moon.hotwire.engine.LoadedMods;
 import dev.moon.hotwire.fabric.add.LoadStatusViews;
 import dev.moon.hotwire.fabric.registration.EntityAttachments;
 import dev.moon.hotwire.fabric.registration.OffModClose;
-import dev.moon.hotwire.fabric.registration.OffModCommands;
+
 import dev.moon.hotwire.modrinth.Downloads;
 import dev.moon.hotwire.redefine.FieldHolders;
 import dev.moon.hotwire.redefine.InitHookRuns;
@@ -121,8 +121,8 @@ public final class HotwireClient implements ClientModInitializer {
         ClientCommandRegistrationCallback.EVENT.register(afterMods, (dispatcher, context) -> {
             HotwireEngine started = engine;
             if (started != null) {
-                OffModCommands.readOffFrom(id -> !started.isOn(id) || Tripwire.isWatched(id));
-                OffModCommands.takeOutOf(dispatcher, true);
+                GameParts.getCommands().readOffFrom(id -> !started.isOn(id) || Tripwire.isWatched(id));
+                GameParts.getCommands().takeOutOf(dispatcher, true);
             }
         });
 
@@ -212,7 +212,7 @@ public final class HotwireClient implements ClientModInitializer {
         if (started != null) {
             started.onWorldOpened();
             OpenKey.tellConflicts(started.getSettings());
-            OffModCommands.readOffFrom(id -> !started.isOn(id) || Tripwire.isWatched(id));
+            GameParts.getCommands().readOffFrom(id -> !started.isOn(id) || Tripwire.isWatched(id));
             InWorldWork.lookAheadSoon(started);
             InWorldWork.fillCacheSoon(started);
             started.showUpdateInChat();
@@ -222,7 +222,7 @@ public final class HotwireClient implements ClientModInitializer {
                 started.offerProfileHere();
             }
 
-            OffModCommands.takeOut(id -> !started.isOn(id));
+            GameParts.getCommands().takeOut(id -> !started.isOn(id));
         }
     }
 
@@ -337,7 +337,7 @@ public final class HotwireClient implements ClientModInitializer {
             StartTimes.mark("Hotwire's engine start ends");
             engine = started;
             HotwireEngine made = started;
-            OffModCommands.readOffFrom(id -> !made.isOn(id) || Tripwire.isWatched(id));
+            GameParts.getCommands().readOffFrom(id -> !made.isOn(id) || Tripwire.isWatched(id));
         }
         return started;
     }

@@ -4,6 +4,7 @@ import com.mojang.brigadier.CommandDispatcher;
 import com.mojang.brigadier.tree.ArgumentCommandNode;
 import com.mojang.brigadier.tree.CommandNode;
 import com.mojang.brigadier.tree.RootCommandNode;
+import dev.moon.hotwire.fabric.GameParts;
 import dev.moon.hotwire.redefine.FieldSlots;
 import dev.moon.hotwire.redefine.Tripwire;
 import dev.moon.hotwire.registration.CallerOwner;
@@ -54,7 +55,7 @@ public final class CommandRecorder {
         CallerOwner.Owner caller = RecorderSupport.findOwner();
         String owner = findOwner(findModsRun(node), caller == null ? null : caller.mod());
 
-        if (owner != null && !Tripwire.isWatched(owner) && !OffModCommands.isGoingOff(owner)) {
+        if (owner != null && !Tripwire.isWatched(owner) && !GameParts.getCommands().isGoingOff(owner)) {
             LOGGER.info("[Hotwire] /{} journaled as {}'s, registered on {}", node.getName(), owner,
                     Thread.currentThread().getName());
             CommandDispatcher<?> client = ClientCommandInternals.getActiveDispatcher();
