@@ -12,6 +12,8 @@ import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.nio.file.StandardOpenOption;
+import java.security.GeneralSecurityException;
+import java.security.SecureRandom;
 import java.util.ArrayList;
 import java.util.Comparator;
 import java.util.HashMap;
@@ -26,6 +28,8 @@ import java.util.zip.CRC32C;
 import java.util.zip.DataFormatException;
 import java.util.zip.Deflater;
 import java.util.zip.Inflater;
+import javax.crypto.Mac;
+import javax.crypto.spec.SecretKeySpec;
 import org.jspecify.annotations.Nullable;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -41,7 +45,11 @@ public final class CacheStore {
     private static final int HEADER = 4 + 4;
     private static final byte WITH_DICTIONARY = 1;
 
-    private static final byte VALUE_CHECKED = 2;
+    private static final byte VALUE_KEYED = 4;
+    private static final String SECRET = "HmacSHA256";
+    private static final int SECRET_BYTES = 32;
+
+    private static final int MOST_VALUE_BYTES = 1 << 28;
 
     private static final int MOST_PACKS = 16;
 
@@ -53,6 +61,8 @@ public final class CacheStore {
 
     private final Path folder;
     private final String kind;
+
+    private final Mac mac;
 
     private final int user;
 
@@ -84,9 +94,10 @@ public final class CacheStore {
     private record Place(int pack, long offset, int length, int lastUse, int user) {
     }
 
-    private CacheStore(Path folder, String kind, long capBytes, int user) {
+    private CacheStore(Path folder, String kind, long capBytes, int user, Mac mac) {
         this.folder = folder;
         this.kind = kind;
+        this.mac = mac;
         this.capBytes = capBytes;
         this.user = user;
     }
@@ -96,7 +107,8 @@ public final class CacheStore {
     }
 
     public static CacheStore open(Path folder, String kind, long capBytes, String instance) {
-        CacheStore store = new CacheStore(folder, kind, capBytes, instance.hashCode());
+        CacheStore store = new CacheStore(folder, kind, capBytes, instance.hashCode(),
+                makeMac(readSecret(folder, kind)));
         try {
             Files.createDirectories(folder);
             store.readHead();
@@ -138,7 +150,7 @@ public final class CacheStore {
                 this.misses++;
                 return null;
             }
-            byte[] read = this.read(place, dictionary);
+            byte[] read = this.read(key, place, dictionary);
             if (read == null) {
                 this.places.remove(key);
                 this.used = true;
@@ -172,7 +184,7 @@ public final class CacheStore {
                 return 0;
             }
             this.pending.put(key, new WaitingEntry(packed,
-                    (byte) (VALUE_CHECKED | (dictionary == null ? 0 : WITH_DICTIONARY)), check(value)));
+                    (byte) (VALUE_KEYED | (dictionary == null ? 0 : WITH_DICTIONARY)), check(value)));
         }
         return packed.length + 5;
     }
@@ -190,6 +202,46 @@ public final class CacheStore {
         CRC32C crc = new CRC32C();
         crc.update(value);
         return (int) crc.getValue();
+    }
+
+    private int sign(CacheKey key, byte flags, int valueCheck, byte[] packed) {
+        this.mac.update(ByteBuffer.allocate(2 * Long.BYTES + 1 + Integer.BYTES).putLong(key.high())
+                .putLong(key.low()).put(flags).putInt(valueCheck).array());
+        return ByteBuffer.wrap(this.mac.doFinal(packed)).getInt();
+    }
+
+    private static byte[] readSecret(Path folder, String kind) {
+        Path file = folder.resolve(kind + ".key");
+        try {
+            if (Files.isRegularFile(file) && Files.size(file) == SECRET_BYTES) {
+                byte[] read = Files.readAllBytes(file);
+                if (read.length == SECRET_BYTES) {
+                    return read;
+                }
+            }
+            byte[] made = makeSecret();
+            AtomicFiles.write(file, made);
+            return made;
+        } catch (IOException | RuntimeException e) {
+            LOGGER.info("[Hotwire] the {} cache's key could not be kept: {}", kind, e.toString());
+            return makeSecret();
+        }
+    }
+
+    private static byte[] makeSecret() {
+        byte[] made = new byte[SECRET_BYTES];
+        new SecureRandom().nextBytes(made);
+        return made;
+    }
+
+    private static Mac makeMac(byte[] secret) {
+        try {
+            Mac mac = Mac.getInstance(SECRET);
+            mac.init(new SecretKeySpec(secret, SECRET));
+            return mac;
+        } catch (GeneralSecurityException e) {
+            throw new IllegalStateException(SECRET + " is missing from this JVM", e);
+        }
     }
 
     public void setCapBytes(long capBytes) {
@@ -355,27 +407,30 @@ public final class CacheStore {
         int count = read.getInt();
         for (int entry = 0; entry < count; entry++) {
             CacheKey key = new CacheKey(read.getLong(), read.getLong());
-            into.put(key, new Place(read.getInt(), read.getLong(), read.getInt(), read.getInt(), read.getInt()));
+            Place place = new Place(read.getInt(), read.getLong(), read.getInt(), read.getInt(), read.getInt());
+            if (place.offset() < 0 || place.length() < 0 || place.length() > MOST_VALUE_BYTES) {
+                throw new IOException("a damaged index: " + index.getFileName());
+            }
+            into.put(key, place);
         }
     }
 
-    private byte @Nullable [] read(Place place, byte @Nullable [] dictionary) {
+    private byte @Nullable [] read(CacheKey key, Place place, byte @Nullable [] dictionary) {
         byte[] raw = this.readRaw(place);
         if (raw == null) {
             return null;
         }
         try {
             ByteBuffer at = ByteBuffer.wrap(raw);
-            int crc = at.getInt();
+            int signed = at.getInt();
             byte flags = at.get();
-            byte[] packed = new byte[place.length()];
-            at.get(packed);
-            boolean valueChecked = (flags & VALUE_CHECKED) != 0;
-            if (!valueChecked && check(packed) != crc) {
+            if ((flags & VALUE_KEYED) == 0) {
                 return null;
             }
+            byte[] packed = new byte[place.length()];
+            at.get(packed);
             byte[] value = expand(packed, (flags & WITH_DICTIONARY) != 0 ? dictionary : null);
-            return value == null || (valueChecked && check(value) != crc) ? null : value;
+            return value == null || this.sign(key, flags, check(value), packed) != signed ? null : value;
         } catch (RuntimeException e) {
             return null;
         }
@@ -422,10 +477,11 @@ public final class CacheStore {
                 }
             }
             for (Map.Entry<CacheKey, WaitingEntry> entry : this.pending.entrySet()) {
-                byte[] value = entry.getValue().packed();
+                WaitingEntry waiting = entry.getValue();
+                byte[] value = waiting.packed();
                 ByteBuffer entryHeader = ByteBuffer.allocate(5)
-                        .putInt(entry.getValue().check())
-                        .put(entry.getValue().flags());
+                        .putInt(this.sign(entry.getKey(), waiting.flags(), waiting.check(), value))
+                        .put(waiting.flags());
                 written.put(entry.getKey(), new Place(next, at, value.length, this.start, this.user));
                 pack.write(entryHeader.array());
                 pack.write(value);
@@ -480,6 +536,9 @@ public final class CacheStore {
                 pack = FileChannel.open(this.folder.resolve(this.kind + "." + place.pack() + ".pack"),
                         StandardOpenOption.READ);
                 this.packs.put(place.pack(), pack);
+            }
+            if (place.offset() + place.length() + 5 > pack.size()) {
+                return null;
             }
             ByteBuffer raw = ByteBuffer.allocate(place.length() + 5);
             long at = place.offset();
@@ -556,6 +615,9 @@ public final class CacheStore {
     private static byte @Nullable [] expand(byte[] packed, byte @Nullable [] dictionary) {
         ByteBuffer read = ByteBuffer.wrap(packed);
         int length = read.getInt();
+        if (length < 0 || length > MOST_VALUE_BYTES) {
+            return null;
+        }
         Inflater inflater = new Inflater(true);
         try {
             if (dictionary != null) {

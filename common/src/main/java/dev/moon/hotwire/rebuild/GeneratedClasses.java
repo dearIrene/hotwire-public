@@ -44,7 +44,12 @@ public final class GeneratedClasses {
         try {
             List<String> written = new ArrayList<>();
             for (Map.Entry<String, byte[]> entry : classes.entrySet()) {
-                Path file = this.folder.resolve(entry.getKey() + ".class");
+                Path file = this.folder.resolve(entry.getKey() + ".class").normalize();
+
+                if (!file.startsWith(this.folder.normalize())) {
+                    LOGGER.warn("[Hotwire] the generated class {} names no place in {}", entry.getKey(), this.folder);
+                    continue;
+                }
                 if (!Files.exists(file)) {
                     Files.createDirectories(file.getParent());
                     Files.write(file, entry.getValue());
