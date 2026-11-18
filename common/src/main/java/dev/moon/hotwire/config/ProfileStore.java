@@ -14,6 +14,7 @@ import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Locale;
 import java.util.Map;
+import java.util.Optional;
 import java.util.Set;
 import java.util.function.Predicate;
 import org.jspecify.annotations.Nullable;
@@ -69,6 +70,14 @@ public final class ProfileStore {
 
     public ProfileStore(Path file) {
         this.file = file;
+    }
+
+    public Optional<String> findInstanceName() {
+        Path game = this.file.toAbsolutePath().getParent();
+        for (int up = 0; up < 2 && game != null; up++) {
+            game = game.getParent();
+        }
+        return game == null ? Optional.empty() : InstanceName.find(game);
     }
 
     public synchronized List<String> getNames() {

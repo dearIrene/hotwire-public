@@ -21,7 +21,8 @@ final class ProfileMenu {
         void applyProfile(String name, ProfileStore.ProfilePlan plan);
     }
 
-    final Push menu = Kit.push(Lang.get("hotwire.setup.unsaved"), this::openMenu).menu();
+    private final String unsaved;
+    final Push menu;
     final TextField naming;
     private final ProfileStore profiles;
     private final Screen screen;
@@ -36,6 +37,8 @@ final class ProfileMenu {
     ProfileMenu(ProfileStore profiles, Screen screen, Root root, TextField search, Element showMenu, Popup popup,
             Runnable manage) {
         this.profiles = profiles;
+        this.unsaved = profiles.findInstanceName().orElseGet(() -> Lang.get("hotwire.setup.unsaved"));
+        this.menu = Kit.push(this.unsaved, this::openMenu).menu();
         this.screen = screen;
         this.root = root;
         this.search = search;
@@ -82,7 +85,7 @@ final class ProfileMenu {
         items.add(new Popup.Item(Lang.get("hotwire.setup.save"), Palette.TEXT, this::startNaming));
         items.add(new Popup.Item(Lang.get("hotwire.setup.manage"), Palette.TEXT, this.manage));
         this.items = items;
-        this.menu.label(current == null ? Lang.get("hotwire.setup.unsaved") : current);
+        this.menu.label(current == null ? this.unsaved : current);
     }
 
     private void apply(String name) {
