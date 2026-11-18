@@ -174,6 +174,7 @@ public final class SwitchApplier {
         return this.redefinitionHold.get();
     }
 
+    @SuppressWarnings("ReferenceEquality")
     private Runnable holdGameOrRefuse() throws RebuildException {
         if (this.redefinitionHold != OWN_HOLD) {
             return this.holdGame();
