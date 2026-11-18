@@ -26,9 +26,13 @@ public final class DisabledJars {
         return disabled;
     }
 
-    public static Path enable(Path disabled, Runnable classPathChanged) throws IOException {
-        KnotInternals.dropFromClassPath(disabled);
-        return restore(disabled, true, classPathChanged);
+    public static Path rename(Path disabled) throws IOException {
+        return restore(disabled, false, () -> { });
+    }
+
+    public static Path renameBack(Path jar) throws IOException {
+        KnotInternals.dropFromClassPath(jar);
+        return Files.move(jar, jar.resolveSibling(jar.getFileName() + SUFFIX));
     }
 
     public static Path restore(Path disabled, boolean runs, Runnable classPathChanged) throws IOException {

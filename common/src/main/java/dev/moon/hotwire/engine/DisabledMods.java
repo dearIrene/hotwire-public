@@ -148,19 +148,25 @@ public final class DisabledMods {
             ended.complete(new ModAdder.Result.Refused(Lang.get("hotwire.switch.not_installed", id)));
             return ended;
         }
-        this.adder.add(disabledJar, result -> {
-            if (!(result instanceof ModAdder.Result.Added)) {
-                ended.complete(result);
-                return;
-            }
-            try {
-                this.installed.onRestored(id, DisabledJars.enable(disabledJar, this.classPathChanged));
-            } catch (IOException e) {
-                LOGGER.warn("[Hotwire] {} is back on, but {} could not get its name back", id,
-                        disabledJar.getFileName(), e);
-                this.installed.onRestored(id, disabledJar);
-                this.say.accept(Lang.get("hotwire.switch.brought_back_failed", this.installed.nameOf(id),
-                        e.getMessage()), true);
+        Path jar;
+        try {
+            jar = DisabledJars.rename(disabledJar);
+        } catch (IOException e) {
+            LOGGER.warn("[Hotwire] {} could not get its name back for its add", disabledJar.getFileName(), e);
+            this.say.accept(Lang.get("hotwire.switch.brought_back_failed", this.installed.nameOf(id),
+                    e.getMessage()), true);
+            ended.complete(new ModAdder.Result.Refused(e.getMessage()));
+            return ended;
+        }
+        this.adder.add(jar, result -> {
+            if (result instanceof ModAdder.Result.Added) {
+                this.installed.onRestored(id, jar);
+            } else {
+                try {
+                    DisabledJars.renameBack(jar);
+                } catch (IOException e) {
+                    LOGGER.warn("[Hotwire] {} did not go in and could not be renamed off again", jar.getFileName(), e);
+                }
             }
             ended.complete(result);
         });
