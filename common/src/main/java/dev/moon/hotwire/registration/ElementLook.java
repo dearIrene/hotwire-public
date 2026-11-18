@@ -70,6 +70,11 @@ public final class ElementLook {
         return sets;
     }
 
+    private static final long OFF_WAIT_NANOS = 10_000_000_000L;
+
+    private static volatile long offDeadline;
+
+    private static long steps;
     private static volatile boolean cutForOff;
     private static final int SLOW_SECONDS = 10;
     private static final int SLOW_PRINTS = 12;
@@ -128,9 +133,19 @@ public final class ElementLook {
         switchUnderWay = busy;
     }
 
-    public static void beginOff() {
-        cutForOff = true;
-        stopLooking();
+    public static boolean lookForOff(FieldReferences references, Collection<String> mods, Predicate<String> on) {
+        if (NO_LOOK) {
+            return true;
+        }
+        long last = lookedEveryAt;
+        offDeadline = System.nanoTime() + OFF_WAIT_NANOS;
+        try {
+            look(references, findEvery(mods), on, false);
+        } finally {
+            offDeadline = 0;
+        }
+        cutForOff = lookedEveryAt == last;
+        return !cutForOff;
     }
 
     public static void endOff() {
@@ -312,6 +327,10 @@ public final class ElementLook {
         }
         if (Games.getNow().isHoldOverBudget()) {
             throw new HoldBudgetException();
+        }
+        long deadline = offDeadline;
+        if (deadline != 0 && (++steps & 4095) == 0 && isLooking() && System.nanoTime() - deadline > 0) {
+            throw new CancellationException("an off waited " + OFF_WAIT_NANOS / 1_000_000_000L + " s for it");
         }
     }
 

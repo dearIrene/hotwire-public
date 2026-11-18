@@ -447,9 +447,10 @@ public final class SwitchRunner {
         if (!plan.isRefused()) {
             this.switcher.showBegun(plan, Lang.get("hotwire.progress.preparing"));
 
-            ElementLook.beginOff();
-            this.lateFor.addAll(wired);
-            SwitchTimes.mark("look gave way");
+            if (!ElementLook.lookForOff(this.fieldReferences, wired, this.switcher::isOn)) {
+                this.lateFor.addAll(wired);
+            }
+            SwitchTimes.mark("look: notes");
         }
 
         ModSwitcher.Result result;
