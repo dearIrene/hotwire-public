@@ -3,6 +3,7 @@ package dev.moon.hotwire.fabric;
 import dev.moon.hotwire.add.LoaderModList;
 import dev.moon.hotwire.engine.HotwireEngine;
 import dev.moon.hotwire.engine.InstalledMods;
+import dev.moon.hotwire.engine.JvmParts;
 import dev.moon.hotwire.engine.ModPolicy;
 import dev.moon.hotwire.engine.SeenUses;
 import dev.moon.hotwire.fabric.add.WorldReopen;
@@ -64,7 +65,10 @@ final class OffCodeNotice {
             return;
         }
 
-        engine.findJvmParts().ifPresent(parts -> parts.runner().takeStillCalled(mod, first));
+        JvmParts parts = engine.findParts();
+        if (parts != null) {
+            parts.runner().takeStillCalled(mod, first);
+        }
         Object watch = Tripwire.findWatch(mod);
         if (ran && watch != null && isToldFor(mod, watch)) {
             return;
@@ -92,9 +96,7 @@ final class OffCodeNotice {
             return;
         }
         ModScreen current = engine.getScreen();
-        boolean fromWorld = engine.findJvmParts()
-                .map(parts -> ((GameClasses) parts.classes()).isReachedFromWorld(mod, first))
-                .orElse(false);
+        boolean fromWorld = parts != null && ((GameClasses) parts.classes()).isReachedFromWorld(mod, first);
         if (current != null && fromWorld && WorldReopen.findRefusal().isEmpty()) {
             current.offerReopen(new ReopenPanel.Offer(true, List.of(), installed.nameOf(mod),
                     Lang.get("hotwire.off_code.world")));

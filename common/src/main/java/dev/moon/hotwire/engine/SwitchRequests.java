@@ -104,7 +104,7 @@ final class SwitchRequests {
     @SuppressWarnings("FutureReturnValueIgnored")
     private CompletableFuture<SwitchResult> run(Function<SwitchRunner, CheckedResult> work, boolean off,
             List<String> ids, boolean quiet, boolean undoable) {
-        JvmParts parts = this.engine.findJvmParts().orElse(null);
+        JvmParts parts = this.engine.findParts();
         if (parts == null) {
             return this.refuse(this.engine.getSwitchRefusal(), quiet);
         }

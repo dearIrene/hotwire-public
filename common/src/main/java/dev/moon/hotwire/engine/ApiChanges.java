@@ -95,7 +95,7 @@ final class ApiChanges {
 
     private static Plan work(ChangeRequest request, CallerBlocks.Callers callers) throws IOException {
         HotwireEngine engine = EngineApi.findEngine();
-        if (engine == null || engine.findJvmParts().isEmpty()) {
+        if (engine == null || engine.findParts() == null) {
             String why = engine == null ? Lang.get("hotwire.api.starting") : engine.getSwitchRefusal();
             return new Plan(false, Reason.NOT_READY, List.of(why), request, List.of(), callers,
                     List.of(), List.of(), false);
@@ -115,7 +115,7 @@ final class ApiChanges {
         }
 
         if (!request.on().isEmpty()) {
-            JvmParts parts = engine.findJvmParts().orElseThrow();
+            JvmParts parts = engine.requireSwitching();
             List<String> back = request.on().stream().filter(engine.getDisabled()::isDisabledSinceStart).toList();
             if (!back.isEmpty()) {
                 lines.add(Lang.get("hotwire.api.back_from_jar", PlayerMessages.joinNames(back, engine::nameOfMod)));
@@ -212,7 +212,7 @@ final class ApiChanges {
         boolean reopen = false;
         boolean oneWay = request.off().isEmpty() != request.on().isEmpty();
         if (can && oneWay && request.update().isEmpty() && request.add().isEmpty() && request.jars().isEmpty()) {
-            JvmParts parts = engine.findJvmParts().orElseThrow();
+            JvmParts parts = engine.requireSwitching();
             boolean off = !request.off().isEmpty();
             SwitchPlan planned = off ? parts.runner().getSwitcher().planOff(request.off())
                     : parts.runner().getSwitcher().planOn(request.on());

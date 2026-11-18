@@ -137,7 +137,7 @@ final class JarRequests {
 
     @SuppressWarnings("FutureReturnValueIgnored")
     void update(Path jar, UpdateMethod method) {
-        JvmParts parts = this.engine.findJvmParts().orElse(null);
+        JvmParts parts = this.engine.findParts();
         if (parts == null) {
             ModAdder.Result queued = this.changes.queueAddAlone(jar);
             boolean ok = queued instanceof ModAdder.Result.Queued;

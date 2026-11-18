@@ -130,7 +130,7 @@ public class EngineApi implements HotwireApi {
         if (engine == null) {
             return new ApiStatus(ApiStatus.State.STARTING, 0, Lang.get("hotwire.api.starting"));
         }
-        if (engine.findJvmParts().isEmpty()) {
+        if (engine.findParts() == null) {
             return new ApiStatus(ApiStatus.State.UNAVAILABLE, 0, engine.getSwitchRefusal());
         }
         Progress.Snapshot now = engine.getProgress().snapshot();
@@ -566,7 +566,7 @@ public class EngineApi implements HotwireApi {
         if (engine == null) {
             return new SwitchPreview(false, Reason.NOT_READY, List.of(), Lang.get("hotwire.api.starting"));
         }
-        JvmParts parts = engine.findJvmParts().orElse(null);
+        JvmParts parts = engine.findParts();
         if (parts == null) {
             return new SwitchPreview(false, Reason.NOT_READY, List.of(), engine.getSwitchRefusal());
         }
@@ -606,7 +606,7 @@ public class EngineApi implements HotwireApi {
         Games.getNow().runOnGame(() -> {
             try {
                 HotwireEngine engine = findEngine();
-                JvmParts parts = engine == null ? null : engine.findJvmParts().orElse(null);
+                JvmParts parts = engine == null ? null : engine.findParts();
                 if (engine == null || parts == null) {
                     ended.complete(SwitchResult.ofRefusal(Reason.NOT_READY, engine == null
                             ? Lang.get("hotwire.api.starting") : engine.getSwitchRefusal()));
