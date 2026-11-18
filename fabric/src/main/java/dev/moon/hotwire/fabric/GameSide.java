@@ -205,6 +205,12 @@ public final class GameSide implements Game {
     }
 
     @Override
+    public @Nullable Runnable holdOrRefuse() {
+        GameHold hold = GameHold.beginOrRefuse(Minecraft.getInstance());
+        return hold == null ? null : hold::release;
+    }
+
+    @Override
     public void runUnheld(Runnable work) {
         GameHold.runUnheld(work);
     }

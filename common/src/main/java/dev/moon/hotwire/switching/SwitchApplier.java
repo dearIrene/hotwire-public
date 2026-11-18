@@ -14,6 +14,7 @@ import dev.moon.hotwire.redefine.ReplacedStatics;
 import dev.moon.hotwire.redefine.StopPoint;
 import dev.moon.hotwire.registration.ElementLook;
 import dev.moon.hotwire.seam.Games;
+import dev.moon.hotwire.ui.Lang;
 import java.lang.instrument.ClassFileTransformer;
 import java.util.ArrayList;
 import java.util.Collection;
@@ -122,6 +123,8 @@ public final class SwitchApplier {
 
     private static final Logger LOGGER = LoggerFactory.getLogger(SwitchApplier.class);
 
+    private static final Supplier<Runnable> OWN_HOLD = () -> Games.getNow().hold();
+
     private final ClassRebuilder rebuilder;
     private final Game game;
 
@@ -156,7 +159,7 @@ public final class SwitchApplier {
 
     private final Set<String> adopted = ConcurrentHashMap.newKeySet();
 
-    private volatile Supplier<Runnable> redefinitionHold = () -> Games.getNow().hold();
+    private volatile Supplier<Runnable> redefinitionHold = OWN_HOLD;
 
     public void holdRedefinitionWith(Supplier<Runnable> hold) {
         this.redefinitionHold = hold;
@@ -169,6 +172,18 @@ public final class SwitchApplier {
     Runnable holdGame() {
         ElementLook.giveWay();
         return this.redefinitionHold.get();
+    }
+
+    private Runnable holdGameOrRefuse() throws RebuildException {
+        if (this.redefinitionHold != OWN_HOLD) {
+            return this.holdGame();
+        }
+        ElementLook.giveWay();
+        Runnable release = Games.getNow().holdOrRefuse();
+        if (release == null) {
+            throw new RebuildException(Lang.get("hotwire.switch.game_busy"));
+        }
+        return release;
     }
 
     private final CarriedMixins carriedMixins;
@@ -200,7 +215,7 @@ public final class SwitchApplier {
 
         LiveObjects.checkWhilePaused(prepared);
         Games.getNow().getReloads().announceRebuild(prepared.newlyBuilt(), prepared.pausedReloads());
-        Runnable release = this.holdGame();
+        Runnable release = this.holdGameOrRefuse();
         SwitchTimes.mark("pause game");
         long pausedAt = System.nanoTime();
         try {
@@ -616,9 +631,9 @@ public final class SwitchApplier {
         if (plan != null && plan.isSitesAlone()) {
             try {
                 beforeHold.run();
-                return this.guardFlips.flip(plan, switched, onAfter, this.holdGame(),
+                return this.guardFlips.flip(plan, switched, onAfter, this.holdGameOrRefuse(),
                         whilePaused);
-            } catch (RuntimeException | LinkageError e) {
+            } catch (RebuildException | RuntimeException | LinkageError e) {
                 sites.restore();
                 this.on = before;
                 throw e;
@@ -637,7 +652,7 @@ public final class SwitchApplier {
                 this.applyWhilePaused(prepared, beforeChange, sites.setBefore(whilePaused),
                         plan == null ? Set.of() : plan.flipped());
             } else {
-                Runnable release = this.holdGame();
+                Runnable release = this.holdGameOrRefuse();
                 try {
                     sites.setBefore(whilePaused).run();
                 } catch (RuntimeException | LinkageError e) {

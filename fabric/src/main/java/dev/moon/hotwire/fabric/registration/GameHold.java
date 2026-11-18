@@ -49,15 +49,20 @@ public final class GameHold {
     private @Nullable CountDownLatch server;
     private final boolean owner;
 
+    private final boolean refuses;
+
+    private boolean allPaused = true;
+
     private boolean hotwireWorkBefore;
 
-    private GameHold(boolean owner) {
+    private GameHold(boolean owner, boolean refuses) {
         this.owner = owner;
+        this.refuses = refuses;
     }
 
     private static volatile boolean isServerPaused;
 
-    private static volatile boolean crashing;
+    private static volatile Object lastCrash = new Object();
     private static volatile boolean gamePaused;
 
     private static final BlockingQueue<Runnable> PAUSED_WORK = new LinkedBlockingQueue<>();
@@ -78,7 +83,7 @@ public final class GameHold {
     }
 
     public static void releaseForCrash() {
-        crashing = true;
+        lastCrash = new Object();
         PAUSED_WORK.add(GameHold::unblock);
         PAUSED_GAME_WORK.add(GameHold::unblock);
     }
@@ -260,17 +265,29 @@ public final class GameHold {
     }
 
     public static GameHold begin(Minecraft client) {
+        return begin(client, false);
+    }
+
+    public static @Nullable GameHold beginOrRefuse(Minecraft client) {
+        GameHold hold = begin(client, true);
+        return hold.allPaused ? hold : null;
+    }
+
+    private static GameHold begin(Minecraft client, boolean refuses) {
         if (HOLDING.get()) {
-            return new GameHold(false);
+            return new GameHold(false, refuses);
         }
         HOLDING.set(true);
         holder = Thread.currentThread().getName();
-        GameHold hold = new GameHold(true);
+        GameHold hold = new GameHold(true, refuses);
         hold.hotwireWorkBefore = Tripwire.markHotwireWork(true);
 
         boolean begun = false;
         try {
             hold.pauseThreads(client);
+            if (hold.isRefused()) {
+                return hold;
+            }
             LiveConnections.drain();
             pausedSince = System.nanoTime();
             for (Runnable work = AT_NEXT_HOLD.poll(); work != null; work = AT_NEXT_HOLD.poll()) {
@@ -313,9 +330,20 @@ public final class GameHold {
                     break;
                 }
             }
-            this.onReached(paused, decided, "server");
+
+            if (this.onReached(paused, decided, "server") && !ChunkWaits.awaitWrites(server, REACH)) {
+                this.allPaused = false;
+                LOGGER.warn("[Hotwire] chunk saves were still being written after {} s; {}", REACH.toSeconds(),
+                        this.refuses ? "the change is refused" : "the change goes on");
+            }
         }
-        this.pauseGame(client);
+        if (!this.isRefused()) {
+            this.pauseGame(client);
+        }
+    }
+
+    private boolean isRefused() {
+        return this.refuses && !this.allPaused;
     }
 
     public void pauseGame(Minecraft client) {
@@ -406,16 +434,19 @@ public final class GameHold {
         return latch;
     }
 
-    private void onReached(CountDownLatch paused, AtomicBoolean decided, String thread) {
+    private boolean onReached(CountDownLatch paused, AtomicBoolean decided, String thread) {
         try {
             if (!paused.await(REACH.toSeconds(), TimeUnit.SECONDS) && decided.compareAndSet(false, true)) {
-                LOGGER.warn("[Hotwire] the {} thread did not park in {} s; the change goes on unheld; it is at {}",
-                        thread, REACH.toSeconds(), getStackOf(thread.equals("server") ? "Server thread"
-                        : "Render thread"));
+                this.allPaused = false;
+                LOGGER.warn("[Hotwire] the {} thread did not park in {} s; {}; it is at {}", thread,
+                        REACH.toSeconds(), this.refuses ? "the change is refused" : "the change goes on unheld",
+                        getStackOf(thread.equals("server") ? "Server thread" : "Render thread"));
+                return false;
             }
         } catch (InterruptedException e) {
             Thread.currentThread().interrupt();
         }
+        return true;
     }
 
     private static void unblock() {
@@ -440,6 +471,7 @@ public final class GameHold {
 
     private static void await(CountDownLatch paused, CountDownLatch latch, BlockingQueue<Runnable> work,
             String thread, BooleanSupplier stopping) {
+        Object crash = lastCrash;
         paused.countDown();
         long said = System.nanoTime();
 
@@ -448,7 +480,7 @@ public final class GameHold {
             HoldFrame.begin();
         }
         try {
-            while (latch.getCount() > 0 && !crashing && !stopping.getAsBoolean()) {
+            while (latch.getCount() > 0 && lastCrash == crash && !stopping.getAsBoolean()) {
                 Runnable next = work.poll(drawing ? 15 : 1000, TimeUnit.MILLISECONDS);
                 if (next != null) {
                     next.run();

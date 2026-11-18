@@ -11,6 +11,7 @@
     "core.util.thread.BlockableEventLoopAccessor",
     "core.util.thread.BlockableEventLoopMixin",
     "core.world.level.chunk.BoundTickingBlockEntityMixin",
+    "core.server.level.ChunkMapAccessor",
     "core.network.ConnectionAccessor",
     "core.CrashReportMixin",
     "core.world.item.CreativeModeTabsAccessor",

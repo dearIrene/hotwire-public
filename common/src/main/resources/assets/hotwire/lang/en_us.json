@@ -494,6 +494,7 @@
   "hotwire.switch.brought_back_failed": "%s is back on, but its jar couldn't get its name back (%s). It will stay off after restart until you turn it back on!",
   "hotwire.switch.failed_off": "Couldn't turn off %s, so nothing changed: %s. Please check the game log for details.",
   "hotwire.switch.failed_on": "Couldn't turn on %s, so nothing changed: %s. Please check the game log for details.",
+  "hotwire.switch.game_busy": "the game was busy (a save or a long task) and didn't pause in time, so try again in a moment",
   "hotwire.switch.reopen_off": "Can't turn off %s while you're in a world so nothing changed, Hotwire's own screen can do it by reopening the world",
   "hotwire.switch.reopen_on": "Can't turn on %s while you're in a world so nothing changed, Hotwire's own screen can do it by reopening the world",
   "hotwire.switch.next_start_off": "Can't turn off %s while the game runs so nothing changed, Hotwire's own screen can do it at your next start",

@@ -68,6 +68,8 @@ public interface Game {
 
     Runnable hold();
 
+    @Nullable Runnable holdOrRefuse();
+
     void runUnheld(Runnable work);
 
     boolean isHoldOverBudget();

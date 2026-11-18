@@ -60,6 +60,9 @@ import com.mojang.renderpearl.api.pipeline.CompiledRenderPipeline;
 //? if <1.21.5 {
 /*import com.mojang.blaze3d.systems.RenderSystem;
 *///?}
+//? if >=1.21.2 {
+import dev.moon.hotwire.fabric.mixin.core.server.level.ChunkMapAccessor;
+//?}
 
 public final class Spellings {
     //? if >=26.1 {
@@ -68,11 +71,13 @@ public final class Spellings {
             "buildInitialScreens");
     public static final String PACKET_LISTENER_CLASS = "net/minecraft/client/multiplayer/ClientPacketListener";
     public static final Set<String> JOIN_METHODS = Set.of("handleLogin");
+    public static final Set<String> MANAGED_BLOCK_METHODS = Set.of("managedBlock");
     //?} else {
     /*public static final String MINECRAFT_CLASS = "net/minecraft/class_310";
     public static final Set<String> LOAD_FINISHED_METHODS = Set.of("method_53465", "method_51736", "method_53527");
     public static final String PACKET_LISTENER_CLASS = "net/minecraft/class_634";
     public static final Set<String> JOIN_METHODS = Set.of("method_11120");
+    public static final Set<String> MANAGED_BLOCK_METHODS = Set.of("method_18857", "managedBlock");
     *///?}
 
     private Spellings() {
@@ -252,6 +257,17 @@ public final class Spellings {
         //?} else {
         /*server.tell(task);
         *///?}
+    }
+
+    public static boolean isWritingChunks(MinecraftServer server) {
+        //? if >=1.21.2 {
+        for (ServerLevel level : server.getAllLevels()) {
+            if (((ChunkMapAccessor) level.getChunkSource().chunkMap).hotwire$getActiveChunkWrites().get() > 0) {
+                return true;
+            }
+        }
+        //?}
+        return false;
     }
 
     public static void setRendererLevel(Minecraft game, @Nullable ClientLevel level) {
