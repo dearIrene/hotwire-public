@@ -155,7 +155,7 @@ public final class DisabledMods {
             LOGGER.warn("[Hotwire] {} could not get its name back for its add", disabledJar.getFileName(), e);
             this.say.accept(Lang.get("hotwire.switch.brought_back_failed", this.installed.nameOf(id),
                     e.getMessage()), true);
-            ended.complete(new ModAdder.Result.Refused(e.getMessage()));
+            ended.complete(new ModAdder.Result.Refused(String.valueOf(e.getMessage())));
             return ended;
         }
         this.adder.add(jar, result -> {
