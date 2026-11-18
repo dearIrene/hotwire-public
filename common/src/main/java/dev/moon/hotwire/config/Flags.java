@@ -60,6 +60,8 @@ public final class Flags {
     private Flags() {
     }
 
+    public static final long HOLD_BUDGET_MILLIS = Long.getLong("hotwire_hold_budget_millis", 30_000);
+
     public static @Nullable String findGuards() {
         return System.getProperty("hotwire.guards");
     }

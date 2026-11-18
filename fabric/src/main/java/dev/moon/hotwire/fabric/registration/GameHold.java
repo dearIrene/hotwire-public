@@ -1,5 +1,6 @@
 package dev.moon.hotwire.fabric.registration;
 
+import dev.moon.hotwire.config.Flags;
 import dev.moon.hotwire.fabric.ModViews;
 import dev.moon.hotwire.fabric.screen.HoldFrame;
 import dev.moon.hotwire.fabric.version.Spellings;
@@ -41,7 +42,7 @@ public final class GameHold {
 
     private static volatile long pausedSince;
 
-    private static final Duration BUDGET = Duration.ofMillis(Long.getLong("hotwire_hold_budget_millis", 30_000));
+    private static final Duration BUDGET = Duration.ofMillis(Flags.HOLD_BUDGET_MILLIS);
 
     private final List<CountDownLatch> released = new ArrayList<>();
     private @Nullable CountDownLatch game;
