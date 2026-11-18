@@ -262,10 +262,6 @@ public final class HotwireEngine implements ModScreenGame, AutoCloseable {
         return this.bound instanceof Bound.Refused refused ? refused.why() : "";
     }
 
-    public @Nullable ModScreen findScreen() {
-        return this.screen;
-    }
-
     public @Nullable Path findJarOf(String id) {
         return this.installed.findJarOf(id);
     }

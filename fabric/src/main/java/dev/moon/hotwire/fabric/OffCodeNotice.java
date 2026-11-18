@@ -91,7 +91,7 @@ final class OffCodeNotice {
         if (!ran) {
             return;
         }
-        ModScreen current = engine.findScreen();
+        ModScreen current = engine.getScreen();
         boolean fromWorld = engine.findJvmParts()
                 .map(parts -> ((GameClasses) parts.classes()).isReachedFromWorld(mod, first))
                 .orElse(false);
