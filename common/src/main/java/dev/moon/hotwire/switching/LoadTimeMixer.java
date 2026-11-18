@@ -52,7 +52,7 @@ final class LoadTimeMixer {
             } else {
                 rebuilder.getLoadedBytes().onDefined(name, bytes);
             }
-        }, this.applier::getAdopted);
+        }, this.applier::getAdopted, rebuilder.getRelocations());
     }
 
     private byte @Nullable [] mixAsItLoads(String className, byte[] loaded, boolean includeOff) {

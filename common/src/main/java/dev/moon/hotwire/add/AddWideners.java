@@ -110,12 +110,13 @@ final class AddWideners {
 
             Map<String, String> moves = new LinkedHashMap<>();
             Map<String, String> adopted = new LinkedHashMap<>();
+            Relocations relocations = this.engine.getApplier().getRebuilder().getRelocations();
             for (WidenerUses.Use use : JarUseReader.findUsesOf(jar, loaded, this.engine)) {
                 if (jar != null && !moves.containsKey(use.inClass())
                         && JarUseReader.isMovable(use, jar, this.engine, true)) {
                     String target = Relocations.findTarget(use.inClass(), use.owner());
                     moves.put(use.inClass(), target);
-                    Relocations.register(use.inClass(), target, jar.classes());
+                    relocations.register(use.inClass(), target, jar.classes());
                     LOGGER.info("[Hotwire] {} moves to {}, beside {}", use.inClass(), target, use.owner());
                 }
                 if (use.kind() == WidenerUses.Kind.OVERRIDE) {
@@ -133,7 +134,7 @@ final class AddWideners {
             });
             if (!moves.isEmpty()) {
                 Map<String, byte[]> generated = new LinkedHashMap<>();
-                moves.forEach((moved, target) -> generated.put(target, Relocations.remap(
+                moves.forEach((moved, target) -> generated.put(target, relocations.remap(
                         Objects.requireNonNull(Objects.requireNonNull(jar).classes().get(moved)))));
                 this.engine.getApplier().getRebuilder().getHooks().onGenerated(generated);
             }

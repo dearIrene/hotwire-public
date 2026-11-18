@@ -26,20 +26,11 @@ import org.objectweb.asm.tree.MethodInsnNode;
 import org.objectweb.asm.tree.MethodNode;
 
 public final class Relocations {
-    private static final Map<String, String> MOVED = new ConcurrentHashMap<>();
+    private final Map<String, String> targets = new ConcurrentHashMap<>();
 
-    private static final Set<String> LEFT = ConcurrentHashMap.newKeySet();
+    private final Set<String> leftPackages = ConcurrentHashMap.newKeySet();
 
-    private static final Set<String> OPENED = ConcurrentHashMap.newKeySet();
-
-    private Relocations() {
-    }
-
-    static void clear() {
-        MOVED.clear();
-        LEFT.clear();
-        OPENED.clear();
-    }
+    private final Set<String> openedMembers = ConcurrentHashMap.newKeySet();
 
     public static String findTarget(String moved, String parent) {
         int slash = parent.lastIndexOf('/');
@@ -47,25 +38,26 @@ public final class Relocations {
         return parentPackage + "hotwire$" + moved.replace('/', '_');
     }
 
-    public static void register(String moved, String target, Map<String, byte[]> classes) {
-        MOVED.put(moved, target);
-        LEFT.add(getPackageOf(moved));
-        OPENED.addAll(findCrossings(moved, classes).opened());
+    public void register(String moved, String target, Map<String, byte[]> classes) {
+        this.targets.put(moved, target);
+        this.leftPackages.add(getPackageOf(moved));
+        this.openedMembers.addAll(findCrossings(moved, classes).opened());
     }
 
-    public static byte[] remap(byte[] classBytes) {
-        if (MOVED.isEmpty()) {
+    public byte[] remap(byte[] classBytes) {
+        if (this.targets.isEmpty()) {
             return classBytes;
         }
         String className = new ClassReader(classBytes).getClassName();
-        boolean opened = MOVED.containsValue(className) || LEFT.contains(getPackageOf(className));
-        if (!opened && !namesAny(classBytes)) {
+        boolean opened = this.targets.containsValue(className)
+                || this.leftPackages.contains(getPackageOf(className));
+        if (!opened && !this.namesAny(classBytes)) {
             return classBytes;
         }
         ClassWriter writer = new ClassWriter(0);
 
         ClassVisitor publicly = new ClassVisitor(Opcodes.ASM9,
-                new ClassRemapper(writer, new SimpleRemapper(Map.copyOf(MOVED)))) {
+                new ClassRemapper(writer, new SimpleRemapper(Map.copyOf(this.targets)))) {
             @Override
             public void visit(int version, int access, String name, @Nullable String signature,
                     @Nullable String superName, String @Nullable [] interfaces) {
@@ -75,14 +67,16 @@ public final class Relocations {
             @Override
             public FieldVisitor visitField(int access, String name, String descriptor, @Nullable String signature,
                     @Nullable Object value) {
-                return super.visitField(openReached(className, name + descriptor, opened ? open(access) : access),
+                return super.visitField(
+                        Relocations.this.openReached(className, name + descriptor, opened ? open(access) : access),
                         name, descriptor, signature, value);
             }
 
             @Override
             public MethodVisitor visitMethod(int access, String name, String descriptor, @Nullable String signature,
                     String @Nullable [] exceptions) {
-                return super.visitMethod(openReached(className, name + descriptor, opened ? open(access) : access),
+                return super.visitMethod(
+                        Relocations.this.openReached(className, name + descriptor, opened ? open(access) : access),
                         name, descriptor, signature, exceptions);
             }
         };
@@ -90,8 +84,9 @@ public final class Relocations {
         return writer.toByteArray();
     }
 
-    private static int openReached(String owner, String member, int access) {
-        return OPENED.contains(owner + "." + member) ? (access & ~Opcodes.ACC_PRIVATE) | Opcodes.ACC_PUBLIC : access;
+    private int openReached(String owner, String member, int access) {
+        return this.openedMembers.contains(owner + "." + member)
+                ? (access & ~Opcodes.ACC_PRIVATE) | Opcodes.ACC_PUBLIC : access;
     }
 
     private static int open(int access) {
@@ -99,9 +94,9 @@ public final class Relocations {
                 : (access | Opcodes.ACC_PUBLIC) & ~Opcodes.ACC_PROTECTED;
     }
 
-    private static boolean namesAny(byte[] classBytes) {
+    private boolean namesAny(byte[] classBytes) {
         String text = new String(classBytes, StandardCharsets.ISO_8859_1);
-        for (String moved : MOVED.keySet()) {
+        for (String moved : this.targets.keySet()) {
             if (text.contains(moved)) {
                 return true;
             }

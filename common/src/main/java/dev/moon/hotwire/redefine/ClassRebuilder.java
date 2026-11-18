@@ -156,6 +156,8 @@ public final class ClassRebuilder {
 
     private final RebuildHooks hooks = new RebuildHooks();
 
+    private final Relocations relocations = new Relocations();
+
     private volatile @Nullable BatchRider rider;
 
     public void setRider(@Nullable BatchRider rider) {
@@ -164,6 +166,10 @@ public final class ClassRebuilder {
 
     public RebuildHooks getHooks() {
         return this.hooks;
+    }
+
+    public Relocations getRelocations() {
+        return this.relocations;
     }
 
     public ClassRebuilder(Instrumentation instrumentation, MixinCopy copy) {
@@ -370,7 +376,7 @@ public final class ClassRebuilder {
             }
             byte[] dispatched = AddedOverrides.addDispatch(name, running,
                     ShutOverrides.addDispatch(name, caught.getBytes(), mods));
-            retained.put(name, Relocations.remap(dispatched));
+            retained.put(name, this.relocations.remap(dispatched));
         });
         return retained;
     }

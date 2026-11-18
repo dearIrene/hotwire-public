@@ -38,6 +38,7 @@ final class LoadTimeBridge implements ClassFileTransformer {
     private final Predicate<String> stuckForOff;
     private final DefinitionWatcher defined;
     private final Supplier<Set<String>> adopted;
+    private final Relocations relocations;
 
     interface DefinitionWatcher {
         void accept(String name, byte[] bytes, @Nullable ClassLoader inGame);
@@ -47,13 +48,14 @@ final class LoadTimeBridge implements ClassFileTransformer {
 
     LoadTimeBridge(Predicate<String> differs, BiFunction<String, byte[], byte @Nullable []> mix,
             BiFunction<String, byte[], byte @Nullable []> mixWithoutOff, Predicate<String> stuckForOff,
-            DefinitionWatcher defined, Supplier<Set<String>> adopted) {
+            DefinitionWatcher defined, Supplier<Set<String>> adopted, Relocations relocations) {
         this.differs = differs;
         this.mix = mix;
         this.mixWithoutOff = mixWithoutOff;
         this.stuckForOff = stuckForOff;
         this.defined = defined;
         this.adopted = adopted;
+        this.relocations = relocations;
     }
 
     @Override
@@ -88,7 +90,7 @@ final class LoadTimeBridge implements ClassFileTransformer {
             byte[] bytes) {
         byte[] mixed = this.differs.test(className) ? this.mix.apply(className, bytes) : null;
 
-        byte[] base = Relocations.remap(mixed == null ? bytes : mixed);
+        byte[] base = this.relocations.remap(mixed == null ? bytes : mixed);
         if (base != bytes) {
             mixed = base;
         }
@@ -99,7 +101,7 @@ final class LoadTimeBridge implements ClassFileTransformer {
         byte[] guarded = HandlerGuards.ENABLED ? HandlerGuards.rewrite(className, base) : null;
         if (guarded != null && mixed != null && this.stuckForOff.test(className)) {
             mixed = this.mixWithoutOff.apply(className, bytes);
-            base = Relocations.remap(mixed == null ? bytes : mixed);
+            base = this.relocations.remap(mixed == null ? bytes : mixed);
             guarded = HandlerGuards.rewrite(className, base);
         }
         if (guarded != null) {
