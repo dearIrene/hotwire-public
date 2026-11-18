@@ -27,6 +27,7 @@ import dev.moon.hotwire.ui.Lang;
 import dev.moon.hotwire.ui.ModScreen;
 import dev.moon.hotwire.ui.notices.DownloadNotices;
 import java.io.IOException;
+import java.lang.ref.WeakReference;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.util.concurrent.CompletableFuture;
@@ -55,6 +56,8 @@ public final class HotwireClient implements ClientModInitializer {
 
     private static final String START_FAILED = "Hotwire did not start; hotwire/logs/start-failure.txt says why";
     private static @Nullable HotwireEngine engine;
+
+    private static WeakReference<Connection> profiled = new WeakReference<>(null);
 
     private static boolean startFailed;
     private static final String TITLE = "title screen";
@@ -133,7 +136,7 @@ public final class HotwireClient implements ClientModInitializer {
             ActionJournal.get().note(ActionJournal.Action.JOIN, "", findPlaceOf(handler.getConnection()));
             client.execute(() -> {
                 SkippedConstructorCalls.dropClosedWorlds();
-                onJoined();
+                onJoined(handler.getConnection());
             });
         });
 
@@ -169,7 +172,8 @@ public final class HotwireClient implements ClientModInitializer {
         StartTimes.mark("Hotwire's client start ends");
     }
 
-    private static void onJoined() {
+    @SuppressWarnings("ReferenceEquality")
+    private static void onJoined(Connection connection) {
         FieldHolders.retryCatchUps();
         HotwireEngine started = engine;
         if (started != null) {
@@ -179,7 +183,11 @@ public final class HotwireClient implements ClientModInitializer {
             InWorldWork.lookAheadSoon(started);
             InWorldWork.fillCacheSoon(started);
             started.showUpdateInChat();
-            started.offerProfileHere();
+
+            if (profiled.get() != connection) {
+                profiled = new WeakReference<>(connection);
+                started.offerProfileHere();
+            }
 
             OffModCommands.takeOut(id -> !started.isOn(id));
         }
