@@ -34,7 +34,6 @@ import dev.moon.hotwire.switching.SwitchTimes;
 import dev.moon.hotwire.ui.Lang;
 import dev.moon.hotwire.ui.Notice;
 import dev.moon.hotwire.ui.Notices;
-import dev.moon.hotwire.ui.Progress;
 import dev.moon.hotwire.update.LiveUpdates;
 import java.lang.management.ManagementFactory;
 import java.lang.management.ThreadMXBean;
@@ -42,6 +41,7 @@ import java.util.ArrayList;
 import java.util.Collection;
 import java.util.Deque;
 import java.util.HashMap;
+import java.util.IdentityHashMap;
 import java.util.List;
 import java.util.Locale;
 import java.util.Map;
@@ -90,6 +90,8 @@ public final class SwitchRunner {
     private static final int MOST_SEARCHES = 8;
 
     private final Map<String, Integer> searchesFor = new ConcurrentHashMap<>();
+
+    private final Set<String> lateFor = ConcurrentHashMap.newKeySet();
 
     @SuppressWarnings("ThreadPriorityCheck")
     private final ExecutorService looking = Executors.newSingleThreadExecutor(
@@ -226,7 +228,7 @@ public final class SwitchRunner {
         List<Long> took = new ArrayList<>();
         for (int at = 0; at < times; at++) {
             long began = System.nanoTime();
-            ElementLook.findAheadForOff(this.fieldReferences, List.of(), this.switcher::isOn, () -> { });
+            ElementLook.findAheadWhole(this.fieldReferences, List.of(), this.switcher::isOn);
             took.add((System.nanoTime() - began) / 1_000_000);
             Thread.sleep(gapMillis);
         }
@@ -252,6 +254,34 @@ public final class SwitchRunner {
                 LOGGER.warn("[Hotwire] what still holds {}'s {} could not be taken out", mod, called, e);
             }
         });
+    }
+
+    private void takeLate() {
+        List<String> stillOff = this.lateFor.stream().filter(id -> !this.switcher.isOn(id)).toList();
+        this.lateFor.retainAll(stillOff);
+        if (stillOff.isEmpty() || this.switcher.isBusy()) {
+            return;
+        }
+        try {
+            IdentityHashMap<Object, Integer> before = this.fieldReferences.countNotedTakesOf(stillOff);
+            long start = System.nanoTime();
+            if (!ElementLook.findAheadWhole(this.fieldReferences, stillOff, this.switcher::isOn)) {
+                return;
+            }
+            int added = 0;
+            for (Map.Entry<Object, Integer> noted : this.fieldReferences.countNotedTakesOf(stillOff).entrySet()) {
+                Integer had = before.get(noted.getKey());
+                added += had == null ? noted.getValue() : Math.max(0, noted.getValue() - had);
+            }
+            this.lateFor.removeAll(stillOff);
+            LOGGER.info("[Hotwire] the look after the off of {} took {} ms and noted {} takes the notes lacked at"
+                    + " it", stillOff, (System.nanoTime() - start) / 1_000_000, added);
+            if (added > 0 && !this.switcher.isBusy()) {
+                this.fieldReferences.takeOutElementsAgain(stillOff, this.switcher::isOn);
+            }
+        } catch (RuntimeException | LinkageError e) {
+            LOGGER.warn("[Hotwire] what the look came to late of {} could not be taken out", stillOff, e);
+        }
     }
 
     public void prepareAhead(List<String> ids, boolean off) {
@@ -361,6 +391,9 @@ public final class SwitchRunner {
 
             this.switcher.hideProgress();
             this.switcher.setBusy(false);
+            if (!this.lateFor.isEmpty()) {
+                this.looking.execute(this::takeLate);
+            }
             SwitchTimes.mark("progress hidden");
             SwitchTimes.end((off ? "the off of " : "the on of ") + ids);
             endJournal(journal, result);
@@ -412,12 +445,11 @@ public final class SwitchRunner {
         }
         SwitchTimes.mark("plan");
         if (!plan.isRefused()) {
-            this.switcher.showBegun(plan, Lang.get("hotwire.progress.looking"));
+            this.switcher.showBegun(plan, Lang.get("hotwire.progress.preparing"));
 
-            Progress shown = this.switcher.getProgress();
-            ElementLook.findAheadForOff(this.fieldReferences, wired, this.switcher::isOn,
-                    () -> shown.count(Lang.get("hotwire.progress.looking"), ElementLook.findPercent(), 100));
-            SwitchTimes.mark("look: notes");
+            ElementLook.beginOff();
+            this.lateFor.addAll(wired);
+            SwitchTimes.mark("look gave way");
         }
 
         ModSwitcher.Result result;
@@ -441,6 +473,7 @@ public final class SwitchRunner {
             Tripwire.pause(false);
             Tripwire.endOff(wired);
             this.switcher.hideProgress();
+            ElementLook.endOff();
         }
         if (!(result instanceof ModSwitcher.Result.Done)) {
             List<String> order = out.get();

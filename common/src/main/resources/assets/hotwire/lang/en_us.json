@@ -445,7 +445,6 @@
   "hotwire.progress.why.nested": "inside %s's jar",
   "hotwire.progress.why.ships": "carries %s",
   "hotwire.progress.why.needed_by": "needed by %s",
-  "hotwire.progress.looking": "Checking what other mods keep of it",
   "hotwire.progress.reloading_models": "Reloading textures and models (game will pause for a bit)",
   "hotwire.progress.rebuilding_renderers": "Rebuilding how it draws (game will pause for a bit)",
   "hotwire.switch.already_off": "Already off.",

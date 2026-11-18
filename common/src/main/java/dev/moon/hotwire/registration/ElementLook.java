@@ -70,14 +70,7 @@ public final class ElementLook {
         return sets;
     }
 
-    private static final long OFF_WAIT_NANOS = 30_000_000_000L;
-
-    private static volatile long offDeadline;
-
-    private static long steps;
-    private static volatile long stepsOfLast;
-    private static volatile @Nullable Runnable stepHearer;
-    private static final int STEPS_A_WORD = 4095;
+    private static volatile boolean cutForOff;
     private static final int SLOW_SECONDS = 10;
     private static final int SLOW_PRINTS = 12;
 
@@ -135,43 +128,22 @@ public final class ElementLook {
         switchUnderWay = busy;
     }
 
-    public static void findAheadForOff(FieldReferences references, Collection<String> mods, Predicate<String> on,
-            Runnable hearer) {
-        if (NO_LOOK) {
-            return;
-        }
-        offDeadline = System.nanoTime() + OFF_WAIT_NANOS;
-        stepHearer = hearer;
-
-        boolean stood = lookedEveryWorld == findWorldNumber();
-        long sinceLast = (System.nanoTime() - lookedEveryAt) / 1_000_000;
-        IdentityHashMap<Object, Integer> before = references.countNotedTakesOf(mods);
-        try {
-            look(references, findEvery(mods), on, false);
-        } finally {
-            offDeadline = 0;
-            stepHearer = null;
-        }
-        if (mods.isEmpty()) {
-            return;
-        }
-        int[] added = new int[4];
-        references.countNotedTakesOf(mods).forEach((container, takes) -> {
-            Integer had = before.get(container);
-            added[0] += had == null ? takes : Math.max(0, takes - had);
-            added[1] += had == null ? 1 : 0;
-            added[2] += takes;
-            added[3]++;
-        });
-        LOGGER.info("[Hotwire] the off's look added {} takes in {} new collections for {}, of {} takes in {}; the look"
-                + " before it {}", added[0], added[1], mods, added[2], added[3],
-                stood ? "ended " + sinceLast + " ms earlier" : "was of no world or another");
+    public static void beginOff() {
+        cutForOff = true;
+        stopLooking();
     }
 
-    public static int findPercent() {
-        long done = steps;
-        long whole = stepsOfLast;
-        return (int) Math.min(99, whole > 0 ? done * 100 / whole : done * 100 / (done + 400_000));
+    public static void endOff() {
+        cutForOff = false;
+    }
+
+    public static boolean findAheadWhole(FieldReferences references, Collection<String> mods, Predicate<String> on) {
+        if (NO_LOOK || switchUnderWay.getAsBoolean()) {
+            return false;
+        }
+        long last = lookedEveryAt;
+        look(references, findEvery(mods), on, false);
+        return lookedEveryAt != last;
     }
 
     public static void findAhead(FieldReferences references, Collection<String> mods, Predicate<String> on) {
@@ -216,7 +188,6 @@ public final class ElementLook {
             runningMode = Mode.LOOK_EVERY;
             MODE.set(Mode.LOOK_EVERY);
 
-            steps = 0;
             int world = findWorldNumber();
             boolean newWorld = world != lookedEveryWorld;
             boolean whole = WHOLE.get() || newWorld;
@@ -241,9 +212,6 @@ public final class ElementLook {
                 lookedEveryClasses = LOADING.getTotalLoadedClassCount();
                 lookedEveryWorld = world;
                 references.finishEveryLook();
-                if (whole) {
-                    stepsOfLast = steps;
-                }
             } catch (RuntimeException | LinkageError e) {
                 LOGGER.info("[Hotwire] the look ahead for {} mods ended early: {}", asked.size(), e.toString());
             } finally {
@@ -345,17 +313,6 @@ public final class ElementLook {
         if (Games.getNow().isHoldOverBudget()) {
             throw new HoldBudgetException();
         }
-        if ((++steps & STEPS_A_WORD) == 0 && isLooking()) {
-            long deadline = offDeadline;
-            if (deadline != 0 && System.nanoTime() - deadline > 0) {
-                throw new CancellationException("an off waited " + OFF_WAIT_NANOS / 1_000_000_000L
-                        + " s for it, and walks for itself");
-            }
-            Runnable hearer = stepHearer;
-            if (hearer != null) {
-                hearer.run();
-            }
-        }
     }
 
     private static boolean isFreshForEvery(List<String> asked) {
@@ -415,7 +372,7 @@ public final class ElementLook {
     }
 
     boolean isReadyFor(Collection<String> walked) {
-        return !NO_LOOK && !isLooking() && stands(List.copyOf(walked));
+        return !NO_LOOK && !isLooking() && (cutForOff || stands(List.copyOf(walked)));
     }
 
     boolean hasNoted(Runnable work) {
