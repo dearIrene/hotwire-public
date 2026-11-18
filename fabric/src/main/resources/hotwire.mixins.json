@@ -19,6 +19,7 @@
     "core.fabric.base.event.EventPhaseDataAccessor",
     "core.fabric.base.event.EventPhaseDataMixin",
     "core.fabric.networking.AbstractNetworkAddonMixin",
+    "core.fabric.registry.RegistrySyncManagerMixin",
     "core.fabric.networking.GlobalReceiverRegistryAccessor",
     "core.fabric.networking.GlobalReceiverRegistryMixin",
     "core.fabric.networking.PayloadTypeRegistryImplMixin",

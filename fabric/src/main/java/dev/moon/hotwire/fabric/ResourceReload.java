@@ -329,7 +329,10 @@ public final class ResourceReload {
 
         if (comingOn.isEmpty()) {
             reloadedWhilePaused = true;
-            ShaderPrograms.compileAgain(game);
+
+            if (awaitingAssets.isEmpty()) {
+                ShaderPrograms.compileAgain(game);
+            }
             if (leavingReload) {
                 waitingReload = "the off before left the game's resources as they were";
                 LOGGER.info("[Hotwire] the off's resource reload is left to the switch that follows it");
