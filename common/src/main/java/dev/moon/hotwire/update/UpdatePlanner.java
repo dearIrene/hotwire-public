@@ -53,6 +53,7 @@ public final class UpdatePlanner {
         compareNestedJars(was, now, changed, blockers);
 
         List<ClassAction> actions = new ArrayList<>();
+        Set<String> notCarried = new TreeSet<>();
         for (ClassDiff diffed : diff.classes()) {
             if (diffed.change() == ClassChange.IDENTICAL) {
                 continue;
@@ -65,11 +66,19 @@ public final class UpdatePlanner {
             }
             if (loaded && diffed.change() == ClassChange.SHAPE && !diffed.isCarried() && !game.takesShapes()) {
                 blockers.add(new UpdateBlocker.ShapeNotCarried(diffed.name(), diffed.shape()));
+                notCarried.add(diffed.name());
             }
         }
         if (!game.takesShapes()) {
             diff.startedElsewhere().forEach(name -> blockers.add(new UpdateBlocker.ShapeNotCarried(name,
                     Set.of(ShapeChange.STATIC_SET_ELSEWHERE))));
+
+            new TreeMap<>(diff.fieldsReplaced()).forEach((owner, readers) -> {
+                if (game.loadedClasses().contains(owner) && !notCarried.contains(owner)
+                        && readers.stream().anyMatch(game.savedClasses()::contains)) {
+                    blockers.add(new UpdateBlocker.ShapeNotCarried(owner, Set.of(ShapeChange.SAVED_FIELD_REPLACED)));
+                }
+            });
         }
         if (findTier(blockers) == UpdateTier.RESTART_MOD && !game.dependents().isEmpty()) {
             blockers.add(new UpdateBlocker.BoundByDependents(game.dependents()));

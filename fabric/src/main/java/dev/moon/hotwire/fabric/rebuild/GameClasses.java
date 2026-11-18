@@ -44,6 +44,7 @@ import net.minecraft.world.level.chunk.LevelChunk;
 import net.minecraft.world.level.chunk.LevelChunkSection;
 import net.minecraft.world.level.chunk.storage.IOWorker;
 import net.minecraft.world.level.lighting.LevelLightEngine;
+import net.minecraft.world.level.saveddata.SavedData;
 import org.jspecify.annotations.Nullable;
 
 public final class GameClasses implements SwitchApplier.Game {
@@ -258,6 +259,12 @@ public final class GameClasses implements SwitchApplier.Game {
             }
         }
         return false;
+    }
+
+    @Override
+    public boolean isSavedWithWorld(Class<?> type) {
+        return Entity.class.isAssignableFrom(type) || BlockEntity.class.isAssignableFrom(type)
+                || SavedData.class.isAssignableFrom(type);
     }
 
     @Override

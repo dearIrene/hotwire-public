@@ -82,6 +82,10 @@ public final class SwitchApplier {
             return false;
         }
 
+        default boolean isSavedWithWorld(Class<?> type) {
+            return false;
+        }
+
         default boolean isMadeByReload(Class<?> type) {
             return false;
         }

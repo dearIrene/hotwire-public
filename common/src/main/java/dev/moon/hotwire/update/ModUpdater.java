@@ -1011,9 +1011,14 @@ public final class ModUpdater {
         Set<String> names = new HashSet<>();
         diff.classes().forEach(diffed -> names.add(diffed.name()));
         Set<String> loaded = new HashSet<>();
+        Set<String> saved = new HashSet<>();
         for (String name : names) {
-            if (this.engine.getClasses().findLoaded(name) != null) {
+            Class<?> type = this.engine.getClasses().findLoaded(name);
+            if (type != null) {
                 loaded.add(name);
+            }
+            if (type != null && this.engine.getClasses().isSavedWithWorld(type)) {
+                saved.add(name);
             }
         }
         Map<String, List<String>> unmet = new TreeMap<>();
@@ -1039,7 +1044,7 @@ public final class ModUpdater {
         UpdateContext context = new UpdateContext(this.engine.getStateOf(id), loaded,
                 this.engine.getApplier().getPatchersOf(names, this.engine.on(), id),
                         this.engine.getGraph()
-                .getDependents(id), unmet, VERSION_ORDER, DevSession.takesShapes(id));
+                .getDependents(id), unmet, VERSION_ORDER, DevSession.takesShapes(id), saved);
         return UpdatePlanner.withBlockers(UpdatePlanner.plan(diff, context), waits);
     }
 }
