@@ -462,16 +462,18 @@ public final class ClassRebuilder {
         this.loadedBytes.rememberAll(classes);
     }
 
-    public void startStatics() {
+    public Set<String> startStatics() {
+        Set<String> failed = new TreeSet<>();
         for (Class<?> type : this.staticsToStart) {
             try {
                 FieldHolders.startStatics(type);
             } catch (RuntimeException | LinkageError e) {
-                LOGGER.error("[Hotwire] The static fields a mod added to {} could not be set up; they have what"
-                        + " they had before this switch, or their defaults", type.getName(), e);
+                failed.add(Type.getInternalName(type));
+                LOGGER.warn("[Hotwire] The static fields a mod added to {} could not be set up", type.getName(), e);
             }
         }
         this.staticsToStart.clear();
+        return failed;
     }
 
     public void apply(PreparedRebuild prepared) throws RebuildException {

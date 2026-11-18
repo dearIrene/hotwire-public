@@ -68,7 +68,12 @@ final class RebuildSteps {
         if (catchUpLater == null) {
             notSetUp = LiveObjects.replay(prepared, onGameThread);
             Tripwire.releaseComingOn();
-            rebuilder.startStatics();
+            Set<String> failed = rebuilder.startStatics();
+            if (!failed.isEmpty()) {
+                revert(rebuilder, prepared, afterRebuild);
+                throw RebuildException.ofRestartOnly("the new static fields of " + failed + " cannot be set up while"
+                        + " the game runs", new IllegalStateException(String.valueOf(failed))).withBlamed(failed);
+            }
         } else {
             catchUpLater.accept(() -> {
                 int later = LiveObjects.replay(prepared, onGameThread);
