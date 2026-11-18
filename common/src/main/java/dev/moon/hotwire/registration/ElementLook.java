@@ -20,6 +20,7 @@ import java.util.concurrent.CancellationException;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.atomic.AtomicLong;
 import java.util.function.BooleanSupplier;
+import java.util.function.Function;
 import java.util.function.Predicate;
 import java.util.function.Supplier;
 import org.jspecify.annotations.Nullable;
@@ -108,6 +109,8 @@ public final class ElementLook {
     private static final Object ONE_LOOK = new Object();
 
     private static volatile Supplier<List<String>> everyMod = List::of;
+
+    private static volatile Function<List<String>, List<String>> holderSearch = mods -> List.of();
     private static final int NO_WORLD = Integer.MIN_VALUE;
 
     private static volatile List<String> lookedForEvery = List.of();
@@ -130,6 +133,10 @@ public final class ElementLook {
 
     public static void useMods(Supplier<List<String>> mods) {
         everyMod = mods;
+    }
+
+    public static void useHolderSearch(Function<List<String>, List<String>> search) {
+        holderSearch = search;
     }
 
     public static void watchSwitches(BooleanSupplier busy) {
@@ -266,6 +273,9 @@ public final class ElementLook {
             if (!notesOnly.equals("{}")) {
                 LOGGER.info("[Hotwire] check: of the off of {}, what only the notes still reach (no read from the"
                         + " game's roots does): {}", mods, notesOnly);
+            }
+            for (String line : holderSearch.apply(mods)) {
+                LOGGER.info("[Hotwire] check: of the off of {}, a holder search of the whole heap: {}", mods, line);
             }
         } finally {
             WHOLE.remove();
