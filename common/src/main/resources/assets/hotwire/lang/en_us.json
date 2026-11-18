@@ -827,6 +827,8 @@
   "hotwire.shared.others_closed": "The host closed the world to change mods. Ask them when to join again.",
   "hotwire.reopen.add_failed": "Save and add couldn't finish: %s",
   "hotwire.reopen.not_reopened": "The world didn't reopen (%s). Please open it from the world list.",
+  "hotwire.reopen.stays_closed": "The world stays closed until then.",
+  "hotwire.reopen.half_started": "%s is still half there after a failed add. Restart the game before opening a world.",
   "hotwire.switch.lunar": "Unfortunately Hotwire is incompatible with Lunar Client due to it's obfuscation. My deepest apologies sweetheart ): - Irene/Moonshee",
   "hotwire.next_start.add": "%s %s goes in when you close the game. Cancel it any time from Pending tasks.",
   "hotwire.next_start.update": "%s updates to %s when you close the game. Cancel it any time from Pending tasks.",

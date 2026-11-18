@@ -5,6 +5,8 @@ import dev.moon.hotwire.fabric.registration.InternedKeys;
 import dev.moon.hotwire.fabric.version.RegistryBands;
 import dev.moon.hotwire.redefine.FieldSlots;
 import dev.moon.hotwire.registration.Fields;
+import java.lang.reflect.Field;
+import java.lang.reflect.Modifier;
 import java.util.ArrayList;
 import java.util.IdentityHashMap;
 import java.util.List;
@@ -14,11 +16,14 @@ import net.minecraft.core.Holder;
 import net.minecraft.core.MappedRegistry;
 import net.minecraft.core.Registry;
 import net.minecraft.core.registries.BuiltInRegistries;
+import org.jspecify.annotations.Nullable;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 public final class OpenRegistries implements AutoCloseable {
     private static final Logger LOGGER = LoggerFactory.getLogger(OpenRegistries.class);
+
+    private static final String REMAP_COPY = "fabric_prevEntries";
 
     private static volatile boolean open;
 
@@ -83,6 +88,7 @@ public final class OpenRegistries implements AutoCloseable {
             if (registry.size() > before) {
                 grew.add(nameOf(registry) + " +" + (registry.size() - before));
                 bindNoTags(registry);
+                joinRemapCopy(registry);
             }
         }
 
@@ -115,6 +121,48 @@ public final class OpenRegistries implements AutoCloseable {
                 }
             }
         }
+    }
+
+    private static <T> void joinRemapCopy(MappedRegistry<T> registry) {
+        Map<Object, Object> copy = findRemapCopy(registry);
+        if (copy == null) {
+            return;
+        }
+        int joined = 0;
+        try {
+            for (T value : registry) {
+                Object key = registry.getKey(value);
+                if (key != null && !copy.containsKey(key)
+                        && registry.wrapAsHolder(value) instanceof Holder.Reference<T> holder) {
+                    copy.put(key, holder);
+                    joined++;
+                }
+            }
+        } catch (IllegalArgumentException | UnsupportedOperationException e) {
+            LOGGER.warn("[Hotwire] {}'s new entries could not be kept for the server's leave: {}", nameOf(registry),
+                    e.toString());
+        }
+        if (joined > 0) {
+            LOGGER.info("[Hotwire] {} new entries of {} are kept for when the player leaves the server", joined,
+                    nameOf(registry));
+        }
+    }
+
+    @SuppressWarnings("unchecked")
+    private static @Nullable Map<Object, Object> findRemapCopy(MappedRegistry<?> registry) {
+        for (Field field : MappedRegistry.class.getDeclaredFields()) {
+            if (Modifier.isStatic(field.getModifiers()) || !field.getName().startsWith(REMAP_COPY)) {
+                continue;
+            }
+            try {
+                field.setAccessible(true);
+                return field.get(registry) instanceof Map<?, ?> copy ? (Map<Object, Object>) copy : null;
+            } catch (IllegalAccessException | RuntimeException e) {
+                LOGGER.warn("[Hotwire] Fabric's copy of {} could not be read: {}", nameOf(registry), e.toString());
+                return null;
+            }
+        }
+        return null;
     }
 
     private static <T> void bindNoRegistryTags(MappedRegistry<T> registry) {

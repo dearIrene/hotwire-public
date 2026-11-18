@@ -63,6 +63,11 @@ public final class ModLifecycle {
     }
 
     public static List<String> stop(String id, RegistrationJournal journal, Minecraft client) {
+        if (LifecycleListeners.isUnstarted(id)) {
+            LAST_STOPS.remove(id);
+            LOGGER.info("[Hotwire] {} never started through; its stop listeners are not run", id);
+            return List.of();
+        }
         List<String> ofPlayers = new ArrayList<>();
         List<String> ofServer = new ArrayList<>();
         List<String> ofClient = new ArrayList<>();
@@ -94,7 +99,7 @@ public final class ModLifecycle {
                 }
                 callEach(id, journal, ServerLifecycleEvents.SERVER_STOPPING, ofServer, listener ->
                         ((ServerLifecycleEvents.ServerStopping) listener).onServerStopping(server), noted);
-                callArchitectury(id, journal, "SERVER_STOPPING", ofServer, server);
+                callArchitectury(id, journal, "SERVER_STOPPING", ofServer, new ArrayList<>(), server);
 
                 for (ServerLevel level : server.getAllLevels()) {
                     callEach(id, journal, findLevelEvent(false), ofServer, listener ->
@@ -102,7 +107,7 @@ public final class ModLifecycle {
                 }
                 callEach(id, journal, ServerLifecycleEvents.SERVER_STOPPED, ofServer, listener ->
                         ((ServerLifecycleEvents.ServerStopped) listener).onServerStopped(server), noted);
-                callArchitectury(id, journal, "SERVER_STOPPED", ofServer, server);
+                callArchitectury(id, journal, "SERVER_STOPPED", ofServer, new ArrayList<>(), server);
             }, "server");
         }
         LAST_STOPS.put(id, new LastStop(server == null ? null : new WeakReference<>(server), !ofServer.isEmpty(),
@@ -114,6 +119,10 @@ public final class ModLifecycle {
     }
 
     public static List<String> start(String id, RegistrationJournal journal, Minecraft client) {
+        return start(id, journal, client, new ArrayList<>());
+    }
+
+    private static List<String> start(String id, RegistrationJournal journal, Minecraft client, List<String> threw) {
         List<String> ran = new ArrayList<>();
         MinecraftServer server = client.getSingleplayerServer();
         LastStop before = LAST_STOPS.remove(id);
@@ -128,23 +137,23 @@ public final class ModLifecycle {
                     : listener -> parts.contains(findPartOf(id, listener));
             onThread(work -> GameHold.onServer(server, work), () -> {
                 if (last.ofServer()) {
-                    callEach(id, journal, ServerLifecycleEvents.SERVER_STARTING, ran, listener ->
+                    callEach(id, journal, ServerLifecycleEvents.SERVER_STARTING, ran, threw, listener ->
                             ((ServerLifecycleEvents.ServerStarting) listener).onServerStarting(server), stopped);
-                    callArchitectury(id, journal, "SERVER_STARTING", ran, server);
+                    callArchitectury(id, journal, "SERVER_STARTING", ran, threw, server);
 
                     for (ServerLevel level : server.getAllLevels()) {
-                        callEach(id, journal, findLevelEvent(true), ran, listener ->
+                        callEach(id, journal, findLevelEvent(true), ran, threw, listener ->
                                 callLevel(listener, server, level, true), stopped);
                     }
-                    callEach(id, journal, ServerLifecycleEvents.SERVER_STARTED, ran, listener ->
+                    callEach(id, journal, ServerLifecycleEvents.SERVER_STARTED, ran, threw, listener ->
                             ((ServerLifecycleEvents.ServerStarted) listener).onServerStarted(server), stopped);
-                    callArchitectury(id, journal, "SERVER_STARTED", ran, server);
+                    callArchitectury(id, journal, "SERVER_STARTED", ran, threw, server);
                 }
                 for (ServerPlayer player : last.ofPlayers() ? List.copyOf(server.getPlayerList().getPlayers())
                         : List.<ServerPlayer>of()) {
-                    callEach(id, journal, ServerPlayConnectionEvents.JOIN, ran, listener ->
+                    callEach(id, journal, ServerPlayConnectionEvents.JOIN, ran, threw, listener ->
                             ((ServerPlayConnectionEvents.Join) listener).onPlayReady(player.connection,
-                                    ServerPlayNetworking.getSender(player), server));
+                                    ServerPlayNetworking.getSender(player), server), listener -> true);
                 }
             }, "server");
         }
@@ -163,16 +172,25 @@ public final class ModLifecycle {
                 CommandBuildContext context = CommandBuildContext.simple(connection.registryAccess(),
                         connection.enabledFeatures());
                 int already = ran.size();
-                callEach(id, journal, ClientCommandRegistrationCallback.EVENT, ran, listener ->
-                        ((ClientCommandRegistrationCallback) listener).register(commands, context));
+                callEach(id, journal, ClientCommandRegistrationCallback.EVENT, ran, threw, listener ->
+                        ((ClientCommandRegistrationCallback) listener).register(commands, context), listener -> true);
                 if (ran.size() > already) {
                     CommandRegistration.resendCommands(true);
                 }
             }
-            callEach(id, journal, ClientPlayConnectionEvents.JOIN, ran, listener ->
+            callEach(id, journal, ClientPlayConnectionEvents.JOIN, ran, threw, listener ->
                     ((ClientPlayConnectionEvents.Join) listener).onPlayReady(connection,
-                            ClientPlayNetworking.getSender(), client));
+                            ClientPlayNetworking.getSender(), client), listener -> true);
         }, "client");
+        return ran;
+    }
+
+    public static List<String> startAdded(String id, RegistrationJournal journal, Minecraft client) {
+        List<String> threw = new ArrayList<>();
+        List<String> ran = start(id, journal, client, threw);
+        if (!threw.isEmpty()) {
+            throw new IllegalStateException("its start listeners threw: " + String.join(", ", threw));
+        }
         return ran;
     }
 
@@ -199,6 +217,11 @@ public final class ModLifecycle {
 
     private static void callEach(String id, RegistrationJournal journal, Object event, List<String> ran,
             Consumer<Object> call, Predicate<Object> runs) {
+        callEach(id, journal, event, ran, new ArrayList<>(), call, runs);
+    }
+
+    private static void callEach(String id, RegistrationJournal journal, Object event, List<String> ran,
+            List<String> threw, Consumer<Object> call, Predicate<Object> runs) {
         for (RegistrationJournal.Entry entry : journal.getLive(id)) {
             if (!(entry.registration() instanceof EventRegistration registration) || !registration.listensTo(event)) {
                 continue;
@@ -213,6 +236,7 @@ public final class ModLifecycle {
             } catch (RuntimeException | LinkageError e) {
                 LOGGER.warn("[Hotwire] {}'s listener {} threw while the mod was stopped or started", id,
                         registration.describe(), e);
+                threw.add(registration.describe());
             }
         }
     }
@@ -232,7 +256,7 @@ public final class ModLifecycle {
     }
 
     private static void callArchitectury(String id, RegistrationJournal journal, String name, List<String> ran,
-            Object... arguments) {
+            List<String> threw, Object... arguments) {
         Object event = ArchitecturyEventRegistration.findLifecycleEvent(name);
         if (event == null) {
             return;
@@ -246,6 +270,7 @@ public final class ModLifecycle {
                 } catch (RuntimeException | LinkageError e) {
                     LOGGER.warn("[Hotwire] {}'s listener on Architectury's {} threw as the mod stopped or started", id,
                             name, e);
+                    threw.add("Architectury's " + name);
                 }
             }
         }
@@ -283,7 +308,7 @@ public final class ModLifecycle {
         onThread(work -> GameHold.onGameBeforeNextFrame(work, client), () -> {
             callEach(id, journal, ClientLifecycleEvents.CLIENT_STARTED, ran, listener ->
                     ((ClientLifecycleEvents.ClientStarted) listener).onClientStarted(client));
-            callArchitectury(id, journal, "SETUP", ran);
+            callArchitectury(id, journal, "SETUP", ran, new ArrayList<>());
         }, "client");
         return ran;
     }

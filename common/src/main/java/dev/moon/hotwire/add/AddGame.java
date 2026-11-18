@@ -42,6 +42,8 @@ public interface AddGame {
 
     List<String> runStartListeners(String id, RegistrationJournal journal);
 
+    void refuseWorldsFor(String name);
+
     ModAdder.Result addAroundReopen(Supplier<ModAdder.Result> add);
 
     MixinCopy.Decorations readDecorations(List<ModJar> jars);

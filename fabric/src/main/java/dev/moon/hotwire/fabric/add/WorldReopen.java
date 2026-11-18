@@ -58,6 +58,8 @@ public final class WorldReopen {
 
     private static volatile @Nullable QueueAtLeave queueAtLeave;
 
+    private static volatile @Nullable String halfStarted;
+
     private WorldReopen() {
     }
 
@@ -118,7 +120,7 @@ public final class WorldReopen {
                 backUpIfAsked(client, level);
                 ModAdder.Result result = add.get();
                 if (result instanceof ModAdder.Result.Failed failed && failed.leftBehind()) {
-                    return new ModAdder.Result.Failed(failed.reason() + " The world stays closed until then.",
+                    return new ModAdder.Result.Failed(failed.reason() + " " + Lang.get("hotwire.reopen.stays_closed"),
                             failed.cause(), true);
                 }
                 openOrSay(client, level);
@@ -162,6 +164,21 @@ public final class WorldReopen {
         } finally {
             closedFor.accept(false);
         }
+    }
+
+    public static synchronized void refuseWorldsFor(String name) {
+        String before = halfStarted;
+        halfStarted = before == null ? name : before + ", " + name;
+    }
+
+    public static boolean refuseOpen() {
+        String half = halfStarted;
+        if (half == null) {
+            return false;
+        }
+        LOGGER.warn("[Hotwire] a world was not opened: {} stays half started until the game restarts", half);
+        Notices.show("Hotwire", Lang.get("hotwire.reopen.half_started", half));
+        return true;
     }
 
     private static void openOrSay(Minecraft client, String level) throws InterruptedException {

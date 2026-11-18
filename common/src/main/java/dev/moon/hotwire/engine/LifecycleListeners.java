@@ -7,6 +7,7 @@ import dev.moon.hotwire.seam.Games;
 import dev.moon.hotwire.switching.Listeners;
 import java.util.ArrayList;
 import java.util.List;
+import java.util.Map;
 import java.util.Set;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.function.Consumer;
@@ -21,7 +22,7 @@ public final class LifecycleListeners {
 
     private static final Set<String> TOLD_OFF = ConcurrentHashMap.newKeySet();
     private static final Set<String> CAME_ON = ConcurrentHashMap.newKeySet();
-    private static final Set<String> STARTING = ConcurrentHashMap.newKeySet();
+    private static final Map<String, Boolean> STARTING = new ConcurrentHashMap<>();
     private static final ThreadLocal<int[]> DEPTH = ThreadLocal.withInitial(() -> new int[1]);
     private static volatile Predicate<String> isOn = id -> true;
 
@@ -91,12 +92,12 @@ public final class LifecycleListeners {
         }
         List<String> back = new ArrayList<>();
         for (String id : List.copyOf(TOLD_OFF)) {
-            if (TOLD_OFF.remove(id) && on.test(id) && !STARTING.contains(id)) {
+            if (TOLD_OFF.remove(id) && on.test(id) && !STARTING.containsKey(id)) {
                 back.add(id);
             }
         }
         for (String id : List.copyOf(CAME_ON)) {
-            if (CAME_ON.remove(id) && on.test(id) && !STARTING.contains(id) && !back.contains(id)) {
+            if (CAME_ON.remove(id) && on.test(id) && !STARTING.containsKey(id) && !back.contains(id)) {
                 back.add(id);
             }
         }
@@ -108,7 +109,7 @@ public final class LifecycleListeners {
     public static void prepareOff(List<String> order) {
         List<String> fresh = new ArrayList<>();
         for (String id : order) {
-            if (!STARTING.contains(id) && TOLD_OFF.add(id)) {
+            if (!STARTING.containsKey(id) && TOLD_OFF.add(id)) {
                 fresh.add(id);
             }
         }
@@ -122,13 +123,21 @@ public final class LifecycleListeners {
     }
 
     public static void beginStarting(List<String> ids) {
-        STARTING.addAll(ids);
+        ids.forEach(id -> STARTING.put(id, false));
     }
 
     public static void endStarting(List<String> ids) {
         ids.forEach(STARTING::remove);
         ids.forEach(TOLD_OFF::remove);
         ids.forEach(CAME_ON::remove);
+    }
+
+    public static void markStarted(String id) {
+        STARTING.replace(id, true);
+    }
+
+    public static boolean isUnstarted(String id) {
+        return Boolean.FALSE.equals(STARTING.get(id));
     }
 
     public static void prepareStart(List<String> ids) {

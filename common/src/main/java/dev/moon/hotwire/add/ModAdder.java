@@ -766,6 +766,7 @@ public final class ModAdder {
                 for (String id : ids) {
                     List<String> ran = new ArrayList<>(clientStarted.getOrDefault(id, List.of()));
                     ran.addAll(this.game.runStartListeners(id, GameRegistrations.getJournal()));
+                    LifecycleListeners.markStarted(id);
                     if (!ran.isEmpty()) {
                         LOGGER.info("[Hotwire] {} started with the running server: {}", id, ran);
                     }
@@ -803,6 +804,7 @@ public final class ModAdder {
         String failed = Lang.get("hotwire.add.start_failed", name, cause);
         if (PlayerMessages.isBad(back)) {
             LOGGER.error("[Hotwire] {} could not be taken back out: {}", ids, PlayerMessages.describe(back, id -> id));
+            this.game.refuseWorldsFor(name);
             return new Result.Failed(failed + " " + Lang.get("hotwire.add.start_failed_stays"), failure, true);
         }
         ids.forEach(GameRegistrations.getJournal()::forget);

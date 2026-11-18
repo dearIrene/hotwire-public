@@ -56,7 +56,12 @@ public final class AddGameSide implements AddGame {
 
     @Override
     public List<String> runStartListeners(String id, RegistrationJournal journal) {
-        return ModLifecycle.start(id, journal, Minecraft.getInstance());
+        return ModLifecycle.startAdded(id, journal, Minecraft.getInstance());
+    }
+
+    @Override
+    public void refuseWorldsFor(String name) {
+        WorldReopen.refuseWorldsFor(name);
     }
 
     @Override

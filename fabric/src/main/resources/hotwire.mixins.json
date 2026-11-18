@@ -62,6 +62,7 @@
     "core.client.server.IntegratedServerMixin",
     "core.client.gui.GuiNoticeMixin",
     "core.client.gui.screens.TitleScreenMixin",
+    "core.client.gui.screens.worldselection.WorldOpenFlowsMixin",
     "core.brigadier.tree.CommandNodeAccessor",
     "core.brigadier.tree.CommandNodeMixin",
     "core.client.renderer.entity.EntityRenderersAccessor",
