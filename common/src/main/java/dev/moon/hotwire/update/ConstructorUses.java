@@ -16,6 +16,7 @@ import org.jspecify.annotations.Nullable;
 import org.objectweb.asm.ClassReader;
 import org.objectweb.asm.Handle;
 import org.objectweb.asm.Opcodes;
+import org.objectweb.asm.Type;
 import org.objectweb.asm.tree.AbstractInsnNode;
 import org.objectweb.asm.tree.ClassNode;
 import org.objectweb.asm.tree.FieldInsnNode;
@@ -35,8 +36,10 @@ final class ConstructorUses {
         List<ClassDiff> out = new ArrayList<>(classes.size());
         Map<String, Integer> at = new HashMap<>();
         Set<String> nullSafe = StaticReads.findNullSafe(classes, running, incoming);
+        Set<String> inLambdas = classes.stream().anyMatch(diff -> diff.shape().contains(ShapeChange.INTERFACES))
+                ? findTypesOfLambdas(incoming) : Set.of();
         for (ClassDiff diff : classes) {
-            ClassDiff own = isOwnInterfaces(diff, running, incoming) ? withInterfacesOwn(diff) : diff;
+            ClassDiff own = isOwnInterfaces(diff, running, incoming, inLambdas) ? withInterfacesOwn(diff) : diff;
             if (nullSafe.contains(own.name())) {
                 own = dropStaticSetElsewhere(own);
             }
@@ -185,7 +188,8 @@ final class ConstructorUses {
         return gained;
     }
 
-    private static boolean isOwnInterfaces(ClassDiff diff, Map<String, byte[]> running, Map<String, byte[]> incoming) {
+    private static boolean isOwnInterfaces(ClassDiff diff, Map<String, byte[]> running, Map<String, byte[]> incoming,
+            Set<String> inLambdas) {
         if (diff.change() != ClassChange.SHAPE || !diff.shape().contains(ShapeChange.INTERFACES)) {
             return false;
         }
@@ -196,7 +200,46 @@ final class ConstructorUses {
         }
         Set<String> gained = new HashSet<>(List.of(new ClassReader(now).getInterfaces()));
         gained.removeAll(List.of(new ClassReader(was).getInterfaces()));
-        return gained.stream().allMatch(name -> incoming.containsKey(name + ".class"));
+        return gained.stream().allMatch(name -> incoming.containsKey(name + ".class") && !inLambdas.contains(name));
+    }
+
+    private static Set<String> findTypesOfLambdas(Map<String, byte[]> incoming) {
+        Set<String> named = new HashSet<>();
+        for (Map.Entry<String, byte[]> entry : incoming.entrySet()) {
+            if (!entry.getKey().endsWith(".class")) {
+                continue;
+            }
+            for (MethodNode method : ClassNodes.read(entry.getValue(), ClassReader.SKIP_DEBUG
+                    | ClassReader.SKIP_FRAMES).methods) {
+                for (AbstractInsnNode insn : method.instructions) {
+                    if (insn instanceof InvokeDynamicInsnNode made) {
+                        addTypes(made.desc, named);
+                        for (Object part : made.bsmArgs) {
+                            if (part instanceof Type type && type.getSort() == Type.METHOD) {
+                                addTypes(type.getDescriptor(), named);
+                            } else if (part instanceof Handle handle && handle.getDesc().startsWith("(")) {
+                                addTypes(handle.getDesc(), named);
+                            }
+                        }
+                    }
+                }
+            }
+        }
+        return named;
+    }
+
+    private static void addTypes(String methodDescriptor, Set<String> into) {
+        for (Type type : Type.getArgumentTypes(methodDescriptor)) {
+            addType(type, into);
+        }
+        addType(Type.getReturnType(methodDescriptor), into);
+    }
+
+    private static void addType(Type type, Set<String> into) {
+        Type plain = type.getSort() == Type.ARRAY ? type.getElementType() : type;
+        if (plain.getSort() == Type.OBJECT) {
+            into.add(plain.getInternalName());
+        }
     }
 
     private static ClassDiff withInterfacesOwn(ClassDiff diff) {
