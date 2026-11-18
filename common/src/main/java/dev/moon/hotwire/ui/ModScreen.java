@@ -20,6 +20,7 @@ import dev.moon.hotwire.ui.panels.AddPanel;
 import dev.moon.hotwire.ui.panels.AlsoOffPanel;
 import dev.moon.hotwire.ui.panels.CarriedPanel;
 import dev.moon.hotwire.ui.panels.ClosePanel;
+import dev.moon.hotwire.ui.panels.DownloadsWarningPanel;
 import dev.moon.hotwire.ui.panels.FindBrokenPanel;
 import dev.moon.hotwire.ui.panels.FirstOpenPanel;
 import dev.moon.hotwire.ui.panels.HostPanel;
@@ -89,6 +90,7 @@ public final class ModScreen implements JarHost {
 
     private static final float ROWS_IN_BY = 6;
     private final FirstOpenPanel firstOpen;
+    private final DownloadsWarningPanel downloadsWarning;
     private final Entrance entrance = new Entrance();
 
     private @Nullable Runnable leaving;
@@ -155,12 +157,13 @@ public final class ModScreen implements JarHost {
         }, this::callOff, game::findIcon, game.getCatalog()::name);
         this.hostPanel = new HostPanel(() -> {
             this.closePanels();
-            game.matchHost();
+            this.runAfterWarning(game::matchHost);
         }, () -> {
             this.closePanels();
             game.dropHostChanges();
         }, game.getCatalog()::name);
         this.tour = new TourPanel(game::markTourSeen);
+        this.downloadsWarning = new DownloadsWarningPanel(game::markDownloadsWarned, this::closePanels);
 
         this.firstOpen = new FirstOpenPanel(() -> {
             game.acceptFirstOpen();
@@ -181,7 +184,7 @@ public final class ModScreen implements JarHost {
 
         this.panels = List.of(this.findBroken, this.addPanel, this.updatePanel, this.progress,
                 this.reopenPanel, this.carriedPanel, this.alsoOffPanel, this.firstOpen, this.tour,
-                this.selfUpdate, this.profilesPanel, this.hostPanel);
+                this.selfUpdate, this.profilesPanel, this.hostPanel, this.downloadsWarning);
         this.panels.forEach(this.root.getModal()::add);
         this.root.getModal().add(this.closePanel);
         this.root.getModal().add(this.updateSummary);
@@ -216,7 +219,7 @@ public final class ModScreen implements JarHost {
     private void pickRail(int index) {
         switch (index) {
             case MODS -> this.turnTo(MODS, 0);
-            case STORE -> this.game.openStore();
+            case STORE -> this.runAfterWarning(this.game::openStore);
             case UPDATES -> this.openUpdates();
             case ADD -> this.game.addMod();
             case PENDING -> {
@@ -231,6 +234,14 @@ public final class ModScreen implements JarHost {
             case REPORT -> this.turnTo(REPORT, 2);
             case SETTINGS -> this.openSettings();
             default -> { }
+        }
+    }
+
+    private void runAfterWarning(Runnable download) {
+        if (this.game.isDownloadsWarned()) {
+            download.run();
+        } else {
+            this.downloadsWarning.present(download);
         }
     }
 

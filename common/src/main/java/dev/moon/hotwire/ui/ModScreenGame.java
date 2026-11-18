@@ -208,6 +208,13 @@ public interface ModScreenGame {
     default void markTourSeen() {
     }
 
+    default boolean isDownloadsWarned() {
+        return true;
+    }
+
+    default void markDownloadsWarned() {
+    }
+
     default String findNewerHotwire() {
         return "";
     }

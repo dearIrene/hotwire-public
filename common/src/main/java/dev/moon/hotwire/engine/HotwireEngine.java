@@ -458,6 +458,16 @@ public final class HotwireEngine implements ModScreenGame, AutoCloseable {
     }
 
     @Override
+    public boolean isDownloadsWarned() {
+        return this.settings.isDownloadsWarned();
+    }
+
+    @Override
+    public void markDownloadsWarned() {
+        this.settings.markDownloadsWarned();
+    }
+
+    @Override
     public String findNewerHotwire() {
         return this.selfUpdate.findNewer();
     }

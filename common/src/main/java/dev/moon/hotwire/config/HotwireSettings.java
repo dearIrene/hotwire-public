@@ -196,6 +196,7 @@ public final class HotwireSettings {
         @Nullable String promptAcceptedFor;
         boolean keyCardShown;
         boolean tourSeen;
+        boolean downloadsWarned;
         @Nullable List<String> favorites = List.of();
 
         @Nullable List<String> searchSetup;
@@ -232,6 +233,7 @@ public final class HotwireSettings {
     private volatile @Nullable String promptAcceptedFor;
     private volatile boolean keyCardShown;
     private volatile boolean tourSeen;
+    private volatile boolean downloadsWarned;
     private final Set<String> favorites = ConcurrentHashMap.newKeySet();
     private volatile List<String> searchSetup = List.of();
     private volatile List<String> searchPins = List.of();
@@ -276,6 +278,7 @@ public final class HotwireSettings {
         this.devSeeThrough = saved.devSeeThrough == null ? 0 : Math.clamp(saved.devSeeThrough, 0, 1);
         this.keyCardShown = saved.keyCardShown;
         this.tourSeen = saved.tourSeen;
+        this.downloadsWarned = saved.downloadsWarned;
         if (saved.favorites != null) {
             saved.favorites.stream().filter(Objects::nonNull).forEach(this.favorites::add);
         }
@@ -475,6 +478,15 @@ public final class HotwireSettings {
         this.save();
     }
 
+    public boolean isDownloadsWarned() {
+        return this.downloadsWarned;
+    }
+
+    public void markDownloadsWarned() {
+        this.downloadsWarned = true;
+        this.save();
+    }
+
     public void acceptPrompt(String major) {
         this.promptAcceptedFor = major;
         this.save();
@@ -644,6 +656,7 @@ public final class HotwireSettings {
         saved.promptAcceptedFor = this.promptAcceptedFor;
         saved.keyCardShown = this.keyCardShown;
         saved.tourSeen = this.tourSeen;
+        saved.downloadsWarned = this.downloadsWarned;
         saved.favorites = this.favorites.stream().sorted().toList();
         saved.searchSetup = this.searchSetup.isEmpty() ? null : this.searchSetup;
         saved.searchPins = this.searchPins.isEmpty() ? null : this.searchPins;
