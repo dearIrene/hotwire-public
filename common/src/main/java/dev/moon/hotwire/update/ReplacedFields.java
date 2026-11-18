@@ -56,7 +56,7 @@ final class ReplacedFields {
             for (AbstractInsnNode insn : method.instructions) {
                 if (insn instanceof FieldInsnNode field && field.getOpcode() == Opcodes.GETFIELD
                         && lost.getOrDefault(field.owner, Set.of()).contains(field.name + ":" + field.desc)) {
-                    readers.get(field.owner).add(node.name);
+                    readers.computeIfAbsent(field.owner, owner -> new TreeSet<>()).add(node.name);
                 }
             }
         }
