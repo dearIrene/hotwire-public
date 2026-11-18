@@ -8,6 +8,7 @@ import dev.moon.hotwire.jar.ModManifest;
 import dev.moon.hotwire.plan.ModGraph;
 import dev.moon.hotwire.seam.Games;
 import java.io.IOException;
+import java.nio.charset.Charset;
 import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
 import java.nio.file.Path;
@@ -75,6 +76,32 @@ public final class GameEnvironment {
         }
     }
 
+    static String describePaths() {
+        Charset system;
+        try {
+            system = Charset.forName(System.getProperty("sun.jnu.encoding", "UTF-8"));
+        } catch (IllegalArgumentException unknown) {
+            system = StandardCharsets.UTF_8;
+        }
+        List<String> said = new ArrayList<>();
+        for (String[] path : List.of(new String[] {"game folder", Path.of("").toAbsolutePath().toString()},
+                new String[] {"Java", System.getProperty("java.home", "")},
+                new String[] {"home", System.getProperty("user.home", "")})) {
+            said.add(path[0] + " " + describePath(path[1], system));
+        }
+        return String.join("; ", said) + " (the system's own letters: " + system + ")";
+    }
+
+    static String describePath(String path, Charset system) {
+        long beyond = path.chars().filter(letter -> letter > 127).count();
+        String spaces = path.indexOf(' ') < 0 ? "" : ", with spaces";
+        if (beyond == 0) {
+            return "plain" + spaces;
+        }
+        return beyond + " letters outside ASCII" + (system.newEncoder().canEncode(path) ? ""
+                : ", some outside the system's own") + spaces;
+    }
+
     public String describe() {
         if (!Games.getNow().isOnGameThread()) {
             this.hashJars("as a report was written");
@@ -84,6 +111,7 @@ public final class GameEnvironment {
                 "Fabric Loader: " + LoadedMods.findVersion("fabricloader", "unknown"),
                 "Java: " + System.getProperty("java.version") + ", " + System.getProperty("java.vendor"),
                 "OS: " + System.getProperty("os.name") + " (" + System.getProperty("os.arch") + ")",
+                "Paths: " + describePaths(),
                 "Journal: " + ActionJournal.get().describeCost(), "Jar hashes: " + this.hashed,
                 String.format(Locale.ROOT, "Jar list: %d jars at the start, taken in %.3f ms on the game's thread",
                         this.atStart.size(), this.listNanos / 1e6));
