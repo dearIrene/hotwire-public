@@ -49,9 +49,10 @@ public final class JvmAccess {
         Path own;
         try {
             own = AgentJar.write(spare);
+            AgentJar.checkMade(own);
         } catch (IOException | RuntimeException e) {
             JvmAccessException failed = new JvmAccessException(Reason.NOT_AN_AGENT_JAR,
-                    "the agent's own jar could not be written into " + spare, e);
+                    "the agent's own jar could not be written into " + spare + " or is not the one made", e);
             if (first != null) {
                 failed.addSuppressed(first);
             }

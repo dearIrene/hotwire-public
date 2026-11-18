@@ -1,12 +1,16 @@
 package dev.moon.hotwire.jvm;
 
 import java.io.IOException;
+import java.io.InputStream;
 import java.io.OutputStream;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.nio.file.StandardCopyOption;
+import java.util.Arrays;
+import java.util.Collections;
 import java.util.jar.Attributes;
 import java.util.jar.JarEntry;
+import java.util.jar.JarFile;
 import java.util.jar.JarOutputStream;
 import java.util.jar.Manifest;
 import org.objectweb.asm.ClassWriter;
@@ -45,6 +49,31 @@ final class AgentJar {
             }
         }
         return jar;
+    }
+
+    static void checkMade(Path jar) throws IOException {
+        byte[] agent = makeAgent();
+        boolean found = false;
+        try (JarFile file = new JarFile(jar.toFile())) {
+            for (JarEntry entry : Collections.list(file.entries())) {
+                String name = entry.getName();
+                if (entry.isDirectory() || JarFile.MANIFEST_NAME.equals(name)) {
+                    continue;
+                }
+                if (!name.equals(AGENT + ".class")) {
+                    throw new IOException(jar + " holds " + name + ", which the agent's jar never has");
+                }
+                try (InputStream in = file.getInputStream(entry)) {
+                    if (!Arrays.equals(in.readAllBytes(), agent)) {
+                        throw new IOException(jar + " holds an agent class Hotwire did not make");
+                    }
+                }
+                found = true;
+            }
+        }
+        if (!found) {
+            throw new IOException(jar + " holds no agent class");
+        }
     }
 
     static byte[] makeAgent() {
