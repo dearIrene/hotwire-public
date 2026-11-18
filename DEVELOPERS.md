@@ -89,7 +89,7 @@ Theres a Hotwire MCP mod in our GitHub releases, put it in your run's mods folde
 
 Then just ask your agent for a change. It builds, calls `wait_for_build` and gets back what went in, if it needs a restart and any crash with the file and line, so it can fix its own mistakes while your game keeps running. It can also see your builds and their reports, roll back, merge, pin, read your crashes, mixins and history, reload or restart your mod and read the game log, everything the developer window does.
 
-It only listens on your own machine and needs the token in `config/hotwire-mcp.json`. The game log has the server's address if you'd rather add it yourself.
+It only listens on your own machine and needs a token, which stays in a small script in your home folder (`.hotwire/mcp-headers`), never in your project. The game log has the server's address and that script if you'd rather add it yourself.
 
 ## Settings
 
