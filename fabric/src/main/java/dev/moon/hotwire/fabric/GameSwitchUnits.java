@@ -29,6 +29,8 @@ import net.minecraft.client.Minecraft;
 
 final class GameSwitchUnits implements SwitchUnits {
     private final MixinPlugins plugins;
+    private final RegistryCheck registries = new RegistryCheck();
+    private final WorldWrappers worldWrappers = new WorldWrappers();
 
     GameSwitchUnits(MixinPlugins plugins) {
         this.plugins = plugins;
@@ -51,12 +53,12 @@ final class GameSwitchUnits implements SwitchUnits {
 
     @Override
     public void takeRegistryKeysOnce() {
-        RegistryCheck.takeKeysOnce();
+        this.registries.takeKeysOnce();
     }
 
     @Override
     public void checkRegistriesAfter(Set<String> switched) {
-        RegistryCheck.checkAfter(switched);
+        this.registries.checkAfter(switched);
     }
 
     @Override
@@ -151,7 +153,7 @@ final class GameSwitchUnits implements SwitchUnits {
 
     @Override
     public void takeOutWorldWrappers(Collection<String> mods) {
-        WorldWrappers.takeOut(mods);
+        this.worldWrappers.takeOut(mods);
     }
 
     @Override

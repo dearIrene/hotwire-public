@@ -13,29 +13,26 @@ import org.slf4j.LoggerFactory;
 
 public final class RegistryCheck {
     private static final Logger LOGGER = LoggerFactory.getLogger(RegistryCheck.class);
-    private static final IdentityHashMap<Registry<?>, List<ResourceKey<?>>> KEYS = new IdentityHashMap<>();
-    private static boolean told;
+    private final IdentityHashMap<Registry<?>, List<ResourceKey<?>>> keys = new IdentityHashMap<>();
+    private boolean told;
 
-    private RegistryCheck() {
-    }
-
-    public static synchronized void takeKeysOnce() {
-        if (!KEYS.isEmpty()) {
+    public synchronized void takeKeysOnce() {
+        if (!this.keys.isEmpty()) {
             return;
         }
         for (Registry<?> registry : BuiltInRegistries.REGISTRY) {
-            KEYS.put(registry, List.copyOf(registry.registryKeySet()));
+            this.keys.put(registry, List.copyOf(registry.registryKeySet()));
         }
     }
 
     @SuppressWarnings("unchecked")
-    public static synchronized void checkAfter(Set<String> switched) {
-        if (told || KEYS.isEmpty()) {
+    public synchronized void checkAfter(Set<String> switched) {
+        if (this.told || this.keys.isEmpty()) {
             return;
         }
         List<String> gone = new ArrayList<>();
         int count = 0;
-        for (Map.Entry<Registry<?>, List<ResourceKey<?>>> entry : KEYS.entrySet()) {
+        for (Map.Entry<Registry<?>, List<ResourceKey<?>>> entry : this.keys.entrySet()) {
             Registry<Object> registry = (Registry<Object>) entry.getKey();
             for (ResourceKey<?> key : entry.getValue()) {
                 if (!registry.containsKey((ResourceKey<Object>) key)) {
@@ -47,7 +44,7 @@ public final class RegistryCheck {
             }
         }
         if (count > 0) {
-            told = true;
+            this.told = true;
             LOGGER.error("[Hotwire] after the switch of {}, {} of the registries' entries are gone: {}", switched,
                     count, gone);
         }

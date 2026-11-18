@@ -55,30 +55,26 @@ public final class WorldWrappers {
         }
     }
 
-    private static final Map<String, Integer> COUNTS = new HashMap<>();
-
-    private WorldWrappers() {
-    }
-
-    public static synchronized void takeOut(Collection<String> mods) {
+    public synchronized void takeOut(Collection<String> mods) {
         Map<Class<?>, List<FieldSlots.Slot>> fieldsOf = new HashMap<>();
+        Map<String, Integer> counts = new HashMap<>();
         int[] lookedThrough = new int[2];
-        GameHold.onGameAndWait(() -> lookedThrough[0] = unwrap(findClientEntities(), mods, fieldsOf));
+        GameHold.onGameAndWait(() -> lookedThrough[0] = this.unwrap(findClientEntities(), mods, fieldsOf,
+                counts));
         SwitchTimes.mark("client entities");
         IntegratedServer server = Minecraft.getInstance().getSingleplayerServer();
         if (server != null) {
-            GameHold.onServerAndWait(server, () -> lookedThrough[1] = unwrap(findServerEntities(server), mods,
-                    fieldsOf));
+            GameHold.onServerAndWait(server, () -> lookedThrough[1] = this.unwrap(findServerEntities(server), mods,
+                    fieldsOf, counts));
         }
-        COUNTS.forEach((mod, count) -> LOGGER.info(
+        counts.forEach((mod, count) -> LOGGER.info(
                 "[Hotwire] {} entities hold the game's own objects again instead of {}'s wrappers", count, mod));
-        COUNTS.clear();
         LOGGER.info("[Hotwire] {} client and {} server entities were looked through for {}'s wrappers",
                 lookedThrough[0], lookedThrough[1], mods);
     }
 
-    private static int unwrap(List<Entity> entities, Collection<String> mods,
-            Map<Class<?>, List<FieldSlots.Slot>> fieldsOf) {
+    private int unwrap(List<Entity> entities, Collection<String> mods,
+            Map<Class<?>, List<FieldSlots.Slot>> fieldsOf, Map<String, Integer> counts) {
         for (Entity entity : entities) {
             for (FieldSlots.Slot field : fieldsOf.computeIfAbsent(entity.getClass(), WorldWrappers::findGameFields)) {
                 Object value = CollectionParts.read(field, entity);
@@ -87,14 +83,14 @@ public final class WorldWrappers {
                     continue;
                 }
                 Object inner = findWrapped(value, field.getType(), mod);
-                if (inner == null && SAID.add(value.getClass().getName() + field.getName())) {
+                if (inner == null && this.said.add(value.getClass().getName() + field.getName())) {
                     LOGGER.info("[Hotwire] {}.{} holds {}'s {}, which wraps nothing of the field's type: {}",
                             entity.getClass().getName(), field.getName(), mod, value.getClass().getName(),
                             describeFields(value));
                 }
                 if (inner != null && write(field, entity, inner)) {
                     GameRegistrations.getJournal().addTake(mod, new UnwrappedField(entity, field, value, inner));
-                    COUNTS.merge(mod, 1, Integer::sum);
+                    counts.merge(mod, 1, Integer::sum);
                 }
             }
         }
@@ -132,7 +128,7 @@ public final class WorldWrappers {
         return fields;
     }
 
-    private static final Set<String> SAID = ConcurrentHashMap.newKeySet();
+    private final Set<String> said = ConcurrentHashMap.newKeySet();
 
     private static String describeFields(Object wrapper) {
         List<String> out = new ArrayList<>();
