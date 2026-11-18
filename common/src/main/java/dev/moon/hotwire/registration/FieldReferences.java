@@ -65,6 +65,8 @@ public final class FieldReferences {
 
     private final Set<Field> finalsWritten = ConcurrentHashMap.newKeySet();
 
+    private final Set<Class<?>> refusedReaders = Collections.newSetFromMap(new MapMaker().weakKeys().makeMap());
+
     private record EarlyScan(Set<String> mods, LoadedClasses scan, long loaded, long unloaded) {
     }
 
@@ -126,7 +128,7 @@ public final class FieldReferences {
         Set<Field> written = Set.copyOf(this.finalsWritten);
 
         this.finalsWritten.removeAll(written);
-        FinalReaders.refresh(this.instrumentation, this.lambdas.open(), written);
+        FinalReaders.refresh(this.instrumentation, this.lambdas.open(), written, this.refusedReaders);
     }
 
     private List<StaticRecomputer.Recomputation> recomputeStatics(String mod, Map<String, Class<?>> loaded,

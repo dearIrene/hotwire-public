@@ -37,6 +37,10 @@ final class CollectionReferences implements FixedLists.Walk {
 
     static final int WRAPPERS_IN = 512;
     private final Map<String, List<Removal>> removals = new HashMap<>();
+
+    private final LazyFields lazyFields = new LazyFields();
+
+    private final FixedLists.FirstLists firstLists = new FixedLists.FirstLists();
     private final StaticRecomputer.Writer writer;
 
     private IdentityHashMap<Object, Set<String>> seen = new IdentityHashMap<>();
@@ -153,7 +157,7 @@ final class CollectionReferences implements FixedLists.Walk {
 
     private void endRemoval(List<String> mods) {
         this.mine.forEach((mod, out) -> {
-            out.forEach(Removal::resetHolder);
+            out.forEach(removal -> removal.resetHolder(this.lazyFields));
             if (!out.isEmpty()) {
                 this.removals.computeIfAbsent(mod, any -> new ArrayList<>()).addAll(out);
                 LOGGER.info("[Hotwire] {} of {}'s objects were taken out of collections others keep: {}",
@@ -723,6 +727,11 @@ final class CollectionReferences implements FixedLists.Walk {
         return this.writer;
     }
 
+    @Override
+    public FixedLists.FirstLists getFirstLists() {
+        return this.firstLists;
+    }
+
     synchronized void putBack(Collection<String> mods) {
         List<Map.Entry<String, Removal>> back = new ArrayList<>();
         for (String mod : mods) {
@@ -865,7 +874,7 @@ final class CollectionReferences implements FixedLists.Walk {
             Object value = CollectionParts.read(field, holder);
             if ((value instanceof Collection<?> || value instanceof Map<?, ?> || value instanceof Object[])
                     && !field.isPlainOnly() && this.visit(value)) {
-                LazyFields.noteHolder(value, holder);
+                this.lazyFields.noteHolder(value, holder);
                 this.collectField(field, holder, value);
             } else if (value != null && Wrappers.isLookedInto(value) && !isOneConfigNode(value.getClass())
                     && !ElementLook.isLeftToOthers(value) && this.visit(value)) {

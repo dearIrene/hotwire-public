@@ -1,5 +1,6 @@
 package dev.moon.hotwire.registration;
 
+import com.google.common.collect.MapMaker;
 import java.util.ArrayList;
 import java.util.Collection;
 import java.util.Collections;
@@ -60,6 +61,11 @@ public final class RegistrationJournal {
     private long nextSequence;
 
     private final Map<String, List<Take>> takes = new LinkedHashMap<>();
+
+    private final Set<Object> recorderKeys = Collections.newSetFromMap(new MapMaker().weakKeys().makeMap());
+    private final Map<Object, Long> recorderSequences = new MapMaker().weakKeys().makeMap();
+
+    private final Set<String> unownedLines = new HashSet<>();
 
     public synchronized long record(String owner, Registration registration) {
         if (++this.recordsSincePrune >= PRUNE_EVERY) {
@@ -129,6 +135,18 @@ public final class RegistrationJournal {
 
     public synchronized boolean isLive(long sequence) {
         return this.entries.stream().anyMatch(entry -> entry.sequence() == sequence && !this.removed.contains(entry));
+    }
+
+    Set<Object> getRecorderKeys() {
+        return this.recorderKeys;
+    }
+
+    Map<Object, Long> getRecorderSequences() {
+        return this.recorderSequences;
+    }
+
+    Set<String> getUnownedLines() {
+        return this.unownedLines;
     }
 
     public synchronized int restore(String mod) {

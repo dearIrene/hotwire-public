@@ -26,25 +26,22 @@ import org.slf4j.LoggerFactory;
 final class LazyFields {
     private static final Logger LOGGER = LoggerFactory.getLogger(LazyFields.class);
 
-    private static final Map<Object, Object> HOLDERS = new MapMaker().weakKeys().weakValues().makeMap();
+    private final Map<Object, Object> holders = new MapMaker().weakKeys().weakValues().makeMap();
 
-    private static final Map<Class<?>, Map<String, Set<String>>> LAZY = new ConcurrentHashMap<>();
+    private final Map<Class<?>, Map<String, Set<String>>> lazyByClass = new ConcurrentHashMap<>();
 
-    private LazyFields() {
-    }
-
-    static void noteHolder(Object collection, Object holder) {
-        HOLDERS.put(collection, holder);
+    void noteHolder(Object collection, Object holder) {
+        this.holders.put(collection, holder);
     }
 
     @SuppressWarnings("ReferenceEquality")
-    static void resetFor(Object collection) {
-        Object holder = HOLDERS.get(collection);
+    void resetFor(Object collection) {
+        Object holder = this.holders.get(collection);
         if (holder == null) {
             return;
         }
         for (Class<?> at = holder.getClass(); at != null && at != Object.class; at = at.getSuperclass()) {
-            Map<String, Set<String>> lazy = LAZY.computeIfAbsent(at, LazyFields::findLazy);
+            Map<String, Set<String>> lazy = this.lazyByClass.computeIfAbsent(at, LazyFields::findLazy);
             String of = findFieldHolding(at, holder, collection);
             if (of == null) {
                 continue;

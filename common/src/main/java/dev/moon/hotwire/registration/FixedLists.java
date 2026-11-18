@@ -32,30 +32,34 @@ final class FixedLists {
         List<Removal> getRemovalsOf(String mod);
 
         StaticRecomputer.Writer getWriter();
+
+        FirstLists getFirstLists();
     }
 
     private FixedLists() {
     }
 
-    private static final Map<List<?>, List<?>> ROOTS = new MapMaker().weakKeys().makeMap();
+    static final class FirstLists {
+        private final Map<List<?>, List<?>> firsts = new MapMaker().weakKeys().makeMap();
 
-    private static List<?> findRoot(List<?> list) {
-        List<?> found = ROOTS.get(list);
-        return found == null ? list : found;
-    }
+        List<?> findFirst(List<?> list) {
+            List<?> found = this.firsts.get(list);
+            return found == null ? list : found;
+        }
 
-    @SuppressWarnings({"unchecked", "ReferenceEquality"})
-    static List<Object> findHolderList(List<Object> elements, List<?> first) {
-        boolean same = elements.size() == first.size();
-        for (int index = 0; same && index < elements.size(); index++) {
-            same = elements.get(index) == first.get(index);
+        @SuppressWarnings({"unchecked", "ReferenceEquality"})
+        List<Object> findHolderList(List<Object> elements, List<?> first) {
+            boolean same = elements.size() == first.size();
+            for (int index = 0; same && index < elements.size(); index++) {
+                same = elements.get(index) == first.get(index);
+            }
+            if (same) {
+                return (List<Object>) first;
+            }
+            List<Object> copy = Collections.unmodifiableList(elements);
+            this.firsts.put(copy, first);
+            return copy;
         }
-        if (same) {
-            return (List<Object>) first;
-        }
-        List<Object> copy = Collections.unmodifiableList(elements);
-        ROOTS.put(copy, first);
-        return copy;
     }
 
     private static boolean isPlainList(List<?> list) {
@@ -143,17 +147,18 @@ final class FixedLists {
             String mod = item == null ? null : walk.getOwners().findOwnerOf(item, walk.isInSmall());
             if (mod != null) {
                 out.computeIfAbsent(mod, any -> new ArrayList<>())
-                        .add(new Removal.InFixedValue(entries, key, index, item, findRoot(now)));
+                        .add(new Removal.InFixedValue(entries, key, index, item, walk.getFirstLists().findFirst(now),
+                                walk.getFirstLists()));
             } else {
                 retained.add(item);
             }
         }
         walk.setInSmall(outer);
-        return out.isEmpty() ? null : new Plan(retained, out, findRoot(now));
+        return out.isEmpty() ? null : new Plan(retained, out, walk.getFirstLists().findFirst(now));
     }
 
     private static void writeValue(Walk walk, Map<Object, Object> entries, Object key, Plan plan) {
-        entries.put(key, findHolderList(plan.retained(), plan.first()));
+        entries.put(key, walk.getFirstLists().findHolderList(plan.retained(), plan.first()));
         plan.out().forEach((mod, removed) -> walk.getRemovalsOf(mod).addAll(removed));
     }
 
@@ -196,7 +201,8 @@ final class FixedLists {
             String mod = item == null ? null : walk.getOwners().findOwnerOf(item, walk.isInSmall());
             if (mod != null) {
                 out.computeIfAbsent(mod, any -> new ArrayList<>())
-                        .add(new Removal.InFixedList(field, holder, index, item, walk.getWriter(), findRoot(now)));
+                        .add(new Removal.InFixedList(field, holder, index, item, walk.getWriter(),
+                                walk.getFirstLists().findFirst(now), walk.getFirstLists()));
             } else {
                 retained.add(item);
             }
@@ -206,12 +212,12 @@ final class FixedLists {
         if (retained.isEmpty() && now.stream().allMatch(item -> item instanceof Enum<?>)) {
             return null;
         }
-        return out.isEmpty() ? null : new Plan(retained, out, findRoot(now));
+        return out.isEmpty() ? null : new Plan(retained, out, walk.getFirstLists().findFirst(now));
     }
 
     private static void writeField(Walk walk, FieldSlots.Slot field, @Nullable Object holder, Plan plan) {
         try {
-            walk.getWriter().write(field, holder, findHolderList(plan.retained(), plan.first()));
+            walk.getWriter().write(field, holder, walk.getFirstLists().findHolderList(plan.retained(), plan.first()));
             plan.out().forEach((mod, removed) -> walk.getRemovalsOf(mod).addAll(removed));
         } catch (IllegalAccessException e) {
             LOGGER.warn("[Hotwire] {} keeps {}'s elements: {}", field, plan.out().keySet(), e.toString());

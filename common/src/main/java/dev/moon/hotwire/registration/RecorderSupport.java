@@ -1,8 +1,5 @@
 package dev.moon.hotwire.registration;
 
-import com.google.common.collect.MapMaker;
-import java.util.Collections;
-import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
@@ -14,10 +11,6 @@ public final class RecorderSupport {
     private static final Logger LOGGER = LoggerFactory.getLogger(RecorderSupport.class);
     private static final StackWalker STACK = StackWalker.getInstance(StackWalker.Option.RETAIN_CLASS_REFERENCE);
 
-    private static final Set<Object> KNOWN = Collections.newSetFromMap(new MapMaker().weakKeys().makeMap());
-    private static final Map<Object, Long> SEQUENCES = new MapMaker().weakKeys().makeMap();
-    private static final Set<String> UNOWNED = new HashSet<>();
-
     private RecorderSupport() {
     }
 
@@ -28,26 +21,26 @@ public final class RecorderSupport {
     }
 
     public static boolean isFirst(Object key) {
-        if (GameRegistrations.getJournal().isRestoring()) {
+        RegistrationJournal journal = GameRegistrations.getJournal();
+        if (journal.isRestoring()) {
             return false;
         }
-        synchronized (KNOWN) {
-            if (KNOWN.add(key)) {
+        Set<Object> known = journal.getRecorderKeys();
+        synchronized (known) {
+            if (known.add(key)) {
                 return true;
             }
         }
+        Map<Object, Long> sequences = journal.getRecorderSequences();
         Long sequence;
-        synchronized (SEQUENCES) {
-            sequence = SEQUENCES.get(key);
+        synchronized (sequences) {
+            sequence = sequences.get(key);
         }
-        return sequence != null && !GameRegistrations.getJournal().isLive(sequence);
+        return sequence != null && !journal.isLive(sequence);
     }
 
     public static void recordAs(String mod, Object key, Registration registration) {
-        long sequence = GameRegistrations.getJournal().record(mod, registration);
-        synchronized (SEQUENCES) {
-            SEQUENCES.put(key, sequence);
-        }
+        noteSequence(key, GameRegistrations.getJournal().record(mod, registration));
     }
 
     public static boolean record(Object key, Registration registration) {
@@ -61,17 +54,22 @@ public final class RecorderSupport {
             logUnowned(registration);
             return false;
         }
-        long sequence = GameRegistrations.getJournal().record(owner.mod(), registration);
-        synchronized (SEQUENCES) {
-            SEQUENCES.put(key, sequence);
-        }
+        noteSequence(key, GameRegistrations.getJournal().record(owner.mod(), registration));
         return true;
+    }
+
+    private static void noteSequence(Object key, long sequence) {
+        Map<Object, Long> sequences = GameRegistrations.getJournal().getRecorderSequences();
+        synchronized (sequences) {
+            sequences.put(key, sequence);
+        }
     }
 
     private static void logUnowned(Registration registration) {
         String what = registration.getKind() + " " + registration.describe();
-        synchronized (UNOWNED) {
-            if (!UNOWNED.add(what)) {
+        Set<String> unowned = GameRegistrations.getJournal().getUnownedLines();
+        synchronized (unowned) {
+            if (!unowned.add(what)) {
                 return;
             }
         }
@@ -82,8 +80,9 @@ public final class RecorderSupport {
     }
 
     public static long getSequenceOf(Object key) {
-        synchronized (SEQUENCES) {
-            return SEQUENCES.getOrDefault(key, Long.MAX_VALUE);
+        Map<Object, Long> sequences = GameRegistrations.getJournal().getRecorderSequences();
+        synchronized (sequences) {
+            return sequences.getOrDefault(key, Long.MAX_VALUE);
         }
     }
 }

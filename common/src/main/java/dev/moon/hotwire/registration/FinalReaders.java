@@ -1,6 +1,5 @@
 package dev.moon.hotwire.registration;
 
-import com.google.common.collect.MapMaker;
 import dev.moon.hotwire.jvm.LoadedClassList;
 import dev.moon.hotwire.rebuild.ConstantPools;
 import java.lang.instrument.Instrumentation;
@@ -8,7 +7,6 @@ import java.lang.instrument.UnmodifiableClassException;
 import java.lang.reflect.Field;
 import java.lang.reflect.Modifier;
 import java.util.Arrays;
-import java.util.Collections;
 import java.util.HashMap;
 import java.util.HashSet;
 import java.util.LinkedHashSet;
@@ -23,9 +21,6 @@ import org.slf4j.LoggerFactory;
 
 final class FinalReaders {
     private static final Logger LOGGER = LoggerFactory.getLogger(FinalReaders.class);
-
-    private static final Set<Class<?>> REFUSED = Collections.newSetFromMap(new MapMaker().weakKeys().makeMap());
-
     private FinalReaders() {
     }
 
@@ -49,7 +44,8 @@ final class FinalReaders {
         return read;
     }
 
-    static void refresh(Instrumentation instrumentation, @Nullable ConstantPools pools, Set<Field> written) {
+    static void refresh(Instrumentation instrumentation, @Nullable ConstantPools pools, Set<Field> written,
+            Set<Class<?>> refused) {
         if (written.isEmpty()) {
             return;
         }
@@ -71,13 +67,13 @@ final class FinalReaders {
                     .toList());
         }
         long found = System.nanoTime();
-        readers.removeAll(REFUSED);
-        readBack(instrumentation, List.copyOf(readers));
+        readers.removeAll(refused);
+        readBack(instrumentation, List.copyOf(readers), refused);
         LOGGER.info("[Hotwire] {} classes reading {} statics made again were read anew in {} ms (found in {} ms)",
                 readers.size(), written.size(), (System.nanoTime() - began) / 1_000_000, (found - began) / 1_000_000);
     }
 
-    private static void readBack(Instrumentation instrumentation, List<Class<?>> readers) {
+    private static void readBack(Instrumentation instrumentation, List<Class<?>> readers, Set<Class<?>> refused) {
         if (readers.isEmpty()) {
             return;
         }
@@ -86,12 +82,12 @@ final class FinalReaders {
         } catch (UnmodifiableClassException | RuntimeException | LinkageError e) {
             if (readers.size() > 1) {
                 int half = readers.size() / 2;
-                readBack(instrumentation, readers.subList(0, half));
-                readBack(instrumentation, readers.subList(half, readers.size()));
+                readBack(instrumentation, readers.subList(0, half), refused);
+                readBack(instrumentation, readers.subList(half, readers.size()), refused);
                 return;
             }
             Class<?> reader = readers.get(0);
-            REFUSED.add(reader);
+            refused.add(reader);
 
             if (e instanceof ClassFormatError && reader.isRecord()) {
                 LOGGER.info("[Hotwire] the JVM cannot read {} back: {}", reader.getName(), e.toString());

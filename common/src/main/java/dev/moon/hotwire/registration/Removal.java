@@ -15,7 +15,7 @@ public sealed interface Removal {
 
     @Nullable Object container();
 
-    default void resetHolder() {
+    default void resetHolder(LazyFields lazy) {
     }
 
     record InList(List<Object> list, int index, Object element) implements Removal {
@@ -37,8 +37,8 @@ public sealed interface Removal {
         }
 
         @Override
-        public void resetHolder() {
-            LazyFields.resetFor(this.list);
+        public void resetHolder(LazyFields lazy) {
+            lazy.resetFor(this.list);
         }
     }
 
@@ -63,8 +63,8 @@ public sealed interface Removal {
         }
 
         @Override
-        public void resetHolder() {
-            LazyFields.resetFor(this.collection);
+        public void resetHolder(LazyFields lazy) {
+            lazy.resetFor(this.collection);
         }
     }
 
@@ -101,7 +101,7 @@ public sealed interface Removal {
     }
 
     record InFixedList(FieldSlots.Slot field, @Nullable Object holder, int index, Object element,
-            StaticRecomputer.Writer writer, List<?> first) implements Removal {
+            StaticRecomputer.Writer writer, List<?> first, FixedLists.FirstLists firsts) implements Removal {
         @Override
         public @Nullable Object container() {
             return CollectionParts.read(this.field, this.holder);
@@ -116,7 +116,7 @@ public sealed interface Removal {
             List<Object> back = new ArrayList<>(now);
             back.add(Math.min(this.index, back.size()), this.element);
             try {
-                this.writer.write(this.field, this.holder, FixedLists.findHolderList(back, this.first));
+                this.writer.write(this.field, this.holder, this.firsts.findHolderList(back, this.first));
             } catch (IllegalAccessException e) {
                 LoggerFactory.getLogger(Removal.class).warn("[Hotwire] {} could not be given its element back",
                         this.field, e);
@@ -130,8 +130,8 @@ public sealed interface Removal {
         }
     }
 
-    record InFixedValue(Map<Object, Object> map, Object key, int index, Object element, List<?> first)
-            implements Removal {
+    record InFixedValue(Map<Object, Object> map, Object key, int index, Object element, List<?> first,
+            FixedLists.FirstLists firsts) implements Removal {
         @Override
         public Object container() {
             return this.map;
@@ -144,7 +144,7 @@ public sealed interface Removal {
             }
             List<Object> back = new ArrayList<>(now);
             back.add(Math.min(this.index, back.size()), this.element);
-            this.map.put(this.key, FixedLists.findHolderList(back, this.first));
+            this.map.put(this.key, this.firsts.findHolderList(back, this.first));
         }
 
         @Override
