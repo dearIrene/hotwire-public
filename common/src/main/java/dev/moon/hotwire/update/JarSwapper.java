@@ -23,7 +23,7 @@ public final class JarSwapper {
 
     private static final String DISABLED = ".disabled";
 
-    private record Move(Path from, Path to) {
+    private record Move(Path from, Path to, boolean linked) {
     }
 
     private JarSwapper() {
@@ -198,14 +198,23 @@ public final class JarSwapper {
     }
 
     private static void move(Path from, Path to, List<Move> moved) throws IOException {
-        Files.move(from, to, StandardCopyOption.REPLACE_EXISTING);
-        moved.add(new Move(from, to));
+        boolean linked = Files.exists(to) && Files.isSameFile(from, to);
+        if (linked) {
+            Files.delete(from);
+        } else {
+            Files.move(from, to, StandardCopyOption.REPLACE_EXISTING);
+        }
+        moved.add(new Move(from, to, linked));
     }
 
     private static void putBack(List<Move> moved) {
         for (Move move : moved.reversed()) {
             try {
-                Files.move(move.to(), move.from());
+                if (move.linked()) {
+                    Files.copy(move.to(), move.from());
+                } else {
+                    Files.move(move.to(), move.from());
+                }
             } catch (IOException e) {
                 LOGGER.warn("[Hotwire] {} could not go back to {}", move.to(), move.from(), e);
             }
