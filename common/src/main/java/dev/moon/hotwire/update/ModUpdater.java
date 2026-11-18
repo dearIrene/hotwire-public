@@ -263,6 +263,12 @@ public final class ModUpdater {
     }
 
     public Map<String, String> dropUnstartable() {
+        return this.inBatch ? Map.of() : this.dropUnstartableNow();
+    }
+
+    private volatile boolean inBatch;
+
+    Map<String, String> dropUnstartableNow() {
         Map<String, String> dropped = new HashMap<>();
         ModGraph graph = this.engine.getGraph();
         NextStart.Game game = new NextStart.Game() {
@@ -295,7 +301,7 @@ public final class ModUpdater {
             for (UpdateQueue.Entry entry : this.engine.getQueue().getEntries()) {
                 Path staged = Path.of(entry.stagedJar());
                 if (Files.isRegularFile(staged)) {
-                    waiting.put(entry.modId(), this.findComingOf(staged));
+                    waiting.put(entry.modId(), this.findComingOfQueued(entry, staged));
                 }
             }
             NextStart.Unmet unmet = NextStart.findUnmet(waiting, game);
@@ -313,18 +319,28 @@ public final class ModUpdater {
                     : Lang.get(unmet.breaks() ? "hotwire.update.stays_excludes" : "hotwire.update.stays_needs", mod,
                             other, ranges, has);
             LOGGER.info("[Hotwire] {}'s update does not wait for the next start: {}", unmet.entry(), why);
-            try {
-                Path staging = this.engine.getStagingFolder().toAbsolutePath();
-                for (UpdateQueue.Entry entry : this.engine.getQueue().getEntries()) {
-                    Path staged = Path.of(entry.stagedJar()).toAbsolutePath();
-                    if (entry.modId().equals(unmet.entry()) && staged.startsWith(staging)) {
-                        Files.deleteIfExists(staged);
-                    }
+
+            Path staging = this.engine.getStagingFolder().toAbsolutePath();
+            List<Path> jars = new ArrayList<>();
+            for (UpdateQueue.Entry entry : this.engine.getQueue().getEntries()) {
+                Path staged = Path.of(entry.stagedJar()).toAbsolutePath();
+                if (entry.modId().equals(unmet.entry()) && staged.startsWith(staging)) {
+                    jars.add(staged);
                 }
+            }
+            try {
                 this.engine.getQueue().remove(unmet.entry());
             } catch (IOException e) {
                 LOGGER.warn("[Hotwire] {}'s update could not be taken off the queue", unmet.entry(), e);
                 return dropped;
+            }
+            for (Path staged : jars) {
+                try {
+                    Files.deleteIfExists(staged);
+                } catch (IOException e) {
+                    LOGGER.info("[Hotwire] {} stays until the next start cleans it: {}", staged.getFileName(),
+                            e.toString());
+                }
             }
             dropped.put(unmet.entry(), why);
         }
@@ -452,11 +468,14 @@ public final class ModUpdater {
     public List<Result> updateAll(List<Path> jars, Function<Path, Result> alone,
             BiFunction<Path, Result.Failed, Result> instead) {
         SwitchTimes.begin();
+        this.inBatch = true;
         try {
             this.wideners.clear();
             this.updateCopies.forgetBatch();
             return new UpdateBatch(this, this.live).run(jars, alone, instead);
         } finally {
+            this.inBatch = false;
+
             this.plans.clear();
             this.carried.forget();
             SwitchTimes.end("the update of " + jars.size() + " mods");
@@ -505,17 +524,39 @@ public final class ModUpdater {
         }
     }
 
-    private final Map<String, Map<String, String>> carriedByQueued = new ConcurrentHashMap<>();
+    private final Map<String, List<ModManifest>> modsOfQueued = new ConcurrentHashMap<>();
 
     private Map<String, String> findCarriedBy(UpdateQueue.Entry entry) {
-        return this.carriedByQueued.computeIfAbsent(entry.stagedSha256(), hash -> {
-            Map<String, String> carried = new HashMap<>();
-            Path staged = Path.of(entry.stagedJar());
-            if (Files.isRegularFile(staged)) {
-                this.findComingOf(staged).forEach((id, coming) -> carried.put(id, coming.version()));
+        Map<String, String> carried = new HashMap<>();
+        Path staged = Path.of(entry.stagedJar());
+        if (Files.isRegularFile(staged)) {
+            this.findComingOfQueued(entry, staged).forEach((id, coming) -> carried.put(id, coming.version()));
+        }
+        return carried;
+    }
+
+    private Map<String, ModManifest> findComingOfQueued(UpdateQueue.Entry entry, Path staged) {
+        List<ModManifest> mods = this.modsOfQueued.computeIfAbsent(entry.stagedSha256(), hash -> {
+            List<ModManifest> all = new ArrayList<>();
+            try {
+                addMods(this.plans.read(this.unwrap(staged)), all);
+            } catch (ModJarException e) {
+                LOGGER.debug("[Hotwire] {} could not be read for what it brings", staged.getFileName(), e);
             }
-            return carried;
+            return all;
         });
+
+        Map<String, ModManifest> coming = new HashMap<>();
+        if (!mods.isEmpty()) {
+            coming.put(mods.getFirst().id(), mods.getFirst());
+        }
+        mods.forEach(manifest -> this.addComing(manifest, coming));
+        return coming;
+    }
+
+    private static void addMods(ModJar jar, List<ModManifest> into) {
+        into.add(jar.manifest());
+        jar.nested().forEach(nested -> addMods(nested, into));
     }
 
     SortResult sort(Path picked, Map<String, ModManifest> brought, Map<String, String> waiting) {
@@ -891,13 +932,16 @@ public final class ModUpdater {
     }
 
     Map<String, ModManifest> readComing(ModJar jar, Map<String, ModManifest> into) {
-        ModManifest manifest = jar.manifest();
+        this.addComing(jar.manifest(), into);
+        jar.nested().forEach(nested -> this.readComing(nested, into));
+        return into;
+    }
+
+    private void addComing(ModManifest manifest, Map<String, ModManifest> into) {
         String runs = this.engine.findVersionOf(manifest.id());
         if (runs == null || VERSION_ORDER.compare(manifest.version(), runs) > 0) {
             into.putIfAbsent(manifest.id(), manifest);
         }
-        jar.nested().forEach(nested -> this.readComing(nested, into));
-        return into;
     }
 
     private @Nullable ModManifest findComingAs(String id) {

@@ -478,7 +478,7 @@ final class EngineStart {
             ready.runner().setAfterOff(result -> {
                 started.getDisabled().disableAfter(result);
 
-                Games.getNow().runOnGame(started::checkQueue);
+                started.checkQueueAfterOff();
             });
             ready.runner().setBeforeOn(started.getDisabled()::restore);
         }

@@ -860,6 +860,16 @@ public final class HotwireEngine implements ModScreenGame, AutoCloseable {
         }
     }
 
+    public void checkQueueAfterOff() {
+        JvmParts parts = this.findParts();
+        if (parts != null) {
+            List<String> said = List.copyOf(parts.updates().checkQueue().values());
+            if (!said.isEmpty()) {
+                Games.getNow().runOnGame(() -> said.forEach(why -> this.showMessage(why, true)));
+            }
+        }
+    }
+
     @Override
     public void removeCopy(String id) throws IOException {
         this.rows.removeCopy(id);

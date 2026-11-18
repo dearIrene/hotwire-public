@@ -110,7 +110,7 @@ final class UpdateBatch {
         try {
             this.runSorted(jars, inPlace, inPlaceAt, later, results, waiting, alone, instead);
         } finally {
-            Map<String, String> dropped = this.updater.dropUnstartable();
+            Map<String, String> dropped = this.updater.dropUnstartableNow();
             for (int i = 0; i < results.length; i++) {
                 if (results[i] instanceof ModUpdater.Result.Queued queued && dropped.containsKey(queued.id())) {
                     results[i] = new ModUpdater.Result.Refused(dropped.get(queued.id()));
