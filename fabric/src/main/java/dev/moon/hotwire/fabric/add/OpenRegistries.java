@@ -6,7 +6,6 @@ import dev.moon.hotwire.fabric.version.RegistryBands;
 import dev.moon.hotwire.redefine.FieldSlots;
 import dev.moon.hotwire.registration.Fields;
 import java.util.ArrayList;
-import java.util.Collections;
 import java.util.IdentityHashMap;
 import java.util.List;
 import java.util.Map;
@@ -23,9 +22,6 @@ public final class OpenRegistries implements AutoCloseable {
 
     private static volatile boolean open;
 
-    private static final Set<Registry<?>> INTRUSIVE = Collections.synchronizedSet(
-            Collections.newSetFromMap(new IdentityHashMap<>()));
-
     private final List<MappedRegistry<?>> opened = new ArrayList<>();
     private final IdentityHashMap<MappedRegistry<?>, Integer> sizes = new IdentityHashMap<>();
     private List<String> grew = List.of();
@@ -36,10 +32,6 @@ public final class OpenRegistries implements AutoCloseable {
 
     private static String nameOf(Registry<?> registry) {
         return InternedKeys.findIdOf(registry.key()).toString();
-    }
-
-    public static void allowIntrusive(MappedRegistry<?> registry) {
-        INTRUSIVE.add(registry);
     }
 
     public static boolean isOpen() {
@@ -58,7 +50,7 @@ public final class OpenRegistries implements AutoCloseable {
                 MappedRegistryAccessor access = (MappedRegistryAccessor) mapped;
                 access.hotwire$setFrozen(false);
                 open.sizes.put(mapped, mapped.size());
-                if (INTRUSIVE.contains(registry) && access.hotwire$getUnregisteredIntrusiveHolders() == null) {
+                if (isIntrusive(mapped) && access.hotwire$getUnregisteredIntrusiveHolders() == null) {
                     access.hotwire$setUnregisteredIntrusiveHolders(new IdentityHashMap<>());
                 }
                 open.opened.add(mapped);
@@ -83,7 +75,7 @@ public final class OpenRegistries implements AutoCloseable {
                 LOGGER.warn("[Hotwire] {} entries of {} were made and never registered", unregistered.size(),
                         nameOf(registry));
             }
-            if (INTRUSIVE.contains(registry)) {
+            if (isIntrusive(registry)) {
                 access.hotwire$setUnregisteredIntrusiveHolders(null);
             }
             access.hotwire$setFrozen(true);
@@ -131,6 +123,14 @@ public final class OpenRegistries implements AutoCloseable {
         } catch (IllegalStateException bound) {
             LOGGER.info("[Hotwire] {} keeps the tags it has: {}", nameOf(registry), bound.getMessage());
         }
+    }
+
+    private static boolean isIntrusive(MappedRegistry<?> registry) {
+        return ((IntrusiveRegistry) registry).hotwire$isIntrusive();
+    }
+
+    public interface IntrusiveRegistry {
+        boolean hotwire$isIntrusive();
     }
 
     List<String> getGrown() {
