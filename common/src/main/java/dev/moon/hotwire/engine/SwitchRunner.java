@@ -36,7 +36,6 @@ import dev.moon.hotwire.switching.SwitchTimes;
 import dev.moon.hotwire.ui.Lang;
 import dev.moon.hotwire.ui.notices.Notice;
 import dev.moon.hotwire.ui.notices.Notices;
-import dev.moon.hotwire.update.LiveUpdates;
 import java.lang.instrument.Instrumentation;
 import java.lang.management.ManagementFactory;
 import java.lang.management.ThreadMXBean;
