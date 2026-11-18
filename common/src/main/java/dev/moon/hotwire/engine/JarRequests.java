@@ -47,7 +47,7 @@ final class JarRequests {
     }
 
     @SuppressWarnings("FutureReturnValueIgnored")
-    void add(Path jar, AddMode mode, Consumer<ModAdder.Result> then) {
+    void add(Path jar, AddMode mode, boolean byPlayer, Consumer<ModAdder.Result> then) {
         if (mode == AddMode.NEXT_START && this.engine.isInModsFolder(jar)) {
             String name = String.valueOf(jar.getFileName());
             ModAdder.Result queued = new ModAdder.Result.Queued(name, Lang.get("hotwire.folder.next_start", name));
@@ -69,7 +69,8 @@ final class JarRequests {
         this.progress.beginAdding(String.valueOf(jar.getFileName()).replaceFirst("(?i)\\.jar$", ""));
         this.tasks.submit("add", () -> {
             try {
-                return mode == AddMode.SAVE_AND_REOPEN ? this.changes.addWithReopen(jar) : this.changes.addNow(jar);
+                return mode == AddMode.SAVE_AND_REOPEN ? this.changes.addWithReopen(jar, byPlayer)
+                        : this.changes.addNow(jar);
             } finally {
                 this.progress.endAdding();
             }

@@ -12,7 +12,13 @@ import java.util.stream.Stream;
 import org.jspecify.annotations.Nullable;
 
 public final class WorldBackups {
+    private static final long LEFT_OVER = 512L * 1024 * 1024;
+
     private WorldBackups() {
+    }
+
+    public static long findRoomNeeded(long size) {
+        return size + Math.max(size / 10, LEFT_OVER);
     }
 
     public static long findSize(Path world) throws IOException {

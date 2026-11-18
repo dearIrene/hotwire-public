@@ -44,7 +44,7 @@ public interface AddGame {
 
     void refuseWorldsFor(String name);
 
-    ModAdder.Result addAroundReopen(Supplier<ModAdder.Result> add);
+    ModAdder.Result addAroundReopen(Supplier<ModAdder.Result> add, boolean byPlayer);
 
     MixinCopy.Decorations readDecorations(List<ModJar> jars);
 }

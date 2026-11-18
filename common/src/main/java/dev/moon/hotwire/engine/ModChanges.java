@@ -47,13 +47,14 @@ public final class ModChanges {
                 : ready.adds().add(jar, this.installed::nameOf);
     }
 
-    public ModAdder.Result addWithReopen(Path jar) {
+    public ModAdder.Result addWithReopen(Path jar, boolean byPlayer) {
         ActionJournal.Entry journal = ActionJournal.get().begin(ActionJournal.Action.REOPEN_ADD,
                 String.valueOf(jar.getFileName()));
         ModAdder.Result result;
         try {
             JvmParts ready = this.parts;
-            result = ready == null ? this.addNow(jar) : ready.adds().addAroundReopen(() -> this.addNow(jar));
+            result = ready == null ? this.addNow(jar) : ready.adds().addAroundReopen(() -> this.addNow(jar),
+                    byPlayer);
         } catch (RuntimeException e) {
             journal.endThrown();
             throw e;

@@ -98,8 +98,8 @@ public final class GameSide implements Game {
     }
 
     @Override
-    public <T> T reopenAround(Supplier<T> work) throws InterruptedException {
-        return WorldReopen.runAround(work);
+    public <T> T reopenAround(Supplier<T> work, boolean byPlayer) throws InterruptedException {
+        return WorldReopen.runAround(work, byPlayer);
     }
 
     @Override

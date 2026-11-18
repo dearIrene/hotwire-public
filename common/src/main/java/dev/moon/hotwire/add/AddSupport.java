@@ -243,8 +243,8 @@ public final class AddSupport implements ModAdder.Engine {
         return result;
     }
 
-    public ModAdder.Result addAroundReopen(Supplier<ModAdder.Result> add) {
-        return this.game.addAroundReopen(add);
+    public ModAdder.Result addAroundReopen(Supplier<ModAdder.Result> add, boolean byPlayer) {
+        return this.game.addAroundReopen(add, byPlayer);
     }
 
     public static void endJournal(ActionJournal.Entry journal, ModAdder.Result result) {

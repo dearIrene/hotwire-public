@@ -223,11 +223,12 @@ final class SwitchRequests {
     }
 
     @SuppressWarnings("FutureReturnValueIgnored")
-    CompletableFuture<SwitchResult> switchWithReopen(SwitchRunner runner, boolean off, List<String> ids) {
+    CompletableFuture<SwitchResult> switchWithReopen(SwitchRunner runner, boolean off, List<String> ids,
+            boolean byPlayer) {
         CompletableFuture<SwitchResult> ended = EngineApi.beginSwitch(this.engine);
         this.tasks.submit("save and switch", () -> {
             try {
-                return Optional.ofNullable(runSwitchWithReopen(runner, off, ids));
+                return Optional.ofNullable(runSwitchWithReopen(runner, off, ids, byPlayer));
             } catch (InterruptedException e) {
                 Thread.currentThread().interrupt();
                 throw new IllegalStateException("the switch was interrupted while the world closed or opened", e);
@@ -245,8 +246,8 @@ final class SwitchRequests {
         return ended;
     }
 
-    static @Nullable CheckedResult runSwitchWithReopen(SwitchRunner runner, boolean off, List<String> ids)
-            throws InterruptedException {
+    static @Nullable CheckedResult runSwitchWithReopen(SwitchRunner runner, boolean off, List<String> ids,
+            boolean byPlayer) throws InterruptedException {
         ActionJournal.Entry journal = ActionJournal.get().begin(off ? ActionJournal.Action.REOPEN_OFF
                 : ActionJournal.Action.REOPEN_ON, ids);
         @Nullable CheckedResult result;
@@ -256,7 +257,7 @@ final class SwitchRequests {
                     return null;
                 }
                 return off ? runner.turnOff(ids) : runner.turnOn(ids);
-            });
+            }, byPlayer);
         } catch (InterruptedException | RuntimeException e) {
             journal.endThrown();
             throw e;

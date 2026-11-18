@@ -93,7 +93,7 @@ public final class CrashGuard {
                                     + caught.mod() + " after its crash", () -> turnOffAfterCrash(caught.mod(), () -> {
                                         try {
                                             return Games.getNow().reopenAround(
-                                                    () -> switching.turnOffQuietly(caught.mod()));
+                                                    () -> switching.turnOffQuietly(caught.mod()), false);
                                         } catch (InterruptedException e) {
                                             Thread.currentThread().interrupt();
                                             throw new IllegalStateException("the off was interrupted while the"

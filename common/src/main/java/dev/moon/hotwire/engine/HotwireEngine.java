@@ -165,7 +165,7 @@ public final class HotwireEngine implements ModScreenGame, AutoCloseable {
             }
         });
         this.disabled = new DisabledMods(installed, settings, folders.mods(), this::showMessage,
-                (jar, then) -> this.jars.add(jar, AddMode.NOW, then));
+                (jar, then) -> this.jars.add(jar, AddMode.NOW, false, then));
         this.switches = new SwitchRequests(this, this.tasks, installed, settings, this.disabled, () -> this.screen,
                 this::showMessage);
         this.profiles = new ProfileStore(FabricLoader.getInstance().getConfigDir().resolve("hotwire/profiles.txt"));
@@ -342,16 +342,16 @@ public final class HotwireEngine implements ModScreenGame, AutoCloseable {
     @Override
     @SuppressWarnings("FutureReturnValueIgnored")
     public void switchWithReopen(boolean off, List<String> ids) {
-        this.switches.switchWithReopen(this.requireSwitching().runner(), off, ids);
+        this.switches.switchWithReopen(this.requireSwitching().runner(), off, ids, true);
     }
 
     CompletableFuture<SwitchResult> switchWithReopenFor(boolean off, List<String> ids) {
-        return this.switches.switchWithReopen(this.requireSwitching().runner(), off, ids);
+        return this.switches.switchWithReopen(this.requireSwitching().runner(), off, ids, false);
     }
 
     public @Nullable CheckedResult runSwitchWithReopen(boolean off, List<String> ids)
             throws InterruptedException {
-        return SwitchRequests.runSwitchWithReopen(this.requireSwitching().runner(), off, ids);
+        return SwitchRequests.runSwitchWithReopen(this.requireSwitching().runner(), off, ids, true);
     }
 
     public List<String> getDryRunCandidates() {
@@ -879,7 +879,7 @@ public final class HotwireEngine implements ModScreenGame, AutoCloseable {
 
     @Override
     public void add(Path jar, AddMode mode) {
-        this.jars.add(jar, mode, result -> this.storeJars.offerNext());
+        this.jars.add(jar, mode, true, result -> this.storeJars.offerNext());
     }
 
     @Override
@@ -1024,7 +1024,7 @@ public final class HotwireEngine implements ModScreenGame, AutoCloseable {
     }
 
     void add(Path jar, AddMode mode, Consumer<ModAdder.Result> then) {
-        this.jars.add(jar, mode, then);
+        this.jars.add(jar, mode, false, then);
     }
 
     @Override

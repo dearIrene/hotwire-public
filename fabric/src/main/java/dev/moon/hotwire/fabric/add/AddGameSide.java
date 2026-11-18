@@ -65,8 +65,8 @@ public final class AddGameSide implements AddGame {
     }
 
     @Override
-    public ModAdder.Result addAroundReopen(Supplier<ModAdder.Result> add) {
-        return WorldReopen.add(add);
+    public ModAdder.Result addAroundReopen(Supplier<ModAdder.Result> add, boolean byPlayer) {
+        return WorldReopen.add(add, byPlayer);
     }
 
     @Override

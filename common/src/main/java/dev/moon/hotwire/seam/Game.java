@@ -26,7 +26,7 @@ public interface Game {
 
     @Nullable Object getWorld();
 
-    <T> T reopenAround(Supplier<T> work) throws InterruptedException;
+    <T> T reopenAround(Supplier<T> work, boolean byPlayer) throws InterruptedException;
 
     Object getModelManager();
 
