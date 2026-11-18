@@ -17,7 +17,8 @@ public final class ReportPage {
     private static final int WIDE = 360;
     public final Part part;
     private final Text title = Kit.text(Lang.get("hotwire.report.page")).big();
-    private final Text warning = Kit.text("", Palette.BAD).wrap();
+
+    private final Text warning = Kit.text("", Palette.BAD).wrap().lines(4);
     private final Text where = Kit.text("", Palette.PATH).wrap();
     private final Line fileButtons;
     private final Line result;
