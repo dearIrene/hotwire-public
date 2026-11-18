@@ -1,7 +1,7 @@
 package dev.moon.hotwire.dev;
 
 import dev.moon.hotwire.ui.Lang;
-import dev.moon.hotwire.ui.UpdatePreview;
+import dev.moon.hotwire.update.UpdatePreview;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Locale;

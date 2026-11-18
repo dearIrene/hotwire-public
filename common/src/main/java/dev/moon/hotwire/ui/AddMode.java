@@ -16,11 +16,11 @@ public enum AddMode {
         this.button = button;
     }
 
-    String getLead() {
+    public String getLead() {
         return Lang.get(this.lead);
     }
 
-    @Nullable String findButton() {
+    public @Nullable String findButton() {
         return this.button == null ? null : Lang.get(this.button);
     }
 }

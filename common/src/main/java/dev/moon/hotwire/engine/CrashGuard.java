@@ -16,7 +16,7 @@ import dev.moon.hotwire.switching.ModSwitcher;
 import dev.moon.hotwire.switching.PlayerMessages;
 import dev.moon.hotwire.switching.SwitchHistory;
 import dev.moon.hotwire.ui.Lang;
-import dev.moon.hotwire.ui.Notices;
+import dev.moon.hotwire.ui.notices.Notices;
 import java.lang.reflect.Method;
 import java.util.ArrayList;
 import java.util.Arrays;

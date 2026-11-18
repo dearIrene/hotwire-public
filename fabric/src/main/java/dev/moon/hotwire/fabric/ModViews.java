@@ -8,7 +8,7 @@ import dev.moon.hotwire.fabric.version.Spellings;
 import dev.moon.hotwire.redefine.FieldSlots;
 import dev.moon.hotwire.registration.Fields;
 import dev.moon.hotwire.registration.Owners;
-import dev.moon.hotwire.ui.Notices;
+import dev.moon.hotwire.ui.notices.Notices;
 import java.util.ArrayList;
 import java.util.Collection;
 import java.util.List;

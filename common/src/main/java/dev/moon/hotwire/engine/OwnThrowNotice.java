@@ -3,7 +3,7 @@ package dev.moon.hotwire.engine;
 import dev.moon.hotwire.concurrent.Tasks;
 import dev.moon.hotwire.report.LoggedFaults;
 import dev.moon.hotwire.ui.Lang;
-import dev.moon.hotwire.ui.Notices;
+import dev.moon.hotwire.ui.notices.Notices;
 import java.util.Set;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.function.BiConsumer;

@@ -6,8 +6,8 @@ import com.mojang.blaze3d.platform.cursor.CursorTypes;
 //? if <1.21.2 {
 /*import com.mojang.blaze3d.systems.RenderSystem;
 *///?}
-import dev.moon.hotwire.ui.Canvas;
-import dev.moon.hotwire.ui.Colors;
+import dev.moon.hotwire.ui.widgets.Canvas;
+import dev.moon.hotwire.ui.widgets.Colors;
 //? if <1.21.6 {
 /*import java.util.Arrays;
 *///?}

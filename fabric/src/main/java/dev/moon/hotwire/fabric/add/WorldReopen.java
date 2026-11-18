@@ -10,7 +10,7 @@ import dev.moon.hotwire.fabric.mixin.core.util.thread.BlockableEventLoopAccessor
 import dev.moon.hotwire.fabric.version.Spellings;
 import dev.moon.hotwire.jvm.JarChannels;
 import dev.moon.hotwire.ui.Lang;
-import dev.moon.hotwire.ui.Notices;
+import dev.moon.hotwire.ui.notices.Notices;
 import io.netty.channel.Channel;
 import java.io.IOException;
 import java.nio.channels.FileChannel;

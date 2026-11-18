@@ -1,5 +1,10 @@
 package dev.moon.hotwire.ui;
 
+import dev.moon.hotwire.ui.panels.DownloadsPanel;
+import dev.moon.hotwire.ui.widgets.Canvas;
+import dev.moon.hotwire.ui.widgets.Element;
+import dev.moon.hotwire.ui.widgets.FrameClock;
+import dev.moon.hotwire.ui.widgets.Sheet;
 import java.util.ArrayList;
 import java.util.List;
 import org.jspecify.annotations.Nullable;
@@ -43,11 +48,11 @@ public final class Root {
         return this.base;
     }
 
-    Element getMenus() {
+    public Element getMenus() {
         return this.menus;
     }
 
-    Element getModal() {
+    public Element getModal() {
         return this.modal;
     }
 
@@ -147,7 +152,7 @@ public final class Root {
         return this.base.scroll(x, y, amount);
     }
 
-    void focus(@Nullable Element element) {
+    public void focus(@Nullable Element element) {
         if (this.focus != null) {
             this.focus.setFocused(false);
         }

@@ -1,10 +1,10 @@
 package dev.moon.hotwire.fabric.screen;
 
 import com.mojang.blaze3d.platform.Window;
-import dev.moon.hotwire.ui.BuildMark;
-import dev.moon.hotwire.ui.DevWindow;
-import dev.moon.hotwire.ui.NoticeLayer;
 import dev.moon.hotwire.ui.Root;
+import dev.moon.hotwire.ui.dev.BuildMark;
+import dev.moon.hotwire.ui.dev.DevWindow;
+import dev.moon.hotwire.ui.notices.NoticeLayer;
 import net.minecraft.client.Minecraft;
 
 public final class DevGameScreen extends RootScreen {

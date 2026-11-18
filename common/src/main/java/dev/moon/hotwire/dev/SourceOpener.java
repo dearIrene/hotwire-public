@@ -2,8 +2,8 @@ package dev.moon.hotwire.dev;
 
 import dev.moon.hotwire.seam.Games;
 import dev.moon.hotwire.ui.Lang;
-import dev.moon.hotwire.ui.Notice;
-import dev.moon.hotwire.ui.Notices;
+import dev.moon.hotwire.ui.notices.Notice;
+import dev.moon.hotwire.ui.notices.Notices;
 import java.io.IOException;
 import java.nio.file.Path;
 import org.slf4j.Logger;

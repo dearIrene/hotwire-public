@@ -1,6 +1,6 @@
 package dev.moon.hotwire.modrinth;
 
-import dev.moon.hotwire.ui.IconPixels;
+import dev.moon.hotwire.ui.widgets.IconPixels;
 import java.io.IOException;
 import java.nio.charset.StandardCharsets;
 import java.util.Arrays;

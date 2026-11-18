@@ -7,7 +7,7 @@ import dev.moon.hotwire.fabric.version.Frames;
 import dev.moon.hotwire.report.Causes;
 import dev.moon.hotwire.switching.CrashPolicy;
 import dev.moon.hotwire.ui.Lang;
-import dev.moon.hotwire.ui.Notices;
+import dev.moon.hotwire.ui.notices.Notices;
 import net.minecraft.client.Minecraft;
 import net.minecraft.client.gui.screens.Screen;
 import org.slf4j.Logger;

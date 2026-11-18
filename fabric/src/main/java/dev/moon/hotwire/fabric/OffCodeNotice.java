@@ -14,7 +14,7 @@ import dev.moon.hotwire.redefine.Tripwire;
 import dev.moon.hotwire.registration.Owners;
 import dev.moon.hotwire.ui.Lang;
 import dev.moon.hotwire.ui.ModScreen;
-import dev.moon.hotwire.ui.ReopenPanel;
+import dev.moon.hotwire.ui.panels.ReopenPanel;
 import java.lang.reflect.Method;
 import java.util.ArrayDeque;
 import java.util.Deque;

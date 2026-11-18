@@ -2,8 +2,6 @@ package dev.moon.hotwire.config;
 
 import dev.moon.hotwire.plan.SwitchPlanner.NestedJars;
 import dev.moon.hotwire.ui.Lang;
-import dev.moon.hotwire.ui.SettingOption;
-import dev.moon.hotwire.ui.SettingsSection;
 import java.io.IOException;
 import java.nio.file.Path;
 import java.util.Arrays;

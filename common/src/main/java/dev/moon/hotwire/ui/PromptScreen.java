@@ -1,5 +1,8 @@
 package dev.moon.hotwire.ui;
 
+import dev.moon.hotwire.ui.panels.FirstOpenPanel;
+import dev.moon.hotwire.ui.widgets.Canvas;
+
 public final class PromptScreen {
     private final Root root = new Root();
     private final FirstOpenPanel panel;

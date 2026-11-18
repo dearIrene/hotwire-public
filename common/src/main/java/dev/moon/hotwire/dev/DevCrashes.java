@@ -1,8 +1,8 @@
 package dev.moon.hotwire.dev;
 
 import dev.moon.hotwire.ui.Lang;
-import dev.moon.hotwire.ui.Notice;
-import dev.moon.hotwire.ui.Notices;
+import dev.moon.hotwire.ui.notices.Notice;
+import dev.moon.hotwire.ui.notices.Notices;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;

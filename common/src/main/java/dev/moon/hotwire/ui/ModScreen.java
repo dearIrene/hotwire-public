@@ -3,7 +3,44 @@ package dev.moon.hotwire.ui;
 import dev.moon.hotwire.config.ProfileStore;
 import dev.moon.hotwire.modrinth.StoreModel;
 import dev.moon.hotwire.seam.SharedChange;
+import dev.moon.hotwire.switching.LastSwitch;
+import dev.moon.hotwire.switching.Progress;
+import dev.moon.hotwire.ui.notices.Notice;
+import dev.moon.hotwire.ui.notices.NoticeBar;
+import dev.moon.hotwire.ui.notices.Notices;
+import dev.moon.hotwire.ui.pages.CachePage;
+import dev.moon.hotwire.ui.pages.HistoryPage;
+import dev.moon.hotwire.ui.pages.ModsPage;
+import dev.moon.hotwire.ui.pages.PendingPage;
+import dev.moon.hotwire.ui.pages.ReportPage;
+import dev.moon.hotwire.ui.pages.SettingsPage;
+import dev.moon.hotwire.ui.pages.StorePage;
+import dev.moon.hotwire.ui.pages.UpdatesPage;
+import dev.moon.hotwire.ui.panels.AddPanel;
+import dev.moon.hotwire.ui.panels.AlsoOffPanel;
+import dev.moon.hotwire.ui.panels.CarriedPanel;
+import dev.moon.hotwire.ui.panels.ClosePanel;
+import dev.moon.hotwire.ui.panels.FindBrokenPanel;
+import dev.moon.hotwire.ui.panels.FirstOpenPanel;
+import dev.moon.hotwire.ui.panels.HostPanel;
+import dev.moon.hotwire.ui.panels.ProfilesPanel;
+import dev.moon.hotwire.ui.panels.ReopenPanel;
+import dev.moon.hotwire.ui.panels.SelfUpdatePanel;
+import dev.moon.hotwire.ui.panels.TourPanel;
+import dev.moon.hotwire.ui.panels.UpdatePanel;
+import dev.moon.hotwire.ui.panels.UpdateSummaryPanel;
+import dev.moon.hotwire.ui.widgets.Canvas;
+import dev.moon.hotwire.ui.widgets.Deck;
+import dev.moon.hotwire.ui.widgets.Element;
+import dev.moon.hotwire.ui.widgets.Entrance;
+import dev.moon.hotwire.ui.widgets.Kit;
+import dev.moon.hotwire.ui.widgets.Line;
+import dev.moon.hotwire.ui.widgets.Palette;
+import dev.moon.hotwire.ui.widgets.Part;
+import dev.moon.hotwire.ui.widgets.StoreIcons;
+import dev.moon.hotwire.ui.widgets.Tabs;
 import dev.moon.hotwire.update.PendingChange;
+import dev.moon.hotwire.update.UpdateMethod;
 import dev.moon.hotwire.update.UpdateOffer;
 import dev.moon.hotwire.update.UrgentUpdate;
 import java.nio.file.Path;
@@ -57,7 +94,7 @@ public final class ModScreen implements JarHost {
     private @Nullable Runnable leaving;
     private final TourPanel tour;
     private final SelfUpdatePanel selfUpdate;
-    final FindBrokenPanel findBroken;
+    public final FindBrokenPanel findBroken;
     private final PendingActions pendingActions;
     private final ClosePanel closePanel = new ClosePanel(this::closeForPending);
     private final UpdateSummaryPanel updateSummary = new UpdateSummaryPanel(() -> this.pickRail(PENDING));
@@ -160,12 +197,12 @@ public final class ModScreen implements JarHost {
         this.pendingCount = game.getPendingChanges().size();
     }
 
-    static final class Icons {
-        static final String MODS = "mods";
-        static final String STORE = "store";
-        static final String UPDATES = "updates";
-        static final String ADD = "add";
-        static final String PENDING = "pending";
+    public static final class Icons {
+        public static final String MODS = "mods";
+        public static final String STORE = "store";
+        public static final String UPDATES = "updates";
+        public static final String ADD = "add";
+        public static final String PENDING = "pending";
         static final String CACHE = "cache";
         static final String HISTORY = "dev_history";
         static final String REPORT = "report";
@@ -319,7 +356,7 @@ public final class ModScreen implements JarHost {
         this.entrance.play();
     }
 
-    void leave() {
+    public void leave() {
         this.leave(this.game::onDone);
     }
 
@@ -414,7 +451,7 @@ public final class ModScreen implements JarHost {
         this.openFindBroken(Set.of());
     }
 
-    void openFindBroken(Set<String> pinned) {
+    public void openFindBroken(Set<String> pinned) {
         if (this.isIdle()) {
             this.findBroken.present(pinned);
         }
@@ -424,7 +461,7 @@ public final class ModScreen implements JarHost {
         this.report.show(Lang.get("hotwire.report.title"), this.game.report(), "");
     }
 
-    void showSearchReport(String name) {
+    public void showSearchReport(String name) {
         this.report.show(Lang.get("hotwire.find.report_title", name), this.game.report(), "");
         this.turnTo(REPORT, 2);
         this.showMessage(Lang.get("hotwire.find.stays_off", name), false);
@@ -610,7 +647,7 @@ public final class ModScreen implements JarHost {
         }
     }
 
-    boolean isIdle() {
+    public boolean isIdle() {
         return !this.game.getProgress().isBusy() && !this.root.isModalOpen();
     }
 
@@ -619,7 +656,7 @@ public final class ModScreen implements JarHost {
         this.mods.clearWishes();
     }
 
-    void openProfiles() {
+    public void openProfiles() {
         this.closePanels();
         this.profilesPanel.present();
     }

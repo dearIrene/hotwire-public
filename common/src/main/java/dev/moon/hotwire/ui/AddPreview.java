@@ -1,5 +1,6 @@
 package dev.moon.hotwire.ui;
 
+import dev.moon.hotwire.ui.widgets.Canvas;
 import java.util.List;
 import org.jspecify.annotations.Nullable;
 

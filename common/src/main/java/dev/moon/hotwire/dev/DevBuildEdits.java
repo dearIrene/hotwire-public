@@ -2,9 +2,9 @@ package dev.moon.hotwire.dev;
 
 import dev.moon.hotwire.config.HotwireSettings;
 import dev.moon.hotwire.ui.Lang;
-import dev.moon.hotwire.ui.MergeWords;
-import dev.moon.hotwire.ui.Notice;
-import dev.moon.hotwire.ui.Notices;
+import dev.moon.hotwire.ui.dev.MergeWords;
+import dev.moon.hotwire.ui.notices.Notice;
+import dev.moon.hotwire.ui.notices.Notices;
 import java.io.IOException;
 import java.nio.file.Files;
 import java.nio.file.Path;

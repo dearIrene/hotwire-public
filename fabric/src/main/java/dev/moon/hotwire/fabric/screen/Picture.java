@@ -1,9 +1,9 @@
 package dev.moon.hotwire.fabric.screen;
 
 import dev.moon.hotwire.modrinth.WebpLossless;
-import dev.moon.hotwire.ui.Canvas;
-import dev.moon.hotwire.ui.IconPixels;
-import dev.moon.hotwire.ui.OtherImages;
+import dev.moon.hotwire.ui.widgets.Canvas;
+import dev.moon.hotwire.ui.widgets.IconPixels;
+import dev.moon.hotwire.ui.widgets.OtherImages;
 import java.io.IOException;
 import java.util.Optional;
 import java.util.concurrent.CompletableFuture;

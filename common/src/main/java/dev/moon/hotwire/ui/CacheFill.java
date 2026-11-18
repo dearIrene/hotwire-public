@@ -20,7 +20,7 @@ public record CacheFill(int done, int of, boolean running, long savedBytes, long
         return String.format(Locale.ROOT, "%.1f MB", bytes / (1024.0 * 1024.0));
     }
 
-    static String describeMillis(long millis) {
+    public static String describeMillis(long millis) {
         long minutes = Math.round(millis / 60_000.0);
         return minutes < 1 ? Lang.get("hotwire.cache.under_a_minute") : Lang.get("hotwire.cache.minutes", minutes);
     }

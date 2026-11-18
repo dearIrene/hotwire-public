@@ -15,7 +15,7 @@ import dev.moon.hotwire.switching.PlayerMessages;
 import dev.moon.hotwire.switching.SwitchHistory;
 import dev.moon.hotwire.ui.Lang;
 import dev.moon.hotwire.ui.ModScreen;
-import dev.moon.hotwire.ui.ReopenPanel;
+import dev.moon.hotwire.ui.panels.ReopenPanel;
 import java.io.IOException;
 import java.util.ArrayList;
 import java.util.List;

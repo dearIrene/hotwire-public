@@ -2,13 +2,13 @@ package dev.moon.hotwire.engine;
 
 import com.google.common.base.Splitter;
 import dev.moon.hotwire.cache.CacheBudget;
+import dev.moon.hotwire.cache.CacheVersion;
 import dev.moon.hotwire.redefine.CachedMixes;
 import dev.moon.hotwire.report.ActionJournal;
 import dev.moon.hotwire.seam.Games;
 import dev.moon.hotwire.switching.SwitchCacheFiller;
 import dev.moon.hotwire.ui.CacheFill;
 import dev.moon.hotwire.ui.CacheHost;
-import dev.moon.hotwire.ui.CacheVersion;
 import dev.moon.hotwire.ui.StoreCacheView;
 import dev.moon.hotwire.update.PendingChanges;
 import java.io.IOException;

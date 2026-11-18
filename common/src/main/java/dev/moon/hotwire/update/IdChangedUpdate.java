@@ -2,8 +2,6 @@ package dev.moon.hotwire.update;
 
 import dev.moon.hotwire.jar.ModManifest;
 import dev.moon.hotwire.ui.Lang;
-import dev.moon.hotwire.ui.UpdateMethod;
-import dev.moon.hotwire.ui.UpdatePreview;
 import dev.moon.hotwire.update.UpdatePlan.UpdateTier;
 import java.io.IOException;
 import java.nio.file.Path;

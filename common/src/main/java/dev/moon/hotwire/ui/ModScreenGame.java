@@ -1,14 +1,19 @@
 package dev.moon.hotwire.ui;
 
 import dev.moon.hotwire.config.ProfileStore;
+import dev.moon.hotwire.config.SettingsSection;
 import dev.moon.hotwire.modrinth.Downloads;
 import dev.moon.hotwire.seam.SharedChange;
+import dev.moon.hotwire.switching.Progress;
 import dev.moon.hotwire.switching.SwitchHistory;
 import dev.moon.hotwire.ui.list.Badges;
 import dev.moon.hotwire.ui.list.ModCatalog;
 import dev.moon.hotwire.ui.list.ModStatus;
+import dev.moon.hotwire.ui.widgets.Canvas;
 import dev.moon.hotwire.update.PendingChange;
+import dev.moon.hotwire.update.UpdateMethod;
 import dev.moon.hotwire.update.UpdateOffer;
+import dev.moon.hotwire.update.UpdatePreview;
 import dev.moon.hotwire.update.UrgentUpdate;
 import java.io.IOException;
 import java.nio.file.Path;

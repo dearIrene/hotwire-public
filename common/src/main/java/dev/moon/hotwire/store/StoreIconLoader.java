@@ -2,9 +2,9 @@ package dev.moon.hotwire.store;
 
 import dev.moon.hotwire.modrinth.StoreCache;
 import dev.moon.hotwire.modrinth.StoreModel;
-import dev.moon.hotwire.ui.Canvas;
-import dev.moon.hotwire.ui.ImageDecoder;
-import dev.moon.hotwire.ui.StoreIcons;
+import dev.moon.hotwire.ui.widgets.Canvas;
+import dev.moon.hotwire.ui.widgets.ImageDecoder;
+import dev.moon.hotwire.ui.widgets.StoreIcons;
 import java.io.IOException;
 import java.util.LinkedHashMap;
 import java.util.Map;

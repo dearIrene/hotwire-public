@@ -1,5 +1,11 @@
 package dev.moon.hotwire.ui;
 
+import dev.moon.hotwire.switching.Progress;
+import dev.moon.hotwire.ui.widgets.Canvas;
+import dev.moon.hotwire.ui.widgets.Colors;
+import dev.moon.hotwire.ui.widgets.EasedValue;
+import dev.moon.hotwire.ui.widgets.Palette;
+import dev.moon.hotwire.ui.widgets.Part;
 import java.util.List;
 import java.util.function.Function;
 import org.jspecify.annotations.Nullable;
