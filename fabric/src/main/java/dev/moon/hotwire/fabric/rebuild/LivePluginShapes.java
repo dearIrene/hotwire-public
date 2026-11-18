@@ -20,9 +20,6 @@ public final class LivePluginShapes {
     private static final Logger LOGGER = LoggerFactory.getLogger(LivePluginShapes.class);
     private static volatile @Nullable MixinInternals mixin;
 
-    private LivePluginShapes() {
-    }
-
     static void bind(MixinInternals internals) {
         mixin = internals;
     }
@@ -32,7 +29,7 @@ public final class LivePluginShapes {
         return (found != null && found.getPlugin() != null) || LivePlugins.findPlugin(config) != null;
     }
 
-    public static @Nullable Boolean ask(String config, String target, String mixin) {
+    public @Nullable Boolean ask(String config, String target, String mixin) {
         IMixinConfig found = findConfig(config);
         Object plugin = found != null && found.getPlugin() != null ? found.getPlugin() : LivePlugins.findPlugin(config);
         if (!(plugin instanceof IMixinConfigPlugin live)) {
@@ -40,7 +37,7 @@ public final class LivePluginShapes {
         }
 
         String question = config + ' ' + target + ' ' + mixin;
-        Boolean known = ANSWERED.get(question);
+        Boolean known = this.answered.get(question);
         if (known != null) {
             return known;
         }
@@ -50,16 +47,16 @@ public final class LivePluginShapes {
         }
         try {
             Boolean answer = live.shouldApplyMixin(target, mixin);
-            ANSWERED.put(question, answer);
+            this.answered.put(question, answer);
             return answer;
         } catch (RuntimeException | LinkageError e) {
             return null;
         }
     }
 
-    private static final Map<String, Boolean> ANSWERED = new ConcurrentHashMap<>();
+    private final Map<String, Boolean> answered = new ConcurrentHashMap<>();
 
-    public static void rememberAnswers(Collection<String> mods) {
+    public void rememberAnswers(Collection<String> mods) {
         for (Object config : findConfigs()) {
             IMixinConfigPlugin plugin = config instanceof IMixinConfig one ? one.getPlugin() : null;
             String owner = plugin == null ? null : Owners.findModOf(plugin.getClass());
@@ -68,7 +65,7 @@ public final class LivePluginShapes {
                     && !Tripwire.isOfOffMod(plugin.getClass()) && mods.contains(owner)) {
                 for (Object listed : PrivateField.of(config.getClass(), "mixins").get(config, List.class)) {
                     if (listed instanceof IMixinInfo info) {
-                        info.getTargetClasses().forEach(target -> remember(live.getName(), plugin,
+                        info.getTargetClasses().forEach(target -> this.remember(live.getName(), plugin,
                                 target.replace('/', '.'), info.getClassName()));
                     }
                 }
@@ -76,11 +73,11 @@ public final class LivePluginShapes {
         }
     }
 
-    private static void remember(String config, IMixinConfigPlugin plugin, String target, String mixin) {
+    private void remember(String config, IMixinConfigPlugin plugin, String target, String mixin) {
         String question = config + ' ' + target + ' ' + mixin;
-        if (!ANSWERED.containsKey(question)) {
+        if (!this.answered.containsKey(question)) {
             try {
-                ANSWERED.put(question, plugin.shouldApplyMixin(target, mixin));
+                this.answered.put(question, plugin.shouldApplyMixin(target, mixin));
             } catch (RuntimeException | LinkageError e) {
                 LOGGER.debug("[Hotwire] {} gave no answer for {}: {}", config, mixin, e.toString());
             }

@@ -15,16 +15,17 @@ import net.minecraft.world.entity.EntityType;
 
 public final class EntityRendererProviders {
     private static final EntityRendererProvider<Entity> NOTHING = NoopRenderer::new;
-    private static final AtomicBoolean CHANGED = new AtomicBoolean();
+    private final AtomicBoolean changed = new AtomicBoolean();
 
-    private record Removal(EntityType<?> type, EntityRendererProvider<?> provider) implements RegistrationJournal.Take {
+    private record Removal(EntityRendererProviders from, EntityType<?> type, EntityRendererProvider<?> provider)
+            implements RegistrationJournal.Take {
         @Override
         @SuppressWarnings("ReferenceEquality")
         public void restore() {
             Map<EntityType<?>, EntityRendererProvider<?>> providers = EntityRenderersAccessor.hotwire$getProviders();
             if (providers.get(this.type) == NOTHING) {
                 providers.put(this.type, this.provider);
-                CHANGED.set(true);
+                this.from.changed.set(true);
             }
         }
 
@@ -34,27 +35,24 @@ public final class EntityRendererProviders {
         }
     }
 
-    private EntityRendererProviders() {
-    }
-
-    public static void takeOut(Collection<String> mods) {
+    public void takeOut(Collection<String> mods) {
         Map<EntityType<?>, EntityRendererProvider<?>> providers = EntityRenderersAccessor.hotwire$getProviders();
-        boolean changed = false;
+        boolean any = false;
         for (EntityType<?> type : List.copyOf(providers.keySet())) {
             EntityRendererProvider<?> provider = providers.get(type);
             String mod = provider == null ? null : Owners.findModOf(provider.getClass());
             if (provider != null && mod != null && mods.contains(mod)) {
-                GameRegistrations.getJournal().addTake(mod, new Removal(type, provider));
+                GameRegistrations.getJournal().addTake(mod, new Removal(this, type, provider));
                 providers.put(type, NOTHING);
-                changed = true;
+                any = true;
             }
         }
-        if (changed) {
-            CHANGED.set(true);
+        if (any) {
+            this.changed.set(true);
         }
     }
 
-    public static boolean takeChanged() {
-        return CHANGED.getAndSet(false);
+    public boolean takeChanged() {
+        return this.changed.getAndSet(false);
     }
 }

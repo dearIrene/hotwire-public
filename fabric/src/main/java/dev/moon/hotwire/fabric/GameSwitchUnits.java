@@ -31,9 +31,13 @@ final class GameSwitchUnits implements SwitchUnits {
     private final MixinPlugins plugins;
     private final RegistryCheck registries = new RegistryCheck();
     private final WorldWrappers worldWrappers = new WorldWrappers();
+    private final LivePluginShapes shapes;
+    private final EntityHolders holders = new EntityHolders();
+    private final EntityRendererProviders rendererProviders = new EntityRendererProviders();
 
-    GameSwitchUnits(MixinPlugins plugins) {
+    GameSwitchUnits(MixinPlugins plugins, LivePluginShapes shapes) {
         this.plugins = plugins;
+        this.shapes = shapes;
     }
 
     @Override
@@ -68,12 +72,12 @@ final class GameSwitchUnits implements SwitchUnits {
 
     @Override
     public Map<String, String> findEntityHolders(Collection<String> mods, Predicate<Object> reached) {
-        return EntityHolders.find(mods, reached);
+        return this.holders.find(mods, reached);
     }
 
     @Override
     public void rememberPluginAnswers(Collection<String> mods) {
-        LivePluginShapes.rememberAnswers(mods);
+        this.shapes.rememberAnswers(mods);
     }
 
     @Override
@@ -113,12 +117,12 @@ final class GameSwitchUnits implements SwitchUnits {
 
     @Override
     public void takeOutRendererProviders(Collection<String> mods) {
-        EntityRendererProviders.takeOut(mods);
+        this.rendererProviders.takeOut(mods);
     }
 
     @Override
     public boolean takeRenderersChanged() {
-        return EntityRendererProviders.takeChanged();
+        return this.rendererProviders.takeChanged();
     }
 
     @Override

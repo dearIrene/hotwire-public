@@ -177,9 +177,10 @@ final class EngineStart {
         HandlerGuards.readOverwritersWith(applier.getCarriedMixins()::findOverwriters);
         laps.endLap("applier and Mixin copy");
         long limit = (long) CacheLimit.read(CacheLimit.findCacheFolder()) << 20;
+        LivePluginShapes shapes = new LivePluginShapes();
         applier.getRebuilder().getCache().cacheIn(
                 CacheStore.open(CacheLimit.findCacheFolder().resolve("mixed"), "mixed",
-                        CacheBudget.findOwnCap(CacheLimit.findCacheFolder(), limit)), LivePluginShapes::ask);
+                        CacheBudget.findOwnCap(CacheLimit.findCacheFolder(), limit)), shapes::ask);
         CacheLimit.fitLater(CacheLimit.findCacheFolder(), limit);
         laps.endLap("open the switch cache");
         applier.getRebuilder().getHooks()
@@ -259,7 +260,7 @@ final class EngineStart {
                 new AsyncLogging(applier.getRebuilder(), instrumentation),
                 new GeneratedWrappers(applier.getRebuilder(),
                 mixin::getGeneratedBy), new GameSwitchUnits(new MixinPlugins(mixin::getConfigObjects,
-                        mixin.getProcessor())), installed, chain);
+                        mixin.getProcessor()), shapes), installed, chain);
         AddSupport adds = new AddSupport(installed, applier, switcher, classes, reports, gameDir, folders, queue,
                 icons, new AddGameSide(), ids -> runner.turnOff(ids).result(), runner::lookAheadForAll);
         UpdateSupport updates = new UpdateSupport(installed, applier, switcher, classes, folders, queue, reports,

@@ -66,23 +66,22 @@ public final class EntityAttachments {
             return this.entity.isRemoved();
         }
     }
-    private static final Map<String, Integer> COUNTS = new HashMap<>();
 
     private EntityAttachments() {
     }
 
     public static synchronized void takeOut(Collection<String> mods) {
-        GameHold.onGameAndWait(() -> detach(WorldWrappers.findClientEntities(), mods));
+        Map<String, Integer> counts = new HashMap<>();
+        GameHold.onGameAndWait(() -> detach(WorldWrappers.findClientEntities(), mods, counts));
         IntegratedServer server = Minecraft.getInstance().getSingleplayerServer();
         if (server != null) {
-            GameHold.onServerAndWait(server, () -> detach(WorldWrappers.findServerEntities(server), mods));
+            GameHold.onServerAndWait(server, () -> detach(WorldWrappers.findServerEntities(server), mods, counts));
         }
-        COUNTS.forEach((mod, count) -> LOGGER.info("[Hotwire] {} of {}'s attachments taken off the world's entities",
+        counts.forEach((mod, count) -> LOGGER.info("[Hotwire] {} of {}'s attachments taken off the world's entities",
                 count, mod));
-        COUNTS.clear();
     }
 
-    private static void detach(List<Entity> entities, Collection<String> mods) {
+    private static void detach(List<Entity> entities, Collection<String> mods, Map<String, Integer> counts) {
         for (Entity entity : entities) {
             Map<AttachmentType<?>, ?> attached = ((AttachmentTargetImpl) entity).fabric_getAttachments();
             if (attached == null || attached.isEmpty()) {
@@ -95,7 +94,7 @@ public final class EntityAttachments {
                     ((AttachmentTarget) entity).removeAttached(entry.getKey());
                     GameRegistrations.getJournal().addTake(mod,
                             new RemovedAttachment(entity, entry.getKey(), entry.getValue()));
-                    COUNTS.merge(mod, 1, Integer::sum);
+                    counts.merge(mod, 1, Integer::sum);
                 }
             }
         }
