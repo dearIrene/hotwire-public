@@ -6,6 +6,7 @@ import dev.moon.hotwire.fabric.registration.ModSounds;
 import dev.moon.hotwire.fabric.registration.OffKeyBindings;
 import dev.moon.hotwire.fabric.registration.OffModCommands;
 import dev.moon.hotwire.fabric.update.OldPayloads;
+import dev.moon.hotwire.fabric.version.HudElements;
 
 public final class GameParts {
     private static final GameTasks TASKS = new GameTasks();
@@ -14,6 +15,7 @@ public final class GameParts {
     private static final OffKeyBindings OFF_KEYS = new OffKeyBindings();
     private static final OffModCommands COMMANDS = new OffModCommands();
     private static final HiddenPacks PACKS = new HiddenPacks();
+    private static final HudElements HUD = new HudElements();
 
     private GameParts() {
     }
@@ -40,5 +42,9 @@ public final class GameParts {
 
     public static HiddenPacks getPacks() {
         return PACKS;
+    }
+
+    public static HudElements getHud() {
+        return HUD;
     }
 }

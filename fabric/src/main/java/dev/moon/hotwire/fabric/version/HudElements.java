@@ -35,20 +35,17 @@ public final class HudElements {
     private record Change(String kind, Object id) {
     }
 
-    private static final Set<Change> KNOWN = new HashSet<>();
+    private final Set<Change> known = new HashSet<>();
 
-    private HudElements() {
-    }
-
-    public static void onAdded(Placement placement, @Nullable Identifier anchor,
+    public void onAdded(Placement placement, @Nullable Identifier anchor,
             Identifier id, HudElement element) {
-        if (!isKnown(new Change("add", id))) {
+        if (!this.isKnown(new Change("add", id))) {
             RecorderSupport.record(id, new Addition(placement, anchor, id, element));
         }
     }
 
-    public static void onRemoved(Identifier id) {
-        if (!isKnown(new Change("remove", id))) {
+    public void onRemoved(Identifier id) {
+        if (!this.isKnown(new Change("remove", id))) {
             RecorderSupport.record(id, new Removal(id));
         }
     }
@@ -67,9 +64,9 @@ public final class HudElements {
         return true;
     }
 
-    private static boolean isKnown(Change change) {
-        synchronized (KNOWN) {
-            return !KNOWN.add(change);
+    private boolean isKnown(Change change) {
+        synchronized (this.known) {
+            return !this.known.add(change);
         }
     }
 
@@ -264,9 +261,7 @@ public final class HudElements {
     }
 }
 //?} else {
-/*// Before 1.21.6 Fabric has no HUD element registry: a HUD throw is the frame's (CrashGuard).
+/*// Before 1.21.6 Fabric has no HUD element registry: a HUD throw is the frame's (CrashGuard). GameParts holds one
 public final class HudElements {
-    private HudElements() {
-    }
 }
 *///?}

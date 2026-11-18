@@ -1,6 +1,7 @@
 package dev.moon.hotwire.fabric.mixin.core.fabric.client.rendering.hud;
 
 //? if >=1.21.6 {
+import dev.moon.hotwire.fabric.GameParts;
 import dev.moon.hotwire.fabric.version.HudElements;
 import java.util.function.Function;
 import net.fabricmc.fabric.api.client.rendering.v1.hud.HudElement;
@@ -25,29 +26,29 @@ public abstract class HudElementRegistryImplMixin {
 
     @Inject(method = "addFirst", at = @At("TAIL"))
     private static void hotwire$onAddedFirst(Identifier id, HudElement element, CallbackInfo ci) {
-        HudElements.onAdded(HudElements.Placement.FIRST, null, id, element);
+        GameParts.getHud().onAdded(HudElements.Placement.FIRST, null, id, element);
     }
 
     @Inject(method = "addLast", at = @At("TAIL"))
     private static void hotwire$onAddedLast(Identifier id, HudElement element, CallbackInfo ci) {
-        HudElements.onAdded(HudElements.Placement.LAST, null, id, element);
+        GameParts.getHud().onAdded(HudElements.Placement.LAST, null, id, element);
     }
 
     @Inject(method = "attachElementBefore", at = @At("TAIL"))
     private static void hotwire$onAttachedBefore(Identifier anchor, Identifier id, HudElement element,
             CallbackInfo ci) {
-        HudElements.onAdded(HudElements.Placement.BEFORE, anchor, id, element);
+        GameParts.getHud().onAdded(HudElements.Placement.BEFORE, anchor, id, element);
     }
 
     @Inject(method = "attachElementAfter", at = @At("TAIL"))
     private static void hotwire$onAttachedAfter(Identifier anchor, Identifier id, HudElement element,
             CallbackInfo ci) {
-        HudElements.onAdded(HudElements.Placement.AFTER, anchor, id, element);
+        GameParts.getHud().onAdded(HudElements.Placement.AFTER, anchor, id, element);
     }
 
     @Inject(method = "removeElement", at = @At("TAIL"))
     private static void hotwire$onRemoved(Identifier id, CallbackInfo ci) {
-        HudElements.onRemoved(id);
+        GameParts.getHud().onRemoved(id);
     }
 
     @Inject(method = "replaceElement", at = @At("HEAD"), cancellable = true)
