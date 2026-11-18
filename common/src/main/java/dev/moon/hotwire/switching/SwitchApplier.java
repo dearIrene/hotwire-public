@@ -203,19 +203,14 @@ public final class SwitchApplier {
         return this.catchUps;
     }
 
-    void applyWhilePaused(ClassRebuilder.PreparedRebuild prepared, Runnable whilePaused, Set<String> flipped)
-            throws RebuildException {
-        this.applyWhilePaused(prepared, () -> { }, whilePaused, flipped);
-    }
-
     void applyWhilePaused(ClassRebuilder.PreparedRebuild prepared, Runnable beforeChange, Runnable whilePaused,
-            Set<String> flipped) throws RebuildException {
+            Set<String> flipped, boolean refusable) throws RebuildException {
         Games.getNow().getReloads().awaitIdle();
         SwitchTimes.mark("reloads under way");
 
         LiveObjects.checkWhilePaused(prepared);
         Games.getNow().getReloads().announceRebuild(prepared.newlyBuilt(), prepared.pausedReloads());
-        Runnable release = this.holdGameOrRefuse();
+        Runnable release = refusable ? this.holdGameOrRefuse() : this.holdGame();
         SwitchTimes.mark("pause game");
         long pausedAt = System.nanoTime();
         try {
@@ -514,7 +509,7 @@ public final class SwitchApplier {
             }
         });
         try {
-            this.applyWhilePaused(prepared, served, joined, Set.of());
+            this.applyWhilePaused(prepared, served, joined, Set.of(), true);
         } catch (RebuildException e) {
             classes.keySet().forEach(this.replaced::remove);
             this.replaced.putAll(servedBefore);
@@ -650,7 +645,7 @@ public final class SwitchApplier {
             Runnable beforeChange = Collections.disjoint(switched, onAfter) ? sites::set : () -> { };
             if (prepared != null) {
                 this.applyWhilePaused(prepared, beforeChange, sites.setBefore(whilePaused),
-                        plan == null ? Set.of() : plan.flipped());
+                        plan == null ? Set.of() : plan.flipped(), true);
             } else {
                 Runnable release = this.holdGameOrRefuse();
                 try {
@@ -719,7 +714,7 @@ public final class SwitchApplier {
                 .map(Class::getName).toList());
         this.applyWhilePaused(this.prepare(originals, originals, Map.of(),
                 this.on.configs(), onAfter, Set.of(),
-                "rebuild"), () -> { }, Set.of());
+                "rebuild"), () -> { }, () -> { }, Set.of(), false);
     }
 
     private Map<String, byte[]> findRunningBytes(Collection<String> internalNames) {

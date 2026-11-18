@@ -269,8 +269,8 @@ public final class GameHold {
     }
 
     public static @Nullable GameHold beginOrRefuse(Minecraft client) {
-        GameHold hold = begin(client, true);
-        return hold.allPaused ? hold : null;
+        GameHold hold = begin(client, !UNBUDGETED.get());
+        return hold.isRefused() ? null : hold;
     }
 
     private static GameHold begin(Minecraft client, boolean refuses) {
