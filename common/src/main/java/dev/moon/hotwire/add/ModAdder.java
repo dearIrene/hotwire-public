@@ -404,20 +404,21 @@ public final class ModAdder {
 
     public Optional<String> findWidenerRefusalOfUpdate(ModJar part, Path path) {
         return part.accessWidener().flatMap(widener -> this.addWideners.findRefusalOfUpdate(widener,
-                part.manifest().name(), path));
+                part.manifest().name(), path, this.engine::isLoaded));
     }
 
     public Optional<String> findAccessRefusalOfUpdate(List<String> lines, ModJar part, Path path) {
         return this.addWideners.findRefusalOfUpdate(LoaderClassTweaker.ofLines(part.manifest().name(), lines),
-                part.manifest().name(), path);
+                part.manifest().name(), path, own -> true);
     }
 
     public void openWidenerOfUpdate(ModJar part) {
-        part.accessWidener().ifPresent(widener -> this.addWideners.openOfUpdate(widener, part));
+        part.accessWidener().ifPresent(widener -> this.addWideners.openOfUpdate(widener, part,
+                this.engine::isLoaded));
     }
 
     public void openAccessOfUpdate(List<String> lines, ModJar part) {
-        this.addWideners.openOfUpdate(LoaderClassTweaker.ofLines(part.manifest().name(), lines), part);
+        this.addWideners.openOfUpdate(LoaderClassTweaker.ofLines(part.manifest().name(), lines), part, own -> true);
     }
 
     public static boolean isWorldBuilt(Result result) {

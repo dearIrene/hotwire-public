@@ -14,6 +14,7 @@ import java.util.List;
 import java.util.Map;
 import java.util.Objects;
 import java.util.Optional;
+import java.util.function.Predicate;
 import org.jspecify.annotations.Nullable;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -59,13 +60,14 @@ final class AddWideners {
         return Optional.empty();
     }
 
-    Optional<String> findRefusalOfUpdate(AccessWidenerText widener, String name, Path path) {
+    Optional<String> findRefusalOfUpdate(AccessWidenerText widener, String name, Path path,
+            Predicate<String> bridged) {
         try {
             LoaderClassTweaker.check(widener, name);
         } catch (IllegalArgumentException e) {
             return Optional.of(Objects.requireNonNull(e.getMessage()));
         }
-        List<AccessWidenerText.Clause> loaded = widener.getClausesOnLoadedClasses(this.engine::isLoaded);
+        List<AccessWidenerText.Clause> loaded = widener.getClausesOnLoadedClasses(bridged);
         if (loaded.isEmpty()) {
             return Optional.empty();
         }
@@ -83,9 +85,9 @@ final class AddWideners {
         return Optional.empty();
     }
 
-    void openOfUpdate(AccessWidenerText widener, ModJar part) {
-        LoaderClassTweaker.apply(widener, part.manifest().name(), this.engine::isLoaded);
-        List<AccessWidenerText.Clause> loaded = widener.getClausesOnLoadedClasses(this.engine::isLoaded);
+    void openOfUpdate(AccessWidenerText widener, ModJar part, Predicate<String> bridged) {
+        LoaderClassTweaker.apply(widener, part.manifest().name(), bridged);
+        List<AccessWidenerText.Clause> loaded = widener.getClausesOnLoadedClasses(bridged);
         WidenerUses.Openings openings = WidenerUses.findOpenings(loaded, this.engine);
         if (!openings.isEmpty()) {
             Linker.open(openings);
@@ -95,7 +97,7 @@ final class AddWideners {
                     AccessBridge.open(type);
                 }
             }
-            LOGGER.info("[Hotwire] {}'s update opens {} loaded classes and {} members through the bridge",
+            LOGGER.info("[Hotwire] {}'s update opens {} classes and {} members through the bridge",
                     part.manifest().id(), openings.classes().size(), openings.members().size());
         }
     }
