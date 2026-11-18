@@ -103,6 +103,11 @@ public final class SaveHooks {
         return found;
     }
 
+    public static boolean isRunWhileOff(String internalName, String mixin) {
+        ClassState state = ClassState.find(internalName);
+        return state != null && state.getSavesRun().contains(mixin);
+    }
+
     private static void addIfOf(Collection<String> mods, String mixin, String why, Map<String, String> found) {
         String mod = Linker.findMixinOwner(mixin.replace('.', '/'));
         if (mod != null && mods.contains(mod)) {

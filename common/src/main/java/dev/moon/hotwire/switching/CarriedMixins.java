@@ -1,6 +1,7 @@
 package dev.moon.hotwire.switching;
 
 import dev.moon.hotwire.classfile.ClassNodes;
+import dev.moon.hotwire.redefine.SaveHooks;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.ConcurrentModificationException;
@@ -53,7 +54,10 @@ public final class CarriedMixins {
                 return;
             }
             @Nullable String source = offMixins.contains(mixin) ? null : this.findModMaking(mixin, id -> true);
-            if (offMixins.contains(mixin) || (source != null && !on.contains(source))) {
+            boolean ofOff = offMixins.contains(mixin) || (source != null && !on.contains(source));
+            if (ofOff && SaveHooks.isRunWhileOff(type, mixin)) {
+                found.add(type + " <- " + mixin + " (saves its mod's data while it is off)");
+            } else if (ofOff) {
                 LOGGER.debug("[Hotwire] {} drops {}, whose mod is off", type, mixin);
             } else if (askedAgain.test(mixin) && this.isSelfContained(mixin)) {
                 LOGGER.info("[Hotwire] {} drops {}, which its own plugin declined with the mods on now", type, mixin);
@@ -263,7 +267,8 @@ public final class CarriedMixins {
     Set<String> findOwnersOf(List<String> lost, Set<String> on) {
         Set<String> owners = new TreeSet<>();
         for (String entry : lost) {
-            String owner = this.findModMaking(entry.substring(entry.indexOf(" <- ") + " <- ".length()), on::contains);
+            String mixin = entry.substring(entry.indexOf(" <- ") + " <- ".length()).split(" ", 2)[0];
+            String owner = this.findModMaking(mixin, on::contains);
             if (owner != null) {
                 owners.add(owner);
             }
