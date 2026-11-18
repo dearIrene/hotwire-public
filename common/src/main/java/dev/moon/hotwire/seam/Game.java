@@ -50,6 +50,10 @@ public interface Game {
 
     void copyToClipboard(String text);
 
+    default String readClipboard() {
+        return "";
+    }
+
     int getFrameRate();
 
     double findServerTickMillis();

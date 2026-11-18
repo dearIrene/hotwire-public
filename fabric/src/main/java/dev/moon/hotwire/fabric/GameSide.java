@@ -153,6 +153,12 @@ public final class GameSide implements Game {
     }
 
     @Override
+    public String readClipboard() {
+        String text = Minecraft.getInstance().keyboardHandler.getClipboard();
+        return text == null ? "" : text;
+    }
+
+    @Override
     public void copyToClipboard(String text) {
         Minecraft game = Minecraft.getInstance();
         game.execute(() -> game.keyboardHandler.setClipboard(text));

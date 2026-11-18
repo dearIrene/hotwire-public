@@ -1,5 +1,6 @@
 package dev.moon.hotwire.ui.widgets;
 
+import dev.moon.hotwire.seam.Games;
 import java.util.function.Consumer;
 import java.util.function.IntPredicate;
 import java.util.function.ToIntFunction;
@@ -14,6 +15,9 @@ public final class TextField extends Element {
     static final int HOME = 268;
     static final int END = 269;
     static final int KEY_A = 65;
+    private static final int KEY_C = 67;
+    private static final int KEY_V = 86;
+    private static final int KEY_X = 88;
     static final int SHIFT = 1;
     static final int CONTROL = 2;
     private static final int EDGE = Palette.PANEL_EDGE;
@@ -133,6 +137,24 @@ public final class TextField extends Element {
                 this.anchor = 0;
                 this.cursor = this.text.length();
             }
+
+            case KEY_C, KEY_X -> {
+                if (!control) {
+                    return false;
+                }
+                if (this.cursor != this.anchor) {
+                    Games.getNow().copyToClipboard(this.findSelected());
+                    if (key == KEY_X) {
+                        this.replace("");
+                    }
+                }
+            }
+            case KEY_V -> {
+                if (!control) {
+                    return false;
+                }
+                this.insertPasted(Games.getNow().readClipboard());
+            }
             default -> {
                 return false;
             }
@@ -165,6 +187,19 @@ public final class TextField extends Element {
             }
         }
         return at;
+    }
+
+    private String findSelected() {
+        return this.text.substring(Math.min(this.cursor, this.anchor), Math.max(this.cursor, this.anchor));
+    }
+
+    private void insertPasted(String clipboard) {
+        StringBuilder typed = new StringBuilder();
+        clipboard.codePoints().filter(point -> !Character.isISOControl(point) && point != 0xA7)
+                .filter(this.accepts).forEach(typed::appendCodePoint);
+        if (!typed.isEmpty()) {
+            this.replace(typed.toString());
+        }
     }
 
     private void erase(int direction, boolean wholeWord) {
