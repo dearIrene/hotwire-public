@@ -271,7 +271,7 @@ public final class ResourceReload {
 
     public static void awaitIdle() {
         Minecraft game = Minecraft.getInstance();
-        if (!game.isSameThread()) {
+        if (!game.isSameThread() && !GameHold.isUnbudgeted()) {
             GameParts.getOngoingReload().awaitIdle(game);
         }
     }

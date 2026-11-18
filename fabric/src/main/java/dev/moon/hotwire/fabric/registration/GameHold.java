@@ -250,6 +250,10 @@ public final class GameHold {
         }
     }
 
+    public static boolean isUnbudgeted() {
+        return UNBUDGETED.get();
+    }
+
     public static GameHold begin(Minecraft client) {
         return begin(client, false);
     }
