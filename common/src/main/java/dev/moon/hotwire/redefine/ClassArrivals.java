@@ -9,41 +9,41 @@ import org.jspecify.annotations.Nullable;
 
 public final class ClassArrivals {
     private static final int MOST = 4096;
-    private static final Queue<NewClass> ARRIVED = new ConcurrentLinkedQueue<>();
-    private static final AtomicInteger COUNT = new AtomicInteger();
-    private static volatile boolean listening;
+    private final Queue<NewClass> arrived = new ConcurrentLinkedQueue<>();
+    private final AtomicInteger count = new AtomicInteger();
+    private volatile boolean listening;
 
     private record NewClass(String binaryName, ClassLoader loader) {
     }
 
-    private ClassArrivals() {
+    ClassArrivals() {
     }
 
-    public static void note(String internalName, ClassLoader loader) {
-        if (!listening) {
+    public void note(String internalName, ClassLoader loader) {
+        if (!this.listening) {
             return;
         }
-        if (COUNT.incrementAndGet() > MOST) {
-            listening = false;
-            ARRIVED.clear();
+        if (this.count.incrementAndGet() > MOST) {
+            this.listening = false;
+            this.arrived.clear();
             return;
         }
-        ARRIVED.add(new NewClass(internalName.replace('/', '.'), loader));
+        this.arrived.add(new NewClass(internalName.replace('/', '.'), loader));
     }
 
-    public static void listen() {
-        ARRIVED.clear();
-        COUNT.set(0);
-        listening = true;
+    public void listen() {
+        this.arrived.clear();
+        this.count.set(0);
+        this.listening = true;
     }
 
-    public static @Nullable List<Class<?>> take() {
-        if (!listening) {
+    public @Nullable List<Class<?>> take() {
+        if (!this.listening) {
             return null;
         }
         List<Class<?>> found = new ArrayList<>();
-        for (NewClass defined = ARRIVED.poll(); defined != null; defined = ARRIVED.poll()) {
-            COUNT.decrementAndGet();
+        for (NewClass defined = this.arrived.poll(); defined != null; defined = this.arrived.poll()) {
+            this.count.decrementAndGet();
             try {
                 found.add(Class.forName(defined.binaryName(), false, defined.loader()));
             } catch (ClassNotFoundException | LinkageError e) {

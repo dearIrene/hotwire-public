@@ -51,6 +51,7 @@ public final class ClassRebuilder {
     final Instrumentation instrumentation;
     private final MixinCopy copy;
     private final LoadedClassBytes loadedBytes;
+    private final ClassArrivals arrivals = new ClassArrivals();
 
     private final Map<Class<?>, Set<String>> carrying = Collections.synchronizedMap(new WeakHashMap<>());
 
@@ -647,6 +648,10 @@ public final class ClassRebuilder {
 
     public LoadedClassBytes getLoadedBytes() {
         return this.loadedBytes;
+    }
+
+    public ClassArrivals getArrivals() {
+        return this.arrivals;
     }
 
     public byte @Nullable [] launchBytes(String internal) {

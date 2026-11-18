@@ -2,7 +2,6 @@ package dev.moon.hotwire.switching;
 
 import dev.moon.hotwire.classfile.GameNames;
 import dev.moon.hotwire.mixin_copy.AppliedMixins;
-import dev.moon.hotwire.redefine.ClassArrivals;
 import dev.moon.hotwire.redefine.ClassRebuilder;
 import dev.moon.hotwire.redefine.FieldHolders;
 import dev.moon.hotwire.redefine.ForeignFields;
@@ -43,7 +42,7 @@ final class LoadTimeMixer {
                 (name, bytes) -> this.mixAsItLoads(name, bytes, false), this::isStuckForOff,
                 (name, bytes, inGame) -> {
             if (inGame != null) {
-                ClassArrivals.note(name, inGame);
+                rebuilder.getArrivals().note(name, inGame);
             }
             if (GameNames.isGameInternal(name)
                     && this.applier.getPatchedNames().contains(name)) {

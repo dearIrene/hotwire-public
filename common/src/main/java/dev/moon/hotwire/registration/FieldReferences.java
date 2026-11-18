@@ -76,6 +76,7 @@ public final class FieldReferences {
     final Lambdas lambdas;
     private final Function<String, Set<String>> handedTo;
     private final LookRoots roots;
+    private final ClassArrivals arrivals;
     private boolean askedForInitializedCheck;
     private @Nullable MethodHandle initializedCheck;
     private @Nullable Object unsafe;
@@ -92,6 +93,7 @@ public final class FieldReferences {
         this.handedTo = handedTo;
         this.roots = new LookRoots(mixinTargets, handedTo, this::isInitialized);
         this.lambdas = new Lambdas(instrumentation);
+        this.arrivals = rebuilder.getArrivals();
         this.recomputer = new StaticRecomputer(rebuilder, this.lambdas::findModOf, generatedBy);
         this.loadedChecks = new LoadedCheckAnswers(instrumentation, originalBytes, this::write);
         this.elements = new CollectionReferences(this::write);
@@ -242,7 +244,7 @@ public final class FieldReferences {
     }
 
     public void lookForEvery(Collection<String> mods, Predicate<String> on) {
-        ClassArrivals.listen();
+        this.arrivals.listen();
         this.loadedChecks.readForEvery(mods, this.lambdas.open());
         ElementLook.stopIfAsked();
         LoadedClasses scan = this.findLoaded(mods);
@@ -251,7 +253,7 @@ public final class FieldReferences {
     }
 
     public boolean refreshEvery(Collection<String> mods, Predicate<String> on) {
-        List<Class<?>> arrived = ClassArrivals.take();
+        List<Class<?>> arrived = this.arrivals.take();
         if (arrived == null) {
             return false;
         }

@@ -34,9 +34,9 @@ public final class CachedMixes {
 
     private static final int SPLIT_FROM = 64;
     private static final int WAYS = findWays();
-    private static final ExecutorService LOTS = Executors.newCachedThreadPool(
-            Thread.ofPlatform().name("hotwire-mix-", 1).daemon().factory());
 
+    private final ExecutorService mixers = Executors.newCachedThreadPool(
+            Thread.ofPlatform().name("hotwire-mix-", 1).daemon().factory());
     private final MixinCopy copy;
     private volatile @Nullable MixedCache cache;
 
@@ -282,7 +282,7 @@ public final class CachedMixes {
         int priority = Thread.currentThread().getPriority();
         List<Future<MixinCopy.MixResult>> others = new ArrayList<>();
         for (Set<String> lot : lots.subList(1, lots.size())) {
-            others.add(LOTS.submit(() -> {
+            others.add(this.mixers.submit(() -> {
                 Thread.currentThread().setPriority(priority);
                 return this.copy.mixAll(lot, classes, resources, configs, stop);
             }));
