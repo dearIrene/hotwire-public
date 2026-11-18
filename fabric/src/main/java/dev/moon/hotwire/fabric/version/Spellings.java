@@ -62,6 +62,9 @@ import com.mojang.renderpearl.api.pipeline.CompiledRenderPipeline;
 *///?}
 //? if >=1.21.2 {
 import dev.moon.hotwire.fabric.mixin.core.server.level.ChunkMapAccessor;
+//? if <1.21.9 {
+/*import dev.moon.hotwire.fabric.mixin.core.fabric.client.keybinding.KeyBindingRegistryImplAccessor;
+*///?}
 //?}
 
 public final class Spellings {
@@ -229,8 +232,7 @@ public final class Spellings {
 
     public static void addKeyCategory(KeyMapping binding) {
         //? if <1.21.9 {
-        /*dev.moon.hotwire.fabric.mixin.core.fabric.client.keybinding.KeyBindingRegistryImplAccessor
-                .hotwire$addCategory(binding.getCategory());
+        /*KeyBindingRegistryImplAccessor.hotwire$addCategory(binding.getCategory());
         *///?}
     }
 
