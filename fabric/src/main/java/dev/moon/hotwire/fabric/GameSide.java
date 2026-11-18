@@ -1,5 +1,6 @@
 package dev.moon.hotwire.fabric;
 
+import dev.moon.hotwire.fabric.add.OpenRegistries;
 import dev.moon.hotwire.fabric.add.WorldReopen;
 import dev.moon.hotwire.fabric.mixin.core.fabric.base.event.ArrayBackedEventAccessor;
 import dev.moon.hotwire.fabric.mixin.core.world.item.CreativeModeTabsAccessor;
@@ -232,6 +233,11 @@ public final class GameSide implements Game {
     @Override
     public void drawHoldFrame() {
         HoldFrame.drawIfDue();
+    }
+
+    @Override
+    public Runnable openRegistries() {
+        return OpenRegistries.open()::close;
     }
 
     @Override

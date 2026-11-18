@@ -102,6 +102,10 @@ public interface Game {
 
     void drawHoldFrame();
 
+    default Runnable openRegistries() {
+        return () -> { };
+    }
+
     void showScreen(@Nullable Object screen);
 
     boolean isHotwireShown();

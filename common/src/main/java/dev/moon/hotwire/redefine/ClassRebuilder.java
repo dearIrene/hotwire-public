@@ -462,6 +462,10 @@ public final class ClassRebuilder {
         this.loadedBytes.rememberAll(classes);
     }
 
+    public boolean hasStaticsToStart() {
+        return !this.staticsToStart.isEmpty();
+    }
+
     public Set<String> startStatics() {
         Set<String> failed = new TreeSet<>();
         for (Class<?> type : this.staticsToStart) {

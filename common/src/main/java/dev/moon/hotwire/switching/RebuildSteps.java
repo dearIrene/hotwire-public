@@ -68,7 +68,7 @@ final class RebuildSteps {
         if (catchUpLater == null) {
             notSetUp = LiveObjects.replay(prepared, onGameThread);
             Tripwire.releaseComingOn();
-            Set<String> failed = rebuilder.startStatics();
+            Set<String> failed = startStatics(rebuilder);
             if (!failed.isEmpty()) {
                 revert(rebuilder, prepared, afterRebuild);
                 throw RebuildException.ofRestartOnly("the new static fields of " + failed + " cannot be set up while"
@@ -79,7 +79,7 @@ final class RebuildSteps {
                 int later = LiveObjects.replay(prepared, onGameThread);
                 Games.getNow().drawHoldFrame();
                 Tripwire.releaseComingOn();
-                rebuilder.startStatics();
+                startStatics(rebuilder);
                 rebuildObjects.run();
                 Games.getNow().drawHoldFrame();
                 return later;
@@ -95,6 +95,18 @@ final class RebuildSteps {
             throw inWorld ? new RebuildException(message, cause, true) : RebuildException.ofRestartOnly(message, cause);
         }
         return catchUpLater == null ? rebuildObjects : () -> { };
+    }
+
+    private static Set<String> startStatics(ClassRebuilder rebuilder) {
+        if (!rebuilder.hasStaticsToStart()) {
+            return Set.of();
+        }
+        Runnable close = Games.getNow().openRegistries();
+        try {
+            return rebuilder.startStatics();
+        } finally {
+            close.run();
+        }
     }
 
     static void revert(ClassRebuilder rebuilder, ClassRebuilder.PreparedRebuild prepared,
