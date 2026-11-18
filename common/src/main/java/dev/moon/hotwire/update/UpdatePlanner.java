@@ -97,8 +97,8 @@ public final class UpdatePlanner {
                 case UpdateBlocker.ModIsOff off -> new UpdateNotice.UpdatedWhileOff();
                 case UpdateBlocker.AddedThisSession added -> new UpdateNotice.ChangedBefore(false);
                 case UpdateBlocker.UpdatedEarlierThisSession updated -> new UpdateNotice.ChangedBefore(true);
-                case UpdateBlocker.EntrypointAdded entrypoint -> new UpdateNotice.EntrypointRuns(
-                        entrypoint.key(), entrypoint.value());
+                case UpdateBlocker.EntrypointAdded entrypoint -> entrypoint.replaces() ? null
+                        : new UpdateNotice.EntrypointRuns(entrypoint.key(), entrypoint.value());
                 case UpdateBlocker.AccessWidenerChanged widener -> new UpdateNotice.WidenerOpens();
                 default -> null;
             };
@@ -206,9 +206,10 @@ public final class UpdatePlanner {
     private static void compareEntrypoints(ModManifest was, ModManifest now, List<UpdateBlocker> blockers) {
         for (Map.Entry<String, List<ModManifest.Entrypoint>> key : now.entrypoints().entrySet()) {
             List<ModManifest.Entrypoint> before = was.entrypoints().getOrDefault(key.getKey(), List.of());
+            boolean dropped = !key.getValue().containsAll(before);
             for (ModManifest.Entrypoint entrypoint : key.getValue()) {
                 if (!before.contains(entrypoint)) {
-                    blockers.add(new UpdateBlocker.EntrypointAdded(key.getKey(), entrypoint.value()));
+                    blockers.add(new UpdateBlocker.EntrypointAdded(key.getKey(), entrypoint.value(), dropped));
                 }
             }
         }

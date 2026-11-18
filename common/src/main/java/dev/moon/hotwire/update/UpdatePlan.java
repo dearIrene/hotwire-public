@@ -133,7 +133,7 @@ public record UpdatePlan(String modId, String runningVersion, String incomingVer
         record ComponentAdded(String component) implements UpdateBlocker {
         }
 
-        record EntrypointAdded(String key, String value) implements UpdateBlocker {
+        record EntrypointAdded(String key, String value, boolean replaces) implements UpdateBlocker {
         }
 
         record NestedJarChanged(String path) implements UpdateBlocker {
