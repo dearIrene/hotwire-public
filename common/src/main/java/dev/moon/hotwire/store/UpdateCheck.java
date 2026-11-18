@@ -27,6 +27,7 @@ import java.util.Map;
 import java.util.Queue;
 import java.util.Set;
 import java.util.concurrent.ConcurrentLinkedQueue;
+import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.concurrent.atomic.AtomicInteger;
 import java.util.function.Consumer;
 import net.fabricmc.loader.api.FabricLoader;
@@ -56,6 +57,11 @@ public final class UpdateCheck {
     private final List<Consumer<List<UpdateOffer>>> asking = new ArrayList<>();
     private boolean checking;
     private volatile @Nullable OfferMatch lastFound;
+
+    private volatile Map<String, String> projectById = Map.of();
+    private volatile Map<String, Path> namedJars = Map.of();
+    private volatile long nameAgainAt;
+    private final AtomicBoolean naming = new AtomicBoolean();
 
     private record OfferMatch(Map<String, Path> jars, long atNanos, List<UpdateOffer> offers) {
     }
@@ -100,6 +106,54 @@ public final class UpdateCheck {
 
     public void noteInstalled(String projectId) {
         this.installedSince.add(projectId);
+    }
+
+    public Map<String, String> findProjectById() {
+        Map<String, Path> jars = this.installed.getJarsByTopLevel();
+        if (!jars.equals(this.namedJars) && System.nanoTime() >= this.nameAgainAt
+                && this.naming.compareAndSet(false, true)) {
+            Thread.ofPlatform().name("hotwire-naming").daemon().start(() -> {
+                try {
+                    this.nameJars(jars);
+                } finally {
+                    this.naming.set(false);
+                }
+            });
+        }
+        return this.projectById;
+    }
+
+    private void nameJars(Map<String, Path> jars) {
+        Map<String, String> idByName = new HashMap<>();
+        jars.forEach((id, jar) -> idByName.put(String.valueOf(jar.getFileName()), id));
+        Map<String, String> hashByName = FileHashes.findSha512ByName(jars.values());
+        UpdateMemory memory = UpdateMemory.read(this.memoryFile);
+        Map<String, String> named = new HashMap<>();
+        Map<String, String> unheard = new HashMap<>();
+        hashByName.forEach((name, hash) -> {
+            UpdateMemory.Entry entry = memory.find(hash);
+            if (entry == null) {
+                unheard.put(name, hash);
+            } else if (!entry.isUnknown()) {
+                named.put(idByName.getOrDefault(name, name), entry.projectId());
+            }
+        });
+        boolean answered = true;
+        if (!unheard.isEmpty()) {
+            try {
+                this.client.findByHashes(unheard).forEach((name, version) ->
+                        named.put(idByName.getOrDefault(name, name), version.projectId()));
+            } catch (IOException | RuntimeException e) {
+                answered = false;
+                LOGGER.info("[Hotwire] {} jars were not named by Modrinth: {}", unheard.size(), e.toString());
+            }
+        }
+        this.projectById = Map.copyOf(named);
+        if (answered) {
+            this.namedJars = jars;
+        } else {
+            this.nameAgainAt = System.nanoTime() + 60_000_000_000L;
+        }
     }
 
     public long findWaitSeconds() {

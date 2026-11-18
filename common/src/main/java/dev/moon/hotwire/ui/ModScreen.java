@@ -165,7 +165,7 @@ public final class ModScreen implements JarHost {
         }, () -> {
             this.closePanels();
             game.dropHostChanges();
-        }, game.getCatalog()::name);
+        }, game.getCatalog()::name, game::findIcon);
         this.tour = new TourPanel(game::markTourSeen);
         this.downloadsWarning = new DownloadsWarningPanel(game::markDownloadsWarned, this::closePanels);
 

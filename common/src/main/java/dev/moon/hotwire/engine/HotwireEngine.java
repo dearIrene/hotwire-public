@@ -65,6 +65,7 @@ import java.util.List;
 import java.util.Map;
 import java.util.Objects;
 import java.util.Set;
+import java.util.UUID;
 import java.util.concurrent.CompletableFuture;
 import java.util.function.Consumer;
 import net.fabricmc.loader.api.FabricLoader;
@@ -594,7 +595,26 @@ public final class HotwireEngine implements ModScreenGame, AutoCloseable {
     private volatile List<PlayerMods> players = List.of();
 
     public void onPlayersChanged(List<PlayerMods> heard) {
+        Map<UUID, PlayerMods> before = new HashMap<>();
+        this.players.forEach(one -> before.put(one.player(), one));
         this.players = List.copyOf(heard);
+        Map<String, SharedMod> own = new HashMap<>();
+        for (PlayerMods player : heard) {
+            PlayerMods last = before.get(player.player());
+            if (!player.sharing() || (last != null && last.mods().equals(player.mods()))) {
+                continue;
+            }
+            if (own.isEmpty()) {
+                this.findOwnMods().forEach(mod -> own.put(mod.mod(), mod));
+            }
+            int differing = player.countDiffering(own);
+            if (differing > 0) {
+                String title = last == null ? Lang.get("hotwire.players.notice_joined", player.name())
+                        : Lang.get("hotwire.players.notice_changed", player.name());
+                Notices.show(new Notice(Notice.Kind.ASK, title, Lang.get("hotwire.players.notice_line", differing),
+                        "players " + player.player()));
+            }
+        }
     }
 
     @Override
@@ -604,8 +624,8 @@ public final class HotwireEngine implements ModScreenGame, AutoCloseable {
 
     @Override
     public List<SharedMod> findOwnMods() {
-        Map<String, String> projectOf = new HashMap<>();
-        this.storeJars.getCheck().getIdByProject().forEach((project, id) -> projectOf.put(id, project));
+        Map<String, String> projectOf = new HashMap<>(this.storeJars.getCheck().findProjectById());
+        this.storeJars.getCheck().getIdByProject().forEach((project, id) -> projectOf.putIfAbsent(id, project));
         ModCatalog catalog = this.getCatalog();
         List<SharedMod> mine = new ArrayList<>();
         for (ModStatus mod : this.getMods()) {

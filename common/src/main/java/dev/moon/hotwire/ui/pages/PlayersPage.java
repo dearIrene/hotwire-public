@@ -12,6 +12,7 @@ import dev.moon.hotwire.ui.widgets.Line;
 import dev.moon.hotwire.ui.widgets.Palette;
 import dev.moon.hotwire.ui.widgets.Part;
 import dev.moon.hotwire.ui.widgets.Push;
+import dev.moon.hotwire.ui.widgets.Stripe;
 import dev.moon.hotwire.ui.widgets.Text;
 import java.util.ArrayList;
 import java.util.HashMap;
@@ -23,7 +24,9 @@ import org.jspecify.annotations.Nullable;
 public final class PlayersPage {
     private static final int CARD_TALL = 30;
     private static final int FACE = 18;
+    private static final int BIG_FACE = 26;
     private static final int PEOPLE_WIDE = 150;
+    private static final int ROW_TALL = 18;
 
     private static final int OWN_EVERY = 30;
 
@@ -37,24 +40,28 @@ public final class PlayersPage {
     private final Line people = Kit.column().gap(4);
     private final Line rows = Kit.column().gap(3);
     private final Text heading = Kit.text("");
+    private final Text summary = Kit.dim("");
     private final Text empty = Kit.dim(Lang.get("hotwire.players.nobody")).wrap();
     private final Push matchAll = Kit.lead("", this::matchAll);
     private @Nullable UUID chosen;
     private List<PlayerMods> shown = List.of();
     private Map<String, SharedMod> own = Map.of();
-    private List<SharedMod> ownSeen = List.of();
-    private int frames;
+    private @Nullable List<SharedMod> ownSeen;
+
+    private int frames = OWN_EVERY;
 
     public PlayersPage(ModScreenGame game) {
         this.game = game;
-        Part detail = Kit.column(Kit.row(this.heading, Kit.space(), this.matchAll).gap(8), Kit.scroll(this.rows)
-                .grow(1)).gap(8).grow(1);
+        Part header = Kit.row(new Face(), Kit.column(this.heading, this.summary).gap(3), Kit.space(), this.matchAll)
+                .gap(8).cross(Line.Cross.CENTER);
+        Part detail = Kit.column(header, Kit.scroll(this.rows).grow(1)).gap(10).grow(1);
         this.part = Kit.column(
                 Kit.row(Kit.text(Lang.get("hotwire.players.title")).big(), Kit.space(),
                         Kit.dim(Lang.get("hotwire.players.share")),
                         Kit.check(game::isSharingMods, () -> game.setSharingMods(!game.isSharingMods()))).gap(8),
                 this.empty,
-                Kit.row(Kit.scroll(this.people).width(PEOPLE_WIDE), Kit.rule().width(1), detail).gap(10).grow(1))
+                Kit.row(Kit.scroll(this.people).width(PEOPLE_WIDE), Kit.rule().width(1), detail).gap(10).grow(1)
+                        .cross(Line.Cross.STRETCH))
                 .pad(12, 10).gap(10).grow(1);
     }
 
@@ -82,7 +89,7 @@ public final class PlayersPage {
         this.empty.show(players.isEmpty());
         this.people.clear();
         for (PlayerMods player : players) {
-            this.people.with(new Card(player, this.findDifferences(player).size()));
+            this.people.with(new Card(player, player.countDiffering(this.own)));
         }
         this.fillDetail();
     }
@@ -101,18 +108,20 @@ public final class PlayersPage {
         PlayerMods player = this.findChosen();
         if (player == null) {
             this.heading.set("");
+            this.summary.set("");
             this.matchAll.show(false);
             return;
         }
+        this.heading.set(player.name());
         if (!player.sharing()) {
-            this.heading.set(Lang.get("hotwire.players.not_sharing", player.name()));
+            this.summary.set(Lang.get("hotwire.players.not_sharing", player.name()));
             this.matchAll.show(false);
             return;
         }
         List<Difference> differences = this.findDifferences(player);
         long doable = differences.stream().filter(one -> one.kind() != Kind.VERSION
                 && one.kind() != Kind.NOT_ON_MODRINTH).count();
-        this.heading.set(differences.isEmpty() ? Lang.get("hotwire.players.same", player.name())
+        this.summary.set(differences.isEmpty() ? Lang.get("hotwire.players.same", player.name())
                 : Lang.get("hotwire.players.differ", player.name(), differences.size()));
         this.matchAll.label(Lang.get("hotwire.players.match_all", doable)).show(doable > 1);
         for (Kind kind : Kind.values()) {
@@ -120,7 +129,8 @@ public final class PlayersPage {
             if (ofKind.isEmpty()) {
                 continue;
             }
-            this.rows.with(Kit.dim(Lang.get(findGroupKey(kind))));
+            this.rows.with(Kit.row(Kit.text(Lang.get(findGroupKey(kind)) + "  " + ofKind.size(), findInk(kind)))
+                    .pad(0, 4));
             ofKind.forEach(one -> this.rows.with(this.makeRow(one)));
         }
     }
@@ -135,12 +145,23 @@ public final class PlayersPage {
         };
     }
 
+    private static int findInk(Kind kind) {
+        return switch (kind) {
+            case ADD -> Palette.GOOD;
+            case ON -> Palette.ON;
+            case OFF -> Palette.OFF_TINT;
+            case VERSION -> Palette.GOLD;
+            case NOT_ON_MODRINTH -> Palette.FAINT;
+        };
+    }
+
     private Part makeRow(Difference one) {
         ModCatalog catalog = this.game.getCatalog();
         String id = one.theirs().mod();
         String name = one.mine() == null ? id : catalog.name(id);
+        int ink = findInk(one.kind());
         Line row = Kit.row().gap(8).pad(6, 4).cross(Line.Cross.CENTER).face(Palette.HAIRLINE);
-        row.with(Kit.picture(() -> this.game.findIcon(id), name, 14), Kit.text(name));
+        row.with(new Stripe(ink, ROW_TALL), Kit.picture(() -> this.game.findIcon(id), name, 16), Kit.text(name));
         SharedMod mine = one.mine();
         String versions = mine != null && !mine.version().equals(one.theirs().version())
                 ? Lang.get("hotwire.players.versions", mine.version(), one.theirs().version())
@@ -153,7 +174,7 @@ public final class PlayersPage {
             case VERSION, NOT_ON_MODRINTH -> "";
         };
         if (!action.isEmpty()) {
-            row.with(Kit.push(action, () -> this.game.matchPlayer(List.of(one.theirs()))));
+            row.with(Kit.push(action, () -> this.game.matchPlayer(List.of(one.theirs()))).ink(ink));
         }
         return row;
     }
@@ -189,19 +210,45 @@ public final class PlayersPage {
         return found;
     }
 
+    private static void drawFace(Canvas canvas, UUID player, int x, int y, int side, float alpha) {
+        if (!canvas.drawFace(player, x, y, side)) {
+            canvas.fill(x, y, x + side, y + side, Colors.fade(Palette.PANEL_EDGE, alpha));
+        }
+    }
+
+    private final class Face extends Part {
+        Face() {
+            this.width(BIG_FACE);
+            this.height(BIG_FACE);
+        }
+
+        @Override
+        protected void paint(Canvas canvas, float alpha) {
+            UUID player = PlayersPage.this.chosen;
+            if (player != null) {
+                drawFace(canvas, player, this.getX(), this.getY(), BIG_FACE, alpha);
+            }
+        }
+    }
+
     private final class Card extends Part {
         private final PlayerMods player;
         private final String note;
+        private final int noteInk;
 
         Card(PlayerMods player, int differing) {
             this.player = player;
             String said = Lang.get("hotwire.players.card_differ", differing);
+            int ink = Palette.WARN;
             if (!player.sharing()) {
                 said = Lang.get("hotwire.players.card_hidden");
+                ink = Palette.FAINT;
             } else if (differing == 0) {
                 said = Lang.get("hotwire.players.card_same");
+                ink = Palette.GOOD;
             }
             this.note = said;
+            this.noteInk = ink;
             this.height(CARD_TALL);
             this.press((button, modifiers) -> PlayersPage.this.choose(player.player()));
         }
@@ -219,14 +266,11 @@ public final class PlayersPage {
             canvas.fill(x, bottom - 1, right, bottom, Colors.fade(edge, alpha));
             canvas.fill(x, y, x + 1, bottom, Colors.fade(edge, alpha));
             canvas.fill(right - 1, y, right, bottom, Colors.fade(edge, alpha));
-            int faceY = y + (CARD_TALL - FACE) / 2;
-            if (!canvas.drawFace(this.player.player(), x + 6, faceY, FACE)) {
-                canvas.fill(x + 6, faceY, x + 6 + FACE, faceY + FACE, Colors.fade(Palette.PANEL_EDGE, alpha));
-            }
+            drawFace(canvas, this.player.player(), x + 6, y + (CARD_TALL - FACE) / 2, FACE, alpha);
             int textX = x + 6 + FACE + 6;
             int room = right - 6 - textX;
             canvas.drawText(canvas.clip(this.player.name(), room), textX, y + 6, Colors.fade(Palette.TEXT, alpha));
-            canvas.drawText(canvas.clip(this.note, room), textX, y + 17, Colors.fade(Palette.DIM, alpha));
+            canvas.drawText(canvas.clip(this.note, room), textX, y + 17, Colors.fade(this.noteInk, alpha));
         }
     }
 }

@@ -2,10 +2,12 @@ package dev.moon.hotwire.ui.panels;
 
 import dev.moon.hotwire.seam.SharedChange;
 import dev.moon.hotwire.ui.Lang;
+import dev.moon.hotwire.ui.widgets.Canvas;
 import dev.moon.hotwire.ui.widgets.Kit;
 import dev.moon.hotwire.ui.widgets.Line;
 import dev.moon.hotwire.ui.widgets.Palette;
 import dev.moon.hotwire.ui.widgets.Sheet;
+import dev.moon.hotwire.ui.widgets.Stripe;
 import java.util.List;
 import java.util.function.Consumer;
 import java.util.function.Function;
@@ -15,6 +17,7 @@ public final class HostPanel extends Sheet {
     private static final int LIST_TALL = 110;
 
     private final Function<String, String> names;
+    private final Function<String, Canvas.@Nullable Image> icons;
     private final Consumer<List<SharedChange>> onMatch;
     private final Runnable onLater;
 
@@ -23,9 +26,11 @@ public final class HostPanel extends Sheet {
     private @Nullable Runnable no;
 
     @SuppressWarnings("this-escape")
-    public HostPanel(Consumer<List<SharedChange>> onMatch, Runnable onLater, Function<String, String> names) {
+    public HostPanel(Consumer<List<SharedChange>> onMatch, Runnable onLater, Function<String, String> names,
+            Function<String, Canvas.@Nullable Image> icons) {
         super(400, onLater);
         this.names = names;
+        this.icons = icons;
         this.onMatch = onMatch;
         this.onLater = onLater;
     }
@@ -36,11 +41,20 @@ public final class HostPanel extends Sheet {
         this.title.set(Lang.get("hotwire.host.title"));
         Line rows = Kit.column().gap(4);
         for (SharedChange change : changes) {
-            rows.with(Kit.text(switch (change.kind()) {
-                case ADD -> Lang.get("hotwire.host.added", change.mod());
-                case ON -> Lang.get("hotwire.host.on", this.names.apply(change.mod()));
-                case OFF -> Lang.get("hotwire.host.off", this.names.apply(change.mod()));
-            }));
+            String mod = change.mod();
+            String name = change.kind() == SharedChange.Kind.ADD ? mod : this.names.apply(mod);
+            int ink = switch (change.kind()) {
+                case ADD -> Palette.GOOD;
+                case ON -> Palette.ON;
+                case OFF -> Palette.OFF_TINT;
+            };
+            String verb = switch (change.kind()) {
+                case ADD -> Lang.get("hotwire.host.verb_add");
+                case ON -> Lang.get("hotwire.host.verb_on");
+                case OFF -> Lang.get("hotwire.host.verb_off");
+            };
+            rows.with(Kit.row(new Stripe(ink, 16), Kit.picture(() -> this.icons.apply(mod), name, 16),
+                    Kit.text(verb, ink), Kit.text(name)).gap(7).cross(Line.Cross.CENTER));
         }
         this.body.clear().with(Kit.dim(Lang.get("hotwire.host.line")).wrap(),
                 Kit.column(Kit.scroll(rows).capAt(LIST_TALL)).pad(8, 6).face(Palette.HAIRLINE));
