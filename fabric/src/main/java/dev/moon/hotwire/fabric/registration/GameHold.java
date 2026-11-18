@@ -292,7 +292,7 @@ public final class GameHold {
             CountDownLatch latch = this.pause();
             AtomicBoolean decided = new AtomicBoolean();
             this.server = latch;
-            schedule(server, () -> {
+            Runnable pausing = () -> {
                 if (!decided.compareAndSet(false, true)) {
                     return;
                 }
@@ -304,7 +304,15 @@ public final class GameHold {
                     isServerPaused = false;
                     runPausedWork();
                 }
-            });
+            };
+            schedule(server, pausing);
+
+            for (long waited = 0; waited < REACH.toMillis() && !awaitEdge(paused); waited += EDGE.toMillis()) {
+                if (ChunkWaits.isIn(server)) {
+                    ChunkWaits.run(server, pausing);
+                    break;
+                }
+            }
             this.onReached(paused, decided, "server");
         }
         this.pauseGame(client);
