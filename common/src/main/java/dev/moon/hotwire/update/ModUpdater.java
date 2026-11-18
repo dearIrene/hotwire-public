@@ -250,6 +250,10 @@ public final class ModUpdater {
         this.afterWorld.add(picked);
     }
 
+    public boolean hasAfterWorld() {
+        return !this.afterWorld.isEmpty();
+    }
+
     public List<Path> takeAfterWorld() {
         List<Path> jars = List.copyOf(this.afterWorld);
         this.afterWorld.removeAll(jars);

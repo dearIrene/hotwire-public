@@ -68,6 +68,8 @@ public final class HotwireClient implements ClientModInitializer {
 
     private static WeakReference<Connection> profiled = new WeakReference<>(null);
 
+    private static volatile WeakReference<Thread> serverThread = new WeakReference<>(null);
+
     private static boolean startFailed;
     private static final String TITLE = "title screen";
 
@@ -140,8 +142,10 @@ public final class HotwireClient implements ClientModInitializer {
         InitHookRuns.catchUpLaterWhile(() -> Minecraft.getInstance().level == null);
 
         ServerLifecycleEvents.SERVER_STOPPED.register(server -> LoadStatusViews.release());
-        ServerLifecycleEvents.SERVER_STARTING.register(server -> ActionJournal.get().note(ActionJournal.Action.OPEN,
-                ""));
+        ServerLifecycleEvents.SERVER_STARTING.register(server -> {
+            serverThread = new WeakReference<>(server.getRunningThread());
+            ActionJournal.get().note(ActionJournal.Action.OPEN, "");
+        });
         ClientPlayConnectionEvents.JOIN.register((handler, sender, client) -> {
             ActionJournal.get().note(ActionJournal.Action.JOIN, "", findPlaceOf(handler.getConnection()));
             client.execute(() -> {
@@ -163,7 +167,7 @@ public final class HotwireClient implements ClientModInitializer {
             client.execute(() -> {
                 HotwireEngine started = engine;
                 if (started != null && !started.isWorldClosedForWork()) {
-                    started.getChanges().updateAfterWorld();
+                    started.getChanges().updateAfterWorld(serverThread.get());
                     started.forgetWorld();
                 }
             });

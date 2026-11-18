@@ -11,6 +11,7 @@ import dev.moon.hotwire.update.UpdatePlan;
 import dev.moon.hotwire.update.UpdatePreview;
 import dev.moon.hotwire.update.UpdateSupport;
 import java.nio.file.Path;
+import java.time.Duration;
 import java.util.List;
 import java.util.Map;
 import java.util.concurrent.CompletableFuture;
@@ -21,6 +22,8 @@ import org.slf4j.LoggerFactory;
 
 public final class ModChanges {
     private static final Logger LOGGER = LoggerFactory.getLogger(ModChanges.class);
+
+    private static final Duration SAVE_WAIT = Duration.ofMinutes(10);
 
     private final @Nullable JvmParts parts;
     private final String refusal;
@@ -128,14 +131,31 @@ public final class ModChanges {
     }
 
     @SuppressWarnings("FutureReturnValueIgnored")
-    public void updateAfterWorld() {
+    public void updateAfterWorld(@Nullable Thread saving) {
         JvmParts ready = this.parts;
         if (ready != null) {
             this.tasks.submit("update after the world", () -> {
+                if (!ready.updates().getUpdater().hasAfterWorld()) {
+                    return true;
+                }
+                if (saving != null && !hasEnded(saving)) {
+                    LOGGER.warn("[Hotwire] the world's server still saves after {} s, so the updates that waited for"
+                            + " the world wait on", SAVE_WAIT.toSeconds());
+                    return false;
+                }
                 ready.updates().updateAfterWorld();
                 return true;
             });
         }
+    }
+
+    private static boolean hasEnded(Thread thread) {
+        try {
+            thread.join(SAVE_WAIT.toMillis());
+        } catch (InterruptedException e) {
+            Thread.currentThread().interrupt();
+        }
+        return !thread.isAlive();
     }
 
     public void describePlans(Path jar, Consumer<String> out) throws ModJarException {
