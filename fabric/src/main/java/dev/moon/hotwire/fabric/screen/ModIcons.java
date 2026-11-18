@@ -298,6 +298,7 @@ public final class ModIcons implements AutoCloseable, IconSource {
     }
 
     private static @Nullable IconPixels decodePng(byte[] bytes) throws IOException {
+        OtherImages.checkPngSize(bytes);
         try (NativeImage image = NativeImage.read(new ByteArrayInputStream(bytes))) {
             //? if >=1.21.4 {
             int[] argb = image.getPixels();
