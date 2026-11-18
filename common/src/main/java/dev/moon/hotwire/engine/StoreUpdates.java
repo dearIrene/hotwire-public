@@ -108,7 +108,8 @@ public final class StoreUpdates {
         AtomicLong landedBytes = new AtomicLong();
 
         this.progress.showDownloads(offers.stream().sorted(Comparator.comparingLong(UpdateOffer::size).reversed())
-                .map(offer -> new Progress.ReelItem(offer.id(), offer.name(), offer.newVersion(), offer.fileName()))
+                .map(offer -> new Progress.ReelItem(offer.id(), offer.name(), offer.installedVersion(),
+                        offer.newVersion(), offer.fileName()))
                 .toList(), () -> Math.min(1, (landedBytes.get() + Downloads.findAllUnderWay().stream()
                 .filter(job -> !job.isOver()).mapToLong(Downloads.Job::done).sum()) / (double) total),
                 StoreUpdates::findUnderWay, () -> {

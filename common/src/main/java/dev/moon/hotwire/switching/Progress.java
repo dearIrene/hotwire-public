@@ -83,7 +83,7 @@ public final class Progress {
 
     private volatile boolean worldClosed;
 
-    public record ReelItem(String id, String name, String version, String file) {
+    public record ReelItem(String id, String name, String from, String version, String file) {
     }
 
     private volatile List<ReelItem> reel = List.of();

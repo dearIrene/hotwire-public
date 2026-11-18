@@ -39,9 +39,12 @@ public final class LoadingScreen extends Part {
 
     private static final double DOWNLOADS_PART = 0.8;
 
-    private static final int CARD = 124;
+    private static final int CARD = 114;
+    private static final int CARD_WIDE = 108;
+    private static final int CARD_TALL = 30;
+    private static final int CARD_ICON = 18;
     private static final double POP_NANOS = 4.5e8;
-    private static final double SOFT_ENDS = 56;
+    private static final double SOFT_ENDS = 40;
 
     private final Progress progress;
     private final Sounds sounds;
@@ -259,7 +262,7 @@ public final class LoadingScreen extends Part {
             canvas.popScale();
             this.stopRight = this.stopLeft;
             if (this.progress.isUpdating() && now.at() <= 0 && !this.progress.getReel().isEmpty()) {
-                this.paintReel(canvas, x + 22, bottom - 64, right - 22, in);
+                this.paintReel(canvas, x + 22, bottom - 72, right - 22, in);
                 if (this.progress.canStop()) {
                     this.paintStop(canvas, (x + right) / 2, bottom - 30, in);
                 }
@@ -345,17 +348,21 @@ public final class LoadingScreen extends Part {
         if (reel.isEmpty() || alpha < 0.01f) {
             return;
         }
-        double start = left + (right - left) / 3.0 - this.strip.getValue() * CARD;
+
+        int fits = Math.max(1, (right - left + CARD - CARD_WIDE) / CARD);
+        double start = left + (right - left - (fits * CARD - (CARD - CARD_WIDE))) / 2.0 + (fits / 2) * CARD
+                - this.strip.getValue() * CARD;
         int from = Math.max(0, (int) Math.floor((left - start) / CARD));
         long clock = System.nanoTime();
-        canvas.pushClip(left, top - 4, right, top + 26);
+        canvas.pushClip(left, top - 4, right, top + CARD_TALL + 1);
         for (int at = from; at < reel.size(); at++) {
             double cardStart = start + at * (double) CARD;
             if (cardStart > right) {
                 break;
             }
             int cardX = (int) Math.floor(cardStart);
-            double fromEnd = Math.min(cardStart + CARD / 2.0 - left, right - cardStart - CARD / 2.0) / SOFT_ENDS;
+            double fromEnd = Math.min(cardStart + CARD_WIDE / 2.0 - left, right - cardStart - CARD_WIDE / 2.0)
+                    / SOFT_ENDS;
             float soft = alpha * (float) Math.clamp(fromEnd, 0, 1);
             if (soft < 0.01f) {
                 continue;
@@ -371,22 +378,37 @@ public final class LoadingScreen extends Part {
         long landedAt = this.progress.findLandedAt(item.id());
         Double share = landedAt == 0 ? this.underWay.get(item.file()) : null;
         float pop = landedAt == 0 ? 0 : (float) Math.clamp(1 - (clock - landedAt) / POP_NANOS, 0, 1);
-        float lit = 0.4f;
+        float lit = 0.45f;
+        int edge = Palette.PANEL_EDGE;
         int ink = Palette.DIM;
         if (landedAt != 0) {
             lit = 1;
-            ink = Colors.mix(Palette.TEXT, Palette.ACCENT, pop);
+            edge = Colors.mix(Colors.mix(Palette.PANEL_EDGE, Palette.ACCENT, 0.55f), Palette.ACCENT, pop);
+            ink = Palette.TEXT;
         } else if (share != null) {
-            lit = 0.85f;
+            lit = 0.9f;
+            edge = Colors.mix(Palette.PANEL_EDGE, Palette.ON, 0.45f);
             ink = Palette.TEXT;
         }
-        int lift = Math.round(pop * pop * 3);
-        int textX = cardX;
-        Canvas.Image icon = this.icons.apply(item.id());
-        if (icon != null && canvas.drawImage(icon, cardX, top + 1 - lift, 16, 16, soft * lit)) {
-            textX += 21;
+        int y = top - Math.round(pop * pop * 3);
+        int right = cardX + CARD_WIDE;
+        int bottom = y + CARD_TALL;
+
+        canvas.fill(cardX + 1, y + 1, right - 1, bottom - 1, Colors.fade(Palette.HAIRLINE, soft));
+        int line = Colors.fade(edge, soft);
+        canvas.fill(cardX, y, right, y + 1, line);
+        canvas.fill(cardX, bottom - 1, right, bottom, line);
+        canvas.fill(cardX, y + 1, cardX + 1, bottom - 1, line);
+        canvas.fill(right - 1, y + 1, right, bottom - 1, line);
+        if (pop > 0) {
+            canvas.fill(cardX + 1, y + 1, right - 1, bottom - 1, Colors.fade(Palette.ACCENT, soft * pop * 0.22f));
         }
-        int room = cardX + CARD - 12 - textX;
+        Canvas.Image icon = this.icons.apply(item.id());
+        if (icon != null) {
+            canvas.drawImage(icon, cardX + 6, y + 6, CARD_ICON, CARD_ICON, soft * lit);
+        }
+        int textX = cardX + 6 + CARD_ICON + 5;
+        int room = right - 5 - textX;
         String name = this.shortNames.get(item.id());
         if (name == null) {
             name = canvas.clip(item.name(), room);
@@ -394,17 +416,17 @@ public final class LoadingScreen extends Part {
         }
         String version = this.shortVersions.get(item.id());
         if (version == null) {
-            version = canvas.clip(item.version(), room);
+            String both = item.from() + " \u2192 " + item.version();
+            version = canvas.clip(item.from().isEmpty() || item.from().equals(item.version())
+                    || canvas.measureText(both) > room ? item.version() : both, room);
             this.shortVersions.put(item.id(), version);
         }
-        canvas.drawText(name, textX, top - lift, Colors.fade(ink, soft));
-        canvas.drawText(version, textX, top + 10 - lift, Colors.fade(landedAt != 0 ? Palette.ACCENT : Palette.FAINT,
-                soft));
+        canvas.drawText(name, textX, y + 6, Colors.fade(ink, soft));
+        canvas.drawText(version, textX, y + 17, Colors.fade(landedAt != 0 ? Palette.ACCENT : Palette.FAINT, soft));
         if (share != null) {
-            int lineRight = cardX + CARD - 12;
-            int lineY = top + 21;
-            canvas.fill(textX, lineY, lineRight, lineY + 1, Colors.fade(Palette.ON, soft * 0.22f));
-            canvas.fillAcross(textX, lineY, textX + (int) Math.round((lineRight - textX) * share), lineY + 1,
+            int barY = bottom - 3;
+            canvas.fill(cardX + 1, barY, right - 1, barY + 2, Colors.fade(Palette.ON, soft * 0.18f));
+            canvas.fillAcross(cardX + 1, barY, cardX + 1 + (int) Math.round((CARD_WIDE - 2) * share), barY + 2,
                     Colors.fade(Palette.ON, soft), Colors.fade(Palette.ACCENT, soft));
         }
     }
