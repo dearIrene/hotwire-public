@@ -12,6 +12,8 @@ import dev.moon.hotwire.update.SwapAtClose;
 import java.io.IOException;
 import java.io.UncheckedIOException;
 import java.lang.management.ManagementFactory;
+import java.nio.ByteBuffer;
+import java.nio.channels.SeekableByteChannel;
 import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
 import java.nio.file.Path;
@@ -56,6 +58,8 @@ public final class GameReports {
 
     private static final DateTimeFormatter WHEN = DateTimeFormatter.ofPattern("yyyy-MM-dd HH:mm:ss")
             .withZone(ZoneId.systemDefault());
+
+    private static final int MOST_READ = 8 * 1024 * 1024;
     private static volatile @Nullable GameReports current;
 
     private final Path folder;
@@ -607,8 +611,18 @@ public final class GameReports {
     }
 
     private static String read(Path file) {
-        try {
-            return new String(Files.readAllBytes(file), StandardCharsets.UTF_8);
+        try (SeekableByteChannel in = Files.newByteChannel(file)) {
+            long size = in.size();
+            int length = (int) Math.min(size, MOST_READ);
+            in.position(size - length);
+            ByteBuffer bytes = ByteBuffer.allocate(length);
+            while (bytes.hasRemaining()) {
+                if (in.read(bytes) < 0) {
+                    break;
+                }
+            }
+
+            return new String(bytes.array(), 0, bytes.position(), StandardCharsets.UTF_8);
         } catch (IOException | UncheckedIOException e) {
             return "(could not be read: " + e + ")";
         }

@@ -26,15 +26,20 @@ public final class ReportBundle {
     private static final DateTimeFormatter FILE_TIME = DateTimeFormatter.ofPattern("yyyy-MM-dd HH-mm-ss",
             Locale.ROOT).withZone(ZoneId.systemDefault());
 
-    private static final Pattern SECRET_FLAG = Pattern.compile(
-            "(?i)(--(?:accessToken|session|xuid|clientId|uuid|username|userProperties))(\\s+|=)\\S+");
-    private static final Pattern KEY_VALUE = Pattern.compile(
-            "(?i)\\b(access_?token|refresh_?token|token|api_?key|secret|password|authorization|bearer)"
-                    + "(\"?\\s*[:= ]\\s*\"?)(?:bearer\\s+)?[^\\s\",}]+");
+    private static final Pattern SECRET_FLAG = Pattern.compile("(?i)(--(?:accessToken|session|xuid|clientId|uuid"
+            + "|username|userProperties|server|port|quickPlay\\w*))(\\s+|=)\\S+");
+
+    private static final Pattern KEY_VALUE = Pattern.compile("(?i)(?<![a-z0-9])(access_?token|refresh_?token"
+            + "|session_?token|token|api_?key|secret|password|authorization|bearer)"
+            + "(\"?\\s*[:= ]\\s*\"?)(?:bearer\\s+)?[^\\s\",}]+");
     private static final Pattern JWT = Pattern.compile("eyJ[A-Za-z0-9_-]{5,}\\.[A-Za-z0-9_-]+\\.?[A-Za-z0-9_-]*");
     private static final Pattern UUID = Pattern.compile(
             "(?i)\\b[0-9a-f]{8}-?[0-9a-f]{4}-?[0-9a-f]{4}-?[0-9a-f]{4}-?[0-9a-f]{12}\\b");
     private static final Pattern IP_WITH_PORT = Pattern.compile("\\b\\d{1,3}(\\.\\d{1,3}){3}:\\d{1,5}\\b");
+
+    private static final Pattern IP6 = Pattern.compile("(?i)(?<![\\w:])(?:(?:[0-9a-f]{1,4}:){7}[0-9a-f]{1,4}"
+            + "|(?=[0-9a-f:]*[0-9a-f])(?:[0-9a-f]{1,4}(?::[0-9a-f]{1,4}){0,6})?::"
+            + "(?:[0-9a-f]{1,4}(?::[0-9a-f]{1,4}){0,6})?)(?![\\w:])");
 
     private static final Pattern CONNECTING = Pattern.compile("(?i)(Connecting to )[^\\r\\n]+");
 
@@ -45,6 +50,12 @@ public final class ReportBundle {
                     + "|LOGONSERVER)\\s*=\\s*).+$");
 
     private static final Pattern CHAT = Pattern.compile("\\[CHAT\\](?! \\[Hotwire\\])");
+
+    private static final String SERVER = "\\[Server thread/INFO\\](?::| \\([^)]*\\)) ";
+    private static final Pattern SERVER_CHAT = Pattern.compile(SERVER
+            + "(?:\\[Not Secure\\] )?(?:<|\\* |\\[[^\\]:]+: )");
+    private static final Pattern SERVER_JOIN = Pattern.compile(SERVER
+            + ".*(?: joined the game| left the game| logged in with entity id| lost connection: )");
 
     private static final Pattern ZIP = Pattern.compile("(?:Hotwire ([0-9]{4}-[0-9]{2}-[0-9]{2}"
             + " [0-9]{2}-[0-9]{2}-[0-9]{2})(?: .+)?|hotwire-(?:report|crash)-([0-9_-]+))\\.zip");
@@ -78,7 +89,7 @@ public final class ReportBundle {
     static String redact(String text, Set<String> personal) {
         List<String> retained = new ArrayList<>();
         for (String line : text.split("\n", -1)) {
-            if (!CHAT.matcher(line).find()) {
+            if (!CHAT.matcher(line).find() && !SERVER_CHAT.matcher(line).find() && !isOtherJoin(line, personal)) {
                 retained.add(line);
             }
         }
@@ -89,6 +100,7 @@ public final class ReportBundle {
         out = UUID.matcher(out).replaceAll("[id]");
         out = CONNECTING.matcher(out).replaceAll("$1[address]");
         out = IP_WITH_PORT.matcher(out).replaceAll("[address]");
+        out = IP6.matcher(out).replaceAll("[address]");
         out = HOME.matcher(out).replaceAll("$1[user]");
         out = USER_VARIABLE.matcher(out).replaceAll("$1[removed]");
         for (String word : personal) {
@@ -98,6 +110,19 @@ public final class ReportBundle {
             }
         }
         return out;
+    }
+
+    private static boolean isOtherJoin(String line, Set<String> personal) {
+        if (!SERVER_JOIN.matcher(line).find()) {
+            return false;
+        }
+        String lower = line.toLowerCase(Locale.ROOT);
+        for (String word : personal) {
+            if (word.length() >= 3 && lower.contains(word.toLowerCase(Locale.ROOT))) {
+                return false;
+            }
+        }
+        return true;
     }
 
     private static String readTime(Path zip) {
