@@ -433,6 +433,7 @@ public final class GameHold {
         }
     }
 
+    @SuppressWarnings("ReferenceEquality")
     private static void await(CountDownLatch paused, CountDownLatch latch, BlockingQueue<Runnable> work,
             String thread, BooleanSupplier stopping) {
         Object crash = lastCrash;
