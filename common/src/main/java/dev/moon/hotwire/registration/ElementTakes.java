@@ -361,8 +361,12 @@ final class ElementTakes {
     }
 
     static boolean isGameEntry(@Nullable Object key, @Nullable Object value) {
-        return key != null && value != null && isGameClass(key) && isGameClass(value)
-                && CollectionParts.findNamespaceOf(key) == null;
+        if (key == null || value == null || !isGameClass(key) || !isGameClass(value)
+                || CollectionParts.findNamespaceOf(key) != null) {
+            return false;
+        }
+        IdentityHashMap<Object, String> out = Games.getNow().findOutContent();
+        return !out.containsKey(key) && !out.containsKey(value);
     }
 
     private static boolean isGameClass(Object item) {
@@ -375,6 +379,10 @@ final class ElementTakes {
         changeOnItsThread(entries, () -> {
             if (!isGameEntry(key, value) && entries.remove(key, value)) {
                 out.add(new Removal.InMap(entries, key, value));
+            } else if (Games.getNow().findOutContent().containsKey(key)) {
+                LOGGER.debug("[Hotwire] a {} keeps a key that left the registries: the game's own entry {}, held {},"
+                        + " with that value {}", entries.getClass().getName(), isGameEntry(key, value),
+                        entries.containsKey(key), entries.containsValue(value));
             }
         });
     }

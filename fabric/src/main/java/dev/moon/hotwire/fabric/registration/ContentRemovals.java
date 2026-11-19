@@ -32,6 +32,7 @@ public final class ContentRemovals {
     private static final String SYNC = "fabric-registry-sync-v0";
 
     private static Map<String, List<OutEntry<?>>> out = Map.of();
+    private static IdentityHashMap<Object, String> outObjects = new IdentityHashMap<>();
 
     private static Set<String> back = Set.of();
 
@@ -46,6 +47,11 @@ public final class ContentRemovals {
     }
 
     public static synchronized IdentityHashMap<Object, String> findOut() {
+        return outObjects;
+    }
+
+    private static void setOut(Map<String, List<OutEntry<?>>> next) {
+        out = Map.copyOf(next);
         IdentityHashMap<Object, String> all = new IdentityHashMap<>();
         out.forEach((mod, entries) -> {
             for (OutEntry<?> entry : entries) {
@@ -61,7 +67,7 @@ public final class ContentRemovals {
                 }
             }
         });
-        return all;
+        outObjects = all;
     }
 
     public static synchronized boolean isBack(String mod) {
@@ -101,7 +107,7 @@ public final class ContentRemovals {
                 }
             }
         } finally {
-            out = Map.copyOf(next);
+            setOut(next);
         }
         Set<String> stillBack = new HashSet<>(back);
         stillBack.removeAll(mods);
@@ -124,7 +130,7 @@ public final class ContentRemovals {
         for (List<OutEntry<?>> entries : byRegistry.values()) {
             restored += restoreTo(entries);
         }
-        out = Map.copyOf(next);
+        setOut(next);
         Set<String> nowBack = new HashSet<>(back);
         nowBack.addAll(mods);
         back = Set.copyOf(nowBack);

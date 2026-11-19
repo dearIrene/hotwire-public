@@ -447,8 +447,13 @@ final class CollectionReferences implements FixedLists.Walk {
         this.readThrough = Collections.newSetFromMap(new IdentityHashMap<>());
         this.reader = TakeReach.GAME;
         this.mods = List.copyOf(mods);
-        this.owners = new ElementOwners(mods, Games.getNow().getRegistered(),
-                Games.getNow().findOutContent(), this.reflected);
+        IdentityHashMap<Object, String> out = Games.getNow().findOutContent();
+        this.owners = new ElementOwners(mods, Games.getNow().getRegistered(), out, this.reflected);
+        if (!out.isEmpty()) {
+            LOGGER.debug("[Hotwire] the walk for {} takes {} objects that left the registries as their mods'{}",
+                    mods.size() > 4 ? mods.size() + " mods" : mods, out.size(),
+                    ElementLook.isLooking() ? ", in a look" : "");
+        }
         Map<String, List<Removal>> mine = new LinkedHashMap<>();
         mods.forEach(mod -> mine.put(mod, new ArrayList<>()));
         this.mine = mine;
