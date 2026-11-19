@@ -1,5 +1,6 @@
 package dev.moon.hotwire.registration;
 
+import com.google.common.collect.MapMaker;
 import dev.moon.hotwire.classfile.GameNames;
 import dev.moon.hotwire.config.Flags;
 import dev.moon.hotwire.redefine.FieldSlots;
@@ -61,7 +62,8 @@ public final class ElementLook {
 
     private static Set<Object> findModelSets() {
         Object manager = Games.getNow().getModelManager();
-        Set<Object> sets = Collections.newSetFromMap(new IdentityHashMap<>());
+
+        Set<Object> sets = Collections.newSetFromMap(new MapMaker().weakKeys().makeMap());
         for (FieldSlots.Slot field : Fields.getReferenceFields(manager.getClass(), false)) {
             Object value = CollectionParts.read(field, manager);
             if (value != null && GameNames.isMinecraft(value.getClass().getName())
