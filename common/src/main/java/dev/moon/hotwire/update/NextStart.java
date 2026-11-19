@@ -1,6 +1,7 @@
 package dev.moon.hotwire.update;
 
 import dev.moon.hotwire.jar.ModManifest;
+import java.util.ArrayList;
 import java.util.Collection;
 import java.util.List;
 import java.util.Map;
@@ -28,6 +29,10 @@ public final class NextStart {
         for (Map.Entry<String, Map<String, ModManifest>> entry : waiting.entrySet()) {
             for (ModManifest mod : entry.getValue().values()) {
                 Unmet own = findOwn(entry.getKey(), mod, waiting, game);
+
+                if (own != null && !mod.id().equals(entry.getKey()) && !isAsked(mod, waiting, game)) {
+                    continue;
+                }
                 Unmet unmet = own != null ? own : findAsked(entry.getKey(), mod, entry.getValue(), waiting, game);
                 if (unmet != null) {
                     return unmet;
@@ -76,6 +81,22 @@ public final class NextStart {
             }
         }
         return null;
+    }
+
+    private static boolean isAsked(ModManifest mod, Map<String, Map<String, ModManifest>> waiting, Game game) {
+        List<ModManifest> others = new ArrayList<>(game.getInstalled());
+        waiting.values().forEach(brought -> others.addAll(brought.values()));
+        for (ModManifest other : others) {
+            if (other.id().equals(mod.id())) {
+                continue;
+            }
+            for (String id : other.getRelation(ModManifest.Relation.DEPENDS).keySet()) {
+                if (isNamed(id, mod, game)) {
+                    return true;
+                }
+            }
+        }
+        return false;
     }
 
     private static boolean isNamed(String id, ModManifest mod, Game game) {
