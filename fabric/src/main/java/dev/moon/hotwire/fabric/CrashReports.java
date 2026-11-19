@@ -6,6 +6,7 @@ import dev.moon.hotwire.engine.CrashNotice;
 import dev.moon.hotwire.fabric.screen.CrashPopup;
 import dev.moon.hotwire.report.GameReports;
 import dev.moon.hotwire.report.ReportZips;
+import dev.moon.hotwire.store.OutdatedNotice;
 import dev.moon.hotwire.ui.Lang;
 import java.io.File;
 import java.time.LocalDateTime;
@@ -48,7 +49,8 @@ public final class CrashReports {
                 LOGGER.info("[Hotwire] the crash box is not shown in a test launch");
             } else if (!Minecraft.getInstance().isSameThread() || CrashPopup.showOnItsOwnThread(
                     Lang.get("hotwire.report.crash_title"),
-                    Lang.get("hotwire.report.crash_blame") + "\n\n" + words + "\n" + Lang.get("hotwire.report.send"),
+                    OutdatedNotice.addTo(Lang.get("hotwire.report.crash_blame")) + "\n\n" + words + "\n"
+                            + Lang.get("hotwire.report.send"),
                     Lang.get("hotwire.report.show_file_now"), Lang.get("hotwire.button.close"),
                     Lang.get("hotwire.report.show_ask"))) {
                 zips.revealLastBeforeExit();

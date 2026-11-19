@@ -1,5 +1,6 @@
 package dev.moon.hotwire.ui.pages;
 
+import dev.moon.hotwire.store.OutdatedNotice;
 import dev.moon.hotwire.ui.Lang;
 import dev.moon.hotwire.ui.notices.Notice;
 import dev.moon.hotwire.ui.notices.Notices;
@@ -53,7 +54,8 @@ public final class ReportPage {
     public void show(String title, String where, String warning) {
         this.title.set(title);
         this.where.set(where);
-        this.warning.set(warning).show(!warning.isEmpty());
+        String warned = OutdatedNotice.addTo(warning);
+        this.warning.set(warned).show(!warned.isEmpty());
 
         Path zip = this.file.get();
         String named = zip == null ? "" : String.valueOf(zip.getFileName());

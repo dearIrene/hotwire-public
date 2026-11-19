@@ -5,6 +5,7 @@ import dev.moon.hotwire.config.AtomicFiles;
 import dev.moon.hotwire.engine.LoadedMods;
 import dev.moon.hotwire.plan.SwitchPlan;
 import dev.moon.hotwire.registration.Owners;
+import dev.moon.hotwire.store.OutdatedNotice;
 import dev.moon.hotwire.switching.ModSwitcher;
 import dev.moon.hotwire.switching.SwitchApplier;
 import dev.moon.hotwire.update.ModUpdater;
@@ -514,7 +515,8 @@ public final class GameReports {
 
         ActionJournal.get().flush();
         Path journal = logs.resolve(lastSession ? ActionJournal.LAST : ActionJournal.FILE);
-        texts.put(Diagnosis.FILE, (Files.isRegularFile(journal) ? Diagnosis.describeJournal(read(journal)) : "")
+        texts.put(Diagnosis.FILE, OutdatedNotice.note()
+                + (Files.isRegularFile(journal) ? Diagnosis.describeJournal(read(journal)) : "")
                 + Diagnosis.write(told, about == null ? List.of() : about.messages(),
                 about == null ? List.of() : about.frames(), about == null ? List.of() : about.mods(),
                 about == null ? List.of() : about.spans(), Files.isRegularFile(whole) ? read(whole) : ""));

@@ -10,6 +10,7 @@ import dev.moon.hotwire.report.Causes;
 import dev.moon.hotwire.report.GameReports;
 import dev.moon.hotwire.report.Report;
 import dev.moon.hotwire.seam.Games;
+import dev.moon.hotwire.store.OutdatedNotice;
 import dev.moon.hotwire.switching.CheckedResult;
 import dev.moon.hotwire.switching.CrashPolicy;
 import dev.moon.hotwire.switching.ModSwitcher;
@@ -79,7 +80,7 @@ public final class CrashGuard {
                         Lang.get("hotwire.report.file.mod_crash", name), why), where -> {
                     String line = Lang.get("hotwire.crash.off_held", name, where);
                     say.accept(line, true);
-                    Notices.show(Lang.get("hotwire.crash.title"), line);
+                    Notices.show(Lang.get("hotwire.crash.title"), OutdatedNotice.addTo(line));
                 });
                 return;
             }
@@ -168,7 +169,7 @@ public final class CrashGuard {
         LOGGER.info("[Hotwire] the crash net caught {}'s crash; {}", name, off ? "it is off for this session"
                 : "it could not go off");
         say.accept(line, true);
-        Notices.show(title, line);
+        Notices.show(title, OutdatedNotice.addTo(line));
     }
 
     static String findWhat(Throwable thrown) {

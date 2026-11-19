@@ -44,6 +44,7 @@ public final class SelfUpdate {
             ModrinthClient.Version found = this.find(checked);
             if (found != null) {
                 this.newer = found;
+                OutdatedNotice.set(found.number());
                 then.accept(found);
             }
         });

@@ -899,6 +899,7 @@
   "hotwire.report.show_file": "Open folder",
   "hotwire.report.copy_path": "Copy path",
   "hotwire.report.path_copied": "Path copied",
+  "hotwire.outdated": "You're on Hotwire %s and %s is out. Update Hotwire first, this may already be fixed.",
   "hotwire.report.send": "Send that file to wherever you got Hotwire from. Nothing is sent automatically.",
   "hotwire.report.holds": "It holds the game log and what Hotwire did, with your name and login taken out.",
   "hotwire.report.written": "Your bug report is at %s.",
