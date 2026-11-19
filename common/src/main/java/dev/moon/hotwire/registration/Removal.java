@@ -18,7 +18,7 @@ public sealed interface Removal {
     default void resetHolder(LazyFields lazy) {
     }
 
-    record InList(List<Object> list, int index, Object element) implements Removal {
+    record InList(List<Object> list, int index, Object element, boolean inPlace) implements Removal {
         @Override
         public Object container() {
             return this.list;
@@ -26,7 +26,9 @@ public sealed interface Removal {
 
         @Override
         public void restore() {
-            if (!containsSame(this.list, this.element)) {
+            if (this.inPlace && this.index < this.list.size() && this.list.get(this.index) == null) {
+                this.list.set(this.index, this.element);
+            } else if (!containsSame(this.list, this.element)) {
                 this.list.add(Math.min(this.index, this.list.size()), this.element);
             }
         }

@@ -311,11 +311,25 @@ final class ElementTakes {
     static void takeFromList(List<Object> items, Object item, List<Removal> out) {
         for (int index = items.size() - 1; index >= 0; index--) {
             if (items.get(index) == item) {
-                items.remove(index);
-                out.add(new Removal.InList(items, index, item));
+                boolean inPlace = hasEmptyPlace(items, index);
+                if (inPlace) {
+                    items.set(index, null);
+                } else {
+                    items.remove(index);
+                }
+                out.add(new Removal.InList(items, index, item, inPlace));
                 return;
             }
         }
+    }
+
+    private static boolean hasEmptyPlace(List<Object> items, int but) {
+        for (int index = 0; index < items.size(); index++) {
+            if (index != but && items.get(index) == null) {
+                return true;
+            }
+        }
+        return false;
     }
 
     static void changeOnItsThread(Object container, Runnable change) {
