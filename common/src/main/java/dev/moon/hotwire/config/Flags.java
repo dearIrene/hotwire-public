@@ -33,6 +33,8 @@ public final class Flags {
 
     public static final boolean NO_LOOK = Boolean.parseBoolean(System.getProperty("hotwire.noLook"));
 
+    public static final boolean CONTENT_LEAVES = Boolean.parseBoolean(System.getProperty("hotwire.contentLeaves"));
+
     public static final boolean CHECK_SKIPS = System.getProperty("hotwire.checkSkips") != null;
 
     public static final boolean VERIFY_LIBRARIES = Boolean.parseBoolean(System.getProperty("hotwire.verifyLibraries"));

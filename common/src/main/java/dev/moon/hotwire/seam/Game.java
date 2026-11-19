@@ -1,10 +1,12 @@
 package dev.moon.hotwire.seam;
 
 import java.nio.file.Path;
+import java.util.IdentityHashMap;
 import java.util.List;
 import java.util.Optional;
 import java.util.Set;
 import java.util.function.Function;
+import java.util.function.Predicate;
 import java.util.function.Supplier;
 import org.jspecify.annotations.Nullable;
 
@@ -28,6 +30,11 @@ public interface Game {
 
     <T> T reopenAround(Supplier<T> work, boolean byPlayer) throws InterruptedException;
 
+    default <T> T closeAround(Supplier<T> work, boolean byPlayer, Predicate<T> staysClosed)
+            throws InterruptedException {
+        return this.reopenAround(work, byPlayer);
+    }
+
     Object getModelManager();
 
     List<Object> getEntities();
@@ -35,6 +42,10 @@ public interface Game {
     List<Object> getPipelineObjects();
 
     Set<Object> getRegistered();
+
+    default IdentityHashMap<Object, String> findOutContent() {
+        return new IdentityHashMap<>();
+    }
 
     long findRegistrySizes();
 

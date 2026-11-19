@@ -399,7 +399,7 @@ public final class SwitchRunner {
         CheckedResult result = null;
         LifecycleListeners.begin();
         try {
-            result = off ? this.runTimedOff(ids) : this.runTimedOn(ids);
+            result = off ? this.runTimedOff(ids) : this.runOnWithContent(ids);
             SwitchTimes.mark("told");
 
             if (off && !QUIET.get()) {
@@ -463,7 +463,17 @@ public final class SwitchRunner {
 
         this.units.markCommandsGoingOff(id -> wired.contains(id) || !this.switcher.isOn(id));
 
-        Map<String, List<String>> content = this.units.findWorldContent(wired);
+        Map<String, List<String>> registered = this.units.findWorldContent(wired);
+
+        boolean leaves = !registered.isEmpty() && this.units.canContentLeave(registered);
+        if (leaves && Games.getNow().getWorld() != null) {
+            String why = "the game's registries hold " + registered
+                    + ". The world is saved and opened again without them";
+            LOGGER.info("[Hotwire] the off of {} takes a reopen: {}", ids, why);
+            return new CheckedResult(new ModSwitcher.Result.Failed(plan, RebuildException.ofWorldBuilt(why)),
+                    new Report.OffCheck.NotRun(), List.of());
+        }
+        Map<String, List<String>> content = leaves ? Map.of() : registered;
         SwitchTimes.mark("plan: content");
 
         Map<String, String> inEntities = content.isEmpty() ? this.findEntityHolders(wired) : Map.of();
@@ -483,6 +493,18 @@ public final class SwitchRunner {
             LOGGER.info("[Hotwire] the off of {} waits for the next start: {}", ids, why);
             return new CheckedResult(new ModSwitcher.Result.Failed(plan, RebuildException.ofRestartOnly(why)),
                     new Report.OffCheck.NotRun(), List.of());
+        }
+
+        if (leaves) {
+            try {
+                this.units.removeContent(wired);
+            } catch (RuntimeException e) {
+                LOGGER.error("[Hotwire] the content of {} could not leave the registries; it is put back", wired, e);
+                this.units.restoreContent(wired);
+                return new CheckedResult(new ModSwitcher.Result.Failed(plan, RebuildException.ofRestartOnly(
+                        "the game's registries would not let go of " + registered + ": " + e)),
+                        new Report.OffCheck.NotRun(), List.of());
+            }
         }
 
         if (!wired.isEmpty()) {
@@ -531,6 +553,9 @@ public final class SwitchRunner {
             List<String> order = out.get();
             if (order != null) {
                 this.back(order);
+            }
+            if (leaves) {
+                this.units.restoreContent(wired);
             }
             this.tripwire.unwire(wired);
         }
@@ -612,6 +637,26 @@ public final class SwitchRunner {
         LOGGER.error("[Hotwire] what {} left in others could not all be taken out", ids, e);
     }
 
+    public boolean hasLeavingContent(List<String> ids) {
+        Map<String, List<String>> content = this.units.findWorldContent(this.switcher.planOff(ids).order());
+        return !content.isEmpty() && this.units.canContentLeave(content);
+    }
+
+    private CheckedResult runOnWithContent(List<String> ids) {
+        SwitchPlan asked = this.switcher.planOn(ids);
+        if (asked.isRefused() || !this.units.isContentOut(asked.order())) {
+            return this.runTimedOn(ids);
+        }
+        if (Games.getNow().getWorld() != null) {
+            String why = "the game's registries take back what " + asked.order() + " registered. The world is saved"
+                    + " and opened again with them";
+            LOGGER.info("[Hotwire] the on of {} takes a reopen: {}", ids, why);
+            return new CheckedResult(new ModSwitcher.Result.Failed(asked, RebuildException.ofWorldBuilt(why)),
+                    new Report.OffCheck.NotRun(), List.of());
+        }
+        return this.runTimedOn(ids);
+    }
+
     private CheckedResult runTimedOn(List<String> ids) {
         SwitchPlan asked = this.switcher.planOn(ids);
         if (!asked.isRefused()) {
@@ -649,6 +694,12 @@ public final class SwitchRunner {
                 this.units.putBackPlugins(coming.order());
                 undo.push(this.units::takeOutPlugins);
                 SwitchTimes.mark("plugins back");
+
+                if (this.units.isContentOut(coming.order())) {
+                    this.units.restoreContent(coming.order());
+                    undo.push(this.units::removeContent);
+                    SwitchTimes.mark("content back");
+                }
                 dropPutBack = Games.getNow().runAtNextHold(() -> {
                     this.fieldReferences.putBackElements(coming.order());
 

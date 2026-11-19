@@ -1,6 +1,7 @@
 package dev.moon.hotwire.fabric.add;
 
 import dev.moon.hotwire.add.LoaderModList;
+import dev.moon.hotwire.fabric.registration.ContentRemovals;
 import dev.moon.hotwire.fabric.registration.WorldContent;
 import dev.moon.hotwire.fabric.version.ReloadBands;
 import dev.moon.hotwire.fabric.version.Spellings;
@@ -59,6 +60,10 @@ public final class HiddenPacks {
         Map<String, Set<String>> providers = findProviders();
         for (Map.Entry<String, ModContainer> hidden : hiddenMods.entrySet()) {
             String id = hidden.getKey();
+
+            if (ContentRemovals.isOut(id)) {
+                continue;
+            }
             Optional<Set<String>> named = this.namespaces.computeIfAbsent(id,
                     any -> readNamespaces(id, hidden.getValue()));
             if (named.isEmpty()) {

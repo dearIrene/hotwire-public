@@ -50,7 +50,7 @@ final class CollectionReferences implements FixedLists.Walk {
 
     final ReflectedOwners reflected = new ReflectedOwners();
 
-    private ElementOwners owners = new ElementOwners(List.of(), Set.of(), this.reflected);
+    private ElementOwners owners = new ElementOwners(List.of(), Set.of(), new IdentityHashMap<>(), this.reflected);
     private Map<String, List<Removal>> mine = Map.of();
 
     @Nullable String readingStaticsOf;
@@ -101,7 +101,7 @@ final class CollectionReferences implements FixedLists.Walk {
         this.prepared = null;
 
         if (ready == null) {
-            this.owners = new ElementOwners(List.of(), Set.of(), this.reflected);
+            this.owners = new ElementOwners(List.of(), Set.of(), new IdentityHashMap<>(), this.reflected);
         }
         List<Runnable> ahead = ready != null ? List.of() : this.look.open(mods);
         try {
@@ -174,7 +174,7 @@ final class CollectionReferences implements FixedLists.Walk {
         this.seen = new IdentityHashMap<>();
         this.readThrough = Collections.newSetFromMap(new IdentityHashMap<>());
         this.mods = List.of();
-        this.owners = new ElementOwners(List.of(), Set.of(), this.reflected);
+        this.owners = new ElementOwners(List.of(), Set.of(), new IdentityHashMap<>(), this.reflected);
 
         this.ownClassAsked = null;
         this.ownStaticsAsked = null;
@@ -447,7 +447,8 @@ final class CollectionReferences implements FixedLists.Walk {
         this.readThrough = Collections.newSetFromMap(new IdentityHashMap<>());
         this.reader = TakeReach.GAME;
         this.mods = List.copyOf(mods);
-        this.owners = new ElementOwners(mods, Games.getNow().getRegistered(), this.reflected);
+        this.owners = new ElementOwners(mods, Games.getNow().getRegistered(),
+                Games.getNow().findOutContent(), this.reflected);
         Map<String, List<Removal>> mine = new LinkedHashMap<>();
         mods.forEach(mod -> mine.put(mod, new ArrayList<>()));
         this.mine = mine;

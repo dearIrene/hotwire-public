@@ -33,6 +33,7 @@ import java.util.concurrent.RejectedExecutionException;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.TimeoutException;
 import java.util.function.Consumer;
+import java.util.function.Predicate;
 import java.util.function.Supplier;
 import java.util.stream.Collectors;
 import net.minecraft.client.Minecraft;
@@ -205,6 +206,11 @@ public final class WorldReopen {
     }
 
     public static <T> T runAround(Supplier<T> add, boolean byPlayer) throws InterruptedException {
+        return runAround(add, byPlayer, result -> false);
+    }
+
+    public static <T> T runAround(Supplier<T> add, boolean byPlayer, Predicate<T> staysClosed)
+            throws InterruptedException {
         Minecraft client = Minecraft.getInstance();
         if (isLeftOnly()) {
             leave(client);
@@ -232,7 +238,11 @@ public final class WorldReopen {
                 openOrSay(client, level);
                 throw e;
             }
-            openOrSay(client, level);
+            if (staysClosed.test(result)) {
+                LOGGER.info("[Hotwire] the world {} stays closed after the switch", level);
+            } else {
+                openOrSay(client, level);
+            }
             return result;
         } finally {
             closedFor.accept(false);

@@ -1,17 +1,16 @@
 package dev.moon.hotwire.fabric;
 
+import dev.moon.hotwire.config.Flags;
 import dev.moon.hotwire.fabric.rebuild.LivePluginShapes;
+import dev.moon.hotwire.fabric.registration.ContentRemovals;
 import dev.moon.hotwire.fabric.registration.EntityAttachments;
 import dev.moon.hotwire.fabric.registration.EntityHolders;
 import dev.moon.hotwire.fabric.registration.EntityRendererProviders;
 import dev.moon.hotwire.fabric.registration.GameHold;
-
 import dev.moon.hotwire.fabric.registration.GlfwCallbacks;
 import dev.moon.hotwire.fabric.registration.MixinPlugins;
-
 import dev.moon.hotwire.fabric.registration.ModelReloadCheck;
 import dev.moon.hotwire.fabric.registration.NetworkHandlers;
-
 import dev.moon.hotwire.fabric.registration.OneConfigHuds;
 import dev.moon.hotwire.fabric.registration.RegistryCheck;
 import dev.moon.hotwire.fabric.registration.ReloadedLists;
@@ -68,6 +67,27 @@ final class GameSwitchUnits implements SwitchUnits {
     @Override
     public Map<String, List<String>> findWorldContent(Collection<String> mods) {
         return WorldContent.find(mods);
+    }
+
+    @Override
+    public boolean canContentLeave(Map<String, List<String>> content) {
+        return Flags.CONTENT_LEAVES && ContentRemovals.isPossible() && content.values().stream()
+                .noneMatch(kinds -> kinds.contains("saved components"));
+    }
+
+    @Override
+    public void removeContent(Collection<String> mods) {
+        Minecraft.getInstance().executeBlocking(() -> ContentRemovals.take(mods));
+    }
+
+    @Override
+    public boolean isContentOut(Collection<String> mods) {
+        return mods.stream().anyMatch(ContentRemovals::isOut);
+    }
+
+    @Override
+    public void restoreContent(Collection<String> mods) {
+        Minecraft.getInstance().executeBlocking(() -> ContentRemovals.restore(mods));
     }
 
     @Override

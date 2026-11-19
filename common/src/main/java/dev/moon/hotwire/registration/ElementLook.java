@@ -119,6 +119,8 @@ public final class ElementLook {
     private static volatile long lookedEveryClasses;
     private static volatile int lookedEveryWorld = NO_WORLD;
 
+    private static volatile long lookedEveryRegistries;
+
     private static volatile @Nullable Thread looking;
 
     private static volatile boolean stopAsked;
@@ -236,6 +238,7 @@ public final class ElementLook {
                 lookedEveryAt = System.nanoTime();
                 lookedEveryClasses = LOADING.getTotalLoadedClassCount();
                 lookedEveryWorld = world;
+                lookedEveryRegistries = Games.getNow().findRegistrySizes();
                 references.finishEveryLook();
             } catch (RuntimeException | LinkageError e) {
                 LOGGER.info("[Hotwire] the look ahead for {} mods ended early: {}", asked.size(), e.toString());
@@ -298,6 +301,7 @@ public final class ElementLook {
                 lookedEveryAt = System.nanoTime();
                 lookedEveryClasses = LOADING.getTotalLoadedClassCount();
                 lookedEveryWorld = world;
+                lookedEveryRegistries = Games.getNow().findRegistrySizes();
                 references.finishEveryLook();
             } catch (RuntimeException | LinkageError e) {
                 LOGGER.info("[Hotwire] the look's warm-up ended early: {}", e.toString());
@@ -348,8 +352,7 @@ public final class ElementLook {
     }
 
     private static boolean isFreshForEvery(List<String> asked) {
-        return lookedForEvery.containsAll(asked)
-                && (System.nanoTime() - lookedEveryAt < FRESH_NANOS || isGameAsLooked());
+        return stands(asked) && (System.nanoTime() - lookedEveryAt < FRESH_NANOS || isGameAsLooked());
     }
 
     private static boolean isGameAsLooked() {
@@ -366,7 +369,7 @@ public final class ElementLook {
     }
 
     private static boolean stands(List<String> asked) {
-        return lookedForEvery.containsAll(asked);
+        return lookedForEvery.containsAll(asked) && lookedEveryRegistries == Games.getNow().findRegistrySizes();
     }
 
     CollectionNotes getNotes() {

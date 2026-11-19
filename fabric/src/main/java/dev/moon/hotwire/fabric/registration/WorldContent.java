@@ -21,6 +21,7 @@ import net.fabricmc.loader.api.metadata.ModEnvironment;
 import net.minecraft.core.Registry;
 import net.minecraft.core.registries.BuiltInRegistries;
 import net.minecraft.resources.Identifier;
+import org.jspecify.annotations.Nullable;
 
 public final class WorldContent {
     private static Map<String, SortedSet<String>> found = Map.of();
@@ -122,6 +123,14 @@ public final class WorldContent {
                 index.computeIfAbsent(owner, mod -> new TreeSet<>()).add(kind);
             }
         }
+    }
+
+    static @Nullable String findOwner(Identifier key, Object value) {
+        FabricLoader loader = FabricLoader.getInstance();
+        String namespace = key.getNamespace();
+        String owner = !"minecraft".equals(namespace) && loader.isModLoaded(namespace) ? namespace
+                : Owners.findModOf(value.getClass());
+        return owner != null && !"minecraft".equals(owner) && !isClientOnly(loader, owner) ? owner : null;
     }
 
     private static boolean isClientOnly(FabricLoader loader, String mod) {

@@ -35,7 +35,7 @@ public final class RegistryCheck {
         for (Map.Entry<Registry<?>, List<ResourceKey<?>>> entry : this.keys.entrySet()) {
             Registry<Object> registry = (Registry<Object>) entry.getKey();
             for (ResourceKey<?> key : entry.getValue()) {
-                if (!registry.containsKey((ResourceKey<Object>) key)) {
+                if (!registry.containsKey((ResourceKey<Object>) key) && !ContentRemovals.isEntryOut(key)) {
                     count++;
                     if (gone.size() < 8) {
                         gone.add(key.toString());

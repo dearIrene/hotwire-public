@@ -10,6 +10,7 @@ import java.lang.reflect.Member;
 import java.lang.reflect.Proxy;
 import java.util.Arrays;
 import java.util.HashSet;
+import java.util.IdentityHashMap;
 import java.util.List;
 import java.util.Set;
 import net.fabricmc.loader.api.ModContainer;
@@ -22,18 +23,22 @@ final class ElementOwners {
     private final Set<String> libraryOfSome;
     private final Set<Object> registered;
 
+    private final IdentityHashMap<Object, String> out;
+
     private final ModNames names;
 
     private final Wrappers wrappers = new Wrappers();
     private final ReflectedOwners reflected;
 
-    ElementOwners(List<String> mods, Set<Object> registered, ReflectedOwners reflected) {
+    ElementOwners(List<String> mods, Set<Object> registered, IdentityHashMap<Object, String> out,
+            ReflectedOwners reflected) {
         this.mods = List.copyOf(mods);
         this.modSet = Set.copyOf(mods);
         Set<String> libraries = new HashSet<>();
         mods.forEach(mod -> libraries.addAll(Tripwire.getLibrariesOf(mod)));
         this.libraryOfSome = Set.copyOf(libraries);
         this.registered = registered;
+        this.out = out;
         this.names = new ModNames(mods);
         this.reflected = reflected;
     }
@@ -61,6 +66,10 @@ final class ElementOwners {
     }
 
     @Nullable String findOwnerAmong(Object value) {
+        String left = this.findOutOwner(value);
+        if (left != null) {
+            return left;
+        }
         String own = this.findOwnOwner(value);
         if (own != null) {
             return own;
@@ -71,6 +80,27 @@ final class ElementOwners {
         }
         String named = this.reflected.findOwnerOf(value instanceof Class<?> type ? type : value.getClass());
         return named != null && this.modSet.contains(named) ? named : null;
+    }
+
+    private @Nullable String findOutOwner(Object value) {
+        if (this.out.isEmpty()) {
+            return null;
+        }
+        String mod = this.out.get(value);
+        if (mod == null && value.getClass().isRecord()) {
+            try {
+                for (FieldSlots.Slot part : Fields.getRecordParts(value.getClass())) {
+                    Object inner = part.getType().isPrimitive() ? null : part.get(value);
+                    mod = inner == null ? null : this.out.get(inner);
+                    if (mod != null) {
+                        break;
+                    }
+                }
+            } catch (ReflectiveOperationException | RuntimeException | LinkageError e) {
+                return null;
+            }
+        }
+        return mod != null && this.modSet.contains(mod) ? mod : null;
     }
 
     @Nullable String findOwnOwner(Object value) {
@@ -91,6 +121,10 @@ final class ElementOwners {
     @Nullable String findOwnerOf(Object item, boolean inSmall) {
         if (this.registered.contains(item)) {
             return null;
+        }
+        String left = this.findOutOwner(item);
+        if (left != null) {
+            return left;
         }
 
         if (isGameObject(item)) {

@@ -5,10 +5,10 @@ import dev.moon.hotwire.fabric.add.WorldReopen;
 import dev.moon.hotwire.fabric.mixin.core.fabric.base.event.ArrayBackedEventAccessor;
 import dev.moon.hotwire.fabric.mixin.core.world.item.CreativeModeTabsAccessor;
 import dev.moon.hotwire.fabric.rebuild.GameClasses;
+import dev.moon.hotwire.fabric.registration.ContentRemovals;
 import dev.moon.hotwire.fabric.registration.GameHold;
 import dev.moon.hotwire.fabric.registration.InternedKeys;
 import dev.moon.hotwire.fabric.registration.LevelEntities;
-
 import dev.moon.hotwire.fabric.registration.NetworkHandlers;
 import dev.moon.hotwire.fabric.registration.RegisteredContent;
 import dev.moon.hotwire.fabric.screen.HoldFrame;
@@ -19,10 +19,12 @@ import dev.moon.hotwire.seam.Reloads;
 import dev.moon.hotwire.seam.SharedChange;
 import io.netty.channel.Channel;
 import java.nio.file.Path;
+import java.util.IdentityHashMap;
 import java.util.List;
 import java.util.Optional;
 import java.util.Set;
 import java.util.function.Function;
+import java.util.function.Predicate;
 import java.util.function.Supplier;
 import net.minecraft.client.Minecraft;
 import net.minecraft.client.gui.screens.Screen;
@@ -103,6 +105,12 @@ public final class GameSide implements Game {
     }
 
     @Override
+    public <T> T closeAround(Supplier<T> work, boolean byPlayer, Predicate<T> staysClosed)
+            throws InterruptedException {
+        return WorldReopen.runAround(work, byPlayer, staysClosed);
+    }
+
+    @Override
     public Object getModelManager() {
         return Minecraft.getInstance().getModelManager();
     }
@@ -120,6 +128,11 @@ public final class GameSide implements Game {
     @Override
     public Set<Object> getRegistered() {
         return RegisteredContent.find();
+    }
+
+    @Override
+    public IdentityHashMap<Object, String> findOutContent() {
+        return ContentRemovals.findOut();
     }
 
     @Override

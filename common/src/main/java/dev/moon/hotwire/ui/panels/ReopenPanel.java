@@ -13,29 +13,34 @@ import org.jspecify.annotations.Nullable;
 
 public final class ReopenPanel extends Sheet {
     public record Offer(boolean off, List<String> ids, @Nullable Path jar, String who, String why, boolean leaves,
-            boolean nextStart, boolean backup) {
+            boolean nextStart, boolean backup, boolean closes) {
         public Offer {
             ids = List.copyOf(ids);
         }
 
         public Offer(boolean off, List<String> ids, @Nullable Path jar, String who, String why, boolean leaves) {
-            this(off, ids, jar, who, why, leaves, false, false);
+            this(off, ids, jar, who, why, leaves, false, false, false);
         }
 
         public Offer(boolean off, List<String> ids, @Nullable Path jar, String who, String why) {
-            this(off, ids, jar, who, why, false, false, false);
+            this(off, ids, jar, who, why, false, false, false, false);
         }
 
         public Offer(boolean off, List<String> ids, String who, String why) {
-            this(off, ids, null, who, why, false, false, false);
+            this(off, ids, null, who, why, false, false, false, false);
         }
 
         public static Offer ofNextStart(List<String> ids, String who, String why) {
-            return new Offer(true, ids, null, who, why, false, true, false);
+            return new Offer(true, ids, null, who, why, false, true, false, false);
+        }
+
+        public static Offer ofClose(List<String> ids, String who, String why) {
+            return new Offer(true, ids, null, who, why, false, false, false, true);
         }
 
         Offer withBackup(boolean backup) {
-            return new Offer(this.off, this.ids, this.jar, this.who, this.why, this.leaves, this.nextStart, backup);
+            return new Offer(this.off, this.ids, this.jar, this.who, this.why, this.leaves, this.nextStart, backup,
+                    this.closes);
         }
 
         public boolean isReopening() {
@@ -67,12 +72,13 @@ public final class ReopenPanel extends Sheet {
 
     private void fill(Offer offer) {
         this.title.set(findTitle(offer));
-        String safe = offer.leaves() ? "hotwire.reopen.safe.server" : "hotwire.reopen.safe.world";
+        String safe = offer.closes() ? "hotwire.reopen.safe.close"
+                : offer.leaves() ? "hotwire.reopen.safe.server" : "hotwire.reopen.safe.world";
         String shared = offer.isReopening() ? this.others.get() : "";
         this.body.clear().with(Kit.text(offer.who(), Palette.ACCENT).wrap(), Kit.dim(offer.why()).wrap(),
                 new Part().height(4), Kit.text(findPlan(offer)).wrap(),
                 Kit.text(Lang.get(offer.nextStart() ? "hotwire.reopen.safe.next_start" : safe),
-                        offer.nextStart() ? Palette.WARN : Palette.ON).wrap(),
+                        offer.closes() ? Palette.BAD : offer.nextStart() ? Palette.WARN : Palette.ON).wrap(),
                 Kit.text(shared, Palette.WARN).wrap().show(!shared.isEmpty()),
                 Kit.dim(Lang.get("hotwire.reopen.backup_line")).wrap().show(offer.isReopening() && backupWanted));
         this.buttons.clear().with(Kit.push(Lang.get(backupWanted ? "hotwire.reopen.backup_on"
@@ -90,6 +96,9 @@ public final class ReopenPanel extends Sheet {
         if (offer.nextStart()) {
             return "hotwire.reopen.off_next_start";
         }
+        if (offer.closes()) {
+            return "hotwire.reopen.save_and_off";
+        }
         if (offer.leaves()) {
             return "hotwire.reopen.leave_and_switch";
         }
@@ -103,6 +112,9 @@ public final class ReopenPanel extends Sheet {
         if (offer.nextStart()) {
             return Lang.get("hotwire.reopen.title.next_start");
         }
+        if (offer.closes()) {
+            return Lang.get("hotwire.reopen.title.close");
+        }
         if (offer.leaves()) {
             return Lang.get("hotwire.reopen.title.leave");
         }
@@ -112,6 +124,9 @@ public final class ReopenPanel extends Sheet {
     static String findPlan(Offer offer) {
         if (offer.nextStart()) {
             return Lang.get("hotwire.reopen.plan.next_start");
+        }
+        if (offer.closes()) {
+            return Lang.get("hotwire.reopen.plan.close");
         }
         if (offer.leaves()) {
             return Lang.get("hotwire.reopen.plan.leave");

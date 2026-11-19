@@ -19,6 +19,20 @@ public interface SwitchUnits {
 
     Map<String, List<String>> findWorldContent(Collection<String> mods);
 
+    default boolean canContentLeave(Map<String, List<String>> content) {
+        return false;
+    }
+
+    default void removeContent(Collection<String> mods) {
+    }
+
+    default boolean isContentOut(Collection<String> mods) {
+        return false;
+    }
+
+    default void restoreContent(Collection<String> mods) {
+    }
+
     Map<String, String> findEntityHolders(Collection<String> mods, Predicate<Object> reached);
 
     void rememberPluginAnswers(Collection<String> mods);

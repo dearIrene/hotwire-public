@@ -2,7 +2,7 @@ package dev.moon.hotwire.fabric;
 
 import dev.moon.hotwire.add.LoaderModList;
 import dev.moon.hotwire.engine.ModSoundFiles;
-
+import dev.moon.hotwire.fabric.registration.ContentRemovals;
 import dev.moon.hotwire.fabric.registration.GameHold;
 import dev.moon.hotwire.fabric.registration.ModelReloadCheck;
 import dev.moon.hotwire.fabric.registration.ReloadedLists;
@@ -452,7 +452,9 @@ public final class ResourceReload {
         if (reloadedWhilePaused) {
             return;
         }
-        boolean models = off ? owners.hasModelsOf(mods) : modelsAtOn;
+
+        boolean models = (off ? owners.hasModelsOf(mods) : modelsAtOn)
+                || mods.stream().anyMatch(off ? ContentRemovals::isOut : ContentRemovals::isBack);
         FontManager manager = FontReload.findFontManager();
         boolean fonts = manager != null && (off ? owners.hasFontsOf(manager, mods) : fontsAtOn);
 

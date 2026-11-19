@@ -157,9 +157,12 @@ final class SwitchRequests {
                     && (this.engine.units.isWorldLeftOnly() || Games.getNow().findReopenRefusal().isEmpty())) {
                 LOGGER.info("[Hotwire] {}", said);
                 String where = this.engine.units.isWorldLeftOnly() ? "server" : "world";
-                current.offerReopen(new ReopenPanel.Offer(off, ids, null, PlayerMessages.joinNames(ids,
-                        this.installed::nameOf), Lang.get("hotwire.reopen.why." + (off ? "off_" : "on_") + where),
-                        this.engine.units.isWorldLeftOnly()));
+
+                String lost = off ? this.describeLost(failed.plan().order()) : "";
+                String names = PlayerMessages.joinNames(ids, this.installed::nameOf);
+                current.offerReopen(lost.isEmpty() ? new ReopenPanel.Offer(off, ids, null, names,
+                        Lang.get("hotwire.reopen.why." + (off ? "off_" : "on_") + where),
+                        this.engine.units.isWorldLeftOnly()) : ReopenPanel.Offer.ofClose(ids, names, lost));
             } else {
                 boolean lasting = off && result.result() instanceof ModSwitcher.Result.Done done
                         && !done.plan().order().isEmpty() && !untilOn;
@@ -187,6 +190,16 @@ final class SwitchRequests {
                 LOGGER.warn("[Hotwire] the switch could not be written into the profile", e);
             }
         }
+    }
+
+    private String describeLost(List<String> order) {
+        List<String> named = List.copyOf(this.engine.units.findWorldContentKinds(order));
+        if (named.isEmpty()) {
+            return "";
+        }
+        String listed = named.size() == 1 ? named.getFirst() : String.join(", ", named.subList(0, named.size() - 1))
+                + " and " + named.getLast();
+        return Lang.get("hotwire.reopen.why.content_off", listed);
     }
 
     private String describeWhyAtStart(List<String> order, SwitchRunner runner) {
@@ -253,12 +266,17 @@ final class SwitchRequests {
                 : ActionJournal.Action.REOPEN_ON, ids);
         @Nullable CheckedResult result;
         try {
-            result = Games.getNow().reopenAround(() -> {
-                if (ids.isEmpty()) {
-                    return null;
-                }
-                return off ? runner.turnOff(ids) : runner.turnOn(ids);
-            }, byPlayer);
+            if (off && !ids.isEmpty() && runner.hasLeavingContent(ids)) {
+                result = Games.getNow().closeAround(() -> runner.turnOff(ids), byPlayer,
+                        done -> done.result() instanceof ModSwitcher.Result.Done);
+            } else {
+                result = Games.getNow().reopenAround(() -> {
+                    if (ids.isEmpty()) {
+                        return null;
+                    }
+                    return off ? runner.turnOff(ids) : runner.turnOn(ids);
+                }, byPlayer);
+            }
         } catch (InterruptedException | RuntimeException e) {
             journal.endThrown();
             throw e;

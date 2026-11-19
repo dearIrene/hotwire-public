@@ -1,5 +1,7 @@
 package dev.moon.hotwire.fabric.mixin.core.core;
 
+import it.unimi.dsi.fastutil.objects.ObjectList;
+import it.unimi.dsi.fastutil.objects.Reference2IntMap;
 import java.util.Map;
 import net.minecraft.core.MappedRegistry;
 import org.jspecify.annotations.Nullable;
@@ -24,4 +26,22 @@ public interface MappedRegistryAccessor {
 
     @Accessor("unregisteredIntrusiveHolders")
     void hotwire$setUnregisteredIntrusiveHolders(@Nullable Map<Object, Object> holders);
+
+    @Accessor("byId")
+    ObjectList<Object> hotwire$getById();
+
+    @Accessor("toId")
+    Reference2IntMap<?> hotwire$getToId();
+
+    @Accessor("byLocation")
+    Map<Object, Object> hotwire$getByLocation();
+
+    @Accessor("byKey")
+    Map<Object, Object> hotwire$getByKey();
+
+    @Accessor("byValue")
+    Map<Object, Object> hotwire$getByValue();
+
+    @Accessor("registrationInfos")
+    Map<Object, Object> hotwire$getRegistrationInfos();
 }
