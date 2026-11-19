@@ -502,8 +502,23 @@ public final class ModUpdater {
             case SortResult.Refused refused -> refused.result();
             case SortResult.IdChanged changed -> this.idChanged.update(changed.manifest(), changed.replaced(),
                     changed.jar(), method);
-            case SortResult.Planned planned -> this.take(planned, method);
+            case SortResult.Planned planned -> this.take(planned, this.isLacking(planned) ? UpdateMethod.NEXT_START
+                    : method);
         });
+    }
+
+    private boolean isLacking(SortResult.Planned planned) {
+        Set<String> goingIn;
+        try {
+            goingIn = JarLinks.readClassNames(planned.jar());
+        } catch (IOException e) {
+            goingIn = Set.of();
+        }
+        String lacking = this.updateClashes.findLacking(planned, goingIn);
+        if (lacking != null) {
+            LOGGER.info("[Hotwire] {} waits for the next start: {}", planned.manifest().id(), lacking);
+        }
+        return lacking != null;
     }
 
     public sealed interface SortResult {

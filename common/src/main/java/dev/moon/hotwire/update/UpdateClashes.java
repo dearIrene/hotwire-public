@@ -85,6 +85,10 @@ final class UpdateClashes {
         if (missing != null) {
             return "it needs " + missing + ", which comes with an update that waits";
         }
+        return this.findLacking(planned, goingIn);
+    }
+
+    @Nullable String findLacking(ModUpdater.SortResult.Planned planned, Set<String> goingIn) {
         List<UpdatePlan> plans = new ArrayList<>(List.of(planned.whole().plan()));
         planned.whole().bundled().forEach(carried -> plans.add(carried.plan()));
         for (UpdatePlan plan : plans) {
