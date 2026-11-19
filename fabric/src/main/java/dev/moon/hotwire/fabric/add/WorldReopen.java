@@ -387,7 +387,15 @@ public final class WorldReopen {
         boolean[] refused = new boolean[1];
         Object before = ModViews.openScreen();
         client.execute(() -> client.createWorldOpenFlows().openWorld(level, () -> refused[0] = true));
+        long said = System.nanoTime();
         while (client.player == null || client.level == null) {
+            if (System.nanoTime() - said > 10_000_000_000L) {
+                said = System.nanoTime();
+                Object shown = ModViews.openScreen();
+                LOGGER.debug("[Hotwire] the world {} is not open yet; the game shows {}", level,
+                        shown == null ? "no screen" : shown.getClass().getName()
+                                + (shown instanceof Screen screen ? " \"" + screen.getTitle().getString() + "\"" : ""));
+            }
             if (refused[0]) {
                 throw new IllegalStateException("the game would not open the world " + level + " again");
             }
