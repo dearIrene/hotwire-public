@@ -6,6 +6,8 @@ import dev.moon.hotwire.jar.ZipBytes;
 import java.io.ByteArrayInputStream;
 import java.io.IOException;
 import java.io.InputStream;
+import java.lang.invoke.MethodType;
+import java.lang.reflect.Method;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.util.ArrayDeque;
@@ -212,6 +214,16 @@ public final class JarLinks {
         return null;
     }
 
+    private static boolean isOfObject(String name, String desc) {
+        for (Method method : Object.class.getDeclaredMethods()) {
+            if (method.getName().equals(name) && MethodType.methodType(method.getReturnType(),
+                    method.getParameterTypes()).toMethodDescriptorString().equals(desc)) {
+                return true;
+            }
+        }
+        return false;
+    }
+
     private static boolean hasMember(String owner, String member, GameClassReader running) {
         int space = member.indexOf(' ');
         String name = member.substring(0, space);
@@ -220,6 +232,10 @@ public final class JarLinks {
         Set<String> seen = new HashSet<>();
         while (!next.isEmpty()) {
             String type = next.removeFirst();
+
+            if (type.equals("java/lang/Object") && isOfObject(name, desc)) {
+                return true;
+            }
             if (!seen.add(type) || type.equals("java/lang/Object")) {
                 continue;
             }
