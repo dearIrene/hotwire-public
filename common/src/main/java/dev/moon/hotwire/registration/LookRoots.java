@@ -87,6 +87,14 @@ final class LookRoots {
             }
         }
 
+        if (!Games.getNow().findOutContent().isEmpty()) {
+            loaded.forEach((name, type) -> {
+                if (GameNames.isMinecraftInternal(name) && this.initialized.test(type)) {
+                    statics.add(type);
+                }
+            });
+        }
+
         Set<Object> handed = LoaderModList.findHanded(mods);
         Set<String> consumers = HandedSearch.findConsumers(handed);
         List<Class<?>> consumerClasses = new ArrayList<>();
