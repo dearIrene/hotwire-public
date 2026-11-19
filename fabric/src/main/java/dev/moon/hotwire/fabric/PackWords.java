@@ -11,6 +11,7 @@ import java.io.Reader;
 import java.nio.charset.StandardCharsets;
 import java.util.HashMap;
 import java.util.List;
+import java.util.Locale;
 import java.util.Map;
 import net.minecraft.client.Minecraft;
 import net.minecraft.locale.Language;
@@ -58,7 +59,10 @@ final class PackWords {
         Map<String, String> read = new HashMap<>();
         String chosen = client.getLanguageManager().getSelected();
         for (String code : chosen.equals(ENGLISH) ? List.of(ENGLISH) : List.of(ENGLISH, chosen)) {
-            Identifier file = Identifier.fromNamespaceAndPath(HotwireClient.ID, "lang/" + code + ".json");
+            Identifier file = Identifier.tryBuild(HotwireClient.ID, "lang/" + code.toLowerCase(Locale.ROOT) + ".json");
+            if (file == null) {
+                continue;
+            }
             for (PackResources pack : packs) {
                 IoSupplier<InputStream> found = pack.getResource(PackType.CLIENT_RESOURCES, file);
                 if (found != null) {
