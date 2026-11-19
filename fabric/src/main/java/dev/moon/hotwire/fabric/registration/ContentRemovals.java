@@ -1,6 +1,7 @@
 package dev.moon.hotwire.fabric.registration;
 
 import dev.moon.hotwire.fabric.mixin.core.core.MappedRegistryAccessor;
+import dev.moon.hotwire.fabric.mixin.core.world.item.CreativeModeTabsAccessor;
 import it.unimi.dsi.fastutil.ints.Int2IntMap;
 import it.unimi.dsi.fastutil.ints.Int2IntOpenHashMap;
 import it.unimi.dsi.fastutil.objects.Reference2IntMap;
@@ -21,6 +22,8 @@ import net.minecraft.core.Registry;
 import net.minecraft.core.registries.BuiltInRegistries;
 import net.minecraft.resources.Identifier;
 import net.minecraft.resources.ResourceKey;
+import net.minecraft.world.item.BlockItem;
+import net.minecraft.world.item.Item;
 import net.minecraft.world.level.block.Block;
 import net.minecraft.world.level.material.Fluid;
 import org.jspecify.annotations.Nullable;
@@ -33,6 +36,8 @@ public final class ContentRemovals {
 
     private static Map<String, List<OutEntry<?>>> out = Map.of();
     private static IdentityHashMap<Object, String> outObjects = new IdentityHashMap<>();
+
+    private static Map<String, Map<Block, Item>> standIns = Map.of();
 
     private static Set<String> back = Set.of();
 
@@ -113,6 +118,9 @@ public final class ContentRemovals {
         stillBack.removeAll(mods);
         back = Set.copyOf(stillBack);
         LOGGER.info("[Hotwire] {} entries of {} left the game's registries: {}", count, mods, from);
+        putBackGameItems();
+
+        CreativeModeTabsAccessor.hotwire$setCachedParameters(null);
         return count;
     }
 
@@ -130,6 +138,15 @@ public final class ContentRemovals {
         for (List<OutEntry<?>> entries : byRegistry.values()) {
             restored += restoreTo(entries);
         }
+        Map<String, Map<Block, Item>> standing = new HashMap<>(standIns);
+        for (String mod : mods) {
+            Map<Block, Item> was = standing.remove(mod);
+            if (was != null) {
+                Item.BY_BLOCK.putAll(was);
+            }
+        }
+        standIns = Map.copyOf(standing);
+        CreativeModeTabsAccessor.hotwire$setCachedParameters(null);
         setOut(next);
         Set<String> nowBack = new HashSet<>(back);
         nowBack.addAll(mods);
@@ -138,6 +155,30 @@ public final class ContentRemovals {
             LOGGER.info("[Hotwire] {} entries of {} are back in the game's registries", restored, mods);
         }
         return restored;
+    }
+
+    private static void putBackGameItems() {
+        Map<Block, Item> rule = new HashMap<>();
+        for (Item item : BuiltInRegistries.ITEM) {
+            if (item instanceof BlockItem blockItem) {
+                blockItem.registerBlocks(rule, item);
+            }
+        }
+        Map<String, Map<Block, Item>> standing = new HashMap<>(standIns);
+        int put = 0;
+        for (Map.Entry<Block, Item> entry : Item.BY_BLOCK.entrySet()) {
+            String mod = outObjects.get(entry.getValue());
+            Item game = rule.get(entry.getKey());
+            if (mod != null && game != null && !outObjects.containsKey(entry.getKey())) {
+                standing.computeIfAbsent(mod, any -> new HashMap<>()).put(entry.getKey(), entry.getValue());
+                entry.setValue(game);
+                put++;
+            }
+        }
+        standIns = Map.copyOf(standing);
+        if (put > 0) {
+            LOGGER.info("[Hotwire] {} of the game's blocks have their own item again in Item.BY_BLOCK", put);
+        }
     }
 
     @SuppressWarnings("unchecked")
