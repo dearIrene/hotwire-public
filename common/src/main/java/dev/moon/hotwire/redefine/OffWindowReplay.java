@@ -50,7 +50,8 @@ public final class OffWindowReplay {
     private OffWindowReplay() {
     }
 
-    static Addition add(String name, byte[] mixed, byte[] running, byte @Nullable [] original, boolean handlers) {
+    static Addition add(String name, byte[] mixed, byte[] running, byte @Nullable [] original, boolean handlers,
+            byte @Nullable [] previous) {
         OffWindowObjects.markRecording(name, isRecording(mixed));
         if (original == null || OffWindowObjects.countAlive(name) == 0) {
             return new Addition(mixed, Set.of());
@@ -59,7 +60,10 @@ public final class OffWindowReplay {
         Set<String> own = new HashSet<>();
         RetainedInitializers.read(original).fields.forEach(field -> own.add(field.name + field.desc));
         Set<String> setNow = ConstructedFields.of(mixed);
-        Set<String> setThen = ConstructedFields.of(running);
+        Set<String> setThen = new HashSet<>(ConstructedFields.of(running));
+        if (previous != null) {
+            setThen.addAll(ConstructedFields.of(previous));
+        }
         Map<String, String> lost = new HashMap<>();
 
         boolean record = "java/lang/Record".equals(now.superName);

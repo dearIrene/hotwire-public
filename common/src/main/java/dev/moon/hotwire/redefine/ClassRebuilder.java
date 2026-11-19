@@ -364,9 +364,10 @@ public final class ClassRebuilder {
                 return;
             }
             byte[] original = originals.get(entry.getValue());
-            byte[] withInitializers = RetainedInitializers.retain(bytes, this.launchOf(name, running), original);
+            byte[] withInitializers = RetainedInitializers.record(RetainedInitializers.retain(bytes,
+                    this.launchOf(name, running), original), this.mixedNow.get(name), original);
             OffWindowReplay.Addition added = OffWindowReplay.add(name, withInitializers, running, original,
-                    this.hooks.hasReplayedHandlers(entry.getValue()));
+                    this.hooks.hasReplayedHandlers(entry.getValue()), this.mixedNow.get(name));
             if (!added.getFields().isEmpty()) {
                 replayed.put(name, added.getFields());
             }
@@ -728,7 +729,7 @@ public final class ClassRebuilder {
                     }
                 });
                 if (!part.generated().isEmpty()) {
-                    this.hooks.onGenerated(part.generated());
+                    this.hooks.onGenerated(GeneratedNest.open(part.generated(), this::findRunning));
                 }
                 SyntheticArgs.rename(part.classes(), argsNames)
                         .forEach((name, bytes) -> mixed.put(name,

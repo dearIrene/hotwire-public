@@ -77,16 +77,7 @@ final class RetainedInitializers {
                     "(Ljava/lang/Object;Ljava/lang/String;)V", false));
             retained.add(count);
         }
-
-        for (MethodNode method : now.methods) {
-            MethodInsnNode setUp = method.name.equals("<init>") ? findSuperCall(method, now) : null;
-            if (setUp != null) {
-                InsnList all = new InsnList();
-                retained.forEach(slice -> all.add(FieldInitializers.shiftLocals(slice,
-                        Math.max(method.maxLocals, 1) - 1)));
-                method.instructions.insert(setUp, all);
-            }
-        }
+        insertAfterSetUp(now, retained);
 
         for (FieldNode field : was.fields) {
             if (lost.contains(field.name + field.desc) && !unkept.contains(field.name + field.desc)
@@ -95,6 +86,45 @@ final class RetainedInitializers {
                         field.signature, null));
             }
         }
+        ClassWriter writer = new ClassWriter(ClassWriter.COMPUTE_MAXS);
+        now.accept(writer);
+        return writer.toByteArray();
+    }
+
+    private static void insertAfterSetUp(ClassNode now, List<InsnList> slices) {
+        for (MethodNode method : now.methods) {
+            MethodInsnNode setUp = method.name.equals("<init>") ? findSuperCall(method, now) : null;
+            if (setUp != null) {
+                InsnList all = new InsnList();
+                slices.forEach(slice -> all.add(FieldInitializers.shiftLocals(slice,
+                        Math.max(method.maxLocals, 1) - 1)));
+                method.instructions.insert(setUp, all);
+            }
+        }
+    }
+
+    static byte[] record(byte[] mixed, byte @Nullable [] previous, byte @Nullable [] original) {
+        if (previous == null || original == null || OffWindowReplay.isRecording(mixed)) {
+            return mixed;
+        }
+        Set<String> own = ConstructedFields.readFields(original).keys();
+        Set<String> setNow = ConstructedFields.of(mixed);
+        Set<String> setThen = ConstructedFields.of(previous);
+        boolean lost = false;
+        for (ConstructedFields.FieldInfo field : ConstructedFields.readFields(previous).fields()) {
+            lost |= field.isInstance() && setThen.contains(field.name()) && !setNow.contains(field.name())
+                    && !own.contains(field.key());
+        }
+        if (!lost) {
+            return mixed;
+        }
+        ClassNode now = read(mixed);
+        InsnList count = new InsnList();
+        count.add(new VarInsnNode(Opcodes.ALOAD, 0));
+        count.add(new LdcInsnNode(now.name));
+        count.add(new MethodInsnNode(Opcodes.INVOKESTATIC, MADE, "onMade",
+                "(Ljava/lang/Object;Ljava/lang/String;)V", false));
+        insertAfterSetUp(now, List.of(count));
         ClassWriter writer = new ClassWriter(ClassWriter.COMPUTE_MAXS);
         now.accept(writer);
         return writer.toByteArray();
