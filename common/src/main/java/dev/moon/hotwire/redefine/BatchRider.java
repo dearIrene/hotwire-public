@@ -111,7 +111,7 @@ public interface BatchRider {
                 LOGGER.trace("[Hotwire] {} links, with {} methods", type.getName(), type.getDeclaredMethods().length);
             } catch (LinkageError e) {
                 found.add(Type.getInternalName(type));
-                LOGGER.warn("[Hotwire] {} cannot link, and no switch can change it: {}", type.getName(), e.toString());
+                LOGGER.info("[Hotwire] {} cannot link, so it never runs: {}", type.getName(), e.toString());
             }
         }
         return found;

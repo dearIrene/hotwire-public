@@ -274,8 +274,11 @@ public final class ClassRebuilder {
 
         Set<String> unlinkable = BatchRider.findUnlinkable(splits.keySet());
         if (!unlinkable.isEmpty()) {
-            throw RebuildException.ofRestartOnly("the JVM cannot link " + unlinkable + ", so they cannot change"
-                    + " while the game runs").withBlamed(unlinkable);
+            splits.keySet().removeIf(type -> unlinkable.contains(Type.getInternalName(type)));
+            mixed.keySet().removeAll(unlinkable);
+            carried.keySet().removeAll(unlinkable);
+            newlyBuilt.removeAll(unlinkable);
+            LOGGER.info("[Hotwire] {} classes that cannot link stay as they are: {}", unlinkable.size(), unlinkable);
         }
         PreparedRebuild prepared = new PreparedRebuild(splits, carried, mixing.getMillis(), splitting.getMillis(),
                 newlyBuilt, replayed, current, null, Set.of(), hooked, mixed);
