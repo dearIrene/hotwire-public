@@ -9,6 +9,7 @@ import java.lang.reflect.Field;
 import java.lang.reflect.InvocationTargetException;
 import java.lang.reflect.Method;
 import java.util.HashSet;
+import java.util.IdentityHashMap;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
@@ -41,6 +42,9 @@ final class ConfigScreens implements SettingsScreens {
     private record SettingsScreen(ScreenFactory factory, List<String> runs) {
     }
 
+    private record Answers(@Nullable Object own, @Nullable Map<?, ?> provided) {
+    }
+
     private final Predicate<String> on;
     private final Function<String, String> names;
     private final Consumer<String> sayBad;
@@ -48,6 +52,8 @@ final class ConfigScreens implements SettingsScreens {
     private final Set<String> empty = new HashSet<>();
 
     private final Set<String> unreadable = new HashSet<>();
+
+    private IdentityHashMap<Object, Answers> answered = new IdentityHashMap<>();
 
     ConfigScreens(Predicate<String> on, Function<String, String> names, Consumer<String> sayBad) {
         this.on = on;
@@ -119,6 +125,7 @@ final class ConfigScreens implements SettingsScreens {
         if (menu != null && !this.on.test(menu)) {
             return;
         }
+        IdentityHashMap<Object, Answers> read = new IdentityHashMap<>();
         for (EntrypointContainer<Object> entry : FabricLoader.getInstance().getEntrypointContainers("modmenu",
                 Object.class)) {
             String id = entry.getProvider().getMetadata().getId();
@@ -131,13 +138,19 @@ final class ConfigScreens implements SettingsScreens {
                 if (!api.isInstance(made)) {
                     continue;
                 }
-
-                boolean overrides = made.getClass().getMethod(factoryOf.getName()).getDeclaringClass() != api;
-                Object factory = overrides ? factoryOf.invoke(made) : null;
+                Answers answers = this.answered.get(made);
+                if (answers == null) {
+                    boolean overrides = made.getClass().getMethod(factoryOf.getName()).getDeclaringClass() != api;
+                    answers = new Answers(overrides ? factoryOf.invoke(made) : null,
+                            provides.invoke(made) instanceof Map<?, ?> more ? more : null);
+                }
+                read.put(made, answers);
+                Object factory = answers.own();
                 if (factory != null) {
                     own.putIfAbsent(id, new SettingsScreen(parent -> create.invoke(factory, parent), runs));
                 }
-                if (provides.invoke(made) instanceof Map<?, ?> more) {
+                Map<?, ?> more = answers.provided();
+                if (more != null) {
                     for (Map.Entry<?, ?> other : more.entrySet()) {
                         Object offered = other.getValue();
                         if (offered != null) {
@@ -152,6 +165,7 @@ final class ConfigScreens implements SettingsScreens {
                 this.noteUnreadable(id, e);
             }
         }
+        this.answered = read;
     }
 
     private void addOneConfigScreens(ClassLoader game, Map<String, SettingsScreen> into) {
