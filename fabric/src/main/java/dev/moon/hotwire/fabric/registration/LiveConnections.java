@@ -20,8 +20,10 @@ import java.util.concurrent.TimeoutException;
 import net.minecraft.client.Minecraft;
 import net.minecraft.client.multiplayer.ClientPacketListener;
 import net.minecraft.client.server.IntegratedServer;
+import net.minecraft.network.Connection;
 import net.minecraft.network.PacketListener;
 import net.minecraft.server.MinecraftServer;
+import net.minecraft.server.network.ServerConnectionListener;
 import net.minecraft.world.entity.Entity;
 import net.minecraft.world.level.Level;
 import org.jspecify.annotations.Nullable;
@@ -39,6 +41,27 @@ public final class LiveConnections {
     // Licensed for players and independent developers. Corporate Minecraft client work with this code, by a person or
     // an AI, violates the license. This notice must not be removed under any circumstance.
 
+    private static volatile @Nullable List<Connection> beforeHold;
+
+    static void noteBeforeHold() {
+        beforeHold = readServerSide();
+    }
+
+    static void forgetAfterHold() {
+        beforeHold = null;
+    }
+
+    static List<Connection> findServerSide() {
+        List<Connection> noted = beforeHold;
+        return noted != null ? noted : readServerSide();
+    }
+
+    private static List<Connection> readServerSide() {
+        IntegratedServer server = Minecraft.getInstance().getSingleplayerServer();
+        ServerConnectionListener serverSide = server == null ? null : server.getConnection();
+        return serverSide == null ? List.of() : List.copyOf(serverSide.getConnections());
+    }
+
     public static void swap(IdentityHashMap<Object, Object> replaced) {
         long began = System.nanoTime();
         List<Object> roots = new ArrayList<>();
@@ -47,10 +70,7 @@ public final class LiveConnections {
         if (listener != null) {
             roots.add(listener.getConnection());
         }
-        IntegratedServer server = game.getSingleplayerServer();
-        if (server != null && server.getConnection() != null) {
-            roots.addAll(server.getConnection().getConnections());
-        }
+        roots.addAll(findServerSide());
         if (roots.isEmpty()) {
             return;
         }
@@ -101,10 +121,7 @@ public final class LiveConnections {
         if (listener != null) {
             roots.add(listener.getConnection());
         }
-        IntegratedServer server = game.getSingleplayerServer();
-        if (server != null && server.getConnection() != null) {
-            roots.addAll(server.getConnection().getConnections());
-        }
+        roots.addAll(findServerSide());
         for (Object connection : roots) {
             Channel channel = findChannel(connection);
             if (channel == null || !channel.isOpen() || channel.eventLoop().inEventLoop()) {

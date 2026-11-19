@@ -39,6 +39,9 @@ import dev.moon.hotwire.ui.notices.Notice;
 import dev.moon.hotwire.ui.notices.Notices;
 import java.lang.instrument.Instrumentation;
 import java.lang.management.ManagementFactory;
+import java.lang.management.MemoryPoolMXBean;
+import java.lang.management.MemoryType;
+import java.lang.management.MemoryUsage;
 import java.lang.management.ThreadMXBean;
 import java.util.ArrayList;
 import java.util.Collection;
@@ -314,6 +317,11 @@ public final class SwitchRunner {
             if (this.switcher.isBusy()) {
                 return;
             }
+            if (isHeapNearlyFull()) {
+                LOGGER.info("[Hotwire] no look ahead: the game's memory is nearly full, and a switch reads what it"
+                        + " needs when it is asked");
+                return;
+            }
             long start = System.nanoTime();
             long ran = THREADS.getCurrentThreadCpuTime();
             ElementLook.findAheadForAll(this.fieldReferences, this.switcher::isOn);
@@ -328,6 +336,17 @@ public final class SwitchRunner {
             LOGGER.info("[Hotwire] whose each loaded class is was asked ahead in {} ms",
                     (System.nanoTime() - owners) / 1_000_000);
         });
+    }
+
+    private static boolean isHeapNearlyFull() {
+        long left = 0;
+        for (MemoryPoolMXBean pool : ManagementFactory.getMemoryPoolMXBeans()) {
+            MemoryUsage after = pool.getType() == MemoryType.HEAP ? pool.getCollectionUsage() : null;
+            if (after != null) {
+                left += after.getUsed();
+            }
+        }
+        return left > Runtime.getRuntime().maxMemory() / 10 * 9;
     }
 
     public void prepareLook() {
@@ -430,7 +449,9 @@ public final class SwitchRunner {
     }
 
     private CheckedResult runTimedOff(List<String> ids) {
-        this.reloads.awaitIdle();
+        if (ids.stream().anyMatch(this.switcher::isOn)) {
+            this.reloads.awaitIdle();
+        }
         SwitchTimes.mark("reloads under way");
 
         SwitchPlan plan = this.switcher.planOff(ids);

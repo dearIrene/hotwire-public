@@ -25,6 +25,8 @@ final class LaunchDecisions {
 
     private final SwitchApplier.Game game;
     private final Map<String, String> ownerOfConfig;
+
+    private final Function<String, List<String>> configsOf;
     private final Set<String> onAtLaunch;
     private final MixinChoice choice;
 
@@ -44,11 +46,13 @@ final class LaunchDecisions {
 
     LaunchDecisions(SwitchApplier.Game game, Map<String, String> ownerOfConfig, Set<String> onAtLaunch,
             MixinChoice choice) {
-        this(game, ownerOfConfig, onAtLaunch, choice, id -> Set.of());
+        this(game, ownerOfConfig, onAtLaunch, choice, id -> Set.of(), id -> List.of());
     }
 
     LaunchDecisions(SwitchApplier.Game game, Map<String, String> ownerOfConfig, Set<String> onAtLaunch,
-            MixinChoice choice, Function<String, Set<String>> shippedBy) {
+            MixinChoice choice, Function<String, Set<String>> shippedBy,
+            Function<String, List<String>> configsOf) {
+        this.configsOf = configsOf;
         this.game = game;
         this.ownerOfConfig = ownerOfConfig;
         this.onAtLaunch = onAtLaunch;
@@ -80,6 +84,14 @@ final class LaunchDecisions {
             String owner = this.ownerOfConfig.get(config);
             if (owner != null && !this.onAtLaunch.contains(owner)) {
                 Set<String> answers = this.game.findPluginAnswers(config);
+
+                Set<String> earlier = this.findListedEarlier(config, owner);
+                if (!earlier.isEmpty()) {
+                    Set<String> left = new HashSet<>(answers != null ? answers : this.readListed(config));
+                    if (left.removeAll(earlier)) {
+                        answers = left;
+                    }
+                }
                 if (answers == null) {
                     this.passOver(config, trimmed);
                     continue;
@@ -216,6 +228,29 @@ final class LaunchDecisions {
         Set<String> out = new HashSet<>(chosen);
         out.addAll(given);
         return out;
+    }
+
+    private Set<String> findListedEarlier(String config, String owner) {
+        Set<String> earlier = new HashSet<>();
+        for (String other : this.configsOf.apply(owner)) {
+            if (other.equals(config)) {
+                break;
+            }
+            earlier.addAll(this.readListed(other));
+        }
+        return earlier;
+    }
+
+    private Set<String> readListed(String config) {
+        byte[] bytes = this.findBytes(config);
+        if (bytes == null) {
+            return Set.of();
+        }
+        try {
+            return this.listed.computeIfAbsent(config, key -> ConfigTrim.readListed(bytes, this.game.getSide()));
+        } catch (JsonParseException | IllegalStateException e) {
+            return Set.of();
+        }
     }
 
     private static Set<String> findAnswered(Set<String> listed, Set<String> answers) {

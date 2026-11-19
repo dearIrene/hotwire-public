@@ -12,6 +12,7 @@ import java.util.stream.Stream;
 import org.jspecify.annotations.Nullable;
 import org.objectweb.asm.ClassReader;
 import org.objectweb.asm.ClassWriter;
+import org.objectweb.asm.Label;
 import org.objectweb.asm.MethodVisitor;
 import org.objectweb.asm.Opcodes;
 import org.objectweb.asm.Type;
@@ -25,6 +26,7 @@ import org.objectweb.asm.tree.JumpInsnNode;
 import org.objectweb.asm.tree.LabelNode;
 import org.objectweb.asm.tree.MethodInsnNode;
 import org.objectweb.asm.tree.MethodNode;
+import org.objectweb.asm.tree.TryCatchBlockNode;
 import org.objectweb.asm.tree.VarInsnNode;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -37,6 +39,8 @@ public final class TripwireSites {
     static final String HIT = "hit";
     static final String SKIP = "skip";
     static final String DEFER = "defer";
+    static final String ASKED = "asked";
+    static final String ANSWERED = "answered";
     static final String DEFER_DESC = "(Ljava/lang/Object;Ljava/lang/Object;)Ljava/lang/Object;";
 
     private static final Map<String, String> ARMED = new ConcurrentHashMap<>();
@@ -81,6 +85,7 @@ public final class TripwireSites {
         String holder = findHolder(mod);
         boolean armed = false;
         boolean inserted = false;
+        Set<String> asked = findAsked(node);
         for (MethodNode method : node.methods) {
             if ((method.access & (Opcodes.ACC_ABSTRACT | Opcodes.ACC_NATIVE)) != 0 || method.instructions.size() == 0) {
                 continue;
@@ -90,7 +95,9 @@ public final class TripwireSites {
                 armed = true;
                 continue;
             }
-            if (isGated(method)) {
+            if (isAsked(asked, method) && !hasJdkBody(node.superName, method.name, method.desc)) {
+                addAsked(method, holder);
+            } else if (isGated(method)) {
                 method.instructions.insert(makeGate(method, holder));
             } else if (DueCoroutines.isBody(node.superName, method.name, method.desc)) {
                 method.instructions.insert(makeDeferGate(method, holder));
@@ -122,6 +129,57 @@ public final class TripwireSites {
 
     private static final Set<String> NEVER_GATED = Set.of("<init>", "<clinit>", "equals", "hashCode", "toString",
             "compareTo", "compare", "finalize");
+
+    private static Set<String> findAsked(ClassNode node) {
+        Set<String> found = JdkContracts.find(node.superName, node.interfaces);
+        if (found.isEmpty()) {
+            return found;
+        }
+        for (MethodNode method : node.methods) {
+            if ((method.access & (Opcodes.ACC_ABSTRACT | Opcodes.ACC_NATIVE)) == 0 && method.instructions.size() != 0
+                    && isAsked(found, method) && isGated(method)
+                    && !hasJdkBody(node.superName, method.name, method.desc)) {
+                return found;
+            }
+        }
+        return Set.of();
+    }
+
+    private static boolean isAsked(Set<String> asked, MethodNode method) {
+        return !asked.isEmpty() && (method.access & Opcodes.ACC_STATIC) == 0 && !method.name.equals("<init>")
+                && asked.contains(method.name + method.desc);
+    }
+
+    private static void addAsked(MethodNode method, String holder) {
+        for (AbstractInsnNode insn : method.instructions.toArray()) {
+            int op = insn.getOpcode();
+            if (op >= Opcodes.IRETURN && op <= Opcodes.RETURN) {
+                method.instructions.insertBefore(insn, new MethodInsnNode(Opcodes.INVOKESTATIC, holder, ANSWERED,
+                        "()V", false));
+            }
+        }
+        LabelNode from = new LabelNode();
+        LabelNode to = new LabelNode();
+        InsnList site = new InsnList();
+        LabelNode go = new LabelNode();
+        site.add(new FieldInsnNode(Opcodes.GETSTATIC, holder, OFF, "Z"));
+        site.add(new JumpInsnNode(Opcodes.IFEQ, go));
+        site.add(new MethodInsnNode(Opcodes.INVOKESTATIC, holder, HIT, "()V", false));
+        site.add(new MethodInsnNode(Opcodes.INVOKESTATIC, holder, ASKED, "()V", false));
+        site.add(go);
+        if (!startsWithFrame(method)) {
+            site.add(new FrameNode(Opcodes.F_SAME, 0, null, 0, null));
+        }
+        site.add(from);
+        method.instructions.insert(site);
+
+        method.instructions.add(to);
+        method.instructions.add(new FrameNode(Opcodes.F_FULL, 0, new Object[0], 1,
+                new Object[] {"java/lang/Throwable"}));
+        method.instructions.add(new MethodInsnNode(Opcodes.INVOKESTATIC, holder, ANSWERED, "()V", false));
+        method.instructions.add(new InsnNode(Opcodes.ATHROW));
+        method.tryCatchBlocks.add(new TryCatchBlockNode(from, to, to, null));
+    }
 
     private static boolean isGated(MethodNode method) {
         return isGated(method.name, method.desc);
@@ -178,8 +236,9 @@ public final class TripwireSites {
         return gate;
     }
 
-    static boolean isRewriteOnly(@Nullable String superName, String name, String desc) {
-        return DueCoroutines.isBody(superName, name, desc) || hasJdkBody(superName, name, desc);
+    static boolean isRewriteOnly(@Nullable String superName, Set<String> asked, String name, String desc) {
+        return (isGated(name, desc) && asked.contains(name + desc)) || DueCoroutines.isBody(superName, name, desc)
+                || hasJdkBody(superName, name, desc);
     }
 
     private static InsnList makeJdkGate(MethodNode method, String holder, String superName) {
@@ -230,7 +289,9 @@ public final class TripwireSites {
             if (!mod.equals(ARMED.get(Type.getInternalName(host)))) {
                 return false;
             }
-            if (!type.isHidden() && isGated(frame.getMethodName(), frame.getMethodType().toMethodDescriptorString())) {
+            String desc = frame.getMethodType().toMethodDescriptorString();
+            if (!type.isHidden() && isGated(frame.getMethodName(), desc)
+                    && !JdkContracts.find(type).contains(frame.getMethodName() + desc)) {
                 return true;
             }
         }
@@ -391,6 +452,27 @@ public final class TripwireSites {
         skip.visitInsn(Opcodes.IRETURN);
         skip.visitMaxs(0, 0);
         skip.visitEnd();
+        MethodVisitor asked = writer.visitMethod(Opcodes.ACC_PUBLIC | Opcodes.ACC_STATIC, ASKED, "()V", null, null);
+        asked.visitCode();
+        asked.visitLdcInsn(mod);
+        asked.visitMethodInsn(Opcodes.INVOKESTATIC, tripwire, "enterAsked", "(Ljava/lang/String;)V", false);
+        asked.visitInsn(Opcodes.RETURN);
+        asked.visitMaxs(0, 0);
+        asked.visitEnd();
+
+        MethodVisitor answered = writer.visitMethod(Opcodes.ACC_PUBLIC | Opcodes.ACC_STATIC, ANSWERED, "()V", null,
+                null);
+        answered.visitCode();
+        Label on = new Label();
+        answered.visitFieldInsn(Opcodes.GETSTATIC, holder, OFF, "Z");
+        answered.visitJumpInsn(Opcodes.IFEQ, on);
+        answered.visitLdcInsn(mod);
+        answered.visitMethodInsn(Opcodes.INVOKESTATIC, tripwire, "leaveAsked", "(Ljava/lang/String;)V", false);
+        answered.visitLabel(on);
+        answered.visitFrame(Opcodes.F_SAME, 0, null, 0, null);
+        answered.visitInsn(Opcodes.RETURN);
+        answered.visitMaxs(0, 0);
+        answered.visitEnd();
         MethodVisitor defer = writer.visitMethod(Opcodes.ACC_PUBLIC | Opcodes.ACC_STATIC, DEFER, DEFER_DESC, null,
                 null);
         defer.visitCode();

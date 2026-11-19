@@ -274,6 +274,7 @@ public final class GameHold {
 
         boolean begun = false;
         try {
+            LiveConnections.noteBeforeHold();
             hold.pauseThreads(client);
             if (hold.isRefused()) {
                 return hold;
@@ -381,6 +382,7 @@ public final class GameHold {
             PAUSED_GAME_WORK.add(GameHold::unblock);
         }
         if (this.owner) {
+            LiveConnections.forgetAfterHold();
             HOLDING.set(false);
             pausedSince = 0;
             Tripwire.markHotwireWork(this.hotwireWorkBefore);

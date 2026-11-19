@@ -331,7 +331,7 @@ public final class CrashGuard {
             Method[] methods;
             try {
                 methods = type.getDeclaredMethods();
-            } catch (LinkageError e) {
+            } catch (LinkageError | RuntimeException e) {
                 continue;
             }
             boolean merged = false;
@@ -362,7 +362,16 @@ public final class CrashGuard {
 
     public static boolean handle(Throwable thrown, CrashPolicy.Site site) {
         Guard current = guard;
-        return current != null && current.policy().handle(thrown, site);
+        if (current == null) {
+            return false;
+        }
+        try {
+            return current.policy().handle(thrown, site);
+        } catch (RuntimeException | LinkageError e) {
+            thrown.addSuppressed(e);
+            LOGGER.warn("[Hotwire] the throw at {} goes back to the game: whose it is could not be told", site, e);
+            return false;
+        }
     }
 
     public static List<String> getCaught() {

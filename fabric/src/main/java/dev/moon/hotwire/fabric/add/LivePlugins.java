@@ -50,20 +50,33 @@ public final class LivePlugins {
             return;
         }
 
+        boolean ownExtras = OwnExtras.isOffered(jar);
         Tripwire.expect(Set.of(manifest.id()), () -> {
             for (PluginQuestions questions : all) {
                 if (RAN.add(questions.config())) {
-                    ask(questions);
+                    ask(questions, ownExtras);
                 }
             }
         });
     }
 
-    private static void ask(PluginQuestions questions) {
+    private static void load(IMixinConfigPlugin plugin, String pkg, boolean ownExtras) {
+        if (ownExtras) {
+            try {
+                OwnExtras.runOffered(() -> plugin.onLoad(pkg));
+                return;
+            } catch (ExceptionInInitializerError | NoClassDefFoundError e) {
+                LOGGER.debug("[Hotwire] the game's MixinExtras could not be opened to a mod's own", e);
+            }
+        }
+        plugin.onLoad(pkg);
+    }
+
+    private static void ask(PluginQuestions questions, boolean ownExtras) {
         try {
             IMixinConfigPlugin plugin = Class.forName(questions.plugin(), true, LivePlugins.class.getClassLoader())
                     .asSubclass(IMixinConfigPlugin.class).getDeclaredConstructor().newInstance();
-            plugin.onLoad(questions.pkg());
+            load(plugin, questions.pkg(), ownExtras);
             if (questions.asksRefmap()) {
                 plugin.getRefMapperConfig();
             }

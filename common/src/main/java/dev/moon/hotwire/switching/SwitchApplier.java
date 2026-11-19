@@ -260,6 +260,9 @@ public final class SwitchApplier {
         this.decisions = new LaunchDecisions(game, this.ownerOfConfig, this.onAtLaunch, this.choice, id -> {
             ModMixins mod = this.mods.get(id);
             return mod == null ? Set.of() : mod.owns();
+        }, id -> {
+            ModMixins mod = this.mods.get(id);
+            return mod == null ? List.of() : mod.configs();
         });
         this.unowned = List.copyOf(unowned);
 

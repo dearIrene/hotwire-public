@@ -19,9 +19,7 @@ import java.util.Map;
 import java.util.NoSuchElementException;
 import net.minecraft.client.Minecraft;
 import net.minecraft.client.multiplayer.ClientPacketListener;
-import net.minecraft.client.server.IntegratedServer;
 import net.minecraft.network.Connection;
-import net.minecraft.server.network.ServerConnectionListener;
 import org.jspecify.annotations.Nullable;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -100,14 +98,7 @@ public final class NetworkHandlers {
         if (listener != null) {
             connections.add(listener.getConnection());
         }
-        IntegratedServer server = client.getSingleplayerServer();
-        ServerConnectionListener serverSide = server == null ? null : server.getConnection();
-        if (serverSide != null) {
-            List<Connection> serverConnections = serverSide.getConnections();
-            synchronized (serverConnections) {
-                connections.addAll(serverConnections);
-            }
-        }
+        connections.addAll(LiveConnections.findServerSide());
         List<Channel> channels = new ArrayList<>();
         for (Connection connection : connections) {
             Channel channel = ((ConnectionAccessor) connection).hotwire$getChannel();

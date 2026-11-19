@@ -6,6 +6,7 @@ import dev.moon.hotwire.seam.Games;
 import java.lang.reflect.Field;
 import java.util.ArrayList;
 import java.util.Comparator;
+import java.util.HashSet;
 import java.util.LinkedHashMap;
 import java.util.LinkedHashSet;
 import java.util.List;
@@ -174,9 +175,30 @@ public final class InitHookReplay {
         Set<String> caughtUp = new TreeSet<>();
         Set<String> read = new LinkedHashSet<>(once);
         read.addAll(joins);
-        visitInOrder(findCalls(now, read), now, (key, site) -> {
+        Map<String, Site> calls = findCalls(now, read);
+
+        Set<String> valueKeys = new HashSet<>();
+        for (String key : fresh) {
+            Site site = isHandler(key) ? null : findCallOutsideStatics(now, key, read);
+            if (site != null && site.moment().equals("<init>") && calls.putIfAbsent(key, site) == null) {
+                valueKeys.add(key);
+            }
+        }
+        Set<String> replayed = new HashSet<>();
+        visitInOrder(calls, now, (key, site) -> {
             MethodNode handler = ArgumentInitializers.findMethod(now, site.call().name, site.call().desc);
             if (!fresh.contains(key) || handler == null) {
+                return;
+            }
+            if (valueKeys.contains(key)) {
+                MethodNode moment = findMethodOf(now, site.call());
+                InsnList replay = moment == null ? null : ValueHooks.buildReplay(now, moment, site.call(), handler,
+                        finals);
+                if (replay != null) {
+                    onObjects.add(replay);
+                    objectKeys.add(key);
+                    replayed.add(key);
+                }
                 return;
             }
 
@@ -208,6 +230,9 @@ public final class InitHookReplay {
             Site site = findCallOutsideStatics(now, key, read);
             if (site == null) {
                 return false;
+            }
+            if (replayed.contains(key)) {
+                return true;
             }
             MethodNode handler = ArgumentInitializers.findMethod(now, site.call().name, site.call().desc);
             Set<String> statics = handler == null ? Set.of() : findStaticWrites(handler);

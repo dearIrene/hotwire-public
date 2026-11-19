@@ -72,12 +72,16 @@ public final class Spellings {
     public static final String MINECRAFT_CLASS = "net/minecraft/client/Minecraft";
     public static final Set<String> LOAD_FINISHED_METHODS = Set.of("onResourceLoadFinished", "onGameLoadFinished",
             "buildInitialScreens");
+    public static final String OPTIONS_CLASS = "net/minecraft/client/Options";
+    public static final Set<String> OPTIONS_LOAD_METHODS = Set.of("load");
     public static final String PACKET_LISTENER_CLASS = "net/minecraft/client/multiplayer/ClientPacketListener";
     public static final Set<String> JOIN_METHODS = Set.of("handleLogin");
     public static final Set<String> MANAGED_BLOCK_METHODS = Set.of("managedBlock");
     //?} else {
     /*public static final String MINECRAFT_CLASS = "net/minecraft/class_310";
     public static final Set<String> LOAD_FINISHED_METHODS = Set.of("method_53465", "method_51736", "method_53527");
+    public static final String OPTIONS_CLASS = "net/minecraft/class_315";
+    public static final Set<String> OPTIONS_LOAD_METHODS = Set.of("method_1636");
     public static final String PACKET_LISTENER_CLASS = "net/minecraft/class_634";
     public static final Set<String> JOIN_METHODS = Set.of("method_11120");
     public static final Set<String> MANAGED_BLOCK_METHODS = Set.of("method_18857", "managedBlock");

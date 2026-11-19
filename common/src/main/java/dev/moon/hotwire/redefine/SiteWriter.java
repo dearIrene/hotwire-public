@@ -1,8 +1,11 @@
 package dev.moon.hotwire.redefine;
 
 import java.nio.charset.StandardCharsets;
+import java.util.ArrayList;
 import java.util.Arrays;
+import java.util.List;
 import java.util.OptionalInt;
+import java.util.Set;
 import org.jspecify.annotations.Nullable;
 import org.objectweb.asm.Opcodes;
 
@@ -45,6 +48,8 @@ final class SiteWriter {
 
     private @Nullable String superName;
 
+    private Set<String> asked = Set.of();
+
     private SiteWriter(byte[] in, String mod) {
         this.in = in;
         this.mod = mod;
@@ -66,6 +71,11 @@ final class SiteWriter {
         int poolEnd = pool.getAsInt();
         int superClass = this.readShort(poolEnd + 4);
         this.superName = superClass == 0 ? null : this.readText(this.readShort(this.pool[superClass] + 1));
+        List<String> interfaces = new ArrayList<>();
+        for (int at = 0; at < this.readShort(poolEnd + 6); at++) {
+            interfaces.add(this.readText(this.readShort(this.pool[this.readShort(poolEnd + 8 + 2 * at)] + 1)));
+        }
+        this.asked = JdkContracts.find(this.superName, interfaces);
         int methodsAt = this.skipFields(poolEnd + 6 + 2 + 2 * this.readShort(poolEnd + 6));
         int methods = this.readShort(methodsAt);
 
@@ -235,7 +245,7 @@ final class SiteWriter {
         }
         String nameText = this.readText(name);
         String descText = this.readText(desc);
-        if (TripwireSites.isRewriteOnly(this.superName, nameText, descText)) {
+        if (TripwireSites.isRewriteOnly(this.superName, this.asked, nameText, descText)) {
             return false;
         }
         int site = HIT_LENGTH;

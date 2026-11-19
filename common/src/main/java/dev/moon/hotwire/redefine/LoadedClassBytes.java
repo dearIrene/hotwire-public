@@ -63,6 +63,11 @@ public final class LoadedClassBytes {
     }
 
     public void onDefined(String internal, byte[] bytes) {
+        if (this.loadedAs.contains(internal)) {
+            LOGGER.info("[Hotwire] another loader's copy of {} is not the game's, which is known as it loaded",
+                    internal);
+            return;
+        }
         this.definedAs.put(internal, bytes);
         this.definedInGame.remove(internal);
     }

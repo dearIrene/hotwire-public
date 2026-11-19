@@ -1,6 +1,7 @@
 package dev.moon.hotwire.report;
 
 import dev.moon.hotwire.redefine.MissingMember;
+import dev.moon.hotwire.redefine.SidecarReflection;
 import java.util.function.BiConsumer;
 import org.apache.logging.log4j.Level;
 import org.apache.logging.log4j.LogManager;
@@ -17,6 +18,8 @@ public final class LoggedFaults extends AbstractFilter {
     private static final String OWN = "dev.moon.hotwire.";
 
     private static final String HARNESS = "dev.moon.hotwire.fabric.harness.";
+
+    private static final String REFLECTION = SidecarReflection.class.getName();
     private static final String PREFIX = "[Hotwire] ";
 
     private static volatile BiConsumer<String, Throwable> ownThrow = (said, thrown) -> { };
@@ -92,7 +95,8 @@ public final class LoggedFaults extends AbstractFilter {
             }
             for (StackTraceElement frame : at.getStackTrace()) {
                 String type = frame.getClassName();
-                if (type.startsWith("java.") || type.startsWith("jdk.") || type.startsWith("sun.")) {
+                if (type.startsWith("java.") || type.startsWith("jdk.") || type.startsWith("sun.")
+                        || type.equals(REFLECTION)) {
                     continue;
                 }
                 if (type.startsWith(OWN) && !type.startsWith(HARNESS)) {

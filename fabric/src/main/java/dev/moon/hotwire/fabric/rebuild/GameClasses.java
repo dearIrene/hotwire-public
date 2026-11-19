@@ -322,6 +322,8 @@ public final class GameClasses implements SwitchApplier.Game {
 
             case "net/minecraft/client/main/Main" -> Set.of("main");
             case Spellings.MINECRAFT_CLASS -> Spellings.LOAD_FINISHED_METHODS;
+
+            case Spellings.OPTIONS_CLASS -> Spellings.OPTIONS_LOAD_METHODS;
             default -> Set.of();
         };
     }

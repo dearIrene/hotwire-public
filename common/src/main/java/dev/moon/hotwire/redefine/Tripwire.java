@@ -10,6 +10,7 @@ import java.lang.ref.WeakReference;
 import java.lang.reflect.Modifier;
 import java.util.ArrayList;
 import java.util.Collection;
+import java.util.HashMap;
 import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
@@ -68,6 +69,8 @@ public final class Tripwire {
         volatile @Nullable List<String> firstLoad;
 
         final AtomicBoolean ran = new AtomicBoolean();
+
+        volatile int ons;
 
         volatile boolean goingOff;
         final Map<String, WeakReference<Thread>> loaders = new ConcurrentHashMap<>();
@@ -182,9 +185,38 @@ public final class Tripwire {
 
     private static final Set<String> SAID_WHOSE = ConcurrentHashMap.newKeySet();
 
-    private static boolean hitOnce(String mod, boolean runs) {
+    private static final ThreadLocal<Map<String, int[]>> ASKED = ThreadLocal.withInitial(HashMap::new);
+
+    public static void enterAsked(String mod) {
         ModWatch watch = MODS.get(mod);
         if (watch == null) {
+            return;
+        }
+        Map<String, int[]> asked = ASKED.get();
+        int[] at = asked.get(mod);
+        if (at == null || at[0] != watch.ons) {
+            asked.put(mod, new int[] {watch.ons, 1});
+        } else {
+            at[1]++;
+        }
+    }
+
+    public static void leaveAsked(String mod) {
+        Map<String, int[]> asked = ASKED.get();
+        int[] at = asked.get(mod);
+        if (at != null && --at[1] <= 0) {
+            asked.remove(mod);
+        }
+    }
+
+    private static boolean isAsked(String mod, ModWatch watch) {
+        int[] at = ASKED.get().get(mod);
+        return at != null && at[0] == watch.ons;
+    }
+
+    private static boolean hitOnce(String mod, boolean runs) {
+        ModWatch watch = MODS.get(mod);
+        if (watch == null || isAsked(mod, watch)) {
             return false;
         }
         CountDownLatch gate = watch.gate;
@@ -754,6 +786,7 @@ public final class Tripwire {
                 WATCHED.decrementAndGet();
             }
             watch.calls = null;
+            watch.ons++;
             watch.ran.set(false);
             first = watch.first;
             watch.first = null;
