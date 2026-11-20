@@ -211,25 +211,28 @@ public final class ContentRemovals {
         List<Holder.Reference<T>> byId = (List<Holder.Reference<T>>) (List<?>) access.hotwire$getById();
         List<Holder.Reference<T>> before = List.copyOf(byId);
         int count = 0;
-        for (int at = byId.size() - 1; at >= 0; at--) {
-            Holder.Reference<T> holder = byId.get(at);
-            Identifier id = InternedKeys.findIdOf(holder.key());
-            String owner = WorldContent.findOwner(id, holder.value());
+        try {
+            for (int at = byId.size() - 1; at >= 0; at--) {
+                Holder.Reference<T> holder = byId.get(at);
+                Identifier id = InternedKeys.findIdOf(holder.key());
+                String owner = WorldContent.findOwner(id, holder.value());
 
-            if (owner == null || !mods.contains(owner) || "minecraft".equals(id.getNamespace())) {
-                continue;
+                if (owner == null || !mods.contains(owner) || "minecraft".equals(id.getNamespace())) {
+                    continue;
+                }
+                byId.remove(at);
+                access.hotwire$getByKey().remove(holder.key());
+                access.hotwire$getByLocation().values().remove(holder);
+                access.hotwire$getByValue().remove(holder.value());
+                Object info = access.hotwire$getRegistrationInfos().remove(holder.key());
+                into.computeIfAbsent(owner, any -> new ArrayList<>()).add(new OutEntry<>(registry, holder, info));
+                count++;
             }
-            byId.remove(at);
-            access.hotwire$getByKey().remove(holder.key());
-            access.hotwire$getByLocation().values().remove(holder);
-            access.hotwire$getByValue().remove(holder.value());
-            Object info = access.hotwire$getRegistrationInfos().remove(holder.key());
-            into.computeIfAbsent(owner, any -> new ArrayList<>()).add(new OutEntry<>(registry, holder, info));
-            count++;
-        }
-        if (count > 0) {
-            setNumbers(registry, byId);
-            tellMoved(registry, before, byId);
+        } finally {
+            if (count > 0) {
+                setNumbers(registry, byId);
+                tellMoved(registry, before, byId);
+            }
         }
         return count;
     }
