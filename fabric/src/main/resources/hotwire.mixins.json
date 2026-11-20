@@ -13,6 +13,7 @@
     "core.world.level.chunk.BoundTickingBlockEntityMixin",
     "core.server.level.ChunkMapAccessor",
     "core.network.ConnectionAccessor",
+    "core.network.syncher.SynchedEntityDataBuilderMixin",
     "core.CrashReportMixin",
     "core.world.item.CreativeModeTabsAccessor",
     "core.fabric.resource.DataResourceLoaderImplAccessor",
