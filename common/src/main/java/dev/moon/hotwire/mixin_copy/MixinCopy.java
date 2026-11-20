@@ -525,7 +525,14 @@ public final class MixinCopy implements AutoCloseable {
         List<URL> path = new ArrayList<>();
         path.add(toUrl(copyJar()));
         this.mixinJars.forEach(jar -> path.add(toUrl(jar)));
+        if (namesLauncher(this.mixinJars)) {
+            return start(new LauncherAwareLoader(path.toArray(URL[]::new), MixinCopy.class.getClassLoader()));
+        }
         URLClassLoader loader = new URLClassLoader(path.toArray(URL[]::new), ClassLoader.getPlatformClassLoader());
+        return start(loader);
+    }
+
+    private static Copy start(URLClassLoader loader) throws MixinCopyException {
         try {
             @SuppressWarnings("unchecked")
             Function<Object[], Object[]> mixer = load(loader, "CopyMixer", Function.class);
@@ -533,6 +540,68 @@ public final class MixinCopy implements AutoCloseable {
         } catch (MixinCopyException e) {
             closeLoader(loader);
             throw e;
+        }
+    }
+
+    private static volatile @Nullable Boolean launcherNamed;
+
+    private static boolean namesLauncher(List<Path> jars) {
+        Boolean known = launcherNamed;
+        if (known != null) {
+            return known;
+        }
+        byte[] wanted = "net/fabricmc/loader/impl".getBytes(StandardCharsets.UTF_8);
+        boolean found = false;
+        for (Path jar : jars) {
+            try (ZipFile zip = new ZipFile(jar.toFile())) {
+                ZipEntry info = zip.getEntry("org/spongepowered/asm/mixin/transformer/MixinInfo.class");
+                if (info != null) {
+                    try (InputStream in = zip.getInputStream(info)) {
+                        found |= contains(in.readAllBytes(), wanted);
+                    }
+                }
+            } catch (IOException e) {
+            }
+        }
+        launcherNamed = found;
+        if (found) {
+            LOGGER.info("[Hotwire] the game's Mixin names Fabric Loader's launcher (Kilt's build): Mixin's copy finds"
+                    + " the loader's own classes in the game");
+        }
+        return found;
+    }
+
+    private static boolean contains(byte[] bytes, byte[] part) {
+        outer:
+        for (int at = 0; at <= bytes.length - part.length; at++) {
+            for (int one = 0; one < part.length; one++) {
+                if (bytes[at + one] != part[one]) {
+                    continue outer;
+                }
+            }
+            return true;
+        }
+        return false;
+    }
+
+    private static final class LauncherAwareLoader extends URLClassLoader {
+        private final ClassLoader game;
+
+        LauncherAwareLoader(URL[] path, ClassLoader game) {
+            super(path, ClassLoader.getPlatformClassLoader());
+            this.game = game;
+        }
+
+        @Override
+        protected Class<?> findClass(String name) throws ClassNotFoundException {
+            try {
+                return super.findClass(name);
+            } catch (ClassNotFoundException missing) {
+                if (name.startsWith("net.fabricmc.loader.")) {
+                    return this.game.loadClass(name);
+                }
+                throw missing;
+            }
         }
     }
 

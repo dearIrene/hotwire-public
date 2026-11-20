@@ -9,6 +9,7 @@ import java.util.List;
 import java.util.Locale;
 import java.util.function.Function;
 import java.util.function.Predicate;
+import net.fabricmc.loader.api.FabricLoader;
 
 public final class PlayerMessages {
     private PlayerMessages() {
@@ -39,8 +40,12 @@ public final class PlayerMessages {
                     String.valueOf(failed.cause().getMessage());
             case ModSwitcher.Result.Failed failed -> Lang.get(off ? "hotwire.switch.failed_off"
                     : "hotwire.switch.failed_on", joinNames(listAskedFirst(failed.plan()), nameOf),
-                    String.valueOf(failed.cause().getMessage()).replaceFirst("[.]$", ""));
+                    String.valueOf(failed.cause().getMessage()).replaceFirst("[.]$", "")) + findKiltHint();
         };
+    }
+
+    private static String findKiltHint() {
+        return FabricLoader.getInstance().isModLoaded("kilt") ? " " + Lang.get("hotwire.switch.kilt_hint") : "";
     }
 
     public static String describe(Report.OffCheck offCheck) {
