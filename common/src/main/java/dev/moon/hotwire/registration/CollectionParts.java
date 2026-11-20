@@ -12,6 +12,7 @@ import java.util.Arrays;
 import java.util.Collection;
 import java.util.Collections;
 import java.util.ConcurrentModificationException;
+import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Map;
 import java.util.NoSuchElementException;
@@ -121,6 +122,7 @@ public final class CollectionParts {
     }
 
     static void readChanging(Object value, Consumer<Object> read, ElementLook look, List<String> mods) {
+        Set<String> writers = new LinkedHashSet<>();
         for (int attempt = 1; ; attempt++) {
             try {
                 read.accept(value);
@@ -141,9 +143,11 @@ public final class CollectionParts {
                 })) {
                     return;
                 }
+                addWriters(value.getClass().getName(), writers);
                 if (attempt == CHANGED_READS) {
-                    LOGGER.warn("[Hotwire] {} changed under the removal {} times; what it holds of {} stays",
-                            value.getClass().getName(), CHANGED_READS, mods);
+                    LOGGER.warn("[Hotwire] {} changed under the removal {} times; what it holds of {} stays; the"
+                            + " threads seen in its code: {}", value.getClass().getName(), CHANGED_READS, mods,
+                            writers);
                     return;
                 }
                 try {
@@ -164,6 +168,18 @@ public final class CollectionParts {
                 return;
             }
         }
+    }
+
+    private static void addWriters(String collection, Set<String> writers) {
+        Thread.getAllStackTraces().forEach((thread, frames) -> {
+            if (thread.equals(Thread.currentThread())
+                    || Arrays.stream(frames).noneMatch(frame -> frame.getClassName().equals(collection))) {
+                return;
+            }
+            String caller = Arrays.stream(frames).filter(frame -> !frame.getClassName().startsWith("java."))
+                    .limit(4).map(StackTraceElement::toString).toList().toString();
+            writers.add(thread.getName() + " at " + caller);
+        });
     }
 
     public static boolean isGameObject(Object value) {
