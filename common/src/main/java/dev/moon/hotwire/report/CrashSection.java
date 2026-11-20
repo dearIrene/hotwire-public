@@ -47,8 +47,12 @@ public record CrashSection(List<Detail> details) {
         return decision.startsWith("Hotwire involved? NO");
     }
 
-    public static Detail describeTrace(Collection<String> frames, Collection<String> messages,
-            Function<String, @Nullable String> rebuiltBy, Set<String> switched,
+    public static boolean isHotwires(String decision) {
+        return decision.startsWith("Hotwire involved? YES");
+    }
+
+    public static Detail describeTrace(Collection<String> frames, Collection<String> nearThrow,
+            Collection<String> messages, Function<String, @Nullable String> rebuiltBy, Set<String> switched,
             Function<String, @Nullable String> modOf, Function<String, String> nameOf) {
         Set<String> own = new TreeSet<>();
         for (String frame : frames) {
@@ -65,12 +69,13 @@ public record CrashSection(List<Detail> details) {
             }
         }
         Set<String> touched = new TreeSet<>();
+        Set<String> callers = new TreeSet<>();
         Set<String> by = new TreeSet<>();
         Set<String> mods = new TreeSet<>();
         for (String frame : frames) {
             String line = rebuiltBy.apply(frame.replace('.', '/'));
             if (line != null) {
-                touched.add(frame);
+                (nearThrow.contains(frame) ? touched : callers).add(frame);
                 by.add(line);
             }
             String mod = modOf.apply(frame);
@@ -92,6 +97,13 @@ public record CrashSection(List<Detail> details) {
                     + " not Hotwire's; does not, send the newest zip under hotwire/reports.");
         }
         if (touched.isEmpty() && mods.isEmpty() && own.isEmpty() && mixin == null) {
+            if (!callers.isEmpty()) {
+                return new Detail("This crash", "Hotwire involved? MAYBE. Another mod's code threw, and no class"
+                        + " near the throw was changed; classes Hotwire redefined are only further down, as callers: "
+                        + String.join(", ", callers) + " (by '" + String.join("', '", by) + "'). To tell whose bug:"
+                        + " reproduce without that switch; still crashes, not Hotwire's; does not, send the newest zip"
+                        + " under hotwire/reports.");
+            }
             return new Detail("This crash", "Hotwire involved? NO. No class Hotwire redefined, no mod it switched"
                     + " and none of its own code is in the trace.");
         }

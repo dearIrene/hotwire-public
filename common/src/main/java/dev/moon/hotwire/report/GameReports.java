@@ -203,7 +203,7 @@ public final class GameReports {
     }
 
     public static void logCrashDecision(CrashSection.Detail trace) {
-        if (CrashSection.isCleared(trace.value())) {
+        if (!CrashSection.isHotwires(trace.value())) {
             LOGGER.error("[Hotwire] {}: {}", trace.name(), trace.value());
             return;
         }
@@ -226,14 +226,29 @@ public final class GameReports {
 
     public static CrashSection.Detail describeTrace(Throwable crash) {
         Set<String> frames = new LinkedHashSet<>();
+        Set<String> nearThrow = new LinkedHashSet<>();
         List<String> messages = new ArrayList<>();
+        ClassLoader game = GameReports.class.getClassLoader();
         for (Throwable at : Causes.list(crash)) {
+            boolean near = true;
             for (StackTraceElement frame : at.getStackTrace()) {
                 frames.add(frame.getClassName());
+                if (near) {
+                    nearThrow.add(frame.getClassName());
+                    near = findModOf(frame.getClassName(), game) == null;
+                }
             }
             messages.add(at.toString());
         }
-        return describeTrace(frames, messages);
+        return describeTrace(frames, nearThrow, messages);
+    }
+
+    private static @Nullable String findModOf(String name, ClassLoader game) {
+        try {
+            return Owners.findModOf(Class.forName(name, false, game));
+        } catch (ClassNotFoundException | LinkageError e) {
+            return null;
+        }
     }
 
     public static Map<String, String> listCrashDetails(Throwable crash) {
@@ -244,7 +259,7 @@ public final class GameReports {
         CrashSection.Detail trace = describeTrace(crash);
         details.put(CrashSection.TITLE + ": " + trace.name(), trace.value());
 
-        if (!CrashSection.isCleared(trace.value())) {
+        if (CrashSection.isHotwires(trace.value())) {
             details.put("!!! If you are reading this, Hotwire caused this crash", trace.value());
         }
         return details;
@@ -262,23 +277,19 @@ public final class GameReports {
         }
     }
 
-    public static CrashSection.Detail describeTrace(Collection<String> frames, Collection<String> messages) {
+    public static CrashSection.Detail describeTrace(Collection<String> frames, Collection<String> nearThrow,
+            Collection<String> messages) {
         GameReports reports = current;
         if (reports == null) {
-            return CrashSection.describeTrace(frames, messages, name -> null, Set.of(), name -> null, id -> id);
+            return CrashSection.describeTrace(frames, nearThrow, messages, name -> null, Set.of(), name -> null,
+                    id -> id);
         }
         Set<String> switched = new HashSet<>(reports.off);
         switched.addAll(reports.added);
         ClassLoader game = GameReports.class.getClassLoader();
         reports.note(frames, messages, game);
-        CrashSection.Detail trace = CrashSection.describeTrace(frames, messages, reports.rebuiltBy::get, switched,
-                name -> {
-                    try {
-                        return Owners.findModOf(Class.forName(name, false, game));
-                    } catch (ClassNotFoundException | LinkageError e) {
-                        return null;
-                    }
-                }, reports.nameOf);
+        CrashSection.Detail trace = CrashSection.describeTrace(frames, nearThrow, messages, reports.rebuiltBy::get,
+                switched, name -> findModOf(name, game), reports.nameOf);
 
         String now = reports.underWay;
         if (now != null && CrashSection.isCleared(trace.value())) {
