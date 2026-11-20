@@ -474,6 +474,7 @@ final class EngineStart {
             JvmParts parts = started.findParts();
             return parts == null ? null : parts.runner();
         }, say, started::writeReport, () -> started.getSettings().isAntiCrashOn(),
+                () -> !started.getSettings().isAntiCrashOn() && !started.getSettings().isAntiCrashOfferOff(),
                 id -> DevSession.isDevMod(id) && started.getSettings().isDevCatchOn(DevSetups.get().inSetup()));
         OwnThrowNotice.install(engine.getTasks(), say,
                 why -> started.writeReport(Lang.get("hotwire.report.file.hotwire_error"), why));

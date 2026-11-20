@@ -2,14 +2,21 @@ package dev.moon.hotwire.ui;
 
 import dev.moon.hotwire.ui.panels.FirstOpenPanel;
 import dev.moon.hotwire.ui.widgets.Canvas;
+import dev.moon.hotwire.ui.widgets.Sheet;
 
 public final class PromptScreen {
     private final Root root = new Root();
-    private final FirstOpenPanel panel;
+    private final Sheet panel;
 
     public PromptScreen(Runnable onAccept, Runnable onOpenHotwire) {
-        this.panel = this.root.getModal().add(new FirstOpenPanel(onAccept, onOpenHotwire));
-        this.panel.present();
+        FirstOpenPanel first = this.root.getModal().add(new FirstOpenPanel(onAccept, onOpenHotwire));
+        first.present();
+        this.panel = first;
+    }
+
+    public PromptScreen(Sheet panel) {
+        this.panel = this.root.getModal().add(panel);
+        panel.show();
     }
 
     public Root getRoot() {

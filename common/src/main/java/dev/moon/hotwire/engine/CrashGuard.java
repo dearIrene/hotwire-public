@@ -45,7 +45,8 @@ public final class CrashGuard {
 
     private static final int MOST_CAUGHT = 200;
 
-    private record Guard(CrashPolicy policy, Set<String> switched, List<String> caught) {
+    private record Guard(CrashPolicy policy, Set<String> switched, List<String> caught, InstalledMods installed,
+            Supplier<@Nullable SwitchRunner> runner, BooleanSupplier offerWanted) {
     }
 
     private CrashGuard() {
@@ -55,12 +56,12 @@ public final class CrashGuard {
 
     public static void install(InstalledMods installed, Tasks tasks, Supplier<@Nullable SwitchRunner> runner,
             BiConsumer<String, Boolean> say, BiFunction<String, String, String> writeReport,
-            BooleanSupplier antiCrash, Predicate<String> inDevelopment) {
+            BooleanSupplier antiCrash, BooleanSupplier offerWanted, Predicate<String> inDevelopment) {
         CrashPolicy[] made = new CrashPolicy[1];
         Set<String> switched = ConcurrentHashMap.newKeySet();
         List<String> said = new CopyOnWriteArrayList<>();
-        made[0] = new CrashPolicy(CrashGuard::findModBehind, id -> canLeave(id)
-                && (isTouched(installed, switched, id) || antiCrash.getAsBoolean()), caught -> {
+        made[0] = new CrashPolicy(CrashGuard::findModBehind, id -> canLeave(id) && (isTouched(installed, switched, id)
+                || (antiCrash.getAsBoolean() && !hasWorldContent(runner, id))), caught -> {
             String name = installed.nameOf(caught.mod());
             boolean byAntiCrash = !isTouched(installed, switched, caught.mod());
             LOGGER.error("[Hotwire] {} threw at {} ({}); Hotwire keeps the game going and turns it off", name,
@@ -114,7 +115,7 @@ public final class CrashGuard {
                     place == null ? findWhere(caught.thrown(), caught.mod()) : place.words(),
                     place == null ? "" : place.source(), place == null ? 0 : place.line());
         });
-        guard = new Guard(made[0], switched, said);
+        guard = new Guard(made[0], switched, said, installed, runner, offerWanted);
     }
 
     @SuppressWarnings("FutureReturnValueIgnored")
@@ -139,6 +140,22 @@ public final class CrashGuard {
         journal.endSwitch(result.result(), result.check() instanceof Report.OffCheck.PartlyOff);
         SwitchHistory.get().recordDone(result.result(), SwitchHistory.Cause.ANTI_CRASH, "");
         return result;
+    }
+
+    private static void noteOffer(Guard current, Throwable thrown) {
+        if (!current.offerWanted().getAsBoolean() || CrashPolicy.isJvmFailure(thrown)) {
+            return;
+        }
+        String mod = findModBehind(thrown);
+        if (mod != null && canLeave(mod) && !isTouched(current.installed(), current.switched(), mod)
+                && !hasWorldContent(current.runner(), mod)) {
+            AntiCrashOffer.noteThrow(current.installed().nameOf(mod), thrown);
+        }
+    }
+
+    private static boolean hasWorldContent(Supplier<@Nullable SwitchRunner> runner, String mod) {
+        SwitchRunner now = runner.get();
+        return now == null || now.hasWorldContent(List.of(mod));
     }
 
     private static boolean isTouched(InstalledMods installed, Set<String> switched, String mod) {
@@ -367,7 +384,11 @@ public final class CrashGuard {
             return false;
         }
         try {
-            return current.policy().handle(thrown, site);
+            boolean goesOn = current.policy().handle(thrown, site);
+            if (!goesOn) {
+                noteOffer(current, thrown);
+            }
+            return goesOn;
         } catch (RuntimeException | LinkageError e) {
             thrown.addSuppressed(e);
             LOGGER.warn("[Hotwire] the throw at {} goes back to the game: whose it is could not be told", site, e);

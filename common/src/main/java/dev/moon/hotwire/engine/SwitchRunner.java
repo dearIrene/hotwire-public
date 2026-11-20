@@ -641,6 +641,10 @@ public final class SwitchRunner {
         LOGGER.error("[Hotwire] what {} left in others could not all be taken out", ids, e);
     }
 
+    public boolean hasWorldContent(List<String> ids) {
+        return !this.units.findWorldContent(this.switcher.planOff(ids).order()).isEmpty();
+    }
+
     public boolean hasLeavingContent(List<String> ids) {
         Map<String, List<String>> content = this.units.findWorldContent(this.switcher.planOff(ids).order());
         return !content.isEmpty() && this.units.canContentLeave(content);

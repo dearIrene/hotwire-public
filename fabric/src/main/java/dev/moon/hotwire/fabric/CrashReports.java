@@ -2,6 +2,7 @@ package dev.moon.hotwire.fabric;
 
 import dev.moon.hotwire.concurrent.Tasks;
 import dev.moon.hotwire.config.Flags;
+import dev.moon.hotwire.engine.AntiCrashOffer;
 import dev.moon.hotwire.engine.CrashNotice;
 import dev.moon.hotwire.fabric.screen.CrashPopup;
 import dev.moon.hotwire.report.GameReports;
@@ -33,6 +34,7 @@ public final class CrashReports {
     @SuppressWarnings("FutureReturnValueIgnored")
     static void watch(Tasks tasks, ReportZips zips) {
         CrashNotice.readAtStart();
+        AntiCrashOffer.readAtStart();
         tasks.submit("report of the last session's crash", zips::findLastSessionCrash,
                 where -> where.ifPresent(CrashNotice::setDue));
         GameReports.listenForCrashes(crash -> {

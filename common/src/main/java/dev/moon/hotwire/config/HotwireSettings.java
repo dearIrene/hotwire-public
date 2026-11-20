@@ -198,6 +198,7 @@ public final class HotwireSettings {
         boolean tourSeen;
         @Nullable Boolean shareMods;
         boolean downloadsWarned;
+        boolean antiCrashOfferOff;
         @Nullable List<String> favorites = List.of();
 
         @Nullable List<String> searchSetup;
@@ -236,6 +237,7 @@ public final class HotwireSettings {
     private volatile boolean tourSeen;
     private volatile boolean shareMods = true;
     private volatile boolean downloadsWarned;
+    private volatile boolean antiCrashOfferOff;
     private final Set<String> favorites = ConcurrentHashMap.newKeySet();
     private volatile List<String> searchSetup = List.of();
     private volatile List<String> searchPins = List.of();
@@ -282,6 +284,7 @@ public final class HotwireSettings {
         this.tourSeen = saved.tourSeen;
         this.shareMods = saved.shareMods == null || saved.shareMods;
         this.downloadsWarned = saved.downloadsWarned;
+        this.antiCrashOfferOff = saved.antiCrashOfferOff;
         if (saved.favorites != null) {
             saved.favorites.stream().filter(Objects::nonNull).forEach(this.favorites::add);
         }
@@ -501,6 +504,19 @@ public final class HotwireSettings {
         this.save();
     }
 
+    public boolean isAntiCrashOfferOff() {
+        return this.antiCrashOfferOff;
+    }
+
+    public void stopAntiCrashOffer() {
+        this.antiCrashOfferOff = true;
+        this.save();
+    }
+
+    public void turnOnAntiCrash() {
+        this.choose(ANTI_CRASH, ANTI_CRASH_ORDER.indexOf(AntiCrash.ON));
+    }
+
     public void acceptPrompt(String major) {
         this.promptAcceptedFor = major;
         this.save();
@@ -672,6 +688,7 @@ public final class HotwireSettings {
         saved.tourSeen = this.tourSeen;
         saved.shareMods = this.shareMods ? null : Boolean.FALSE;
         saved.downloadsWarned = this.downloadsWarned;
+        saved.antiCrashOfferOff = this.antiCrashOfferOff;
         saved.favorites = this.favorites.stream().sorted().toList();
         saved.searchSetup = this.searchSetup.isEmpty() ? null : this.searchSetup;
         saved.searchPins = this.searchPins.isEmpty() ? null : this.searchPins;

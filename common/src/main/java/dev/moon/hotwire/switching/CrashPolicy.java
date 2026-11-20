@@ -101,7 +101,7 @@ public final class CrashPolicy {
         }
     }
 
-    private static boolean isJvmFailure(Throwable thrown) {
+    public static boolean isJvmFailure(Throwable thrown) {
         return Causes.list(thrown).stream().anyMatch(cause -> cause instanceof VirtualMachineError
                 && !(cause instanceof StackOverflowError));
     }

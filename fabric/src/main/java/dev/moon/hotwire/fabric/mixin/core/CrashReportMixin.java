@@ -1,5 +1,6 @@
 package dev.moon.hotwire.fabric.mixin.core;
 
+import dev.moon.hotwire.engine.AntiCrashOffer;
 import dev.moon.hotwire.report.GameReports;
 import java.nio.file.Path;
 import java.util.List;
@@ -26,6 +27,7 @@ public abstract class CrashReportMixin {
     private void hotwire$onSaved(Path file, ReportType type, List<String> lines, CallbackInfoReturnable<Boolean> cir) {
         if (cir.getReturnValueZ()) {
             GameReports.onCrashSaved(file, this.getException());
+            AntiCrashOffer.onCrashSaved(this.getException());
         }
     }
 
