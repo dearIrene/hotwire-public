@@ -160,6 +160,7 @@ public final class ContentRemovals {
         for (List<OutEntry<?>> entries : byRegistry.values()) {
             restored += restoreTo(entries);
         }
+        RegistryAddedMaps.restore(mods);
         Map<String, Map<Block, Swap>> standing = new HashMap<>(standIns);
         for (String mod : mods) {
             Map<Block, Swap> was = standing.remove(mod);
@@ -220,6 +221,7 @@ public final class ContentRemovals {
         MappedRegistryAccessor access = (MappedRegistryAccessor) registry;
         List<Holder.Reference<T>> byId = (List<Holder.Reference<T>>) (List<?>) access.hotwire$getById();
         List<Holder.Reference<T>> before = List.copyOf(byId);
+        Map<Object, String> leaving = new HashMap<>();
         int count = 0;
         try {
             for (int at = byId.size() - 1; at >= 0; at--) {
@@ -236,12 +238,17 @@ public final class ContentRemovals {
                 access.hotwire$getByValue().remove(holder.value());
                 Object info = access.hotwire$getRegistrationInfos().remove(holder.key());
                 into.computeIfAbsent(owner, any -> new ArrayList<>()).add(new OutEntry<>(registry, holder, info));
+                leaving.put(holder.key(), owner);
+                leaving.put(id, owner);
+                leaving.put(holder, owner);
+                leaving.put(holder.value(), owner);
                 count++;
             }
         } finally {
             if (count > 0) {
                 setNumbers(registry, byId);
                 tellMoved(registry, before, byId);
+                RegistryAddedMaps.take(registry, leaving);
             }
         }
         return count;
