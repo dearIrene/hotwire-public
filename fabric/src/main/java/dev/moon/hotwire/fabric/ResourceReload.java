@@ -67,6 +67,8 @@ public final class ResourceReload {
 
     private static volatile boolean wholeAfterHold;
 
+    private static volatile long holdBegan = Long.MAX_VALUE;
+
     private static volatile Set<String> packsAtPause = Set.of();
 
     private static volatile List<String> comingOn = List.of();
@@ -250,6 +252,7 @@ public final class ResourceReload {
         reloadedWhilePaused = false;
         reloadedRenderers = false;
         wholeAfterHold = false;
+        holdBegan = Long.MAX_VALUE;
         added = List.of();
         packsAtPause = Set.of();
         GameParts.getModelCheck().forgetPause();
@@ -318,6 +321,7 @@ public final class ResourceReload {
 
         comingOn.forEach(LoaderModList::show);
         packsAtPause = getAvailablePacks();
+        holdBegan = System.nanoTime();
         noteOwnersAtPause();
 
         GameParts.getOngoingReload().clearDoneOverlay();
@@ -453,8 +457,13 @@ public final class ResourceReload {
             return;
         }
 
+        if (off && GameParts.getOngoingReload().hasWholeEndedSince(holdBegan)) {
+            LOGGER.info("[Hotwire] a whole reload since the hold made the game's resources without {}", mods);
+            return;
+        }
+
         boolean models = (off ? owners.hasModelsOf(mods) : modelsAtOn)
-                || mods.stream().anyMatch(off ? ContentRemovals::isOut : ContentRemovals::isBack);
+                || (!off && mods.stream().anyMatch(ContentRemovals::isBack));
         FontManager manager = FontReload.findFontManager();
         boolean fonts = manager != null && (off ? owners.hasFontsOf(manager, mods) : fontsAtOn);
 

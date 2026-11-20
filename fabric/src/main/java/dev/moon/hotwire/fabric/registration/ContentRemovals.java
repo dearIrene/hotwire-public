@@ -2,6 +2,7 @@ package dev.moon.hotwire.fabric.registration;
 
 import dev.moon.hotwire.fabric.mixin.core.core.MappedRegistryAccessor;
 import dev.moon.hotwire.fabric.mixin.core.world.item.CreativeModeTabsAccessor;
+import dev.moon.hotwire.fabric.version.Spellings;
 import it.unimi.dsi.fastutil.ints.Int2IntMap;
 import it.unimi.dsi.fastutil.ints.Int2IntOpenHashMap;
 import it.unimi.dsi.fastutil.objects.Reference2IntMap;
@@ -38,6 +39,8 @@ public final class ContentRemovals {
     private static Map<String, List<OutEntry<?>>> out = Map.of();
     private static IdentityHashMap<Object, String> outObjects = new IdentityHashMap<>();
 
+    private static Set<Identifier> outIds = Set.of();
+
     private static Map<String, Map<Block, Swap>> standIns = Map.of();
 
     private record Swap(Item was, @Nullable Item put) {
@@ -69,8 +72,10 @@ public final class ContentRemovals {
         out = Map.copyOf(next);
         changes++;
         IdentityHashMap<Object, String> all = new IdentityHashMap<>();
+        Set<Identifier> ids = new HashSet<>();
         out.forEach((mod, entries) -> {
             for (OutEntry<?> entry : entries) {
+                ids.add(Spellings.getKeyId(entry.holder().key()));
                 Object value = entry.holder().value();
                 all.put(value, mod);
                 all.put(entry.holder(), mod);
@@ -84,6 +89,11 @@ public final class ContentRemovals {
             }
         });
         outObjects = all;
+        outIds = Set.copyOf(ids);
+    }
+
+    public static synchronized boolean isGone(Object key) {
+        return outObjects.containsKey(key) || (key instanceof Identifier id && outIds.contains(id));
     }
 
     public static synchronized boolean isBack(String mod) {

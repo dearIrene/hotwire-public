@@ -35,6 +35,8 @@ public final class OngoingReload {
     private final AtomicReference<CompletableFuture<Void>> changed = new AtomicReference<>(new CompletableFuture<>());
     private volatile @Nullable Object pendingSeen;
 
+    private volatile long wholeEndedBegun = Long.MIN_VALUE;
+
     static final class Run {
         final ReloadInstance reload;
         final long began = System.nanoTime();
@@ -58,11 +60,22 @@ public final class OngoingReload {
             here.add(run);
         }
         reload.done().whenComplete((done, thrown) -> {
+            if (thrown == null && !run.partial) {
+                this.noteWholeEnded(run.began);
+            }
             if (run.shownBy == null) {
                 this.end(run);
             }
         });
         this.markChanged();
+    }
+
+    private synchronized void noteWholeEnded(long began) {
+        this.wholeEndedBegun = Math.max(this.wholeEndedBegun, began);
+    }
+
+    public boolean hasWholeEndedSince(long time) {
+        return this.wholeEndedBegun > time;
     }
 
     @SuppressWarnings("FutureReturnValueIgnored")

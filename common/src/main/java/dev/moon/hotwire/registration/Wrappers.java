@@ -13,6 +13,7 @@ import java.util.List;
 import java.util.Map;
 import java.util.Set;
 import java.util.function.Function;
+import java.util.function.Predicate;
 import org.jspecify.annotations.Nullable;
 import org.objectweb.asm.Type;
 
@@ -472,6 +473,23 @@ public final class Wrappers {
 
     static boolean makesValues(Map<?, ?> map) {
         return Owners.findModOf(map.getClass()) != null;
+    }
+
+    public static Collection<?> readValuesBut(Map<?, ?> map, Predicate<Object> leftOut) {
+        if (makesValues(map) || GuavaCaches.isCache(map)) {
+            return readValues(map);
+        }
+        try {
+            List<Object> values = new ArrayList<>();
+            for (Map.Entry<?, ?> entry : map.entrySet()) {
+                if (entry.getKey() == null || !leftOut.test(entry.getKey())) {
+                    values.add(entry.getValue());
+                }
+            }
+            return values;
+        } catch (RuntimeException refused) {
+            return List.of();
+        }
     }
 
     public static Collection<?> readValues(Map<?, ?> map) {

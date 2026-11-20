@@ -196,7 +196,7 @@ public final class ModelReloadCheck {
         }
         if (value instanceof Map<?, ?> map) {
             path.add(value.getClass().getSimpleName() + " values");
-            look(Wrappers.readValues(map), mods, found, seen, owners, path, depth, most);
+            look(Wrappers.readValuesBut(map, ContentRemovals::isGone), mods, found, seen, owners, path, depth, most);
             path.removeLast();
             return;
         }
