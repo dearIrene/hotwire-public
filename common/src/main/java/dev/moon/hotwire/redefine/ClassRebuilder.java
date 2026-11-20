@@ -51,7 +51,7 @@ public final class ClassRebuilder {
     final Instrumentation instrumentation;
     private final MixinCopy copy;
     private final LoadedClassBytes loadedBytes;
-    private final ClassArrivals arrivals = new ClassArrivals();
+    private final ClassArrivals arrivals = new ClassArrivals(name -> this.loaded.test(name));
 
     private final Map<Class<?>, Set<String>> carrying = Collections.synchronizedMap(new WeakHashMap<>());
 

@@ -5,6 +5,7 @@ import java.util.List;
 import java.util.Queue;
 import java.util.concurrent.ConcurrentLinkedQueue;
 import java.util.concurrent.atomic.AtomicInteger;
+import java.util.function.Predicate;
 import org.jspecify.annotations.Nullable;
 
 public final class ClassArrivals {
@@ -16,7 +17,10 @@ public final class ClassArrivals {
     private record NewClass(String binaryName, ClassLoader loader) {
     }
 
-    ClassArrivals() {
+    private final Predicate<String> loaded;
+
+    ClassArrivals(Predicate<String> loaded) {
+        this.loaded = loaded;
     }
 
     public void note(String internalName, ClassLoader loader) {
@@ -44,6 +48,10 @@ public final class ClassArrivals {
         List<Class<?>> found = new ArrayList<>();
         for (NewClass defined = this.arrived.poll(); defined != null; defined = this.arrived.poll()) {
             this.count.decrementAndGet();
+
+            if (!this.loaded.test(defined.binaryName())) {
+                continue;
+            }
             try {
                 found.add(Class.forName(defined.binaryName(), false, defined.loader()));
             } catch (ClassNotFoundException | LinkageError e) {
