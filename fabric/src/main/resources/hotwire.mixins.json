@@ -33,6 +33,7 @@
     "core.world.level.levelgen.placement.PlacedFeatureMixin",
     "core.world.level.levelgen.structure.StructureMixin",
     "core.world.level.levelgen.structure.StructureStartAccessor",
+    "core.core.IdMapperAccessor",
     "core.core.MappedRegistryAccessor",
     "core.core.MappedRegistryMixin",
     "core.core.component.InitializerEntryMixin",
@@ -56,6 +57,8 @@
   ],
   "client": [
     "core.client.MinecraftAccessor",
+    "core.client.color.block.BlockColorsAccessor",
+    "core.client.color.block.BlockColorsMixin",
     "core.client.ReloadableResourceManagerMixin",
     "core.blaze3d.systems.CommandEncoderAccessor",
     "core.blaze3d.opengl.GlCommandEncoderAccessor",

@@ -159,6 +159,7 @@ final class CollectionReferences implements FixedLists.Walk {
         this.mine.forEach((mod, out) -> {
             out.forEach(removal -> removal.resetHolder(this.lazyFields));
             if (!out.isEmpty()) {
+                this.noteChunkTables(out);
                 this.removals.computeIfAbsent(mod, any -> new ArrayList<>()).addAll(out);
                 LOGGER.info("[Hotwire] {} of {}'s objects were taken out of collections others keep: {}",
                         out.size(), mod, out.stream().map(Removal::describe).distinct().toList());
@@ -747,6 +748,7 @@ final class CollectionReferences implements FixedLists.Walk {
             }
         }
         back.sort(Comparator.comparingInt(one -> one.getValue() instanceof Removal.InList list ? list.index() : 0));
+        this.noteChunkTables(back.stream().map(Map.Entry::getValue).toList());
         Set<Object> containers = Collections.newSetFromMap(new IdentityHashMap<>());
         back.forEach(one -> {
             if (one.getValue().container() != null) {
@@ -767,6 +769,24 @@ final class CollectionReferences implements FixedLists.Walk {
                 }
             }
         });
+    }
+
+    private volatile boolean chunkTablesChanged;
+
+    private void noteChunkTables(List<Removal> changed) {
+        for (Removal one : changed) {
+            Object container = one.container();
+            if (container != null && Games.getNow().getTables().isDrawnIntoChunks(container)) {
+                this.chunkTablesChanged = true;
+                return;
+            }
+        }
+    }
+
+    boolean takeChunkTablesChanged() {
+        boolean changed = this.chunkTablesChanged;
+        this.chunkTablesChanged = false;
+        return changed;
     }
 
     private static boolean isOfStoppedSound(Removal removal) {

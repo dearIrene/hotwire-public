@@ -329,6 +329,12 @@ final class ElementTakes {
         for (int index = items.size() - 1; index >= 0; index--) {
             if (items.get(index) == item) {
                 boolean inPlace = hasEmptyPlace(items, index);
+                Object game = inPlace ? Games.getNow().getTables().findGameDefault(items, index) : null;
+                if (game != null) {
+                    items.set(index, game);
+                    out.add(new Removal.InListPlace(items, index, item, game));
+                    return;
+                }
                 if (inPlace) {
                     items.set(index, null);
                 } else {
@@ -394,7 +400,10 @@ final class ElementTakes {
 
     static void takeFromMap(Map<Object, Object> entries, Object key, Object value, List<Removal> out) {
         changeOnItsThread(entries, () -> {
-            if (!isGameEntry(key, value) && entries.remove(key, value)) {
+            Object game = isGameEntry(key, value) ? null : Games.getNow().getTables().findGameDefault(entries, key);
+            if (game != null && entries.replace(key, value, game)) {
+                out.add(new Removal.InMapValue(entries, key, value, game));
+            } else if (!isGameEntry(key, value) && entries.remove(key, value)) {
                 out.add(new Removal.InMap(entries, key, value));
             } else if (Games.getNow().findOutContent().containsKey(key)) {
                 LOGGER.debug("[Hotwire] a {} keeps a key that left the registries: the game's own entry {}, held {},"
@@ -419,7 +428,7 @@ final class ElementTakes {
     }
 
     private static boolean isGameOwn(Class<?> type) {
-        return GameNames.isGame(type.getName());
+        return Owners.isGameOwn(type);
     }
 
     private static Class<?> findGameClassAbove(Class<?> type) {

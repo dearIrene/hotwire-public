@@ -13,8 +13,10 @@ import dev.moon.hotwire.fabric.registration.NetworkHandlers;
 import dev.moon.hotwire.fabric.registration.RegisteredContent;
 import dev.moon.hotwire.fabric.screen.HoldFrame;
 import dev.moon.hotwire.fabric.screen.WebLinks;
+import dev.moon.hotwire.fabric.version.GameColors;
 import dev.moon.hotwire.fabric.version.Spellings;
 import dev.moon.hotwire.seam.Game;
+import dev.moon.hotwire.seam.GameTables;
 import dev.moon.hotwire.seam.Reloads;
 import dev.moon.hotwire.seam.SharedChange;
 import io.netty.channel.Channel;
@@ -143,6 +145,11 @@ public final class GameSide implements Game {
     @Override
     public boolean isStoppedSound(@Nullable Object sound) {
         return GameParts.getSounds().isStopped(sound);
+    }
+
+    @Override
+    public GameTables getTables() {
+        return GameColors.TABLES;
     }
 
     @Override

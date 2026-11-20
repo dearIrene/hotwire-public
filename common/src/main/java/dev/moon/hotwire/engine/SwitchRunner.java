@@ -823,7 +823,8 @@ public final class SwitchRunner {
             this.reloads.reloadResources(done.applied().newlyBuilt(), done.plan().order(), off);
 
             long flips = HandlerGuards.getChunkFlips();
-            if (flips != this.flipsSeen) {
+            boolean colors = this.fieldReferences.takeChunkTablesChanged();
+            if (flips != this.flipsSeen || colors) {
                 this.units.redrawChunks();
             }
             this.flipsSeen = flips;

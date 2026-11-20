@@ -171,6 +171,10 @@ public final class Owners {
         return (current == null ? 0 : current.learned.get()) * 31L + Games.getNow().findRegistrySizes();
     }
 
+    public static boolean isGameOwn(Class<?> type) {
+        return GameNames.isGame(type.getName()) && (!type.isHidden() || ValueOwners.findLambdaOwner(type) == null);
+    }
+
     public static @Nullable String findModOf(Class<?> type) {
         return of(type).mod;
     }

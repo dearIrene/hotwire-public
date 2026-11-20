@@ -43,6 +43,10 @@ public interface Game {
 
     Set<Object> getRegistered();
 
+    default GameTables getTables() {
+        return GameTables.NONE;
+    }
+
     default IdentityHashMap<Object, String> findOutContent() {
         return new IdentityHashMap<>();
     }
