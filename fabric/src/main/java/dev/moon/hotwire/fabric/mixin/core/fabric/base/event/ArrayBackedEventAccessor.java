@@ -19,6 +19,9 @@ public interface ArrayBackedEventAccessor {
     @Accessor("invokerFactory")
     Function<?, ?> hotwire$getInvokerFactory();
 
+    @Accessor("handlers")
+    Object[] hotwire$getHandlers();
+
     @Invoker("rebuildInvoker")
     void hotwire$rebuildInvoker(int length);
 }

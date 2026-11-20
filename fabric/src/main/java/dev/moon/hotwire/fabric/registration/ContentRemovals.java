@@ -1,6 +1,7 @@
 package dev.moon.hotwire.fabric.registration;
 
 import dev.moon.hotwire.fabric.mixin.core.core.MappedRegistryAccessor;
+import dev.moon.hotwire.fabric.mixin.core.fabric.base.event.ArrayBackedEventAccessor;
 import dev.moon.hotwire.fabric.mixin.core.world.item.CreativeModeTabsAccessor;
 import dev.moon.hotwire.fabric.version.Spellings;
 import it.unimi.dsi.fastutil.ints.Int2IntMap;
@@ -15,6 +16,7 @@ import java.util.Iterator;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
+import net.fabricmc.fabric.api.event.Event;
 import net.fabricmc.fabric.api.event.registry.RegistryEntryAddedCallback;
 import net.fabricmc.fabric.api.event.registry.RegistryIdRemapCallback;
 import net.fabricmc.loader.api.FabricLoader;
@@ -277,11 +279,31 @@ public final class ContentRemovals {
             added.add(holder);
         }
         setNumbers(registry, byId);
+        Set<Class<?>> refused = new HashSet<>();
         for (Holder.Reference<T> holder : added) {
-            RegistryEntryAddedCallback.event(registry).invoker().onEntryAdded(registry.getId(holder.value()),
-                    InternedKeys.findIdOf(holder.key()), holder.value());
+            tellAdded(registry, holder, refused);
         }
         return added.size();
+    }
+
+    @SuppressWarnings("unchecked")
+
+    private static <T> void tellAdded(MappedRegistry<T> registry, Holder.Reference<T> holder, Set<Class<?>> refused) {
+        Event<RegistryEntryAddedCallback<T>> event = RegistryEntryAddedCallback.event(registry);
+        int number = registry.getId(holder.value());
+        Identifier id = InternedKeys.findIdOf(holder.key());
+        Object[] listeners = event instanceof ArrayBackedEventAccessor access ? access.hotwire$getHandlers()
+                : new Object[] {event.invoker()};
+        for (Object listener : listeners) {
+            try {
+                ((RegistryEntryAddedCallback<T>) listener).onEntryAdded(number, id, holder.value());
+            } catch (RuntimeException e) {
+                if (refused.add(listener.getClass())) {
+                    LOGGER.info("[Hotwire] {} of {} did not take {} back: {}", listener.getClass().getName(),
+                            registry.key(), id, e.toString());
+                }
+            }
+        }
     }
 
     @SuppressWarnings("unchecked")
