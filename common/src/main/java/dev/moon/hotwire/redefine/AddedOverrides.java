@@ -241,7 +241,7 @@ public final class AddedOverrides {
 
     static CallSite bootstrap(MethodHandles.Lookup caller, String name, MethodType type, String key)
             throws ReflectiveOperationException {
-        Class<?> holder = caller.lookupClass();
+        Class<?> holder = Linker.getHostOf(caller.lookupClass());
         MethodHandles.Lookup side = Linker.findCurrentLookup(holder);
         if (side == null) {
             throw new NoSuchMethodException(key + " has no body beside it");

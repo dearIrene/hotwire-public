@@ -142,7 +142,7 @@ public final class CrashGuard {
     }
 
     private static boolean isTouched(InstalledMods installed, Set<String> switched, String mod) {
-        return installed.isAddedThisSession(mod) || switched.contains(mod);
+        return installed.isAddedThisSession(mod) || installed.isUpdatedThisSession(mod) || switched.contains(mod);
     }
 
     private static boolean isWorldBuilt(ModSwitcher.Result result) {
