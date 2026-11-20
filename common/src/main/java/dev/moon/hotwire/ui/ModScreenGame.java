@@ -181,6 +181,13 @@ public interface ModScreenGame {
     default void cancelPending(String id) throws IOException {
     }
 
+    default boolean canDelete(String id) {
+        return false;
+    }
+
+    default void deleteMod(String id) {
+    }
+
     default void removeCopy(String id) throws IOException {
     }
 

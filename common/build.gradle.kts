@@ -62,6 +62,8 @@ dependencies {
     compileOnly("org.ow2.asm:asm-analysis:9.8")
     compileOnly("com.google.guava:guava:32.1.2-jre")
 
+    compileOnly("net.java.dev.jna:jna-platform:5.12.1")
+
     compileOnly("net.fabricmc:fabric-loader:${property("loader_version")}")
 
     testRuntimeOnly("net.fabricmc:fabric-loader:${property("loader_version")}")

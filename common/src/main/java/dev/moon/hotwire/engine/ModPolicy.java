@@ -45,6 +45,8 @@ public final class ModPolicy {
 
     private static volatile Set<String> stayingThrough = Set.of();
 
+    private static volatile Predicate<String> gone = mod -> false;
+
     private ModPolicy() {
     }
 
@@ -141,6 +143,14 @@ public final class ModPolicy {
         staying = mods;
     }
 
+    public static void setGone(Predicate<String> mods) {
+        gone = mods;
+    }
+
+    private static boolean isGone(String mod) {
+        return gone.test(mod);
+    }
+
     public static void setStayingThrough(Set<String> libraries) {
         stayingThrough = Set.copyOf(libraries);
     }
@@ -159,7 +169,7 @@ public final class ModPolicy {
         guarded.addAll(findNeededByUnread(graph.getIds()));
         SwitchPlanner planner = new SwitchPlanner(graph, new SwitchPlanner.Settings(nestedJars,
                 findBuiltIn(graph.getIds()), guarded, ModPolicy::satisfies,
-                seenUses != null ? seenUses : KnownUses.NONE, ModPolicy::isStaying));
+                seenUses != null ? seenUses : KnownUses.NONE, ModPolicy::isStaying, ModPolicy::isGone));
 
         Set<String> own = new HashSet<>(graph.findSharedNested());
         own.addAll(planner.findNestedStayingOn());

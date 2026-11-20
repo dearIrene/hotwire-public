@@ -116,6 +116,7 @@ public final class HotwireEngine implements ModScreenGame, AutoCloseable {
     private final DisabledMods disabled;
     private final SwitchRequests switches;
     private final FolderJars folderJars;
+    private final ModDeletes deletes;
 
     private PendingChanges getPending() {
         return this.pending;
@@ -175,6 +176,8 @@ public final class HotwireEngine implements ModScreenGame, AutoCloseable {
                 this::showMessage);
         this.profiles = new ProfileStore(FabricLoader.getInstance().getConfigDir().resolve("hotwire/profiles.txt"));
         this.folderJars = new FolderJars(folders.mods(), installed, queue, progress, this::findHost);
+        this.deletes = new ModDeletes(installed, this.disabled, this.pending, this::findParts,
+                FabricLoader.getInstance().getGameDir().resolve("hotwire").resolve("added").resolve("deleted"));
     }
 
     public void cleanUpdateFolders() {
@@ -992,6 +995,27 @@ public final class HotwireEngine implements ModScreenGame, AutoCloseable {
     @Override
     public void removeCopy(String id) throws IOException {
         this.rows.removeCopy(id);
+    }
+
+    @Override
+    public boolean canDelete(String id) {
+        Path jar = this.installed.findFolderJarOf(id);
+        return jar != null && !this.isOn(id) && this.installed.isTopLevel(id) && this.isInModsFolder(jar)
+                && !ModPolicy.isGuarded(id);
+    }
+
+    @Override
+    @SuppressWarnings("FutureReturnValueIgnored")
+    public void deleteMod(String id) {
+        this.tasks.submit("delete " + id, () -> this.canDelete(id) ? this.deletes.delete(id) : "", refused -> {
+            if (!refused.isEmpty()) {
+                this.showMessage(refused, true);
+            }
+            ModScreen current = this.screen;
+            if (current != null) {
+                current.onSwitched();
+            }
+        });
     }
 
     public EngineScreens getScreens() {

@@ -136,6 +136,9 @@ public final class ModsPage implements ProfileMenu.Screen {
                 Kit.text(shown.note(), Palette.FAINT).spare(), this.makeTags(mod).spare());
         if (this.hasSettings(id)) {
             row.with(Kit.push(Lang.get("hotwire.row.settings"), () -> this.openSettings(id)));
+        } else if (!mod.on() && this.game.canDelete(id)) {
+            row.with(Kit.lead(Lang.get("hotwire.row.delete"), () -> this.screen.confirmDelete(id, mod.name()))
+                    .ink(Palette.BAD));
         }
         row.with(new Star(id).press((button, modifiers) -> this.toggleFavorite(id)),
                 new Flip(() -> this.findShownState(mod), () -> this.toggle(mod))

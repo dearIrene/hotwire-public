@@ -48,6 +48,8 @@ public final class InstalledMods {
     private final Map<String, ModJar> disabled = new HashMap<>();
     private final Set<String> addedThisSession = new HashSet<>();
 
+    private final Set<String> deleted = new HashSet<>();
+
     private final Map<String, String> offeredFor = new HashMap<>();
     private final Set<String> updatedThisSession = new HashSet<>();
 
@@ -181,7 +183,8 @@ public final class InstalledMods {
     }
 
     public boolean isGoneAtNextStart(String id) {
-        return this.isDisabled(id) || this.offAtStart.stream().anyMatch(off -> off.ids().contains(id));
+        return this.isDisabled(id) || this.isDeleted(id)
+                || this.offAtStart.stream().anyMatch(off -> off.ids().contains(id));
     }
 
     public synchronized Optional<ModManifest> findDisabled(String id) {
@@ -202,6 +205,17 @@ public final class InstalledMods {
     public synchronized void onRestored(String id, Path jar) {
         this.disabled.remove(id);
         this.setFolderJar(id, jar);
+    }
+
+    public synchronized void onDeleted(String id) {
+        this.deleted.add(id);
+        this.topLevel.remove(id);
+        this.jarOf.remove(id);
+        this.folderJarOf.remove(id);
+    }
+
+    public synchronized boolean isDeleted(String id) {
+        return this.deleted.contains(id);
     }
 
     private void makeGraphAgain() {

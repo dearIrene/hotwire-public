@@ -21,6 +21,7 @@ import dev.moon.hotwire.ui.panels.AddPanel;
 import dev.moon.hotwire.ui.panels.AlsoOffPanel;
 import dev.moon.hotwire.ui.panels.CarriedPanel;
 import dev.moon.hotwire.ui.panels.ClosePanel;
+import dev.moon.hotwire.ui.panels.DeletePanel;
 import dev.moon.hotwire.ui.panels.DownloadsWarningPanel;
 import dev.moon.hotwire.ui.panels.FindBrokenPanel;
 import dev.moon.hotwire.ui.panels.FirstOpenPanel;
@@ -85,6 +86,7 @@ public final class ModScreen implements JarHost {
     private final List<Element> panels;
     private final ReopenPanel reopenPanel;
     private final AlsoOffPanel alsoOffPanel;
+    private final DeletePanel deletePanel;
     private final ProfilesPanel profilesPanel;
     private final CarriedPanel carriedPanel;
     private final HostPanel hostPanel;
@@ -171,6 +173,7 @@ public final class ModScreen implements JarHost {
         }, game.getCatalog()::name, game::findIcon);
         this.tour = new TourPanel(game::markTourSeen);
         this.downloadsWarning = new DownloadsWarningPanel(game::markDownloadsWarned, this::closePanels);
+        this.deletePanel = new DeletePanel(game::deleteMod, this::closePanels);
 
         this.firstOpen = new FirstOpenPanel(() -> {
             game.acceptFirstOpen();
@@ -192,7 +195,7 @@ public final class ModScreen implements JarHost {
 
         this.panels = List.of(this.findBroken, this.addPanel, this.updatePanel, this.progress,
                 this.reopenPanel, this.carriedPanel, this.alsoOffPanel, this.firstOpen, this.tour,
-                this.selfUpdate, this.profilesPanel, this.hostPanel, this.downloadsWarning);
+                this.selfUpdate, this.profilesPanel, this.hostPanel, this.downloadsWarning, this.deletePanel);
         this.panels.forEach(this.root.getModal()::add);
         this.root.getModal().add(this.closePanel);
         this.root.getModal().add(this.updateSummary);
@@ -486,6 +489,12 @@ public final class ModScreen implements JarHost {
     public void openFindBroken(Set<String> pinned) {
         if (this.isIdle()) {
             this.findBroken.present(pinned);
+        }
+    }
+
+    public void confirmDelete(String id, String name) {
+        if (this.isIdle()) {
+            this.deletePanel.present(id, name);
         }
     }
 

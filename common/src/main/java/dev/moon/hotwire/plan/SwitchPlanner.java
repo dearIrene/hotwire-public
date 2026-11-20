@@ -40,10 +40,15 @@ public final class SwitchPlanner {
     }
 
     public record Settings(NestedJars nestedJars, Set<String> builtIn, Set<String> protectedMods, Versions versions,
-            KnownUses uses, Predicate<String> staying) {
+            KnownUses uses, Predicate<String> staying, Predicate<String> gone) {
         public Settings {
             builtIn = Set.copyOf(builtIn);
             protectedMods = Set.copyOf(protectedMods);
+        }
+
+        public Settings(NestedJars nestedJars, Set<String> builtIn, Set<String> protectedMods, Versions versions,
+                KnownUses uses, Predicate<String> staying) {
+            this(nestedJars, builtIn, protectedMods, versions, uses, staying, mod -> false);
         }
 
         public Settings(NestedJars nestedJars, Set<String> builtIn, Set<String> protectedMods, Versions versions,
@@ -172,6 +177,13 @@ public final class SwitchPlanner {
                 }
             }
         }
+
+        coming.forEach((mod, reason) -> {
+            if (this.settings.gone().test(mod)) {
+                refusals.add(reason instanceof Reason.NeededBy needed
+                        ? new Refusal.MissingDependency(needed.mod(), mod) : new Refusal.NotInstalled(mod));
+            }
+        });
         refusals.addAll(this.findBreaks(coming.keySet(), off));
         if (!refusals.isEmpty()) {
             return new SwitchPlan(Direction.ON, List.of(), Map.of(), List.of(), List.copyOf(new LinkedHashSet<>(

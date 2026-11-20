@@ -246,6 +246,19 @@ public final class ModGraph {
         return shared;
     }
 
+    public SortedSet<String> findCarriedOnlyBy(String id, Set<String> others) {
+        SortedSet<String> going = new TreeSet<>();
+        Deque<String> next = new ArrayDeque<>(List.of(id));
+        while (!next.isEmpty()) {
+            String one = next.poll();
+            if (going.add(one)) {
+                next.addAll(this.getChildrenOf(one));
+            }
+        }
+        going.removeIf(one -> others.contains(one) || this.findTopContainers(one).stream().anyMatch(others::contains));
+        return going;
+    }
+
     private Set<String> findTopContainers(String id) {
         Set<String> tops = new TreeSet<>();
         Set<String> seen = new HashSet<>();

@@ -219,6 +219,7 @@ final class EngineStart {
         ModPolicy.setSeenUses(new SeenUses(FabricLoader.getInstance().getConfigDir().resolve("hotwire/uses.json"),
                 id -> installed.find(id).map(ModManifest::version).orElse(null)));
         ModPolicy.setStaying(applier::patchesLiveBackend);
+        ModPolicy.setGone(installed::isDeleted);
         laps.endLap("off checker, seen uses");
         ModTripwire tripwire = new ModTripwire(instrumentation, applier.getRebuilder(), classes::findLoaded);
         applier.addRider(tripwire.getRide());
