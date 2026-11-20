@@ -1,14 +1,12 @@
 package dev.moon.hotwire.add;
 
+import dev.moon.hotwire.registration.SodiumSettingsPages;
 import java.lang.reflect.Field;
 import java.lang.reflect.Method;
 import java.util.ArrayList;
-import java.util.Collection;
-import java.util.Comparator;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
-import java.util.function.Function;
 import java.util.function.Supplier;
 import net.fabricmc.loader.api.FabricLoader;
 import net.fabricmc.loader.api.ModContainer;
@@ -25,11 +23,6 @@ public final class HostLists {
     private static final String MULTIMAP = "com.google.common.collect.Multimap";
     private static final String SODIUM = "net.caffeinemc.mods.sodium.client.config.ConfigManager";
     private static final String SODIUM_KEY = "sodium:config_api_user";
-    private static final String SODIUM_BUILDER = "net.caffeinemc.mods.sodium.client.config.builder.ConfigBuilderImpl";
-    private static final String SODIUM_USER = "net.caffeinemc.mods.sodium.api.config.ConfigEntryPoint";
-    private static final String SODIUM_BUILDER_API = "net.caffeinemc.mods.sodium.api.config.structure.ConfigBuilder";
-    private static final String SODIUM_CONFIG = "net.caffeinemc.mods.sodium.client.config.structure.Config";
-    private static final String SODIUM_PAGE = "net.caffeinemc.mods.sodium.client.config.structure.ModOptions";
     private static final String VOICE_PLUGINS = "de.maxhenkel.voicechat.plugins.PluginManager";
     private static final String VOICE_PLUGIN = "de.maxhenkel.voicechat.api.VoicechatPlugin";
     private static final String VOICE_API = "de.maxhenkel.voicechat.api.VoicechatApi";
@@ -171,42 +164,21 @@ public final class HostLists {
         }
         for (EntrypointContainer<Object> entry : findEntrypoints(SODIUM_KEY, id)) {
             try {
-                Object built = manager.getField("CONFIG").get(null);
-                if (built == null) {
+                if (manager.getField("CONFIG").get(null) == null) {
                     return;
                 }
                 Object made = entry.getEntrypoint();
-                Class<?> builderType = Class.forName(SODIUM_BUILDER, true, game);
-                Object builder = builderType.getConstructor(Function.class, String.class)
-                        .newInstance(read(manager, "modInfoFunction"), id);
-                Class.forName(SODIUM_USER, true, game)
-                        .getMethod("registerConfigLate", Class.forName(SODIUM_BUILDER_API, true, game))
-                        .invoke(made, builder);
-                Class<?> config = Class.forName(SODIUM_CONFIG, true, game);
-                Method configId = Class.forName(SODIUM_PAGE, true, game).getMethod("configId");
-                Method name = Class.forName(SODIUM_PAGE, true, game).getMethod("name");
-                List<Object> pages = new ArrayList<>((List<?>) config.getMethod("getModOptions").invoke(built));
-
-                Collection<String> replaced = FabricLoader.getInstance().getModContainer(id)
-                        .map(container -> container.getMetadata().getProvides()).orElse(List.of());
-                pages.removeIf(page -> replaced.contains(String.valueOf(invoke(configId, page))));
-                List<Object> ids = new ArrayList<>();
-                for (Object page : pages) {
-                    ids.add(configId.invoke(page));
-                }
-                for (Object page : (Collection<?>) builderType.getMethod("build").invoke(builder)) {
-                    if (!ids.contains(configId.invoke(page))) {
-                        pages.add(page);
-                    }
-                }
-                List<Object> rest = new ArrayList<>(pages.subList(1, pages.size()));
-                rest.sort(Comparator.comparing(page -> String.valueOf(invoke(name, page))));
-                rest.addFirst(pages.getFirst());
-                Object settings = config.getConstructor(List.class).newInstance(rest);
                 manager.getMethod("registerConfigEntryPoint", Supplier.class, String.class)
                         .invoke(null, (Supplier<Object>) () -> made, id);
-                manager.getField("CONFIG").set(null, settings);
-                LOGGER.info("[Hotwire] {}'s page is in Sodium's video settings", id);
+
+                Set<String> replaced = FabricLoader.getInstance().getModContainer(id)
+                        .map(container -> Set.copyOf(container.getMetadata().getProvides())).orElse(Set.of());
+                if (SodiumSettingsPages.buildAgain(replaced)) {
+                    LOGGER.info("[Hotwire] {}'s page is in Sodium's video settings", id);
+                } else {
+                    LOGGER.warn("[Hotwire] {}'s page could not join Sodium's video settings; it shows there after a"
+                            + " restart", id);
+                }
             } catch (ReflectiveOperationException | RuntimeException | LinkageError e) {
                 LOGGER.warn("[Hotwire] {}'s page could not join Sodium's video settings; it shows there after a"
                         + " restart", id, e);
@@ -239,13 +211,5 @@ public final class HostLists {
     @SuppressWarnings("unchecked")
     private static Map<String, Object> readMap(Class<?> owner, String field) throws ReflectiveOperationException {
         return (Map<String, Object>) read(owner, field);
-    }
-
-    private static @Nullable Object invoke(Method method, Object on) {
-        try {
-            return method.invoke(on);
-        } catch (ReflectiveOperationException e) {
-            return "";
-        }
     }
 }

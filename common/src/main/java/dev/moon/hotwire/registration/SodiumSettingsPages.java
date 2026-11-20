@@ -101,7 +101,7 @@ public final class SodiumSettingsPages {
     }
 
     @SuppressWarnings("unchecked")
-    private static boolean buildAgain(Set<String> going) {
+    public static boolean buildAgain(Set<String> going) {
         Class<?> manager = findManager();
         if (manager == null) {
             return false;
