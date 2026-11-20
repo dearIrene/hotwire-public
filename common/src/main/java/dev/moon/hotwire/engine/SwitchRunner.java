@@ -563,6 +563,10 @@ public final class SwitchRunner {
             List<String> stayed = wired.stream().filter(id -> !done.plan().order().contains(id)).toList();
             if (!stayed.isEmpty()) {
                 this.tripwire.unwire(stayed);
+
+                if (leaves) {
+                    this.units.restoreContent(stayed);
+                }
             }
             ElementLook.checkAfterOff(this.fieldReferences, done.plan().order(), this.switcher::isOn);
         }
@@ -678,6 +682,7 @@ public final class SwitchRunner {
             Deque<Consumer<List<String>>> undo = new ConcurrentLinkedDeque<>();
             Runnable dropPutBack = () -> { };
             boolean toReopen = !coming.isRefused() && this.switcher.isOnForReopen(coming.order());
+            boolean contentBack = false;
             if (!coming.isRefused() && !toReopen) {
                 this.tripwire.offerDisarm(coming.order());
 
@@ -695,7 +700,8 @@ public final class SwitchRunner {
                 undo.push(this.units::takeOutPlugins);
                 SwitchTimes.mark("plugins back");
 
-                if (this.units.isContentOut(coming.order())) {
+                contentBack = this.units.isContentOut(coming.order());
+                if (contentBack) {
                     this.units.restoreContent(coming.order());
                     undo.push(this.units::removeContent);
                     SwitchTimes.mark("content back");
@@ -734,6 +740,10 @@ public final class SwitchRunner {
                         this.takeOutAgain(stillOff);
                         return null;
                     });
+
+                    if (contentBack) {
+                        this.units.removeContent(stillOff);
+                    }
                 } else {
                     for (Consumer<List<String>> one = undo.poll(); one != null; one = undo.poll()) {
                         one.accept(stillOff);
@@ -823,8 +833,7 @@ public final class SwitchRunner {
             this.reloads.reloadResources(done.applied().newlyBuilt(), done.plan().order(), off);
 
             long flips = HandlerGuards.getChunkFlips();
-            boolean colors = this.fieldReferences.takeChunkTablesChanged();
-            if (flips != this.flipsSeen || colors) {
+            if (flips != this.flipsSeen) {
                 this.units.redrawChunks();
             }
             this.flipsSeen = flips;

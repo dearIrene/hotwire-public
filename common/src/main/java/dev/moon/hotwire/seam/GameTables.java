@@ -13,4 +13,7 @@ public interface GameTables {
     default boolean isDrawnIntoChunks(Object container) {
         return false;
     }
+
+    default void redrawChunks() {
+    }
 }

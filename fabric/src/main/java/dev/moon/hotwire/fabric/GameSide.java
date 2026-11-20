@@ -149,8 +149,25 @@ public final class GameSide implements Game {
 
     @Override
     public GameTables getTables() {
-        return GameColors.TABLES;
+        return TABLES;
     }
+
+    private static final GameTables TABLES = new GameTables() {
+        @Override
+        public @Nullable Object findGameDefault(Object container, Object place) {
+            return GameColors.findDefault(container, place);
+        }
+
+        @Override
+        public boolean isDrawnIntoChunks(Object container) {
+            return GameColors.isTable(container);
+        }
+
+        @Override
+        public void redrawChunks() {
+            ChunkRedraw.run();
+        }
+    };
 
     @Override
     public Iterable<?> getCreativeTabs() {

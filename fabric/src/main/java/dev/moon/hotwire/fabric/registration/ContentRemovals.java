@@ -10,6 +10,7 @@ import java.util.Collection;
 import java.util.HashMap;
 import java.util.HashSet;
 import java.util.IdentityHashMap;
+import java.util.Iterator;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
@@ -37,7 +38,10 @@ public final class ContentRemovals {
     private static Map<String, List<OutEntry<?>>> out = Map.of();
     private static IdentityHashMap<Object, String> outObjects = new IdentityHashMap<>();
 
-    private static Map<String, Map<Block, Item>> standIns = Map.of();
+    private static Map<String, Map<Block, Swap>> standIns = Map.of();
+
+    private record Swap(Item was, @Nullable Item put) {
+    }
 
     private static Set<String> back = Set.of();
 
@@ -45,6 +49,12 @@ public final class ContentRemovals {
     }
 
     private ContentRemovals() {
+    }
+
+    private static long changes;
+
+    public static synchronized long getChanges() {
+        return changes;
     }
 
     public static boolean isPossible() {
@@ -57,6 +67,7 @@ public final class ContentRemovals {
 
     private static void setOut(Map<String, List<OutEntry<?>>> next) {
         out = Map.copyOf(next);
+        changes++;
         IdentityHashMap<Object, String> all = new IdentityHashMap<>();
         out.forEach((mod, entries) -> {
             for (OutEntry<?> entry : entries) {
@@ -124,6 +135,7 @@ public final class ContentRemovals {
         return count;
     }
 
+    @SuppressWarnings("ReferenceEquality")
     public static synchronized int restore(Collection<String> mods) {
         Map<String, List<OutEntry<?>>> next = new HashMap<>(out);
         Map<MappedRegistry<?>, List<OutEntry<?>>> byRegistry = new HashMap<>();
@@ -138,11 +150,15 @@ public final class ContentRemovals {
         for (List<OutEntry<?>> entries : byRegistry.values()) {
             restored += restoreTo(entries);
         }
-        Map<String, Map<Block, Item>> standing = new HashMap<>(standIns);
+        Map<String, Map<Block, Swap>> standing = new HashMap<>(standIns);
         for (String mod : mods) {
-            Map<Block, Item> was = standing.remove(mod);
+            Map<Block, Swap> was = standing.remove(mod);
             if (was != null) {
-                Item.BY_BLOCK.putAll(was);
+                was.forEach((block, swap) -> {
+                    if (Item.BY_BLOCK.get(block) == swap.put()) {
+                        Item.BY_BLOCK.put(block, swap.was());
+                    }
+                });
             }
         }
         standIns = Map.copyOf(standing);
@@ -164,20 +180,27 @@ public final class ContentRemovals {
                 blockItem.registerBlocks(rule, item);
             }
         }
-        Map<String, Map<Block, Item>> standing = new HashMap<>(standIns);
+        Map<String, Map<Block, Swap>> standing = new HashMap<>(standIns);
         int put = 0;
-        for (Map.Entry<Block, Item> entry : Item.BY_BLOCK.entrySet()) {
+        for (Iterator<Map.Entry<Block, Item>> entries = Item.BY_BLOCK.entrySet().iterator(); entries.hasNext();) {
+            Map.Entry<Block, Item> entry = entries.next();
             String mod = outObjects.get(entry.getValue());
-            Item game = rule.get(entry.getKey());
-            if (mod != null && game != null && !outObjects.containsKey(entry.getKey())) {
-                standing.computeIfAbsent(mod, any -> new HashMap<>()).put(entry.getKey(), entry.getValue());
-                entry.setValue(game);
-                put++;
+            if (mod == null || outObjects.containsKey(entry.getKey())) {
+                continue;
             }
+            Item game = rule.get(entry.getKey());
+            standing.computeIfAbsent(mod, any -> new HashMap<>()).put(entry.getKey(), new Swap(entry.getValue(), game));
+
+            if (game == null) {
+                entries.remove();
+            } else {
+                entry.setValue(game);
+            }
+            put++;
         }
         standIns = Map.copyOf(standing);
         if (put > 0) {
-            LOGGER.info("[Hotwire] {} of the game's blocks have their own item again in Item.BY_BLOCK", put);
+            LOGGER.info("[Hotwire] {} blocks have the item of the registries again in Item.BY_BLOCK", put);
         }
     }
 
@@ -190,8 +213,10 @@ public final class ContentRemovals {
         int count = 0;
         for (int at = byId.size() - 1; at >= 0; at--) {
             Holder.Reference<T> holder = byId.get(at);
-            String owner = WorldContent.findOwner(InternedKeys.findIdOf(holder.key()), holder.value());
-            if (owner == null || !mods.contains(owner)) {
+            Identifier id = InternedKeys.findIdOf(holder.key());
+            String owner = WorldContent.findOwner(id, holder.value());
+
+            if (owner == null || !mods.contains(owner) || "minecraft".equals(id.getNamespace())) {
                 continue;
             }
             byId.remove(at);

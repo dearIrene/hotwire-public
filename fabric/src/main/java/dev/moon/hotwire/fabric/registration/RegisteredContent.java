@@ -15,7 +15,7 @@ public final class RegisteredContent {
     }
 
     public static long findSizes() {
-        long size = BuiltInRegistries.REGISTRY.size();
+        long size = BuiltInRegistries.REGISTRY.size() * 31L + ContentRemovals.getChanges();
         for (Registry<?> registry : BuiltInRegistries.REGISTRY) {
             size = size * 31 + registry.size();
         }

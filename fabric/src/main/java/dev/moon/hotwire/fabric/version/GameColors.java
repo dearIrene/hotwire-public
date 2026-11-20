@@ -2,7 +2,6 @@ package dev.moon.hotwire.fabric.version;
 
 import dev.moon.hotwire.fabric.mixin.core.client.color.block.BlockColorsAccessor;
 import dev.moon.hotwire.registration.Owners;
-import dev.moon.hotwire.seam.GameTables;
 import java.lang.reflect.Field;
 import java.lang.reflect.Modifier;
 import java.util.ArrayList;
@@ -15,25 +14,16 @@ import java.util.Set;
 import net.minecraft.client.Minecraft;
 import net.minecraft.client.color.block.BlockColors;
 import org.jspecify.annotations.Nullable;
-//? if <26.1 {
+//? if >=26.1 {
+import net.minecraft.client.color.block.BlockTintSource;
+import net.minecraft.world.level.block.Block;
+//?} else {
 /*import dev.moon.hotwire.fabric.mixin.core.core.IdMapperAccessor;
 *///?}
 
 public final class GameColors {
     private GameColors() {
     }
-
-    public static final GameTables TABLES = new GameTables() {
-        @Override
-        public @Nullable Object findGameDefault(Object container, Object place) {
-            return findDefault(container, place);
-        }
-
-        @Override
-        public boolean isDrawnIntoChunks(Object container) {
-            return isTable(container);
-        }
-    };
 
     private static final ThreadLocal<BlockColors @Nullable []> MAKING = new ThreadLocal<>();
 
@@ -68,7 +58,11 @@ public final class GameColors {
         if (foundIn != running) {
             Set<Object> found = Collections.newSetFromMap(new IdentityHashMap<>());
             for (Object value : readFields(running)) {
-                if (value instanceof Collection<?> || value instanceof Map<?, ?>) {
+                if (value instanceof Map<?, ?> map) {
+                    found.add(value);
+
+                    map.values().stream().filter(one -> one instanceof List<?>).forEach(found::add);
+                } else if (value instanceof Collection<?>) {
                     found.add(value);
                 } else if (value != null) {
                     readFields(value).stream().filter(one -> one instanceof Collection<?> || one instanceof Map<?, ?>)
@@ -95,28 +89,53 @@ public final class GameColors {
         return values;
     }
 
+    private static @Nullable BlockColors fresh;
+
     @SuppressWarnings("ReferenceEquality")
-    public static @Nullable Object findDefault(Object container, Object place) {
+    public static synchronized @Nullable Object findDefault(Object container, Object place) {
         BlockColors running = Minecraft.getInstance().getBlockColors();
-        if (running == null) {
+        if (running == null || !isTable(container)) {
             return null;
         }
+        for (int tries = 0; tries < 2; tries++) {
+            BlockColors made = fresh;
+            if (made == null || tries > 0) {
+                made = makeDefault();
+                fresh = made;
+            }
+            Object found = made == null ? null : findIn(running, made, container, place);
+            if (found != null) {
+                return found;
+            }
+        }
+        return null;
+    }
+
+    @SuppressWarnings("ReferenceEquality")
+    private static @Nullable Object findIn(BlockColors running, BlockColors made, Object container, Object place) {
         //? if >=26.1 {
-        if (container != ((BlockColorsAccessor) running).hotwire$getColors()) {
-            return null;
+        Map<Block, List<BlockTintSource>> colors = ((BlockColorsAccessor) running).hotwire$getColors();
+        Map<Block, List<BlockTintSource>> fromGame = ((BlockColorsAccessor) made).hotwire$getColors();
+        if (container == colors) {
+            List<?> own = fromGame.get(place);
+            return own != null && own.stream().allMatch(one -> Owners.isGameOwn(one.getClass())) ? own : null;
         }
-        BlockColors fresh = makeDefault();
-        List<?> made = fresh == null ? null : ((BlockColorsAccessor) fresh).hotwire$getColors().get(place);
-        return made != null && made.stream().allMatch(one -> Owners.isGameOwn(one.getClass())) ? made
-                : null;
+
+        for (Map.Entry<Block, List<BlockTintSource>> entry : colors.entrySet()) {
+            if (entry.getValue() == container && place instanceof Integer number) {
+                List<?> own = fromGame.get(entry.getKey());
+                Object one = own == null || number >= own.size() ? null : own.get(number);
+                return one != null && Owners.isGameOwn(one.getClass()) ? one : null;
+            }
+        }
+        return null;
         //?} else {
-        /*if (container != ((IdMapperAccessor) ((BlockColorsAccessor) running).hotwire$getColors()).hotwire$getById()
-                || !(place instanceof Integer number)) {
+        /*Object byNumber = ((IdMapperAccessor) ((BlockColorsAccessor) running).hotwire$getColors()).hotwire$getById();
+        if (container != byNumber || !(place instanceof Integer number)) {
             return null;
         }
-        BlockColors fresh = makeDefault();
-        Object made = fresh == null ? null : ((BlockColorsAccessor) fresh).hotwire$getColors().byId(number);
-        return made != null && Owners.isGameOwn(made.getClass()) ? made : null;
+        Object one = ((BlockColorsAccessor) made).hotwire$getColors().byId(number);
+        return one != null && Owners.isGameOwn(one.getClass()) ? one : null;
         *///?}
     }
 }

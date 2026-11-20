@@ -320,6 +320,10 @@ final class ElementOwners {
         return mod != null ? mod : Wrappers.findNamed(key, element, this.names);
     }
 
+    boolean isOut(Object value) {
+        return this.out.containsKey(value);
+    }
+
     boolean isAmong(String mod) {
         return this.modSet.contains(mod);
     }

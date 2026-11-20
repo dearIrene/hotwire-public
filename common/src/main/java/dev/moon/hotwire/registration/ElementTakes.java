@@ -309,7 +309,7 @@ final class ElementTakes {
 
     @SuppressWarnings("ReferenceEquality")
     static void takeOrUnwrapInList(List<Object> items, Object item, String mod, List<Removal> out) {
-        Object inner = findWrappedValue(item, mod);
+        Object inner = hasEmptyPlace(items, -1) ? findWrappedValue(item, mod) : null;
         if (inner == null) {
             takeFromList(items, item, out);
             return;
@@ -329,7 +329,7 @@ final class ElementTakes {
         for (int index = items.size() - 1; index >= 0; index--) {
             if (items.get(index) == item) {
                 boolean inPlace = hasEmptyPlace(items, index);
-                Object game = inPlace ? Games.getNow().getTables().findGameDefault(items, index) : null;
+                Object game = Games.getNow().getTables().findGameDefault(items, index);
                 if (game != null) {
                     items.set(index, game);
                     out.add(new Removal.InListPlace(items, index, item, game));
