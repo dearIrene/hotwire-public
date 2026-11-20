@@ -48,6 +48,9 @@ public final class EarlyDefinitions implements PreLaunchEntrypoint {
 
     @Override
     public void onPreLaunch() {
+        if (!LaunchSupport.isFabricOwn()) {
+            return;
+        }
         StartTimes.mark("Hotwire's pre-launch begins");
         long began = System.nanoTime();
         makeOnce(true);

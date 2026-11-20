@@ -8,6 +8,9 @@ import net.minecraft.client.gui.screens.Screen;
 public final class ModMenuEntry implements ModMenuApi {
     @Override
     public ConfigScreenFactory<?> getModConfigScreenFactory() {
+        if (!LaunchSupport.isFabricOwn()) {
+            return parent -> null;
+        }
         String slice = FamilySlices.findRunning();
         if (slice != null && slice.isEmpty()) {
             return parent -> null;

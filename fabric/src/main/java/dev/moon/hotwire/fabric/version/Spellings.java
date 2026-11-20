@@ -14,6 +14,7 @@ import net.fabricmc.loader.api.ModContainer;
 import net.minecraft.client.KeyMapping;
 import net.minecraft.client.Minecraft;
 import net.minecraft.client.gui.components.ChatComponent;
+import net.minecraft.client.gui.components.toasts.SystemToast;
 import net.minecraft.client.gui.screens.Overlay;
 import net.minecraft.client.gui.screens.Screen;
 import net.minecraft.client.gui.screens.inventory.tooltip.ClientTooltipComponent;
@@ -223,6 +224,16 @@ public final class Spellings {
         mapping.setKey(InputConstants.Type.KEYBOARD.getOrCreate(code));
         //?} else {
         /*mapping.setKey(InputConstants.Type.KEYSYM.getOrCreate(code));
+        *///?}
+    }
+
+    public static void addSystemToast(Minecraft client, Component title, Component body) {
+        //? if >=26.2 {
+        SystemToast.addOrUpdate(client.gui.toastManager(), SystemToast.SystemToastId.PACK_LOAD_FAILURE, title, body);
+        //?} else if >=1.21.4 {
+        /*SystemToast.addOrUpdate(client.getToastManager(), SystemToast.SystemToastId.PACK_LOAD_FAILURE, title, body);
+        *///?} else {
+        /*SystemToast.addOrUpdate(client.getToasts(), SystemToast.SystemToastId.PACK_LOAD_FAILURE, title, body);
         *///?}
     }
 
