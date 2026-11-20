@@ -209,7 +209,7 @@ final class DuckRebridge {
                 if (done != null) {
                     done.addAll(this.ridingMoved);
                 }
-            } catch (RebuildException | RuntimeException | LinkageError e) {
+            } catch (RuntimeException | LinkageError e) {
                 LOGGER.error("[Hotwire] Loaded classes could not be bridged to the new ducks {} and moved methods {}",
                         this.ridingDucks, this.ridingMoved, e);
             } finally {
@@ -268,28 +268,37 @@ final class DuckRebridge {
         }
     }
 
-    private static void redefineEachIfRefused(ClassRebuilder rebuilder, Map<Class<?>, byte[]> bridged)
-            throws RebuildException {
-        try {
-            rebuilder.redefine(bridged);
-            return;
-        } catch (RebuildException batch) {
-            LOGGER.warn("[Hotwire] the JVM refused the bridged classes as a batch; each goes alone: {}",
-                    batch.getMessage());
-        }
+    private static void redefineEachIfRefused(ClassRebuilder rebuilder, Map<Class<?>, byte[]> bridged) {
         List<String> refused = new ArrayList<>();
-        for (Map.Entry<Class<?>, byte[]> entry : bridged.entrySet()) {
-            try {
-                rebuilder.redefine(Map.of(entry.getKey(), entry.getValue()));
-            } catch (RebuildException e) {
-                refused.add(entry.getKey().getName() + " (" + e.getCause() + ")");
-                dumpRefused(entry.getKey().getName(), entry.getValue());
-            }
-        }
+        redefineHalves(rebuilder, List.copyOf(bridged.entrySet()), refused, true);
         if (!refused.isEmpty()) {
             LOGGER.error("[Hotwire] {} loaded classes could not be bridged and keep their old calls: {}",
                     refused.size(), refused.stream().limit(8).toList());
         }
+    }
+
+    private static void redefineHalves(ClassRebuilder rebuilder, List<Map.Entry<Class<?>, byte[]>> part,
+            List<String> refused, boolean whole) {
+        Map<Class<?>, byte[]> classes = new LinkedHashMap<>();
+        part.forEach(entry -> classes.put(entry.getKey(), entry.getValue()));
+        try {
+            rebuilder.redefine(classes);
+            return;
+        } catch (RebuildException e) {
+            if (whole) {
+                LOGGER.warn("[Hotwire] the JVM refused the bridged classes as a batch; its halves go alone: {}",
+                        e.getMessage());
+            }
+            if (part.size() == 1) {
+                Map.Entry<Class<?>, byte[]> one = part.getFirst();
+                refused.add(one.getKey().getName() + " (" + e.getCause() + ")");
+                dumpRefused(one.getKey().getName(), one.getValue());
+                return;
+            }
+        }
+        int half = part.size() / 2;
+        redefineHalves(rebuilder, part.subList(0, half), refused, false);
+        redefineHalves(rebuilder, part.subList(half, part.size()), refused, false);
     }
 
     private static void dumpRefused(String name, byte[] bytes) {

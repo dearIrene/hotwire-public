@@ -1,6 +1,7 @@
 package dev.moon.hotwire.redefine;
 
 import dev.moon.hotwire.classfile.ClassNodes;
+import java.util.Map;
 import java.util.Set;
 import org.objectweb.asm.ClassReader;
 import org.objectweb.asm.ClassWriter;
@@ -63,9 +64,12 @@ public final class DuckBridge {
                 return true;
             }
 
-            if (tag == 12 && !moved.isEmpty()
-                    && moved.contains(reader.readUTF8(offset, buffer) + reader.readUTF8(offset + 2, buffer))) {
-                return true;
+            if ((tag == 10 || tag == 11) && !moved.isEmpty()) {
+                int member = reader.getItem(reader.readUnsignedShort(offset + 2));
+                String method = reader.readUTF8(member, buffer) + reader.readUTF8(member + 2, buffer);
+                if (moved.contains(method) && canReach(reader.readClass(offset, buffer), method)) {
+                    return true;
+                }
             }
 
             if (tag == 16 && !ducks.isEmpty() && namesAny(reader.readUTF8(offset, buffer), ducks)) {
@@ -184,7 +188,8 @@ public final class DuckBridge {
                 case InvokeDynamicInsnNode lambda when isDuckLambda(lambda, ducks) -> lambda.bsm = DUCK_LAMBDA;
 
                 case MethodInsnNode call when !self.equals(call.owner) && call.getOpcode() == Opcodes.INVOKESPECIAL
-                        && !call.name.equals("<init>") && moved.contains(call.name + call.desc) -> {
+                        && !call.name.equals("<init>") && moved.contains(call.name + call.desc)
+                        && canReach(call.owner, call.name + call.desc) -> {
                     method.instructions.set(insn, new InvokeDynamicInsnNode(call.name,
                             "(L" + self + ";" + call.desc.substring(1), MOVED_SUPER, call.owner, call.name,
                             call.desc));
@@ -192,13 +197,45 @@ public final class DuckBridge {
                 case MethodInsnNode call when !self.equals(call.owner)
                         && (call.getOpcode() == Opcodes.INVOKEVIRTUAL || call.getOpcode() == Opcodes.INVOKESTATIC
                         || call.getOpcode() == Opcodes.INVOKEINTERFACE)
-                        && moved.contains(call.name + call.desc) -> {
+                        && moved.contains(call.name + call.desc)
+                        && canReach(call.owner, call.name + call.desc) -> {
                     method.instructions.set(insn, makeMovedCall(call));
                 }
                 default -> {
                 }
             }
         }
+    }
+
+    static boolean canReach(String owner, String method) {
+        return owner.startsWith("java/") ? canReach(owner, method, Linker.getMovedByTarget()) : isFound(owner);
+    }
+
+    private static boolean isFound(String owner) {
+        ClassLoader loader = DuckBridge.class.getClassLoader();
+        return loader == null || loader.getResource(owner + ".class") != null;
+    }
+
+    static boolean canReach(String owner, String method, Map<Class<?>, Set<String>> movedByTarget) {
+        if (!owner.startsWith("java/")) {
+            return true;
+        }
+        Class<?> type;
+        try {
+            type = Class.forName(owner.replace('/', '.'), false, null);
+        } catch (ClassNotFoundException | LinkageError e) {
+            return true;
+        }
+        boolean inSidecar = false;
+        for (Map.Entry<Class<?>, Set<String>> target : movedByTarget.entrySet()) {
+            if (target.getValue().contains(method)) {
+                inSidecar = true;
+                if (type.isAssignableFrom(target.getKey())) {
+                    return true;
+                }
+            }
+        }
+        return !inSidecar;
     }
 
     static InvokeDynamicInsnNode makeMovedCall(MethodInsnNode call) {
