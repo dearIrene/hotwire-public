@@ -182,6 +182,26 @@ public sealed interface Removal {
         }
     }
 
+    record InListPlace(List<Object> list, int index, Object mods, Object inner) implements Removal {
+        @Override
+        public Object container() {
+            return this.list;
+        }
+
+        @Override
+        @SuppressWarnings("ReferenceEquality")
+        public void restore() {
+            if (this.index < this.list.size() && this.list.get(this.index) == this.inner) {
+                this.list.set(this.index, this.mods);
+            }
+        }
+
+        @Override
+        public String describe() {
+            return "a list's place (" + this.mods.getClass().getSimpleName() + ")";
+        }
+    }
+
     record InMapValue(Map<Object, Object> map, Object key, Object mods, Object inner) implements Removal {
         @Override
         public Object container() {

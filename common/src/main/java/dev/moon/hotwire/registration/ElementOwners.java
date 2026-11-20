@@ -300,8 +300,15 @@ final class ElementOwners {
     }
 
     @Nullable String findOwnerOfEntry(@Nullable Object key, @Nullable Object element, boolean inSmall) {
-        if ((key != null && this.registered.contains(key)) || (element != null && this.registered.contains(element))) {
+        if (element != null && this.registered.contains(element)) {
             return null;
+        }
+        if (key != null && this.registered.contains(key)) {
+            if (element == null) {
+                return null;
+            }
+            String mod = this.findOwnerAmong(element);
+            return mod != null && ElementTakes.findWrappedValue(element, mod) != null ? mod : null;
         }
         if (this.isStayingModsType(key)) {
             return element == null ? null : this.findOwnOwner(element);

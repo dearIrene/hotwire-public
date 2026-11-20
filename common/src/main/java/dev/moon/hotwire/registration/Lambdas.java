@@ -5,6 +5,7 @@ import dev.moon.hotwire.redefine.FieldSlots;
 import dev.moon.hotwire.redefine.Linker;
 import java.lang.instrument.Instrumentation;
 import java.lang.reflect.Method;
+import java.util.Map;
 import java.util.Optional;
 import org.jspecify.annotations.Nullable;
 import org.objectweb.asm.Type;
@@ -78,11 +79,16 @@ public final class Lambdas {
     static @Nullable Object findWrapped(Object lambda, Class<?> type, String mod) {
         Object found = null;
         for (FieldSlots.Slot field : Fields.getDeclared(lambda.getClass())) {
-            if (field.isStatic() || !type.isAssignableFrom(field.getType())) {
+            boolean entry = Map.Entry.class.isAssignableFrom(field.getType());
+            if (field.isStatic() || (!entry && !type.isAssignableFrom(field.getType()))) {
                 continue;
             }
             try {
                 Object value = field.get(lambda);
+                if (entry) {
+                    value = value instanceof Map.Entry<?, ?> one && type.isInstance(one.getValue()) ? one.getValue()
+                            : null;
+                }
                 if (value != null && !mod.equals(Owners.findModOf(value.getClass()))) {
                     if (found != null) {
                         return null;

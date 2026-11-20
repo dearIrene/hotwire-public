@@ -308,6 +308,23 @@ final class ElementTakes {
     }
 
     @SuppressWarnings("ReferenceEquality")
+    static void takeOrUnwrapInList(List<Object> items, Object item, String mod, List<Removal> out) {
+        Object inner = findWrappedValue(item, mod);
+        if (inner == null) {
+            takeFromList(items, item, out);
+            return;
+        }
+        for (int index = items.size() - 1; index >= 0; index--) {
+            if (items.get(index) == item) {
+                items.set(index, inner);
+                out.add(new Removal.InListPlace(items, index, item, inner));
+                LOGGER.info("[Hotwire] {} gave way to {} in {}", item.getClass().getName(), inner.getClass().getName(),
+                        items.getClass().getName());
+            }
+        }
+    }
+
+    @SuppressWarnings("ReferenceEquality")
     static void takeFromList(List<Object> items, Object item, List<Removal> out) {
         for (int index = items.size() - 1; index >= 0; index--) {
             if (items.get(index) == item) {
@@ -397,8 +414,12 @@ final class ElementTakes {
         Object inner = Lambdas.findWrapped(value, shape, mod);
         return inner == null || !shape.isInstance(inner) || (above != Object.class && !above.isInstance(inner))
                 || inner instanceof Collection<?> || inner instanceof Map<?, ?>
-                || Owners.findModOf(inner.getClass()) != null
+                || !isGameOwn(inner.getClass())
                 || mod.equals(Owners.findModOrShipper(inner.getClass())) ? null : inner;
+    }
+
+    private static boolean isGameOwn(Class<?> type) {
+        return GameNames.isGame(type.getName());
     }
 
     private static Class<?> findGameClassAbove(Class<?> type) {

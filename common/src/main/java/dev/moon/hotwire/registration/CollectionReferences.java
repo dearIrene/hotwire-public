@@ -998,7 +998,8 @@ final class CollectionReferences implements FixedLists.Walk {
                             this.takeOrNote(mod, this.candidates.find(item, this.inSmall),
                                     ElementTakes.askWeak(item, one -> this.owners.findOwnerOf(one, this.inSmall)),
                                     ElementTakes.makeWeak(items, item, (now, one, owner) ->
-                                            ElementTakes.takeFromList(now, one, this.getRemovalsOf(owner))), item,
+                                            ElementTakes.takeOrUnwrapInList(now, one, owner,
+                                                    this.getRemovalsOf(owner))), item,
                                     TakeReach.findCalledThrough(item));
                         } else if (item != null) {
                             this.followLambda(item);
