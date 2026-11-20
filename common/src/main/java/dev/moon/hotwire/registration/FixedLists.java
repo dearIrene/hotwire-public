@@ -2,6 +2,7 @@ package dev.moon.hotwire.registration;
 
 import com.google.common.collect.MapMaker;
 import dev.moon.hotwire.redefine.FieldSlots;
+import dev.moon.hotwire.seam.Games;
 import java.lang.ref.WeakReference;
 import java.util.ArrayList;
 import java.util.Collections;
@@ -158,6 +159,14 @@ final class FixedLists {
     }
 
     private static void writeValue(Walk walk, Map<Object, Object> entries, Object key, Plan plan) {
+        Object game = plan.out().isEmpty() ? null : Games.getNow().getTables().findGameDefault(entries, key);
+        Object was = entries.get(key);
+        if (game != null && was != null) {
+            entries.put(key, game);
+            walk.getRemovalsOf(plan.out().keySet().iterator().next()).add(new Removal.InMapValue(entries, key, was,
+                    game));
+            return;
+        }
         entries.put(key, walk.getFirstLists().findHolderList(plan.retained(), plan.first()));
         plan.out().forEach((mod, removed) -> walk.getRemovalsOf(mod).addAll(removed));
     }
