@@ -56,7 +56,7 @@ public final class CommandRecorder {
         String owner = findOwner(findModsRun(node), caller == null ? null : caller.mod());
 
         if (owner != null && !Tripwire.isWatched(owner) && !GameParts.getCommands().isGoingOff(owner)) {
-            LOGGER.info("[Hotwire] /{} journaled as {}'s, registered on {}", node.getName(), owner,
+            LOGGER.debug("[Hotwire] /{} journaled as {}'s, registered on {}", node.getName(), owner,
                     Thread.currentThread().getName());
             CommandDispatcher<?> client = ClientCommandInternals.getActiveDispatcher();
             RecorderSupport.recordAs(owner, node, new CommandRegistration(root, node.getName(), owner,

@@ -51,11 +51,13 @@ final class CommandRegistration implements Registration {
     }
 
     @Override
+    @SuppressWarnings("ReferenceEquality")
     public void remove() {
         CommandDispatcher<?> dispatcher = findActiveDispatcher(this.client);
         CommandNode<?> node = dispatcher == null ? null : this.findIn(dispatcher);
         if (dispatcher == null || node == null) {
-            CommandNode<?> there = dispatcher == null ? null : dispatcher.getRoot().getChild(this.name);
+            CommandNode<?> there = dispatcher == null || dispatcher.getRoot() != this.addedTo.get() ? null
+                    : dispatcher.getRoot().getChild(this.name);
             if (there != null) {
                 LOGGER.info("[Hotwire] /{} of {} is left in: the command of that name in use runs {}", this.name,
                         this.mod, CommandRecorder.findModsRun(there));
