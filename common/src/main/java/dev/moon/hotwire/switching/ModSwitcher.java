@@ -5,6 +5,7 @@ import dev.moon.hotwire.plan.ModGraph;
 import dev.moon.hotwire.plan.SwitchPlan;
 import dev.moon.hotwire.plan.SwitchPlanner;
 import dev.moon.hotwire.redefine.RebuildException;
+import dev.moon.hotwire.registration.Owners;
 import dev.moon.hotwire.registration.RegistrationJournal;
 import dev.moon.hotwire.report.Causes;
 import dev.moon.hotwire.ui.Lang;
@@ -30,6 +31,7 @@ import java.util.function.Function;
 import java.util.function.Predicate;
 import java.util.function.Supplier;
 import java.util.regex.Pattern;
+import java.util.stream.Collectors;
 import org.jspecify.annotations.Nullable;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -669,6 +671,19 @@ public final class ModSwitcher {
         return queue;
     }
 
+    private RebuildException tellNotFitting(RebuildException e) {
+        Map<Class<?>, Set<String>> notFitting = e.getNotFitting();
+        if (notFitting.isEmpty()) {
+            return e;
+        }
+        Map.Entry<Class<?>, Set<String>> first = notFitting.entrySet().iterator().next();
+        String owner = Owners.findModOf(first.getKey());
+        String patchers = first.getValue().stream().map(this::nameOf).collect(Collectors.joining(", "));
+        String said = Lang.get("hotwire.switch.not_fitting", patchers,
+                owner == null ? first.getKey().getSimpleName() : this.nameOf(owner));
+        return new RebuildException(said, e).withBlamed(e.getBlamedClasses()).withNotFitting(notFitting);
+    }
+
     private String nameOf(String id) {
         return this.graph.find(id).map(ModManifest::name).orElse(id);
     }
@@ -816,7 +831,7 @@ public final class ModSwitcher {
                 LOGGER.warn("[Hotwire] Switching {} {} failed and nothing changed", goingOff ? "off" : "on",
                         plan.order(), e);
             }
-            return new Result.Failed(plan, e);
+            return new Result.Failed(plan, this.tellNotFitting(e));
         } finally {
             this.progress.end();
         }

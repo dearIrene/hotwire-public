@@ -320,6 +320,7 @@
   "hotwire.find.skip.restart": "only goes off with a restart",
   "hotwire.find.stuck": "Not tested, these can't go off while the game runs: %s",
   "hotwire.switch.stayed_on": "These can't go off while the game runs so they stayed on: %s.",
+  "hotwire.switch.not_fitting": "%s doesn't work with the version of %s you have, and wouldn't after a restart either.",
   "hotwire.find.card": "Round %s of %s: is the problem still there?",
   "hotwire.find.card_detail": "Open Hotwire to answer.",
   "hotwire.find.more": "and %s more",

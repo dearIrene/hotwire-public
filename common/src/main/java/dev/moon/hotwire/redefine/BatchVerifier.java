@@ -4,14 +4,21 @@ import dev.moon.hotwire.classfile.ClassNodes;
 import java.lang.invoke.MethodHandles;
 import java.util.ArrayList;
 import java.util.HashSet;
+import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
+import java.util.TreeSet;
+import java.util.regex.Matcher;
+import java.util.regex.Pattern;
 import org.jspecify.annotations.Nullable;
 import org.objectweb.asm.ClassReader;
 import org.objectweb.asm.Opcodes;
 import org.objectweb.asm.Type;
+import org.objectweb.asm.tree.AbstractInsnNode;
 import org.objectweb.asm.tree.ClassNode;
+import org.objectweb.asm.tree.InvokeDynamicInsnNode;
+import org.objectweb.asm.tree.MethodInsnNode;
 import org.objectweb.asm.tree.MethodNode;
 import org.objectweb.asm.tree.analysis.Analyzer;
 import org.objectweb.asm.tree.analysis.AnalyzerException;
@@ -19,6 +26,8 @@ import org.objectweb.asm.tree.analysis.BasicValue;
 import org.objectweb.asm.tree.analysis.SimpleVerifier;
 
 final class BatchVerifier {
+    private static final Pattern HANDLER = Pattern.compile("^[A-Za-z]+[$][a-z0-9]+[$]([A-Za-z0-9_-]+)[$]");
+
     private BatchVerifier() {
     }
 
@@ -55,22 +64,12 @@ final class BatchVerifier {
         List<String> problems = new ArrayList<>();
         classes.forEach((type, bytes) -> {
             ClassNode node = ClassNodes.read(bytes, ClassReader.SKIP_DEBUG);
-            Type superType = node.superName == null ? null : Type.getObjectType(node.superName);
-            List<Type> interfaces = new ArrayList<>(node.interfaces.size());
-            for (String face : node.interfaces) {
-                interfaces.add(Type.getObjectType(face));
-            }
-            boolean isInterface = (node.access & Opcodes.ACC_INTERFACE) != 0;
             for (MethodNode method : node.methods) {
                 if (method.instructions.size() == 0) {
                     continue;
                 }
-                SimpleVerifier verifier = new SimpleVerifier(Opcodes.ASM9, Type.getObjectType(node.name), superType,
-                        interfaces, isInterface) {
-                };
-                verifier.setClassLoader(type.getClassLoader());
                 try {
-                    new Analyzer<BasicValue>(verifier).analyze(node.name, method);
+                    verify(type, node, method);
                 } catch (AnalyzerException | RuntimeException | LinkageError e) {
                     String at = e instanceof AnalyzerException refused && refused.node != null
                             ? " at instruction " + method.instructions.indexOf(refused.node) : "";
@@ -87,6 +86,51 @@ final class BatchVerifier {
             });
         }
         return problems;
+    }
+
+    private static void verify(Class<?> type, ClassNode node, MethodNode method) throws AnalyzerException {
+        Type superType = node.superName == null ? null : Type.getObjectType(node.superName);
+        List<Type> interfaces = new ArrayList<>(node.interfaces.size());
+        for (String face : node.interfaces) {
+            interfaces.add(Type.getObjectType(face));
+        }
+        SimpleVerifier verifier = new SimpleVerifier(Opcodes.ASM9, Type.getObjectType(node.name), superType,
+                interfaces, (node.access & Opcodes.ACC_INTERFACE) != 0) {
+        };
+        verifier.setClassLoader(type.getClassLoader());
+        new Analyzer<BasicValue>(verifier).analyze(node.name, method);
+    }
+
+    static Map<Class<?>, Set<String>> findNotFitting(Map<Class<?>, byte[]> mixed) {
+        Map<Class<?>, Set<String>> found = new LinkedHashMap<>();
+        mixed.forEach((type, bytes) -> {
+            ClassNode node = ClassNodes.read(bytes, ClassReader.SKIP_DEBUG);
+            for (MethodNode method : node.methods) {
+                String mod = method.instructions.size() == 0 ? null : findHandlerMod(findRefused(type, node, method));
+                if (mod != null) {
+                    found.computeIfAbsent(type, any -> new TreeSet<>()).add(mod);
+                }
+            }
+        });
+        return found;
+    }
+
+    private static @Nullable AbstractInsnNode findRefused(Class<?> type, ClassNode node, MethodNode method) {
+        try {
+            verify(type, node, method);
+            return null;
+        } catch (AnalyzerException e) {
+            return e.node;
+        } catch (RuntimeException | LinkageError e) {
+            return null;
+        }
+    }
+
+    static @Nullable String findHandlerMod(@Nullable AbstractInsnNode at) {
+        String name = at instanceof MethodInsnNode call ? call.name
+                : at instanceof InvokeDynamicInsnNode dynamic ? dynamic.name : null;
+        Matcher handler = name == null ? null : HANDLER.matcher(name);
+        return handler != null && handler.find() ? handler.group(1) : null;
     }
 
     static @Nullable String findJvmProblem(Class<?> type, byte[] bytes) {

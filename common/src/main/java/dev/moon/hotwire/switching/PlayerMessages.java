@@ -34,6 +34,9 @@ public final class PlayerMessages {
             case ModSwitcher.Result.Failed failed when failed.cause().isRestartOnly() -> Lang.get(off
                     ? "hotwire.switch.next_start_off" : "hotwire.switch.next_start_on",
                     joinNames(listAskedFirst(failed.plan()), nameOf));
+
+            case ModSwitcher.Result.Failed failed when !failed.cause().getNotFitting().isEmpty() ->
+                    String.valueOf(failed.cause().getMessage());
             case ModSwitcher.Result.Failed failed -> Lang.get(off ? "hotwire.switch.failed_off"
                     : "hotwire.switch.failed_on", joinNames(listAskedFirst(failed.plan()), nameOf),
                     String.valueOf(failed.cause().getMessage()).replaceFirst("[.]$", ""));

@@ -552,6 +552,7 @@ public final class ClassRebuilder {
             }
             String why = e.getMessage();
             Set<String> named = Set.of();
+            Map<Class<?>, Set<String>> notFitting = Map.of();
             if (e instanceof VerifyError) {
                 Map<Class<?>, byte[]> made = new LinkedHashMap<>();
                 definitions.forEach(definition -> made.put(definition.getDefinitionClass(),
@@ -560,6 +561,19 @@ public final class ClassRebuilder {
                 LOGGER.warn("[Hotwire] The JVM would not verify the new classes: {}", problems);
                 why = problems.isEmpty() ? "a class did not verify" : problems.getFirst();
                 named = BatchVerifier.findNamed(made.keySet(), problems);
+
+                Map<Class<?>, byte[]> plain = new LinkedHashMap<>();
+                made.keySet().forEach(type -> {
+                    byte[] mixedBytes = prepared.mixed().get(Type.getInternalName(type));
+                    if (mixedBytes != null) {
+                        plain.put(type, mixedBytes);
+                    }
+                });
+                notFitting = BatchVerifier.findNotFitting(plain);
+                if (!notFitting.isEmpty()) {
+                    LOGGER.warn("[Hotwire] the plain mix fails the same check, at these mods' handlers: {}",
+                            notFitting);
+                }
             } else if (e instanceof ClassFormatError) {
                 Map<Class<?>, byte[]> made = new LinkedHashMap<>();
                 definitions.forEach(definition -> made.put(definition.getDefinitionClass(),
@@ -581,7 +595,7 @@ public final class ClassRebuilder {
             }
             LOGGER.warn("[Hotwire] Redefining {} failed and nothing changed", prepared.splits().keySet(), e);
             throw new RebuildException("could not redefine " + prepared.splits().keySet() + ": " + why, e)
-                    .withBlamed(named);
+                    .withBlamed(named).withNotFitting(notFitting);
         }
 
         Map<String, byte[]> mixedBefore = new HashMap<>(this.mixedNow);

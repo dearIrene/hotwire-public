@@ -8,7 +8,8 @@ final class FailureReports {
     }
 
     static boolean isUnplanned(Throwable cause) {
-        return !(cause instanceof RebuildException rebuild && (rebuild.reopenFixes() || rebuild.isRestartOnly()));
+        return !(cause instanceof RebuildException rebuild && (rebuild.reopenFixes() || rebuild.isRestartOnly()))
+                && !RebuildException.isNotFitting(cause);
     }
 
     @SuppressWarnings("FutureReturnValueIgnored")

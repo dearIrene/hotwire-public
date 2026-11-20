@@ -502,6 +502,11 @@ public final class UpdateSupport implements ModUpdater.Engine, ModAdder.CarriedL
     }
 
     private ModUpdater.Result queueInstead(Path jar, ModUpdater.Result.Failed failed) {
+        if (RebuildException.isNotFitting(failed.cause())) {
+            LOGGER.info("[Hotwire] not queued for the next start, the patch would not fit there either: {}",
+                    failed.reason());
+            return failed;
+        }
         LOGGER.info("[Hotwire] in place failed, queued for the next start instead: {}", failed.reason());
         ModUpdater.Result queued = this.updater.update(jar, UpdateMethod.NEXT_START);
         return queued instanceof ModUpdater.Result.Queued ? queued : failed;

@@ -1,8 +1,11 @@
 package dev.moon.hotwire.redefine;
 
 import java.io.Serial;
+import java.util.Collections;
 import java.util.HashSet;
+import java.util.LinkedHashMap;
 import java.util.List;
+import java.util.Map;
 import java.util.Set;
 import java.util.StringJoiner;
 import org.jspecify.annotations.Nullable;
@@ -19,6 +22,8 @@ public final class RebuildException extends Exception {
 
     private transient List<RebuildException> parts = List.of();
     private transient Set<String> blamedClasses = Set.of();
+
+    private transient Map<Class<?>, Set<String>> notFitting = Map.of();
 
     public RebuildException(String message) {
         this(message, null, false);
@@ -78,17 +83,19 @@ public final class RebuildException extends Exception {
         }
         StringJoiner message = new StringJoiner("; ");
         Set<String> blamed = new HashSet<>();
+        Map<Class<?>, Set<String>> notFitting = new LinkedHashMap<>();
         boolean reopenFixes = true;
         boolean restartOnly = false;
         for (RebuildException part : parts) {
             message.add(part.getMessage());
             blamed.addAll(part.blamedClasses);
+            notFitting.putAll(part.notFitting);
             reopenFixes &= part.reopenFixes;
             restartOnly |= part.restartOnly;
         }
         RebuildException all = new RebuildException(message.toString(), parts.getFirst(), reopenFixes, false,
                 reopenFixes,
-                restartOnly).withBlamed(blamed);
+                restartOnly).withBlamed(blamed).withNotFitting(notFitting);
         all.parts = List.copyOf(parts);
         return all;
     }
@@ -106,6 +113,24 @@ public final class RebuildException extends Exception {
 
     public Set<String> getBlamedClasses() {
         return this.blamedClasses;
+    }
+
+    public RebuildException withNotFitting(Map<Class<?>, Set<String>> mods) {
+        this.notFitting = Collections.unmodifiableMap(new LinkedHashMap<>(mods));
+        return this;
+    }
+
+    public Map<Class<?>, Set<String>> getNotFitting() {
+        return this.notFitting;
+    }
+
+    public static boolean isNotFitting(@Nullable Throwable thrown) {
+        for (Throwable at = thrown; at != null; at = at.getCause()) {
+            if (at instanceof RebuildException rebuild && !rebuild.notFitting.isEmpty()) {
+                return true;
+            }
+        }
+        return false;
     }
 
     public static RebuildException ofLosing(String message, Set<String> mods) {
