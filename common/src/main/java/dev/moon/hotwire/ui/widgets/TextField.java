@@ -20,6 +20,9 @@ public final class TextField extends Element {
     private static final int KEY_X = 88;
     static final int SHIFT = 1;
     static final int CONTROL = 2;
+    private static final int SUPER = 8;
+
+    static final int SHORTCUT = System.getProperty("os.name", "").startsWith("Mac") ? SUPER : CONTROL;
     private static final int EDGE = Palette.PANEL_EDGE;
     private static final int EDGE_FOCUSED = Palette.ACCENT;
     private static final int FILL = 0xFF0E0B17;
@@ -113,7 +116,7 @@ public final class TextField extends Element {
             return false;
         }
         boolean shift = (modifiers & SHIFT) != 0;
-        boolean control = (modifiers & CONTROL) != 0;
+        boolean control = (modifiers & SHORTCUT) != 0;
         this.clock = 0;
         switch (key) {
             case ENTER -> {
