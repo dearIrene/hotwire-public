@@ -1054,15 +1054,20 @@ final class CollectionReferences implements FixedLists.Walk {
                         Object standIn = whole != null ? StandIns.of(slot)
                                 : parts != null ? CollectionParts.withStandIns(parts, Objects.requireNonNull(item))
                                 : null;
+                        boolean ownWhole = whole != null;
                         if (item != null && standIn != null) {
                             String found = whole != null ? whole : Objects.requireNonNull(parts);
                             int at = index;
                             this.takeOrNote(found, this.candidates.find(item, true),
 
                                     ElementTakes.askWeak(item, one -> this.owners.findOwnerOfSlot(one)),
-                                    ElementTakes.makeWeak(array, item, (now, one, owner) ->
-                                            ElementTakes.replaceInArray(now, at, one, standIn,
-                                                    this.getRemovalsOf(owner))), item,
+
+                                    ElementTakes.makeWeak(array, item, (now, one, owner) -> {
+                                        Object game = ownWhole
+                                                ? Games.getNow().getTables().findGameDefault(now, at) : null;
+                                        ElementTakes.replaceInArray(now, at, one, game != null ? game : standIn,
+                                                this.getRemovalsOf(owner));
+                                    }), item,
                                     TakeReach.findCalledThrough(item));
                         }
                     }
@@ -1113,6 +1118,8 @@ final class CollectionReferences implements FixedLists.Walk {
                                     this.lookInto(element);
                                 }
                             }
+                        } else if (element instanceof Object[] && this.visit(element)) {
+                            this.collect(element);
                         } else if (element != null && !(element instanceof Collection<?>)
                                 && !(element instanceof Map<?, ?>) && !Wrappers.isOfAnotherMod(element.getClass())) {
                             this.noteWrappedInside(element, LookRoots.WRAPPED_STEPS);

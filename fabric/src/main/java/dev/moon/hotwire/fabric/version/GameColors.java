@@ -61,7 +61,8 @@ public final class GameColors {
                 if (value instanceof Map<?, ?> map) {
                     found.add(value);
 
-                    map.values().stream().filter(one -> one instanceof List<?>).forEach(found::add);
+                    map.values().stream().filter(one -> one instanceof List<?> || one instanceof Object[])
+                            .forEach(found::add);
                 } else if (value instanceof Collection<?>) {
                     found.add(value);
                 } else if (value != null) {
@@ -121,11 +122,19 @@ public final class GameColors {
             return own != null && own.stream().allMatch(one -> Owners.isGameOwn(one.getClass())) ? own : null;
         }
 
-        for (Map.Entry<Block, List<BlockTintSource>> entry : colors.entrySet()) {
-            if (entry.getValue() == container && place instanceof Integer number) {
-                List<?> own = fromGame.get(entry.getKey());
-                Object one = own == null || number >= own.size() ? null : own.get(number);
-                return one != null && Owners.isGameOwn(one.getClass()) ? one : null;
+        if (!(place instanceof Integer number)) {
+            return null;
+        }
+        for (Object table : tables) {
+            if (!(table instanceof Map<?, ?> map)) {
+                continue;
+            }
+            for (Map.Entry<?, ?> entry : map.entrySet()) {
+                if (entry.getValue() == container && entry.getKey() instanceof Block block) {
+                    List<?> own = fromGame.get(block);
+                    Object one = own == null || number >= own.size() ? null : own.get(number);
+                    return one != null && Owners.isGameOwn(one.getClass()) ? one : null;
+                }
             }
         }
         return null;
