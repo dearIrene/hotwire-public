@@ -45,7 +45,8 @@ public final class OpenGameClasses implements ClassFileTransformer {
     static byte @Nullable [] open(byte[] bytes) {
         int at = findAccessAt(bytes);
         int access = readShort(bytes, at);
-        if ((access & Opcodes.ACC_FINAL) == 0 || (access & Opcodes.ACC_ENUM) != 0
+        if ((access & Opcodes.ACC_FINAL) == 0 || (access & Opcodes.ACC_PUBLIC) == 0
+                || (access & Opcodes.ACC_ENUM) != 0
                 || "java/lang/Record".equals(new ClassReader(bytes).getSuperName())) {
             return null;
         }
