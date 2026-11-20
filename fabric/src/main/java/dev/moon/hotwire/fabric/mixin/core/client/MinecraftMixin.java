@@ -13,12 +13,14 @@ import dev.moon.hotwire.add.TickEnd;
 import dev.moon.hotwire.fabric.HotwireClient;
 import dev.moon.hotwire.fabric.registration.ClosedWorldHolders;
 import dev.moon.hotwire.fabric.registration.GameHold;
+import dev.moon.hotwire.fabric.registration.WorldSetMoment;
 import dev.moon.hotwire.fabric.registration.WorldTintCaches;
 import dev.moon.hotwire.redefine.StartArguments;
 import dev.moon.hotwire.switching.CrashPolicy;
 import net.minecraft.CrashReport;
 import net.minecraft.client.Minecraft;
 import net.minecraft.client.main.GameConfig;
+import net.minecraft.client.multiplayer.ClientLevel;
 import org.objectweb.asm.Type;
 import org.spongepowered.asm.mixin.Mixin;
 import org.spongepowered.asm.mixin.injection.At;
@@ -31,6 +33,12 @@ public abstract class MinecraftMixin {
     private void hotwire$saveConfig(GameConfig config, CallbackInfo ci) {
         StartArguments.save(Type.getInternalName(Minecraft.class) + ".<init>"
                 + Type.getMethodDescriptor(Type.VOID_TYPE, Type.getType(GameConfig.class)), config);
+    }
+
+    @Inject(method = "updateLevelInEngines(Lnet/minecraft/client/multiplayer/ClientLevel;)V", at = @At("HEAD"))
+    private void hotwire$saveLevel(ClientLevel level, CallbackInfo ci) {
+        StartArguments.save(Type.getInternalName(Minecraft.class) + "." + WorldSetMoment.NAME
+                + Type.getMethodDescriptor(Type.VOID_TYPE, Type.getType(ClientLevel.class)), level);
     }
 
     @WrapOperation(method = "run", at = @At(value = "INVOKE", target = "Lnet/minecraft/client/Minecraft;runTick(Z)V"))

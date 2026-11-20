@@ -3,6 +3,7 @@ package dev.moon.hotwire.fabric.rebuild;
 import dev.moon.hotwire.add.FailedAddJars;
 import dev.moon.hotwire.classfile.GameNames;
 import dev.moon.hotwire.fabric.add.LivePlugins;
+import dev.moon.hotwire.fabric.registration.WorldSetMoment;
 import dev.moon.hotwire.fabric.version.Spellings;
 import dev.moon.hotwire.rebuild.KnotInternals;
 import dev.moon.hotwire.rebuild.PreMixinReads;
@@ -333,8 +334,12 @@ public final class GameClasses implements SwitchApplier.Game {
     }
 
     public static Set<String> getJoinMethods(String internalName) {
-        if (Minecraft.getInstance().getConnection() == null) {
+        Minecraft client = Minecraft.getInstance();
+        if (client.getConnection() == null) {
             return Set.of();
+        }
+        if (internalName.equals(Spellings.MINECRAFT_CLASS)) {
+            return client.level == null ? Set.of() : Set.of(WorldSetMoment.NAME);
         }
         return internalName.equals(Spellings.PACKET_LISTENER_CLASS) ? Spellings.JOIN_METHODS : Set.of();
     }
