@@ -2,10 +2,12 @@ package dev.moon.hotwire.fabric.mixin.core.client.multiplayer;
 
 import com.llamalad7.mixinextras.injector.wrapmethod.WrapMethod;
 import com.llamalad7.mixinextras.injector.wrapoperation.Operation;
+import dev.moon.hotwire.fabric.GameParts;
 import dev.moon.hotwire.fabric.registration.CommandRecorder;
 import dev.moon.hotwire.fabric.registration.LoginMoment;
 import dev.moon.hotwire.redefine.StartArguments;
 import dev.moon.hotwire.registration.ClientPacketListenerExtension;
+import net.minecraft.client.Minecraft;
 import net.minecraft.client.multiplayer.ClientPacketListener;
 import net.minecraft.network.protocol.game.ClientboundCommandsPacket;
 import net.minecraft.network.protocol.game.ClientboundLoginPacket;
@@ -25,6 +27,11 @@ public abstract class ClientPacketListenerMixin implements ClientPacketListenerE
 
     @Shadow
     public abstract void handleCommands(ClientboundCommandsPacket packet);
+
+    @Inject(method = "close", at = @At("HEAD"))
+    private void hotwire$tellDisconnectOnGameThread(CallbackInfo ci) {
+        GameParts.getDisconnects().tellAtLeave(Minecraft.getInstance());
+    }
 
     @Inject(method = "handleCommands", at = @At("HEAD"))
     private void hotwire$onReceived(ClientboundCommandsPacket packet, CallbackInfo ci) {

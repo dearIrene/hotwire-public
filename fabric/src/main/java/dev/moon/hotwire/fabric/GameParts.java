@@ -25,6 +25,7 @@ public final class GameParts {
     private static final ReloadFailures RELOAD_FAILURES = new ReloadFailures();
     private static final ModelReloadCheck MODEL_CHECK = new ModelReloadCheck();
     private static final HoldWork HOLD_WORK = new HoldWork();
+    private static final GameThreadDisconnects DISCONNECTS = new GameThreadDisconnects();
 
     private GameParts() {
     }
@@ -79,5 +80,9 @@ public final class GameParts {
 
     public static HoldWork getHoldWork() {
         return HOLD_WORK;
+    }
+
+    public static GameThreadDisconnects getDisconnects() {
+        return DISCONNECTS;
     }
 }

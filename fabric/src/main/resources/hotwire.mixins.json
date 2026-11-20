@@ -10,6 +10,7 @@
     "core.fabric.base.event.ArrayBackedEventMixin",
     "core.util.thread.BlockableEventLoopAccessor",
     "core.util.thread.BlockableEventLoopMixin",
+    "core.util.thread.ReentrantBlockableEventLoopInvoker",
     "core.world.level.chunk.BoundTickingBlockEntityMixin",
     "core.server.level.ChunkMapAccessor",
     "core.network.ConnectionAccessor",

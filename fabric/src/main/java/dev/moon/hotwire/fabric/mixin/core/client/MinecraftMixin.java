@@ -45,6 +45,7 @@ public abstract class MinecraftMixin {
     @SuppressWarnings("checkstyle:IllegalCatch")
     private void hotwire$catchFrameThrow(Minecraft game, boolean advance, Operation<Void> original) {
         GameParts.getHoldWork().runAtFrameEdge();
+        GameParts.getDisconnects().tellAtFrame(game);
         try {
             original.call(game, advance);
         } catch (RuntimeException | Error e) {
