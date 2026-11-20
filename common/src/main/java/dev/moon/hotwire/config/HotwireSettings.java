@@ -204,6 +204,7 @@ public final class HotwireSettings {
         @Nullable List<String> searchSetup;
 
         @Nullable List<String> searchPins;
+        @Nullable List<String> storeHidden;
     }
 
     private final JsonFile<SettingsJson> file;
@@ -241,6 +242,7 @@ public final class HotwireSettings {
     private final Set<String> favorites = ConcurrentHashMap.newKeySet();
     private volatile List<String> searchSetup = List.of();
     private volatile List<String> searchPins = List.of();
+    private volatile List<String> storeHidden = List.of();
 
     public HotwireSettings(Path path) {
         this.file = new JsonFile<>(path, SettingsJson.class, SettingsJson::new);
@@ -287,6 +289,9 @@ public final class HotwireSettings {
         this.antiCrashOfferOff = saved.antiCrashOfferOff;
         if (saved.favorites != null) {
             saved.favorites.stream().filter(Objects::nonNull).forEach(this.favorites::add);
+        }
+        if (saved.storeHidden != null) {
+            this.storeHidden = saved.storeHidden.stream().filter(Objects::nonNull).toList();
         }
         if (saved.searchPins != null) {
             this.searchPins = saved.searchPins.stream().filter(Objects::nonNull).toList();
@@ -446,6 +451,17 @@ public final class HotwireSettings {
 
     public List<String> getSearchPins() {
         return this.searchPins;
+    }
+
+    public List<String> getStoreHidden() {
+        return this.storeHidden;
+    }
+
+    public void setStoreHidden(List<String> categories) {
+        if (!categories.equals(this.storeHidden)) {
+            this.storeHidden = List.copyOf(categories);
+            this.save();
+        }
     }
 
     public void setSearchPins(List<String> ids) {
@@ -692,6 +708,7 @@ public final class HotwireSettings {
         saved.favorites = this.favorites.stream().sorted().toList();
         saved.searchSetup = this.searchSetup.isEmpty() ? null : this.searchSetup;
         saved.searchPins = this.searchPins.isEmpty() ? null : this.searchPins;
+        saved.storeHidden = this.storeHidden.isEmpty() ? null : this.storeHidden;
         try {
             this.file.save(saved);
         } catch (IOException e) {

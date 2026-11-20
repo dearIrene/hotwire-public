@@ -66,6 +66,10 @@ public final class StorePage {
             + line.across(), this::makeGridLine, CARD, GAP).hideMark();
     private List<StoreCategories.Group> groups = List.of();
 
+    private int lastPicked = -1;
+    private long lastPickedAt;
+    private static final long DOUBLE_CLICK_NANOS = 400_000_000L;
+
     private volatile List<String> releases;
     private List<StoreModel.Card> shown = List.of();
     private int across;
@@ -128,11 +132,25 @@ public final class StorePage {
                     : (has ? nameTag(chosen) : Lang.get("hotwire.store.section." + group.name())) + " ▾");
         }
         this.categories.choose(lit);
+        List<String> hidden = this.model.getHiddenCategories();
+        for (int at = 0; at < this.groups.size(); at++) {
+            StoreCategories.Group group = this.groups.get(at);
+            this.categories.setStruck(at, group.parts().isEmpty() && hidden.contains(group.name()));
+        }
     }
 
     private void pickGroup(int index) {
+        long now = System.nanoTime();
+        boolean twice = index == this.lastPicked && now - this.lastPickedAt < DOUBLE_CLICK_NANOS;
+        this.lastPicked = twice ? -1 : index;
+        this.lastPickedAt = now;
         StoreCategories.Group group = this.groups.get(index);
         if (group.parts().isEmpty()) {
+            if (twice && !group.name().isEmpty()) {
+                this.model.toggleHidden(group.name());
+                this.showCategory(this.model.getCategory());
+                return;
+            }
             this.pickCategory(group.name());
             return;
         }

@@ -126,6 +126,8 @@ public final class ModrinthClient {
     private final LocalJars local;
 
     private volatile String browseLoader;
+
+    private volatile List<String> hiddenCategories = List.of();
     private volatile String browseVersion;
 
     public ModrinthClient(String hotwireVersion, String loader, String gameVersion, LocalJars local) {
@@ -189,6 +191,11 @@ public final class ModrinthClient {
         facets.add(List.of("versions:" + this.findVersionFor(kind)));
         if (!category.isEmpty()) {
             facets.add(List.of("categories:" + category));
+        }
+        for (String hidden : this.hiddenCategories) {
+            if (!hidden.equals(category)) {
+                facets.add(List.of("categories!=" + hidden));
+            }
         }
 
         JsonArray facetJson = new JsonArray();
@@ -391,6 +398,14 @@ public final class ModrinthClient {
     public Version findVersion(String versionId) throws IOException {
         return readVersion(JsonParser.parseString(this.transport.get(API + "/version/" + encode(versionId)))
                 .getAsJsonObject());
+    }
+
+    public List<String> getHiddenCategories() {
+        return this.hiddenCategories;
+    }
+
+    public void setHiddenCategories(Collection<String> hidden) {
+        this.hiddenCategories = hidden.stream().sorted().distinct().toList();
     }
 
     public String getScope() {

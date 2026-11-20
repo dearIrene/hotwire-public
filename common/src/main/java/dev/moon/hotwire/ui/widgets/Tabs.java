@@ -26,6 +26,8 @@ public final class Tabs extends Part {
         private String badge = "";
         private int badgeInk = Palette.ACCENT;
         private boolean active = true;
+
+        private boolean struck;
         private int labelWidth;
 
         private int at;
@@ -99,6 +101,10 @@ public final class Tabs extends Part {
 
     public void setActive(int index, boolean active) {
         this.tabs.get(index).active = active;
+    }
+
+    public void setStruck(int index, boolean struck) {
+        this.tabs.get(index).struck = struck;
     }
 
     public boolean press(int index) {
@@ -235,7 +241,7 @@ public final class Tabs extends Part {
         for (int i = 0; i < this.tabs.size(); i++) {
             Tab tab = this.tabs.get(i);
             int ink = Palette.FAINT;
-            if (tab.active) {
+            if (tab.active && !tab.struck) {
                 ink = i == this.chosen ? Palette.TEXT : Colors.mix(Palette.DIM, Palette.TEXT, tab.hover.getValue());
             }
             ink = Colors.fade(ink, alpha);
@@ -256,6 +262,10 @@ public final class Tabs extends Part {
                 int textX = tab.at + (this.look == Look.BOX ? BOX_PAD : 0);
                 int textY = this.look == Look.BOX ? y + (Push.HEIGHT - Text.HEIGHT) / 2 : y + tab.row * WORDS_TALL;
                 canvas.drawText(tab.label, textX, textY, ink);
+                if (tab.struck) {
+                    int middle = textY + Text.HEIGHT / 2;
+                    canvas.fill(textX - 1, middle, textX + tab.labelWidth + 1, middle + 1, ink);
+                }
                 if (!tab.badge.isEmpty()) {
                     canvas.drawText(tab.badge, textX + tab.labelWidth + 4, textY, badgeInk);
                 }

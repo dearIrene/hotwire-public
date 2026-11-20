@@ -71,6 +71,7 @@ public final class StoreModel implements AutoCloseable {
 
     private volatile String words = "";
     private volatile String category = "";
+    private volatile Consumer<List<String>> saveHidden = hidden -> { };
     private volatile boolean hideInstalled;
     private List<Card> shown = List.of();
     private @Nullable List<Card> shownFrom;
@@ -255,7 +256,34 @@ public final class StoreModel implements AutoCloseable {
     }
 
     private String findKey(ModrinthClient.Kind kind, String words, String category) {
-        return this.client.getScope() + ":" + kind + ":" + words + ":" + category;
+        return this.client.getScope() + ":" + kind + ":" + words + ":" + category + this.findHiddenKey();
+    }
+
+    private String findHiddenKey() {
+        List<String> hidden = this.client.getHiddenCategories();
+        return hidden.isEmpty() ? "" : ":-" + String.join(",", hidden);
+    }
+
+    public void useHiddenCategories(List<String> hidden, Consumer<List<String>> save) {
+        this.client.setHiddenCategories(hidden);
+        this.saveHidden = save;
+    }
+
+    public List<String> getHiddenCategories() {
+        return this.client.getHiddenCategories();
+    }
+
+    public void toggleHidden(String category) {
+        List<String> hidden = new ArrayList<>(this.client.getHiddenCategories());
+        if (!hidden.remove(category)) {
+            hidden.add(category);
+        }
+        this.client.setHiddenCategories(hidden);
+        this.saveHidden.accept(this.client.getHiddenCategories());
+        if (this.client.getHiddenCategories().contains(this.category)) {
+            this.category = "";
+        }
+        this.searchFresh();
     }
 
     public void setBrowsing(String loader, String gameVersion) {
@@ -303,7 +331,7 @@ public final class StoreModel implements AutoCloseable {
         this.onChanged.run();
         this.worker.execute(() -> {
             String key = this.client.getScope() + ":" + kind.getProjectType() + ":" + words + ":" + category + ":"
-                    + offset;
+                    + offset + this.findHiddenKey();
             ModrinthClient.Search found;
             boolean stale;
             try {

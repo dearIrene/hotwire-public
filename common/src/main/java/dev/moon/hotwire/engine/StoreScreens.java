@@ -1,5 +1,6 @@
 package dev.moon.hotwire.engine;
 
+import dev.moon.hotwire.config.HotwireSettings;
 import dev.moon.hotwire.modrinth.StoreCache;
 import dev.moon.hotwire.modrinth.StoreModel;
 import dev.moon.hotwire.seam.Games;
@@ -42,6 +43,8 @@ final class StoreScreens {
         ModStore made = this.store;
         if (made == null) {
             made = new ModStore(this.installed, this.jars.getCheck(), this.icons::of, this.icons);
+            HotwireSettings settings = this.engine.getSettings();
+            made.getModel().useHiddenCategories(settings.getStoreHidden(), settings::setStoreHidden);
             made.checkInstalled();
             StoreModel.Packs packs = this.engine.units.makePacks(made.getModel().getClient(),
                     made.getModel().getDownloads(),
