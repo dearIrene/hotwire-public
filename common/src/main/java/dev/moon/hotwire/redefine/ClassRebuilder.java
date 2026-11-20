@@ -86,6 +86,10 @@ public final class ClassRebuilder {
         STOP.set(stop);
     }
 
+    public static boolean isStopAsked() {
+        return STOP.get().getAsBoolean();
+    }
+
     public void toLaunch(boolean all) {
         this.toLaunch = all && !this.launchChanged;
     }

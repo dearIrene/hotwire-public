@@ -3,6 +3,7 @@ package dev.moon.hotwire.switching;
 import com.google.gson.JsonParseException;
 import dev.moon.hotwire.mixin_copy.ConfigTrim;
 import dev.moon.hotwire.mixin_copy.PluginShape;
+import dev.moon.hotwire.redefine.ClassRebuilder;
 import dev.moon.hotwire.redefine.RebuildException;
 import java.util.HashMap;
 import java.util.HashSet;
@@ -123,6 +124,9 @@ final class LaunchDecisions {
         int repeated = 0;
         Set<String> asked = new HashSet<>();
         for (Map.Entry<String, byte[]> entry : readable.entrySet()) {
+            if (ClassRebuilder.isStopAsked()) {
+                break;
+            }
             String config = entry.getKey();
             byte[] bytes = entry.getValue();
             Set<String> own = listedBy.getOrDefault(config, Set.of());

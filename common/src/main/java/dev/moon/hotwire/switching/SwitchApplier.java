@@ -790,6 +790,9 @@ public final class SwitchApplier {
         List<String> patching = this.findPatching(configs, rebuilt);
 
         LaunchDecisions.Result decided = this.decisions.of(patching, carriedNow, on::contains);
+        if (ClassRebuilder.isStopAsked()) {
+            throw new RebuildException("the rebuild worked out ahead gave way to a switch");
+        }
         SwitchTimes.mark("marks and decisions");
         ClassRebuilder.PreparedRebuild mixed = this.rebuilder.prepare(originals, current, classes,
                 decided.configs(),
