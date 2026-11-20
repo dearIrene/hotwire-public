@@ -26,8 +26,10 @@ public sealed interface Removal {
 
         @Override
         public void restore() {
-            if (this.inPlace && this.index < this.list.size() && this.list.get(this.index) == null) {
-                this.list.set(this.index, this.element);
+            if (this.inPlace) {
+                if (this.index < this.list.size() && this.list.get(this.index) == null) {
+                    this.list.set(this.index, this.element);
+                }
             } else if (!containsSame(this.list, this.element)) {
                 this.list.add(Math.min(this.index, this.list.size()), this.element);
             }
