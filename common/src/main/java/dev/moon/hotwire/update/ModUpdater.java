@@ -1,5 +1,6 @@
 package dev.moon.hotwire.update;
 
+import dev.moon.hotwire.concurrent.Parallel;
 import dev.moon.hotwire.dev.DevSession;
 import dev.moon.hotwire.engine.ModPolicy;
 import dev.moon.hotwire.jar.ContentScan;
@@ -879,19 +880,13 @@ public final class ModUpdater {
             Set<String> old = JarLinks.readClassNames(running);
             Map<String, byte[]> fresh = ContentScan.readClasses(jar).bytes();
             JarLinks.GameClassReader reader = new JarLinks.GameClassReader(fresh::get);
+
+            Parallel.runEachBeside(users, user -> this.readNamedOf(user, running, old));
             for (String user : users) {
-                Path userJar = this.engine.findRunningJarOf(user);
-                if (userJar == null || userJar.equals(running)) {
+                Map<String, Set<String>> named = this.readNamedOf(user, running, old);
+                if (named == null) {
                     continue;
                 }
-                Map<String, Set<String>> named = this.usersNames.computeIfAbsent(userJar + " " + running, key -> {
-                    try {
-                        return JarLinks.readNamed(userJar, Set.of(), old);
-                    } catch (IOException e) {
-                        LOGGER.info("[Hotwire] {} could not be read through: {}", userJar.getFileName(), e.toString());
-                        return Map.of();
-                    }
-                });
                 String missing = JarLinks.findMissing(named, old, reader);
                 if (missing != null) {
                     String name = this.engine.getGraph().find(user).map(ModManifest::name).orElse(user);
@@ -905,6 +900,21 @@ public final class ModUpdater {
             LOGGER.info("[Hotwire] {}'s users could not be checked against it: {}", jar.getFileName(), e.toString());
         }
         return Optional.empty();
+    }
+
+    private @Nullable Map<String, Set<String>> readNamedOf(String user, Path running, Set<String> old) {
+        Path userJar = this.engine.findRunningJarOf(user);
+        if (userJar == null || userJar.equals(running)) {
+            return null;
+        }
+        return this.usersNames.computeIfAbsent(userJar + " " + running, key -> {
+            try {
+                return JarLinks.readNamed(userJar, Set.of(), old);
+            } catch (IOException e) {
+                LOGGER.info("[Hotwire] {} could not be read through: {}", userJar.getFileName(), e.toString());
+                return Map.of();
+            }
+        });
     }
 
     private Optional<String> findRejection(ModManifest incoming) {
