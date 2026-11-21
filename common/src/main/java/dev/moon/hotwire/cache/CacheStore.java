@@ -76,6 +76,9 @@ public final class CacheStore {
 
     private final Map<Integer, FileChannel> packs = new HashMap<>();
 
+    private @Nullable ByteBuffer readBuffer;
+    private static final int READ_BUFFER_MOST = 1 << 20;
+
     @SuppressWarnings("ArrayRecordComponent")
     private record WaitingEntry(byte[] packed, byte flags, int check) {
     }
@@ -540,7 +543,13 @@ public final class CacheStore {
             if (place.offset() + place.length() + 5 > pack.size()) {
                 return null;
             }
-            ByteBuffer raw = ByteBuffer.allocate(place.length() + 5);
+            int need = place.length() + 5;
+            ByteBuffer raw = need > READ_BUFFER_MOST ? ByteBuffer.allocate(need) : this.readBuffer;
+            if (raw == null || raw.capacity() < need) {
+                raw = ByteBuffer.allocateDirect(Math.max(need, 64 * 1024));
+                this.readBuffer = raw;
+            }
+            raw.clear().limit(need);
             long at = place.offset();
             while (raw.hasRemaining()) {
                 int read = pack.read(raw, at + raw.position());
@@ -548,7 +557,9 @@ public final class CacheStore {
                     return null;
                 }
             }
-            return raw.array();
+            byte[] out = new byte[need];
+            raw.flip().get(out);
+            return out;
         } catch (IOException | RuntimeException e) {
             return null;
         }
