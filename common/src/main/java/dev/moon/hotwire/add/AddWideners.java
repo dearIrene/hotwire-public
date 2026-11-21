@@ -66,7 +66,7 @@ final class AddWideners {
     }
 
     Optional<String> findWidenerRefusal(ModJar part, @Nullable Path path) {
-        Optional<String> agent = AddSupport.findAgentRefusal(part.manifest().name(), path);
+        Optional<String> agent = AddSupport.findAgentRefusal(part.manifest().name(), this.readJar(path));
         if (agent.isPresent()) {
             return agent;
         }

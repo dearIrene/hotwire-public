@@ -1,6 +1,7 @@
 package dev.moon.hotwire.jar;
 
 import dev.moon.hotwire.classfile.ClassNodes;
+import dev.moon.hotwire.concurrent.Parallel;
 import java.lang.reflect.Modifier;
 import java.util.ArrayList;
 import java.util.HashMap;
@@ -9,8 +10,9 @@ import java.util.List;
 import java.util.Map;
 import java.util.OptionalInt;
 import java.util.Set;
+import java.util.function.Supplier;
+import java.util.stream.IntStream;
 import org.jspecify.annotations.Nullable;
-import org.objectweb.asm.ClassReader;
 import org.objectweb.asm.Handle;
 import org.objectweb.asm.Opcodes;
 import org.objectweb.asm.Type;
@@ -192,6 +194,19 @@ public final class WidenerUses {
 
     public static List<Use> shutUses(List<AccessWidenerText.Clause> clauses, GameAccess game,
             Map<String, byte[]> classes) {
+        return shutUses(clauses, game, () -> readNodes(classes));
+    }
+
+    public static List<ClassNode> readNodes(Map<String, byte[]> classes) {
+        List<byte[]> all = List.copyOf(classes.values());
+        ClassNode[] nodes = new ClassNode[all.size()];
+        Parallel.runEachBeside(IntStream.range(0, all.size()).boxed().toList(),
+                at -> nodes[at] = ClassNodes.read(all.get(at), 0));
+        return List.of(nodes);
+    }
+
+    public static List<Use> shutUses(List<AccessWidenerText.Clause> clauses, GameAccess game,
+            Supplier<List<ClassNode>> read) {
         Set<String> finalClasses = new HashSet<>();
         Set<String> finalFields = new HashSet<>();
 
@@ -219,8 +234,7 @@ public final class WidenerUses {
             return uses;
         }
         Map<String, ClassNode> nodes = new HashMap<>();
-        for (byte[] bytes : classes.values()) {
-            ClassNode node = ClassNodes.read(bytes, ClassReader.SKIP_DEBUG | ClassReader.SKIP_FRAMES);
+        for (ClassNode node : read.get()) {
             nodes.put(node.name, node);
         }
         for (ClassNode node : nodes.values()) {
@@ -285,15 +299,17 @@ public final class WidenerUses {
     }
 
     public static List<Use> scan(Openings openings, GameAccess game, Map<String, byte[]> classes) {
+        return scan(openings, game, () -> readNodes(classes));
+    }
+
+    public static List<Use> scan(Openings openings, GameAccess game, Supplier<List<ClassNode>> read) {
         List<Use> uses = new ArrayList<>();
         if (openings.isEmpty()) {
             return uses;
         }
-        List<ClassNode> nodes = new ArrayList<>();
+        List<ClassNode> nodes = read.get();
         Set<String> namedElsewhere = new HashSet<>();
-        for (byte[] bytes : classes.values()) {
-            ClassNode node = ClassNodes.read(bytes, 0);
-            nodes.add(node);
+        for (ClassNode node : nodes) {
             for (MethodNode method : node.methods) {
                 for (AbstractInsnNode insn : method.instructions) {
                     if (insn instanceof FieldInsnNode field && !field.owner.equals(node.name)) {

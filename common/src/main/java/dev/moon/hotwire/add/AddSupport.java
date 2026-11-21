@@ -9,7 +9,6 @@ import dev.moon.hotwire.jar.ModJar;
 import dev.moon.hotwire.jar.ModJarException;
 import dev.moon.hotwire.jar.ModJarReader;
 import dev.moon.hotwire.jar.ModManifest;
-import dev.moon.hotwire.jar.ZipBudget;
 import dev.moon.hotwire.plan.ModGraph;
 import dev.moon.hotwire.plan.SwitchPlanner;
 import dev.moon.hotwire.redefine.OpenGameClasses;
@@ -30,7 +29,6 @@ import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.nio.file.StandardCopyOption;
-import java.util.Collections;
 import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
@@ -41,8 +39,6 @@ import java.util.Set;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.function.Function;
 import java.util.function.Supplier;
-import java.util.zip.ZipEntry;
-import java.util.zip.ZipFile;
 import net.fabricmc.loader.api.FabricLoader;
 import net.fabricmc.loader.api.ModContainer;
 import net.fabricmc.loader.api.metadata.ModOrigin;
@@ -414,20 +410,10 @@ public final class AddSupport implements ModAdder.Engine {
         return bytes == null ? null : ClassHeader.of(bytes).superName();
     }
 
-    static Optional<String> findAgentRefusal(String name, @Nullable Path jar) {
-        if (jar == null) {
-            return Optional.empty();
-        }
-        try (ZipFile zip = new ZipFile(jar.toFile())) {
-            ZipBudget budget = new ZipBudget();
-            for (ZipEntry entry : Collections.list(zip.entries())) {
-                if (entry.getName().endsWith(".class") && isInstrumenting(budget.read(zip.getInputStream(entry)))) {
-                    return Optional.of(name + " changes the game's classes in the JVM itself, which nothing takes back"
-                            + " out while the game runs.");
-                }
-            }
-        } catch (IOException e) {
-            LOGGER.warn("[Hotwire] {} could not be read for JVM agents", jar.getFileName(), e);
+    static Optional<String> findAgentRefusal(String name, JarUseReader.@Nullable JarClasses classes) {
+        if (classes != null && classes.classes().values().stream().anyMatch(AddSupport::isInstrumenting)) {
+            return Optional.of(name + " changes the game's classes in the JVM itself, which nothing takes back out"
+                    + " while the game runs.");
         }
         return Optional.empty();
     }

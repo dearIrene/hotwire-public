@@ -12,8 +12,10 @@ import java.util.ArrayList;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.function.Supplier;
 import org.jspecify.annotations.Nullable;
 import org.objectweb.asm.Opcodes;
+import org.objectweb.asm.tree.ClassNode;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -55,9 +57,20 @@ public final class JarUseReader {
         if (jar == null) {
             return List.of();
         }
+        Supplier<List<ClassNode>> nodes = new Supplier<>() {
+            private @Nullable List<ClassNode> read;
+
+            @Override
+            public List<ClassNode> get() {
+                if (this.read == null) {
+                    this.read = WidenerUses.readNodes(jar.classes());
+                }
+                return this.read;
+            }
+        };
         List<WidenerUses.Use> uses = new ArrayList<>(WidenerUses.scan(WidenerUses.findOpenings(loaded, game),
-                game, jar.classes()));
-        uses.addAll(WidenerUses.shutUses(loaded, game, jar.classes()));
+                game, nodes));
+        uses.addAll(WidenerUses.shutUses(loaded, game, nodes));
         return uses;
     }
 
