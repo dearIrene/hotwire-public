@@ -350,6 +350,7 @@ public final class ModTripwire {
 
     public void unwire(Collection<String> ids) {
         ids.forEach(id -> TripwireSites.setOff(id, false));
+        DueCoroutines.resume(ids);
         this.watcher.execute(() -> {
             try {
                 this.disarm(ids);

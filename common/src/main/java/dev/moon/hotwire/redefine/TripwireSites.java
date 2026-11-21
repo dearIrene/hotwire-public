@@ -494,9 +494,6 @@ public final class TripwireSites {
             return;
         }
         watch.flag().setVolatile(off);
-        if (!off) {
-            DueCoroutines.resume(mod);
-        }
 
         if (LOGGER.isDebugEnabled()) {
             LOGGER.debug("[Hotwire] the watch of {} was set by {}", mod, StackWalker.getInstance().walk(frames ->

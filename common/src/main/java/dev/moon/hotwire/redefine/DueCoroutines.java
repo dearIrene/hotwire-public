@@ -2,6 +2,7 @@ package dev.moon.hotwire.redefine;
 
 import java.lang.reflect.Method;
 import java.util.ArrayList;
+import java.util.Collection;
 import java.util.Collections;
 import java.util.List;
 import java.util.Map;
@@ -67,7 +68,11 @@ public final class DueCoroutines {
         return suspended;
     }
 
-    static void resume(String mod) {
+    public static void resume(Collection<String> mods) {
+        mods.forEach(DueCoroutines::resume);
+    }
+
+    private static void resume(String mod) {
         List<Due> due = DEFERRED.remove(mod);
         if (due == null) {
             return;

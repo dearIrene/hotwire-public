@@ -3,6 +3,7 @@ package dev.moon.hotwire.engine;
 import dev.moon.hotwire.add.LoaderModList;
 import dev.moon.hotwire.plan.SwitchPlan;
 import dev.moon.hotwire.rebuild.TransformerChain;
+import dev.moon.hotwire.redefine.DueCoroutines;
 import dev.moon.hotwire.redefine.HandlerGuards;
 import dev.moon.hotwire.redefine.InitHookRuns;
 import dev.moon.hotwire.redefine.RebuildException;
@@ -794,6 +795,7 @@ public final class SwitchRunner {
             this.putBackAll(order);
         } finally {
             Tripwire.release(order);
+            DueCoroutines.resume(order);
         }
     }
 
