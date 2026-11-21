@@ -4,6 +4,7 @@ import com.mojang.blaze3d.systems.RenderSystem;
 import dev.moon.hotwire.engine.CrashGuard;
 import dev.moon.hotwire.fabric.screen.HotwireScreen;
 import dev.moon.hotwire.fabric.version.Frames;
+import dev.moon.hotwire.fabric.version.Spellings;
 import dev.moon.hotwire.report.Causes;
 import dev.moon.hotwire.switching.CrashPolicy;
 import dev.moon.hotwire.ui.Lang;
@@ -24,10 +25,24 @@ public final class FrameRecovery {
     public static boolean recover(Minecraft game, Throwable thrown) {
         Frames.endRenderPass();
         boolean closed = closeThrowingScreen(thrown);
-        if (!CrashGuard.handle(thrown, CrashPolicy.Site.FRAME) && !closed) {
+        if (!CrashGuard.handle(thrown, CrashPolicy.Site.FRAME) && !closed && !leaveIfHalfJoined(game)) {
             return false;
         }
         end(game);
+        return true;
+    }
+
+    public static boolean leaveIfHalfJoined(Minecraft game) {
+        if (game.player != null || (game.level == null && game.gameMode == null)) {
+            return false;
+        }
+        LOGGER.warn("[Hotwire] a throw the crash net kept ended the world's join part way, so the world is left");
+        try {
+            Spellings.leaveWorld(game);
+        } catch (RuntimeException e) {
+            LOGGER.warn("[Hotwire] the half-joined world could not be left", e);
+        }
+        Notices.show(Lang.get("hotwire.crash.title"), Lang.get("hotwire.crash.left_half_joined"));
         return true;
     }
 

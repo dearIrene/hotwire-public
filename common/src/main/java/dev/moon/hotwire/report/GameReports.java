@@ -85,6 +85,8 @@ public final class GameReports {
 
     private volatile @Nullable String underWay;
 
+    private static volatile boolean crashOffUnderWay;
+
     private volatile LocalTime begun = LocalTime.MIN;
     private final Map<String, String> ranWhen = new ConcurrentHashMap<>();
 
@@ -197,6 +199,10 @@ public final class GameReports {
                 + ": under way, the classes it redefined so far not counted below";
     }
 
+    public static void setCrashOffUnderWay(boolean underWay) {
+        crashOffUnderWay = underWay;
+    }
+
     public void onEnded() {
         if (this.depth.decrementAndGet() <= 0) {
             this.depth.set(0);
@@ -294,7 +300,7 @@ public final class GameReports {
                 switched, name -> findModOf(name, game), reports.nameOf);
 
         String now = reports.underWay;
-        if (now != null && CrashSection.isCleared(trace.value())) {
+        if (now != null && !crashOffUnderWay && CrashSection.isCleared(trace.value())) {
             return new CrashSection.Detail(trace.name(), "Hotwire involved? YES. The game crashed while Hotwire was"
                     + " switching (" + now + "). Send the newest zip under hotwire/reports.");
         }

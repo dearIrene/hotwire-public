@@ -920,6 +920,7 @@
   "hotwire.crash.title": "Hotwire a rattrapé un crash",
   "hotwire.crash.off_held": "%s est désactivé, mais un morceau que le jeu avait encore a crashé. Hotwire a gardé le jeu en marche. Redémarre le jeu pour nettoyer ça. %s",
   "hotwire.crash.turned_off": "%s a crashé, donc Hotwire l'a désactivé. Le jeu continue. %s",
+  "hotwire.crash.left_half_joined": "Le monde n'a pas pu finir de s'ouvrir, donc Hotwire t'en a fait sortir. Ouvre-le à nouveau.",
   "hotwire.crash.not_turned_off": "%s a crashé et n'a pas pu être désactivé : %s %s",
   "hotwire.own_fault.title": "Hotwire a rattrapé une de ses propres erreurs",
   "hotwire.own_fault": "Le code de Hotwire lui-même a échoué dans le jeu, mais le jeu a continué : %s. Redémarre le jeu par sécurité. %s",

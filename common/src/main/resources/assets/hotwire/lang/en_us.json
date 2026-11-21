@@ -920,6 +920,7 @@
   "hotwire.crash.title": "Hotwire caught a crash",
   "hotwire.crash.off_held": "%s is off, but a piece of it the game still had crashed. Hotwire kept the game going. Restart the game to clear it. %s",
   "hotwire.crash.turned_off": "%s crashed, so Hotwire turned it off. The game will carry on. %s",
+  "hotwire.crash.left_half_joined": "The world couldn't finish opening, so Hotwire took you out of it. Open it again.",
   "hotwire.crash.not_turned_off": "%s crashed and couldn't be turned off: %s %s",
   "hotwire.own_fault.title": "Hotwire caught a fault of its own",
   "hotwire.own_fault": "Hotwire's own code failed inside the game, but the game carried on: %s. Please restart the game to be safe. %s",

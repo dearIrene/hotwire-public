@@ -3,6 +3,7 @@ package dev.moon.hotwire.fabric.rebuild;
 import dev.moon.hotwire.jvm.PrivateField;
 import dev.moon.hotwire.mixin_copy.MixinCopy;
 import dev.moon.hotwire.rebuild.TransformerChain;
+import dev.moon.hotwire.report.Causes;
 import java.io.IOException;
 import java.lang.reflect.Field;
 import java.util.ArrayList;
@@ -19,11 +20,38 @@ import org.spongepowered.asm.mixin.MixinEnvironment;
 import org.spongepowered.asm.mixin.extensibility.IMixinConfig;
 import org.spongepowered.asm.mixin.extensibility.IMixinInfo;
 import org.spongepowered.asm.mixin.injection.invoke.arg.ArgsClassGenerator;
+import org.spongepowered.asm.mixin.transformer.throwables.InvalidMixinException;
 import org.spongepowered.asm.service.IMixinService;
 import org.spongepowered.asm.service.ISyntheticClassInfo;
 import org.spongepowered.asm.service.MixinService;
 
 public final class MixinInternals {
+    public static @Nullable String findUnappliedOwner(Throwable thrown) {
+        for (Throwable at : Causes.list(thrown)) {
+            IMixinInfo mixin = at instanceof InvalidMixinException invalid ? invalid.getMixin() : null;
+            if (mixin != null && mixin.getConfig().hasDecoration(FabricUtil.KEY_MOD_ID)) {
+                return mixin.getConfig().getDecoration(FabricUtil.KEY_MOD_ID);
+            }
+        }
+        return null;
+    }
+
+    public static boolean dropUnapplied(Throwable thrown) {
+        for (Throwable at : Causes.list(thrown)) {
+            IMixinInfo mixin = at instanceof InvalidMixinException invalid ? invalid.getMixin() : null;
+            if (mixin != null) {
+                Object config = mixin.getConfig();
+                Map<?, ?> targets = PrivateField.of(config.getClass(), "mixinMapping").get(config, Map.class);
+                boolean dropped = false;
+                for (Object mixins : targets.values()) {
+                    dropped |= mixins instanceof List<?> list && list.remove(mixin);
+                }
+                return dropped;
+            }
+        }
+        return false;
+    }
+
     private final String sessionId;
     private final List<String> configs;
     private final Object argsGenerator;

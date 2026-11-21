@@ -920,6 +920,7 @@
   "hotwire.crash.title": "Hotwire 拦下了一次崩溃",
   "hotwire.crash.off_held": "%s 已关闭，但游戏里还留着的它的一部分崩溃了。Hotwire 让游戏继续运行。重启游戏来清除。%s",
   "hotwire.crash.turned_off": "%s 崩溃了，所以 Hotwire 关闭了它。游戏会继续运行。%s",
+  "hotwire.crash.left_half_joined": "世界没能完全打开，所以 Hotwire 让你退出了。请重新打开它。",
   "hotwire.crash.not_turned_off": "%s 崩溃了，且无法关闭：%s %s",
   "hotwire.own_fault.title": "Hotwire 拦下了它自己的错误",
   "hotwire.own_fault": "Hotwire 自己的代码在游戏中出错了，但游戏继续运行：%s。为了安全请重启游戏。%s",

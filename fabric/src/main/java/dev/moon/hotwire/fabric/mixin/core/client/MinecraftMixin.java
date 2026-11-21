@@ -103,10 +103,13 @@ public abstract class MinecraftMixin {
     @WrapOperation(method = "runTick", at = @At(value = "INVOKE", target = "Lnet/minecraft/client/Minecraft;tick()V"))
     @SuppressWarnings("checkstyle:IllegalCatch")
     private void hotwire$catchTickThrow(Minecraft game, Operation<Void> original) {
+        if (FrameRecovery.leaveIfHalfJoined(game)) {
+            return;
+        }
         try {
             original.call(game);
         } catch (RuntimeException | Error e) {
-            if (!CrashGuard.handle(e, CrashPolicy.Site.FRAME)) {
+            if (!CrashGuard.handle(e, CrashPolicy.Site.FRAME) && !FrameRecovery.leaveIfHalfJoined(game)) {
                 throw e;
             }
         }

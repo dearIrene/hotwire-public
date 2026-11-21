@@ -46,7 +46,7 @@ public final class CrashGuard {
     private static final int MOST_CAUGHT = 200;
 
     private record Guard(CrashPolicy policy, Set<String> switched, List<String> caught, InstalledMods installed,
-            Supplier<@Nullable SwitchRunner> runner, BooleanSupplier offerWanted) {
+            Supplier<@Nullable SwitchRunner> runner, BooleanSupplier offerWanted, UnappliedMixins unapplied) {
     }
 
     private CrashGuard() {
@@ -56,13 +56,18 @@ public final class CrashGuard {
 
     public static void install(InstalledMods installed, Tasks tasks, Supplier<@Nullable SwitchRunner> runner,
             BiConsumer<String, Boolean> say, BiFunction<String, String, String> writeReport,
-            BooleanSupplier antiCrash, BooleanSupplier offerWanted, Predicate<String> inDevelopment) {
+            BooleanSupplier antiCrash, BooleanSupplier offerWanted, Predicate<String> inDevelopment,
+            UnappliedMixins unapplied) {
         CrashPolicy[] made = new CrashPolicy[1];
         Set<String> switched = ConcurrentHashMap.newKeySet();
         List<String> said = new CopyOnWriteArrayList<>();
         made[0] = new CrashPolicy(CrashGuard::findModBehind, id -> canLeave(id) && (isTouched(installed, switched, id)
                 || DataPackFaults.isFaulted(id) || (antiCrash.getAsBoolean() && !hasWorldContent(runner, id))),
                 caught -> {
+            if (unapplied.dropFrom(caught.thrown())) {
+                LOGGER.warn("[Hotwire] {}'s mixin that could not apply is out of the game's Mixin, so the class it"
+                        + " broke loads without it", caught.mod());
+            }
             String name = installed.nameOf(caught.mod());
             boolean byAntiCrash = !isTouched(installed, switched, caught.mod());
             LOGGER.error("[Hotwire] {} threw at {} ({}); Hotwire keeps the game going and turns it off", name,
@@ -119,7 +124,7 @@ public final class CrashGuard {
                     place == null ? findWhere(caught.thrown(), caught.mod()) : place.words(),
                     place == null ? "" : place.source(), place == null ? 0 : place.line());
         });
-        guard = new Guard(made[0], switched, said, installed, runner, offerWanted);
+        guard = new Guard(made[0], switched, said, installed, runner, offerWanted, unapplied);
     }
 
     @SuppressWarnings("FutureReturnValueIgnored")
@@ -135,11 +140,14 @@ public final class CrashGuard {
             Supplier<CheckedResult> off) {
         ActionJournal.Entry journal = ActionJournal.get().begin(ActionJournal.Action.CRASH_OFF, mod);
         CheckedResult result;
+        GameReports.setCrashOffUnderWay(true);
         try {
             result = Games.getNow().runUnbudgeted(off);
         } catch (RuntimeException e) {
             journal.endThrown();
             throw e;
+        } finally {
+            GameReports.setCrashOffUnderWay(false);
         }
         journal.endSwitch(result.result(), result.check() instanceof Report.OffCheck.PartlyOff);
         SwitchHistory.get().recordDone(result.result(), SwitchHistory.Cause.ANTI_CRASH, "");
@@ -259,6 +267,10 @@ public final class CrashGuard {
         if (broke != null) {
             return broke;
         }
+        String unapplied = findUnappliedMixinOwner(thrown);
+        if (unapplied != null) {
+            return unapplied;
+        }
         String merged = findMergedOwner(thrown);
         if (merged != null) {
             return merged;
@@ -327,6 +339,11 @@ public final class CrashGuard {
             }
         }
         return Arrays.asList(frames);
+    }
+
+    private static @Nullable String findUnappliedMixinOwner(Throwable thrown) {
+        Guard now = guard;
+        return now == null ? null : now.unapplied().findOwner(thrown);
     }
 
     private static @Nullable String findMergedOwner(Throwable thrown) {

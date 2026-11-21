@@ -920,6 +920,7 @@
   "hotwire.crash.title": "O Hotwire segurou um crash",
   "hotwire.crash.off_held": "%s está desligado, mas um pedaço dele que o jogo ainda tinha crashou. O Hotwire manteve o jogo rodando. Reinicie o jogo pra limpar. %s",
   "hotwire.crash.turned_off": "%s crashou, então o Hotwire desligou ele. O jogo continua. %s",
+  "hotwire.crash.left_half_joined": "O mundo não conseguiu terminar de abrir, então o Hotwire tirou você dele. Abra de novo.",
   "hotwire.crash.not_turned_off": "%s crashou e não pôde ser desligado: %s %s",
   "hotwire.own_fault.title": "O Hotwire segurou um erro dele mesmo",
   "hotwire.own_fault": "O próprio código do Hotwire falhou dentro do jogo, mas o jogo continuou: %s. Reinicie o jogo por segurança. %s",

@@ -920,6 +920,7 @@
   "hotwire.crash.title": "Hotwire hat einen Absturz abgefangen",
   "hotwire.crash.off_held": "%s ist aus, aber ein Stück davon, das das Spiel noch hatte, ist abgestürzt. Hotwire hat das Spiel am Laufen gehalten. Starte das Spiel neu, um es zu beseitigen. %s",
   "hotwire.crash.turned_off": "%s ist abgestürzt, also hat Hotwire ihn ausgeschaltet. Das Spiel läuft weiter. %s",
+  "hotwire.crash.left_half_joined": "Die Welt konnte nicht fertig geladen werden, deshalb hat Hotwire dich rausgeholt. Öffne sie einfach nochmal.",
   "hotwire.crash.not_turned_off": "%s ist abgestürzt und konnte nicht ausgeschaltet werden: %s %s",
   "hotwire.own_fault.title": "Hotwire hat einen eigenen Fehler abgefangen",
   "hotwire.own_fault": "Hotwires eigener Code ist im Spiel fehlgeschlagen, aber das Spiel lief weiter: %s. Starte das Spiel sicherheitshalber neu. %s",

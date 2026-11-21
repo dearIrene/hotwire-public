@@ -19,6 +19,7 @@ import dev.moon.hotwire.engine.OwnThrowNotice;
 import dev.moon.hotwire.engine.RestartOnlyFile;
 import dev.moon.hotwire.engine.SeenUses;
 import dev.moon.hotwire.engine.SwitchRunner;
+import dev.moon.hotwire.engine.UnappliedMixins;
 import dev.moon.hotwire.fabric.add.AddGameSide;
 import dev.moon.hotwire.fabric.rebuild.GameClasses;
 import dev.moon.hotwire.fabric.rebuild.GameMixinCopy;
@@ -476,7 +477,18 @@ final class EngineStart {
             return parts == null ? null : parts.runner();
         }, say, started::writeReport, () -> started.getSettings().isAntiCrashOn(),
                 () -> !started.getSettings().isAntiCrashOn() && !started.getSettings().isAntiCrashOfferOff(),
-                id -> DevSession.isDevMod(id) && started.getSettings().isDevCatchOn(DevSetups.get().inSetup()));
+                id -> DevSession.isDevMod(id) && started.getSettings().isDevCatchOn(DevSetups.get().inSetup()),
+                new UnappliedMixins() {
+                    @Override
+                    public @Nullable String findOwner(Throwable thrown) {
+                        return MixinInternals.findUnappliedOwner(thrown);
+                    }
+
+                    @Override
+                    public boolean dropFrom(Throwable thrown) {
+                        return MixinInternals.dropUnapplied(thrown);
+                    }
+                });
         OwnThrowNotice.install(engine.getTasks(), say,
                 why -> started.writeReport(Lang.get("hotwire.report.file.hotwire_error"), why));
         JvmParts ready = started.findParts();
