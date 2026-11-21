@@ -17,6 +17,7 @@ import java.util.Objects;
 import java.util.Optional;
 import java.util.Set;
 import java.util.WeakHashMap;
+import java.util.concurrent.ConcurrentHashMap;
 import java.util.function.Predicate;
 import org.jspecify.annotations.Nullable;
 import org.slf4j.Logger;
@@ -29,8 +30,33 @@ final class AddWideners {
     private final Set<Class<?>> accessible = Collections.synchronizedSet(
             Collections.newSetFromMap(new WeakHashMap<>()));
 
+    private final Map<Path, JarUseReader.JarClasses> reads = new ConcurrentHashMap<>();
+
     AddWideners(ModAdder.Engine engine) {
         this.engine = engine;
+    }
+
+    private JarUseReader.@Nullable JarClasses readJar(@Nullable Path path) {
+        if (path == null) {
+            return null;
+        }
+        JarUseReader.JarClasses known = this.reads.get(path);
+        if (known != null) {
+            return known;
+        }
+        JarUseReader.JarClasses read = JarUseReader.readJar(path);
+        if (read != null) {
+            this.reads.put(path, read);
+        }
+        return read;
+    }
+
+    void forget(Path path) {
+        this.reads.remove(path);
+    }
+
+    void forgetAll() {
+        this.reads.clear();
     }
 
     private void openAccessor(Class<?> type) {
@@ -63,7 +89,7 @@ final class AddWideners {
         if (!unbridgeable.isEmpty()) {
             return Optional.of(AccessWidenerText.describeRefusal(name, unbridgeable.get(0)));
         }
-        JarUseReader.JarClasses jar = JarUseReader.readJar(path);
+        JarUseReader.JarClasses jar = this.readJar(path);
         for (WidenerUses.Use use : JarUseReader.findUsesOf(jar, loaded, this.engine)) {
             if (!use.isFixable() && !JarUseReader.isMovable(use, jar, this.engine, false)) {
                 return Optional.of(Lang.get("hotwire.add.widener_loaded", name, use.describe()));
@@ -88,7 +114,7 @@ final class AddWideners {
         if (!unbridgeable.isEmpty()) {
             return Optional.of(AccessWidenerText.describeRefusal(name, unbridgeable.get(0)));
         }
-        JarUseReader.JarClasses jar = JarUseReader.readJar(path);
+        JarUseReader.JarClasses jar = this.readJar(path);
         for (WidenerUses.Use use : JarUseReader.findUsesOf(jar, loaded, this.engine)) {
             if (!use.isFixable()) {
                 return Optional.of(Lang.get("hotwire.update.widener_loaded", name, use.describe()));
@@ -118,7 +144,7 @@ final class AddWideners {
         part.accessWidener().ifPresent(widener -> {
             List<AccessWidenerText.Clause> loaded = widener.getClausesOnLoadedClasses(this.engine::isLoaded);
 
-            JarUseReader.JarClasses jar = JarUseReader.readJar(path);
+            JarUseReader.JarClasses jar = this.readJar(path);
 
             Map<String, String> moves = new LinkedHashMap<>();
             Map<String, String> adopted = new LinkedHashMap<>();

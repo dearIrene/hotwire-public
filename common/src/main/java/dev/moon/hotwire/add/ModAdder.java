@@ -36,6 +36,7 @@ import java.io.IOException;
 import java.io.InputStream;
 import java.nio.file.Files;
 import java.nio.file.Path;
+import java.nio.file.attribute.BasicFileAttributes;
 import java.time.Duration;
 import java.util.ArrayDeque;
 import java.util.ArrayList;
@@ -149,6 +150,8 @@ public final class ModAdder {
 
     private final Map<Path, ModJar> readsAhead = new ConcurrentHashMap<>();
 
+    private final Map<Path, String> readStamps = new ConcurrentHashMap<>();
+
     private final Map<Path, ContentScan.Classes> scans = new ConcurrentHashMap<>();
     private final Map<Path, ContentScan.Classes> ownScans = new ConcurrentHashMap<>();
 
@@ -238,11 +241,15 @@ public final class ModAdder {
     AddPreview preview(Path jarPath) {
         StageTimes times = new StageTimes();
         AddPreview preview = null;
+        this.forgetReadsAhead();
+        this.savingReads = true;
         try {
             preview = this.preview(jarPath, times);
             return preview;
         } finally {
-            this.forgetScans();
+            this.savingReads = false;
+
+            this.stampReads();
 
             LOGGER.info("[Hotwire] the dry run of {} took {}{}", jarPath.getFileName(), times,
                     preview == null || preview.mode() == AddMode.NOW ? ""
@@ -521,6 +528,7 @@ public final class ModAdder {
 
     private AddDecision decide(List<Path> jarPaths, Map<String, Part> parts, Set<String> off,
             Function<String, String> nameOf) {
+        this.dropChanged();
         this.setAside.clear();
 
         if (jarPaths.size() > 1) {
@@ -635,6 +643,15 @@ public final class ModAdder {
     }
 
     public Result add(List<Path> jarPaths, Function<String, String> nameOf, Set<String> leaving,
+            Function<Set<String>, @Nullable String> beforeOn) {
+        try {
+            return this.addJars(jarPaths, nameOf, leaving, beforeOn);
+        } finally {
+            this.forgetReadsAhead();
+        }
+    }
+
+    private Result addJars(List<Path> jarPaths, Function<String, String> nameOf, Set<String> leaving,
             Function<Set<String>, @Nullable String> beforeOn) {
         Map<String, Part> parts = new LinkedHashMap<>();
         Set<String> offThen = new HashSet<>(this.engine.getSwitcher().getOff());
@@ -847,6 +864,8 @@ public final class ModAdder {
 
     public void forgetReadsAhead() {
         this.readsAhead.clear();
+        this.readStamps.clear();
+        this.addWideners.forgetAll();
         this.forgetScans();
     }
 
@@ -854,6 +873,38 @@ public final class ModAdder {
         this.scans.clear();
         this.ownScans.clear();
         this.contents.clear();
+    }
+
+    private void stampReads() {
+        Set<Path> read = new HashSet<>(this.readsAhead.keySet());
+        read.addAll(this.scans.keySet());
+        read.addAll(this.ownScans.keySet());
+        read.addAll(this.contents.keySet());
+        for (Path path : read) {
+            this.readStamps.put(path, stampOf(path));
+        }
+    }
+
+    private void dropChanged() {
+        this.readStamps.forEach((path, stamp) -> {
+            if (!stampOf(path).equals(stamp)) {
+                this.readStamps.remove(path);
+                this.readsAhead.remove(path);
+                this.scans.remove(path);
+                this.ownScans.remove(path);
+                this.contents.remove(path);
+                this.addWideners.forget(path);
+            }
+        });
+    }
+
+    private static String stampOf(Path path) {
+        try {
+            BasicFileAttributes attributes = Files.readAttributes(path, BasicFileAttributes.class);
+            return attributes.size() + "@" + attributes.lastModifiedTime().toMillis();
+        } catch (IOException e) {
+            return "";
+        }
     }
 
     public ModJar readJar(Path path) throws ModJarException {
