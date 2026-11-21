@@ -18,11 +18,6 @@ public final class OffModClose {
     private static final long EXIT_AFTER_MILLIS = 10_000;
 
     public static void exitWhenStuck(Minecraft client) {
-        boolean anyOff = GameRegistrations.getJournal().countByOwner().keySet().stream().anyMatch(Tripwire::isWatched);
-        if (!anyOff) {
-            return;
-        }
-
         MinecraftServer server = client.getSingleplayerServer();
         Thread game = Thread.currentThread();
         Thread watch = new Thread(() -> {
