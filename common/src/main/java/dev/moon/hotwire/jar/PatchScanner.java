@@ -182,6 +182,8 @@ final class PatchScanner {
             }
         }
         Set<String> read = new HashSet<>();
+
+        Set<String> collected = new HashSet<>();
         while (!reached.isEmpty()) {
             String type = reached.poll();
             byte[] bytes = read.add(type) ? reader.read(type + ".class") : null;
@@ -190,8 +192,10 @@ final class PatchScanner {
             }
             Set<String> refs = new HashSet<>();
             collectNamedClasses(bytes, refs);
-            collectModIds(bytes, asks);
-            collectAsksOfFieldsRead(bytes, owns, reader, asks);
+            if (collected.add(type)) {
+                collectModIds(bytes, asks);
+            }
+            collectAsksOfFieldsRead(bytes, owns, reader, asks, collected);
             for (String ref : refs) {
                 if (owns.contains(ref)) {
                     if (!read.contains(ref)) {
@@ -280,19 +284,17 @@ final class PatchScanner {
     }
 
     private static void collectAsksOfFieldsRead(byte[] bytes, Set<String> owns, ModJarReader.EntryReader entries,
-            Set<String> into) throws IOException {
+            Set<String> into, Set<String> collected) throws IOException {
         ClassReader reader = openPool(bytes);
         if (reader == null) {
             return;
         }
         char[] buffer = new char[reader.getMaxStringLength()];
-
-        Set<String> asked = new HashSet<>();
         for (int item = 1; item < reader.getItemCount(); item++) {
             int offset = reader.getItem(item);
             if (offset != 0 && bytes[offset - 1] == FIELD_ENTRY) {
                 String owner = reader.readClass(offset, buffer);
-                byte[] holder = owns.contains(owner) && asked.add(owner) ? entries.read(owner + ".class") : null;
+                byte[] holder = owns.contains(owner) && collected.add(owner) ? entries.read(owner + ".class") : null;
                 if (holder != null) {
                     collectModIds(holder, into);
                 }
