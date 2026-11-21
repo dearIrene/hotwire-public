@@ -356,7 +356,8 @@ final class CollectionReferences implements FixedLists.Walk {
         }
         CollectionNotes notes = ElementLook.isLooking() ? this.look.getNotes() : null;
 
-        if (notes != null && !NO_PRINTS && notes.isReadBy(value, this.reader) && notes.isUnchanged(value)) {
+        if (notes != null && !NO_PRINTS && !this.rereading && notes.isReadBy(value, this.reader)
+                && notes.isUnchanged(value)) {
             return;
         }
         if (notes != null) {
@@ -371,8 +372,9 @@ final class CollectionReferences implements FixedLists.Walk {
                 this.readChanging(map, now -> NamespacedMaps.removeFrom(this, (Map<?, ?>) now));
             }
             this.collect(value);
-            if (value instanceof List<?> list && list.size() <= LookRoots.LARGEST && CollectionParts.isFixedSize(list)
-                    && field.getType().isAssignableFrom(List.class)) {
+
+            if (value instanceof List<?> list && (list.size() <= LookRoots.LARGEST || this.rereading)
+                    && CollectionParts.isFixedSize(list) && field.getType().isAssignableFrom(List.class)) {
                 FixedLists.removeFromField(this, field, null);
             }
 
@@ -443,6 +445,9 @@ final class CollectionReferences implements FixedLists.Walk {
         return String.valueOf(this.look.getNotes().findOrigin(container).staticsOf());
     }
 
+    private boolean rereading;
+    private @Nullable IdentityHashMap<Object, String> walkOut;
+
     private void begin(List<String> mods) {
         this.seen = new IdentityHashMap<>();
         this.readThrough = Collections.newSetFromMap(new IdentityHashMap<>());
@@ -450,6 +455,10 @@ final class CollectionReferences implements FixedLists.Walk {
         this.mods = List.copyOf(mods);
         IdentityHashMap<Object, String> out = Games.getNow().findOutContent();
         this.owners = new ElementOwners(mods, Games.getNow().getRegistered(), out, this.reflected);
+
+        CollectionNotes notes = ElementLook.isLooking() ? this.look.getNotes() : null;
+        this.rereading = notes != null && !out.isEmpty() && notes.isOutUnread(out);
+        this.walkOut = out;
         if (!out.isEmpty()) {
             LOGGER.debug("[Hotwire] the walk for {} takes {} objects that left the registries as their mods'{}",
                     mods.size() > 4 ? mods.size() + " mods" : mods, out.size(),
@@ -510,7 +519,7 @@ final class CollectionReferences implements FixedLists.Walk {
             ElementLook.stopIfAsked();
 
             long print = notes == null ? Fingerprints.UNKNOWN : printFields(owner);
-            if (notes != null && notes.isStaticsUnchanged(owner, print)) {
+            if (notes != null && !this.rereading && notes.isStaticsUnchanged(owner, print)) {
                 unchanged++;
                 continue;
             }
@@ -535,6 +544,10 @@ final class CollectionReferences implements FixedLists.Walk {
         }
         this.readingStaticsOf = null;
         this.reader = TakeReach.GAME;
+
+        if (this.rereading) {
+            this.look.getNotes().markOutRead(this.walkOut);
+        }
         this.report.end(ElementLook.isLooking(), mods, statics.size(), began, this.owners.getWrappers().describe(),
                 this.candidates);
     }
@@ -920,7 +933,8 @@ final class CollectionReferences implements FixedLists.Walk {
                 && CollectionParts.isFixedSize(list) && field.getType().isAssignableFrom(List.class);
         CollectionNotes notes = fixed && ElementLook.isLooking() && CollectionParts.isGameObject(holder)
                 ? this.look.getNotes() : null;
-        if (notes != null && !NO_PRINTS && notes.isReadBy(value, this.reader) && notes.isUnchanged(value)) {
+        if (notes != null && !NO_PRINTS && !this.rereading && notes.isReadBy(value, this.reader)
+                && notes.isUnchanged(value)) {
             return;
         }
         if (notes != null) {
@@ -963,7 +977,7 @@ final class CollectionReferences implements FixedLists.Walk {
         CollectionNotes notes = ElementLook.isLooking() ? this.look.getNotes() : null;
 
         if (notes != null && !NO_PRINTS && !notes.isBeingRead(value)) {
-            if (notes.isReadBy(value, this.reader) && notes.isUnchanged(value)) {
+            if (!this.rereading && notes.isReadBy(value, this.reader) && notes.isUnchanged(value)) {
                 return;
             }
         }

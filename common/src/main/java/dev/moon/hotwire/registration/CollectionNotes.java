@@ -96,6 +96,8 @@ public final class CollectionNotes {
     private int dead;
 
     private final List<Note> order = new ArrayList<>();
+
+    private @Nullable IdentityHashMap<Object, String> outRead;
     private List<Runnable> nowhere = new ArrayList<>();
 
     private static final String ANY = "";
@@ -488,6 +490,15 @@ public final class CollectionNotes {
         if (note != null) {
             note.print = Fingerprints.UNKNOWN;
         }
+    }
+
+    @SuppressWarnings("ReferenceEquality")
+    synchronized boolean isOutUnread(IdentityHashMap<Object, String> out) {
+        return out != this.outRead;
+    }
+
+    synchronized void markOutRead(@Nullable IdentityHashMap<Object, String> out) {
+        this.outRead = out;
     }
 
     synchronized boolean isUnchanged(Object container) {

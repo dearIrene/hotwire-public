@@ -71,6 +71,8 @@ public final class FieldReferences {
     }
 
     private volatile @Nullable EarlyScan scanAhead;
+
+    private @Nullable IdentityHashMap<Object, String> lookedOut;
     private final AtomicBoolean refreshDue = new AtomicBoolean();
     private final LoadedCheckAnswers loadedChecks;
     private final StaticRecomputer recomputer;
@@ -255,6 +257,9 @@ public final class FieldReferences {
     }
 
     public boolean refreshEvery(Collection<String> mods, Predicate<String> on) {
+        if (this.isOutChanged()) {
+            return false;
+        }
         List<Class<?>> arrived = this.arrivals.take();
         if (arrived == null) {
             return false;
@@ -286,6 +291,14 @@ public final class FieldReferences {
         }
         this.elements.takeOut(List.copyOf(mods), List.of(), statics, HandedSearch.NONE);
         return true;
+    }
+
+    @SuppressWarnings("ReferenceEquality")
+    private boolean isOutChanged() {
+        IdentityHashMap<Object, String> out = Games.getNow().findOutContent();
+        boolean changed = out != this.lookedOut;
+        this.lookedOut = out;
+        return changed && !out.isEmpty();
     }
 
     private void readStaticsLists() {

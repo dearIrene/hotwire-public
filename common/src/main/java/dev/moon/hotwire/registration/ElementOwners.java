@@ -307,6 +307,11 @@ final class ElementOwners {
             if (element == null) {
                 return null;
             }
+
+            String left = this.findOutOwner(element);
+            if (left != null) {
+                return left;
+            }
             String mod = this.findOwnerAmong(element);
             return mod != null && ElementTakes.findWrappedValue(element, mod) != null ? mod : null;
         }
