@@ -216,6 +216,17 @@ public final class AccessBridge {
         }
         for (MethodNode method : node.methods) {
             rewrite(method, openings, host, null);
+            eraseOwnSites(method, openings);
+        }
+    }
+
+    private static void eraseOwnSites(MethodNode method, WidenerUses.Openings openings) {
+        for (AbstractInsnNode insn : method.instructions.toArray()) {
+            if (insn instanceof InvokeDynamicInsnNode site && site.bsm.equals(OPEN) && openings.mentions(site.desc)) {
+                Type returned = Type.getReturnType(site.desc);
+                site.desc = erase(site.desc, openings);
+                castBack(method.instructions, site, returned, openings);
+            }
         }
     }
 
