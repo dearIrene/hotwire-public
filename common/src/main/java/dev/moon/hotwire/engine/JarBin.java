@@ -1,6 +1,8 @@
 package dev.moon.hotwire.engine;
 
 import com.sun.jna.platform.FileUtils;
+import com.sun.jna.platform.win32.Shell32;
+import com.sun.jna.platform.win32.ShellAPI;
 import java.io.IOException;
 import java.nio.file.Files;
 import java.nio.file.Path;
@@ -16,23 +18,50 @@ public final class JarBin {
     private static final int NAMES = 1000;
     private static final int GIO_SECONDS = 20;
 
+    private static final int WANT_NUKE_WARNING = 0x4000;
+
     private JarBin() {
     }
 
     public static String throwAway(Path jar) throws IOException {
         String os = System.getProperty("os.name", "");
-        if (os.startsWith("Windows") || os.startsWith("Mac")) {
-            FileUtils system = FileUtils.getInstance();
-            if (!system.hasTrash()) {
-                throw new IOException("the system has no bin");
+        try {
+            if (os.startsWith("Windows")) {
+                sendToRecycleBin(jar);
+                return "the Recycle Bin";
             }
-            system.moveToTrash(jar.toFile());
-            return "the system's bin";
+            if (os.startsWith("Mac")) {
+                FileUtils system = FileUtils.getInstance();
+                if (!system.hasTrash()) {
+                    throw new IOException("the system has no Trash");
+                }
+                system.moveToTrash(jar.toFile());
+                return "the Trash";
+            }
+        } catch (LinkageError e) {
+            throw new IOException("the system's bin could not be reached: " + e, e);
         }
         if (isTrashedByGio(jar)) {
             return "the desktop's Trash";
         }
-        return String.valueOf(moveToTrash(jar, findHomeTrash(System.getenv(), System.getProperty("user.home"))));
+        Map<String, String> env = System.getenv();
+
+        if (env.containsKey("FLATPAK_ID") || env.containsKey("SNAP")) {
+            throw new IOException("the launcher's sandbox has no way to the Trash");
+        }
+        return String.valueOf(moveToTrash(jar, findHomeTrash(env, System.getProperty("user.home"))));
+    }
+
+    private static void sendToRecycleBin(Path jar) throws IOException {
+        ShellAPI.SHFILEOPSTRUCT operation = new ShellAPI.SHFILEOPSTRUCT();
+        operation.wFunc = ShellAPI.FO_DELETE;
+        operation.pFrom = operation.encodePaths(new String[] {jar.toAbsolutePath().toString()});
+        operation.fFlags = (short) (ShellAPI.FOF_ALLOWUNDO | ShellAPI.FOF_NOCONFIRMATION | ShellAPI.FOF_SILENT
+                | ShellAPI.FOF_NOERRORUI | WANT_NUKE_WARNING);
+        int result = Shell32.INSTANCE.SHFileOperation(operation);
+        if (result != 0 || operation.fAnyOperationsAborted || Files.exists(jar)) {
+            throw new IOException("the Recycle Bin did not take it (" + result + ")");
+        }
     }
 
     private static boolean isTrashedByGio(Path jar) {
