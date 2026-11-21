@@ -322,7 +322,7 @@ public final class ModrinthClient {
 
     private void fetchAlone(Version version, Path target, LongConsumer onBytes) throws IOException {
         Path part = target.resolveSibling(target.getFileName() + ".part");
-        if (!this.copyLocal(version, part)) {
+        if (!this.local.copyTo(version.fileName(), version.size(), version.sha512(), part)) {
             long began = System.nanoTime();
             try {
                 this.transport.fetchTo(version.url(), version.size(), version.sha512(), part, onBytes);
@@ -334,28 +334,6 @@ public final class ModrinthClient {
                     Files.size(part) / 1024, (System.nanoTime() - began) / 1_000_000);
         }
         AtomicFiles.moveInto(part, target);
-    }
-
-    private boolean copyLocal(Version version, Path part) throws IOException {
-        Path copy = this.local.find(version.fileName(), version.size(), version.sha512());
-        if (copy == null) {
-            return false;
-        }
-        try {
-            Files.copy(copy, part, StandardCopyOption.REPLACE_EXISTING);
-        } catch (IOException e) {
-            LOGGER.info("[Hotwire] {} could not be copied from {} ({}); it is downloaded", version.fileName(),
-                    copy.getParent(), e.toString());
-            Files.deleteIfExists(part);
-            return false;
-        }
-        if (LocalJars.isSameJar(part, version.size(), version.sha512())) {
-            return true;
-        }
-        LOGGER.info("[Hotwire] {} changed in {} as it was copied; it is downloaded", version.fileName(),
-                copy.getParent());
-        Files.deleteIfExists(part);
-        return false;
     }
 
     public void fetchTo(Version version, Path target, Downloads queue) throws IOException {
