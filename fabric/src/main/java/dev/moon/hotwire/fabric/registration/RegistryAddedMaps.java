@@ -59,6 +59,7 @@ final class RegistryAddedMaps {
         }
     }
 
+    @SuppressWarnings("unchecked")
     private static int takeFrom(Map<Object, Object> map, Map<Object, String> leaving) {
         int count = 0;
         try {
@@ -73,6 +74,8 @@ final class RegistryAddedMaps {
                             .add(new LeftEntry(map, entry.getKey(), entry.getValue()));
                     it.remove();
                     count++;
+                } else if (entry.getValue() instanceof Map<?, ?> inner) {
+                    count += takeFrom((Map<Object, Object>) inner, leaving);
                 }
             }
         } catch (RuntimeException e) {
