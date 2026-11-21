@@ -50,7 +50,7 @@ public final class JarSwapper {
     }
 
     static void swap(UpdateQueue queue, Path mods, Path replaced) throws IOException {
-        List<UpdateQueue.Entry> entries = queue.getEntries();
+        List<UpdateQueue.Entry> entries = dropUndoable(queue, mods);
         Map<String, String> stuck = new LinkedHashMap<>();
         for (UpdateQueue.Entry entry : entries) {
             String reason = findChange(entry, mods);
@@ -77,6 +77,26 @@ public final class JarSwapper {
             queue.replace(left);
         }
         PendingChanges.trimReplaced(queue, replaced);
+    }
+
+    static List<UpdateQueue.Entry> dropUndoable(UpdateQueue queue, Path mods) throws IOException {
+        List<UpdateQueue.Entry> still = new ArrayList<>();
+        for (UpdateQueue.Entry entry : queue.getEntries()) {
+            Path staged = Path.of(entry.stagedJar());
+            Path running = findRunning(entry, mods);
+            boolean gone = !Files.exists(staged);
+            boolean done = !gone && running != null && FileHashes.findSha256(running).equals(entry.stagedSha256());
+            if (gone || done) {
+                LOGGER.info("[Hotwire] {} {} leaves the queue: {}", entry.name(), entry.toVersion(),
+                        gone ? "its new jar is gone" : "the mods folder has it already");
+            } else {
+                still.add(entry);
+            }
+        }
+        if (still.size() != queue.getEntries().size()) {
+            queue.replace(still);
+        }
+        return still;
     }
 
     private static void holdTied(List<UpdateQueue.Entry> entries, Map<String, String> stuck) {

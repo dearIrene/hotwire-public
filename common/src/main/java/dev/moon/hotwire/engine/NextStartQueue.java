@@ -1,6 +1,7 @@
 package dev.moon.hotwire.engine;
 
 import dev.moon.hotwire.add.AddFirstLook;
+import dev.moon.hotwire.add.AddSupport;
 import dev.moon.hotwire.add.ModAdder;
 import dev.moon.hotwire.jar.FileHashes;
 import dev.moon.hotwire.jar.ModJarException;
@@ -38,8 +39,9 @@ public final class NextStartQueue {
             ModManifest manifest = ModJarReader.read(jar).manifest();
 
             Path folder = this.installed.findFolderJarOf(manifest.id());
-            Path running = ModPolicy.isHotwire(manifest.id()) ? null
-                    : folder != null ? folder : this.installed.findJarOf(manifest.id());
+
+            Path running = ModPolicy.isHotwire(manifest.id()) ? AddSupport.findFolderJar(this.folders.mods(),
+                    manifest.id()) : folder != null ? folder : this.installed.findJarOf(manifest.id());
             String from = running == null ? "" : this.installed.find(manifest.id()).map(ModManifest::version)
                     .orElse("");
             if (running != null && from.equals(manifest.version())) {

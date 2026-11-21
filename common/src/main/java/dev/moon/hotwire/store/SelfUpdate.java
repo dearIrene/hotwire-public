@@ -69,6 +69,7 @@ public final class SelfUpdate {
             return ModPolicy.isNewer(newest.number(), running) ? newest : null;
         } catch (IOException | RuntimeException e) {
             LOGGER.info("[Hotwire] could not ask Modrinth for a newer Hotwire: {}", e.toString());
+            this.started = false;
             return null;
         }
     }

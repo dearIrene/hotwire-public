@@ -14,6 +14,7 @@ import java.security.CodeSource;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Optional;
+import java.util.stream.Stream;
 import java.util.zip.ZipEntry;
 import java.util.zip.ZipFile;
 import net.fabricmc.loader.api.FabricLoader;
@@ -55,7 +56,7 @@ public final class SwapAtClose {
         if (this.started || entries.isEmpty()) {
             return;
         }
-        Optional<String> java = ProcessHandle.current().info().command();
+        Optional<String> java = findJava();
         if (java.isEmpty()) {
             LOGGER.error("[Hotwire] the running Java is not known, so {} queued updates wait for the next close",
                     entries.size());
@@ -84,7 +85,7 @@ public final class SwapAtClose {
     }
 
     private synchronized void watchClose() {
-        Optional<String> java = ProcessHandle.current().info().command();
+        Optional<String> java = findJava();
         if (java.isEmpty()) {
             return;
         }
@@ -164,6 +165,16 @@ public final class SwapAtClose {
             }
         }
         return String.join(File.pathSeparator, entries);
+    }
+
+    private static Optional<String> findJava() {
+        Optional<String> command = ProcessHandle.current().info().command();
+        if (command.isPresent()) {
+            return command;
+        }
+        Path bin = Path.of(System.getProperty("java.home", "")).resolve("bin");
+        return Stream.of("javaw.exe", "java.exe", "java").map(bin::resolve).filter(Files::isRegularFile)
+                .map(String::valueOf).findFirst();
     }
 
     public static List<String> getUnfinished(UpdateQueue queue) {
