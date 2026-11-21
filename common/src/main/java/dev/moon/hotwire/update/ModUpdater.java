@@ -879,6 +879,12 @@ public final class ModUpdater {
         try {
             Set<String> old = JarLinks.readClassNames(running);
             Map<String, byte[]> fresh = ContentScan.readClasses(jar).bytes();
+            if (!JarLinks.hasRepeatedClass(running) && !JarLinks.hasRepeatedClass(jar)
+                    && JarLinks.hasEverythingOf(old, ContentScan.readClasses(running).bytes(), fresh)) {
+                LOGGER.info("[Hotwire] {} {} keeps every class and member of the version running, so no user can"
+                        + " lose one", incoming.name(), incoming.version());
+                return Optional.empty();
+            }
             JarLinks.GameClassReader reader = new JarLinks.GameClassReader(fresh::get);
 
             Parallel.runEachBeside(users, user -> this.readNamedOf(user, running, old));

@@ -11,6 +11,7 @@ import java.lang.reflect.Method;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.util.ArrayDeque;
+import java.util.ArrayList;
 import java.util.Collections;
 import java.util.Deque;
 import java.util.HashMap;
@@ -55,21 +56,66 @@ public final class JarLinks {
 
     public static Set<String> readClassNames(Path jar) throws IOException {
         Set<String> names = new HashSet<>();
+        readClassNames(jar, names::add);
+        return names;
+    }
+
+    public static boolean hasRepeatedClass(Path jar) throws IOException {
+        List<String> names = new ArrayList<>();
+        readClassNames(jar, names::add);
+        return names.size() != new HashSet<>(names).size();
+    }
+
+    private static void readClassNames(Path jar, Consumer<String> into) throws IOException {
         ZipBudget budget = new ZipBudget();
         try (ZipFile zip = new ZipFile(jar.toFile())) {
             for (ZipEntry entry : Collections.list(zip.entries())) {
-                addClassName(entry.getName(), names);
+                addClassName(entry.getName(), into);
                 if (entry.getName().endsWith(JAR_SUFFIX)) {
                     try (InputStream in = zip.getInputStream(entry)) {
-                        collectNames(budget.read(in), names, 1, budget);
+                        collectNames(budget.read(in), into, 1, budget);
                     }
                 }
             }
         }
-        return names;
     }
 
-    private static void collectNames(byte[] jar, Set<String> into, int depth, ZipBudget budget) throws IOException {
+    public static boolean hasEverythingOf(Set<String> old, Map<String, byte[]> oldBytes, Map<String, byte[]> fresh) {
+        for (String name : old) {
+            byte[] before = oldBytes.get(name);
+            byte[] after = fresh.get(name);
+            if (before == null || after == null) {
+                return false;
+            }
+            ClassHeader was;
+            ClassHeader is;
+            try {
+                was = ClassHeader.of(before);
+                is = ClassHeader.of(after);
+            } catch (RuntimeException e) {
+                return false;
+            }
+            if (!was.findAbove().equals(is.findAbove()) || !findKeys(is.methods()).containsAll(findKeys(was.methods()))
+                    || !findKeys(is.fields()).containsAll(findKeys(was.fields()))) {
+                return false;
+            }
+            for (String above : was.findAbove()) {
+                if (!old.contains(above) && fresh.containsKey(above)) {
+                    return false;
+                }
+            }
+        }
+        return true;
+    }
+
+    private static Set<String> findKeys(List<ClassHeader.Member> members) {
+        Set<String> keys = new HashSet<>();
+        members.forEach(member -> keys.add(member.name() + " " + member.desc()));
+        return keys;
+    }
+
+    private static void collectNames(byte[] jar, Consumer<String> into, int depth, ZipBudget budget)
+            throws IOException {
         ZipBudget.checkDepth(depth);
         ZipBytes zip;
         try {
@@ -87,7 +133,7 @@ public final class JarLinks {
         }
     }
 
-    private static void collectNamesOfStream(InputStream jar, Set<String> into, int depth, ZipBudget budget)
+    private static void collectNamesOfStream(InputStream jar, Consumer<String> into, int depth, ZipBudget budget)
             throws IOException {
         ZipInputStream zip = new ZipInputStream(jar);
         for (ZipEntry entry = zip.getNextEntry(); entry != null; entry = zip.getNextEntry()) {
@@ -98,9 +144,9 @@ public final class JarLinks {
         }
     }
 
-    private static void addClassName(String entry, Set<String> into) {
+    private static void addClassName(String entry, Consumer<String> into) {
         if (entry.endsWith(CLASS_SUFFIX)) {
-            into.add(entry.substring(0, entry.length() - CLASS_SUFFIX.length()));
+            into.accept(entry.substring(0, entry.length() - CLASS_SUFFIX.length()));
         }
     }
 
