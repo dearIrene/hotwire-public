@@ -10,6 +10,7 @@ import java.util.List;
 import java.util.Map;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.CountDownLatch;
+import java.util.function.BiFunction;
 import java.util.function.Function;
 import java.util.function.IntSupplier;
 import java.util.function.Supplier;
@@ -44,7 +45,8 @@ public interface AddGame {
 
     void refuseWorldsFor(String name);
 
-    ModAdder.Result addAroundReopen(Supplier<ModAdder.Result> add, boolean byPlayer);
+    ModAdder.Result addAroundReopen(Supplier<ModAdder.Result> add, boolean byPlayer,
+            BiFunction<ModAdder.Result.Added, String, ModAdder.Result> takeBack);
 
     MixinCopy.Decorations readDecorations(List<ModJar> jars);
 }

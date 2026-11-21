@@ -2,14 +2,15 @@ package dev.moon.hotwire.fabric;
 
 import dev.moon.hotwire.classfile.GameNames;
 import dev.moon.hotwire.dev.DevSession;
+import dev.moon.hotwire.engine.DataPackFaults;
 import dev.moon.hotwire.engine.DevSetups;
 import dev.moon.hotwire.engine.EngineApi;
 import dev.moon.hotwire.engine.HotwireEngine;
 import dev.moon.hotwire.engine.LoadedMods;
 import dev.moon.hotwire.fabric.add.LoadStatusViews;
+import dev.moon.hotwire.fabric.add.WorldReopen;
 import dev.moon.hotwire.fabric.registration.EntityAttachments;
 import dev.moon.hotwire.fabric.registration.OffModClose;
-
 import dev.moon.hotwire.modrinth.Downloads;
 import dev.moon.hotwire.redefine.FieldHolders;
 import dev.moon.hotwire.redefine.InitHookRuns;
@@ -143,8 +144,10 @@ public final class HotwireClient implements ClientModInitializer {
         });
 
         InitHookRuns.catchUpLaterWhile(() -> Minecraft.getInstance().level == null);
+        DataPackFaults.onStopped(WorldReopen::showStopped);
 
         ServerLifecycleEvents.SERVER_STOPPED.register(server -> LoadStatusViews.release());
+        ServerLifecycleEvents.SERVER_STARTED.register(server -> WorldContentNotes.noteAtStart(server, findEngine()));
         ServerLifecycleEvents.SERVER_STARTING.register(server -> {
             serverThread = new WeakReference<>(server.getRunningThread());
             ActionJournal.get().note(ActionJournal.Action.OPEN, "");

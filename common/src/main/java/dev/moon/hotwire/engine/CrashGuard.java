@@ -61,7 +61,8 @@ public final class CrashGuard {
         Set<String> switched = ConcurrentHashMap.newKeySet();
         List<String> said = new CopyOnWriteArrayList<>();
         made[0] = new CrashPolicy(CrashGuard::findModBehind, id -> canLeave(id) && (isTouched(installed, switched, id)
-                || (antiCrash.getAsBoolean() && !hasWorldContent(runner, id))), caught -> {
+                || DataPackFaults.isFaulted(id) || (antiCrash.getAsBoolean() && !hasWorldContent(runner, id))),
+                caught -> {
             String name = installed.nameOf(caught.mod());
             boolean byAntiCrash = !isTouched(installed, switched, caught.mod());
             LOGGER.error("[Hotwire] {} threw at {} ({}); Hotwire keeps the game going and turns it off", name,
@@ -86,6 +87,9 @@ public final class CrashGuard {
                 return;
             }
 
+            if (DataPackFaults.isFaulted(caught.mod())) {
+                DataPackFaults.tellStopped(name);
+            }
             Notices.show(Lang.get(byAntiCrash ? "hotwire.anti_crash.title" : "hotwire.crash.title"),
                     Lang.get("hotwire.anti_crash.turning_off", name));
             endWhenThrown(made[0], caught.mod(), tasks.submit("turning off " + caught.mod() + " after its crash",
@@ -251,6 +255,10 @@ public final class CrashGuard {
     private static final long AFTER_SWITCH_NANOS = TimeUnit.SECONDS.toNanos(30);
 
     private static @Nullable String findModBehind(Throwable thrown) {
+        String broke = DataPackFaults.findModOf(CrashGuard::canLeave);
+        if (broke != null) {
+            return broke;
+        }
         String merged = findMergedOwner(thrown);
         if (merged != null) {
             return merged;

@@ -793,6 +793,20 @@ public final class ModAdder {
         }
     }
 
+    public Result takeBackFromWorld(Result.Added added, String why) {
+        ModSwitcher.Result back = this.engine.takeOut(added.ids());
+        String said = Lang.get("hotwire.reopen.add_broke_world", added.name());
+        IllegalStateException cause = new IllegalStateException(why);
+        if (PlayerMessages.isBad(back)) {
+            LOGGER.error("[Hotwire] {} could not be taken back out: {}", added.ids(),
+                    PlayerMessages.describe(back, id -> id));
+            this.game.refuseWorldsFor(added.name());
+            return new Result.Failed(said + " " + Lang.get("hotwire.add.start_failed_stays"), cause, true);
+        }
+        added.ids().forEach(GameRegistrations.getJournal()::forget);
+        return new Result.Failed(said, cause);
+    }
+
     private Result backOut(List<String> ids, String name, Throwable cause, List<String> grew, AddUndo undo,
             Exception failure) {
         LOGGER.error("[Hotwire] {} failed while starting; it goes back out", ids, failure);

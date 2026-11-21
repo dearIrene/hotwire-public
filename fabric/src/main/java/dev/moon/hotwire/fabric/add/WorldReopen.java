@@ -6,6 +6,7 @@ import dev.moon.hotwire.add.WorldBackups;
 import dev.moon.hotwire.fabric.ModViews;
 import dev.moon.hotwire.fabric.OtherPlayers;
 import dev.moon.hotwire.fabric.ResourceReload;
+import dev.moon.hotwire.fabric.mixin.core.client.gui.screens.DatapackLoadFailureScreenAccessor;
 import dev.moon.hotwire.fabric.mixin.core.network.ConnectionAccessor;
 import dev.moon.hotwire.fabric.mixin.core.util.thread.BlockableEventLoopAccessor;
 import dev.moon.hotwire.fabric.version.Spellings;
@@ -32,12 +33,14 @@ import java.util.concurrent.ExecutionException;
 import java.util.concurrent.RejectedExecutionException;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.TimeoutException;
+import java.util.function.BiFunction;
 import java.util.function.Consumer;
 import java.util.function.Predicate;
 import java.util.function.Supplier;
 import java.util.stream.Collectors;
 import net.minecraft.client.Minecraft;
 import net.minecraft.client.gui.screens.AlertScreen;
+import net.minecraft.client.gui.screens.DatapackLoadFailureScreen;
 import net.minecraft.client.gui.screens.DisconnectedScreen;
 import net.minecraft.client.gui.screens.Screen;
 import net.minecraft.client.multiplayer.ClientPacketListener;
@@ -168,7 +171,8 @@ public final class WorldReopen {
         }
     }
 
-    public static ModAdder.Result add(Supplier<ModAdder.Result> add, boolean byPlayer) {
+    public static ModAdder.Result add(Supplier<ModAdder.Result> add, boolean byPlayer,
+            BiFunction<ModAdder.Result.Added, String, ModAdder.Result> takeBack) {
         Optional<String> cannot = findRefusal();
         if (cannot.isPresent()) {
             return new ModAdder.Result.Refused(cannot.get());
@@ -191,8 +195,26 @@ public final class WorldReopen {
                     return new ModAdder.Result.Failed(failed.reason() + " " + Lang.get("hotwire.reopen.stays_closed"),
                             failed.cause(), true);
                 }
-                openOrSay(client, level);
-                return result;
+                if (!(result instanceof ModAdder.Result.Added added)) {
+                    openOrSay(client, level);
+                    return result;
+                }
+                try {
+                    open(client, level);
+                    return result;
+                } catch (WorldRefusal e) {
+                    LOGGER.warn("[Hotwire] the world {} would not open with {}: {}", level, added.ids(),
+                            e.getMessage());
+                    ModAdder.Result back = takeBack.apply(added, e.getMessage());
+                    openOrSay(client, level);
+
+                    showStopped(added.name());
+                    return back;
+                } catch (IllegalStateException e) {
+                    LOGGER.warn("[Hotwire] the world {} did not open again: {}", level, e.getMessage());
+                    Notices.show("Hotwire", Lang.get("hotwire.reopen.not_reopened", e.getMessage()));
+                    return result;
+                }
             } finally {
                 closedFor.accept(false);
             }
@@ -247,6 +269,16 @@ public final class WorldReopen {
         } finally {
             closedFor.accept(false);
         }
+    }
+
+    public static void showStopped(String name) {
+        Minecraft client = Minecraft.getInstance();
+        client.execute(() -> {
+            Screen under = ModViews.openScreen();
+            ModViews.show(new AlertScreen(() -> ModViews.show(under),
+                    Component.literal(Lang.get("hotwire.reopen.refused_add.title", name)),
+                    Component.literal(Lang.get("hotwire.reopen.refused_add", name))));
+        });
     }
 
     public static synchronized void refuseWorldsFor(String name) {
@@ -397,7 +429,12 @@ public final class WorldReopen {
                                 + (shown instanceof Screen screen ? " \"" + screen.getTitle().getString() + "\"" : ""));
             }
             if (refused[0]) {
-                throw new IllegalStateException("the game would not open the world " + level + " again");
+                throw new WorldRefusal("the game would not open the world " + level + " again");
+            }
+
+            if (ModViews.openScreen() instanceof DatapackLoadFailureScreen failed && failed != before) {
+                client.submit(((DatapackLoadFailureScreenAccessor) failed).hotwire$getCancel()).join();
+                throw new WorldRefusal("the data packs of the world " + level + " failed to load");
             }
 
             if (ModViews.openScreen() instanceof DisconnectedScreen dropped && dropped != before) {
@@ -436,6 +473,14 @@ public final class WorldReopen {
             return false;
         } catch (OverlappingFileLockException | IOException e) {
             return true;
+        }
+    }
+
+    static final class WorldRefusal extends IllegalStateException {
+        private static final long serialVersionUID = 1L;
+
+        WorldRefusal(String message) {
+            super(message);
         }
     }
 }

@@ -204,11 +204,25 @@ public final class AddSupport implements ModAdder.Engine {
     }
 
     private @Nullable Path findRunningJar(String id) {
-        Path mods = this.folders.mods().toAbsolutePath().normalize();
+        return findFolderJar(this.folders.mods(), id);
+    }
+
+    public static @Nullable Path findFolderJar(Path mods, String id) {
         return FabricLoader.getInstance().getModContainer(id).map(ModContainer::getOrigin)
                 .filter(origin -> origin.getKind() == ModOrigin.Kind.PATH && !origin.getPaths().isEmpty())
                 .map(origin -> origin.getPaths().get(0).toAbsolutePath().normalize())
-                .filter(jar -> mods.equals(jar.getParent()) && Files.isRegularFile(jar)).orElse(null);
+                .filter(jar -> Files.isRegularFile(jar) && isSameFolder(mods, jar.getParent())).orElse(null);
+    }
+
+    private static boolean isSameFolder(Path mods, @Nullable Path folder) {
+        if (folder == null) {
+            return false;
+        }
+        try {
+            return Files.isSameFile(mods, folder);
+        } catch (IOException e) {
+            return mods.toAbsolutePath().normalize().equals(folder);
+        }
     }
 
     public ModAdder.Result add(Path jar, Function<String, String> nameOf) {
@@ -244,7 +258,7 @@ public final class AddSupport implements ModAdder.Engine {
     }
 
     public ModAdder.Result addAroundReopen(Supplier<ModAdder.Result> add, boolean byPlayer) {
-        return this.game.addAroundReopen(add, byPlayer);
+        return this.game.addAroundReopen(add, byPlayer, this.adder::takeBackFromWorld);
     }
 
     public static void endJournal(ActionJournal.Entry journal, ModAdder.Result result) {

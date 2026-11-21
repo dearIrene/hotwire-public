@@ -3,6 +3,7 @@ package dev.moon.hotwire.report;
 import dev.moon.hotwire.classfile.GameNames;
 import dev.moon.hotwire.config.AtomicFiles;
 import dev.moon.hotwire.engine.LoadedMods;
+import dev.moon.hotwire.engine.WorldContentRecord;
 import dev.moon.hotwire.plan.SwitchPlan;
 import dev.moon.hotwire.registration.Owners;
 import dev.moon.hotwire.store.OutdatedNotice;
@@ -54,6 +55,7 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 public final class GameReports {
+    private static final int WORLD_LOG_LINES = 3000;
     private static final DateTimeFormatter SPAN = DateTimeFormatter.ofPattern("HH:mm:ss");
     private static final Logger LOGGER = LoggerFactory.getLogger(GameReports.class);
 
@@ -535,6 +537,13 @@ public final class GameReports {
         Path pending = game.resolve("hotwire").resolve("updates.json");
         if (Files.isRegularFile(pending)) {
             texts.put("hotwire-updates.json", read(pending));
+        }
+
+        Path worlds = game.resolve("hotwire").resolve(WorldContentRecord.History.FILE);
+        if (Files.isRegularFile(worlds)) {
+            List<String> lines = read(worlds).lines().toList();
+            texts.put("hotwire-" + WorldContentRecord.History.FILE,
+                    String.join("\n", lines.subList(Math.max(0, lines.size() - WORLD_LOG_LINES), lines.size())));
         }
 
         for (String name : List.of(HotwireLog.START_FAILURE, SwapAtClose.LAST_LOGS)) {

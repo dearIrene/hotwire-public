@@ -6,6 +6,7 @@
   "mixins": [
     "features.compat.architectury.event.ArchitecturyEventMixin",
     "core.fabric.base.event.ArrayBackedEventAccessor",
+    "core.resources.RegistryDataLoaderMixin",
     "core.fabric.base.event.EventAccessor",
     "core.fabric.base.event.ArrayBackedEventMixin",
     "core.util.thread.BlockableEventLoopAccessor",
@@ -59,6 +60,8 @@
   ],
   "client": [
     "core.client.MinecraftAccessor",
+    "core.client.gui.screens.DatapackLoadFailureScreenAccessor",
+    "core.client.gui.screens.DatapackLoadFailureScreenMixin",
     "core.client.color.block.BlockColorsAccessor",
     "core.client.color.block.BlockColorsMixin",
     "core.client.ReloadableResourceManagerMixin",
