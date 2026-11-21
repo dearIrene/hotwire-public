@@ -859,6 +859,7 @@
   "hotwire.world_loss.mod_gone": "%s (не установлен)",
   "hotwire.world_loss.open": "Всё равно открыть",
   "hotwire.world_loss.back": "Назад",
+  "hotwire.world_loss.understand": "Я понимаю",
   "hotwire.reopen.add_failed": "«Сохранить и добавить» не смогло закончить: %s",
   "hotwire.reopen.not_reopened": "Мир не открылся снова (%s). Открой его из списка миров.",
   "hotwire.reopen.stays_closed": "До тех пор мир остаётся закрытым.",

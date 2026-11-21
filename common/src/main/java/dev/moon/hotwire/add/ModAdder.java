@@ -731,7 +731,9 @@ public final class ModAdder {
                 }
                 hold.begin();
                 if (PlayerMessages.isBad(switched)) {
-                    return new Result.Failed(PlayerMessages.describe(switched, nameOf) + undo.run(),
+                    Function<String, String> named = id -> parts.containsKey(id)
+                            ? parts.get(id).jar().manifest().name() : nameOf.apply(id);
+                    return new Result.Failed(PlayerMessages.describe(switched, named) + undo.run(),
                             switched instanceof ModSwitcher.Result.Failed failed ? failed.cause()
                                     : new IllegalStateException("refused"));
                 }

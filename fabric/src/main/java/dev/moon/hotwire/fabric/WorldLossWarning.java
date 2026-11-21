@@ -9,6 +9,9 @@ import java.util.List;
 import net.fabricmc.loader.api.FabricLoader;
 import net.minecraft.ChatFormatting;
 import net.minecraft.client.Minecraft;
+import net.minecraft.client.gui.components.Button;
+import net.minecraft.client.gui.components.Checkbox;
+import net.minecraft.client.gui.components.events.GuiEventListener;
 import net.minecraft.client.gui.screens.ConfirmScreen;
 import net.minecraft.client.gui.screens.Screen;
 import net.minecraft.network.chat.Component;
@@ -21,9 +24,37 @@ public final class WorldLossWarning extends ConfirmScreen {
 
     private static volatile @Nullable String allowed;
 
+    private static final int ABOVE_BUTTONS = 28;
+
     private WorldLossWarning(BooleanConsumer answer, Component title, Component text) {
         super(answer, title, text, Component.literal(Lang.get("hotwire.world_loss.open")),
                 Component.literal(Lang.get("hotwire.world_loss.back")));
+    }
+
+    @Override
+    protected void init() {
+        super.init();
+        Component open = Component.literal(Lang.get("hotwire.world_loss.open"));
+        Button openAnyway = null;
+        int buttonsTop = this.height;
+        for (GuiEventListener child : this.children()) {
+            if (child instanceof Button button) {
+                buttonsTop = Math.min(buttonsTop, button.getY());
+                if (button.getMessage().getString().equals(open.getString())) {
+                    openAnyway = button;
+                }
+            }
+        }
+        if (openAnyway == null) {
+            return;
+        }
+        Button gated = openAnyway;
+        gated.active = false;
+        Checkbox understood = Checkbox.builder(Component.literal(Lang.get("hotwire.world_loss.understand")),
+                this.font).onValueChange((box, ticked) -> gated.active = ticked).build();
+        understood.setX((this.width - understood.getWidth()) / 2);
+        understood.setY(buttonsTop - ABOVE_BUTTONS);
+        this.addRenderableWidget(understood);
     }
 
     public static void allowOnce(String level) {

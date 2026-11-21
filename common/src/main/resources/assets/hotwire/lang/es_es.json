@@ -859,6 +859,7 @@
   "hotwire.world_loss.mod_gone": "%s (no instalado)",
   "hotwire.world_loss.open": "Abrir de todos modos",
   "hotwire.world_loss.back": "Atrás",
+  "hotwire.world_loss.understand": "Lo entiendo",
   "hotwire.reopen.add_failed": "Guardar y añadir no pudo terminar: %s",
   "hotwire.reopen.not_reopened": "El mundo no se volvió a abrir (%s). Ábrelo desde la lista de mundos.",
   "hotwire.reopen.stays_closed": "El mundo se queda cerrado hasta entonces.",
