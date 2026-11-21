@@ -93,10 +93,10 @@ public final class HotwireSettings {
     private static final int FORMAT = 2;
     private static final int AUTO_FILL_ON_FROM = 2;
 
-    private static final List<String> IN_WORLD_CHOICES = List.of("hotwire.settings.in_world.auto",
-            "hotwire.settings.in_world.off");
+    private static final List<String> IN_WORLD_CHOICES = List.of("hotwire.settings.in_world.off",
+            "hotwire.settings.in_world.auto");
 
-    private static final List<InWorld> IN_WORLD_ORDER = List.of(InWorld.AUTO, InWorld.OFF);
+    private static final List<InWorld> IN_WORLD_ORDER = List.of(InWorld.OFF, InWorld.AUTO);
     private static final List<OffLasts> OFF_LASTS_ORDER = List.of(OffLasts.SESSION, OffLasts.UNTIL_ON);
     private static final List<String> OFF_LASTS_CHOICES = List.of("hotwire.settings.off_lasts.session",
             "hotwire.settings.off_lasts.until_on");
@@ -113,14 +113,14 @@ public final class HotwireSettings {
     private static final List<String> AUTO_FILL_CHOICES = List.of("hotwire.settings.auto_fill.off",
             "hotwire.settings.auto_fill.on");
     private static final List<Developer> DEVELOPER_ORDER = List.of(Developer.OFF, Developer.ON);
-    private static final List<UpdateChecks> UPDATE_CHECKS_ORDER = List.of(UpdateChecks.ON, UpdateChecks.OFF);
-    private static final List<String> UPDATE_CHECKS_CHOICES = List.of("hotwire.settings.update_checks.on",
-            "hotwire.settings.update_checks.off");
+    private static final List<UpdateChecks> UPDATE_CHECKS_ORDER = List.of(UpdateChecks.OFF, UpdateChecks.ON);
+    private static final List<String> UPDATE_CHECKS_CHOICES = List.of("hotwire.settings.update_checks.off",
+            "hotwire.settings.update_checks.on");
     private static final List<String> DEVELOPER_CHOICES = List.of("hotwire.settings.developer.off",
             "hotwire.settings.developer.on");
-    private static final List<NestedJars> NESTED_ORDER = List.of(NestedJars.AUTO, NestedJars.ALL, NestedJars.NONE);
-    private static final List<String> NESTED_CHOICES = List.of("hotwire.settings.nested.auto",
-            "hotwire.settings.nested.all", "hotwire.settings.nested.none");
+    private static final List<NestedJars> NESTED_ORDER = List.of(NestedJars.NONE, NestedJars.ALL, NestedJars.AUTO);
+    private static final List<String> NESTED_CHOICES = List.of("hotwire.settings.nested.none",
+            "hotwire.settings.nested.all", "hotwire.settings.nested.auto");
     private static final List<AntiCrash> ANTI_CRASH_ORDER = List.of(AntiCrash.OFF, AntiCrash.ON);
     private static final List<String> ANTI_CRASH_CHOICES = List.of("hotwire.settings.anti_crash.off",
             "hotwire.settings.anti_crash.on");
