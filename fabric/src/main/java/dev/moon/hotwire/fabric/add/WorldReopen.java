@@ -6,6 +6,7 @@ import dev.moon.hotwire.add.WorldBackups;
 import dev.moon.hotwire.fabric.ModViews;
 import dev.moon.hotwire.fabric.OtherPlayers;
 import dev.moon.hotwire.fabric.ResourceReload;
+import dev.moon.hotwire.fabric.WorldLossWarning;
 import dev.moon.hotwire.fabric.mixin.core.client.gui.screens.DatapackLoadFailureScreenAccessor;
 import dev.moon.hotwire.fabric.mixin.core.network.ConnectionAccessor;
 import dev.moon.hotwire.fabric.mixin.core.util.thread.BlockableEventLoopAccessor;
@@ -200,6 +201,7 @@ public final class WorldReopen {
                     return result;
                 }
                 try {
+                    WorldLossWarning.allowOnce(level);
                     open(client, level);
                     return result;
                 } catch (WorldRefusal e) {
@@ -302,6 +304,7 @@ public final class WorldReopen {
 
     private static void openOrSay(Minecraft client, String level) throws InterruptedException {
         try {
+            WorldLossWarning.allowOnce(level);
             open(client, level);
         } catch (IllegalStateException e) {
             LOGGER.warn("[Hotwire] the world {} did not open again: {}", level, e.getMessage());
@@ -430,6 +433,10 @@ public final class WorldReopen {
             }
             if (refused[0]) {
                 throw new WorldRefusal("the game would not open the world " + level + " again");
+            }
+            if (WorldLossWarning.isShown(ModViews.openScreen())) {
+                throw new WorldRefusal("the world " + level + " waits for the player: it would open without mods it"
+                        + " holds content of");
             }
 
             if (ModViews.openScreen() instanceof DatapackLoadFailureScreen failed && failed != before) {

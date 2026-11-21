@@ -1,5 +1,6 @@
 package dev.moon.hotwire.switching;
 
+import dev.moon.hotwire.engine.ModPolicy;
 import dev.moon.hotwire.jar.ModManifest;
 import dev.moon.hotwire.plan.ModGraph;
 import dev.moon.hotwire.plan.SwitchPlan;
@@ -30,6 +31,7 @@ import java.util.function.Consumer;
 import java.util.function.Function;
 import java.util.function.Predicate;
 import java.util.function.Supplier;
+import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 import java.util.stream.Collectors;
 import org.jspecify.annotations.Nullable;
@@ -66,6 +68,7 @@ public final class ModSwitcher {
     private static final int NAMED_ROUNDS = 4;
     private final BiConsumer<String, String> restartLearned;
 
+    private static final Pattern MIX_REFUSED = Pattern.compile("Mixin could not patch ([\\w.$]+):");
     private static final Pattern HOOK_WORD = Pattern.compile("[$]([A-Za-z0-9_-]+)(?=[$])");
 
     private final Map<String, String> offBecauseOf = new HashMap<>();
@@ -684,6 +687,28 @@ public final class ModSwitcher {
         return new RebuildException(said, e).withBlamed(e.getBlamedClasses()).withNotFitting(notFitting);
     }
 
+    private RebuildException tellClash(RebuildException e, SwitchPlan plan) {
+        if (!e.getNotFitting().isEmpty()) {
+            return e;
+        }
+        for (Throwable at = e; at != null; at = at.getCause()) {
+            Matcher refused = MIX_REFUSED.matcher(String.valueOf(at.getMessage()));
+            if (refused.find()) {
+                String target = refused.group(1).replace('.', '/');
+                List<String> others = this.graph.findPatchersOf(Set.of(target)).stream()
+                        .filter(id -> !plan.order().contains(id) && this.isOn(id) && ModPolicy.isSwitchable(id))
+                        .toList();
+                if (others.isEmpty()) {
+                    return e;
+                }
+                String said = Lang.get("hotwire.switch.clash",
+                        others.stream().map(this::nameOf).collect(Collectors.joining(", ")));
+                return new RebuildException(said, e).withBlamed(e.getBlamedClasses());
+            }
+        }
+        return e;
+    }
+
     private String nameOf(String id) {
         return this.graph.find(id).map(ModManifest::name).orElse(id);
     }
@@ -831,7 +856,8 @@ public final class ModSwitcher {
                 LOGGER.warn("[Hotwire] Switching {} {} failed and nothing changed", goingOff ? "off" : "on",
                         plan.order(), e);
             }
-            return new Result.Failed(plan, this.tellNotFitting(e));
+            return new Result.Failed(plan, goingOff ? this.tellNotFitting(e)
+                    : this.tellClash(this.tellNotFitting(e), plan));
         } finally {
             this.progress.end();
         }

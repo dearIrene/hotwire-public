@@ -116,7 +116,7 @@ public final class WorldContentNotes {
         return said;
     }
 
-    private static WorldContentRecord.History openHistory(String world) {
+    static WorldContentRecord.History openHistory(String world) {
         return new WorldContentRecord.History(FabricLoader.getInstance().getGameDir().resolve("hotwire")
                 .resolve(WorldContentRecord.History.FILE), world);
     }
