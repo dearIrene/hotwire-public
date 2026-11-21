@@ -114,19 +114,16 @@ public final class Markdown extends Part {
 
     private void paintSpan(Canvas canvas, MarkdownLines.Line line, MarkdownLines.Span span, int left, int y,
             float alpha) {
+        if (this.onLink == null || span.url().isEmpty()) {
+            return;
+        }
         String part = line.text().substring(span.from(), span.to());
         int x = left + canvas.measureText(line.text().substring(0, span.from()));
-        boolean link = this.onLink != null && !span.url().isEmpty();
-        int color = Colors.fade(link ? Palette.ON : line.color(), alpha);
-        if (link) {
-            int right = x + canvas.measureText(part);
-            canvas.drawText(part, x, y, color);
-            canvas.fill(x, y + Text.HEIGHT, right, y + Text.HEIGHT + 1, color);
-            this.links.add(new LinkBox(x, y, right, span.url()));
-        }
-        if (span.bold()) {
-            canvas.drawText(part, x + 1, y, color);
-        }
+        int right = x + canvas.measureText(part);
+        int color = Colors.fade(Palette.ON, alpha);
+        canvas.drawText(part, x, y, color);
+        canvas.fill(x, y + Text.HEIGHT, right, y + Text.HEIGHT + 1, color);
+        this.links.add(new LinkBox(x, y, right, span.url()));
     }
 
     @Override
