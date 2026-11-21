@@ -45,9 +45,13 @@ public final class SyncedDataSlots {
         }
         for (int at = empty; at < items.length; at++) {
             if (items[at] == null && full[at] != null) {
-                items[at] = copy(full[at]);
+                items[at] = share(full[at]);
             }
         }
+    }
+
+    private static <T> SynchedEntityData.DataItem<T> share(SynchedEntityData.DataItem<T> first) {
+        return new SynchedEntityData.DataItem<>(first.getAccessor(), first.getValue());
     }
 
     private static <T> SynchedEntityData.DataItem<T> copy(SynchedEntityData.DataItem<T> first) {
