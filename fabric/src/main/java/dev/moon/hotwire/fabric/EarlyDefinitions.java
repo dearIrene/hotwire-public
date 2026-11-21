@@ -127,6 +127,10 @@ public final class EarlyDefinitions implements PreLaunchEntrypoint {
 
                     long began = System.nanoTime();
                     byte[] made = HandlerGuards.ENABLED ? SiteCache.rewrite(name, bytes) : null;
+                    if (made != null) {
+                        StartTimes.add("early watcher: handler sites", began);
+                    }
+                    long sited = System.nanoTime();
                     String mod = HandlerGuards.ENABLED ? TripwireSites.findModOfClass(name) : null;
                     if (mod != null) {
                         try {
@@ -139,6 +143,9 @@ public final class EarlyDefinitions implements PreLaunchEntrypoint {
                         }
                     }
                     long rewritten = System.nanoTime();
+                    if (mod != null) {
+                        StartTimes.add("early watcher: mod flags", sited, rewritten);
+                    }
                     byte[] recorded = made == null ? bytes : made;
                     boolean written = LoadedClassBytes.recordDefinedInGame(name, recorded, loader);
                     StartTimes.add("early watcher: call sites", began, rewritten);
