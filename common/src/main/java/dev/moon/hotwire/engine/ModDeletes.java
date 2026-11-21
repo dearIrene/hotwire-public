@@ -49,18 +49,19 @@ final class ModDeletes {
         if (!needing.isEmpty()) {
             return Lang.get("hotwire.delete.needed", name, PlayerMessages.joinNames(needing, this.installed::nameOf));
         }
+        String where;
         try {
             if (!this.installed.isDisabledSinceStart(id) && this.installed.isRunningFromFolderJar(id)) {
                 this.readFromCopy(jar);
             }
-            JarBin.throwAway(jar);
+            where = JarBin.throwAway(jar);
         } catch (IOException | RuntimeException e) {
             LOGGER.warn("[Hotwire] {} could not go to the bin", jar.getFileName(), e);
             return Lang.get("hotwire.delete.failed", name, String.valueOf(e.getMessage()));
         }
         this.dropChanges(id);
         this.installed.onDeleted(id);
-        LOGGER.info("[Hotwire] {} is deleted: {} is in the bin", id, jar.getFileName());
+        LOGGER.info("[Hotwire] {} is deleted: {} went to {}", id, jar.getFileName(), where);
         return "";
     }
 

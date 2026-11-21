@@ -8,15 +8,18 @@ import java.nio.file.StandardOpenOption;
 import java.time.LocalDateTime;
 import java.time.ZoneId;
 import java.time.format.DateTimeFormatter;
+import java.util.Map;
+import java.util.concurrent.TimeUnit;
 
 public final class JarBin {
     private static final DateTimeFormatter WHEN = DateTimeFormatter.ofPattern("yyyy-MM-dd'T'HH:mm:ss");
     private static final int NAMES = 1000;
+    private static final int GIO_SECONDS = 20;
 
     private JarBin() {
     }
 
-    public static void throwAway(Path jar) throws IOException {
+    public static String throwAway(Path jar) throws IOException {
         String os = System.getProperty("os.name", "");
         if (os.startsWith("Windows") || os.startsWith("Mac")) {
             FileUtils system = FileUtils.getInstance();
@@ -24,12 +27,34 @@ public final class JarBin {
                 throw new IOException("the system has no bin");
             }
             system.moveToTrash(jar.toFile());
-            return;
+            return "the system's bin";
         }
-        String data = System.getenv("XDG_DATA_HOME");
-        Path home = data == null || data.isBlank() ? Path.of(System.getProperty("user.home"), ".local", "share")
-                : Path.of(data);
-        moveToTrash(jar, home.resolve("Trash"));
+        if (isTrashedByGio(jar)) {
+            return "the desktop's Trash";
+        }
+        return String.valueOf(moveToTrash(jar, findHomeTrash(System.getenv(), System.getProperty("user.home"))));
+    }
+
+    private static boolean isTrashedByGio(Path jar) {
+        try {
+            Process gio = new ProcessBuilder("gio", "trash", "--", jar.toAbsolutePath().toString())
+                    .redirectOutput(ProcessBuilder.Redirect.DISCARD).redirectError(ProcessBuilder.Redirect.DISCARD)
+                    .start();
+            if (!gio.waitFor(GIO_SECONDS, TimeUnit.SECONDS)) {
+                gio.destroyForcibly().waitFor(GIO_SECONDS, TimeUnit.SECONDS);
+            }
+            return Files.notExists(jar);
+        } catch (IOException e) {
+            return false;
+        } catch (InterruptedException e) {
+            Thread.currentThread().interrupt();
+            return false;
+        }
+    }
+
+    static Path findHomeTrash(Map<String, String> env, String home) {
+        String data = env.get(env.containsKey("FLATPAK_ID") ? "HOST_XDG_DATA_HOME" : "XDG_DATA_HOME");
+        return (data == null || data.isBlank() ? Path.of(home, ".local", "share") : Path.of(data)).resolve("Trash");
     }
 
     static Path moveToTrash(Path file, Path trash) throws IOException {
