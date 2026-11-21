@@ -398,11 +398,14 @@ public final class UpdateCheck {
     }
 
     private boolean isInstalled(String projectId) {
-        return this.installedProjects.contains(projectId) || this.installed.isInstalled(projectId)
-                || FabricLoader.getInstance().isModLoaded(projectId);
+        return this.installedProjects.contains(projectId) || (!this.installed.isDeleted(projectId)
+                && (this.installed.isInstalled(projectId) || FabricLoader.getInstance().isModLoaded(projectId)));
     }
 
     private boolean isInstalled(ModrinthClient.Project project) {
+        if (this.installed.isDeleted(project.slug())) {
+            return false;
+        }
         if (this.installed.isInstalled(project.slug()) || FabricLoader.getInstance().isModLoaded(project.slug())) {
             return true;
         }

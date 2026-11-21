@@ -43,8 +43,11 @@ public final class ModChanges {
 
     public ModAdder.Result addNow(Path jar) {
         JvmParts ready = this.parts;
-        return ready == null ? new ModAdder.Result.Refused(this.refusal)
-                : ready.adds().add(jar, this.installed::nameOf);
+        if (ready == null) {
+            return new ModAdder.Result.Refused(this.refusal);
+        }
+        ModAdder.Result back = ready.adds().restoreDeleted(jar, ids -> ready.runner().turnOn(ids).result());
+        return back != null ? back : ready.adds().add(jar, this.installed::nameOf);
     }
 
     public ModAdder.Result addWithReopen(Path jar, boolean byPlayer) {

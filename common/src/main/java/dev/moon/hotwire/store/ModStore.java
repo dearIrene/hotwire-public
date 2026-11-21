@@ -56,8 +56,9 @@ public final class ModStore {
         ModrinthClient client = LoadedMods.makeStoreClient();
         StoreCache cache = new StoreCache(CacheLimit.findStoreFolder().resolve("answers"),
                 (long) CacheLimit.readStore() << 20);
-        this.model = new StoreModel(client, cache, id -> installed.isInstalled(id)
-                || FabricLoader.getInstance().isModLoaded(id), () -> { });
+
+        this.model = new StoreModel(client, cache, id -> !installed.isDeleted(id) && (installed.isInstalled(id)
+                || FabricLoader.getInstance().isModLoaded(id)), () -> { });
         this.icons = new StoreIconLoader(this.model, cache, project -> {
             String id = check.getIdByProject().get(project);
             return id == null ? null : icons.apply(id);

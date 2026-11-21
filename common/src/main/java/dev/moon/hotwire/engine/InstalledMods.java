@@ -214,6 +214,13 @@ public final class InstalledMods {
         this.folderJarOf.remove(id);
     }
 
+    public synchronized void onBroughtBack(String id, Path jar) {
+        this.deleted.remove(id);
+        this.topLevel.add(id);
+        this.jarOf.put(id, jar);
+        this.folderJarOf.put(id, jar);
+    }
+
     public synchronized boolean isDeleted(String id) {
         return this.deleted.contains(id);
     }

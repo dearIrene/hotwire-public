@@ -6,9 +6,11 @@ import java.io.UncheckedIOException;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.util.ArrayList;
+import java.util.HashMap;
 import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Locale;
+import java.util.Map;
 import java.util.Set;
 import java.util.stream.Stream;
 import org.jspecify.annotations.Nullable;
@@ -19,8 +21,12 @@ public final class LocalJars {
     private static final Logger LOGGER = LoggerFactory.getLogger(LocalJars.class);
     private static final List<String> MODS = List.of("mods", ".minecraft/mods", "minecraft/mods");
 
+    private static final long LISTING_NANOS = 60_000_000_000L;
+
     private final @Nullable Path gameDir;
     private final List<Path> launcherHomes;
+    private @Nullable Map<Long, List<Path>> bySize;
+    private long listedAt;
 
     public LocalJars(@Nullable Path gameDir, List<Path> launcherHomes) {
         this.gameDir = gameDir;
@@ -66,26 +72,39 @@ public final class LocalJars {
             return null;
         }
         long began = System.nanoTime();
-        for (Path folder : this.findModsFolders()) {
-            for (Path file : list(folder)) {
-                String name = file.getFileName().toString();
-                if (!name.endsWith(".jar") && !name.endsWith(".jar.disabled")) {
-                    continue;
+        for (Path file : this.findOfSize(size)) {
+            try {
+                if (Files.size(file) == size && ModrinthClient.hashOf(file).equalsIgnoreCase(sha512)) {
+                    LOGGER.info("[Hotwire] {} was read from {} in place of a download ({} ms)", fileName,
+                            file.getParent(), (System.nanoTime() - began) / 1_000_000);
+                    return file;
                 }
-                try {
-                    if (Files.size(file) != size) {
-                        continue;
-                    }
-                    if (ModrinthClient.hashOf(file).equalsIgnoreCase(sha512)) {
-                        LOGGER.info("[Hotwire] {} was read from {} in place of a download ({} ms)", fileName,
-                                folder, (System.nanoTime() - began) / 1_000_000);
-                        return file;
-                    }
-                } catch (IOException | UncheckedIOException e) {
-                }
+            } catch (IOException | UncheckedIOException e) {
             }
         }
         return null;
+    }
+
+    private synchronized List<Path> findOfSize(long size) {
+        Map<Long, List<Path>> listed = this.bySize;
+        if (listed == null || System.nanoTime() - this.listedAt > LISTING_NANOS) {
+            listed = new HashMap<>();
+            for (Path folder : this.findModsFolders()) {
+                for (Path file : list(folder)) {
+                    String name = file.getFileName().toString();
+                    if (!name.endsWith(".jar") && !name.endsWith(".jar.disabled")) {
+                        continue;
+                    }
+                    try {
+                        listed.computeIfAbsent(Files.size(file), any -> new ArrayList<>()).add(file);
+                    } catch (IOException | UncheckedIOException e) {
+                    }
+                }
+            }
+            this.bySize = listed;
+            this.listedAt = System.nanoTime();
+        }
+        return listed.getOrDefault(size, List.of());
     }
 
     List<Path> findModsFolders() {

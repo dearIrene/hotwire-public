@@ -341,7 +341,14 @@ public final class ModrinthClient {
         if (copy == null) {
             return false;
         }
-        Files.copy(copy, part, StandardCopyOption.REPLACE_EXISTING);
+        try {
+            Files.copy(copy, part, StandardCopyOption.REPLACE_EXISTING);
+        } catch (IOException e) {
+            LOGGER.info("[Hotwire] {} could not be copied from {} ({}); it is downloaded", version.fileName(),
+                    copy.getParent(), e.toString());
+            Files.deleteIfExists(part);
+            return false;
+        }
         if (LocalJars.isSameJar(part, version.size(), version.sha512())) {
             return true;
         }

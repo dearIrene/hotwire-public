@@ -107,7 +107,7 @@ public final class AddSupport implements ModAdder.Engine {
         try {
             ModManifest read = ModJarReader.read(jar).manifest();
 
-            if (!ModPolicy.isHotwire(read.id()) && this.isInstalled(read.id())) {
+            if (!ModPolicy.isHotwire(read.id()) && this.isInstalled(read.id()) && !this.isDeleted(read.id())) {
                 journal.end(ActionJournal.Outcome.REFUSED, "installed");
                 return new ModAdder.Result.Refused(Lang.get("hotwire.add.queue.installed", read.name()));
             }
@@ -225,6 +225,39 @@ public final class AddSupport implements ModAdder.Engine {
         }
     }
 
+    public ModAdder.@Nullable Result restoreDeleted(Path jar, Function<List<String>, ModSwitcher.Result> turnOn) {
+        ModManifest manifest;
+        try {
+            manifest = ModJarReader.read(jar).manifest();
+        } catch (ModJarException e) {
+            return null;
+        }
+        String id = manifest.id();
+        if (!this.installed.isDeleted(id)) {
+            return null;
+        }
+
+        if (!this.installed.find(id).map(ModManifest::version).orElse("").equals(manifest.version())) {
+            return this.queue(jar);
+        }
+        Path mods = this.folders.mods().toAbsolutePath().normalize();
+        Path target = jar.toAbsolutePath().normalize().startsWith(mods) ? jar
+                : mods.resolve(String.valueOf(jar.getFileName()));
+        try {
+            if (!target.equals(jar)) {
+                Path part = target.resolveSibling(target.getFileName() + ".part");
+                Files.copy(jar, part, StandardCopyOption.REPLACE_EXISTING);
+                AtomicFiles.moveInto(part, target);
+            }
+        } catch (IOException e) {
+            return new ModAdder.Result.Failed(Lang.get("hotwire.add.queue_failed", jar.getFileName(),
+                    e.getMessage()), e);
+        }
+        this.installed.onBroughtBack(id, target);
+        LOGGER.info("[Hotwire] {} is back from its delete: {} is in the mods folder again", id, target.getFileName());
+        return new ModAdder.Result.Added(List.of(id), manifest.name(), turnOn.apply(List.of(id)));
+    }
+
     public ModAdder.Result add(Path jar, Function<String, String> nameOf) {
         long start = System.nanoTime();
         ActionJournal.Entry journal = ActionJournal.get().begin(ActionJournal.Action.ADD,
@@ -280,6 +313,11 @@ public final class AddSupport implements ModAdder.Engine {
     @Override
     public boolean isInstalled(String id) {
         return this.installed.isInstalled(id) || FabricLoader.getInstance().isModLoaded(id);
+    }
+
+    @Override
+    public boolean isDeleted(String id) {
+        return this.installed.isDeleted(id);
     }
 
     @Override

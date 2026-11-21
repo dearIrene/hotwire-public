@@ -102,6 +102,10 @@ public final class ModAdder {
     interface Engine extends WidenerUses.GameAccess {
         boolean isInstalled(String id);
 
+        default boolean isDeleted(String id) {
+            return false;
+        }
+
         default Set<String> findQueuedIds() {
             return Set.of();
         }
@@ -545,7 +549,8 @@ public final class ModAdder {
         Part asked = parts.values().stream().reduce((first, second) -> second).orElseThrow();
         ModManifest manifest = asked.jar().manifest();
         String name = manifest.name();
-        if (ModPolicy.isHotwire(manifest.id()) || this.engine.isInstalled(manifest.id())) {
+        if (ModPolicy.isHotwire(manifest.id())
+                || (this.engine.isInstalled(manifest.id()) && !this.engine.isDeleted(manifest.id()))) {
             return new AddDecision.Refused(ModPolicy.isHotwire(manifest.id()) ? ModPolicy.describeSelfChange()
                     : Lang.get("hotwire.add.installed", name));
         }
