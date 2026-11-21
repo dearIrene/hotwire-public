@@ -28,6 +28,9 @@ final class PackWords {
     private static final Logger LOGGER = LoggerFactory.getLogger(PackWords.class);
     private static final String ENGLISH = "en_us";
     private static final String OWN = "hotwire.";
+
+    private static final Map<String, String> SAME_LANGUAGE = Map.of("es", "es_es", "pt", "pt_br", "de", "de_de",
+            "fr", "fr_fr", "ru", "ru_ru");
     private static volatile @Nullable Language readFor;
     private static volatile Map<String, String> words = Map.of();
 
@@ -58,7 +61,12 @@ final class PackWords {
                         && !PackSource.WORLD.equals(pack.location().source())).toList();
         Map<String, String> read = new HashMap<>();
         String chosen = client.getLanguageManager().getSelected();
-        for (String code : chosen.equals(ENGLISH) ? List.of(ENGLISH) : List.of(ENGLISH, chosen)) {
+        String lower = chosen.toLowerCase(Locale.ROOT);
+        int region = lower.indexOf('_');
+        String same = SAME_LANGUAGE.get(region < 0 ? lower : lower.substring(0, region));
+        List<String> codes = chosen.equals(ENGLISH) ? List.of(ENGLISH)
+                : same == null || same.equals(lower) ? List.of(ENGLISH, chosen) : List.of(ENGLISH, same, chosen);
+        for (String code : codes) {
             Identifier file = Identifier.tryBuild(HotwireClient.ID, "lang/" + code.toLowerCase(Locale.ROOT) + ".json");
             if (file == null) {
                 continue;
