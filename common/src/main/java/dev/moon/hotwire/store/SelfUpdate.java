@@ -31,6 +31,8 @@ public final class SelfUpdate {
     private final ModrinthClient client = LoadedMods.makeStoreClient();
     private final Downloads downloads = new Downloads();
     private final Path folder = FabricLoader.getInstance().getGameDir().resolve("hotwire").resolve("store");
+
+    private static final String OWN_PROJECT = "6CCeZxnF";
     private volatile ModrinthClient.@Nullable Version newer;
     private volatile String changes = "";
     private boolean started;
@@ -54,7 +56,7 @@ public final class SelfUpdate {
         try {
             String project = this.findOwnProject();
             if (project == null) {
-                LOGGER.info("[Hotwire] this Hotwire jar is not one of Modrinth's, so no newer one is looked for");
+                LOGGER.info("[Hotwire] this Hotwire does not run from one jar, so no newer one is looked for");
                 return null;
             }
             List<ModrinthClient.Version> versions = this.client.findVersions(ModrinthClient.Kind.MOD, project);
@@ -86,7 +88,7 @@ public final class SelfUpdate {
         }
         ModrinthClient.Version version = this.client.findByHashes(Map.of(GameNames.HOTWIRE,
                 FileHashes.findSha512(jar))).get(GameNames.HOTWIRE);
-        return version == null ? null : version.projectId();
+        return version == null ? OWN_PROJECT : version.projectId();
     }
 
     public void allowAgain() {
