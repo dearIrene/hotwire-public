@@ -3,8 +3,11 @@ package dev.moon.hotwire.registration;
 import dev.moon.hotwire.redefine.FieldSlots;
 import java.util.ArrayList;
 import java.util.Collection;
+import java.util.Collections;
+import java.util.IdentityHashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.Set;
 import org.jspecify.annotations.Nullable;
 import org.slf4j.LoggerFactory;
 
@@ -242,6 +245,40 @@ public sealed interface Removal {
     private static String describeKind(@Nullable Object value) {
         return value == null ? "null" : ValueOwners.isPlain(value) ? String.valueOf(value)
                 : value.getClass().getSimpleName();
+    }
+
+    static void restoreFixedLists(List<InFixedList> all) {
+        IdentityHashMap<Object, List<InFixedList>> byList = new IdentityHashMap<>();
+        for (InFixedList one : all) {
+            if (one.container() instanceof List<?> now) {
+                byList.computeIfAbsent(now, any -> new ArrayList<>()).add(one);
+            }
+        }
+        byList.forEach((list, group) -> {
+            InFixedList first = group.getFirst();
+            List<?> now = (List<?>) list;
+            Set<Object> wanted = Collections.newSetFromMap(new IdentityHashMap<>());
+            wanted.addAll(now);
+            group.forEach(one -> wanted.add(one.element()));
+            List<Object> back = new ArrayList<>(wanted.size());
+            Set<Object> placed = Collections.newSetFromMap(new IdentityHashMap<>());
+            for (Object item : first.first()) {
+                if (wanted.contains(item) && placed.add(item)) {
+                    back.add(item);
+                }
+            }
+            for (Object item : now) {
+                if (placed.add(item)) {
+                    back.add(item);
+                }
+            }
+            try {
+                first.writer().write(first.field(), first.holder(), first.firsts().findHolderList(back, first.first()));
+            } catch (IllegalAccessException e) {
+                LoggerFactory.getLogger(Removal.class).warn("[Hotwire] {} could not be given its elements back",
+                        first.field(), e);
+            }
+        });
     }
 
     @SuppressWarnings("ReferenceEquality")

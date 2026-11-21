@@ -770,8 +770,10 @@ final class CollectionReferences implements FixedLists.Walk {
         });
 
         this.look.getNotes().notePrintsAfter(containers, () -> {
+            Removal.restoreFixedLists(back.stream().map(Map.Entry::getValue)
+                    .filter(Removal.InFixedList.class::isInstance).map(Removal.InFixedList.class::cast).toList());
             for (Map.Entry<String, Removal> one : back) {
-                if (isOfStoppedSound(one.getValue())) {
+                if (isOfStoppedSound(one.getValue()) || one.getValue() instanceof Removal.InFixedList) {
                     continue;
                 }
                 try {
