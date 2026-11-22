@@ -38,6 +38,7 @@ import dev.moon.hotwire.switching.Waits;
 import dev.moon.hotwire.ui.Lang;
 import dev.moon.hotwire.ui.PromptScreen;
 import dev.moon.hotwire.ui.panels.FirstOpenPanel;
+import dev.moon.hotwire.update.LiveNames;
 import java.lang.reflect.Method;
 import java.nio.file.Path;
 import java.util.ArrayList;
@@ -48,6 +49,7 @@ import java.util.HashSet;
 import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Map;
+import java.util.Objects;
 import java.util.Optional;
 import java.util.Set;
 import java.util.concurrent.CompletableFuture;
@@ -72,7 +74,7 @@ public class EngineApi implements HotwireApi {
         return engines.get();
     }
 
-    private static final int REVISION = 1;
+    private static final int REVISION = 2;
     private static final StackWalker STACK = StackWalker.getInstance(StackWalker.Option.RETAIN_CLASS_REFERENCE);
     private static final Logger LOGGER = LoggerFactory.getLogger(EngineApi.class);
     private static final Listeners<Consumer<SwitchResult>> LISTENERS = new Listeners<>();
@@ -343,6 +345,66 @@ public class EngineApi implements HotwireApi {
                 Games.getNow().runOnGame(engine::open);
             }
         };
+    }
+
+    @Override
+    public @Nullable OpeningPrompt findDownloadsWarning() {
+        HotwireEngine engine = findEngine();
+        if (engine == null || engine.isDownloadsWarned()) {
+            return null;
+        }
+        return new OpeningPrompt() {
+            @Override
+            public String getTitle() {
+                return Lang.get("hotwire.downloads_warning.title");
+            }
+
+            @Override
+            public List<String> getLines() {
+                return List.of(Lang.get("hotwire.downloads_warning.source"), Lang.get("hotwire.downloads_warning.mind"),
+                        Lang.get("hotwire.downloads_warning.host"));
+            }
+
+            @Override
+            public String getAcceptText() {
+                return Lang.get("hotwire.first_open.accept");
+            }
+
+            @Override
+            public String getOpenHotwireText() {
+                return Lang.get("hotwire.first_open.open_hotwire");
+            }
+
+            @Override
+            public int getWaitSeconds() {
+                return (int) FirstOpenPanel.WAIT;
+            }
+
+            @Override
+            public void accept() {
+                Games.getNow().runOnGame(engine::markDownloadsWarned);
+            }
+
+            @Override
+            public void acceptAndOpenHotwire() {
+                this.accept();
+                Games.getNow().runOnGame(engine::open);
+            }
+        };
+    }
+
+    @Override
+    public String findOwnName(Class<?> type) {
+        return Objects.requireNonNull(LiveNames.findOwnName(type.getName()));
+    }
+
+    @Override
+    public Optional<Class<?>> findRunningClass(String ownName) {
+        try {
+            return Optional.of(LiveNames.findRunning(ownName, EngineApi.class.getClassLoader()));
+        } catch (ClassNotFoundException | LinkageError e) {
+            return Optional.empty();
+        }
     }
 
     @Override

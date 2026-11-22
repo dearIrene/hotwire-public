@@ -63,6 +63,12 @@ public interface HotwireApi {
 
     @Nullable OpeningPrompt findOpeningPrompt();
 
+    @Nullable OpeningPrompt findDownloadsWarning();
+
+    String findOwnName(Class<?> type);
+
+    Optional<Class<?>> findRunningClass(String ownName);
+
     void openScreen();
 
     CompletableFuture<StorePage> searchStore(StoreQuery query);
