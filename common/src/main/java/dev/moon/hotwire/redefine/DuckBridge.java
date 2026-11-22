@@ -105,12 +105,11 @@ public final class DuckBridge {
         if (ducks.contains(node.name)) {
             return rewriteDuck(node, ducks, moved);
         }
-        rewrite(node, ducks, moved);
-        return write(node, 0);
+        return rewrite(node, ducks, moved) ? write(node, 0) : classBytes;
     }
 
-    static void rewrite(ClassNode node, Set<String> ducks) {
-        rewrite(node, ducks, Linker.getMoved());
+    static boolean rewrite(ClassNode node, Set<String> ducks) {
+        return rewrite(node, ducks, Linker.getMoved());
     }
 
     public static byte[] bridgeInstructions(byte[] classBytes, Set<String> ducks) {
@@ -124,7 +123,10 @@ public final class DuckBridge {
         if (ducks.contains(node.name)) {
             return rewriteDuck(node, ducks, Linker.getMoved());
         }
-        rewrite(node, ducks);
+
+        if (!rewrite(node, ducks)) {
+            return classBytes;
+        }
         return write(node, 0);
     }
 
@@ -155,56 +157,73 @@ public final class DuckBridge {
         return write(node, 0);
     }
 
-    static void rewrite(ClassNode node, Set<String> ducks, Set<String> moved) {
+    static boolean rewrite(ClassNode node, Set<String> ducks, Set<String> moved) {
+        boolean changed = false;
         for (MethodNode method : node.methods) {
-            rewrite(node.name, method, ducks, moved);
+            changed |= rewrite(node.name, method, ducks, moved);
         }
+        return changed;
     }
 
-    private static void rewrite(String self, MethodNode method, Set<String> ducks, Set<String> moved) {
+    private static boolean rewrite(String self, MethodNode method, Set<String> ducks, Set<String> moved) {
+        boolean changed = false;
         for (AbstractInsnNode insn : method.instructions.toArray()) {
-            switch (insn) {
-                case TypeInsnNode type when ducks.contains(type.desc) -> {
-                    if (type.getOpcode() == Opcodes.INSTANCEOF) {
-                        method.instructions.set(insn, new InvokeDynamicInsnNode("isInstance",
-                                "(Ljava/lang/Object;)Z", IS_INSTANCE, type.desc));
-                    } else if (type.getOpcode() == Opcodes.CHECKCAST) {
-                        method.instructions.set(insn, new InvokeDynamicInsnNode("cast",
-                                "(Ljava/lang/Object;)Ljava/lang/Object;", CAST, type.desc));
-                    }
-                }
-                case MethodInsnNode call when call.getOpcode() == Opcodes.INVOKEINTERFACE
-                        && ducks.contains(call.owner) -> {
-                    method.instructions.set(insn, new InvokeDynamicInsnNode(call.name,
-                            "(Ljava/lang/Object;" + call.desc.substring(1), DUCK, call.owner, call.name, call.desc));
-                }
-
-                case InvokeDynamicInsnNode lambda when isMovedLambda(self, lambda, moved) -> {
-                    Handle target = (Handle) lambda.bsmArgs[1];
-                    method.instructions.set(insn, new InvokeDynamicInsnNode(lambda.name, lambda.desc, MOVED_LAMBDA,
-                            lambda.bsmArgs[0], target.getOwner(), target.getName(), target.getDesc(),
-                            target.getTag() == Opcodes.H_INVOKESTATIC ? 1 : 0));
-                }
-                case InvokeDynamicInsnNode lambda when isDuckLambda(lambda, ducks) -> lambda.bsm = DUCK_LAMBDA;
-
-                case MethodInsnNode call when !self.equals(call.owner) && call.getOpcode() == Opcodes.INVOKESPECIAL
-                        && !call.name.equals("<init>") && moved.contains(call.name + call.desc)
-                        && canReach(call.owner, call.name + call.desc) -> {
-                    method.instructions.set(insn, new InvokeDynamicInsnNode(call.name,
-                            "(L" + self + ";" + call.desc.substring(1), MOVED_SUPER, call.owner, call.name,
-                            call.desc));
-                }
-                case MethodInsnNode call when !self.equals(call.owner)
-                        && (call.getOpcode() == Opcodes.INVOKEVIRTUAL || call.getOpcode() == Opcodes.INVOKESTATIC
-                        || call.getOpcode() == Opcodes.INVOKEINTERFACE)
-                        && moved.contains(call.name + call.desc)
-                        && canReach(call.owner, call.name + call.desc) -> {
-                    method.instructions.set(insn, makeMovedCall(call));
-                }
-                default -> {
-                }
-            }
+            changed |= rewriteOne(self, method, insn, ducks, moved);
         }
+        return changed;
+    }
+
+    private static boolean rewriteOne(String self, MethodNode method, AbstractInsnNode insn, Set<String> ducks,
+            Set<String> moved) {
+        return switch (insn) {
+            case TypeInsnNode type when ducks.contains(type.desc) -> {
+                if (type.getOpcode() == Opcodes.INSTANCEOF) {
+                    method.instructions.set(insn, new InvokeDynamicInsnNode("isInstance",
+                            "(Ljava/lang/Object;)Z", IS_INSTANCE, type.desc));
+                    yield true;
+                }
+                if (type.getOpcode() == Opcodes.CHECKCAST) {
+                    method.instructions.set(insn, new InvokeDynamicInsnNode("cast",
+                            "(Ljava/lang/Object;)Ljava/lang/Object;", CAST, type.desc));
+                    yield true;
+                }
+                yield false;
+            }
+            case MethodInsnNode call when call.getOpcode() == Opcodes.INVOKEINTERFACE && ducks.contains(call.owner) -> {
+                method.instructions.set(insn, new InvokeDynamicInsnNode(call.name,
+                        "(Ljava/lang/Object;" + call.desc.substring(1), DUCK, call.owner, call.name, call.desc));
+                yield true;
+            }
+
+            case InvokeDynamicInsnNode lambda when isMovedLambda(self, lambda, moved) -> {
+                Handle target = (Handle) lambda.bsmArgs[1];
+                method.instructions.set(insn, new InvokeDynamicInsnNode(lambda.name, lambda.desc, MOVED_LAMBDA,
+                        lambda.bsmArgs[0], target.getOwner(), target.getName(), target.getDesc(),
+                        target.getTag() == Opcodes.H_INVOKESTATIC ? 1 : 0));
+                yield true;
+            }
+            case InvokeDynamicInsnNode lambda when isDuckLambda(lambda, ducks) -> {
+                lambda.bsm = DUCK_LAMBDA;
+                yield true;
+            }
+
+            case MethodInsnNode call when !self.equals(call.owner) && call.getOpcode() == Opcodes.INVOKESPECIAL
+                    && !call.name.equals("<init>") && moved.contains(call.name + call.desc)
+                    && canReach(call.owner, call.name + call.desc) -> {
+                method.instructions.set(insn, new InvokeDynamicInsnNode(call.name,
+                        "(L" + self + ";" + call.desc.substring(1), MOVED_SUPER, call.owner, call.name, call.desc));
+                yield true;
+            }
+            case MethodInsnNode call when !self.equals(call.owner)
+                    && (call.getOpcode() == Opcodes.INVOKEVIRTUAL || call.getOpcode() == Opcodes.INVOKESTATIC
+                    || call.getOpcode() == Opcodes.INVOKEINTERFACE)
+                    && moved.contains(call.name + call.desc)
+                    && canReach(call.owner, call.name + call.desc) -> {
+                method.instructions.set(insn, makeMovedCall(call));
+                yield true;
+            }
+            default -> false;
+        };
     }
 
     static boolean canReach(String owner, String method) {
