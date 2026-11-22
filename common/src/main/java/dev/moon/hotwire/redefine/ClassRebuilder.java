@@ -515,6 +515,32 @@ public final class ClassRebuilder {
         return failed;
     }
 
+    public void checkShapes(PreparedRebuild prepared) throws RebuildException {
+        List<String> changes = RebuildEvidence.findShapeChanges(prepared, prepared.before());
+        if (changes.isEmpty()) {
+            return;
+        }
+        Map<String, Class<?>> byName = new LinkedHashMap<>();
+        for (Class<?> type : prepared.splits().keySet()) {
+            String name = Type.getInternalName(type);
+            for (String line : changes) {
+                if (line.startsWith(name + ":")) {
+                    byName.put(name, type);
+                }
+            }
+        }
+        Map<String, byte[]> running = new ConcurrentHashMap<>();
+        this.loadedBytes.capture(byName, running, new LinkedHashMap<>());
+        List<String> confirmed = RebuildEvidence.findShapeChanges(prepared, running);
+        if (!confirmed.isEmpty()) {
+            LOGGER.warn("[Hotwire] the rebuild changes the shape of classes the JVM runs, which it refuses: {}",
+                    confirmed);
+            throw RebuildException.ofRestartOnly("the rebuild would change classes the game runs in a way Java cannot"
+                    + " do while it runs: " + confirmed.getFirst() + (confirmed.size() > 1 ? " and "
+                    + (confirmed.size() - 1) + " more" : ""));
+        }
+    }
+
     public void apply(PreparedRebuild prepared) throws RebuildException {
         this.ahead.clear();
         long start = System.nanoTime();

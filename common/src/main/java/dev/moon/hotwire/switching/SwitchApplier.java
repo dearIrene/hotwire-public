@@ -821,6 +821,8 @@ public final class SwitchApplier {
         } finally {
             SwitchTimes.mark("live objects");
         }
+        this.rebuilder.checkShapes(prepared);
+        SwitchTimes.mark("shape check");
         return prepared;
     }
 

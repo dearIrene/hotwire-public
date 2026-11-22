@@ -124,6 +124,49 @@ final class RebuildEvidence {
         }
     }
 
+    static List<String> findShapeChanges(ClassRebuilder.PreparedRebuild prepared, Map<String, byte[]> against) {
+        List<String> out = new ArrayList<>();
+        prepared.splits().forEach((type, split) -> {
+            String name = Type.getInternalName(type);
+            byte[] now = against.get(name);
+            String change = now == null ? null : describeShapeChange(now, split.target());
+            if (change != null) {
+                out.add(name + ": " + change);
+            }
+        });
+        return out;
+    }
+
+    static @Nullable String describeShapeChange(byte[] now, byte[] target) {
+        List<String> changes = new ArrayList<>();
+        Set<String> missing = new TreeSet<>(listMethods(now));
+        missing.removeAll(listMethods(target));
+        Set<String> gained = new TreeSet<>(listMethods(target));
+        gained.removeAll(listMethods(now));
+        if (!missing.isEmpty()) {
+            changes.add("methods it runs that the rebuild lacks " + missing);
+        }
+        if (!gained.isEmpty()) {
+            changes.add("methods only the rebuild has " + gained);
+        }
+        if (!listFieldNames(now).equals(listFieldNames(target))) {
+            changes.add("fields " + listFieldNames(now) + " become " + listFieldNames(target));
+        }
+        ClassHeader before = ClassHeader.of(now);
+        ClassHeader after = ClassHeader.of(target);
+        if (!Set.copyOf(before.interfaces()).equals(Set.copyOf(after.interfaces()))
+                || !Objects.equals(before.superName(), after.superName())) {
+            changes.add("interfaces " + before.interfaces() + " become " + after.interfaces());
+        }
+        return changes.isEmpty() ? null : String.join(", ", changes);
+    }
+
+    private static Set<String> listFieldNames(byte[] bytes) {
+        Set<String> out = new TreeSet<>();
+        ClassHeader.of(bytes).fields().forEach(field -> out.add(field.name() + " " + field.desc()));
+        return out;
+    }
+
     static Set<String> listMethods(byte @Nullable [] bytes) {
         Set<String> out = new TreeSet<>();
         if (bytes != null) {
