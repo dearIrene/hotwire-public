@@ -15,8 +15,6 @@ import java.util.function.Predicate;
 import net.fabricmc.loader.api.FabricLoader;
 import net.minecraft.client.KeyMapping;
 import net.minecraft.client.Minecraft;
-import net.minecraft.client.gui.components.EditBox;
-import net.minecraft.client.gui.components.MultiLineEditBox;
 import net.minecraft.client.gui.screens.Screen;
 import net.minecraft.client.gui.screens.TitleScreen;
 import net.minecraft.network.chat.Component;
@@ -32,6 +30,8 @@ public final class OpenKey {
     private static @Nullable Class<?> homeScreen;
     private static Runnable open = () -> { };
     private static Runnable openStore = () -> { };
+
+    private static @Nullable Runnable waiting;
 
     private static @Nullable KeyMapping devKey;
     private static @Nullable KeyMapping devReloadKey;
@@ -116,25 +116,32 @@ public final class OpenKey {
                 + names.getLast();
     }
 
-    public static boolean openAtScreen(Predicate<KeyMapping> pressed) {
+    public static void pressAtScreen(Predicate<KeyMapping> pressed) {
         KeyMapping made = key;
         KeyMapping store = storeKey;
-        Minecraft minecraft = Minecraft.getInstance();
         Screen shown = ModViews.openScreen();
-        if (made == null || store == null || minecraft.level != null || shown == null
-                || !(shown instanceof TitleScreen || shown.getClass() == homeScreen) || shown instanceof HotwireScreen
-                || shown.getFocused() instanceof EditBox || shown.getFocused() instanceof MultiLineEditBox) {
-            return false;
+        if (made == null || store == null || Minecraft.getInstance().level != null || shown == null
+                || !(shown instanceof TitleScreen || shown.getClass() == homeScreen)
+                || shown instanceof HotwireScreen) {
+            return;
         }
-        if (pressed.test(store)) {
-            openStore.run();
-            return true;
+        Runnable opening = pressed.test(store) ? openStore : pressed.test(made) ? HotwireClient::openFromScreen : null;
+        if (opening != null) {
+            waiting = opening;
+            ModViews.runSoon(() -> onTyped(false));
         }
-        if (!pressed.test(made)) {
-            return false;
+    }
+
+    public static boolean isWaiting() {
+        return waiting != null;
+    }
+
+    public static void onTyped(boolean used) {
+        Runnable opening = waiting;
+        waiting = null;
+        if (opening != null && !used) {
+            opening.run();
         }
-        HotwireClient.openFromScreen();
-        return true;
     }
 
     static void noteHome() {
