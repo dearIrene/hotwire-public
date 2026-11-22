@@ -27,6 +27,7 @@ import java.util.List;
 import java.util.Map;
 import java.util.Objects;
 import java.util.Set;
+import java.util.TreeMap;
 import java.util.TreeSet;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.ConcurrentSkipListMap;
@@ -818,12 +819,30 @@ public final class SwitchApplier {
             SwitchTimes.mark("live objects");
         }
         if (!lost.isEmpty()) {
+            this.describeLost(lost, carriedNow, mixed.carried(), decided.configs().keySet());
             throw RebuildException.ofLosing("the " + what + " would drop patches of mods that stay on: " + lost,
                             this.carriedMixins.findOwnersOf(lost, on));
         }
         this.rebuilder.checkShapes(prepared);
         SwitchTimes.mark("shape check");
         return prepared;
+    }
+
+    private void describeLost(List<String> lost, Map<String, Set<String>> carriedNow, Map<String, Set<String>> carried,
+            Set<String> configs) {
+        Set<String> types = new TreeSet<>();
+        lost.forEach(line -> types.add(line.substring(0, line.indexOf(" <- "))));
+        for (String type : types) {
+            Set<String> missing = new TreeSet<>(carriedNow.getOrDefault(type, Set.of()));
+            missing.removeAll(carried.getOrDefault(type, Set.of()));
+            Map<String, String> owners = new TreeMap<>();
+            missing.forEach(mixin -> owners.put(mixin, String.valueOf(this.carriedMixins.findModMaking(mixin,
+                    id -> true))));
+            LOGGER.warn("[Hotwire] lost patch detail: {} runs with {} mixins and the new mix carries {}; missing {}",
+                    type, carriedNow.getOrDefault(type, Set.of()).size(), carried.getOrDefault(type, Set.of()).size(),
+                    owners);
+        }
+        LOGGER.warn("[Hotwire] lost patch detail: the mix read {} configs: {}", configs.size(), new TreeSet<>(configs));
     }
 
     private Set<String> findDifferingFromLaunch(Set<String> on) {

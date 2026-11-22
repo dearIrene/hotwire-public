@@ -535,6 +535,17 @@ public final class ClassRebuilder {
         if (!confirmed.isEmpty()) {
             LOGGER.warn("[Hotwire] the rebuild changes the shape of classes the JVM runs, which it refuses: {}",
                     confirmed);
+
+            for (Map.Entry<String, Class<?>> each : byName.entrySet()) {
+                Set<String> now = this.carrying.getOrDefault(each.getValue(), Set.of());
+                Set<String> next = prepared.carried().getOrDefault(each.getKey(), Set.of());
+                Set<String> missing = new TreeSet<>(now);
+                missing.removeAll(next);
+                Set<String> added = new TreeSet<>(next);
+                added.removeAll(now);
+                LOGGER.warn("[Hotwire] shape detail: {} runs with {} mixins and the new mix carries {}; missing {},"
+                        + " new {}", each.getKey(), now.size(), next.size(), missing, added);
+            }
             throw RebuildException.ofRestartOnly("the rebuild would change classes the game runs in a way Java cannot"
                     + " do while it runs: " + confirmed.getFirst() + (confirmed.size() > 1 ? " and "
                     + (confirmed.size() - 1) + " more" : ""));
