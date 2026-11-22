@@ -4,12 +4,18 @@ Other mods can switch mods through Hotwire. You get the same switch the player g
 
 ## Setting it up
 
+The API lives in a jar inside Hotwire's jar, `META-INF/jars/hotwire-core.jar`, so compile against that one and never bundle it:
+
 ```groovy
 repositories {
     maven { url "https://api.modrinth.com/maven" }
 }
+configurations {
+    hotwire
+}
 dependencies {
-    modCompileOnly "maven.modrinth:irenehotwire:VERSION"   // compile against it and never bundle it
+    hotwire "maven.modrinth:irenehotwire:VERSION"
+    compileOnly files({ zipTree(configurations.hotwire.singleFile).matching { include "META-INF/jars/hotwire-core.jar" }.singleFile })
 }
 ```
 
@@ -63,6 +69,13 @@ How it works:
 - The player only sees it again when Hotwire gets a big update
 - Reading stuff (`getMods`, `getStatus`, the store's pages) doesn't need it
 - Adding a mod from Modrinth is refused until the player accepted it
+
+Downloading from Modrinth also needs the warning Hotwire's own store shows before its first download. Same deal, take it as text if your mod has its own store:
+
+```java
+OpeningPrompt warning = api.findDownloadsWarning();   // null once the player read it
+warning.accept();                                     // when the player presses accept
+```
 
 ## Switching
 
@@ -227,6 +240,7 @@ A lifecycle listener hears every change from every path, even the player's own c
 ```java
 api.addLifecycleListener(new ModLifecycleListener() {
     public void prepareOff(List<String> ids) { }     // still on and safe to call, save their settings here
+    public void finishOff(List<String> ids) { }      // off with their objects out, only the mods that really went off
     public void finishOn(List<String> ids) { }       // back on with the objects they had
     public void prepareStart(List<String> ids) { }   // added mods, live copies, mods off since launch, and new entrypoints of an update
     public void finishStart(List<String> ids, boolean ok) { }
@@ -235,8 +249,15 @@ api.addLifecycleListener(new ModLifecycleListener() {
 api.addLifecycleListener("zoomify", listener);       // only the changes zoomify is part of
 ```
 
-Every call runs on the game thread and Hotwire waits for it, up to 5 seconds. `ids` is the whole change with the mods going along. A switch that fails after `prepareOff` answers with `finishOn` for the mods that stayed on so you never get stuck with half your pages gone. While your mod is off its listeners aren't called.
+Every call runs on the game thread and Hotwire waits for it, up to 5 seconds. A `prepareOff` still running after that refuses the off and names your mod, since that's where settings get saved. `ids` is the whole change with the mods going along. A switch that fails after `prepareOff` answers with `finishOn` for the mods that stayed on so you never get stuck with half your pages gone. While your mod is off its listeners aren't called.
 
-`getRevision()` goes up when a call is added, so if you need a newer one ask `api.hasRevision(2)` first.
+An update can run a mod as a live copy, with its classes renamed under `hotwire_live`. If you save class names (a HUD's class, say) save the mod's own name and look the class up when you load:
+
+```java
+api.findOwnName(hud.getClass());           // the name in the mod's own jar, save this
+api.findRunningClass("occopy.CopyHud");    // the class it runs as now, empty when it isn't there
+```
+
+`getRevision()` goes up when a call is added, so if you need a newer one ask `api.hasRevision(2)` first. Revision 2 added `finishOff`, `findDownloadsWarning`, `findOwnName` and `findRunningClass`.
 
 If something goes wrong on your side `api.writeReport("why")` writes a Hotwire report zip and gives you its path.
