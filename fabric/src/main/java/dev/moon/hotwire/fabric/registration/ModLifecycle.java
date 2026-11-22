@@ -6,6 +6,7 @@ import dev.moon.hotwire.fabric.GameParts;
 import dev.moon.hotwire.fabric.version.Spellings;
 import dev.moon.hotwire.plan.SwitchPlan;
 import dev.moon.hotwire.registration.ArchitecturyEventRegistration;
+import dev.moon.hotwire.registration.OneConfigEventRecorder;
 import dev.moon.hotwire.registration.Owners;
 import dev.moon.hotwire.registration.RegistrationJournal;
 import dev.moon.hotwire.switching.ModSwitcher;
@@ -307,8 +308,22 @@ public final class ModLifecycle {
             callEach(id, journal, ClientLifecycleEvents.CLIENT_STARTED, ran, listener ->
                     ((ClientLifecycleEvents.ClientStarted) listener).onClientStarted(client));
             callArchitectury(id, journal, "SETUP", ran, new ArrayList<>());
+            callOneConfigInitialization(id, journal, ran);
         }, "client");
         return ran;
+    }
+
+    private static void callOneConfigInitialization(String id, RegistrationJournal journal, List<String> ran) {
+        for (RegistrationJournal.Entry entry : journal.getLive(id)) {
+            try {
+                if (OneConfigEventRecorder.runIfOnInitialization(entry.registration())) {
+                    ran.add("OneConfig's InitializationEvent");
+                }
+            } catch (ReflectiveOperationException | RuntimeException | LinkageError e) {
+                LOGGER.warn("[Hotwire] {}'s handler on OneConfig's InitializationEvent threw as the mod started", id,
+                        e);
+            }
+        }
     }
 
     private void onThread(Function<Runnable, CompletableFuture<?>> submit, Runnable work,
@@ -366,6 +381,9 @@ public final class ModLifecycle {
             public void finishSwitch(SwitchPlan plan, boolean done, Predicate<String> isOn) {
                 if (done && plan.direction() == SwitchPlan.Direction.ON) {
                     LifecycleListeners.markOn(plan.order());
+                }
+                if (done && plan.direction() == SwitchPlan.Direction.OFF) {
+                    LifecycleListeners.finishOff(plan.order().stream().filter(id -> !isOn.test(id)).toList());
                 }
                 LifecycleListeners.end(isOn);
             }

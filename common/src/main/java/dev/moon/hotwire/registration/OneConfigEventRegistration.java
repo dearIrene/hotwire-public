@@ -10,6 +10,7 @@ import org.jspecify.annotations.Nullable;
 
 final class OneConfigEventRegistration implements Registration {
     private static final String HANDLER = "org.polyfrost.oneconfig.api.event.v1.invoke.EventHandler";
+    private static final String INITIALIZATION = "org.polyfrost.oneconfig.api.event.v1.events.InitializationEvent";
 
     private final Object bus;
     private final Object handler;
@@ -59,6 +60,25 @@ final class OneConfigEventRegistration implements Registration {
         for (int put = 0; put < this.copies; put++) {
             this.call("register");
         }
+    }
+
+    boolean runIfOnInitialization() throws ReflectiveOperationException {
+        Class<?> base = this.handler.getClass();
+        while (base != null && !HANDLER.equals(LiveNames.findOwnName(base.getName()))) {
+            base = base.getSuperclass();
+        }
+        if (base == null || !(base.getMethod("getEventClass").invoke(this.handler) instanceof Class<?> event)
+                || !INITIALIZATION.equals(LiveNames.findOwnName(event.getName()))) {
+            return false;
+        }
+        Object instance = event.getField("INSTANCE").get(null);
+        for (Method method : base.getMethods()) {
+            if (method.getName().equals("handle") && method.getParameterCount() == 1) {
+                method.invoke(this.handler, instance);
+                return true;
+            }
+        }
+        return false;
     }
 
     private @Nullable Object call(String name) {
