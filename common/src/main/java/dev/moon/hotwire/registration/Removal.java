@@ -21,6 +21,9 @@ public sealed interface Removal {
     default void resetHolder(LazyFields lazy) {
     }
 
+    default void restoreHolder(LazyFields lazy) {
+    }
+
     record InList(List<Object> list, int index, Object element, boolean inPlace) implements Removal {
         @Override
         public Object container() {
@@ -47,6 +50,11 @@ public sealed interface Removal {
         public void resetHolder(LazyFields lazy) {
             lazy.resetFor(this.list);
         }
+
+        @Override
+        public void restoreHolder(LazyFields lazy) {
+            lazy.restoreFor(this.list);
+        }
     }
 
     record InCollection(Collection<Object> collection, Object element) implements Removal {
@@ -72,6 +80,11 @@ public sealed interface Removal {
         @Override
         public void resetHolder(LazyFields lazy) {
             lazy.resetFor(this.collection);
+        }
+
+        @Override
+        public void restoreHolder(LazyFields lazy) {
+            lazy.restoreFor(this.collection);
         }
     }
 

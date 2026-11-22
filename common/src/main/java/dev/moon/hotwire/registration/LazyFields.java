@@ -30,6 +30,8 @@ final class LazyFields {
 
     private final Map<Class<?>, Map<String, Set<String>>> lazyByClass = new ConcurrentHashMap<>();
 
+    private final Map<Object, Map<FieldSlots.Slot, Object>> nulled = new MapMaker().weakKeys().makeMap();
+
     void noteHolder(Object collection, Object holder) {
         this.holders.put(collection, holder);
     }
@@ -50,7 +52,10 @@ final class LazyFields {
                 if (lazy.getOrDefault(field.getName(), Set.of()).contains(of) && !field.isStatic()
                         && !Modifier.isFinal(field.getModifiers())) {
                     try {
-                        if (field.get(holder) != null && field.get(holder) != collection) {
+                        Object before = field.get(holder);
+                        if (before != null && before != collection) {
+                            this.nulled.computeIfAbsent(holder, any -> new ConcurrentHashMap<>())
+                                    .putIfAbsent(field, before);
                             field.set(holder, null);
                             LOGGER.info("[Hotwire] {}.{} is made again from what its collection holds now",
                                     at.getSimpleName(), field.getName());
@@ -60,6 +65,31 @@ final class LazyFields {
                 }
             }
         }
+    }
+
+    @SuppressWarnings("ReferenceEquality")
+    void restoreFor(Object collection) {
+        Object holder = this.holders.get(collection);
+        if (holder == null) {
+            return;
+        }
+        Map<FieldSlots.Slot, Object> fields = this.nulled.remove(holder);
+        if (fields == null) {
+            return;
+        }
+        fields.forEach((field, before) -> {
+            try {
+                Object now = field.get(holder);
+                if (now == null) {
+                    field.set(holder, before);
+                    LOGGER.info("[Hotwire] {}.{} has its value from before its collection's elements left again",
+                            holder.getClass().getSimpleName(), field.getName());
+                } else if (now != before) {
+                    field.set(holder, null);
+                }
+            } catch (ReflectiveOperationException | RuntimeException e) {
+            }
+        });
     }
 
     @SuppressWarnings("ReferenceEquality")

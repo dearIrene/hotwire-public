@@ -783,6 +783,18 @@ final class CollectionReferences implements FixedLists.Walk {
                             one.getValue().describe(), e);
                 }
             }
+
+            Set<Object> stillOut = Collections.newSetFromMap(new IdentityHashMap<>());
+            this.removals.values().forEach(out -> out.forEach(removal -> {
+                if (removal.container() != null) {
+                    stillOut.add(removal.container());
+                }
+            }));
+            for (Map.Entry<String, Removal> one : back) {
+                if (!stillOut.contains(one.getValue().container())) {
+                    one.getValue().restoreHolder(this.lazyFields);
+                }
+            }
         });
     }
 
