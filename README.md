@@ -55,7 +55,7 @@ Rebuilding files as if they were never modified obviously needs the original cla
 
 ```java
 // common/src/main/java/dev/moon/hotwire/registration/RegistrationJournal.java
-public record Entry(long sequence, String owner, @Nullable String via, Registration registration) {}
+public record Entry(long sequence, String owner, Registration registration) {}
 ```
 
 ### Turning a mod off
@@ -455,10 +455,10 @@ Every mod tested so far, with the newest result per operation.
 | Numerical Enchantments | 1.0.1 | 1.21.11 |  |  | ok in world | ok in world | ok |  | 2026-10-30 |
 | Numerical Enchantments | 1.0.2 | 26.2 | clean | ok | ok in world | ok in world |  |  | 2026-10-30 |
 | Numerical Enchantments | 1.0.2 | 26.3 |  |  | ok in world | ok in world | ok |  | 2026-10-30 |
-| oneconfigv1 |  | 1.21.1 |  |  | ran while off |  |  |  | 2026-10-29 |
-| oneconfigv1 |  | 1.21.11 |  |  | ran while off |  |  |  | 2026-10-29 |
-| oneconfigv1 |  | 26.2 |  |  | ran while off |  |  |  | 2026-10-30 |
-| oneconfigv1 |  | 26.3 |  |  | ran while off |  |  |  | 2026-10-30 |
+| oneconfigv1 |  | 1.21.1 | clean |  | ok |  |  |  | 2026-11-22 |
+| oneconfigv1 |  | 1.21.11 | clean |  | ok |  |  |  | 2026-11-22 |
+| oneconfigv1 |  | 26.2 | clean |  | ok |  |  |  | 2026-11-22 |
+| oneconfigv1 |  | 26.3 | clean |  | ok |  |  |  | 2026-11-22 |
 | OptiGUI | 2.3.0-beta.9+1.21 | 1.21.1 |  |  | ok in world | ok in world | ok |  | 2026-10-07 |
 | OptiGUI | 2.3.0-beta.9+1.21.9 | 1.21.11 |  |  | ok in world | ok in world | ok |  | 2026-10-30 |
 | OptiGUI | 2.3.0-beta.10+26.2 | 26.2 |  |  | ok in world | ok in world |  |  | 2026-10-30 |
