@@ -803,10 +803,6 @@ public final class SwitchApplier {
         staying.removeAll(replacing);
         List<String> lost = this.carriedMixins.findLost(carriedNow, mixed.carried(), mixed.mixed(), staying,
                 decided::isAskedAgain, replacing);
-        if (!lost.isEmpty()) {
-            throw RebuildException.ofLosing("the " + what + " would drop patches of mods that stay on: " + lost,
-                            this.carriedMixins.findOwnersOf(lost, on));
-        }
 
         ClassRebuilder.PreparedRebuild prepared;
         try {
@@ -820,6 +816,10 @@ public final class SwitchApplier {
                 });
         } finally {
             SwitchTimes.mark("live objects");
+        }
+        if (!lost.isEmpty()) {
+            throw RebuildException.ofLosing("the " + what + " would drop patches of mods that stay on: " + lost,
+                            this.carriedMixins.findOwnersOf(lost, on));
         }
         this.rebuilder.checkShapes(prepared);
         SwitchTimes.mark("shape check");
