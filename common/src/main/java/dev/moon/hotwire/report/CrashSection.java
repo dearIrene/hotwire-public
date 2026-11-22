@@ -87,22 +87,22 @@ public record CrashSection(List<Detail> details) {
         if (own.isEmpty() && mixin == null && messages.stream().anyMatch(one -> one.startsWith(OUT_OF_MEMORY))) {
             return new Detail("This crash", "Hotwire involved? UNKNOWN. The game ran out of memory, and the trace"
                     + " shows only where, not what filled it. To tell: play the same way without switching; still"
-                    + " runs out, not Hotwire's; does not, send the newest zip under hotwire/reports.");
+                    + " runs out, not Hotwire's; does not, send the newest report under hotwire/reports.");
         }
 
         if (own.isEmpty() && mixin == null && HandlerGuards.ENABLED && messages.stream().anyMatch(
                 one -> LOAD_FAILURES.stream().anyMatch(one::contains))) {
             return new Detail("This crash", "Hotwire involved? MAYBE. A class failed to load or set up, and Hotwire"
                     + " changes classes as they load. To tell: start the game once without Hotwire; still crashes,"
-                    + " not Hotwire's; does not, send the newest zip under hotwire/reports.");
+                    + " not Hotwire's; does not, send the newest report under hotwire/reports.");
         }
         if (touched.isEmpty() && mods.isEmpty() && own.isEmpty() && mixin == null) {
             if (!callers.isEmpty()) {
                 return new Detail("This crash", "Hotwire involved? MAYBE. Another mod's code threw, and no class"
                         + " near the throw was changed; classes Hotwire redefined are only further down, as callers: "
                         + String.join(", ", callers) + " (by '" + String.join("', '", by) + "'). To tell whose bug:"
-                        + " reproduce without that switch; still crashes, not Hotwire's; does not, send the newest zip"
-                        + " under hotwire/reports.");
+                        + " reproduce without that switch; still crashes, not Hotwire's; does not, send the newest"
+                        + " report under hotwire/reports.");
             }
             return new Detail("This crash", "Hotwire involved? NO. No class Hotwire redefined, no mod it switched"
                     + " and none of its own code is in the trace.");
@@ -115,7 +115,7 @@ public record CrashSection(List<Detail> details) {
             out.append(" Hotwire's own code is in the trace: ").append(String.join(", ", own)).append('.');
         }
         if (touched.isEmpty() && mods.isEmpty()) {
-            return new Detail("This crash", out + " This one is Hotwire's: send the newest zip under"
+            return new Detail("This crash", out + " This one is Hotwire's: send the newest report under"
                     + " hotwire/reports.");
         }
         if (!touched.isEmpty()) {
@@ -126,7 +126,7 @@ public record CrashSection(List<Detail> details) {
             out.append(" Switched mods in the trace: ").append(String.join(", ", mods)).append('.');
         }
         return new Detail("This crash", out + " To tell whose bug: reproduce without that switch; still"
-                + " crashes, the mod's; does not, Hotwire's, send the newest zip under hotwire/reports.");
+                + " crashes, the mod's; does not, Hotwire's, send the newest report under hotwire/reports.");
     }
 
     private static String describeLastOperation(Report last) {

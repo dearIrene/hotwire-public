@@ -925,7 +925,7 @@
   "hotwire.own_fault.title": "Hotwire поймал собственную ошибку",
   "hotwire.own_fault": "Собственный код Hotwire сломался внутри игры, но игра продолжилась: %s. На всякий случай перезапусти игру. %s",
   "hotwire.report.page": "Отчёт о баге",
-  "hotwire.report.about": "Что-то пошло не так? Сделай отчёт: один zip с логом игры и тем, что делал Hotwire.",
+  "hotwire.report.about": "Что-то пошло не так? Сделай отчёт: один текстовый файл с логом игры и тем, что делал Hotwire.",
   "hotwire.report.make": "Сделать отчёт",
   "hotwire.report.discord": "Зайти в Discord",
   "hotwire.settings.question": "Есть вопрос?",

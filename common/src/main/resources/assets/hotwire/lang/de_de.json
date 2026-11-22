@@ -925,7 +925,7 @@
   "hotwire.own_fault.title": "Hotwire hat einen eigenen Fehler abgefangen",
   "hotwire.own_fault": "Hotwires eigener Code ist im Spiel fehlgeschlagen, aber das Spiel lief weiter: %s. Starte das Spiel sicherheitshalber neu. %s",
   "hotwire.report.page": "Bugbericht",
-  "hotwire.report.about": "Ist etwas schiefgelaufen? Mach einen Bericht: eine Zip-Datei mit dem Spiel-Log und dem, was Hotwire gemacht hat.",
+  "hotwire.report.about": "Ist etwas schiefgelaufen? Mach einen Bericht: eine Textdatei mit dem Spiel-Log und dem, was Hotwire gemacht hat.",
   "hotwire.report.make": "Bericht erstellen",
   "hotwire.report.discord": "Dem Discord beitreten",
   "hotwire.settings.question": "Hast du eine Frage?",

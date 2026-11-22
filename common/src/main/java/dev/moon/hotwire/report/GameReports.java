@@ -302,7 +302,7 @@ public final class GameReports {
         String now = reports.underWay;
         if (now != null && !crashOffUnderWay && CrashSection.isCleared(trace.value())) {
             return new CrashSection.Detail(trace.name(), "Hotwire involved? YES. The game crashed while Hotwire was"
-                    + " switching (" + now + "). Send the newest zip under hotwire/reports.");
+                    + " switching (" + now + "). Send the newest report under hotwire/reports.");
         }
         return trace;
     }

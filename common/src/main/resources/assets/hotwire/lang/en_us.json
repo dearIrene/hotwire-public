@@ -925,7 +925,7 @@
   "hotwire.own_fault.title": "Hotwire caught a fault of its own",
   "hotwire.own_fault": "Hotwire's own code failed inside the game, but the game carried on: %s. Please restart the game to be safe. %s",
   "hotwire.report.page": "Bug report",
-  "hotwire.report.about": "Something went wrong? Make a report: one zip file with the game log and what Hotwire did.",
+  "hotwire.report.about": "Something went wrong? Make a report: one text file with the game log and what Hotwire did.",
   "hotwire.report.make": "Make the report",
   "hotwire.report.discord": "Join the discord",
   "hotwire.settings.question": "Got a question?",

@@ -925,7 +925,7 @@
   "hotwire.own_fault.title": "Hotwire 拦下了它自己的错误",
   "hotwire.own_fault": "Hotwire 自己的代码在游戏中出错了，但游戏继续运行：%s。为了安全请重启游戏。%s",
   "hotwire.report.page": "Bug 报告",
-  "hotwire.report.about": "出问题了？生成一份报告：一个 zip，包含游戏日志和 Hotwire 做了什么。",
+  "hotwire.report.about": "出问题了？生成一份报告：一个文本文件，包含游戏日志和 Hotwire 做了什么。",
   "hotwire.report.make": "生成报告",
   "hotwire.report.discord": "加入 Discord",
   "hotwire.settings.question": "有问题吗？",

@@ -925,7 +925,7 @@
   "hotwire.own_fault.title": "Hotwire atrapó un fallo suyo",
   "hotwire.own_fault": "El propio código de Hotwire falló dentro del juego, pero el juego siguió: %s. Reinicia el juego para ir sobre seguro. %s",
   "hotwire.report.page": "Reporte de bug",
-  "hotwire.report.about": "¿Algo salió mal? Haz un reporte: un zip con el log del juego y lo que hizo Hotwire.",
+  "hotwire.report.about": "¿Algo salió mal? Haz un reporte: un archivo de texto con el log del juego y lo que hizo Hotwire.",
   "hotwire.report.make": "Hacer el reporte",
   "hotwire.report.discord": "Entra en el Discord",
   "hotwire.settings.question": "¿Tienes alguna pregunta?",
