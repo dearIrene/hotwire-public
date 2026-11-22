@@ -152,6 +152,10 @@ public final class InstalledMods {
         this.copyOf.put(copy, of);
     }
 
+    public synchronized void forgetCopyOf(String copy) {
+        this.copyOf.remove(copy);
+    }
+
     public synchronized @Nullable String findCopyOf(String id) {
         return this.copyOf.get(id);
     }

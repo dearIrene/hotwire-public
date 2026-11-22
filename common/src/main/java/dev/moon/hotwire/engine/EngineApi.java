@@ -44,6 +44,7 @@ import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.Collection;
 import java.util.HashMap;
+import java.util.HashSet;
 import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Map;
@@ -54,6 +55,7 @@ import java.util.concurrent.ConcurrentHashMap;
 import java.util.function.Consumer;
 import java.util.function.Supplier;
 import java.util.stream.Stream;
+import net.fabricmc.loader.api.FabricLoader;
 import org.jspecify.annotations.Nullable;
 import org.objectweb.asm.Type;
 import org.slf4j.Logger;
@@ -213,8 +215,10 @@ public class EngineApi implements HotwireApi {
         CallerBlocks.Callers callers = findCallers();
         ApiState.ModRowCache seen = engine.api.rowsSeen.get(callers);
         long now = System.nanoTime();
-        if (seen == null || now - seen.at() > MODS_FRESH_NANOS) {
-            seen = new ApiState.ModRowCache(now, makeRows(engine, callers));
+
+        long calls = LifecycleListeners.countCalls();
+        if (seen == null || now - seen.at() > MODS_FRESH_NANOS || seen.calls() != calls) {
+            seen = new ApiState.ModRowCache(now, calls, makeRows(engine, callers));
             engine.api.rowsSeen.put(callers, seen);
         }
         return seen.mods();
@@ -227,13 +231,25 @@ public class EngineApi implements HotwireApi {
                 neededBy.putIfAbsent(needed, caller);
             }
         }
-        return engine.getMods().stream().map(mod -> {
+        List<ModState> rows = new ArrayList<>(engine.getMods().stream().map(mod -> {
             String blocked = CallerBlocks.describeRow(mod.id(), ModPolicy.isSwitchable(mod.id()), callers, neededBy,
                     engine::nameOfMod);
             return new ModState(mod.id(), mod.name(), mod.version(), mod.on(),
                     engine.getDisabled().isDisabledSinceStart(mod.id()), blocked.isEmpty(), blocked,
                     engine.findCopyOf(mod.id()));
-        }).toList();
+        }).toList());
+
+        Set<String> listed = new HashSet<>();
+        rows.forEach(row -> listed.add(row.id()));
+        for (String id : LifecycleListeners.findStarting()) {
+            if (listed.contains(id)) {
+                continue;
+            }
+            FabricLoader.getInstance().getModContainer(id).ifPresent(mod -> rows.add(new ModState(id,
+                    mod.getMetadata().getName(), mod.getMetadata().getVersion().getFriendlyString(), true, false, false,
+                    Lang.get("hotwire.api.starting"), engine.findCopyOf(id))));
+        }
+        return List.copyOf(rows);
     }
 
     @Override

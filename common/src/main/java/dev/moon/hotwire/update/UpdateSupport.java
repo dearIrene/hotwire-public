@@ -359,6 +359,8 @@ public final class UpdateSupport implements ModUpdater.Engine, ModAdder.CarriedL
             } else {
                 all.forEach(one -> LiveNames.setRunning(one.tag(), true));
                 all.forEach(one -> this.updater.getCopies().putPinned(one.pinned().getBodies()));
+
+                liveIds.forEach((id, live) -> this.installed.onCopyOf(live, id));
             }
             return refusal;
         });
@@ -371,6 +373,7 @@ public final class UpdateSupport implements ModUpdater.Engine, ModAdder.CarriedL
             LOGGER.info("[Hotwire] {} stay until the next start: the add of their copies was refused: {}",
                     liveIds.keySet(), added);
             all.forEach(one -> LiveNames.setRunning(one.tag(), false));
+            liveIds.values().forEach(this.installed::forgetCopyOf);
             if (wentOff[0]) {
                 all.forEach(one -> this.updater.getCopies().putPinned(one.pinned().getBefore()));
                 if (++this.refusedAdds >= MOST_REFUSED_ADDS) {
@@ -387,7 +390,6 @@ public final class UpdateSupport implements ModUpdater.Engine, ModAdder.CarriedL
         this.reloads.runWaitingReload();
         offs.forEach(this.installed::onRunningFromCopy);
         noteInHistory(offs, false);
-        liveIds.forEach((id, live) -> this.installed.onCopyOf(live, id));
 
         Map<Path, ModJar> reads = new LinkedHashMap<>();
         for (Path copy : copies) {

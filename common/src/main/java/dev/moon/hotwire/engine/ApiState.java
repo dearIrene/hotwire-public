@@ -14,6 +14,6 @@ final class ApiState {
 
     final Map<CallerBlocks.Callers, ModRowCache> rowsSeen = new ConcurrentHashMap<>();
 
-    record ModRowCache(long at, List<ModState> mods) {
+    record ModRowCache(long at, long calls, List<ModState> mods) {
     }
 }

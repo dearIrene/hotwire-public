@@ -76,6 +76,10 @@ public final class LifecycleListeners {
         return LISTENERS.isListening(mod);
     }
 
+    public static boolean isListeningFrom(String packagePrefix) {
+        return LISTENERS.isListeningFrom(packagePrefix);
+    }
+
     public static void setIsOn(Predicate<String> on) {
         isOn = on;
     }
@@ -124,6 +128,14 @@ public final class LifecycleListeners {
 
     public static void beginStarting(List<String> ids) {
         ids.forEach(id -> STARTING.put(id, false));
+    }
+
+    public static Set<String> findStarting() {
+        return Set.copyOf(STARTING.keySet());
+    }
+
+    public static long countCalls() {
+        return LISTENERS.countCalls();
     }
 
     public static void endStarting(List<String> ids) {

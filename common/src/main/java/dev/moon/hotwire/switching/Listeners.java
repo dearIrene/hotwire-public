@@ -3,6 +3,7 @@ package dev.moon.hotwire.switching;
 import dev.moon.hotwire.api.Registration;
 import java.util.List;
 import java.util.concurrent.CopyOnWriteArrayList;
+import java.util.concurrent.atomic.AtomicLong;
 import java.util.function.Consumer;
 import java.util.function.Predicate;
 import org.jspecify.annotations.Nullable;
@@ -12,6 +13,7 @@ import org.slf4j.LoggerFactory;
 public final class Listeners<T> {
     private static final Logger LOGGER = LoggerFactory.getLogger(Listeners.class);
     private final List<Entry<T>> entries = new CopyOnWriteArrayList<>();
+    private final AtomicLong calls = new AtomicLong();
 
     private static final class Entry<T> {
         private final T listener;
@@ -37,7 +39,16 @@ public final class Listeners<T> {
         return mod != null && this.entries.stream().anyMatch(entry -> mod.equals(entry.mod));
     }
 
+    public boolean isListeningFrom(String packagePrefix) {
+        return this.entries.stream().anyMatch(entry -> entry.listener.getClass().getName().startsWith(packagePrefix));
+    }
+
+    public long countCalls() {
+        return this.calls.get();
+    }
+
     public void tell(String what, Predicate<String> on, Consumer<T> call) {
+        this.calls.incrementAndGet();
         for (Entry<T> entry : this.entries) {
             if (entry.mod != null && !on.test(entry.mod)) {
                 continue;
