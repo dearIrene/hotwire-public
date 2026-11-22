@@ -21,6 +21,7 @@ import dev.moon.hotwire.engine.SeenUses;
 import dev.moon.hotwire.engine.SwitchRunner;
 import dev.moon.hotwire.engine.UnappliedMixins;
 import dev.moon.hotwire.fabric.add.AddGameSide;
+import dev.moon.hotwire.fabric.add.OpenLibraryRegistries;
 import dev.moon.hotwire.fabric.rebuild.GameClasses;
 import dev.moon.hotwire.fabric.rebuild.GameMixinCopy;
 import dev.moon.hotwire.fabric.rebuild.LivePluginShapes;
@@ -230,6 +231,7 @@ final class EngineStart {
                 mod -> installed.getGraphJars().stream().filter(jar -> jar.manifest().id().equals(mod)).findFirst()
                         .map(jar -> jar.patches().patches()).orElse(Set.of()), mod -> findHandedTo(mod, installed),
                 mixin::getGeneratedBy);
+        OpenLibraryRegistries.setInitialized(fieldReferences::isInitialized);
         InitHookReplay.writeStaticsWith(fieldReferences::writeStatic);
         ReplacedStatics.swapWith(replaced -> {
             LiveConnections.swap(replaced);

@@ -65,11 +65,13 @@ final class AddStart {
 
         GameParts.getHoldWork().runNextAtFrameEdge(() -> {
             OpenRegistries registries = OpenRegistries.open();
+            OpenLibraryRegistries libraries = OpenLibraryRegistries.open(ids, findLoaded);
             OpenOneConfig configs;
             try {
                 configs = OpenOneConfig.open();
             } catch (RuntimeException | LinkageError e) {
                 registries.close();
+                libraries.close();
                 started.completeExceptionally(e);
                 GameHold.holdGameUntil(backedOut);
                 return;
@@ -84,6 +86,7 @@ final class AddStart {
                 configs.markStarted();
 
                 registries.close();
+                libraries.close();
 
                 int notSetUp = catchUp.getAsInt();
 
@@ -96,6 +99,7 @@ final class AddStart {
             } finally {
                 configs.close();
                 registries.close();
+                libraries.close();
                 grew.addAll(registries.getGrown());
             }
             if (failed == null) {
