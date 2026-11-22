@@ -67,9 +67,15 @@ public final class LoaderModList {
 
     @SuppressWarnings("unchecked")
     public static ModContainerImpl register(Path jar) {
+        return register(jar, List.of());
+    }
+
+    @SuppressWarnings("unchecked")
+    public static ModContainerImpl register(Path jar, Collection<String> children) {
         FabricLoaderImpl loader = FabricLoaderImpl.INSTANCE;
         LoaderModMetadata metadata = parse(jar, loader);
         ModContainerImpl container = makeContainer(jar, metadata);
+        setChildren(container, children);
 
         List<ModContainerImpl> mods = new ArrayList<>(MODS.get(loader, List.class));
         Map<String, ModContainerImpl> byId = MOD_MAP.get(loader, Map.class);
@@ -226,6 +232,20 @@ public final class LoaderModList {
             return new ModContainerImpl(candidate);
         } catch (ReflectiveOperationException e) {
             throw new IllegalStateException("the loader could not make a container for " + metadata.getId(), e);
+        }
+    }
+
+    private static void setChildren(ModContainerImpl container, Collection<String> children) {
+        if (children.isEmpty()) {
+            return;
+        }
+        try {
+            Field ids = ModContainerImpl.class.getDeclaredField("childModIds");
+            ids.setAccessible(true);
+            ids.set(container, List.copyOf(children));
+        } catch (ReflectiveOperationException | RuntimeException e) {
+            LOGGER.info("[Hotwire] {} lists none of the mods its jar carries: {}", container.getMetadata().getId(),
+                    e.toString());
         }
     }
 

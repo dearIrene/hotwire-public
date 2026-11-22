@@ -186,7 +186,7 @@ final class ConfigScreens implements SettingsScreens {
             page = config.getField("id");
             metadata = LiveNames.findRunning(ONECONFIG_NODE, game).getMethod("getMetadata", String.class);
             create = LiveNames.findRunning(ONECONFIG_UI, game).getMethod("createScreen", Object.class);
-            route = LiveNames.findRunning(ONECONFIG_ROUTE, game).getConstructor(String.class, String.class);
+            route = findRouteConstructor(LiveNames.findRunning(ONECONFIG_ROUTE, game));
         } catch (ClassNotFoundException | NoSuchFieldException | NoSuchMethodException | LinkageError
                 | RuntimeException e) {
             return;
@@ -216,7 +216,9 @@ final class ConfigScreens implements SettingsScreens {
                 }
                 Object shown = page.get(config);
                 List<String> runs = oneConfig == null ? List.of(id) : List.of(id, oneConfig);
-                into.put(id, new SettingsScreen(parent -> create.invoke(null, route.newInstance(shown, null)), runs));
+                Object[] where = new Object[route.getParameterCount()];
+                where[0] = shown;
+                into.put(id, new SettingsScreen(parent -> create.invoke(null, route.newInstance(where)), runs));
             } catch (InvocationTargetException e) {
                 this.noteUnreadable(id, e.getCause() == null ? e : e.getCause());
             } catch (ReflectiveOperationException | RuntimeException e) {
@@ -242,5 +244,13 @@ final class ConfigScreens implements SettingsScreens {
                     ? cause.getClass().getSimpleName() : message));
         }
         return false;
+    }
+
+    private static Constructor<?> findRouteConstructor(Class<?> route) throws NoSuchMethodException {
+        try {
+            return route.getConstructor(String.class, String.class, String.class);
+        } catch (NoSuchMethodException e) {
+            return route.getConstructor(String.class, String.class);
+        }
     }
 }

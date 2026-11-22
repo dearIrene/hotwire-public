@@ -13,6 +13,7 @@ import org.slf4j.LoggerFactory;
 public final class OpenOneConfig implements AutoCloseable {
     private static final Logger LOGGER = LoggerFactory.getLogger(OpenOneConfig.class);
     private static final String MANAGER = "org.polyfrost.oneconfig.api.config.v1.ConfigManager";
+    private static final String ONECONFIG_PACKAGE = "org.polyfrost.oneconfig.";
 
     private final @Nullable Class<?> manager;
     private boolean started;
@@ -26,7 +27,8 @@ public final class OpenOneConfig implements AutoCloseable {
             Class<?> manager = Class.forName(LiveNames.findRunningName(MANAGER), true,
                     OpenOneConfig.class.getClassLoader());
 
-            if (LifecycleListeners.isListening(Owners.findModOrShipper(manager))) {
+            if (LifecycleListeners.isListening(Owners.findModOrShipper(manager))
+                    || LifecycleListeners.isListeningFrom(ONECONFIG_PACKAGE)) {
                 return new OpenOneConfig(null);
             }
             Field initialized = findInitialized(manager);

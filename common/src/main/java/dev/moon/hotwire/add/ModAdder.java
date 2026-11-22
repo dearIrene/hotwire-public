@@ -852,7 +852,8 @@ public final class ModAdder {
     private @Nullable Result joinModList(Part part, AddUndo undo) {
         String id = part.jar().manifest().id();
         try {
-            LoaderModList.register(part.path());
+            LoaderModList.register(part.path(), part.jar().nested().stream().map(one -> one.manifest().id())
+                    .toList());
             undo.addUndo(() -> LoaderModList.unregister(id));
             return null;
         } catch (IllegalStateException e) {
