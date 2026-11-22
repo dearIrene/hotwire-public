@@ -4,6 +4,7 @@ import net.minecraft.client.Minecraft;
 //? if >=26.2 {
 import com.mojang.blaze3d.systems.RenderSystem;
 import com.mojang.renderpearl.api.textures.GpuTextureView;
+import dev.moon.hotwire.fabric.mixin.core.blaze3d.systems.CommandEncoderAccessor;
 //?} else if >=26.1 {
 /*import com.mojang.blaze3d.systems.RenderSystem;
 import dev.moon.hotwire.fabric.mixin.core.blaze3d.opengl.GlCommandEncoderAccessor;
@@ -31,7 +32,12 @@ public final class Frames {
     }
 
     public static void endRenderPass() {
-        //? if >=1.21.5 && <26.1 {
+        //? if >=26.2 {
+        if (RenderSystem.getDevice().createCommandEncoder() instanceof CommandEncoderAccessor encoder
+                && encoder.hotwire$isInRenderPass()) {
+            encoder.hotwire$submitRenderPass();
+        }
+        //?} else if >=1.21.5 && <26.1 {
         /*if (RenderSystem.getDevice().createCommandEncoder() instanceof GlCommandEncoderAccessor encoder
                 && encoder.hotwire$isInRenderPass()) {
             encoder.hotwire$finishRenderPass();
