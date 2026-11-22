@@ -117,7 +117,7 @@ public interface Game {
 
     long countFrames();
 
-    void runBeforeFrameAndWait(Runnable work, String what);
+    boolean runBeforeFrameAndWait(Runnable work, String what);
 
     void runSoon(Runnable work);
 

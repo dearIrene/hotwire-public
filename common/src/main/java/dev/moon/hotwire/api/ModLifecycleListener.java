@@ -6,6 +6,9 @@ public interface ModLifecycleListener {
     default void prepareOff(List<String> ids) {
     }
 
+    default void finishOff(List<String> ids) {
+    }
+
     default void finishOn(List<String> ids) {
     }
 

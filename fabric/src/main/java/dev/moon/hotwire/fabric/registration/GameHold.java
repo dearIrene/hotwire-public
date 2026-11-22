@@ -155,14 +155,18 @@ public final class GameHold {
         }
     }
 
-    public static void onGameBeforeFrameAndWait(Runnable work, String what) {
+    public static boolean onGameBeforeFrameAndWait(Runnable work, String what) {
         try {
             await(onGameBeforeNextFrame(work, Minecraft.getInstance()), BEFORE_FRAME_SECONDS, "Render thread", what);
         } catch (InterruptedException e) {
             Thread.currentThread().interrupt();
-        } catch (ExecutionException | TimeoutException e) {
+        } catch (ExecutionException e) {
             LOGGER.warn("[Hotwire] {} could not be done on the game thread", what, e);
+        } catch (TimeoutException e) {
+            LOGGER.warn("[Hotwire] {} could not be done on the game thread", what, e);
+            return false;
         }
+        return true;
     }
 
     public static void onGameAndWait(Runnable work) {

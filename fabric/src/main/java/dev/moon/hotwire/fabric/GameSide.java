@@ -300,8 +300,8 @@ public final class GameSide implements Game {
     }
 
     @Override
-    public void runBeforeFrameAndWait(Runnable work, String what) {
-        GameHold.onGameBeforeFrameAndWait(work, what);
+    public boolean runBeforeFrameAndWait(Runnable work, String what) {
+        return GameHold.onGameBeforeFrameAndWait(work, what);
     }
 
     @Override

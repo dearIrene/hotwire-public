@@ -1,6 +1,7 @@
 package dev.moon.hotwire.switching;
 
 import dev.moon.hotwire.api.Registration;
+import java.util.Arrays;
 import java.util.List;
 import java.util.concurrent.CopyOnWriteArrayList;
 import java.util.concurrent.atomic.AtomicLong;
@@ -14,6 +15,8 @@ public final class Listeners<T> {
     private static final Logger LOGGER = LoggerFactory.getLogger(Listeners.class);
     private final List<Entry<T>> entries = new CopyOnWriteArrayList<>();
     private final AtomicLong calls = new AtomicLong();
+
+    private volatile @Nullable String running;
 
     private static final class Entry<T> {
         private final T listener;
@@ -53,11 +56,23 @@ public final class Listeners<T> {
             if (entry.mod != null && !on.test(entry.mod)) {
                 continue;
             }
+            this.running = entry.mod;
             try {
                 call.accept(entry.listener);
             } catch (RuntimeException | LinkageError e) {
                 LOGGER.warn("[Hotwire] {}'s listener threw in {}", entry.mod == null ? "a" : entry.mod, what, e);
             }
         }
+        this.running = null;
+    }
+
+    public @Nullable String findRunning() {
+        return this.running;
+    }
+
+    public boolean isAnsweringFrom(String packagePrefix, String method) {
+        return this.entries.stream().anyMatch(entry -> entry.listener.getClass().getName().startsWith(packagePrefix)
+                && Arrays.stream(entry.listener.getClass().getDeclaredMethods())
+                        .anyMatch(declared -> declared.getName().equals(method)));
     }
 }

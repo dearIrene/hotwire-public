@@ -69,6 +69,7 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 public final class SwitchRunner {
+    private static final String ONECONFIG = "org.polyfrost.oneconfig.";
     private static final Logger LOGGER = LoggerFactory.getLogger(SwitchRunner.class);
 
     private static final ThreadMXBean THREADS = ManagementFactory.getThreadMXBean();
@@ -171,8 +172,13 @@ public final class SwitchRunner {
                 new Step(this.units::takeOutReloadedLists, "checked lists"),
                 new Step(ids -> this.units.chooseCursorAgainFor(this.switcher.findPatchedBy(ids)),
                         "removals: cursor"),
-                step(this.units::takeOutHuds),
-                step(OneConfigModCards::takeOut),
+
+                step(ids -> {
+                    if (!LifecycleListeners.isAnsweringOffFrom(ONECONFIG)) {
+                        this.units.takeOutHuds(ids);
+                        OneConfigModCards.takeOut(ids);
+                    }
+                }),
                 new Step(this.sodiumPages::takeOut, "removals: huds"),
                 new Step(this.units::takeOutNetworkHandlers, "removals: network"),
                 new Step(this.units::takeOutRendererProviders, "removals: renderer providers"),
@@ -511,7 +517,18 @@ public final class SwitchRunner {
         if (!wired.isEmpty()) {
             this.tripwire.wireCoroutines(wired);
         }
-        Tripwire.runAsHotwire(() -> LifecycleListeners.prepareOff(wired));
+        AtomicReference<@Nullable String> stuck = new AtomicReference<>();
+        Tripwire.runAsHotwire(() -> stuck.set(LifecycleListeners.prepareOff(wired)));
+        String refusal = stuck.get();
+        if (refusal != null) {
+            LOGGER.warn("[Hotwire] the off of {} is refused: {}", ids, refusal);
+            if (leaves) {
+                this.units.restoreContent(wired);
+            }
+            this.tripwire.unwire(wired);
+            return new CheckedResult(new ModSwitcher.Result.Failed(plan, new RebuildException(refusal)),
+                    new Report.OffCheck.NotRun(), List.of());
+        }
 
         this.reloads.awaitIdle();
         if (!wired.isEmpty()) {

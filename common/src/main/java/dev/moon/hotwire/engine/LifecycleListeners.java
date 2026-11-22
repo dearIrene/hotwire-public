@@ -10,6 +10,7 @@ import java.util.List;
 import java.util.Map;
 import java.util.Set;
 import java.util.concurrent.ConcurrentHashMap;
+import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.function.Consumer;
 import java.util.function.Predicate;
 import org.jspecify.annotations.Nullable;
@@ -39,6 +40,13 @@ public final class LifecycleListeners {
             public void prepareOff(List<String> ids) {
                 if (ids.contains(modId)) {
                     listener.prepareOff(ids);
+                }
+            }
+
+            @Override
+            public void finishOff(List<String> ids) {
+                if (ids.contains(modId)) {
+                    listener.finishOff(ids);
                 }
             }
 
@@ -80,6 +88,10 @@ public final class LifecycleListeners {
         return LISTENERS.isListeningFrom(packagePrefix);
     }
 
+    public static boolean isAnsweringOffFrom(String packagePrefix) {
+        return LISTENERS.isAnsweringFrom(packagePrefix, "finishOff");
+    }
+
     public static void setIsOn(Predicate<String> on) {
         isOn = on;
     }
@@ -110,15 +122,38 @@ public final class LifecycleListeners {
         }
     }
 
-    public static void prepareOff(List<String> order) {
+    public static @Nullable String prepareOff(List<String> order) {
         List<String> fresh = new ArrayList<>();
         for (String id : order) {
             if (!STARTING.containsKey(id) && TOLD_OFF.add(id)) {
                 fresh.add(id);
             }
         }
-        if (!fresh.isEmpty()) {
-            tell("beforeOff", listener -> listener.prepareOff(List.copyOf(fresh)));
+        if (fresh.isEmpty() || LISTENERS.isEmpty()) {
+            return null;
+        }
+        AtomicBoolean begun = new AtomicBoolean();
+        AtomicBoolean dropped = new AtomicBoolean();
+        boolean done = tell("beforeOff", listener -> {
+            if (!dropped.get()) {
+                begun.set(true);
+                listener.prepareOff(List.copyOf(fresh));
+            }
+        });
+        if (done) {
+            return null;
+        }
+        dropped.set(true);
+        if (!begun.get()) {
+            fresh.forEach(TOLD_OFF::remove);
+        }
+        String slow = LISTENERS.findRunning();
+        return (slow == null ? "a mod" : slow) + " was still getting ready for the off when the wait ran out";
+    }
+
+    public static void finishOff(List<String> ids) {
+        if (!ids.isEmpty()) {
+            tell("afterOff", listener -> listener.finishOff(List.copyOf(ids)));
         }
     }
 
@@ -170,9 +205,9 @@ public final class LifecycleListeners {
         }
     }
 
-    private static void tell(String what, Consumer<ModLifecycleListener> call) {
+    private static boolean tell(String what, Consumer<ModLifecycleListener> call) {
         if (LISTENERS.isEmpty()) {
-            return;
+            return true;
         }
         long asked = System.nanoTime();
         Runnable each = () -> {
@@ -184,8 +219,8 @@ public final class LifecycleListeners {
         };
         if (Games.getNow().isOnGameThread()) {
             each.run();
-            return;
+            return true;
         }
-        Games.getNow().runBeforeFrameAndWait(each, "the lifecycle listeners' " + what);
+        return Games.getNow().runBeforeFrameAndWait(each, "the lifecycle listeners' " + what);
     }
 }
