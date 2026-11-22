@@ -55,7 +55,12 @@ public final class EntrypointLists {
             List<Object> added = new ArrayList<>();
             for (EntrypointContainer<Object> entry : loader.getEntrypointContainers(key, Object.class)) {
                 if (ids.contains(entry.getProvider().getMetadata().getId())) {
-                    added.add(entry.getEntrypoint());
+                    try {
+                        added.add(entry.getEntrypoint());
+                    } catch (RuntimeException e) {
+                        LOGGER.info("[Hotwire] {}'s {} entrypoint is the host's own type alone: {}",
+                                entry.getProvider().getMetadata().getId(), key, e.toString());
+                    }
                 }
             }
             loader.getModContainer(host).ifPresent(container -> findFilledBy(container, key).forEach(
