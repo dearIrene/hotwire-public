@@ -1,6 +1,7 @@
 package dev.moon.hotwire.redefine;
 
 import dev.moon.hotwire.classfile.ClassHeader;
+import dev.moon.hotwire.classfile.ClassNodes;
 import java.lang.invoke.MethodHandle;
 import java.lang.invoke.MethodHandleProxies;
 import java.lang.invoke.MethodHandles;
@@ -10,6 +11,7 @@ import java.lang.reflect.Field;
 import java.lang.reflect.Method;
 import java.lang.reflect.Modifier;
 import java.util.ArrayList;
+import java.util.HashMap;
 import java.util.HashSet;
 import java.util.IdentityHashMap;
 import java.util.LinkedHashMap;
@@ -21,6 +23,7 @@ import java.util.Set;
 import java.util.function.Supplier;
 import java.util.regex.Pattern;
 import org.jspecify.annotations.Nullable;
+import org.objectweb.asm.ClassReader;
 import org.objectweb.asm.Opcodes;
 import org.objectweb.asm.Type;
 import org.objectweb.asm.tree.AbstractInsnNode;
@@ -29,8 +32,10 @@ import org.objectweb.asm.tree.FieldInsnNode;
 import org.objectweb.asm.tree.FieldNode;
 import org.objectweb.asm.tree.InsnList;
 import org.objectweb.asm.tree.InsnNode;
+import org.objectweb.asm.tree.LabelNode;
 import org.objectweb.asm.tree.MethodInsnNode;
 import org.objectweb.asm.tree.MethodNode;
+import org.objectweb.asm.tree.TypeInsnNode;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -39,6 +44,8 @@ final class ChangedStatics {
     private static final String PREFIX = "hotwire$passedStatic$";
 
     private static final String FRESH_PREFIX = "hotwire$freshStatic$";
+
+    private static final String INNER_PREFIX = "hotwire$innerStatic$";
 
     private static final Pattern MERGED = Pattern.compile("^[A-Za-z]+\\$(?!lambda\\$)[a-z]{3}[0-9a-f]{3}\\$");
 
@@ -79,6 +86,7 @@ final class ChangedStatics {
             if (!(store instanceof FieldInsnNode put) || put.getOpcode() != Opcodes.PUTSTATIC) {
                 return;
             }
+            addInner(now, put, slice);
             slice.set(store, new InsnNode(Type.getType(put.desc).getOpcode(Opcodes.IRETURN)));
             MethodNode method = new MethodNode(Opcodes.ACC_PRIVATE | Opcodes.ACC_STATIC | Opcodes.ACC_SYNTHETIC,
                     PREFIX + put.name, "()" + put.desc, null, null);
@@ -90,12 +98,16 @@ final class ChangedStatics {
     }
 
     static Map<String, String> addSwitched(ClassNode now, ClassNode running) {
-        Map<String, String> recomputed = addAfterMembersOnlyIn(running, now, now);
-        recomputed.putAll(addAfterMembersOnlyIn(now, running, now));
+        Map<String, String> recomputed = addAfterMembersOnlyIn(running, now, now, true);
+        recomputed.putAll(addAfterMembersOnlyIn(now, running, now, false));
+        if (!findSetupHandlerMods(now).equals(findSetupHandlerMods(running))) {
+            addEmptied(now, recomputed);
+        }
         return recomputed;
     }
 
-    private static Map<String, String> addAfterMembersOnlyIn(ClassNode has, ClassNode lacks, ClassNode now) {
+    private static Map<String, String> addAfterMembersOnlyIn(ClassNode has, ClassNode lacks, ClassNode now,
+            boolean dropped) {
         Set<String> standing = new HashSet<>();
         for (MethodNode method : lacks.methods) {
             standing.add(makeKey(method.name) + method.desc);
@@ -112,6 +124,8 @@ final class ChangedStatics {
             made.add(method.name);
         }
         Set<String> stored = new HashSet<>();
+
+        Set<String> written = new HashSet<>();
         for (MethodNode method : has.methods) {
             if (!method.name.equals("<clinit>") || only.isEmpty()) {
                 continue;
@@ -120,6 +134,9 @@ final class ChangedStatics {
             for (AbstractInsnNode insn : method.instructions) {
                 if (insn instanceof MethodInsnNode call && call.owner.equals(has.name)
                         && only.contains(call.name + call.desc)) {
+                    if (dropped) {
+                        addWrites(has, call, written);
+                    }
                     after = true;
                 } else if (after && insn instanceof FieldInsnNode put && put.getOpcode() == Opcodes.PUTSTATIC
                         && put.owner.equals(has.name)) {
@@ -130,8 +147,9 @@ final class ChangedStatics {
                 }
             }
         }
+        written.removeIf(key -> made.contains(PREFIX + key.substring(0, key.indexOf(':'))));
         Map<String, String> recomputed = new LinkedHashMap<>();
-        if (stored.isEmpty()) {
+        if (stored.isEmpty() && written.isEmpty()) {
             return recomputed;
         }
 
@@ -149,11 +167,13 @@ final class ChangedStatics {
             }
             return true;
         });
+        written.forEach(key -> stored.add(key.replace(":", "")));
         FieldInitializers.findStaticSlices(now.name, now, stored).forEach((field, slice) -> {
             AbstractInsnNode store = slice.getLast();
             if (!(store instanceof FieldInsnNode put) || put.getOpcode() != Opcodes.PUTSTATIC) {
                 return;
             }
+            addInner(now, put, slice);
             slice.set(store, new InsnNode(Type.getType(put.desc).getOpcode(Opcodes.IRETURN)));
             MethodNode method = new MethodNode(Opcodes.ACC_PRIVATE | Opcodes.ACC_STATIC | Opcodes.ACC_SYNTHETIC,
                     PREFIX + put.name, "()" + put.desc, null, null);
@@ -222,6 +242,93 @@ final class ChangedStatics {
         return recomputed;
     }
 
+    private static void addEmptied(ClassNode now, Map<String, String> recomputed) {
+        Set<String> made = new HashSet<>();
+        for (MethodNode method : now.methods) {
+            made.add(method.name);
+        }
+        Set<String> own = new HashSet<>();
+        for (FieldNode field : now.fields) {
+            int privateStatic = Opcodes.ACC_STATIC | Opcodes.ACC_PRIVATE;
+            if ((field.access & privateStatic) == privateStatic && field.desc.startsWith("Ljava/util/")) {
+                own.add(field.name + field.desc);
+            }
+        }
+        List<MethodNode> added = new ArrayList<>();
+        for (MethodNode method : now.methods) {
+            if (!method.name.equals("<clinit>")) {
+                continue;
+            }
+            for (AbstractInsnNode insn : method.instructions) {
+                if (!(insn instanceof FieldInsnNode put) || put.getOpcode() != Opcodes.PUTSTATIC
+                        || !put.owner.equals(now.name) || !own.contains(put.name + put.desc)
+                        || recomputed.containsKey(put.name) || made.contains(PREFIX + put.name)) {
+                    continue;
+                }
+                AbstractInsnNode init = findReal(put.getPrevious());
+                AbstractInsnNode dup = init == null ? null : findReal(init.getPrevious());
+                AbstractInsnNode create = dup == null ? null : findReal(dup.getPrevious());
+                if (init instanceof MethodInsnNode call && call.getOpcode() == Opcodes.INVOKESPECIAL
+                        && call.name.equals("<init>") && call.desc.equals("()V") && dup != null
+                        && dup.getOpcode() == Opcodes.DUP && create instanceof TypeInsnNode type
+                        && type.getOpcode() == Opcodes.NEW && type.desc.equals(call.owner)) {
+                    MethodNode making = new MethodNode(Opcodes.ACC_PRIVATE | Opcodes.ACC_STATIC
+                            | Opcodes.ACC_SYNTHETIC, PREFIX + put.name, "()" + put.desc, null, null);
+                    making.instructions.add(new TypeInsnNode(Opcodes.NEW, type.desc));
+                    making.instructions.add(new InsnNode(Opcodes.DUP));
+                    making.instructions.add(new MethodInsnNode(Opcodes.INVOKESPECIAL, type.desc, "<init>", "()V",
+                            false));
+                    making.instructions.add(new InsnNode(Opcodes.ARETURN));
+                    added.add(making);
+                    recomputed.put(put.name, put.desc);
+                }
+            }
+        }
+        now.methods.addAll(added);
+    }
+
+    private static @Nullable AbstractInsnNode findReal(@Nullable AbstractInsnNode insn) {
+        AbstractInsnNode at = insn;
+        while (at != null && at.getOpcode() < 0) {
+            at = at.getPrevious();
+        }
+        return at;
+    }
+
+    private static void addWrites(ClassNode has, MethodInsnNode call, Set<String> into) {
+        for (MethodNode handler : has.methods) {
+            if (handler.name.equals(call.name) && handler.desc.equals(call.desc)) {
+                for (AbstractInsnNode insn : handler.instructions) {
+                    if (insn instanceof FieldInsnNode put && put.getOpcode() == Opcodes.PUTSTATIC
+                            && put.owner.equals(has.name)) {
+                        into.add(put.name + ":" + put.desc);
+                    }
+                }
+            }
+        }
+    }
+
+    static Set<String> findSetupHandlerMods(byte[] bytes) {
+        return findSetupHandlerMods(ClassNodes.read(bytes, ClassReader.SKIP_DEBUG | ClassReader.SKIP_FRAMES));
+    }
+
+    private static Set<String> findSetupHandlerMods(ClassNode node) {
+        Set<String> mods = new HashSet<>();
+        for (MethodNode method : node.methods) {
+            if (method.name.equals("<clinit>")) {
+                for (AbstractInsnNode insn : method.instructions) {
+                    if (insn instanceof MethodInsnNode call && call.owner.equals(node.name)) {
+                        String mod = HandlerGuards.findModInHandlerName(call.name);
+                        if (mod != null) {
+                            mods.add(mod);
+                        }
+                    }
+                }
+            }
+        }
+        return mods;
+    }
+
     private static boolean callsAny(InsnList slice, String owner, Set<String> fresh) {
         for (AbstractInsnNode insn : slice) {
             if (insn instanceof MethodInsnNode call && call.owner.equals(owner)
@@ -255,6 +362,11 @@ final class ChangedStatics {
                 field.setAccessible(true);
                 Object old = field.get(null);
                 boolean changed = hasMethodOf(side, PREFIX + entry.getKey(), field.getType());
+                if (changed && old != null && takeInner(side, field, old, replaced)) {
+                    LOGGER.info("[Hotwire] {}.{} keeps its object; what it holds took what the setup the mods give"
+                            + " it now made", type.getName(), entry.getKey());
+                    continue;
+                }
 
                 if (!changed && old != null) {
                     continue;
@@ -290,6 +402,69 @@ final class ChangedStatics {
         }
         ReplacedStatics.swap(replaced);
         return failed;
+    }
+
+    private static void addInner(ClassNode now, FieldInsnNode put, InsnList slice) {
+        AbstractInsnNode last = put.getPrevious();
+        while (last != null && last.getOpcode() < 0) {
+            last = last.getPrevious();
+        }
+        if (!(last instanceof MethodInsnNode call) || call.getOpcode() != Opcodes.INVOKESTATIC) {
+            return;
+        }
+        Type[] args = Type.getArgumentTypes(call.desc);
+        if (args.length != 2 || args[0].getSize() != 1 || args[1].getSort() != Type.OBJECT) {
+            return;
+        }
+        Map<LabelNode, LabelNode> labels = new HashMap<>();
+        for (AbstractInsnNode insn : slice) {
+            if (insn instanceof LabelNode label) {
+                labels.put(label, new LabelNode());
+            }
+        }
+        InsnList copy = new InsnList();
+        int end = slice.indexOf(call);
+        for (int at = 0; at < end; at++) {
+            copy.add(slice.get(at).clone(labels));
+        }
+        copy.add(new InsnNode(Opcodes.SWAP));
+        copy.add(new InsnNode(Opcodes.POP));
+        copy.add(new InsnNode(Opcodes.ARETURN));
+        MethodNode method = new MethodNode(Opcodes.ACC_PRIVATE | Opcodes.ACC_STATIC | Opcodes.ACC_SYNTHETIC,
+                INNER_PREFIX + put.name, "()" + args[1].getDescriptor(), null, null);
+        method.instructions.add(copy);
+        now.methods.add(method);
+    }
+
+    private static boolean takeInner(MethodHandles.Lookup side, Field field, Object old,
+            IdentityHashMap<Object, Object> replaced) throws ReflectiveOperationException {
+        Method inner = null;
+        for (Method method : side.lookupClass().getDeclaredMethods()) {
+            if (method.getName().equals(INNER_PREFIX + field.getName()) && method.getParameterCount() == 0) {
+                inner = method;
+            }
+        }
+        if (inner == null) {
+            return false;
+        }
+        MethodHandle making = side.findStatic(side.lookupClass(), inner.getName(),
+                MethodType.methodType(inner.getReturnType()));
+        Object made = MethodHandleProxies.asInterfaceInstance(Supplier.class, making).get();
+        if (made == null) {
+            return false;
+        }
+        for (Class<?> at = old.getClass(); at != Object.class; at = at.getSuperclass()) {
+            for (Field part : at.getDeclaredFields()) {
+                if (!Modifier.isStatic(part.getModifiers()) && !part.getType().isPrimitive()
+                        && part.trySetAccessible()) {
+                    Object inside = part.get(old);
+                    if (inside != null && inside.getClass() == made.getClass()) {
+                        return takeStateOf(field, inside, made, replaced);
+                    }
+                }
+            }
+        }
+        return false;
     }
 
     private static boolean hasMethodOf(MethodHandles.Lookup side, String name, Class<?> valueType) {

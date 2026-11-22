@@ -462,6 +462,10 @@ public final class ClassRebuilder {
                 newlyBuilt.add(name);
                 LOGGER.debug("[Hotwire] {} builds its objects another way; {}", name,
                         BatchShapes.describeFirstDifference(was, now));
+            } else if (!ChangedStatics.findSetupHandlerMods(running)
+                    .equals(ChangedStatics.findSetupHandlerMods(split.target()))) {
+                newlyBuilt.add(name);
+                LOGGER.debug("[Hotwire] {} makes its statics another way, so its objects are built another way", name);
             } else if (!this.shapes.findConstructors(running, original, false)
                     .equals(this.shapes.findConstructors(split.target(), original, false))) {
                 numbersAlone.add(name);
