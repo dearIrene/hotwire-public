@@ -1,5 +1,6 @@
 package dev.moon.hotwire.fabric.mixin.core.fabric.client.keymapping;
 
+import com.llamalad7.mixinextras.sugar.Local;
 import dev.moon.hotwire.fabric.registration.KeyBindingRecorder;
 import net.minecraft.client.KeyMapping;
 import org.spongepowered.asm.mixin.Mixin;
@@ -12,14 +13,16 @@ import org.spongepowered.asm.mixin.injection.callback.CallbackInfoReturnable;
 @Mixin(targets = "net.fabricmc.fabric.impl.client.keymapping.KeyMappingRegistryImpl", remap = false)
 public abstract class KeyMappingRegistryImplMixin {
     @Inject(method = "registerKeyMapping", at = @At("HEAD"), cancellable = true)
-    private static void hotwire$registerLate(KeyMapping binding, CallbackInfoReturnable<KeyMapping> cir) {
+    private static void hotwire$registerLate(CallbackInfoReturnable<KeyMapping> cir,
+            @Local(argsOnly = true) KeyMapping binding) {
         if (KeyBindingRecorder.registerLate(binding)) {
             cir.setReturnValue(binding);
         }
     }
 
     @Inject(method = "registerKeyMapping", at = @At("TAIL"))
-    private static void hotwire$onRegistered(KeyMapping binding, CallbackInfoReturnable<KeyMapping> cir) {
+    private static void hotwire$onRegistered(CallbackInfoReturnable<KeyMapping> cir,
+            @Local(argsOnly = true) KeyMapping binding) {
         KeyBindingRecorder.onRegistered(binding);
     }
 }
