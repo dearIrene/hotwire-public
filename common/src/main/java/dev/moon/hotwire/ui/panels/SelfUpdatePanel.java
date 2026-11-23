@@ -112,8 +112,11 @@ public final class SelfUpdatePanel extends Sheet {
             case URGENT -> {
                 this.body.with(Kit.dim(Lang.get("hotwire.self_update.urgent_next_start", this.version)).wrap());
                 later.label(Lang.get("hotwire.self_update.ignore"));
-                this.setLead(Kit.lead(Lang.get("hotwire.self_update.urgent_button"), this.onUpdate)
-                        .ink(Palette.OFF_TINT));
+
+                this.setLead(Kit.lead(Lang.get("hotwire.self_update.urgent_button"), () -> {
+                    this.onUpdate.run();
+                    this.dismiss();
+                }).ink(Palette.OFF_TINT));
             }
             case READY -> {
                 this.body.with(Kit.dim(Lang.get("hotwire.self_update.ready_line", this.version)).wrap());
