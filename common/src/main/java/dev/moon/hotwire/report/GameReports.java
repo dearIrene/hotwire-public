@@ -545,6 +545,11 @@ public final class GameReports {
             texts.put("hotwire-updates.json", read(pending));
         }
 
+        Path swapped = game.resolve("hotwire").resolve("logs").resolve(SwapAtClose.LAST_LOGS);
+        if (Files.isRegularFile(swapped)) {
+            texts.put("hotwire-last-close.log", read(swapped));
+        }
+
         Path worlds = game.resolve("hotwire").resolve(WorldContentRecord.History.FILE);
         if (Files.isRegularFile(worlds)) {
             List<String> lines = read(worlds).lines().toList();

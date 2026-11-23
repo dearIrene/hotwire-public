@@ -7,6 +7,8 @@ import java.io.IOException;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.nio.file.StandardCopyOption;
+import java.time.LocalTime;
+import java.time.ZoneId;
 import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.LinkedHashMap;
@@ -15,11 +17,11 @@ import java.util.Map;
 import java.util.Optional;
 import java.util.Set;
 import org.jspecify.annotations.Nullable;
-import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
 
 public final class JarSwapper {
-    private static final Logger LOGGER = LoggerFactory.getLogger(JarSwapper.class);
+    private static void say(String line) {
+        System.out.println(LocalTime.now(ZoneId.systemDefault()).withNano(0) + " " + line);
+    }
 
     private static final String DISABLED = ".disabled";
 
@@ -42,7 +44,9 @@ public final class JarSwapper {
             game.get().onExit().join();
         }
         UpdateQueue queue = new UpdateQueue(queueFile);
+        say("the game ended; " + queue.getEntries().size() + " queued for " + mods);
         swap(queue, mods, replaced);
+        say(queue.getEntries().size() + " still queued");
 
         if (queue.getEntries().isEmpty()) {
             PendingChanges.clean(Path.of(folders.get(3)), Set.of());
@@ -55,6 +59,7 @@ public final class JarSwapper {
         for (UpdateQueue.Entry entry : entries) {
             String reason = findChange(entry, mods);
             if (!reason.isEmpty()) {
+                say(entry.name() + " " + entry.toVersion() + " waits: " + reason);
                 stuck.put(entry.modId(), reason);
             }
         }
@@ -87,8 +92,8 @@ public final class JarSwapper {
             boolean gone = !Files.exists(staged);
             boolean done = !gone && running != null && FileHashes.findSha256(running).equals(entry.stagedSha256());
             if (gone || done) {
-                LOGGER.info("[Hotwire] {} {} leaves the queue: {}", entry.name(), entry.toVersion(),
-                        gone ? "its new jar is gone" : "the mods folder has it already");
+                say(entry.name() + " " + entry.toVersion() + " leaves the queue: " + (gone
+                        ? "its new jar is gone (" + staged + ")" : "the mods folder has it already"));
             } else {
                 still.add(entry);
             }
@@ -135,6 +140,8 @@ public final class JarSwapper {
             for (UpdateQueue.Entry entry : entries) {
                 Path staged = Path.of(entry.stagedJar()).toAbsolutePath();
                 String aside = moveOne(entry, mods, replaced, moved);
+                say(entry.name() + " " + entry.toVersion() + " is in" + (aside == null ? "" : ", " + aside
+                        + " moved aside"));
                 if (replaced.toAbsolutePath().equals(staged.getParent())) {
                     records.removeIf(record -> record.file().equals(String.valueOf(staged.getFileName())));
                 }
@@ -146,6 +153,7 @@ public final class JarSwapper {
             queue.replaceAll(stuck, records);
             return List.of();
         } catch (IOException e) {
+            say("the jars could not be moved, each goes back: " + e);
             putBack(moved);
             String reason = "the jars could not be moved: " + e.getMessage();
             return entries.stream().map(entry -> entry.withReason(reason)).toList();
@@ -236,7 +244,7 @@ public final class JarSwapper {
                     Files.move(move.to(), move.from());
                 }
             } catch (IOException e) {
-                LOGGER.warn("[Hotwire] {} could not go back to {}", move.to(), move.from(), e);
+                say(move.to() + " could not go back to " + move.from() + ": " + e);
             }
         }
     }
