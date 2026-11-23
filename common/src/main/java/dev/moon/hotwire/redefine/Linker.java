@@ -618,7 +618,21 @@ public final class Linker {
 
     static CallSite bootstrapForeignField(MethodHandles.Lookup caller, String name, MethodType type,
             Class<?> owner, int kind) throws ReflectiveOperationException {
+        if (FieldHolders.findHolderClassOf(owner) == null) {
+            return new ConstantCallSite(findPlainField(MethodHandles.privateLookupIn(owner, caller), owner, name,
+                    type, kind).asType(type));
+        }
         return bindField(owner, name, type, kind);
+    }
+
+    private static MethodHandle findPlainField(MethodHandles.Lookup lookup, Class<?> owner, String name,
+            MethodType type, int kind) throws ReflectiveOperationException {
+        return switch (kind) {
+            case GET_FIELD -> lookup.findGetter(owner, name, type.returnType());
+            case GET_STATIC -> lookup.findStaticGetter(owner, name, type.returnType());
+            case PUT_STATIC -> lookup.findStaticSetter(owner, name, type.parameterType(0));
+            default -> lookup.findSetter(owner, name, type.parameterType(1));
+        };
     }
 
     private static CallSite bindField(Class<?> target, String name, MethodType type, int kind)
