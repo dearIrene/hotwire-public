@@ -27,6 +27,8 @@ public final class CollectionParts {
 
     private static final int CHANGED_READS = 20;
 
+    private static final int BROKEN_READS = 3;
+
     private static final Object FIXED_PROBE = new Object();
 
     private CollectionParts() {
@@ -144,6 +146,14 @@ public final class CollectionParts {
                     return;
                 }
                 addWriters(value.getClass().getName(), writers);
+
+                if (attempt == BROKEN_READS && writers.isEmpty()) {
+                    if (look.addUnreadable(value.getClass().getName())) {
+                        LOGGER.info("[Hotwire] {} throws at every read with nothing changing it ({}); the removal"
+                                + " passes it by", value.getClass().getName(), e.toString());
+                    }
+                    return;
+                }
                 if (attempt == CHANGED_READS) {
                     LOGGER.warn("[Hotwire] {} changed under the removal {} times; what it holds of {} stays; the"
                             + " threads seen in its code: {}", value.getClass().getName(), CHANGED_READS, mods,
