@@ -154,7 +154,7 @@ public final class ElementLook {
         long last = lookedEveryAt;
         offDeadline = System.nanoTime() + OFF_WAIT_NANOS;
         try {
-            look(references, findEvery(mods), on, false);
+            look(references, findEvery(mods), on, false, false);
         } finally {
             offDeadline = 0;
         }
@@ -171,19 +171,19 @@ public final class ElementLook {
             return false;
         }
         long last = lookedEveryAt;
-        look(references, findEvery(mods), on, false);
+        look(references, findEvery(mods), on, false, true);
         return lookedEveryAt != last;
     }
 
     public static void findAhead(FieldReferences references, Collection<String> mods, Predicate<String> on) {
         if (!NO_LOOK && !switchUnderWay.getAsBoolean()) {
-            look(references, findEvery(mods), on, false);
+            look(references, findEvery(mods), on, false, true);
         }
     }
 
     public static void findAheadForAll(FieldReferences references, Predicate<String> on) {
         if (!switchUnderWay.getAsBoolean()) {
-            look(references, findEvery(List.of()), on, true);
+            look(references, findEvery(List.of()), on, true, true);
         }
     }
 
@@ -194,8 +194,9 @@ public final class ElementLook {
     }
 
     @SuppressWarnings({"ThreadPriorityCheck", "ReferenceEquality"})
+
     private static void look(FieldReferences references, List<String> asked, Predicate<String> on,
-            boolean background) {
+            boolean background, boolean ahead) {
         if (background && isFreshForEvery(asked)) {
             return;
         }
@@ -213,6 +214,11 @@ public final class ElementLook {
             Thread self = Thread.currentThread();
             int priority = self.getPriority();
             looking = self;
+
+            if (ahead && switchUnderWay.getAsBoolean()) {
+                looking = null;
+                return;
+            }
             watchSlowLook(self);
             runningMode = Mode.LOOK_EVERY;
             MODE.set(Mode.LOOK_EVERY);
@@ -266,7 +272,7 @@ public final class ElementLook {
         references.traceReach(true);
         WHOLE.set(true);
         try {
-            look(references, findEvery(List.of()), on, false);
+            look(references, findEvery(List.of()), on, false, false);
             LOGGER.info("[Hotwire] check: after the off of {}, a whole read found still in place: {}", mods,
                     references.describeTakesFor(mods, known, watched));
             String offOnly = references.takeReadOnlyByOff();
