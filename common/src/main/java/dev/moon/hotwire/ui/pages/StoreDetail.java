@@ -22,7 +22,8 @@ import java.util.List;
 import org.jspecify.annotations.Nullable;
 
 public final class StoreDetail extends Sheet {
-    private static final int MOST_VERSIONS = 8;
+    private static final int MOST_VERSIONS = 60;
+    private static final int NOTES_TALL = 120;
     private static final int PAGE_TALL = 250;
 
     private static final int ADDRESS_LINE = 60;
@@ -35,6 +36,8 @@ public final class StoreDetail extends Sheet {
     private final Markdown words;
     private final Text link = Kit.text("", Palette.PATH);
     private final Line versions = Kit.column().gap(2);
+
+    private String openedVersion = "";
     private final Scroll page;
     private final Push download = Kit.push(Lang.get("hotwire.store.download"), this::openDownloads);
     private ModrinthClient.@Nullable Hit hit;
@@ -178,7 +181,15 @@ public final class StoreDetail extends Sheet {
             this.versions.with(Kit.text(why == null ? Lang.get("hotwire.store.loading")
                     : Lang.get("hotwire.store.failed", why), why == null ? Palette.FAINT : Palette.BAD).wrap());
         } else {
-            known.forEach(version -> this.versions.with(this.makeVersion(shown, version)));
+            known.forEach(version -> {
+                this.versions.with(this.makeVersion(shown, version));
+                if (version.id().equals(this.openedVersion)) {
+                    this.versions.with(Kit.row(new Part().width(10), (version.changelog().isBlank()
+                            ? Kit.dim(Lang.get("hotwire.updates.no_changelog"))
+                            : Kit.scroll(new Markdown().set(version.changelog())).capAt(NOTES_TALL)).grow(1))
+                            .pad(0, 3));
+                }
+            });
         }
         this.state = this.findState(shown);
         this.buttons.clear().with(Kit.push(Lang.get("hotwire.store.open_modrinth"), this::openOnModrinth),
@@ -192,7 +203,11 @@ public final class StoreDetail extends Sheet {
                 : "  " + version.name());
         String needs = version.requiredProjects().isEmpty() ? ""
                 : Lang.get("hotwire.store.needs", version.requiredProjects().size());
-        return Kit.row(Kit.dim(name).grow(1), Kit.text(needs, Palette.FAINT).spare(),
+
+        String type = "release".equals(version.type()) ? "" : version.type();
+        String day = version.published().length() >= 10 ? version.published().substring(0, 10) : "";
+        return Kit.row(Kit.dim(name).grow(1), Kit.text(type, Palette.WARN).spare(),
+                Kit.text(day, Palette.FAINT).spare(), Kit.text(needs, Palette.FAINT).spare(),
                 Kit.push(Lang.get("hotwire.store.add_this"), () -> {
                     if (this.model.canAdd()) {
                         this.few.run(shown, () -> this.game.addFromStore(shown.projectId(), version.id(),
@@ -201,7 +216,10 @@ public final class StoreDetail extends Sheet {
                         this.few.run(shown, () -> this.game.saveFromStore(shown.projectId(), version.id(),
                                 shown.title()));
                     }
-                })).gap(8).cross(Line.Cross.CENTER);
+                })).gap(8).cross(Line.Cross.CENTER).press((button, modifiers) -> {
+                    this.openedVersion = version.id().equals(this.openedVersion) ? "" : version.id();
+                    this.fill();
+                });
     }
 
     @Override
