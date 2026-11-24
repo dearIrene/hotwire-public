@@ -21,15 +21,20 @@ public final class CloseGuard {
         Thread.ofPlatform().name("hotwire-close").daemon().start(() -> {
             try {
                 long began = System.nanoTime();
+                long lastBusy = began;
                 while (closing.isAlive() && !isDestroying()) {
-                    long waited = System.nanoTime() - began;
-                    if (waited > LONGEST.toNanos() || (waited > CLOSING.toNanos()
-                            && closing.getState() != Thread.State.RUNNABLE)) {
+                    long now = System.nanoTime();
+                    if (closing.getState() == Thread.State.RUNNABLE || isServerRunning()) {
+                        lastBusy = now;
+                    }
+                    if (isGivenUp(now - began, now - lastBusy)) {
                         break;
                     }
                     Thread.sleep(100);
                 }
-                Thread.sleep(QUIET);
+                if (!closing.isAlive() || isDestroying()) {
+                    Thread.sleep(QUIET);
+                }
             } catch (InterruptedException e) {
                 Thread.currentThread().interrupt();
                 return;
@@ -44,6 +49,15 @@ public final class CloseGuard {
                 Runtime.getRuntime().exit(0);
             }
         });
+    }
+
+    static boolean isGivenUp(long waited, long quiet) {
+        return waited > LONGEST.toNanos() || (waited > CLOSING.toNanos() && quiet > QUIET.toNanos());
+    }
+
+    private static boolean isServerRunning() {
+        return Thread.getAllStackTraces().keySet().stream()
+                .anyMatch(thread -> thread.isAlive() && thread.getName().equals("Server thread"));
     }
 
     private static boolean isDestroying() {
