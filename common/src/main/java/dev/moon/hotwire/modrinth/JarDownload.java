@@ -144,7 +144,8 @@ final class JarDownload {
                 }
             }
         } catch (ExecutionException e) {
-            throw e.getCause() instanceof IOException io ? io : new IOException(e.getCause());
+            IOException failed = e.getCause() instanceof IOException io ? io : new IOException(e.getCause());
+                throw Unreachable.describe(failed);
         } catch (InterruptedException e) {
             pending.cancel(true);
             Thread.currentThread().interrupt();

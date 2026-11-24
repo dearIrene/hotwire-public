@@ -576,7 +576,8 @@ public final class ModrinthClient {
                     }
                 }
             } catch (ExecutionException e) {
-                throw e.getCause() instanceof IOException io ? io : new IOException(e.getCause());
+                IOException failed = e.getCause() instanceof IOException io ? io : new IOException(e.getCause());
+                throw Unreachable.describe(failed);
             } catch (InterruptedException e) {
                 pending.cancel(true);
                 Thread.currentThread().interrupt();
@@ -636,6 +637,8 @@ public final class ModrinthClient {
                     throw new IOException("Modrinth answered " + response.statusCode());
                 }
                 return read.read(response);
+            } catch (IOException e) {
+                throw Unreachable.describe(e);
             } catch (InterruptedException e) {
                 Thread.currentThread().interrupt();
                 throw new IOException("interrupted", e);
