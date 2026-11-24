@@ -58,6 +58,8 @@ public final class ModTripwire {
     private final Function<String, @Nullable Class<?>> loadedClassOf;
     private final Map<Class<?>, ArmedClass> armed = new HashMap<>();
 
+    private final Map<String, Integer> ons = new HashMap<>();
+
     final Map<String, ArmedClass> armedAtLoad = new HashMap<>();
 
     final Map<String, String> sources = new ConcurrentHashMap<>();
@@ -171,6 +173,7 @@ public final class ModTripwire {
 
     public synchronized void offerDisarm(Collection<String> ids) {
         SwitchTimes.mark("disarm: lock");
+        ids.forEach(id -> this.ons.merge(id, 1, Integer::sum));
         ids.forEach(id -> TripwireSites.setOff(id, false));
         SwitchTimes.mark("disarm: sites");
         Map<Class<?>, byte[]> back = new LinkedHashMap<>();
@@ -349,6 +352,9 @@ public final class ModTripwire {
     }
 
     public void unwire(Collection<String> ids) {
+        synchronized (this) {
+            ids.forEach(id -> this.ons.merge(id, 1, Integer::sum));
+        }
         ids.forEach(id -> TripwireSites.setOff(id, false));
         DueCoroutines.resume(ids);
         this.watcher.execute(() -> {
@@ -506,9 +512,13 @@ public final class ModTripwire {
     }
 
     public void armLater(Collection<String> ids, Predicate<String> stillOff, Consumer<List<String>> whenArmed) {
+        Map<String, Integer> onsAt = new HashMap<>();
+        synchronized (this) {
+            ids.forEach(id -> onsAt.put(id, this.ons.getOrDefault(id, 0)));
+        }
         this.watcher.execute(() -> {
             synchronized (this) {
-                List<String> off = ids.stream().filter(stillOff).toList();
+                List<String> off = findToArm(ids, stillOff, this.ons, onsAt);
                 if (off.isEmpty()) {
                     return;
                 }
@@ -523,6 +533,12 @@ public final class ModTripwire {
                 }
             }
         });
+    }
+
+    static List<String> findToArm(Collection<String> ids, Predicate<String> stillOff, Map<String, Integer> ons,
+            Map<String, Integer> onsAt) {
+        return ids.stream().filter(id -> stillOff.test(id) && ons.getOrDefault(id, 0).equals(onsAt.get(id)))
+                .toList();
     }
 
     public synchronized Map<String, Observation> getObservations(Collection<String> ids) {
