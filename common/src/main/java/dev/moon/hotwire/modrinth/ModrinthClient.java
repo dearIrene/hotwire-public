@@ -62,7 +62,15 @@ public final class ModrinthClient {
     }
 
     public record Version(String id, String projectId, String number, String name, String fileName, String url,
-            String sha512, long size, List<String> gameVersions, List<String> requiredProjects, String changelog) {
+            String sha512, long size, List<String> gameVersions, List<String> requiredProjects, String changelog,
+            String type, String published) {
+        public Version(String id, String projectId, String number, String name, String fileName, String url,
+                String sha512, long size, List<String> gameVersions, List<String> requiredProjects,
+                String changelog) {
+            this(id, projectId, number, name, fileName, url, sha512, size, gameVersions, requiredProjects, changelog,
+                    "release", "");
+        }
+
         public Path resolveIn(Path folder) {
             return folder.resolve(cleanName(this.id)).resolve(cleanName(this.fileName));
         }
@@ -259,8 +267,11 @@ public final class ModrinthClient {
         };
     }
 
-    public Map<String, Version> findNewest(Map<String, String> sha512ByName) throws IOException {
+    public Map<String, Version> findNewest(Map<String, String> sha512ByName, List<String> types) throws IOException {
         JsonObject body = makeHashesBody(sha512ByName);
+        JsonArray kinds = new JsonArray();
+        types.forEach(kinds::add);
+        body.add("version_types", kinds);
         JsonArray loaders = new JsonArray();
         loaders.add(this.loader);
         body.add("loaders", loaders);
@@ -437,7 +448,9 @@ public final class ModrinthClient {
                 readText(version, "version_number"), readText(version, "name"),
                 file == null ? "" : readText(file, "filename"), file == null ? "" : readText(file, "url"),
                 readText(hashes, "sha512"), file == null ? 0 : readNumber(file, "size"),
-                readStrings(version.get("game_versions")), required, readText(version, "changelog"));
+                readStrings(version.get("game_versions")), required, readText(version, "changelog"),
+                readText(version, "version_type").isEmpty() ? "release" : readText(version, "version_type"),
+                readText(version, "date_published"));
     }
 
     private static String readText(JsonObject object, String key) {

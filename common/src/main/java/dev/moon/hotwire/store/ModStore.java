@@ -3,6 +3,7 @@ package dev.moon.hotwire.store;
 import dev.moon.hotwire.engine.CacheLimit;
 import dev.moon.hotwire.engine.InstalledMods;
 import dev.moon.hotwire.engine.LoadedMods;
+import dev.moon.hotwire.modrinth.Channel;
 import dev.moon.hotwire.modrinth.Downloads;
 import dev.moon.hotwire.modrinth.ModrinthClient;
 import dev.moon.hotwire.modrinth.StoreCache;
@@ -126,9 +127,9 @@ public final class ModStore {
                 client.runOnGame(() -> onFailure.accept(why));
                 return;
             }
-            ModrinthClient.Version wanted = versions.stream()
-                    .filter(version -> versionId.isEmpty() || version.id().equals(versionId)).findFirst()
-                    .orElse(null);
+
+            ModrinthClient.Version wanted = versions.isEmpty() ? null : versionId.isEmpty() ? Channel.pick(versions)
+                    : versions.stream().filter(version -> version.id().equals(versionId)).findFirst().orElse(null);
             if (wanted == null) {
                 String why = Lang.get("hotwire.store.no_version", title);
                 client.runOnGame(() -> onFailure.accept(why));
@@ -188,7 +189,7 @@ public final class ModStore {
         }
         List<ModrinthClient.Version> versions = this.model.getClient().findVersions(ModrinthClient.Kind.MOD, needed);
         if (!versions.isEmpty()) {
-            return versions.subList(0, 1);
+            return List.of(Channel.pick(versions));
         }
         if (!this.model.getClient().isForThisLoader(needed)) {
             return List.of();

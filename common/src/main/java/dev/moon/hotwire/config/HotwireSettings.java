@@ -30,6 +30,8 @@ public final class HotwireSettings {
 
     public enum UpdateChecks { ON, OFF }
 
+    public enum UpdateChannel { RELEASE, BETA, ALPHA }
+
     public enum AntiCrash { OFF, ON }
 
     public enum DevReload { ON, OFF }
@@ -75,6 +77,7 @@ public final class HotwireSettings {
     static final String AUTO_FILL = "auto-fill";
     static final String DEVELOPER = "developer";
     static final String UPDATE_CHECKS = "update-checks";
+    static final String UPDATE_CHANNEL = "update-channel";
     static final String ANTI_CRASH = "anti-crash";
     static final String DEV_RELOAD = "dev-reload";
     static final String RELOAD_POPUPS = "reload-popups";
@@ -114,6 +117,10 @@ public final class HotwireSettings {
             "hotwire.settings.auto_fill.on");
     private static final List<Developer> DEVELOPER_ORDER = List.of(Developer.OFF, Developer.ON);
     private static final List<UpdateChecks> UPDATE_CHECKS_ORDER = List.of(UpdateChecks.OFF, UpdateChecks.ON);
+    private static final List<UpdateChannel> UPDATE_CHANNEL_ORDER = List.of(UpdateChannel.RELEASE, UpdateChannel.BETA,
+            UpdateChannel.ALPHA);
+    private static final List<String> UPDATE_CHANNEL_CHOICES = List.of("hotwire.settings.update_channel.release",
+            "hotwire.settings.update_channel.beta", "hotwire.settings.update_channel.alpha");
     private static final List<String> UPDATE_CHECKS_CHOICES = List.of("hotwire.settings.update_checks.off",
             "hotwire.settings.update_checks.on");
     private static final List<String> DEVELOPER_CHOICES = List.of("hotwire.settings.developer.off",
@@ -173,6 +180,8 @@ public final class HotwireSettings {
         @Nullable AutoFill autoFill = AutoFill.ON;
         @Nullable Developer developer = Developer.OFF;
         @Nullable UpdateChecks updateChecks = UpdateChecks.ON;
+        @Nullable UpdateChannel updateChannel = UpdateChannel.RELEASE;
+        @Nullable List<String> ignoredUpdates;
         @Nullable AntiCrash antiCrash = AntiCrash.OFF;
         @Nullable DevReload devReload = DevReload.ON;
         @Nullable ReloadPopups reloadPopups = ReloadPopups.ALL;
@@ -217,6 +226,9 @@ public final class HotwireSettings {
     private volatile AutoFill autoFill;
     private volatile Developer developer;
     private volatile UpdateChecks updateChecks;
+    private volatile UpdateChannel updateChannel;
+
+    private volatile List<String> ignoredUpdates = List.of();
     private volatile AntiCrash antiCrash;
     private volatile DevReload devReload;
     private volatile ReloadPopups reloadPopups;
@@ -261,6 +273,10 @@ public final class HotwireSettings {
                 : checkKnown(saved.autoFill, AutoFill.ON, "autoFill");
         this.developer = checkKnown(saved.developer, Developer.OFF, "developer");
         this.updateChecks = checkKnown(saved.updateChecks, UpdateChecks.ON, "updateChecks");
+        this.updateChannel = checkKnown(saved.updateChannel, UpdateChannel.RELEASE, "updateChannel");
+        if (saved.ignoredUpdates != null) {
+            this.ignoredUpdates = saved.ignoredUpdates.stream().filter(Objects::nonNull).toList();
+        }
 
         this.antiCrash = saved.antiCrash == null ? AntiCrash.OFF : saved.antiCrash;
         this.devReload = saved.devReload == null ? DevReload.ON : saved.devReload;
@@ -453,6 +469,21 @@ public final class HotwireSettings {
         return this.searchPins;
     }
 
+    public UpdateChannel getUpdateChannel() {
+        return this.updateChannel;
+    }
+
+    public List<String> getIgnoredUpdates() {
+        return this.ignoredUpdates;
+    }
+
+    public void setIgnoredUpdates(List<String> ignored) {
+        if (!ignored.equals(this.ignoredUpdates)) {
+            this.ignoredUpdates = List.copyOf(ignored);
+            this.save();
+        }
+    }
+
     public List<String> getStoreHidden() {
         return this.storeHidden;
     }
@@ -558,6 +589,8 @@ public final class HotwireSettings {
                 new SettingsSection(Lang.get("hotwire.settings.section.updates"), List.of(
                         makeOption(UPDATE_CHECKS, "hotwire.settings.update_checks", UPDATE_CHECKS_CHOICES,
                                 UPDATE_CHECKS_ORDER, this.updateChecks),
+                        makeOption(UPDATE_CHANNEL, "hotwire.settings.update_channel", UPDATE_CHANNEL_CHOICES,
+                                UPDATE_CHANNEL_ORDER, this.updateChannel),
                         makeOption(AUTO_FILL, "hotwire.settings.auto_fill", AUTO_FILL_CHOICES, AUTO_FILL_ORDER,
                                 this.autoFill))),
                 this.findDeveloperSection(dev));
@@ -619,6 +652,8 @@ public final class HotwireSettings {
         Developer dev = DEVELOPER.equals(option) ? pick(DEVELOPER_ORDER, choice, this.developer) : this.developer;
         UpdateChecks checks = UPDATE_CHECKS.equals(option) ? pick(UPDATE_CHECKS_ORDER, choice, this.updateChecks)
                 : this.updateChecks;
+        UpdateChannel channel = UPDATE_CHANNEL.equals(option) ? pick(UPDATE_CHANNEL_ORDER, choice,
+                this.updateChannel) : this.updateChannel;
         AntiCrash crash = ANTI_CRASH.equals(option) ? pick(ANTI_CRASH_ORDER, choice, this.antiCrash) : this.antiCrash;
         DevReload reload = DEV_RELOAD.equals(option) ? pick(DEV_RELOAD_ORDER, choice, this.devReload) : this.devReload;
         ReloadPopups popups = RELOAD_POPUPS.equals(option) ? pick(RELOAD_POPUPS_ORDER, choice, this.reloadPopups)
@@ -639,7 +674,7 @@ public final class HotwireSettings {
         if (world == this.inWorld && nested == this.nestedJars && lasts == this.offLasts && pause == this.pauseGame
                 && alert == this.keyAlert && heard == this.sounds
                 && fill == this.autoFill && dev == this.developer
-                && checks == this.updateChecks && crash == this.antiCrash && reload == this.devReload
+                && checks == this.updateChecks && channel == this.updateChannel && crash == this.antiCrash && reload == this.devReload
                 && popups == this.reloadPopups && caught == this.devCatch && leaks == this.devLeaks
                 && limit == this.devBuildLimit && autoBack == this.devAutoBack && history == this.devHistory
                 && mark == this.devMark && compare == this.devCompare && copy == this.devCopy
@@ -647,6 +682,7 @@ public final class HotwireSettings {
             return;
         }
         this.devLeaks = leaks;
+        this.updateChannel = channel;
         this.devCompare = compare;
         this.devCopy = copy;
         this.devSizes = sizes;
@@ -681,6 +717,7 @@ public final class HotwireSettings {
         saved.autoFill = this.autoFill;
         saved.developer = this.developer;
         saved.updateChecks = this.updateChecks;
+        saved.updateChannel = this.updateChannel;
         saved.antiCrash = this.antiCrash;
         saved.devReload = this.devReload;
         saved.reloadPopups = this.reloadPopups;
@@ -709,6 +746,7 @@ public final class HotwireSettings {
         saved.searchSetup = this.searchSetup.isEmpty() ? null : this.searchSetup;
         saved.searchPins = this.searchPins.isEmpty() ? null : this.searchPins;
         saved.storeHidden = this.storeHidden.isEmpty() ? null : this.storeHidden;
+        saved.ignoredUpdates = this.ignoredUpdates.isEmpty() ? null : this.ignoredUpdates;
         try {
             this.file.save(saved);
         } catch (IOException e) {

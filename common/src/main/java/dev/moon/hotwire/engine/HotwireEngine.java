@@ -8,6 +8,7 @@ import dev.moon.hotwire.concurrent.Tasks;
 import dev.moon.hotwire.config.HotwireSettings;
 import dev.moon.hotwire.config.ProfileStore;
 import dev.moon.hotwire.config.SettingsSection;
+import dev.moon.hotwire.modrinth.Channel;
 import dev.moon.hotwire.modrinth.Downloads;
 import dev.moon.hotwire.plan.ModGraph;
 import dev.moon.hotwire.redefine.LoadedClassBytes;
@@ -156,6 +157,12 @@ public final class HotwireEngine implements ModScreenGame, AutoCloseable {
         this.stores = new StoreScreens(this, installed, this.storeJars, icons);
         this.selfUpdate = new SelfUpdateRequests(this.storeJars, () -> this.screen, this::showMessage, units);
 
+        Channel.setAllowed(() -> switch (settings.getUpdateChannel()) {
+            case RELEASE -> List.of("release");
+            case BETA -> List.of("release", "beta");
+            case ALPHA -> List.of("release", "beta", "alpha");
+        });
+        UpdateCheck.setIgnored(settings::getIgnoredUpdates);
         if (settings.isUpdateCheckOn()) {
             this.selfUpdate.start();
         }

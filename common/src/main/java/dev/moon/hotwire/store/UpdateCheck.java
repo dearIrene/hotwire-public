@@ -6,6 +6,7 @@ import dev.moon.hotwire.engine.LoadedMods;
 import dev.moon.hotwire.engine.ModPolicy;
 import dev.moon.hotwire.jar.FileHashes;
 import dev.moon.hotwire.jar.ModManifest;
+import dev.moon.hotwire.modrinth.Channel;
 import dev.moon.hotwire.modrinth.Downloads;
 import dev.moon.hotwire.modrinth.ModrinthClient;
 import dev.moon.hotwire.modrinth.UpdateMemory;
@@ -28,6 +29,7 @@ import java.util.concurrent.ConcurrentLinkedQueue;
 import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.concurrent.atomic.AtomicInteger;
 import java.util.function.Consumer;
+import java.util.function.Supplier;
 import net.fabricmc.loader.api.FabricLoader;
 import org.jspecify.annotations.Nullable;
 import org.slf4j.Logger;
@@ -35,6 +37,8 @@ import org.slf4j.LoggerFactory;
 
 public final class UpdateCheck {
     private static final Logger LOGGER = LoggerFactory.getLogger(UpdateCheck.class);
+
+    private static volatile Supplier<List<String>> ignoredUpdates = List::of;
 
     private final InstalledMods installed;
     private final ModrinthClient client = LoadedMods.makeStoreClient();
@@ -45,8 +49,10 @@ public final class UpdateCheck {
 
     private volatile Downloads downloads = new Downloads();
 
-    private final Path memoryFile = CacheLimit.findStoreFolder().resolve("updates-"
-            + this.client.getScope().replaceAll("[^A-Za-z0-9.-]", "_") + ".gz");
+    private Path findMemoryFile() {
+        return CacheLimit.findStoreFolder().resolve("updates-" + this.client.getScope().replaceAll("[^A-Za-z0-9.-]",
+                "_") + "-" + String.join("+", Channel.findAllowed()) + ".gz");
+    }
     private static final long RECENT_NANOS = 60_000_000_000L;
     private final AtomicInteger newlyFound = new AtomicInteger();
 
@@ -125,7 +131,7 @@ public final class UpdateCheck {
         Map<String, String> idByName = new HashMap<>();
         jars.forEach((id, jar) -> idByName.put(String.valueOf(jar.getFileName()), id));
         Map<String, String> hashByName = FileHashes.findSha512ByName(jars.values());
-        UpdateMemory memory = UpdateMemory.read(this.memoryFile);
+        UpdateMemory memory = UpdateMemory.read(this.findMemoryFile());
         Map<String, String> named = new HashMap<>();
         Map<String, String> unheard = new HashMap<>();
         hashByName.forEach((name, hash) -> {
@@ -179,7 +185,7 @@ public final class UpdateCheck {
         }
         Map<String, String> idByName = new HashMap<>();
         jars.forEach((id, jar) -> idByName.put(String.valueOf(jar.getFileName()), id));
-        UpdateMemory memory = UpdateMemory.read(this.memoryFile);
+        UpdateMemory memory = UpdateMemory.read(this.findMemoryFile());
 
         List<String> installedSince = new ArrayList<>();
         for (String project = this.installedSince.poll(); project != null; project = this.installedSince.poll()) {
@@ -223,7 +229,9 @@ public final class UpdateCheck {
         Map<String, String> stamps = projects.isEmpty() ? Map.of() : this.client.findChanges(projects);
         Map<String, String> ask = memory.findToAsk(hashByName, stamps, Instant.now());
         if (!ask.isEmpty()) {
-            Map<String, ModrinthClient.Version> answered = this.client.findNewest(ask);
+            Map<String, ModrinthClient.Version> answered = new HashMap<>(this.client.findNewest(ask,
+                    Channel.findAllowed()));
+            this.keepFromGoingBack(answered, ask);
             Set<String> unstamped = new HashSet<>();
             answered.values().forEach(version -> {
                 if (!stamps.containsKey(version.projectId())) {
@@ -269,12 +277,39 @@ public final class UpdateCheck {
         return this.idByProject;
     }
 
+    private void keepFromGoingBack(Map<String, ModrinthClient.Version> answered, Map<String, String> ask)
+            throws IOException {
+        if (answered.isEmpty() || Channel.findAllowed().contains("alpha")) {
+            return;
+        }
+        Map<String, ModrinthClient.Version> running = this.client.findByHashes(ask);
+        running.forEach((name, own) -> {
+            ModrinthClient.Version offered = answered.get(name);
+            if (offered != null && !own.published().isEmpty() && !offered.published().isEmpty()
+                    && offered.published().compareTo(own.published()) < 0) {
+                LOGGER.info("[Hotwire] {} {} is newer than {}, the newest the channel allows; no update offered",
+                        name, own.number(), offered.number());
+                answered.put(name, own);
+            }
+        });
+    }
+
+    private static boolean isIgnored(ModrinthClient.Version version) {
+        List<String> ignored = ignoredUpdates.get();
+        return ignored.contains(version.projectId()) || ignored.contains(version.projectId() + "@" + version.id());
+    }
+
+    public static void setIgnored(Supplier<List<String>> ignored) {
+        ignoredUpdates = ignored;
+    }
+
     private List<UpdateOffer> makeOffers(Map<String, ModrinthClient.Version> newest, Map<String, String> hashByName,
             Map<String, String> idByName, UpdateMemory memory) {
         List<UpdateOffer> offers = new ArrayList<>();
         String loader = findLoaderVersion();
         newest.forEach((name, version) -> {
-            if (version.sha512().equalsIgnoreCase(hashByName.get(name)) || version.url().isEmpty()) {
+            if (version.sha512().equalsIgnoreCase(hashByName.get(name)) || version.url().isEmpty()
+                    || isIgnored(version)) {
                 return;
             }
             String id = idByName.getOrDefault(name, name);
@@ -305,7 +340,7 @@ public final class UpdateCheck {
     }
 
     public void noteLoaderNeed(String versionId, String wanted) {
-        UpdateMemory memory = UpdateMemory.read(this.memoryFile);
+        UpdateMemory memory = UpdateMemory.read(this.findMemoryFile());
         memory.noteLoader(versionId, wanted, findLoaderVersion());
         memory.write();
     }
@@ -389,7 +424,7 @@ public final class UpdateCheck {
             }
             throw new IOException(Lang.get("hotwire.store.needs_no_version", project.title()));
         }
-        ModrinthClient.Version newest = versions.getFirst();
+        ModrinthClient.Version newest = Channel.pick(versions);
         for (String deeper : newest.requiredProjects()) {
             this.fetchNeeded(deeper, project.title(), seen, into, saying);
         }
