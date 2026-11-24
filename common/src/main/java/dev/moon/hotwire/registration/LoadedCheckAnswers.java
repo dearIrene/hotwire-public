@@ -160,6 +160,18 @@ final class LoadedCheckAnswers {
         return merged;
     }
 
+    private record PoolNames(Class<?> type, boolean asks, boolean looks) {
+        static PoolNames read(Class<?> type, ConstantPools pools) {
+            boolean asks = false;
+            boolean looks = false;
+            for (String[] member : pools.getMembers(type)) {
+                asks |= ASKS.contains(member[1]);
+                looks |= LOOKUPS.contains(member[1]);
+            }
+            return new PoolNames(type, asks, looks);
+        }
+    }
+
     private CheckSites find(Collection<String> mods, ConstantPools pools, Predicate<Class<?>> others) {
         return this.find(mods, pools, LoadedClassList.of(this.instrumentation), others);
     }
@@ -169,20 +181,22 @@ final class LoadedCheckAnswers {
         ClassLoader game = LoadedCheckAnswers.class.getClassLoader();
 
         Stream<Class<?>> loaded = Arrays.stream(among);
-        List<Class<?>> candidates = (ElementLook.isLooking() ? loaded : loaded.parallel())
+
+        List<PoolNames> candidates = (ElementLook.isLooking() ? loaded : loaded.parallel())
                 .peek(type -> ElementLook.stopIfAsked())
                 .filter(type -> Objects.equals(type.getClassLoader(), game) && !type.isHidden() && !type.isArray()
-                        && others.test(type) && pools.getMembers(type).stream()
-                                .anyMatch(member -> ASKS.contains(member[1]) || LOOKUPS.contains(member[1])))
+                        && others.test(type))
+                .map(type -> PoolNames.read(type, pools))
+                .filter(named -> named.asks() || named.looks())
                 .toList();
-        List<Class<?>> lookers = candidates.stream().filter(type -> pools.getMembers(type).stream()
-                .anyMatch(member -> LOOKUPS.contains(member[1]))).toList();
+        List<Class<?>> lookers = candidates.stream().filter(PoolNames::looks).map(PoolNames::type).toList();
         Map<String, List<FoundAsk>> asks = new HashMap<>();
-        for (Class<?> type : candidates) {
+        for (PoolNames named : candidates) {
             ElementLook.stopIfAsked();
-            if (pools.getMembers(type).stream().noneMatch(member -> ASKS.contains(member[1]))) {
+            if (!named.asks()) {
                 continue;
             }
+            Class<?> type = named.type();
             byte[] bytes = this.originalBytes.apply(Type.getInternalName(type));
             if (bytes == null) {
                 continue;
