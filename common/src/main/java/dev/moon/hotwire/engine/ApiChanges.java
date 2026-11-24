@@ -165,7 +165,8 @@ final class ApiChanges {
         }
         if (!request.update().isEmpty() || !jars.isEmpty()) {
             UpdateCheck check = engine.storeJars.getCheck();
-            List<UpdateOffer> all = check.findRecent();
+
+            List<UpdateOffer> all = request.update().isEmpty() ? List.of() : check.findRecent();
             List<UpdateOffer> picked = all.stream().filter(offer -> request.update().contains(offer.id())).toList();
 
             List<UpdateOffer> together = new ArrayList<>(check.orderByNeeds(picked, all));
