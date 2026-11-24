@@ -44,6 +44,9 @@ final class HierarchyShapes {
         if ((differing & HARMLESS) != 0) {
             shape.add(ShapeChange.CLASS_FINALITY);
         }
+        if ((was.access & Opcodes.ACC_FINAL) != 0 && (now.access & Opcodes.ACC_FINAL) == 0) {
+            shape.add(ShapeChange.CLASS_OPENED);
+        }
     }
 
     private static boolean hasBodilessMethod(ClassNode node) {
@@ -60,9 +63,26 @@ final class HierarchyShapes {
         for (ClassDiff diff : classes) {
             byName.put(diff.name(), diff);
         }
+
+        Set<String> extended = new HashSet<>();
+        for (Map.Entry<String, byte[]> entry : incoming.entrySet()) {
+            if (entry.getKey().endsWith(".class")) {
+                try {
+                    String parent = new ClassReader(entry.getValue()).getSuperName();
+                    if (parent != null) {
+                        extended.add(parent);
+                    }
+                } catch (RuntimeException e) {
+                }
+            }
+        }
         List<ClassDiff> out = new ArrayList<>(classes.size());
         for (ClassDiff diff : classes) {
-            if (diff.shape().contains(ShapeChange.CLASS_MADE_ABSTRACT)
+            if (diff.shape().contains(ShapeChange.CLASS_OPENED) && extended.contains(diff.name())) {
+                Set<ShapeChange> shape = EnumSet.copyOf(diff.shape());
+                shape.add(ShapeChange.CLASS_MODIFIERS);
+                out.add(new ClassDiff(diff.name(), diff.change(), shape));
+            } else if (diff.shape().contains(ShapeChange.CLASS_MADE_ABSTRACT)
                     && hasNewDuty(diff.name(), byName, incoming)) {
                 Set<ShapeChange> shape = EnumSet.copyOf(diff.shape());
                 shape.remove(ShapeChange.CLASS_MADE_ABSTRACT);

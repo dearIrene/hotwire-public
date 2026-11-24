@@ -59,6 +59,8 @@ public record JarDiff(ModManifest running, ModManifest incoming, List<ClassDiff>
 
         CLASS_FINALITY(true),
 
+        CLASS_OPENED(true),
+
         CLASS_MADE_ABSTRACT(true),
         SUPERCLASS(false),
 
