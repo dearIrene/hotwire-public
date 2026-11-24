@@ -242,7 +242,7 @@ final class EngineStart {
         });
         FinalWrites.writeWith(fieldReferences::writeFinal);
         FieldSlots.readStaticsWhen(fieldReferences::isInitialized);
-        FieldHolders.catchUpOn(thread -> Minecraft.getInstance().isSameThread(), Minecraft.getInstance()::execute);
+        FieldHolders.catchUpOn(thread -> Minecraft.getInstance().isSameThread(), Minecraft.getInstance());
         laps.endLap("field references, statics");
         RestartOnlyFile restartOnly = new RestartOnlyFile(FabricLoader.getInstance().getConfigDir()
                 .resolve("hotwire/restart-only.json"), id -> installed.find(id).map(ModManifest::version).orElse(null));
