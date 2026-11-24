@@ -33,6 +33,7 @@ import java.util.function.BooleanSupplier;
 import java.util.function.Function;
 import java.util.zip.ZipEntry;
 import java.util.zip.ZipFile;
+import net.fabricmc.loader.api.FabricLoader;
 import org.jspecify.annotations.Nullable;
 import org.objectweb.asm.ClassReader;
 import org.objectweb.asm.ClassWriter;
@@ -544,11 +545,21 @@ public final class MixinCopy implements AutoCloseable {
     }
 
     private static volatile @Nullable Boolean launcherNamed;
+    public static final String KILT = "kilt";
+
+    public static final String EXACT = "=";
 
     private static boolean namesLauncher(List<Path> jars) {
         Boolean known = launcherNamed;
         if (known != null) {
             return known;
+        }
+
+        if (FabricLoader.getInstance().isModLoaded(KILT)) {
+            launcherNamed = true;
+            LOGGER.info("[Hotwire] Kilt rewrites Mixin as it loads: Mixin's copy finds the loader's own classes in"
+                    + " the game");
+            return true;
         }
         byte[] wanted = "net/fabricmc/loader/impl".getBytes(StandardCharsets.UTF_8);
         boolean found = false;
@@ -594,10 +605,17 @@ public final class MixinCopy implements AutoCloseable {
 
         @Override
         protected Class<?> findClass(String name) throws ClassNotFoundException {
+            if (name.startsWith("org.objectweb.asm.")) {
+                try {
+                    return this.game.loadClass(name);
+                } catch (ClassNotFoundException missing) {
+                    return super.findClass(name);
+                }
+            }
             try {
                 return super.findClass(name);
             } catch (ClassNotFoundException missing) {
-                if (name.startsWith("net.fabricmc.loader.")) {
+                if (name.startsWith("net.fabricmc.loader.") || name.startsWith("net.lenni0451.classtransform.")) {
                     return this.game.loadClass(name);
                 }
                 throw missing;

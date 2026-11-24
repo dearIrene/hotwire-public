@@ -60,6 +60,22 @@ public final class CopyMixinService extends MixinServiceAbstract
     private static Function<String, byte @Nullable []> more = name -> null;
     private static Map<String, byte[]> resources = Map.of();
     private static List<String> shared = List.of();
+
+    private static final String EXACT = "=";
+
+    private static boolean isShared(String name) {
+        for (String entry : shared) {
+            if (!entry.startsWith(EXACT)) {
+                if (name.startsWith(entry)) {
+                    return true;
+                }
+            } else if (name.startsWith(entry.substring(1))
+                    && (name.length() == entry.length() - 1 || name.charAt(entry.length() - 1) == '$')) {
+                return true;
+            }
+        }
+        return false;
+    }
     private static ClassLoader live = ClassLoader.getPlatformClassLoader();
 
     private static Function<String, @Nullable InputStream> liveResources = name -> live.getResourceAsStream(name);
@@ -109,10 +125,8 @@ public final class CopyMixinService extends MixinServiceAbstract
         @Override
         protected Class<?> loadClass(String name, boolean resolve) throws ClassNotFoundException {
             synchronized (this.getClassLoadingLock(name)) {
-                for (String prefix : shared) {
-                    if (name.startsWith(prefix)) {
-                        return live.loadClass(name);
-                    }
+                if (isShared(name)) {
+                    return live.loadClass(name);
                 }
                 Class<?> loaded = this.findLoadedClass(name);
                 if (loaded != null) {

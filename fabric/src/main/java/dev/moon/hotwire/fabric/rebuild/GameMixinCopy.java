@@ -30,6 +30,20 @@ public final class GameMixinCopy {
     private static final List<String> SHARED = List.of("net.fabricmc.loader.api.", "net.fabricmc.api.",
             "net.fabricmc.loader.impl.launch.FabricLauncher", "org.apache.logging.log4j.", "org.slf4j.");
 
+    private static final List<String> SHARED_WITH_KILT = List.of(MixinCopy.EXACT + "xyz.bluspring.kilt.Kilt",
+            "xyz.bluspring.kilt.loader.KiltLoader", "xyz.bluspring.kilt.loader.remap.KiltRemapper",
+            "xyz.bluspring.kilt.loader.remap.KiltEnhancedRemapper", "xyz.bluspring.kilt.loader.asm.EnumExtensionLoader",
+            "kotlin.", "it.unimi.dsi.fastutil.", "net.minecraftforge.fart.", "net.minecraftforge.srgutils.");
+
+    private static List<String> findShared() {
+        if (!FabricLoader.getInstance().isModLoaded(MixinCopy.KILT)) {
+            return SHARED;
+        }
+        List<String> shared = new ArrayList<>(SHARED);
+        shared.addAll(SHARED_WITH_KILT);
+        return List.copyOf(shared);
+    }
+
     private static final List<String> EXTENSIONS = List.of("com.llamalad7.mixinextras.MixinExtrasBootstrap",
             "com.bawnorton.mixinsquared.MixinSquaredBootstrap",
 
@@ -42,7 +56,7 @@ public final class GameMixinCopy {
             Function<String, byte @Nullable []> originalOf) {
         ClassLoader game = GameMixinCopy.class.getClassLoader();
 
-        MixinCopy copy = new MixinCopy(findJars(), game, SHARED, mixin.getSessionId(),
+        MixinCopy copy = new MixinCopy(findJars(), game, findShared(), mixin.getSessionId(),
                 internal -> {
                     if (FailedAddJars.isHiding(internal)) {
                         return null;

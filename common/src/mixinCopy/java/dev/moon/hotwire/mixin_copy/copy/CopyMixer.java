@@ -6,7 +6,9 @@ import java.lang.reflect.InvocationTargetException;
 import java.lang.reflect.Method;
 import java.lang.reflect.Proxy;
 import java.nio.charset.StandardCharsets;
+import java.util.ArrayList;
 import java.util.Arrays;
+import java.util.HashSet;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
@@ -135,13 +137,21 @@ public final class CopyMixer implements Function<Object[], Object[]> {
                 }
                 Field inner = generator.getClass().getDeclaredField("innerClasses");
                 inner.setAccessible(true);
-                for (Object key : ((Map<?, ?>) inner.get(generator)).keySet()) {
-                    String name = String.valueOf(key).replace('.', '/');
-                    if (isBesideAny(name, mixed.keySet())) {
-                        byte[] bytes = transformer.generateClass(MixinEnvironment.getCurrentEnvironment(),
-                                name.replace('/', '.'));
-                        if (bytes != null) {
-                            made.put(name, bytes);
+
+                Map<?, ?> noted = (Map<?, ?>) inner.get(generator);
+                Set<Object> done = new HashSet<>();
+                for (List<Object> names = new ArrayList<>(noted.keySet()); !names.isEmpty();
+                        names = new ArrayList<>(noted.keySet())) {
+                    names.removeAll(done);
+                    done.addAll(names);
+                    for (Object key : names) {
+                        String name = String.valueOf(key).replace('.', '/');
+                        if (isBesideAny(name, mixed.keySet())) {
+                            byte[] bytes = transformer.generateClass(MixinEnvironment.getCurrentEnvironment(),
+                                    name.replace('/', '.'));
+                            if (bytes != null) {
+                                made.put(name, bytes);
+                            }
                         }
                     }
                 }
