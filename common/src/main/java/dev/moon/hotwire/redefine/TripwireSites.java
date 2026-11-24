@@ -51,7 +51,7 @@ public final class TripwireSites {
     }
 
     public static void registerClasses(String mod, Set<String> classes) {
-        classes.forEach(name -> MOD_BY_CLASS.putIfAbsent(name, mod));
+        classes.forEach(name -> MOD_BY_CLASS.putIfAbsent(name.intern(), mod));
         SiteInputs.writeClasses(mod, classes);
     }
 
@@ -73,7 +73,7 @@ public final class TripwireSites {
                 if (withSites.length == 0) {
                     return null;
                 }
-                ARMED.put(internalName, mod);
+                ARMED.put(internalName.intern(), mod);
                 return withSites;
             }
         }
@@ -114,7 +114,7 @@ public final class TripwireSites {
             return null;
         }
         if (!inserted) {
-            ARMED.put(internalName, mod);
+            ARMED.put(internalName.intern(), mod);
             return classBytes;
         }
         if (relinked) {
@@ -123,7 +123,7 @@ public final class TripwireSites {
 
         ClassWriter writer = new ClassWriter(new ClassReader(classBytes), ClassWriter.COMPUTE_MAXS);
         node.accept(writer);
-        ARMED.put(internalName, mod);
+        ARMED.put(internalName.intern(), mod);
         return writer.toByteArray();
     }
 
