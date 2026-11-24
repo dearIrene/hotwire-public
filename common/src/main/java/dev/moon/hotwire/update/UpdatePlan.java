@@ -88,6 +88,12 @@ public record UpdatePlan(String modId, String runningVersion, String incomingVer
             }
         }
 
+        record SetupKept(List<String> classes) implements UpdateNotice {
+            public SetupKept {
+                classes = List.copyOf(classes);
+            }
+        }
+
         record WidenerOpens() implements UpdateNotice {
         }
     }

@@ -120,7 +120,8 @@ public final class UpdateDiffer {
         return new JarDiff(was, now, refined, resources, OpenedAccess.find(running, incoming, refined),
                 ConstructorUses.findAbstractsGained(refined, running, incoming),
                 ConstructorUses.findChains(refined, running, incoming),
-                StaticReads.findStartedElsewhere(refined, incoming), ReplacedFields.find(refined, running, incoming));
+                StaticReads.findStartedElsewhere(refined, incoming), ReplacedFields.find(refined, running, incoming),
+                StaticSetups.findChanged(refined, running, incoming));
     }
 
     static ClassDiff compareClass(byte[] running, byte[] incoming) {

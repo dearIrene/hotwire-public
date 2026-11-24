@@ -7,8 +7,10 @@ import java.util.Set;
 
 public record JarDiff(ModManifest running, ModManifest incoming, List<ClassDiff> classes,
         List<String> changedResources, List<String> opens, List<String> abstractsGained,
-        List<String> constructorChains, List<String> startedElsewhere, Map<String, Set<String>> fieldsReplaced) {
+        List<String> constructorChains, List<String> startedElsewhere, Map<String, Set<String>> fieldsReplaced,
+        List<String> setupsChanged) {
     public JarDiff {
+        setupsChanged = List.copyOf(setupsChanged);
         fieldsReplaced = Map.copyOf(fieldsReplaced);
         classes = List.copyOf(classes);
         changedResources = List.copyOf(changedResources);
@@ -26,7 +28,7 @@ public record JarDiff(ModManifest running, ModManifest incoming, List<ClassDiff>
             List<String> opens, List<String> abstractsGained, List<String> constructorChains,
             List<String> startedElsewhere) {
         this(running, incoming, classes, changedResources, opens, abstractsGained, constructorChains,
-                startedElsewhere, Map.of());
+                startedElsewhere, Map.of(), List.of());
     }
 
     public record ClassDiff(String name, ClassChange change, Set<ShapeChange> shape) {

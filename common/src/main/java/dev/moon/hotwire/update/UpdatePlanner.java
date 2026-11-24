@@ -93,6 +93,10 @@ public final class UpdatePlanner {
         if (!resources.isEmpty()) {
             notices.add(new UpdateNotice.ResourcesChanged(resources));
         }
+        List<String> setups = diff.setupsChanged().stream().filter(game.loadedClasses()::contains).toList();
+        if (!setups.isEmpty()) {
+            notices.add(new UpdateNotice.SetupKept(setups));
+        }
         if (!diff.opens().isEmpty()) {
             notices.add(new UpdateNotice.AccessOpens(diff.opens()));
         }

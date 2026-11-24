@@ -597,6 +597,7 @@
   "hotwire.update.note.off": "The mod is off. It will switch to the new version now and run it once you turn it back on.",
   "hotwire.update.note.added": "The mod was added while the game ran; new version will take its place.",
   "hotwire.update.note.updated": "The mod was updated once already while the game ran. This will go on top!",
+  "hotwire.update.note.setup_kept": "The starting values of %s changed: the old ones stay until a restart",
   "hotwire.update.note.widener": "Access wideners were changed!",
   "hotwire.update.note.entrypoint": "The new version added a new entrypoint (%s)!",
   "hotwire.update.blocker.mixin_config": "Its mixin config %s changed.",

@@ -12,6 +12,7 @@ import java.util.List;
 import java.util.Map;
 import java.util.TreeSet;
 import java.util.function.BiFunction;
+import java.util.stream.Collectors;
 
 public final class UpdateText {
     private UpdateText() {
@@ -164,6 +165,8 @@ public final class UpdateText {
             case UpdateNotice.EntrypointRuns entrypoint -> say.apply("hotwire.update.note.entrypoint",
                     new Object[] {entrypoint.key()});
             case UpdateNotice.WidenerOpens widener -> say.apply("hotwire.update.note.widener", new Object[0]);
+            case UpdateNotice.SetupKept kept -> say.apply("hotwire.update.note.setup_kept", new Object[] {
+                kept.classes().stream().map(UpdateText::getSimpleName).collect(Collectors.joining(", "))});
             case UpdateNotice.AccessOpens access -> "";
             case UpdateNotice.AbstractsGained abstracts -> "";
             case UpdateNotice.ConstructorChains chains -> "";
