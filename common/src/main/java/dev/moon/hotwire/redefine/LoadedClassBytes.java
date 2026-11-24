@@ -177,8 +177,8 @@ public final class LoadedClassBytes {
                 Integer loader = this.definedInGame.remove(name);
                 boolean inGame = loader != null && loader == System.identityHashCode(type.getClassLoader());
                 known = asLoaded || inGame ? this.definedAs.find(name) : null;
-                if (known != null && !this.knownBytes.has(name)) {
-                    this.knownBytes.put(name, known);
+                if (known != null) {
+                    this.knownBytes.putIfAbsent(name, known);
                 }
             }
             String why = this.unreadable.get(type);
@@ -212,8 +212,8 @@ public final class LoadedClassBytes {
 
         for (String name : byName.keySet()) {
             byte[] bytes = current.get(name);
-            if (bytes != null && !this.knownBytes.has(name)) {
-                this.knownBytes.put(name, bytes);
+            if (bytes != null) {
+                this.knownBytes.putIfAbsent(name, bytes);
             }
         }
         if (!byName.isEmpty()) {

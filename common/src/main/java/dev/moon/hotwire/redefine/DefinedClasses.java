@@ -183,6 +183,12 @@ final class DefinedClasses {
         }
     }
 
+    synchronized void putIfAbsent(String name, byte[] bytes) {
+        if (!this.has(name)) {
+            this.put(name, bytes);
+        }
+    }
+
     boolean has(String name) {
         Entry of = this.entries.get(name);
         return of != null && (of.place >= 0 || of.jar != null);
