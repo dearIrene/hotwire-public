@@ -23,6 +23,7 @@ import java.util.Arrays;
 import java.util.HashMap;
 import java.util.HashSet;
 import java.util.Iterator;
+import java.util.List;
 import java.util.Map;
 import java.util.Set;
 import java.util.concurrent.atomic.AtomicInteger;
@@ -114,24 +115,133 @@ public final class KnotInternals {
                     }
                 }
             }
+            closed += closeCached(trusted, wanted);
+            LOGGER.info("[Hotwire] {} let go by {} holder(s) of Knot's", wanted.getFileName(), closed);
+        } catch (JvmAccessException | ReflectiveOperationException e) {
+            throw new IOException("Knot's class path is out of reach: " + e.getMessage(), e);
+        } catch (IOException | RuntimeException e) {
+            throw e;
+        } catch (Throwable e) {
+            throw new IOException("Knot's class path could not be changed: " + e, e);
+        }
+    }
 
-            Class<?> factory = Class.forName("sun.net.www.protocol.jar.JarFileFactory");
-            HashMap<?, ?> byUrl = (HashMap<?, ?>) trusted.findStaticVarHandle(factory, "fileCache", HashMap.class)
-                    .get();
-            HashMap<?, ?> urlOf = (HashMap<?, ?>) trusted.findStaticVarHandle(factory, "urlCache", HashMap.class).get();
-            synchronized (factory) {
-                for (Iterator<? extends Map.Entry<?, ?>> cached = byUrl.entrySet().iterator(); cached.hasNext();) {
-                    Map.Entry<?, ?> entry = cached.next();
-                    if (entry.getValue() instanceof JarFile open && wanted.equals(Path.of(open.getName())
-                            .toAbsolutePath().normalize())) {
-                        cached.remove();
-                        urlOf.remove(open);
-                        open.close();
-                        closed++;
-                    }
+    private static int closeCached(MethodHandles.Lookup trusted, Path wanted) throws ReflectiveOperationException,
+            IOException {
+        Class<?> factory = Class.forName("sun.net.www.protocol.jar.JarFileFactory");
+        HashMap<?, ?> byUrl = (HashMap<?, ?>) trusted.findStaticVarHandle(factory, "fileCache", HashMap.class).get();
+        HashMap<?, ?> urlOf = (HashMap<?, ?>) trusted.findStaticVarHandle(factory, "urlCache", HashMap.class).get();
+        int closed = 0;
+        synchronized (factory) {
+            for (Iterator<? extends Map.Entry<?, ?>> cached = byUrl.entrySet().iterator(); cached.hasNext();) {
+                Map.Entry<?, ?> entry = cached.next();
+                if (entry.getValue() instanceof JarFile open && wanted.equals(Path.of(open.getName())
+                        .toAbsolutePath().normalize())) {
+                    cached.remove();
+                    urlOf.remove(open);
+                    open.close();
+                    closed++;
                 }
             }
-            LOGGER.info("[Hotwire] {} let go by {} holder(s) of Knot's", wanted.getFileName(), closed);
+        }
+        return closed;
+    }
+
+    public static void renameOnClassPath(Path jar, Path renamed) throws IOException {
+        Path wanted = jar.toAbsolutePath().normalize();
+        Path now = renamed.toAbsolutePath().normalize();
+        ClassPathIndex.drop(wanted);
+        FabricLauncher launcher = FabricLauncherBase.getLauncher();
+        Object delegate = PrivateField.of(launcher.getClass(), "classLoader").get(launcher, Object.class);
+        Object knot = PrivateField.of(delegate.getClass(), "classLoader").get(delegate, Object.class);
+        URLClassLoader urls = PrivateField.of(knot.getClass(), "urlLoader").get(knot, URLClassLoader.class);
+        try {
+            MethodHandles.Lookup trusted = JvmAccess.findTrustedLookup();
+            VarHandle sources = trusted.findVarHandle(delegate.getClass(), "codeSources", Set.class);
+            renameInPlace(urls, jar, renamed);
+            synchronized (delegate) {
+                Set<Path> mapped = new HashSet<>();
+                for (Object source : (Set<?>) sources.get(delegate)) {
+                    if (source instanceof Path known) {
+                        mapped.add(known.toAbsolutePath().normalize().equals(wanted) ? now : known);
+                    }
+                }
+                sources.set(delegate, mapped);
+            }
+        } catch (JvmAccessException | ReflectiveOperationException e) {
+            throw new IOException("Knot's class path is out of reach: " + e.getMessage(), e);
+        }
+    }
+
+    @SuppressWarnings("checkstyle:IllegalCatch")
+    static void renameInPlace(URLClassLoader urls, Path jar, Path renamed) throws IOException {
+        Path wanted = jar.toAbsolutePath().normalize();
+        try {
+            MethodHandles.Lookup trusted = JvmAccess.findTrustedLookup();
+            Class<?> pathType = Class.forName("jdk.internal.loader.URLClassPath");
+            Class<?> loaderType = Class.forName("jdk.internal.loader.URLClassPath$Loader");
+            Object classPath = trusted.findVarHandle(URLClassLoader.class, "ucp", pathType).get(urls);
+            @SuppressWarnings("unchecked")
+            ArrayList<URL> path = (ArrayList<URL>) trusted.findVarHandle(pathType, "path", ArrayList.class)
+                    .get(classPath);
+            @SuppressWarnings("unchecked")
+            ArrayDeque<URL> unopened = (ArrayDeque<URL>) trusted.findVarHandle(pathType, "unopenedUrls",
+                    ArrayDeque.class).get(classPath);
+            @SuppressWarnings("unchecked")
+            ArrayList<Object> loaders = (ArrayList<Object>) trusted.findVarHandle(pathType, "loaders",
+                    ArrayList.class).get(classPath);
+            @SuppressWarnings("unchecked")
+            HashMap<String, Object> byName = (HashMap<String, Object>) trusted.findVarHandle(pathType, "lmap",
+                    HashMap.class).get(classPath);
+            MethodHandle baseOf = trusted.findVirtual(loaderType, "getBaseURL", MethodType.methodType(URL.class));
+            MethodHandle close = trusted.findVirtual(loaderType, "close", MethodType.methodType(void.class));
+            MethodHandle make = trusted.findVirtual(pathType, "getLoader", MethodType.methodType(loaderType,
+                    URL.class));
+            MethodHandle key = trusted.findStatic(Class.forName("sun.net.util.URLUtil"), "urlNoFragString",
+                    MethodType.methodType(String.class, URL.class));
+            synchronized (classPath) {
+                int slot = -1;
+                URL was = null;
+                for (int at = 0; at < loaders.size(); at++) {
+                    URL base = (URL) baseOf.invoke(loaders.get(at));
+                    if (isAt(base, wanted)) {
+                        slot = at;
+                        was = base;
+                        byName.values().remove(loaders.get(at));
+                        close.invoke(loaders.get(at));
+                        break;
+                    }
+                }
+                closeCached(trusted, wanted);
+                URL from = null;
+                for (URL url : path) {
+                    if (isAt(url, wanted)) {
+                        from = url;
+                    }
+                }
+                try {
+                    Files.move(jar, renamed);
+                } catch (IOException e) {
+                    if (slot >= 0 && from != null) {
+                        Object back = make.invoke(classPath, from);
+                        loaders.set(slot, back);
+                        byName.put((String) key.invoke(from), back);
+                    }
+                    throw new IOException(e.getMessage() + " (" + describeOpenZips(jar) + ")", e);
+                }
+                URL to = renamed.toAbsolutePath().normalize().toUri().toURL();
+                path.replaceAll(url -> isAt(url, wanted) ? to : url);
+                List<URL> waiting = new ArrayList<>(unopened);
+                unopened.clear();
+                waiting.forEach(url -> unopened.add(isAt(url, wanted) ? to : url));
+                if (slot >= 0) {
+                    Object made = make.invoke(classPath, to);
+                    loaders.set(slot, made);
+                    byName.put((String) key.invoke(to), made);
+                }
+                LOGGER.info("[Hotwire] {} is read as {} where it stood on the class path{}", wanted.getFileName(),
+                        renamed.getFileName(), was == null ? " (never opened)" : "");
+            }
         } catch (JvmAccessException | ReflectiveOperationException e) {
             throw new IOException("Knot's class path is out of reach: " + e.getMessage(), e);
         } catch (IOException | RuntimeException e) {

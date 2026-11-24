@@ -4,7 +4,6 @@ import dev.moon.hotwire.rebuild.KnotInternals;
 import java.io.IOException;
 import java.nio.file.Files;
 import java.nio.file.Path;
-import net.fabricmc.loader.impl.launch.FabricLauncherBase;
 
 public final class DisabledJars {
     public static final String SUFFIX = ".disabled";
@@ -13,15 +12,16 @@ public final class DisabledJars {
     }
 
     public static Path disable(Path jar, boolean runs) throws IOException {
-        KnotInternals.dropFromClassPath(jar);
         Path disabled = jar.resolveSibling(jar.getFileName() + SUFFIX);
+        if (runs) {
+            KnotInternals.renameOnClassPath(jar, disabled);
+            return disabled;
+        }
+        KnotInternals.dropFromClassPath(jar);
         try {
             Files.move(jar, disabled);
         } catch (IOException e) {
             throw new IOException(e.getMessage() + " (" + KnotInternals.describeOpenZips(jar) + ")", e);
-        }
-        if (runs) {
-            FabricLauncherBase.getLauncher().addToClassPath(disabled);
         }
         return disabled;
     }
@@ -41,9 +41,7 @@ public final class DisabledJars {
         if (!runs) {
             return Files.move(disabled, jar);
         }
-        KnotInternals.dropFromClassPath(disabled);
-        Files.move(disabled, jar);
-        FabricLauncherBase.getLauncher().addToClassPath(jar);
+        KnotInternals.renameOnClassPath(disabled, jar);
         classPathChanged.run();
         return jar;
     }
