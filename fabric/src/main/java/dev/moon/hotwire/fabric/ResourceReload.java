@@ -138,10 +138,11 @@ public final class ResourceReload {
                     if (!reloadAsked && !comingOn.isEmpty()) {
                         reloadedRenderers = true;
                         reloadedWhilePaused |= !renderersOnly;
+                        List<String> soundsFrom = findSwitched();
                         GameParts.getBackgroundReload().beginAfterHold(() -> {
                             Runnable start = () -> startUnprofiled(() -> game.reloadResourcePacks());
                             if (!renderersOnly || wholeAfterHold || !ReloadListeners.runWithoutHeavy(game, start)) {
-                                startWhole(game);
+                                startWhole(game, soundsFrom);
                             }
                         });
                     } else {
@@ -203,10 +204,11 @@ public final class ResourceReload {
             }
 
             reloadedRenderers = true;
+            List<String> soundsFrom = findSwitched();
             GameParts.getBackgroundReload().beginAfterHold(() -> {
                 Runnable start = () -> startUnprofiled(() -> game.reloadResourcePacks());
                 if (wholeAfterHold || !ReloadListeners.runWithoutHeavy(game, start)) {
-                    startWhole(game);
+                    startWhole(game, soundsFrom);
                 }
             });
             return;
@@ -269,7 +271,8 @@ public final class ResourceReload {
         Minecraft game = Minecraft.getInstance();
         LOGGER.info("[Hotwire] the packs of {} come back whole with a reload after the hold, the game drawing", mods);
         wholeAfterHold = true;
-        GameParts.getBackgroundReload().beginAfterHold(() -> startWhole(game));
+        List<String> soundsFrom = findSwitched();
+        GameParts.getBackgroundReload().beginAfterHold(() -> startWhole(game, soundsFrom));
     }
 
     public static void awaitIdle() {
@@ -283,13 +286,18 @@ public final class ResourceReload {
         goingOff = List.copyOf(mods);
     }
 
-    @SuppressWarnings("FutureReturnValueIgnored")
-    private static void startWhole(Minecraft game) {
-        wholeAfterHold = false;
-        waitingReload = null;
+    private static List<String> findSwitched() {
         List<String> switched = new ArrayList<>(comingOn);
         switched.addAll(goingOff);
         switched.addAll(added);
+        return switched;
+    }
+
+    @SuppressWarnings("FutureReturnValueIgnored")
+
+    private static void startWhole(Minecraft game, List<String> switched) {
+        wholeAfterHold = false;
+        waitingReload = null;
         Runnable start = () -> startUnprofiled(() -> game.reloadResourcePacks());
         if (ModSoundFiles.isAnyIn(switched) || !ReloadListeners.runWithout(game, SoundManager.class, start)) {
             start.run();
@@ -337,11 +345,12 @@ public final class ResourceReload {
                 LOGGER.info("[Hotwire] the off's resource reload is left to the switch that follows it");
                 return;
             }
-            GameParts.getBackgroundReload().beginAfterHold(() -> startWhole(game));
+            List<String> soundsFrom = findSwitched();
+            GameParts.getBackgroundReload().beginAfterHold(() -> startWhole(game, soundsFrom));
             return;
         }
 
-        if (packsAlone && GameParts.getBackgroundReload().beginNow(() -> startWhole(game))) {
+        if (packsAlone && GameParts.getBackgroundReload().beginNow(() -> startWhole(game, findSwitched()))) {
             reloadedWhilePaused = true;
             LOGGER.info("[Hotwire] the reload began with the game held and ends with it drawing: only packs made"
                     + " without a mod's setup waited for it");
@@ -351,7 +360,7 @@ public final class ResourceReload {
         OngoingReload.Run run = OngoingReload.begin(() -> {
             if (!renderersOnly || !ReloadListeners.runWithoutHeavy(game,
                     () -> startUnprofiled(() -> game.reloadResourcePacks()))) {
-                startWhole(game);
+                startWhole(game, findSwitched());
             }
         });
         if (run == null) {
