@@ -19,11 +19,15 @@ final class DefinedClasses {
     private static final long LENGTH_MASK = (1L << LENGTH_BITS) - 1;
     private static final String PREFIX = "hotwire-classes";
 
-    private final Map<String, Long> places = new ConcurrentHashMap<>();
+    private final Map<String, Kept> kept = new ConcurrentHashMap<>();
 
-    private final Map<String, Long> rooms = new ConcurrentHashMap<>();
+    private static final class Kept {
+        volatile long place = -1;
 
-    private final Map<String, Path> inJars = new ConcurrentHashMap<>();
+        long room = -1;
+
+        volatile @Nullable Path jar;
+    }
     private final @Nullable Jars jars;
 
     interface Jars {
@@ -59,14 +63,15 @@ final class DefinedClasses {
         this.writing = true;
         try {
             Path jar = this.jars == null ? null : this.jars.findWithSame(name, bytes);
+            Kept of = this.kept.computeIfAbsent(name, made -> new Kept());
             if (jar != null) {
-                this.inJars.put(name, jar);
-                this.places.remove(name);
+                of.jar = jar;
+                of.place = -1;
                 return false;
             }
-            this.inJars.remove(name);
-            Long room = this.rooms.get(name);
-            if (room != null && bytes.length <= (room & LENGTH_MASK)) {
+            of.jar = null;
+            long room = of.room;
+            if (room >= 0 && bytes.length <= (room & LENGTH_MASK)) {
                 long lay = room >>> LENGTH_BITS;
                 if (lay >= this.blockAt) {
                     System.arraycopy(bytes, 0, this.findBlock(), (int) (lay - this.blockAt), bytes.length);
@@ -75,7 +80,7 @@ final class DefinedClasses {
                     into.seek(lay);
                     into.write(bytes);
                 }
-                this.places.put(name, lay << LENGTH_BITS | bytes.length);
+                of.place = lay << LENGTH_BITS | bytes.length;
                 return true;
             }
             if (this.blockLength + bytes.length > BLOCK) {
@@ -92,15 +97,19 @@ final class DefinedClasses {
                 this.blockLength += bytes.length;
             }
             this.end = at + bytes.length;
-            this.places.put(name, at << LENGTH_BITS | bytes.length);
-            this.rooms.put(name, at << LENGTH_BITS | bytes.length);
+            of.place = at << LENGTH_BITS | bytes.length;
+            of.room = of.place;
             return true;
         } catch (IOException | RuntimeException e) {
             this.closed = true;
 
             long lost = this.blockAt;
-            this.places.values().removeIf(place -> place >>> LENGTH_BITS >= lost);
-            this.rooms.clear();
+            for (Kept of : this.kept.values()) {
+                if (of.place >= 0 && of.place >>> LENGTH_BITS >= lost) {
+                    of.place = -1;
+                }
+                of.room = -1;
+            }
             LOGGER.warn("[Hotwire] the classes defined from now on are not kept: their file could not be written, so"
                     + " a class the JVM will not give back cannot be switched", e);
             return false;
@@ -145,9 +154,7 @@ final class DefinedClasses {
 
     synchronized void close() {
         this.closed = true;
-        this.places.clear();
-        this.rooms.clear();
-        this.inJars.clear();
+        this.kept.clear();
         RandomAccessFile into = this.file;
         Path made = this.path;
         this.file = null;
@@ -177,7 +184,8 @@ final class DefinedClasses {
     }
 
     boolean has(String name) {
-        return this.places.containsKey(name) || this.inJars.containsKey(name);
+        Kept of = this.kept.get(name);
+        return of != null && (of.place >= 0 || of.jar != null);
     }
 
     synchronized long getLength() {
@@ -189,8 +197,8 @@ final class DefinedClasses {
         if (from == null) {
             return;
         }
-        for (Map.Entry<String, Path> left : this.inJars.entrySet()) {
-            if (left.getValue().equals(jar)) {
+        for (Map.Entry<String, Kept> left : this.kept.entrySet()) {
+            if (jar.equals(left.getValue().jar)) {
                 byte[] bytes = from.read(left.getKey(), jar);
                 if (bytes != null) {
                     this.putHere(left.getKey(), bytes);
@@ -219,9 +227,10 @@ final class DefinedClasses {
                 this.blockLength += bytes.length;
             }
             this.end = at + bytes.length;
-            this.places.put(name, at << LENGTH_BITS | bytes.length);
-            this.rooms.put(name, at << LENGTH_BITS | bytes.length);
-            this.inJars.remove(name);
+            Kept of = this.kept.computeIfAbsent(name, made -> new Kept());
+            of.place = at << LENGTH_BITS | bytes.length;
+            of.room = of.place;
+            of.jar = null;
         } catch (IOException | RuntimeException e) {
             LOGGER.warn("[Hotwire] {} could not be kept as its jar left the path", name, e);
         } finally {
@@ -230,13 +239,14 @@ final class DefinedClasses {
     }
 
     synchronized byte @Nullable [] find(String name) {
-        Path jar = this.inJars.get(name);
+        Kept of = this.kept.get(name);
+        Path jar = of == null ? null : of.jar;
         Jars source = this.jars;
         if (jar != null && source != null) {
             return source.read(name, jar);
         }
-        Long place = this.places.get(name);
-        if (place == null) {
+        long place = of == null ? -1 : of.place;
+        if (place < 0) {
             return null;
         }
         byte[] bytes = new byte[(int) (place & LENGTH_MASK)];

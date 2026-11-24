@@ -9,6 +9,7 @@ import java.net.URISyntaxException;
 import java.net.URL;
 import java.nio.file.Files;
 import java.nio.file.Path;
+import java.util.Arrays;
 import java.util.HashSet;
 import java.util.Set;
 import java.util.function.Supplier;
@@ -22,7 +23,7 @@ public final class ClassPathListing {
     private static final String VERSIONED = "META-INF/versions/";
     private static final @Nullable Supplier<URL[]> SEARCH_PATH = findSearchPath();
     private static final Set<String> JDK = findJdkPackages();
-    private static @Nullable Set<String> listed;
+    private static long @Nullable [] listed;
     private static int listedFor = -1;
 
     private ClassPathListing() {
@@ -33,11 +34,19 @@ public final class ClassPathListing {
         if (JDK.contains(slash < 0 ? "" : file.substring(0, slash))) {
             return true;
         }
-        Set<String> known = findListed();
-        return known == null || known.contains(file);
+        long[] known = findListed();
+        return known == null || Arrays.binarySearch(known, hash(file)) >= 0;
     }
 
-    private static synchronized @Nullable Set<String> findListed() {
+    static long hash(String name) {
+        long hash = 0xcbf29ce484222325L;
+        for (int at = 0; at < name.length(); at++) {
+            hash = (hash ^ name.charAt(at)) * 0x100000001b3L;
+        }
+        return hash;
+    }
+
+    private static synchronized long @Nullable [] findListed() {
         Supplier<URL[]> searchPath = SEARCH_PATH;
         if (searchPath == null) {
             return null;
@@ -49,7 +58,8 @@ public final class ClassPathListing {
             return null;
         }
         if (path.length != listedFor) {
-            listed = list(path);
+            Set<String> names = list(path);
+            listed = names == null ? null : names.stream().mapToLong(ClassPathListing::hash).sorted().toArray();
             listedFor = path.length;
         }
         return listed;
