@@ -238,6 +238,10 @@ public interface ModScreenGame {
     default void playSound(LoadingScreen.Cue cue, float pitch) {
     }
 
+    default boolean isAddAsked() {
+        return true;
+    }
+
     default boolean isTourSeen() {
         return true;
     }

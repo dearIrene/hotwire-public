@@ -12,8 +12,10 @@ import dev.moon.hotwire.update.PendingChange;
 import java.time.Instant;
 import java.time.ZoneId;
 import java.time.format.DateTimeFormatter;
+import java.util.EnumSet;
 import java.util.List;
 import java.util.Locale;
+import java.util.Set;
 import java.util.function.Consumer;
 import java.util.function.Function;
 import org.jspecify.annotations.Nullable;
@@ -31,6 +33,9 @@ public final class PendingPage {
     private final Push closeGame;
 
     private List<PendingChange> waiting = List.of();
+    private List<PendingChange> changes = List.of();
+
+    private final Set<Kind> opened = EnumSet.noneOf(Kind.class);
     private final Consumer<PendingChange> onAct;
 
     private final Consumer<String> onCleanUp;
@@ -50,15 +55,24 @@ public final class PendingPage {
     }
 
     public void set(List<PendingChange> changes) {
+        this.changes = List.copyOf(changes);
         this.list.clear();
         this.none.show(changes.isEmpty());
         this.scroll.show(!changes.isEmpty());
         for (Kind kind : Kind.values()) {
             List<PendingChange> ofKind = changes.stream().filter(kind.type::isInstance).toList();
             if (!ofKind.isEmpty()) {
-                this.list.with(Kit.row(Kit.text(Lang.get(kind.label), Palette.TEXT),
-                        Kit.text(String.valueOf(ofKind.size()), Palette.ON), Kit.rule().grow(1)).gap(6));
-                ofKind.forEach(this::addRow);
+                boolean shown = !kind.folded || this.opened.contains(kind);
+                Line head = Kit.row(Kit.text(Lang.get(kind.label), Palette.TEXT),
+                        Kit.text(String.valueOf(ofKind.size()), Palette.ON), Kit.rule().grow(1)).gap(6);
+                if (kind.folded) {
+                    head.with(Kit.dim(Lang.get(shown ? "hotwire.pending.hide" : "hotwire.pending.show")))
+                            .press((button, modifiers) -> this.toggle(kind));
+                }
+                this.list.with(head);
+                if (shown) {
+                    ofKind.forEach(this::addRow);
+                }
             }
         }
         this.cleanUpAll.show(changes.stream().anyMatch(PendingChange.Revertable.class::isInstance));
@@ -67,18 +81,27 @@ public final class PendingPage {
         this.closeGame.show(!this.waiting.isEmpty());
     }
 
+    private void toggle(Kind kind) {
+        if (!this.opened.remove(kind)) {
+            this.opened.add(kind);
+        }
+        this.set(this.changes);
+    }
+
     private enum Kind {
-        UPDATES(PendingChange.Update.class, "hotwire.pending.kind.updates"),
-        ADDED(PendingChange.Copied.class, "hotwire.pending.kind.added"),
-        OFF(PendingChange.OffAtStart.class, "hotwire.pending.kind.off"),
-        EARLIER(PendingChange.Revertable.class, "hotwire.pending.kind.earlier");
+        UPDATES(PendingChange.Update.class, "hotwire.pending.kind.updates", false),
+        OFF(PendingChange.OffAtStart.class, "hotwire.pending.kind.off", false),
+        ADDED(PendingChange.Copied.class, "hotwire.pending.kind.added", true),
+        EARLIER(PendingChange.Revertable.class, "hotwire.pending.kind.earlier", true);
 
         private final Class<? extends PendingChange> type;
         private final String label;
+        private final boolean folded;
 
-        Kind(Class<? extends PendingChange> type, String label) {
+        Kind(Class<? extends PendingChange> type, String label, boolean folded) {
             this.type = type;
             this.label = label;
+            this.folded = folded;
         }
     }
 

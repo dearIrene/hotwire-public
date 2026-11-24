@@ -10,8 +10,14 @@ import java.nio.file.Path;
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;
+import java.util.function.Function;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
+import net.fabricmc.loader.api.FabricLoader;
+import net.fabricmc.loader.api.ModContainer;
+import net.fabricmc.loader.api.Version;
+import net.fabricmc.loader.api.VersionParsingException;
+import net.fabricmc.loader.api.metadata.ModDependency;
 import org.jspecify.annotations.Nullable;
 
 public final class AddFirstLook {
@@ -57,7 +63,39 @@ public final class AddFirstLook {
         if (manifest.environment() == ModManifest.Environment.SERVER) {
             return Optional.of(Lang.get("hotwire.add.server_only", manifest.name()));
         }
-        return Optional.empty();
+        String[] broken = findBroken(manifest, AddFirstLook::findVersionOf);
+        broken = broken != null ? broken : findBreaking(manifest);
+        return broken == null ? Optional.empty()
+                : Optional.of(Lang.get("hotwire.add.breaks", broken[0], broken[1], broken[2]));
+    }
+
+    static String @Nullable [] findBroken(ModManifest manifest, Function<String, @Nullable String> versionOf) {
+        for (Map.Entry<String, List<String>> breaks : manifest.getRelation(ModManifest.Relation.BREAKS).entrySet()) {
+            String has = versionOf.apply(breaks.getKey());
+            if (has != null && ModPolicy.satisfies(has, breaks.getValue())) {
+                return new String[] {manifest.name(), breaks.getKey(), has};
+            }
+        }
+        return null;
+    }
+
+    private static String @Nullable [] findBreaking(ModManifest manifest) {
+        Version version;
+        try {
+            version = Version.parse(manifest.version());
+        } catch (VersionParsingException e) {
+            return null;
+        }
+        for (ModContainer mod : FabricLoader.getInstance().getAllMods()) {
+            for (ModDependency dependency : mod.getMetadata().getDependencies()) {
+                if (dependency.getKind() == ModDependency.Kind.BREAKS && dependency.matches(version)
+                        && (dependency.getModId().equals(manifest.id())
+                        || manifest.provides().contains(dependency.getModId()))) {
+                    return new String[] {mod.getMetadata().getName(), manifest.name(), manifest.version()};
+                }
+            }
+        }
+        return null;
     }
 
     private static @Nullable String findVersionOf(String id) {

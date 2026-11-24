@@ -30,6 +30,8 @@ public final class HotwireSettings {
 
     public enum UpdateChecks { ON, OFF }
 
+    public enum AddPrompt { ALWAYS, WHEN_NEEDED }
+
     public enum UpdateChannel { RELEASE, BETA, ALPHA }
 
     public enum AntiCrash { OFF, ON }
@@ -77,6 +79,7 @@ public final class HotwireSettings {
     static final String AUTO_FILL = "auto-fill";
     static final String DEVELOPER = "developer";
     static final String UPDATE_CHECKS = "update-checks";
+    static final String ADD_PROMPT = "add-prompt";
     static final String UPDATE_CHANNEL = "update-channel";
     static final String ANTI_CRASH = "anti-crash";
     static final String DEV_RELOAD = "dev-reload";
@@ -117,6 +120,9 @@ public final class HotwireSettings {
             "hotwire.settings.auto_fill.on");
     private static final List<Developer> DEVELOPER_ORDER = List.of(Developer.OFF, Developer.ON);
     private static final List<UpdateChecks> UPDATE_CHECKS_ORDER = List.of(UpdateChecks.OFF, UpdateChecks.ON);
+    private static final List<AddPrompt> ADD_PROMPT_ORDER = List.of(AddPrompt.ALWAYS, AddPrompt.WHEN_NEEDED);
+    private static final List<String> ADD_PROMPT_CHOICES = List.of("hotwire.settings.add_prompt.always",
+            "hotwire.settings.add_prompt.needed");
     private static final List<UpdateChannel> UPDATE_CHANNEL_ORDER = List.of(UpdateChannel.RELEASE, UpdateChannel.BETA,
             UpdateChannel.ALPHA);
     private static final List<String> UPDATE_CHANNEL_CHOICES = List.of("hotwire.settings.update_channel.release",
@@ -180,6 +186,7 @@ public final class HotwireSettings {
         @Nullable AutoFill autoFill = AutoFill.ON;
         @Nullable Developer developer = Developer.OFF;
         @Nullable UpdateChecks updateChecks = UpdateChecks.ON;
+        @Nullable AddPrompt addPrompt = AddPrompt.ALWAYS;
         @Nullable UpdateChannel updateChannel = UpdateChannel.RELEASE;
         @Nullable List<String> ignoredUpdates;
         @Nullable AntiCrash antiCrash = AntiCrash.OFF;
@@ -226,6 +233,7 @@ public final class HotwireSettings {
     private volatile AutoFill autoFill;
     private volatile Developer developer;
     private volatile UpdateChecks updateChecks;
+    private volatile AddPrompt addPrompt;
     private volatile UpdateChannel updateChannel;
 
     private volatile List<String> ignoredUpdates = List.of();
@@ -273,6 +281,7 @@ public final class HotwireSettings {
                 : checkKnown(saved.autoFill, AutoFill.ON, "autoFill");
         this.developer = checkKnown(saved.developer, Developer.OFF, "developer");
         this.updateChecks = checkKnown(saved.updateChecks, UpdateChecks.ON, "updateChecks");
+        this.addPrompt = checkKnown(saved.addPrompt, AddPrompt.ALWAYS, "addPrompt");
         this.updateChannel = checkKnown(saved.updateChannel, UpdateChannel.RELEASE, "updateChannel");
         if (saved.ignoredUpdates != null) {
             this.ignoredUpdates = saved.ignoredUpdates.stream().filter(Objects::nonNull).toList();
@@ -447,6 +456,10 @@ public final class HotwireSettings {
         return this.reloadPopups == ReloadPopups.ALL;
     }
 
+    public boolean isAddAsked() {
+        return this.addPrompt == AddPrompt.ALWAYS;
+    }
+
     public boolean isUpdateCheckOn() {
         return this.updateChecks == UpdateChecks.ON;
     }
@@ -577,6 +590,8 @@ public final class HotwireSettings {
                         makeOption(SOUNDS, "hotwire.settings.sounds", SOUNDS_CHOICES, SOUNDS_ORDER,
                                 this.sounds))),
                 new SettingsSection(Lang.get("hotwire.settings.section.switching"), List.of(
+                        makeOption(ADD_PROMPT, "hotwire.settings.add_prompt", ADD_PROMPT_CHOICES, ADD_PROMPT_ORDER,
+                                this.addPrompt),
                         makeOption(OFF_LASTS, "hotwire.settings.off_lasts", OFF_LASTS_CHOICES, OFF_LASTS_ORDER,
                                 this.offLasts),
                         makeOption(IN_WORLD, "hotwire.settings.in_world", IN_WORLD_CHOICES, IN_WORLD_ORDER,
@@ -650,6 +665,7 @@ public final class HotwireSettings {
         SwitchSounds heard = SOUNDS.equals(option) ? pick(SOUNDS_ORDER, choice, this.sounds) : this.sounds;
         AutoFill fill = AUTO_FILL.equals(option) ? pick(AUTO_FILL_ORDER, choice, this.autoFill) : this.autoFill;
         Developer dev = DEVELOPER.equals(option) ? pick(DEVELOPER_ORDER, choice, this.developer) : this.developer;
+        AddPrompt asks = ADD_PROMPT.equals(option) ? pick(ADD_PROMPT_ORDER, choice, this.addPrompt) : this.addPrompt;
         UpdateChecks checks = UPDATE_CHECKS.equals(option) ? pick(UPDATE_CHECKS_ORDER, choice, this.updateChecks)
                 : this.updateChecks;
         UpdateChannel channel = UPDATE_CHANNEL.equals(option) ? pick(UPDATE_CHANNEL_ORDER, choice,
@@ -674,6 +690,7 @@ public final class HotwireSettings {
         if (world == this.inWorld && nested == this.nestedJars && lasts == this.offLasts && pause == this.pauseGame
                 && alert == this.keyAlert && heard == this.sounds
                 && fill == this.autoFill && dev == this.developer
+                && asks == this.addPrompt
                 && checks == this.updateChecks && channel == this.updateChannel && crash == this.antiCrash && reload == this.devReload
                 && popups == this.reloadPopups && caught == this.devCatch && leaks == this.devLeaks
                 && limit == this.devBuildLimit && autoBack == this.devAutoBack && history == this.devHistory
@@ -695,6 +712,7 @@ public final class HotwireSettings {
         this.devReload = reload;
         this.reloadPopups = popups;
         this.updateChecks = checks;
+        this.addPrompt = asks;
         this.developer = dev;
         this.autoFill = fill;
         this.pauseGame = pause;
@@ -717,6 +735,7 @@ public final class HotwireSettings {
         saved.autoFill = this.autoFill;
         saved.developer = this.developer;
         saved.updateChecks = this.updateChecks;
+        saved.addPrompt = this.addPrompt;
         saved.updateChannel = this.updateChannel;
         saved.antiCrash = this.antiCrash;
         saved.devReload = this.devReload;

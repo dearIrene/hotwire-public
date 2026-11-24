@@ -11,6 +11,7 @@ import dev.moon.hotwire.ui.widgets.Part;
 import java.nio.file.Path;
 import java.util.List;
 import java.util.function.BiConsumer;
+import java.util.function.BooleanSupplier;
 
 public final class AddPanel extends JarSheet<AddPreview> {
     static final int HEED = 0xFFE0A45C;
@@ -18,17 +19,27 @@ public final class AddPanel extends JarSheet<AddPreview> {
     private static final int LATE_NAMED = 3;
 
     private final BiConsumer<Path, AddMode> onConfirm;
+    private final BooleanSupplier asked;
+    private final Runnable onSettings;
 
     @SuppressWarnings("this-escape")
-    public AddPanel(BiConsumer<Path, AddMode> onConfirm, Runnable onChange, Runnable onCancel) {
+
+    public AddPanel(BiConsumer<Path, AddMode> onConfirm, Runnable onChange, Runnable onCancel, BooleanSupplier asked,
+            Runnable onSettings) {
         super(440, onChange, onCancel);
         this.onConfirm = onConfirm;
+        this.asked = asked;
+        this.onSettings = onSettings;
         this.setMark(ModScreen.Icons.ADD, null);
     }
 
     @Override
     protected AddPreview makeFailed(Throwable cause) {
         return AddPreview.ofRefusal(this.getFileName(), Lang.get("hotwire.failed", cause));
+    }
+
+    static boolean isPlain(AddPreview preview) {
+        return preview.mode() == AddMode.NOW && preview.lateReach().isEmpty();
     }
 
     static String describeHeadsUp(List<String> late) {
@@ -42,6 +53,11 @@ public final class AddPanel extends JarSheet<AddPreview> {
     @Override
     protected void fill(AddPreview preview, Path jar) {
         AddMode mode = preview.mode();
+        boolean plain = isPlain(preview);
+        if (plain && !this.asked.getAsBoolean()) {
+            this.onConfirm.accept(jar, mode);
+            return;
+        }
         boolean refused = mode == AddMode.REFUSED;
         this.setRefused(refused);
         this.setMark(ModScreen.Icons.ADD, preview::icon);
@@ -59,6 +75,9 @@ public final class AddPanel extends JarSheet<AddPreview> {
         } else if (!refused && !preview.lateReach().isEmpty()) {
             this.body.with(Kit.row(new Kit.Fill(HEED).width(2), Kit.column(Kit.text(describeHeadsUp(
                     preview.lateReach()), HEED).wrap()).pad(8, 2).grow(1)).cross(Line.Cross.STRETCH));
+        }
+        if (plain) {
+            this.body.with(new Part().height(2), Kit.push(Lang.get("hotwire.add.ask_setting"), this.onSettings));
         }
         String button = mode.findButton();
         this.setButtons(button == null ? null : Kit.lead(button, () -> this.onConfirm.accept(jar, mode)));

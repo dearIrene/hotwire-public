@@ -504,6 +504,11 @@ public final class HotwireEngine implements ModScreenGame, AutoCloseable {
     }
 
     @Override
+    public boolean isAddAsked() {
+        return this.settings.isAddAsked();
+    }
+
+    @Override
     public boolean isTourSeen() {
         return this.settings.isTourSeen();
     }

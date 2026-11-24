@@ -137,7 +137,10 @@ public final class ModScreen implements JarHost {
                 game::checkForUpdates, game::findUpdateDownloads, game::getIgnoredUpdates, game::setIgnoredUpdates);
         this.progress = new LoadingScreen(game.getProgress(), game::playSound);
         this.progress.showIconsFrom(game::findIcon);
-        this.addPanel = new AddPanel(this::confirmAdd, game::addMod, this::closePanels);
+        this.addPanel = new AddPanel(this::confirmAdd, game::addMod, this::closePanels, game::isAddAsked, () -> {
+            this.closePanels();
+            this.openSettings();
+        });
         this.updatePanel = new UpdatePanel(this::confirmUpdate, game::updateMod, this::closePanels);
         this.pendingActions = new PendingActions(game, this::showMessage);
         this.reopenPanel = new ReopenPanel(game::describeOthers, offer -> {

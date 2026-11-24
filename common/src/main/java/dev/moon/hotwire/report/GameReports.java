@@ -476,9 +476,7 @@ public final class GameReports {
     private static boolean namesHotwire(Path file) {
         String text = read(file);
         if (file.getFileName().toString().startsWith("hs_err")) {
-            int process = text.indexOf("P R O C E S S");
-            String thread = process < 0 ? text : text.substring(0, process);
-            return thread.contains("dev.moon.hotwire") || thread.contains("dev/moon/hotwire");
+            return NativeBlame.of(NativeCrash.read(text), false).part() == NativeBlame.Part.HOTWIRE;
         }
         int at = text.indexOf("Hotwire involved? ");
         if (at >= 0) {
