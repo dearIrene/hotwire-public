@@ -240,6 +240,16 @@ public final class HotwireEngine implements ModScreenGame, AutoCloseable {
     }
 
     @Override
+    public List<String> getIgnoredUpdates() {
+        return this.getSettings().getIgnoredUpdates();
+    }
+
+    @Override
+    public void setIgnoredUpdates(List<String> ignored) {
+        this.getSettings().setIgnoredUpdates(ignored);
+    }
+
+    @Override
     public void checkForUpdates() {
         if (this.storeJars.checkAgain()) {
             this.selfUpdate.checkAgain();

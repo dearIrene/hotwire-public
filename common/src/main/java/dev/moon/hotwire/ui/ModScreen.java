@@ -134,7 +134,7 @@ public final class ModScreen implements JarHost {
                 .tab(Lang.get("hotwire.screen.advanced_short"), Icons.SETTINGS, true);
         this.cache = new CachePage(game.getCaches());
         this.updates = new UpdatesPage(game::updateFromStore, game::updateAllFromStore, game::findIcon,
-                game::checkForUpdates, game::findUpdateDownloads);
+                game::checkForUpdates, game::findUpdateDownloads, game::getIgnoredUpdates, game::setIgnoredUpdates);
         this.progress = new LoadingScreen(game.getProgress(), game::playSound);
         this.progress.showIconsFrom(game::findIcon);
         this.addPanel = new AddPanel(this::confirmAdd, game::addMod, this::closePanels);

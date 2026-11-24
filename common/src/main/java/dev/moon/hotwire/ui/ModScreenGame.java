@@ -137,6 +137,13 @@ public interface ModScreenGame {
     default void updateFromStore(UpdateOffer offer) {
     }
 
+    default List<String> getIgnoredUpdates() {
+        return List.of();
+    }
+
+    default void setIgnoredUpdates(List<String> ignored) {
+    }
+
     default void checkForUpdates() {
     }
 

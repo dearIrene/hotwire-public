@@ -37,6 +37,9 @@ public final class UpdatesPage {
     private final Function<String, Canvas.@Nullable Image> icons;
     private final Supplier<List<Downloads.Job>> jobs;
     private final Runnable onCheck;
+
+    private final Supplier<List<String>> ignored;
+    private final Consumer<List<String>> setIgnored;
     private final Text summary = Kit.dim("");
     private final Push other = Kit.push(Lang.get("hotwire.updates.check"), this::pressOther);
     private final Push main = Kit.lead("", this::pressMain);
@@ -62,7 +65,10 @@ public final class UpdatesPage {
     private double speed;
 
     public UpdatesPage(Consumer<UpdateOffer> onUpdate, Consumer<List<UpdateOffer>> onUpdateAll,
-            Function<String, Canvas.@Nullable Image> icons, Runnable onCheck, Supplier<List<Downloads.Job>> jobs) {
+            Function<String, Canvas.@Nullable Image> icons, Runnable onCheck, Supplier<List<Downloads.Job>> jobs,
+            Supplier<List<String>> ignored, Consumer<List<String>> setIgnored) {
+        this.ignored = ignored;
+        this.setIgnored = setIgnored;
         this.onUpdate = onUpdate;
         this.onUpdateAll = onUpdateAll;
         this.icons = icons;
@@ -207,6 +213,11 @@ public final class UpdatesPage {
                     .wrap());
         }
         this.tree.forEach(node -> this.addRow(node, List.of()));
+        int hidden = this.ignored.get().size();
+        if (hidden > 0 && !this.running) {
+            this.list.with(Kit.row(Kit.dim(Lang.get("hotwire.updates.ignored", hidden)), Kit.space(),
+                    Kit.push(Lang.get("hotwire.updates.show_ignored"), this::showIgnored)).gap(8).pad(4, 6));
+        }
         List<UpdateOffer> picked = this.findPicked();
         this.total.show(this.running);
         this.other.label(Lang.get(this.running ? "hotwire.updates.pause" : "hotwire.updates.check"));
@@ -246,9 +257,31 @@ public final class UpdatesPage {
         Part notes = offer.changelog().isBlank() ? Kit.dim(Lang.get("hotwire.updates.no_changelog"))
                 : Kit.scroll(new Markdown().set(offer.changelog())).capAt(NOTES_TALL);
         this.list.with(Kit.row(new Part().width((above.size() + 1) * INDENT + 30), notes.grow(1)).pad(0, 3));
+
+        this.list.with(Kit.row(new Part().width((above.size() + 1) * INDENT + 30),
+                Kit.push(Lang.get("hotwire.updates.ignore_version"), () -> this.ignore(project + "@"
+                        + offer.versionId())),
+                Kit.push(Lang.get("hotwire.updates.ignore_mod"), () -> this.ignore(project))).gap(6).pad(0, 3));
         List<UpdateTree.Node> under = new ArrayList<>(above);
         under.add(node);
         node.under().forEach(child -> this.addRow(child, under));
+    }
+
+    private void ignore(String entry) {
+        List<String> now = new ArrayList<>(this.ignored.get());
+        if (!now.contains(entry)) {
+            now.add(entry);
+        }
+        this.setIgnored.accept(now);
+        String project = entry.contains("@") ? entry.substring(0, entry.indexOf('@')) : entry;
+        this.setOffers(this.offers.stream().filter(offer -> !offer.projectId().equals(project)).toList(),
+                this.checked);
+    }
+
+    private void showIgnored() {
+        this.setIgnored.accept(List.of());
+        this.onCheck.run();
+        this.fill();
     }
 
     private void toggleOpen(String project) {
