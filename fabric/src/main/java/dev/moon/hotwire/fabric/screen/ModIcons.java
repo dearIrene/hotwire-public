@@ -237,11 +237,15 @@ public final class ModIcons implements AutoCloseable, IconSource {
     }
 
     private Source getSourceOf(String id) {
-        Path jar = this.installed.findJarOf(id);
-        boolean fromJar = jar != null && this.installed.isTopLevel(id)
-                && (this.installed.isAddedThisSession(id) || this.installed.isUpdatedThisSession(id));
+        Path running = this.installed.findJarOf(id);
+        Path jar = running != null ? running : this.installed.findFolderJarOf(id);
+
+        boolean fromJar = jar != null && (FabricLoader.getInstance().getModContainer(id).isEmpty()
+                || (this.installed.isTopLevel(id)
+                && (this.installed.isAddedThisSession(id) || this.installed.isUpdatedThisSession(id))));
         return new Source(id, fromJar ? jar : null,
-                getIconPath(id, this.installed.find(id).flatMap(ModManifest::icon)));
+                getIconPath(id, this.installed.find(id).or(() -> this.installed.findDisabled(id))
+                        .flatMap(ModManifest::icon)));
     }
 
     private static String getIconPath(String id, Optional<String> declared) {
