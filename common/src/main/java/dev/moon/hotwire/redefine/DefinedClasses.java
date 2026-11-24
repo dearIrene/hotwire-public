@@ -43,7 +43,7 @@ final class DefinedClasses {
     private @Nullable Path path;
     private boolean closed;
 
-    private final byte[] block = new byte[BLOCK];
+    private byte @Nullable [] block;
     private int blockLength;
     private long blockAt;
     private static final int BLOCK = 1 << 20;
@@ -69,7 +69,7 @@ final class DefinedClasses {
             if (room != null && bytes.length <= (room & LENGTH_MASK)) {
                 long lay = room >>> LENGTH_BITS;
                 if (lay >= this.blockAt) {
-                    System.arraycopy(bytes, 0, this.block, (int) (lay - this.blockAt), bytes.length);
+                    System.arraycopy(bytes, 0, this.findBlock(), (int) (lay - this.blockAt), bytes.length);
                 } else {
                     RandomAccessFile into = this.open();
                     into.seek(lay);
@@ -88,7 +88,7 @@ final class DefinedClasses {
                 into.write(bytes);
                 this.blockAt = at + bytes.length;
             } else {
-                System.arraycopy(bytes, 0, this.block, this.blockLength, bytes.length);
+                System.arraycopy(bytes, 0, this.findBlock(), this.blockLength, bytes.length);
                 this.blockLength += bytes.length;
             }
             this.end = at + bytes.length;
@@ -109,13 +109,22 @@ final class DefinedClasses {
         }
     }
 
+    private byte[] findBlock() {
+        byte[] made = this.block;
+        if (made == null) {
+            made = new byte[BLOCK];
+            this.block = made;
+        }
+        return made;
+    }
+
     private void writeBlock() throws IOException {
         if (this.blockLength == 0) {
             return;
         }
         RandomAccessFile into = this.open();
         into.seek(this.blockAt);
-        into.write(this.block, 0, this.blockLength);
+        into.write(this.findBlock(), 0, this.blockLength);
         this.blockAt += this.blockLength;
         this.blockLength = 0;
     }
@@ -206,7 +215,7 @@ final class DefinedClasses {
                 into.write(bytes);
                 this.blockAt = at + bytes.length;
             } else {
-                System.arraycopy(bytes, 0, this.block, this.blockLength, bytes.length);
+                System.arraycopy(bytes, 0, this.findBlock(), this.blockLength, bytes.length);
                 this.blockLength += bytes.length;
             }
             this.end = at + bytes.length;
@@ -233,7 +242,7 @@ final class DefinedClasses {
         byte[] bytes = new byte[(int) (place & LENGTH_MASK)];
         long at = place >>> LENGTH_BITS;
         if (at >= this.blockAt && at + bytes.length <= this.blockAt + this.blockLength) {
-            System.arraycopy(this.block, (int) (at - this.blockAt), bytes, 0, bytes.length);
+            System.arraycopy(this.findBlock(), (int) (at - this.blockAt), bytes, 0, bytes.length);
             return bytes;
         }
         RandomAccessFile from = this.file;
