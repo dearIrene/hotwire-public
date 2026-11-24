@@ -9,6 +9,7 @@ import java.util.ArrayList;
 import java.util.HashSet;
 import java.util.List;
 import java.util.Set;
+import java.util.concurrent.atomic.AtomicReference;
 import java.util.function.BiConsumer;
 import java.util.function.Consumer;
 import java.util.function.IntSupplier;
@@ -68,7 +69,7 @@ final class RebuildSteps {
         if (catchUpLater == null) {
             notSetUp = LiveObjects.replay(prepared, onGameThread);
             Tripwire.releaseComingOn();
-            Set<String> failed = startStatics(rebuilder);
+            Set<String> failed = startStatics(rebuilder, onGameThread);
             if (!failed.isEmpty()) {
                 revert(rebuilder, prepared, afterRebuild);
                 throw RebuildException.ofRestartOnly("the new static fields of " + failed + " cannot be set up while"
@@ -79,7 +80,7 @@ final class RebuildSteps {
                 int later = LiveObjects.replay(prepared, onGameThread);
                 Games.getNow().drawHoldFrame();
                 Tripwire.releaseComingOn();
-                startStatics(rebuilder);
+                startStatics(rebuilder, onGameThread);
                 rebuildObjects.run();
                 Games.getNow().drawHoldFrame();
                 return later;
@@ -97,16 +98,20 @@ final class RebuildSteps {
         return catchUpLater == null ? rebuildObjects : () -> { };
     }
 
-    private static Set<String> startStatics(ClassRebuilder rebuilder) {
+    private static Set<String> startStatics(ClassRebuilder rebuilder, Consumer<Runnable> onGameThread) {
         if (!rebuilder.hasStaticsToStart()) {
             return Set.of();
         }
-        Runnable close = Games.getNow().openRegistries();
-        try {
-            return rebuilder.startStatics();
-        } finally {
-            close.run();
-        }
+        AtomicReference<Set<String>> failed = new AtomicReference<>(Set.of());
+        onGameThread.accept(() -> {
+            Runnable close = Games.getNow().openRegistries();
+            try {
+                failed.set(rebuilder.startStatics());
+            } finally {
+                close.run();
+            }
+        });
+        return failed.get();
     }
 
     static void revert(ClassRebuilder rebuilder, ClassRebuilder.PreparedRebuild prepared,
