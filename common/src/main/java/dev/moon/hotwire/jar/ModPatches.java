@@ -18,7 +18,8 @@ public record ModPatches(Set<String> owns, Set<String> patches, Set<String> hook
         addsOnly = Set.copyOf(addsOnly);
         rebuildOnly = Set.copyOf(rebuildOnly);
         fieldsSetUp = Set.copyOf(fieldsSetUp);
-        owns = Set.copyOf(owns);
+
+        owns = owns.stream().map(String::intern).collect(Collectors.toUnmodifiableSet());
         calls = Set.copyOf(calls);
         asks = Set.copyOf(asks);
         patches = Set.copyOf(patches);
