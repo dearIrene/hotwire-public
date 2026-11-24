@@ -5,6 +5,7 @@ import dev.moon.hotwire.fabric.mixin.core.client.OptionsAccessor;
 import dev.moon.hotwire.registration.RecorderSupport;
 import dev.moon.hotwire.registration.Registration;
 import dev.moon.hotwire.registration.SequenceOrder;
+import java.util.Arrays;
 import java.util.List;
 import net.minecraft.client.KeyMapping;
 import net.minecraft.client.Minecraft;
@@ -33,6 +34,7 @@ public final class KeyBindingRegistration implements Registration {
         synchronized (modded) {
             if (modded.remove(this.binding)) {
                 GameParts.getOffKeys().add(this.binding);
+                dropFromGameKeys(this.binding);
                 rebuildGameKeys();
             }
         }
@@ -49,6 +51,16 @@ public final class KeyBindingRegistration implements Registration {
                 GameParts.getOffKeys().remove(this.binding);
                 rebuildGameKeys();
             }
+        }
+    }
+
+    @SuppressWarnings("ReferenceEquality")
+    private static void dropFromGameKeys(KeyMapping binding) {
+        Options options = Minecraft.getInstance().options;
+        if (options != null) {
+            OptionsAccessor access = (OptionsAccessor) options;
+            access.hotwire$setKeyMappings(Arrays.stream(access.hotwire$getKeyMappings())
+                    .filter(key -> key != binding).toArray(KeyMapping[]::new));
         }
     }
 
