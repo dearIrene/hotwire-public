@@ -709,16 +709,16 @@ public final class SwitchApplier {
         return dryRun.applied();
     }
 
-    private void rebuildForRefused(Set<String> loadedMeanwhile, OnState kept) {
+    private void rebuildForRefused(Set<String> loadedMeanwhile, OnState staying) {
         this.rebuilder.endWatchingLoads();
         List<String> mixedOtherwise = loadedMeanwhile.stream()
-                .filter(name -> !kept.mods().equals(this.rebuilder.findLoadedWith(name))).toList();
+                .filter(name -> !staying.mods().equals(this.rebuilder.findLoadedWith(name))).toList();
         if (mixedOtherwise.isEmpty()) {
             return;
         }
         try {
-            this.rebuildLoadedMeanwhile(mixedOtherwise, kept.mods());
-            mixedOtherwise.forEach(name -> this.rebuilder.rememberLoadedWith(name, kept.mods()));
+            this.rebuildLoadedMeanwhile(mixedOtherwise, staying.mods());
+            mixedOtherwise.forEach(name -> this.rebuilder.rememberLoadedWith(name, staying.mods()));
         } catch (RebuildException | RuntimeException | LinkageError e) {
             LOGGER.error("[Hotwire] {} loaded while a refused switch ran and keep the mix made for it", mixedOtherwise,
                     e);
