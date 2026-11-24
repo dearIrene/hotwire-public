@@ -180,8 +180,7 @@ public final class GlfwCallbacks {
                 }
                 try {
                     Object value = field.get(object);
-                    Object java = value == null ? null
-                            : unwrap(value instanceof Callback callback ? Callback.get(callback.address()) : value);
+                    Object java = unwrap(value);
                     String mod = java == null ? null : Owners.findModOrShipper(java.getClass());
                     if (value == null || java == null) {
                         continue;
@@ -279,7 +278,7 @@ public final class GlfwCallbacks {
                 }
                 try {
                     Object value = field.get(mods);
-                    Object java = unwrap(value instanceof Callback callback ? Callback.get(callback.address()) : value);
+                    Object java = unwrap(value);
                     if (java == null) {
                         continue;
                     }
@@ -311,7 +310,7 @@ public final class GlfwCallbacks {
                     continue;
                 }
                 Object value = field.get(null);
-                Object java = unwrap(value instanceof Callback pointer ? Callback.get(pointer.address()) : value);
+                Object java = unwrap(value);
                 if (type.isInstance(java) && !mod.equals(Owners.findModOrShipper(java.getClass()))) {
                     return java;
                 }
