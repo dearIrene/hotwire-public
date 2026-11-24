@@ -1,6 +1,7 @@
 package dev.moon.hotwire.engine;
 
 import dev.moon.hotwire.add.ModAdder;
+import dev.moon.hotwire.concurrent.AheadWork;
 import dev.moon.hotwire.concurrent.Tasks;
 import dev.moon.hotwire.seam.Games;
 import dev.moon.hotwire.seam.SharedChange;
@@ -48,6 +49,7 @@ final class JarRequests {
 
     @SuppressWarnings("FutureReturnValueIgnored")
     void add(Path jar, AddMode mode, boolean byPlayer, Consumer<ModAdder.Result> then) {
+        AheadWork.ask();
         if (mode == AddMode.NEXT_START && this.engine.isInModsFolder(jar)) {
             String name = String.valueOf(jar.getFileName());
             ModAdder.Result queued = new ModAdder.Result.Queued(name, Lang.get("hotwire.folder.next_start", name));

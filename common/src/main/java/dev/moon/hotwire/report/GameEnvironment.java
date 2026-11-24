@@ -1,6 +1,7 @@
 package dev.moon.hotwire.report;
 
 import dev.moon.hotwire.classfile.GameNames;
+import dev.moon.hotwire.concurrent.AheadWork;
 import dev.moon.hotwire.engine.InstalledMods;
 import dev.moon.hotwire.engine.LoadedMods;
 import dev.moon.hotwire.jar.FileHashes;
@@ -18,6 +19,7 @@ import java.util.Locale;
 import java.util.Map;
 import java.util.TreeMap;
 import java.util.concurrent.CompletableFuture;
+import java.util.concurrent.ForkJoinPool;
 import java.util.concurrent.TimeUnit;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -47,7 +49,8 @@ public final class GameEnvironment {
 
     public void hashSoon() {
         CompletableFuture.delayedExecutor(HASH_DELAY_SECONDS, TimeUnit.SECONDS).execute(
-                () -> this.hashJars("on a thread of the shared pool"));
+                () -> AheadWork.runWhenAsked("report hashes", () -> ForkJoinPool.commonPool().execute(
+                        () -> this.hashJars("on a thread of the shared pool"))));
     }
 
     private void hashJars(String where) {

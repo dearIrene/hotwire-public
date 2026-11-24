@@ -31,6 +31,8 @@ public final class Flags {
 
     public static final boolean CHECK_LOOK = Boolean.parseBoolean(System.getProperty("hotwire.checkLook"));
 
+    public static final boolean AHEAD_AT_START = Boolean.parseBoolean(System.getProperty("hotwire.aheadAtStart"));
+
     public static final boolean NO_LOOK = Boolean.parseBoolean(System.getProperty("hotwire.noLook"));
 
     public static final boolean CONTENT_LEAVES = Boolean.parseBoolean(System.getProperty("hotwire.contentLeaves"));

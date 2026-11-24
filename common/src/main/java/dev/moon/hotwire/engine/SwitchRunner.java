@@ -1,6 +1,7 @@
 package dev.moon.hotwire.engine;
 
 import dev.moon.hotwire.add.LoaderModList;
+import dev.moon.hotwire.concurrent.AheadWork;
 import dev.moon.hotwire.plan.SwitchPlan;
 import dev.moon.hotwire.rebuild.TransformerChain;
 import dev.moon.hotwire.redefine.DueCoroutines;
@@ -303,6 +304,7 @@ public final class SwitchRunner {
     }
 
     public void prepareAhead(List<String> ids, boolean off) {
+        AheadWork.ask();
         if (off) {
             List<String> order = this.switcher.planOff(ids).order();
             if (!this.units.findWorldContent(order).isEmpty() || !SaveHooks.findStopped(order).isEmpty()) {
@@ -393,6 +395,7 @@ public final class SwitchRunner {
     }
 
     private CheckedResult runSwitch(List<String> ids, boolean off) {
+        AheadWork.ask();
         LOGGER.info("[Hotwire] turning {} {}", off ? "off" : "on", ids);
         ActionJournal.Entry journal = ActionJournal.get().begin(off ? ActionJournal.Action.OFF
                 : ActionJournal.Action.ON, ids);

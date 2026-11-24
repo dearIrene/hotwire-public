@@ -1,5 +1,6 @@
 package dev.moon.hotwire.engine;
 
+import dev.moon.hotwire.concurrent.AheadWork;
 import dev.moon.hotwire.seam.Games;
 import dev.moon.hotwire.ui.ModScreen;
 import dev.moon.hotwire.ui.ScreenOpenTimer;
@@ -25,7 +26,10 @@ public final class EngineScreens {
 
     public Object makeScreen(@Nullable Object back) {
         ScreenOpenTimer timer = new ScreenOpenTimer();
-        return this.owner.units.wrapScreen(() -> this.buildScreen(back, timer), timer);
+        return this.owner.units.wrapScreen(() -> {
+            AheadWork.ask();
+            return this.buildScreen(back, timer);
+        }, timer);
     }
 
     public Object makeDeveloperSettings(@Nullable Object back) {

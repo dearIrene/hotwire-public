@@ -3,6 +3,8 @@ package dev.moon.hotwire.fabric;
 import dev.moon.hotwire.add.AddSupport;
 import dev.moon.hotwire.cache.CacheBudget;
 import dev.moon.hotwire.cache.CacheStore;
+import dev.moon.hotwire.concurrent.AheadWork;
+import dev.moon.hotwire.config.Flags;
 import dev.moon.hotwire.config.HotwireSettings;
 import dev.moon.hotwire.dev.DevSession;
 import dev.moon.hotwire.engine.CacheLimit;
@@ -414,7 +416,7 @@ final class EngineStart {
         ModPolicy.setNestedJars(settings.getNestedJars());
 
         ModIcons icons = new ModIcons(installed);
-        icons.readAhead(installed.getGraph().getIds());
+        AheadWork.runWhenAsked("icons", () -> icons.readAhead(installed.getGraph().getIds()));
         laps.endLap("settings, folders, icons");
         HotwireEngine engine;
         try {
@@ -442,14 +444,20 @@ final class EngineStart {
                 }
                 return known != null ? known : ((GameClasses) parts.classes()).readOriginalBytes(internal);
             });
-            parts.runner().preloadStatics(parts.instrumentation());
+            AheadWork.runWhenAsked("statics", () -> parts.runner().preloadStatics(parts.instrumentation()));
             laps.endLap("fields");
 
             parts.runner().getSwitcher().getFiller().watchPlaying(Games.getNow()::isPlaying);
-            if (settings.isAutoFillOn()) {
-                parts.runner().getSwitcher().getFiller().fillAll();
-            } else {
-                parts.runner().getSwitcher().getFiller().fillChanged();
+            AheadWork.runWhenAsked("switch cache", () -> {
+                if (settings.isAutoFillOn()) {
+                    parts.runner().getSwitcher().getFiller().fillAll();
+                } else {
+                    parts.runner().getSwitcher().getFiller().fillChanged();
+                }
+            });
+
+            if (Flags.AHEAD_AT_START || DevSetups.get().inSetup()) {
+                AheadWork.ask();
             }
             laps.endLap("switch cache");
             forgetStartFailure(gameDir);

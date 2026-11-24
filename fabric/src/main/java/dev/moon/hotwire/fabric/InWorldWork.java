@@ -1,5 +1,6 @@
 package dev.moon.hotwire.fabric;
 
+import dev.moon.hotwire.concurrent.AheadWork;
 import dev.moon.hotwire.engine.HotwireEngine;
 import dev.moon.hotwire.engine.JvmParts;
 import java.time.Duration;
@@ -18,11 +19,13 @@ final class InWorldWork {
     static void lookAheadSoon(HotwireEngine engine) {
         CompletableFuture.delayedExecutor(LOOK_DELAY.toSeconds(), TimeUnit.SECONDS).execute(() -> {
             JvmParts parts = engine.findParts();
-            if (parts != null && Minecraft.getInstance().level != null) {
-                parts.runner().lookAheadForAll();
+            AheadWork.runWhenAsked("look in a world", () -> {
+                if (parts != null && Minecraft.getInstance().level != null) {
+                    parts.runner().lookAheadForAll();
 
-                parts.runner().preloadStatics(parts.instrumentation());
-            }
+                    parts.runner().preloadStatics(parts.instrumentation());
+                }
+            });
         });
     }
 
@@ -32,9 +35,11 @@ final class InWorldWork {
         }
         CompletableFuture.delayedExecutor(FILL_DELAY.toSeconds(), TimeUnit.SECONDS).execute(() -> {
             JvmParts parts = engine.findParts();
-            if (parts != null && Minecraft.getInstance().level != null) {
-                parts.runner().getSwitcher().getFiller().fillLoadedSince();
-            }
+            AheadWork.runWhenAsked("switch cache in a world", () -> {
+                if (parts != null && Minecraft.getInstance().level != null) {
+                    parts.runner().getSwitcher().getFiller().fillLoadedSince();
+                }
+            });
         });
     }
 }
