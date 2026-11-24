@@ -66,6 +66,9 @@ public final class BackgroundReload {
 
     void dropDue() {
         this.due = null;
+        if (!this.isBusy()) {
+            this.runAfter();
+        }
     }
 
     public void runAfterReload(Runnable then) {
@@ -91,6 +94,10 @@ public final class BackgroundReload {
         ReloadRun now = this.running;
         if (now != null && now.reload() == reload) {
             this.running = null;
+
+            if (!this.isBusy()) {
+                this.runAfter();
+            }
         }
     }
 

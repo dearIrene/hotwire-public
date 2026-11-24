@@ -591,9 +591,15 @@ public final class ResourceReload {
         awaitingAssets = List.copyOf(mods);
     }
 
+    @SuppressWarnings("ReferenceEquality")
     public static void endAssetWait() {
-        awaitingAssets = List.of();
+        List<String> ending = awaitingAssets;
         forgetPausedReload();
+        Minecraft.getInstance().execute(() -> GameParts.getBackgroundReload().runAfterReload(() -> {
+            if (awaitingAssets == ending) {
+                awaitingAssets = List.of();
+            }
+        }));
     }
 
     public static boolean isAwaitingAssets() {
