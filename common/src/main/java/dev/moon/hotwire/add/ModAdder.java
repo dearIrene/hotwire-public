@@ -738,6 +738,8 @@ public final class ModAdder {
 
             CountDownLatch backedOut = new CountDownLatch(1);
             ModSwitcher.Result switched;
+            CompletableFuture<Map<String, List<String>>> started = null;
+            boolean tookBack = false;
             try {
                 CrashGuard.onSwitched(ids);
                 this.engine.getApplier().getCatchUps().hold(true);
@@ -771,7 +773,7 @@ public final class ModAdder {
                             this.game.reloadForAssets(parts.values());
                         }, this.reloads::runAfterReload);
                 this.engine.showAddStep(3);
-                CompletableFuture<Map<String, List<String>>> started = this.game.queueEntrypoints(ids, grew, backedOut,
+                started = this.game.queueEntrypoints(ids, grew, backedOut,
                         this.engine.getSide(), setUp, this.engine::findLoaded);
                 hold.releaseGame();
                 Map<String, List<String>> clientStarted = started.get(ENTRYPOINT_WAIT.toMillis(),
@@ -796,9 +798,11 @@ public final class ModAdder {
                 if (!(e instanceof ExecutionException)) {
                     hold.pauseGame();
                 }
+                tookBack = true;
                 return this.backOut(ids, name, cause, grew, undo, e);
             } catch (InterruptedException e) {
                 hold.pauseGame();
+                tookBack = true;
                 Result back = this.backOut(ids, name, e, grew, undo, e);
                 Thread.currentThread().interrupt();
                 return back;
@@ -806,6 +810,10 @@ public final class ModAdder {
                 this.engine.getApplier().getCatchUps().clear();
                 backedOut.countDown();
                 hold.release();
+
+                if (tookBack && isToldFine(started)) {
+                    LifecycleListeners.finishStart(ids, false);
+                }
             }
             parts.values().forEach(part -> FailedAddJars.remove(part.path()));
             this.engine.rememberParts(parts.values().stream().map(Part::jar).toList());
@@ -829,6 +837,10 @@ public final class ModAdder {
         }
         added.ids().forEach(GameRegistrations.getJournal()::forget);
         return new Result.Failed(said, cause);
+    }
+
+    static boolean isToldFine(@Nullable CompletableFuture<?> started) {
+        return started != null && started.isDone() && !started.isCompletedExceptionally();
     }
 
     private Result backOut(List<String> ids, String name, Throwable cause, List<String> grew, AddUndo undo,
