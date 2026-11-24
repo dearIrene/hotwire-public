@@ -40,7 +40,7 @@ public final class Fields {
     }
     private static volatile Function<Class<?>, byte @Nullable []> bytesOf = type -> null;
 
-    private static final class FieldCache {
+    static final class FieldCache {
         private volatile FieldSlots.@Nullable Read read;
         private volatile @Nullable ReferenceFieldList statics;
         private volatile @Nullable ReferenceFieldList instances;
@@ -49,13 +49,6 @@ public final class Fields {
     private record ReferenceFieldList(List<FieldSlots.Slot> slots, List<FieldSlots.Slot> moving,
             List<FieldSlots.Read> from, boolean complete) {
     }
-
-    private static final ClassValue<FieldCache> CACHES = new ClassValue<>() {
-        @Override
-        protected FieldCache computeValue(Class<?> type) {
-            return new FieldCache();
-        }
-    };
 
     private static final ClassValue<List<FieldSlots.Slot>> RECORD_PARTS = new ClassValue<>() {
         @Override
@@ -113,7 +106,7 @@ public final class Fields {
     }
 
     private static FieldSlots.Read readOf(Class<?> type) {
-        FieldCache cache = CACHES.get(type);
+        FieldCache cache = Owners.findFields(type);
         FieldSlots.Read read = cache.read;
         if (read == null) {
             read = FieldSlots.read(type, bytesOf.apply(type), loaded);
@@ -178,7 +171,7 @@ public final class Fields {
     }
 
     private static ReferenceFieldList findList(Class<?> owner, boolean statics) {
-        FieldCache cache = CACHES.get(owner);
+        FieldCache cache = Owners.findFields(owner);
         ReferenceFieldList holding = statics ? cache.statics : cache.instances;
         if (holding == null || (!holding.complete() && !isCurrent(owner, statics, holding.from()))) {
             holding = findHolding(owner, statics);
@@ -197,7 +190,7 @@ public final class Fields {
         for (Class<?> type = owner; type != null && !type.getName().startsWith("java."); type = statics ? null
                 : type.getSuperclass()) {
             refresh(type);
-            if (CACHES.get(type).read != from.get(at++)) {
+            if (Owners.findFields(type).read != from.get(at++)) {
                 return false;
             }
         }
@@ -205,7 +198,7 @@ public final class Fields {
     }
 
     private static void refresh(Class<?> type) {
-        FieldCache cache = CACHES.get(type);
+        FieldCache cache = Owners.findFields(type);
         FieldSlots.Read read = cache.read;
         if (read == null || read.unloaded().isEmpty()) {
             return;

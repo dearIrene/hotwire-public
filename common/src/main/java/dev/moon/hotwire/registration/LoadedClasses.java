@@ -17,19 +17,16 @@ record LoadedClasses(Map<String, Class<?>> byName, Map<String, Set<String>> used
         Map<String, List<Class<?>>> classesOf) {
     static final String NESTED = "nested:";
 
-    private record Kind(String internal, @Nullable String mod, @Nullable String group) {
+    record Kind(String internal, @Nullable String mod, @Nullable String group) {
     }
 
-    private static final ClassValue<Kind> KINDS = new ClassValue<>() {
-        @Override
-        protected Kind computeValue(Class<?> type) {
-            String mod = Owners.findModOf(type);
-            String shipper = mod == null && Owners.isNestedLibrary(type)
-                    ? Owners.findShippedBy(type) : null;
-            return new Kind(Type.getInternalName(type), mod, mod != null ? mod
-                    : shipper != null ? NESTED + shipper : null);
-        }
-    };
+    static Kind makeKind(Class<?> type) {
+        String mod = Owners.findModOf(type);
+        String shipper = mod == null && Owners.isNestedLibrary(type)
+                ? Owners.findShippedBy(type) : null;
+        return new Kind(Type.getInternalName(type), mod, mod != null ? mod
+                : shipper != null ? NESTED + shipper : null);
+    }
 
     static LoadedClasses scan(Instrumentation instrumentation, Collection<String> mods,
             Function<String, Set<String>> usedBy) {
@@ -40,7 +37,8 @@ record LoadedClasses(Map<String, Class<?>> byName, Map<String, Set<String>> used
         Map<String, Set<String>> used = new HashMap<>();
         Map<String, List<Class<?>>> classesOf = new HashMap<>();
         for (Class<?> type : all) {
-            Kind kind = type.isArray() || type.isPrimitive() || type.isHidden() ? null : KINDS.get(type);
+            Kind kind = type.isArray() || type.isPrimitive() || type.isHidden() ? null
+                    : Owners.findScanned(type, LoadedClasses::makeKind);
             if (kind == null) {
                 continue;
             }

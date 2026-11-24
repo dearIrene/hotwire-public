@@ -12,13 +12,17 @@ import java.net.URL;
 import java.nio.file.FileSystemNotFoundException;
 import java.nio.file.Path;
 import java.security.CodeSource;
+import java.util.Collections;
 import java.util.HashMap;
 import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
 import java.util.Objects;
+import java.util.Optional;
 import java.util.Set;
+import java.util.WeakHashMap;
 import java.util.concurrent.atomic.AtomicInteger;
+import java.util.function.Function;
 import net.fabricmc.loader.api.FabricLoader;
 import net.fabricmc.loader.api.ModContainer;
 import net.fabricmc.loader.api.metadata.ModDependency;
@@ -42,7 +46,11 @@ public final class Owners {
         private volatile @Nullable String mod;
         private volatile @Nullable String nested;
         private volatile @Nullable String shipper;
-        private volatile int learned;
+
+        private volatile int learned = -1;
+
+        private volatile LoadedClasses.@Nullable Kind scanned;
+        private volatile Fields.@Nullable FieldCache fields;
     }
 
     private static final class Jars {
@@ -54,12 +62,12 @@ public final class Owners {
 
         private final AtomicInteger learned = new AtomicInteger();
 
+        private final Map<CodeSource, Optional<Path>> jarOf = Collections.synchronizedMap(new WeakHashMap<>());
+
         private final ClassValue<Kind> answers = new ClassValue<>() {
             @Override
             protected Kind computeValue(Class<?> type) {
-                Kind answer = new Kind();
-                Jars.this.answer(type, answer);
-                return answer;
+                return new Kind();
             }
         };
 
@@ -107,7 +115,8 @@ public final class Owners {
 
         private void answer(Class<?> type, Kind into) {
             int before = this.learned.get();
-            Path jar = findJarOf(type);
+            CodeSource source = type.getProtectionDomain().getCodeSource();
+            Path jar = source == null ? null : this.jarOf.computeIfAbsent(source, Owners::findJarOf).orElse(null);
             String mod = jar == null ? null : this.lookUp(jar);
             Path name = jar == null || mod == null ? null : jar.getFileName();
             boolean game = name != null && GameLibraries.has(Type.getInternalName(type), name.toString());
@@ -164,6 +173,32 @@ public final class Owners {
     private static Kind of(Class<?> type) {
         getCallers();
         return Objects.requireNonNull(jars).find(type);
+    }
+
+    static Fields.FieldCache findFields(Class<?> type) {
+        getCallers();
+        Kind kind = Objects.requireNonNull(jars).answers.get(type);
+        Fields.FieldCache cache = kind.fields;
+        if (cache == null) {
+            synchronized (kind) {
+                cache = kind.fields;
+                if (cache == null) {
+                    cache = new Fields.FieldCache();
+                    kind.fields = cache;
+                }
+            }
+        }
+        return cache;
+    }
+
+    static LoadedClasses.Kind findScanned(Class<?> type, Function<Class<?>, LoadedClasses.Kind> note) {
+        Kind kind = of(type);
+        LoadedClasses.Kind noted = kind.scanned;
+        if (noted == null) {
+            noted = note.apply(type);
+            kind.scanned = noted;
+        }
+        return noted;
     }
 
     static long findVersion() {
@@ -326,14 +361,13 @@ public final class Owners {
         }
     }
 
-    private static @Nullable Path findJarOf(Class<?> type) {
-        CodeSource source = type.getProtectionDomain().getCodeSource();
-        URL location = source == null ? null : source.getLocation();
+    static Optional<Path> findJarOf(CodeSource source) {
+        URL location = source.getLocation();
         try {
-            return location == null || !"file".equals(location.getProtocol()) ? null
-                    : Path.of(location.toURI()).toAbsolutePath().normalize();
+            return location == null || !"file".equals(location.getProtocol()) ? Optional.empty()
+                    : Optional.of(Path.of(location.toURI()).toAbsolutePath().normalize());
         } catch (URISyntaxException | IllegalArgumentException e) {
-            return null;
+            return Optional.empty();
         }
     }
 }
