@@ -214,9 +214,12 @@ public final class StoreJars {
                 if (why != null) {
                     this.say.accept(why, true);
                 }
-                this.queued.clear();
+
+                boolean batch = !this.queued.isEmpty();
                 this.queued.addAll(jars);
-                this.offerNext();
+                if (!batch) {
+                    this.offerNext();
+                }
             });
         });
     }
