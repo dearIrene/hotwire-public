@@ -113,10 +113,6 @@ public final class Rows<T> extends Part {
         return this;
     }
 
-    public boolean isNearEnd(int within) {
-        return this.wanted + this.getHeight() > this.count * this.pitch - within;
-    }
-
     public @Nullable T findAt(double y) {
         for (Entry<T> entry : this.entries) {
             if (!entry.leaving && entry.part.isVisible() && y >= entry.placedY && y < entry.placedY + this.pitch) {

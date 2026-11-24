@@ -15,6 +15,8 @@ import java.util.concurrent.Executors;
 import java.util.concurrent.atomic.AtomicInteger;
 import java.util.function.Consumer;
 import java.util.function.Predicate;
+import java.util.stream.Collectors;
+import java.util.stream.Stream;
 import org.jspecify.annotations.Nullable;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -84,7 +86,8 @@ public final class StoreModel implements AutoCloseable {
     private volatile @Nullable String failure;
     private volatile long typedAt;
     private volatile boolean searchPending;
-    private volatile boolean pageWanted;
+
+    private volatile int page;
 
     private volatile Set<String> installedProjects = Set.of();
 
@@ -194,16 +197,38 @@ public final class StoreModel implements AutoCloseable {
         }
     }
 
-    public void askMore() {
-        if (!this.loading && !this.pageWanted && this.cards.size() < this.total) {
-            this.pageWanted = true;
-            this.ask(this.cards.size());
+    public int getPage() {
+        return this.page;
+    }
+
+    public int countPages() {
+        return (this.total + PAGE - 1) / PAGE;
+    }
+
+    public void showPage(int page) {
+        if (page == this.page || page < 0 || page >= this.countPages()) {
+            return;
         }
+        this.page = page;
+        this.failure = null;
+        Answer answered;
+        synchronized (this.answers) {
+            answered = this.answers.get(this.findKey(this.kind, this.words, this.category));
+        }
+        if (answered != null) {
+            this.asked.incrementAndGet();
+            this.cards = answered.cards();
+            this.loading = false;
+            this.onChanged.run();
+            return;
+        }
+        this.cards = List.of();
+        this.ask(page * PAGE);
     }
 
     private void searchFresh() {
         this.failure = null;
-        this.pageWanted = false;
+        this.page = 0;
         Answer answered;
         synchronized (this.answers) {
             answered = this.answers.get(this.findKey(this.kind, this.words, this.category));
@@ -224,9 +249,8 @@ public final class StoreModel implements AutoCloseable {
         this.ask(0);
     }
 
-    private void show(ModrinthClient.Search found, List<Card> before, ModrinthClient.Kind kind, String words,
-            String category) {
-        List<Card> next = new ArrayList<>(before);
+    private void show(ModrinthClient.Search found, ModrinthClient.Kind kind, String words, String category) {
+        List<Card> next = new ArrayList<>();
         for (ModrinthClient.Hit hit : found.hits()) {
             next.add(this.makeCard(hit));
         }
@@ -240,14 +264,14 @@ public final class StoreModel implements AutoCloseable {
         ModrinthClient.Kind kind = this.kind;
         String words = this.words;
         String category = this.category;
-        String key = this.client.getScope() + ":" + kind.getProjectType() + ":" + words + ":" + category + ":0";
+        String key = this.findPageKey(kind, words, category, 0);
         StoreCache.Entry saved = this.cache.findTextEntry(StoreCache.Kind.SEARCH, key).orElse(null);
         ModrinthClient.Search found = saved == null ? null : this.readCached(saved.text());
         if (saved == null || found == null) {
             return false;
         }
         int ticket = this.asked.incrementAndGet();
-        this.show(found, List.of(), kind, words, category);
+        this.show(found, kind, words, category);
         this.onChanged.run();
         if (!saved.fresh()) {
             this.worker.execute(() -> this.refresh(ticket, kind, words, category, 0, key));
@@ -256,7 +280,13 @@ public final class StoreModel implements AutoCloseable {
     }
 
     private String findKey(ModrinthClient.Kind kind, String words, String category) {
-        return this.client.getScope() + ":" + kind + ":" + words + ":" + category + this.findHiddenKey();
+        return this.client.getScope() + ":" + kind + ":" + words + ":" + category + ":" + this.page
+                + this.findHiddenKey();
+    }
+
+    private String findPageKey(ModrinthClient.Kind kind, String words, String category, int offset) {
+        return this.client.getScope() + ":" + kind.getProjectType() + ":" + words + ":" + category + ":" + offset
+                + this.findHiddenKey();
     }
 
     private String findHiddenKey() {
@@ -280,9 +310,8 @@ public final class StoreModel implements AutoCloseable {
         }
         this.client.setHiddenCategories(hidden);
         this.saveHidden.accept(this.client.getHiddenCategories());
-        if (this.client.getHiddenCategories().contains(this.category)) {
-            this.category = "";
-        }
+        this.category = Stream.of(this.category.split(",", -1))
+                .filter(tag -> !this.client.getHiddenCategories().contains(tag)).collect(Collectors.joining(","));
         this.searchFresh();
     }
 
@@ -336,8 +365,7 @@ public final class StoreModel implements AutoCloseable {
         this.loading = true;
         this.onChanged.run();
         this.worker.execute(() -> {
-            String key = this.client.getScope() + ":" + kind.getProjectType() + ":" + words + ":" + category + ":"
-                    + offset + this.findHiddenKey();
+            String key = this.findPageKey(kind, words, category, offset);
             ModrinthClient.Search found;
             boolean stale;
             try {
@@ -352,7 +380,6 @@ public final class StoreModel implements AutoCloseable {
                 if (ticket == this.asked.get()) {
                     this.failure = e.getMessage() == null ? e.toString() : e.getMessage();
                     this.loading = false;
-                    this.pageWanted = false;
                     this.onChanged.run();
                 }
                 LOGGER.info("[Hotwire] the store's search failed: {}", e.toString());
@@ -361,8 +388,7 @@ public final class StoreModel implements AutoCloseable {
             if (ticket != this.asked.get()) {
                 return;
             }
-            this.show(found, offset == 0 ? List.of() : this.cards, kind, words, category);
-            this.pageWanted = false;
+            this.show(found, kind, words, category);
             this.onChanged.run();
             if (stale) {
                 this.refresh(ticket, kind, words, category, offset, key);
@@ -383,12 +409,9 @@ public final class StoreModel implements AutoCloseable {
         if (ticket != this.asked.get()) {
             return;
         }
-        List<Card> next = new ArrayList<>(this.cards.subList(0, Math.min(offset, this.cards.size())));
+        List<Card> next = new ArrayList<>();
         for (ModrinthClient.Hit hit : fresh.hits()) {
             next.add(this.makeCard(hit));
-        }
-        if (offset + PAGE < this.cards.size()) {
-            next.addAll(this.cards.subList(offset + PAGE, this.cards.size()));
         }
         this.cards = Collections.unmodifiableList(next);
         this.total = fresh.total();

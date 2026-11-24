@@ -238,9 +238,8 @@ public final class ModrinthClient {
         facets.add(List.of("project_type:" + kind.getProjectType()));
         facets.add(this.findLoaders(kind).stream().map(loader -> "categories:" + loader).toList());
         facets.add(List.of("versions:" + this.findVersionFor(kind)));
-        if (!category.isEmpty()) {
-            facets.add(List.of("categories:" + category));
-        }
+        List<String> tags = category.isEmpty() ? List.of() : List.of(category.split(",", -1));
+        tags.forEach(tag -> facets.add(List.of("categories:" + tag)));
         Side runs = this.side;
         if (runs != Side.ANY) {
             facets.add(List.of("client_side:optional", runs == Side.CLIENT ? "client_side:required"
@@ -249,7 +248,7 @@ public final class ModrinthClient {
                     : "server_side:required"));
         }
         for (String hidden : this.hiddenCategories) {
-            if (!hidden.equals(category)) {
+            if (!tags.contains(hidden)) {
                 facets.add(List.of("categories!=" + hidden));
             }
         }

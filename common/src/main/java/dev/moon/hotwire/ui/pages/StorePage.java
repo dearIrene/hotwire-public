@@ -26,6 +26,7 @@ import java.util.ArrayList;
 import java.util.List;
 import java.util.Locale;
 import java.util.function.Consumer;
+import java.util.stream.Collectors;
 import org.jspecify.annotations.Nullable;
 
 public final class StorePage {
@@ -53,6 +54,9 @@ public final class StorePage {
     public final StoreModel model;
     public final TextField search;
     public final StoreDetail detail;
+
+    private static final int NEAR = 2;
+
     private final Game game;
     private final StoreIcons icons;
     private final Popup popup;
@@ -63,6 +67,10 @@ public final class StorePage {
     private final Line chips = Kit.row().gap(4);
     private final Push hide;
     private final Text note = Kit.dim("");
+
+    private final Line pages = Kit.row().gap(4);
+    private int pageShown = -1;
+    private int pagesCounted = -1;
     private final Rows<GridLine> rows = new Rows<GridLine>(line -> line.cards().getFirst().hit().projectId() + "/"
             + line.across(), this::makeGridLine, CARD, GAP).hideMark();
     private List<StoreCategories.Group> groups = List.of();
@@ -96,7 +104,7 @@ public final class StorePage {
         this.part = Kit.column(
                 new Flow(Kit.fit(this.search).width(160).height(20), this.kinds, this.chips).gap(8).endLast(),
                 Kit.row(this.categories.grow(1), this.hide.spare()).gap(8).cross(Line.Cross.CENTER), this.note,
-                this.rows)
+                this.rows, this.pages)
                 .pad(12, 10).gap(8).grow(1);
         this.showKind(model.getKind(), model.getCategory());
     }
@@ -122,17 +130,25 @@ public final class StorePage {
         return Lang.get(tag.isEmpty() ? "hotwire.store.category.all" : "hotwire.store.category." + tag);
     }
 
-    private void showCategory(String chosen) {
+    private static List<String> splitTags(String category) {
+        return category.isEmpty() ? List.of() : List.of(category.split(",", -1));
+    }
+
+    private void showCategory(String category) {
+        List<String> chosen = splitTags(category);
         this.categories.clear();
-        int lit = 0;
+        int lit = -1;
         for (int at = 0; at < this.groups.size(); at++) {
             StoreCategories.Group group = this.groups.get(at);
-            boolean has = group.parts().contains(chosen) || (group.parts().isEmpty() && group.name().equals(chosen));
-            lit = has ? at : lit;
-            this.categories.tab(group.parts().isEmpty() ? nameTag(group.name())
-                    : (has ? nameTag(chosen) : Lang.get("hotwire.store.section." + group.name())) + " ▾");
+            List<String> has = group.parts().stream().filter(chosen::contains).toList();
+            boolean alone = group.parts().isEmpty();
+            boolean ticked = alone && (chosen.isEmpty() ? group.name().isEmpty() : chosen.contains(group.name()));
+            lit = lit < 0 && (ticked || !has.isEmpty()) ? at : lit;
+            this.categories.tab(alone ? (ticked && !chosen.isEmpty() ? "✓ " : "") + nameTag(group.name())
+                    : (has.isEmpty() ? Lang.get("hotwire.store.section." + group.name())
+                            : has.stream().map(StorePage::nameTag).collect(Collectors.joining(", "))) + " ▾");
         }
-        this.categories.choose(lit);
+        this.categories.choose(Math.max(0, lit));
         List<String> hidden = this.model.getHiddenCategories();
         for (int at = 0; at < this.groups.size(); at++) {
             StoreCategories.Group group = this.groups.get(at);
@@ -155,13 +171,21 @@ public final class StorePage {
             this.pickCategory(group.name());
             return;
         }
-        this.openMenu(this.categories, group.parts().stream().map(tag -> new Popup.Item(nameTag(tag), Palette.TEXT,
-                () -> this.pickCategory(tag))).toList());
+        List<String> chosen = splitTags(this.model.getCategory());
+        this.openMenu(this.categories, group.parts().stream().map(tag -> new Popup.Item(nameTag(tag),
+                chosen.contains(tag) ? Palette.ON : Palette.TEXT, () -> this.pickCategory(tag))).toList());
     }
 
     private void pickCategory(String tag) {
-        this.model.setCategory(tag);
-        this.showCategory(tag);
+        List<String> chosen = new ArrayList<>(splitTags(this.model.getCategory()));
+        if (tag.isEmpty()) {
+            chosen.clear();
+        } else if (!chosen.remove(tag)) {
+            chosen.add(tag);
+        }
+        String category = String.join(",", chosen);
+        this.model.setCategory(category);
+        this.showCategory(category);
     }
 
     private void openMenu(Part by, List<Popup.Item> items) {
@@ -244,9 +268,40 @@ public final class StorePage {
         }
         this.note.set(words).ink(failure != null && cards.isEmpty() ? Palette.BAD : Palette.DIM)
                 .show(!words.isEmpty());
-        if (this.rows.isNearEnd(2 * CARD)) {
-            this.model.askMore();
+        this.showPages();
+    }
+
+    private void showPages() {
+        int page = this.model.getPage();
+        int count = this.model.countPages();
+        if (page == this.pageShown && count == this.pagesCounted) {
+            return;
         }
+        this.pageShown = page;
+        this.pagesCounted = count;
+        this.pages.clear();
+        if (count < 2) {
+            return;
+        }
+        this.pages.with(Kit.space(), this.makePage("‹", page - 1).active(page > 0));
+        int last = -1;
+        for (int at = 0; at < count; at++) {
+            if (at == 0 || at == count - 1 || Math.abs(at - page) <= NEAR) {
+                if (at != last + 1) {
+                    this.pages.with(Kit.dim("…"));
+                }
+                this.pages.with(this.makePage(Integer.toString(at + 1), at).lead(at == page));
+                last = at;
+            }
+        }
+        this.pages.with(this.makePage("›", page + 1).active(page < count - 1), Kit.space());
+    }
+
+    private Push makePage(String label, int page) {
+        return Kit.push(label, () -> {
+            this.model.showPage(page);
+            this.rows.scrollToTop();
+        });
     }
 
     private Part makeGridLine(GridLine cards) {
