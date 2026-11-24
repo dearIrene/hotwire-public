@@ -210,7 +210,7 @@ public final class UpdateCheck {
         });
         this.installedProjects = known;
         this.idByProject = ids;
-        List<UpdateOffer> found = this.makeOffers(newest, hashByName, idByName, memory);
+        List<UpdateOffer> found = this.holdNamed(this.makeOffers(newest, hashByName, idByName, memory), hashByName);
 
         memory.retainTold(found.stream().map(UpdateOffer::versionId).toList());
         int fresh = 0;
@@ -301,6 +301,32 @@ public final class UpdateCheck {
 
     public static void setIgnored(Supplier<List<String>> ignored) {
         ignoredUpdates = ignored;
+    }
+
+    private List<UpdateOffer> holdNamed(List<UpdateOffer> offers, Map<String, String> hashByName) {
+        if (offers.isEmpty()) {
+            return offers;
+        }
+        try {
+            Map<String, UpdateOffer> byProject = new HashMap<>();
+            offers.forEach(offer -> byProject.put(offer.projectId(), offer));
+            return NamedVersions.hold(offers, this.client.findByHashes(hashByName).values(), id -> {
+                try {
+                    return this.client.findVersion(id);
+                } catch (IOException e) {
+                    LOGGER.info("[Hotwire] version {} could not be asked for: {}", id, e.toString());
+                    return null;
+                }
+            }, project -> {
+                UpdateOffer own = byProject.get(project);
+                String id = this.idByProject.get(project);
+                return own != null ? own.name() : this.installed.find(id == null ? project : id)
+                        .map(ModManifest::name).orElse(project);
+            });
+        } catch (IOException e) {
+            LOGGER.info("[Hotwire] the versions installed mods name could not be asked for: {}", e.toString());
+            return offers;
+        }
     }
 
     private List<UpdateOffer> makeOffers(Map<String, ModrinthClient.Version> newest, Map<String, String> hashByName,

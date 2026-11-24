@@ -208,6 +208,7 @@
   "hotwire.updates.picked": "Update %d",
   "hotwire.updates.summary": "%d updates, %s",
   "hotwire.updates.needed_by": "needed by %d",
+  "hotwire.updates.made_for": "%s was made for the version you have",
   "hotwire.updates.needs_loader": "Needs Fabric Loader %s",
   "hotwire.updates.no_changelog": "No changelog",
   "hotwire.updates.run": "%d of %d in, %s of %s",

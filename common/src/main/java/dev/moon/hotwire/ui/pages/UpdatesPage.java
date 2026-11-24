@@ -88,7 +88,8 @@ public final class UpdatesPage {
         this.opened.retainAll(known);
         this.unpicked.retainAll(known);
         for (UpdateOffer offer : this.offers) {
-            if (!offer.loaderNeeded().isEmpty() && this.leftForLoader.add(offer.versionId())) {
+            if (!(offer.loaderNeeded().isEmpty() && offer.madeFor().isEmpty())
+                    && this.leftForLoader.add(offer.versionId())) {
                 this.unpicked.add(offer.projectId());
             }
         }
@@ -241,6 +242,9 @@ public final class UpdatesPage {
         }
         if (!offer.loaderNeeded().isEmpty()) {
             words.with(Kit.text(Lang.get("hotwire.updates.needs_loader", offer.loaderNeeded()), Palette.BAD));
+        }
+        if (!offer.madeFor().isEmpty()) {
+            words.with(Kit.text(Lang.get("hotwire.updates.made_for", offer.madeFor()), Palette.BAD));
         }
         words.grow(1);
         Line row = Kit.row(new Part().width(above.size() * INDENT),
