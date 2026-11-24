@@ -240,8 +240,9 @@ public final class FieldHolders {
         Holder holder = findHolder(target);
         if (holder != null) {
             for (Object instance : List.copyOf(holder.awaiting().keySet())) {
-                holder.awaiting().remove(instance);
-                tryCatchUp(target, catchUp, instance);
+                if (holder.awaiting().remove(instance) != null) {
+                    tryCatchUp(target, catchUp, instance);
+                }
             }
         }
     }
@@ -373,15 +374,28 @@ public final class FieldHolders {
             return found;
         }
         Class<?> target = TARGET_OF.get(holder.type());
-        Consumer<Object> catchUp = made || target == null ? null : findCatchUp(target);
-        if (catchUp != null && target != null && gameThread.test(Thread.currentThread())) {
-            tryCatchUp(target, catchUp, instance);
-        } else if (catchUp != null && target != null) {
-            onGame.execute(() -> tryCatchUp(target, catchUp, instance));
-        } else if (!made) {
-            holder.awaiting().put(instance, Boolean.TRUE);
+        if (made || target == null) {
+            return fresh;
         }
+        Consumer<Object> catchUp = findCatchUp(target);
+        if (catchUp == null) {
+            holder.awaiting().put(instance, Boolean.TRUE);
+
+            catchUp = findCatchUp(target);
+            if (catchUp == null || holder.awaiting().remove(instance) == null) {
+                return fresh;
+            }
+        }
+        catchUpOnTheRightThread(target, catchUp, instance);
         return fresh;
+    }
+
+    private static void catchUpOnTheRightThread(Class<?> target, Consumer<Object> catchUp, Object instance) {
+        if (gameThread.test(Thread.currentThread())) {
+            tryCatchUp(target, catchUp, instance);
+        } else {
+            onGame.execute(() -> tryCatchUp(target, catchUp, instance));
+        }
     }
 
     @SuppressWarnings("ReferenceEquality")

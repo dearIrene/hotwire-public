@@ -122,6 +122,7 @@ import java.util.stream.Stream;
 import net.fabricmc.loader.api.FabricLoader;
 import net.fabricmc.loader.impl.metadata.LoaderModMetadata;
 import net.minecraft.client.Minecraft;
+import net.minecraft.server.MinecraftServer;
 import org.jspecify.annotations.Nullable;
 import org.objectweb.asm.Type;
 import org.slf4j.Logger;
@@ -242,7 +243,8 @@ final class EngineStart {
         });
         FinalWrites.writeWith(fieldReferences::writeFinal);
         FieldSlots.readStaticsWhen(fieldReferences::isInitialized);
-        FieldHolders.catchUpOn(thread -> Minecraft.getInstance().isSameThread(), Minecraft.getInstance());
+
+        FieldHolders.catchUpOn(thread -> isGameOrServerThread(), Minecraft.getInstance());
         laps.endLap("field references, statics");
         RestartOnlyFile restartOnly = new RestartOnlyFile(FabricLoader.getInstance().getConfigDir()
                 .resolve("hotwire/restart-only.json"), id -> installed.find(id).map(ModManifest::version).orElse(null));
@@ -515,5 +517,11 @@ final class EngineStart {
         CrashReports.watch(engine.getTasks(), engine.getZips());
         laps.endLap("crash guards and notices");
         return engine;
+    }
+
+    private static boolean isGameOrServerThread() {
+        Minecraft game = Minecraft.getInstance();
+        MinecraftServer server = game.getSingleplayerServer();
+        return game.isSameThread() || (server != null && server.isSameThread());
     }
 }
