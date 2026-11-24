@@ -18,6 +18,13 @@ final class FinalFields {
 
             Object base = isStatic ? type.getMethod("staticFieldBase", Field.class).invoke(unsafe, made)
                     : Objects.requireNonNull(holder, () -> "no object to write " + made + " in");
+
+            if (!isStatic && !made.getDeclaringClass().isInstance(base)) {
+                throw new IllegalAccessException(made + " is not a field of " + base.getClass().getName());
+            }
+            if (value != null && !field.getType().isPrimitive() && !field.getType().isInstance(value)) {
+                throw new IllegalAccessException(made + " cannot hold a " + value.getClass().getName());
+            }
             long offset = (long) type.getMethod(isStatic ? "staticFieldOffset" : "objectFieldOffset", Field.class)
                     .invoke(unsafe, made);
             Class<?> kind = field.getType().isPrimitive() ? field.getType() : Object.class;
