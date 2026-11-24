@@ -966,6 +966,8 @@
   "hotwire.store.queued": "Next start",
   "hotwire.store.nothing": "No results.",
   "hotwire.store.failed": "Modrinth didn't respond: %s",
+  "hotwire.world_closed.title": "Your world closed with an error",
+  "hotwire.world_closed.detail": "%s. Hotwire wrote a report: send it from Hotwire's screen so this can be fixed",
   "hotwire.swap.failed_title": "Some mods weren't put in place when the game closed",
   "hotwire.swap.failed_detail": "Make a report from Hotwire's screen and send it, it says what went wrong",
   "hotwire.swap.missed_detail": "%s didn't go in. Hotwire tries again when you close the game. If it keeps happening, make a report from Hotwire's screen and send it",
