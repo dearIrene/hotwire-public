@@ -88,7 +88,10 @@ public final class EntityAttachments {
 
     private static void detach(List<Entity> entities, Collection<String> mods, Map<String, Integer> counts) {
         for (Entity entity : entities) {
-            Map<AttachmentType<?>, ?> attached = ((AttachmentTargetImpl) entity).fabric_getAttachments();
+            if (!(entity instanceof AttachmentTargetImpl target)) {
+                continue;
+            }
+            Map<AttachmentType<?>, ?> attached = target.fabric_getAttachments();
             if (attached == null || attached.isEmpty()) {
                 continue;
             }
@@ -174,7 +177,7 @@ public final class EntityAttachments {
         for (Map.Entry<String, Tag> entry : aside.entrySet()) {
             int space = entry.getKey().indexOf(' ');
             Identifier name = space < 0 ? null : Identifier.tryParse(entry.getKey().substring(space + 1));
-            AttachmentType<?> type = name == null ? null : AttachmentRegistryImpl.get(name);
+            AttachmentType<?> type = name == null ? null : findType(name);
             Codec<?> codec = type == null ? null : type.persistenceCodec();
             if (type == null || codec == null || !on.test(entry.getKey().substring(0, space))) {
                 continue;
@@ -207,5 +210,13 @@ public final class EntityAttachments {
         }
         String space = type.identifier().getNamespace();
         return mods.contains(space) ? space : null;
+    }
+
+    private static @Nullable AttachmentType<?> findType(Identifier name) {
+        try {
+            return AttachmentRegistryImpl.get(name);
+        } catch (RuntimeException | LinkageError e) {
+            return null;
+        }
     }
 }

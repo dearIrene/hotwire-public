@@ -11,7 +11,8 @@ import org.spongepowered.asm.mixin.injection.callback.CallbackInfo;
 @Mixin(targets = "net.minecraft.world.level.chunk.LevelChunk$BoundTickingBlockEntity")
 public abstract class BoundTickingBlockEntityMixin {
     @Inject(method = "tick", at = @At(value = "INVOKE", target = "Lnet/minecraft/CrashReport;forThrowable"
-            + "(Ljava/lang/Throwable;Ljava/lang/String;)Lnet/minecraft/CrashReport;"), cancellable = true)
+            + "(Ljava/lang/Throwable;Ljava/lang/String;)Lnet/minecraft/CrashReport;"), cancellable = true,
+            require = 0)
     private void hotwire$catchBlockEntityThrow(CallbackInfo ci, @Local Throwable thrown) {
         if (CrashGuard.handle(thrown, CrashPolicy.Site.BLOCK_ENTITY)) {
             ci.cancel();

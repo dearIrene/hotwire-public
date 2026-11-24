@@ -44,14 +44,20 @@ import org.slf4j.LoggerFactory;
 
 public final class LoaderModList {
     private static final Logger LOGGER = LoggerFactory.getLogger(LoaderModList.class);
-    private static final PrivateField MODS = PrivateField.of(FabricLoaderImpl.class, "mods");
-    private static final PrivateField MOD_MAP = PrivateField.of(FabricLoaderImpl.class, "modMap");
-    private static final PrivateField ENTRYPOINT_STORAGE = PrivateField.of(FabricLoaderImpl.class, "entrypointStorage");
-    private static final PrivateField ADAPTERS = PrivateField.of(FabricLoaderImpl.class, "adapterMap");
-    private static final PrivateField ENTRY_MAP = PrivateField.of(EntrypointStorage.class, "entryMap");
-    private static final Method CREATE_PLAIN = createPlain();
 
     private LoaderModList() {
+    }
+
+    private static final class Internals {
+        static final PrivateField MODS = PrivateField.of(FabricLoaderImpl.class, "mods");
+        static final PrivateField MOD_MAP = PrivateField.of(FabricLoaderImpl.class, "modMap");
+        static final PrivateField ENTRYPOINT_STORAGE = PrivateField.of(FabricLoaderImpl.class, "entrypointStorage");
+        static final PrivateField ADAPTERS = PrivateField.of(FabricLoaderImpl.class, "adapterMap");
+        static final PrivateField ENTRY_MAP = PrivateField.of(EntrypointStorage.class, "entryMap");
+        static final Method CREATE_PLAIN = createPlain();
+
+        private Internals() {
+        }
     }
 
     private static Method createPlain() {
@@ -77,13 +83,13 @@ public final class LoaderModList {
         ModContainerImpl container = makeContainer(jar, metadata);
         setChildren(container, children);
 
-        List<ModContainerImpl> mods = new ArrayList<>(MODS.get(loader, List.class));
-        Map<String, ModContainerImpl> byId = MOD_MAP.get(loader, Map.class);
-        EntrypointStorage entrypoints = ENTRYPOINT_STORAGE.get(loader, EntrypointStorage.class);
-        Map<String, LanguageAdapter> adapters = ADAPTERS.get(loader, Map.class);
+        List<ModContainerImpl> mods = new ArrayList<>(Internals.MODS.get(loader, List.class));
+        Map<String, ModContainerImpl> byId = Internals.MOD_MAP.get(loader, Map.class);
+        EntrypointStorage entrypoints = Internals.ENTRYPOINT_STORAGE.get(loader, EntrypointStorage.class);
+        Map<String, LanguageAdapter> adapters = Internals.ADAPTERS.get(loader, Map.class);
         synchronized (loader) {
             mods.add(container);
-            MODS.set(loader, mods);
+            Internals.MODS.set(loader, mods);
             byId.put(metadata.getId(), container);
 
             metadata.getProvides().forEach(provided -> byId.putIfAbsent(provided, container));
@@ -126,11 +132,11 @@ public final class LoaderModList {
         LoaderModMetadata metadata = parse(jar, loader);
         ModContainerImpl container = makeContainer(jar, metadata);
 
-        List<ModContainerImpl> mods = new ArrayList<>(MODS.get(loader, List.class));
-        Map<String, ModContainerImpl> byId = MOD_MAP.get(loader, Map.class);
-        EntrypointStorage entrypoints = ENTRYPOINT_STORAGE.get(loader, EntrypointStorage.class);
-        Map<String, LanguageAdapter> adapters = ADAPTERS.get(loader, Map.class);
-        Map<String, List<Object>> entryMap = ENTRY_MAP.get(entrypoints, Map.class);
+        List<ModContainerImpl> mods = new ArrayList<>(Internals.MODS.get(loader, List.class));
+        Map<String, ModContainerImpl> byId = Internals.MOD_MAP.get(loader, Map.class);
+        EntrypointStorage entrypoints = Internals.ENTRYPOINT_STORAGE.get(loader, EntrypointStorage.class);
+        Map<String, LanguageAdapter> adapters = Internals.ADAPTERS.get(loader, Map.class);
+        Map<String, List<Object>> entryMap = Internals.ENTRY_MAP.get(entrypoints, Map.class);
         synchronized (loader) {
             HiddenMod hidden = HIDDEN.get(id);
             if (hidden != null) {
@@ -146,7 +152,7 @@ public final class LoaderModList {
             } else {
                 mods.add(container);
             }
-            MODS.set(loader, mods);
+            Internals.MODS.set(loader, mods);
             byId.put(id, container);
             for (String key : metadata.getEntrypointKeys()) {
                 for (EntrypointMetadata entrypoint : metadata.getEntrypoints(key)) {
@@ -193,7 +199,7 @@ public final class LoaderModList {
                 }
             }
         }
-        ENTRY_MAP.get(aside, Map.class).forEach((key, made) -> entries.computeIfAbsent((String) key,
+        Internals.ENTRY_MAP.get(aside, Map.class).forEach((key, made) -> entries.computeIfAbsent((String) key,
                 any -> new ArrayList<>()).addAll((List<Object>) made));
         return entries;
     }
@@ -227,7 +233,7 @@ public final class LoaderModList {
 
     private static ModContainerImpl makeContainer(Path jar, LoaderModMetadata metadata) {
         try {
-            ModCandidateImpl candidate = (ModCandidateImpl) CREATE_PLAIN.invoke(null, List.of(jar), metadata, false,
+            ModCandidateImpl candidate = (ModCandidateImpl) Internals.CREATE_PLAIN.invoke(null, List.of(jar), metadata, false,
                     List.of());
             return new ModContainerImpl(candidate);
         } catch (ReflectiveOperationException e) {
@@ -261,10 +267,10 @@ public final class LoaderModList {
     public static void hide(Collection<String> ids) {
         FabricLoaderImpl loader = FabricLoaderImpl.INSTANCE;
 
-        List<ModContainerImpl> mods = new ArrayList<>(MODS.get(loader, List.class));
-        Map<String, ModContainerImpl> byId = MOD_MAP.get(loader, Map.class);
-        EntrypointStorage storage = ENTRYPOINT_STORAGE.get(loader, EntrypointStorage.class);
-        Map<String, List<Object>> entryMap = ENTRY_MAP.get(storage, Map.class);
+        List<ModContainerImpl> mods = new ArrayList<>(Internals.MODS.get(loader, List.class));
+        Map<String, ModContainerImpl> byId = Internals.MOD_MAP.get(loader, Map.class);
+        EntrypointStorage storage = Internals.ENTRYPOINT_STORAGE.get(loader, EntrypointStorage.class);
+        Map<String, List<Object>> entryMap = Internals.ENTRY_MAP.get(storage, Map.class);
         synchronized (loader) {
             Map<String, String> asked = new HashMap<>();
             for (String id : ids) {
@@ -304,7 +310,7 @@ public final class LoaderModList {
                 mods.remove(container);
                 HIDDEN.put(id, new HiddenMod(container, removed.getOrDefault(id, new HashMap<>())));
             });
-            MODS.set(loader, mods);
+            Internals.MODS.set(loader, mods);
         }
     }
 
@@ -313,8 +319,8 @@ public final class LoaderModList {
     @SuppressWarnings("unchecked")
     public static Set<Object> findHanded(Collection<String> mods) {
         FabricLoaderImpl loader = FabricLoaderImpl.INSTANCE;
-        EntrypointStorage storage = ENTRYPOINT_STORAGE.get(loader, EntrypointStorage.class);
-        Map<String, List<Object>> entryMap = ENTRY_MAP.get(storage, Map.class);
+        EntrypointStorage storage = Internals.ENTRYPOINT_STORAGE.get(loader, EntrypointStorage.class);
+        Map<String, List<Object>> entryMap = Internals.ENTRY_MAP.get(storage, Map.class);
         Set<Object> out = Collections.newSetFromMap(new IdentityHashMap<>());
         synchronized (loader) {
             entryMap.forEach((key, entries) -> addMade(key, entries, mods, out));
@@ -377,7 +383,7 @@ public final class LoaderModList {
     @SuppressWarnings("unchecked")
     public static @Nullable String findNewLanguageAdapter(Collection<ModManifest> manifests,
             Predicate<String> quiet) {
-        Map<String, LanguageAdapter> adapters = ADAPTERS.get(FabricLoaderImpl.INSTANCE, Map.class);
+        Map<String, LanguageAdapter> adapters = Internals.ADAPTERS.get(FabricLoaderImpl.INSTANCE, Map.class);
         FabricLauncher launcher = FabricLauncherBase.getLauncher();
         for (ModManifest manifest : manifests) {
             for (Map.Entry<String, String> adapter : manifest.languageAdapters().entrySet()) {
@@ -409,10 +415,10 @@ public final class LoaderModList {
     public static void show(String id) {
         FabricLoaderImpl loader = FabricLoaderImpl.INSTANCE;
 
-        List<ModContainerImpl> mods = new ArrayList<>(MODS.get(loader, List.class));
-        Map<String, ModContainerImpl> byId = MOD_MAP.get(loader, Map.class);
-        EntrypointStorage storage = ENTRYPOINT_STORAGE.get(loader, EntrypointStorage.class);
-        Map<String, List<Object>> entryMap = ENTRY_MAP.get(storage, Map.class);
+        List<ModContainerImpl> mods = new ArrayList<>(Internals.MODS.get(loader, List.class));
+        Map<String, ModContainerImpl> byId = Internals.MOD_MAP.get(loader, Map.class);
+        EntrypointStorage storage = Internals.ENTRYPOINT_STORAGE.get(loader, EntrypointStorage.class);
+        Map<String, List<Object>> entryMap = Internals.ENTRY_MAP.get(storage, Map.class);
         synchronized (loader) {
             HiddenMod hidden = HIDDEN.remove(id);
             if (hidden == null) {
@@ -420,7 +426,7 @@ public final class LoaderModList {
             }
             mods.add(hidden.container());
             sortAs(mods, MODS_ORDER);
-            MODS.set(loader, mods);
+            Internals.MODS.set(loader, mods);
             byId.put(id, hidden.container());
             hidden.container().getMetadata().getProvides()
                     .forEach(provided -> byId.putIfAbsent(provided, hidden.container()));

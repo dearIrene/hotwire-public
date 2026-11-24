@@ -1,0 +1,45 @@
+{
+  "required": false,
+  "minVersion": "0.8",
+  "package": "dev.moon.hotwire.fabric.mixin",
+  "compatibilityLevel": "JAVA_21",
+  "injectors": {
+    "defaultRequire": 1
+  },
+  "overwrites": {
+    "requireAnnotations": true
+  },
+  "mixins": [
+    "core.fabric.base.event.ArrayBackedEventAccessor",
+    "core.fabric.base.event.EventAccessor",
+    "core.fabric.base.event.ArrayBackedEventMixin",
+    "core.fabric.resource.DataResourceLoaderImplAccessor",
+    "core.fabric.resource.DataResourceLoaderImplMixin",
+    "core.fabric.base.event.EventPhaseDataAccessor",
+    "core.fabric.base.event.EventPhaseDataMixin",
+    "core.fabric.networking.AbstractNetworkAddonMixin",
+    "core.fabric.registry.RegistrySyncManagerMixin",
+    "core.fabric.networking.GlobalReceiverRegistryAccessor",
+    "core.fabric.networking.GlobalReceiverRegistryMixin",
+    "core.fabric.networking.PayloadTypeRegistryImplMixin",
+    "core.fabric.resource.pack.ModPackResourcesUtilMixin",
+    "core.fabric.resource.loader.ModResourcePackUtilMixin",
+    "core.fabric.resource.ResourceLoaderImplAccessor",
+    "core.fabric.resource.ResourceLoaderImplMixin",
+    "core.fabric.resource.loader.ResourceManagerHelperImplAccessor",
+    "core.fabric.resource.loader.ResourceManagerHelperImplMixin"
+  ],
+  "client": [
+    "core.fabric.client.rendering.hud.HudElementRegistryImplMixin",
+    "core.fabric.client.keybinding.KeyBindingRegistryImplAccessor",
+    "core.fabric.client.keybinding.KeyBindingRegistryImplMixin",
+    "core.fabric.client.keymapping.KeyMappingRegistryImplAccessor",
+    "core.fabric.client.keymapping.KeyMappingRegistryImplMixin",
+    "core.fabric.client.rendering.LayeredDrawerWrapperImplAccessor",
+    "core.fabric.client.rendering.LayeredDrawerWrapperImplMixin",
+    "core.fabric.client.rendering.PictureInPictureRendererRegistryImplAccessor",
+    "core.fabric.client.rendering.PictureInPictureRendererRegistryImplMixin",
+    "core.fabric.client.rendering.SpecialGuiElementRegistryImplAccessor",
+    "core.fabric.client.rendering.SpecialGuiElementRegistryImplMixin"
+  ]
+}

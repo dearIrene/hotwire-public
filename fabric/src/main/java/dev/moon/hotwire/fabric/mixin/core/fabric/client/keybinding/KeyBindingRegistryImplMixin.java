@@ -1,5 +1,6 @@
 package dev.moon.hotwire.fabric.mixin.core.fabric.client.keybinding;
 
+import com.llamalad7.mixinextras.sugar.Local;
 import dev.moon.hotwire.fabric.registration.KeyBindingRecorder;
 import net.minecraft.client.KeyMapping;
 import org.spongepowered.asm.mixin.Mixin;
@@ -11,15 +12,17 @@ import org.spongepowered.asm.mixin.injection.callback.CallbackInfoReturnable;
 @Pseudo
 @Mixin(targets = "net.fabricmc.fabric.impl.client.keybinding.KeyBindingRegistryImpl", remap = false)
 public abstract class KeyBindingRegistryImplMixin {
-    @Inject(method = "registerKeyBinding", at = @At("HEAD"), cancellable = true)
-    private static void hotwire$registerLate(KeyMapping binding, CallbackInfoReturnable<KeyMapping> cir) {
+    @Inject(method = "registerKeyBinding", at = @At("HEAD"), cancellable = true, require = 0)
+    private static void hotwire$registerLate(CallbackInfoReturnable<KeyMapping> cir,
+            @Local(argsOnly = true) KeyMapping binding) {
         if (KeyBindingRecorder.registerLate(binding)) {
             cir.setReturnValue(binding);
         }
     }
 
-    @Inject(method = "registerKeyBinding", at = @At("TAIL"))
-    private static void hotwire$onRegistered(KeyMapping binding, CallbackInfoReturnable<KeyMapping> cir) {
+    @Inject(method = "registerKeyBinding", at = @At("TAIL"), require = 0)
+    private static void hotwire$onRegistered(CallbackInfoReturnable<KeyMapping> cir,
+            @Local(argsOnly = true) KeyMapping binding) {
         KeyBindingRecorder.onRegistered(binding);
     }
 }

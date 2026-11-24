@@ -85,7 +85,7 @@ public abstract class MinecraftMixin {
     }
 
     @Inject(method = "emergencySaveAndCrash", at = @At(value = "INVOKE",
-            target = "Lnet/minecraft/client/Minecraft;emergencySave()V"))
+            target = "Lnet/minecraft/client/Minecraft;emergencySave()V"), require = 0)
     private void hotwire$saveReportFirst(CrashReport report, CallbackInfo ci) {
         CrashReports.saveBeforeWorld(report, ((Minecraft) (Object) this).gameDirectory);
     }

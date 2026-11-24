@@ -317,8 +317,8 @@ public final class HotwireClient implements ClientModInitializer {
     private static @Nullable HotwireEngine findEngineOrSay() {
         try {
             return getEngine();
-        } catch (IllegalStateException e) {
-            LOGGER.warn("[Hotwire] {}", e.getMessage());
+        } catch (IllegalStateException | LinkageError e) {
+            LOGGER.warn("[Hotwire] {}", e.toString());
             return null;
         }
     }
@@ -333,7 +333,7 @@ public final class HotwireClient implements ClientModInitializer {
             long began = System.nanoTime();
             try {
                 started = EngineStart.start(EarlyDefinitions.get());
-            } catch (IOException | RuntimeException e) {
+            } catch (IOException | RuntimeException | LinkageError e) {
                 startFailed = true;
                 LOGGER.error("[Hotwire] could not start; the game goes on without it", e);
                 EngineStart.writeStartFailure(FabricLoader.getInstance().getGameDir(), e);

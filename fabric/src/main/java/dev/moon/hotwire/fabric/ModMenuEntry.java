@@ -24,6 +24,12 @@ public final class ModMenuEntry implements ModMenuApi {
             }
         }
 
-        return parent -> (Screen) HotwireClient.getEngine().getScreens().makeScreen(parent);
+        return parent -> {
+            try {
+                return (Screen) HotwireClient.getEngine().getScreens().makeScreen(parent);
+            } catch (IllegalStateException e) {
+                return null;
+            }
+        };
     }
 }

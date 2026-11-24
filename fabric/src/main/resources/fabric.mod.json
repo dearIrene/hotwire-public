@@ -13,7 +13,7 @@
     "client": ["dev.moon.hotwire.fabric.HotwireClient"],
     "modmenu": ["dev.moon.hotwire.fabric.ModMenuEntry"]
   },
-  "mixins": ["hotwire.mixins.json"],
+  "mixins": ["hotwire.mixins.json", "hotwire-fabric.mixins.json"],
   "depends": {
     "fabricloader": ">=0.19.3",
     "fabric-api": "*",

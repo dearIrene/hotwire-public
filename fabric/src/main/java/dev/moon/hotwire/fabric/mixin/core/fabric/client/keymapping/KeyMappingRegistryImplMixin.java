@@ -12,7 +12,7 @@ import org.spongepowered.asm.mixin.injection.callback.CallbackInfoReturnable;
 @Pseudo
 @Mixin(targets = "net.fabricmc.fabric.impl.client.keymapping.KeyMappingRegistryImpl", remap = false)
 public abstract class KeyMappingRegistryImplMixin {
-    @Inject(method = "registerKeyMapping", at = @At("HEAD"), cancellable = true)
+    @Inject(method = "registerKeyMapping", at = @At("HEAD"), cancellable = true, require = 0)
     private static void hotwire$registerLate(CallbackInfoReturnable<KeyMapping> cir,
             @Local(argsOnly = true) KeyMapping binding) {
         if (KeyBindingRecorder.registerLate(binding)) {
@@ -20,7 +20,7 @@ public abstract class KeyMappingRegistryImplMixin {
         }
     }
 
-    @Inject(method = "registerKeyMapping", at = @At("TAIL"))
+    @Inject(method = "registerKeyMapping", at = @At("TAIL"), require = 0)
     private static void hotwire$onRegistered(CallbackInfoReturnable<KeyMapping> cir,
             @Local(argsOnly = true) KeyMapping binding) {
         KeyBindingRecorder.onRegistered(binding);

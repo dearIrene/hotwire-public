@@ -4,11 +4,15 @@ import dev.moon.hotwire.fabric.mixin.core.fabric.client.keybinding.KeyBindingReg
 import dev.moon.hotwire.fabric.mixin.core.fabric.client.keymapping.KeyMappingRegistryImplAccessor;
 import dev.moon.hotwire.fabric.version.Spellings;
 import dev.moon.hotwire.registration.RecorderSupport;
+import java.util.ArrayList;
 import java.util.List;
 import net.minecraft.client.KeyMapping;
 import net.minecraft.client.Minecraft;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
 public final class KeyBindingRecorder {
+    private static final Logger LOGGER = LoggerFactory.getLogger(KeyBindingRecorder.class);
     private KeyBindingRecorder() {
     }
 
@@ -44,13 +48,25 @@ public final class KeyBindingRecorder {
         }
     }
 
+    @SuppressWarnings("checkstyle:IllegalCatch")
     static List<KeyMapping> getModded() {
-        return KEY_MAPPING_API ? KeyMappingRegistryImplAccessor.hotwire$getModded()
-                : KeyBindingRegistryImplAccessor.hotwire$getModded();
+        try {
+            return KEY_MAPPING_API ? KeyMappingRegistryImplAccessor.hotwire$getModded()
+                    : KeyBindingRegistryImplAccessor.hotwire$getModded();
+        } catch (RuntimeException | LinkageError | AssertionError e) {
+            LOGGER.warn("[Hotwire] Fabric API's key bindings could not be reached: {}", e.toString());
+            return new ArrayList<>();
+        }
     }
 
+    @SuppressWarnings("checkstyle:IllegalCatch")
     static KeyMapping[] process(KeyMapping[] all) {
-        return KEY_MAPPING_API ? KeyMappingRegistryImplAccessor.hotwire$process(all)
-                : KeyBindingRegistryImplAccessor.hotwire$process(all);
+        try {
+            return KEY_MAPPING_API ? KeyMappingRegistryImplAccessor.hotwire$process(all)
+                    : KeyBindingRegistryImplAccessor.hotwire$process(all);
+        } catch (RuntimeException | LinkageError | AssertionError e) {
+            LOGGER.warn("[Hotwire] Fabric API's key bindings could not be rebuilt: {}", e.toString());
+            return all;
+        }
     }
 }

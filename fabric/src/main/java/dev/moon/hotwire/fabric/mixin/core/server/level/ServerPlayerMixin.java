@@ -12,7 +12,8 @@ import org.spongepowered.asm.mixin.injection.callback.CallbackInfo;
 @Mixin(ServerPlayer.class)
 public abstract class ServerPlayerMixin {
     @Inject(method = "doTick", at = @At(value = "INVOKE", target = "Lnet/minecraft/CrashReport;forThrowable"
-            + "(Ljava/lang/Throwable;Ljava/lang/String;)Lnet/minecraft/CrashReport;"), cancellable = true)
+            + "(Ljava/lang/Throwable;Ljava/lang/String;)Lnet/minecraft/CrashReport;"), cancellable = true,
+            require = 0)
     private void hotwire$catchPlayerThrow(CallbackInfo ci, @Local Throwable thrown) {
         if (CrashGuard.handle(thrown, CrashPolicy.Site.PLAYER)) {
             ci.cancel();
