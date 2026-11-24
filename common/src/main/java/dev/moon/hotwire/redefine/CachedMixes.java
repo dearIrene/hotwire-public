@@ -40,7 +40,7 @@ public final class CachedMixes {
     private final MixinCopy copy;
     private volatile @Nullable MixedCache cache;
 
-    private volatile boolean auditing;
+    private volatile @Nullable Thread auditor;
     private final AtomicInteger audited = new AtomicInteger();
     private final AtomicInteger auditedWrong = new AtomicInteger();
 
@@ -62,7 +62,7 @@ public final class CachedMixes {
     }
 
     public void setAuditing(boolean on) {
-        this.auditing = on;
+        this.auditor = on ? Thread.currentThread() : null;
     }
 
     public void markAudited(CacheKey step) {
@@ -234,7 +234,7 @@ public final class CachedMixes {
                     + " decides for ({})", readBack.size(), targets.size(), keys.size() - readBack.size(),
                     missed.isEmpty() ? "" : " " + missed, targets.size() - keys.size(), known.describe());
 
-            boolean audit = this.auditing;
+            boolean audit = Thread.currentThread().equals(this.auditor);
             if (!readBack.isEmpty() && (audit || Flags.CACHE_VERIFY)) {
                 List<String> differ = verify(readBack, this.copy.mixAll(readBack.keySet(), classes, resources,
                         configs, stop));
