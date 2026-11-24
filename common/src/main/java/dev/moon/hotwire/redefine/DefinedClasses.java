@@ -19,9 +19,9 @@ final class DefinedClasses {
     private static final long LENGTH_MASK = (1L << LENGTH_BITS) - 1;
     private static final String PREFIX = "hotwire-classes";
 
-    private final Map<String, Kept> kept = new ConcurrentHashMap<>();
+    private final Map<String, Entry> entries = new ConcurrentHashMap<>();
 
-    private static final class Kept {
+    private static final class Entry {
         volatile long place = -1;
 
         long room = -1;
@@ -63,7 +63,7 @@ final class DefinedClasses {
         this.writing = true;
         try {
             Path jar = this.jars == null ? null : this.jars.findWithSame(name, bytes);
-            Kept of = this.kept.computeIfAbsent(name, made -> new Kept());
+            Entry of = this.entries.computeIfAbsent(name, made -> new Entry());
             if (jar != null) {
                 of.jar = jar;
                 of.place = -1;
@@ -104,7 +104,7 @@ final class DefinedClasses {
             this.closed = true;
 
             long lost = this.blockAt;
-            for (Kept of : this.kept.values()) {
+            for (Entry of : this.entries.values()) {
                 if (of.place >= 0 && of.place >>> LENGTH_BITS >= lost) {
                     of.place = -1;
                 }
@@ -154,7 +154,7 @@ final class DefinedClasses {
 
     synchronized void close() {
         this.closed = true;
-        this.kept.clear();
+        this.entries.clear();
         RandomAccessFile into = this.file;
         Path made = this.path;
         this.file = null;
@@ -184,7 +184,7 @@ final class DefinedClasses {
     }
 
     boolean has(String name) {
-        Kept of = this.kept.get(name);
+        Entry of = this.entries.get(name);
         return of != null && (of.place >= 0 || of.jar != null);
     }
 
@@ -197,7 +197,7 @@ final class DefinedClasses {
         if (from == null) {
             return;
         }
-        for (Map.Entry<String, Kept> left : this.kept.entrySet()) {
+        for (Map.Entry<String, Entry> left : this.entries.entrySet()) {
             if (jar.equals(left.getValue().jar)) {
                 byte[] bytes = from.read(left.getKey(), jar);
                 if (bytes != null) {
@@ -227,7 +227,7 @@ final class DefinedClasses {
                 this.blockLength += bytes.length;
             }
             this.end = at + bytes.length;
-            Kept of = this.kept.computeIfAbsent(name, made -> new Kept());
+            Entry of = this.entries.computeIfAbsent(name, made -> new Entry());
             of.place = at << LENGTH_BITS | bytes.length;
             of.room = of.place;
             of.jar = null;
@@ -239,7 +239,7 @@ final class DefinedClasses {
     }
 
     synchronized byte @Nullable [] find(String name) {
-        Kept of = this.kept.get(name);
+        Entry of = this.entries.get(name);
         Path jar = of == null ? null : of.jar;
         Jars source = this.jars;
         if (jar != null && source != null) {
