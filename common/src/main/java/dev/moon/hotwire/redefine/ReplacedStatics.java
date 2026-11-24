@@ -38,7 +38,7 @@ public final class ReplacedStatics {
     private static final List<StaticWrite> UNFOLLOWED = new ArrayList<>();
     private static final List<Undo> UNDOS = new ArrayList<>();
 
-    private static @Nullable IdentityHashMap<Object, Object> batch;
+    private static final ThreadLocal<@Nullable IdentityHashMap<Object, Object>> BATCH = new ThreadLocal<>();
     private static Set<String> goingOff = Set.of();
     private static Set<String> onAfterSwitch = Set.of();
 
@@ -139,7 +139,7 @@ public final class ReplacedStatics {
     }
 
     static void swap(IdentityHashMap<Object, Object> replaced) {
-        IdentityHashMap<Object, Object> pending = batch;
+        IdentityHashMap<Object, Object> pending = BATCH.get();
         if (pending != null) {
             pending.putAll(replaced);
         } else if (!replaced.isEmpty()) {
@@ -152,11 +152,11 @@ public final class ReplacedStatics {
 
         AtomicInteger turn = new AtomicInteger(SETTING_UP);
         onGameThread.accept(() -> {
-            batch = pending;
+            BATCH.set(pending);
             try {
                 remaking.run();
             } finally {
-                batch = null;
+                BATCH.remove();
                 if (!turn.compareAndSet(SETTING_UP, SET_UP)) {
                     swap(pending);
                 }
