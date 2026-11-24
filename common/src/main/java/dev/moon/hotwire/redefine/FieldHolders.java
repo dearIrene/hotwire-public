@@ -14,6 +14,7 @@ import java.util.List;
 import java.util.Map;
 import java.util.Set;
 import java.util.concurrent.ConcurrentHashMap;
+import java.util.concurrent.Executor;
 import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.concurrent.atomic.AtomicReference;
 import java.util.function.BiConsumer;
@@ -170,6 +171,14 @@ public final class FieldHolders {
 
     public static Set<String> findAddedFields(String internal) {
         return ADDED_BY_NAME.getOrDefault(internal, Set.of());
+    }
+
+    private static volatile Predicate<Thread> gameThread = thread -> true;
+    private static volatile Executor onGame = Runnable::run;
+
+    public static void catchUpOn(Predicate<Thread> isGameThread, Executor game) {
+        gameThread = isGameThread;
+        onGame = game;
     }
 
     static boolean tryCatchUp(Class<?> target, Consumer<Object> catchUp, Object instance) {
@@ -365,8 +374,10 @@ public final class FieldHolders {
         }
         Class<?> target = TARGET_OF.get(holder.type());
         Consumer<Object> catchUp = made || target == null ? null : findCatchUp(target);
-        if (catchUp != null && target != null) {
+        if (catchUp != null && target != null && gameThread.test(Thread.currentThread())) {
             tryCatchUp(target, catchUp, instance);
+        } else if (catchUp != null && target != null) {
+            onGame.execute(() -> tryCatchUp(target, catchUp, instance));
         } else if (!made) {
             holder.awaiting().put(instance, Boolean.TRUE);
         }

@@ -55,6 +55,7 @@ import dev.moon.hotwire.rebuild.KnotInternals;
 import dev.moon.hotwire.rebuild.LocalRefs;
 import dev.moon.hotwire.rebuild.TransformerChain;
 import dev.moon.hotwire.redefine.ClassRebuilder;
+import dev.moon.hotwire.redefine.FieldHolders;
 import dev.moon.hotwire.redefine.FieldSlots;
 import dev.moon.hotwire.redefine.FinalWrites;
 import dev.moon.hotwire.redefine.HandlerGuards;
@@ -241,6 +242,7 @@ final class EngineStart {
         });
         FinalWrites.writeWith(fieldReferences::writeFinal);
         FieldSlots.readStaticsWhen(fieldReferences::isInitialized);
+        FieldHolders.catchUpOn(thread -> Minecraft.getInstance().isSameThread(), Minecraft.getInstance()::execute);
         laps.endLap("field references, statics");
         RestartOnlyFile restartOnly = new RestartOnlyFile(FabricLoader.getInstance().getConfigDir()
                 .resolve("hotwire/restart-only.json"), id -> installed.find(id).map(ModManifest::version).orElse(null));
