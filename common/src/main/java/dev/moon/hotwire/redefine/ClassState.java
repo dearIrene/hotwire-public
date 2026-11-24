@@ -35,11 +35,37 @@ final class ClassState {
 
     volatile boolean rebuilt;
 
+    private static final ClassState UNMIXED = new ClassState();
+
+    static {
+        UNMIXED.present = Set.of();
+    }
+
     private ClassState() {
     }
 
     static ClassState of(String internalName) {
-        return ALL.computeIfAbsent(internalName, name -> new ClassState());
+        ClassState found = ALL.get(internalName);
+        if (found != null && found != UNMIXED) {
+            return found;
+        }
+        return ALL.compute(internalName, (name, was) -> {
+            if (was != null && was != UNMIXED) {
+                return was;
+            }
+            ClassState made = new ClassState();
+            made.present = was == UNMIXED ? Set.of() : null;
+            return made;
+        });
+    }
+
+    static boolean markUnmixed(String internalName) {
+        ClassState was = ALL.putIfAbsent(internalName, UNMIXED);
+        return was == null || was == UNMIXED;
+    }
+
+    static void forgetUnmixed(String internalName) {
+        ALL.remove(internalName, UNMIXED);
     }
 
     static @Nullable ClassState find(String internalName) {

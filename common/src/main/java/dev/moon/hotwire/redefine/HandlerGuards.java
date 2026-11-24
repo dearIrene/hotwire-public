@@ -356,6 +356,7 @@ public final class HandlerGuards {
     }
 
     public static void forget(String internalName) {
+        ClassState.forgetUnmixed(internalName);
         ClassState state = ClassState.find(internalName);
         if (state != null) {
             state.guarded = null;
@@ -399,7 +400,12 @@ public final class HandlerGuards {
 
     static byte @Nullable [] rewriteOrThrow(String internalName, byte[] bytes, boolean written) {
         if (!ClassBytes.mentions(bytes, MERGED_BYTES)) {
-            if (bytes.length >= 8 && ((bytes[6] & 0xFF) << 8 | (bytes[7] & 0xFF)) >= Opcodes.V1_7) {
+            boolean sited = bytes.length >= 8 && ((bytes[6] & 0xFF) << 8 | (bytes[7] & 0xFF)) >= Opcodes.V1_7;
+            if (sited && ClassState.markUnmixed(internalName)) {
+                OwnMethods.forget(internalName);
+                return null;
+            }
+            if (sited) {
                 ClassState.of(internalName).setStagedPresent(Set.of());
             }
             ClassState unmixed = ClassState.find(internalName);
