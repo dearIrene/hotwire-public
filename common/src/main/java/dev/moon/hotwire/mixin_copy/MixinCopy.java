@@ -164,13 +164,22 @@ public final class MixinCopy implements AutoCloseable {
         if (Integer.valueOf(paths).equals(this.missing.get(name)) || this.folding.isFolded(name)) {
             return null;
         }
+        int changes = this.readChanges.get();
         byte[] found = more.apply(name);
         if (found == null) {
             this.missing.put(name, paths);
+            if (this.readChanges.get() != changes) {
+                this.missing.remove(name, paths);
+            }
             return null;
         }
         byte[] folded = this.folding.fold(found);
-        this.read.put(name, new SoftReference<>(folded));
+
+        SoftReference<byte[]> entry = new SoftReference<>(folded);
+        this.read.put(name, entry);
+        if (this.readChanges.get() != changes) {
+            this.read.remove(name, entry);
+        }
         return folded;
     }
 
