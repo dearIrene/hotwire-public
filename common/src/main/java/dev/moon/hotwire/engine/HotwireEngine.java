@@ -415,6 +415,10 @@ public final class HotwireEngine implements ModScreenGame, AutoCloseable {
         return this.installed.findCopyOf(id);
     }
 
+    public Map<String, String> getCopies() {
+        return this.installed.getCopies();
+    }
+
     public String nameOfMod(String id) {
         return this.installed.nameOf(id);
     }

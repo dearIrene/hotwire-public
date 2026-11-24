@@ -156,6 +156,10 @@ public final class InstalledMods {
         this.copyOf.remove(copy);
     }
 
+    public synchronized Map<String, String> getCopies() {
+        return Map.copyOf(this.copyOf);
+    }
+
     public synchronized @Nullable String findCopyOf(String id) {
         return this.copyOf.get(id);
     }

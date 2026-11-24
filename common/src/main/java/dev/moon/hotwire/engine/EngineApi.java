@@ -245,13 +245,23 @@ public class EngineApi implements HotwireApi {
         Set<String> listed = new HashSet<>();
         rows.forEach(row -> listed.add(row.id()));
         for (String id : LifecycleListeners.findStarting()) {
-            if (listed.contains(id)) {
+            if (!listed.add(id)) {
                 continue;
             }
             FabricLoader.getInstance().getModContainer(id).ifPresent(mod -> rows.add(new ModState(id,
                     mod.getMetadata().getName(), mod.getMetadata().getVersion().getFriendlyString(), true, false, false,
                     Lang.get("hotwire.api.starting"), engine.findCopyOf(id))));
         }
+
+        engine.getCopies().forEach((id, of) -> {
+            if (listed.add(id)) {
+                FabricLoader.getInstance().getModContainer(id).ifPresent(mod -> rows.add(new ModState(id,
+                        mod.getMetadata().getName(), mod.getMetadata().getVersion().getFriendlyString(), true, false,
+                        false, Lang.get("hotwire.progress.why.nested", engine.getGraph().getContainers(id).stream()
+                                .findFirst().map(engine::nameOfMod).orElseGet(() -> Lang.get("hotwire.api.a_mod"))),
+                        of)));
+            }
+        });
         return List.copyOf(rows);
     }
 
