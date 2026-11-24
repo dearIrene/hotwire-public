@@ -23,6 +23,10 @@ public interface Canvas {
 
     void popScale();
 
+    default float getGuiScale() {
+        return 1;
+    }
+
     default boolean drawFace(UUID player, int x, int y, int side) {
         return false;
     }

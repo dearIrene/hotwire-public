@@ -159,7 +159,7 @@ final class MarkdownLines {
     }
 
     private static String markLink(String words, String url) {
-        return url.startsWith("https://") || url.startsWith("http://")
+        return words.indexOf(PICTURE) < 0 && (url.startsWith("https://") || url.startsWith("http://"))
                 ? LINK_START + words + LINK_URL + url + LINK_END : words;
     }
 

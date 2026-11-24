@@ -1018,7 +1018,6 @@
   "hotwire.store.category.blocks": "Blocks",
   "hotwire.store.open_modrinth": "Open on Modrinth",
   "hotwire.store.open_link": "Open in browser",
-  "hotwire.store.picture_elsewhere": "A picture from %s. Click to load it",
   "hotwire.store.category.core-shaders": "Core shaders",
   "hotwire.store.category.entities": "Entities",
   "hotwire.store.category.environment": "Environment",

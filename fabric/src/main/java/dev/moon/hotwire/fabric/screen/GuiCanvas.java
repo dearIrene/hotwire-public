@@ -268,6 +268,11 @@ public final class GuiCanvas implements Canvas {
     }
 
     @Override
+    public float getGuiScale() {
+        return (float) Minecraft.getInstance().getWindow().getGuiScale();
+    }
+
+    @Override
     public void popScale() {
         //? if >=1.21.6 {
         this.graphics.pose().popMatrix();

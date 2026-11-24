@@ -984,7 +984,6 @@
   "hotwire.store.category.blocks": "Blocs",
   "hotwire.store.open_modrinth": "Ouvrir sur Modrinth",
   "hotwire.store.open_link": "Ouvrir dans le navigateur",
-  "hotwire.store.picture_elsewhere": "Une image de %s. Clique pour la charger",
   "hotwire.store.category.core-shaders": "Shaders du cœur",
   "hotwire.store.category.entities": "Entités",
   "hotwire.store.category.environment": "Environnement",

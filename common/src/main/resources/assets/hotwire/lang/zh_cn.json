@@ -984,7 +984,6 @@
   "hotwire.store.category.blocks": "方块",
   "hotwire.store.open_modrinth": "在 Modrinth 上打开",
   "hotwire.store.open_link": "在浏览器中打开",
-  "hotwire.store.picture_elsewhere": "一张来自 %s 的图片。点击加载",
   "hotwire.store.category.core-shaders": "核心着色器",
   "hotwire.store.category.entities": "实体",
   "hotwire.store.category.environment": "环境",
