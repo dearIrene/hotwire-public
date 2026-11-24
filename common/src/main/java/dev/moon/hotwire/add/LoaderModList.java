@@ -140,12 +140,16 @@ public final class LoaderModList {
         synchronized (loader) {
             HiddenMod hidden = HIDDEN.get(id);
             if (hidden != null) {
+                copyChildren(hidden.container(), container);
                 HIDDEN.put(id, new HiddenMod(container, findHiddenEntries(hidden, container, metadata, adapters)));
                 swapOrder(hidden.container(), container);
                 return;
             }
             ModContainerImpl old = byId.get(id);
             int at = old == null ? -1 : mods.indexOf(old);
+            if (old != null) {
+                copyChildren(old, container);
+            }
             if (old != null && at >= 0) {
                 mods.set(at, container);
                 swapOrder(old, container);
@@ -233,11 +237,22 @@ public final class LoaderModList {
 
     private static ModContainerImpl makeContainer(Path jar, LoaderModMetadata metadata) {
         try {
-            ModCandidateImpl candidate = (ModCandidateImpl) Internals.CREATE_PLAIN.invoke(null, List.of(jar), metadata, false,
-                    List.of());
+            ModCandidateImpl candidate = (ModCandidateImpl) Internals.CREATE_PLAIN.invoke(null, List.of(jar), metadata,
+                    false, List.of());
             return new ModContainerImpl(candidate);
         } catch (ReflectiveOperationException e) {
             throw new IllegalStateException("the loader could not make a container for " + metadata.getId(), e);
+        }
+    }
+
+    private static void copyChildren(ModContainerImpl from, ModContainerImpl to) {
+        try {
+            Field ids = ModContainerImpl.class.getDeclaredField("childModIds");
+            ids.setAccessible(true);
+            ids.set(to, ids.get(from));
+        } catch (ReflectiveOperationException | RuntimeException e) {
+            LOGGER.info("[Hotwire] {} lists none of the mods its jar carries: {}", to.getMetadata().getId(),
+                    e.toString());
         }
     }
 
