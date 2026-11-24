@@ -123,10 +123,17 @@ public final class ModTripwire {
     public void armEarly(Collection<String> ids, Set<String> rebuilt) {
         ids.forEach(id -> TripwireSites.setOff(id, true));
         this.ride.open();
+        Map<String, Integer> onsAt = new HashMap<>();
+        synchronized (this) {
+            ids.forEach(id -> onsAt.put(id, this.ons.getOrDefault(id, 0)));
+        }
         this.watcher.execute(() -> {
             synchronized (this) {
                 try {
-                    this.wire(ids, rebuilt, true, type -> true);
+                    List<String> off = findToArm(ids, id -> true, this.ons, onsAt);
+                    if (!off.isEmpty()) {
+                        this.wire(off, rebuilt, true, type -> true);
+                    }
                 } catch (RebuildException | RuntimeException e) {
                     LOGGER.warn("[Hotwire] {} could not be wired ahead of its off: {}", ids, e.toString());
                 } finally {

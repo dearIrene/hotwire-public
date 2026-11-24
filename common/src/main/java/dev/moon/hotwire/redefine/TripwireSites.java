@@ -490,10 +490,12 @@ public final class TripwireSites {
 
     public static void setOff(String mod, boolean off) {
         Watch watch = findWatch(mod);
-        if (!(off ? OFF_NOW.add(mod) : OFF_NOW.remove(mod))) {
-            return;
+        synchronized (watch) {
+            if (!(off ? OFF_NOW.add(mod) : OFF_NOW.remove(mod))) {
+                return;
+            }
+            watch.flag().setVolatile(off);
         }
-        watch.flag().setVolatile(off);
 
         if (LOGGER.isDebugEnabled()) {
             LOGGER.debug("[Hotwire] the watch of {} was set by {}", mod, StackWalker.getInstance().walk(frames ->
