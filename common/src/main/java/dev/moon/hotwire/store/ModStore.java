@@ -160,7 +160,7 @@ public final class ModStore {
     }
 
     interface NeedLookup {
-        List<ModrinthClient.Version> find(String projectId) throws IOException;
+        List<ModrinthClient.Version> find(String projectId, @Nullable String versionId) throws IOException;
     }
 
     static List<ModrinthClient.Version> findNeeded(ModrinthClient.Version version, Set<String> seen,
@@ -168,7 +168,7 @@ public final class ModStore {
         List<Callable<List<ModrinthClient.Version>>> asks = new ArrayList<>();
         for (String needed : version.requiredProjects()) {
             if (!seen.contains(needed)) {
-                asks.add(() -> lookup.find(needed));
+                asks.add(() -> lookup.find(needed, version.requiredVersions().get(needed)));
             }
         }
         List<ModrinthClient.Version> out = new ArrayList<>();
@@ -182,14 +182,20 @@ public final class ModStore {
         return out;
     }
 
-    private List<ModrinthClient.Version> findNewestNeeded(String needed) throws IOException {
+    static ModrinthClient.Version pickNeeded(List<ModrinthClient.Version> versions, @Nullable String named) {
+        return versions.stream().filter(version -> version.id().equals(named)).findFirst()
+                .orElseGet(() -> Channel.pick(versions));
+    }
+
+    private List<ModrinthClient.Version> findNewestNeeded(String needed, @Nullable String named)
+            throws IOException {
         if (this.model.isInstalledProject(needed)
                 || this.model.isInstalledProject(this.model.getClient().findProject(needed).slug())) {
             return List.of();
         }
         List<ModrinthClient.Version> versions = this.model.getClient().findVersions(ModrinthClient.Kind.MOD, needed);
         if (!versions.isEmpty()) {
-            return List.of(Channel.pick(versions));
+            return List.of(pickNeeded(versions, named));
         }
         if (!this.model.getClient().isForThisLoader(needed)) {
             return List.of();

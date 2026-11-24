@@ -63,7 +63,14 @@ public final class ModrinthClient {
 
     public record Version(String id, String projectId, String number, String name, String fileName, String url,
             String sha512, long size, List<String> gameVersions, List<String> requiredProjects, String changelog,
-            String type, String published) {
+            String type, String published, Map<String, String> requiredVersions) {
+        public Version(String id, String projectId, String number, String name, String fileName, String url,
+                String sha512, long size, List<String> gameVersions, List<String> requiredProjects, String changelog,
+                String type, String published) {
+            this(id, projectId, number, name, fileName, url, sha512, size, gameVersions, requiredProjects, changelog,
+                    type, published, Map.of());
+        }
+
         public Version(String id, String projectId, String number, String name, String fileName, String url,
                 String sha512, long size, List<String> gameVersions, List<String> requiredProjects,
                 String changelog) {
@@ -433,6 +440,7 @@ public final class ModrinthClient {
             }
         }
         List<String> required = new ArrayList<>();
+        Map<String, String> named = new LinkedHashMap<>();
         JsonElement dependencies = version.get("dependencies");
         if (dependencies != null && dependencies.isJsonArray()) {
             for (JsonElement element : dependencies.getAsJsonArray()) {
@@ -440,6 +448,9 @@ public final class ModrinthClient {
                 if ("required".equals(readText(dependency, "dependency_type")) && dependency.has("project_id")
                         && !dependency.get("project_id").isJsonNull()) {
                     required.add(readText(dependency, "project_id"));
+                    if (!readText(dependency, "version_id").isEmpty()) {
+                        named.put(readText(dependency, "project_id"), readText(dependency, "version_id"));
+                    }
                 }
             }
         }
@@ -450,7 +461,7 @@ public final class ModrinthClient {
                 readText(hashes, "sha512"), file == null ? 0 : readNumber(file, "size"),
                 readStrings(version.get("game_versions")), required, readText(version, "changelog"),
                 readText(version, "version_type").isEmpty() ? "release" : readText(version, "version_type"),
-                readText(version, "date_published"));
+                readText(version, "date_published"), Map.copyOf(named));
     }
 
     private static String readText(JsonObject object, String key) {
