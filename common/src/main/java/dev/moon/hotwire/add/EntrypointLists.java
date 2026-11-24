@@ -52,20 +52,39 @@ public final class EntrypointLists {
             if (ids.contains(host) || !loader.isModLoaded(host)) {
                 continue;
             }
-            List<Object> added = new ArrayList<>();
-            for (EntrypointContainer<Object> entry : loader.getEntrypointContainers(key, Object.class)) {
-                if (ids.contains(entry.getProvider().getMetadata().getId())) {
-                    try {
-                        added.add(entry.getEntrypoint());
-                    } catch (RuntimeException e) {
-                        LOGGER.info("[Hotwire] {}'s {} entrypoint is the host's own type alone: {}",
-                                entry.getProvider().getMetadata().getId(), key, e.toString());
-                    }
+
+            List<Object> added = null;
+            Map<String, List<String>> filled = loader.getModContainer(host)
+                    .map(container -> findFilledBy(container, key)).orElse(Map.of());
+            for (Map.Entry<String, List<String>> list : filled.entrySet()) {
+                Class<?> owner = findLoaded.apply(list.getKey());
+                if (owner == null) {
+                    continue;
+                }
+                if (added == null) {
+                    added = makeEntrypoints(ids, key);
+                }
+                for (String name : list.getValue()) {
+                    join(owner, name, key, added);
                 }
             }
-            loader.getModContainer(host).ifPresent(container -> findFilledBy(container, key).forEach(
-                    (owner, fields) -> fields.forEach(name -> join(findLoaded.apply(owner), name, key, added))));
         }
+    }
+
+    private static List<Object> makeEntrypoints(List<String> ids, String key) {
+        List<Object> added = new ArrayList<>();
+        for (EntrypointContainer<Object> entry : FabricLoader.getInstance().getEntrypointContainers(key,
+                Object.class)) {
+            if (ids.contains(entry.getProvider().getMetadata().getId())) {
+                try {
+                    added.add(entry.getEntrypoint());
+                } catch (RuntimeException e) {
+                    LOGGER.info("[Hotwire] {}'s {} entrypoint is the host's own type alone: {}",
+                            entry.getProvider().getMetadata().getId(), key, e.toString());
+                }
+            }
+        }
+        return added;
     }
 
     private static Set<String> findKeys(List<String> ids) {
