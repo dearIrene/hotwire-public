@@ -140,6 +140,35 @@ public final class LiveConnections {
 
     private static final long DRAIN_WAIT_MILLIS = 500;
 
+    static Runnable stopReading() {
+        List<Object> roots = new ArrayList<>();
+        ClientPacketListener listener = Minecraft.getInstance().getConnection();
+        if (listener != null) {
+            roots.add(listener.getConnection());
+        }
+        roots.addAll(findServerSide());
+        List<Channel> stopped = new ArrayList<>();
+        for (Object connection : roots) {
+            Channel channel = findChannel(connection);
+            if (channel == null || !channel.isOpen() || channel.eventLoop().inEventLoop()
+                    || !channel.config().isAutoRead()) {
+                continue;
+            }
+            try {
+                channel.eventLoop().submit(() -> channel.config().setAutoRead(false))
+                        .get(DRAIN_WAIT_MILLIS, TimeUnit.MILLISECONDS);
+                stopped.add(channel);
+            } catch (InterruptedException e) {
+                Thread.currentThread().interrupt();
+                break;
+            } catch (ExecutionException | TimeoutException e) {
+                stopped.add(channel);
+                LOGGER.info("[Hotwire] a connection's reading was not stopped for the hold: {}", e.toString());
+            }
+        }
+        return stopped.isEmpty() ? () -> { } : () -> stopped.forEach(channel -> channel.config().setAutoRead(true));
+    }
+
     private static @Nullable Channel findChannel(Object connection) {
         for (FieldSlots.Slot slot : Fields.getReferenceFields(connection.getClass(), false)) {
             try {

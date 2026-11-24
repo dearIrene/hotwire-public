@@ -48,6 +48,8 @@ public final class GameHold {
     private @Nullable CountDownLatch server;
     private final boolean owner;
 
+    private volatile @Nullable Runnable reading;
+
     private final AtomicBoolean turn = new AtomicBoolean();
 
     private final boolean refuses;
@@ -81,10 +83,10 @@ public final class GameHold {
         PAUSED_GAME_WORK.add(GameHold::unblock);
     }
 
-    private static volatile boolean serverHalting;
+    private static volatile long haltedAt;
 
     public static void onServerHalting() {
-        serverHalting = true;
+        haltedAt = System.nanoTime();
     }
 
     static boolean isServerPaused() {
@@ -292,6 +294,7 @@ public final class GameHold {
                 return hold;
             }
             LiveConnections.drain();
+            hold.reading = LiveConnections.stopReading();
             pausedSince = System.nanoTime();
             GameParts.getHoldWork().runNextHoldWork();
             begun = true;
@@ -327,6 +330,7 @@ public final class GameHold {
             CountDownLatch paused = new CountDownLatch(1);
             CountDownLatch latch = this.pause();
             AtomicBoolean decided = new AtomicBoolean();
+            long since = System.nanoTime();
             this.server = latch;
             Runnable pausing = () -> {
                 if (!decided.compareAndSet(false, true)) {
@@ -334,8 +338,8 @@ public final class GameHold {
                 }
                 isServerPaused = true;
                 try {
-                    serverHalting = false;
-                    await(paused, latch, PAUSED_WORK, "server", () -> serverHalting || !server.isRunning());
+                    await(paused, latch, PAUSED_WORK, "server",
+                            () -> (haltedAt != 0 && haltedAt - since >= 0) || !server.isRunning());
                 } finally {
                     isServerPaused = false;
                     runPausedWork();
@@ -412,6 +416,11 @@ public final class GameHold {
             PAUSED_GAME_WORK.add(GameHold::unblock);
         }
         if (this.owner) {
+            Runnable read = this.reading;
+            this.reading = null;
+            if (read != null) {
+                read.run();
+            }
             LiveConnections.forgetAfterHold();
             HOLDING.set(false);
             pausedSince = 0;
