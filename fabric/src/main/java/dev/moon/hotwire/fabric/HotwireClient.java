@@ -76,7 +76,7 @@ public final class HotwireClient implements ClientModInitializer {
     @Override
     public void onInitializeClient() {
         if (!LaunchSupport.isFabricOwn()) {
-            LaunchSupport.tellAtTitle();
+            UnsupportedNotice.tellAtTitle();
             return;
         }
         StartTimes.mark("Hotwire's client start begins");
