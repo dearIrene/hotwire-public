@@ -206,9 +206,13 @@ public final class StoreDetail extends Sheet {
 
         String type = "release".equals(version.type()) ? "" : version.type();
         String day = version.published().length() >= 10 ? version.published().substring(0, 10) : "";
+
+        boolean has = this.model.isInstalledProject(shown.projectId());
         return Kit.row(Kit.dim(name).grow(1), Kit.text(type, Palette.WARN).spare(),
                 Kit.text(day, Palette.FAINT).spare(), Kit.text(needs, Palette.FAINT).spare(),
-                Kit.push(Lang.get("hotwire.store.add_this"), () -> {
+                this.model.isInstalledVersion(version) ? Kit.text(Lang.get("hotwire.store.installed"), Palette.ON)
+                        .spare() : Kit.push(Lang.get(has ? "hotwire.store.switch_this" : "hotwire.store.add_this"),
+                                () -> {
                     if (this.model.canAdd()) {
                         this.few.run(shown, () -> this.game.addFromStore(shown.projectId(), version.id(),
                                 shown.title()));

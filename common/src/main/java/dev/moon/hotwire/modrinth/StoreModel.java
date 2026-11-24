@@ -7,6 +7,7 @@ import java.util.HashMap;
 import java.util.HashSet;
 import java.util.LinkedHashMap;
 import java.util.List;
+import java.util.Locale;
 import java.util.Map;
 import java.util.Set;
 import java.util.concurrent.ConcurrentHashMap;
@@ -90,6 +91,8 @@ public final class StoreModel implements AutoCloseable {
     private volatile int page;
 
     private volatile Set<String> installedProjects = Set.of();
+
+    private volatile Set<String> installedHashes = Set.of();
 
     private volatile Map<String, String> queuedJars = Map.of();
     private volatile Map<String, ModrinthClient.Version> updates = Map.of();
@@ -435,6 +438,14 @@ public final class StoreModel implements AutoCloseable {
         this.cards = Collections.unmodifiableList(next);
         this.clearAnswers();
         this.onChanged.run();
+    }
+
+    public void setInstalledHashes(Set<String> hashes) {
+        this.installedHashes = Set.copyOf(hashes);
+    }
+
+    public boolean isInstalledVersion(ModrinthClient.Version version) {
+        return this.installedHashes.contains(version.sha512().toLowerCase(Locale.ROOT));
     }
 
     public Map<String, ModrinthClient.Version> getUpdates() {

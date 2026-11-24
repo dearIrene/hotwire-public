@@ -22,6 +22,7 @@ import java.util.HashMap;
 import java.util.HashSet;
 import java.util.LinkedHashMap;
 import java.util.List;
+import java.util.Locale;
 import java.util.Map;
 import java.util.Queue;
 import java.util.Set;
@@ -30,6 +31,7 @@ import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.concurrent.atomic.AtomicInteger;
 import java.util.function.Consumer;
 import java.util.function.Supplier;
+import java.util.stream.Collectors;
 import net.fabricmc.loader.api.FabricLoader;
 import org.jspecify.annotations.Nullable;
 import org.slf4j.Logger;
@@ -46,6 +48,8 @@ public final class UpdateCheck {
 
     private volatile Set<String> installedProjects = Set.of();
     private volatile Map<String, String> idByProject = Map.of();
+
+    private volatile Set<String> installedHashes = Set.of();
 
     private volatile Downloads downloads = new Downloads();
 
@@ -210,6 +214,8 @@ public final class UpdateCheck {
         });
         this.installedProjects = known;
         this.idByProject = ids;
+        this.installedHashes = hashByName.values().stream().map(hash -> hash.toLowerCase(Locale.ROOT))
+                .collect(Collectors.toUnmodifiableSet());
         List<UpdateOffer> found = this.holdNamed(this.makeOffers(newest, hashByName, idByName, memory), hashByName);
 
         memory.retainTold(found.stream().map(UpdateOffer::versionId).toList());
@@ -271,6 +277,10 @@ public final class UpdateCheck {
 
     public Set<String> getInstalledProjects() {
         return this.installedProjects;
+    }
+
+    public Set<String> getInstalledHashes() {
+        return this.installedHashes;
     }
 
     public Map<String, String> getIdByProject() {

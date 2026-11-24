@@ -1084,6 +1084,7 @@
   "hotwire.store.loading": "Asking Modrinth...",
   "hotwire.store.needs": "Needs %d more",
   "hotwire.store.add_this": "Add this one",
+  "hotwire.store.switch_this": "Switch to this one",
   "hotwire.store.getting_with": "Fetching %s and %d dependencies from Modrinth",
   "hotwire.store.download": "Download",
   "hotwire.store.download_only": "Download only",

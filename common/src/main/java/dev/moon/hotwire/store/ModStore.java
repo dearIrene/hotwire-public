@@ -92,6 +92,7 @@ public final class ModStore {
                             offer.newVersion(), offer.newVersion(), offer.fileName(), offer.url(), offer.sha512(),
                             offer.size(), List.of(), offer.requiredProjects(), offer.changelog()));
                 }
+                this.model.setInstalledHashes(this.check.getInstalledHashes());
                 this.model.setInstalled(this.check.getInstalledProjects(), updates);
             } finally {
                 this.installedKnown.complete(null);
