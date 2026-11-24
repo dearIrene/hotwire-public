@@ -52,7 +52,7 @@ public final class RegistrationJournal {
 
     private static final Logger LOGGER = LoggerFactory.getLogger(RegistrationJournal.class);
 
-    private boolean restoring;
+    private final ThreadLocal<Boolean> restoring = ThreadLocal.withInitial(() -> false);
 
     private static final int PRUNE_EVERY = 64;
     private final List<Entry> entries = new ArrayList<>();
@@ -102,14 +102,16 @@ public final class RegistrationJournal {
         return this.entries.stream().filter(matchOwner(mod)).filter(entry -> !this.removed.contains(entry)).toList();
     }
 
-    public synchronized int remove(String mod) {
+    public int remove(String mod) {
         List<Entry> mine = this.getLive(mod);
         int count = 0;
         for (int i = mine.size() - 1; i >= 0; i--) {
             Entry entry = mine.get(i);
             try {
                 entry.registration().remove();
-                this.removed.add(entry);
+                synchronized (this) {
+                    this.removed.add(entry);
+                }
                 count++;
             } catch (RuntimeException e) {
                 LOGGER.error("[Hotwire] Could not remove {} {} of {}", entry.registration().getKind(),
@@ -129,8 +131,8 @@ public final class RegistrationJournal {
         return before - this.entries.size();
     }
 
-    public synchronized boolean isRestoring() {
-        return this.restoring;
+    public boolean isRestoring() {
+        return this.restoring.get();
     }
 
     public synchronized boolean isLive(long sequence) {
@@ -149,14 +151,17 @@ public final class RegistrationJournal {
         return this.unownedLines;
     }
 
-    public synchronized int restore(String mod) {
-        List<Entry> mine = this.removed.stream().filter(matchOwner(mod)).sorted((a, b) -> Long.compare(a.sequence(),
-                b.sequence())).toList();
-        this.restoring = true;
+    public int restore(String mod) {
+        List<Entry> mine;
+        synchronized (this) {
+            mine = this.removed.stream().filter(matchOwner(mod)).sorted((a, b) -> Long.compare(a.sequence(),
+                    b.sequence())).toList();
+        }
+        this.restoring.set(true);
         try {
             return this.restoreAll(mod, mine);
         } finally {
-            this.restoring = false;
+            this.restoring.set(false);
         }
     }
 
@@ -165,7 +170,9 @@ public final class RegistrationJournal {
         for (Entry entry : mine) {
             try {
                 entry.registration().restore();
-                this.removed.remove(entry);
+                synchronized (this) {
+                    this.removed.remove(entry);
+                }
                 count++;
             } catch (RuntimeException e) {
                 LOGGER.error("[Hotwire] Could not restore {} {} of {}", entry.registration().getKind(),

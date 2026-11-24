@@ -78,11 +78,13 @@ public final class UpdateQueue {
         return staged;
     }
 
-    public synchronized void add(Entry entry) throws IOException {
-        QueueFile queued = this.load();
-        queued.entries.removeIf(other -> other.modId().equals(entry.modId()));
-        queued.entries.add(entry);
-        this.file.save(queued);
+    public void add(Entry entry) throws IOException {
+        synchronized (this) {
+            QueueFile queued = this.load();
+            queued.entries.removeIf(other -> other.modId().equals(entry.modId()));
+            queued.entries.add(entry);
+            this.file.save(queued);
+        }
         this.onAdded.run();
     }
 
