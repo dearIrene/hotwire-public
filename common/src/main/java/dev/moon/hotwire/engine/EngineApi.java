@@ -22,6 +22,7 @@ import dev.moon.hotwire.api.StoreQuery;
 import dev.moon.hotwire.api.SwitchPreview;
 import dev.moon.hotwire.api.SwitchProgress;
 import dev.moon.hotwire.api.SwitchResult;
+import dev.moon.hotwire.concurrent.AheadWork;
 import dev.moon.hotwire.modrinth.Downloads;
 import dev.moon.hotwire.plan.SwitchPlan;
 import dev.moon.hotwire.redefine.HandlerGuards;
@@ -285,6 +286,7 @@ public class EngineApi implements HotwireApi {
 
     @Override
     public boolean showPrompt() {
+        AheadWork.ask();
         String asker = findCallers().findAsker();
         if (asker != null) {
             this.prompted.add(asker);
@@ -299,6 +301,7 @@ public class EngineApi implements HotwireApi {
 
     @Override
     public @Nullable OpeningPrompt findOpeningPrompt() {
+        AheadWork.ask();
         String asker = findCallers().findAsker();
         if (asker != null) {
             this.prompted.add(asker);
