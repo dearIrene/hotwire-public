@@ -61,6 +61,7 @@ import java.util.concurrent.Executors;
 import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.concurrent.atomic.AtomicInteger;
 import java.util.concurrent.atomic.AtomicReference;
+import java.util.concurrent.locks.ReentrantLock;
 import java.util.function.BooleanSupplier;
 import java.util.function.Consumer;
 import java.util.function.Predicate;
@@ -78,6 +79,8 @@ public final class SwitchRunner {
     private final AtomicInteger worldsOpened = new AtomicInteger();
     private int worldsForgotten;
     private final ModSwitcher switcher;
+
+    private final ReentrantLock switching = new ReentrantLock();
     private final OffChecker offChecker;
     private final GameReports reports;
     private final ModTripwire tripwire;
@@ -295,8 +298,15 @@ public final class SwitchRunner {
             this.lateFor.removeAll(stillOff);
             LOGGER.info("[Hotwire] the look after the off of {} took {} ms and noted {} takes the notes lacked at"
                     + " it", stillOff, (System.nanoTime() - start) / 1_000_000, added);
-            if (added > 0 && !this.switcher.isBusy()) {
-                this.fieldReferences.takeOutElementsAgain(stillOff, this.switcher::isOn);
+
+            if (added > 0 && this.switching.tryLock()) {
+                try {
+                    if (!this.switcher.isBusy()) {
+                        this.fieldReferences.takeOutElementsAgain(stillOff, this.switcher::isOn);
+                    }
+                } finally {
+                    this.switching.unlock();
+                }
             }
         } catch (RuntimeException | LinkageError e) {
             LOGGER.warn("[Hotwire] what the look came to late of {} could not be taken out", stillOff, e);
@@ -404,6 +414,7 @@ public final class SwitchRunner {
                 + (ids.size() == 1 ? " mod, " : " mods, ")
                 + String.join(", ", ids.subList(0, Math.min(8, ids.size()))) + (ids.size() > 8 ? " and more" : ""));
         this.units.takeRegistryKeysOnce();
+        this.switching.lock();
         this.switcher.setBusy(true);
         this.reports.onBegun(off ? Report.Operation.OFF : Report.Operation.ON, String.join(", ", ids));
         CheckedResult result = null;
@@ -441,6 +452,7 @@ public final class SwitchRunner {
 
             this.switcher.hideProgress();
             this.switcher.setBusy(false);
+            this.switching.unlock();
             if (!this.lateFor.isEmpty()) {
                 this.looking.execute(this::takeLate);
             }
