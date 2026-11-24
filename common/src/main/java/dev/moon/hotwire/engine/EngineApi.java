@@ -624,6 +624,9 @@ public class EngineApi implements HotwireApi {
         return switch (result) {
             case ModSwitcher.Result.Done done -> new SwitchResult(SwitchResult.Kind.DONE, done.plan().order(), said);
             case ModSwitcher.Result.Refused refused -> new SwitchResult(SwitchResult.Kind.REFUSED, List.of(), said);
+
+            case ModSwitcher.Result.Failed failed when failed.cause().isRestartOnly() ->
+                    SwitchResult.ofRefusal(Reason.NEEDS_RESTART, said);
             case ModSwitcher.Result.Failed failed -> new SwitchResult(failed.cause().reopenFixes()
                     ? SwitchResult.Kind.NEEDS_REOPEN : SwitchResult.Kind.FAILED, List.of(), said);
         };
@@ -665,6 +668,12 @@ public class EngineApi implements HotwireApi {
         String self = CallerBlocks.findRefusal(plan, ids, callers, engine::nameOfMod);
         if (self != null) {
             return new SwitchPreview(false, Reason.REFUSED, List.of(), self);
+        }
+
+        if (off && !plan.order().isEmpty() && parts.runner().hasWorldContent(plan.order())
+                && !parts.runner().hasLeavingContent(plan.order())) {
+            return new SwitchPreview(false, Reason.NEEDS_RESTART, List.of(), Lang.get(
+                    "hotwire.api.preview_next_start_off", PlayerMessages.joinNames(plan.order(), engine::nameOfMod)));
         }
         if (plan.order().isEmpty() && back.isEmpty()) {
             return new SwitchPreview(true, Reason.NONE, List.of(), Lang.get(off ? "hotwire.switch.already_off"

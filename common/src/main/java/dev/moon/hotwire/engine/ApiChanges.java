@@ -110,7 +110,8 @@ final class ApiChanges {
             lines.add(preview.message());
             if (!preview.possible()) {
                 can = false;
-                reason = engine.isWorldLocked() ? Reason.WORLD_LOCKED : Reason.REFUSED;
+                reason = engine.isWorldLocked() ? Reason.WORLD_LOCKED
+                        : preview.reason() == Reason.NEEDS_RESTART ? Reason.NEEDS_RESTART : Reason.REFUSED;
             }
         }
 

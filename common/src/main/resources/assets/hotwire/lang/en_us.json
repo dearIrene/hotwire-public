@@ -512,6 +512,7 @@
   "hotwire.switch.game_busy": "the game was busy (a save or a long task) and didn't pause in time, so try again in a moment",
   "hotwire.switch.reopen_off": "Can't turn off %s while you're in a world so nothing changed, Hotwire's own screen can do it by reopening the world",
   "hotwire.switch.reopen_on": "Can't turn on %s while you're in a world so nothing changed, Hotwire's own screen can do it by reopening the world",
+  "hotwire.api.preview_next_start_off": "%s can't be turned off while the game runs, as it adds blocks, items or the like. It can be turned off for your next start",
   "hotwire.switch.next_start_off": "Can't turn off %s while the game runs so nothing changed, Hotwire's own screen can do it at your next start",
   "hotwire.switch.next_start_on": "Can't turn on %s while the game runs so nothing changed, it comes back at your next start",
   "hotwire.switch.partly_off": " Partly off: %s still running. Restart the game to clear it.",
