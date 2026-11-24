@@ -25,6 +25,7 @@ import dev.moon.hotwire.ui.widgets.TextField;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Locale;
+import java.util.function.Consumer;
 import org.jspecify.annotations.Nullable;
 
 public final class StorePage {
@@ -182,6 +183,27 @@ public final class StorePage {
         } else {
             this.chips.with(this.makeChip(client.getBrowseVersion(), this.gameVersion, this.releases, false));
         }
+        this.chips.with(this.makeFilter("hotwire.store.order.", client.getOrder(), ModrinthClient.Order.values(),
+                ModrinthClient.Order.DEFAULT, order -> this.model.setFilters(order, client.getSide())));
+        if (kind == ModrinthClient.Kind.MOD) {
+            this.chips.with(this.makeFilter("hotwire.store.side.", client.getSide(), ModrinthClient.Side.values(),
+                    ModrinthClient.Side.ANY, side -> this.model.setFilters(client.getOrder(), side)));
+        }
+    }
+
+    private <E extends Enum<E>> Push makeFilter(String key, E now, E[] choices, E usual, Consumer<E> onPick) {
+        Push[] chip = new Push[1];
+        List<Popup.Item> items = new ArrayList<>();
+        for (E choice : choices) {
+            items.add(new Popup.Item(Lang.get(key + choice.name().toLowerCase(Locale.ROOT)),
+                    choice == now ? Palette.ON : Palette.TEXT, () -> {
+                        onPick.accept(choice);
+                        this.showChips();
+                    }));
+        }
+        chip[0] = Kit.push(Lang.get(key + now.name().toLowerCase(Locale.ROOT)) + " ▾",
+                () -> this.openMenu(chip[0], items));
+        return chip[0].lead(now != usual);
     }
 
     private Push makeChip(String now, String yours, List<String> options, boolean ofLoader) {

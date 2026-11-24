@@ -163,6 +163,40 @@ public final class ModrinthClient {
         this.browseVersion = gameVersion;
     }
 
+    public enum Order {
+        DEFAULT(""), RELEVANCE("relevance"), DOWNLOADS("downloads"), FOLLOWS("follows"), NEWEST("newest"),
+        UPDATED("updated");
+
+        private final String index;
+
+        Order(String index) {
+            this.index = index;
+        }
+    }
+
+    public enum Side {
+        ANY, CLIENT, SERVER
+    }
+
+    private volatile Order order = Order.DEFAULT;
+    private volatile Side side = Side.ANY;
+
+    public Order getOrder() {
+        return this.order;
+    }
+
+    public Side getSide() {
+        return this.side;
+    }
+
+    public void setOrder(Order order) {
+        this.order = order;
+    }
+
+    public void setSide(Side side) {
+        this.side = side;
+    }
+
     public boolean isBrowsingOwn() {
         return this.browseLoader.equals(this.loader) && this.browseVersion.equals(this.gameVersion);
     }
@@ -207,6 +241,13 @@ public final class ModrinthClient {
         if (!category.isEmpty()) {
             facets.add(List.of("categories:" + category));
         }
+        Side runs = this.side;
+        if (runs != Side.ANY) {
+            facets.add(List.of("client_side:optional", runs == Side.CLIENT ? "client_side:required"
+                    : "client_side:unsupported"));
+            facets.add(List.of("server_side:optional", runs == Side.CLIENT ? "server_side:unsupported"
+                    : "server_side:required"));
+        }
         for (String hidden : this.hiddenCategories) {
             if (!hidden.equals(category)) {
                 facets.add(List.of("categories!=" + hidden));
@@ -221,7 +262,8 @@ public final class ModrinthClient {
         }
         String facetText = facetJson.toString();
         String url = API + "/search?query=" + encode(words) + "&facets=" + encode(facetText.toString())
-                + "&index=" + (words.isBlank() ? "downloads" : "relevance") + "&offset=" + offset + "&limit="
+                + "&index=" + (this.order != Order.DEFAULT ? this.order.index : words.isBlank() ? "downloads"
+                        : "relevance") + "&offset=" + offset + "&limit="
                 + limit;
         JsonObject root = JsonParser.parseString(this.transport.get(url)).getAsJsonObject();
         List<Hit> hits = new ArrayList<>();
@@ -412,7 +454,9 @@ public final class ModrinthClient {
     }
 
     public String getScope() {
-        return this.browseLoader + ":" + this.browseVersion;
+        String filters = this.order == Order.DEFAULT && this.side == Side.ANY ? ""
+                : ":" + this.order + ":" + this.side;
+        return this.browseLoader + ":" + this.browseVersion + filters;
     }
 
     public Map<String, String> findChanges(Collection<String> projectIds) throws IOException {

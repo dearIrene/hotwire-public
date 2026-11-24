@@ -291,6 +291,12 @@ public final class StoreModel implements AutoCloseable {
         this.searchFresh();
     }
 
+    public void setFilters(ModrinthClient.Order order, ModrinthClient.Side side) {
+        this.client.setOrder(order);
+        this.client.setSide(side);
+        this.searchFresh();
+    }
+
     public boolean canAdd() {
         return this.client.isBrowsingOwn();
     }
