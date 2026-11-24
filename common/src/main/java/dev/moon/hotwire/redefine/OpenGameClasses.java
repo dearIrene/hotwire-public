@@ -2,6 +2,7 @@ package dev.moon.hotwire.redefine;
 
 import java.lang.instrument.ClassFileTransformer;
 import java.security.ProtectionDomain;
+import java.util.List;
 import java.util.Set;
 import java.util.concurrent.ConcurrentHashMap;
 import org.jspecify.annotations.Nullable;
@@ -11,6 +12,10 @@ import org.objectweb.asm.Opcodes;
 public final class OpenGameClasses implements ClassFileTransformer {
     private static final Set<String> OPENED = ConcurrentHashMap.newKeySet();
     private static final String OWN = "dev/moon/hotwire/";
+
+    private static final List<String> GAME = List.of("net/minecraft/", "com/mojang/minecraft/",
+            "com/mojang/rubydung/", "com/mojang/blaze3d/", "com/mojang/renderpearl/", "com/mojang/math/",
+            "com/mojang/realmsclient/");
 
     private final ClassLoader game;
 
@@ -31,7 +36,7 @@ public final class OpenGameClasses implements ClassFileTransformer {
     @SuppressWarnings("ReferenceEquality")
     public byte @Nullable [] transform(@Nullable ClassLoader loader, @Nullable String name,
             @Nullable Class<?> redefining, @Nullable ProtectionDomain domain, byte[] bytes) {
-        if (name == null || loader != this.game || name.startsWith(OWN)
+        if (name == null || loader != this.game || name.startsWith(OWN) || !isGames(name)
                 || (redefining != null && !OPENED.contains(name))) {
             return null;
         }
@@ -40,6 +45,15 @@ public final class OpenGameClasses implements ClassFileTransformer {
             OPENED.add(name);
         }
         return opened;
+    }
+
+    static boolean isGames(String internalName) {
+        for (String prefix : GAME) {
+            if (internalName.startsWith(prefix)) {
+                return true;
+            }
+        }
+        return internalName.indexOf('/') < 0;
     }
 
     static byte @Nullable [] open(byte[] bytes) {
