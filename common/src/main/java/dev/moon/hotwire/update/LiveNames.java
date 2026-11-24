@@ -28,6 +28,15 @@ public final class LiveNames {
                 .add(id));
     }
 
+    public static Set<String> findOwnIds(String liveId) {
+        return OWN_IDS.getOrDefault(liveId, Set.of());
+    }
+
+    public static List<String> findCopiesOf(String id) {
+        return OWN_IDS.entrySet().stream().filter(copy -> copy.getValue().contains(id)).map(Map.Entry::getKey)
+                .toList();
+    }
+
     public static Set<String> findOwnKeys(String key) {
         int at = key.indexOf('$');
         Set<String> ids = at < 0 ? null : OWN_IDS.get(key.substring(0, at));
@@ -48,8 +57,9 @@ public final class LiveNames {
     }
 
     public static String findRunningName(String name) {
-        for (int at = RUNNING.size() - 1; at >= 0; at--) {
-            String tag = RUNNING.get(at);
+        Object[] tags = RUNNING.toArray();
+        for (int at = tags.length - 1; at >= 0; at--) {
+            String tag = (String) tags[at];
             Set<String> own = CLASSES.get(tag);
             if (own != null && own.contains(name)) {
                 return ROOT + tag + "." + name;

@@ -6,6 +6,7 @@ import dev.moon.hotwire.redefine.FieldSlots;
 import dev.moon.hotwire.redefine.Tripwire;
 import dev.moon.hotwire.seam.ClassKinds;
 import dev.moon.hotwire.seam.Game;
+import dev.moon.hotwire.update.LiveNames;
 import java.lang.reflect.Member;
 import java.lang.reflect.Proxy;
 import java.util.Arrays;
@@ -39,7 +40,7 @@ final class ElementOwners {
         this.libraryOfSome = Set.copyOf(libraries);
         this.registered = registered;
         this.out = out;
-        this.names = new ModNames(mods);
+        this.names = new ModNames(mods, LiveNames::findOwnIds);
         this.reflected = reflected;
     }
 

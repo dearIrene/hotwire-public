@@ -6,6 +6,7 @@ import java.util.List;
 import java.util.Locale;
 import java.util.Map;
 import java.util.Set;
+import java.util.function.Function;
 import java.util.stream.Collectors;
 import java.util.stream.IntStream;
 import org.jspecify.annotations.Nullable;
@@ -22,16 +23,27 @@ public final class ModNames {
     }
 
     public ModNames(List<String> mods) {
+        this(mods, mod -> Set.of());
+    }
+
+    public ModNames(List<String> mods, Function<String, Set<String>> standsFor) {
         this.mods = List.copyOf(mods);
         for (int place = 0; place < this.mods.size(); place++) {
             String mod = this.mods.get(place);
-            this.places.putIfAbsent(mod, place);
-            String id = toWords(mod);
-            if (id.length() >= WORD_LENGTH) {
-                int end = id.indexOf('_');
-                String first = end < 0 ? id : id.substring(0, end);
-                this.byFirstWord.computeIfAbsent(first, any -> new ArrayList<>()).add(new Word("_" + id + "_", place));
+            this.learn(mod, place);
+            for (String other : standsFor.apply(mod)) {
+                this.learn(other, place);
             }
+        }
+    }
+
+    private void learn(String name, int place) {
+        this.places.putIfAbsent(name, place);
+        String id = toWords(name);
+        if (id.length() >= WORD_LENGTH) {
+            int end = id.indexOf('_');
+            String first = end < 0 ? id : id.substring(0, end);
+            this.byFirstWord.computeIfAbsent(first, any -> new ArrayList<>()).add(new Word("_" + id + "_", place));
         }
     }
 
