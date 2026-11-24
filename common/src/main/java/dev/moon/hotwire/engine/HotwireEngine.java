@@ -50,6 +50,7 @@ import dev.moon.hotwire.ui.widgets.IconSource;
 import dev.moon.hotwire.update.PendingChange;
 import dev.moon.hotwire.update.PendingChanges;
 import dev.moon.hotwire.update.SwapAtClose;
+import dev.moon.hotwire.update.SwapProblems;
 import dev.moon.hotwire.update.UpdateFolders;
 import dev.moon.hotwire.update.UpdateMethod;
 import dev.moon.hotwire.update.UpdateOffer;
@@ -57,7 +58,9 @@ import dev.moon.hotwire.update.UpdatePreview;
 import dev.moon.hotwire.update.UpdateQueue;
 import dev.moon.hotwire.update.UrgentUpdate;
 import java.io.IOException;
+import java.nio.file.Files;
 import java.nio.file.Path;
+import java.time.Instant;
 import java.util.ArrayList;
 import java.util.Collection;
 import java.util.HashMap;
@@ -180,10 +183,31 @@ public final class HotwireEngine implements ModScreenGame, AutoCloseable {
                 FabricLoader.getInstance().getGameDir().resolve("hotwire").resolve("added").resolve("deleted"));
     }
 
+    private static void tellSwapProblems(Path lastClose, List<UpdateQueue.Entry> queued) {
+        List<String> problems = new ArrayList<>();
+        try {
+            if (Files.isRegularFile(lastClose)) {
+                problems.addAll(SwapProblems.findInLog(Files.readString(lastClose)));
+            }
+        } catch (IOException e) {
+            LOGGER.debug("[Hotwire] the last close's log could not be read: {}", e.toString());
+        }
+        long started = ProcessHandle.current().info().startInstant().map(Instant::toEpochMilli).orElse(0L);
+        List<String> missed = SwapProblems.findMissed(queued, started);
+        if (problems.isEmpty() && missed.isEmpty()) {
+            return;
+        }
+        LOGGER.warn("[Hotwire] the last close did not put everything in place: {}; never tried: {}", problems, missed);
+        String what = missed.isEmpty() ? Lang.get("hotwire.swap.failed_detail")
+                : Lang.get("hotwire.swap.missed_detail", String.join(", ", missed));
+        Notices.show(Notice.ofBad(Lang.get("hotwire.swap.failed_title"), what));
+    }
+
     public void cleanUpdateFolders() {
         try {
             Path hotwire = FabricLoader.getInstance().getGameDir().resolve("hotwire");
             SwapAtClose.saveLastLogs(this.updateFolders.swapper(), hotwire.resolve("logs"));
+            tellSwapProblems(hotwire.resolve("logs").resolve(SwapAtClose.LAST_LOGS), this.updateQueue.getEntries());
             this.pending.cleanAtStart(hotwire.resolve("store"), hotwire.resolve("added"));
         } catch (IOException e) {
             LOGGER.warn("[Hotwire] the update folders under {} could not be cleaned", this.updateFolders.staging(), e);
