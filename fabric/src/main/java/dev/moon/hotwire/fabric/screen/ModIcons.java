@@ -122,7 +122,12 @@ public final class ModIcons implements AutoCloseable, IconSource {
 
         @Override
         public void release() {
-            this.textures.values().forEach(Minecraft.getInstance().getTextureManager()::release);
+            Minecraft game = Minecraft.getInstance();
+            if (!game.isSameThread()) {
+                game.execute(this::release);
+                return;
+            }
+            this.textures.values().forEach(game.getTextureManager()::release);
             this.textures.clear();
         }
     }
