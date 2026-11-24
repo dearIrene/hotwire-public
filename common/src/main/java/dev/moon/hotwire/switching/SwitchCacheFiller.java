@@ -295,9 +295,15 @@ public final class SwitchCacheFiller {
             return;
         }
         boolean all = Flags.CACHE_AUDIT_ALL;
-        List<Step> checked = all ? this.steps.subList(0, holding)
-                : List.of(this.steps.get(ThreadLocalRandom.current().nextInt(holding)));
         CachedMixes cache = this.applier.getRebuilder().getCache();
+        List<Step> unchecked = this.steps.subList(0, holding).stream()
+                .filter(step -> all || !cache.isAudited(findStepKey(step))).toList();
+        if (unchecked.isEmpty()) {
+            LOGGER.info("[Hotwire] the switch cache's {} steps were each held against a fresh mix before", holding);
+            return;
+        }
+        List<Step> checked = all ? unchecked
+                : List.of(unchecked.get(ThreadLocalRandom.current().nextInt(unchecked.size())));
         for (Step step : checked) {
             if (current != this.run.get()) {
                 return;
@@ -315,8 +321,12 @@ public final class SwitchCacheFiller {
             } finally {
                 cache.setAuditing(false);
             }
+            boolean same = cache.countAuditWrong() == 0;
             LOGGER.info("[Hotwire] the switch cache was held against a fresh mix for the off and on of {}: {}",
                     step.mods(), cache.takeAudit());
+            if (same && current == this.run.get()) {
+                cache.markAudited(findStepKey(step));
+            }
         }
         if (all) {
             LOGGER.info("[Hotwire] the switch cache's audit of all {} steps is done", checked.size());

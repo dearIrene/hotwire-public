@@ -460,6 +460,18 @@ final class MixedCache {
                 .array(), null));
     }
 
+    void markAudited(CacheKey step) {
+        this.writer.execute(() -> this.store.put(findAuditedKey(this.findFilledKey(step)), new byte[] {1}, null));
+    }
+
+    boolean isAudited(CacheKey step) {
+        return this.store.get(findAuditedKey(this.findFilledKey(step)), null) != null;
+    }
+
+    private static CacheKey findAuditedKey(CacheKey filled) {
+        return CacheKey.of("audited 1").add(filled.high()).add(filled.low()).build();
+    }
+
     boolean hasBeenFilled(CacheKey mods) {
         return this.store.get(findModsKey(mods), null) != null;
     }

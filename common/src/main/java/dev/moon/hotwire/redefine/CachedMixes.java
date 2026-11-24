@@ -65,6 +65,22 @@ public final class CachedMixes {
         this.auditing = on;
     }
 
+    public void markAudited(CacheKey step) {
+        MixedCache known = this.cache;
+        if (known != null) {
+            known.markAudited(step);
+        }
+    }
+
+    public boolean isAudited(CacheKey step) {
+        MixedCache known = this.cache;
+        return known != null && known.isAudited(step);
+    }
+
+    public int countAuditWrong() {
+        return this.auditedWrong.get();
+    }
+
     public String takeAudit() {
         return this.audited.getAndSet(0) + " classes, " + this.auditedWrong.getAndSet(0)
                 + " differed and are made again";
