@@ -445,6 +445,8 @@ public final class FindBrokenPanel extends Sheet {
             this.leave();
         } else if (run != null && run.getPhase() == BrokenModRun.Phase.DONE) {
             this.close();
+        } else {
+            this.game.onDone();
         }
         return true;
     }
