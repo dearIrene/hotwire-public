@@ -62,23 +62,46 @@ final class OneConfigEventRegistration implements Registration {
         }
     }
 
-    boolean runIfOnInitialization() throws ReflectiveOperationException {
-        Class<?> base = this.handler.getClass();
-        while (base != null && !HANDLER.equals(LiveNames.findOwnName(base.getName()))) {
-            base = base.getSuperclass();
+    @Nullable Integer findInitializationPriority() throws ReflectiveOperationException {
+        Class<?> base = this.findHandlerType();
+        if (base == null || this.findInitialization(base) == null) {
+            return null;
         }
-        if (base == null || !(base.getMethod("getEventClass").invoke(this.handler) instanceof Class<?> event)
-                || !INITIALIZATION.equals(LiveNames.findOwnName(event.getName()))) {
-            return false;
+        try {
+            return base.getMethod("getPriority").invoke(this.handler) instanceof Integer priority ? priority : 0;
+        } catch (NoSuchMethodException e) {
+            return 0;
+        }
+    }
+
+    void runInitialization() throws ReflectiveOperationException {
+        Class<?> base = this.findHandlerType();
+        Class<?> event = base == null ? null : this.findInitialization(base);
+        if (base == null || event == null) {
+            return;
         }
         Object instance = event.getField("INSTANCE").get(null);
         for (Method method : base.getMethods()) {
             if (method.getName().equals("handle") && method.getParameterCount() == 1) {
-                method.invoke(this.handler, instance);
-                return true;
+                if (Boolean.TRUE.equals(method.invoke(this.handler, instance))) {
+                    this.call("unregister");
+                }
+                return;
             }
         }
-        return false;
+    }
+
+    private @Nullable Class<?> findHandlerType() {
+        Class<?> base = this.handler.getClass();
+        while (base != null && !HANDLER.equals(LiveNames.findOwnName(base.getName()))) {
+            base = base.getSuperclass();
+        }
+        return base;
+    }
+
+    private @Nullable Class<?> findInitialization(Class<?> base) throws ReflectiveOperationException {
+        return base.getMethod("getEventClass").invoke(this.handler) instanceof Class<?> event
+                && INITIALIZATION.equals(LiveNames.findOwnName(event.getName())) ? event : null;
     }
 
     private @Nullable Object call(String name) {

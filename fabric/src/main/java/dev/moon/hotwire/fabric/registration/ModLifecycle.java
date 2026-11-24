@@ -1,6 +1,7 @@
 package dev.moon.hotwire.fabric.registration;
 
 import com.mojang.brigadier.CommandDispatcher;
+import dev.moon.hotwire.add.HostLists;
 import dev.moon.hotwire.engine.LifecycleListeners;
 import dev.moon.hotwire.fabric.GameParts;
 import dev.moon.hotwire.fabric.version.Spellings;
@@ -8,6 +9,7 @@ import dev.moon.hotwire.plan.SwitchPlan;
 import dev.moon.hotwire.registration.ArchitecturyEventRegistration;
 import dev.moon.hotwire.registration.OneConfigEventRecorder;
 import dev.moon.hotwire.registration.Owners;
+import dev.moon.hotwire.registration.Registration;
 import dev.moon.hotwire.registration.RegistrationJournal;
 import dev.moon.hotwire.switching.ModSwitcher;
 import java.lang.ref.WeakReference;
@@ -314,11 +316,13 @@ public final class ModLifecycle {
     }
 
     private static void callOneConfigInitialization(String id, RegistrationJournal journal, List<String> ran) {
-        for (RegistrationJournal.Entry entry : journal.getLive(id)) {
+        List<Registration> live = journal.getLive(id).stream().map(RegistrationJournal.Entry::registration).toList();
+        for (Registration handler : OneConfigEventRecorder.findOnInitialization(live, (one, e) -> LOGGER.warn(
+                "[Hotwire] {}'s handler {} on OneConfig's bus threw as it was asked its event", id, one.describe(),
+                e))) {
             try {
-                if (OneConfigEventRecorder.runIfOnInitialization(entry.registration())) {
-                    ran.add("OneConfig's InitializationEvent");
-                }
+                OneConfigEventRecorder.runInitialization(handler);
+                ran.add("OneConfig's InitializationEvent");
             } catch (ReflectiveOperationException | RuntimeException | LinkageError e) {
                 LOGGER.warn("[Hotwire] {}'s handler on OneConfig's InitializationEvent threw as the mod started", id,
                         e);
@@ -381,6 +385,7 @@ public final class ModLifecycle {
             public void finishSwitch(SwitchPlan plan, boolean done, Predicate<String> isOn) {
                 if (done && plan.direction() == SwitchPlan.Direction.ON) {
                     LifecycleListeners.markOn(plan.order());
+                    HostLists.listMissing(plan.order(), Minecraft.getInstance());
                 }
                 if (done && plan.direction() == SwitchPlan.Direction.OFF) {
                     LifecycleListeners.finishOff(plan.order().stream().filter(id -> !isOn.test(id)).toList());

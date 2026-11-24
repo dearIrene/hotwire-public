@@ -1,5 +1,6 @@
 package dev.moon.hotwire.fabric.update;
 
+import dev.moon.hotwire.add.HostLists;
 import dev.moon.hotwire.fabric.GameParts;
 import dev.moon.hotwire.fabric.add.AddAssets;
 import dev.moon.hotwire.fabric.add.LaunchSteps;
@@ -34,9 +35,12 @@ public final class UpdateGameSide implements UpdateGame {
     @Override
     public void runLaunchSteps(List<String> ids, Function<String, @Nullable Class<?>> findLoaded) {
         try {
-            Minecraft.getInstance().submit(() -> LaunchSteps.run("the update of " + ids,
-                    LaunchSteps.planAfterStart(ids, findLoaded, new LinkedHashMap<>()),
-                    Set.of("host lists", "entrypoint lists", "client-started listeners"))).get(30, TimeUnit.SECONDS);
+            Minecraft.getInstance().submit(() -> {
+                HostLists.refreshScreens(ids);
+                LaunchSteps.run("the update of " + ids,
+                        LaunchSteps.planAfterStart(ids, findLoaded, new LinkedHashMap<>()),
+                        Set.of("host lists", "entrypoint lists", "client-started listeners"));
+            }).get(30, TimeUnit.SECONDS);
         } catch (InterruptedException e) {
             Thread.currentThread().interrupt();
         } catch (ExecutionException | TimeoutException e) {

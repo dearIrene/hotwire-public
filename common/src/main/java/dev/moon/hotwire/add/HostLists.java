@@ -1,12 +1,18 @@
 package dev.moon.hotwire.add;
 
+import dev.moon.hotwire.engine.LifecycleListeners;
 import dev.moon.hotwire.registration.SodiumSettingsPages;
+import dev.moon.hotwire.update.LiveNames;
 import java.lang.reflect.Field;
 import java.lang.reflect.Method;
 import java.util.ArrayList;
+import java.util.Collection;
+import java.util.Comparator;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
+import java.util.concurrent.Executor;
+import java.util.function.Predicate;
 import java.util.function.Supplier;
 import net.fabricmc.loader.api.FabricLoader;
 import net.fabricmc.loader.api.ModContainer;
@@ -20,6 +26,7 @@ public final class HostLists {
     private static final String MENU = "com.terraformersmc.modmenu.ModMenu";
     private static final String MENU_MOD = "com.terraformersmc.modmenu.util.mod.fabric.FabricMod";
     private static final String MENU_API = "com.terraformersmc.modmenu.api.ModMenuApi";
+    private static final String MENU_NO_SCREEN = "com.terraformersmc.modmenu.util.NullScreenFactory";
     private static final String MULTIMAP = "com.google.common.collect.Multimap";
     private static final String SODIUM = "net.caffeinemc.mods.sodium.client.config.ConfigManager";
     private static final String SODIUM_KEY = "sodium:config_api_user";
@@ -34,6 +41,56 @@ public final class HostLists {
     private static final String LIBJF_NAMING = "dev.jfronny.libjf.config.api.v2.Naming$Custom";
 
     private HostLists() {
+    }
+
+    public static void listMissing(Collection<String> cameOn, Executor game) {
+        if (!cameOn.contains("modmenu") || LifecycleListeners.findStarting().contains("modmenu")) {
+            return;
+        }
+        game.execute(() -> {
+            ClassLoader loader = HostLists.class.getClassLoader();
+            Class<?> menu = find(loader, MENU);
+            if (menu == null) {
+                return;
+            }
+            try {
+                Map<String, Object> listed = readMap(menu, "MODS");
+                FabricLoader.getInstance().getAllMods().stream()
+                        .filter(mod -> !listed.containsKey(mod.getMetadata().getId()))
+                        .sorted(Comparator.comparingInt(HostLists::countContainers))
+                        .forEach(mod -> listInMenu(loader, mod.getMetadata().getId(), mod));
+            } catch (ReflectiveOperationException | RuntimeException | LinkageError e) {
+                LOGGER.warn("[Hotwire] the mods added while Mod Menu was off could not be listed in it; they show"
+                        + " there after a restart", e);
+            }
+        });
+    }
+
+    private static int countContainers(ModContainer mod) {
+        int depth = 0;
+        for (ModContainer at = mod; at.getContainingMod().isPresent() && depth < 16; depth++) {
+            at = at.getContainingMod().get();
+        }
+        return depth;
+    }
+
+    public static void refreshScreens(List<String> ids) {
+        ClassLoader game = HostLists.class.getClassLoader();
+        Class<?> menu = find(game, MENU);
+        if (menu == null) {
+            return;
+        }
+        for (String id : ids) {
+            try {
+                if (readMap(menu, "MODS").containsKey(id)) {
+                    Class<?> api = Class.forName(MENU_API, true, game);
+                    addScreens(menu, api, findNoScreen(game), id, makeEntrypoints("modmenu", id, api));
+                }
+            } catch (ReflectiveOperationException | RuntimeException | LinkageError e) {
+                LOGGER.warn("[Hotwire] {}'s Mod Menu screen could not be read again; it is there after a restart", id,
+                        e);
+            }
+        }
     }
 
     public static void join(List<String> ids) {
@@ -121,14 +178,17 @@ public final class HostLists {
                     .newInstance(container, Set.of());
             mods.put(id, mod);
             Object parentId = mod.getClass().getMethod("getParent").invoke(mod);
-            Object parent = parentId == null || id.equals(parentId) ? null : mods.get(String.valueOf(parentId));
+            String declared = String.valueOf(parentId);
+            Object parent = parentId == null || id.equals(parentId) ? null : findParent(mods, declared,
+                    LiveNames.findCopiesOf(declared), FabricLoader.getInstance()::isModLoaded);
             if (parent == null) {
                 readMap(menu, "ROOT_MODS").put(id, mod);
             } else {
                 Class.forName(MULTIMAP, true, game).getMethod("put", Object.class, Object.class)
                         .invoke(read(menu, "PARENT_MAP"), parent, mod);
             }
-            boolean screen = addScreens(game, menu, id);
+            Class<?> api = Class.forName(MENU_API, true, game);
+            boolean screen = addScreens(menu, api, findNoScreen(game), id, makeEntrypoints("modmenu", id, api));
             menu.getMethod("clearModCountCache").invoke(null);
             LOGGER.info("[Hotwire] {} is listed in Mod Menu{}", id, screen ? ", with its config screen" : "");
         } catch (ReflectiveOperationException | RuntimeException | LinkageError e) {
@@ -136,25 +196,57 @@ public final class HostLists {
         }
     }
 
+    static @Nullable Object findParent(Map<String, Object> mods, String declared, List<String> copies,
+            Predicate<String> isLoaded) {
+        for (String copy : copies) {
+            Object found = isLoaded.test(copy) ? mods.get(copy) : null;
+            if (found != null) {
+                return found;
+            }
+        }
+        return mods.get(declared);
+    }
+
+    private static @Nullable Class<?> findNoScreen(ClassLoader game) {
+        try {
+            return Class.forName(MENU_NO_SCREEN, false, game);
+        } catch (ClassNotFoundException | LinkageError e) {
+            return null;
+        }
+    }
+
     @SuppressWarnings("unchecked")
-    private static boolean addScreens(ClassLoader game, Class<?> menu, String id) throws ReflectiveOperationException {
-        Class<?> api = Class.forName(MENU_API, true, game);
+    static boolean addScreens(Class<?> menu, Class<?> api, @Nullable Class<?> noScreen, String id, List<Object> made)
+            throws ReflectiveOperationException {
         Map<String, Object> factories = readMap(menu, "configScreenFactories");
         List<Object> apis = (List<Object>) read(menu, "apiImplementations");
         boolean own = false;
-        for (EntrypointContainer<Object> entry : findEntrypoints("modmenu", id)) {
-            Object made = entry.getEntrypoint();
-            Object factory = api.getMethod("getModConfigScreenFactory").invoke(made);
-            if (factory != null) {
+        for (Object one : made) {
+            Object factory = api.getMethod("getModConfigScreenFactory").invoke(one);
+            if (factory != null && (noScreen == null || !noScreen.isInstance(factory))) {
                 factories.put(id, factory);
                 own = true;
             }
-            if (api.getMethod("getProvidedConfigScreenFactories").invoke(made) instanceof Map<?, ?> more) {
-                more.forEach((key, value) -> factories.put(String.valueOf(key), value));
+            if (api.getMethod("getProvidedConfigScreenFactories").invoke(one) instanceof Map<?, ?> more) {
+                more.forEach((key, value) -> factories.putIfAbsent(String.valueOf(key), value));
             }
-            apis.add(made);
+            if (!apis.contains(one)) {
+                apis.add(one);
+            }
         }
         return own;
+    }
+
+    @SuppressWarnings({"unchecked", "rawtypes"})
+    private static List<Object> makeEntrypoints(String key, String id, Class<?> type) {
+        List<Object> made = new ArrayList<>();
+        for (Object entry : FabricLoader.getInstance().getEntrypointContainers(key, (Class) type)) {
+            EntrypointContainer<?> one = (EntrypointContainer<?>) entry;
+            if (one.getProvider().getMetadata().getId().equals(id)) {
+                made.add(one.getEntrypoint());
+            }
+        }
+        return made;
     }
 
     private static void addSodiumPages(ClassLoader game, String id) {
