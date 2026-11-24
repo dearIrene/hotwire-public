@@ -33,6 +33,7 @@ dependencies {
 }
 
 tasks.named<JavaCompile>("compileJava") { options.compilerArgs.add("-Xlint:-classfile") }
+tasks.named<JavaCompile>("compileTestJava") { options.compilerArgs.add("-Xlint:-classfile") }
 
 for (task in listOf("compileMixinCopyJava", "compileMixinFixturesJava")) {
     tasks.named<JavaCompile>(task) { options.errorprone.disable("NullAway") }
@@ -68,6 +69,7 @@ dependencies {
 
     testRuntimeOnly("net.fabricmc:fabric-loader:${property("loader_version")}")
     compileOnly("org.apache.logging.log4j:log4j-core:2.22.1")
+    testImplementation("org.apache.logging.log4j:log4j-core:2.22.1")
 
     testImplementation("org.slf4j:slf4j-api:2.0.17")
     testImplementation("com.google.code.gson:gson:2.14.0")

@@ -3,6 +3,7 @@ package dev.moon.hotwire.report;
 import dev.moon.hotwire.redefine.MissingMember;
 import dev.moon.hotwire.redefine.SidecarReflection;
 import java.util.function.BiConsumer;
+import java.util.function.Supplier;
 import org.apache.logging.log4j.Level;
 import org.apache.logging.log4j.LogManager;
 import org.apache.logging.log4j.Marker;
@@ -24,7 +25,7 @@ public final class LoggedFaults extends AbstractFilter {
 
     private static volatile BiConsumer<String, Throwable> ownThrow = (said, thrown) -> { };
 
-    private LoggedFaults() {
+    LoggedFaults() {
         super(Result.NEUTRAL, Result.NEUTRAL);
     }
 
@@ -50,7 +51,7 @@ public final class LoggedFaults extends AbstractFilter {
             Object... params) {
         if (message != null && level.isMoreSpecificThan(Level.WARN)) {
             ParameterizedMessage said = new ParameterizedMessage(message, params);
-            note(logger, said.getFormattedMessage(), said.getThrowable());
+            note(logger, said::getFormattedMessage, said.getThrowable());
         }
         return Result.NEUTRAL;
     }
@@ -61,7 +62,7 @@ public final class LoggedFaults extends AbstractFilter {
     public Result filter(Logger logger, Level level, @Nullable Marker marker, @Nullable Object message,
             @Nullable Throwable thrown) {
         if (message != null && level.isMoreSpecificThan(Level.WARN)) {
-            note(logger, String.valueOf(message), thrown);
+            note(logger, () -> String.valueOf(message), thrown);
         }
         return Result.NEUTRAL;
     }
@@ -70,21 +71,36 @@ public final class LoggedFaults extends AbstractFilter {
     public Result filter(Logger logger, Level level, @Nullable Marker marker, @Nullable Message message,
             @Nullable Throwable thrown) {
         if (message != null && level.isMoreSpecificThan(Level.WARN)) {
-            note(logger, message.getFormattedMessage(), thrown == null ? message.getThrowable() : thrown);
+            note(logger, message::getFormattedMessage, thrown == null ? message.getThrowable() : thrown);
         }
         return Result.NEUTRAL;
     }
 
-    private static void note(Logger logger, String said, @Nullable Throwable thrown) {
-        String name = logger.getName();
-        if (name.startsWith(HARNESS)) {
-            return;
+    @SuppressWarnings("checkstyle:IllegalCatch")
+    private static void note(Logger logger, Supplier<String> words, @Nullable Throwable thrown) {
+        try {
+            String name = logger.getName();
+            if (name.startsWith(HARNESS)) {
+                return;
+            }
+            if (name.startsWith(OWN)) {
+                String said = words.get();
+                SwitchFaults.note(said.startsWith(PREFIX) ? said.substring(PREFIX.length()) : said, thrown);
+            } else if (thrown != null && findOwnFrame(thrown) != null) {
+                String said = readWords(words);
+                SwitchFaults.note(said + " (" + thrown + ")", thrown);
+                ownThrow.accept(said, thrown);
+            }
+        } catch (RuntimeException | LinkageError e) {
         }
-        if (name.startsWith(OWN)) {
-            SwitchFaults.note(said.startsWith(PREFIX) ? said.substring(PREFIX.length()) : said, thrown);
-        } else if (thrown != null && findOwnFrame(thrown) != null) {
-            SwitchFaults.note(said + " (" + thrown + ")", thrown);
-            ownThrow.accept(said, thrown);
+    }
+
+    @SuppressWarnings("checkstyle:IllegalCatch")
+    private static String readWords(Supplier<String> words) {
+        try {
+            return words.get();
+        } catch (RuntimeException e) {
+            return "a line that could not be put into words (" + e + ")";
         }
     }
 
