@@ -20,6 +20,7 @@ import java.util.HashMap;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.concurrent.atomic.AtomicInteger;
 import java.util.function.Function;
 import java.util.function.Predicate;
@@ -104,8 +105,11 @@ public final class GameClassIndex {
                     return own;
                 };
                 List<?> live = index.countJars() == path.length ? findLivePath(jars) : null;
+
+                AtomicBoolean left = new AtomicBoolean();
+                ClassPathIndex.onLeaving(jar -> left.set(true));
                 Predicate<String> absent = name -> {
-                    if (live == null || live.size() != path.length || !index.isAbsent(name)) {
+                    if (!isPathAsListed(live, left.get(), path.length) || !index.isAbsent(name)) {
                         return false;
                     }
                     if (isTrusted(checked)) {
@@ -132,6 +136,10 @@ public final class GameClassIndex {
                 LOGGER.info("[Hotwire] the game's loader goes on asking every jar for a class: {}", e.toString());
             }
         });
+    }
+
+    static boolean isPathAsListed(@Nullable List<?> live, boolean jarLeft, int listed) {
+        return live != null && !jarLeft && live.size() == listed;
     }
 
     private static boolean isTrusted(AtomicInteger checked) {
