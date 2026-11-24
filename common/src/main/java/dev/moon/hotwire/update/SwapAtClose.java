@@ -13,7 +13,9 @@ import java.nio.file.StandardCopyOption;
 import java.security.CodeSource;
 import java.util.ArrayList;
 import java.util.List;
+import java.util.Locale;
 import java.util.Optional;
+import java.util.concurrent.TimeUnit;
 import java.util.stream.Stream;
 import java.util.zip.ZipEntry;
 import java.util.zip.ZipFile;
@@ -34,6 +36,10 @@ public final class SwapAtClose {
     private final Path hotwireJar;
     private final Path swapperCopy;
     private boolean started;
+
+    private boolean inProcess;
+
+    private static final long STARTED_MILLIS = 1500;
 
     public SwapAtClose(UpdateQueue queue, UpdateFolders folders, Path hotwireJar) {
         this.queue = queue;
@@ -58,8 +64,9 @@ public final class SwapAtClose {
         }
         Optional<String> java = findJava();
         if (java.isEmpty()) {
-            LOGGER.error("[Hotwire] the running Java is not known, so {} queued updates wait for the next close",
+            LOGGER.error("[Hotwire] the running Java is not known; {} queued updates go in as the game closes",
                     entries.size());
+            this.swapInProcess();
             return;
         }
         try {
@@ -69,18 +76,50 @@ public final class SwapAtClose {
                     this.folders.replaced().toAbsolutePath().toString(),
                     FabricLoader.getInstance().getGameDir().resolve("hotwire").resolve("store").toAbsolutePath()
                             .toString()));
-            new ProcessBuilder(java.get(), "-Xmx16m", "-XX:+UseSerialGC", "-XX:TieredStopAtLevel=1", "-cp",
-                    this.copyClassPath(), JarSwapper.class.getName(), Long.toString(ProcessHandle.current().pid()))
+            Process swapper = new ProcessBuilder(java.get(), "-Xmx16m", "-XX:+UseSerialGC",
+                    "-XX:TieredStopAtLevel=1", "-cp", this.copyClassPath(), JarSwapper.class.getName(),
+                    Long.toString(ProcessHandle.current().pid()))
                     .directory(this.folders.swapper().toFile())
                     .redirectErrorStream(true)
                     .redirectOutput(this.folders.swapperLog().toFile())
                     .start();
             this.started = true;
+
+            if (swapper.waitFor(STARTED_MILLIS, TimeUnit.MILLISECONDS)) {
+                LOGGER.warn("[Hotwire] the swapper ended at once (exit {}); queued updates go in as the game closes",
+                        swapper.exitValue());
+                this.swapInProcess();
+                return;
+            }
             LOGGER.info("[Hotwire] the swapper waits to put what is queued in place once the game ends ({} now)",
                     entries.size());
         } catch (IOException e) {
-            LOGGER.error("[Hotwire] the swapper could not start; {} queued updates wait for the next close",
+            LOGGER.error("[Hotwire] the swapper could not start; {} queued updates go in as the game closes",
                     entries.size(), e);
+            this.swapInProcess();
+        } catch (InterruptedException e) {
+            Thread.currentThread().interrupt();
+        }
+    }
+
+    private void swapInProcess() {
+        if (this.inProcess || System.getProperty("os.name", "").toLowerCase(Locale.ROOT).startsWith("windows")) {
+            return;
+        }
+        this.inProcess = true;
+        this.started = true;
+        Runnable swap = () -> {
+            try {
+                JarSwapper.swap(this.queue, this.folders.mods(), this.folders.replaced());
+                LOGGER.info("[Hotwire] the queued jars were put in place as the game closed");
+            } catch (IOException | RuntimeException e) {
+                LOGGER.error("[Hotwire] the queued jars could not be put in place as the game closed", e);
+            }
+        };
+        try {
+            Runtime.getRuntime().addShutdownHook(new Thread(swap, "Hotwire swap in the game"));
+        } catch (IllegalStateException closing) {
+            swap.run();
         }
     }
 
