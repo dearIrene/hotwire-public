@@ -557,6 +557,7 @@ public final class SwitchRunner {
                     this.takeOut(order);
 
                     this.units.compileShadersAgainFor(this.switcher.findChangedBy(order));
+                    this.units.rebuildPipelinesHolding(order);
                 } finally {
                     release.run();
                 }

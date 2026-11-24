@@ -81,6 +81,8 @@ public interface SwitchUnits {
 
     void compileShadersAgainFor(Collection<String> changed);
 
+    void rebuildPipelinesHolding(Collection<String> mods);
+
     void redrawChunks();
 
     List<String> closeViews(Collection<String> mods);

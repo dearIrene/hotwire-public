@@ -213,6 +213,11 @@ final class GameSwitchUnits implements SwitchUnits {
     }
 
     @Override
+    public void rebuildPipelinesHolding(Collection<String> mods) {
+        GameHold.onGameAndWait(() -> IrisPipelines.reloadIfHolding(mods));
+    }
+
+    @Override
     public void redrawChunks() {
         ChunkRedraw.run();
     }
