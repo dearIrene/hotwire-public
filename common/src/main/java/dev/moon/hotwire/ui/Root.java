@@ -162,6 +162,10 @@ public final class Root {
         }
     }
 
+    public boolean isTyping() {
+        return this.focus != null && this.focus.open();
+    }
+
     public boolean pressKey(int key, int modifiers) {
         if (this.isModalOpen()) {
             return this.modal.pressKey(key, modifiers);

@@ -2,7 +2,9 @@ package dev.moon.hotwire.fabric;
 
 import com.mojang.blaze3d.platform.InputConstants;
 import dev.moon.hotwire.config.HotwireSettings;
+import dev.moon.hotwire.engine.HotwireEngine;
 import dev.moon.hotwire.fabric.screen.HotwireScreen;
+import dev.moon.hotwire.fabric.version.Spellings;
 import dev.moon.hotwire.registration.Owners;
 import dev.moon.hotwire.ui.Lang;
 import dev.moon.hotwire.ui.notices.Notice;
@@ -26,6 +28,8 @@ public final class OpenKey {
     private static final Logger LOGGER = LoggerFactory.getLogger(OpenKey.class);
     private static @Nullable KeyMapping key;
 
+    private static volatile boolean openedSincePress;
+
     private static @Nullable KeyMapping storeKey;
     private static @Nullable Class<?> homeScreen;
     private static Runnable open = () -> { };
@@ -43,6 +47,11 @@ public final class OpenKey {
     }
 
     private OpenKey() {
+    }
+
+    public static boolean isOpenKey(int keyCode) {
+        KeyMapping bound = key;
+        return bound != null && bound.saveString().equals(Spellings.nameKey(keyCode));
     }
 
     static void register(Runnable opener, Runnable storeOpener, @Nullable DevKeys dev) {
@@ -132,6 +141,39 @@ public final class OpenKey {
         }
     }
 
+    public static void pressInWorld(Predicate<KeyMapping> pressed) {
+        KeyMapping made = key;
+        if (made == null || Minecraft.getInstance().level == null || ModViews.openScreen() != null
+                || !pressed.test(made)) {
+            return;
+        }
+        openedSincePress = false;
+        ModViews.runSoon(() -> ModViews.runSoon(() -> {
+            if (!openedSincePress && !(ModViews.openScreen() instanceof HotwireScreen)) {
+                tellNotOpened(made);
+            }
+        }));
+    }
+
+    @SuppressWarnings("ReferenceEquality")
+    private static void tellNotOpened(KeyMapping made) {
+        HotwireEngine engine = HotwireClient.findEngine();
+        if (engine == null || !engine.getSettings().isKeyAlertOn()) {
+            return;
+        }
+        List<String> others = new ArrayList<>();
+        for (KeyMapping other : Minecraft.getInstance().options.keyMappings) {
+            if (other != made && other.same(made) && !other.isUnbound()) {
+                others.add(Component.translatable(other.getName()).getString());
+            }
+        }
+        String keyName = made.getTranslatedKeyMessage().getString();
+        LOGGER.info("[Hotwire] {} was pressed and Hotwire did not open; on the same key: {}", keyName, others);
+        Notices.show(Notice.ofAsk(Lang.get("hotwire.key.taken", keyName), others.isEmpty()
+                ? Lang.get("hotwire.key.not_opened", keyName)
+                : Lang.get("hotwire.key.not_opened_by", keyName, joinPlainly(others))).makeResting(10));
+    }
+
     public static boolean isWaiting() {
         return waiting != null;
     }
@@ -154,6 +196,7 @@ public final class OpenKey {
     public static void onPressed() {
         KeyMapping made = key;
         if (made != null && made.consumeClick()) {
+            openedSincePress = true;
             open.run();
         }
         KeyMapping store = storeKey;

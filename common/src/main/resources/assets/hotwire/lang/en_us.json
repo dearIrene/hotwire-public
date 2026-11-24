@@ -196,6 +196,8 @@
   "hotwire.self_update.keep_playing": "Keep playing",
   "hotwire.self_update.not_hotwire": "the file from Modrinth isn't Hotwire",
   "hotwire.self_update.urgent_chat": "Hotwire %s is an urgent update, you're on %s! Press here to update!",
+  "hotwire.key.not_opened": "%s didn't open Hotwire: another mod took the press. Give Hotwire its own key in Options > Controls",
+  "hotwire.key.not_opened_by": "%s didn't open Hotwire: %s use that key too. Give Hotwire its own key in Options > Controls",
   "hotwire.key.taken": "Hotwire: %s is taken",
   "hotwire.key.and": "and",
   "hotwire.key.taken_by": "%s also opens %s. Pick another key in Controls or turn this alert off in Settings.",

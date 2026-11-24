@@ -21,6 +21,7 @@ public abstract class KeyboardHandlerMixin {
     private void hotwire$pressAtScreen(long window, int action, KeyEvent event, CallbackInfo ci) {
         if (action == InputConstants.PRESS) {
             OpenKey.pressAtScreen(key -> key.matches(event));
+            OpenKey.pressInWorld(key -> key.matches(event));
         }
     }
 
@@ -38,6 +39,7 @@ public abstract class KeyboardHandlerMixin {
             CallbackInfo ci) {
         if (action == InputConstants.PRESS) {
             OpenKey.pressAtScreen(mapping -> mapping.matches(key, scanCode));
+            OpenKey.pressInWorld(mapping -> mapping.matches(key, scanCode));
         }
     }
 

@@ -219,6 +219,14 @@ public final class Spellings {
         return made;
     }
 
+    public static String nameKey(int code) {
+        //? if >=26.3 {
+        return InputConstants.Type.KEYBOARD.getOrCreate(code).getName();
+        //?} else {
+        /*return InputConstants.Type.KEYSYM.getOrCreate(code).getName();
+        *///?}
+    }
+
     public static void setKey(KeyMapping mapping, int code) {
         //? if >=26.3 {
         mapping.setKey(InputConstants.Type.KEYBOARD.getOrCreate(code));

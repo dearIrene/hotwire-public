@@ -1,5 +1,6 @@
 package dev.moon.hotwire.fabric.screen;
 
+import dev.moon.hotwire.fabric.OpenKey;
 import dev.moon.hotwire.ui.ModScreen;
 import dev.moon.hotwire.ui.Root;
 import dev.moon.hotwire.ui.ScreenOpenTimer;
@@ -36,6 +37,15 @@ public final class HotwireScreen extends RootScreen {
 
     public HotwireScreen makeAgain() {
         return new HotwireScreen(this.findScreen(), new ScreenOpenTimer());
+    }
+
+    @Override
+    protected boolean onKeyLeft(int key, int modifiers) {
+        if (modifiers == 0 && !this.getRoot().isTyping() && OpenKey.isOpenKey(key)) {
+            this.onClose();
+            return true;
+        }
+        return false;
     }
 
     @Override
