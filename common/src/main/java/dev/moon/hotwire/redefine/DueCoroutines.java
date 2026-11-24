@@ -52,6 +52,7 @@ public final class DueCoroutines {
                 "(Ljava/lang/Object;)Ljava/lang/Object;");
     }
 
+    @SuppressWarnings("ReferenceEquality")
     public static @Nullable Object addDue(String mod, Object continuation, @Nullable Object result) {
         if (!Tripwire.canWaitForOn(mod)) {
             tell(mod, "runs: " + Thread.currentThread().getName() + " cannot wait for its on", continuation);
@@ -63,8 +64,13 @@ public final class DueCoroutines {
             return null;
         }
         tell(mod, "is set aside for its on", continuation);
-        DEFERRED.computeIfAbsent(mod, any -> Collections.synchronizedList(new ArrayList<>()))
-                .add(new Due(continuation, result));
+
+        Due due = new Due(continuation, result);
+        List<Due> list = DEFERRED.computeIfAbsent(mod, any -> Collections.synchronizedList(new ArrayList<>()));
+        list.add(due);
+        if (DEFERRED.get(mod) != list && list.remove(due)) {
+            resumeAll(mod, List.of(due));
+        }
         return suspended;
     }
 
@@ -78,9 +84,15 @@ public final class DueCoroutines {
             return;
         }
         List<Due> all;
+
         synchronized (due) {
             all = List.copyOf(due);
+            due.clear();
         }
+        resumeAll(mod, all);
+    }
+
+    private static void resumeAll(String mod, List<Due> all) {
         for (Due one : all) {
             try {
                 Object target = one.continuation();
