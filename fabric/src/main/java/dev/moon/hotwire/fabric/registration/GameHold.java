@@ -17,6 +17,7 @@ import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.ExecutionException;
 import java.util.concurrent.Future;
 import java.util.concurrent.LinkedBlockingQueue;
+import java.util.concurrent.Semaphore;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.TimeoutException;
 import java.util.concurrent.atomic.AtomicBoolean;
@@ -47,6 +48,8 @@ public final class GameHold {
     private @Nullable CountDownLatch server;
     private final boolean owner;
 
+    private final AtomicBoolean turn = new AtomicBoolean();
+
     private final boolean refuses;
 
     private boolean allPaused = true;
@@ -62,6 +65,10 @@ public final class GameHold {
 
     private static volatile Object lastCrash = new Object();
     private static volatile boolean gamePaused;
+
+    private static volatile boolean stoppedByStart;
+
+    private static final Semaphore TURN = new Semaphore(1);
 
     private static final BlockingQueue<Runnable> PAUSED_WORK = new LinkedBlockingQueue<>();
     private static final BlockingQueue<Runnable> PAUSED_GAME_WORK = new LinkedBlockingQueue<>();
@@ -272,8 +279,9 @@ public final class GameHold {
             return new GameHold(false, refuses);
         }
         HOLDING.set(true);
-        holder = Thread.currentThread().getName();
         GameHold hold = new GameHold(true, refuses);
+        hold.takeTurn(client);
+        holder = Thread.currentThread().getName();
         hold.hotwireWorkBefore = Tripwire.markHotwireWork(true);
 
         boolean begun = false;
@@ -293,6 +301,24 @@ public final class GameHold {
             }
         }
         return hold;
+    }
+
+    private void takeTurn(Minecraft client) {
+        MinecraftServer server = client.getSingleplayerServer();
+        if (client.isSameThread() || (server != null && server.isSameThread())) {
+            return;
+        }
+        String other = holder;
+        try {
+            if (TURN.tryAcquire(REACH.toMillis(), TimeUnit.MILLISECONDS)) {
+                this.turn.set(true);
+            } else {
+                LOGGER.warn("[Hotwire] {}'s hold still ran after {} s; this one goes on beside it", other,
+                        REACH.toSeconds());
+            }
+        } catch (InterruptedException e) {
+            Thread.currentThread().interrupt();
+        }
     }
 
     private void pauseThreads(Minecraft client) {
@@ -340,7 +366,7 @@ public final class GameHold {
     }
 
     public void pauseGame(Minecraft client) {
-        if (!client.isSameThread() && !gamePaused) {
+        if (!client.isSameThread() && !stoppedByStart) {
             CountDownLatch paused = new CountDownLatch(1);
             CountDownLatch latch = this.pause();
             AtomicBoolean decided = new AtomicBoolean();
@@ -390,6 +416,9 @@ public final class GameHold {
             HOLDING.set(false);
             pausedSince = 0;
             Tripwire.markHotwireWork(this.hotwireWorkBefore);
+            if (this.turn.compareAndSet(true, false)) {
+                TURN.release();
+            }
         }
     }
 
@@ -428,9 +457,11 @@ public final class GameHold {
 
     public static void holdGameUntil(CountDownLatch release) {
         gamePaused = true;
+        stoppedByStart = true;
         try {
             await(new CountDownLatch(1), release, PAUSED_GAME_WORK, "game", () -> false);
         } finally {
+            stoppedByStart = false;
             gamePaused = false;
             runPausedGameWork();
         }
