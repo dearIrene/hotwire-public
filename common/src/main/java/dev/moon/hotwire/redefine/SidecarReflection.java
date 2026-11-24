@@ -15,6 +15,8 @@ import org.jspecify.annotations.Nullable;
 import org.objectweb.asm.Type;
 
 public final class SidecarReflection {
+    private static final String OWN_MARK = "hotwire$";
+
     private SidecarReflection() {
     }
 
@@ -55,16 +57,22 @@ public final class SidecarReflection {
 
     public static Method[] getDeclaredMethods(Class<?> type) {
         List<Method> all = new ArrayList<>(Arrays.asList(type.getDeclaredMethods()));
+        all.removeIf(SidecarReflection::isHotwires);
         all.addAll(findAddedMethods(type));
         return all.toArray(Method[]::new);
     }
 
     public static Method[] getMethods(Class<?> type) {
         List<Method> all = new ArrayList<>(Arrays.asList(type.getMethods()));
+        all.removeIf(SidecarReflection::isHotwires);
         for (Class<?> at = type; at != null; at = at.getSuperclass()) {
             all.addAll(findAddedMethods(at));
         }
         return all.toArray(Method[]::new);
+    }
+
+    static boolean isHotwires(Method method) {
+        return method.getName().contains(OWN_MARK);
     }
 
     @SuppressWarnings("checkstyle:IllegalCatch")
