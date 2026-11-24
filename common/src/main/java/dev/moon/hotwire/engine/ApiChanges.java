@@ -279,13 +279,24 @@ final class ApiChanges {
         }
     }
 
+    private static SwitchResult makeFailed(Throwable error) {
+        return new SwitchResult(SwitchResult.Kind.FAILED, List.of(), Lang.get("hotwire.api.plan_failed",
+                error.toString()));
+    }
+
     private static ChangeOutcome addAll(HotwireEngine engine, List<Path> jars, List<AddMode> modes) {
         ChangeOutcome made = new ChangeOutcome();
         for (int at = 0; at < jars.size(); at++) {
             Path jar = jars.get(at);
             AddMode mode = modes.get(at);
             CompletableFuture<ModAdder.Result> added = new CompletableFuture<>();
-            Games.getNow().runOnGame(() -> engine.add(jar, mode, added::complete));
+            Games.getNow().runOnGame(() -> {
+                try {
+                    engine.add(jar, mode, added::complete);
+                } catch (RuntimeException | LinkageError e) {
+                    added.complete(new ModAdder.Result.Failed(e.toString(), e));
+                }
+            });
             switch (added.join()) {
                 case ModAdder.Result.Added one -> made.now().addAll(one.ids());
                 case ModAdder.Result.Queued queued -> made.later().add(queued.id());
@@ -416,8 +427,7 @@ final class ApiChanges {
                 return EngineApi.onGame(ended);
             }
             Thread.ofPlatform().name("hotwire-api-queue").daemon().start(() -> {
-                ChangeOutcome updates = readUpdates(this.jars.stream().map(jar -> engine.getChanges().queueUpdate(jar))
-                        .toList());
+                ChangeOutcome updates = readUpdates(engine.getChanges().queueAll(this.jars).join());
                 ChangeOutcome adds = addAll(engine, this.adding, this.adding.stream().map(jar -> AddMode.NEXT_START)
                         .toList());
                 List<String> bad = new ArrayList<>(updates.bad());
@@ -481,15 +491,14 @@ final class ApiChanges {
                 boolean off = !this.request.off().isEmpty();
                 List<String> ids = off ? this.request.off() : this.request.on();
                 CompletableFuture<SwitchResult> made = new CompletableFuture<>();
-                Games.getNow().runOnGame(() -> found.switchWithReopenFor(off, ids).whenComplete((result,
-                        error) -> {
-                    if (error != null) {
-                        made.complete(new SwitchResult(SwitchResult.Kind.FAILED, List.of(),
-                                Lang.get("hotwire.api.plan_failed", error.toString())));
-                    } else {
-                        made.complete(result);
+                Games.getNow().runOnGame(() -> {
+                    try {
+                        found.switchWithReopenFor(off, ids).whenComplete((result, error) -> made.complete(
+                                error == null ? result : makeFailed(error)));
+                    } catch (RuntimeException | LinkageError e) {
+                        made.complete(makeFailed(e));
                     }
-                }));
+                });
                 return made.join();
             }
             for (boolean off : List.of(true, false)) {
@@ -505,7 +514,7 @@ final class ApiChanges {
             }
             HotwireEngine engine = EngineApi.findEngine();
             if (!this.jars.isEmpty() && engine != null) {
-                ChangeOutcome updates = readUpdates(engine.getChanges().updateAllNow(this.jars));
+                ChangeOutcome updates = readUpdates(engine.getChanges().updateAll(this.jars).join());
                 now.addAll(updates.now());
                 later.addAll(updates.later());
                 if (!updates.bad().isEmpty()) {

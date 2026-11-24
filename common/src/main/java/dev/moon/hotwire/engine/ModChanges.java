@@ -173,6 +173,10 @@ public final class ModChanges {
         return this.tasks.submit("plan ahead", () -> this.planUpdate(jar) != null);
     }
 
+    CompletableFuture<List<ModUpdater.Result>> queueAll(List<Path> jars) {
+        return this.tasks.submit("queue updates", () -> jars.stream().map(this::queueUpdate).toList());
+    }
+
     CompletableFuture<List<ModUpdater.Result>> updateAll(List<Path> jars) {
         return this.tasks.submit("update all", () -> this.updateAllNow(jars));
     }

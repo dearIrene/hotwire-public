@@ -73,6 +73,10 @@ final class JarRequests {
             try {
                 return mode == AddMode.SAVE_AND_REOPEN ? this.changes.addWithReopen(jar, byPlayer)
                         : this.changes.addNow(jar);
+            } catch (RuntimeException | LinkageError e) {
+                LOGGER.warn("[Hotwire] the add of {} threw", jar, e);
+                return new ModAdder.Result.Failed(Lang.get("hotwire.add.start_failed",
+                        String.valueOf(jar.getFileName()), e.toString()), e);
             } finally {
                 this.progress.endAdding();
             }
