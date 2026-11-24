@@ -219,6 +219,10 @@ public final class FieldSlots {
         }
 
         public void set(@Nullable Object holder, @Nullable Object value) throws IllegalAccessException {
+            if (holder == null && this.isStatic() && !setUp.test(this.owner)) {
+                throw new IllegalAccessException(this.owner.getName() + "." + this.name + " is not set up");
+            }
+
             VarHandle write = Modifier.isFinal(this.modifiers) ? null
                     : this.field != null ? this.handle : this.findHandle();
             if (write == null) {
