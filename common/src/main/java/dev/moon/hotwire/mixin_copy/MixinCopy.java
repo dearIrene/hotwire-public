@@ -470,7 +470,7 @@ public final class MixinCopy implements AutoCloseable {
                     this.livePlugins, this.liveMixins, (Function<String, @Nullable InputStream>) this::findLive});
         } catch (IllegalStateException e) {
             this.discard(copy);
-            throw new MixinCopyException(e.getMessage(), e);
+            throw new MixinCopyException(MixinFailures.describe(e), e);
         } catch (RuntimeException | LinkageError | ServiceConfigurationError e) {
             this.discard(copy);
             throw new MixinCopyException("Mixin's copy failed: " + e, e);

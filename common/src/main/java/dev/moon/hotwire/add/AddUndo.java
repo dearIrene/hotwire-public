@@ -28,6 +28,10 @@ public final class AddUndo {
             }
         }
         this.undoable.clear();
-        return this.permanent.isEmpty() ? "" : " Until the game restarts: " + String.join("; ", this.permanent) + ".";
+
+        if (!this.permanent.isEmpty()) {
+            LOGGER.info("[Hotwire] until the game restarts: {}", String.join("; ", this.permanent));
+        }
+        return "";
     }
 }
