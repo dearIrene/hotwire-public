@@ -69,6 +69,7 @@ public final class ClassRebuilder {
     private final Map<String, Set<String>> launchAtLoad = new ConcurrentHashMap<>();
 
     private final Map<String, Set<String>> loadedWith = new ConcurrentHashMap<>();
+    private volatile @Nullable Set<String> loadsWatched;
 
     private final DefinedClasses launch = new DefinedClasses();
 
@@ -717,6 +718,24 @@ public final class ClassRebuilder {
 
     public void rememberLoadedWith(String internalName, Set<String> mods) {
         this.loadedWith.put(internalName, Set.copyOf(mods));
+        Set<String> watched = this.loadsWatched;
+        if (watched != null) {
+            watched.add(internalName);
+        }
+    }
+
+    public Set<String> watchLoads() {
+        Set<String> watched = ConcurrentHashMap.newKeySet();
+        this.loadsWatched = watched;
+        return watched;
+    }
+
+    public void endWatchingLoads() {
+        this.loadsWatched = null;
+    }
+
+    public @Nullable Set<String> findLoadedWith(String internalName) {
+        return this.loadedWith.get(internalName);
     }
 
     public boolean isMixedWith(String internalName, String mod, boolean onAtLaunch) {

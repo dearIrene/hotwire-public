@@ -627,6 +627,7 @@ public final class SwitchApplier {
         OnState before = this.on;
         GuardFlips.Plan plan = HandlerGuards.ENABLED ? this.guardFlips.find(switched, onAfter,
                 this.alsoRebuilt.apply(switched, onAfter), this.replaced.keySet()) : null;
+        Set<String> loadedMeanwhile = this.rebuilder.watchLoads();
         this.on = this.makeOnState(onAfter);
         GuardFlips.Sites sites = this.guardFlips.new Sites(plan, onAfter);
         if (plan != null && plan.isSitesAlone()) {
@@ -637,6 +638,7 @@ public final class SwitchApplier {
             } catch (RebuildException | RuntimeException | LinkageError e) {
                 sites.restore();
                 this.on = before;
+                this.rebuildForRefused(loadedMeanwhile, before);
                 throw e;
             }
         }
@@ -671,6 +673,7 @@ public final class SwitchApplier {
             this.duckRide.disarm();
             sites.restore();
             this.on = before;
+            this.rebuildForRefused(loadedMeanwhile, before);
             throw e;
         }
         try {
@@ -695,13 +698,31 @@ public final class SwitchApplier {
                 release.run();
             }
             this.on = before;
+            this.rebuildForRefused(loadedMeanwhile, before);
             throw e;
         }
+        this.rebuilder.endWatchingLoads();
         SwitchTimes.mark("loaded meanwhile");
         DuckRebridge.runAfterSwitch(this.bridged, this.duckRide.disarm(), this.mods,
                 this.game, this.rebuilder);
         SwitchTimes.mark("duck bridges");
         return dryRun.applied();
+    }
+
+    private void rebuildForRefused(Set<String> loadedMeanwhile, OnState kept) {
+        this.rebuilder.endWatchingLoads();
+        List<String> mixedOtherwise = loadedMeanwhile.stream()
+                .filter(name -> !kept.mods().equals(this.rebuilder.findLoadedWith(name))).toList();
+        if (mixedOtherwise.isEmpty()) {
+            return;
+        }
+        try {
+            this.rebuildLoadedMeanwhile(mixedOtherwise, kept.mods());
+            mixedOtherwise.forEach(name -> this.rebuilder.rememberLoadedWith(name, kept.mods()));
+        } catch (RebuildException | RuntimeException | LinkageError e) {
+            LOGGER.error("[Hotwire] {} loaded while a refused switch ran and keep the mix made for it", mixedOtherwise,
+                    e);
+        }
     }
 
     private void rebuildLoadedMeanwhile(List<String> notLoaded, Set<String> onAfter) throws RebuildException {
