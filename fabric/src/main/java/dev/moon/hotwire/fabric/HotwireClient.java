@@ -79,6 +79,22 @@ public final class HotwireClient implements ClientModInitializer {
             UnsupportedNotice.tellAtTitle();
             return;
         }
+
+        try {
+            if (EarlyDefinitions.findFailure() != null) {
+                throw new IllegalStateException("Hotwire's pre-launch failed: " + EarlyDefinitions.findFailure());
+            }
+            start();
+        } catch (RuntimeException | LinkageError e) {
+            synchronized (HotwireClient.class) {
+                startFailed = true;
+            }
+            LOGGER.error("[Hotwire] could not start; the game goes on without it", e);
+            EngineStart.writeStartFailure(FabricLoader.getInstance().getGameDir(), e);
+        }
+    }
+
+    private static void start() {
         StartTimes.mark("Hotwire's client start begins");
         Games.start(new GameSide());
         EngineApi.start(HotwireClient::findEngine);

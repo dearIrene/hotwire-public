@@ -140,9 +140,12 @@ public final class CopyMixer implements Function<Object[], Object[]> {
 
                 Map<?, ?> noted = (Map<?, ?>) inner.get(generator);
                 Set<Object> done = new HashSet<>();
-                for (List<Object> names = new ArrayList<>(noted.keySet()); !names.isEmpty();
-                        names = new ArrayList<>(noted.keySet())) {
+                while (true) {
+                    List<Object> names = new ArrayList<>(noted.keySet());
                     names.removeAll(done);
+                    if (names.isEmpty()) {
+                        break;
+                    }
                     done.addAll(names);
                     for (Object key : names) {
                         String name = String.valueOf(key).replace('.', '/');

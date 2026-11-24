@@ -51,11 +51,23 @@ public final class EarlyDefinitions implements PreLaunchEntrypoint {
         if (!LaunchSupport.isFabricOwn()) {
             return;
         }
-        StartTimes.mark("Hotwire's pre-launch begins");
-        long began = System.nanoTime();
-        makeOnce(true);
-        StartTimes.add("pre-launch", began);
-        StartTimes.mark("Hotwire's pre-launch ends");
+
+        try {
+            StartTimes.mark("Hotwire's pre-launch begins");
+            long began = System.nanoTime();
+            makeOnce(true);
+            StartTimes.add("pre-launch", began);
+            StartTimes.mark("Hotwire's pre-launch ends");
+        } catch (RuntimeException | LinkageError e) {
+            LOGGER.error("[Hotwire] the pre-launch failed", e);
+            failure = String.valueOf(e);
+        }
+    }
+
+    private static volatile @Nullable String failure;
+
+    static @Nullable String findFailure() {
+        return failure;
     }
 
     static Early get() {
