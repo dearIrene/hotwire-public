@@ -560,6 +560,14 @@ public final class StoreModel implements AutoCloseable {
         this.queuedJars = Map.copyOf(still);
     }
 
+    public void markRemoved(String projectId) {
+        Set<String> fewer = new HashSet<>(this.installedProjects);
+        if (!fewer.remove(projectId)) {
+            return;
+        }
+        this.setInstalled(fewer, this.updates);
+    }
+
     public void markInstalled(String projectId) {
         Set<String> more = new HashSet<>(this.installedProjects);
         more.add(projectId);

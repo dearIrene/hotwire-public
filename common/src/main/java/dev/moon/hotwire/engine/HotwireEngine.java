@@ -1061,6 +1061,14 @@ public final class HotwireEngine implements ModScreenGame, AutoCloseable {
             if (!refused.isEmpty()) {
                 this.showMessage(refused, true);
             }
+            ModStore store = this.getStore();
+            if (store != null && this.installed.isDeleted(id)) {
+                this.storeJars.getCheck().getIdByProject().forEach((project, mod) -> {
+                    if (mod.equals(id)) {
+                        store.getModel().markRemoved(project);
+                    }
+                });
+            }
             ModScreen current = this.screen;
             if (current != null) {
                 current.onSwitched();
