@@ -4,6 +4,7 @@ import dev.moon.hotwire.config.Flags;
 import dev.moon.hotwire.redefine.AccessBridge;
 import dev.moon.hotwire.redefine.Adoption;
 import dev.moon.hotwire.redefine.DuckBridge;
+import dev.moon.hotwire.redefine.FieldHolders;
 import dev.moon.hotwire.redefine.HandlerGuards;
 import dev.moon.hotwire.redefine.HotwireLoaders;
 import dev.moon.hotwire.redefine.Linker;
@@ -99,6 +100,12 @@ final class LoadTimeBridge implements ClassFileTransformer {
         if (!this.loaders.seesHotwire(loader) || isHotwireItself(className, domain)
                 || AccessBridge.isAccessor(className)) {
             return mixed;
+        }
+
+        byte[] reaching = FieldHolders.reachAdded(base);
+        if (reaching != base) {
+            base = reaching;
+            mixed = reaching;
         }
         byte[] guarded = HandlerGuards.ENABLED ? HandlerGuards.rewrite(className, base) : null;
         if (guarded != null && mixed != null && this.stuckForOff.test(className)) {

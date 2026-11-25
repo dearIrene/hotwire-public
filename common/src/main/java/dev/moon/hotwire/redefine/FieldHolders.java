@@ -173,6 +173,15 @@ public final class FieldHolders {
         return ADDED_BY_NAME.getOrDefault(internal, Set.of());
     }
 
+    public static byte[] reachAdded(byte[] bytes) {
+        for (String owner : ADDED_BY_NAME.keySet()) {
+            if (ClassBytes.mentions(bytes, owner)) {
+                return ForeignFields.rewrite(bytes, FieldHolders::findAddedFields);
+            }
+        }
+        return bytes;
+    }
+
     private static volatile Predicate<Thread> gameThread = thread -> true;
     private static volatile Executor onGame = Runnable::run;
 
