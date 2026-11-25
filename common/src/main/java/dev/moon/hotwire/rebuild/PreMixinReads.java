@@ -58,6 +58,18 @@ public final class PreMixinReads {
         }
     }
 
+    byte @Nullable [] readSamePool(String internal, Class<?> loaded) {
+        try {
+            if (this.patches.transform(internal.replace('/', '.')) != null
+                    || FabricLoaderImpl.INSTANCE.getClassTweaker().getTargets().contains(internal)) {
+                return null;
+            }
+        } catch (RuntimeException | LinkageError e) {
+            return null;
+        }
+        return readFile(internal, loaded);
+    }
+
     public static byte @Nullable [] readFile(String internal, Class<?> loaded) {
         URL file = findFile(internal, loaded);
         if (file == null) {

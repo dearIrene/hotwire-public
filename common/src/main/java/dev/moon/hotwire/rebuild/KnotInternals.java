@@ -309,6 +309,11 @@ public final class KnotInternals {
         }
     }
 
+    public byte @Nullable [] findSamePoolBytes(String internal, @Nullable Class<?> loaded) {
+        PreMixinReads reads = this.ownFileReads;
+        return reads == null || loaded == null ? null : reads.readSamePool(internal, loaded);
+    }
+
     public byte @Nullable [] findPreMixinBytes(String internal, @Nullable Class<?> loaded) {
         PreMixinReads reads = this.ownFileReads;
         byte[] own = reads == null || loaded == null ? null : reads.read(internal, loaded);

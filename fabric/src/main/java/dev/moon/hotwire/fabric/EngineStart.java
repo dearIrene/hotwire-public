@@ -232,7 +232,7 @@ final class EngineStart {
         applier.addRider(tripwire.getRide());
         laps.endLap("tripwire");
         FieldReferences fieldReferences = new FieldReferences(instrumentation, applier.getRebuilder(),
-                classes::findOriginalBytes, classes::readOriginalBytes,
+                classes::findOriginalBytes, classes::readPoolBytes,
                 mod -> installed.getGraphJars().stream().filter(jar -> jar.manifest().id().equals(mod)).findFirst()
                         .map(jar -> jar.patches().patches()).orElse(Set.of()), mod -> findHandedTo(mod, installed),
                 mixin::getGeneratedBy);
