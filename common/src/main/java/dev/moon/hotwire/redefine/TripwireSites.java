@@ -70,6 +70,11 @@ public final class TripwireSites {
         MOD_BY_CLASS.keySet().removeIf(name -> made.find(name) != null);
     }
 
+    private static String findName(String internalName) {
+        String own = classTable.findName(internalName);
+        return own != null ? own : internalName.intern();
+    }
+
     public static @Nullable String findModOfClass(String internalName) {
         String mod = classTable.find(internalName);
         return mod != null ? mod : MOD_BY_CLASS.get(internalName);
@@ -89,7 +94,7 @@ public final class TripwireSites {
                 if (withSites.length == 0) {
                     return null;
                 }
-                ARMED.put(internalName.intern(), mod);
+                ARMED.put(findName(internalName), mod);
                 return withSites;
             }
         }
@@ -130,7 +135,7 @@ public final class TripwireSites {
             return null;
         }
         if (!inserted) {
-            ARMED.put(internalName.intern(), mod);
+            ARMED.put(findName(internalName), mod);
             return classBytes;
         }
         if (relinked) {
@@ -139,7 +144,7 @@ public final class TripwireSites {
 
         ClassWriter writer = new ClassWriter(new ClassReader(classBytes), ClassWriter.COMPUTE_MAXS);
         node.accept(writer);
-        ARMED.put(internalName.intern(), mod);
+        ARMED.put(findName(internalName), mod);
         return writer.toByteArray();
     }
 
