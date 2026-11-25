@@ -9,6 +9,10 @@ import java.util.regex.Pattern;
 
 public final class AccessWidenerText {
     public record Clause(int line, String kind, String owner, String text) {
+        public Clause {
+            kind = kind.intern();
+            owner = owner.intern();
+        }
     }
 
     private static final int AW_V1 = 1;

@@ -173,7 +173,7 @@ public final class JarScans {
         List<String> missing = readAll(in);
         Map<String, Set<String>> byConfig = new LinkedHashMap<>();
         for (int count = in.readInt(); count > 0; count--) {
-            byConfig.put(in.readUTF(), Set.copyOf(readAll(in)));
+            byConfig.put(in.readUTF().intern(), Set.copyOf(readAll(in)));
         }
         List<String> calls = readAll(in);
         List<String> asks = readAll(in);
@@ -213,7 +213,7 @@ public final class JarScans {
         int count = in.readInt();
         List<String> names = new ArrayList<>(count);
         for (int at = 0; at < count; at++) {
-            names.add(in.readUTF());
+            names.add(in.readUTF().intern());
         }
         return names;
     }
