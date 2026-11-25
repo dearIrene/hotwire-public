@@ -18,8 +18,11 @@ import java.util.jar.JarFile;
 import java.util.jar.Manifest;
 import java.util.zip.ZipEntry;
 import org.jspecify.annotations.Nullable;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
 public final class ClassPathListing {
+    private static final Logger LOGGER = LoggerFactory.getLogger(ClassPathListing.class);
     private static final String VERSIONED = "META-INF/versions/";
     private static final @Nullable Supplier<URL[]> SEARCH_PATH = findSearchPath();
     private static final Set<String> JDK = findJdkPackages();
@@ -61,6 +64,9 @@ public final class ClassPathListing {
             Set<String> names = list(path);
             listed = names == null ? null : names.stream().mapToLong(ClassPathListing::hash).sorted().toArray();
             listedFor = path.length;
+            LOGGER.debug("[Hotwire] the class path's listing: {}", names == null
+                    ? "none, its loader answers for every class (" + path.length + " entries)"
+                    : names.size() + " class files in " + path.length + " entries");
         }
         return listed;
     }
@@ -126,6 +132,8 @@ public final class ClassPathListing {
             return MethodHandleProxies.asInterfaceInstance(Supplier.class, MethodHandles.filterReturnValue(ucp,
                     urls));
         } catch (JvmAccessException | ReflectiveOperationException | RuntimeException e) {
+            LOGGER.debug("[Hotwire] the system loader's search path cannot be read, so it answers for every class: {}",
+                    e.toString());
             return null;
         }
     }
