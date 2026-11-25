@@ -17,7 +17,9 @@ import dev.moon.hotwire.redefine.HandlerGuards;
 import dev.moon.hotwire.redefine.LoadedClassBytes;
 import dev.moon.hotwire.redefine.OpenGameClasses;
 import dev.moon.hotwire.redefine.SiteCache;
+import dev.moon.hotwire.redefine.SiteCode;
 import dev.moon.hotwire.redefine.TripwireSites;
+import dev.moon.hotwire.registration.Owners;
 import dev.moon.hotwire.report.HotwireLog;
 import dev.moon.hotwire.report.StartTimes;
 import java.io.IOException;
@@ -32,10 +34,16 @@ import java.nio.file.Files;
 import java.nio.file.Path;
 import java.nio.file.attribute.BasicFileAttributes;
 import java.security.ProtectionDomain;
+import java.util.ArrayDeque;
 import java.util.ArrayList;
+import java.util.Deque;
+import java.util.HashSet;
 import java.util.List;
+import java.util.Set;
 import net.fabricmc.loader.api.FabricLoader;
+import net.fabricmc.loader.api.ModContainer;
 import net.fabricmc.loader.api.entrypoint.PreLaunchEntrypoint;
+import net.fabricmc.loader.api.metadata.ModOrigin;
 import org.jspecify.annotations.Nullable;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -192,9 +200,21 @@ public final class EarlyDefinitions implements PreLaunchEntrypoint {
             Path temp = Path.of(System.getProperty("java.io.tmpdir")).toAbsolutePath().normalize();
 
             List<String> told = new ArrayList<>();
+
+            Set<Path> own = findOwnJars();
+            ClassLoader game = EarlyDefinitions.class.getClassLoader();
+            long code = SiteCode.hash(name -> {
+                try (InputStream in = game.getResourceAsStream(name + ".class")) {
+                    return in == null ? null : in.readAllBytes();
+                } catch (IOException e) {
+                    return null;
+                }
+            });
+            stamp.add(code);
+            told.add("Hotwire's site code " + Long.toHexString(code));
             for (URL url : path) {
-                Path jar = Path.of(url.toURI());
-                if (jar.toAbsolutePath().normalize().startsWith(temp)) {
+                Path jar = Path.of(url.toURI()).toAbsolutePath().normalize();
+                if (jar.startsWith(temp) || own.contains(jar)) {
                     continue;
                 }
                 BasicFileAttributes file = Files.readAttributes(jar, BasicFileAttributes.class);
@@ -217,6 +237,26 @@ public final class EarlyDefinitions implements PreLaunchEntrypoint {
         } catch (IOException | URISyntaxException | RuntimeException e) {
             LOGGER.debug("[Hotwire] call sites are made as classes load: {}", e.toString());
         }
+    }
+
+    private static Set<Path> findOwnJars() {
+        Set<Path> own = new HashSet<>();
+        Deque<ModContainer> next = new ArrayDeque<>();
+        FabricLoader.getInstance().getModContainer("hotwire").ifPresent(next::add);
+        while (!next.isEmpty()) {
+            ModContainer mod = next.poll();
+            next.addAll(mod.getContainedMods());
+            if (mod.getOrigin().getKind() == ModOrigin.Kind.PATH) {
+                mod.getOrigin().getPaths().forEach(jar -> own.add(jar.toAbsolutePath().normalize()));
+            }
+            for (Path root : mod.getRootPaths()) {
+                Path jar = Owners.findJarOf(root);
+                if (jar != null) {
+                    own.add(jar);
+                }
+            }
+        }
+        return own;
     }
 
     private static void tellChanged(Path file, List<String> jars) throws IOException {
