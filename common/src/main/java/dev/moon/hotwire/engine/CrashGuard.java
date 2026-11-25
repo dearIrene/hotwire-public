@@ -63,6 +63,7 @@ public final class CrashGuard {
         CrashPolicy[] made = new CrashPolicy[1];
         Set<String> switched = ConcurrentHashMap.newKeySet();
         List<String> said = new CopyOnWriteArrayList<>();
+        Set<String> duringChange = ConcurrentHashMap.newKeySet();
         made[0] = new CrashPolicy(CrashGuard::findModBehind, id -> canLeave(id) && (isTouched(installed, switched, id)
                 || DataPackFaults.isFaulted(id) || (antiCrash.getAsBoolean() && !hasWorldContent(runner, id))),
                 caught -> {
@@ -81,6 +82,17 @@ public final class CrashGuard {
 
             String decision = GameReports.describeTrace(caught.thrown()).value();
             ActionJournal.get().noteCaught(decision);
+
+            if (ActionJournal.get().isChangeUnderWay()) {
+                if (duringChange.add(caught.mod())) {
+                    LOGGER.error("[Hotwire] {} threw at {} ({}) while a change of Hotwire's is under way; Hotwire"
+                            + " keeps the game going and leaves it on", name, caught.site(), caught.mod(),
+                            caught.thrown());
+                    Notices.show(Lang.get("hotwire.crash.title"), Lang.get("hotwire.crash.during_change", name, name));
+                }
+                made[0].onOffFinished(caught.mod(), true);
+                return;
+            }
             onCaught.accept(caught.site(), caught.thrown());
             SwitchRunner switching = runner.get();
             if (switching == null) {
@@ -162,7 +174,8 @@ public final class CrashGuard {
     }
 
     private static void noteOffer(Guard current, Throwable thrown) {
-        if (!current.offerWanted().getAsBoolean() || CrashPolicy.isJvmFailure(thrown)) {
+        if (!current.offerWanted().getAsBoolean() || CrashPolicy.isJvmFailure(thrown) || CrashBlame.answerOf(
+                GameReports.describeTrace(thrown).value()) != CrashBlame.Answer.NOT_OURS) {
             return;
         }
         String mod = findModBehind(thrown);

@@ -34,7 +34,7 @@ public final class ActionJournal {
     private static final Logger LOGGER = LoggerFactory.getLogger(ActionJournal.class);
     private static final Pattern BREAKS = Pattern.compile("[\\t\\r\\n]+");
     private static final long MS = 1_000_000L;
-    private static final long AFTERMATH_SECONDS = 30;
+    private static final long AFTERMATH_SECONDS = 5;
 
     private static final Set<Action> CHANGES = EnumSet.of(Action.OFF, Action.ON, Action.ADD, Action.UPDATE,
             Action.REOPEN_OFF, Action.REOPEN_ON, Action.REOPEN_ADD, Action.CRASH_OFF);
@@ -147,8 +147,11 @@ public final class ActionJournal {
 
     public @Nullable CaughtCrash findCaughtJustBefore() {
         CaughtCrash last = this.caught;
-        return last != null && this.clock.getAsLong() - last.at() <= AFTERMATH_SECONDS * 1000 * MS
-                && this.changesBegun.get() == last.begun() ? last : null;
+        if (last == null || this.changesBegun.get() != last.begun()) {
+            return null;
+        }
+        return this.crashOffsOpen.get() > 0
+                || this.clock.getAsLong() - last.at() <= AFTERMATH_SECONDS * 1000 * MS ? last : null;
     }
 
     public Entry begin(Action action, List<String> ids) {

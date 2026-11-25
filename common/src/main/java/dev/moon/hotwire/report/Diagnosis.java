@@ -1,5 +1,8 @@
 package dev.moon.hotwire.report;
 
+import java.time.Instant;
+import java.time.ZoneId;
+import java.time.format.DateTimeFormatter;
 import java.util.ArrayList;
 import java.util.Collection;
 import java.util.HashMap;
@@ -11,6 +14,9 @@ import java.util.Set;
 
 public final class Diagnosis {
     public static final String FILE = "DIAGNOSIS.txt";
+
+    private static final DateTimeFormatter CLOCK = DateTimeFormatter.ofPattern("HH:mm:ss")
+            .withZone(ZoneId.systemDefault());
     private static final int MOST_LEADS = 80;
     private static final int MOST_ACTIONS = 80;
     private static final int MOST_FIRST = 120;
@@ -66,6 +72,10 @@ public final class Diagnosis {
     }
 
     public static String describeJournal(String journal) {
+        return describeJournal(journal, 0);
+    }
+
+    public static String describeJournal(String journal, long started) {
         List<String[]> told = new ArrayList<>();
         Map<String, String[]> open = new HashMap<>();
         for (String line : journal.lines().toList()) {
@@ -86,13 +96,14 @@ public final class Diagnosis {
                 String ended = (parts.length > 5 ? parts[5] : "ended") + (parts.length > 6 && !parts[6].isEmpty()
                         ? " (" + parts[6] + ")" : "");
                 if (began == null) {
-                    told.add(new String[] {formatSince(at), what, ended});
+                    told.add(new String[] {formatSince(at, started), what, ended});
                 } else {
                     began[2] = ended + String.format(Locale.ROOT, ", %.1f s", (at - Long.parseLong(began[3])) / 1e9);
                 }
                 continue;
             }
-            String[] one = {formatSince(at), what, parts[1].equals("start") ? "NEVER ENDED" : "", parts[0]};
+            String[] one = {formatSince(at, started), what, parts[1].equals("start") ? "NEVER ENDED" : "",
+                    parts[0]};
             told.add(one);
             if (parts[1].equals("start")) {
                 open.put(key, one);
@@ -119,9 +130,11 @@ public final class Diagnosis {
         };
     }
 
-    private static String formatSince(long nanos) {
+    private static String formatSince(long nanos, long started) {
         long seconds = nanos / 1_000_000_000L;
-        return String.format(Locale.ROOT, "%d:%02d", seconds / 60, seconds % 60);
+        String since = String.format(Locale.ROOT, "%d:%02d", seconds / 60, seconds % 60);
+        return started == 0 ? since : CLOCK.format(Instant.ofEpochMilli(started + nanos / 1_000_000L)) + " ("
+                + since + ")";
     }
 
     public static List<String> readFrames(String trace) {

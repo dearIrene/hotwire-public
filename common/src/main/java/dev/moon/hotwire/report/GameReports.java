@@ -103,6 +103,8 @@ public final class GameReports {
 
     private volatile @Nullable LastThrow lastThrow;
 
+    private volatile String lastDecision = "";
+
     private record LastThrow(List<String> messages, List<String> frames, List<String> mods, List<String> spans) {
     }
 
@@ -377,8 +379,10 @@ public final class GameReports {
                 switched, name -> findModOf(name, game), reports.nameOf);
 
         String now = crashOffUnderWay ? null : reports.underWay;
-        return CrashBlame.decide(trace, new CrashBlame.Session(now, proof, ties, journal.getLastChange(),
-                journal.countSecondsSinceChange(), journal.hasCaught(), first));
+        CrashSection.Detail decided = CrashBlame.decide(trace, new CrashBlame.Session(now, proof, ties,
+                journal.getLastChange(), journal.countSecondsSinceChange(), journal.hasCaught(), first));
+        reports.lastDecision = decided.value();
+        return decided;
     }
 
     private String describeSpan() {
@@ -606,8 +610,12 @@ public final class GameReports {
 
         ActionJournal.get().flush();
         Path journal = logs.resolve(lastSession ? ActionJournal.LAST : ActionJournal.FILE);
-        texts.put(Diagnosis.FILE, OutdatedNotice.note()
-                + (Files.isRegularFile(journal) ? Diagnosis.describeJournal(read(journal)) : "")
+
+        String decision = lastSession || this.lastDecision.isEmpty() ? ""
+                : "Whose crash\n  " + this.lastDecision + "\n\n";
+        texts.put(Diagnosis.FILE, OutdatedNotice.note() + decision
+                + (Files.isRegularFile(journal) ? Diagnosis.describeJournal(read(journal), lastSession ? 0
+                        : ManagementFactory.getRuntimeMXBean().getStartTime()) : "")
                 + Diagnosis.write(told, about == null ? List.of() : about.messages(),
                 about == null ? List.of() : about.frames(), about == null ? List.of() : about.mods(),
                 about == null ? List.of() : about.spans(), Files.isRegularFile(whole) ? read(whole) : ""));
@@ -657,7 +665,10 @@ public final class GameReports {
             }
         }
         texts.put("hotwire-environment.txt", environment);
-        this.listSince(this.folder, ".txt").forEach(file -> texts.put("reports/" + file.getFileName(), read(file)));
+
+        this.listSince(this.folder, ".txt").stream()
+                .filter(file -> !String.valueOf(file.getFileName()).startsWith("Hotwire "))
+                .forEach(file -> texts.put("reports/" + file.getFileName(), read(file)));
         this.listSince(game.resolve("crash-reports"), ".txt")
                 .forEach(file -> texts.put("crash-reports/" + file.getFileName(), read(file)));
         extra.forEach(file -> texts.put("crash-reports/" + file.getFileName(), read(file)));
