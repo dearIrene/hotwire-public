@@ -8,11 +8,14 @@ import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.nio.file.StandardCopyOption;
+import java.util.EnumSet;
 import java.util.List;
 import java.util.Locale;
+import java.util.Set;
 import java.util.concurrent.Executor;
 import java.util.concurrent.RejectedExecutionException;
 import java.util.concurrent.atomic.AtomicBoolean;
+import java.util.concurrent.atomic.AtomicInteger;
 import java.util.concurrent.atomic.LongAccumulator;
 import java.util.concurrent.atomic.LongAdder;
 import java.util.function.LongSupplier;
@@ -31,6 +34,10 @@ public final class ActionJournal {
     private static final Logger LOGGER = LoggerFactory.getLogger(ActionJournal.class);
     private static final Pattern BREAKS = Pattern.compile("[\\t\\r\\n]+");
     private static final long MS = 1_000_000L;
+    private static final long AFTERMATH_SECONDS = 30;
+
+    private static final Set<Action> CHANGES = EnumSet.of(Action.OFF, Action.ON, Action.ADD, Action.UPDATE,
+            Action.REOPEN_OFF, Action.REOPEN_ON, Action.REOPEN_ADD, Action.CRASH_OFF);
 
     public enum Action {
         TITLE, OPEN, JOIN, LEAVE, OFF, ON, ADD, UPDATE, REOPEN_OFF, REOPEN_ON, REOPEN_ADD, LATER_OFF, LATER_ADD,
@@ -40,6 +47,9 @@ public final class ActionJournal {
     public enum Place { TITLE, WORLD, SERVER }
 
     public enum Outcome { DONE, REFUSED, FAILED, REVERTED, QUEUED }
+
+    public record CaughtCrash(long at, int begun, String decision) {
+    }
 
     private static volatile ActionJournal current = new ActionJournal(null, () -> Place.TITLE, System::nanoTime, 0);
 
@@ -57,6 +67,13 @@ public final class ActionJournal {
     private final AtomicBoolean flushQueued = new AtomicBoolean();
 
     private volatile long lastLine;
+
+    private final AtomicInteger changesOpen = new AtomicInteger();
+    private final AtomicInteger crashOffsOpen = new AtomicInteger();
+    private final AtomicInteger changesBegun = new AtomicInteger();
+    private volatile long lastChangeEnded;
+    private volatile String lastChange = "";
+    private volatile @Nullable CaughtCrash caught;
 
     private ActionJournal(@Nullable Writer out, Supplier<Place> place, LongSupplier clock, long start) {
         this.out = out;
@@ -97,7 +114,41 @@ public final class ActionJournal {
 
     public Entry begin(Action action, String target) {
         this.write("start", action, this.place.get(), target, null, "");
-        return new Entry(action, target);
+        boolean counted = false;
+        if (action == Action.CRASH_OFF) {
+            this.crashOffsOpen.incrementAndGet();
+        } else if (CHANGES.contains(action) && this.crashOffsOpen.get() == 0) {
+            counted = true;
+            this.changesBegun.incrementAndGet();
+            this.changesOpen.incrementAndGet();
+        }
+        return new Entry(action, target, counted);
+    }
+
+    public boolean isChangeUnderWay() {
+        return this.changesOpen.get() > 0;
+    }
+
+    public String getLastChange() {
+        return this.lastChange;
+    }
+
+    public long countSecondsSinceChange() {
+        return this.lastChange.isEmpty() ? -1 : (this.clock.getAsLong() - this.lastChangeEnded) / (1000 * MS);
+    }
+
+    public void noteCaught(String decision) {
+        this.caught = new CaughtCrash(this.clock.getAsLong(), this.changesBegun.get(), decision);
+    }
+
+    public boolean hasCaught() {
+        return this.caught != null;
+    }
+
+    public @Nullable CaughtCrash findCaughtJustBefore() {
+        CaughtCrash last = this.caught;
+        return last != null && this.clock.getAsLong() - last.at() <= AFTERMATH_SECONDS * 1000 * MS
+                && this.changesBegun.get() == last.begun() ? last : null;
     }
 
     public Entry begin(Action action, List<String> ids) {
@@ -244,9 +295,12 @@ public final class ActionJournal {
         private final Action action;
         private final String target;
 
-        private Entry(Action action, String target) {
+        private final boolean counted;
+
+        private Entry(Action action, String target, boolean counted) {
             this.action = action;
             this.target = target;
+            this.counted = counted;
         }
 
         public void end(Outcome outcome) {
@@ -255,6 +309,16 @@ public final class ActionJournal {
 
         public void end(Outcome outcome, String detail) {
             ActionJournal.this.write("end", this.action, ActionJournal.this.place.get(), this.target, outcome, detail);
+            if (this.counted) {
+                ActionJournal.this.changesOpen.decrementAndGet();
+            } else if (this.action == Action.CRASH_OFF) {
+                ActionJournal.this.crashOffsOpen.decrementAndGet();
+            }
+
+            if (CHANGES.contains(this.action) && outcome != Outcome.REFUSED && outcome != Outcome.QUEUED) {
+                ActionJournal.this.lastChangeEnded = ActionJournal.this.clock.getAsLong();
+                ActionJournal.this.lastChange = toWord(this.action) + " " + this.target;
+            }
         }
 
         public void endSwitch(ModSwitcher.Result result, boolean partlyOff) {

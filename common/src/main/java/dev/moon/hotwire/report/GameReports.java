@@ -12,6 +12,7 @@ import dev.moon.hotwire.switching.SwitchApplier;
 import dev.moon.hotwire.update.ModUpdater;
 import dev.moon.hotwire.update.SwapAtClose;
 import java.io.IOException;
+import java.io.InputStream;
 import java.io.UncheckedIOException;
 import java.lang.management.ManagementFactory;
 import java.nio.ByteBuffer;
@@ -25,6 +26,7 @@ import java.time.LocalTime;
 import java.time.ZoneId;
 import java.time.format.DateTimeFormatter;
 import java.util.ArrayList;
+import java.util.Arrays;
 import java.util.Collection;
 import java.util.HashMap;
 import java.util.HashSet;
@@ -51,6 +53,11 @@ import java.util.stream.Collectors;
 import java.util.stream.Stream;
 import net.fabricmc.loader.api.FabricLoader;
 import org.jspecify.annotations.Nullable;
+import org.objectweb.asm.ClassReader;
+import org.objectweb.asm.tree.AbstractInsnNode;
+import org.objectweb.asm.tree.ClassNode;
+import org.objectweb.asm.tree.FieldInsnNode;
+import org.objectweb.asm.tree.MethodNode;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -63,6 +70,8 @@ public final class GameReports {
             .withZone(ZoneId.systemDefault());
 
     private static final int MOST_READ = 8 * 1024 * 1024;
+
+    private static final int NEAR_FRAMES = 12;
     private static volatile @Nullable GameReports current;
 
     private final Path folder;
@@ -81,6 +90,8 @@ public final class GameReports {
     }
     private final Set<String> redefined = new ConcurrentSkipListSet<>();
     private volatile Set<String> off = Set.of();
+
+    private final Set<String> emptied = ConcurrentHashMap.newKeySet();
     private volatile @Nullable Report last;
 
     private volatile @Nullable String underWay;
@@ -248,7 +259,64 @@ public final class GameReports {
             }
             messages.add(at.toString());
         }
-        return describeTrace(frames, nearThrow, messages);
+        GameReports reports = current;
+        String read = reports == null ? null : reports.findEmptiedRead(crash, game);
+        boolean isNull = Causes.findInnermost(crash) instanceof NullPointerException;
+        return describeTrace(frames, nearThrow, messages, read != null && isNull ? "Hotwire emptied " + read
+                + ", and the code that threw reads it" : null, read != null && !isNull
+                ? List.of("the code that threw reads " + read + ", which Hotwire emptied") : List.of());
+    }
+
+    public static void noteEmptied(String owner, String field) {
+        GameReports reports = current;
+        if (reports != null) {
+            reports.emptied.add(owner + "." + field);
+        }
+    }
+
+    public static void noteFilled(String owner, String field) {
+        GameReports reports = current;
+        if (reports != null) {
+            reports.emptied.remove(owner + "." + field);
+        }
+    }
+
+    private @Nullable String findEmptiedRead(Throwable crash, ClassLoader game) {
+        if (this.emptied.isEmpty()) {
+            return null;
+        }
+        for (Throwable at : Causes.list(crash)) {
+            for (StackTraceElement frame : Arrays.stream(at.getStackTrace()).limit(NEAR_FRAMES).toList()) {
+                String read = this.findEmptiedRead(frame, game);
+                if (read != null) {
+                    return read;
+                }
+            }
+        }
+        return null;
+    }
+
+    private @Nullable String findEmptiedRead(StackTraceElement frame, ClassLoader game) {
+        try (InputStream in = game.getResourceAsStream(frame.getClassName().replace('.', '/') + ".class")) {
+            if (in == null) {
+                return null;
+            }
+            ClassNode node = new ClassNode();
+            new ClassReader(in).accept(node, ClassReader.SKIP_DEBUG | ClassReader.SKIP_FRAMES);
+            for (MethodNode method : node.methods) {
+                if (!method.name.equals(frame.getMethodName())) {
+                    continue;
+                }
+                for (AbstractInsnNode insn : method.instructions) {
+                    if (insn instanceof FieldInsnNode field
+                            && this.emptied.contains(field.owner + "." + field.name)) {
+                        return field.owner.substring(field.owner.lastIndexOf('/') + 1) + "." + field.name;
+                    }
+                }
+            }
+        } catch (IOException | RuntimeException e) {
+        }
+        return null;
     }
 
     private static @Nullable String findModOf(String name, ClassLoader game) {
@@ -287,10 +355,19 @@ public final class GameReports {
 
     public static CrashSection.Detail describeTrace(Collection<String> frames, Collection<String> nearThrow,
             Collection<String> messages) {
+        return describeTrace(frames, nearThrow, messages, null, List.of());
+    }
+
+    private static CrashSection.Detail describeTrace(Collection<String> frames, Collection<String> nearThrow,
+            Collection<String> messages, @Nullable String proof, List<String> ties) {
         GameReports reports = current;
+        ActionJournal journal = ActionJournal.get();
+        ActionJournal.CaughtCrash before = journal.findCaughtJustBefore();
+        String first = before == null ? null : before.decision();
         if (reports == null) {
-            return CrashSection.describeTrace(frames, nearThrow, messages, name -> null, Set.of(), name -> null,
-                    id -> id);
+            return CrashBlame.decide(CrashSection.describeTrace(frames, nearThrow, messages, name -> null, Set.of(),
+                    name -> null, id -> id), new CrashBlame.Session(null, proof, ties, journal.getLastChange(),
+                    journal.countSecondsSinceChange(), journal.hasCaught(), first));
         }
         Set<String> switched = new HashSet<>(reports.off);
         switched.addAll(reports.added);
@@ -299,12 +376,9 @@ public final class GameReports {
         CrashSection.Detail trace = CrashSection.describeTrace(frames, nearThrow, messages, reports.rebuiltBy::get,
                 switched, name -> findModOf(name, game), reports.nameOf);
 
-        String now = reports.underWay;
-        if (now != null && !crashOffUnderWay && CrashSection.isCleared(trace.value())) {
-            return new CrashSection.Detail(trace.name(), "Hotwire involved? YES. The game crashed while Hotwire was"
-                    + " switching (" + now + "). Send the newest report under hotwire/reports.");
-        }
-        return trace;
+        String now = crashOffUnderWay ? null : reports.underWay;
+        return CrashBlame.decide(trace, new CrashBlame.Session(now, proof, ties, journal.getLastChange(),
+                journal.countSecondsSinceChange(), journal.hasCaught(), first));
     }
 
     private String describeSpan() {

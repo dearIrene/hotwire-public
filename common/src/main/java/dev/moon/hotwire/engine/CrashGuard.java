@@ -7,7 +7,7 @@ import dev.moon.hotwire.registration.MergedMembers;
 import dev.moon.hotwire.registration.Owners;
 import dev.moon.hotwire.report.ActionJournal;
 import dev.moon.hotwire.report.Causes;
-import dev.moon.hotwire.report.CrashSection;
+import dev.moon.hotwire.report.CrashBlame;
 import dev.moon.hotwire.report.GameReports;
 import dev.moon.hotwire.report.Report;
 import dev.moon.hotwire.seam.Games;
@@ -78,6 +78,9 @@ public final class CrashGuard {
                 said.remove(0);
             }
             said.add(caught.mod() + " at " + caught.site() + ": " + caught.thrown());
+
+            String decision = GameReports.describeTrace(caught.thrown()).value();
+            ActionJournal.get().noteCaught(decision);
             onCaught.accept(caught.site(), caught.thrown());
             SwitchRunner switching = runner.get();
             if (switching == null) {
@@ -115,11 +118,12 @@ public final class CrashGuard {
                                         }
                                     }),
                                     reopened -> finish(made[0], caught.mod(), name, reopened.result(), why,
-                                            caught.thrown(), installed, say, writeReport, byAntiCrash)));
+                                            caught.thrown(), installed, say, writeReport, byAntiCrash,
+                                            decision)));
                             return;
                         }
                         finish(made[0], caught.mod(), name, reported.result(), why, caught.thrown(), installed,
-                                say, writeReport, byAntiCrash);
+                                say, writeReport, byAntiCrash, decision);
                     }));
         }, inDevelopment, caught -> {
             Place place = findPlace(caught.thrown(), caught.mod());
@@ -183,7 +187,7 @@ public final class CrashGuard {
 
     private static void finish(CrashPolicy policy, String mod, String name, ModSwitcher.Result result, String why,
             Throwable thrown, InstalledMods installed, BiConsumer<String, Boolean> say,
-            BiFunction<String, String, String> writeReport, boolean byAntiCrash) {
+            BiFunction<String, String, String> writeReport, boolean byAntiCrash, String decision) {
         boolean off = !PlayerMessages.isBad(result);
         policy.onOffFinished(mod, off);
         String where = writeReport.apply(Lang.get("hotwire.report.file.mod_crash", name), why);
@@ -205,24 +209,25 @@ public final class CrashGuard {
         HotwireEngine engine = EngineApi.findEngine();
         if (engine != null) {
             engine.getScreens().offerCaughtCrash(new CrashPanel.Caught(mod, name, title,
-                    OutdatedNotice.addTo(line), describeProof(thrown, mod, name), where));
+                    OutdatedNotice.addTo(line), describeProof(decision, thrown, mod, name), where));
         }
     }
 
+    static String describeProof(String decision, Throwable thrown, String mod, String name) {
+        return switch (CrashBlame.answerOf(decision)) {
+            case OURS -> Lang.get("hotwire.crash.proof.ours", name);
+            case TIED -> Lang.get("hotwire.crash.proof.tied", name);
+            case UNTIED -> Lang.get("hotwire.crash.proof.untied", name);
+            case NOT_OURS -> {
+                Place place = findPlace(thrown, mod);
+                yield place == null ? Lang.get("hotwire.crash.proof.unknown", name)
+                        : Lang.get("hotwire.crash.proof.mod", name, place.words());
+            }
+        };
+    }
+
     static String describeProof(Throwable thrown, String mod, String name) {
-        List<String> frames = new ArrayList<>();
-        List<String> messages = new ArrayList<>();
-        for (Throwable at : Causes.list(thrown)) {
-            findFramesAbove(at).forEach(frame -> frames.add(frame.getClassName()));
-            messages.add(at.toString());
-        }
-        if (CrashSection.isHotwires(CrashSection.describeTrace(frames, frames, messages, type -> null, Set.of(),
-                type -> null, id -> id).value())) {
-            return Lang.get("hotwire.crash.proof.ours");
-        }
-        Place place = findPlace(thrown, mod);
-        return place == null ? Lang.get("hotwire.crash.proof.unknown", name)
-                : Lang.get("hotwire.crash.proof.mod", name, place.words());
+        return describeProof(GameReports.describeTrace(thrown).value(), thrown, mod, name);
     }
 
     static String findWhat(Throwable thrown) {

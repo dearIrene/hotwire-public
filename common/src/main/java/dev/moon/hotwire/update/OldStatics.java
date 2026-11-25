@@ -2,6 +2,7 @@ package dev.moon.hotwire.update;
 
 import dev.moon.hotwire.redefine.InitialValues;
 import dev.moon.hotwire.registration.Owners;
+import dev.moon.hotwire.report.GameReports;
 import java.lang.reflect.Field;
 import java.lang.reflect.Modifier;
 import java.util.ArrayList;
@@ -57,9 +58,11 @@ public final class OldStatics {
                     }
                     field.set(null, first.filter(value -> !leaving.contains(value.getClass().getName()
                             .replace('.', '/'))).orElse(null));
+                    GameReports.noteEmptied(name, field.getName());
                     back.add(() -> {
                         try {
                             field.set(null, old);
+                            GameReports.noteFilled(name, field.getName());
                         } catch (IllegalAccessException | RuntimeException e) {
                             LOGGER.warn("[Hotwire] {} could not be given the old version's object back", field, e);
                         }
