@@ -725,6 +725,7 @@ public final class ModAdder {
             }
         }
         undo.addUndo(this.engine.getSwitcher().learn(graph, planner, ids));
+        undo.addUndo(YumiStarts.register(ids));
 
         parts.values().forEach(part -> this.game.runPlugins(part.jar().manifest(), part.path()));
 

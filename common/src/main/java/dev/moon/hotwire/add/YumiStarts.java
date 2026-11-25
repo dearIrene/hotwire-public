@@ -23,6 +23,45 @@ public final class YumiStarts {
     private YumiStarts() {
     }
 
+    public static Runnable register(List<String> ids) {
+        FabricLoader loader = FabricLoader.getInstance();
+        if (ids.contains(YUMI) || !loader.isModLoaded(YUMI)) {
+            return () -> { };
+        }
+        ClassLoader game = YumiStarts.class.getClassLoader();
+        List<String> filed = new ArrayList<>();
+        for (String id : ids) {
+            ModContainer provider = loader.getModContainer(id).orElse(null);
+            try {
+                if (provider != null && !isFiled(game, id)) {
+                    findContainer(game, id, provider);
+                    filed.add(id);
+                }
+            } catch (ReflectiveOperationException | LinkageError | RuntimeException e) {
+                LOGGER.info("[Hotwire] {} is not filed in Yumi's mods ahead of its start: {}", id, e.toString());
+            }
+        }
+        return () -> filed.forEach(id -> forget(game, id));
+    }
+
+    @SuppressWarnings("unchecked")
+    private static boolean isFiled(ClassLoader game, String id) throws ReflectiveOperationException {
+        Class<?> mods = Class.forName(MODS, true, game);
+        return ((Map<String, Object>) read(mods, mods.getField("INSTANCE").get(null), "modsMap")).containsKey(id);
+    }
+
+    @SuppressWarnings("unchecked")
+    private static void forget(ClassLoader game, String id) {
+        try {
+            Class<?> mods = Class.forName(MODS, true, game);
+            Object yumi = mods.getField("INSTANCE").get(null);
+            Object own = ((Map<String, Object>) read(mods, yumi, "modsMap")).remove(id);
+            ((List<Object>) read(mods, yumi, "mods")).remove(own);
+        } catch (ReflectiveOperationException | LinkageError | RuntimeException e) {
+            LOGGER.info("[Hotwire] {} stays filed in Yumi's mods: {}", id, e.toString());
+        }
+    }
+
     public static List<Runnable> collect(List<String> ids, ModManifest.Environment side) {
         if (ids.contains(YUMI) || !FabricLoader.getInstance().isModLoaded(YUMI)) {
             return List.of();
