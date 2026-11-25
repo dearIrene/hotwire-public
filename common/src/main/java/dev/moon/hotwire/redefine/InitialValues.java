@@ -43,6 +43,23 @@ public final class InitialValues {
                 .get(name + descriptor), descriptor);
     }
 
+    public static boolean isStoredByInitializer(byte[] original, String name, String descriptor) {
+        ClassNode node = RetainedInitializers.read(original);
+        for (MethodNode method : node.methods) {
+            if (!method.name.equals("<clinit>")) {
+                continue;
+            }
+            for (AbstractInsnNode insn : method.instructions) {
+                if (insn instanceof FieldInsnNode store && store.getOpcode() == Opcodes.PUTSTATIC
+                        && store.owner.equals(node.name) && store.name.equals(name)
+                        && store.desc.equals(descriptor)) {
+                    return true;
+                }
+            }
+        }
+        return false;
+    }
+
     public static Optional<Object> ofStaticBranching(Class<?> owner, byte[] original, String name, String descriptor)
             throws ReflectiveOperationException {
         ClassNode node = RetainedInitializers.read(original);

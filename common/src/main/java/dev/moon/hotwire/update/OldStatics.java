@@ -48,6 +48,13 @@ public final class OldStatics {
                     byte[] original = originalBytes.apply(name);
                     Optional<Object> first = original == null ? Optional.empty() : InitialValues.ofStatic(owner,
                             original, field.getName(), field.getType().descriptorString());
+
+                    if (first.isEmpty() && original != null && InitialValues.isStoredByInitializer(original,
+                            field.getName(), field.getType().descriptorString())) {
+                        LOGGER.info("[Hotwire] {}.{} goes on with the old version's object: its class fills it"
+                                + " in a way that cannot be made again", owner.getSimpleName(), field.getName());
+                        continue;
+                    }
                     field.set(null, first.filter(value -> !leaving.contains(value.getClass().getName()
                             .replace('.', '/'))).orElse(null));
                     back.add(() -> {
