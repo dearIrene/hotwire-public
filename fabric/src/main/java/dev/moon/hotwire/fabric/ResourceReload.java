@@ -55,6 +55,7 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 public final class ResourceReload {
+    private static final int FIRST_TEXTURE_UNIT = 0x84C0;
     private static final Logger LOGGER = LoggerFactory.getLogger(ResourceReload.class);
     private static final int LAYOUT_TRIES = 3;
 
@@ -108,6 +109,15 @@ public final class ResourceReload {
         }
     }
 
+    private static void resetTextureUnit(String internalName) {
+        try {
+            Class.forName(internalName.replace('/', '.'), false, ResourceReload.class.getClassLoader())
+                    .getMethod("_activeTexture", int.class).invoke(null, FIRST_TEXTURE_UNIT);
+        } catch (ReflectiveOperationException | LinkageError e) {
+            LOGGER.warn("[Hotwire] the texture unit in use stays as it is: {}", e.toString());
+        }
+    }
+
     @SuppressWarnings("FutureReturnValueIgnored")
     static void rebuildRenderers(Collection<String> newlyBuilt, Collection<String> rebuilt,
             Collection<String> reloadFor) {
@@ -121,12 +131,19 @@ public final class ResourceReload {
         boolean sounds = hasAny(types, List.of(SoundInstance.class));
         boolean language = hasAny(findLoaded(rebuilt), LANGUAGE);
         boolean world = WorldRendererReset.isClosed() || WorldRendererReset.holdsAny(types);
-        if (!renderers && !screens && !particles && !sounds && !language && !reload && !world) {
+
+        String unitsOf = rebuilt.stream().filter(name -> name.endsWith("/GlStateManager")).findFirst()
+                .orElse(null);
+        if (!renderers && !screens && !particles && !sounds && !language && !reload && !world && unitsOf == null) {
             return;
         }
         Minecraft game = Minecraft.getInstance();
         try {
             GameHold.onGameBeforeNextFrame(() -> {
+                if (unitsOf != null) {
+                    resetTextureUnit(unitsOf);
+                }
+
                 GameParts.getOngoingReload().awaitBegun(game);
                 if (world) {
                     WorldRendererReset.run();
