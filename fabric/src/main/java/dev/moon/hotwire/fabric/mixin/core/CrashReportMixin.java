@@ -1,6 +1,7 @@
 package dev.moon.hotwire.fabric.mixin.core;
 
 import dev.moon.hotwire.engine.AntiCrashOffer;
+import dev.moon.hotwire.fabric.CrashReports;
 import dev.moon.hotwire.report.GameReports;
 import java.nio.file.Path;
 import java.util.List;
@@ -33,6 +34,7 @@ public abstract class CrashReportMixin {
 
     @Inject(method = "<init>", at = @At("TAIL"))
     private void hotwire$addSection(CallbackInfo ci) {
+        CrashReports.noteReported(this.getException());
         GameReports.listCrashDetails(this.getException())
                 .forEach((name, value) -> this.getSystemReport().setDetail(name, value));
     }

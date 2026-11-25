@@ -8,14 +8,17 @@ import dev.moon.hotwire.fabric.screen.CrashPopup;
 import dev.moon.hotwire.report.GameReports;
 import dev.moon.hotwire.report.ReportZips;
 import dev.moon.hotwire.store.OutdatedNotice;
+import dev.moon.hotwire.switching.CrashPolicy;
 import dev.moon.hotwire.ui.Lang;
 import java.io.File;
+import java.lang.ref.WeakReference;
 import java.time.LocalDateTime;
 import java.time.ZoneId;
 import java.time.format.DateTimeFormatter;
 import java.util.Locale;
 import net.minecraft.CrashReport;
 import net.minecraft.ReportType;
+import net.minecraft.ReportedException;
 import net.minecraft.client.Minecraft;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -28,7 +31,33 @@ public final class CrashReports {
     private static volatile boolean goingDown;
     private static volatile boolean closing;
 
+    private static volatile WeakReference<Throwable> lastReported = new WeakReference<>(null);
+
     private CrashReports() {
+    }
+
+    public static void noteReported(Throwable thrown) {
+        lastReported = new WeakReference<>(thrown);
+    }
+
+    @SuppressWarnings({"FutureReturnValueIgnored", "ReferenceEquality"})
+    static void makeForCaught(Tasks tasks, CrashPolicy.Site site, Throwable thrown) {
+        if (lastReported.get() == thrown || thrown instanceof ReportedException) {
+            return;
+        }
+        String title = switch (site) {
+            case FRAME -> "Unexpected error";
+            case PACKET -> "Main thread packet handler";
+            case ENTITY -> "Ticking entity";
+            case BLOCK_ENTITY -> "Ticking block entity";
+            case PLAYER -> "Ticking player";
+            case SERVER_TICK, SERVER_STATUS -> "Exception in server tick loop";
+        };
+        tasks.submit("the game's own report of a crash Hotwire caught", () -> {
+            CrashReport.forThrowable(thrown, title);
+            LOGGER.info("[Hotwire] made the game's own crash report ({}) for the crash caught", title);
+            return title;
+        });
     }
 
     @SuppressWarnings("FutureReturnValueIgnored")

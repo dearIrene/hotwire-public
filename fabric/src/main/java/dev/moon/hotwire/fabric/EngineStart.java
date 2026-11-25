@@ -508,7 +508,7 @@ final class EngineStart {
                     public boolean dropFrom(Throwable thrown) {
                         return MixinInternals.dropUnapplied(thrown);
                     }
-                });
+                }, (site, thrown) -> CrashReports.makeForCaught(started.getTasks(), site, thrown));
         OwnThrowNotice.install(engine.getTasks(), say,
                 why -> started.writeReport(Lang.get("hotwire.report.file.hotwire_error"), why));
         JvmParts ready = started.findParts();

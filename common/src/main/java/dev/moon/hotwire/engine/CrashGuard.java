@@ -57,7 +57,7 @@ public final class CrashGuard {
     public static void install(InstalledMods installed, Tasks tasks, Supplier<@Nullable SwitchRunner> runner,
             BiConsumer<String, Boolean> say, BiFunction<String, String, String> writeReport,
             BooleanSupplier antiCrash, BooleanSupplier offerWanted, Predicate<String> inDevelopment,
-            UnappliedMixins unapplied) {
+            UnappliedMixins unapplied, BiConsumer<CrashPolicy.Site, Throwable> onCaught) {
         CrashPolicy[] made = new CrashPolicy[1];
         Set<String> switched = ConcurrentHashMap.newKeySet();
         List<String> said = new CopyOnWriteArrayList<>();
@@ -76,6 +76,7 @@ public final class CrashGuard {
                 said.remove(0);
             }
             said.add(caught.mod() + " at " + caught.site() + ": " + caught.thrown());
+            onCaught.accept(caught.site(), caught.thrown());
             SwitchRunner switching = runner.get();
             if (switching == null) {
                 made[0].onOffFinished(caught.mod(), false);
