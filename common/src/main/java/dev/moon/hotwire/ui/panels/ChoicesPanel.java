@@ -25,6 +25,7 @@ public final class ChoicesPanel extends Sheet {
 
     private final Supplier<List<SettingsSection>> sections;
     private final BiConsumer<String, Integer> choose;
+    private final Runnable onPick;
     private final Runnable onDone;
     private int lasts;
     private int crash = ON;
@@ -33,13 +34,14 @@ public final class ChoicesPanel extends Sheet {
 
     @SuppressWarnings("this-escape")
     public ChoicesPanel(Supplier<List<SettingsSection>> sections, BiConsumer<String, Integer> choose,
-            Runnable onDone) {
+            Runnable onPick, Runnable onDone) {
         super(400, null);
         this.sections = sections;
         this.choose = choose;
+        this.onPick = onPick;
         this.onDone = onDone;
         this.title.set(Lang.get("hotwire.choices.title"));
-        this.buttons.with(Kit.dim(Lang.get("hotwire.choices.later")), Kit.space(),
+        this.buttons.with(Kit.text(Lang.get("hotwire.choices.later"), Palette.FAINT).wrap().grow(1),
                 this.setLead(Kit.lead(Lang.get("hotwire.choices.done"), this::finish)));
     }
 
@@ -69,6 +71,7 @@ public final class ChoicesPanel extends Sheet {
         Tabs[] bars = new Tabs[2];
         Tabs lastsBar = Kit.tabs(Tabs.Look.BOX, choice -> {
             this.lasts = choice;
+            this.onPick.run();
             bars[0].choose(choice);
             lastsNote.set(lasts.choices().get(choice).explains());
         });
@@ -78,6 +81,7 @@ public final class ChoicesPanel extends Sheet {
         Tabs crashBar = Kit.tabs(Tabs.Look.BOX, choice -> {
             this.crash = choice;
             this.sceneClock = 0;
+            this.onPick.run();
             bars[1].choose(choice);
             crashNote.set(this.describeCrash());
         });

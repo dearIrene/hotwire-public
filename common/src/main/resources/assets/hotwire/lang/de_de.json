@@ -97,7 +97,7 @@
   "hotwire.choices.anti_crash.now": "Im Moment schließt sich dein ganzes Spiel, wenn eine Mod abstürzt.",
   "hotwire.choices.anti_crash.on": "Mit Anti-Crash fängt Hotwire den Absturz ab, schaltet nur diese Mod aus und räumt auf, was sie hinterlassen hat. Du spielst weiter.",
   "hotwire.choices.anti_crash.off": "So lassen: Eine abstürzende Mod schließt dein Spiel.",
-  "hotwire.choices.later": "Beides kannst du in den Einstellungen ändern.",
+  "hotwire.choices.later": "Das sind ältere Funktionen, die du kennen solltest. Beides kannst du in den Einstellungen ändern.",
   "hotwire.choices.done": "Fertig",
   "hotwire.tour.switch.title": "Mods wechseln, während du spielst",
   "hotwire.tour.switch.text": "Schalte einen Mod an oder aus, und es passiert direkt in deiner Welt, ohne Neustart.",

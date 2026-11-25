@@ -97,7 +97,7 @@
   "hotwire.choices.anti_crash.now": "Pour l'instant, quand un mod plante, tout votre jeu se ferme.",
   "hotwire.choices.anti_crash.on": "Avec Anti-Crash, Hotwire rattrape le plantage, désactive seulement ce mod et nettoie le désordre qu'il a laissé. Vous continuez à jouer.",
   "hotwire.choices.anti_crash.off": "Laisser ainsi : un mod qui plante ferme votre jeu.",
-  "hotwire.choices.later": "Vous pouvez changer les deux dans les paramètres.",
+  "hotwire.choices.later": "Ce sont d'anciennes fonctions à connaître. Vous pouvez changer les deux dans les paramètres.",
   "hotwire.choices.done": "Terminé",
   "hotwire.tour.switch.title": "Les mods changent pendant que tu joues",
   "hotwire.tour.switch.text": "Active ou désactive un mod et ça se fait directement dans ton monde, sans redémarrer.",

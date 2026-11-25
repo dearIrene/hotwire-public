@@ -180,7 +180,9 @@ public final class ModScreen implements JarHost {
         this.downloadsWarning = new DownloadsWarningPanel(game::markDownloadsWarned, this::closePanels);
         this.deletePanel = new DeletePanel(game::deleteMod, this::closePanels);
 
-        this.choices = new ChoicesPanel(game::getSettingsSections, game::chooseSetting, () -> {
+        this.choices = new ChoicesPanel(game::getSettingsSections, game::chooseSetting,
+                () -> game.playSound(LoadingScreen.Cue.MOD, 1.3f), () -> {
+            game.playSound(LoadingScreen.Cue.ADDED, 1);
             game.markChoicesMade();
             this.presentTour();
         });

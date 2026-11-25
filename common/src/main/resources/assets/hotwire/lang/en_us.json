@@ -97,7 +97,7 @@
   "hotwire.choices.anti_crash.now": "Right now, when a mod crashes, your whole game closes.",
   "hotwire.choices.anti_crash.on": "With Anti-Crash, Hotwire catches the crash, turns off only that mod and cleans up the mess it left. You keep playing.",
   "hotwire.choices.anti_crash.off": "Keep it that way: a crashing mod closes your game.",
-  "hotwire.choices.later": "You can change both in Settings.",
+  "hotwire.choices.later": "These are old features you should know about. You can change both in Settings.",
   "hotwire.choices.done": "Done",
   "hotwire.tour.switch.title": "Mods switch while you play",
   "hotwire.tour.switch.text": "Turn a mod off or on and it happens right there in your world, no restart.",
