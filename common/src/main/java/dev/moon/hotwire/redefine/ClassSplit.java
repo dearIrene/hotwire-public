@@ -2,6 +2,7 @@ package dev.moon.hotwire.redefine;
 
 import dev.moon.hotwire.classfile.ClassNodes;
 import java.util.ArrayList;
+import java.util.HashMap;
 import java.util.HashSet;
 import java.util.LinkedHashMap;
 import java.util.List;
@@ -180,12 +181,27 @@ public final class ClassSplit {
             if (bytes == null) {
                 continue;
             }
-            for (MethodNode inherited : read(bytes).methods) {
+            List<MethodNode> inDuck = read(bytes).methods;
+
+            Map<String, String> moved = new HashMap<>();
+            for (MethodNode inherited : inDuck) {
+                if ((inherited.access & Opcodes.ACC_PRIVATE) != 0 && !inherited.name.startsWith("<")) {
+                    moved.put(inherited.name + inherited.desc,
+                            inherited.name + "$" + duck.substring(duck.lastIndexOf('/') + 1));
+                }
+            }
+            for (MethodNode inherited : inDuck) {
+                String renamed = moved.get(inherited.name + inherited.desc);
                 boolean concrete = (inherited.access & (Opcodes.ACC_ABSTRACT | Opcodes.ACC_STATIC
                         | Opcodes.ACC_PRIVATE)) == 0
                         && !inherited.name.equals("<clinit>");
-                if (concrete && !mixedMethods.containsKey(inherited.name + inherited.desc)
+                if (renamed != null) {
+                    reachMoved(inherited, duck, running.name, moved);
+                    inherited.name = renamed;
+                    addedMethods.putIfAbsent(renamed + inherited.desc, inherited);
+                } else if (concrete && !mixedMethods.containsKey(inherited.name + inherited.desc)
                         && !fromParents.contains(inherited.name + inherited.desc)) {
+                    reachMoved(inherited, duck, running.name, moved);
                     addedMethods.putIfAbsent(inherited.name + inherited.desc, inherited);
                 }
             }
@@ -622,6 +638,36 @@ public final class ClassSplit {
                     : new InvokeDynamicInsnNode(call.name, descriptor, ClassSplit.METHOD));
         } else if (inSidecar && call.getOpcode() == Opcodes.INVOKESPECIAL && !call.name.equals("<init>")) {
             call.setOpcode(Opcodes.INVOKEVIRTUAL);
+        }
+    }
+
+    private static void reachMoved(MethodNode method, String duck, String target, Map<String, String> moved) {
+        if (moved.isEmpty()) {
+            return;
+        }
+        for (AbstractInsnNode insn : method.instructions) {
+            if (insn instanceof MethodInsnNode call && call.owner.equals(duck)) {
+                String name = moved.get(call.name + call.desc);
+                if (name != null) {
+                    call.owner = target;
+                    call.name = name;
+                    call.itf = false;
+                    if (call.getOpcode() != Opcodes.INVOKESTATIC) {
+                        call.setOpcode(Opcodes.INVOKEVIRTUAL);
+                    }
+                }
+            } else if (insn instanceof InvokeDynamicInsnNode indy) {
+                for (int at = 0; at < indy.bsmArgs.length; at++) {
+                    if (indy.bsmArgs[at] instanceof Handle handle && handle.getOwner().equals(duck)) {
+                        String name = moved.get(handle.getName() + handle.getDesc());
+                        if (name != null) {
+                            int tag = handle.getTag() == Opcodes.H_INVOKESTATIC ? Opcodes.H_INVOKESTATIC
+                                    : Opcodes.H_INVOKEVIRTUAL;
+                            indy.bsmArgs[at] = new Handle(tag, target, name, handle.getDesc(), false);
+                        }
+                    }
+                }
+            }
         }
     }
 
