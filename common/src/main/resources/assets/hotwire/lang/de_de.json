@@ -99,6 +99,8 @@
   "hotwire.choices.anti_crash.off": "Eine abstürzende Mod schließt dein Spiel.",
   "hotwire.choices.later": "Das sind ältere Funktionen, die du kennen solltest. Beides kannst du in den Einstellungen ändern.",
   "hotwire.choices.done": "Fertig",
+  "hotwire.choices.question": "Eine Frage oder ein Problem?",
+  "hotwire.choices.discord": "Komm auf unseren Discord",
   "hotwire.tour.switch.title": "Mods wechseln, während du spielst",
   "hotwire.tour.switch.text": "Schalte einen Mod an oder aus, und es passiert direkt in deiner Welt, ohne Neustart.",
   "hotwire.tour.profiles.title": "Profile",

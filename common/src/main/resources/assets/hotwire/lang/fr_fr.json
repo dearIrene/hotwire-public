@@ -99,6 +99,8 @@
   "hotwire.choices.anti_crash.off": "Un mod qui plante ferme votre jeu.",
   "hotwire.choices.later": "Ce sont d'anciennes fonctions à connaître. Vous pouvez changer les deux dans les paramètres.",
   "hotwire.choices.done": "Terminé",
+  "hotwire.choices.question": "Une question ou un souci ?",
+  "hotwire.choices.discord": "Rejoins notre Discord",
   "hotwire.tour.switch.title": "Les mods changent pendant que tu joues",
   "hotwire.tour.switch.text": "Active ou désactive un mod et ça se fait directement dans ton monde, sans redémarrer.",
   "hotwire.tour.profiles.title": "Profils",

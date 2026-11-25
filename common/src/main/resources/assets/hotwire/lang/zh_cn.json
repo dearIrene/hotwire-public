@@ -99,6 +99,8 @@
   "hotwire.choices.anti_crash.off": "模组崩溃会关闭游戏。",
   "hotwire.choices.later": "这些是你应该知道的老功能。两项都可以在设置里更改。",
   "hotwire.choices.done": "完成",
+  "hotwire.choices.question": "有疑问或遇到问题？",
+  "hotwire.choices.discord": "加入我们的 Discord",
   "hotwire.tour.switch.title": "边玩边切换模组",
   "hotwire.tour.switch.text": "开启或关闭一个模组，它会直接在你的世界里生效，不用重启。",
   "hotwire.tour.profiles.title": "方案",

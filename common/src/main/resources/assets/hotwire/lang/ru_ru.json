@@ -99,6 +99,8 @@
   "hotwire.choices.anti_crash.off": "Упавший мод закрывает игру.",
   "hotwire.choices.later": "Это старые функции, о которых стоит знать. Оба выбора можно изменить в настройках.",
   "hotwire.choices.done": "Готово",
+  "hotwire.choices.question": "Есть вопрос или проблема?",
+  "hotwire.choices.discord": "Заходи в наш Discord",
   "hotwire.tour.switch.title": "Моды переключаются прямо во время игры",
   "hotwire.tour.switch.text": "Включи или выключи мод, и это произойдёт прямо в твоём мире, без перезапуска.",
   "hotwire.tour.profiles.title": "Профили",

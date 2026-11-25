@@ -99,6 +99,8 @@
   "hotwire.choices.anti_crash.off": "A crashing mod closes your game.",
   "hotwire.choices.later": "These are old features you should know about. You can change both in Settings.",
   "hotwire.choices.done": "Done",
+  "hotwire.choices.question": "Got a question or an issue?",
+  "hotwire.choices.discord": "Join our Discord",
   "hotwire.tour.switch.title": "Mods switch while you play",
   "hotwire.tour.switch.text": "Turn a mod off or on and it happens right there in your world, no restart.",
   "hotwire.tour.profiles.title": "Profiles",

@@ -99,6 +99,8 @@
   "hotwire.choices.anti_crash.off": "Um mod que trava fecha seu jogo.",
   "hotwire.choices.later": "São recursos antigos que você deveria conhecer. Você pode mudar as duas nas Configurações.",
   "hotwire.choices.done": "Pronto",
+  "hotwire.choices.question": "Tem uma dúvida ou um problema?",
+  "hotwire.choices.discord": "Entre no nosso Discord",
   "hotwire.tour.switch.title": "Os mods mudam enquanto você joga",
   "hotwire.tour.switch.text": "Ligue ou desligue um mod e acontece ali mesmo no seu mundo, sem reiniciar.",
   "hotwire.tour.profiles.title": "Perfis",

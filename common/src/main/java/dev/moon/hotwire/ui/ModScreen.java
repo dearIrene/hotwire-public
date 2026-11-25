@@ -196,7 +196,7 @@ public final class ModScreen implements JarHost {
             game.playSound(LoadingScreen.Cue.ADDED, 1);
             game.markChoicesMade();
             this.presentTour();
-        });
+        }, () -> game.openLink(SettingsPage.DISCORD));
         this.firstOpen = new FirstOpenPanel(() -> {
             game.acceptFirstOpen();
             this.presentChoices();

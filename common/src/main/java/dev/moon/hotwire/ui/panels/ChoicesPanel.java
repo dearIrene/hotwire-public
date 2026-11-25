@@ -27,6 +27,7 @@ public final class ChoicesPanel extends Sheet {
     private final BiConsumer<String, Integer> choose;
     private final Runnable onPick;
     private final Runnable onDone;
+    private final Runnable onDiscord;
     private int lasts;
     private int crash = ON;
 
@@ -34,12 +35,13 @@ public final class ChoicesPanel extends Sheet {
 
     @SuppressWarnings("this-escape")
     public ChoicesPanel(Supplier<List<SettingsSection>> sections, BiConsumer<String, Integer> choose,
-            Runnable onPick, Runnable onDone) {
+            Runnable onPick, Runnable onDone, Runnable onDiscord) {
         super(400, null);
         this.sections = sections;
         this.choose = choose;
         this.onPick = onPick;
         this.onDone = onDone;
+        this.onDiscord = onDiscord;
         this.title.set(Lang.get("hotwire.choices.title"));
         this.buttons.with(Kit.text(Lang.get("hotwire.choices.later"), Palette.FAINT).wrap().grow(1),
                 this.setLead(Kit.lead(Lang.get("hotwire.choices.done"), this::finish)));
@@ -95,7 +97,11 @@ public final class ChoicesPanel extends Sheet {
                 Kit.row(Kit.column(Kit.text(crash.label(), Palette.ACCENT),
                         Kit.dim(Lang.get("hotwire.choices.anti_crash.now")).wrap()).gap(3).grow(1), new Scene())
                         .gap(10).cross(Line.Cross.END),
-                Kit.column(crashBar, crashNote).gap(3).cross(Line.Cross.START));
+                Kit.column(crashBar, crashNote).gap(3).cross(Line.Cross.START),
+
+                Kit.row(Kit.text(Lang.get("hotwire.choices.question"), Palette.ACCENT).wrap().grow(1),
+                        Kit.lead(Lang.get("hotwire.choices.discord"), this.onDiscord)).gap(8)
+                        .cross(Line.Cross.CENTER));
         this.show();
         return true;
     }
