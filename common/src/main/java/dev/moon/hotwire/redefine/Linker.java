@@ -618,7 +618,7 @@ public final class Linker {
 
     static CallSite bootstrapForeignField(MethodHandles.Lookup caller, String name, MethodType type,
             Class<?> owner, int kind) throws ReflectiveOperationException {
-        if (FieldHolders.findHolderClassOf(owner) == null) {
+        if (FieldHolders.findHolderClassOf(FieldHolders.findDeclaringOf(owner, name)) == null) {
             return new ConstantCallSite(findPlainField(MethodHandles.privateLookupIn(owner, caller), owner, name,
                     type, kind).asType(type));
         }
