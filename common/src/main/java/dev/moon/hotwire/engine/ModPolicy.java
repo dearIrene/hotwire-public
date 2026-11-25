@@ -164,6 +164,10 @@ public final class ModPolicy {
     }
 
     public static SwitchPlanner makePlannerFor(ModGraph graph) {
+        return makePlannerFor(graph, true);
+    }
+
+    public static SwitchPlanner makePlannerFor(ModGraph graph, boolean isInstalling) {
         Set<String> guarded = new HashSet<>();
         graph.getIds().stream().filter(ModPolicy::isGuarded).forEach(guarded::add);
         guarded.addAll(findNeededByUnread(graph.getIds()));
@@ -171,9 +175,11 @@ public final class ModPolicy {
                 findBuiltIn(graph.getIds()), guarded, ModPolicy::satisfies,
                 seenUses != null ? seenUses : KnownUses.NONE, ModPolicy::isStaying, ModPolicy::isGone));
 
-        Set<String> own = new HashSet<>(graph.findSharedNested());
-        own.addAll(planner.findNestedStayingOn());
-        Owners.useShared(own);
+        if (isInstalling) {
+            Set<String> own = new HashSet<>(graph.findSharedNested());
+            own.addAll(planner.findNestedStayingOn());
+            Owners.useShared(own);
+        }
         return planner;
     }
 

@@ -1,5 +1,6 @@
 package dev.moon.hotwire.add;
 
+import com.google.errorprone.annotations.CanIgnoreReturnValue;
 import dev.moon.hotwire.jar.ModJar;
 import dev.moon.hotwire.jar.ModManifest;
 import dev.moon.hotwire.mixin_copy.MixinCopy;
@@ -22,7 +23,8 @@ public interface AddGame {
 
         void releaseGame();
 
-        void pauseGame();
+        @CanIgnoreReturnValue
+        boolean pauseGame();
 
         void release();
     }

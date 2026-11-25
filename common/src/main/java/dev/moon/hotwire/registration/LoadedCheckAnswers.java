@@ -6,6 +6,7 @@ import dev.moon.hotwire.redefine.FieldSlots;
 import dev.moon.hotwire.redefine.InitialValues;
 import dev.moon.hotwire.redefine.LoadedChecks;
 import java.lang.instrument.Instrumentation;
+import java.lang.management.ManagementFactory;
 import java.lang.reflect.Member;
 import java.lang.reflect.Modifier;
 import java.util.ArrayList;
@@ -62,6 +63,8 @@ final class LoadedCheckAnswers {
     private volatile Set<String> aheadFor = Set.of();
     private volatile @Nullable CheckSites ahead;
 
+    private volatile long aheadLoads = -1;
+
     private volatile Set<String> everyFor = Set.of();
     private volatile @Nullable CheckSites every;
 
@@ -84,9 +87,15 @@ final class LoadedCheckAnswers {
 
     void readAhead(Collection<String> mods, @Nullable ConstantPools pools, Predicate<Class<?>> others) {
         if (pools != null && !mods.isEmpty()) {
+            long loads = countLoads();
             this.ahead = this.find(mods, pools, others);
             this.aheadFor = Set.copyOf(mods);
+            this.aheadLoads = loads;
         }
+    }
+
+    private static long countLoads() {
+        return ManagementFactory.getClassLoadingMXBean().getTotalLoadedClassCount();
     }
 
     void match(Collection<String> mods, boolean off, @Nullable ConstantPools pools, Predicate<Class<?>> others) {
@@ -94,9 +103,10 @@ final class LoadedCheckAnswers {
             return;
         }
         CheckSites read = this.ahead;
+        this.ahead = null;
         CheckSites all = this.every;
         CheckSites found;
-        if (read != null && this.aheadFor.equals(Set.copyOf(mods))) {
+        if (read != null && this.aheadFor.equals(Set.copyOf(mods)) && this.aheadLoads == countLoads()) {
             found = read;
         } else if (all != null && this.everyFor.containsAll(mods)) {
             found = this.catchUp(all, pools);

@@ -286,6 +286,8 @@ public final class MixinCopy implements AutoCloseable {
     public void replace(Map<String, byte[]> classes) {
         this.readChanges.incrementAndGet();
         this.replaced.putAll(classes);
+
+        this.readChanges.incrementAndGet();
         this.defaultRefmap = null;
         synchronized (BOOTING) {
             this.discard();

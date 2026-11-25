@@ -369,7 +369,7 @@ public final class GameHold {
         return this.refuses && !this.allPaused;
     }
 
-    public void pauseGame(Minecraft client) {
+    public boolean pauseGame(Minecraft client) {
         if (!client.isSameThread() && !stoppedByStart) {
             CountDownLatch paused = new CountDownLatch(1);
             CountDownLatch latch = this.pause();
@@ -392,8 +392,9 @@ public final class GameHold {
             if (!awaitEdge(paused)) {
                 client.execute(GameParts.getHoldWork()::runAtFrameEdge);
             }
-            this.onReached(paused, decided, "game");
+            return this.onReached(paused, decided, "game");
         }
+        return true;
     }
 
     public void releaseGame() {

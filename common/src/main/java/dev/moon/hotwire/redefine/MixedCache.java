@@ -288,7 +288,10 @@ final class MixedCache {
         } catch (IOException e) {
             return false;
         }
-        this.holding.add(reads);
+
+        if (this.copy.findReadChanges() == changes) {
+            this.holding.add(reads);
+        }
         return true;
     }
 
@@ -321,6 +324,7 @@ final class MixedCache {
     }
 
     void save(Map<String, CacheKey> keys, MixinCopy.MixResult made, Map<String, byte[]> classes) {
+        int changes = this.copy.findReadChanges();
         Map<String, byte @Nullable []> read = new TreeMap<>(this.copy.findReadBytes(made.read()));
         read.keySet().removeIf(this.listed::contains);
         Map<String, byte[]> originals = new HashMap<>(classes);
@@ -332,7 +336,7 @@ final class MixedCache {
         });
         this.writer.execute(() -> {
             try {
-                CacheKey reads = this.saveReads(read);
+                CacheKey reads = this.saveReads(read, changes);
                 if (reads == null) {
                     return;
                 }
@@ -359,7 +363,7 @@ final class MixedCache {
         }
     }
 
-    private @Nullable CacheKey saveReads(Map<String, byte @Nullable []> read) {
+    private @Nullable CacheKey saveReads(Map<String, byte @Nullable []> read, int changes) {
         ByteArrayOutputStream list = new ByteArrayOutputStream();
         try (DataOutputStream out = new DataOutputStream(list)) {
             out.writeInt(read.size());
@@ -376,7 +380,9 @@ final class MixedCache {
         if (this.counted.add(reads)) {
             this.readsSaved.addAndGet(this.store.findSize(reads));
         }
-        this.holding.add(reads);
+        if (this.copy.findReadChanges() == changes) {
+            this.holding.add(reads);
+        }
         return reads;
     }
 

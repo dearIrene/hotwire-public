@@ -78,6 +78,10 @@ final class StoreApiAdd {
                         }
                         store.fetch(project.id(), versionId, project.name(),
                                 (jars, projects) -> {
+                                    if (!store.getModel().getClient().isBrowsingOwn()) {
+                                        made.complete(refusal.apply(Lang.get("hotwire.api.add.browsing")));
+                                        return;
+                                    }
                                     engine.storeJars.remember(jars, projects);
                                     then.take(engine, project, jars);
                                 },

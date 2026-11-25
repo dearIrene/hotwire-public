@@ -143,7 +143,9 @@ final class DefinedClasses {
         if (into == null) {
             Path folder = Path.of(System.getProperty("java.io.tmpdir"));
             deleteLeftBehind(folder);
-            Path made = Files.createTempFile(folder, PREFIX, ".bin");
+
+            Path made = Files.createFile(folder.resolve(PREFIX + ProcessHandle.current().pid() + "-"
+                    + Integer.toHexString(System.identityHashCode(this)) + "-" + System.nanoTime() + ".bin"));
             made.toFile().deleteOnExit();
             into = new RandomAccessFile(made.toFile(), "rw");
             this.file = into;

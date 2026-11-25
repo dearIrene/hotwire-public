@@ -754,7 +754,7 @@ public final class ModSwitcher {
         this.switched = true;
         this.switches.incrementAndGet();
         if (this.isWorldBound(plan)) {
-            return this.runAlone(plan, theirs);
+            return this.runAlone(plan, theirs, true);
         }
         this.waiting = plan;
         Thread worker = this.aheadWorker;
@@ -766,7 +766,7 @@ public final class ModSwitcher {
             synchronized (this.rebuilding) {
                 this.waiting = null;
                 SwitchTimes.mark("work ahead");
-                return this.runAlone(plan, theirs);
+                return this.runAlone(plan, theirs, false);
             }
         } finally {
             this.waiting = null;
@@ -779,7 +779,7 @@ public final class ModSwitcher {
         return Causes.hasCause(thrown, HoldBudgetException.class);
     }
 
-    private Result runAlone(SwitchPlan plan, Consumer<List<String>> theirs) {
+    private Result runAlone(SwitchPlan plan, Consumer<List<String>> theirs, boolean isWorldBound) {
         if (plan.isRefused()) {
             return new Result.Refused(plan);
         }
@@ -791,7 +791,7 @@ public final class ModSwitcher {
         try {
             this.progress.step(1, plan.order().isEmpty() ? "" : this.nameOf(plan.order().getFirst()));
             Set<String> onAfter = this.onAfter(plan, goingOff);
-            if (this.isWorldBound(plan)) {
+            if (isWorldBound || this.isWorldBound(plan)) {
                 throw RebuildException.ofWorldBuilt(plan.order() + " changed how this world's objects are built when"
                         + " it last switched: they are the world's, so it changes with the world saved and opened"
                         + " again");

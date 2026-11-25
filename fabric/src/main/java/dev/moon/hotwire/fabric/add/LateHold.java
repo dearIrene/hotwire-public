@@ -29,8 +29,8 @@ final class LateHold implements AddGame.Hold {
     }
 
     @Override
-    public void pauseGame() {
-        this.get().pauseGame(Minecraft.getInstance());
+    public boolean pauseGame() {
+        return this.get().pauseGame(Minecraft.getInstance());
     }
 
     @Override

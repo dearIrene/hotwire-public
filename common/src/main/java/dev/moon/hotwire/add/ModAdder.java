@@ -113,7 +113,7 @@ public final class ModAdder {
 
         ModGraph makeGraphWith(List<ModJar> jars);
 
-        SwitchPlanner makePlannerFor(ModGraph graph);
+        SwitchPlanner makePlannerFor(ModGraph graph, boolean isInstalling);
 
         void rememberParts(List<ModJar> parts);
 
@@ -603,7 +603,8 @@ public final class ModAdder {
                         widener.get());
             }
         }
-        SwitchPlan plan = AddDependencies.planOn(this.engine.makePlannerFor(this.engine.makeGraphWith(jars)), jars,
+        SwitchPlan plan = AddDependencies.planOn(this.engine.makePlannerFor(this.engine.makeGraphWith(jars), false),
+                jars,
                 off);
         Optional<String> missing = AddDependencies.describe(plan, nameOf);
         List<Path> libraries = List.of();
@@ -671,7 +672,7 @@ public final class ModAdder {
             }
         }
         ModGraph graph = this.engine.makeGraphWith(jars);
-        SwitchPlanner planner = this.engine.makePlannerFor(graph);
+        SwitchPlanner planner = this.engine.makePlannerFor(graph, true);
         Optional<String> missing = AddDependencies.describe(AddDependencies.planOn(planner, jars, offThen), nameOf);
         if (missing.isPresent()) {
             return new Result.Refused(missing.get());
@@ -795,8 +796,13 @@ public final class ModAdder {
                 }
             } catch (ExecutionException | TimeoutException | RuntimeException e) {
                 Throwable cause = e instanceof ExecutionException && e.getCause() != null ? e.getCause() : e;
-                if (!(e instanceof ExecutionException)) {
-                    hold.pauseGame();
+
+                if (!(e instanceof ExecutionException) && !hold.pauseGame()) {
+                    LOGGER.error("[Hotwire] {} is still starting on the game thread; it stays in until a restart",
+                            ids, e);
+                    this.game.refuseWorldsFor(name);
+                    return new Result.Failed(Lang.get("hotwire.add.start_failed", name, cause) + " "
+                            + Lang.get("hotwire.add.start_failed_stays"), e, true);
                 }
                 tookBack = true;
                 return this.backOut(ids, name, cause, grew, undo, e);
