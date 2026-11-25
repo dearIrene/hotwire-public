@@ -51,6 +51,8 @@ public final class LoadedClassBytes {
     private final DefinedClasses definedAs = DEFINED;
 
     private static final Map<String, Integer> IN_GAME = new ConcurrentHashMap<>();
+
+    private static volatile @Nullable Integer lastLoader;
     private final Map<String, Integer> definedInGame = IN_GAME;
 
     LoadedClassBytes(Instrumentation instrumentation) {
@@ -80,8 +82,18 @@ public final class LoadedClassBytes {
     public static boolean recordDefinedInGame(String internal, byte[] bytes, ClassLoader loader) {
         boolean written = DEFINED.put(internal, bytes);
 
-        IN_GAME.put(internal, System.identityHashCode(loader));
+        IN_GAME.put(internal, findLoaderNumber(loader));
         return written;
+    }
+
+    private static Integer findLoaderNumber(ClassLoader loader) {
+        int number = System.identityHashCode(loader);
+        Integer last = lastLoader;
+        if (last == null || last != number) {
+            last = number;
+            lastLoader = last;
+        }
+        return last;
     }
 
     public void onDefinedInGame(String internal, byte[] bytes, ClassLoader loader) {

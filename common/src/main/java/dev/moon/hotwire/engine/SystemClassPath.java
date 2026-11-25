@@ -23,11 +23,12 @@ final class SystemClassPath {
     }
 
     static boolean has(String internalName) {
+        return canHave(internalName) && ClassLoader.getSystemResource(internalName + ".class") != null;
+    }
+
+    static boolean canHave(String internalName) {
         int slash = internalName.lastIndexOf('/');
-        if (PACKAGES != null && !PACKAGES.contains(slash < 0 ? "" : internalName.substring(0, slash))) {
-            return false;
-        }
-        return ClassLoader.getSystemResource(internalName + ".class") != null;
+        return PACKAGES == null || PACKAGES.contains(slash < 0 ? "" : internalName.substring(0, slash));
     }
 
     private static @Nullable Set<String> readPackages() {

@@ -92,7 +92,7 @@ public final class InstalledMods {
     private final Map<String, Boolean> ofGame = new ConcurrentHashMap<>();
 
     private boolean isOfGame(String type) {
-        return this.ofGame.computeIfAbsent(type, SystemClassPath::has);
+        return SystemClassPath.canHave(type) && this.ofGame.computeIfAbsent(type, SystemClassPath::has);
     }
 
     public synchronized ModGraph getGraph() {
