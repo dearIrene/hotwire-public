@@ -491,6 +491,11 @@ public final class ResourceReload {
             FontReload.reloadFonts(changed, List.of());
         } else if (!resources.isEmpty()) {
             run(changed);
+        } else if (models && off && ModelReloadCheck.findModelOwners(mods).isEmpty()) {
+            LOGGER.info("[Hotwire] the game's baked models held {}'s, each drawing what it wraps now: they are made"
+                    + " anew with the game drawing", mods);
+            List<String> soundsFrom = findSwitched();
+            GameParts.getBackgroundReload().beginAfterHold(() -> startWhole(Minecraft.getInstance(), soundsFrom));
         } else if (models) {
             run(off ? "the game's baked models held " + mods + "'s" : mods + " bake their models in again");
         } else if (fonts && packsGone.isEmpty() && !ownPack) {
