@@ -7,7 +7,6 @@ import dev.moon.hotwire.seam.Games;
 import dev.moon.hotwire.seam.SharedChange;
 import dev.moon.hotwire.switching.Progress;
 import dev.moon.hotwire.ui.AddMode;
-import dev.moon.hotwire.ui.AddPreview;
 import dev.moon.hotwire.ui.JarHost;
 import dev.moon.hotwire.ui.Lang;
 import dev.moon.hotwire.ui.panels.ReopenPanel;
@@ -81,11 +80,15 @@ final class JarRequests {
                 this.progress.endAdding();
             }
         }, result -> {
+            boolean more = this.storeJars.hasQueued();
             if (mode == AddMode.SAVE_AND_REOPEN) {
                 this.storeJars.endReopenWait(false);
-            }
 
-            boolean more = this.storeJars.hasQueued();
+                if (this.engine.findHost() != null && !Games.getNow().isHotwireShown()
+                        && (!(result instanceof ModAdder.Result.Added) || this.storeJars.hasQueued())) {
+                    this.engine.open();
+                }
+            }
             boolean reopens = mode == AddMode.NOW && ModAdder.isWorldBuilt(result)
                     && Games.getNow().findReopenRefusal().isEmpty() && this.engine.findHost() != null;
             if (reopens && more) {
@@ -106,9 +109,7 @@ final class JarRequests {
             } else if (ModAdder.isRestartOnly(result) && current != null) {
                 LOGGER.info("[Hotwire] {}", result instanceof ModAdder.Result.Refused refused ? refused.reason()
                         : ((ModAdder.Result.Failed) result).reason());
-                List<String> why = List.of(Lang.get("hotwire.add.start_only"));
-                current.offerAdd(jar, this.changes.dryRunAdd(jar).thenApply(preview -> AddPreview.ofLater(
-                        preview.name(), preview.version(), why)));
+                this.storeJars.offerLater(current, jar, more);
             } else if (result instanceof ModAdder.Result.Added added && current != null
                     && Games.getNow().getWorld() != null
                     && (this.changes.setsUpOnJoin(jar) || (!more && this.storeJars.takeReopenWanted()))) {

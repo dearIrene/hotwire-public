@@ -8,6 +8,7 @@ import dev.moon.hotwire.seam.Games;
 import dev.moon.hotwire.store.ModStore;
 import dev.moon.hotwire.store.UpdateCheck;
 import dev.moon.hotwire.switching.Progress;
+import dev.moon.hotwire.ui.AddPreview;
 import dev.moon.hotwire.ui.JarHost;
 import dev.moon.hotwire.ui.Lang;
 import dev.moon.hotwire.ui.ModScreen;
@@ -59,6 +60,8 @@ public final class StoreJars {
     private boolean reopenWanted;
 
     private boolean reopenWait;
+
+    private final Set<Path> later = new HashSet<>();
 
     private final Set<String> needsMet = new HashSet<>();
     private List<UpdateOffer> offers = List.of();
@@ -312,8 +315,20 @@ public final class StoreJars {
         return wanted;
     }
 
+    public void offerLater(JarHost current, Path jar, boolean behind) {
+        if (behind) {
+            this.later.add(jar);
+            this.queued.add(new StoreJar(jar, false));
+            return;
+        }
+        List<String> why = List.of(Lang.get("hotwire.add.start_only"));
+        current.offerAdd(jar, this.changes.dryRunAdd(jar).thenApply(preview -> AddPreview.ofLater(preview.name(),
+                preview.version(), why)));
+    }
+
     public void clear() {
         this.queued.clear();
+        this.later.clear();
         this.reopenWanted = false;
         this.projects.clear();
         this.needsMet.clear();
@@ -397,6 +412,10 @@ public final class StoreJars {
         }
         StoreJar next = current == null ? null : this.queued.poll();
         if (next == null || current == null) {
+            return;
+        }
+        if (this.later.remove(next.jar())) {
+            this.offerLater(current, next.jar(), false);
             return;
         }
 
