@@ -273,10 +273,6 @@ public final class FieldReferences {
         this.elements.forgetClosedWorld();
     }
 
-    public void forgetNotes() {
-        this.elements.forgetNotes();
-    }
-
     public void lookForEvery(Collection<String> mods, Predicate<String> on) {
         this.arrivals.listen();
         this.loadedChecks.readForEvery(mods, this.lambdas.open());
