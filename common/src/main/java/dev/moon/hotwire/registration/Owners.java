@@ -340,7 +340,8 @@ public final class Owners {
         ids.add(GameNames.HOTWIRE);
         for (ModContainer mod : loader.getAllMods()) {
             String id = mod.getMetadata().getId();
-            if (ModPolicy.isFabricApi(id) || ModPolicy.isNeverTouched(id)) {
+
+            if (ModPolicy.isFabricApi(id) || ModPolicy.isNeverTouched(id) || ModPolicy.isHotwire(id)) {
                 ids.add(id);
             }
         }
