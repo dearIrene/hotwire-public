@@ -10,6 +10,7 @@ import dev.moon.hotwire.fabric.add.WorldReopen;
 import dev.moon.hotwire.fabric.rebuild.GameClasses;
 import dev.moon.hotwire.fabric.version.Spellings;
 import dev.moon.hotwire.plan.ModGraph;
+import dev.moon.hotwire.redefine.SidecarReflection;
 import dev.moon.hotwire.redefine.Tripwire;
 import dev.moon.hotwire.registration.Owners;
 import dev.moon.hotwire.ui.Lang;
@@ -160,7 +161,7 @@ final class OffCodeNotice {
                 continue;
             }
 
-            if (CALL_PLUMBING.contains(type.getPackageName())) {
+            if (CALL_PLUMBING.contains(type.getPackageName()) || type == SidecarReflection.class) {
                 continue;
             }
 
