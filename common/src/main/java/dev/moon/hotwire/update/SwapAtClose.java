@@ -51,7 +51,8 @@ public final class SwapAtClose {
     public void arm() {
         Runtime.getRuntime().addShutdownHook(new Thread(this::start, "Hotwire swapper launch"));
         Runtime.getRuntime().addShutdownHook(new Thread(this::watchClose, "Hotwire close watch launch"));
-        this.queue.setOnAdded(this::start);
+
+        this.queue.setOnAdded(() -> Thread.ofPlatform().name("hotwire-swapper-start").daemon().start(this::start));
         if (!this.queue.getEntries().isEmpty()) {
             Thread.ofPlatform().name("Hotwire swapper launch").daemon().start(this::start);
         }

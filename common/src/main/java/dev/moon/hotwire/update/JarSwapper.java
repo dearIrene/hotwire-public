@@ -23,6 +23,8 @@ public final class JarSwapper {
         System.out.println(LocalTime.now(ZoneId.systemDefault()).withNano(0) + " " + line);
     }
 
+    static final int MOVE_TRIES = 5;
+
     private static final String DISABLED = ".disabled";
 
     private record Move(Path from, Path to, boolean linked) {
@@ -35,6 +37,8 @@ public final class JarSwapper {
 
     public static void main(String[] args) throws IOException, InterruptedException {
         long pid = Long.parseLong(args[0]);
+
+        say("waiting for the game " + pid);
         List<String> folders = Files.readAllLines(Path.of(FOLDERS + pid + ".txt"));
         Path queueFile = Path.of(folders.get(0));
         Path mods = Path.of(folders.get(1));
@@ -45,7 +49,14 @@ public final class JarSwapper {
         }
         UpdateQueue queue = new UpdateQueue(queueFile);
         say("the game ended; " + queue.getEntries().size() + " queued for " + mods);
-        swap(queue, mods, replaced);
+        boolean isStuck = swap(queue, mods, replaced);
+        for (int tried = 1; isStuck && tried < MOVE_TRIES; tried++) {
+            Thread.sleep(1000);
+            isStuck = swap(queue, mods, replaced);
+        }
+        if (isStuck) {
+            say("the jars could not be moved after " + MOVE_TRIES + " tries");
+        }
         say(queue.getEntries().size() + " still queued");
 
         if (queue.getEntries().isEmpty()) {
@@ -53,7 +64,7 @@ public final class JarSwapper {
         }
     }
 
-    static void swap(UpdateQueue queue, Path mods, Path replaced) throws IOException {
+    static boolean swap(UpdateQueue queue, Path mods, Path replaced) throws IOException {
         List<UpdateQueue.Entry> entries = dropUndoable(queue, mods);
         Map<String, String> stuck = new LinkedHashMap<>();
         for (UpdateQueue.Entry entry : entries) {
@@ -82,6 +93,7 @@ public final class JarSwapper {
             queue.replace(left);
         }
         PendingChanges.trimReplaced(queue, replaced);
+        return !failed.isEmpty();
     }
 
     static List<UpdateQueue.Entry> dropUndoable(UpdateQueue queue, Path mods) throws IOException {
@@ -153,7 +165,7 @@ public final class JarSwapper {
             queue.replaceAll(stuck, records);
             return List.of();
         } catch (IOException e) {
-            say("the jars could not be moved, each goes back: " + e);
+            say("moving the jars failed, each goes back: " + e);
             putBack(moved);
             String reason = "the jars could not be moved: " + e.getMessage();
             return entries.stream().map(entry -> entry.withReason(reason)).toList();
