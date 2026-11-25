@@ -7,6 +7,7 @@ import dev.moon.hotwire.ui.list.ModStatus;
 import java.io.IOException;
 import java.nio.file.Files;
 import java.nio.file.Path;
+import java.nio.file.StandardCopyOption;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Locale;
@@ -14,6 +15,7 @@ import java.util.Optional;
 import java.util.concurrent.TimeUnit;
 import java.util.function.Predicate;
 import java.util.function.Supplier;
+import java.util.stream.Stream;
 import net.fabricmc.loader.api.FabricLoader;
 import org.jspecify.annotations.Nullable;
 import org.slf4j.Logger;
@@ -21,6 +23,8 @@ import org.slf4j.LoggerFactory;
 
 public final class ReportZips {
     private static final Logger LOGGER = LoggerFactory.getLogger(ReportZips.class);
+
+    private static final String SEND_FOLDER = "Send this to Hotwire";
 
     private final GameReports reports;
     private final Supplier<List<ModStatus>> mods;
@@ -93,9 +97,38 @@ public final class ReportZips {
                     before.getFileName());
         }
         this.replaceable = asked ? null : zip;
-        this.last = zip;
+        Path shown = putForSending(zip);
+        this.last = shown;
         GameLog.LOGGER.info("[Hotwire] wrote the report {}: {}", zip.getFileName(), why);
-        return zip;
+        return shown;
+    }
+
+    private static Path putForSending(Path report) {
+        Path reports = report.toAbsolutePath().getParent();
+        if (reports == null || reports.getParent() == null) {
+            return report;
+        }
+        Path sending = reports.getParent().resolve(SEND_FOLDER);
+        String name = String.valueOf(report.getFileName());
+
+        String base = name.replaceFirst("( part 1 of [0-9]+)?[.]txt$", "");
+        try {
+            Files.createDirectories(sending);
+            try (Stream<Path> old = Files.list(sending)) {
+                for (Path file : old.filter(Files::isRegularFile).toList()) {
+                    Files.delete(file);
+                }
+            }
+            try (Stream<Path> parts = Files.list(reports)) {
+                for (Path part : parts.filter(file -> String.valueOf(file.getFileName()).startsWith(base)).toList()) {
+                    Files.copy(part, sending.resolve(part.getFileName()), StandardCopyOption.REPLACE_EXISTING);
+                }
+            }
+            return sending.resolve(name);
+        } catch (IOException e) {
+            LOGGER.warn("[Hotwire] the report could not be put in {} for sending: {}", sending, e.toString());
+            return report;
+        }
     }
 
     public @Nullable Path findLast() {
