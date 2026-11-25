@@ -27,7 +27,7 @@ public final class ForeignFields {
         boolean changed = false;
         for (MethodNode method : node.methods) {
             for (AbstractInsnNode insn : method.instructions.toArray()) {
-                if (insn instanceof FieldInsnNode field && !field.owner.equals(node.name)
+                if (insn instanceof FieldInsnNode field
                         && addedElsewhere.apply(field.owner).contains(field.name + field.desc)) {
                     method.instructions.set(field, makeAccess(field));
                     changed = true;

@@ -4,7 +4,6 @@ import dev.moon.hotwire.classfile.GameNames;
 import dev.moon.hotwire.mixin_copy.AppliedMixins;
 import dev.moon.hotwire.redefine.ClassRebuilder;
 import dev.moon.hotwire.redefine.FieldHolders;
-import dev.moon.hotwire.redefine.ForeignFields;
 import dev.moon.hotwire.redefine.HandlerGuards;
 import dev.moon.hotwire.redefine.OpenGameClasses;
 import dev.moon.hotwire.redefine.RebuildException;
@@ -64,8 +63,7 @@ final class LoadTimeMixer {
                 LOGGER.info("[Hotwire] {} mixed as it loaded", className);
             }
 
-            return mixed == null ? null : OpenGameClasses.reopen(className,
-                    ForeignFields.rewrite(mixed, FieldHolders::findAddedFields));
+            return mixed == null ? null : OpenGameClasses.reopen(className, FieldHolders.reachAdded(mixed));
         } finally {
             LOADING.set(outer);
         }

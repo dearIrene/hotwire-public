@@ -487,7 +487,7 @@ public final class ClassSplit {
         for (AbstractInsnNode insn : method.instructions.toArray()) {
             switch (insn) {
                 case FieldInsnNode field -> {
-                    if (!field.owner.equals(this.target)
+                    if (!(field.owner.equals(this.target) && this.addedFields.contains(field.name + field.desc))
                             && this.addedElsewhere.apply(field.owner).contains(field.name + field.desc)) {
                         method.instructions.set(field, ForeignFields.makeAccess(field));
                     } else if (field.owner.equals(this.target)

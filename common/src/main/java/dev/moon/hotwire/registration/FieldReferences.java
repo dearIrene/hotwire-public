@@ -5,6 +5,7 @@ import dev.moon.hotwire.classfile.GameNames;
 import dev.moon.hotwire.jvm.LoadedClassList;
 import dev.moon.hotwire.redefine.ClassArrivals;
 import dev.moon.hotwire.redefine.ClassRebuilder;
+import dev.moon.hotwire.redefine.FieldHolders;
 import dev.moon.hotwire.redefine.FieldSlots;
 import dev.moon.hotwire.redefine.ReplacedStatics;
 import dev.moon.hotwire.seam.ClassKinds;
@@ -103,6 +104,7 @@ public final class FieldReferences {
         this.elements = new CollectionReferences(this::write);
         ValueOwners.setLambdaOwners(this.lambdas::findModOf);
         ReflectedOwners.readBytesWith(originalBytes);
+        FieldHolders.readBytesWith(originalBytes);
     }
 
     public void takeOut(Collection<String> mods, Predicate<String> on) {
@@ -269,6 +271,10 @@ public final class FieldReferences {
 
     public void forgetClosedWorld() {
         this.elements.forgetClosedWorld();
+    }
+
+    public void forgetNotes() {
+        this.elements.forgetNotes();
     }
 
     public void lookForEvery(Collection<String> mods, Predicate<String> on) {

@@ -405,11 +405,18 @@ public final class ClassRebuilder {
         Map<String, Set<String>> batchAdded = BatchShapes.findFieldsGained(current, mixed);
 
         Map<String, Set<String>> elsewhere = new ConcurrentHashMap<>();
-        Function<String, Set<String>> addedElsewhere = owner -> elsewhere.computeIfAbsent(owner, name -> {
+        Function<String, Set<String>> addedTo = name -> {
             Set<String> fields = new HashSet<>(batchAdded.getOrDefault(name, Set.of()));
             fields.addAll(FieldHolders.findAddedFields(name));
-            return fields.isEmpty() ? Set.of() : Set.copyOf(fields);
-        });
+            return fields;
+        };
+
+        Function<String, byte @Nullable []> shaped = name -> {
+            byte[] now = mixed.get(name);
+            return now != null ? now : anyClass.apply(name);
+        };
+        Function<String, Set<String>> addedElsewhere = owner -> elsewhere.computeIfAbsent(owner,
+                name -> Set.copyOf(FieldHolders.findAddedThrough(name, addedTo, shaped)));
         times.end("shapes");
         Map<String, Object> splitOrFailure = new ConcurrentHashMap<>();
         Parallel.forEach(byName.keySet(), name -> {

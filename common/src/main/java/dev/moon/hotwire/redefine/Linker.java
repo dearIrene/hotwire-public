@@ -638,7 +638,7 @@ public final class Linker {
     private static CallSite bindField(Class<?> target, String name, MethodType type, int kind)
             throws ReflectiveOperationException {
         return kind == PUT_FINAL ? new ConstantCallSite(findCastFieldHandle(target, name, type, kind))
-                : FieldCallSites.bind(target, name, type, kind);
+                : FieldCallSites.bind(FieldHolders.findDeclaringOf(target, name), name, type, kind);
     }
 
     static MethodHandle findCastFieldHandle(Class<?> target, String name, MethodType type, int kind)

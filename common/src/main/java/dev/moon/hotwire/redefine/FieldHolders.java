@@ -1,6 +1,7 @@
 package dev.moon.hotwire.redefine;
 
 import com.google.common.collect.MapMaker;
+import dev.moon.hotwire.classfile.ClassHeader;
 import java.lang.invoke.MethodHandle;
 import java.lang.invoke.MethodHandles;
 import java.lang.invoke.MethodType;
@@ -9,6 +10,7 @@ import java.lang.reflect.Modifier;
 import java.util.ArrayDeque;
 import java.util.Collection;
 import java.util.Deque;
+import java.util.HashMap;
 import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
@@ -19,6 +21,7 @@ import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.concurrent.atomic.AtomicReference;
 import java.util.function.BiConsumer;
 import java.util.function.Consumer;
+import java.util.function.Function;
 import java.util.function.Predicate;
 import org.jspecify.annotations.Nullable;
 import org.objectweb.asm.AnnotationVisitor;
@@ -174,12 +177,61 @@ public final class FieldHolders {
     }
 
     public static byte[] reachAdded(byte[] bytes) {
-        for (String owner : ADDED_BY_NAME.keySet()) {
-            if (ClassBytes.mentions(bytes, owner)) {
-                return ForeignFields.rewrite(bytes, FieldHolders::findAddedFields);
+        if (ADDED_BY_NAME.isEmpty()) {
+            return bytes;
+        }
+        Map<String, Set<String>> asked = new HashMap<>();
+        Function<String, byte @Nullable []> read = classBytes;
+        return ForeignFields.rewrite(bytes, owner -> asked.computeIfAbsent(owner,
+                name -> findAddedThrough(name, FieldHolders::findAddedFields, read)));
+    }
+
+    private static volatile Function<String, byte @Nullable []> classBytes = name -> null;
+
+    public static void readBytesWith(Function<String, byte @Nullable []> bytes) {
+        classBytes = bytes;
+    }
+
+    static Set<String> findAddedThrough(String owner, Function<String, Set<String>> added,
+            Function<String, byte @Nullable []> bytesOf) {
+        Set<String> found = new HashSet<>(added.apply(owner));
+        Set<String> below = new HashSet<>();
+        String at = owner;
+        for (int depth = 0; depth < MOST_PARENTS; depth++) {
+            byte[] bytes = bytesOf.apply(at);
+            if (bytes == null) {
+                break;
+            }
+            ClassHeader header = ClassHeader.of(bytes);
+            header.fields().forEach(field -> below.add(field.name() + field.desc()));
+            at = header.superName();
+            if (at == null || at.startsWith("java/")) {
+                break;
+            }
+            for (String field : added.apply(at)) {
+                if (!below.contains(field)) {
+                    found.add(field);
+                }
             }
         }
-        return bytes;
+        return found;
+    }
+
+    private static final int MOST_PARENTS = 64;
+
+    static Class<?> findDeclaringOf(Class<?> target, String name) {
+        for (Class<?> at = target; at != null; at = at.getSuperclass()) {
+            Holder holder = findHolder(at);
+            if (holder == null) {
+                continue;
+            }
+            for (Field field : holder.type().getDeclaredFields()) {
+                if (field.getName().equals(name)) {
+                    return at;
+                }
+            }
+        }
+        return target;
     }
 
     private static volatile Predicate<Thread> gameThread = thread -> true;
