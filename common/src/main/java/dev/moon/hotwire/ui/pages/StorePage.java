@@ -7,10 +7,10 @@ import dev.moon.hotwire.ui.Lang;
 import dev.moon.hotwire.ui.Root;
 import dev.moon.hotwire.ui.widgets.Canvas;
 import dev.moon.hotwire.ui.widgets.Colors;
+import dev.moon.hotwire.ui.widgets.Drawer;
 import dev.moon.hotwire.ui.widgets.EasedValue;
 import dev.moon.hotwire.ui.widgets.Flip;
 import dev.moon.hotwire.ui.widgets.Flow;
-import dev.moon.hotwire.ui.widgets.IconPixels;
 import dev.moon.hotwire.ui.widgets.Kit;
 import dev.moon.hotwire.ui.widgets.Line;
 import dev.moon.hotwire.ui.widgets.Palette;
@@ -18,15 +18,14 @@ import dev.moon.hotwire.ui.widgets.Part;
 import dev.moon.hotwire.ui.widgets.Popup;
 import dev.moon.hotwire.ui.widgets.Push;
 import dev.moon.hotwire.ui.widgets.Rows;
+import dev.moon.hotwire.ui.widgets.Scroll;
 import dev.moon.hotwire.ui.widgets.StoreIcons;
-import dev.moon.hotwire.ui.widgets.Tabs;
 import dev.moon.hotwire.ui.widgets.Text;
 import dev.moon.hotwire.ui.widgets.TextField;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Locale;
 import java.util.function.Consumer;
-import java.util.stream.Collectors;
 import org.jspecify.annotations.Nullable;
 
 public final class StorePage {
@@ -42,48 +41,45 @@ public final class StorePage {
 
     private static final List<String> LOADERS = List.of("fabric", "quilt", "forge", "neoforge");
     private static final List<ModrinthClient.Kind> KINDS = List.of(ModrinthClient.Kind.values());
-    private static final int CARD = 96;
-    private static final int CARD_LEAST = 220;
-    private static final int GAP = 8;
-    private static final int ICON = IconPixels.STORE_BOX;
+    private static final int SIDEBAR = 132;
+    private static final int ROW = 34;
+    private static final int ICON = 24;
 
-    private record GridLine(List<StoreModel.Card> cards, int across) {
-    }
+    private static final int NARROW = 560;
+    private static final int SMALL = 470;
+
+    private static final int NEAR = 2;
 
     public final Part part;
     public final StoreModel model;
     public final TextField search;
     public final StoreDetail detail;
 
-    private static final int NEAR = 2;
+    public final FewDownloadsSheet few = new FewDownloadsSheet();
 
     private final Game game;
     private final StoreIcons icons;
     private final Popup popup;
     private final String loader;
     private final String gameVersion;
-    private final Tabs kinds = Kit.tabs(Tabs.Look.BOX, index -> this.pickKind(KINDS.get(index)));
-    private final Tabs categories = Kit.tabs(Tabs.Look.WORDS, this::pickGroup);
+    private final Line sideBody = Kit.column().pad(10, 10).gap(3);
+    private final Drawer side;
+    private final Line order = Kit.row();
     private final Line chips = Kit.row().gap(4);
-    private final Push hide;
     private final Text note = Kit.dim("");
 
     private final Line pages = Kit.row().gap(4);
     private int pageShown = -1;
     private int pagesCounted = -1;
-    private final Rows<GridLine> rows = new Rows<GridLine>(line -> line.cards().getFirst().hit().projectId() + "/"
-            + line.across(), this::makeGridLine, CARD, GAP).hideMark();
-    private List<StoreCategories.Group> groups = List.of();
+    private final Rows<StoreModel.Card> rows;
+    private final Part main;
 
-    private int lastPicked = -1;
-    private long lastPickedAt;
-    private static final long DOUBLE_CLICK_NANOS = 400_000_000L;
+    private @Nullable Boolean sidebarAsked;
 
     private volatile List<String> releases;
     private List<StoreModel.Card> shown = List.of();
-    private int across;
 
-    public final FewDownloadsSheet few = new FewDownloadsSheet();
+    private String filtersMadeFor = "";
 
     public StorePage(StoreModel model, Game game, StoreIcons icons, String loader, String gameVersion, Root root,
             Runnable onEscape) {
@@ -95,35 +91,37 @@ public final class StorePage {
         this.releases = List.of(gameVersion);
         model.findGameVersions(found -> this.releases = List.copyOf(found));
         this.popup = root.getMenus().add(new Popup());
-        this.detail = new StoreDetail(model, icons, game, this.popup, this.few);
-        this.search = new TextField(Lang.get("hotwire.store.search"), model::setWords, () -> { }, onEscape);
+        this.detail = new StoreDetail(model, icons, game, this.popup, this.few, this::getPart);
+
+        this.search = new TextField(Lang.get("hotwire.store.search"), model::setWords, () -> { }, () -> {
+            if (this.detail.isOpen()) {
+                this.detail.dismiss();
+            } else {
+                onEscape.run();
+            }
+        });
         this.search.setText(model.getWords());
-        KINDS.forEach(kind -> this.kinds.tab(Lang.get("hotwire.store.kind." + kind.getProjectType())));
-        this.hide = Kit.push(Lang.get("hotwire.store.hide_installed"), this::toggleHide);
-        this.hide.lead(model.isHidingInstalled());
-        this.part = Kit.column(
-                new Flow(Kit.fit(this.search).width(160).height(20), this.kinds, this.chips).gap(8).endLast(),
-                Kit.row(this.categories.grow(1), this.hide.spare()).gap(8).cross(Line.Cross.CENTER), this.note,
-                this.rows, this.pages)
-                .pad(12, 10).gap(8).grow(1);
-        this.showKind(model.getKind(), model.getCategory());
+        this.rows = new Rows<StoreModel.Card>(card -> card.hit().projectId(), this::makeRow, ROW, 2)
+                .mark(card -> this.detail.isShowing(card.hit().projectId()));
+        Scroll sideScroll = Kit.scroll(this.sideBody);
+        this.side = Kit.drawer(false, Kit.row(sideScroll.grow(1), Kit.rule().width(1)).cross(Line.Cross.STRETCH),
+                SIDEBAR);
+        this.side.open(true);
+        this.main = Kit.column(
+                Kit.row(Kit.push(Lang.get("hotwire.store.filters"), this::flipSidebar),
+                        Kit.fit(this.search).width(80).height(20).grow(1), this.order).gap(6)
+                        .cross(Line.Cross.CENTER),
+                this.chips, this.note, this.rows, this.pages).pad(10, 10).gap(6).grow(1);
+        this.part = Kit.row(this.side, this.main, this.detail.part).cross(Line.Cross.STRETCH).grow(1);
+        this.showFilters();
     }
 
-    private void toggleHide() {
-        this.model.setHideInstalled(!this.model.isHidingInstalled());
-        this.hide.lead(this.model.isHidingInstalled());
+    private void flipSidebar() {
+        this.sidebarAsked = !this.side.isOpen();
     }
 
-    private void pickKind(ModrinthClient.Kind kind) {
-        this.model.setKind(kind);
-        this.showKind(kind, "");
-    }
-
-    private void showKind(ModrinthClient.Kind kind, String category) {
-        this.kinds.choose(KINDS.indexOf(kind));
-        this.groups = StoreCategories.of(kind);
-        this.showCategory(category);
-        this.showChips();
+    private Part getPart() {
+        return this.part;
     }
 
     private static String nameTag(String tag) {
@@ -134,58 +132,167 @@ public final class StorePage {
         return category.isEmpty() ? List.of() : List.of(category.split(",", -1));
     }
 
-    private void showCategory(String category) {
-        List<String> chosen = splitTags(category);
-        this.categories.clear();
-        int lit = -1;
-        for (int at = 0; at < this.groups.size(); at++) {
-            StoreCategories.Group group = this.groups.get(at);
-            List<String> has = group.parts().stream().filter(chosen::contains).toList();
-            boolean alone = group.parts().isEmpty();
-            boolean ticked = alone && (chosen.isEmpty() ? group.name().isEmpty() : chosen.contains(group.name()));
-            lit = lit < 0 && (ticked || !has.isEmpty()) ? at : lit;
-            this.categories.tab(alone ? (ticked && !chosen.isEmpty() ? "✓ " : "") + nameTag(group.name())
-                    : (has.isEmpty() ? Lang.get("hotwire.store.section." + group.name())
-                            : has.stream().map(StorePage::nameTag).collect(Collectors.joining(", "))) + " ▾");
-        }
-        this.categories.choose(Math.max(0, lit));
-        List<String> hidden = this.model.getHiddenCategories();
-        for (int at = 0; at < this.groups.size(); at++) {
-            StoreCategories.Group group = this.groups.get(at);
-            this.categories.setStruck(at, group.parts().isEmpty() && hidden.contains(group.name()));
-        }
+    private String findFiltersState() {
+        ModrinthClient client = this.model.getClient();
+        return this.model.getKind() + "|" + this.model.getCategory() + "|" + this.model.getHiddenCategories() + "|"
+                + client.getSide() + "|" + client.getOrder() + "|" + client.getBrowseLoader() + "|"
+                + client.getBrowseVersion() + "|" + this.model.isHidingInstalled() + "|" + this.releases.size();
     }
 
-    private void pickGroup(int index) {
-        long now = System.nanoTime();
-        boolean twice = index == this.lastPicked && now - this.lastPickedAt < DOUBLE_CLICK_NANOS;
-        this.lastPicked = twice ? -1 : index;
-        this.lastPickedAt = now;
-        StoreCategories.Group group = this.groups.get(index);
-        if (group.parts().isEmpty()) {
-            if (twice && !group.name().isEmpty()) {
-                this.model.toggleHidden(group.name());
-                this.showCategory(this.model.getCategory());
-                return;
-            }
-            this.pickCategory(group.name());
+    private void showFilters() {
+        String now = this.findFiltersState();
+        if (now.equals(this.filtersMadeFor)) {
             return;
         }
-        List<String> chosen = splitTags(this.model.getCategory());
-        this.openMenu(this.categories, group.parts().stream().map(tag -> new Popup.Item(nameTag(tag),
-                chosen.contains(tag) ? Palette.ON : Palette.TEXT, () -> this.pickCategory(tag))).toList());
+        this.filtersMadeFor = now;
+        this.showSidebar();
+        this.order.clear().with(this.makeOrder());
+        this.showChips();
     }
 
-    private void pickCategory(String tag) {
-        List<String> chosen = new ArrayList<>(splitTags(this.model.getCategory()));
-        if (tag.isEmpty()) {
-            chosen.clear();
-        } else if (!chosen.remove(tag)) {
-            chosen.add(tag);
+    private void showSidebar() {
+        ModrinthClient client = this.model.getClient();
+        ModrinthClient.Kind kind = this.model.getKind();
+        this.sideBody.clear().with(this.makeHeading("hotwire.store.browse"));
+        for (ModrinthClient.Kind each : KINDS) {
+            this.sideBody.with(this.makeChoice(Lang.get("hotwire.store.kind." + each.getProjectType()), each == kind,
+                    () -> this.model.setKind(each)));
         }
-        String category = String.join(",", chosen);
-        this.model.setCategory(category);
-        this.showCategory(category);
+        this.sideBody.with(this.makeHeading("hotwire.store.game"));
+        if (kind == ModrinthClient.Kind.DATA_PACK) {
+            this.sideBody.with(Kit.text(this.gameVersion, Palette.FAINT));
+        } else {
+            this.sideBody.with(this.makeBrowse(client.getBrowseVersion(), this.gameVersion, this.releases, false));
+        }
+        if (kind == ModrinthClient.Kind.MOD) {
+            this.sideBody.with(this.makeBrowse(client.getBrowseLoader(), this.loader, LOADERS, true));
+            this.sideBody.with(this.makeHeading("hotwire.store.runs_on"));
+            for (ModrinthClient.Side each : ModrinthClient.Side.values()) {
+                this.sideBody.with(this.makeChoice(Lang.get("hotwire.store.side." + each.name().toLowerCase(
+                        Locale.ROOT)), each == client.getSide(), () -> this.model.setFilters(client.getOrder(), each)));
+            }
+        } else if (kind == ModrinthClient.Kind.SHADER) {
+            this.sideBody.with(Kit.text("Iris", Palette.FAINT));
+        }
+        Runnable hide = () -> this.model.setHideInstalled(!this.model.isHidingInstalled());
+        this.sideBody.with(Kit.row(Kit.check(this.model::isHidingInstalled, hide),
+                Kit.text(Lang.get("hotwire.store.hide_installed"))).gap(5).cross(Line.Cross.CENTER).pad(0, 3)
+                .press((button, modifiers) -> hide.run()));
+        List<StoreCategories.Group> groups = StoreCategories.of(kind);
+        List<String> alone = groups.stream().filter(group -> group.parts().isEmpty() && !group.name().isEmpty())
+                .map(StoreCategories.Group::name).toList();
+        if (!alone.isEmpty()) {
+            this.sideBody.with(this.makeHeading("hotwire.store.tags"));
+            alone.forEach(tag -> this.sideBody.with(this.makeTag(tag)));
+        }
+        for (StoreCategories.Group group : groups) {
+            if (!group.parts().isEmpty()) {
+                this.sideBody.with(this.makeHeading("hotwire.store.section." + group.name()));
+                group.parts().forEach(tag -> this.sideBody.with(this.makeTag(tag)));
+            }
+        }
+    }
+
+    private Part makeHeading(String key) {
+        return Kit.row(Kit.text(Lang.get(key), Palette.DIM)).pad(0, 4);
+    }
+
+    private Part makeChoice(String label, boolean chosen, Runnable pick) {
+        return Kit.row(Kit.text((chosen ? "▸ " : "  ") + label, chosen ? Palette.ON : Palette.TEXT))
+                .pad(0, 3).press((button, modifiers) -> pick.run());
+    }
+
+    private Part makeTag(String tag) {
+        boolean chosen = splitTags(this.model.getCategory()).contains(tag);
+        boolean hidden = this.model.getHiddenCategories().contains(tag);
+        Runnable next = () -> this.flipTag(tag);
+        int ink = chosen ? Palette.ON : Palette.TEXT;
+        return Kit.row(Kit.check(() -> splitTags(this.model.getCategory()).contains(tag), next),
+                Kit.text(nameTag(tag) + (hidden ? "  ✕" : ""), hidden ? Palette.BAD : ink))
+                .gap(5).cross(Line.Cross.CENTER).pad(0, 2)
+                .press((button, modifiers) -> next.run());
+    }
+
+    private void flipTag(String tag) {
+        List<String> chosen = new ArrayList<>(splitTags(this.model.getCategory()));
+        if (this.model.getHiddenCategories().contains(tag)) {
+            this.model.toggleHidden(tag);
+        } else if (chosen.remove(tag)) {
+            this.model.setCategory(String.join(",", chosen));
+            this.model.toggleHidden(tag);
+        } else {
+            chosen.add(tag);
+            this.model.setCategory(String.join(",", chosen));
+        }
+    }
+
+    private void dropTag(String tag) {
+        List<String> chosen = new ArrayList<>(splitTags(this.model.getCategory()));
+        chosen.remove(tag);
+        this.model.setCategory(String.join(",", chosen));
+    }
+
+    private void showChips() {
+        ModrinthClient client = this.model.getClient();
+        List<Part> made = new ArrayList<>();
+        splitTags(this.model.getCategory()).forEach(tag -> made.add(this.makeChip(nameTag(tag),
+                () -> this.dropTag(tag))));
+        this.model.getHiddenCategories().forEach(tag -> made.add(this.makeChip(Lang.get("hotwire.store.not_tag",
+                nameTag(tag)), () -> this.model.toggleHidden(tag))));
+        if (client.getSide() != ModrinthClient.Side.ANY) {
+            made.add(this.makeChip(Lang.get("hotwire.store.side." + client.getSide().name().toLowerCase(Locale.ROOT)),
+                    () -> this.model.setFilters(client.getOrder(), ModrinthClient.Side.ANY)));
+        }
+        if (!client.getBrowseVersion().equals(this.gameVersion) || !client.getBrowseLoader().equals(this.loader)) {
+            made.add(this.makeChip(client.getBrowseVersion() + " " + client.getBrowseLoader(),
+                    () -> this.model.setBrowsing(this.loader, this.gameVersion)));
+        }
+        if (made.size() > 1) {
+            made.add(Kit.push(Lang.get("hotwire.store.clear_filters"), this::clearFilters));
+        }
+        this.chips.clear();
+        if (!made.isEmpty()) {
+            this.chips.with(new Flow(made.toArray(Part[]::new)).gap(4).grow(1));
+        }
+        this.chips.show(!made.isEmpty());
+    }
+
+    private Push makeChip(String label, Runnable drop) {
+        return Kit.push(label + "  ×", drop).lead(true);
+    }
+
+    private void clearFilters() {
+        ModrinthClient client = this.model.getClient();
+        List.copyOf(this.model.getHiddenCategories()).forEach(this.model::toggleHidden);
+        this.model.setCategory("");
+        this.model.setFilters(client.getOrder(), ModrinthClient.Side.ANY);
+        this.model.setBrowsing(this.loader, this.gameVersion);
+    }
+
+    private Push makeOrder() {
+        ModrinthClient client = this.model.getClient();
+        ModrinthClient.Order now = client.getOrder();
+        Push[] button = new Push[1];
+        List<Popup.Item> items = new ArrayList<>();
+        for (ModrinthClient.Order choice : ModrinthClient.Order.values()) {
+            items.add(new Popup.Item(Lang.get("hotwire.store.order." + choice.name().toLowerCase(Locale.ROOT)),
+                    choice == now ? Palette.ON : Palette.TEXT, () -> this.model.setFilters(choice, client.getSide())));
+        }
+        button[0] = Kit.push(Lang.get("hotwire.store.order." + now.name().toLowerCase(Locale.ROOT)) + " ▾",
+                () -> this.openMenu(button[0], items));
+        return button[0];
+    }
+
+    private Push makeBrowse(String now, String yours, List<String> options, boolean ofLoader) {
+        Push[] button = new Push[1];
+        button[0] = Kit.push(now + " ▾", () -> this.openMenu(button[0], options.stream().map(option ->
+                new Popup.Item(option.equals(yours) ? option + "  " + Lang.get("hotwire.store.this_game") : option,
+                        option.equals(yours) ? Palette.ON : Palette.TEXT, () -> {
+                            ModrinthClient client = this.model.getClient();
+                            this.model.setBrowsing(ofLoader ? option : client.getBrowseLoader(),
+                                    ofLoader ? client.getBrowseVersion() : option);
+                        })).toList()));
+        return button[0].lead(!now.equals(yours));
     }
 
     private void openMenu(Part by, List<Popup.Item> items) {
@@ -193,69 +300,21 @@ public final class StorePage {
                 this.part.getY() + this.part.getHeight(), items);
     }
 
-    private void showChips() {
-        ModrinthClient client = this.model.getClient();
-        ModrinthClient.Kind kind = this.model.getKind();
-        this.chips.clear();
-        if (kind == ModrinthClient.Kind.MOD) {
-            this.chips.with(this.makeChip(client.getBrowseLoader(), this.loader, LOADERS, true));
-        } else if (kind == ModrinthClient.Kind.SHADER) {
-            this.chips.with(Kit.push("Iris", () -> { }).active(false));
-        }
-        if (kind == ModrinthClient.Kind.DATA_PACK) {
-            this.chips.with(Kit.push(this.gameVersion, () -> { }).active(false));
-        } else {
-            this.chips.with(this.makeChip(client.getBrowseVersion(), this.gameVersion, this.releases, false));
-        }
-        this.chips.with(this.makeFilter("hotwire.store.order.", client.getOrder(), ModrinthClient.Order.values(),
-                ModrinthClient.Order.DEFAULT, order -> this.model.setFilters(order, client.getSide())));
-        if (kind == ModrinthClient.Kind.MOD) {
-            this.chips.with(this.makeFilter("hotwire.store.side.", client.getSide(), ModrinthClient.Side.values(),
-                    ModrinthClient.Side.ANY, side -> this.model.setFilters(client.getOrder(), side)));
-        }
-    }
-
-    private <E extends Enum<E>> Push makeFilter(String key, E now, E[] choices, E usual, Consumer<E> onPick) {
-        Push[] chip = new Push[1];
-        List<Popup.Item> items = new ArrayList<>();
-        for (E choice : choices) {
-            items.add(new Popup.Item(Lang.get(key + choice.name().toLowerCase(Locale.ROOT)),
-                    choice == now ? Palette.ON : Palette.TEXT, () -> {
-                        onPick.accept(choice);
-                        this.showChips();
-                    }));
-        }
-        chip[0] = Kit.push(Lang.get(key + now.name().toLowerCase(Locale.ROOT)) + " ▾",
-                () -> this.openMenu(chip[0], items));
-        return chip[0].lead(now != usual);
-    }
-
-    private Push makeChip(String now, String yours, List<String> options, boolean ofLoader) {
-        Push[] chip = new Push[1];
-        chip[0] = Kit.push(now + " ▾", () -> this.openMenu(chip[0], options.stream().map(option -> new Popup.Item(
-                option.equals(yours) ? option + "  " + Lang.get("hotwire.store.this_game") : option,
-                option.equals(yours) ? Palette.ON : Palette.TEXT, () -> {
-                    ModrinthClient client = this.model.getClient();
-                    this.model.setBrowsing(ofLoader ? option : client.getBrowseLoader(),
-                            ofLoader ? client.getBrowseVersion() : option);
-                    this.showChips();
-                })).toList()));
-        return chip[0].lead(!now.equals(yours));
-    }
-
     @SuppressWarnings("ReferenceEquality")
     public void refresh() {
         this.model.tick();
+        this.showFilters();
+        int wide = this.part.getWidth();
+        boolean open = this.detail.isOpen();
+        Boolean asked = this.sidebarAsked;
+        this.side.open(asked != null ? asked : wide >= (open ? NARROW : SMALL));
+        boolean whole = open && wide < SMALL;
+        this.detail.part.setSize(whole ? Math.max(StoreDetail.WIDTH, wide) : StoreDetail.WIDTH);
+        this.main.show(!whole);
         List<StoreModel.Card> cards = this.model.getCards();
-        int fits = Math.max(1, (this.rows.getWidth() + GAP) / (CARD_LEAST + GAP));
-        if (cards != this.shown || fits != this.across) {
+        if (cards != this.shown) {
             this.shown = cards;
-            this.across = fits;
-            List<GridLine> lines = new ArrayList<>();
-            for (int from = 0; from < cards.size(); from += fits) {
-                lines.add(new GridLine(cards.subList(from, Math.min(cards.size(), from + fits)), fits));
-            }
-            this.rows.set(lines);
+            this.rows.set(cards);
         }
         String failure = this.model.getFailure();
         String words = "";
@@ -304,13 +363,8 @@ public final class StorePage {
         });
     }
 
-    private Part makeGridLine(GridLine cards) {
-        Line line = Kit.row().gap(GAP).cross(Line.Cross.STRETCH);
-        cards.cards().forEach(card -> line.with(new Card(card).grow(1)));
-        for (int empty = cards.cards().size(); empty < cards.across(); empty++) {
-            line.with(new Part().grow(1));
-        }
-        return line;
+    private Part makeRow(StoreModel.Card card) {
+        return new Result(card);
     }
 
     public boolean openPage(String projectId) {
@@ -346,7 +400,7 @@ public final class StorePage {
     }
 
     static Part makeDownloadCount(long downloads) {
-        return Kit.text("\u2193 " + describeDownloads(downloads),
+        return Kit.text("↓ " + describeDownloads(downloads),
                 downloads < FewDownloadsSheet.FEW ? Palette.WARN : Palette.TEXT);
     }
 
@@ -357,22 +411,18 @@ public final class StorePage {
         return downloads >= 1_000 ? downloads / 1_000 + "K" : String.valueOf(downloads);
     }
 
-    private final class Card extends Part {
+    private final class Result extends Part {
         private final EasedValue hot = EasedValue.ofSpeed(14);
         private final Line inner;
 
-        Card(StoreModel.Card card) {
+        Result(StoreModel.Card card) {
             ModrinthClient.Hit hit = card.hit();
-            Push[] square = new Push[1];
-            square[0] = Kit.push("↓", () -> StorePage.this.openMenu(square[0], makeDownloads(StorePage.this.model,
-                    StorePage.this.game, hit, StorePage.this.findUpdateOf(card), StorePage.this.few)));
-            square[0].show(!StorePage.this.model.isShowingPacks());
             this.inner = this.add(Kit.row(Kit.picture(() -> hit.iconUrl().isEmpty() ? null
                     : StorePage.this.icons.find(hit.projectId(), hit.iconUrl()), hit.title(), ICON),
-                    Kit.column(Kit.text(hit.title()), Kit.row(Kit.text(hit.author(), Palette.FAINT),
-                            makeDownloadCount(hit.downloads())).gap(8), Kit.dim(hit.description()).lines(2),
-                            Kit.space(), Kit.row(Kit.space(), square[0], new Action(card)).gap(4)).gap(4).grow(1))
-                    .gap(10).pad(10, 9).cross(Line.Cross.STRETCH));
+                    Kit.column(Kit.row(Kit.text(hit.title()).lines(1), Kit.text(hit.author(), Palette.FAINT)
+                            .lines(1).spare(), makeDownloadCount(hit.downloads()).spare()).gap(6),
+                            Kit.dim(hit.description()).lines(1)).gap(4).grow(1),
+                    new Action(card)).gap(8).pad(8, 5).cross(Line.Cross.CENTER));
             this.press((button, modifiers) -> StorePage.this.detail.open(hit));
         }
 
@@ -386,8 +436,8 @@ public final class StorePage {
         @Override
         public void measure(Canvas canvas, int room) {
             this.inner.measure(canvas, room);
-            this.hugWidth = CARD_LEAST;
-            this.hugHeight = CARD;
+            this.hugWidth = this.inner.findWidth();
+            this.hugHeight = ROW;
         }
 
         @Override
@@ -401,8 +451,6 @@ public final class StorePage {
             int x = this.getX();
             int y = this.getY();
             canvas.fill(x, y, x + this.getWidth(), y + this.getHeight(),
-                    Colors.fade(Colors.mix(Palette.PANEL_EDGE, Palette.ACCENT, hot * 0.5f), alpha));
-            canvas.fill(x + 1, y + 1, x + this.getWidth() - 1, y + this.getHeight() - 1,
                     Colors.fade(Colors.mix(Palette.PANEL, Palette.TRACK, hot) | 0xFF000000, alpha));
         }
     }

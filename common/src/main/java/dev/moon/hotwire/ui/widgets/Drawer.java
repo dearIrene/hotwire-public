@@ -3,7 +3,7 @@ package dev.moon.hotwire.ui.widgets;
 public final class Drawer extends Part {
     private final boolean down;
     private final Part inner;
-    private final int size;
+    private int size;
     private final EasedValue open = EasedValue.ofSpeed(16);
     private int shown;
 
@@ -16,6 +16,14 @@ public final class Drawer extends Part {
 
     public void open(boolean open) {
         this.open.to(open ? 1 : 0);
+    }
+
+    public void setSize(int size) {
+        if (size != this.size) {
+            this.size = size;
+            this.shown = -1;
+            markChanged();
+        }
     }
 
     public boolean isOpen() {
