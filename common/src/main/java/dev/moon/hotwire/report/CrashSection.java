@@ -51,6 +51,10 @@ public record CrashSection(List<Detail> details) {
         return decision.startsWith("Hotwire involved? YES");
     }
 
+    public static boolean isProven(String decision) {
+        return isHotwires(decision) && decision.contains("This one is Hotwire's");
+    }
+
     public static Detail describeTrace(Collection<String> frames, Collection<String> nearThrow,
             Collection<String> messages, Function<String, @Nullable String> rebuiltBy, Set<String> switched,
             Function<String, @Nullable String> modOf, Function<String, String> nameOf) {

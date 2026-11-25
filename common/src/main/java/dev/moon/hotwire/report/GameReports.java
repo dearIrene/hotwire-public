@@ -211,7 +211,7 @@ public final class GameReports {
     }
 
     public static void logCrashDecision(CrashSection.Detail trace) {
-        if (!CrashSection.isHotwires(trace.value())) {
+        if (!CrashSection.isProven(trace.value())) {
             LOGGER.error("[Hotwire] {}: {}", trace.name(), trace.value());
             return;
         }
@@ -267,7 +267,7 @@ public final class GameReports {
         CrashSection.Detail trace = describeTrace(crash);
         details.put(CrashSection.TITLE + ": " + trace.name(), trace.value());
 
-        if (CrashSection.isHotwires(trace.value())) {
+        if (CrashSection.isProven(trace.value())) {
             details.put("!!! If you are reading this, Hotwire caused this crash", trace.value());
         }
         return details;
