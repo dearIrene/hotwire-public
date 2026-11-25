@@ -985,6 +985,8 @@
   "hotwire.switch.hint.session": "Er *geht wieder an*, wenn du das Spiel neu startest, außer du änderst das in den Einstellungen.",
   "hotwire.store.search": "Modrinth durchsuchen",
   "hotwire.store.add": "Hinzufügen",
+  "hotwire.store.add_count": "%s hinzufügen",
+  "hotwire.store.picked_most": "%s ausgewählt, mehr geht nicht auf einmal",
   "hotwire.store.browse": "Durchsuchen",
   "hotwire.store.game": "Spiel",
   "hotwire.store.runs_on": "Läuft auf",

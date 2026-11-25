@@ -155,6 +155,7 @@ public final class HotwireEngine implements ModScreenGame, AutoCloseable {
         this.storeJars = new StoreJars(installed, this.changes, this::findHost, () -> this.screen,
                 this::getStore, this::showMessage, progress, this::refreshScreen);
         this.stores = new StoreScreens(this, installed, this.storeJars, icons);
+        this.storeJars.setDrained(this.stores::addNextOfMany, this.stores::hasMany);
         this.selfUpdate = new SelfUpdateRequests(this.storeJars, () -> this.screen, this::showMessage, units);
 
         Channel.setAllowed(() -> switch (settings.getUpdateChannel()) {
@@ -515,8 +516,8 @@ public final class HotwireEngine implements ModScreenGame, AutoCloseable {
     }
 
     @Override
-    public boolean isAddAsked() {
-        return this.settings.isAddAsked();
+    public boolean isAddAsked(Path jar) {
+        return this.settings.isAddAsked() && !this.storeJars.isUnasked(jar);
     }
 
     @Override
@@ -981,6 +982,7 @@ public final class HotwireEngine implements ModScreenGame, AutoCloseable {
         this.screen = null;
         this.under = null;
         this.storeJars.clear();
+        this.stores.dropMany();
         this.showBack(back);
     }
 
@@ -1132,6 +1134,10 @@ public final class HotwireEngine implements ModScreenGame, AutoCloseable {
 
     public @Nullable StorePage findShownStore() {
         return this.stores.findShown();
+    }
+
+    public void addManyFromStoreNow(List<String> projectIds) {
+        this.stores.addManyFromStoreNow(projectIds, this.under);
     }
 
     public void addFromStoreNow(String projectId, String versionId) {

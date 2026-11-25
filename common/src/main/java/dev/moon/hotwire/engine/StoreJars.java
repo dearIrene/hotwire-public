@@ -30,6 +30,7 @@ import java.util.List;
 import java.util.Map;
 import java.util.Set;
 import java.util.function.BiConsumer;
+import java.util.function.BooleanSupplier;
 import java.util.function.Supplier;
 import java.util.stream.Collectors;
 import org.jspecify.annotations.Nullable;
@@ -62,6 +63,12 @@ public final class StoreJars {
     private boolean reopenWait;
 
     private final Set<Path> later = new HashSet<>();
+
+    private final Set<Path> unasked = new HashSet<>();
+
+    private Runnable drained = () -> { };
+
+    private BooleanSupplier moreComing = () -> false;
 
     private final Set<String> needsMet = new HashSet<>();
     private List<UpdateOffer> offers = List.of();
@@ -237,9 +244,22 @@ public final class StoreJars {
         return false;
     }
 
-    public void queue(List<Path> jars, boolean update, List<String> projects) {
+    public void setDrained(Runnable drained, BooleanSupplier moreComing) {
+        this.drained = drained;
+        this.moreComing = moreComing;
+    }
+
+    public boolean isUnasked(Path jar) {
+        return this.unasked.contains(jar);
+    }
+
+    public void queue(List<Path> jars, boolean update, List<String> projects, boolean unasked) {
         this.queued.clear();
-        this.reopenWanted = false;
+        if (unasked) {
+            this.unasked.addAll(jars);
+        }
+
+        this.reopenWanted = this.reopenWanted && unasked;
         this.reopenWait = false;
         for (int i = 0; i < jars.size(); i++) {
             this.queued.add(new StoreJar(jars.get(i), update && i == jars.size() - 1));
@@ -290,7 +310,7 @@ public final class StoreJars {
     }
 
     public boolean hasQueued() {
-        return !this.queued.isEmpty();
+        return !this.queued.isEmpty() || this.moreComing.getAsBoolean();
     }
 
     public void waitForReopen() {
@@ -330,6 +350,7 @@ public final class StoreJars {
         this.reopenWait = false;
         this.queued.clear();
         this.later.clear();
+        this.unasked.clear();
         this.reopenWanted = false;
         this.projects.clear();
         this.needsMet.clear();
@@ -413,6 +434,9 @@ public final class StoreJars {
         }
         StoreJar next = current == null ? null : this.queued.poll();
         if (next == null || current == null) {
+            if (current != null) {
+                this.drained.run();
+            }
             return;
         }
         if (this.later.remove(next.jar())) {

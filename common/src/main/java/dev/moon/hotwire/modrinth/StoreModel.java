@@ -193,6 +193,16 @@ public final class StoreModel implements AutoCloseable {
         }
     }
 
+    private volatile boolean grid;
+
+    public boolean isGrid() {
+        return this.grid;
+    }
+
+    public void setGrid(boolean grid) {
+        this.grid = grid;
+    }
+
     public void tick() {
         if (this.searchPending && System.nanoTime() - this.typedAt >= TYPING_PAUSE_NANOS) {
             this.searchPending = false;

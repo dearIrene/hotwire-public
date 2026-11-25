@@ -985,6 +985,8 @@
   "hotwire.switch.hint.session": "It will *turn back on* when you restart the game unless you change that in Settings.",
   "hotwire.store.search": "Search Modrinth",
   "hotwire.store.add": "Add",
+  "hotwire.store.add_count": "Add %s",
+  "hotwire.store.picked_most": "%s picked, that's the most at once",
   "hotwire.store.browse": "Browse",
   "hotwire.store.game": "Game",
   "hotwire.store.runs_on": "Runs on",

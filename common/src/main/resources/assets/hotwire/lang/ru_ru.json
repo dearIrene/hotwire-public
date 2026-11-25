@@ -985,6 +985,8 @@
   "hotwire.switch.hint.session": "Он *снова включится*, когда ты перезапустишь игру, если не поменять это в настройках.",
   "hotwire.store.search": "Поиск на Modrinth",
   "hotwire.store.add": "Добавить",
+  "hotwire.store.add_count": "Добавить: %s",
+  "hotwire.store.picked_most": "Выбрано: %s, больше за раз нельзя",
   "hotwire.store.browse": "Обзор",
   "hotwire.store.game": "Игра",
   "hotwire.store.runs_on": "Работает на",

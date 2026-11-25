@@ -3,12 +3,14 @@ package dev.moon.hotwire.ui.widgets;
 public final class Scroll extends Part {
     private static final int STEP = 36;
     private static final int BAR = 3;
+    private static final int FADE = 22;
 
     private final Part inner;
     private final EasedValue shown = EasedValue.ofSpeed(22);
     private float wanted;
     private int most = Integer.MAX_VALUE;
     private int placedAt = Integer.MIN_VALUE;
+    private boolean fading;
 
     Scroll(Part inner) {
         this.inner = this.add(inner);
@@ -19,6 +21,23 @@ public final class Scroll extends Part {
         this.most = most;
         this.grow(0);
         return this;
+    }
+
+    public Scroll fade() {
+        this.fading = true;
+        return this;
+    }
+
+    private void fadeEnds() {
+        float at = this.shown.getValue();
+        float above = Math.min(1, at / FADE);
+        float below = Math.min(1, (this.findMost() - at) / FADE);
+        for (Element part : this.inner.getChildren()) {
+            float middle = part.getY() + part.getHeight() / 2f;
+            float top = Math.clamp((middle - this.getY()) / FADE, 0, 1);
+            float bottom = Math.clamp((this.getY() + this.getHeight() - middle) / FADE, 0, 1);
+            part.setAlpha(Math.min(1 - (1 - top) * above, 1 - (1 - bottom) * below));
+        }
     }
 
     private int findMost() {
@@ -72,6 +91,9 @@ public final class Scroll extends Part {
     @Override
     protected void paint(Canvas canvas, float alpha) {
         this.placeInner(canvas);
+        if (this.fading) {
+            this.fadeEnds();
+        }
         canvas.pushClip(this.getX(), this.getY(), this.getX() + this.getWidth(), this.getY() + this.getHeight());
     }
 

@@ -985,6 +985,8 @@
   "hotwire.switch.hint.session": "Ele vai *ligar de novo* quando você reiniciar o jogo, a não ser que mude isso nas Configurações.",
   "hotwire.store.search": "Pesquisar no Modrinth",
   "hotwire.store.add": "Adicionar",
+  "hotwire.store.add_count": "Adicionar %s",
+  "hotwire.store.picked_most": "%s escolhidos, o máximo de uma vez",
   "hotwire.store.browse": "Explorar",
   "hotwire.store.game": "Jogo",
   "hotwire.store.runs_on": "Roda em",

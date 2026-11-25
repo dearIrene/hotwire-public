@@ -985,6 +985,8 @@
   "hotwire.switch.hint.session": "除非你在设置中更改，否则重启游戏时它会*重新开启*。",
   "hotwire.store.search": "搜索 Modrinth",
   "hotwire.store.add": "添加",
+  "hotwire.store.add_count": "添加 %s 个",
+  "hotwire.store.picked_most": "已选 %s 个，一次最多这么多",
   "hotwire.store.browse": "浏览",
   "hotwire.store.game": "游戏",
   "hotwire.store.runs_on": "运行于",

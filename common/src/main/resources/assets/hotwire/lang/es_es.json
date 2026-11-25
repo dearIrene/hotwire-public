@@ -985,6 +985,8 @@
   "hotwire.switch.hint.session": "Se *volverá a activar* cuando reinicies el juego, a menos que lo cambies en Ajustes.",
   "hotwire.store.search": "Buscar en Modrinth",
   "hotwire.store.add": "Añadir",
+  "hotwire.store.add_count": "Añadir %s",
+  "hotwire.store.picked_most": "%s elegidos, el máximo de una vez",
   "hotwire.store.browse": "Explorar",
   "hotwire.store.game": "Juego",
   "hotwire.store.runs_on": "Funciona en",

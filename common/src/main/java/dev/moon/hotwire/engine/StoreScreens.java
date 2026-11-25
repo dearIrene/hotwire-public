@@ -1,6 +1,7 @@
 package dev.moon.hotwire.engine;
 
 import dev.moon.hotwire.config.HotwireSettings;
+import dev.moon.hotwire.modrinth.ModrinthClient;
 import dev.moon.hotwire.modrinth.StoreCache;
 import dev.moon.hotwire.modrinth.StoreModel;
 import dev.moon.hotwire.seam.Games;
@@ -14,8 +15,11 @@ import java.io.IOException;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.nio.file.StandardCopyOption;
+import java.util.ArrayDeque;
+import java.util.Deque;
 import java.util.HashMap;
 import java.util.HashSet;
+import java.util.List;
 import java.util.Locale;
 import java.util.Map;
 import java.util.Objects;
@@ -29,6 +33,8 @@ final class StoreScreens {
     private final IconSource icons;
 
     private final Set<String> fetching = new HashSet<>();
+
+    private final Deque<Runnable> many = new ArrayDeque<>();
     private @Nullable ModStore store;
     private StoreModel.@Nullable Packs packs;
 
@@ -123,8 +129,44 @@ final class StoreScreens {
     void addFromStoreNow(String projectId, String versionId, @Nullable Object back) {
         ModStore made = this.store;
         if (made != null) {
-            this.addFromStore(made, back, projectId, versionId, projectId);
+            this.many.clear();
+            this.addFromStore(made, back, projectId, versionId, projectId, false);
         }
+    }
+
+    void addManyFromStoreNow(List<String> projectIds, @Nullable Object back) {
+        ModStore made = this.store;
+        if (made != null) {
+            this.addManyFromStore(made, back, projectIds, projectIds);
+        }
+    }
+
+    private void addManyFromStore(ModStore made, @Nullable Object back, List<String> projectIds,
+            List<String> titles) {
+        this.many.clear();
+        for (int at = 0; at < projectIds.size(); at++) {
+            String projectId = projectIds.get(at);
+            String title = titles.get(at);
+            this.many.add(() -> this.addFromStore(made, back, projectId, "", title, true));
+        }
+        this.addNextOfMany();
+    }
+
+    void addNextOfMany() {
+        if (this.fetching.isEmpty() && !this.engine.getProgress().isBusy()) {
+            Runnable next = this.many.poll();
+            if (next != null) {
+                next.run();
+            }
+        }
+    }
+
+    boolean hasMany() {
+        return !this.many.isEmpty();
+    }
+
+    void dropMany() {
+        this.many.clear();
     }
 
     void openStore(ModStore made, @Nullable Object back) {
@@ -134,7 +176,14 @@ final class StoreScreens {
         Objects.requireNonNull(this.engine.screen).showStore(made.getModel(), new StorePage.Game() {
             @Override
             public void addFromStore(String projectId, String versionId, String title) {
-                StoreScreens.this.addFromStore(made, back, projectId, versionId, title);
+                StoreScreens.this.many.clear();
+                StoreScreens.this.addFromStore(made, back, projectId, versionId, title, false);
+            }
+
+            @Override
+            public void addManyFromStore(List<ModrinthClient.Hit> hits) {
+                StoreScreens.this.addManyFromStore(made, back, hits.stream().map(ModrinthClient.Hit::projectId)
+                        .toList(), hits.stream().map(ModrinthClient.Hit::title).toList());
             }
 
             @Override
@@ -206,7 +255,7 @@ final class StoreScreens {
     }
 
     private void addFromStore(ModStore made, @Nullable Object back, String projectId, String versionId,
-            String title) {
+            String title, boolean unasked) {
         this.engine.showMessage(Lang.get("hotwire.store.downloading", title), false);
         if (this.isShowingPacks(made)) {
             this.fetchPack(made, projectId, versionId, title);
@@ -226,10 +275,12 @@ final class StoreScreens {
             if (!Games.getNow().isHotwireShown()) {
                 Games.getNow().showScreen(this.engine.getScreens().makeScreen(back));
             }
-            this.jars.queue(fetched, update, projects);
+            this.jars.queue(fetched, update, projects, unasked);
         }, failure -> {
             this.fetching.remove(projectId);
             this.engine.showMessage(failure, true);
+
+            this.addNextOfMany();
         });
     }
 }

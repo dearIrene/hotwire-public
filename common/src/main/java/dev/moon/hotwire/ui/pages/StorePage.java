@@ -23,8 +23,12 @@ import dev.moon.hotwire.ui.widgets.StoreIcons;
 import dev.moon.hotwire.ui.widgets.Text;
 import dev.moon.hotwire.ui.widgets.TextField;
 import java.util.ArrayList;
+import java.util.HashSet;
+import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Locale;
+import java.util.Map;
+import java.util.Set;
 import java.util.function.Consumer;
 import org.jspecify.annotations.Nullable;
 
@@ -37,6 +41,10 @@ public final class StorePage {
         void saveFromStore(String projectId, String versionId, String title);
 
         void openLink(String link);
+
+        default void addManyFromStore(List<ModrinthClient.Hit> hits) {
+            hits.forEach(hit -> this.addFromStore(hit.projectId(), "", hit.title()));
+        }
     }
 
     private static final List<String> LOADERS = List.of("fabric", "quilt", "forge", "neoforge");
@@ -44,6 +52,12 @@ public final class StorePage {
     private static final int SIDEBAR = 132;
     private static final int ROW = 34;
     private static final int ICON = 24;
+
+    private static final int CARD = 60;
+    private static final int CARD_WIDE = 170;
+    private static final int CARD_GAP = 6;
+
+    public static final int MOST_PICKED = 5;
 
     private static final int NARROW = 560;
     private static final int SMALL = 470;
@@ -72,6 +86,20 @@ public final class StorePage {
     private int pageShown = -1;
     private int pagesCounted = -1;
     private final Rows<StoreModel.Card> rows;
+
+    private final Rows<GridRow> grid;
+    private int columns = 1;
+    private List<StoreModel.Card> gridOf = List.of();
+
+    private final Set<String> shut = new HashSet<>();
+
+    private final Map<String, ModrinthClient.Hit> picked = new LinkedHashMap<>();
+    private final Text pickedNote = Kit.text("");
+    private final Push addPicked = Kit.lead("", this::addPicked);
+    private final Drawer pickBar;
+
+    private @Nullable String pressed;
+    private long pressedAt;
     private final Part main;
 
     private @Nullable Boolean sidebarAsked;
@@ -102,16 +130,22 @@ public final class StorePage {
         });
         this.search.setText(model.getWords());
         this.rows = new Rows<StoreModel.Card>(card -> card.hit().projectId(), this::makeRow, ROW, 2)
-                .mark(card -> this.detail.isShowing(card.hit().projectId()));
-        Scroll sideScroll = Kit.scroll(this.sideBody);
+                .hideMark();
+        this.grid = new Rows<GridRow>(row -> row.cards().get(0).hit().projectId() + "/" + row.columns(),
+                this::makeGridRow, CARD, CARD_GAP).hideMark();
+        this.pickBar = Kit.drawer(true, Kit.row(this.pickedNote, Kit.space(),
+                Kit.push(Lang.get("hotwire.screen.unpick_all"), this::unpickAll), this.addPicked).gap(6).pad(8, 0)
+                .face(Palette.PANEL), Push.HEIGHT + 8);
+        Scroll sideScroll = Kit.scroll(this.sideBody).fade();
         this.side = Kit.drawer(false, Kit.row(sideScroll.grow(1), Kit.rule().width(1)).cross(Line.Cross.STRETCH),
                 SIDEBAR);
         this.side.open(true);
         this.main = Kit.column(
                 Kit.row(Kit.push(Lang.get("hotwire.store.filters"), this::flipSidebar),
-                        Kit.fit(this.search).width(80).height(20).grow(1), this.order).gap(6)
+                        Kit.fit(this.search).width(80).height(20).grow(1), this.order,
+                        Kit.row(new LayoutPick(false), new LayoutPick(true)).gap(2)).gap(6)
                         .cross(Line.Cross.CENTER),
-                this.chips, this.note, this.rows, this.pages).pad(10, 10).gap(6).grow(1);
+                this.chips, this.note, this.rows, this.grid, this.pages, this.pickBar).pad(10, 10).gap(6).grow(1);
         this.part = Kit.row(this.side, this.main, this.detail.part).cross(Line.Cross.STRETCH).grow(1);
         this.showFilters();
     }
@@ -153,26 +187,29 @@ public final class StorePage {
     private void showSidebar() {
         ModrinthClient client = this.model.getClient();
         ModrinthClient.Kind kind = this.model.getKind();
-        this.sideBody.clear().with(this.makeHeading("hotwire.store.browse"));
-        for (ModrinthClient.Kind each : KINDS) {
-            this.sideBody.with(this.makeChoice(Lang.get("hotwire.store.kind." + each.getProjectType()), each == kind,
-                    () -> this.model.setKind(each)));
+        this.sideBody.clear();
+        if (this.openSection("hotwire.store.browse")) {
+            for (ModrinthClient.Kind each : KINDS) {
+                this.sideBody.with(this.makeChoice(Lang.get("hotwire.store.kind." + each.getProjectType()),
+                        each == kind, () -> this.model.setKind(each)));
+            }
         }
-        this.sideBody.with(this.makeHeading("hotwire.store.game"));
-        if (kind == ModrinthClient.Kind.DATA_PACK) {
+        if (!this.openSection("hotwire.store.game")) {
+        } else if (kind == ModrinthClient.Kind.DATA_PACK) {
             this.sideBody.with(Kit.text(this.gameVersion, Palette.FAINT));
         } else {
             this.sideBody.with(this.makeBrowse(client.getBrowseVersion(), this.gameVersion, this.releases, false));
+            if (kind == ModrinthClient.Kind.MOD) {
+                this.sideBody.with(this.makeBrowse(client.getBrowseLoader(), this.loader, LOADERS, true));
+            } else if (kind == ModrinthClient.Kind.SHADER) {
+                this.sideBody.with(Kit.text("Iris", Palette.FAINT));
+            }
         }
-        if (kind == ModrinthClient.Kind.MOD) {
-            this.sideBody.with(this.makeBrowse(client.getBrowseLoader(), this.loader, LOADERS, true));
-            this.sideBody.with(this.makeHeading("hotwire.store.runs_on"));
+        if (kind == ModrinthClient.Kind.MOD && this.openSection("hotwire.store.runs_on")) {
             for (ModrinthClient.Side each : ModrinthClient.Side.values()) {
                 this.sideBody.with(this.makeChoice(Lang.get("hotwire.store.side." + each.name().toLowerCase(
                         Locale.ROOT)), each == client.getSide(), () -> this.model.setFilters(client.getOrder(), each)));
             }
-        } else if (kind == ModrinthClient.Kind.SHADER) {
-            this.sideBody.with(Kit.text("Iris", Palette.FAINT));
         }
         Runnable hide = () -> this.model.setHideInstalled(!this.model.isHidingInstalled());
         this.sideBody.with(Kit.row(Kit.check(this.model::isHidingInstalled, hide),
@@ -181,20 +218,26 @@ public final class StorePage {
         List<StoreCategories.Group> groups = StoreCategories.of(kind);
         List<String> alone = groups.stream().filter(group -> group.parts().isEmpty() && !group.name().isEmpty())
                 .map(StoreCategories.Group::name).toList();
-        if (!alone.isEmpty()) {
-            this.sideBody.with(this.makeHeading("hotwire.store.tags"));
+        if (!alone.isEmpty() && this.openSection("hotwire.store.tags")) {
             alone.forEach(tag -> this.sideBody.with(this.makeTag(tag)));
         }
         for (StoreCategories.Group group : groups) {
-            if (!group.parts().isEmpty()) {
-                this.sideBody.with(this.makeHeading("hotwire.store.section." + group.name()));
+            if (!group.parts().isEmpty() && this.openSection("hotwire.store.section." + group.name())) {
                 group.parts().forEach(tag -> this.sideBody.with(this.makeTag(tag)));
             }
         }
     }
 
-    private Part makeHeading(String key) {
-        return Kit.row(Kit.text(Lang.get(key), Palette.DIM)).pad(0, 4);
+    private boolean openSection(String key) {
+        boolean open = !this.shut.contains(key);
+        this.sideBody.with(Kit.row(Kit.text(Lang.get(key) + (open ? "  ▾" : "  ▸"), Palette.DIM)).pad(0, 4)
+                .press((button, modifiers) -> {
+                    if (!this.shut.remove(key)) {
+                        this.shut.add(key);
+                    }
+                    this.filtersMadeFor = "";
+                }));
+        return open;
     }
 
     private Part makeChoice(String label, boolean chosen, Runnable pick) {
@@ -316,6 +359,19 @@ public final class StorePage {
             this.shown = cards;
             this.rows.set(cards);
         }
+        boolean tiled = this.model.isGrid();
+        this.rows.show(!tiled);
+        this.grid.show(tiled);
+        int across = Math.max(1, (this.grid.getWidth() + CARD_GAP) / (CARD_WIDE + CARD_GAP));
+        if (tiled && (cards != this.gridOf || across != this.columns)) {
+            this.gridOf = cards;
+            this.columns = across;
+            List<GridRow> lines = new ArrayList<>();
+            for (int at = 0; at < cards.size(); at += across) {
+                lines.add(new GridRow(cards.subList(at, Math.min(cards.size(), at + across)), across));
+            }
+            this.grid.set(lines);
+        }
         String failure = this.model.getFailure();
         String words = "";
         if (cards.isEmpty() && failure != null) {
@@ -360,11 +416,125 @@ public final class StorePage {
         return Kit.push(label, () -> {
             this.model.showPage(page);
             this.rows.scrollToTop();
+            this.grid.scrollToTop();
         });
     }
 
     private Part makeRow(StoreModel.Card card) {
-        return new Result(card);
+        return new Result(card, false);
+    }
+
+    record GridRow(List<StoreModel.Card> cards, int columns) {
+    }
+
+    private Part makeGridRow(GridRow row) {
+        Line line = Kit.row().gap(CARD_GAP).cross(Line.Cross.STRETCH);
+        row.cards().forEach(card -> line.with(new Result(card, true).grow(1)));
+        for (int more = row.cards().size(); more < row.columns(); more++) {
+            line.with(Kit.space());
+        }
+        return line;
+    }
+
+    private boolean isLit(String projectId) {
+        return this.picked.containsKey(projectId) || this.detail.isShowing(projectId);
+    }
+
+    private boolean canPick(StoreModel.Card card) {
+        return this.model.canAdd() && !this.model.isShowingPacks() && !card.installed() && card.update() == null
+                && !this.model.isQueuedProject(card.hit().projectId());
+    }
+
+    private void pressResult(StoreModel.Card card, int button) {
+        ModrinthClient.Hit hit = card.hit();
+        String id = hit.projectId();
+        if (button == 1 || !this.canPick(card)) {
+            this.detail.open(hit);
+            return;
+        }
+        if (button != 0) {
+            return;
+        }
+        long now = System.nanoTime();
+        boolean again = id.equals(this.pressed) && now - this.pressedAt < ModsPage.DOUBLE_NANOS;
+        this.pressed = again ? null : id;
+        this.pressedAt = now;
+        if (this.picked.remove(id) == null && this.picked.size() < MOST_PICKED) {
+            this.picked.put(id, hit);
+        }
+        if (again) {
+            this.detail.open(hit);
+        }
+        this.showPicked();
+    }
+
+    public void pressResult(String projectId) {
+        StoreModel.Card card = this.model.getCardsByProject().get(projectId);
+        if (card != null) {
+            this.pressResult(card, 0);
+        }
+    }
+
+    public List<String> getPicked() {
+        return List.copyOf(this.picked.keySet());
+    }
+
+    private void unpickAll() {
+        this.picked.clear();
+        this.showPicked();
+    }
+
+    private void showPicked() {
+        int count = this.picked.size();
+        this.pickedNote.set(Lang.get(count == MOST_PICKED ? "hotwire.store.picked_most" : "hotwire.screen.picked",
+                count));
+        this.addPicked.label(Lang.get("hotwire.store.add_count", count));
+        this.pickBar.open(count > 0);
+    }
+
+    public void addPicked() {
+        List<ModrinthClient.Hit> hits = this.picked.values().stream().filter(hit -> !this.model.isInstalledProject(
+                hit.projectId()) && !this.model.isQueuedProject(hit.projectId())).toList();
+        this.unpickAll();
+        this.askFew(hits, 0);
+    }
+
+    private void askFew(List<ModrinthClient.Hit> hits, int at) {
+        if (at < hits.size()) {
+            this.few.run(hits.get(at), () -> this.askFew(hits, at + 1));
+        } else if (!hits.isEmpty()) {
+            this.game.addManyFromStore(hits);
+        }
+    }
+
+    private final class LayoutPick extends Part {
+        private final boolean tiled;
+
+        LayoutPick(boolean tiled) {
+            this.tiled = tiled;
+            this.width(Push.HEIGHT).height(Push.HEIGHT);
+            this.press((button, modifiers) -> StorePage.this.model.setGrid(tiled));
+        }
+
+        @Override
+        protected void paint(Canvas canvas, float alpha) {
+            boolean chosen = StorePage.this.model.isGrid() == this.tiled;
+            int x = this.getX();
+            int y = this.getY();
+            int side = Push.HEIGHT;
+            canvas.fill(x, y, x + side, y + side, Colors.fade(chosen || this.isHovered() ? Palette.TRACK
+                    : Palette.HAIRLINE, alpha));
+            int ink = Colors.fade(chosen ? Palette.ON : Palette.DIM, alpha);
+            for (int at = 0; at < (this.tiled ? 4 : 3); at++) {
+                if (this.tiled) {
+                    int left = x + 5 + at % 2 * 6;
+                    int top = y + 5 + at / 2 * 6;
+                    canvas.fill(left, top, left + 4, top + 4, ink);
+                } else {
+                    canvas.fill(x + 5, y + 5 + at * 4, x + side - 5, y + 7 + at * 4, ink);
+                }
+            }
+        }
     }
 
     public boolean openPage(String projectId) {
@@ -413,31 +583,43 @@ public final class StorePage {
 
     private final class Result extends Part {
         private final EasedValue hot = EasedValue.ofSpeed(14);
+        private final EasedValue lit = EasedValue.ofSpeed(16);
         private final Line inner;
+        private final String id;
+        private final boolean tile;
 
-        Result(StoreModel.Card card) {
+        Result(StoreModel.Card card, boolean tile) {
             ModrinthClient.Hit hit = card.hit();
-            this.inner = this.add(Kit.row(Kit.picture(() -> hit.iconUrl().isEmpty() ? null
-                    : StorePage.this.icons.find(hit.projectId(), hit.iconUrl()), hit.title(), ICON),
-                    Kit.column(Kit.row(Kit.text(hit.title()).lines(1), Kit.text(hit.author(), Palette.FAINT)
-                            .lines(1).spare(), makeDownloadCount(hit.downloads()).spare()).gap(6),
+            this.id = hit.projectId();
+            this.tile = tile;
+            Part picture = Kit.picture(() -> hit.iconUrl().isEmpty() ? null
+                    : StorePage.this.icons.find(hit.projectId(), hit.iconUrl()), hit.title(), ICON);
+            this.inner = this.add(tile ? Kit.column(Kit.row(picture, Kit.column(Kit.text(hit.title()).lines(1),
+                    Kit.row(makeDownloadCount(hit.downloads()), Kit.text(hit.author(), Palette.FAINT).lines(1)
+                            .grow(1)).gap(6)).gap(4).grow(1), new Action(card)).gap(8).cross(Line.Cross.CENTER),
+                    Kit.dim(hit.description()).lines(2)).gap(5).pad(8, 6).cross(Line.Cross.STRETCH)
+                    : Kit.row(picture, Kit.column(Kit.row(Kit.text(hit.title()).lines(1), Kit.text(hit.author(),
+                            Palette.FAINT).lines(1).spare(), makeDownloadCount(hit.downloads()).spare()).gap(6),
                             Kit.dim(hit.description()).lines(1)).gap(4).grow(1),
                     new Action(card)).gap(8).pad(8, 5).cross(Line.Cross.CENTER));
-            this.press((button, modifiers) -> StorePage.this.detail.open(hit));
+            this.press((button, modifiers) -> StorePage.this.pressResult(card, button));
         }
 
         @Override
         public void step(float dt) {
             this.hot.to(this.isHovered() ? 1 : 0);
             this.hot.step(dt);
+            this.lit.to(StorePage.this.isLit(this.id) ? 1 : 0);
+            this.lit.step(dt);
             super.step(dt);
         }
 
         @Override
         public void measure(Canvas canvas, int room) {
             this.inner.measure(canvas, room);
-            this.hugWidth = this.inner.findWidth();
-            this.hugHeight = ROW;
+
+            this.hugWidth = this.tile ? 0 : this.inner.findWidth();
+            this.hugHeight = this.tile ? CARD : ROW;
         }
 
         @Override
@@ -452,6 +634,12 @@ public final class StorePage {
             int y = this.getY();
             canvas.fill(x, y, x + this.getWidth(), y + this.getHeight(),
                     Colors.fade(Colors.mix(Palette.PANEL, Palette.TRACK, hot) | 0xFF000000, alpha));
+
+            float lit = alpha * this.lit.getValue();
+            if (lit > 0.01f) {
+                canvas.fill(x, y, x + this.getWidth(), y + this.getHeight(), Colors.fade(Palette.ON, lit * 0.12f));
+                canvas.fill(x, y, x + 2, y + this.getHeight(), Colors.fade(Palette.ON, lit));
+            }
         }
     }
 

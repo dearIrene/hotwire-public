@@ -238,7 +238,7 @@ public interface ModScreenGame {
     default void playSound(LoadingScreen.Cue cue, float pitch) {
     }
 
-    default boolean isAddAsked() {
+    default boolean isAddAsked(Path jar) {
         return true;
     }
 
