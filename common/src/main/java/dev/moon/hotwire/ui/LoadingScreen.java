@@ -19,8 +19,8 @@ public final class LoadingScreen extends Part {
         void play(Cue cue, float pitch);
     }
 
-    private static final float LINGER = 0.4f;
-    private static final float LINGER_BATCH = 1.1f;
+    private static final float LINGER = 0.25f;
+    private static final float LINGER_BATCH = 0.5f;
     private static final int INSET_X = 20;
     private static final int INSET_Y = 14;
     private static final int ROW = 14;
@@ -50,7 +50,7 @@ public final class LoadingScreen extends Part {
     private final Sounds sounds;
     private Function<String, Canvas.@Nullable Image> icons = id -> null;
 
-    private final EasedValue shown = EasedValue.ofSpeed(9);
+    private final EasedValue shown = EasedValue.ofSpeed(14);
     private final EasedValue bar = EasedValue.ofSpeed(8);
     private final EasedValue nameIn = EasedValue.ofSpeed(18);
     private final EasedValue tailAt = EasedValue.ofSpeed(14);

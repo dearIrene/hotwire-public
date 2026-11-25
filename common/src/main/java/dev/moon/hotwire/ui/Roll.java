@@ -5,8 +5,8 @@ final class Roll {
     private static final float WAIT_AT = 0.98f;
 
     private static final float FINISH = 0.3f;
-    private static final float FINISH_ALL = 2;
-    private static final float FINISH_MOST = 1.4f;
+    private static final float FINISH_ALL = 0.8f;
+    private static final float FINISH_MOST = 0.4f;
 
     private float finishRate;
     private static final float CURVE = 0.4f;
