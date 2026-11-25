@@ -9,6 +9,7 @@ import org.spongepowered.asm.mixin.Final;
 import org.spongepowered.asm.mixin.Mixin;
 import org.spongepowered.asm.mixin.Shadow;
 import org.spongepowered.asm.mixin.injection.At;
+import org.spongepowered.asm.mixin.injection.Group;
 import org.spongepowered.asm.mixin.injection.Inject;
 import org.spongepowered.asm.mixin.injection.callback.CallbackInfo;
 
@@ -18,6 +19,7 @@ public abstract class BlockableEventLoopMixin {
     @Final
     private Queue<Runnable> pendingRunnables;
 
+    @Group(name = "onDropAll")
     @Inject(method = "dropAllTasks", at = @At("HEAD"), cancellable = true)
     private void hotwire$onDropAll(CallbackInfo ci) {
         if ((Object) this instanceof Minecraft game) {
@@ -28,6 +30,7 @@ public abstract class BlockableEventLoopMixin {
         }
     }
 
+    @Group(name = "onRunTask")
     @Inject(method = "doRunTask", at = @At("HEAD"), cancellable = true)
     private void hotwire$onRunTask(Runnable task, CallbackInfo ci) {
         if (GameParts.getTasks().isSetAside((BlockableEventLoop<?>) (Object) this, task)) {

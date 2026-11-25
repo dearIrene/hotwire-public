@@ -17,6 +17,7 @@ import org.spongepowered.asm.mixin.Pseudo;
 @Mixin(targets = "net.fabricmc.fabric.impl.client.rendering.PictureInPictureRendererRegistryImpl", remap = false)
 public abstract class PictureInPictureRendererRegistryImplMixin {
     //? if >=26.1 {
+    @org.spongepowered.asm.mixin.injection.Group(name = "registerLate")
     @Inject(method = "register", at = @At("HEAD"), cancellable = true)
     private static void hotwire$registerLate(PictureInPictureRendererRegistry.Factory factory, CallbackInfo ci) {
         if (PictureInPicture.registerLate(factory)) {
@@ -24,6 +25,7 @@ public abstract class PictureInPictureRendererRegistryImplMixin {
         }
     }
 
+    @org.spongepowered.asm.mixin.injection.Group(name = "recordContext")
     @WrapOperation(method = "onReady", at = @At(value = "INVOKE", target = "Lnet/fabricmc/fabric/api/client/rendering/"
             + "v1/PictureInPictureRendererRegistry$Factory;createRenderer"))
     private static PictureInPictureRenderer<?> hotwire$recordContext(PictureInPictureRendererRegistry.Factory factory,

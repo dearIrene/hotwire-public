@@ -26,24 +26,28 @@ import org.spongepowered.asm.mixin.Mixin;
 *///?}
 public abstract class SerializableChunkDataMixin {
     //? if >=1.21.4 {
+    @org.spongepowered.asm.mixin.injection.Group(name = "copyAsOn")
     @WrapMethod(method = "copyOf")
     private static SerializableChunkData hotwire$copyAsOn(ServerLevel level, ChunkAccess chunk,
             Operation<SerializableChunkData> original) {
         return OffModSaves.run(() -> original.call(level, chunk));
     }
 
+    @org.spongepowered.asm.mixin.injection.Group(name = "readAsOn")
     @WrapMethod(method = "read")
     private ProtoChunk hotwire$readAsOn(ServerLevel level, PoiManager poi, RegionStorageInfo storage, ChunkPos pos,
             Operation<ProtoChunk> original) {
         return OffModSaves.run(() -> original.call(level, poi, storage, pos));
     }
     //?} else {
-    /*@WrapMethod(method = "write")
+    /*@org.spongepowered.asm.mixin.injection.Group(name = "writeAsOn")
+    @WrapMethod(method = "write")
     private static CompoundTag hotwire$writeAsOn(ServerLevel level, ChunkAccess chunk,
             Operation<CompoundTag> original) {
         return OffModSaves.run(() -> original.call(level, chunk));
     }
 
+    @org.spongepowered.asm.mixin.injection.Group(name = "readAsOn2")
     @WrapMethod(method = "read")
     private static ProtoChunk hotwire$readAsOn(ServerLevel level, PoiManager poi, RegionStorageInfo storage,
             ChunkPos pos, CompoundTag tag, Operation<ProtoChunk> original) {

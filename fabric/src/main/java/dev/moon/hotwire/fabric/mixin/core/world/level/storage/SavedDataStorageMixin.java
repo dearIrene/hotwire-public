@@ -39,12 +39,14 @@ import org.spongepowered.asm.mixin.injection.At;
 *///?}
 public abstract class SavedDataStorageMixin {
     //? if >=1.21.5 {
+    @org.spongepowered.asm.mixin.injection.Group(name = "encodeAsOn")
     @WrapMethod(method = "encodeUnchecked")
     private CompoundTag hotwire$encodeAsOn(SavedDataType<?> type, SavedData data, RegistryOps<Tag> ops,
             Operation<CompoundTag> original) {
         return OffModSaves.run(() -> original.call(type, data, ops));
     }
 
+    @org.spongepowered.asm.mixin.injection.Group(name = "parseAsOn")
     @WrapOperation(method = "readSavedData", at = @At(value = "INVOKE", target = "Lcom/mojang/serialization/Codec;"
             + "parse(Lcom/mojang/serialization/DynamicOps;Ljava/lang/Object;)Lcom/mojang/serialization/DataResult;"))
     private DataResult<?> hotwire$parseAsOn(Codec<?> codec, DynamicOps<?> ops, @Nullable Object input,
@@ -52,7 +54,8 @@ public abstract class SavedDataStorageMixin {
         return OffModSaves.run(() -> original.call(codec, ops, input));
     }
     //?} else {
-    /*@WrapOperation(method = "readSavedData", at = @At(value = "INVOKE",
+    /*@org.spongepowered.asm.mixin.injection.Group(name = "readAsOn")
+    @WrapOperation(method = "readSavedData", at = @At(value = "INVOKE",
             target = "Ljava/util/function/BiFunction;apply(Ljava/lang/Object;Ljava/lang/Object;)Ljava/lang/Object;"))
     private Object hotwire$readAsOn(BiFunction<?, ?, ?> reader, Object tag, Object registries,
             Operation<Object> original) {

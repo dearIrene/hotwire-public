@@ -1,5 +1,5 @@
 {
-  "required": true,
+  "required": false,
   "minVersion": "0.8",
   "package": "dev.moon.hotwire.fabric.mixin",
   "compatibilityLevel": "JAVA_21",
@@ -73,9 +73,6 @@
     "core.client.gui.components.toasts.ToastManagerAccessor",
     "core.client.gui.screens.LoadingOverlayMixin"
   ],
-  "injectors": {
-    "defaultRequire": 1
-  },
   "overwrites": {
     "requireAnnotations": true
   }

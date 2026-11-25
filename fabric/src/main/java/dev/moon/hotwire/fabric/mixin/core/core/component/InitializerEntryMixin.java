@@ -21,6 +21,7 @@ public abstract class InitializerEntryMixin {
     @Final
     private ResourceKey<?> key;
 
+    @org.spongepowered.asm.mixin.injection.Group(name = "leaveOutOffMods")
     @WrapMethod(method = "run")
     private void hotwire$leaveOutOffMods(DataComponentMap.Builder builder, HolderLookup.Provider registries,
             Operation<Void> original) {

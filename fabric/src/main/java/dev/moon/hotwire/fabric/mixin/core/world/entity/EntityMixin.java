@@ -16,21 +16,25 @@ import org.spongepowered.asm.mixin.Mixin;
 @Mixin(Entity.class)
 public abstract class EntityMixin {
     //? if >=1.21.8 {
+    @org.spongepowered.asm.mixin.injection.Group(name = "saveAsOn")
     @WrapMethod(method = "saveWithoutId")
     private void hotwire$saveAsOn(ValueOutput output, Operation<Void> original) {
         OffModSaves.run(() -> original.call(output));
     }
 
+    @org.spongepowered.asm.mixin.injection.Group(name = "loadAsOn")
     @WrapMethod(method = "load")
     private void hotwire$loadAsOn(ValueInput input, Operation<Void> original) {
         OffModSaves.run(() -> original.call(input));
     }
     //?} else {
-    /*@WrapMethod(method = "saveWithoutId")
+    /*@org.spongepowered.asm.mixin.injection.Group(name = "saveAsOn2")
+    @WrapMethod(method = "saveWithoutId")
     private CompoundTag hotwire$saveAsOn(CompoundTag tag, Operation<CompoundTag> original) {
         return OffModSaves.run(() -> original.call(tag));
     }
 
+    @org.spongepowered.asm.mixin.injection.Group(name = "loadAsOn2")
     @WrapMethod(method = "load")
     private void hotwire$loadAsOn(CompoundTag tag, Operation<Void> original) {
         OffModSaves.run(() -> original.call(tag));

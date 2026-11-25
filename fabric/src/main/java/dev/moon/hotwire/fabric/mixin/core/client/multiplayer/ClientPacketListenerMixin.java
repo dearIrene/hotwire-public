@@ -17,6 +17,7 @@ import org.spongepowered.asm.mixin.Mixin;
 import org.spongepowered.asm.mixin.Shadow;
 import org.spongepowered.asm.mixin.Unique;
 import org.spongepowered.asm.mixin.injection.At;
+import org.spongepowered.asm.mixin.injection.Group;
 import org.spongepowered.asm.mixin.injection.Inject;
 import org.spongepowered.asm.mixin.injection.callback.CallbackInfo;
 
@@ -28,21 +29,25 @@ public abstract class ClientPacketListenerMixin implements ClientPacketListenerE
     @Shadow
     public abstract void handleCommands(ClientboundCommandsPacket packet);
 
+    @Group(name = "tellDisconnectOnGameThread")
     @Inject(method = "close", at = @At("HEAD"))
     private void hotwire$tellDisconnectOnGameThread(CallbackInfo ci) {
         GameParts.getDisconnects().tellAtLeave(Minecraft.getInstance());
     }
 
+    @Group(name = "onReceived")
     @Inject(method = "handleCommands", at = @At("HEAD"))
     private void hotwire$onReceived(ClientboundCommandsPacket packet, CallbackInfo ci) {
         this.hotwire$commands = packet;
     }
 
+    @Group(name = "readServerTree")
     @WrapMethod(method = "handleCommands")
     private void hotwire$readServerTree(ClientboundCommandsPacket packet, Operation<Void> original) {
         CommandRecorder.runForServerTree(() -> original.call(packet));
     }
 
+    @Group(name = "saveLogin")
     @Inject(method = "handleLogin", at = @At("RETURN"))
     private void hotwire$saveLogin(ClientboundLoginPacket packet, CallbackInfo ci) {
         StartArguments.save(Type.getInternalName(ClientPacketListener.class) + "." + LoginMoment.NAME

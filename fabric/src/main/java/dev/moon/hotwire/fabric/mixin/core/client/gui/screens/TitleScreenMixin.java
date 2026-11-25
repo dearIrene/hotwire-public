@@ -22,6 +22,7 @@ import org.spongepowered.asm.mixin.injection.callback.CallbackInfo;
 
 @Mixin(TitleScreen.class)
 public abstract class TitleScreenMixin {
+    @org.spongepowered.asm.mixin.injection.Group(name = "showCrashNotice")
     @Inject(method = "init", at = @At("TAIL"))
     private void hotwire$showCrashNotice(CallbackInfo ci) {
         HotwireClient.onTitleScreen();

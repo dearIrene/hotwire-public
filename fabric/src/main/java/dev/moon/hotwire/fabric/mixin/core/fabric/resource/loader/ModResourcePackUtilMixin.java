@@ -23,13 +23,15 @@ import org.spongepowered.asm.mixin.Pseudo;
 @Mixin(targets = "net.fabricmc.fabric.impl.resource.loader.ModResourcePackUtil", remap = false)
 public abstract class ModResourcePackUtilMixin {
     //? if <1.21.4 {
-    /*@Inject(method = "appendModResourcePacks", at = @At("TAIL"))
+    /*@org.spongepowered.asm.mixin.injection.Group(name = "addHiddenPacks")
+    @Inject(method = "appendModResourcePacks", at = @At("TAIL"))
     private static void hotwire$addHiddenPacks(List<ModResourcePack> packs, PackType type,
             @Nullable String subPath, CallbackInfo ci) {
         GameParts.getPacks().addHidden(type, subPath, packs);
     }
     *///?} elif <1.21.11 {
-    /*@Inject(method = "getModResourcePacks", at = @At("RETURN"), cancellable = true)
+    /*@org.spongepowered.asm.mixin.injection.Group(name = "addHiddenPacks2")
+    @Inject(method = "getModResourcePacks", at = @At("RETURN"), cancellable = true)
     private static void hotwire$addHiddenPacks(FabricLoader loader, PackType type, @Nullable String subPath,
             CallbackInfoReturnable<List<ModResourcePack>> cir) {
         List<ModResourcePack> packs = new ArrayList<>(cir.getReturnValue());

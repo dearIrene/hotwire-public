@@ -7,6 +7,7 @@ import org.spongepowered.asm.mixin.Final;
 import org.spongepowered.asm.mixin.Mixin;
 import org.spongepowered.asm.mixin.Shadow;
 import org.spongepowered.asm.mixin.injection.At;
+import org.spongepowered.asm.mixin.injection.Group;
 import org.spongepowered.asm.mixin.injection.Inject;
 import org.spongepowered.asm.mixin.injection.callback.CallbackInfoReturnable;
 
@@ -20,6 +21,7 @@ public abstract class SynchedEntityDataBuilderMixin {
     @Final
     private SynchedEntityData.DataItem<?>[] itemsById;
 
+    @Group(name = "fillSlotsOfOffMods")
     @Inject(method = "build", at = @At("HEAD"))
     private void hotwire$fillSlotsOfOffMods(CallbackInfoReturnable<SynchedEntityData> cir) {
         SyncedDataSlots.fill(this.entity.getClass(), this.itemsById);

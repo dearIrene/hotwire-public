@@ -53,6 +53,7 @@ public final class EarlyDefinitions implements PreLaunchEntrypoint {
         }
 
         try {
+            LostHooks.listen();
             StartTimes.mark("Hotwire's pre-launch begins");
             long began = System.nanoTime();
             makeOnce(true);

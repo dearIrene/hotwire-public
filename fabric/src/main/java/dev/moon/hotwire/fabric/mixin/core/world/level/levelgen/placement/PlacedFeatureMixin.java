@@ -18,11 +18,13 @@ import org.spongepowered.asm.mixin.injection.callback.CallbackInfoReturnable;
 @Mixin(PlacedFeature.class)
 public abstract class PlacedFeatureMixin {
     //? if >=26.3 {
+    @org.spongepowered.asm.mixin.injection.Group(name = "skipOff")
     @Inject(method = "place", at = @At("HEAD"), cancellable = true)
     private void hotwire$skipOff(WorldGenLevel level, ChunkGenerator generator, RandomSource random, BlockPos origin,
             CallbackInfoReturnable<Boolean> cir) {
     //?} else {
-    /*@Inject(method = "placeWithContext", at = @At("HEAD"), cancellable = true)
+    /*@org.spongepowered.asm.mixin.injection.Group(name = "skipOff2")
+    @Inject(method = "placeWithContext", at = @At("HEAD"), cancellable = true)
     private void hotwire$skipOff(PlacementContext context, RandomSource random, BlockPos origin,
             CallbackInfoReturnable<Boolean> cir) {
     *///?}

@@ -6,6 +6,7 @@ import net.minecraft.server.packs.resources.PreparableReloadListener;
 import org.spongepowered.asm.mixin.Mixin;
 import org.spongepowered.asm.mixin.Pseudo;
 import org.spongepowered.asm.mixin.injection.At;
+import org.spongepowered.asm.mixin.injection.Group;
 import org.spongepowered.asm.mixin.injection.Inject;
 import org.spongepowered.asm.mixin.injection.callback.CallbackInfo;
 
@@ -13,6 +14,7 @@ import org.spongepowered.asm.mixin.injection.callback.CallbackInfo;
 @Mixin(targets = {"net.fabricmc.fabric.impl.resource.ResourceLoaderImpl",
         "net.fabricmc.fabric.impl.resource.v1.ResourceLoaderImpl"}, remap = false)
 public abstract class ResourceLoaderImplMixin {
+    @Group(name = "onRegistered")
     @Inject(method = {"registerReloadListener", "registerReloader"}, at = @At("TAIL"))
     private void hotwire$onRegistered(Identifier id, PreparableReloadListener reloader, CallbackInfo ci) {
         ReloaderRecorder.onRegistered(((ResourceLoaderImplAccessor) this).hotwire$getReloaders(), id, reloader);

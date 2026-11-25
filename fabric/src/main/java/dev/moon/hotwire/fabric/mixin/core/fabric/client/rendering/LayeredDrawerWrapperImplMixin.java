@@ -22,23 +22,27 @@ public abstract class LayeredDrawerWrapperImplMixin {
     /*@Unique
     private HudLayers.@Nullable LayerPosition hotwire$changing;
 
+    @org.spongepowered.asm.mixin.injection.Group(name = "onAdded")
     @Inject(method = "addLayer", at = @At("TAIL"))
     private void hotwire$onAdded(IdentifiedLayer layer, CallbackInfoReturnable<LayeredDrawerWrapper> cir) {
         HudLayers.onAdded(((LayeredDrawerWrapperImplAccessor) this).hotwire$getBase(), layer);
     }
 
-    @Inject(method = {"attachLayerAfter", "attachLayerBefore"}, at = @At("TAIL"), require = 2)
+    @org.spongepowered.asm.mixin.injection.Group(name = "onAttached", min = 2)
+    @Inject(method = {"attachLayerAfter", "attachLayerBefore"}, at = @At("TAIL"))
     private void hotwire$onAttached(ResourceLocation anchor, IdentifiedLayer layer,
             CallbackInfoReturnable<LayeredDrawerWrapper> cir) {
         HudLayers.onAdded(((LayeredDrawerWrapperImplAccessor) this).hotwire$getBase(), layer);
     }
 
+    @org.spongepowered.asm.mixin.injection.Group(name = "onReplacing")
     @Inject(method = "replaceLayer", at = @At("HEAD"))
     private void hotwire$onReplacing(ResourceLocation id, Function<IdentifiedLayer, IdentifiedLayer> replacer,
             CallbackInfoReturnable<LayeredDrawerWrapper> cir) {
         this.hotwire$changing = HudLayers.find(((LayeredDrawerWrapperImplAccessor) this).hotwire$getBase(), id);
     }
 
+    @org.spongepowered.asm.mixin.injection.Group(name = "onReplaced")
     @Inject(method = "replaceLayer", at = @At("TAIL"))
     private void hotwire$onReplaced(ResourceLocation id, Function<IdentifiedLayer, IdentifiedLayer> replacer,
             CallbackInfoReturnable<LayeredDrawerWrapper> cir) {
@@ -46,11 +50,13 @@ public abstract class LayeredDrawerWrapperImplMixin {
         this.hotwire$changing = null;
     }
 
+    @org.spongepowered.asm.mixin.injection.Group(name = "onRemoving")
     @Inject(method = "removeLayer", at = @At("HEAD"))
     private void hotwire$onRemoving(ResourceLocation id, CallbackInfoReturnable<LayeredDrawerWrapper> cir) {
         this.hotwire$changing = HudLayers.find(((LayeredDrawerWrapperImplAccessor) this).hotwire$getBase(), id);
     }
 
+    @org.spongepowered.asm.mixin.injection.Group(name = "onRemoved")
     @Inject(method = "removeLayer", at = @At("TAIL"))
     private void hotwire$onRemoved(ResourceLocation id, CallbackInfoReturnable<LayeredDrawerWrapper> cir) {
         HudLayers.onRemoved(this.hotwire$changing);

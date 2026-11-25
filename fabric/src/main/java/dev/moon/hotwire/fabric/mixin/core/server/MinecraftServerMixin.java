@@ -29,17 +29,20 @@ public abstract class MinecraftServerMixin {
     @Shadow
     private ServerStatus status;
 
+    @org.spongepowered.asm.mixin.injection.Group(name = "noteDataReload")
     @Inject(method = "reloadResources", at = @At("RETURN"))
     private void hotwire$noteDataReload(Collection<String> packs, CallbackInfoReturnable<CompletableFuture<Void>> cir) {
         GameParts.getOngoingReload().onServerReload(cir.getReturnValue());
     }
 
+    @org.spongepowered.asm.mixin.injection.Group(name = "noteOpeningPacks")
     @Inject(method = "configurePackRepository", at = @At("HEAD"))
     private static void hotwire$noteOpeningPacks(PackRepository packs, WorldDataConfiguration config, boolean initMode,
             boolean safeMode, CallbackInfoReturnable<WorldDataConfiguration> cir) {
         GameParts.getPacks().noteOpeningPacks(config.dataPacks().getEnabled());
     }
 
+    @org.spongepowered.asm.mixin.injection.Group(name = "forgetOpeningPacks")
     @Inject(method = "configurePackRepository", at = @At("RETURN"))
     private static void hotwire$forgetOpeningPacks(PackRepository packs, WorldDataConfiguration config,
             boolean initMode, boolean safeMode, CallbackInfoReturnable<WorldDataConfiguration> cir) {
@@ -47,6 +50,7 @@ public abstract class MinecraftServerMixin {
     }
 
     //? if >=1.21.11 {
+    @org.spongepowered.asm.mixin.injection.Group(name = "catchTickThrow")
     @WrapOperation(method = "runServer", at = @At(value = "INVOKE",
             target = "Lnet/minecraft/server/MinecraftServer;processPacketsAndTick(Z)V"))
     @SuppressWarnings("checkstyle:IllegalCatch")
@@ -60,7 +64,8 @@ public abstract class MinecraftServerMixin {
         }
     }
     //?} else {
-    /*@WrapOperation(method = "runServer", at = @At(value = "INVOKE",
+    /*@org.spongepowered.asm.mixin.injection.Group(name = "catchTickThrow2")
+    @WrapOperation(method = "runServer", at = @At(value = "INVOKE",
             target = "Lnet/minecraft/server/MinecraftServer;tickServer(Ljava/util/function/BooleanSupplier;)V"))
     @SuppressWarnings("checkstyle:IllegalCatch") // the crash guard sees every throw of a tick; CrashPolicy decides
     private void hotwire$catchTickThrow(MinecraftServer server, BooleanSupplier haveTime,
@@ -75,6 +80,7 @@ public abstract class MinecraftServerMixin {
     }
     *///?}
 
+    @org.spongepowered.asm.mixin.injection.Group(name = "catchStatusThrow")
     @WrapOperation(method = "runServer", at = @At(value = "INVOKE",
             target = "Lnet/minecraft/server/MinecraftServer;buildServerStatus()"
                     + "Lnet/minecraft/network/protocol/status/ServerStatus;"))
@@ -90,6 +96,7 @@ public abstract class MinecraftServerMixin {
         }
     }
 
+    @org.spongepowered.asm.mixin.injection.Group(name = "runWhatIsLeft")
     @Inject(method = "onServerExit", at = @At("HEAD"))
     private void hotwire$runWhatIsLeft(CallbackInfo ci) {
         Tasks.runLeft(((BlockableEventLoopAccessor) this).hotwire$getPending());

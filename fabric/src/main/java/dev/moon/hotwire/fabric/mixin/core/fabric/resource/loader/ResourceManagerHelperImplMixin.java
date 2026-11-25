@@ -14,6 +14,7 @@ import org.spongepowered.asm.mixin.Pseudo;
 public abstract class ResourceManagerHelperImplMixin {
     //? if <1.21.10 {
     /*// Both public overloads end in the private one; each records the newest factory, once.
+    @org.spongepowered.asm.mixin.injection.Group(name = "onRegistered")
     @Inject(method = "registerReloadListener", at = @At("TAIL"))
     private void hotwire$onRegistered(CallbackInfo ci) {
         ReloaderRecorder.onRegisteredLegacy(((ResourceManagerHelperImplAccessor) this).hotwire$getFactories());

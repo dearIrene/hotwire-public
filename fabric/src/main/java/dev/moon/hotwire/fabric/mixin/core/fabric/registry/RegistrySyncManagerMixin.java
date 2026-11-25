@@ -7,12 +7,14 @@ import net.minecraft.resources.Identifier;
 import org.spongepowered.asm.mixin.Mixin;
 import org.spongepowered.asm.mixin.Pseudo;
 import org.spongepowered.asm.mixin.injection.At;
+import org.spongepowered.asm.mixin.injection.Group;
 import org.spongepowered.asm.mixin.injection.Inject;
 import org.spongepowered.asm.mixin.injection.callback.CallbackInfoReturnable;
 
 @Pseudo
 @Mixin(targets = "net.fabricmc.fabric.impl.registry.sync.RegistrySyncManager", remap = false)
 public abstract class RegistrySyncManagerMixin {
+    @Group(name = "leaveOutOff")
     @Inject(method = "createAndPopulateRegistryMap", at = @At("RETURN"))
     private static void hotwire$leaveOutOff(CallbackInfoReturnable<Map<Identifier, Object2IntMap<Identifier>>> cir) {
         OffEntries.leaveOut(cir.getReturnValue());

@@ -17,6 +17,7 @@ import net.minecraft.client.input.KeyEvent;
 @Mixin(KeyboardHandler.class)
 public abstract class KeyboardHandlerMixin {
     //? if >=1.21.9 {
+    @org.spongepowered.asm.mixin.injection.Group(name = "pressAtScreen")
     @Inject(method = "keyPress", at = @At("HEAD"))
     private void hotwire$pressAtScreen(long window, int action, KeyEvent event, CallbackInfo ci) {
         if (action == InputConstants.PRESS) {
@@ -25,6 +26,7 @@ public abstract class KeyboardHandlerMixin {
         }
     }
 
+    @org.spongepowered.asm.mixin.injection.Group(name = "passLetterToScreen")
     @Inject(method = "charTyped", at = @At("HEAD"), cancellable = true)
     private void hotwire$passLetterToScreen(long window, CharacterEvent event, CallbackInfo ci) {
         Screen shown = ModViews.openScreen();
@@ -34,7 +36,8 @@ public abstract class KeyboardHandlerMixin {
         }
     }
     //?} else {
-    /*@Inject(method = "keyPress", at = @At("HEAD"))
+    /*@org.spongepowered.asm.mixin.injection.Group(name = "pressAtScreen2")
+    @Inject(method = "keyPress", at = @At("HEAD"))
     private void hotwire$pressAtScreen(long window, int action, int key, int scanCode, int modifiers,
             CallbackInfo ci) {
         if (action == InputConstants.PRESS) {
@@ -43,6 +46,7 @@ public abstract class KeyboardHandlerMixin {
         }
     }
 
+    @org.spongepowered.asm.mixin.injection.Group(name = "passLetterToScreen2")
     @Inject(method = "charTyped", at = @At("HEAD"), cancellable = true)
     private void hotwire$passLetterToScreen(long window, int codepoint, int modifiers, CallbackInfo ci) {
         Screen shown = ModViews.openScreen();

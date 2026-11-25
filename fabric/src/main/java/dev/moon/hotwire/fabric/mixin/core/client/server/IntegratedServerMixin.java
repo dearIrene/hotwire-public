@@ -4,11 +4,13 @@ import dev.moon.hotwire.fabric.registration.GameHold;
 import net.minecraft.client.server.IntegratedServer;
 import org.spongepowered.asm.mixin.Mixin;
 import org.spongepowered.asm.mixin.injection.At;
+import org.spongepowered.asm.mixin.injection.Group;
 import org.spongepowered.asm.mixin.injection.Inject;
 import org.spongepowered.asm.mixin.injection.callback.CallbackInfo;
 
 @Mixin(IntegratedServer.class)
 public abstract class IntegratedServerMixin {
+    @Group(name = "releaseServer")
     @Inject(method = "halt", at = @At("HEAD"))
     private void hotwire$releaseServer(boolean waitForServer, CallbackInfo ci) {
         GameHold.onServerHalting();

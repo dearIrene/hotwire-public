@@ -16,6 +16,7 @@ import org.spongepowered.asm.mixin.Pseudo;
 @Mixin(targets = "net.minecraft.client.renderer.feature.FeatureRendererMap")
 public abstract class FeatureRendererMapMixin {
     //? if >=26.2 {
+    @org.spongepowered.asm.mixin.injection.Group(name = "makeAddedRenderer")
     @Inject(method = "getOrThrow", at = @At(value = "NEW", target = "java/lang/IllegalArgumentException"),
             cancellable = true)
     @SuppressWarnings({"unchecked", "rawtypes"})

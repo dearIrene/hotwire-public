@@ -5,11 +5,13 @@ import dev.moon.hotwire.fabric.OpenKey;
 import net.minecraft.client.KeyMapping;
 import org.spongepowered.asm.mixin.Mixin;
 import org.spongepowered.asm.mixin.injection.At;
+import org.spongepowered.asm.mixin.injection.Group;
 import org.spongepowered.asm.mixin.injection.Inject;
 import org.spongepowered.asm.mixin.injection.callback.CallbackInfo;
 
 @Mixin(KeyMapping.class)
 public abstract class KeyMappingMixin {
+    @Group(name = "openOnPress")
     @Inject(method = "click", at = @At("TAIL"))
     private static void hotwire$openOnPress(InputConstants.Key pressed, CallbackInfo ci) {
         OpenKey.onPressed();

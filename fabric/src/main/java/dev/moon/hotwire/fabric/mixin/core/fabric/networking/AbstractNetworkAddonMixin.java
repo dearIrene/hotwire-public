@@ -10,6 +10,7 @@ import org.spongepowered.asm.mixin.Mixin;
 import org.spongepowered.asm.mixin.Pseudo;
 import org.spongepowered.asm.mixin.Shadow;
 import org.spongepowered.asm.mixin.injection.At;
+import org.spongepowered.asm.mixin.injection.Group;
 import org.spongepowered.asm.mixin.injection.Inject;
 import org.spongepowered.asm.mixin.injection.callback.CallbackInfo;
 
@@ -20,6 +21,7 @@ public abstract class AbstractNetworkAddonMixin {
     @Final
     private AtomicBoolean disconnected;
 
+    @Group(name = "waitForGameThread")
     @Inject(method = "handleDisconnect", at = @At("HEAD"), cancellable = true)
     private void hotwire$waitForGameThread(CallbackInfo ci) {
         if (!this.disconnected.get()
@@ -28,6 +30,7 @@ public abstract class AbstractNetworkAddonMixin {
         }
     }
 
+    @Group(name = "endSessionAfterThrow")
     @WrapOperation(method = "handleDisconnect", at = @At(value = "INVOKE", target = "Lnet/fabricmc/fabric/impl/"
             + "networking/AbstractNetworkAddon;invokeDisconnectEvent()V"))
     private void hotwire$endSessionAfterThrow(AbstractNetworkAddon<?> addon, Operation<Void> tell) {

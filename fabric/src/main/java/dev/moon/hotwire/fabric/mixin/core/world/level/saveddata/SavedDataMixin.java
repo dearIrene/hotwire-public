@@ -20,12 +20,14 @@ import org.spongepowered.asm.mixin.Mixin;
 @Mixin(SavedData.class)
 public abstract class SavedDataMixin {
     //? if <1.21.4 {
-    /*@WrapMethod(method = "save(Ljava/io/File;Lnet/minecraft/core/HolderLookup$Provider;)V")
+    /*@org.spongepowered.asm.mixin.injection.Group(name = "saveAsOn")
+    @WrapMethod(method = "save(Ljava/io/File;Lnet/minecraft/core/HolderLookup$Provider;)V")
     private void hotwire$saveAsOn(File file, HolderLookup.Provider registries, Operation<Void> original) {
         OffModSaves.run(() -> original.call(file, registries));
     }
     *///?} else if <1.21.5 {
-    /*@WrapMethod(method = "save(Lnet/minecraft/core/HolderLookup$Provider;)Lnet/minecraft/nbt/CompoundTag;")
+    /*@org.spongepowered.asm.mixin.injection.Group(name = "saveAsOn2")
+    @WrapMethod(method = "save(Lnet/minecraft/core/HolderLookup$Provider;)Lnet/minecraft/nbt/CompoundTag;")
     private CompoundTag hotwire$saveAsOn(HolderLookup.Provider registries, Operation<CompoundTag> original) {
         return OffModSaves.run(() -> original.call(registries));
     }

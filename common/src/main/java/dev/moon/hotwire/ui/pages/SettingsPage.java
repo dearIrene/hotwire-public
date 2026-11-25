@@ -18,7 +18,7 @@ import java.util.function.Consumer;
 import java.util.function.ObjIntConsumer;
 
 public final class SettingsPage {
-    static final String DISCORD = "https://discord.gg/NR5cSrvSDA";
+    public static final String DISCORD = "https://discord.gg/NR5cSrvSDA";
 
     public final Part part;
     public final TextField search;

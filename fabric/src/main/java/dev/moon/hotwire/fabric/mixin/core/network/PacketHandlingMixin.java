@@ -19,10 +19,12 @@ import org.spongepowered.asm.mixin.injection.At;
 *///?}
 public abstract class PacketHandlingMixin {
     //? if >=1.21.10 {
+    @org.spongepowered.asm.mixin.injection.Group(name = "handle")
     @WrapOperation(method = "handle", at = @At(value = "INVOKE",
             target = "Lnet/minecraft/network/protocol/Packet;handle(Lnet/minecraft/network/PacketListener;)V"))
     //?} else {
     /*// The lambda ensureRunningOnSameThread runs on the game's thread, by the name it has on every node.
+    @org.spongepowered.asm.mixin.injection.Group(name = "catchPacketThrow")
     @WrapOperation(method = "method_11072", remap = false, at = @At(value = "INVOKE", remap = true,
             target = "Lnet/minecraft/network/protocol/Packet;handle(Lnet/minecraft/network/PacketListener;)V"))
     *///?}

@@ -17,13 +17,15 @@ import org.spongepowered.asm.mixin.Pseudo;
 @Mixin(targets = "net.fabricmc.fabric.impl.client.rendering.SpecialGuiElementRegistryImpl", remap = false)
 public abstract class SpecialGuiElementRegistryImplMixin {
     //? if >=1.21.6 && <26.1 {
-    /*@Inject(method = "register", at = @At("HEAD"), cancellable = true)
+    /*@org.spongepowered.asm.mixin.injection.Group(name = "registerLate")
+    @Inject(method = "register", at = @At("HEAD"), cancellable = true)
     private static void hotwire$registerLate(SpecialGuiElementRegistry.Factory factory, CallbackInfo ci) {
         if (PictureInPicture.registerLate(factory)) {
             ci.cancel();
         }
     }
 
+    @org.spongepowered.asm.mixin.injection.Group(name = "recordContext")
     @WrapOperation(method = "onReady", at = @At(value = "INVOKE", target = "Lnet/fabricmc/fabric/api/client/rendering/"
             + "v1/SpecialGuiElementRegistry$Factory;createSpecialRenderer"))
     private static PictureInPictureRenderer<?> hotwire$recordContext(SpecialGuiElementRegistry.Factory factory,

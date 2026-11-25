@@ -17,21 +17,25 @@ import org.spongepowered.asm.mixin.Mixin;
 @Mixin(BlockEntity.class)
 public abstract class BlockEntityMixin {
     //? if >=1.21.8 {
+    @org.spongepowered.asm.mixin.injection.Group(name = "saveAsOn")
     @WrapMethod(method = "saveWithoutMetadata(Lnet/minecraft/world/level/storage/ValueOutput;)V")
     private void hotwire$saveAsOn(ValueOutput output, Operation<Void> original) {
         OffModSaves.run(() -> original.call(output));
     }
 
+    @org.spongepowered.asm.mixin.injection.Group(name = "loadAsOn")
     @WrapMethod(method = "loadWithComponents")
     private void hotwire$loadAsOn(ValueInput input, Operation<Void> original) {
         OffModSaves.run(() -> original.call(input));
     }
     //?} else {
-    /*@WrapMethod(method = "saveWithoutMetadata")
+    /*@org.spongepowered.asm.mixin.injection.Group(name = "saveAsOn2")
+    @WrapMethod(method = "saveWithoutMetadata")
     private CompoundTag hotwire$saveAsOn(HolderLookup.Provider registries, Operation<CompoundTag> original) {
         return OffModSaves.run(() -> original.call(registries));
     }
 
+    @org.spongepowered.asm.mixin.injection.Group(name = "loadAsOn2")
     @WrapMethod(method = "loadWithComponents")
     private void hotwire$loadAsOn(CompoundTag tag, HolderLookup.Provider registries, Operation<Void> original) {
         OffModSaves.run(() -> original.call(tag, registries));

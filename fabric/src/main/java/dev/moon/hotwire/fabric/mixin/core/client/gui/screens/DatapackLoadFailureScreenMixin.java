@@ -9,6 +9,7 @@ import net.minecraft.client.gui.screens.Screen;
 import net.minecraft.network.chat.Component;
 import org.spongepowered.asm.mixin.Mixin;
 import org.spongepowered.asm.mixin.injection.At;
+import org.spongepowered.asm.mixin.injection.Group;
 import org.spongepowered.asm.mixin.injection.Inject;
 import org.spongepowered.asm.mixin.injection.callback.CallbackInfo;
 
@@ -20,6 +21,7 @@ public abstract class DatapackLoadFailureScreenMixin extends Screen {
         super(title);
     }
 
+    @Group(name = "addCause")
     @Inject(method = "init", at = @At("TAIL"))
     private void hotwire$addCause(CallbackInfo ci) {
         int below = 0;

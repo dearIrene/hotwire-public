@@ -19,6 +19,7 @@ import org.spongepowered.asm.mixin.Pseudo;
 @Mixin(targets = "net.fabricmc.fabric.impl.resource.pack.ModPackResourcesUtil", remap = false)
 public abstract class ModPackResourcesUtilMixin {
     //? if >=1.21.11 {
+    @org.spongepowered.asm.mixin.injection.Group(name = "addHiddenPacks")
     @Inject(method = "getModResourcePacks", at = @At("RETURN"), cancellable = true)
     private static void hotwire$addHiddenPacks(FabricLoader loader, PackType type, @Nullable String subPath,
             CallbackInfoReturnable<List<ModPackResources>> cir) {

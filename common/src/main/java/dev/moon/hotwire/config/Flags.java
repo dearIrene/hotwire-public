@@ -29,6 +29,8 @@ public final class Flags {
 
     public static final boolean NO_FINGERPRINTS = System.getProperty("hotwire.noFingerprints") != null;
 
+    public static final @Nullable String LOST_HOOK = System.getProperty("hotwire.lostHook");
+
     public static final boolean CHECK_LOOK = Boolean.parseBoolean(System.getProperty("hotwire.checkLook"));
 
     public static final boolean AHEAD_AT_START = Boolean.parseBoolean(System.getProperty("hotwire.aheadAtStart"));

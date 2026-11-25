@@ -4,12 +4,14 @@ import dev.moon.hotwire.fabric.registration.EventRecorder;
 import org.spongepowered.asm.mixin.Mixin;
 import org.spongepowered.asm.mixin.Pseudo;
 import org.spongepowered.asm.mixin.injection.At;
+import org.spongepowered.asm.mixin.injection.Group;
 import org.spongepowered.asm.mixin.injection.Inject;
 import org.spongepowered.asm.mixin.injection.callback.CallbackInfo;
 
 @Pseudo
 @Mixin(targets = "net.fabricmc.fabric.impl.base.event.EventPhaseData", remap = false)
 public abstract class EventPhaseDataMixin {
+    @Group(name = "onAdded")
     @Inject(method = "addListener", at = @At("TAIL"))
     private void hotwire$onAdded(Object listener, CallbackInfo ci) {
         EventRecorder.onAdded(this, listener);

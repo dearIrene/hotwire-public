@@ -157,6 +157,7 @@ public final class HotwireClient implements ClientModInitializer {
         ClientLifecycleEvents.CLIENT_STARTED.register(client -> {
             StartTimes.mark("the game started, Hotwire's engine queued");
             client.execute(HotwireClient::findEngineOrSay);
+            LostHooksPrompt.tellWhenReady(client);
         });
 
         InitHookRuns.catchUpLaterWhile(() -> Minecraft.getInstance().level == null);
@@ -348,6 +349,10 @@ public final class HotwireClient implements ClientModInitializer {
             StartTimes.mark("Hotwire's engine start begins");
             long began = System.nanoTime();
             try {
+                String lost = LostHooks.findLost();
+                if (lost != null) {
+                    throw new IllegalStateException("Hotwire's hooks could not all be put in:\n" + lost);
+                }
                 started = EngineStart.start(EarlyDefinitions.get());
             } catch (IOException | RuntimeException | LinkageError e) {
                 startFailed = true;
