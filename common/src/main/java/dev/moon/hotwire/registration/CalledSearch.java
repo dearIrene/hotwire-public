@@ -1,5 +1,6 @@
 package dev.moon.hotwire.registration;
 
+import dev.moon.hotwire.classfile.GameNames;
 import dev.moon.hotwire.redefine.FieldSlots;
 import java.util.ArrayDeque;
 import java.util.Arrays;
@@ -16,10 +17,10 @@ import org.jspecify.annotations.Nullable;
 final class CalledSearch {
     private static final int BUDGET = 200_000;
 
-    record Holders(List<Object> holders, Set<Class<?>> statics, int looked) {
+    record Holders(List<Object> holders, Set<Class<?>> statics, int looked, int near) {
     }
 
-    private record Step(Object value, Object holder) {
+    private record Step(Object value, Object holder, boolean near) {
     }
 
     private CalledSearch() {
@@ -30,38 +31,44 @@ final class CalledSearch {
         Set<Object> holders = Collections.newSetFromMap(new IdentityHashMap<>());
         Set<Class<?>> classes = new LinkedHashSet<>();
         Deque<Step> queue = new ArrayDeque<>();
+        Deque<Step> first = new ArrayDeque<>();
         for (Object root : roots) {
             if (seen.add(root)) {
-                queue.add(new Step(root, root));
+                boolean near = Owners.findModOf(root.getClass()) != null;
+                (near ? first : queue).add(new Step(root, root, near));
             }
         }
         for (Class<?> type : statics) {
+            boolean near = Owners.findModOf(type) != null;
             for (FieldSlots.Slot field : Fields.getReferenceFields(type, true)) {
-                offer(CollectionParts.read(field, null), type, called, seen, queue, holders, classes);
+                offer(CollectionParts.read(field, null), type, near, called, seen, first, queue, holders, classes);
             }
         }
         int looked = 0;
-        while (!queue.isEmpty() && looked < BUDGET) {
-            Step step = queue.poll();
+        int near = 0;
+        while ((!first.isEmpty() || !queue.isEmpty()) && looked < BUDGET) {
+            Step step = first.isEmpty() ? queue.poll() : first.poll();
             looked++;
+            near += step.near() ? 1 : 0;
             Object value = step.value();
 
             Collection<?> items = readItems(value);
             if (items != null) {
                 for (Object item : items) {
-                    offer(item, step.holder(), called, seen, queue, holders, classes);
+                    offer(item, step.holder(), step.near(), called, seen, first, queue, holders, classes);
                 }
                 continue;
             }
             for (FieldSlots.Slot field : Fields.getReferenceFields(value.getClass(), false)) {
-                offer(CollectionParts.read(field, value), value, called, seen, queue, holders, classes);
+                offer(CollectionParts.read(field, value), value, step.near(), called, seen, first, queue, holders,
+                        classes);
             }
         }
-        return new Holders(List.copyOf(holders), classes, looked);
+        return new Holders(List.copyOf(holders), classes, looked, near);
     }
 
-    private static void offer(@Nullable Object value, Object holder, Class<?> called, Set<Object> seen,
-            Deque<Step> queue, Set<Object> holders, Set<Class<?>> classes) {
+    private static void offer(@Nullable Object value, Object holder, boolean fromNear, Class<?> called,
+            Set<Object> seen, Deque<Step> first, Deque<Step> queue, Set<Object> holders, Set<Class<?>> classes) {
         if (value == null) {
             return;
         }
@@ -82,7 +89,9 @@ final class CalledSearch {
         }
         boolean container = value instanceof Collection<?> || value instanceof Map<?, ?>
                 || value instanceof Object[];
-        queue.add(new Step(value, container ? holder : value));
+        boolean near = Owners.findModOf(value.getClass()) != null
+                || (fromNear && !GameNames.isGame(value.getClass().getName()));
+        (near ? first : queue).add(new Step(value, container ? holder : value, near));
     }
 
     private static @Nullable Collection<?> readItems(Object value) {

@@ -37,6 +37,11 @@ final class OffCodeNotice {
 
     private final Map<String, Object> told = new ConcurrentHashMap<>();
 
+    private final Map<String, FirstRun> ranOnce = new ConcurrentHashMap<>();
+
+    private record FirstRun(@Nullable Object watch, long calls) {
+    }
+
     private OffCodeNotice() {
     }
 
@@ -72,6 +77,9 @@ final class OffCodeNotice {
             parts.runner().takeStillCalled(mod, first);
         }
         Object watch = Tripwire.findWatch(mod);
+        if (ran && !this.hasRunAgain(mod, watch)) {
+            return;
+        }
         if (ran && watch != null && this.isToldFor(mod, watch)) {
             return;
         }
@@ -107,6 +115,20 @@ final class OffCodeNotice {
 
         String clears = Lang.get(fromWorld ? "hotwire.off_code.reopen" : "hotwire.off_code.restart");
         engine.showMessage(Lang.get("hotwire.off_code.ran", installed.nameOf(mod), clears), true);
+    }
+
+    @SuppressWarnings("ReferenceEquality")
+    private boolean hasRunAgain(String mod, @Nullable Object watch) {
+        long calls = Tripwire.peek(mod).calls();
+        FirstRun once = this.ranOnce.get(mod);
+        if (once != null && once.watch() == watch) {
+            return calls > once.calls();
+        }
+        this.ranOnce.put(mod, new FirstRun(watch, calls));
+        LOGGER.info("[Hotwire] {} is off and its code ran as something built with it shut down ({} calls); said if"
+                + " it runs again: {}", mod, calls, String.join(" < ", Tripwire.peek(mod).first()));
+        Tripwire.listenAgain(mod);
+        return false;
     }
 
     @SuppressWarnings("ReferenceEquality")

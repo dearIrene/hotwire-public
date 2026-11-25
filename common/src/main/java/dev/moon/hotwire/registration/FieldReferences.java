@@ -190,8 +190,9 @@ public final class FieldReferences {
         }
         long start = System.nanoTime();
         CalledSearch.Holders found = CalledSearch.find(called, roots.holders(), roots.statics());
-        LOGGER.info("[Hotwire] {}'s {} was still called: {} objects and {} classes hold one, of {} looked at in {} ms",
-                mod, calledName, found.holders().size(), found.statics().size(), found.looked(),
+        LOGGER.info("[Hotwire] {}'s {} was still called: {} objects and {} classes hold one, of {} looked at"
+                + " ({} of them mods' own) in {} ms",
+                mod, calledName, found.holders().size(), found.statics().size(), found.looked(), found.near(),
                 (System.nanoTime() - start) / 1_000_000);
         if (found.holders().isEmpty() && found.statics().isEmpty()) {
             return 0;
