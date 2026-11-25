@@ -196,14 +196,37 @@ public final class FieldReferences {
         if (found.holders().isEmpty() && found.statics().isEmpty()) {
             return 0;
         }
+
+        List<Replacement> given = new ArrayList<>();
+        Games.getNow().runOnGameAndWait(() -> given.addAll(this.planFieldsOf(mod, found, others)));
         hold = Games.getNow().hold();
         try {
-            return this.elements.takeFromHolders(mods,
+            if (stale.getAsBoolean()) {
+                return 0;
+            }
+            return this.putIn(mod, given) + this.elements.takeFromHolders(mods,
                     found.holders().stream().filter(one -> others.test(one.getClass())).toList(), found.statics(),
                     stale);
         } finally {
             hold.run();
         }
+    }
+
+    private List<Replacement> planFieldsOf(String mod, CalledSearch.Holders found, Predicate<Class<?>> others) {
+        List<Replacement> mine = new ArrayList<>();
+        List<RemainingReference> retained = new ArrayList<>();
+        for (Object holder : found.holders()) {
+            if (others.test(holder.getClass())) {
+                this.fieldGiveBacks.giveBack(holder.getClass(), holder, mod, mine, retained, false);
+            }
+        }
+        for (Class<?> owner : found.statics()) {
+            if (others.test(owner)) {
+                this.fieldGiveBacks.giveBack(owner, null, mod, mine, retained, false);
+            }
+        }
+        FieldGiveBacks.checkSameAsGiven(retained, mine);
+        return mine;
     }
 
     public void finishEveryLook() {
@@ -639,7 +662,8 @@ public final class FieldReferences {
     }
 
     @SuppressWarnings("ReferenceEquality")
-    private void putIn(String mod, List<Replacement> planned) {
+
+    private int putIn(String mod, List<Replacement> planned) {
         List<Replacement> done = new ArrayList<>();
         for (Replacement one : planned) {
             if (ClassKinds.is(one.holder(), Game.REGISTRY)) {
@@ -659,11 +683,16 @@ public final class FieldReferences {
         }
         rebuildTabs(done);
         if (!done.isEmpty()) {
-            this.replacements.put(mod, List.copyOf(done));
+            this.replacements.merge(mod, List.copyOf(done), (was, more) -> {
+                List<Replacement> all = new ArrayList<>(was);
+                all.addAll(more);
+                return List.copyOf(all);
+            });
             LOGGER.info("[Hotwire] {}'s objects were taken out of {}", mod, done.stream()
                     .map(one -> one.field().getDeclaringClass().getSimpleName() + "." + one.field().getName())
                     .toList());
         }
+        return done.size();
     }
 
     private static boolean isEntity(@Nullable Class<?> type) {

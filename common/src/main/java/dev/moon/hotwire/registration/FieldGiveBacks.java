@@ -6,6 +6,7 @@ import java.util.Collection;
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;
+import java.util.concurrent.Semaphore;
 import org.jspecify.annotations.Nullable;
 import org.objectweb.asm.Type;
 import org.slf4j.Logger;
@@ -98,6 +99,9 @@ final class FieldGiveBacks {
             } else if (from instanceof Collection fromItems && to instanceof Collection toItems) {
                 toItems.clear();
                 toItems.addAll(fromItems);
+            } else if (from instanceof Semaphore fromPermits && to instanceof Semaphore toPermits
+                    && fromPermits.availablePermits() > 0) {
+                toPermits.release(fromPermits.availablePermits());
             }
         } catch (UnsupportedOperationException e) {
             LOGGER.info("[Hotwire] a {} takes no change; it goes in as it is", to.getClass().getName());
