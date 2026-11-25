@@ -223,6 +223,13 @@ public interface ModScreenGame {
     default void acceptFirstOpen() {
     }
 
+    default boolean isChoicesMade() {
+        return true;
+    }
+
+    default void markChoicesMade() {
+    }
+
     default String findDescription(String id) {
         return "";
     }

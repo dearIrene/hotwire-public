@@ -20,6 +20,7 @@ import dev.moon.hotwire.ui.pages.UpdatesPage;
 import dev.moon.hotwire.ui.panels.AddPanel;
 import dev.moon.hotwire.ui.panels.AlsoOffPanel;
 import dev.moon.hotwire.ui.panels.CarriedPanel;
+import dev.moon.hotwire.ui.panels.ChoicesPanel;
 import dev.moon.hotwire.ui.panels.ClosePanel;
 import dev.moon.hotwire.ui.panels.DeletePanel;
 import dev.moon.hotwire.ui.panels.DownloadsWarningPanel;
@@ -95,6 +96,7 @@ public final class ModScreen implements JarHost {
 
     private static final float ROWS_IN_BY = 6;
     private final FirstOpenPanel firstOpen;
+    private final ChoicesPanel choices;
     private final DownloadsWarningPanel downloadsWarning;
     private final Entrance entrance = new Entrance();
 
@@ -178,9 +180,13 @@ public final class ModScreen implements JarHost {
         this.downloadsWarning = new DownloadsWarningPanel(game::markDownloadsWarned, this::closePanels);
         this.deletePanel = new DeletePanel(game::deleteMod, this::closePanels);
 
+        this.choices = new ChoicesPanel(game::getSettingsSections, game::chooseSetting, () -> {
+            game.markChoicesMade();
+            this.presentTour();
+        });
         this.firstOpen = new FirstOpenPanel(() -> {
             game.acceptFirstOpen();
-            this.presentTour();
+            this.presentChoices();
         });
         this.selfUpdate = new SelfUpdatePanel(game::updateHotwireAtNextStart, this::closePanels,
                 game::closeGame);
@@ -197,7 +203,7 @@ public final class ModScreen implements JarHost {
         this.root.getBase().add(this.message);
 
         this.panels = List.of(this.findBroken, this.addPanel, this.updatePanel, this.progress,
-                this.reopenPanel, this.carriedPanel, this.alsoOffPanel, this.firstOpen, this.tour,
+                this.reopenPanel, this.carriedPanel, this.alsoOffPanel, this.firstOpen, this.choices, this.tour,
                 this.selfUpdate, this.profilesPanel, this.hostPanel, this.downloadsWarning, this.deletePanel);
         this.panels.forEach(this.root.getModal()::add);
         this.root.getModal().add(this.closePanel);
@@ -205,7 +211,7 @@ public final class ModScreen implements JarHost {
         if (!game.isFirstOpenAccepted() || ModifiedClients.takePromptDue()) {
             this.firstOpen.present();
         } else {
-            this.presentTour();
+            this.presentChoices();
         }
         this.showNewerHotwire();
         this.offerHostChanges();
@@ -569,6 +575,12 @@ public final class ModScreen implements JarHost {
         this.game.update(jar, method);
     }
 
+    private void presentChoices() {
+        if (this.game.isChoicesMade() || !this.choices.present()) {
+            this.presentTour();
+        }
+    }
+
     private void presentTour() {
         if (!this.game.isTourSeen()) {
             this.tour.present();
@@ -708,7 +720,7 @@ public final class ModScreen implements JarHost {
     }
 
     void closePanels() {
-        this.panels.stream().filter(panel -> panel != this.progress && panel != this.firstOpen
+        this.panels.stream().filter(panel -> panel != this.progress && panel != this.firstOpen && panel != this.choices
                 && panel != this.tour && panel != this.findBroken)
                 .forEach(Element::dismiss);
     }

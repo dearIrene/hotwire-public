@@ -215,6 +215,7 @@ public final class HotwireSettings {
         @Nullable Boolean shareMods;
         boolean downloadsWarned;
         boolean antiCrashOfferOff;
+        boolean choicesMade;
         @Nullable List<String> favorites = List.of();
 
         @Nullable List<String> searchSetup;
@@ -259,6 +260,7 @@ public final class HotwireSettings {
     private volatile boolean shareMods = true;
     private volatile boolean downloadsWarned;
     private volatile boolean antiCrashOfferOff;
+    private volatile boolean choicesMade;
     private final Set<String> favorites = ConcurrentHashMap.newKeySet();
     private volatile List<String> searchSetup = List.of();
     private volatile List<String> searchPins = List.of();
@@ -312,6 +314,7 @@ public final class HotwireSettings {
         this.shareMods = saved.shareMods == null || saved.shareMods;
         this.downloadsWarned = saved.downloadsWarned;
         this.antiCrashOfferOff = saved.antiCrashOfferOff;
+        this.choicesMade = saved.choicesMade;
         if (saved.favorites != null) {
             saved.favorites.stream().filter(Objects::nonNull).forEach(this.favorites::add);
         }
@@ -564,6 +567,15 @@ public final class HotwireSettings {
         this.save();
     }
 
+    public boolean isChoicesMade() {
+        return this.choicesMade;
+    }
+
+    public void markChoicesMade() {
+        this.choicesMade = true;
+        this.save();
+    }
+
     public boolean isAntiCrashOfferOff() {
         return this.antiCrashOfferOff;
     }
@@ -761,6 +773,7 @@ public final class HotwireSettings {
         saved.shareMods = this.shareMods ? null : Boolean.FALSE;
         saved.downloadsWarned = this.downloadsWarned;
         saved.antiCrashOfferOff = this.antiCrashOfferOff;
+        saved.choicesMade = this.choicesMade;
         saved.favorites = this.favorites.stream().sorted().toList();
         saved.searchSetup = this.searchSetup.isEmpty() ? null : this.searchSetup;
         saved.searchPins = this.searchPins.isEmpty() ? null : this.searchPins;
