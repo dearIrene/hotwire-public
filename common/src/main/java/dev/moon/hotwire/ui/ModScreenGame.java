@@ -230,6 +230,13 @@ public interface ModScreenGame {
     default void markChoicesMade() {
     }
 
+    default boolean isOwnerNoteSeen() {
+        return true;
+    }
+
+    default void markOwnerNoteSeen() {
+    }
+
     default String findDescription(String id) {
         return "";
     }

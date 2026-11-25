@@ -500,6 +500,16 @@ public final class HotwireEngine implements ModScreenGame, AutoCloseable {
     }
 
     @Override
+    public boolean isOwnerNoteSeen() {
+        return this.settings.isOwnerNoteSeen();
+    }
+
+    @Override
+    public void markOwnerNoteSeen() {
+        this.settings.markOwnerNoteSeen();
+    }
+
+    @Override
     public void playSound(LoadingScreen.Cue cue, float pitch) {
         if (!this.settings.isSoundOn()) {
             return;

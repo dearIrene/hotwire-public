@@ -11,6 +11,7 @@ final class ClientWarning {
     private static final Logger LOGGER = LoggerFactory.getLogger(ClientWarning.class);
     private static final long ASK_EVERY_MS = 200;
     private static volatile boolean opened;
+    private static volatile boolean inClient;
 
     private ClientWarning() {
     }
@@ -22,12 +23,14 @@ final class ClientWarning {
         String client = ModifiedClients.isDawn(loader::isModLoaded, flat,
                 file -> ClientWarning.class.getClassLoader().getResource(file) != null) ? ModifiedClients.DAWN
                 : ModifiedClients.find(loader::isModLoaded, flat);
+
+        ClientLifecycleEvents.CLIENT_STARTED.register(ClientWarning::waitToOpen);
         if (client == null) {
             return;
         }
         LOGGER.warn("[Hotwire] running in a modified client: {}", client);
         ModifiedClients.setCurrent(client);
-        ClientLifecycleEvents.CLIENT_STARTED.register(ClientWarning::waitToOpen);
+        inClient = true;
     }
 
     private static void waitToOpen(Minecraft game) {
@@ -51,6 +54,9 @@ final class ClientWarning {
             return;
         }
         opened = true;
+        if (!inClient && HotwireClient.getEngine().isOwnerNoteSeen()) {
+            return;
+        }
         HotwireClient.getEngine().open();
     }
 }

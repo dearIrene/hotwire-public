@@ -216,6 +216,7 @@ public final class HotwireSettings {
         boolean downloadsWarned;
         boolean antiCrashOfferOff;
         boolean choicesMade;
+        boolean ownerNoteSeen;
         @Nullable List<String> favorites = List.of();
 
         @Nullable List<String> searchSetup;
@@ -261,6 +262,7 @@ public final class HotwireSettings {
     private volatile boolean downloadsWarned;
     private volatile boolean antiCrashOfferOff;
     private volatile boolean choicesMade;
+    private volatile boolean ownerNoteSeen;
     private final Set<String> favorites = ConcurrentHashMap.newKeySet();
     private volatile List<String> searchSetup = List.of();
     private volatile List<String> searchPins = List.of();
@@ -315,6 +317,7 @@ public final class HotwireSettings {
         this.downloadsWarned = saved.downloadsWarned;
         this.antiCrashOfferOff = saved.antiCrashOfferOff;
         this.choicesMade = saved.choicesMade;
+        this.ownerNoteSeen = saved.ownerNoteSeen;
         if (saved.favorites != null) {
             saved.favorites.stream().filter(Objects::nonNull).forEach(this.favorites::add);
         }
@@ -576,6 +579,15 @@ public final class HotwireSettings {
         this.save();
     }
 
+    public boolean isOwnerNoteSeen() {
+        return this.ownerNoteSeen;
+    }
+
+    public void markOwnerNoteSeen() {
+        this.ownerNoteSeen = true;
+        this.save();
+    }
+
     public boolean isAntiCrashOfferOff() {
         return this.antiCrashOfferOff;
     }
@@ -703,7 +715,8 @@ public final class HotwireSettings {
                 && alert == this.keyAlert && heard == this.sounds
                 && fill == this.autoFill && dev == this.developer
                 && asks == this.addPrompt
-                && checks == this.updateChecks && channel == this.updateChannel && crash == this.antiCrash && reload == this.devReload
+                && checks == this.updateChecks && channel == this.updateChannel && crash == this.antiCrash
+                && reload == this.devReload
                 && popups == this.reloadPopups && caught == this.devCatch && leaks == this.devLeaks
                 && limit == this.devBuildLimit && autoBack == this.devAutoBack && history == this.devHistory
                 && mark == this.devMark && compare == this.devCompare && copy == this.devCopy
@@ -774,6 +787,7 @@ public final class HotwireSettings {
         saved.downloadsWarned = this.downloadsWarned;
         saved.antiCrashOfferOff = this.antiCrashOfferOff;
         saved.choicesMade = this.choicesMade;
+        saved.ownerNoteSeen = this.ownerNoteSeen;
         saved.favorites = this.favorites.stream().sorted().toList();
         saved.searchSetup = this.searchSetup.isEmpty() ? null : this.searchSetup;
         saved.searchPins = this.searchPins.isEmpty() ? null : this.searchPins;
