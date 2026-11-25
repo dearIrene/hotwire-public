@@ -104,6 +104,13 @@ public final class LoadedClassBytes {
         return this.loadedAs.contains(internal) ? this.definedAs.find(internal) : null;
     }
 
+    public byte @Nullable [] findDefinedInGame(Class<?> type) {
+        String name = Type.getInternalName(type);
+        Integer loader = this.definedInGame.get(name);
+        return loader != null && loader == System.identityHashCode(type.getClassLoader()) ? this.definedAs.find(name)
+                : null;
+    }
+
     void remember(Class<?> type, byte[] bytes) {
         this.knownBytes.put(Type.getInternalName(type), bytes);
         HandlerGuards.forget(Type.getInternalName(type));
