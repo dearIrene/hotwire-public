@@ -81,12 +81,17 @@ final class JarRequests {
             }
         }, result -> {
             boolean more = this.storeJars.hasQueued();
+
+            boolean later = byPlayer && more && ModAdder.isRestartOnly(result) && this.engine.findHost() != null;
+            if (later) {
+                this.storeJars.queueLater(jar);
+            }
             if (mode == AddMode.SAVE_AND_REOPEN) {
                 this.storeJars.endReopenWait(false);
 
                 if (this.engine.findHost() != null && !Games.getNow().isHotwireShown()
                         && (!(result instanceof ModAdder.Result.Added) || this.storeJars.hasQueued())) {
-                    this.engine.open();
+                    this.engine.showScreen();
                 }
             }
             boolean reopens = mode == AddMode.NOW && ModAdder.isWorldBuilt(result)
@@ -109,7 +114,9 @@ final class JarRequests {
             } else if (ModAdder.isRestartOnly(result) && current != null) {
                 LOGGER.info("[Hotwire] {}", result instanceof ModAdder.Result.Refused refused ? refused.reason()
                         : ((ModAdder.Result.Failed) result).reason());
-                this.storeJars.offerLater(current, jar, more);
+                if (!later) {
+                    this.storeJars.offerLater(current, jar);
+                }
             } else if (result instanceof ModAdder.Result.Added added && current != null
                     && Games.getNow().getWorld() != null
                     && (this.changes.setsUpOnJoin(jar) || (!more && this.storeJars.takeReopenWanted()))) {
@@ -137,7 +144,6 @@ final class JarRequests {
 
             if (mode == AddMode.SAVE_AND_REOPEN && this.storeJars.hasQueued() && this.engine.findHost() == null) {
                 this.engine.open();
-                this.storeJars.offerNext();
             }
             this.engine.refreshScreen();
         });

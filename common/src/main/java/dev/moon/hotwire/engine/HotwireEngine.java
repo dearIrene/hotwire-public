@@ -227,11 +227,18 @@ public final class HotwireEngine implements ModScreenGame, AutoCloseable {
     }
 
     public void open() {
-        Games.getNow().showScreen(this.engineScreens.makeScreen(Games.getNow().isHotwireShown() ? this.under
-                : this.units.findOpenScreen()));
+        this.showScreen();
+        boolean batch = this.storeJars.hasQueued();
 
         this.storeJars.offerNext();
-        this.folderJars.offerNext();
+        if (!batch) {
+            this.folderJars.offerNext();
+        }
+    }
+
+    void showScreen() {
+        Games.getNow().showScreen(this.engineScreens.makeScreen(Games.getNow().isHotwireShown() ? this.under
+                : this.units.findOpenScreen()));
     }
 
     @Override

@@ -315,18 +315,19 @@ public final class StoreJars {
         return wanted;
     }
 
-    public void offerLater(JarHost current, Path jar, boolean behind) {
-        if (behind) {
-            this.later.add(jar);
-            this.queued.add(new StoreJar(jar, false));
-            return;
-        }
+    public void offerLater(JarHost current, Path jar) {
         List<String> why = List.of(Lang.get("hotwire.add.start_only"));
         current.offerAdd(jar, this.changes.dryRunAdd(jar).thenApply(preview -> AddPreview.ofLater(preview.name(),
                 preview.version(), why)));
     }
 
+    public void queueLater(Path jar) {
+        this.later.add(jar);
+        this.queued.addFirst(new StoreJar(jar, false));
+    }
+
     public void clear() {
+        this.reopenWait = false;
         this.queued.clear();
         this.later.clear();
         this.reopenWanted = false;
@@ -415,7 +416,7 @@ public final class StoreJars {
             return;
         }
         if (this.later.remove(next.jar())) {
-            this.offerLater(current, next.jar(), false);
+            this.offerLater(current, next.jar());
             return;
         }
 
@@ -447,6 +448,8 @@ public final class StoreJars {
                         JarHost shown = this.host.get();
                         if (shown != null) {
                             shown.onJarPicked(next.jar(), true);
+                        } else {
+                            this.queued.addFirst(next);
                         }
                     } else {
                         this.say.accept(skip, true);
