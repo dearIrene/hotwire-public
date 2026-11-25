@@ -301,7 +301,9 @@ public final class ClassRebuilder {
                 continue;
             }
             try {
-                this.instrumentation.redefineClasses(new ClassDefinition(type, running));
+                synchronized (REDEFINING) {
+                    this.instrumentation.redefineClasses(new ClassDefinition(type, running));
+                }
             } catch (InternalError refused) {
                 failed.add(Type.getInternalName(type));
                 LOGGER.warn("[Hotwire] {}'s own setup failed, and the JVM changes it no more", type.getName());
@@ -483,19 +485,23 @@ public final class ClassRebuilder {
         return newlyBuilt;
     }
 
+    public static final Object REDEFINING = new Object();
+
     public void redefine(Map<Class<?>, byte[]> classes) throws RebuildException {
         ClassDefinition[] definitions = new ClassDefinition[classes.size()];
         int at = 0;
         for (Map.Entry<Class<?>, byte[]> entry : classes.entrySet()) {
             definitions[at++] = new ClassDefinition(entry.getKey(), entry.getValue());
         }
-        try {
-            this.instrumentation.redefineClasses(definitions);
-        } catch (ClassNotFoundException | UnmodifiableClassException | RuntimeException | LinkageError
-                | InternalError e) {
-            throw new RebuildException("could not redefine " + classes.keySet() + ": " + e, e);
+        synchronized (REDEFINING) {
+            try {
+                this.instrumentation.redefineClasses(definitions);
+            } catch (ClassNotFoundException | UnmodifiableClassException | RuntimeException | LinkageError
+                    | InternalError e) {
+                throw new RebuildException("could not redefine " + classes.keySet() + ": " + e, e);
+            }
+            this.loadedBytes.rememberAll(classes);
         }
-        this.loadedBytes.rememberAll(classes);
     }
 
     public boolean hasStaticsToStart() {

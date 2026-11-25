@@ -69,21 +69,27 @@ public interface BatchRider {
             throws ClassNotFoundException, UnmodifiableClassException {
         if (riding.isEmpty()) {
             if (!definitions.isEmpty()) {
-                instrumentation.redefineClasses(definitions.toArray(ClassDefinition[]::new));
+                synchronized (ClassRebuilder.REDEFINING) {
+                    instrumentation.redefineClasses(definitions.toArray(ClassDefinition[]::new));
+                }
             }
             return;
         }
         List<ClassDefinition> all = new ArrayList<>(definitions);
         riding.forEach((type, bytes) -> all.add(new ClassDefinition(type, bytes)));
         try {
-            instrumentation.redefineClasses(all.toArray(ClassDefinition[]::new));
+            synchronized (ClassRebuilder.REDEFINING) {
+                instrumentation.redefineClasses(all.toArray(ClassDefinition[]::new));
+            }
         } catch (ClassNotFoundException | UnmodifiableClassException | RuntimeException | LinkageError
                 | InternalError e) {
             LOGGER.info("[Hotwire] the JVM refused the switch's classes with {} riding along ({}); they go alone",
                     riding.size(), e.toString());
             noteUnlinkable(riding.keySet());
             if (!definitions.isEmpty()) {
-                instrumentation.redefineClasses(definitions.toArray(ClassDefinition[]::new));
+                synchronized (ClassRebuilder.REDEFINING) {
+                    instrumentation.redefineClasses(definitions.toArray(ClassDefinition[]::new));
+                }
             }
             end(rider, riding, false, true);
             return;

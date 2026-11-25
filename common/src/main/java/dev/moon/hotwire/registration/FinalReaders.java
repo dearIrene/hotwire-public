@@ -2,6 +2,7 @@ package dev.moon.hotwire.registration;
 
 import dev.moon.hotwire.jvm.LoadedClassList;
 import dev.moon.hotwire.rebuild.ConstantPools;
+import dev.moon.hotwire.redefine.ClassRebuilder;
 import java.lang.instrument.Instrumentation;
 import java.lang.instrument.UnmodifiableClassException;
 import java.lang.reflect.Field;
@@ -78,7 +79,9 @@ final class FinalReaders {
             return;
         }
         try {
-            instrumentation.retransformClasses(readers.toArray(Class<?>[]::new));
+            synchronized (ClassRebuilder.REDEFINING) {
+                instrumentation.retransformClasses(readers.toArray(Class<?>[]::new));
+            }
         } catch (UnmodifiableClassException | RuntimeException | LinkageError e) {
             if (readers.size() > 1) {
                 int half = readers.size() / 2;

@@ -44,10 +44,28 @@ public final class SkippedConstructorCalls {
 
     @SuppressWarnings("UnusedMethod")
     private static void record(String mixin, MethodHandle handler, Object[] arguments) {
+        if (!isRecorded(mixin, handler, arguments)) {
+            try {
+                handler.invokeWithArguments(arguments);
+            } catch (Throwable e) {
+                LOGGER.warn("[Hotwire] {}'s constructor handler could not run for an object made as it came on",
+                        mixin, e);
+            }
+        }
+    }
+
+    @SuppressWarnings("ReferenceEquality")
+    private static boolean isRecorded(String mixin, MethodHandle handler, Object[] arguments) {
         List<Call> calls = CALLS.computeIfAbsent(mixin, any -> new ArrayList<>());
         synchronized (calls) {
+            if (!HandlerGuards.isOff(mixin)) {
+                return false;
+            }
+            if (CALLS.get(mixin) != calls) {
+                return isRecorded(mixin, handler, arguments);
+            }
             if (calls.size() >= CAP) {
-                return;
+                return true;
             }
 
             if (calls.size() % PURGE_EVERY == PURGE_EVERY - 1) {
@@ -55,6 +73,7 @@ public final class SkippedConstructorCalls {
             }
             List<@Nullable Object> rest = new ArrayList<>(Arrays.asList(arguments).subList(1, arguments.length));
             calls.add(new Call(handler, new WeakReference<>(arguments[0]), rest));
+            return true;
         }
     }
 
