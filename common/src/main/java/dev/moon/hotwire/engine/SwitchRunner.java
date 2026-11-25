@@ -248,11 +248,7 @@ public final class SwitchRunner {
 
     public String measureLooks(int times, long gapMillis) throws InterruptedException {
         List<Long> took = new ArrayList<>();
-
-        for (int at = 0; at < Math.abs(times); at++) {
-            if (times < 0) {
-                this.fieldReferences.forgetNotes();
-            }
+        for (int at = 0; at < times; at++) {
             long began = System.nanoTime();
             ElementLook.findAheadWhole(this.fieldReferences, List.of(), this.switcher::isOn);
             took.add((System.nanoTime() - began) / 1_000_000);
