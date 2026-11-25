@@ -35,6 +35,8 @@ public final class ZipBytes {
     public static final int MOST_ENTRY_BYTES = 256 * 1024 * 1024;
     public static final long MOST_SCAN_BYTES = 1L << 30;
 
+    static final int MOST_SHARING = 16;
+
     private final ByteBuffer bytes;
     private final Map<String, Entry> entries = new LinkedHashMap<>();
 
@@ -60,6 +62,7 @@ public final class ZipBytes {
         }
         int at = (int) directoryStart;
         Set<Long> starts = new HashSet<>();
+        int sharing = 0;
         for (int i = 0; i < count; i++) {
             if (this.bytes.getInt(at) != DIRECTORY_ENTRY) {
                 throw new ZipException("broken central directory at " + at);
@@ -76,7 +79,7 @@ public final class ZipBytes {
             }
             String name = new String(zip, at + 46, nameLength, StandardCharsets.UTF_8);
 
-            if (!starts.add(local)) {
+            if (!starts.add(local) && ++sharing > MOST_SHARING) {
                 throw new ZipException(name + " shares its place in the jar with another entry");
             }
             this.entries.put(name, new Entry(method, (int) compressed, (int) size, (int) local));
