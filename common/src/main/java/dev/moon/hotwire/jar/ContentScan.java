@@ -66,6 +66,12 @@ public final class ContentScan {
     private static final String LANGUAGE_ADAPTER = "net/fabricmc/loader/api/LanguageAdapter";
     private static final String REGISTRY = "net/minecraft/core/Registry";
 
+    private static final String GAME_RULES = "game rules";
+    private static final String FABRIC_RULES = "net/fabricmc/fabric/api/gamerule/";
+    private static final Set<String> RULE_HOLDERS = Set.of("net/minecraft/world/level/gamerules/GameRules",
+            "net/minecraft/world/level/GameRules", "net/minecraft/class_1928");
+    private static final String RULE = "net/minecraft/world/level/gamerules/GameRule";
+
     private static final List<String> NEVER_REGISTER = List.of("java/", "javax/", "kotlin/", "com/google/",
             "com/mojang/", "net/fabricmc/fabric/api/event/Event", "net/fabricmc/fabric/api/networking/");
 
@@ -192,6 +198,9 @@ public final class ContentScan {
         if (!obfuscated) {
             kinds.retainAll(registered);
         }
+        if (nodes.values().stream().anyMatch(ContentScan::makesGameRule)) {
+            kinds.add(GAME_RULES);
+        }
         return kinds;
     }
 
@@ -216,6 +225,28 @@ public final class ContentScan {
             }
         }
         return found;
+    }
+
+    private static boolean makesGameRule(ClassNode node) {
+        for (MethodNode method : node.methods) {
+            for (AbstractInsnNode insn : method.instructions) {
+                if (insn instanceof TypeInsnNode type && type.getOpcode() == Opcodes.NEW && type.desc.equals(RULE)) {
+                    return true;
+                }
+                if (!(insn instanceof MethodInsnNode call)) {
+                    continue;
+                }
+                boolean registers = call.name.startsWith("register") || call.name.startsWith("build");
+
+                boolean keyed = call.getOpcode() == Opcodes.INVOKESTATIC
+                        && call.desc.contains(")Lnet/minecraft/class_1928$");
+                if ((call.owner.startsWith(FABRIC_RULES) && registers)
+                        || (RULE_HOLDERS.contains(call.owner) && (registers || keyed))) {
+                    return true;
+                }
+            }
+        }
+        return false;
     }
 
     private static boolean isRegistering(MethodInsnNode call) {
