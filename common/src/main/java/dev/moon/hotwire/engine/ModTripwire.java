@@ -593,8 +593,10 @@ public final class ModTripwire {
     private void disarmClasses(Collection<String> ids) throws RebuildException {
         ids.forEach(Tripwire::unwatch);
         Map<Class<?>, byte[]> back = new HashMap<>();
+        Map<Class<?>, ArmedClass> wiredAs = new HashMap<>();
         this.armed.entrySet().removeIf(entry -> {
             if (ids.contains(entry.getValue().getMod())) {
+                wiredAs.put(entry.getKey(), entry.getValue());
                 this.putBack(entry.getKey(), entry.getValue(), back);
                 return true;
             }
@@ -618,6 +620,7 @@ public final class ModTripwire {
         atLoad.forEach((name, was) -> {
             Class<?> type = this.loadedClassOf.apply(name);
             if (type != null) {
+                wiredAs.put(type, was);
                 this.putBack(type, was, back);
             }
         });
@@ -626,11 +629,17 @@ public final class ModTripwire {
 
         this.watcher.execute(() -> {
             synchronized (this) {
-                try {
-                    this.rebuilder.redefine(back);
-                } catch (RebuildException | RuntimeException e) {
-                    LOGGER.warn("[Hotwire] {} keep their probes, which only return while unwatched: {}", ids,
-                            e.toString());
+                synchronized (ClassRebuilder.REDEFINING) {
+                    back.keySet().removeIf(type -> {
+                        ArmedClass was = wiredAs.get(type);
+                        return was != null && !was.isAsWired(this.rebuilder.getLoadedBytes().findKnown(type));
+                    });
+                    try {
+                        this.rebuilder.redefine(back);
+                    } catch (RebuildException | RuntimeException e) {
+                        LOGGER.warn("[Hotwire] {} keep their probes, which only return while unwatched: {}", ids,
+                                e.toString());
+                    }
                 }
             }
         });

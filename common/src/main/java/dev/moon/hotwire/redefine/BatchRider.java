@@ -71,6 +71,7 @@ public interface BatchRider {
             if (!definitions.isEmpty()) {
                 synchronized (ClassRebuilder.REDEFINING) {
                     instrumentation.redefineClasses(definitions.toArray(ClassDefinition[]::new));
+                    rememberSent(loaded, definitions);
                 }
             }
             return;
@@ -80,6 +81,7 @@ public interface BatchRider {
         try {
             synchronized (ClassRebuilder.REDEFINING) {
                 instrumentation.redefineClasses(all.toArray(ClassDefinition[]::new));
+                rememberSent(loaded, all);
             }
         } catch (ClassNotFoundException | UnmodifiableClassException | RuntimeException | LinkageError
                 | InternalError e) {
@@ -89,13 +91,19 @@ public interface BatchRider {
             if (!definitions.isEmpty()) {
                 synchronized (ClassRebuilder.REDEFINING) {
                     instrumentation.redefineClasses(definitions.toArray(ClassDefinition[]::new));
+                    rememberSent(loaded, definitions);
                 }
             }
             end(rider, riding, false, true);
             return;
         }
-        loaded.rememberAll(riding);
         end(rider, riding, true, false);
+    }
+
+    private static void rememberSent(LoadedClassBytes loaded, List<ClassDefinition> sent) {
+        for (ClassDefinition definition : sent) {
+            loaded.remember(definition.getDefinitionClass(), definition.getDefinitionClassFile());
+        }
     }
 
     private static void noteUnlinkable(Set<Class<?>> types) {
