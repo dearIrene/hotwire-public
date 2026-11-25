@@ -230,7 +230,7 @@ public final class ModScreen implements JarHost {
         this.panels.forEach(this.root.getModal()::add);
         this.root.getModal().add(this.closePanel);
         this.root.getModal().add(this.updateSummary);
-        if (game.isOwnerNoteSeen()) {
+        if (game.isOwnerNoteSeen() && !ModifiedClients.takeNoteDue()) {
             this.presentFirst();
         } else {
             this.ownerNote.present();

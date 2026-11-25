@@ -24,6 +24,7 @@ public final class ModifiedClients {
 
     private static volatile @Nullable String current;
     private static volatile boolean promptDue;
+    private static volatile boolean noteDue;
 
     private ModifiedClients() {
     }
@@ -35,6 +36,13 @@ public final class ModifiedClients {
     public static void setCurrent(String client) {
         current = client;
         promptDue = true;
+        noteDue = DAWN.equals(client);
+    }
+
+    static boolean takeNoteDue() {
+        boolean due = noteDue;
+        noteDue = false;
+        return due;
     }
 
     static boolean takePromptDue() {

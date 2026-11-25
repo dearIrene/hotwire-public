@@ -54,7 +54,9 @@ final class ClientWarning {
             return;
         }
         opened = true;
-        if (!inClient && HotwireClient.getEngine().isOwnerNoteSeen()) {
+
+        boolean dawn = ModifiedClients.DAWN.equals(ModifiedClients.getCurrent());
+        if ((!inClient || dawn) && HotwireClient.getEngine().isOwnerNoteSeen()) {
             return;
         }
         HotwireClient.getEngine().open();
