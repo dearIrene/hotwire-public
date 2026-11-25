@@ -531,6 +531,7 @@
   "hotwire.switch.failed_off": "%s konnte nicht ausgeschaltet werden, also hat sich nichts geändert: %s. Details stehen im Log des Spiels.",
   "hotwire.switch.failed_on": "%s konnte nicht angeschaltet werden, also hat sich nichts geändert: %s. Details stehen im Log des Spiels.",
   "hotwire.switch.clash": "er kollidiert mit %s, das denselben Teil des Spiels ändert. Das Spiel mit beiden zu starten, würde wahrscheinlich auch abstürzen, also lass einen davon aus",
+  "hotwire.switch.no_target": "es wurde nicht für diese Version des Spiels gemacht. Es ändert einen Teil des Spiels, den es in dieser Version nicht gibt, such also nach einem Build für deine",
   "hotwire.switch.game_busy": "das Spiel war beschäftigt (beim Speichern oder mit einer langen Aufgabe) und hat nicht rechtzeitig pausiert, also versuch es gleich nochmal",
   "hotwire.switch.reopen_off": "%s kann nicht ausgeschaltet werden, während du in einer Welt bist, also hat sich nichts geändert. Der Hotwire-Bildschirm kann es, indem er die Welt neu öffnet",
   "hotwire.switch.reopen_on": "%s kann nicht angeschaltet werden, während du in einer Welt bist, also hat sich nichts geändert. Der Hotwire-Bildschirm kann es, indem er die Welt neu öffnet",

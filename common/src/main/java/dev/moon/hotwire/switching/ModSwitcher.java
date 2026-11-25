@@ -69,6 +69,8 @@ public final class ModSwitcher {
     private final BiConsumer<String, String> restartLearned;
 
     private static final Pattern MIX_REFUSED = Pattern.compile("Mixin could not patch ([\\w.$]+):");
+
+    private static final Pattern NO_TARGET = Pattern.compile("could not find any targets matching");
     private static final Pattern HOOK_WORD = Pattern.compile("[$]([A-Za-z0-9_-]+)(?=[$])");
 
     private final Map<String, String> offBecauseOf = new HashMap<>();
@@ -690,6 +692,14 @@ public final class ModSwitcher {
     private RebuildException tellClash(RebuildException e, SwitchPlan plan) {
         if (!e.getNotFitting().isEmpty()) {
             return e;
+        }
+
+        for (Throwable at = e; at != null; at = at.getCause()) {
+            Matcher absent = NO_TARGET.matcher(String.valueOf(at.getMessage()));
+            if (absent.find()) {
+                return new RebuildException(Lang.get("hotwire.switch.no_target"), e)
+                        .withBlamed(e.getBlamedClasses());
+            }
         }
         for (Throwable at = e; at != null; at = at.getCause()) {
             Matcher refused = MIX_REFUSED.matcher(String.valueOf(at.getMessage()));

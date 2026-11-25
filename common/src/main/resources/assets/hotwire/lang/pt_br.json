@@ -531,6 +531,7 @@
   "hotwire.switch.failed_off": "Não deu pra desligar %s, então nada mudou: %s. Veja o log do jogo pra mais detalhes.",
   "hotwire.switch.failed_on": "Não deu pra ligar %s, então nada mudou: %s. Veja o log do jogo pra mais detalhes.",
   "hotwire.switch.clash": "ele entra em conflito com %s, que muda a mesma parte do jogo. Abrir o jogo com os dois provavelmente também ia crashar, então deixe um deles desligado",
+  "hotwire.switch.no_target": "ele não foi feito para esta versão do jogo. Ele muda uma parte do jogo que não existe nesta versão, então procure uma build para a sua",
   "hotwire.switch.game_busy": "o jogo estava ocupado (salvando ou numa tarefa longa) e não pausou a tempo, tente de novo daqui a pouco",
   "hotwire.switch.reopen_off": "Não dá pra desligar %s com você num mundo, então nada mudou. A tela do Hotwire consegue fazer isso reabrindo o mundo",
   "hotwire.switch.reopen_on": "Não dá pra ligar %s com você num mundo, então nada mudou. A tela do Hotwire consegue fazer isso reabrindo o mundo",

@@ -531,6 +531,7 @@
   "hotwire.switch.failed_off": "无法关闭 %s，所以什么都没变：%s。详情请看游戏日志。",
   "hotwire.switch.failed_on": "无法开启 %s，所以什么都没变：%s。详情请看游戏日志。",
   "hotwire.switch.clash": "它和 %s 冲突，两者改的是游戏的同一部分。带着两者启动游戏多半也会崩溃，所以请关掉其中一个",
+  "hotwire.switch.no_target": "它不是为这个游戏版本制作的。它要改的那部分游戏在这个版本里不存在，请找适合你版本的构建",
   "hotwire.switch.game_busy": "游戏正忙（在保存或处理长任务），没能及时暂停，请稍后再试",
   "hotwire.switch.reopen_off": "你在世界里时无法关闭 %s，所以什么都没变。Hotwire 自己的界面可以通过重新打开世界来做到",
   "hotwire.switch.reopen_on": "你在世界里时无法开启 %s，所以什么都没变。Hotwire 自己的界面可以通过重新打开世界来做到",

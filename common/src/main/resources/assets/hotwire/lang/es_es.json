@@ -531,6 +531,7 @@
   "hotwire.switch.failed_off": "No se pudo desactivar %s, así que no cambió nada: %s. Mira el log del juego para más detalles.",
   "hotwire.switch.failed_on": "No se pudo activar %s, así que no cambió nada: %s. Mira el log del juego para más detalles.",
   "hotwire.switch.clash": "choca con %s, que cambia la misma parte del juego. Iniciar el juego con los dos seguramente también crashearía, así que deja uno de ellos desactivado",
+  "hotwire.switch.no_target": "no está hecho para esta versión del juego. Cambia una parte del juego que no existe en esta versión, así que busca una build para la tuya",
   "hotwire.switch.game_busy": "el juego estaba ocupado (guardando o con una tarea larga) y no se pausó a tiempo, prueba otra vez en un momento",
   "hotwire.switch.reopen_off": "No se puede desactivar %s mientras estás en un mundo, así que no cambió nada. La pantalla de Hotwire puede hacerlo volviendo a abrir el mundo",
   "hotwire.switch.reopen_on": "No se puede activar %s mientras estás en un mundo, así que no cambió nada. La pantalla de Hotwire puede hacerlo volviendo a abrir el mundo",
