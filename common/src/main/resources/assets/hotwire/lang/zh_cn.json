@@ -560,6 +560,7 @@
   "hotwire.api.no_update": "Modrinth 上没有更新的版本。",
   "hotwire.api.update_now": "现在把 %s 更新到 %s。",
   "hotwire.api.update_later": "下次启动时把 %s 更新到 %s。",
+  "hotwire.api.update_copy": "如果新版本能和旧版本一起启动，现在就把 %s 更新到 %s。不行的话等下次启动。",
   "hotwire.api.change_done": "全部完成。",
   "hotwire.api.on_and_off": "这会关闭 %s，而你要开启的模组需要它。",
   "hotwire.api.add_now": "现在添加 %s。",

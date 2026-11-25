@@ -9,6 +9,7 @@ import dev.moon.hotwire.jar.ModManifest;
 import dev.moon.hotwire.report.ActionJournal;
 import dev.moon.hotwire.ui.AddPreview;
 import dev.moon.hotwire.update.ModUpdater;
+import dev.moon.hotwire.update.UpdateMethod;
 import dev.moon.hotwire.update.UpdatePlan;
 import dev.moon.hotwire.update.UpdatePreview;
 import dev.moon.hotwire.update.UpdateSupport;
@@ -143,6 +144,11 @@ public final class ModChanges {
     public ModUpdater.Result queueUpdate(Path jar) {
         JvmParts ready = this.parts;
         return ready == null ? new ModUpdater.Result.Refused(this.refusal) : ready.updates().queueForNextStart(jar);
+    }
+
+    public boolean isUpdatedInPlace(ModUpdater.SortResult.Planned planned) {
+        JvmParts ready = this.parts;
+        return ready != null && ready.updates().getUpdater().findMethodNow(planned) == UpdateMethod.IN_PLACE;
     }
 
     public List<ModUpdater.SortResult> previewUpdates(List<Path> jars) {

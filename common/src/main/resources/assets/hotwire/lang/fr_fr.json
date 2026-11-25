@@ -560,6 +560,7 @@
   "hotwire.api.no_update": "Il n'y en a pas de version plus récente sur Modrinth.",
   "hotwire.api.update_now": "Met %s à jour en %s maintenant.",
   "hotwire.api.update_later": "Met %s à jour en %s au prochain lancement.",
+  "hotwire.api.update_copy": "Met %s à jour en %s maintenant si la nouvelle version peut démarrer à côté de l'ancienne. Sinon, ça attend le prochain lancement.",
   "hotwire.api.change_done": "C'est fait.",
   "hotwire.api.on_and_off": "Ça désactive %s, et les mods que tu actives en ont besoin.",
   "hotwire.api.add_now": "Ajoute %s maintenant.",

@@ -508,6 +508,11 @@ public final class ModUpdater {
         });
     }
 
+    public UpdateMethod findMethodNow(SortResult.Planned planned) {
+        return planned.method() == UpdateMethod.IN_PLACE && this.isLacking(planned) ? UpdateMethod.NEXT_START
+                : planned.method();
+    }
+
     private boolean isLacking(SortResult.Planned planned) {
         Set<String> goingIn;
         try {

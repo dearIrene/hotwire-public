@@ -27,6 +27,7 @@ import dev.moon.hotwire.update.UpdateMethod;
 import dev.moon.hotwire.update.UpdateOffer;
 import java.io.IOException;
 import java.io.UncheckedIOException;
+import java.nio.file.Files;
 import java.nio.file.Path;
 import java.util.ArrayList;
 import java.util.HashSet;
@@ -147,7 +148,15 @@ final class ApiChanges {
         List<AddMode> addModes = new ArrayList<>();
         for (Path jar : request.jars()) {
             ModManifest manifest = JarLookup.findManifest(jar);
-            (manifest != null && engine.findJarOf(manifest.id()) != null ? jars : adding).add(jar);
+            Path installed = manifest == null ? null : engine.findJarOf(manifest.id());
+
+            if (manifest != null && installed != null && hasSameBytes(installed, jar)) {
+                lines.add(Lang.get("hotwire.update.same_version", manifest.name(), manifest.version()));
+                can = false;
+                reason = Reason.INSTALLED;
+                continue;
+            }
+            (installed != null ? jars : adding).add(jar);
         }
         for (ChangeRequest.Add project : request.add()) {
             StoreApiAdd.ProjectJars fetched = StoreApiAdd.fetchJars(project.idOrSlug(), project.versionId()).join();
@@ -204,9 +213,16 @@ final class ApiChanges {
                         reason = Reason.NEEDS_MOD;
                     }
                     case ModUpdater.SortResult.Planned planned -> {
-                        boolean now = planned.method() == UpdateMethod.IN_PLACE;
-                        lines.add(Lang.get(now ? "hotwire.api.update_now" : "hotwire.api.update_later",
-                                planned.manifest().name(), planned.manifest().version()));
+                        boolean now = engine.getChanges().isUpdatedInPlace(planned);
+                        boolean copied = planned.method() == UpdateMethod.NEXT_START
+                                && ModPolicy.isSwitchable(planned.manifest().id());
+                        String key = "hotwire.api.update_later";
+                        if (now) {
+                            key = "hotwire.api.update_now";
+                        } else if (copied) {
+                            key = "hotwire.api.update_copy";
+                        }
+                        lines.add(Lang.get(key, planned.manifest().name(), planned.manifest().version()));
                         if (!now && reason == Reason.NONE) {
                             reason = Reason.NEEDS_RESTART;
                         }
@@ -536,6 +552,14 @@ final class ApiChanges {
 
         @Override
         public void cancel() {
+        }
+    }
+
+    private static boolean hasSameBytes(Path one, Path other) {
+        try {
+            return Files.mismatch(one, other) < 0;
+        } catch (IOException e) {
+            return false;
         }
     }
 }
