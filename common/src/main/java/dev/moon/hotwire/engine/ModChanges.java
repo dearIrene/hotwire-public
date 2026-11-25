@@ -3,7 +3,9 @@ package dev.moon.hotwire.engine;
 import dev.moon.hotwire.add.AddSupport;
 import dev.moon.hotwire.add.ModAdder;
 import dev.moon.hotwire.concurrent.Tasks;
+import dev.moon.hotwire.jar.JarLookup;
 import dev.moon.hotwire.jar.ModJarException;
+import dev.moon.hotwire.jar.ModManifest;
 import dev.moon.hotwire.report.ActionJournal;
 import dev.moon.hotwire.ui.AddPreview;
 import dev.moon.hotwire.update.ModUpdater;
@@ -48,6 +50,20 @@ public final class ModChanges {
         }
         ModAdder.Result back = ready.adds().restoreDeleted(jar, ids -> ready.runner().turnOn(ids).result());
         return back != null ? back : ready.adds().add(jar, this.installed::nameOf);
+    }
+
+    public ModAdder.@Nullable Result addTogetherNow(List<Path> jars) {
+        JvmParts ready = this.parts;
+        if (ready == null) {
+            return null;
+        }
+        for (Path jar : jars) {
+            ModManifest manifest = JarLookup.findManifest(jar);
+            if (manifest == null || ready.adds().isDeleted(manifest.id())) {
+                return null;
+            }
+        }
+        return ready.adds().addTogether(jars, this.installed::nameOf);
     }
 
     public ModAdder.Result addWithReopen(Path jar, boolean byPlayer) {

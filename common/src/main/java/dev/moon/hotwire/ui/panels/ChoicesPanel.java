@@ -116,7 +116,10 @@ public final class ChoicesPanel extends Sheet {
         private static final int SIDE = 12;
         private static final int GAP = 8;
         private static final int CRASHING = 2;
-        private static final int ROOM = 38;
+        private static final int ROOM = 42;
+
+        private static final int UNDER = 5;
+        private static final float FADE = 0.35f;
         private static final float CRASH_AT = 1.3f;
         private static final float ANSWER_AT = 2.1f;
         private static final float LOOP = 4.6f;
@@ -162,11 +165,13 @@ public final class ChoicesPanel extends Sheet {
         }
 
         @Override
-        protected void paint(Canvas canvas, float alpha) {
+        protected void paint(Canvas canvas, float shown) {
+            float alpha = shown * Math.clamp(Math.min(ChoicesPanel.this.sceneClock,
+                    LOOP - ChoicesPanel.this.sceneClock) / FADE, 0, 1);
             boolean guarded = ChoicesPanel.this.crash == ON;
             float clock = ChoicesPanel.this.sceneClock;
             float since = clock - ANSWER_AT;
-            int floor = this.getY() + this.getHeight() - SIDE;
+            int floor = this.getY() + this.getHeight() - SIDE - UNDER;
             for (int mod = 0; mod < MODS; mod++) {
                 float x = this.getX() + GAP / 2f + mod * (SIDE + GAP);
                 boolean crasher = mod == CRASHING;
@@ -197,11 +202,13 @@ public final class ChoicesPanel extends Sheet {
             }
             if (guarded && since >= 0 && since < BURST) {
                 float middle = this.getX() + GAP / 2f + CRASHING * (SIDE + GAP) + SIDE / 2f;
-                float reach = SIDE / 2f + since * 26;
+                float height = floor + SIDE / 2f;
+                float reach = SIDE / 2f + since * 14;
                 float ring = alpha * (1 - since / BURST);
-                this.fill(canvas, middle - reach, floor + SIDE - 1, reach * 2, 1, Palette.ACCENT, ring);
-                this.fill(canvas, middle - reach, floor - 2, 1, SIDE + 2, Palette.ACCENT, ring);
-                this.fill(canvas, middle + reach - 1, floor - 2, 1, SIDE + 2, Palette.ACCENT, ring);
+                this.fill(canvas, middle - reach, height - reach, reach * 2, 1, Palette.ACCENT, ring);
+                this.fill(canvas, middle - reach, height + reach - 1, reach * 2, 1, Palette.ACCENT, ring);
+                this.fill(canvas, middle - reach, height - reach, 1, reach * 2, Palette.ACCENT, ring);
+                this.fill(canvas, middle + reach - 1, height - reach, 1, reach * 2, Palette.ACCENT, ring);
             }
         }
 

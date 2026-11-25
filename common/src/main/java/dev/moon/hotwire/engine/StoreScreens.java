@@ -19,11 +19,13 @@ import java.util.ArrayDeque;
 import java.util.Deque;
 import java.util.HashMap;
 import java.util.HashSet;
+import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Locale;
 import java.util.Map;
 import java.util.Objects;
 import java.util.Set;
+import java.util.TreeMap;
 import org.jspecify.annotations.Nullable;
 
 final class StoreScreens {
@@ -144,12 +146,52 @@ final class StoreScreens {
     private void addManyFromStore(ModStore made, @Nullable Object back, List<String> projectIds,
             List<String> titles) {
         this.many.clear();
+        this.engine.showMessage(Lang.get("hotwire.store.downloading", Lang.get("hotwire.add.many",
+                projectIds.size())), false);
+
+        Map<Integer, ModFetch> all = new TreeMap<>();
+        int[] left = {projectIds.size()};
         for (int at = 0; at < projectIds.size(); at++) {
+            int place = at;
             String projectId = projectIds.get(at);
-            String title = titles.get(at);
-            this.many.add(() -> this.addFromStore(made, back, projectId, "", title, true));
+            Runnable answered = () -> {
+                this.fetching.remove(projectId);
+                if (--left[0] == 0) {
+                    this.addModFetch(back, List.copyOf(all.values()));
+                }
+            };
+            if (!this.fetching.add(projectId)) {
+                left[0]--;
+                continue;
+            }
+            made.fetch(projectId, "", titles.get(at), (jars, projects) -> {
+                all.put(place, new ModFetch(jars, projects));
+                answered.run();
+            }, failure -> {
+                this.engine.showMessage(failure, true);
+                answered.run();
+            });
         }
-        this.addNextOfMany();
+    }
+
+    private record ModFetch(List<Path> jars, List<String> projects) {
+    }
+
+    private void addModFetch(@Nullable Object back, List<ModFetch> all) {
+        if (!Games.getNow().isHotwireShown()) {
+            Games.getNow().showScreen(this.engine.getScreens().makeScreen(back));
+        }
+        Set<Path> jars = new LinkedHashSet<>();
+        for (ModFetch one : all) {
+            this.jars.remember(one.jars(), one.projects());
+            one.jars().stream().filter(jar -> !this.engine.isInstalledJar(jar)).forEach(jars::add);
+            this.many.add(() -> this.jars.queue(one.jars(), false, one.projects(), true));
+        }
+        if (jars.size() < 2) {
+            this.addNextOfMany();
+        } else {
+            this.engine.addTogether(List.copyOf(jars), this::addNextOfMany, this.many::clear);
+        }
     }
 
     void addNextOfMany() {

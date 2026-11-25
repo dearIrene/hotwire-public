@@ -30,6 +30,7 @@ import java.nio.file.Files;
 import java.nio.file.Path;
 import java.nio.file.StandardCopyOption;
 import java.util.HashSet;
+import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Objects;
@@ -39,6 +40,7 @@ import java.util.Set;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.function.Function;
 import java.util.function.Supplier;
+import java.util.stream.Collectors;
 import net.fabricmc.loader.api.FabricLoader;
 import net.fabricmc.loader.api.ModContainer;
 import net.fabricmc.loader.api.metadata.ModOrigin;
@@ -255,13 +257,17 @@ public final class AddSupport implements ModAdder.Engine {
     }
 
     public ModAdder.Result add(Path jar, Function<String, String> nameOf) {
+        return this.addTogether(List.of(jar), nameOf);
+    }
+
+    public ModAdder.Result addTogether(List<Path> jars, Function<String, String> nameOf) {
         long start = System.nanoTime();
-        ActionJournal.Entry journal = ActionJournal.get().begin(ActionJournal.Action.ADD,
-                String.valueOf(jar.getFileName()));
-        this.reports.onBegun(Report.Operation.ADD, String.valueOf(jar.getFileName()));
+        String names = jars.stream().map(jar -> String.valueOf(jar.getFileName())).collect(Collectors.joining("+"));
+        ActionJournal.Entry journal = ActionJournal.get().begin(ActionJournal.Action.ADD, names);
+        this.reports.onBegun(Report.Operation.ADD, names);
         ModAdder.Result result;
         try {
-            result = this.adder.add(jar, nameOf);
+            result = this.adder.add(jars, nameOf, Set.of(), ids -> null);
         } catch (RuntimeException e) {
             journal.endThrown();
             throw e;
@@ -273,14 +279,18 @@ public final class AddSupport implements ModAdder.Engine {
         if (result instanceof ModAdder.Result.Added added) {
             this.reports.onAdded(added.ids(), added.switched(), millis);
         } else if (result instanceof ModAdder.Result.Failed failed) {
-            this.reports.onAddFailed(String.valueOf(jar.getFileName()), failed.cause(), millis);
+            this.reports.onAddFailed(names, failed.cause(), millis);
         }
         if (result instanceof ModAdder.Result.Added added) {
+            Map<Path, ModJar> reads = new LinkedHashMap<>();
             try {
-                this.installed.onAdded(jar, ModJarReader.read(jar), added.ids());
+                for (Path jar : jars) {
+                    reads.put(jar, ModJarReader.read(jar));
+                }
             } catch (ModJarException e) {
                 throw new IllegalStateException(e);
             }
+            this.installed.onAddedTogether(reads, added.ids());
             this.afterAdd.run();
         }
         return result;
