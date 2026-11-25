@@ -283,9 +283,13 @@ public final class ModrinthClient {
         return new Project(readText(root, "id"), readText(root, "slug"), readText(root, "title"),
                 readText(root, "description"), readText(root, "body"),
                 licenseObject == null ? "" : readText(licenseObject, "name").isEmpty()
-                        ? readText(licenseObject, "id") : readText(licenseObject, "name"),
+                        ? nameLicense(readText(licenseObject, "id")) : readText(licenseObject, "name"),
                 licenseObject == null ? "" : readText(licenseObject, "url"), readText(root, "source_url"),
                 readNumber(root, "downloads"), readNumber(root, "followers"), readText(root, "icon_url"));
+    }
+
+    static String nameLicense(String id) {
+        return id.startsWith("LicenseRef-") ? id.substring("LicenseRef-".length()).replace('-', ' ') : id;
     }
 
     public boolean isForThisLoader(String projectId) throws IOException {
