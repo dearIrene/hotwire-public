@@ -232,6 +232,7 @@ public final class EarlyModsReader {
                         .filter(name -> !GameLibraries.has(name, null)).collect(Collectors.toSet()));
             }
         });
+        TripwireSites.packClasses();
     }
 
     static Read open() {

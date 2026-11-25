@@ -46,17 +46,33 @@ public final class TripwireSites {
     private static final Map<String, String> ARMED = new ConcurrentHashMap<>();
 
     private static final Map<String, String> MOD_BY_CLASS = new ConcurrentHashMap<>();
+    private static volatile ModClassTable classTable = ModClassTable.EMPTY;
 
     private TripwireSites() {
     }
 
     public static void registerClasses(String mod, Set<String> classes) {
-        classes.forEach(name -> MOD_BY_CLASS.putIfAbsent(name.intern(), mod));
+        ModClassTable table = classTable;
+        classes.forEach(name -> {
+            if (table.find(name) == null) {
+                MOD_BY_CLASS.putIfAbsent(name, mod);
+            }
+        });
         SiteInputs.writeClasses(mod, classes);
     }
 
+    public static synchronized void packClasses() {
+        ModClassTable made = classTable.makeWith(MOD_BY_CLASS);
+        if (made == null) {
+            return;
+        }
+        classTable = made;
+        MOD_BY_CLASS.keySet().removeIf(name -> made.find(name) != null);
+    }
+
     public static @Nullable String findModOfClass(String internalName) {
-        return MOD_BY_CLASS.get(internalName);
+        String mod = classTable.find(internalName);
+        return mod != null ? mod : MOD_BY_CLASS.get(internalName);
     }
 
     public static byte @Nullable [] arm(String internalName, byte[] classBytes, String mod) {

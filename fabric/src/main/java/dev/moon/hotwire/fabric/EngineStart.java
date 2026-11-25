@@ -171,6 +171,7 @@ final class EngineStart {
                             .filter(name -> !GameLibraries.has(name, null)).collect(Collectors.toSet()));
                 }
             });
+            TripwireSites.packClasses();
         }
         laps.endLap("read the mixin configs, call sites");
         GameClasses classes = new GameClasses(knot, HotwireEngine.class.getClassLoader());
