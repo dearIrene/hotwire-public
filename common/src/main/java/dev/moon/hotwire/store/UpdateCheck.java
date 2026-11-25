@@ -510,6 +510,7 @@ public final class UpdateCheck {
         Path jar = version.resolveIn(this.folder);
         Files.createDirectories(jar.getParent());
         this.client.fetchTo(version, jar, this.downloads);
+        PrismIndex.follow(version);
         return jar;
     }
 }

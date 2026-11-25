@@ -250,6 +250,7 @@ public final class ModStore {
             Path jar = version.resolveIn(this.downloads);
             Files.createDirectories(jar.getParent());
             this.model.getClient().fetchTo(version, jar, downloads.findFeed(job));
+            PrismIndex.follow(version);
             downloads.end(job, true);
             return jar;
         } catch (IOException | RuntimeException e) {
