@@ -8,8 +8,10 @@ import dev.moon.hotwire.registration.Owners;
 import dev.moon.hotwire.registration.RegistrationJournal;
 import java.util.Collection;
 import java.util.HashMap;
+import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
+import java.util.Set;
 import java.util.function.Predicate;
 import net.fabricmc.fabric.api.attachment.v1.AttachmentRegistry;
 import net.fabricmc.fabric.api.attachment.v1.AttachmentTarget;
@@ -22,7 +24,9 @@ import net.minecraft.client.server.IntegratedServer;
 import net.minecraft.nbt.NbtOps;
 import net.minecraft.nbt.Tag;
 import net.minecraft.resources.Identifier;
+import net.minecraft.server.MinecraftServer;
 import net.minecraft.server.level.ServerLevel;
+import net.minecraft.server.level.ServerPlayer;
 import net.minecraft.world.entity.Entity;
 import org.jspecify.annotations.Nullable;
 import org.slf4j.Logger;
@@ -72,7 +76,34 @@ public final class EntityAttachments {
         }
     }
 
+    private record StoppedSync(ServerPlayer player, Set<Identifier> types) implements RegistrationJournal.Take {
+        @Override
+        public void restore() {
+            AcceptedAttachments.add(this.player, this.types);
+        }
+
+        @Override
+        public String describe() {
+            return "the sync of " + this.types + " to " + this.player.getScoreboardName();
+        }
+
+        @Override
+        public RegistrationJournal.Where getWhere() {
+            return RegistrationJournal.Where.SERVER;
+        }
+
+        @Override
+        public boolean isStale() {
+            return this.player.hasDisconnected();
+        }
+    }
+
     private EntityAttachments() {
+    }
+
+    @SuppressWarnings("ReferenceEquality")
+    public static boolean isAttachedTo(Object entity, Object holder) {
+        return entity instanceof AttachmentTargetImpl target && target.fabric_getAttachments() == holder;
     }
 
     public static synchronized void takeOut(Collection<String> mods) {
@@ -80,10 +111,39 @@ public final class EntityAttachments {
         GameHold.onGameAndWait(() -> detach(WorldWrappers.findClientEntities(), mods, counts));
         IntegratedServer server = Minecraft.getInstance().getSingleplayerServer();
         if (server != null) {
-            GameHold.onServerAndWait(server, () -> detach(WorldWrappers.findServerEntities(server), mods, counts));
+            GameHold.onServerAndWait(server, () -> {
+                List<Entity> entities = WorldWrappers.findServerEntities(server);
+                stopSync(server, entities, mods);
+                detach(entities, mods, counts);
+            });
         }
         counts.forEach((mod, count) -> LOGGER.info("[Hotwire] {} of {}'s attachments taken off the world's entities",
                 count, mod));
+    }
+
+    private static void stopSync(MinecraftServer server, List<Entity> entities, Collection<String> mods) {
+        Map<String, Set<Identifier>> types = new HashMap<>();
+        for (Entity entity : entities) {
+            Map<AttachmentType<?>, ?> attached = entity instanceof AttachmentTargetImpl target
+                    ? target.fabric_getAttachments() : null;
+            if (attached == null) {
+                continue;
+            }
+            for (Map.Entry<AttachmentType<?>, ?> entry : List.copyOf(attached.entrySet())) {
+                String mod = findOffOwner(entry.getKey(), entry.getValue(), mods);
+                if (mod != null) {
+                    types.computeIfAbsent(mod, one -> new HashSet<>()).add(entry.getKey().identifier());
+                }
+            }
+        }
+        for (ServerPlayer player : server.getPlayerList().getPlayers()) {
+            types.forEach((mod, names) -> {
+                Set<Identifier> removed = AcceptedAttachments.remove(player, names);
+                if (!removed.isEmpty()) {
+                    GameRegistrations.getJournal().addTake(mod, new StoppedSync(player, removed));
+                }
+            });
+        }
     }
 
     private static void detach(List<Entity> entities, Collection<String> mods, Map<String, Integer> counts) {

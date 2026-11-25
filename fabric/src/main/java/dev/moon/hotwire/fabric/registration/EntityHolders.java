@@ -78,7 +78,8 @@ public final class EntityHolders {
                 }
                 String holderMod = findCodeMod(holder.getClass(), codeMods);
                 if ((holderMod != null && off.contains(holderMod)) || holder instanceof Entity
-                        || holder instanceof Level || CollectionParts.isGameObject(holder)) {
+                        || holder instanceof Level || CollectionParts.isGameObject(holder)
+                        || EntityAttachments.isAttachedTo(entity, holder)) {
                     continue;
                 }
                 for (Object one : this.readInside(holder, off, reached)) {
