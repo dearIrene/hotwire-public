@@ -18,6 +18,7 @@ final class DefinedClasses {
     private static final int LENGTH_BITS = 24;
     private static final long LENGTH_MASK = (1L << LENGTH_BITS) - 1;
     private static final String PREFIX = "hotwire-classes";
+    private static final byte FLIP = 0x5A;
 
     private final Map<String, Entry> entries = new ConcurrentHashMap<>();
 
@@ -78,7 +79,7 @@ final class DefinedClasses {
                 } else {
                     RandomAccessFile into = this.open();
                     into.seek(lay);
-                    into.write(bytes);
+                    into.write(flip(bytes.clone(), bytes.length));
                 }
                 of.place = lay << LENGTH_BITS | bytes.length;
                 return true;
@@ -90,7 +91,7 @@ final class DefinedClasses {
             if (bytes.length > BLOCK) {
                 RandomAccessFile into = this.open();
                 into.seek(at);
-                into.write(bytes);
+                into.write(flip(bytes.clone(), bytes.length));
                 this.blockAt = at + bytes.length;
             } else {
                 System.arraycopy(bytes, 0, this.findBlock(), this.blockLength, bytes.length);
@@ -133,9 +134,16 @@ final class DefinedClasses {
         }
         RandomAccessFile into = this.open();
         into.seek(this.blockAt);
-        into.write(this.findBlock(), 0, this.blockLength);
+        into.write(flip(this.findBlock(), this.blockLength), 0, this.blockLength);
         this.blockAt += this.blockLength;
         this.blockLength = 0;
+    }
+
+    private static byte[] flip(byte[] bytes, int length) {
+        for (int i = 0; i < length; i++) {
+            bytes[i] ^= FLIP;
+        }
+        return bytes;
     }
 
     private RandomAccessFile open() throws IOException {
@@ -145,7 +153,7 @@ final class DefinedClasses {
             deleteLeftBehind(folder);
 
             Path made = Files.createFile(folder.resolve(PREFIX + ProcessHandle.current().pid() + "-"
-                    + Integer.toHexString(System.identityHashCode(this)) + "-" + System.nanoTime() + ".bin"));
+                    + Integer.toHexString(System.identityHashCode(this)) + "-" + System.nanoTime() + ".tmp"));
             made.toFile().deleteOnExit();
             into = new RandomAccessFile(made.toFile(), "rw");
             this.file = into;
@@ -174,7 +182,7 @@ final class DefinedClasses {
     }
 
     private static void deleteLeftBehind(Path folder) {
-        try (DirectoryStream<Path> files = Files.newDirectoryStream(folder, PREFIX + "*.bin")) {
+        try (DirectoryStream<Path> files = Files.newDirectoryStream(folder, PREFIX + "*.{bin,tmp}")) {
             for (Path file : files) {
                 try {
                     Files.deleteIfExists(file);
@@ -228,7 +236,7 @@ final class DefinedClasses {
             if (bytes.length > BLOCK) {
                 RandomAccessFile into = this.open();
                 into.seek(at);
-                into.write(bytes);
+                into.write(flip(bytes.clone(), bytes.length));
                 this.blockAt = at + bytes.length;
             } else {
                 System.arraycopy(bytes, 0, this.findBlock(), this.blockLength, bytes.length);
@@ -270,7 +278,7 @@ final class DefinedClasses {
         try {
             from.seek(at);
             from.readFully(bytes);
-            return bytes;
+            return flip(bytes, bytes.length);
         } catch (IOException e) {
             LOGGER.warn("[Hotwire] the bytes {} was defined with could not be read back", name, e);
             return null;
