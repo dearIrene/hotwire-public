@@ -1,5 +1,6 @@
 package dev.moon.hotwire.engine;
 
+import dev.moon.hotwire.concurrent.AheadWork;
 import dev.moon.hotwire.config.Flags;
 import dev.moon.hotwire.jvm.ClassPathIndex;
 import dev.moon.hotwire.jvm.JvmAccess;
@@ -80,62 +81,75 @@ public final class GameClassIndex {
                         return;
                     }
                 }
-                byte[] patched = patch(read(game.getClass()));
-
-                Class<?> agent = Class.forName(AGENT.replace('/', '.'), false, ClassLoader.getSystemClassLoader());
-                AtomicInteger checked = new AtomicInteger();
-                Runnable stop = () -> {
-                    try {
-                        agent.getMethod("setResources", Function.class, Predicate.class).invoke(null, null, null);
-                    } catch (ReflectiveOperationException e) {
-                        checked.set(Integer.MIN_VALUE);
-                    }
-                };
-                Function<String, @Nullable URL> finder = name -> {
-                    URL answered = index.apply(name);
-                    if (answered == null || isTrusted(checked)) {
-                        return answered;
-                    }
-                    URL own = jars.findResource(name);
-                    if (!String.valueOf(own).equals(String.valueOf(answered))) {
-                        stop.run();
-                        LOGGER.warn("[Hotwire] the game's loader finds {} at {} and the index of its jars at {}: the"
-                                + " loader asks every jar again from here", name, own, answered);
-                    }
-                    return own;
-                };
-                List<?> live = index.countJars() == path.length ? findLivePath(jars) : null;
-
-                AtomicBoolean left = new AtomicBoolean();
-                ClassPathIndex.onLeaving(jar -> left.set(true));
-                Predicate<String> absent = name -> {
-                    if (!isPathAsListed(live, left.get(), path.length) || !index.isAbsent(name)) {
-                        return false;
-                    }
-                    if (isTrusted(checked)) {
-                        return true;
-                    }
-                    URL own = jars.findResource(name);
-                    if (own != null) {
-                        stop.run();
-                        LOGGER.warn("[Hotwire] the game's loader finds {} at {} and the index of its jars nowhere: the"
-                                + " loader asks every jar again from here", name, own);
-                    }
-                    return own == null;
-                };
-                agent.getMethod("setResources", Function.class, Predicate.class).invoke(null, finder, absent);
                 index.activate();
-                instrumentation.redefineClasses(new ClassDefinition(game.getClass(), patched));
+
+                AheadWork.runWhenAsked("class index", () -> Thread.ofPlatform().daemon().name("hotwire-class-index")
+                        .start(() -> changeLoader(instrumentation, game, jars, index, path.length)));
                 StartTimes.add("class index (own thread)", began);
-                LOGGER.info("[Hotwire] the game's loader finds a class's jar through an index of {} names in {} jars,"
-                        + " made in {} ms{}", index.countNames(), index.countJars(),
-                        (System.nanoTime() - began) / 1_000_000, live == null ? "; a class no jar holds is the"
-                        + " loader's to answer" : "");
-            } catch (ReflectiveOperationException | UnmodifiableClassException | IOException | JvmAccessException
+            } catch (ReflectiveOperationException | JvmAccessException
                     | RuntimeException | LinkageError e) {
                 LOGGER.info("[Hotwire] the game's loader goes on asking every jar for a class: {}", e.toString());
             }
         });
+    }
+
+    private static void changeLoader(Instrumentation instrumentation, ClassLoader game, URLClassLoader jars,
+            ClassPathIndex index, int listed) {
+        long began = System.nanoTime();
+        try {
+            byte[] patched = patch(read(game.getClass()));
+
+            Class<?> agent = Class.forName(AGENT.replace('/', '.'), false, ClassLoader.getSystemClassLoader());
+            AtomicInteger checked = new AtomicInteger();
+            Runnable stop = () -> {
+                try {
+                    agent.getMethod("setResources", Function.class, Predicate.class).invoke(null, null, null);
+                } catch (ReflectiveOperationException e) {
+                    checked.set(Integer.MIN_VALUE);
+                }
+            };
+            Function<String, @Nullable URL> finder = name -> {
+                URL answered = index.apply(name);
+                if (answered == null || isTrusted(checked)) {
+                    return answered;
+                }
+                URL own = jars.findResource(name);
+                if (!String.valueOf(own).equals(String.valueOf(answered))) {
+                    stop.run();
+                    LOGGER.warn("[Hotwire] the game's loader finds {} at {} and the index of its jars at {}: the"
+                            + " loader asks every jar again from here", name, own, answered);
+                }
+                return own;
+            };
+            List<?> live = index.countJars() == listed ? findLivePath(jars) : null;
+
+            AtomicBoolean left = new AtomicBoolean();
+            ClassPathIndex.onLeaving(jar -> left.set(true));
+            Predicate<String> absent = name -> {
+                if (!isPathAsListed(live, left.get(), listed) || !index.isAbsent(name)) {
+                    return false;
+                }
+                if (isTrusted(checked)) {
+                    return true;
+                }
+                URL own = jars.findResource(name);
+                if (own != null) {
+                    stop.run();
+                    LOGGER.warn("[Hotwire] the game's loader finds {} at {} and the index of its jars nowhere: the"
+                            + " loader asks every jar again from here", name, own);
+                }
+                return own == null;
+            };
+            agent.getMethod("setResources", Function.class, Predicate.class).invoke(null, finder, absent);
+            instrumentation.redefineClasses(new ClassDefinition(game.getClass(), patched));
+            LOGGER.info("[Hotwire] the game's loader finds a class's jar through an index of {} names in {} jars,"
+                    + " made in {} ms{}", index.countNames(), index.countJars(),
+                    (System.nanoTime() - began) / 1_000_000, live == null ? "; a class no jar holds is the"
+                    + " loader's to answer" : "");
+        } catch (ReflectiveOperationException | UnmodifiableClassException | IOException
+                | RuntimeException | LinkageError e) {
+            LOGGER.info("[Hotwire] the game's loader goes on asking every jar for a class: {}", e.toString());
+    }
     }
 
     static boolean isPathAsListed(@Nullable List<?> live, boolean jarLeft, int listed) {
