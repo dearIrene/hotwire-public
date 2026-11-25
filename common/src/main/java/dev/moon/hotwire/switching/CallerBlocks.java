@@ -2,8 +2,10 @@ package dev.moon.hotwire.switching;
 
 import dev.moon.hotwire.plan.SwitchPlan;
 import dev.moon.hotwire.ui.Lang;
+import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
+import java.util.function.BiPredicate;
 import java.util.function.Function;
 import org.jspecify.annotations.Nullable;
 
@@ -19,6 +21,23 @@ public final class CallerBlocks {
         public @Nullable String findAsker() {
             return this.mods.isEmpty() ? null : this.mods.getFirst();
         }
+    }
+
+    public static List<String> findAskers(List<String> mods, BiPredicate<String, String> uses) {
+        if (mods.isEmpty()) {
+            return List.of();
+        }
+        List<String> askers = new ArrayList<>(List.of(mods.getFirst()));
+        for (String next : mods) {
+            if (askers.contains(next)) {
+                continue;
+            }
+            if (!uses.test(next, askers.getFirst())) {
+                break;
+            }
+            askers.addFirst(next);
+        }
+        return askers;
     }
 
     public static String describeRow(String id, boolean switchable, Callers callers, Map<String, String> neededBy,

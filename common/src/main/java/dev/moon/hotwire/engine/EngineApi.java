@@ -527,7 +527,7 @@ public class EngineApi implements HotwireApi {
 
     private static CallerBlocks.Callers findCallers() {
         List<StackWalker.StackFrame> frames = STACK.walk(Stream::toList);
-        Set<String> mods = new LinkedHashSet<>();
+        List<String> mods = new ArrayList<>();
         boolean hotwire = false;
         for (StackWalker.StackFrame frame : frames) {
             if (frame.getDeclaringClass() == EngineApi.class) {
@@ -536,28 +536,14 @@ public class EngineApi implements HotwireApi {
             String mod = findModOf(frame);
             if (mod != null && ModPolicy.isHotwire(mod)) {
                 hotwire = true;
-            } else if (Owners.isRecordedMod(mod)) {
+            } else if (mod != null && Owners.isRecordedMod(mod)) {
                 mods.add(mod);
             }
         }
-        return new CallerBlocks.Callers(putAskerFirst(List.copyOf(mods)), hotwire || !mods.isEmpty());
-    }
-
-    private static List<String> putAskerFirst(List<String> mods) {
         HotwireEngine engine = findEngine();
-        if (engine == null || mods.size() < 2) {
-            return mods;
-        }
-        for (String one : mods) {
-            boolean usedByAnother = mods.stream()
-                    .anyMatch(other -> !other.equals(one) && engine.getGraph().getUses(other).contains(one));
-            if (!usedByAnother) {
-                List<String> ordered = new ArrayList<>(List.of(one));
-                mods.stream().filter(other -> !other.equals(one)).forEach(ordered::add);
-                return ordered;
-            }
-        }
-        return mods;
+        List<String> askers = engine == null ? mods.stream().limit(1).toList()
+                : CallerBlocks.findAskers(mods, (user, used) -> engine.getGraph().getUses(user).contains(used));
+        return new CallerBlocks.Callers(askers, hotwire || !mods.isEmpty());
     }
 
     private static @Nullable String findModOf(StackWalker.StackFrame frame) {
