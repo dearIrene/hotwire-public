@@ -13,6 +13,8 @@ import java.util.Set;
 import java.util.TreeSet;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.TimeUnit;
+import java.util.function.BooleanSupplier;
+import java.util.function.Consumer;
 import org.jspecify.annotations.Nullable;
 import org.objectweb.asm.Type;
 
@@ -35,6 +37,8 @@ public final class OffWindowObjects {
         final Set<Reference<Object>> reloaded = ConcurrentHashMap.newKeySet();
         final ReferenceQueue<Object> gone = new ReferenceQueue<>();
         private volatile boolean untracked;
+
+        private boolean forgotten;
 
         private volatile boolean isMadeElsewhere;
 
@@ -62,7 +66,52 @@ public final class OffWindowObjects {
     }
 
     public static void onMade(Object made, String className) {
-        ClassRecord of = MADE.computeIfAbsent(className, any -> new ClassRecord());
+        while (true) {
+            ClassRecord of = MADE.computeIfAbsent(className, any -> new ClassRecord());
+            synchronized (of) {
+                if (!of.forgotten) {
+                    record(of, made);
+                    return;
+                }
+            }
+        }
+    }
+
+    static boolean onMadeWhile(Object made, String className, BooleanSupplier isOff, BooleanSupplier isOtherOff) {
+        while (true) {
+            ClassRecord of = MADE.computeIfAbsent(className, any -> new ClassRecord());
+            synchronized (of) {
+                if (of.forgotten) {
+                    continue;
+                }
+                boolean off = isOff.getAsBoolean();
+                if (off || isOtherOff.getAsBoolean()) {
+                    record(of, made);
+                }
+                return off;
+            }
+        }
+    }
+
+    static void replay(String className, Consumer<List<Object>> give, BooleanSupplier forgetting) {
+        ClassRecord of = MADE.get(className);
+        if (of == null) {
+            return;
+        }
+        synchronized (of) {
+            List<Object> live = getLive(of);
+            if (live.isEmpty()) {
+                return;
+            }
+            give.accept(live);
+            if (forgetting.getAsBoolean() && !RECORDING.contains(className)) {
+                of.forgotten = true;
+                MADE.remove(className, of);
+            }
+        }
+    }
+
+    private static void record(ClassRecord of, Object made) {
         if (of.untracked) {
             return;
         }
@@ -117,9 +166,10 @@ public final class OffWindowObjects {
 
     static List<Object> getLive(String className) {
         ClassRecord of = MADE.get(className);
-        if (of == null) {
-            return List.of();
-        }
+        return of == null ? List.of() : getLive(of);
+    }
+
+    private static List<Object> getLive(ClassRecord of) {
         List<Object> live = new ArrayList<>();
         for (Reference<Object> made : of.live) {
             Object object = made.get();
@@ -139,8 +189,13 @@ public final class OffWindowObjects {
     }
 
     public static void forget(String className) {
-        if (!RECORDING.contains(className)) {
-            MADE.remove(className);
+        ClassRecord of = MADE.get(className);
+        if (of == null || RECORDING.contains(className)) {
+            return;
+        }
+        synchronized (of) {
+            of.forgotten = true;
+            MADE.remove(className, of);
         }
     }
 

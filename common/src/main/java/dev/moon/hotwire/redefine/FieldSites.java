@@ -2,9 +2,12 @@ package dev.moon.hotwire.redefine;
 
 import dev.moon.hotwire.classfile.ClassHeader;
 import java.lang.invoke.MethodHandle;
+import java.lang.invoke.MethodHandles;
+import java.lang.invoke.MethodType;
 import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.HashSet;
+import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
@@ -505,32 +508,49 @@ final class FieldSites {
 
     static void replay(Set<String> mixins) {
         for (String mixin : mixins) {
-            Set<String> given = new HashSet<>();
+            Map<String, List<Init>> byClass = new LinkedHashMap<>();
             for (Init init : INITS.getOrDefault(mixin, List.of())) {
-                List<Object> made = OffWindowObjects.getLive(init.className());
-                int failed = 0;
-                for (Object object : made) {
-                    try {
-                        init.setUp().invoke(object);
-                    } catch (Throwable e) {
-                        if (failed++ == 0) {
-                            LOGGER.warn("[Hotwire] {}'s setup could not be given an object made while {} was off",
-                                    init.className(), mixin, e);
-                        }
-                    }
-                }
-                if (!made.isEmpty()) {
-                    LOGGER.info("[Hotwire] {} objects of {} made while {} was off were given its setup, {} failed",
-                            made.size(), init.className(), mixin, failed);
-                    given.add(init.className());
-                }
+                byClass.computeIfAbsent(init.className(), any -> new ArrayList<>()).add(init);
             }
+            byClass.forEach((className, inits) -> OffWindowObjects.replay(className,
+                    made -> inits.forEach(init -> giveSetUp(mixin, init, made)),
+                    () -> !hasOtherOff(className, mixin)));
+        }
+    }
 
-            for (String className : given) {
-                if (!hasOtherOff(className, mixin)) {
-                    OffWindowObjects.forget(className);
+    private static void giveSetUp(String mixin, Init init, List<Object> made) {
+        int failed = 0;
+        for (Object object : made) {
+            try {
+                init.setUp().invoke(object);
+            } catch (Throwable e) {
+                if (failed++ == 0) {
+                    LOGGER.warn("[Hotwire] {}'s setup could not be given an object made while {} was off",
+                            init.className(), mixin, e);
                 }
             }
         }
+        LOGGER.info("[Hotwire] {} objects of {} made while {} was off were given its setup, {} failed", made.size(),
+                init.className(), mixin, failed);
+    }
+
+    @SuppressWarnings("UnusedMethod")
+    private static void onMadeOff(Object made, String className, String mixin, MethodHandle setUp) {
+        if (OffWindowObjects.onMadeWhile(made, className, () -> HandlerGuards.isOff(mixin),
+                () -> hasOtherOff(className, mixin))) {
+            return;
+        }
+        try {
+            setUp.invoke(made);
+        } catch (Throwable e) {
+            LOGGER.warn("[Hotwire] {}'s setup could not be given an object made as {} came on", className, mixin, e);
+        }
+    }
+
+    static MethodHandle findStandIn(String className, String mixin, MethodHandle setUp)
+            throws ReflectiveOperationException {
+        return MethodHandles.insertArguments(MethodHandles.lookup().findStatic(FieldSites.class, "onMadeOff",
+                MethodType.methodType(void.class, Object.class, String.class, String.class, MethodHandle.class)),
+                1, className, mixin, setUp);
     }
 }

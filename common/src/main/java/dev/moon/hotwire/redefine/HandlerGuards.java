@@ -615,11 +615,10 @@ public final class HandlerGuards {
             throws ReflectiveOperationException {
         Class<?> owner = caller.lookupClass();
         String className = Type.getInternalName(owner);
-        FieldSites.note(mixin, className, name,
-                caller.findSpecial(owner, name, MethodType.methodType(void.class), owner));
-        return link(caller, name, type, mixin, OWN, () -> MethodHandles.insertArguments(MethodHandles.lookup()
-                .findStatic(OffWindowObjects.class, "onMade", MethodType.methodType(void.class, Object.class,
-                        String.class)), 1, className).asType(type));
+        MethodHandle setUp = caller.findSpecial(owner, name, MethodType.methodType(void.class), owner);
+        FieldSites.note(mixin, className, name, setUp);
+        return link(caller, name, type, mixin, OWN, () -> FieldSites.findStandIn(className, mixin, setUp)
+                .asType(type));
     }
 
     static CallSite bootstrapOverwrite(MethodHandles.Lookup caller, String name, MethodType type, String mixin,
