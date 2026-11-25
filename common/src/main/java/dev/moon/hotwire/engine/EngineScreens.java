@@ -4,6 +4,7 @@ import dev.moon.hotwire.concurrent.AheadWork;
 import dev.moon.hotwire.seam.Games;
 import dev.moon.hotwire.ui.ModScreen;
 import dev.moon.hotwire.ui.ScreenOpenTimer;
+import dev.moon.hotwire.ui.panels.CrashPanel;
 import dev.moon.hotwire.update.SwapAtClose;
 import dev.moon.hotwire.update.UpdateOffer;
 import dev.moon.hotwire.update.UrgentUpdate;
@@ -19,6 +20,8 @@ import org.slf4j.LoggerFactory;
 public final class EngineScreens {
     private static final Logger LOGGER = LoggerFactory.getLogger(EngineScreens.class);
     private final HotwireEngine owner;
+
+    private volatile CrashPanel.@Nullable Caught caught;
 
     EngineScreens(HotwireEngine owner) {
         this.owner = owner;
@@ -50,6 +53,7 @@ public final class EngineScreens {
         this.owner.screen = opened;
         this.owner.under = back;
         opened.setUpdates(this.owner.storeJars.getOffers(), this.owner.storeJars.isChecked());
+        this.showCaughtCrash(opened);
         if (this.owner.getSettings().isUpdateCheckOn()) {
             this.owner.storeJars.startCheck();
             this.owner.selfUpdate.start();
@@ -96,6 +100,24 @@ public final class EngineScreens {
         ModScreen current = this.owner.screen;
         if (current != null) {
             current.showSelfUpdate(version, urgent, changes, scrolled);
+        }
+    }
+
+    void offerCaughtCrash(CrashPanel.Caught crash) {
+        this.caught = crash;
+        Games.getNow().runOnGame(() -> {
+            ModScreen current = this.owner.screen;
+            if (current != null && Games.getNow().isHotwireShown()) {
+                this.showCaughtCrash(current);
+            }
+        });
+    }
+
+    private void showCaughtCrash(ModScreen screen) {
+        CrashPanel.Caught due = this.caught;
+        if (due != null) {
+            this.caught = null;
+            screen.showCaughtCrash(due);
         }
     }
 

@@ -22,6 +22,7 @@ import dev.moon.hotwire.ui.panels.AlsoOffPanel;
 import dev.moon.hotwire.ui.panels.CarriedPanel;
 import dev.moon.hotwire.ui.panels.ChoicesPanel;
 import dev.moon.hotwire.ui.panels.ClosePanel;
+import dev.moon.hotwire.ui.panels.CrashPanel;
 import dev.moon.hotwire.ui.panels.DeletePanel;
 import dev.moon.hotwire.ui.panels.DownloadsWarningPanel;
 import dev.moon.hotwire.ui.panels.FindBrokenPanel;
@@ -88,6 +89,7 @@ public final class ModScreen implements JarHost {
     private final ReopenPanel reopenPanel;
     private final AlsoOffPanel alsoOffPanel;
     private final DeletePanel deletePanel;
+    private final CrashPanel crashPanel;
     private final ProfilesPanel profilesPanel;
     private final CarriedPanel carriedPanel;
     private final HostPanel hostPanel;
@@ -180,6 +182,15 @@ public final class ModScreen implements JarHost {
         this.downloadsWarning = new DownloadsWarningPanel(game::markDownloadsWarned, this::closePanels);
         this.deletePanel = new DeletePanel(game::deleteMod, this::closePanels);
 
+        this.crashPanel = new CrashPanel(game::findIcon, id -> game.getCatalog().isOn(id), caught -> {
+            this.closePanels();
+            if (game.getCatalog().isOn(caught.id())) {
+                this.turnOffAsking(List.of(caught.id()));
+            } else {
+                game.turnOffAtNextStart(List.of(caught.id()));
+            }
+        }, this::reportCaughtCrash, this::closePanels);
+
         this.choices = new ChoicesPanel(game::getSettingsSections, game::chooseSetting,
                 () -> game.playSound(LoadingScreen.Cue.MOD, 1.3f), () -> {
             game.playSound(LoadingScreen.Cue.ADDED, 1);
@@ -206,7 +217,8 @@ public final class ModScreen implements JarHost {
 
         this.panels = List.of(this.findBroken, this.addPanel, this.updatePanel, this.progress,
                 this.reopenPanel, this.carriedPanel, this.alsoOffPanel, this.firstOpen, this.choices, this.tour,
-                this.selfUpdate, this.profilesPanel, this.hostPanel, this.downloadsWarning, this.deletePanel);
+                this.selfUpdate, this.profilesPanel, this.hostPanel, this.downloadsWarning, this.deletePanel,
+                this.crashPanel);
         this.panels.forEach(this.root.getModal()::add);
         this.root.getModal().add(this.closePanel);
         this.root.getModal().add(this.updateSummary);
@@ -318,6 +330,16 @@ public final class ModScreen implements JarHost {
     public void showFailureReport(String failed, String where) {
         this.report.show(Lang.get("hotwire.report.failure_title"), where, failed);
         this.turnTo(REPORT, 2);
+    }
+
+    private void reportCaughtCrash(CrashPanel.Caught caught) {
+        this.closePanels();
+        this.report.show(Lang.get("hotwire.report.title"), caught.where(), "");
+        this.turnTo(REPORT, 2);
+    }
+
+    public void showCaughtCrash(CrashPanel.Caught caught) {
+        this.crashPanel.present(caught);
     }
 
     public Root getRoot() {

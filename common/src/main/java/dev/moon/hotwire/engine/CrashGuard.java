@@ -7,6 +7,7 @@ import dev.moon.hotwire.registration.MergedMembers;
 import dev.moon.hotwire.registration.Owners;
 import dev.moon.hotwire.report.ActionJournal;
 import dev.moon.hotwire.report.Causes;
+import dev.moon.hotwire.report.CrashSection;
 import dev.moon.hotwire.report.GameReports;
 import dev.moon.hotwire.report.Report;
 import dev.moon.hotwire.seam.Games;
@@ -18,6 +19,7 @@ import dev.moon.hotwire.switching.PlayerMessages;
 import dev.moon.hotwire.switching.SwitchHistory;
 import dev.moon.hotwire.ui.Lang;
 import dev.moon.hotwire.ui.notices.Notices;
+import dev.moon.hotwire.ui.panels.CrashPanel;
 import java.lang.reflect.Method;
 import java.util.ArrayList;
 import java.util.Arrays;
@@ -113,11 +115,11 @@ public final class CrashGuard {
                                         }
                                     }),
                                     reopened -> finish(made[0], caught.mod(), name, reopened.result(), why,
-                                            installed, say, writeReport, byAntiCrash)));
+                                            caught.thrown(), installed, say, writeReport, byAntiCrash)));
                             return;
                         }
-                        finish(made[0], caught.mod(), name, reported.result(), why, installed, say,
-                                writeReport, byAntiCrash);
+                        finish(made[0], caught.mod(), name, reported.result(), why, caught.thrown(), installed,
+                                say, writeReport, byAntiCrash);
                     }));
         }, inDevelopment, caught -> {
             Place place = findPlace(caught.thrown(), caught.mod());
@@ -180,7 +182,7 @@ public final class CrashGuard {
     }
 
     private static void finish(CrashPolicy policy, String mod, String name, ModSwitcher.Result result, String why,
-            InstalledMods installed, BiConsumer<String, Boolean> say,
+            Throwable thrown, InstalledMods installed, BiConsumer<String, Boolean> say,
             BiFunction<String, String, String> writeReport, boolean byAntiCrash) {
         boolean off = !PlayerMessages.isBad(result);
         policy.onOffFinished(mod, off);
@@ -200,6 +202,27 @@ public final class CrashGuard {
                 : "it could not go off");
         say.accept(line, true);
         Notices.show(title, OutdatedNotice.addTo(line));
+        HotwireEngine engine = EngineApi.findEngine();
+        if (engine != null) {
+            engine.getScreens().offerCaughtCrash(new CrashPanel.Caught(mod, name, title,
+                    OutdatedNotice.addTo(line), describeProof(thrown, mod, name), where));
+        }
+    }
+
+    static String describeProof(Throwable thrown, String mod, String name) {
+        List<String> frames = new ArrayList<>();
+        List<String> messages = new ArrayList<>();
+        for (Throwable at : Causes.list(thrown)) {
+            findFramesAbove(at).forEach(frame -> frames.add(frame.getClassName()));
+            messages.add(at.toString());
+        }
+        if (CrashSection.isHotwires(CrashSection.describeTrace(frames, frames, messages, type -> null, Set.of(),
+                type -> null, id -> id).value())) {
+            return Lang.get("hotwire.crash.proof.ours");
+        }
+        Place place = findPlace(thrown, mod);
+        return place == null ? Lang.get("hotwire.crash.proof.unknown", name)
+                : Lang.get("hotwire.crash.proof.mod", name, place.words());
     }
 
     static String findWhat(Throwable thrown) {
@@ -231,8 +254,10 @@ public final class CrashGuard {
                 continue;
             }
             if (mod.equals(Owners.findModOf(type))) {
-                return new Place(element.getClassName(), element.getLineNumber(), element.getFileName() + ":"
-                        + element.getLineNumber() + " in " + element.getMethodName());
+                String at = element.getFileName() == null || element.getLineNumber() < 0 ? type.getSimpleName()
+                        : element.getFileName() + ":" + element.getLineNumber();
+                return new Place(element.getClassName(), element.getLineNumber(), at + " in "
+                        + element.getMethodName());
             }
             String mixin = MergedMembers.findMixinIn(type, element.getMethodName(), mod);
             if (mixin != null) {
