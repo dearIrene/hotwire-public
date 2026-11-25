@@ -75,6 +75,7 @@ dependencies {
     testImplementation("com.google.code.gson:gson:2.14.0")
     testImplementation("org.ow2.asm:asm:9.8")
     testImplementation("org.ow2.asm:asm-tree:9.8")
+    testImplementation("org.ow2.asm:asm-util:9.8")
     testImplementation("org.ow2.asm:asm-commons:9.8")
     testImplementation("org.ow2.asm:asm-analysis:9.8")
     testImplementation("com.google.guava:guava:32.1.2-jre")
