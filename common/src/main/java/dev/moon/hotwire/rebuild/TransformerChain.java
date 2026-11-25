@@ -43,7 +43,7 @@ public final class TransformerChain {
 
     private final Map<String, byte[]> loadedWhileOff = new ConcurrentHashMap<>();
 
-    private TransformerChain(List<Object> wrappers, List<String> owners, Object mixins, Method transformBytes) {
+    TransformerChain(List<Object> wrappers, List<String> owners, Object mixins, Method transformBytes) {
         this.wrappers = List.copyOf(wrappers);
         this.owners = List.copyOf(owners);
         this.mixins = mixins;
@@ -163,6 +163,9 @@ public final class TransformerChain {
 
     public void runAgain(Collection<String> mods) {
         this.bypassed.removeAll(mods);
+    }
+
+    public void forgetLoadedWhileOff() {
         if (this.bypassed.isEmpty()) {
             this.loadedWhileOff.clear();
         }
@@ -172,7 +175,7 @@ public final class TransformerChain {
         return Map.copyOf(this.loadedWhileOff);
     }
 
-    private Object link(int from, Class<?> face) {
+    Object link(int from, Class<?> face) {
         return Proxy.newProxyInstance(face.getClassLoader(), new Class<?>[] {face}, new Link(from));
     }
 
@@ -207,6 +210,8 @@ public final class TransformerChain {
                 }
                 return args[2];
             }
+
+            boolean isPassing = !TransformerChain.this.bypassed.isEmpty();
             Object next = this.getNext();
             Object result;
             try {
@@ -219,7 +224,8 @@ public final class TransformerChain {
                 }
                 throw e.getCause();
             }
-            if (next == TransformerChain.this.mixins && transforms && !TransformerChain.this.bypassed.isEmpty()
+            if (next == TransformerChain.this.mixins && transforms
+                    && (isPassing || !TransformerChain.this.bypassed.isEmpty())
                     && method.getName().equals("transformClassBytes") && result instanceof byte[] mixed) {
                 TransformerChain.this.loadedWhileOff.put((String) args[0], mixed);
             }

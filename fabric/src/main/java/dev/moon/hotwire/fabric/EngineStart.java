@@ -116,7 +116,6 @@ import java.util.Map;
 import java.util.Optional;
 import java.util.Set;
 import java.util.function.BiConsumer;
-import java.util.function.BiFunction;
 import java.util.stream.Collectors;
 import java.util.stream.Stream;
 import net.fabricmc.loader.api.FabricLoader;
@@ -201,14 +200,16 @@ final class EngineStart {
         Linker.setMixinOwners(applier.getCarriedMixins()::findModShipping);
         laps.endLap("load-time mixer, hooks");
         TransformerChain chain = TransformerChain.bind(ForeignPatches.makeOwnerFinder(installed.getGraphJars()));
-        BiFunction<Set<String>, Set<String>, Set<String>> foreign = findForeignPatches(instrumentation, installed,
-                applier, chain);
+        ForeignPatches foreign = findForeignPatches(instrumentation, installed, applier, chain);
 
         applier.rebuildAlsoWith((switched, on) -> {
-            Set<String> also = new HashSet<>(foreign.apply(switched, on));
+            Set<String> also = new HashSet<>(foreign == null ? Set.of() : foreign.findClassesFor(switched, on));
             also.addAll(ShutOverrides.findOwnersFor(switched));
             return also;
         });
+        if (foreign != null) {
+            applier.rebuildLateWith(foreign::findLoadedMeanwhile);
+        }
 
         laps.endLap("foreign patches");
         OffChecker offChecker = new OffChecker(GameRegistrations.getJournal(), () -> {
@@ -285,19 +286,19 @@ final class EngineStart {
         return new JvmParts(runner, adds, updates, instrumentation, loadTimeMixer, classes);
     }
 
-    private static BiFunction<Set<String>, Set<String>, Set<String>> findForeignPatches(
+    private static @Nullable ForeignPatches findForeignPatches(
             Instrumentation instrumentation, InstalledMods installed, SwitchApplier applier,
             @Nullable TransformerChain chain) {
         if (chain == null) {
-            return (switched, on) -> Set.of();
+            return null;
         }
         applier.getRebuilder().getHooks().setAfterMixin(chain::apply);
         ConstantPools pools = ConstantPools.open(instrumentation);
         if (pools == null) {
-            return (switched, on) -> Set.of();
+            return null;
         }
         return new ForeignPatches(instrumentation, chain, pools, HotwireEngine.class.getClassLoader(),
-                installed.getGraphJars())::findClassesFor;
+                installed.getGraphJars());
     }
 
     private static void describeTrace(Throwable thrown, StringBuilder out, String prefix) {

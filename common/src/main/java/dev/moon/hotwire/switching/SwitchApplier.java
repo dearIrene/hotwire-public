@@ -147,6 +147,8 @@ public final class SwitchApplier {
 
     private volatile BiFunction<Set<String>, Set<String>, Set<String>> alsoRebuilt = (switched, on) -> Set.of();
 
+    private volatile BiFunction<Set<String>, Set<String>, Set<String>> loadedLate = (switched, on) -> Set.of();
+
     private final GuardFlips guardFlips;
     private volatile @Nullable Set<String> patched;
 
@@ -282,6 +284,10 @@ public final class SwitchApplier {
 
     public void rebuildAlsoWith(BiFunction<Set<String>, Set<String>, Set<String>> also) {
         this.alsoRebuilt = also;
+    }
+
+    public void rebuildLateWith(BiFunction<Set<String>, Set<String>, Set<String>> late) {
+        this.loadedLate = late;
     }
 
     public synchronized void learn(String id, ModMixins mixins) {
@@ -678,6 +684,8 @@ public final class SwitchApplier {
         }
         try {
             this.rebuildLoadedMeanwhile(dryRun.applied().notLoaded(), onAfter);
+
+            this.rebuildLoadedMeanwhile(List.copyOf(this.loadedLate.apply(switched, onAfter)), onAfter);
         } catch (RebuildException | RuntimeException | LinkageError e) {
             this.duckRide.disarm();
             ClassRebuilder.PreparedRebuild prepared = dryRun.prepared();

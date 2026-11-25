@@ -771,6 +771,9 @@ public final class SwitchRunner {
             }
             if (result instanceof ModSwitcher.Result.Done) {
                 CrashGuard.onBackOn(coming.order());
+                if (this.chain != null) {
+                    this.chain.forgetLoadedWhileOff();
+                }
             } else if (!coming.isRefused() && !toReopen) {
                 List<String> stillOff = coming.order().stream().filter(id -> !this.switcher.isOn(id)).toList();
                 if (allBack.get()) {

@@ -47,6 +47,9 @@ public final class ForeignPatches {
     private final Map<String, Set<String>> rebuiltAtOff = new ConcurrentHashMap<>();
     private final Map<ProtectionDomain, Boolean> familyDomains = new ConcurrentHashMap<>();
 
+    private volatile Class<?>[] scanned = new Class<?>[0];
+    private volatile Set<String> copied = Set.of();
+
     public ForeignPatches(Instrumentation instrumentation, TransformerChain chain, ConstantPools pools,
             ClassLoader game, List<ModJar> jars) {
         this.instrumentation = instrumentation;
@@ -142,31 +145,20 @@ public final class ForeignPatches {
         Set<String> classes = new HashSet<>();
         if (on.containsAll(switched)) {
             switched.forEach(mod -> classes.addAll(this.rebuiltAtOff.getOrDefault(mod, Set.of())));
-            this.chain.getLoadedWhileOff().forEach((name, mixed) -> {
-                if (!Arrays.equals(this.chain.apply(name, mixed, on::contains), mixed)) {
-                    classes.add(name.replace('.', '/'));
-                }
-            });
+            Map<String, byte[]> loaded = this.chain.getLoadedWhileOff();
+            this.copied = loaded.keySet();
+            classes.addAll(this.findChangedOn(loaded, on));
             return classes;
         }
         long start = System.nanoTime();
-        Set<String> named = new HashSet<>();
-        switched.forEach(mod -> {
-            ModJar jar = this.jars.get(mod);
-            if (jar != null) {
-                named.addAll(jar.patches().owns());
-            }
-        });
+        Set<String> named = this.findOwnedBy(switched);
 
-        Set<String> off = new HashSet<>();
-        for (ModJar jar : this.jars.values()) {
-            if (!on.contains(jar.manifest().id())) {
-                off.addAll(jar.patches().owns());
-            }
-        }
+        Set<String> off = this.findOwnedOff(on);
+        Class<?>[] loaded = LoadedClassList.of(this.instrumentation);
+        this.scanned = loaded;
         List<Class<?>> read = new ArrayList<>();
         List<Class<?>> others = new ArrayList<>();
-        for (Class<?> type : LoadedClassList.of(this.instrumentation)) {
+        for (Class<?> type : loaded) {
             if (type.getClassLoader() != this.game || type.isHidden()) {
                 continue;
             }
@@ -191,5 +183,75 @@ public final class ForeignPatches {
                 classes.size(), read.size(), switched, (System.nanoTime() - start) / 1_000_000,
                 new TreeSet<>(classes));
         return classes;
+    }
+
+    @SuppressWarnings("ReferenceEquality")
+    public Set<String> findLoadedMeanwhile(Set<String> switched, Set<String> on) {
+        if (Collections.disjoint(switched, this.family)) {
+            return Set.of();
+        }
+        if (on.containsAll(switched)) {
+            Map<String, byte[]> late = new HashMap<>(this.chain.getLoadedWhileOff());
+            late.keySet().removeAll(this.copied);
+            this.copied = Set.of();
+            return this.findChangedOn(late, on);
+        }
+        Class<?>[] before = this.scanned;
+        this.scanned = new Class<?>[0];
+        if (before.length == 0) {
+            return Set.of();
+        }
+        Set<Class<?>> seen = new HashSet<>(Arrays.asList(before));
+        Set<String> named = this.findOwnedBy(switched);
+        Set<String> off = this.findOwnedOff(on);
+        List<Class<?>> fresh = new ArrayList<>();
+        for (Class<?> type : LoadedClassList.of(this.instrumentation)) {
+            if (type.getClassLoader() == this.game && !type.isHidden() && !seen.contains(type)
+                    && !this.fromFamily(type) && !off.contains(Type.getInternalName(type))) {
+                fresh.add(type);
+            }
+        }
+        Set<String> classes = new HashSet<>();
+        for (Class<?> type : Parallel.filter(fresh, type -> this.pools.names(type, named::contains))) {
+            classes.add(Type.getInternalName(type));
+        }
+
+        switched.forEach(mod -> this.rebuiltAtOff.compute(mod, (id, at) -> {
+            Set<String> both = new HashSet<>(at == null ? Set.of() : at);
+            both.addAll(classes);
+            return Set.copyOf(both);
+        }));
+        return classes;
+    }
+
+    private Set<String> findChangedOn(Map<String, byte[]> loaded, Set<String> on) {
+        Set<String> changed = new HashSet<>();
+        loaded.forEach((name, mixed) -> {
+            if (!Arrays.equals(this.chain.apply(name, mixed, on::contains), mixed)) {
+                changed.add(name.replace('.', '/'));
+            }
+        });
+        return changed;
+    }
+
+    private Set<String> findOwnedBy(Set<String> mods) {
+        Set<String> owned = new HashSet<>();
+        mods.forEach(mod -> {
+            ModJar jar = this.jars.get(mod);
+            if (jar != null) {
+                owned.addAll(jar.patches().owns());
+            }
+        });
+        return owned;
+    }
+
+    private Set<String> findOwnedOff(Set<String> on) {
+        Set<String> off = new HashSet<>();
+        for (ModJar jar : this.jars.values()) {
+            if (!on.contains(jar.manifest().id())) {
+                off.addAll(jar.patches().owns());
+            }
+        }
+        return off;
     }
 }
