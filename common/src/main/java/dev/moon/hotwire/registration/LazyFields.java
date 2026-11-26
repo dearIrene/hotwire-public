@@ -20,6 +20,7 @@ import org.objectweb.asm.tree.ClassNode;
 import org.objectweb.asm.tree.FieldInsnNode;
 import org.objectweb.asm.tree.MethodInsnNode;
 import org.objectweb.asm.tree.MethodNode;
+import org.objectweb.asm.tree.VarInsnNode;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -118,7 +119,11 @@ final class LazyFields {
             Set<String> read = new HashSet<>();
             for (AbstractInsnNode insn : method.instructions) {
                 if (insn instanceof FieldInsnNode field && field.owner.equals(node.name)) {
-                    (field.getOpcode() == Opcodes.PUTFIELD ? set : read).add(field.name);
+                    if (field.getOpcode() != Opcodes.PUTFIELD) {
+                        read.add(field.name);
+                    } else if (isMade(method, field)) {
+                        set.add(field.name);
+                    }
                 }
             }
             setBy.put(method.name + method.desc, set);
@@ -147,6 +152,25 @@ final class LazyFields {
             }
         }
         return lazy;
+    }
+
+    private static boolean isMade(MethodNode method, FieldInsnNode store) {
+        AbstractInsnNode value = store.getPrevious();
+        while (value != null && value.getOpcode() < 0) {
+            value = value.getPrevious();
+        }
+        if (value == null || value.getOpcode() == Opcodes.ACONST_NULL) {
+            return false;
+        }
+        if (!(value instanceof VarInsnNode load) || load.getOpcode() != Opcodes.ALOAD) {
+            return true;
+        }
+        boolean isStatic = (method.access & Opcodes.ACC_STATIC) != 0;
+        int parameters = isStatic ? 0 : 1;
+        for (Type argument : Type.getArgumentTypes(method.desc)) {
+            parameters += argument.getSize();
+        }
+        return (!isStatic && load.var == 0) || load.var >= parameters;
     }
 
     private static @Nullable ClassNode read(Class<?> type) {
