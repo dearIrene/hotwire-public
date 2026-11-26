@@ -19,7 +19,7 @@ import org.spongepowered.asm.mixin.extensibility.IMixinConfigPlugin;
 public final class LivePlugins {
     private static final Logger LOGGER = LoggerFactory.getLogger(LivePlugins.class);
 
-    private static final Set<String> RAN = ConcurrentHashMap.newKeySet();
+    private static final Map<String, String> RAN = new ConcurrentHashMap<>();
 
     private static final Map<String, Set<String>> ANSWERED = new ConcurrentHashMap<>();
 
@@ -53,7 +53,7 @@ public final class LivePlugins {
         boolean ownExtras = OwnExtras.isOffered(jar);
         Tripwire.expect(Set.of(manifest.id()), () -> {
             for (PluginQuestions questions : all) {
-                if (RAN.add(questions.config())) {
+                if (RAN.putIfAbsent(questions.config(), "") == null) {
                     ask(questions, ownExtras);
                 }
             }
@@ -72,13 +72,19 @@ public final class LivePlugins {
         plugin.onLoad(pkg);
     }
 
+    public static @Nullable String findRefmap(String config) {
+        String refmap = RAN.get(config);
+        return refmap == null || refmap.isEmpty() ? null : refmap;
+    }
+
     private static void ask(PluginQuestions questions, boolean ownExtras) {
         try {
             IMixinConfigPlugin plugin = Class.forName(questions.plugin(), true, LivePlugins.class.getClassLoader())
                     .asSubclass(IMixinConfigPlugin.class).getDeclaredConstructor().newInstance();
             load(plugin, questions.pkg(), ownExtras);
             if (questions.asksRefmap()) {
-                plugin.getRefMapperConfig();
+                String refmap = plugin.getRefMapperConfig();
+                RAN.put(questions.config(), refmap == null ? "" : refmap);
             }
             Set<String> mine = new TreeSet<>();
             Set<String> accepted = new TreeSet<>();

@@ -128,7 +128,7 @@ final class LaunchDecisions {
                 break;
             }
             String config = entry.getKey();
-            byte[] bytes = entry.getValue();
+            byte[] bytes = this.withPluginRefmap(config, entry.getValue());
             Set<String> own = listedBy.getOrDefault(config, Set.of());
             Predicate<String> elsewhere = name -> listings.getOrDefault(name, 0) > (own.contains(name) ? 1 : 0);
             Set<String> answers = answeredBy.get(config);
@@ -162,12 +162,21 @@ final class LaunchDecisions {
         return new Result(trimmed, Set.copyOf(asked));
     }
 
+    private byte[] withPluginRefmap(String config, byte[] bytes) {
+        if (ConfigTrim.readPluginOf(bytes) == null || ConfigTrim.readRefmapOf(bytes) != null) {
+            return bytes;
+        }
+        String refmap = this.game.findPluginRefmap(config);
+        return refmap == null ? bytes : ConfigTrim.nameRefmap(bytes, refmap);
+    }
+
     private void passOver(String config, Map<String, byte[]> into) {
         byte[] bytes = this.findBytes(config);
         if (bytes == null) {
             return;
         }
 
+        bytes = this.withPluginRefmap(config, bytes);
         Set<String> unlisted = ConfigTrim.readPluginOf(bytes) == null ? Set.of()
                 : this.findUnlisted(config, bytes, name -> false);
 

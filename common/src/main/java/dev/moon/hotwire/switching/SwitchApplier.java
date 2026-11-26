@@ -56,6 +56,10 @@ public final class SwitchApplier {
 
         byte @Nullable [] findConfigBytes(String config);
 
+        default @Nullable String findPluginRefmap(String config) {
+            return null;
+        }
+
         default Map<String, byte[]> useConfigs(Map<String, byte[]> configs) {
             return Map.of();
         }

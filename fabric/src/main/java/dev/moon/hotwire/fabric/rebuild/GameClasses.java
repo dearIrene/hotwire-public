@@ -5,6 +5,7 @@ import dev.moon.hotwire.classfile.GameNames;
 import dev.moon.hotwire.fabric.add.LivePlugins;
 import dev.moon.hotwire.fabric.registration.WorldSetMoment;
 import dev.moon.hotwire.fabric.version.Spellings;
+import dev.moon.hotwire.jvm.PrivateField;
 import dev.moon.hotwire.rebuild.KnotInternals;
 import dev.moon.hotwire.rebuild.PreMixinReads;
 import dev.moon.hotwire.registration.Fields;
@@ -47,6 +48,8 @@ import net.minecraft.world.level.chunk.storage.IOWorker;
 import net.minecraft.world.level.lighting.LevelLightEngine;
 import net.minecraft.world.level.saveddata.SavedData;
 import org.jspecify.annotations.Nullable;
+import org.spongepowered.asm.mixin.Mixins;
+import org.spongepowered.asm.mixin.transformer.Config;
 
 public final class GameClasses implements SwitchApplier.Game {
     private final Map<String, byte[]> updatedConfigs = new ConcurrentHashMap<>();
@@ -184,6 +187,28 @@ public final class GameClasses implements SwitchApplier.Game {
         names.forEach(this.updatedConfigs::remove);
         this.updatedConfigs.putAll(before);
     }
+
+    @Override
+    public @Nullable String findPluginRefmap(String config) {
+        String asked = LivePlugins.findRefmap(config);
+        if (asked != null) {
+            return asked;
+        }
+        for (Config live : Mixins.getConfigs()) {
+            if (live.getName().equals(config)) {
+                try {
+                    String named = PrivateField.of(live.getConfig().getClass(), "refMapperConfig")
+                            .get(live.getConfig(), String.class);
+                    return named == null || named.equals(DEFAULT_REFMAP) ? null : named;
+                } catch (RuntimeException e) {
+                    return null;
+                }
+            }
+        }
+        return null;
+    }
+
+    private static final String DEFAULT_REFMAP = "mixin.refmap.json";
 
     @Override
     public byte @Nullable [] findConfigBytes(String config) {

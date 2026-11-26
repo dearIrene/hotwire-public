@@ -53,6 +53,15 @@ public final class ConfigTrim {
         return names;
     }
 
+    public static byte[] nameRefmap(byte[] json, String refmap) {
+        JsonObject root = JsonParser.parseString(new String(json, StandardCharsets.UTF_8)).getAsJsonObject();
+        if (isName(root.get("refmap"))) {
+            return json;
+        }
+        root.addProperty("refmap", refmap);
+        return root.toString().getBytes(StandardCharsets.UTF_8);
+    }
+
     public static @Nullable String readRefmapOf(byte[] json) {
         JsonObject root = JsonParser.parseString(new String(json, StandardCharsets.UTF_8)).getAsJsonObject();
         return isName(root.get("refmap")) ? root.get("refmap").getAsString() : null;
