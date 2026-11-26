@@ -5,7 +5,9 @@ import dev.moon.hotwire.ui.Lang;
 import dev.moon.hotwire.update.UpdatePlan.UpdateTier;
 import java.io.IOException;
 import java.nio.file.Path;
+import java.util.HashMap;
 import java.util.List;
+import java.util.Map;
 import java.util.Objects;
 import java.util.SortedSet;
 import org.jspecify.annotations.Nullable;
@@ -80,9 +82,37 @@ final class IdChangedUpdate {
 
     private @Nullable String findRefusal(ModManifest incoming, String replaced) {
         SortedSet<String> dependents = this.engine.getGraph().getDependents(replaced);
-        return dependents.isEmpty() ? null
-                : Lang.get("hotwire.update.new_id_needed", incoming.name(), incoming.id(),
-                        String.join(", ", dependents));
+        if (!dependents.isEmpty()) {
+            return Lang.get("hotwire.update.new_id_needed", incoming.name(), incoming.id(),
+                    String.join(", ", dependents));
+        }
+        return this.findUnmet(incoming);
+    }
+
+    private @Nullable String findUnmet(ModManifest incoming) {
+        Map<String, String> waiting = new HashMap<>();
+        for (UpdateQueue.Entry entry : this.engine.getQueue().getEntries()) {
+            waiting.put(entry.modId(), entry.toVersion());
+        }
+        String name = incoming.name() + " " + incoming.version();
+        for (Map.Entry<String, List<String>> wants : incoming.getRelation(ModManifest.Relation.DEPENDS).entrySet()) {
+            String needed = wants.getKey();
+            if (needed.equals("java") || needed.equals("minecraft")) {
+                continue;
+            }
+            String have = waiting.getOrDefault(this.engine.getGraph().resolve(needed),
+                    this.engine.findVersionOf(needed));
+            if (have != null && this.engine.satisfies(have, wants.getValue())) {
+                continue;
+            }
+            String ranges = String.join(" or ", wants.getValue());
+            if (needed.equals("fabricloader") && have != null) {
+                return Lang.get("hotwire.update.needs_loader", name, ranges, have);
+            }
+            return have == null ? Lang.get("hotwire.update.needs_missing", name, needed, ranges, needed)
+                    : Lang.get("hotwire.update.needs_has", name, needed, ranges, have, needed);
+        }
+        return null;
     }
 
     private String findInstalledVersion(String id) {
