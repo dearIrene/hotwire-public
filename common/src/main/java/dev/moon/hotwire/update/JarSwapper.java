@@ -173,8 +173,18 @@ public final class JarSwapper {
     }
 
     private static Path findTarget(Path staged, @Nullable Path running, Path mods) {
+        if (running != null && isAppProfile(mods)) {
+            return running;
+        }
         boolean off = running != null && String.valueOf(running.getFileName()).endsWith(DISABLED);
         return mods.resolve(staged.getFileName() + (off ? DISABLED : ""));
+    }
+
+    private static boolean isAppProfile(Path mods) {
+        Path profile = mods.toAbsolutePath().getParent();
+        Path profiles = profile == null ? null : profile.getParent();
+        return profiles != null && profiles.getParent() != null && profiles.endsWith("profiles")
+                && Files.isRegularFile(profiles.resolveSibling("app.db"));
     }
 
     private static String findChange(UpdateQueue.Entry entry, Path mods) {
