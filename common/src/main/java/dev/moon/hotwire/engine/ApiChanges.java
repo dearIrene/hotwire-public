@@ -32,8 +32,10 @@ import java.io.UncheckedIOException;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.util.ArrayList;
+import java.util.HashMap;
 import java.util.HashSet;
 import java.util.List;
+import java.util.Map;
 import java.util.Optional;
 import java.util.Set;
 import java.util.concurrent.CompletableFuture;
@@ -57,11 +59,15 @@ final class ApiChanges {
         }
         Thread.ofPlatform().name("hotwire-api-updates").daemon().start(() -> {
             try {
-                Set<String> queued = engine.getPendingChanges().stream()
-                        .filter(PendingChange.Update.class::isInstance).map(PendingChange::modId)
-                        .collect(Collectors.toSet());
+                Map<String, String> queued = new HashMap<>();
+                engine.getPendingChanges().forEach(change -> {
+                    if (change instanceof PendingChange.Update update) {
+                        queued.put(update.modId(), update.toVersion());
+                    }
+                });
                 made.complete(new ModUpdates(engine.storeJars.getCheck().findRecent().stream()
-                        .filter(offer -> !queued.contains(offer.id()))
+                        .filter(offer -> !queued.containsKey(offer.id())
+                                || UpdateCheck.isOlder(queued.get(offer.id()), offer.newVersion()))
                         .map(offer -> new ModUpdate(offer.id(), offer.name(), offer.installedVersion(),
                                 offer.newVersion(), offer.projectId())).toList(), ""));
             } catch (IOException | RuntimeException e) {

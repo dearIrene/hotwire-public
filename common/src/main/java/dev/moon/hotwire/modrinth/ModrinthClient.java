@@ -23,7 +23,6 @@ import java.security.NoSuchAlgorithmException;
 import java.time.Duration;
 import java.util.ArrayList;
 import java.util.Collection;
-import java.util.HashMap;
 import java.util.HexFormat;
 import java.util.LinkedHashMap;
 import java.util.List;
@@ -373,31 +372,16 @@ public final class ModrinthClient {
             return;
         }
 
-        Path file = target.toAbsolutePath().normalize();
-        int[] lock;
-        synchronized (FETCHING) {
-            lock = FETCHING.computeIfAbsent(file, made -> new int[1]);
-            lock[0]++;
-        }
-        try {
-            synchronized (lock) {
-                if (onBytes instanceof Downloads.Feed feed) {
-                    feed.awaitGo();
-                }
-                if (!LocalJars.isSameJar(target, version.size(), version.sha512())) {
-                    this.fetchAlone(version, target, onBytes);
-                }
+        String lock = ("hotwire-fetch:" + target.toAbsolutePath().normalize()).intern();
+        synchronized (lock) {
+            if (onBytes instanceof Downloads.Feed feed) {
+                feed.awaitGo();
             }
-        } finally {
-            synchronized (FETCHING) {
-                if (--lock[0] == 0) {
-                    FETCHING.remove(file);
-                }
+            if (!LocalJars.isSameJar(target, version.size(), version.sha512())) {
+                this.fetchAlone(version, target, onBytes);
             }
         }
     }
-
-    private static final Map<Path, int[]> FETCHING = new HashMap<>();
 
     private void fetchAlone(Version version, Path target, LongConsumer onBytes) throws IOException {
         Path part = target.resolveSibling(target.getFileName() + ".part");

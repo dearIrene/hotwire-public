@@ -203,6 +203,10 @@ public final class CrashGuard {
             BiFunction<String, String, String> writeReport, boolean byAntiCrash, String decision) {
         boolean off = !PlayerMessages.isBad(result);
         policy.onOffFinished(mod, off);
+
+        if (off) {
+            EngineApi.tellSwitched(EngineApi.toResult(result, why));
+        }
         String where = writeReport.apply(Lang.get("hotwire.report.file.mod_crash", name), why);
         String title = Lang.get(byAntiCrash ? "hotwire.anti_crash.title" : "hotwire.crash.title");
         String line;

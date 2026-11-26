@@ -46,15 +46,15 @@ public final class FileHashes {
         }
     }
 
-    public static Map<String, String> findSha512ByName(Collection<Path> files) {
+    public static Map<String, String> findSha512ByName(Map<String, Path> files) {
         Map<String, String> out = new LinkedHashMap<>();
-        for (Path file : files) {
+        files.forEach((name, file) -> {
             try {
-                out.put(String.valueOf(file.getFileName()), findSha512(file));
+                out.put(name, findSha512(file));
             } catch (IOException e) {
                 LOGGER.info("[Hotwire] {} could not be hashed: {}", file.getFileName(), e.toString());
             }
-        }
+        });
         return out;
     }
 

@@ -623,6 +623,14 @@ public class EngineApi implements HotwireApi {
         LISTENERS.tell("a switch's end", engine::isOn, listener -> listener.accept(result));
     }
 
+    static void tellSwitched(SwitchResult result) {
+        HotwireEngine engine = findEngine();
+        if (engine != null) {
+            engine.api.rowsSeen.clear();
+            LISTENERS.tell("a switch's end", engine::isOn, listener -> listener.accept(result));
+        }
+    }
+
     static void endIfFailed(HotwireEngine engine, CompletableFuture<SwitchResult> ended, @Nullable Throwable error) {
         if (error != null && !ended.isDone()) {
             Games.getNow().runOnGame(() -> endSwitch(engine, ended, new SwitchResult(SwitchResult.Kind.FAILED,

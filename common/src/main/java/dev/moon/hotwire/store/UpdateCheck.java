@@ -132,9 +132,9 @@ public final class UpdateCheck {
     }
 
     private void nameJars(Map<String, Path> jars) {
-        Map<String, String> idByName = new HashMap<>();
-        jars.forEach((id, jar) -> idByName.put(String.valueOf(jar.getFileName()), id));
-        Map<String, String> hashByName = FileHashes.findSha512ByName(jars.values());
+        Map<String, Path> files = new LinkedHashMap<>();
+        Map<String, String> idByName = nameEach(jars, files);
+        Map<String, String> hashByName = FileHashes.findSha512ByName(files);
         UpdateMemory memory = UpdateMemory.read(this.findMemoryFile());
         Map<String, String> named = new HashMap<>();
         Map<String, String> unheard = new HashMap<>();
@@ -181,14 +181,25 @@ public final class UpdateCheck {
         return this.find();
     }
 
+    private static Map<String, String> nameEach(Map<String, Path> jars, Map<String, Path> files) {
+        Map<String, String> idByName = new HashMap<>();
+        jars.forEach((id, jar) -> {
+            String name = String.valueOf(jar.getFileName());
+            String own = files.containsKey(name) ? jar.toString() : name;
+            files.put(own, jar);
+            idByName.put(own, id);
+        });
+        return idByName;
+    }
+
     private List<UpdateOffer> find() throws IOException {
         Map<String, Path> jars = this.installed.getJarsByTopLevel();
-        Map<String, String> hashByName = FileHashes.findSha512ByName(jars.values());
+        Map<String, Path> files = new LinkedHashMap<>();
+        Map<String, String> idByName = nameEach(jars, files);
+        Map<String, String> hashByName = FileHashes.findSha512ByName(files);
         if (hashByName.isEmpty()) {
             return List.of();
         }
-        Map<String, String> idByName = new HashMap<>();
-        jars.forEach((id, jar) -> idByName.put(String.valueOf(jar.getFileName()), id));
         UpdateMemory memory = UpdateMemory.read(this.findMemoryFile());
 
         List<String> installedSince = new ArrayList<>();
@@ -350,7 +361,8 @@ public final class UpdateCheck {
             }
             String id = idByName.getOrDefault(name, name);
             String parent = this.installed.find(id).flatMap(ModManifest::menuParent).orElse(null);
-            if (parent != null && this.installed.find(parent).isPresent()
+
+            if (parent != null && !idByName.containsValue(parent) && this.installed.find(parent).isPresent()
                     && !this.installed.find(id).orElseThrow().getRelation(ModManifest.Relation.DEPENDS)
                     .containsKey(parent)) {
                 id = parent;
@@ -359,7 +371,14 @@ public final class UpdateCheck {
                     return;
                 }
             }
-            ModManifest manifest = this.installed.find(id).orElse(null);
+
+            String asked = id;
+            ModManifest manifest = this.installed.find(id).or(() -> this.installed.findDisabled(asked))
+                    .orElse(null);
+
+            if (manifest != null && isOlder(version.number(), manifest.version())) {
+                return;
+            }
             offers.add(new UpdateOffer(id, manifest == null ? id : manifest.name(),
                     manifest == null ? "" : manifest.version(), version.number(), version.changelog(),
                     version.projectId(), version.id(), version.fileName(), version.url(), version.sha512(),
@@ -369,6 +388,13 @@ public final class UpdateCheck {
         LOGGER.info("[Hotwire] {} of {} mods have a newer version", offers.size(), hashByName.size());
         return offers;
     }
+
+    public static boolean isOlder(String offered, String installed) {
+        return offered.matches(PLAIN_VERSION) && installed.matches(PLAIN_VERSION)
+                && ModPolicy.isNewer(installed.replaceFirst("[+].*", ""), offered.replaceFirst("[+].*", ""));
+    }
+
+    private static final String PLAIN_VERSION = "\\d+\\.\\d+\\.\\d+([+][A-Za-z0-9.+_-]*)?";
 
     private static String findLoaderVersion() {
         return FabricLoader.getInstance().getModContainer("fabricloader")

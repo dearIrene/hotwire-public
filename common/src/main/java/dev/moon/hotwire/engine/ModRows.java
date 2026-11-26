@@ -37,7 +37,9 @@ public final class ModRows {
             boolean disabled = this.installed.isDisabled(id);
             String container = graph.getContainers(id).stream().filter(this.isOn).findFirst()
                     .map(this.installed::nameOf).orElse(null);
-            (disabled ? this.installed.findDisabled(id) : this.installed.find(id)).ifPresent(mod -> out.add(
+
+            (disabled && this.installed.isDisabledSinceStart(id) ? this.installed.findDisabled(id)
+                    : this.installed.find(id).or(() -> this.installed.findDisabled(id))).ifPresent(mod -> out.add(
                     new ModStatus(id, mod.name(), mod.version(), this.isOn.test(id), String.join(", ", mod.authors()),
                             mod.library(), disabled, container)));
         }
