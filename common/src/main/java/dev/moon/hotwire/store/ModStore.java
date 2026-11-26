@@ -34,6 +34,7 @@ import java.util.concurrent.TimeoutException;
 import java.util.function.BiConsumer;
 import java.util.function.Consumer;
 import java.util.function.Function;
+import java.util.function.Predicate;
 import net.fabricmc.loader.api.FabricLoader;
 import org.jspecify.annotations.Nullable;
 import org.slf4j.Logger;
@@ -58,8 +59,9 @@ public final class ModStore {
         StoreCache cache = new StoreCache(CacheLimit.findStoreFolder().resolve("answers"),
                 (long) CacheLimit.readStore() << 20);
 
-        this.model = new StoreModel(client, cache, id -> !installed.isDeleted(id) && (installed.isInstalled(id)
-                || FabricLoader.getInstance().isModLoaded(id)), () -> { });
+        Predicate<String> has = id -> !installed.isDeleted(id) && (installed.isInstalled(id)
+                || FabricLoader.getInstance().isModLoaded(id));
+        this.model = new StoreModel(client, cache, id -> has.test(id) || has.test(id.replace('-', '_')), () -> { });
         this.icons = new StoreIconLoader(this.model, cache, project -> {
             String id = check.getIdByProject().get(project);
             return id == null ? null : icons.apply(id);
