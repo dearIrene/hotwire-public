@@ -25,6 +25,9 @@ final class CandidateReach {
     private long asked;
     private long computed;
 
+    private static final int MOST = 1_000_000;
+    private boolean over;
+
     CandidateReach(int expected) {
         this.reached = new IdentityHashMap<>(expected);
     }
@@ -33,14 +36,26 @@ final class CandidateReach {
         return this.reached.size();
     }
 
-    Set<String> find(Object item) {
+    @Nullable Set<String> find(Object item) {
         this.asked++;
-        return this.named.computeIfAbsent(this.reach(item, LookRoots.WRAPPER_STEPS), this::toNames);
+        if (this.over) {
+            return null;
+        }
+        BitSet answer = this.reach(item, LookRoots.WRAPPER_STEPS);
+        return this.over ? null : this.named.computeIfAbsent(answer, this::toNames);
     }
 
     String describe() {
         return this.reached.size() + " objects read into for " + this.asked + " elements, " + this.computed
-                + " worked out, " + (this.singles.size() + this.shared.size()) + " answers";
+                + " worked out, " + (this.singles.size() + this.shared.size()) + " answers"
+                + (this.over ? ", over its budget: any mod from then on; most read: " + this.findMostRead() : "");
+    }
+
+    private List<String> findMostRead() {
+        Map<String, Integer> counts = new HashMap<>();
+        this.reached.keySet().forEach(one -> counts.merge(one.getClass().getName(), 1, Integer::sum));
+        return counts.entrySet().stream().sorted(Map.Entry.<String, Integer>comparingByValue().reversed()).limit(8)
+                .map(entry -> entry.getKey() + " " + entry.getValue()).toList();
     }
 
     private BitSet reach(@Nullable Object value, int left) {
@@ -82,6 +97,10 @@ final class CandidateReach {
                     return NONE;
                 }
             }
+        }
+        if (this.over || this.reached.size() >= MOST) {
+            this.over = true;
+            return NONE;
         }
         this.computed++;
 

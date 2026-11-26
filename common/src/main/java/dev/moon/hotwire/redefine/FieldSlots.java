@@ -218,6 +218,12 @@ public final class FieldSlots {
             }
         }
 
+        public void prepareHandle() {
+            if (this.isStatic() && setUp.test(this.owner)) {
+                this.findHandle();
+            }
+        }
+
         public void set(@Nullable Object holder, @Nullable Object value) throws IllegalAccessException {
             if (holder == null && this.isStatic() && !setUp.test(this.owner)) {
                 throw new IllegalAccessException(this.owner.getName() + "." + this.name + " is not set up");

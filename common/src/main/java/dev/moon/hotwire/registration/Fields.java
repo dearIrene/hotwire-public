@@ -85,9 +85,10 @@ public final class Fields {
             try {
                 ClassLoader game = Fields.class.getClassLoader();
                 for (Class<?> type : LoadedClassList.of(instrumentation)) {
-                    if (Objects.equals(type.getClassLoader(), game) && !type.isHidden() && !type.isArray()
+                    if ((Objects.equals(type.getClassLoader(), game) || StaticCopies.isWalked(type.getName()))
+                            && !type.isHidden() && !type.isArray() && !type.isPrimitive()
                             && !Owners.isOfOffMod(type)) {
-                        getReferenceFields(type, true);
+                        getReferenceFields(type, true).forEach(FieldSlots.Slot::prepareHandle);
                     }
                 }
             } finally {

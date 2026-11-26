@@ -42,6 +42,9 @@ final class TakeCandidates {
             CandidateReach walk = this.reach;
             if (walk != null) {
                 Set<String> reached = walk.find(element);
+                if (reached == null) {
+                    return null;
+                }
                 if (VERIFY) {
                     this.verify(element, reached);
                 }

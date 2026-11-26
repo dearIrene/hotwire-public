@@ -245,7 +245,7 @@ public final class StaticCopies {
         return WALKED_KIND.get(value.getClass());
     }
 
-    private static boolean isWalked(String name) {
+    static boolean isWalked(String name) {
         return !name.startsWith("java.") && !name.startsWith("jdk.") && !name.startsWith("sun.")
                 && !name.startsWith("com.sun.") && !name.startsWith("io.netty.") && !name.startsWith("org.lwjgl.")
                 && !name.startsWith("dev.moon.hotwire.") && !name.startsWith("org.objectweb.")

@@ -31,6 +31,7 @@ import org.jspecify.annotations.Nullable;
 import org.objectweb.asm.Type;
 
 public final class Owners {
+    private static final String NEOFORGE = "neoforge";
     private static final String DISABLED = ".disabled";
     private static volatile @Nullable CallerOwner callers;
     private static volatile @Nullable Jars jars;
@@ -118,6 +119,10 @@ public final class Owners {
             CodeSource source = type.getProtectionDomain().getCodeSource();
             Path jar = source == null ? null : this.jarOf.computeIfAbsent(source, Owners::findJarOf).orElse(null);
             String mod = jar == null ? null : this.lookUp(jar);
+
+            if (NEOFORGE.equals(mod) && GameNames.isGame(type.getName())) {
+                mod = GameNames.MINECRAFT;
+            }
             Path name = jar == null || mod == null ? null : jar.getFileName();
             boolean game = name != null && GameLibraries.has(Type.getInternalName(type), name.toString());
             into.nested = jar == null ? null : this.nestedOf.get(jar);

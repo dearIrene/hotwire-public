@@ -36,6 +36,8 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 public final class ClassRebuilder {
+    private static final HotwireLoaders SEEING = new HotwireLoaders();
+
     private static volatile Predicate<String> wholeClasses = name -> false;
 
     public static void setWholeClasses(Predicate<String> classes) {
@@ -240,6 +242,16 @@ public final class ClassRebuilder {
     public PreparedRebuild prepare(Map<Class<?>, byte[]> originals, Map<String, byte[]> current,
             Map<String, byte[]> classes,
             Map<String, byte[]> resources, List<String> on, Predicate<String> mods) throws RebuildException {
+        List<String> apart = new ArrayList<>();
+        for (Class<?> type : originals.keySet()) {
+            if (!SEEING.seesHotwire(type.getClassLoader())) {
+                apart.add(type.getName());
+            }
+        }
+        if (!apart.isEmpty()) {
+            throw RebuildException.ofRestartOnly("its mixins are in classes loaded where Hotwire's code cannot be"
+                    + " reached: " + apart);
+        }
         RebuildCache.Inputs inputs = new RebuildCache.Inputs(originals, current, classes, resources, on, this.toLaunch,
                 OffWindowObjects.findMadeWithout(originals.keySet()), this.copy.findClassPathChanges());
         PreparedRebuild cached = this.ahead.find(inputs);
