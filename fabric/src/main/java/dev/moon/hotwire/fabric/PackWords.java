@@ -29,8 +29,13 @@ final class PackWords {
     private static final String ENGLISH = "en_us";
     private static final String OWN = "hotwire.";
 
-    private static final Map<String, String> SAME_LANGUAGE = Map.of("es", "es_es", "pt", "pt_br", "de", "de_de",
-            "fr", "fr_fr", "ru", "ru_ru");
+    private static final Map<String, String> SAME_LANGUAGE = Map.ofEntries(Map.entry("es", "es_es"),
+            Map.entry("pt", "pt_br"), Map.entry("de", "de_de"), Map.entry("fr", "fr_fr"), Map.entry("ru", "ru_ru"),
+            Map.entry("it", "it_it"), Map.entry("nl", "nl_nl"), Map.entry("pl", "pl_pl"), Map.entry("cs", "cs_cz"),
+            Map.entry("da", "da_dk"), Map.entry("fi", "fi_fi"), Map.entry("sv", "sv_se"), Map.entry("no", "no_no"),
+            Map.entry("nb", "no_no"), Map.entry("nn", "no_no"), Map.entry("el", "el_gr"), Map.entry("hu", "hu_hu"),
+            Map.entry("id", "id_id"), Map.entry("ja", "ja_jp"), Map.entry("ro", "ro_ro"), Map.entry("th", "th_th"),
+            Map.entry("tr", "tr_tr"), Map.entry("uk", "uk_ua"), Map.entry("vi", "vi_vn"));
     private static volatile @Nullable Language readFor;
     private static volatile Map<String, String> words = Map.of();
 
