@@ -7,6 +7,7 @@ import java.nio.file.DirectoryStream;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.util.Map;
+import java.util.Objects;
 import java.util.concurrent.ConcurrentHashMap;
 import org.jspecify.annotations.Nullable;
 import org.slf4j.Logger;
@@ -54,16 +55,33 @@ final class DefinedClasses {
     private static final int BLOCK = 1 << 20;
 
     private boolean writing;
+
+    private static final ThreadLocal<Boolean> ASKING = new ThreadLocal<>();
     private long end;
 
     @CanIgnoreReturnValue
-    synchronized boolean put(String name, byte[] bytes) {
-        if (this.closed || this.writing || bytes.length > LENGTH_MASK) {
+    boolean put(String name, byte[] bytes) {
+        if (this.closed || bytes.length > LENGTH_MASK || ASKING.get() != null) {
+            return false;
+        }
+        Path jar = null;
+        if (this.jars != null) {
+            ASKING.set(Boolean.TRUE);
+            try {
+                jar = this.jars.findWithSame(name, bytes);
+            } finally {
+                ASKING.remove();
+            }
+        }
+        return this.putFound(name, bytes, jar);
+    }
+
+    private synchronized boolean putFound(String name, byte[] bytes, @Nullable Path jar) {
+        if (this.closed || this.writing) {
             return false;
         }
         this.writing = true;
         try {
-            Path jar = this.jars == null ? null : this.jars.findWithSame(name, bytes);
             Entry of = this.entries.computeIfAbsent(name, made -> new Entry());
             if (jar != null) {
                 of.jar = jar;
@@ -254,13 +272,19 @@ final class DefinedClasses {
         }
     }
 
-    synchronized byte @Nullable [] find(String name) {
-        Entry of = this.entries.get(name);
-        Path jar = of == null ? null : of.jar;
-        Jars source = this.jars;
-        if (jar != null && source != null) {
-            return source.read(name, jar);
+    byte @Nullable [] find(String name) {
+        Path jar;
+        synchronized (this) {
+            Entry of = this.entries.get(name);
+            jar = of == null ? null : of.jar;
+            if (jar == null || this.jars == null) {
+                return this.findWritten(name, of);
+            }
         }
+        return Objects.requireNonNull(this.jars).read(name, jar);
+    }
+
+    private byte @Nullable [] findWritten(String name, @Nullable Entry of) {
         long place = of == null ? -1 : of.place;
         if (place < 0) {
             return null;
