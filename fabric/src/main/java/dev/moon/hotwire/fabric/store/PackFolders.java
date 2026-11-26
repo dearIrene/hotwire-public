@@ -10,6 +10,7 @@ import java.nio.file.Files;
 import java.nio.file.Path;
 import java.util.ArrayList;
 import java.util.EnumMap;
+import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;
@@ -100,7 +101,9 @@ public final class PackFolders implements StoreModel.Packs {
                 return;
             }
             try {
-                Map<String, String> hashes = FileHashes.findSha512ByName(zips);
+                Map<String, Path> named = new LinkedHashMap<>();
+                zips.forEach(zip -> named.put(String.valueOf(zip.getFileName()), zip));
+                Map<String, String> hashes = FileHashes.findSha512ByName(named);
                 this.client.findByHashes(hashes).forEach((name, version) -> this.findFiles(kind)
                         .put(version.projectId(), name));
             } catch (IOException | RuntimeException e) {

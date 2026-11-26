@@ -33,6 +33,7 @@ import java.io.UncheckedIOException;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.util.ArrayList;
+import java.util.Collection;
 import java.util.HashMap;
 import java.util.HashSet;
 import java.util.LinkedHashSet;
@@ -265,8 +266,18 @@ final class ApiChanges {
                             reason = Reason.NEEDS_RESTART;
                         }
                     }
-                    case ModUpdater.SortResult.IdChanged changed -> lines.add(Lang.get("hotwire.api.update_later",
-                            changed.manifest().name(), changed.manifest().version()));
+                    case ModUpdater.SortResult.IdChanged changed -> {
+                        Collection<String> needing = engine.getGraph().getDependents(changed.replaced());
+                        if (needing.isEmpty()) {
+                            lines.add(Lang.get("hotwire.api.update_later", changed.manifest().name(),
+                                    changed.manifest().version()));
+                        } else {
+                            lines.add(Lang.get("hotwire.update.new_id_needed", changed.manifest().name(),
+                                    changed.manifest().id(), String.join(", ", needing)));
+                            can = false;
+                            reason = Reason.NEEDS_MOD;
+                        }
+                    }
                 }
             }
         }
@@ -288,11 +299,14 @@ final class ApiChanges {
             boolean off = !request.off().isEmpty();
             SwitchPlan planned = off ? parts.runner().getSwitcher().planOff(request.off())
                     : parts.runner().getSwitcher().planOn(request.on());
-            if (parts.runner().getSwitcher().needsReopen(planned) && Games.getNow().countOthers() > 0) {
+
+            boolean closes = parts.runner().getSwitcher().needsReopen(planned) || (off
+                    && Games.getNow().getWorld() != null && parts.runner().hasLeavingContent(planned.order()));
+            if (closes && Games.getNow().countOthers() > 0) {
                 can = false;
                 reason = Reason.REFUSED;
                 lines.add(Lang.get("hotwire.api.reopen_others"));
-            } else if (parts.runner().getSwitcher().needsReopen(planned)) {
+            } else if (closes) {
                 reopen = true;
                 lines.add(Lang.get(Games.getNow().hasOwnServer() ? "hotwire.api.switch_reopen"
                         : "hotwire.api.switch_leave"));
@@ -344,7 +358,11 @@ final class ApiChanges {
                         }
                     }
                 }
-                default -> lines.add(Lang.get("hotwire.api.add_now", preview.name()));
+                default -> {
+                    lines.add(Lang.get("hotwire.api.add_now", preview.name()));
+
+                    lines.addAll(preview.lines());
+                }
             }
         }
         return new Plan(can, reason, List.copyOf(lines), request, List.copyOf(jars), callers, List.copyOf(adding),

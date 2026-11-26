@@ -459,7 +459,9 @@ public final class ModrinthClient {
     public String getScope() {
         String filters = this.order == Order.DEFAULT && this.side == Side.ANY ? ""
                 : ":" + this.order + ":" + this.side;
-        return this.browseLoader + ":" + this.browseVersion + filters;
+
+        return this.browseLoader + ":" + this.browseVersion + filters
+                + (this.hiddenCategories.isEmpty() ? "" : ":!" + String.join(",", this.hiddenCategories));
     }
 
     public Map<String, String> findChanges(Collection<String> projectIds) throws IOException {

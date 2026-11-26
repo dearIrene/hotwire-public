@@ -203,6 +203,8 @@ api.checkUpdates().thenAccept(found -> {
 
 If `failure()` isn't empty then you don't know if there are updates so don't tell the player there are none.
 
+`api.isUpdateCheckOn()` is false when the player turned "Check for updates" off. While it's off, only call `checkUpdates()` when the player asks for a check.
+
 Hotwire itself:
 
 ```java

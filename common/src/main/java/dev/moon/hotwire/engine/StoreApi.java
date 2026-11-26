@@ -81,6 +81,9 @@ final class StoreApi {
         synchronized (BROWSING) {
             made.setBrowsing(query.loader().isEmpty() ? made.getLoader() : query.loader(),
                     query.gameVersion().isEmpty() ? made.getGameVersion() : query.gameVersion());
+
+            ModStore store = findStore();
+            made.setHiddenCategories(store == null ? List.of() : store.getModel().getHiddenCategories());
             return ask.run(made);
         }
     }
