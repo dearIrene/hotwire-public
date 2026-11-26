@@ -603,7 +603,6 @@
   "hotwire.api.self_update.none": "Todavía no se conoce ningún Hotwire más nuevo.",
   "hotwire.add.queue.installed": "%s ya está instalado, así que no se vuelve a poner en cola.",
   "hotwire.add.name_taken": "Ya hay otro archivo llamado %s en tu carpeta de mods, así que %s no se ha devuelto. Cambia el nombre de uno de los dos y añádelo otra vez.",
-  "hotwire.api.add.browsing": "La tienda de Hotwire está mirando otra versión, vuelve a ponerla para añadir mods.",
   "hotwire.switch.saving": "El mundo se está guardando ahora mismo. Prueba otra vez en un momento.",
   "hotwire.switch.world_locked": "¡Cambiar dentro del mundo está desactivado en Ajustes! Sal del mundo y luego cambia.",
   "hotwire.switch.preview_off": "Desactiva %s.",

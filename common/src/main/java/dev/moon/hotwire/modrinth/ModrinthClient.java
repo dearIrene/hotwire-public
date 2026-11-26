@@ -205,6 +205,11 @@ public final class ModrinthClient {
         this.side = side;
     }
 
+    public ModrinthClient asOwn() {
+        return this.isBrowsingOwn() ? this : new ModrinthClient(this.transport, this.loader, this.gameVersion,
+                this.local);
+    }
+
     public boolean isBrowsingOwn() {
         return this.browseLoader.equals(this.loader) && this.browseVersion.equals(this.gameVersion);
     }

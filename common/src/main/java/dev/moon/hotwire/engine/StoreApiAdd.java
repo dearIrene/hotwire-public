@@ -83,20 +83,13 @@ final class StoreApiAdd {
                     StoreProject project = found.get();
                     Games.getNow().runOnGame(marks.carry(() -> {
                         ModStore store = engine.findStore();
-                        if (!store.getModel().getClient().isBrowsingOwn()) {
-                            made.complete(refusal.apply(Lang.get("hotwire.api.add.browsing")));
-                            return;
-                        }
+
                         store.fetch(project.id(), versionId, project.name(),
                                 (jars, projects) -> {
-                                    if (!store.getModel().getClient().isBrowsingOwn()) {
-                                        made.complete(refusal.apply(Lang.get("hotwire.api.add.browsing")));
-                                        return;
-                                    }
                                     engine.storeJars.remember(jars, projects);
                                     then.take(engine, project, jars);
                                 },
-                                failed -> made.complete(refusal.apply(failed)));
+                                failed -> made.complete(refusal.apply(failed)), true);
                     }));
                 });
     }

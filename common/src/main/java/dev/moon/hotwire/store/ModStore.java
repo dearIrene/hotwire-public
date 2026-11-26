@@ -117,12 +117,18 @@ public final class ModStore {
 
     public void fetch(String projectId, String versionId, String title, BiConsumer<List<Path>, List<String>> onJars,
             Consumer<String> onFailure) {
+        this.fetch(projectId, versionId, title, onJars, onFailure, false);
+    }
+
+    public void fetch(String projectId, String versionId, String title, BiConsumer<List<Path>, List<String>> onJars,
+            Consumer<String> onFailure, boolean own) {
         Game client = Games.getNow();
+        ModrinthClient asking = own ? this.model.getClient().asOwn() : this.model.getClient();
 
         Thread.ofPlatform().name("hotwire-store-fetch").daemon().start(Downloads.findMarks().carry(() -> {
             List<ModrinthClient.Version> versions;
             try {
-                versions = this.model.getClient().findVersions(ModrinthClient.Kind.MOD, projectId);
+                versions = asking.findVersions(ModrinthClient.Kind.MOD, projectId);
             } catch (IOException | RuntimeException e) {
                 String why = Lang.get("hotwire.store.failed", e.getMessage());
                 client.runOnGame(() -> onFailure.accept(why));
@@ -136,16 +142,17 @@ public final class ModStore {
                 client.runOnGame(() -> onFailure.accept(why));
                 return;
             }
-            this.fetchFor(wanted, title, onJars, onFailure);
+            this.fetchFor(wanted, title, onJars, onFailure, asking);
         }));
     }
 
     private void fetchFor(ModrinthClient.Version wanted, String title,
-            BiConsumer<List<Path>, List<String>> onJars, Consumer<String> onFailure) {
+            BiConsumer<List<Path>, List<String>> onJars, Consumer<String> onFailure, ModrinthClient asking) {
         Game client = Games.getNow();
         try {
             List<ModrinthClient.Version> all = new ArrayList<>(findNeeded(wanted,
-                    new HashSet<>(Set.of(wanted.projectId())), this::findNewestNeeded));
+                    new HashSet<>(Set.of(wanted.projectId())),
+                    (needed, named) -> this.findNewestNeeded(asking, needed, named)));
             all.add(wanted);
             List<Path> jars = this.fetchAll(all);
             List<String> projects = all.stream().map(ModrinthClient.Version::projectId).toList();
@@ -188,17 +195,17 @@ public final class ModStore {
                 .orElseGet(() -> Channel.pick(versions));
     }
 
-    private List<ModrinthClient.Version> findNewestNeeded(String needed, @Nullable String named)
-            throws IOException {
+    private List<ModrinthClient.Version> findNewestNeeded(ModrinthClient asking, String needed,
+            @Nullable String named) throws IOException {
         if (this.model.isInstalledProject(needed)
                 || this.model.isInstalledProject(this.model.getClient().findProject(needed).slug())) {
             return List.of();
         }
-        List<ModrinthClient.Version> versions = this.model.getClient().findVersions(ModrinthClient.Kind.MOD, needed);
+        List<ModrinthClient.Version> versions = asking.findVersions(ModrinthClient.Kind.MOD, needed);
         if (!versions.isEmpty()) {
             return List.of(pickNeeded(versions, named));
         }
-        if (!this.model.getClient().isForThisLoader(needed)) {
+        if (!asking.isForThisLoader(needed)) {
             return List.of();
         }
         throw new IOException(Lang.get("hotwire.store.needs_no_version",

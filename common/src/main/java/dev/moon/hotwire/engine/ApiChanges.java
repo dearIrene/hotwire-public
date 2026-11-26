@@ -92,7 +92,7 @@ final class ApiChanges {
             } catch (IOException | RuntimeException e) {
                 LOGGER.warn("[Hotwire] the API's plan failed", e);
                 made.complete(new Plan(false, Reason.REFUSED, List.of(Lang.get("hotwire.api.plan_failed",
-                        e.toString())), request, List.of(), callers, List.of(), List.of(), false, Set.of(), Map.of()));
+                        e.toString())), request, List.of(), callers, List.of(), List.of(), false, Set.of(), Map.of(), 0));
             } finally {
                 endTag.run();
             }
@@ -105,13 +105,13 @@ final class ApiChanges {
         if (engine == null || engine.findParts() == null) {
             String why = engine == null ? Lang.get("hotwire.api.starting") : engine.getSwitchRefusal();
             return new Plan(false, Reason.NOT_READY, List.of(why), request, List.of(), callers,
-                    List.of(), List.of(), false, Set.of(), Map.of());
+                    List.of(), List.of(), false, Set.of(), Map.of(), 0);
         }
 
         String notAllowed = ApiConsent.findRefusal(engine, !request.add().isEmpty());
         if (notAllowed != null) {
             return new Plan(false, Reason.REFUSED, List.of(notAllowed), request, List.of(), callers, List.of(),
-                    List.of(), false, Set.of(), Map.of());
+                    List.of(), false, Set.of(), Map.of(), 0);
         }
         List<String> lines = new ArrayList<>();
         Reason reason = Reason.NONE;
@@ -171,6 +171,8 @@ final class ApiChanges {
         List<AddMode> addModes = new ArrayList<>();
 
         Map<Path, String> asked = new HashMap<>();
+
+        int addedFirst = 0;
         for (Path jar : request.jars()) {
             asked.put(jar, FileHashes.findSha256(jar));
             ModManifest manifest = JarLookup.findManifest(jar);
@@ -232,6 +234,22 @@ final class ApiChanges {
                     lines.add(Lang.get("hotwire.api.update_with", offer.name()));
                 }
             }
+
+            List<Path> needs = new ArrayList<>();
+            List<ModUpdater.SortResult> updating = new ArrayList<>();
+            for (int at = 0; at < every.size() && at < results.size(); at++) {
+                ModManifest coming = JarLookup.findManifest(every.get(at));
+                if (results.get(at) instanceof ModUpdater.SortResult.Refused && coming != null
+                        && engine.findJarOf(coming.id()) == null) {
+                    needs.add(every.get(at));
+                } else {
+                    updating.add(results.get(at));
+                }
+            }
+            results = updating;
+            every.removeAll(needs);
+            adding.addAll(0, needs);
+            addedFirst = needs.size();
             jars.clear();
             jars.addAll(every);
             for (String name : unfetched) {
@@ -366,7 +384,7 @@ final class ApiChanges {
             }
         }
         return new Plan(can, reason, List.copyOf(lines), request, List.copyOf(jars), callers, List.copyOf(adding),
-                List.copyOf(addModes), reopen, Set.copyOf(judgedWith), Map.copyOf(asked));
+                List.copyOf(addModes), reopen, Set.copyOf(judgedWith), Map.copyOf(asked), addedFirst);
     }
 
     private record ChangeOutcome(List<String> bad, List<String> refused, List<String> now, List<String> later,
@@ -577,7 +595,7 @@ final class ApiChanges {
 
     private record Plan(boolean can, Reason reason, List<String> lines, ChangeRequest request,
             List<Path> jars, CallerBlocks.Callers callers, List<Path> adding, List<AddMode> addModes,
-            boolean reopen, Set<Path> judgedWith, Map<Path, String> asked) implements ChangePlan {
+            boolean reopen, Set<Path> judgedWith, Map<Path, String> asked, int addedFirst) implements ChangePlan {
         @Override
         public boolean needsReopen() {
             return this.reopen;
@@ -602,9 +620,17 @@ final class ApiChanges {
             engine.api.changing.incrementAndGet();
             Thread.ofPlatform().name("hotwire-api-queue").daemon().start(() -> {
                 try {
+                    List<AddMode> waiting = this.adding.stream().map(jar -> AddMode.NEXT_START).toList();
+                    ChangeOutcome needs = addAll(engine, this.adding.subList(0, this.addedFirst),
+                            waiting.subList(0, this.addedFirst), Set.of());
                     ChangeOutcome updates = readUpdates(engine.getChanges().queueAll(this.jars).join());
-                    ChangeOutcome adds = addAll(engine, this.adding, this.adding.stream()
-                            .map(jar -> AddMode.NEXT_START).toList(), Set.of());
+                    ChangeOutcome adds = addAll(engine, this.adding.subList(this.addedFirst, this.adding.size()),
+                            waiting.subList(this.addedFirst, waiting.size()), Set.of());
+                    adds.bad().addAll(needs.bad());
+                    adds.refused().addAll(needs.refused());
+                    adds.now().addAll(needs.now());
+                    adds.later().addAll(needs.later());
+                    adds.said().addAll(needs.said());
                     ChangeOutcome all = new ChangeOutcome();
                     for (ChangeOutcome part : List.of(updates, adds)) {
                         all.bad().addAll(part.bad());
@@ -711,6 +737,16 @@ final class ApiChanges {
                 }
             }
             HotwireEngine engine = EngineApi.findEngine();
+            if (engine != null && this.addedFirst > 0) {
+                ChangeOutcome needs = addAll(engine, this.adding.subList(0, this.addedFirst),
+                        this.addModes.subList(0, this.addedFirst), this.judgedWith);
+                now.addAll(needs.now());
+                later.addAll(needs.later());
+                said.addAll(needs.said());
+                if (needs.hasStopped()) {
+                    return new SwitchResult(needs.findKind(), switched, needs.describe(), now, later);
+                }
+            }
             if (!this.jars.isEmpty() && engine != null) {
                 Progress progress = engine.getProgress();
                 boolean shown = !progress.snapshot().running();
@@ -734,8 +770,9 @@ final class ApiChanges {
                     return new SwitchResult(updates.findKind(), switched, updates.describe(), now, later);
                 }
             }
-            if (engine != null && !this.adding.isEmpty()) {
-                ChangeOutcome adds = addAll(engine, this.adding, this.addModes, this.judgedWith);
+            if (engine != null && this.adding.size() > this.addedFirst) {
+                ChangeOutcome adds = addAll(engine, this.adding.subList(this.addedFirst, this.adding.size()),
+                        this.addModes.subList(this.addedFirst, this.addModes.size()), this.judgedWith);
                 now.addAll(adds.now());
                 later.addAll(adds.later());
                 said.addAll(adds.said());

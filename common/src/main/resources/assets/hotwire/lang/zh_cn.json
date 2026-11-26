@@ -603,7 +603,6 @@
   "hotwire.api.self_update.none": "目前还没有更新的 Hotwire。",
   "hotwire.add.queue.installed": "%s 已经安装了，所以不会再次排队。",
   "hotwire.add.name_taken": "你的 mods 文件夹里已经有另一个名为 %s 的文件，所以 %s 没有放回去。请重命名其中一个，然后再添加一次。",
-  "hotwire.api.add.browsing": "Hotwire 的商店正在浏览另一个版本，切回来才能添加模组。",
   "hotwire.switch.saving": "世界正在保存。请稍后再试。",
   "hotwire.switch.world_locked": "设置里关闭了世界内切换！请先退出世界再切换。",
   "hotwire.switch.preview_off": "关闭 %s。",

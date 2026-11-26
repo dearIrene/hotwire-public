@@ -603,7 +603,6 @@
   "hotwire.api.self_update.none": "No newer Hotwire is known yet.",
   "hotwire.add.queue.installed": "%s is installed already, so it is not queued again.",
   "hotwire.add.name_taken": "Another file named %s is in your mods folder, so %s was not put back. Rename one of the two, then add it again.",
-  "hotwire.api.add.browsing": "Hotwire's store is looking at another version, set it back to add mods.",
   "hotwire.switch.saving": "The world is saving right now. Try again in a moment.",
   "hotwire.switch.world_locked": "In-world switching is off in Settings! Leave the world, then switch.",
   "hotwire.switch.preview_off": "Turns off %s.",
