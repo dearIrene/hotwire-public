@@ -15,8 +15,10 @@ import java.lang.reflect.Method;
 import java.lang.reflect.Modifier;
 import java.util.ArrayList;
 import java.util.Collection;
+import java.util.Collections;
 import java.util.HashMap;
 import java.util.HashSet;
+import java.util.IdentityHashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
@@ -110,15 +112,19 @@ public final class GlfwCallbacks {
                 String mod = current == null ? null : Owners.findModOrShipper(current.getClass());
                 if (current == null || mod == null || !mods.contains(mod)) {
                     LOGGER.debug("[Hotwire] {} holds {} ({})", setter.getName(), current, mod);
+                    if (current != null) {
+                        fixBelow(current, setter.getParameterTypes()[1], mods);
+                    }
                     continue;
                 }
-                Object inner = findWrapped(current, setter.getParameterTypes()[1], mod, WRAP_DEPTH);
+                Object inner = findWrapped(current, setter.getParameterTypes()[1], mods, WRAP_DEPTH);
 
                 if (inner != null && set(setter, window, inner)) {
                     GameRegistrations.getJournal().addTake(mod, new WrapperRemoval(setter, current, inner));
                     LOGGER.info("[Hotwire] the window's {} is {} again instead of {}'s", setter.getName()
                             .replace("glfwSet", "").replace("Callback", " callback"),
                             inner.getClass().getName(), mod);
+                    fixBelow(inner, setter.getParameterTypes()[1], mods);
                 }
             }
         });
@@ -188,9 +194,10 @@ public final class GlfwCallbacks {
                     if (mod == null || !mods.contains(mod)) {
                         LOGGER.debug("[Hotwire] {}.{} holds {} ({}'s), not one of {}'s", object.getClass().getName(),
                                 field.getName(), java.getClass().getName(), mod, mods);
+                        out += fixBelow(java, type, mods);
                         continue;
                     }
-                    Object inner = findWrapped(java, type, mod, WRAP_DEPTH);
+                    Object inner = findWrapped(java, type, mods, WRAP_DEPTH);
 
                     if (inner == null) {
                         LOGGER.info("[Hotwire] {}.{} of {} keeps {}'s callback: what it wraps was not found, and"
@@ -203,11 +210,82 @@ public final class GlfwCallbacks {
                     GameRegistrations.getJournal().addTake(mod, new FieldRemoval(field, object, value, inner));
                     LOGGER.info("[Hotwire] {}.{} of {} holds {} again instead of {}'s", object.getClass().getName(),
                             field.getName(), holder, inner == null ? "nothing" : inner.getClass().getName(), mod);
+                    out += fixBelow(inner, type, mods);
                 } catch (ReflectiveOperationException | RuntimeException e) {
                 }
             }
         }
         return out;
+    }
+
+    private static int fixBelow(Object start, Class<?> type, Collection<String> off) {
+        Set<Object> seen = Collections.newSetFromMap(new IdentityHashMap<>());
+        return fixBelow(start, type, off, WRAP_DEPTH, seen);
+    }
+
+    @SuppressWarnings("ReferenceEquality")
+    private static int fixBelow(Object object, Class<?> type, Collection<String> off, int depth, Set<Object> seen) {
+        String own = Owners.findModOrShipper(object.getClass());
+        if (depth <= 0 || own == null || off.contains(own) || "minecraft".equals(own) || !seen.add(object)) {
+            return 0;
+        }
+        int out = 0;
+        for (Class<?> at = object.getClass(); at != null && at != Object.class; at = at.getSuperclass()) {
+            for (FieldSlots.Slot field : Fields.getDeclared(at)) {
+                if (field.isStatic() || field.getType().isPrimitive()) {
+                    continue;
+                }
+                try {
+                    Object value = field.get(object);
+                    Object java = unwrap(value);
+                    if (java == null) {
+                        continue;
+                    }
+                    String mod = Owners.findModOrShipper(java.getClass());
+                    if (!type.isInstance(java) || mod == null || !off.contains(mod)) {
+                        out += fixBelow(java, type, off, depth - 1, seen);
+                        continue;
+                    }
+                    Object inner = findWrapped(java, type, off, WRAP_DEPTH);
+                    if (inner == null) {
+                        LOGGER.info("[Hotwire] {}.{} keeps {}'s callback: what it wraps was not found, and a callback"
+                                + " is never put back as nothing", at.getName(), field.getName(), mod);
+                        continue;
+                    }
+                    FieldSlots.Slot place = field;
+                    Object holder = object;
+                    if (value != null && value != java) {
+                        place = findDelegate(value.getClass());
+                        holder = value;
+                    }
+                    if (place == null || !place.getType().isInstance(inner)) {
+                        continue;
+                    }
+                    place.set(holder, inner);
+                    GameRegistrations.getJournal().addTake(mod, new FieldRemoval(place, holder, java, inner));
+                    out++;
+                    LOGGER.info("[Hotwire] {}.{} passes on to {} again instead of {}'s", at.getName(), field.getName(),
+                            inner.getClass().getName(), mod);
+                    out += fixBelow(inner, type, off, depth - 1, seen);
+                } catch (ReflectiveOperationException | RuntimeException e) {
+                }
+            }
+        }
+        return out;
+    }
+
+    private static boolean isOff(Object object, Collection<String> off) {
+        String mod = Owners.findModOrShipper(object.getClass());
+        return mod != null && off.contains(mod);
+    }
+
+    private static FieldSlots.@Nullable Slot findDelegate(Class<?> container) {
+        for (FieldSlots.Slot field : Fields.getDeclared(container)) {
+            if (!field.isStatic() && CallbackI.class.isAssignableFrom(field.getType())) {
+                return field;
+            }
+        }
+        return null;
     }
 
     private static long findWindow() {
@@ -270,23 +348,23 @@ public final class GlfwCallbacks {
         }
     }
 
-    private static @Nullable Object findWrapped(Object mods, Class<?> type, String mod, int depth) {
-        for (Class<?> at = mods.getClass(); at != null && at != Object.class; at = at.getSuperclass()) {
+    private static @Nullable Object findWrapped(Object wrapper, Class<?> type, Collection<String> off, int depth) {
+        for (Class<?> at = wrapper.getClass(); at != null && at != Object.class; at = at.getSuperclass()) {
             for (FieldSlots.Slot field : Fields.getDeclared(at)) {
                 if (field.isStatic() || field.getType().isPrimitive()) {
                     continue;
                 }
                 try {
-                    Object value = field.get(mods);
+                    Object value = field.get(wrapper);
                     Object java = unwrap(value);
                     if (java == null) {
                         continue;
                     }
-                    boolean theirs = mod.equals(Owners.findModOrShipper(java.getClass()));
+                    boolean theirs = isOff(java, off);
                     if (type.isInstance(java) && !theirs) {
                         return java;
                     }
-                    Object deeper = theirs && depth > 1 ? findWrapped(java, type, mod, depth - 1) : null;
+                    Object deeper = theirs && depth > 1 ? findWrapped(java, type, off, depth - 1) : null;
                     if (deeper != null) {
                         return deeper;
                     }
@@ -295,10 +373,10 @@ public final class GlfwCallbacks {
                 }
             }
         }
-        return findWrappedInStatics(mods.getClass(), type, mod);
+        return findWrappedInStatics(wrapper.getClass(), type, off);
     }
 
-    private static @Nullable Object findWrappedInStatics(Class<?> callback, Class<?> type, String mod) {
+    private static @Nullable Object findWrappedInStatics(Class<?> callback, Class<?> type, Collection<String> off) {
         int lambda = callback.isHidden() ? callback.getName().indexOf("$$Lambda") : -1;
         if (lambda < 0) {
             return null;
@@ -311,7 +389,7 @@ public final class GlfwCallbacks {
                 }
                 Object value = field.get(null);
                 Object java = unwrap(value);
-                if (type.isInstance(java) && !mod.equals(Owners.findModOrShipper(java.getClass()))) {
+                if (type.isInstance(java) && !isOff(java, off)) {
                     return java;
                 }
             }

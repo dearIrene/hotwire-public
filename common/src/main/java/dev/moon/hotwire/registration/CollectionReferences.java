@@ -90,6 +90,8 @@ final class CollectionReferences implements FixedLists.Walk {
         this.writer = writer;
     }
 
+    private final MultimapParts multimaps = new MultimapParts();
+
     synchronized void takeOut(List<String> mods, Collection<Object> holders, Collection<Class<?>> statics,
             HandedSearch handed) {
         Tripwire.runAsHotwire(() -> this.takeOutNow(mods, holders, statics, handed));
@@ -156,6 +158,8 @@ final class CollectionReferences implements FixedLists.Walk {
     }
 
     private void endRemoval(List<String> mods) {
+        this.multimaps.fix(this.mine.values().stream().flatMap(List::stream).map(Removal::container)
+                .filter(Objects::nonNull).toList());
         this.mine.forEach((mod, out) -> {
             out.forEach(removal -> removal.resetHolder(this.lazyFields));
             if (!out.isEmpty()) {
@@ -783,6 +787,7 @@ final class CollectionReferences implements FixedLists.Walk {
                             one.getValue().describe(), e);
                 }
             }
+            this.multimaps.fix(containers);
 
             Set<Object> stillOut = Collections.newSetFromMap(new IdentityHashMap<>());
             this.removals.values().forEach(out -> out.forEach(removal -> {
@@ -841,6 +846,7 @@ final class CollectionReferences implements FixedLists.Walk {
     }
 
     void lookIntoNow(Object holder) {
+        this.multimaps.note(holder);
         this.readThrough.add(holder);
         Set<String> was = this.enter(holder);
         CollectionNotes notes = ElementLook.isLooking() && !CollectionParts.isGameObject(holder) ? this.look.getNotes()
