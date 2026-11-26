@@ -372,6 +372,11 @@ public final class UpdateCheck {
                 }
             }
 
+            if (parent != null && this.installed.find(parent).map(ModManifest::version)
+                    .filter(running -> running.equals(version.number())).isPresent()) {
+                return;
+            }
+
             String asked = id;
             ModManifest manifest = this.installed.find(id).or(() -> this.installed.findDisabled(asked))
                     .orElse(null);
