@@ -20,6 +20,7 @@ import java.util.concurrent.TimeUnit;
 import java.util.concurrent.TimeoutException;
 import java.util.function.BiConsumer;
 import java.util.function.Consumer;
+import java.util.function.Function;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -171,6 +172,34 @@ public final class DisabledMods {
             ended.complete(result);
         });
         return ended;
+    }
+
+    public ModAdder.Result enableNow(String id, Function<Path, ModAdder.Result> add) {
+        this.awaitRenames();
+        Path disabledJar = this.installed.findJarOf(id);
+        if (disabledJar == null) {
+            return new ModAdder.Result.Refused(Lang.get("hotwire.switch.not_installed", id));
+        }
+        Path jar;
+        try {
+            jar = DisabledJars.rename(disabledJar);
+        } catch (IOException e) {
+            LOGGER.warn("[Hotwire] {} could not get its name back for its add", disabledJar.getFileName(), e);
+            return new ModAdder.Result.Refused(Lang.get("hotwire.switch.brought_back_failed",
+                    this.installed.nameOf(id), e.getMessage()));
+        }
+        ModAdder.Result result = add.apply(jar);
+        if (result instanceof ModAdder.Result.Added) {
+            this.installed.onRestored(id, jar);
+            LOGGER.info("[Hotwire] {} is back from its kept-off jar, added with the world closed", id);
+        } else {
+            try {
+                DisabledJars.renameBack(jar);
+            } catch (IOException e) {
+                LOGGER.warn("[Hotwire] {} did not go in and could not be renamed off again", jar.getFileName(), e);
+            }
+        }
+        return result;
     }
 
     public void disableAfter(ModSwitcher.Result result) {

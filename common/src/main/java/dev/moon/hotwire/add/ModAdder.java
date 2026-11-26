@@ -80,9 +80,13 @@ public final class ModAdder {
         record Queued(String id, String message) implements Result {
         }
 
-        record Refused(String reason, boolean restartOnly) implements Result {
+        record Refused(String reason, boolean restartOnly, boolean reopens) implements Result {
             public Refused(String reason) {
-                this(reason, false);
+                this(reason, false, false);
+            }
+
+            public Refused(String reason, boolean restartOnly) {
+                this(reason, restartOnly, false);
             }
         }
 
@@ -518,7 +522,8 @@ public final class ModAdder {
                 String name = parts.values().stream().reduce((first, second) -> second).orElseThrow().jar()
                         .manifest().name();
                 yield new Result.Refused(reopen.content().isEmpty() ? Lang.get("hotwire.add.starts_use_reopen", name)
-                        : Lang.get("hotwire.add.makes_use_reopen", name, String.join(", ", reopen.content())));
+                        : Lang.get("hotwire.add.makes_use_reopen", name, String.join(", ", reopen.content())), false,
+                        true);
             }
         };
     }

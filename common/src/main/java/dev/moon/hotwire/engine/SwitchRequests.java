@@ -75,12 +75,43 @@ final class SwitchRequests {
 
         CompletableFuture<SwitchResult> brought = EngineApi.beginSwitch(this.engine);
         CompletableFuture.allOf(adds.toArray(CompletableFuture[]::new)).whenComplete((ignored, error) ->
-                Games.getNow().runOnGame(() -> EngineApi.endSwitch(this.engine, brought, findBroughtBack(adds))));
+                Games.getNow().runOnGame(() -> {
+                    EngineApi.endSwitch(this.engine, brought, findBroughtBack(adds));
+                    if (!quiet) {
+                        this.offerReopenFor(disabledIds, adds);
+                    }
+                }));
         if (rest.isEmpty()) {
             return brought;
         }
         return this.run(runner -> runner.turnOn(rest), false, rest, quiet, false).thenCombine(brought,
                 SwitchRequests::combine);
+    }
+
+    private void offerReopenFor(List<String> disabledIds, List<CompletableFuture<ModAdder.Result>> adds) {
+        List<String> reopening = new ArrayList<>();
+        for (int at = 0; at < adds.size(); at++) {
+            if (adds.get(at).getNow(null) instanceof ModAdder.Result.Refused refused && refused.reopens()) {
+                reopening.add(disabledIds.get(at));
+            }
+        }
+        ModScreen current = this.screen.get();
+        if (reopening.isEmpty() || current == null || Games.getNow().findReopenRefusal().isPresent()) {
+            return;
+        }
+        current.offerReopen(new ReopenPanel.Offer(false, reopening, null,
+                PlayerMessages.joinNames(reopening, this.installed::nameOf), Lang.get("hotwire.reopen.why.on_world"),
+                false));
+    }
+
+    private @Nullable CheckedResult turnOnBringingBack(SwitchRunner runner, List<String> ids) {
+        List<String> back = this.orderByNeeds(ids.stream().filter(this.disabled::isDisabledSinceStart).toList());
+        for (String id : back) {
+            ModAdder.Result added = this.disabled.enableNow(id, this.engine.getChanges()::addNow);
+            this.say.show(ModAdder.describe(added), !(added instanceof ModAdder.Result.Added), "");
+        }
+        List<String> rest = ids.stream().filter(id -> !back.contains(id)).toList();
+        return rest.isEmpty() ? null : runner.turnOn(rest);
     }
 
     private List<String> orderByNeeds(List<String> ids) {
@@ -277,7 +308,8 @@ final class SwitchRequests {
         CompletableFuture<SwitchResult> ended = EngineApi.beginSwitch(this.engine);
         this.tasks.submit("save and switch", () -> {
             try {
-                return Optional.ofNullable(runSwitchWithReopen(runner, off, ids, byPlayer));
+                return Optional.ofNullable(runSwitchWithReopen(runner, off, ids, byPlayer,
+                        on -> this.turnOnBringingBack(runner, on)));
             } catch (InterruptedException e) {
                 Thread.currentThread().interrupt();
                 throw new IllegalStateException("the switch was interrupted while the world closed or opened", e);
@@ -301,6 +333,11 @@ final class SwitchRequests {
 
     static @Nullable CheckedResult runSwitchWithReopen(SwitchRunner runner, boolean off, List<String> ids,
             boolean byPlayer) throws InterruptedException {
+        return runSwitchWithReopen(runner, off, ids, byPlayer, runner::turnOn);
+    }
+
+    static @Nullable CheckedResult runSwitchWithReopen(SwitchRunner runner, boolean off, List<String> ids,
+            boolean byPlayer, Function<List<String>, @Nullable CheckedResult> turnOn) throws InterruptedException {
         ActionJournal.Entry journal = ActionJournal.get().begin(off ? ActionJournal.Action.REOPEN_OFF
                 : ActionJournal.Action.REOPEN_ON, ids);
         @Nullable CheckedResult result;
@@ -313,7 +350,7 @@ final class SwitchRequests {
                     if (ids.isEmpty()) {
                         return null;
                     }
-                    return off ? runner.turnOff(ids) : runner.turnOn(ids);
+                    return off ? runner.turnOff(ids) : turnOn.apply(ids);
                 }, byPlayer);
             }
         } catch (InterruptedException | RuntimeException e) {
