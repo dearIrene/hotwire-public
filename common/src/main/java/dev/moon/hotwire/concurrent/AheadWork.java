@@ -17,6 +17,7 @@ public final class AheadWork {
         private final Map<String, Runnable> forSwitch = new LinkedHashMap<>();
         private boolean asked;
         private boolean switching;
+        private boolean lookEarly;
     }
 
     private AheadWork() {
@@ -68,6 +69,18 @@ public final class AheadWork {
             WAITS.forSwitch.clear();
         }
         due.forEach(entry -> run(entry.getKey(), entry.getValue()));
+    }
+
+    public static void setLookEarly() {
+        synchronized (WAITS) {
+            WAITS.lookEarly = true;
+        }
+    }
+
+    public static boolean isLookEarly() {
+        synchronized (WAITS) {
+            return WAITS.lookEarly;
+        }
     }
 
     public static boolean isAsked() {

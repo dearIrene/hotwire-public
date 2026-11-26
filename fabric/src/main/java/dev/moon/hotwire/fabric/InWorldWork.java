@@ -19,10 +19,22 @@ final class InWorldWork {
     static void lookAheadSoon(HotwireEngine engine) {
         CompletableFuture.delayedExecutor(LOOK_DELAY.toSeconds(), TimeUnit.SECONDS).execute(() -> {
             JvmParts parts = engine.findParts();
-            AheadWork.runWhenAsked("look in a world", () -> {
-                if (parts != null && Minecraft.getInstance().level != null) {
+            if (parts == null) {
+                return;
+            }
+            Runnable look = () -> {
+                if (Minecraft.getInstance().level != null) {
                     parts.runner().lookAheadForAll();
+                }
+            };
+            if (AheadWork.isLookEarly()) {
+                look.run();
+            } else {
+                AheadWork.runWhenAsked("look in a world", look);
+            }
 
+            AheadWork.runWhenAsked("statics in a world", () -> {
+                if (Minecraft.getInstance().level != null) {
                     parts.runner().preloadStatics(parts.instrumentation());
                 }
             });

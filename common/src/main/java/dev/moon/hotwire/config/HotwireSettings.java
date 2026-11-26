@@ -212,6 +212,7 @@ public final class HotwireSettings {
         @Nullable String promptAcceptedFor;
         boolean keyCardShown;
         boolean tourSeen;
+        int sessionsUnused;
         @Nullable Boolean shareMods;
 
         boolean storeNoteRead;
@@ -259,6 +260,7 @@ public final class HotwireSettings {
     private volatile @Nullable String promptAcceptedFor;
     private volatile boolean keyCardShown;
     private volatile boolean tourSeen;
+    private volatile int sessionsUnused;
     private volatile boolean shareMods = true;
     private volatile boolean downloadsWarned;
     private volatile boolean antiCrashOfferOff;
@@ -314,6 +316,7 @@ public final class HotwireSettings {
         this.devSeeThrough = saved.devSeeThrough == null ? 0 : Math.clamp(saved.devSeeThrough, 0, 1);
         this.keyCardShown = saved.keyCardShown;
         this.tourSeen = saved.tourSeen;
+        this.sessionsUnused = saved.sessionsUnused;
         this.shareMods = saved.shareMods == null || saved.shareMods;
         this.downloadsWarned = saved.storeNoteRead;
         this.antiCrashOfferOff = saved.antiCrashOfferOff;
@@ -562,6 +565,22 @@ public final class HotwireSettings {
         this.save();
     }
 
+    public int countSession(int most) {
+        int before = this.sessionsUnused;
+        if (before < most) {
+            this.sessionsUnused = before + 1;
+            this.save();
+        }
+        return before;
+    }
+
+    public void markUsed() {
+        if (this.sessionsUnused != 0) {
+            this.sessionsUnused = 0;
+            this.save();
+        }
+    }
+
     public boolean isDownloadsWarned() {
         return this.downloadsWarned;
     }
@@ -784,6 +803,7 @@ public final class HotwireSettings {
         saved.promptAcceptedFor = this.promptAcceptedFor;
         saved.keyCardShown = this.keyCardShown;
         saved.tourSeen = this.tourSeen;
+        saved.sessionsUnused = this.sessionsUnused;
         saved.shareMods = this.shareMods ? null : Boolean.FALSE;
         saved.storeNoteRead = this.downloadsWarned;
         saved.antiCrashOfferOff = this.antiCrashOfferOff;

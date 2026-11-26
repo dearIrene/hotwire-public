@@ -130,6 +130,8 @@ import org.slf4j.LoggerFactory;
 final class EngineStart {
     private static final Logger LOGGER = LoggerFactory.getLogger(EngineStart.class);
 
+    private static final int SESSIONS_UNUSED = 3;
+
     private EngineStart() {
     }
 
@@ -466,8 +468,13 @@ final class EngineStart {
                 }
             });
 
+            AheadWork.runWhenAsked("used", settings::markUsed);
             if (Flags.AHEAD_AT_START || DevSetups.get().inSetup()) {
                 AheadWork.ask();
+            } else if (settings.countSession(SESSIONS_UNUSED) < SESSIONS_UNUSED && !Flags.NO_LOOK_EARLY) {
+                AheadWork.setLookEarly();
+                Thread.ofPlatform().name("hotwire-look-warm").daemon()
+                        .start(() -> parts.runner().prepareLook());
             }
             laps.endLap("switch cache");
             forgetStartFailure(gameDir);

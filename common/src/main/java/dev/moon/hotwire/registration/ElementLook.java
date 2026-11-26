@@ -297,6 +297,9 @@ public final class ElementLook {
     public static void prepareAhead(FieldReferences references, Predicate<String> on) {
         List<String> every = findEvery(List.of());
         synchronized (ONE_LOOK) {
+            if (!lookedForEvery.isEmpty()) {
+                return;
+            }
             looking = Thread.currentThread();
             runningMode = Mode.SETUP;
             MODE.set(Mode.SETUP);
