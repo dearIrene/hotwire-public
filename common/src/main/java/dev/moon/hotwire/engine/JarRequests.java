@@ -53,7 +53,7 @@ final class JarRequests {
 
     @SuppressWarnings("FutureReturnValueIgnored")
     void add(Path jar, AddMode mode, boolean byPlayer, BiConsumer<ModAdder.Result, String> then) {
-        AheadWork.ask();
+        AheadWork.onSwitch();
         if (mode == AddMode.NEXT_START && this.engine.isInModsFolder(jar)) {
             String name = String.valueOf(jar.getFileName());
 
@@ -177,7 +177,7 @@ final class JarRequests {
 
     @SuppressWarnings("FutureReturnValueIgnored")
     void addTogether(List<Path> jars, Runnable otherwise, Runnable then) {
-        AheadWork.ask();
+        AheadWork.onSwitch();
         this.progress.beginAdding(Lang.get("hotwire.add.many", jars.size()));
         this.tasks.submit("add", () -> {
             try {

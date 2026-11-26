@@ -29,9 +29,11 @@ public final class EngineScreens {
 
     public Object makeScreen(@Nullable Object back) {
         ScreenOpenTimer timer = new ScreenOpenTimer();
+
         return this.owner.units.wrapScreen(() -> {
+            ModScreen built = this.buildScreen(back, timer);
             AheadWork.ask();
-            return this.buildScreen(back, timer);
+            return built;
         }, timer);
     }
 

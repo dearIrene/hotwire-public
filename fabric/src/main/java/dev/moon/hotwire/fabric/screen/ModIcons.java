@@ -2,11 +2,13 @@ package dev.moon.hotwire.fabric.screen;
 
 import com.mojang.blaze3d.platform.NativeImage;
 import dev.moon.hotwire.add.LoaderModList;
+import dev.moon.hotwire.engine.CacheLimit;
 import dev.moon.hotwire.engine.InstalledMods;
 import dev.moon.hotwire.jar.JarLookup;
 import dev.moon.hotwire.jar.ModJarException;
 import dev.moon.hotwire.jar.ModJarReader;
 import dev.moon.hotwire.jar.ModManifest;
+import dev.moon.hotwire.modrinth.StoreCache;
 import dev.moon.hotwire.modrinth.WebpLossless;
 import dev.moon.hotwire.ui.widgets.Canvas;
 import dev.moon.hotwire.ui.widgets.IconPixels;
@@ -15,6 +17,9 @@ import dev.moon.hotwire.ui.widgets.OtherImages;
 import dev.moon.hotwire.ui.widgets.StoreIcons;
 import dev.moon.hotwire.ui.widgets.SvgIcon;
 import java.io.ByteArrayInputStream;
+import java.io.ByteArrayOutputStream;
+import java.io.DataInputStream;
+import java.io.DataOutputStream;
 import java.io.IOException;
 import java.nio.file.Files;
 import java.nio.file.Path;
@@ -23,6 +28,7 @@ import java.util.HashMap;
 import java.util.List;
 import java.util.Locale;
 import java.util.Map;
+import java.util.Objects;
 import java.util.Optional;
 import java.util.Set;
 import java.util.concurrent.CompletableFuture;
@@ -31,6 +37,8 @@ import java.util.concurrent.LinkedBlockingQueue;
 import java.util.concurrent.ThreadPoolExecutor;
 import java.util.concurrent.TimeUnit;
 import java.util.stream.Stream;
+import java.util.zip.DeflaterOutputStream;
+import java.util.zip.InflaterInputStream;
 import java.util.zip.ZipEntry;
 import java.util.zip.ZipFile;
 import net.fabricmc.loader.api.FabricLoader;
@@ -65,12 +73,20 @@ public final class ModIcons implements AutoCloseable, IconSource {
         private final byte @Nullable [] encoded;
         private final @Nullable IconPixels pixels;
 
+        private final @Nullable Source again;
+
         private final Map<Integer, int[]> ahead = new ConcurrentHashMap<>();
         private final Set<Integer> decoding = ConcurrentHashMap.newKeySet();
         private final Map<Integer, Identifier> textures = new HashMap<>();
         private volatile double scale;
 
         private Icon(String name, String path, byte @Nullable [] encoded, @Nullable IconPixels pixels, double scale) {
+            this(name, path, encoded, pixels, scale, null);
+        }
+
+        private Icon(String name, String path, byte @Nullable [] encoded, @Nullable IconPixels pixels, double scale,
+                @Nullable Source again) {
+            this.again = again;
             this.name = name;
             this.path = path;
             this.encoded = encoded;
@@ -104,13 +120,15 @@ public final class ModIcons implements AutoCloseable, IconSource {
 
         @SuppressWarnings("FutureReturnValueIgnored")
         private void decodeSoon(int size, double scale) {
-            byte[] file = this.encoded;
-            if (file == null || !this.decoding.add(size)) {
+            byte[] inMemory = this.encoded;
+            Source from = this.again;
+            if ((inMemory == null && from == null) || !this.decoding.add(size)) {
                 return;
             }
             DECODER.execute(() -> {
                 try {
-                    IconPixels decoded = decode(this.path, file);
+                    byte[] file = inMemory != null ? inMemory : readSource(Objects.requireNonNull(from)).orElse(null);
+                    IconPixels decoded = file == null ? null : decode(this.path, file);
                     if (decoded != null && scale == this.scale) {
                         this.ahead.put(size, decoded.makeSquare(size));
                     }
@@ -129,6 +147,58 @@ public final class ModIcons implements AutoCloseable, IconSource {
             }
             this.textures.values().forEach(game.getTextureManager()::release);
             this.textures.clear();
+        }
+    }
+
+    private static volatile @Nullable StoreCache squares;
+
+    private static StoreCache findSquares() {
+        StoreCache made = squares;
+        if (made == null) {
+            made = new StoreCache(CacheLimit.findStoreFolder().resolve("answers"), (long) CacheLimit.readStore() << 20);
+            squares = made;
+        }
+        return made;
+    }
+
+    private static @Nullable String findSquareKey(Source source, int size) {
+        try {
+            Path jar = source.jar();
+            String stamp = jar != null ? Files.size(jar) + "@" + Files.getLastModifiedTime(jar).toMillis()
+                    : findContainer(source.id()).map(found -> found.getMetadata().getVersion().getFriendlyString())
+                            .orElse(null);
+            return stamp == null ? null : "modicon:" + source.id() + "|" + (jar == null ? "game" : jar) + "|"
+                    + stamp + "|" + source.path() + "|" + size;
+        } catch (IOException | RuntimeException e) {
+            return null;
+        }
+    }
+
+    static byte[] packSquare(int size, int[] argb) {
+        ByteArrayOutputStream bytes = new ByteArrayOutputStream(argb.length);
+        try (DataOutputStream out = new DataOutputStream(new DeflaterOutputStream(bytes))) {
+            out.writeInt(size);
+            for (int pixel : argb) {
+                out.writeInt(pixel);
+            }
+        } catch (IOException e) {
+            throw new IllegalStateException(e);
+        }
+        return bytes.toByteArray();
+    }
+
+    static int @Nullable [] unpackSquare(byte[] packed, int size) {
+        try (DataInputStream in = new DataInputStream(new InflaterInputStream(new ByteArrayInputStream(packed)))) {
+            if (in.readInt() != size) {
+                return null;
+            }
+            int[] argb = new int[size * size];
+            for (int i = 0; i < argb.length; i++) {
+                argb[i] = in.readInt();
+            }
+            return argb;
+        } catch (IOException | RuntimeException e) {
+            return null;
         }
     }
 
@@ -281,6 +351,54 @@ public final class ModIcons implements AutoCloseable, IconSource {
     }
 
     private static Optional<Icon> decode(Source source) {
+        Path jar = source.jar();
+        String name = (jar == null ? "" : "jar-" + Integer.toHexString(jar.hashCode()) + "-")
+                + source.id().toLowerCase(Locale.ROOT).replaceAll("[^a-z0-9_.-]", "_");
+        double scale = Minecraft.getInstance().getWindow().getGuiScale();
+        int size = (int) Math.round(IconPixels.LIST_BOX * scale);
+        String key = size > 0 ? findSquareKey(source, size) : null;
+        StoreCache.Entry entry = key == null ? null : findSquares().find(StoreCache.Kind.PICTURE, key).orElse(null);
+        int[] saved = entry == null ? null : unpackSquare(entry.bytes(), size);
+        if (saved != null) {
+            Icon icon = new Icon(name, source.path(), null, null, scale, source);
+            icon.ahead.put(size, saved);
+            return Optional.of(icon);
+        }
+        Optional<Icon> made = decodeFile(source, name);
+        if (key != null) {
+            made.ifPresent(icon -> {
+                int[] shown = icon.ahead.get(size);
+                IconPixels pixels = icon.pixels;
+                if (shown == null && pixels != null) {
+                    shown = pixels.makeSquare(size);
+                }
+                if (shown != null) {
+                    findSquares().save(StoreCache.Kind.PICTURE, key, packSquare(size, shown));
+                }
+            });
+        }
+        return made;
+    }
+
+    private static Optional<byte[]> readSource(Source source) {
+        try {
+            Path jar = source.jar();
+            Optional<byte[]> bytes = jar == null ? fromGame(source) : fromJar(jar, source.path());
+            if (bytes.isPresent()) {
+                return bytes;
+            }
+            Optional<String> only = jar == null ? findOnlyImageInGame(source.id()) : findOnlyImageInJar(jar,
+                    source.id());
+            if (only.isEmpty()) {
+                return Optional.empty();
+            }
+            return jar == null ? fromGameFile(source.id(), only.get()) : fromJar(jar, only.get());
+        } catch (IOException | RuntimeException e) {
+            return Optional.empty();
+        }
+    }
+
+    private static Optional<Icon> decodeFile(Source source, String name) {
         try {
             Path jar = source.jar();
             Optional<byte[]> bytes = jar == null ? fromGame(source) : fromJar(jar, source.path());
@@ -297,8 +415,6 @@ public final class ModIcons implements AutoCloseable, IconSource {
                     return Optional.empty();
                 }
             }
-            String name = (jar == null ? "" : "jar-" + Integer.toHexString(jar.hashCode()) + "-")
-                    + source.id().toLowerCase(Locale.ROOT).replaceAll("[^a-z0-9_.-]", "_");
             return makeIcon(name, path, bytes.get(), IconPixels.LIST_BOX);
         } catch (IOException | RuntimeException e) {
             LOGGER.info("[Hotwire] {}'s icon {} could not be read: {}", source.id(), source.path(), e.toString());

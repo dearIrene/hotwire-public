@@ -26,6 +26,7 @@ import org.slf4j.LoggerFactory;
 
 final class ConfigScreens implements SettingsScreens {
     private static final Logger LOGGER = LoggerFactory.getLogger(ConfigScreens.class);
+    private static final long SLOW_NANOS = 10_000_000;
     private static final String MENU_API = "com.terraformersmc.modmenu.api.ModMenuApi";
     private static final String MENU_FACTORY = "com.terraformersmc.modmenu.api.ConfigScreenFactory";
     private static final String ONECONFIG_MANAGER = "org.polyfrost.oneconfig.api.config.v1.ConfigManager";
@@ -94,8 +95,15 @@ final class ConfigScreens implements SettingsScreens {
         ClassLoader game = ConfigScreens.class.getClassLoader();
         Map<String, SettingsScreen> found = new LinkedHashMap<>();
         Map<String, SettingsScreen> provided = new LinkedHashMap<>();
+        long began = System.nanoTime();
         this.addMenuScreens(game, found, provided);
+        long menu = System.nanoTime();
         this.addOneConfigScreens(game, found);
+        long all = System.nanoTime();
+        if (all - began > SLOW_NANOS) {
+            LOGGER.info("[Hotwire] the settings screens were read in {} ms: Mod Menu's {} ms, OneConfig's {} ms",
+                    (all - began) / 1_000_000, (menu - began) / 1_000_000, (all - menu) / 1_000_000);
+        }
         provided.forEach(found::putIfAbsent);
         found.entrySet().removeIf(entry -> !this.isOpenable(entry.getKey(), entry.getValue()));
         return found;

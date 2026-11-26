@@ -196,6 +196,7 @@ public final class SwitchRunner {
         return List.of(
                 step(this.units::takeOutWorldWrappers),
                 step(this.units::takeOutGlfwCallbacks),
+                step(this.units::takeOutGameModes),
                 step(UncaughtHandlers::takeOut),
                 new Step(this.units::takeOutAttachments, "world wrappers"),
                 new Step(this.wrappers::takeOut, "generated wrappers"),
@@ -405,7 +406,7 @@ public final class SwitchRunner {
     }
 
     private CheckedResult runSwitch(List<String> ids, boolean off) {
-        AheadWork.ask();
+        AheadWork.onSwitch();
         LOGGER.info("[Hotwire] turning {} {}", off ? "off" : "on", ids);
         ActionJournal.Entry journal = ActionJournal.get().begin(off ? ActionJournal.Action.OFF
                 : ActionJournal.Action.ON, ids);

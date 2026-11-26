@@ -11,6 +11,7 @@ import dev.moon.hotwire.fabric.add.LoadStatusViews;
 import dev.moon.hotwire.fabric.add.WorldReopen;
 import dev.moon.hotwire.fabric.registration.EntityAttachments;
 import dev.moon.hotwire.fabric.registration.OffModClose;
+import dev.moon.hotwire.fabric.screen.ScreenPreloader;
 import dev.moon.hotwire.modrinth.Downloads;
 import dev.moon.hotwire.redefine.FieldHolders;
 import dev.moon.hotwire.redefine.InitHookRuns;
@@ -256,6 +257,7 @@ public final class HotwireClient implements ClientModInitializer {
         }
         StartTimes.mark(TITLE);
         ActionJournal.get().note(ActionJournal.Action.TITLE, "");
+        ScreenPreloader.start();
         Path file = FabricLoader.getInstance().getGameDir().resolve("hotwire").resolve("logs")
                 .resolve(HotwireLog.STARTUP);
         String about = "Hotwire " + LoadedMods.findVersion(ID, "unknown") + " on Minecraft "

@@ -134,6 +134,10 @@ public final class ClassRebuilder {
         MIX_ONLY.set(only);
     }
 
+    static boolean isMixOnly() {
+        return MIX_ONLY.get();
+    }
+
     private volatile Function<Collection<String>, Map<String, byte[]>> runningOf = names -> Map.of();
 
     public void resolveRunningWith(Function<Collection<String>, Map<String, byte[]>> runningOf) {

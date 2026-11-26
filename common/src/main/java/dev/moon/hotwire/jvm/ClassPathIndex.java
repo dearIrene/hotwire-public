@@ -40,6 +40,8 @@ public final class ClassPathIndex implements Function<String, @Nullable URL>, Au
 
     private final long[] keys;
     private final @Nullable OpenJar[] jars;
+
+    private final @Nullable JarFile[] readers;
     private final List<String> samples;
 
     private record OpenJar(Path path, @Nullable JarFile file, String base, boolean own) {
@@ -51,6 +53,7 @@ public final class ClassPathIndex implements Function<String, @Nullable URL>, Au
     private ClassPathIndex(long[] keys, @Nullable OpenJar[] jars, List<String> samples) {
         this.keys = keys;
         this.jars = jars;
+        this.readers = new JarFile[jars.length];
         this.samples = samples;
     }
 
@@ -223,12 +226,16 @@ public final class ClassPathIndex implements Function<String, @Nullable URL>, Au
             return null;
         }
         int at = index.find(hash(name));
-        OpenJar jar = at < 0 ? null : index.jars[(int) (index.keys[at] & ((1 << JAR_BITS) - 1))];
-        JarFile file = jar == null ? null : jar.file();
-        if (jar == null || file == null || !jar.path().equals(from)) {
+        int number = at < 0 ? -1 : (int) (index.keys[at] & ((1 << JAR_BITS) - 1));
+        OpenJar jar = number < 0 ? null : index.jars[number];
+        if (jar == null || jar.file() == null || !jar.path().equals(from)) {
             return null;
         }
         try {
+            JarFile file = index.findReader(number, jar);
+            if (file == null) {
+                return null;
+            }
             JarEntry entry = file.getJarEntry(name);
             if (entry == null) {
                 return null;
@@ -238,6 +245,29 @@ public final class ClassPathIndex implements Function<String, @Nullable URL>, Au
             }
         } catch (IOException | RuntimeException e) {
             return null;
+        }
+    }
+
+    private synchronized @Nullable JarFile findReader(int number, OpenJar jar) throws IOException {
+        if (!jar.equals(this.jars[number])) {
+            return null;
+        }
+        JarFile reader = this.readers[number];
+        if (reader == null) {
+            reader = new JarFile(jar.path().toFile(), false, ZipFile.OPEN_READ, JarFile.runtimeVersion());
+            this.readers[number] = reader;
+        }
+        return reader;
+    }
+
+    private void closeReader(int number) {
+        JarFile reader = this.readers[number];
+        this.readers[number] = null;
+        if (reader != null) {
+            try {
+                reader.close();
+            } catch (IOException e) {
+            }
         }
     }
 
@@ -257,6 +287,7 @@ public final class ClassPathIndex implements Function<String, @Nullable URL>, Au
                 OpenJar listed = index.jars[number];
                 if (listed != null && listed.path().equals(wanted)) {
                     index.jars[number] = null;
+                    index.closeReader(number);
                     closeOwn(listed);
                 }
             }
@@ -288,6 +319,7 @@ public final class ClassPathIndex implements Function<String, @Nullable URL>, Au
         for (int number = 0; number < this.jars.length; number++) {
             OpenJar jar = this.jars[number];
             this.jars[number] = null;
+            this.closeReader(number);
             if (jar != null) {
                 closeOwn(jar);
             }

@@ -83,7 +83,7 @@ public final class GameClassIndex {
                 }
                 index.activate();
 
-                AheadWork.runWhenAsked("class index", () -> Thread.ofPlatform().daemon().name("hotwire-class-index")
+                AheadWork.runAtSwitch("class index", () -> Thread.ofPlatform().daemon().name("hotwire-class-index")
                         .start(() -> changeLoader(instrumentation, game, jars, index, path.length)));
                 StartTimes.add("class index (own thread)", began);
             } catch (ReflectiveOperationException | JvmAccessException
