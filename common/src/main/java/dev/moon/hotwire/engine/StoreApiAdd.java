@@ -19,10 +19,6 @@ import org.slf4j.LoggerFactory;
 final class StoreApiAdd {
     private static final Logger LOGGER = LoggerFactory.getLogger(StoreApiAdd.class);
 
-    interface Then<T> {
-        T run(HotwireEngine engine, String name, List<Path> jars);
-    }
-
     private interface Taker {
         void take(HotwireEngine engine, StoreProject project, List<Path> jars);
     }
@@ -38,14 +34,6 @@ final class StoreApiAdd {
         fetch(idOrSlug, versionId, made, (engine, project, jars) -> made.complete(new ProjectJars(List.copyOf(jars),
                 "", project.name(), project.slug(), project.downloads())),
                 why -> new ProjectJars(List.of(), why, "", "", 0));
-        return made;
-    }
-
-    static CompletableFuture<SwitchResult> fetchThen(String idOrSlug, String versionId, Then<SwitchResult> then) {
-        CompletableFuture<SwitchResult> made = new CompletableFuture<>();
-        fetch(idOrSlug, versionId, made, (engine, project, jars) -> {
-            made.complete(then.run(engine, project.name(), jars));
-        }, why -> SwitchResult.ofRefusal(Reason.REFUSED, why));
         return made;
     }
 

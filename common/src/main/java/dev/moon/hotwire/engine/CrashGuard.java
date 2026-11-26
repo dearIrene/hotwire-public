@@ -64,7 +64,9 @@ public final class CrashGuard {
         Set<String> switched = ConcurrentHashMap.newKeySet();
         List<String> said = new CopyOnWriteArrayList<>();
         Set<String> duringChange = ConcurrentHashMap.newKeySet();
+
         made[0] = new CrashPolicy(CrashGuard::findModBehind, id -> canLeave(id) && (isTouched(installed, switched, id)
+                || ActionJournal.get().isChangeUnderWay()
                 || DataPackFaults.isFaulted(id) || (antiCrash.getAsBoolean() && !hasWorldContent(runner, id))),
                 caught -> {
             if (unapplied.dropFrom(caught.thrown())) {

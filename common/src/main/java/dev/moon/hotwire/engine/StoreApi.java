@@ -47,7 +47,6 @@ final class StoreApi {
     private static final Executor ASK = run -> Thread.ofVirtual().name("hotwire-api-store").start(run);
 
     private static final Downloads SAVES = new Downloads();
-    private static final Object BROWSING = new Object();
 
     private static final Map<String, String> IDS = new ConcurrentHashMap<>();
     private static volatile @Nullable ModrinthClient client;
@@ -77,15 +76,13 @@ final class StoreApi {
     }
 
     private static <T> T askBrowsing(StoreQuery query, ClientCall<T> ask) throws IOException {
-        ModrinthClient made = getClient();
-        synchronized (BROWSING) {
-            made.setBrowsing(query.loader().isEmpty() ? made.getLoader() : query.loader(),
-                    query.gameVersion().isEmpty() ? made.getGameVersion() : query.gameVersion());
+        ModrinthClient shared = getClient();
+        ModrinthClient made = shared.asBrowsing(query.loader().isEmpty() ? shared.getLoader() : query.loader(),
+                query.gameVersion().isEmpty() ? shared.getGameVersion() : query.gameVersion());
 
-            ModStore store = findStore();
-            made.setHiddenCategories(store == null ? List.of() : store.getModel().getHiddenCategories());
-            return ask.run(made);
-        }
+        ModStore store = findStore();
+        made.setHiddenCategories(store == null ? List.of() : store.getModel().getHiddenCategories());
+        return ask.run(made);
     }
 
     private static <T> CompletableFuture<T> ask(IoSupplier<T> work) {
@@ -246,17 +243,39 @@ final class StoreApi {
         return ended;
     }
 
+    @SuppressWarnings("FutureReturnValueIgnored")
     static CompletableFuture<SwitchResult> queueForNextStart(String idOrSlug, String versionId) {
-        return StoreApiAdd.fetchThen(idOrSlug, versionId, (engine, name, jars) -> {
-            List<ModAdder.Result> results = new ArrayList<>();
-            jars.forEach(jar -> engine.add(jar, AddMode.NEXT_START, results::add));
-            for (ModAdder.Result result : results) {
-                if (!(result instanceof ModAdder.Result.Queued)) {
-                    return EngineApi.toResult(result);
-                }
+        CompletableFuture<SwitchResult> ended = new CompletableFuture<>();
+        StoreApiAdd.fetchJars(idOrSlug, versionId).whenComplete((fetched, failure) -> {
+            HotwireEngine engine = EngineApi.findEngine();
+            if (failure != null || engine == null || fetched.jars().isEmpty()) {
+                ended.complete(failure != null ? EngineApi.toFailure(failure)
+                        : SwitchResult.ofRefusal(Reason.REFUSED, fetched.why()));
+                return;
             }
-            return new SwitchResult(SwitchResult.Kind.DONE, List.of(), Lang.get("hotwire.api.add.next_start", name));
+
+            Games.getNow().runOnGame(() -> {
+                List<CompletableFuture<ModAdder.Result>> each = new ArrayList<>();
+                for (Path jar : fetched.jars()) {
+                    CompletableFuture<ModAdder.Result> one = new CompletableFuture<>();
+                    each.add(one);
+                    engine.add(jar, AddMode.NEXT_START, one::complete);
+                }
+                CompletableFuture.allOf(each.toArray(CompletableFuture[]::new)).whenComplete((done, error) -> {
+                    for (CompletableFuture<ModAdder.Result> one : each) {
+                        ModAdder.Result result = one.getNow(null);
+                        if (!(result instanceof ModAdder.Result.Queued)) {
+                            ended.complete(result == null ? EngineApi.toFailure(error)
+                                    : EngineApi.toResult(result));
+                            return;
+                        }
+                    }
+                    ended.complete(new SwitchResult(SwitchResult.Kind.DONE, List.of(),
+                            Lang.get("hotwire.api.add.next_start", fetched.name())));
+                });
+            });
         });
+        return ended;
     }
 
     static Path findDownloads() {
@@ -287,7 +306,9 @@ final class StoreApi {
         }
         Path folder = findDownloads();
         if (browsing.kind() == StoreKind.MOD && browsing.gameVersion().isEmpty() && browsing.loader().isEmpty()) {
-            return StoreApiAdd.fetchThen(idOrSlug, versionId, (made, name, jars) -> copyInto(folder, name, jars));
+            return StoreApiAdd.fetchJars(idOrSlug, versionId).thenApplyAsync(fetched -> fetched.jars().isEmpty()
+                    ? SwitchResult.ofRefusal(Reason.REFUSED, fetched.why())
+                    : copyInto(folder, fetched.name(), fetched.jars()), ASK);
         }
         return ask(() -> {
             CachedAsks asks = findAsks(findStore());

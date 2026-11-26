@@ -286,8 +286,12 @@ final class SwitchRequests {
             String said = result.map(done -> PlayerMessages.describe(done.result(), this.installed::nameOf)
                     + PlayerMessages.describe(done.check())).orElse(Lang.get("hotwire.reopen.world_open_again"));
             this.say.show(said, result.map(done -> PlayerMessages.isBad(done.result())).orElse(false), "");
-            result.ifPresent(done -> SwitchHistory.get().recordDone(done.result(), SwitchHistory.Cause.PLAYER, ""));
-            result.ifPresent(done -> this.followInProfile(done.result()));
+
+            result.ifPresent(done -> SwitchHistory.get().recordDone(done.result(), byPlayer
+                    ? SwitchHistory.Cause.PLAYER : SwitchHistory.Cause.MOD, ""));
+            if (byPlayer) {
+                result.ifPresent(done -> this.followInProfile(done.result()));
+            }
             this.engine.refreshScreen();
             EngineApi.endSwitch(this.engine, ended, result.map(done -> EngineApi.toResult(done.result(), said))
                     .orElse(new SwitchResult(SwitchResult.Kind.DONE, List.of(), said)));

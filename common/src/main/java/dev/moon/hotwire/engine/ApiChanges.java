@@ -92,7 +92,8 @@ final class ApiChanges {
             } catch (IOException | RuntimeException e) {
                 LOGGER.warn("[Hotwire] the API's plan failed", e);
                 made.complete(new Plan(false, Reason.REFUSED, List.of(Lang.get("hotwire.api.plan_failed",
-                        e.toString())), request, List.of(), callers, List.of(), List.of(), false, Set.of(), Map.of(), 0));
+                        e.toString())), request, List.of(), callers, List.of(), List.of(), false, Set.of(),
+                        Map.of(), 0));
             } finally {
                 endTag.run();
             }
@@ -280,6 +281,9 @@ final class ApiChanges {
                             key = "hotwire.api.update_copy";
                         }
                         lines.add(Lang.get(key, planned.manifest().name(), planned.manifest().version()));
+
+                        planned.whole().bundled().forEach(library -> lines.add(Lang.get("hotwire.api.update_with",
+                                library.manifest().name() + " " + library.manifest().version())));
                         if (!now && reason == Reason.NONE) {
                             reason = Reason.NEEDS_RESTART;
                         }

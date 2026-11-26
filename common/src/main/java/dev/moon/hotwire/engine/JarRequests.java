@@ -65,14 +65,22 @@ final class JarRequests {
             return;
         }
         if (mode == AddMode.NEXT_START) {
-            ModAdder.Result queued = this.changes.queueAddAlone(jar);
-            boolean ok = queued instanceof ModAdder.Result.Queued;
-            this.engine.showMessage(ModAdder.describe(queued), !ok);
-            if (ok) {
-                this.storeJars.markQueued(jar, this.engine.getPendingChanges());
-            }
-            then.accept(queued, ModAdder.describe(queued));
-            this.engine.refreshScreen();
+            this.tasks.submit("queue add", () -> {
+                try {
+                    return this.changes.queueAddAlone(jar);
+                } catch (RuntimeException | LinkageError e) {
+                    LOGGER.warn("[Hotwire] the queueing of {} threw", jar, e);
+                    return new ModAdder.Result.Failed(Lang.get("hotwire.failed", e), e);
+                }
+            }, queued -> {
+                boolean ok = queued instanceof ModAdder.Result.Queued;
+                this.engine.showMessage(ModAdder.describe(queued), !ok);
+                if (ok) {
+                    this.storeJars.markQueued(jar, this.engine.getPendingChanges());
+                }
+                then.accept(queued, ModAdder.describe(queued));
+                this.engine.refreshScreen();
+            });
             return;
         }
         this.progress.beginAdding(String.valueOf(jar.getFileName()).replaceFirst("(?i)\\.jar$", ""));

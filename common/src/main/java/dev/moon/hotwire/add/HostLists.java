@@ -5,6 +5,7 @@ import dev.moon.hotwire.registration.SodiumSettingsPages;
 import dev.moon.hotwire.update.LiveNames;
 import java.lang.reflect.Field;
 import java.lang.reflect.Method;
+import java.nio.file.Path;
 import java.util.ArrayList;
 import java.util.Collection;
 import java.util.Comparator;
@@ -38,6 +39,7 @@ public final class HostLists {
     private static final String LIBJF_DSL = "dev.jfronny.libjf.config.api.v2.dsl.DSL";
     private static final String LIBJF_CONFIG = "dev.jfronny.libjf.config.api.v2.JfCustomConfig";
     private static final String LIBJF_NAMINGS = "dev.jfronny.libjf.config.impl.io.Namings";
+    private static final String ICEBERG_CONFIGS = "com.anthonyhilyard.iceberg.fabric.config.ConfigTracker";
     private static final String LIBJF_NAMING = "dev.jfronny.libjf.config.api.v2.Naming$Custom";
 
     private HostLists() {
@@ -101,6 +103,34 @@ public final class HostLists {
         ids.forEach(id -> addSodiumPages(game, id));
         ids.forEach(id -> addLibJfConfigs(game, id));
         ids.forEach(id -> addVoicePlugins(game, id));
+        loadIcebergConfigs(game);
+    }
+
+    private static void loadIcebergConfigs(ClassLoader game) {
+        if (!FabricLoader.getInstance().isModLoaded("iceberg")) {
+            return;
+        }
+        try {
+            Class<?> tracker = Class.forName(ICEBERG_CONFIGS, true, game);
+            Object instance = tracker.getField("INSTANCE").get(null);
+            Field files = tracker.getDeclaredField("fileMap");
+            files.setAccessible(true);
+            for (Object info : new ArrayList<Object>(((Map<?, ?>) files.get(instance)).values())) {
+                Method spec = info.getClass().getDeclaredMethod("getSpec");
+                spec.setAccessible(true);
+                Object config = spec.invoke(info);
+
+                Field values = config.getClass().getDeclaredField("childConfig");
+                values.setAccessible(true);
+                if (values.get(config) == null) {
+                    tracker.getMethod("openConfig", info.getClass(), Path.class).invoke(instance, info,
+                            FabricLoader.getInstance().getConfigDir());
+                    LOGGER.info("[Hotwire] a config registered with Iceberg since the start is loaded");
+                }
+            }
+        } catch (ReflectiveOperationException | RuntimeException | LinkageError e) {
+            LOGGER.warn("[Hotwire] Iceberg's configs registered since the start could not be loaded", e);
+        }
     }
 
     private static void addVoicePlugins(ClassLoader game, String id) {
