@@ -1,6 +1,7 @@
 package dev.moon.hotwire.update;
 
 import dev.moon.hotwire.concurrent.Parallel;
+import dev.moon.hotwire.config.AtomicFiles;
 import dev.moon.hotwire.dev.DevSession;
 import dev.moon.hotwire.engine.ModPolicy;
 import dev.moon.hotwire.jar.ContentScan;
@@ -150,6 +151,8 @@ public final class ModUpdater {
                 engine::satisfies);
     }
 
+    private static final int UNWRAP_HASH = 12;
+
     public Path unwrap(Path jar) {
         ModManifest manifest = JarLookup.findManifest(jar);
         String parent = manifest == null ? null : manifest.menuParent().orElse(null);
@@ -158,17 +161,27 @@ public final class ModUpdater {
         }
         try (ZipFile zip = new ZipFile(jar.toFile())) {
             for (ZipEntry entry : zip.stream().filter(one -> one.getName().endsWith(".jar")).toList()) {
-                Path written = this.engine.getStagingFolder().resolve(parent)
-                        .resolve(Path.of(entry.getName()).getFileName().toString());
-                Files.createDirectories(written.getParent());
+                String name = Path.of(entry.getName()).getFileName().toString();
+                Path folder = this.engine.getStagingFolder().resolve(parent);
+                Files.createDirectories(folder);
+                Path read = Files.createTempFile(folder, "unwrap", ".part");
                 try (InputStream in = zip.getInputStream(entry)) {
-                    Files.copy(in, written, StandardCopyOption.REPLACE_EXISTING);
+                    Files.copy(in, read, StandardCopyOption.REPLACE_EXISTING);
                 }
-                ModManifest inner = JarLookup.findManifest(written);
-                if (inner != null && inner.id().equals(parent)) {
-                    return written;
+                ModManifest inner = JarLookup.findManifest(read);
+                if (inner == null || !inner.id().equals(parent)) {
+                    Files.delete(read);
+                    continue;
                 }
-                Files.delete(written);
+
+                Path written = folder.resolve(FileHashes.findSha256(read).substring(0, UNWRAP_HASH)).resolve(name);
+                if (Files.exists(written)) {
+                    Files.delete(read);
+                } else {
+                    Files.createDirectories(written.getParent());
+                    AtomicFiles.moveInto(read, written);
+                }
+                return written;
             }
             return jar;
         } catch (IOException e) {

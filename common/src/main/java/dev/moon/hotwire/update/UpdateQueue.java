@@ -2,6 +2,8 @@ package dev.moon.hotwire.update;
 
 import dev.moon.hotwire.config.AtomicFiles;
 import dev.moon.hotwire.config.JsonFile;
+import dev.moon.hotwire.jar.JarLookup;
+import dev.moon.hotwire.jar.ModManifest;
 import java.io.IOException;
 import java.nio.file.Files;
 import java.nio.file.Path;
@@ -56,10 +58,16 @@ public final class UpdateQueue {
 
     public static Path putInStaging(Path staging, Path jar, boolean linked) throws IOException {
         Files.createDirectories(staging);
-        Path staged = staging.resolve(String.valueOf(jar.getFileName()));
-        if (staged.toAbsolutePath().normalize().equals(jar.toAbsolutePath().normalize())) {
-            return staged;
+        Path named = staging.resolve(String.valueOf(jar.getFileName()));
+        if (named.toAbsolutePath().normalize().equals(jar.toAbsolutePath().normalize())) {
+            return named;
         }
+
+        ModManifest there = Files.isRegularFile(named) ? JarLookup.findManifest(named) : null;
+        ModManifest coming = there == null ? null : JarLookup.findManifest(jar);
+        Path staged = there != null && coming != null && !there.id().equals(coming.id())
+                ? Files.createDirectories(staging.resolve(coming.id())).resolve(String.valueOf(jar.getFileName()))
+                : named;
         Path part = staged.resolveSibling(staged.getFileName() + ".part");
         Files.deleteIfExists(part);
         try {

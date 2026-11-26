@@ -172,6 +172,11 @@ public final class JarSwapper {
         }
     }
 
+    private static Path findTarget(Path staged, @Nullable Path running, Path mods) {
+        boolean off = running != null && String.valueOf(running.getFileName()).endsWith(DISABLED);
+        return mods.resolve(staged.getFileName() + (off ? DISABLED : ""));
+    }
+
     private static String findChange(UpdateQueue.Entry entry, Path mods) {
         Path staged = Path.of(entry.stagedJar());
         Path running = findRunning(entry, mods);
@@ -186,7 +191,7 @@ public final class JarSwapper {
                 return "the running jar changed after the update was queued";
             }
 
-            Path into = mods.resolve(staged.getFileName());
+            Path into = findTarget(staged, running, mods);
             if (Files.isRegularFile(into) && (running == null || !Files.isSameFile(into, running))
                     && !FileHashes.findSha256(into).equals(entry.stagedSha256())) {
                 return "another jar named " + into.getFileName() + " is in the mods folder";
@@ -218,15 +223,12 @@ public final class JarSwapper {
             throws IOException {
         Path staged = Path.of(entry.stagedJar());
         Path running = findRunning(entry, mods);
-        Path into = mods.resolve(staged.getFileName());
+        Path into = findTarget(staged, running, mods);
         if (running == null) {
             move(staged, into, moved);
             return null;
         }
         Path aside = replaced.resolve(stripDisabled(running.getFileName()));
-        if (String.valueOf(running.getFileName()).endsWith(DISABLED)) {
-            into = mods.resolve(staged.getFileName() + DISABLED);
-        }
         if (aside.toAbsolutePath().equals(staged.toAbsolutePath())) {
             Path swap = staged.resolveSibling(staged.getFileName() + ".swap");
             move(staged, swap, moved);
