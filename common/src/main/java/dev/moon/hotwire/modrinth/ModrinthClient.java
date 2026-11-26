@@ -151,6 +151,8 @@ public final class ModrinthClient {
     private volatile String browseLoader;
 
     private volatile List<String> hiddenCategories = List.of();
+
+    private volatile List<String> leftOut = List.of();
     private volatile String browseVersion;
 
     public ModrinthClient(String hotwireVersion, String loader, String gameVersion, LocalJars local) {
@@ -271,6 +273,7 @@ public final class ModrinthClient {
                 facets.add(List.of("categories!=" + hidden));
             }
         }
+        this.leftOut.forEach(project -> facets.add(List.of("project_id!=" + project)));
 
         JsonArray facetJson = new JsonArray();
         for (List<String> any : facets) {
@@ -461,6 +464,14 @@ public final class ModrinthClient {
 
     public List<String> getHiddenCategories() {
         return this.hiddenCategories;
+    }
+
+    public List<String> getLeftOut() {
+        return this.leftOut;
+    }
+
+    public void setLeftOut(Collection<String> projects) {
+        this.leftOut = projects.stream().sorted().distinct().toList();
     }
 
     public void setHiddenCategories(Collection<String> hidden) {

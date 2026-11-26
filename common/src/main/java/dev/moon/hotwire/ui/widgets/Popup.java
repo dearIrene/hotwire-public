@@ -8,6 +8,9 @@ public final class Popup extends Element {
     }
 
     private static final int ITEM = 16;
+    private static final int MOST_ROWS = 12;
+
+    private static final int BEATS = 5;
     private static final int PAD = 8;
     private static final int FACE = Palette.PANEL | 0xFF000000;
 
@@ -24,6 +27,9 @@ public final class Popup extends Element {
     private int bottom;
     private boolean sized;
 
+    private int first;
+    private int rows;
+
     public Popup() {
         this.setVisible(false);
     }
@@ -35,6 +41,8 @@ public final class Popup extends Element {
         this.right = right;
         this.bottom = bottom;
         this.sized = false;
+        this.first = 0;
+        this.rows = Math.min(this.items.size(), MOST_ROWS);
         this.wanted = true;
         this.openedAt = System.nanoTime();
         this.shown.snap(0);
@@ -84,8 +92,8 @@ public final class Popup extends Element {
     }
 
     private int findUnder() {
-        int under = (int) Math.floor((this.getPointerY() - this.getY() - 2) / ITEM);
-        return this.isHovered() && under >= 0 && under < this.items.size() ? under : -1;
+        int row = (int) Math.floor((this.getPointerY() - this.getY() - 2) / ITEM);
+        return this.isHovered() && row >= 0 && row < this.rows ? this.first + row : -1;
     }
 
     @Override
@@ -93,7 +101,8 @@ public final class Popup extends Element {
         if (!this.sized) {
             int width = this.items.stream().mapToInt(item -> canvas.measureText(item.label())).max().orElse(0)
                     + 2 * PAD;
-            int height = this.items.size() * ITEM + 4;
+            this.rows = Math.max(1, Math.min(this.rows, (this.bottom - 4) / ITEM));
+            int height = this.rows * ITEM + 4;
             this.setBounds(Math.max(0, Math.min(this.atX, this.right - width)),
                     Math.max(0, Math.min(this.atY, this.bottom - height)), width, height);
             this.sized = true;
@@ -107,21 +116,35 @@ public final class Popup extends Element {
         int under = this.findUnder();
         boolean live = under >= 0 && this.items.get(under).action() != null;
         if (live && this.markShown.getValue() < 0.05f) {
-            this.markAt.snap(under * ITEM);
+            this.markAt.snap((under - this.first) * ITEM);
         } else if (live) {
-            this.markAt.to(under * ITEM);
+            this.markAt.to((under - this.first) * ITEM);
         }
         this.markShown.to(live ? 1 : 0);
         int mark = y + 2 + this.markAt.getRounded();
         canvas.fill(x + 1, mark, far - 1, mark + ITEM, Colors.fade(Palette.PANEL_EDGE,
                 alpha * open * this.markShown.getValue()));
-        for (int i = 0; i < this.items.size(); i++) {
-            Item item = this.items.get(i);
+        for (int row = 0; row < this.rows && this.first + row < this.items.size(); row++) {
+            Item item = this.items.get(this.first + row);
 
-            float in = Math.clamp(open * 1.8f - i * 0.14f, 0, 1);
-            canvas.drawText(item.label(), x + PAD - Math.round((1 - in) * 4), y + 2 + i * ITEM + (ITEM - 8) / 2,
+            float in = Math.clamp(open * 1.8f - Math.min(row, BEATS) * 0.14f, 0, 1);
+            canvas.drawText(item.label(), x + PAD - Math.round((1 - in) * 4), y + 2 + row * ITEM + (ITEM - 8) / 2,
                     Colors.fade(item.action() == null ? Palette.FAINT : item.ink(), alpha * in));
         }
+        int more = this.items.size() - this.rows;
+        if (more > 0) {
+            int track = this.rows * ITEM;
+            int thumb = Math.max(8, track * this.rows / this.items.size());
+            int top = y + 2 + (track - thumb) * this.first / more;
+            canvas.fill(far - 3, top, far - 1, top + thumb, Colors.fade(Palette.FAINT, alpha * open));
+        }
+    }
+
+    @Override
+    protected boolean onScroll(double amount) {
+        this.first = Math.clamp(this.first - (int) Math.signum(amount) * 3, 0,
+                Math.max(0, this.items.size() - this.rows));
+        return true;
     }
 
     @Override

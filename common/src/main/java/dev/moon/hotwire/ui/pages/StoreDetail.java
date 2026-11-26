@@ -4,7 +4,9 @@ import dev.moon.hotwire.modrinth.ModrinthClient;
 import dev.moon.hotwire.modrinth.StoreModel;
 import dev.moon.hotwire.ui.Lang;
 import dev.moon.hotwire.ui.widgets.Canvas;
+import dev.moon.hotwire.ui.widgets.Colors;
 import dev.moon.hotwire.ui.widgets.Drawer;
+import dev.moon.hotwire.ui.widgets.EasedValue;
 import dev.moon.hotwire.ui.widgets.Element;
 import dev.moon.hotwire.ui.widgets.Kit;
 import dev.moon.hotwire.ui.widgets.Line;
@@ -33,7 +35,14 @@ public final class StoreDetail {
     private static final int ADDRESS_LINE = 60;
     private static final int ABOUT = 0;
 
+    private static final int POPPED_WIDE = 420;
+    private static final int POPPED_MARGIN = 14;
+
     public final Drawer part;
+
+    public final Over over = new Over();
+    private final Line beside = Kit.row().cross(Line.Cross.STRETCH);
+    private final Part body;
     private final StoreModel model;
     private final StoreIcons icons;
     private final StorePage.Game game;
@@ -44,7 +53,9 @@ public final class StoreDetail {
     private final Markdown words;
     private final Line header = Kit.row().gap(8);
     private final Text title = Kit.text("").lines(2);
-    private final Text sub = Kit.dim("").lines(2);
+
+    private final Text sub = Kit.dim("").lines(1);
+    private final Text license = Kit.dim("").wrap();
     private final Text link = Kit.text("", Palette.PATH);
     private final Line actions = Kit.row().gap(4);
     private final Tabs tabs = Kit.tabs(Tabs.Look.WORDS, this::showTab);
@@ -75,13 +86,14 @@ public final class StoreDetail {
 
         Line linkRow = Kit.row(this.link);
         linkRow.press((button, modifiers) -> this.askToOpen(linkRow, this.link.get()));
-        this.about = Kit.column(linkRow, this.words).gap(8);
+        this.about = Kit.column(this.license, linkRow, this.words).gap(8);
         this.tabs.tab(Lang.get("hotwire.store.about")).tab(Lang.get("hotwire.store.versions_short"));
         this.page = Kit.scroll(this.shownTab);
         this.words.within(this.page);
         Line body = Kit.column(this.header, this.actions, this.tabs, this.page.grow(1)).pad(10, 10).gap(8)
                 .face(Palette.PANEL);
-        this.part = Kit.drawer(false, Kit.row(Kit.rule().width(1), new Body(body).grow(1))
+        this.body = new Body(body).grow(1);
+        this.part = Kit.drawer(false, Kit.row(Kit.rule().width(1), this.beside.grow(1))
                 .cross(Line.Cross.STRETCH), WIDTH);
         this.showTab(ABOUT);
     }
@@ -100,7 +112,15 @@ public final class StoreDetail {
                 Kit.push("×", this::dismiss));
         this.showTab(ABOUT);
         this.fill();
-        this.part.open(true);
+        boolean popped = this.model.isGrid();
+        this.beside.clear();
+        this.over.slot.clear();
+        (popped ? this.over.slot : this.beside).with(this.body);
+        this.part.open(!popped);
+        this.over.wanted = popped;
+        if (popped) {
+            this.over.setVisible(true);
+        }
         this.model.findProject(hit, page -> this.take(() -> this.project = page), why -> this.take(
                 () -> this.failure = why));
         this.model.findVersions(hit, versions -> this.take(() -> this.found = versions.size() > MOST_VERSIONS
@@ -109,7 +129,15 @@ public final class StoreDetail {
     }
 
     public boolean isOpen() {
+        return this.part.isOpen() || this.over.wanted;
+    }
+
+    public boolean isBeside() {
         return this.part.isOpen();
+    }
+
+    public boolean isPopped() {
+        return this.over.wanted;
     }
 
     boolean isShowing(String projectId) {
@@ -119,6 +147,7 @@ public final class StoreDetail {
 
     public void dismiss() {
         this.part.open(false);
+        this.over.wanted = false;
     }
 
     private void showTab(int tab) {
@@ -215,10 +244,11 @@ public final class StoreDetail {
             return;
         }
         ModrinthClient.Project page = this.project;
-        String license = page == null || page.license().isEmpty() ? ""
-                : "  " + Lang.get("hotwire.store.license", page.license());
-        this.sub.set(shown.author() + license + "  " + StorePage.describeDownloads(page == null ? shown.downloads()
-                : page.downloads()) + " " + Lang.get("hotwire.store.downloads"));
+        String license = page == null ? "" : page.license();
+        this.license.set(license.isEmpty() ? "" : Lang.get("hotwire.store.license", license))
+                .show(!license.isEmpty());
+        this.sub.set(shown.author() + "  " + StorePage.describeDownloads(shown.downloads()) + " "
+                + Lang.get("hotwire.store.downloads"));
         this.link.set(page == null ? "" : page.sourceUrl()).show(page != null && !page.sourceUrl().isEmpty());
         this.words.set(page == null ? shown.description() : page.body());
         List<ModrinthClient.Version> known = this.found;
@@ -264,13 +294,72 @@ public final class StoreDetail {
                     }
                 });
         boolean opened = version.id().equals(this.openedVersion);
-        return Kit.column(Kit.row(Kit.text((opened ? "▾ " : "▸ ") + name).lines(1).grow(1), button)
-                .gap(6).cross(Line.Cross.CENTER),
+        return Kit.column(Kit.text((opened ? "▾ " : "▸ ") + name).lines(1),
                 Kit.row(Kit.text(type, Palette.WARN).spare(), Kit.text(day, Palette.FAINT).spare(),
-                        Kit.text(needs, Palette.FAINT).spare()).gap(8)).gap(2).press((button2, modifiers) -> {
+                        Kit.text(needs, Palette.FAINT).spare(), Kit.space(), button).gap(8)
+                        .cross(Line.Cross.CENTER)).gap(2).press((button2, modifiers) -> {
                             this.openedVersion = opened ? "" : version.id();
                             this.fill();
                         });
+    }
+
+    public final class Over extends Part {
+        private final Line slot = Kit.column().cross(Line.Cross.STRETCH);
+        private final EasedValue shown = EasedValue.ofSpeed(16);
+        private boolean wanted;
+
+        Over() {
+            this.add(this.slot);
+            this.setVisible(false);
+        }
+
+        @Override
+        public void step(float dt) {
+            this.shown.to(this.wanted ? 1 : 0);
+            this.shown.step(dt);
+            if (!this.wanted && this.shown.getValue() <= 0.01f) {
+                this.setVisible(false);
+                return;
+            }
+            this.slot.setAlpha(this.shown.getValue());
+            super.step(dt);
+        }
+
+        @Override
+        public void measure(Canvas canvas, int room) {
+            this.slot.measure(canvas, Math.min(POPPED_WIDE, room - 2 * POPPED_MARGIN));
+            this.hugWidth = 0;
+            this.hugHeight = 0;
+        }
+
+        @Override
+        protected void place(Canvas canvas) {
+            int wide = Math.max(0, Math.min(POPPED_WIDE, this.getWidth() - 2 * POPPED_MARGIN));
+            this.slot.lay(canvas, this.getX() + (this.getWidth() - wide) / 2, this.getY() + POPPED_MARGIN, wide,
+                    Math.max(0, this.getHeight() - 2 * POPPED_MARGIN));
+        }
+
+        @Override
+        protected void paint(Canvas canvas, float alpha) {
+            canvas.fill(this.getX(), this.getY(), this.getX() + this.getWidth(), this.getY() + this.getHeight(),
+                    Colors.fade(Palette.BACKDROP, alpha * this.shown.getValue()));
+            canvas.fill(this.slot.getX() - 1, this.slot.getY() - 1, this.slot.getX() + this.slot.getWidth() + 1,
+                    this.slot.getY() + this.slot.getHeight() + 1,
+                    Colors.fade(Palette.PANEL_EDGE, alpha * this.shown.getValue()));
+        }
+
+        @Override
+        protected boolean onClick(double px, double py, int button) {
+            if (!this.slot.contains(px, py)) {
+                StoreDetail.this.dismiss();
+            }
+            return true;
+        }
+
+        @Override
+        protected boolean onScroll(double amount) {
+            return true;
+        }
     }
 
     private final class Body extends Part {

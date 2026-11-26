@@ -15,6 +15,7 @@ public final class DownloadsWarningPanel extends Sheet {
     }
 
     private static final List<Sentence> SENTENCES = List.of(
+            new Sentence("hotwire.downloads_warning.api", Palette.TEXT),
             new Sentence("hotwire.downloads_warning.source", Palette.TEXT),
             new Sentence("hotwire.downloads_warning.mind", Palette.BAD),
             new Sentence("hotwire.downloads_warning.host", Palette.DIM));

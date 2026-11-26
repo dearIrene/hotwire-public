@@ -587,6 +587,8 @@ public final class GameReports {
         Map<String, String> texts = new LinkedHashMap<>();
 
         texts.put(Diagnosis.FILE, "");
+
+        texts.put(OtherFiles.FILE, OtherFiles.describe(game, this.folder, this.began));
         Path log = game.resolve("logs").resolve("latest.log");
         Instant now = Instant.now();
         Path logs = game.resolve("hotwire").resolve("logs");

@@ -391,8 +391,8 @@ public class EngineApi implements HotwireApi {
 
             @Override
             public List<String> getLines() {
-                return List.of(Lang.get("hotwire.downloads_warning.source"), Lang.get("hotwire.downloads_warning.mind"),
-                        Lang.get("hotwire.downloads_warning.host"));
+                return List.of(Lang.get("hotwire.downloads_warning.api"), Lang.get("hotwire.downloads_warning.source"),
+                        Lang.get("hotwire.downloads_warning.mind"), Lang.get("hotwire.downloads_warning.host"));
             }
 
             @Override

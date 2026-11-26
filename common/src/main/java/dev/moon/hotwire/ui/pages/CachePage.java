@@ -212,7 +212,7 @@ public final class CachePage {
     private static final class Limit {
         private final Part part;
         private final TextField field;
-        private final Text note = Kit.dim("");
+        private final Text note = Kit.dim("").wrap();
         private final String noteKey;
         private final IntSupplier limit;
 
@@ -229,7 +229,7 @@ public final class CachePage {
             this.field.acceptOnly(Character::isDigit);
             this.field.typeOnlyOnceClicked();
             this.field.setInk(Limit::findInk);
-            this.part = Kit.row(Kit.column(Kit.text(Lang.get(labelKey)), this.note).gap(3), Kit.space(),
+            this.part = Kit.row(Kit.column(Kit.text(Lang.get(labelKey)), this.note).gap(3).grow(1),
                     Kit.fit(this.field).width(48).height(14),
                     Kit.dim(Lang.get("hotwire.cache.limit_unit"))).gap(6);
         }

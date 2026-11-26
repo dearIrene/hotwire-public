@@ -213,7 +213,8 @@ public final class HotwireSettings {
         boolean keyCardShown;
         boolean tourSeen;
         @Nullable Boolean shareMods;
-        boolean downloadsWarned;
+
+        boolean storeNoteRead;
         boolean antiCrashOfferOff;
         boolean choicesMade;
         boolean ownerNoteSeen;
@@ -314,7 +315,7 @@ public final class HotwireSettings {
         this.keyCardShown = saved.keyCardShown;
         this.tourSeen = saved.tourSeen;
         this.shareMods = saved.shareMods == null || saved.shareMods;
-        this.downloadsWarned = saved.downloadsWarned;
+        this.downloadsWarned = saved.storeNoteRead;
         this.antiCrashOfferOff = saved.antiCrashOfferOff;
         this.choicesMade = saved.choicesMade;
         this.ownerNoteSeen = saved.ownerNoteSeen;
@@ -784,7 +785,7 @@ public final class HotwireSettings {
         saved.keyCardShown = this.keyCardShown;
         saved.tourSeen = this.tourSeen;
         saved.shareMods = this.shareMods ? null : Boolean.FALSE;
-        saved.downloadsWarned = this.downloadsWarned;
+        saved.storeNoteRead = this.downloadsWarned;
         saved.antiCrashOfferOff = this.antiCrashOfferOff;
         saved.choicesMade = this.choicesMade;
         saved.ownerNoteSeen = this.ownerNoteSeen;

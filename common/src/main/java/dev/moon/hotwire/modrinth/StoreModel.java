@@ -24,7 +24,7 @@ import org.slf4j.LoggerFactory;
 
 public final class StoreModel implements AutoCloseable {
     private static final Logger LOGGER = LoggerFactory.getLogger(StoreModel.class);
-    public static final int PAGE = 20;
+    public static final int PAGE = 40;
 
     static final long TYPING_PAUSE_NANOS = 300_000_000L;
     private static final int MOST_ANSWERS = 24;
@@ -123,7 +123,8 @@ public final class StoreModel implements AutoCloseable {
 
     public void setHideInstalled(boolean hide) {
         this.hideInstalled = hide;
-        this.onChanged.run();
+        this.client.setLeftOut(hide ? this.installedProjects : Set.of());
+        this.searchFresh();
     }
 
     public int getTotal() {
@@ -304,7 +305,9 @@ public final class StoreModel implements AutoCloseable {
 
     private String findHiddenKey() {
         List<String> hidden = this.client.getHiddenCategories();
-        return hidden.isEmpty() ? "" : ":-" + String.join(",", hidden);
+        List<String> out = this.client.getLeftOut();
+        return (hidden.isEmpty() ? "" : ":-" + String.join(",", hidden))
+                + (out.isEmpty() ? "" : ":x" + Integer.toHexString(out.hashCode()));
     }
 
     public void useHiddenCategories(List<String> hidden, Consumer<List<String>> save) {

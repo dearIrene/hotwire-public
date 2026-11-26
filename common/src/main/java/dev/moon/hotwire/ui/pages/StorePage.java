@@ -47,7 +47,9 @@ public final class StorePage {
         }
     }
 
-    private static final List<String> LOADERS = List.of("fabric", "quilt", "forge", "neoforge");
+    private static final List<String> LOADERS = List.of("fabric", "quilt", "forge", "neoforge", "legacy-fabric",
+            "ornithe", "babric", "liteloader", "rift", "modloader", "nilloader", "paper", "purpur", "spigot",
+            "bukkit", "folia", "sponge", "velocity", "bungeecord", "waterfall");
     private static final List<ModrinthClient.Kind> KINDS = List.of(ModrinthClient.Kind.values());
     private static final int SIDEBAR = 132;
     private static final int ROW = 34;
@@ -146,7 +148,8 @@ public final class StorePage {
                         Kit.row(new LayoutPick(false), new LayoutPick(true)).gap(2)).gap(6)
                         .cross(Line.Cross.CENTER),
                 this.chips, this.note, this.rows, this.grid, this.pages, this.pickBar).pad(10, 10).gap(6).grow(1);
-        this.part = Kit.row(this.side, this.main, this.detail.part).cross(Line.Cross.STRETCH).grow(1);
+        this.part = new Layers(Kit.row(this.side, this.main, this.detail.part).cross(Line.Cross.STRETCH),
+                this.detail.over).grow(1);
         this.showFilters();
     }
 
@@ -348,7 +351,7 @@ public final class StorePage {
         this.model.tick();
         this.showFilters();
         int wide = this.part.getWidth();
-        boolean open = this.detail.isOpen();
+        boolean open = this.detail.isBeside();
         Boolean asked = this.sidebarAsked;
         this.side.open(asked != null ? asked : wide >= (open ? NARROW : SMALL));
         boolean whole = open && wide < SMALL;
@@ -360,6 +363,10 @@ public final class StorePage {
             this.rows.set(cards);
         }
         boolean tiled = this.model.isGrid();
+
+        if (this.detail.isOpen() && tiled != this.detail.isPopped()) {
+            this.detail.dismiss();
+        }
         this.rows.show(!tiled);
         this.grid.show(tiled);
         int across = Math.max(1, (this.grid.getWidth() + CARD_GAP) / (CARD_WIDE + CARD_GAP));
@@ -449,7 +456,11 @@ public final class StorePage {
         ModrinthClient.Hit hit = card.hit();
         String id = hit.projectId();
         if (button == 1 || !this.canPick(card)) {
-            this.detail.open(hit);
+            if (this.detail.isShowing(id)) {
+                this.detail.dismiss();
+            } else {
+                this.detail.open(hit);
+            }
             return;
         }
         if (button != 0) {
@@ -579,6 +590,30 @@ public final class StorePage {
             return String.format(Locale.ROOT, "%.1fM", downloads / 1_000_000d).replace(".0M", "M");
         }
         return downloads >= 1_000 ? downloads / 1_000 + "K" : String.valueOf(downloads);
+    }
+
+    private static final class Layers extends Part {
+        private final Part under;
+        private final Part top;
+
+        Layers(Part under, Part top) {
+            this.under = this.add(under);
+            this.top = this.add(top);
+        }
+
+        @Override
+        public void measure(Canvas canvas, int room) {
+            this.under.measure(canvas, room);
+            this.top.measure(canvas, room);
+            this.hugWidth = this.under.findWidth();
+            this.hugHeight = this.under.findHeight();
+        }
+
+        @Override
+        protected void place(Canvas canvas) {
+            this.under.lay(canvas, this.getX(), this.getY(), this.getWidth(), this.getHeight());
+            this.top.lay(canvas, this.getX(), this.getY(), this.getWidth(), this.getHeight());
+        }
     }
 
     private final class Result extends Part {

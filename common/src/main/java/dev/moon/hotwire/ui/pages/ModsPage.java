@@ -39,6 +39,8 @@ public final class ModsPage implements ProfileMenu.Screen {
     public static final String AUTHOR = "Moonshee";
     private static final int ROW = 26;
     private static final int DETAILS = 190;
+
+    private static final int SMALL = 470;
     private static final int SHIFT = 1;
     public static final long DOUBLE_NANOS = 350_000_000L;
 
@@ -72,6 +74,7 @@ public final class ModsPage implements ProfileMenu.Screen {
     private final Drawer chooseBar;
     private final Line detailsBody = Kit.column().pad(10, 10).gap(6).face(Palette.PANEL);
     private final Drawer details;
+    private final Part main;
 
     private final Map<String, Boolean> wishes = new HashMap<>();
     private List<ModRow> shown = List.of();
@@ -114,13 +117,13 @@ public final class ModsPage implements ProfileMenu.Screen {
                 .cross(Line.Cross.STRETCH), DETAILS);
         Line title = Kit.column(Kit.text("Hotwire").big(), Kit.row(Kit.dim(Lang.get("hotwire.header.credit",
                 AUTHOR)), Kit.text("❤", Palette.ACCENT)).gap(3)).gap(3).cross(Line.Cross.START);
-        Part main = Kit.column(
+        this.main = Kit.column(
                 Kit.row(title, Kit.space(), Kit.fit(this.search).width(80).height(20).grow(4).most(180)).gap(8),
                 Kit.row(this.counts, Kit.meter(() -> this.onPart).grow(1), this.choose).gap(8),
                 Kit.row(Kit.fit(this.profiles.menu, this.profiles.naming).width(90).height(Push.HEIGHT).grow(4)
                         .most(150), this.show, Kit.space(), this.libraries.spare(), this.findBroken.spare()).gap(8),
                 this.empty, this.rows, this.pickBar, this.chooseBar).pad(12, 10).gap(8).grow(1);
-        this.part = Kit.row(main, this.details).cross(Line.Cross.STRETCH);
+        this.part = Kit.row(this.main, this.details).cross(Line.Cross.STRETCH);
         this.refilter();
     }
 
@@ -291,6 +294,10 @@ public final class ModsPage implements ProfileMenu.Screen {
 
     public void refresh(long nowNanos) {
         boolean idle = this.screen.isIdle();
+        int wide = this.part.getWidth();
+        boolean whole = this.details.isOpen() && wide > 0 && wide < SMALL;
+        this.details.setSize(whole ? Math.max(DETAILS, wide) : DETAILS);
+        this.main.show(!whole);
         this.turnOff.active(idle);
         this.turnOn.active(idle);
         this.choose.active(idle);

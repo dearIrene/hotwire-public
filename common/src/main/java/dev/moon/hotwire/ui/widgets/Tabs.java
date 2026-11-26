@@ -9,6 +9,8 @@ public final class Tabs extends Part {
     public enum Look { RAIL, WORDS, BOX }
 
     static final int RAIL_WIDTH = 50;
+
+    private static final int RAIL_MOST = 86;
     private static final int RAIL_TALL = 32;
     private static final int RAIL_ROOMY = 29;
     private static final int RAIL_WORDED = 26;
@@ -51,6 +53,7 @@ public final class Tabs extends Part {
     private boolean worded = true;
     private int signTop = 4;
     private int placedOrigin = Integer.MIN_VALUE;
+    private int railWidth = RAIL_WIDTH;
     private int placedSize;
 
     Tabs(Look look, IntConsumer picked) {
@@ -123,6 +126,14 @@ public final class Tabs extends Part {
             int badge = tab.badge.isEmpty() ? 0 : canvas.measureText(tab.badge) + 4;
             tab.span = this.look == Look.BOX ? tab.labelWidth + badge + 2 * BOX_PAD : tab.labelWidth + badge;
             along += tab.span + (this.look == Look.WORDS ? WORD_GAP : 0);
+        }
+        if (this.look == Look.RAIL) {
+            int widest = this.tabs.stream().mapToInt(tab -> tab.labelWidth).max().orElse(0);
+            int wide = Math.clamp(widest + 2, RAIL_WIDTH, RAIL_MOST);
+            if (wide != this.railWidth) {
+                this.railWidth = wide;
+                this.width(wide);
+            }
         }
         if (this.look == Look.WORDS) {
             this.hugWidth = Math.min(Math.max(0, along - WORD_GAP), room);
@@ -247,13 +258,15 @@ public final class Tabs extends Part {
             ink = Colors.fade(ink, alpha);
             int badgeInk = Colors.fade(tab.badgeInk, alpha);
             if (this.look == Look.RAIL) {
-                int iconX = x + (RAIL_WIDTH - ICON) / 2;
+                int iconX = x + (this.railWidth - ICON) / 2;
                 int iconY = tab.at + (this.worded ? this.signTop : (RAIL_SHORT - ICON) / 2);
                 if (tab.icon != null) {
                     canvas.drawIcon(tab.icon, iconX, iconY, ICON, ink);
                 }
                 if (this.worded) {
-                    canvas.drawText(tab.label, x + (RAIL_WIDTH - tab.labelWidth) / 2, iconY + 14, ink);
+                    int room = Math.min(tab.labelWidth, this.railWidth - 2);
+                    canvas.drawText(room < tab.labelWidth ? canvas.clip(tab.label, room) : tab.label,
+                            x + (this.railWidth - room) / 2, iconY + 14, ink);
                 }
                 if (!tab.badge.isEmpty()) {
                     canvas.drawText(tab.badge, iconX + ICON + 2, iconY - 2, badgeInk);

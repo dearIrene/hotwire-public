@@ -122,9 +122,9 @@ public final class FindBrokenPanel extends Sheet {
                         this.list.with(Kit.row(Kit.check(() -> this.pins.contains(id), () -> this.turnPin(id)), icon,
                                 Kit.text(mod.name()).grow(1)).gap(5).cross(Line.Cross.CENTER));
                     } else {
-                        this.list.with(Kit.row(new Part().width(Kit.Check.SIDE), icon, Kit.text(mod.name(),
-                                Palette.FAINT).grow(1), Kit.text(why, Palette.FAINT).spare()).gap(5)
-                                .cross(Line.Cross.CENTER));
+                        this.list.with(Kit.row(new Part().width(Kit.Check.SIDE), icon, Kit.column(
+                                Kit.text(mod.name(), Palette.FAINT), Kit.text(why, Palette.FAINT).wrap()).gap(2)
+                                .grow(1)).gap(5).cross(Line.Cross.CENTER));
                     }
                 });
     }

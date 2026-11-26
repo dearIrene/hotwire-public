@@ -101,7 +101,7 @@ public final class Line extends Part {
 
     @Override
     public void measure(Canvas canvas, int room) {
-        int inner = room - 2 * this.padX;
+        int inner = this.findRoom(room) - 2 * this.padX;
         for (Part part : this.parts) {
             if (part.left) {
                 part.left = false;

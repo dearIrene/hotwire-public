@@ -111,6 +111,10 @@ public class Part extends Element {
         return this.wantWidth == HUG ? this.hugWidth : this.wantWidth;
     }
 
+    protected int findRoom(int room) {
+        return this.wantWidth == HUG ? room : Math.min(room, this.wantWidth);
+    }
+
     public final int findHeight() {
         return this.wantHeight == HUG ? this.hugHeight : this.wantHeight;
     }
