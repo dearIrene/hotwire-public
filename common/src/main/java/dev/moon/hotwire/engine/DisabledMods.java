@@ -201,7 +201,7 @@ public final class DisabledMods {
                 this.installed.onDisabled(id, DisabledJars.disable(jar, this.installed.isRunningFromFolderJar(id)));
                 LOGGER.info("[Hotwire] {} stays off: {} is now {}", id, jar.getFileName(), jar.getFileName()
                         + DisabledJars.SUFFIX);
-            } catch (IOException e) {
+            } catch (IOException | RuntimeException e) {
                 LOGGER.warn("[Hotwire] {} could not be kept off past the close", id, e);
                 failed.append(failed.isEmpty() ? "" : "; ").append(this.installed.nameOf(id)).append(": ")
                         .append(e.getMessage());

@@ -113,7 +113,12 @@ public final class GameClassIndex {
                 if (answered == null || isTrusted(checked)) {
                     return answered;
                 }
-                URL own = jars.findResource(name);
+                URL own;
+                try {
+                    own = jars.findResource(name);
+                } catch (IllegalStateException closed) {
+                    return answered;
+                }
                 if (!String.valueOf(own).equals(String.valueOf(answered))) {
                     stop.run();
                     LOGGER.warn("[Hotwire] the game's loader finds {} at {} and the index of its jars at {}: the"
@@ -132,7 +137,12 @@ public final class GameClassIndex {
                 if (isTrusted(checked)) {
                     return true;
                 }
-                URL own = jars.findResource(name);
+                URL own;
+                try {
+                    own = jars.findResource(name);
+                } catch (IllegalStateException closed) {
+                    return true;
+                }
                 if (own != null) {
                     stop.run();
                     LOGGER.warn("[Hotwire] the game's loader finds {} at {} and the index of its jars nowhere: the"
