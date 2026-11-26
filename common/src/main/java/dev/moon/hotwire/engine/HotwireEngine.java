@@ -970,6 +970,13 @@ public final class HotwireEngine implements ModScreenGame, AutoCloseable {
     }
 
     @Override
+    public void skipOffered() {
+        if (this.storeJars.hasQueued()) {
+            this.storeJars.offerNext();
+        }
+    }
+
+    @Override
     public void add(Path jar, AddMode mode) {
         this.jars.add(jar, mode, true, (result, said) -> this.storeJars.offerNext());
     }

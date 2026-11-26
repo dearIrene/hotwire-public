@@ -143,11 +143,11 @@ public final class ModScreen implements JarHost {
                 game::checkForUpdates, game::findUpdateDownloads, game::getIgnoredUpdates, game::setIgnoredUpdates);
         this.progress = new LoadingScreen(game.getProgress(), game::playSound);
         this.progress.showIconsFrom(game::findIcon);
-        this.addPanel = new AddPanel(this::confirmAdd, game::addMod, this::closePanels, game::isAddAsked, () -> {
+        this.addPanel = new AddPanel(this::confirmAdd, game::addMod, this::skipOffered, game::isAddAsked, () -> {
             this.closePanels();
             this.openSettings();
         });
-        this.updatePanel = new UpdatePanel(this::confirmUpdate, game::updateMod, this::closePanels);
+        this.updatePanel = new UpdatePanel(this::confirmUpdate, game::updateMod, this::skipOffered);
         this.pendingActions = new PendingActions(game, this::showMessage);
         this.reopenPanel = new ReopenPanel(game::describeOthers, offer -> {
             this.closePanels();
@@ -597,6 +597,11 @@ public final class ModScreen implements JarHost {
             }
         }
         this.showMessage(Lang.get("hotwire.screen.drop_jar_only"), true);
+    }
+
+    private void skipOffered() {
+        this.closePanels();
+        this.game.skipOffered();
     }
 
     private void confirmAdd(Path jar, AddMode mode) {

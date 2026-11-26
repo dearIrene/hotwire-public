@@ -159,6 +159,9 @@ public interface ModScreenGame {
     default void add(Path jar, AddMode mode) {
     }
 
+    default void skipOffered() {
+    }
+
     default CompletableFuture<UpdatePreview> dryRunUpdate(Path jar) {
         return CompletableFuture.completedFuture(new UpdatePreview.Unreadable(String.valueOf(jar.getFileName())));
     }
