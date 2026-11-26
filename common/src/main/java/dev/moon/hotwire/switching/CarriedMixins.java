@@ -31,6 +31,7 @@ public final class CarriedMixins {
     private static final String INJECTION = "Lorg/spongepowered/asm/mixin/injection/";
     private static final String MIXIN_EXTRAS = "Lcom/llamalad7/mixinextras/injector/";
 
+    static final String SAVES_WHILE_OFF = " (saves its mod's data while it is off)";
     private static final String VULKAN_BACKEND = "com/mojang/renderpearl/backend/vulkan/";
 
     private final Map<String, ModMixins> mods;
@@ -56,7 +57,7 @@ public final class CarriedMixins {
             @Nullable String source = offMixins.contains(mixin) ? null : this.findModMaking(mixin, id -> true);
             boolean ofOff = offMixins.contains(mixin) || (source != null && !on.contains(source));
             if (ofOff && SaveHooks.isRunWhileOff(type, mixin)) {
-                found.add(type + " <- " + mixin + " (saves its mod's data while it is off)");
+                found.add(type + " <- " + mixin + SAVES_WHILE_OFF);
             } else if (ofOff) {
                 LOGGER.debug("[Hotwire] {} drops {}, whose mod is off", type, mixin);
             } else if (askedAgain.test(mixin) && this.isSelfContained(mixin)) {
@@ -265,10 +266,14 @@ public final class CarriedMixins {
     }
 
     Set<String> findOwnersOf(List<String> lost, Set<String> on) {
+        return this.findOwnersAmong(lost, on::contains);
+    }
+
+    Set<String> findOwnersAmong(List<String> lost, Predicate<String> among) {
         Set<String> owners = new TreeSet<>();
         for (String entry : lost) {
             String mixin = entry.substring(entry.indexOf(" <- ") + " <- ".length()).split(" ", 2)[0];
-            String owner = this.findModMaking(mixin, on::contains);
+            String owner = this.findModMaking(mixin, among);
             if (owner != null) {
                 owners.add(owner);
             }

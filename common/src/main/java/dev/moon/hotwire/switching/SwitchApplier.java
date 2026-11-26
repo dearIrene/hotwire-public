@@ -35,6 +35,7 @@ import java.util.function.BiConsumer;
 import java.util.function.BiFunction;
 import java.util.function.Predicate;
 import java.util.function.Supplier;
+import java.util.stream.Collectors;
 import org.jspecify.annotations.Nullable;
 import org.objectweb.asm.Type;
 import org.slf4j.Logger;
@@ -846,6 +847,13 @@ public final class SwitchApplier {
                 });
         } finally {
             SwitchTimes.mark("live objects");
+        }
+
+        if (!lost.isEmpty() && lost.stream().allMatch(entry -> entry.endsWith(CarriedMixins.SAVES_WHILE_OFF))) {
+            Set<String> waiting = this.carriedMixins.findOwnersAmong(lost, id -> !on.contains(id));
+            throw RebuildException.ofRestartOnly("the " + what + " would lose what these save while off: " + lost)
+                    .withBlamed(waiting.stream().map(id -> RebuildException.MOD_MARK + id)
+                            .collect(Collectors.toSet()));
         }
         if (!lost.isEmpty()) {
             this.describeLost(lost, carriedNow, mixed.carried(), decided.configs().keySet());
