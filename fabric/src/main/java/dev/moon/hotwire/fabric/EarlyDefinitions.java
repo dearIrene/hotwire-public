@@ -120,11 +120,10 @@ public final class EarlyDefinitions implements PreLaunchEntrypoint {
         try {
             Path jar = fabric.getModContainer("hotwire")
                     .flatMap(mod -> mod.getOrigin().getPaths().stream().findFirst()).orElse(null);
-            if (jar == null) {
-                return null;
-            }
             long reach = System.nanoTime();
-            Instrumentation found = JvmAccess.getInstrumentation(jar);
+
+            Instrumentation found = JvmAccess.getInstrumentation(jar,
+                    fabric.getGameDir().resolve("hotwire").resolve("agent"));
             StartTimes.add("pre-launch: reach the JVM", reach);
 
             HandlerGuards.readOriginalsWith(name -> {
