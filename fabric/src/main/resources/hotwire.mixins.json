@@ -35,6 +35,7 @@
     "features.compat.oneconfig.event.OneConfigEventMixin",
     "core.network.PacketEncodingMixin",
     "core.network.PacketHandlingMixin",
+    "core.server.level.ServerPlayerGameModeMixin",
     "core.server.level.ServerPlayerMixin",
     "core.server.CommandsMixin",
     "core.server.MinecraftServerMixin",

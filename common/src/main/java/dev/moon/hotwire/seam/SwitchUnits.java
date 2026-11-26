@@ -71,6 +71,8 @@ public interface SwitchUnits {
 
     void takeOutGlfwCallbacks(Collection<String> mods);
 
+    void takeOutGameModes(Collection<String> mods);
+
     void takeOutAttachments(Collection<String> mods);
 
     void giveBackAttachments(Collection<String> mods);

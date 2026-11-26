@@ -9,6 +9,7 @@ import dev.moon.hotwire.fabric.registration.EntityRendererProviders;
 import dev.moon.hotwire.fabric.registration.GameHold;
 import dev.moon.hotwire.fabric.registration.GlfwCallbacks;
 import dev.moon.hotwire.fabric.registration.MixinPlugins;
+import dev.moon.hotwire.fabric.registration.ModGameModes;
 import dev.moon.hotwire.fabric.registration.ModelReloadCheck;
 import dev.moon.hotwire.fabric.registration.NetworkHandlers;
 import dev.moon.hotwire.fabric.registration.OneConfigHuds;
@@ -183,6 +184,11 @@ final class GameSwitchUnits implements SwitchUnits {
     @Override
     public void takeOutGlfwCallbacks(Collection<String> mods) {
         GlfwCallbacks.takeOut(mods);
+    }
+
+    @Override
+    public void takeOutGameModes(Collection<String> mods) {
+        ModGameModes.takeOut(mods);
     }
 
     @Override
