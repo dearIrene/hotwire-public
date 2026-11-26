@@ -41,6 +41,8 @@ public final class SwapAtClose {
 
     private static final long STARTED_MILLIS = 1500;
 
+    private static final boolean ANDROID = System.getenv("ANDROID_ROOT") != null;
+
     public SwapAtClose(UpdateQueue queue, UpdateFolders folders, Path hotwireJar) {
         this.queue = queue;
         this.folders = folders;
@@ -59,6 +61,9 @@ public final class SwapAtClose {
     }
 
     private synchronized void start() {
+        if (ANDROID) {
+            this.placeNewJarsNow();
+        }
         List<UpdateQueue.Entry> entries = this.queue.getEntries();
         if (this.started || entries.isEmpty()) {
             return;
@@ -100,6 +105,20 @@ public final class SwapAtClose {
             this.swapInProcess();
         } catch (InterruptedException e) {
             Thread.currentThread().interrupt();
+        }
+    }
+
+    private void placeNewJarsNow() {
+        List<UpdateQueue.Entry> entries = this.queue.getEntries();
+        if (entries.isEmpty() || !entries.stream().allMatch(entry -> entry.runningJar().isEmpty())) {
+            return;
+        }
+        entries.forEach(entry -> this.queue.markPlacedEarly(entry.modId()));
+        try {
+            JarSwapper.swap(this.queue, this.folders.mods(), this.folders.replaced());
+            LOGGER.info("[Hotwire] {} queued mods went into the mods folder now, for the next start", entries.size());
+        } catch (IOException | RuntimeException e) {
+            LOGGER.error("[Hotwire] the queued mods could not go into the mods folder now; they wait for the close", e);
         }
     }
 

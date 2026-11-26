@@ -63,6 +63,7 @@ public final class FolderJars implements AutoCloseable {
         String id = manifest.id();
         if (ModPolicy.isHotwire(id) || this.installed.isInstalled(id) || this.installed.findDisabled(id).isPresent()
                 || this.installed.getJarsByTopLevel().containsValue(jar)
+                || this.queue.isPlacedEarly(id)
                 || this.queue.getEntries().stream().anyMatch(entry -> entry.modId().equals(id))) {
             return true;
         }

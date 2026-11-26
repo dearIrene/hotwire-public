@@ -10,6 +10,8 @@ import java.nio.file.Path;
 import java.nio.file.StandardCopyOption;
 import java.util.ArrayList;
 import java.util.List;
+import java.util.Set;
+import java.util.concurrent.ConcurrentHashMap;
 
 public final class UpdateQueue {
     static final int VERSION = 1;
@@ -35,6 +37,8 @@ public final class UpdateQueue {
     private final JsonFile<QueueFile> file;
     private Runnable onAdded = () -> { };
 
+    private final Set<String> placedEarly = ConcurrentHashMap.newKeySet();
+
     public UpdateQueue(Path path) {
         this.file = new JsonFile<>(path, QueueFile.class, QueueFile::new);
     }
@@ -46,6 +50,14 @@ public final class UpdateQueue {
         queued.entries.removeIf(entry -> entry == null || entry.modId() == null || entry.reason() == null);
         queued.replaced.removeIf(record -> record == null || record.file() == null);
         return queued;
+    }
+
+    public void markPlacedEarly(String modId) {
+        this.placedEarly.add(modId);
+    }
+
+    public boolean isPlacedEarly(String modId) {
+        return this.placedEarly.contains(modId);
     }
 
     public synchronized void setOnAdded(Runnable onAdded) {

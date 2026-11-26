@@ -4,6 +4,7 @@ import dev.moon.hotwire.ui.panels.DownloadsPanel;
 import dev.moon.hotwire.ui.widgets.Canvas;
 import dev.moon.hotwire.ui.widgets.Element;
 import dev.moon.hotwire.ui.widgets.FrameClock;
+import dev.moon.hotwire.ui.widgets.Scroll;
 import dev.moon.hotwire.ui.widgets.Sheet;
 import java.util.ArrayList;
 import java.util.List;
@@ -42,6 +43,14 @@ public final class Root {
     }
     private List<Element> hoverPath = List.of();
     private @Nullable Element pressed;
+
+    private static final int DRAG_SCROLL_START = 6;
+
+    private static final boolean TOUCH = System.getenv("ANDROID_ROOT") != null;
+    private double pressX;
+    private double pressY;
+    private double dragY;
+    private boolean dragScrolling;
     private @Nullable Element focus;
 
     public Element getBase() {
@@ -114,6 +123,10 @@ public final class Root {
     }
 
     public boolean click(double x, double y, int button, int modifiers) {
+        this.pressX = x;
+        this.pressY = y;
+        this.dragY = y;
+        this.dragScrolling = false;
         if (this.isModalOpen()) {
             this.pressed = this.modal.press(x, y, button, modifiers);
             return true;
@@ -131,7 +144,20 @@ public final class Root {
     }
 
     public boolean drag(double x, double y, int button) {
-        return this.pressed != null && this.pressed.onDrag(x, y, button);
+        if (!this.dragScrolling) {
+            double down = Math.abs(y - this.pressY);
+            boolean finger = TOUCH && down >= DRAG_SCROLL_START && down > Math.abs(x - this.pressX);
+            if (!finger && this.pressed != null && this.pressed.onDrag(x, y, button)) {
+                return true;
+            }
+            if (!finger && down < DRAG_SCROLL_START) {
+                return false;
+            }
+        }
+        this.dragScrolling = true;
+        double moved = y - this.dragY;
+        this.dragY = y;
+        return moved != 0 && this.scroll(this.pressX, this.pressY, moved / Scroll.STEP);
     }
 
     public boolean release(double x, double y, int button) {

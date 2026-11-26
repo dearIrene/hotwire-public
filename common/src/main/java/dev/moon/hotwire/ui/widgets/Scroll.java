@@ -1,7 +1,7 @@
 package dev.moon.hotwire.ui.widgets;
 
 public final class Scroll extends Part {
-    private static final int STEP = 36;
+    public static final int STEP = 36;
     private static final int BAR = 3;
     private static final int FADE = 22;
 
