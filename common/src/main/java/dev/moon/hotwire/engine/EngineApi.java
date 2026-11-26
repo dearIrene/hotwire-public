@@ -75,6 +75,12 @@ public class EngineApi implements HotwireApi {
         return engines.get();
     }
 
+    private static volatile boolean startFailed;
+
+    public static void markStartFailed() {
+        startFailed = true;
+    }
+
     private static final int REVISION = 2;
     private static final StackWalker STACK = StackWalker.getInstance(StackWalker.Option.RETAIN_CLASS_REFERENCE);
     private static final Logger LOGGER = LoggerFactory.getLogger(EngineApi.class);
@@ -125,7 +131,8 @@ public class EngineApi implements HotwireApi {
     public ApiStatus getStatus() {
         HotwireEngine engine = findEngine();
         if (engine == null) {
-            return new ApiStatus(ApiStatus.State.STARTING, 0, Lang.get("hotwire.api.starting"));
+            return startFailed ? new ApiStatus(ApiStatus.State.UNAVAILABLE, 0, Lang.get("hotwire.api.start_failed"))
+                    : new ApiStatus(ApiStatus.State.STARTING, 0, Lang.get("hotwire.api.starting"));
         }
         if (engine.findParts() == null) {
             return new ApiStatus(ApiStatus.State.UNAVAILABLE, 0, engine.getSwitchRefusal());

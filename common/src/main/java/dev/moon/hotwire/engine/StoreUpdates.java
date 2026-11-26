@@ -265,8 +265,9 @@ public final class StoreUpdates {
 
         List<UpdateOffer> bySize = new ArrayList<>(offers);
         bySize.sort(Comparator.comparingLong(UpdateOffer::size).reversed());
+        Downloads.Marks marks = Downloads.findMarks();
         for (UpdateOffer offer : bySize) {
-            begun.put(offer, pool.submit(() -> {
+            begun.put(offer, pool.submit(marks.carry(() -> {
                 List<Path> jars = fetch.apply(offer);
                 int in = landed.incrementAndGet();
                 if (!this.early) {
@@ -276,7 +277,7 @@ public final class StoreUpdates {
                     this.changes.planAhead(jars.getFirst());
                 }
                 return jars;
-            }));
+            })));
         }
         List<Future<List<Path>>> futures = new ArrayList<>();
         for (UpdateOffer offer : offers) {

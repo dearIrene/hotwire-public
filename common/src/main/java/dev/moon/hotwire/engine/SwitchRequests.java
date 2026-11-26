@@ -4,6 +4,7 @@ import dev.moon.hotwire.add.ModAdder;
 import dev.moon.hotwire.api.SwitchResult;
 import dev.moon.hotwire.concurrent.Tasks;
 import dev.moon.hotwire.config.HotwireSettings;
+import dev.moon.hotwire.jar.ModManifest;
 import dev.moon.hotwire.plan.SwitchPlan;
 import dev.moon.hotwire.redefine.SaveHooks;
 import dev.moon.hotwire.report.ActionJournal;
@@ -19,7 +20,9 @@ import dev.moon.hotwire.ui.ModScreen;
 import dev.moon.hotwire.ui.panels.ReopenPanel;
 import java.io.IOException;
 import java.util.ArrayList;
+import java.util.HashSet;
 import java.util.List;
+import java.util.Map;
 import java.util.Optional;
 import java.util.Set;
 import java.util.concurrent.CompletableFuture;
@@ -56,16 +59,23 @@ final class SwitchRequests {
         this.say = say;
     }
 
+    @SuppressWarnings("FutureReturnValueIgnored")
     CompletableFuture<SwitchResult> switchFor(boolean off, List<String> ids, boolean quiet) {
-        List<String> disabledIds = off ? List.of() : ids.stream().filter(this.disabled::isDisabledSinceStart).toList();
+        List<String> disabledIds = off ? List.of() : this.orderByNeeds(ids.stream()
+                .filter(this.disabled::isDisabledSinceStart).toList());
+
+        if (!disabledIds.isEmpty() && this.engine.isWorldLocked()) {
+            return this.refuse(Lang.get("hotwire.switch.world_locked"), quiet);
+        }
         List<CompletableFuture<ModAdder.Result>> adds = disabledIds.stream().map(this.disabled::enableByAdd).toList();
         List<String> rest = ids.stream().filter(id -> !disabledIds.contains(id)).toList();
         if (disabledIds.isEmpty()) {
             return this.run(runner -> off ? runner.turnOff(rest) : runner.turnOn(rest), off, rest, quiet, !quiet);
         }
 
-        CompletableFuture<SwitchResult> brought = CompletableFuture.allOf(adds.toArray(CompletableFuture[]::new))
-                .thenApply(ignored -> findBroughtBack(adds));
+        CompletableFuture<SwitchResult> brought = EngineApi.beginSwitch(this.engine);
+        CompletableFuture.allOf(adds.toArray(CompletableFuture[]::new)).whenComplete((ignored, error) ->
+                Games.getNow().runOnGame(() -> EngineApi.endSwitch(this.engine, brought, findBroughtBack(adds))));
         if (rest.isEmpty()) {
             return brought;
         }
@@ -73,12 +83,38 @@ final class SwitchRequests {
                 SwitchRequests::combine);
     }
 
+    private List<String> orderByNeeds(List<String> ids) {
+        List<String> left = new ArrayList<>(ids);
+        List<String> ordered = new ArrayList<>();
+        while (!left.isEmpty()) {
+            String next = left.stream().filter(id -> left.stream().noneMatch(other -> !other.equals(id)
+                    && this.needs(id, other))).findFirst().orElse(left.getFirst());
+            ordered.add(next);
+            left.remove(next);
+        }
+        return ordered;
+    }
+
+    private boolean needs(String id, String other) {
+        Set<String> names = new HashSet<>(this.installed.findDisabled(other).map(ModManifest::provides)
+                .orElse(List.of()));
+        names.add(other);
+        return this.installed.findDisabled(id).map(manifest -> manifest.relations()
+                .getOrDefault(ModManifest.Relation.DEPENDS, Map.of()).keySet().stream().anyMatch(names::contains))
+                .orElse(false);
+    }
+
     private static SwitchResult findBroughtBack(List<CompletableFuture<ModAdder.Result>> adds) {
         List<String> brought = new ArrayList<>();
         for (CompletableFuture<ModAdder.Result> add : adds) {
-            SwitchResult one = EngineApi.toResult(add.join());
+            SwitchResult one;
+            try {
+                one = EngineApi.toResult(add.join());
+            } catch (RuntimeException e) {
+                one = new SwitchResult(SwitchResult.Kind.FAILED, List.of(), Lang.get("hotwire.failed", e));
+            }
             if (one.kind() != SwitchResult.Kind.DONE) {
-                return one;
+                return new SwitchResult(one.kind(), one.reason(), List.of(), one.message(), brought, List.of());
             }
             brought.addAll(one.switched());
         }
@@ -86,14 +122,13 @@ final class SwitchRequests {
     }
 
     private static SwitchResult combine(SwitchResult switched, SwitchResult brought) {
-        if (switched.kind() != SwitchResult.Kind.DONE) {
-            return switched;
+        List<String> both = new ArrayList<>(brought.appliedNow());
+        both.addAll(switched.appliedNow());
+        if (switched.kind() != SwitchResult.Kind.DONE || brought.kind() != SwitchResult.Kind.DONE) {
+            SwitchResult stopped = switched.kind() != SwitchResult.Kind.DONE ? switched : brought;
+            return new SwitchResult(stopped.kind(), stopped.reason(), List.of(), stopped.message(), both,
+                    List.of());
         }
-        if (brought.kind() != SwitchResult.Kind.DONE) {
-            return brought;
-        }
-        List<String> both = new ArrayList<>(brought.switched());
-        both.addAll(switched.switched());
         return new SwitchResult(SwitchResult.Kind.DONE, both, switched.message());
     }
 

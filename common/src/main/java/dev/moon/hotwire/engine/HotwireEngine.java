@@ -71,6 +71,7 @@ import java.util.Objects;
 import java.util.Set;
 import java.util.UUID;
 import java.util.concurrent.CompletableFuture;
+import java.util.function.BiConsumer;
 import java.util.function.Consumer;
 import net.fabricmc.loader.api.FabricLoader;
 import org.jspecify.annotations.Nullable;
@@ -182,7 +183,8 @@ public final class HotwireEngine implements ModScreenGame, AutoCloseable {
             classPathChanged = ready.parts().adds().getApplier().getRebuilder().copy()::markClassPathChanged;
         }
         this.disabled = new DisabledMods(installed, settings, folders.mods(), this::showMessage,
-                (jar, then) -> this.jars.add(jar, AddMode.NOW, false, then), classPathChanged);
+                (jar, then) -> this.jars.add(jar, AddMode.NOW, false, (result, said) -> then.accept(result)),
+                classPathChanged);
         this.switches = new SwitchRequests(this, this.tasks, installed, settings, this.disabled, () -> this.screen,
                 this::showMessage);
         this.profiles = new ProfileStore(FabricLoader.getInstance().getConfigDir().resolve("hotwire/profiles.txt"));
@@ -963,9 +965,13 @@ public final class HotwireEngine implements ModScreenGame, AutoCloseable {
         return this.changes.dryRunAdd(jar);
     }
 
+    CompletableFuture<AddPreview> dryRunAdd(Path jar, List<Path> with) {
+        return this.changes.dryRunAdd(jar, with);
+    }
+
     @Override
     public void add(Path jar, AddMode mode) {
-        this.jars.add(jar, mode, true, result -> this.storeJars.offerNext());
+        this.jars.add(jar, mode, true, (result, said) -> this.storeJars.offerNext());
     }
 
     @Override
@@ -1140,6 +1146,10 @@ public final class HotwireEngine implements ModScreenGame, AutoCloseable {
     }
 
     void add(Path jar, AddMode mode, Consumer<ModAdder.Result> then) {
+        this.jars.add(jar, mode, false, (result, said) -> then.accept(result));
+    }
+
+    void addSaying(Path jar, AddMode mode, BiConsumer<ModAdder.Result, String> then) {
         this.jars.add(jar, mode, false, then);
     }
 

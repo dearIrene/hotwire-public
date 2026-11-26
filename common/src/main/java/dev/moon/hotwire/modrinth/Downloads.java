@@ -6,6 +6,7 @@ import java.util.Comparator;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
+import java.util.concurrent.Callable;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.CopyOnWriteArrayList;
 import java.util.concurrent.atomic.AtomicBoolean;
@@ -165,13 +166,59 @@ public final class Downloads {
     }
 
     private static volatile @Nullable Consumer<Job> whenChanged;
-
-    private static final AtomicInteger QUIET_CALLS =
-            new AtomicInteger();
     private static final AtomicInteger QUIET_NEXT =
             new AtomicInteger();
 
-    private static final List<String> TAGGING = new CopyOnWriteArrayList<>();
+    private static final ThreadLocal<@Nullable Marks> MARKS = new ThreadLocal<>();
+    private static final Marks UNMARKED = new Marks("", false);
+
+    public record Marks(String tag, boolean quiet) {
+        public Runnable carry(Runnable work) {
+            return () -> {
+                Runnable end = mark(this);
+                try {
+                    work.run();
+                } finally {
+                    end.run();
+                }
+            };
+        }
+
+        public <T> Callable<T> carry(Callable<T> work) {
+            return () -> {
+                Runnable end = mark(this);
+                try {
+                    return work.call();
+                } finally {
+                    end.run();
+                }
+            };
+        }
+
+        public Marks asQuiet() {
+            return new Marks(this.tag, true);
+        }
+    }
+
+    public static Marks findMarks() {
+        Marks now = MARKS.get();
+        return now == null ? UNMARKED : now;
+    }
+
+    private static Runnable mark(Marks marks) {
+        Marks before = MARKS.get();
+        Thread owner = Thread.currentThread();
+        MARKS.set(marks);
+        return () -> {
+            if (Thread.currentThread().equals(owner)) {
+                if (before == null) {
+                    MARKS.remove();
+                } else {
+                    MARKS.set(before);
+                }
+            }
+        };
+    }
 
     private final List<Job> jobs = new ArrayList<>();
 
@@ -185,26 +232,11 @@ public final class Downloads {
     }
 
     public static Runnable beginQuiet() {
-        QUIET_CALLS.incrementAndGet();
-        AtomicBoolean ended = new AtomicBoolean();
-        return () -> {
-            if (ended.compareAndSet(false, true)) {
-                QUIET_CALLS.decrementAndGet();
-            }
-        };
+        return mark(findMarks().asQuiet());
     }
 
     public static Runnable beginTag(String tag) {
-        if (tag.isEmpty()) {
-            return () -> { };
-        }
-        TAGGING.add(tag);
-        AtomicBoolean ended = new AtomicBoolean();
-        return () -> {
-            if (ended.compareAndSet(false, true)) {
-                TAGGING.remove(tag);
-            }
-        };
+        return mark(new Marks(tag, findMarks().quiet()));
     }
 
     public static String findTag(int id) {
@@ -222,7 +254,7 @@ public final class Downloads {
     }
 
     private static boolean takeQuiet() {
-        return QUIET_CALLS.get() > 0 || QUIET_NEXT.getAndUpdate(left -> Math.max(0, left - 1)) > 0;
+        return findMarks().quiet() || QUIET_NEXT.getAndUpdate(left -> Math.max(0, left - 1)) > 0;
     }
 
     public synchronized int begin(String name, long total) {
@@ -231,8 +263,8 @@ public final class Downloads {
         if (takeQuiet()) {
             this.quietJobs.add(id);
         }
-        if (!TAGGING.isEmpty()) {
-            this.tags.put(id, TAGGING.getLast());
+        if (!findMarks().tag().isEmpty()) {
+            this.tags.put(id, findMarks().tag());
         }
         Job job = new Job(id, name, 0, total, State.WAITING, 0);
         this.jobs.add(job);

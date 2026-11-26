@@ -89,6 +89,7 @@ public final class HotwireClient implements ClientModInitializer {
             synchronized (HotwireClient.class) {
                 startFailed = true;
             }
+            EngineApi.markStartFailed();
             LOGGER.error("[Hotwire] could not start; the game goes on without it", e);
             EngineStart.writeStartFailure(FabricLoader.getInstance().getGameDir(), e);
         }
@@ -356,6 +357,7 @@ public final class HotwireClient implements ClientModInitializer {
                 started = EngineStart.start(EarlyDefinitions.get());
             } catch (IOException | RuntimeException | LinkageError e) {
                 startFailed = true;
+                EngineApi.markStartFailed();
                 LOGGER.error("[Hotwire] could not start; the game goes on without it", e);
                 EngineStart.writeStartFailure(FabricLoader.getInstance().getGameDir(), e);
                 throw new IllegalStateException(START_FAILED, e);

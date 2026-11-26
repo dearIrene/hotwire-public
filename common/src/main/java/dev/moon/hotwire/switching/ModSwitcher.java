@@ -453,7 +453,8 @@ public final class ModSwitcher {
     public SwitchPlan planOnAfter(Collection<String> asked, Collection<String> goingOff) {
         Set<String> after = new HashSet<>(this.getOff());
         after.addAll(goingOff);
-        return this.planner.planOn(asked, after);
+
+        return this.planner.planOn(this.withOffTogether(this.withGoingAlong(asked, this.off::contains)), after);
     }
 
     private synchronized Set<String> withOffTogether(Collection<String> asked) {

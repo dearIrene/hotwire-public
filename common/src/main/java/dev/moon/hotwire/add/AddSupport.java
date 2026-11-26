@@ -89,7 +89,11 @@ public final class AddSupport implements ModAdder.Engine {
     }
 
     public AddPreview preview(Path jar) {
-        AddPreview preview = this.adder.preview(jar);
+        return this.preview(jar, List.of());
+    }
+
+    public AddPreview preview(Path jar, List<Path> with) {
+        AddPreview preview = this.adder.preview(jar, with);
         return preview.mode() == AddMode.REFUSED ? preview : preview.withIcon(this.icons.ofJar(jar));
     }
 
@@ -242,6 +246,10 @@ public final class AddSupport implements ModAdder.Engine {
         Path target = jar.toAbsolutePath().normalize().startsWith(mods) ? jar
                 : mods.resolve(String.valueOf(jar.getFileName()));
         try {
+            if (!target.equals(jar) && Files.exists(target) && Files.mismatch(target, jar) >= 0) {
+                return new ModAdder.Result.Refused(Lang.get("hotwire.add.name_taken", target.getFileName(),
+                        manifest.name()));
+            }
             if (!target.equals(jar)) {
                 Path part = target.resolveSibling(target.getFileName() + ".part");
                 Files.copy(jar, part, StandardCopyOption.REPLACE_EXISTING);

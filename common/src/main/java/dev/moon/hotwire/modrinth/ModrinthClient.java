@@ -61,6 +61,14 @@ public final class ModrinthClient {
             String licenseUrl, String sourceUrl, long downloads, long followers, String iconUrl) {
     }
 
+    public static final class MissingException extends IOException {
+        private static final long serialVersionUID = 1L;
+
+        MissingException(String message) {
+            super(message);
+        }
+    }
+
     public record Version(String id, String projectId, String number, String name, String fileName, String url,
             String sha512, long size, List<String> gameVersions, List<String> requiredProjects, String changelog,
             String type, String published, Map<String, String> requiredVersions) {
@@ -601,6 +609,8 @@ public final class ModrinthClient {
             }
         }
 
+        private static final int MISSING = 404;
+
         private static final class StalledException extends IOException {
             private static final long serialVersionUID = 1L;
 
@@ -703,6 +713,9 @@ public final class ModrinthClient {
                 if (response.statusCode() == GONE) {
                     throw new IOException("Modrinth has retired the API this Hotwire speaks; a newer Hotwire is"
                             + " needed");
+                }
+                if (response.statusCode() == MISSING) {
+                    throw new MissingException("Modrinth answered " + response.statusCode());
                 }
                 if (response.statusCode() / 100 != 2) {
                     throw new IOException("Modrinth answered " + response.statusCode());

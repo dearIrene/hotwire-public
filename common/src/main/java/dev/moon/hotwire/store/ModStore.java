@@ -119,7 +119,7 @@ public final class ModStore {
             Consumer<String> onFailure) {
         Game client = Games.getNow();
 
-        Thread.ofPlatform().name("hotwire-store-fetch").daemon().start(() -> {
+        Thread.ofPlatform().name("hotwire-store-fetch").daemon().start(Downloads.findMarks().carry(() -> {
             List<ModrinthClient.Version> versions;
             try {
                 versions = this.model.getClient().findVersions(ModrinthClient.Kind.MOD, projectId);
@@ -137,7 +137,7 @@ public final class ModStore {
                 return;
             }
             this.fetchFor(wanted, title, onJars, onFailure);
-        });
+        }));
     }
 
     private void fetchFor(ModrinthClient.Version wanted, String title,
@@ -208,7 +208,8 @@ public final class ModStore {
     private static <T> List<T> runAtOnce(List<Callable<T>> tasks) throws IOException {
         List<Future<T>> futures = new ArrayList<>();
         try (ExecutorService pool = Executors.newVirtualThreadPerTaskExecutor()) {
-            tasks.forEach(task -> futures.add(pool.submit(task)));
+            Downloads.Marks marks = Downloads.findMarks();
+            tasks.forEach(task -> futures.add(pool.submit(marks.carry(task))));
         }
         List<T> out = new ArrayList<>();
         for (Future<T> future : futures) {

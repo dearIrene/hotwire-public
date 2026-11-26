@@ -19,6 +19,7 @@ import java.nio.file.Path;
 import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Set;
+import java.util.function.BiConsumer;
 import java.util.function.Consumer;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -51,13 +52,16 @@ final class JarRequests {
     }
 
     @SuppressWarnings("FutureReturnValueIgnored")
-    void add(Path jar, AddMode mode, boolean byPlayer, Consumer<ModAdder.Result> then) {
+    void add(Path jar, AddMode mode, boolean byPlayer, BiConsumer<ModAdder.Result, String> then) {
         AheadWork.ask();
         if (mode == AddMode.NEXT_START && this.engine.isInModsFolder(jar)) {
             String name = String.valueOf(jar.getFileName());
-            ModAdder.Result queued = new ModAdder.Result.Queued(name, Lang.get("hotwire.folder.next_start", name));
+
+            ModManifest inFolder = JarLookup.findManifest(jar);
+            ModAdder.Result queued = new ModAdder.Result.Queued(inFolder == null ? name : inFolder.id(),
+                    Lang.get("hotwire.folder.next_start", name));
             this.engine.showMessage(ModAdder.describe(queued), false);
-            then.accept(queued);
+            then.accept(queued, ModAdder.describe(queued));
             return;
         }
         if (mode == AddMode.NEXT_START) {
@@ -67,7 +71,7 @@ final class JarRequests {
             if (ok) {
                 this.storeJars.markQueued(jar, this.engine.getPendingChanges());
             }
-            then.accept(queued);
+            then.accept(queued, ModAdder.describe(queued));
             this.engine.refreshScreen();
             return;
         }
@@ -103,7 +107,18 @@ final class JarRequests {
             if (reopens && more) {
                 this.storeJars.waitForReopen();
             }
-            then.accept(result);
+
+            String copied = result instanceof ModAdder.Result.Added ? this.changes.copyIntoMods(jar) : "";
+            boolean joins = result instanceof ModAdder.Result.Added && Games.getNow().getWorld() != null
+                    && this.changes.setsUpOnJoin(jar);
+            String atJoin = !joins ? "" : " " + Lang.get(Games.getNow().hasOwnServer()
+                    ? "hotwire.add.finishes_at_join" : "hotwire.add.rejoin_for_all");
+            then.accept(result, switch (result) {
+                case ModAdder.Result.Added added -> Lang.get("hotwire.add.is_in", added.name()) + copied + atJoin;
+                case ModAdder.Result.Queued queued -> queued.message();
+                case ModAdder.Result.Refused refused -> refused.reason();
+                case ModAdder.Result.Failed failed -> failed.reason();
+            });
             if (result instanceof ModAdder.Result.Added added) {
                 String project = this.storeJars.findProjectOf(jar);
                 this.storeJars.markInstalled(jar);
@@ -125,7 +140,7 @@ final class JarRequests {
                     && Games.getNow().getWorld() != null
                     && (this.changes.setsUpOnJoin(jar) || (!more && this.storeJars.takeReopenWanted()))) {
                 boolean own = Games.getNow().hasOwnServer();
-                this.engine.showMessage(Lang.get("hotwire.add.is_in", added.name()) + this.changes.copyIntoMods(jar)
+                this.engine.showMessage(Lang.get("hotwire.add.is_in", added.name()) + copied
                         + (own ? "" : " " + Lang.get("hotwire.add.rejoin_for_all")), false);
                 if (own && more) {
                     this.storeJars.markReopenWanted();
@@ -135,8 +150,7 @@ final class JarRequests {
                 }
             } else {
                 this.engine.showMessage(switch (result) {
-                    case ModAdder.Result.Added added -> Lang.get("hotwire.add.is_in", added.name())
-                            + this.changes.copyIntoMods(jar);
+                    case ModAdder.Result.Added added -> Lang.get("hotwire.add.is_in", added.name()) + copied;
                     case ModAdder.Result.Queued queued -> queued.message();
                     case ModAdder.Result.Refused refused -> refused.reason();
                     case ModAdder.Result.Failed failed -> failed.reason();

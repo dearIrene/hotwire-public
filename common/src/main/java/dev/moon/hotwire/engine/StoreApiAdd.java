@@ -13,8 +13,12 @@ import java.nio.file.Path;
 import java.util.List;
 import java.util.concurrent.CompletableFuture;
 import java.util.function.Function;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
 final class StoreApiAdd {
+    private static final Logger LOGGER = LoggerFactory.getLogger(StoreApiAdd.class);
+
     interface Then<T> {
         T run(HotwireEngine engine, String name, List<Path> jars);
     }
@@ -61,16 +65,23 @@ final class StoreApiAdd {
             made.complete(refusal.apply(why == null ? "" : why));
             return;
         }
-        Runnable endQuiet = Downloads.beginQuiet();
-        made.whenComplete((done, failed) -> endQuiet.run());
+
+        Downloads.Marks marks = Downloads.findMarks().asQuiet();
         StoreApi.findProject(new StoreQuery(StoreKind.MOD, "", "", 0, "", ""), idOrSlug)
                 .whenComplete((found, failure) -> {
-                    if (failure != null || found == null || found.isEmpty()) {
+                    if (failure != null) {
+                        Throwable cause = failure.getCause() == null ? failure : failure.getCause();
+                        LOGGER.warn("[Hotwire] Modrinth could not be asked for {}", idOrSlug, cause);
+                        made.complete(refusal.apply(Lang.get("hotwire.store.download_failed", idOrSlug,
+                                String.valueOf(cause.getMessage()))));
+                        return;
+                    }
+                    if (found == null || found.isEmpty()) {
                         made.complete(refusal.apply(Lang.get("hotwire.api.add.not_found", idOrSlug)));
                         return;
                     }
                     StoreProject project = found.get();
-                    Games.getNow().runOnGame(() -> {
+                    Games.getNow().runOnGame(marks.carry(() -> {
                         ModStore store = engine.findStore();
                         if (!store.getModel().getClient().isBrowsingOwn()) {
                             made.complete(refusal.apply(Lang.get("hotwire.api.add.browsing")));
@@ -86,7 +97,7 @@ final class StoreApiAdd {
                                     then.take(engine, project, jars);
                                 },
                                 failed -> made.complete(refusal.apply(failed)));
-                    });
+                    }));
                 });
     }
 }

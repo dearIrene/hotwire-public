@@ -12,6 +12,7 @@ import dev.moon.hotwire.api.StoreProject;
 import dev.moon.hotwire.api.StoreQuery;
 import dev.moon.hotwire.api.StoreVersion;
 import dev.moon.hotwire.api.SwitchResult;
+import dev.moon.hotwire.jar.FileHashes;
 import dev.moon.hotwire.modrinth.CachedAsks;
 import dev.moon.hotwire.modrinth.Downloads;
 import dev.moon.hotwire.modrinth.ModrinthClient;
@@ -26,7 +27,6 @@ import dev.moon.hotwire.ui.Lang;
 import java.io.IOException;
 import java.nio.file.Files;
 import java.nio.file.Path;
-import java.nio.file.StandardCopyOption;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
@@ -152,7 +152,7 @@ final class StoreApi {
             ModrinthClient.Project project;
             try {
                 project = asks == null ? getClient().findProject(idOrSlug) : asks.findProject(getClient(), idOrSlug);
-            } catch (IOException e) {
+            } catch (ModrinthClient.MissingException e) {
                 return Optional.empty();
             }
             List<StoreVersion> versions = askBrowsing(browsing, made -> asks == null
@@ -209,7 +209,13 @@ final class StoreApi {
     static CompletableFuture<SwitchResult> fetchPack(StoreKind kind, String idOrSlug, String versionId, Waits waits) {
         CompletableFuture<SwitchResult> ended = new CompletableFuture<>();
         findProject(new StoreQuery(kind, "", "", 0, "", ""), idOrSlug).whenComplete((found, failure) -> {
-            ModStore store = failure == null && found.isPresent() && kind != StoreKind.MOD ? findStore() : null;
+            if (failure != null) {
+                Throwable cause = failure.getCause() == null ? failure : failure.getCause();
+                ended.complete(new SwitchResult(SwitchResult.Kind.FAILED, List.of(), Lang.get(
+                        "hotwire.store.download_failed", idOrSlug, String.valueOf(cause.getMessage()))));
+                return;
+            }
+            ModStore store = found.isPresent() && kind != StoreKind.MOD ? findStore() : null;
             if (store == null) {
                 ended.complete(SwitchResult.ofRefusal(Reason.REFUSED, Lang.get("hotwire.api.add.not_found",
                         idOrSlug)));
@@ -259,15 +265,25 @@ final class StoreApi {
             Files.createDirectories(folder);
         } catch (IOException e) {
             LOGGER.warn("[Hotwire] the downloads folder {} could not be made: {}", folder, e.toString());
+
+            HotwireEngine engine = EngineApi.findEngine();
+            if (engine != null) {
+                Games.getNow().runOnGame(() -> engine.showMessage(Lang.get("hotwire.failed", e), true));
+            }
             return;
         }
         Games.getNow().runOnGame(() -> Games.getNow().openFolder(folder));
     }
 
     static CompletableFuture<SwitchResult> saveToDownloads(StoreQuery browsing, String idOrSlug, String versionId) {
+        HotwireEngine engine = EngineApi.findEngine();
+        String refused = engine == null ? Lang.get("hotwire.api.starting") : ApiConsent.findRefusal(engine, true);
+        if (refused != null) {
+            return CompletableFuture.completedFuture(SwitchResult.ofRefusal(Reason.REFUSED, refused));
+        }
         Path folder = findDownloads();
         if (browsing.kind() == StoreKind.MOD && browsing.gameVersion().isEmpty() && browsing.loader().isEmpty()) {
-            return StoreApiAdd.fetchThen(idOrSlug, versionId, (engine, name, jars) -> copyInto(folder, name, jars));
+            return StoreApiAdd.fetchThen(idOrSlug, versionId, (made, name, jars) -> copyInto(folder, name, jars));
         }
         return ask(() -> {
             CachedAsks asks = findAsks(findStore());
@@ -279,10 +295,14 @@ final class StoreApi {
                     .filter(one -> versionId.isEmpty() || one.id().equals(versionId)).findFirst()
                     .orElseThrow(() -> new IOException(Lang.get("hotwire.store.no_version", idOrSlug)));
             Files.createDirectories(folder);
+            Path named = folder.resolve(version.fileName().replaceAll("[^A-Za-z0-9._+ -]", "_"));
+            if (Files.exists(named) && FileHashes.findSha512(named).equals(version.sha512())) {
+                return new SwitchResult(SwitchResult.Kind.DONE, List.of(), Lang.get("hotwire.store.saved", idOrSlug,
+                        folder));
+            }
             Runnable endQuiet = Downloads.beginQuiet();
             try {
-                getClient().fetchTo(version, folder.resolve(version.fileName().replaceAll("[^A-Za-z0-9._+ -]", "_")),
-                        SAVES);
+                getClient().fetchTo(version, findFree(named), SAVES);
             } finally {
                 endQuiet.run();
             }
@@ -292,11 +312,25 @@ final class StoreApi {
                 String.valueOf(failure.getCause() == null ? failure.getMessage() : failure.getCause().getMessage())));
     }
 
+    static Path findFree(Path named) {
+        String name = String.valueOf(named.getFileName());
+        int dot = name.lastIndexOf('.');
+        Path free = named;
+        for (int copy = 2; Files.exists(free); copy++) {
+            free = named.resolveSibling(dot < 0 ? name + " (" + copy + ")"
+                    : name.substring(0, dot) + " (" + copy + ")" + name.substring(dot));
+        }
+        return free;
+    }
+
     private static SwitchResult copyInto(Path folder, String name, List<Path> jars) {
         try {
             Files.createDirectories(folder);
             for (Path jar : jars) {
-                Files.copy(jar, folder.resolve(jar.getFileName()), StandardCopyOption.REPLACE_EXISTING);
+                Path named = folder.resolve(jar.getFileName());
+                if (!Files.exists(named) || Files.mismatch(named, jar) >= 0) {
+                    Files.copy(jar, findFree(named));
+                }
             }
             return new SwitchResult(SwitchResult.Kind.DONE, List.of(), Lang.get("hotwire.store.saved", name, folder));
         } catch (IOException e) {

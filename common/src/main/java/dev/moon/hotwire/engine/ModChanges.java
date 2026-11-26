@@ -219,6 +219,10 @@ public final class ModChanges {
     }
 
     public CompletableFuture<AddPreview> dryRunAdd(Path jar) {
+        return this.dryRunAdd(jar, List.of());
+    }
+
+    public CompletableFuture<AddPreview> dryRunAdd(Path jar, List<Path> with) {
         JvmParts ready = this.parts;
         if (ready == null) {
             return CompletableFuture.completedFuture(this.later.previewAdd(jar));
@@ -227,7 +231,7 @@ public final class ModChanges {
         return this.tasks.submit("dry-run add", () -> {
             LOGGER.info("[Hotwire] the dry run of {} waited {} ms for the worker", jar.getFileName(),
                     (System.nanoTime() - asked) / 1_000_000);
-            return ready.adds().preview(jar);
+            return ready.adds().preview(jar, with);
         });
     }
 

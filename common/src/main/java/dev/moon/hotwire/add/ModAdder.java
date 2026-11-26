@@ -239,12 +239,16 @@ public final class ModAdder {
     }
 
     AddPreview preview(Path jarPath) {
+        return this.preview(jarPath, List.of());
+    }
+
+    AddPreview preview(Path jarPath, List<Path> with) {
         StageTimes times = new StageTimes();
         AddPreview preview = null;
         this.forgetReadsAhead();
         this.savingReads = true;
         try {
-            preview = this.preview(jarPath, times);
+            preview = this.preview(jarPath, with, times);
             return preview;
         } finally {
             this.savingReads = false;
@@ -257,9 +261,11 @@ public final class ModAdder {
         }
     }
 
-    private AddPreview preview(Path jarPath, StageTimes times) {
+    private AddPreview preview(Path jarPath, List<Path> with, StageTimes times) {
         Map<String, Part> found = new LinkedHashMap<>();
-        AddDecision decision = this.decide(List.of(jarPath), found, this.engine.getSwitcher().getOff(), id -> id);
+        List<Path> all = new ArrayList<>(with);
+        all.add(jarPath);
+        AddDecision decision = this.decide(all, found, this.engine.getSwitcher().getOff(), id -> id);
         times.end("decision");
 
         ModManifest manifest = JarLookup.findManifest(jarPath);
