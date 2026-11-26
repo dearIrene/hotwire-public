@@ -35,6 +35,11 @@ public final class Popup extends Element {
     }
 
     public void openAt(double x, double y, int right, int bottom, List<Item> items) {
+        if (this.wanted && this.items.stream().map(Item::label).toList()
+                .equals(items.stream().map(Item::label).toList())) {
+            this.dismiss();
+            return;
+        }
         this.items = List.copyOf(items);
         this.atX = (int) x;
         this.atY = (int) y;
