@@ -19,23 +19,30 @@ public final class AtomicFiles {
         if (parent != null) {
             Files.createDirectories(parent);
         }
-        Path temp = file.resolveSibling(file.getFileName() + ".tmp");
+
+        Path temp = Files.createTempFile(parent == null ? Path.of("") : parent, file.getFileName() + ".", ".tmp");
         ByteBuffer buffer = ByteBuffer.wrap(bytes);
-        try (FileChannel channel = FileChannel.open(temp, StandardOpenOption.CREATE, StandardOpenOption.WRITE,
-                StandardOpenOption.TRUNCATE_EXISTING)) {
-            while (buffer.hasRemaining()) {
-                channel.write(buffer);
+        try {
+            try (FileChannel channel = FileChannel.open(temp, StandardOpenOption.WRITE,
+                    StandardOpenOption.TRUNCATE_EXISTING)) {
+                while (buffer.hasRemaining()) {
+                    channel.write(buffer);
+                }
+                channel.force(true);
             }
-            channel.force(true);
+            moveInto(temp, file);
+        } finally {
+            Files.deleteIfExists(temp);
         }
-        moveInto(temp, file);
     }
 
     public static void moveInto(Path whole, Path file) throws IOException {
-        try {
-            Files.move(whole, file, StandardCopyOption.REPLACE_EXISTING, StandardCopyOption.ATOMIC_MOVE);
-        } catch (AtomicMoveNotSupportedException e) {
-            Files.move(whole, file, StandardCopyOption.REPLACE_EXISTING);
+        synchronized (AtomicFiles.class) {
+            try {
+                Files.move(whole, file, StandardCopyOption.REPLACE_EXISTING, StandardCopyOption.ATOMIC_MOVE);
+            } catch (AtomicMoveNotSupportedException e) {
+                Files.move(whole, file, StandardCopyOption.REPLACE_EXISTING);
+            }
         }
     }
 

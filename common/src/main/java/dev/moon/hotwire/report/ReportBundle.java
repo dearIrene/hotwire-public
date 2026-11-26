@@ -32,7 +32,7 @@ public final class ReportBundle {
 
     private static final Pattern KEY_VALUE = Pattern.compile("(?i)(?<![a-z0-9])(access_?token|refresh_?token"
             + "|session_?token|token|api_?key|secret|password|authorization|bearer)"
-            + "(\"?\\s*[:= ]\\s*\"?)(?:bearer\\s+)?[^\\s\",}]+");
+            + "(\"?\\s*[:= ]\\s*\"?)(?:(?:bearer|basic|digest|negotiate|ntlm)\\s+)?[^\\s\",}]+");
     private static final Pattern JWT = Pattern.compile("eyJ[A-Za-z0-9_-]{5,}\\.[A-Za-z0-9_-]+\\.?[A-Za-z0-9_-]*");
     private static final Pattern UUID = Pattern.compile(
             "(?i)\\b[0-9a-f]{8}-?[0-9a-f]{4}-?[0-9a-f]{4}-?[0-9a-f]{4}-?[0-9a-f]{12}\\b");
@@ -81,9 +81,15 @@ public final class ReportBundle {
         String words = UNSAFE.matcher(title).replaceAll("").strip();
         words = words.substring(0, Math.min(MOST_TITLE, words.length())).strip();
         String build = UNSAFE.matcher(BUILD_COMMIT.matcher(version).replaceAll("")).replaceAll("").strip();
-        String name = "Hotwire " + FILE_TIME.format(at) + (words.isEmpty() ? "" : " " + words)
+        String base = "Hotwire " + FILE_TIME.format(at) + (words.isEmpty() ? "" : " " + words)
                 + (build.isEmpty() ? "" : " (" + build + ")");
         List<List<String>> parts = split(texts, personal, mostPartBytes);
+
+        String name = base;
+        for (int copy = 2; Files.exists(folder.resolve(name + (parts.size() == 1 ? "" : " part 1 of "
+                + parts.size()) + ".txt")); copy++) {
+            name = base + " " + copy;
+        }
         Path first = null;
         for (int index = 0; index < parts.size(); index++) {
             String part = parts.size() == 1 ? "" : " part " + (index + 1) + " of " + parts.size();
