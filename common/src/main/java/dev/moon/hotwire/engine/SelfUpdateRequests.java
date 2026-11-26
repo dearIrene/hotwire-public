@@ -82,8 +82,17 @@ final class SelfUpdateRequests {
         ModrinthClient.Version newer = this.check.getNewer();
         if (newer == null) {
             if (done != null) {
-                done.complete(new SwitchResult(SwitchResult.Kind.REFUSED, List.of(),
-                        Lang.get("hotwire.api.self_update.none")));
+                Thread.ofPlatform().name("hotwire-self-update").daemon().start(() -> {
+                    boolean found = this.check.findNow() != null;
+                    Games.getNow().runOnGame(() -> {
+                        if (found) {
+                            this.updateAtNextStart(pending, done);
+                        } else {
+                            done.complete(new SwitchResult(SwitchResult.Kind.REFUSED, List.of(),
+                                    Lang.get("hotwire.api.self_update.none")));
+                        }
+                    });
+                });
                 return;
             }
             this.waiting = pending;
@@ -108,7 +117,7 @@ final class SelfUpdateRequests {
                                 : EngineApi.toResult(queued));
                     }
                 });
-            } catch (IOException e) {
+            } catch (IOException | RuntimeException e) {
                 if (!(e instanceof Downloads.DownloadStop)) {
                     Games.getNow().runOnGame(() -> this.say.accept(
                             Lang.get("hotwire.store.download_failed", "Hotwire", e.getMessage()), true));

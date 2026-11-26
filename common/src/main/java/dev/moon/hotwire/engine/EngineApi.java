@@ -138,7 +138,8 @@ public class EngineApi implements HotwireApi {
             return new ApiStatus(ApiStatus.State.UNAVAILABLE, 0, engine.getSwitchRefusal());
         }
         Progress.Snapshot now = engine.getProgress().snapshot();
-        if (now.running() || engine.api.switching.get() > 0 || engine.api.changing.get() > 0) {
+        if (now.running() || engine.api.switching.get() > 0 || engine.api.changing.get() > 0
+                || engine.tasks.isBusy()) {
             return new ApiStatus(ApiStatus.State.BUSY, now.running() ? now.getFraction() : 0,
                     now.running() ? now.describe() : "");
         }
@@ -178,6 +179,7 @@ public class EngineApi implements HotwireApi {
     }
 
     @Override
+    @SuppressWarnings("FutureReturnValueIgnored")
     public CompletableFuture<SwitchResult> updateHotwire() {
         CompletableFuture<SwitchResult> done = new CompletableFuture<>();
         HotwireEngine engine = findEngine();
@@ -188,6 +190,8 @@ public class EngineApi implements HotwireApi {
         } else if (refused != null) {
             done.complete(SwitchResult.ofRefusal(Reason.REFUSED, refused));
         } else {
+            engine.api.changing.incrementAndGet();
+            done.whenComplete((result, error) -> engine.api.changing.decrementAndGet());
             Games.getNow().runOnGame(() -> engine.updateHotwireAtNextStart(done));
         }
         return onGameAsResult(done);

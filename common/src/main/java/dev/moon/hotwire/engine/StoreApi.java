@@ -130,7 +130,8 @@ final class StoreApi {
                     hit.title(), hit.description(), hit.author(), hit.downloads(), hit.iconUrl(), hit.categories(),
                     model != null && (model.isInstalledProject(hit.projectId())
                             || model.isInstalledProject(hit.slug())),
-                    model != null && model.getUpdates().containsKey(hit.projectId()))).toList(), found.total());
+                    model != null && model.getUpdates().containsKey(hit.projectId()),
+                    model != null && model.isQueuedProject(hit.projectId()))).toList(), found.total());
         });
     }
 

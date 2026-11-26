@@ -18,6 +18,7 @@ import dev.moon.hotwire.store.UpdateCheck;
 import dev.moon.hotwire.switching.CallerBlocks;
 import dev.moon.hotwire.switching.ModSwitcher;
 import dev.moon.hotwire.switching.PlayerMessages;
+import dev.moon.hotwire.switching.Progress;
 import dev.moon.hotwire.ui.AddMode;
 import dev.moon.hotwire.ui.AddPreview;
 import dev.moon.hotwire.ui.Lang;
@@ -656,7 +657,21 @@ final class ApiChanges {
             }
             HotwireEngine engine = EngineApi.findEngine();
             if (!this.jars.isEmpty() && engine != null) {
-                ChangeOutcome updates = readUpdates(engine.getChanges().updateAll(this.jars).join());
+                Progress progress = engine.getProgress();
+                boolean shown = !progress.snapshot().running();
+                if (shown) {
+                    progress.beginUpdating(Lang.get("hotwire.updates.all_subject", this.jars.size()));
+                }
+                ChangeOutcome updates;
+                try {
+                    List<ModUpdater.Result> results = engine.getChanges().updateAll(this.jars).join();
+                    Games.getNow().runOnGame(() -> results.forEach(engine.storeJars::noteUpdated));
+                    updates = readUpdates(results);
+                } finally {
+                    if (shown) {
+                        progress.endAdding();
+                    }
+                }
                 now.addAll(updates.now());
                 later.addAll(updates.later());
                 said.addAll(updates.said());

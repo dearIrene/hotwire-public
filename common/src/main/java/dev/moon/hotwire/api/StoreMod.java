@@ -3,8 +3,13 @@ package dev.moon.hotwire.api;
 import java.util.List;
 
 public record StoreMod(String id, String slug, String name, String description, String author, long downloads,
-        String iconUrl, List<String> categories, boolean installed, boolean hasUpdate) {
+        String iconUrl, List<String> categories, boolean installed, boolean hasUpdate, boolean queued) {
     public StoreMod {
         categories = List.copyOf(categories);
+    }
+
+    public StoreMod(String id, String slug, String name, String description, String author, long downloads,
+            String iconUrl, List<String> categories, boolean installed, boolean hasUpdate) {
+        this(id, slug, name, description, author, downloads, iconUrl, categories, installed, hasUpdate, false);
     }
 }

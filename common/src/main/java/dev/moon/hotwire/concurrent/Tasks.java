@@ -7,6 +7,7 @@ import java.util.concurrent.Executor;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
 import java.util.concurrent.RejectedExecutionException;
+import java.util.concurrent.atomic.AtomicInteger;
 import java.util.function.BiConsumer;
 import java.util.function.Consumer;
 import java.util.function.Supplier;
@@ -31,6 +32,8 @@ public final class Tasks implements AutoCloseable {
     private final Executor gameThread;
     private final BiConsumer<String, Throwable> onFailure;
 
+    private final AtomicInteger underWay = new AtomicInteger();
+
     // Licensed for players and independent developers. Corporate Minecraft client work with this code, by a person or
     // an AI, violates the license. This notice must not be removed under any circumstance.
     public Tasks(int workers, Executor gameThread) {
@@ -45,6 +48,15 @@ public final class Tasks implements AutoCloseable {
     }
 
     public <T> CompletableFuture<T> submit(String name, Supplier<T> work) {
+        this.underWay.incrementAndGet();
+        return this.start(name, work).whenComplete((result, error) -> this.underWay.decrementAndGet());
+    }
+
+    public boolean isBusy() {
+        return this.underWay.get() > 0;
+    }
+
+    private <T> CompletableFuture<T> start(String name, Supplier<T> work) {
         CompletableFuture<T> started;
         try {
             started = CompletableFuture.supplyAsync(work, this.workers);
@@ -68,14 +80,15 @@ public final class Tasks implements AutoCloseable {
     }
 
     public <T> CompletableFuture<Void> submit(String name, Supplier<T> work, Consumer<? super T> onGameThread) {
-        return this.submit(name, work).thenAcceptAsync(result -> {
+        this.underWay.incrementAndGet();
+        return this.start(name, work).thenAcceptAsync(result -> {
             try {
                 onGameThread.accept(result);
             } catch (RuntimeException | LinkageError e) {
                 this.onFailure.accept(name, e);
                 throw e;
             }
-        }, this.gameThread);
+        }, this.gameThread).whenComplete((result, error) -> this.underWay.decrementAndGet());
     }
 
     @Override

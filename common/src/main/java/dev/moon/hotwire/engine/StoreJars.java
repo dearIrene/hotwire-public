@@ -393,6 +393,24 @@ public final class StoreJars {
         }
     }
 
+    public void noteUpdated(ModUpdater.Result result) {
+        String id = switch (result) {
+            case ModUpdater.Result.Updated updated -> updated.id();
+            case ModUpdater.Result.Queued queuedUpdate -> queuedUpdate.id();
+            default -> null;
+        };
+        this.dropOffer(result);
+        ModStore made = this.store.get();
+        this.check.getIdByProject().forEach((project, mod) -> {
+            if (mod.equals(id)) {
+                this.check.noteInstalled(project);
+                if (made != null) {
+                    made.getModel().markInstalled(project);
+                }
+            }
+        });
+    }
+
     public void markQueued(Path jar, List<PendingChange> pending) {
         String project = this.projects.remove(jar);
         ModStore made = this.store.get();
@@ -423,6 +441,8 @@ public final class StoreJars {
 
         if (project != null) {
             this.check.noteInstalled(project);
+        } else if (made != null) {
+            made.checkInstalled();
         }
     }
 

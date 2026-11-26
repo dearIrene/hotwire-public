@@ -52,6 +52,15 @@ public final class SelfUpdate {
         });
     }
 
+    public ModrinthClient.@Nullable Version findNow() {
+        ModrinthClient.Version found = this.find(urgent -> { });
+        if (found != null) {
+            this.newer = found;
+            OutdatedNotice.set(found.number());
+        }
+        return found;
+    }
+
     private ModrinthClient.@Nullable Version find(Consumer<Optional<UrgentUpdate>> checked) {
         try {
             String project = this.findOwnProject();
