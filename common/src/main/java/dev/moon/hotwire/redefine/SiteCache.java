@@ -31,7 +31,7 @@ import org.slf4j.LoggerFactory;
 
 public final class SiteCache {
     private static final Logger LOGGER = LoggerFactory.getLogger(SiteCache.class);
-    private static final String RECIPE = "call sites 4";
+    private static final String RECIPE = "call sites 5";
 
     private static volatile @Nullable SiteCache active;
     private static volatile @Nullable SiteCache opened;

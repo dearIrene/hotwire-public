@@ -5,6 +5,7 @@ import dev.moon.hotwire.classfile.GameNames;
 import dev.moon.hotwire.config.Flags;
 import dev.moon.hotwire.seam.Games;
 import java.lang.invoke.CallSite;
+import java.lang.invoke.ConstantCallSite;
 import java.lang.invoke.MethodHandle;
 import java.lang.invoke.MethodHandles;
 import java.lang.invoke.MethodType;
@@ -76,6 +77,16 @@ public final class HandlerGuards {
             Live.NAME, "guardConstructor",
             MethodType.methodType(CallSite.class, MethodHandles.Lookup.class, String.class, MethodType.class,
                     String.class, int.class).toMethodDescriptorString(), false);
+
+    static final Handle BOOTSTRAP_HEAD = new Handle(Opcodes.H_INVOKESTATIC,
+            Live.NAME, "guardHead",
+            MethodType.methodType(CallSite.class, MethodHandles.Lookup.class, String.class, MethodType.class,
+                    String.class, int.class, int.class, int.class).toMethodDescriptorString(), false);
+
+    static final Handle BOOTSTRAP_OFF_FLAG = new Handle(Opcodes.H_INVOKESTATIC,
+            Live.NAME, "findOffFlag",
+            MethodType.methodType(boolean[].class, MethodHandles.Lookup.class, String.class, Class.class,
+                    String.class).toMethodDescriptorString(), false);
     static final Handle BOOTSTRAP_REDIRECT = new Handle(Opcodes.H_INVOKESTATIC,
             Live.NAME, "guardRedirect",
             MethodType.methodType(CallSite.class, MethodHandles.Lookup.class, String.class, MethodType.class,
@@ -106,6 +117,12 @@ public final class HandlerGuards {
 
     private static final Map<String, Map<MutableCallSite, Guard>> GUARDS = new HashMap<>();
     private static final Set<String> OFF = new HashSet<>();
+    private static final HeadFlags HEAD_FLAGS = new HeadFlags();
+
+    private static final class HeadFlags {
+        private final Map<String, boolean[]> byMixin = new HashMap<>();
+        private final Set<String> ofChunks = new HashSet<>();
+    }
 
     private static final AtomicLong CHUNK_FLIPS = new AtomicLong();
     private static final List<String> CHUNK_HOSTS = List.of("chunk", "renderer/block/", "color/block/", "/model/",
@@ -459,6 +476,7 @@ public final class HandlerGuards {
         Set<String> present = new HashSet<>();
         Set<String> guarded = new HashSet<>();
         Map<String, String> handlers = new HashMap<>();
+        Set<String> headGuarded = new HashSet<>();
         for (MethodNode method : node.methods) {
             String mixin = findMerged(method);
             if (mixin != null) {
@@ -467,6 +485,9 @@ public final class HandlerGuards {
                 if (mark > 0 && (KINDS.containsKey(method.name.substring(0, mark))
                         || method.name.startsWith("redirect$"))) {
                     handlers.put(method.name + method.desc, mixin);
+                    if (HandlerSites.isHeadGuarded(method)) {
+                        headGuarded.add(method.name + method.desc);
+                    }
                 }
             }
         }
@@ -508,7 +529,8 @@ public final class HandlerGuards {
                         }
                     }
                     noteDirect(internalName, site.name);
-                } else if (insn instanceof MethodInsnNode call) {
+                } else if (insn instanceof MethodInsnNode call && !(call.owner.equals(internalName)
+                        && headGuarded.contains(call.name + call.desc))) {
                     String direct = call.owner.equals(internalName) ? handlers.get(call.name + call.desc) : null;
                     if (direct != null && direct.equals(outer)) {
                         continue;
@@ -629,6 +651,29 @@ public final class HandlerGuards {
                 : caller.findSpecial(owner, was, type.dropParameterTypes(0, 1), owner));
     }
 
+    static CallSite bootstrapHead(MethodHandles.Lookup caller, String name, MethodType type, String mixin,
+            int isStatic, int kind, int index) {
+        MethodHandle standIn;
+        try {
+            standIn = HandlerStandIns.make(caller, type, kind, index, isStatic == STATIC ? 0 : 1);
+        } catch (ReflectiveOperationException | RuntimeException e) {
+            LOGGER.warn("[Hotwire] {}.{} {} has no stand-in and answers nothing while off: {}",
+                    caller.lookupClass().getName(), name, type, e.toString());
+            markUnflippable(Type.getInternalName(caller.lookupClass()), mixin, "stand-in failed to link");
+            standIn = MethodHandles.empty(type);
+        }
+        return new ConstantCallSite(standIn);
+    }
+
+    static boolean[] findOffFlag(String mixin, Class<?> host) {
+        synchronized (LOCK) {
+            if (isOfChunks(mixin, host.getName())) {
+                HEAD_FLAGS.ofChunks.add(mixin);
+            }
+            return HEAD_FLAGS.byMixin.computeIfAbsent(mixin, m -> new boolean[] {OFF.contains(m)});
+        }
+    }
+
     private interface StandInCall {
         MethodHandle make() throws ReflectiveOperationException;
     }
@@ -669,11 +714,18 @@ public final class HandlerGuards {
             return 0;
         }
         List<MutableCallSite> changed = new ArrayList<>();
+        int flags = 0;
         boolean chunks = false;
         synchronized (LOCK) {
             for (String mixin : mixins) {
                 if (off ? !OFF.add(mixin) : !OFF.remove(mixin)) {
                     continue;
+                }
+                boolean[] flag = HEAD_FLAGS.byMixin.get(mixin);
+                if (flag != null) {
+                    flag[0] = off;
+                    flags++;
+                    chunks |= HEAD_FLAGS.ofChunks.contains(mixin);
                 }
                 for (Map.Entry<MutableCallSite, Guard> guard : GUARDS.getOrDefault(mixin, Map.of()).entrySet()) {
                     guard.getKey().setTarget(off ? guard.getValue().standIn() : guard.getValue().handler());
@@ -694,9 +746,9 @@ public final class HandlerGuards {
                 SkippedConstructorCalls.replay(mixins);
             });
         }
-        LOGGER.info("[Hotwire] {} handler sites of {} mixins now call {}", changed.size(), mixins.size(),
-                off ? "their stand-ins" : "their handlers");
-        return changed.size();
+        LOGGER.info("[Hotwire] {} handler sites and {} guarded handlers of {} mixins now call {}", changed.size(),
+                flags, mixins.size(), off ? "their stand-ins" : "their handlers");
+        return changed.size() + flags;
     }
 
     public static boolean isOff(String mixin) {

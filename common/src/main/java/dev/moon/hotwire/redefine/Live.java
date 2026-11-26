@@ -34,6 +34,15 @@ public final class Live {
         return HandlerGuards.bootstrap(caller, name, type, mixin, isStatic, kind, index);
     }
 
+    public static CallSite guardHead(MethodHandles.Lookup caller, String name, MethodType type, String mixin,
+            int isStatic, int kind, int index) {
+        return HandlerGuards.bootstrapHead(caller, name, type, mixin, isStatic, kind, index);
+    }
+
+    public static boolean[] findOffFlag(MethodHandles.Lookup caller, String name, Class<?> type, String mixin) {
+        return HandlerGuards.findOffFlag(mixin, caller.lookupClass());
+    }
+
     public static CallSite guardSaving(MethodHandles.Lookup caller, String name, MethodType type, String mixin,
             int isStatic, int kind, int index) throws ReflectiveOperationException {
         return HandlerGuards.bootstrapSaving(caller, name, type, mixin, isStatic, kind, index);

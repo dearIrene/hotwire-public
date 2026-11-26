@@ -1,8 +1,11 @@
 package dev.moon.hotwire.redefine;
 
+import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.HashMap;
 import java.util.HashSet;
+import java.util.LinkedHashMap;
+import java.util.List;
 import java.util.Map;
 import java.util.OptionalInt;
 import java.util.Set;
@@ -10,15 +13,23 @@ import java.util.TreeSet;
 import java.util.function.Supplier;
 import org.jspecify.annotations.Nullable;
 import org.objectweb.asm.ClassReader;
+import org.objectweb.asm.ConstantDynamic;
 import org.objectweb.asm.Opcodes;
 import org.objectweb.asm.Type;
 import org.objectweb.asm.tree.AbstractInsnNode;
 import org.objectweb.asm.tree.ClassNode;
 import org.objectweb.asm.tree.FieldInsnNode;
 import org.objectweb.asm.tree.FieldNode;
+import org.objectweb.asm.tree.FrameNode;
+import org.objectweb.asm.tree.InsnList;
+import org.objectweb.asm.tree.InsnNode;
 import org.objectweb.asm.tree.InvokeDynamicInsnNode;
+import org.objectweb.asm.tree.JumpInsnNode;
+import org.objectweb.asm.tree.LabelNode;
+import org.objectweb.asm.tree.LdcInsnNode;
 import org.objectweb.asm.tree.MethodInsnNode;
 import org.objectweb.asm.tree.MethodNode;
+import org.objectweb.asm.tree.VarInsnNode;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -72,6 +83,8 @@ final class HandlerSites {
             return markStaged(internalName, guarded);
         }
         NullArguments nulls = new NullArguments(internalName);
+        Map<String, List<HandlerCall>> placed = new LinkedHashMap<>();
+        Set<String> direct = new HashSet<>();
         for (MethodNode method : node.methods) {
             for (AbstractInsnNode insn : method.instructions.toArray()) {
                 if (!(insn instanceof MethodInsnNode call) || !call.owner.equals(internalName)) {
@@ -89,11 +102,19 @@ final class HandlerSites {
                     HandlerGuards.markUnflippable(internalName, mixin, outcome.refusal());
                 }
                 if (outcome.site() != null) {
-                    method.instructions.set(call, outcome.site());
+                    placed.computeIfAbsent(call.name + call.desc, k -> new ArrayList<>())
+                            .add(new HandlerCall(method, call, outcome.site(), mixin));
                     guarded.add(mixin);
+                } else {
+                    direct.add(call.name + call.desc);
                 }
             }
         }
+        placed.forEach((handler, sites) -> {
+            if (direct.contains(handler) || !putHeadGuard(node, handler, sites)) {
+                sites.forEach(each -> each.in().instructions.set(each.call(), each.site()));
+            }
+        });
         return markStaged(internalName, guarded);
     }
 
@@ -213,6 +234,104 @@ final class HandlerSites {
                 ? new InvokeDynamicInsnNode(call.name, desc, HandlerGuards.BOOTSTRAP_CONSTRUCTOR, mixin, how)
                 : new InvokeDynamicInsnNode(call.name, desc, HandlerGuards.BOOTSTRAP, mixin, how, kind,
                         index.getAsInt() + (isStatic ? 0 : 1)));
+    }
+
+    private record HandlerCall(MethodNode in, MethodInsnNode call, InvokeDynamicInsnNode site, String mixin) {
+    }
+
+    private static boolean putHeadGuard(ClassNode node, String handler, List<HandlerCall> sites) {
+        if ((node.version & 0xFFFF) < Opcodes.V11) {
+            return false;
+        }
+        InvokeDynamicInsnNode first = sites.get(0).site();
+        if (first.bsmArgs.length != 4 || !(first.bsmArgs[2] instanceof Integer kind)
+                || kind == HandlerStandIns.OPERATION) {
+            return false;
+        }
+        for (HandlerCall each : sites) {
+            if (!each.site().bsm.equals(HandlerGuards.BOOTSTRAP)
+                    || !Arrays.equals(each.site().bsmArgs, first.bsmArgs) || !each.site().desc.equals(first.desc)) {
+                return false;
+            }
+        }
+        MethodNode method = null;
+        for (MethodNode each : node.methods) {
+            if ((each.name + each.desc).equals(handler)
+                    && (each.access & (Opcodes.ACC_ABSTRACT | Opcodes.ACC_NATIVE)) == 0) {
+                method = each;
+            }
+        }
+        if (method == null) {
+            return false;
+        }
+        if (isHeadGuarded(method)) {
+            return true;
+        }
+        InsnList head = new InsnList();
+        LabelNode on = new LabelNode();
+        head.add(new LdcInsnNode(new ConstantDynamic("off", "[Z", HandlerGuards.BOOTSTRAP_OFF_FLAG,
+                sites.get(0).mixin())));
+        head.add(new InsnNode(Opcodes.ICONST_0));
+        head.add(new InsnNode(Opcodes.BALOAD));
+        head.add(new JumpInsnNode(Opcodes.IFEQ, on));
+        List<Object> locals = new ArrayList<>();
+        int slot = 0;
+        if ((method.access & Opcodes.ACC_STATIC) == 0) {
+            head.add(new VarInsnNode(Opcodes.ALOAD, 0));
+            locals.add(node.name);
+            slot = 1;
+        }
+        for (Type argument : Type.getArgumentTypes(method.desc)) {
+            head.add(new VarInsnNode(argument.getOpcode(Opcodes.ILOAD), slot));
+            slot += argument.getSize();
+            locals.add(switch (argument.getSort()) {
+                case Type.LONG -> Opcodes.LONG;
+                case Type.DOUBLE -> Opcodes.DOUBLE;
+                case Type.FLOAT -> Opcodes.FLOAT;
+                case Type.OBJECT, Type.ARRAY -> argument.getInternalName();
+                default -> Opcodes.INTEGER;
+            });
+        }
+        head.add(new InvokeDynamicInsnNode(first.name, first.desc, HandlerGuards.BOOTSTRAP_HEAD, first.bsmArgs));
+        head.add(new InsnNode(Type.getReturnType(method.desc).getOpcode(Opcodes.IRETURN)));
+        head.add(on);
+        if (!startsWithFrame(method)) {
+            head.add(hasExpandedFrames(method) ? new FrameNode(Opcodes.F_NEW, locals.size(), locals.toArray(), 0,
+                    new Object[0]) : new FrameNode(Opcodes.F_SAME, 0, null, 0, null));
+        }
+        method.instructions.insert(head);
+        method.maxStack = Math.max(method.maxStack, Math.max(2, slot));
+        return true;
+    }
+
+    static boolean isHeadGuarded(MethodNode method) {
+        for (AbstractInsnNode insn : method.instructions) {
+            if (insn instanceof InvokeDynamicInsnNode site && site.bsm.equals(HandlerGuards.BOOTSTRAP_HEAD)) {
+                return true;
+            }
+        }
+        return false;
+    }
+
+    private static boolean startsWithFrame(MethodNode method) {
+        for (AbstractInsnNode insn : method.instructions) {
+            if (insn instanceof FrameNode) {
+                return true;
+            }
+            if (insn.getOpcode() >= 0) {
+                return false;
+            }
+        }
+        return false;
+    }
+
+    private static boolean hasExpandedFrames(MethodNode method) {
+        for (AbstractInsnNode insn : method.instructions) {
+            if (insn instanceof FrameNode frame) {
+                return frame.type == Opcodes.F_NEW;
+            }
+        }
+        return false;
     }
 
     private static boolean isArraySize(MethodInsnNode call) {
