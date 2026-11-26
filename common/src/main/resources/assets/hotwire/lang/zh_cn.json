@@ -598,6 +598,7 @@
   "hotwire.api.pack.unchanged": "%s 没有变化。",
   "hotwire.api.pack.not_fetched": "%s 无法下载。",
   "hotwire.api.switch_reopen": "会为此保存并重新打开世界。",
+  "hotwire.api.switch_leave": "为此你会先离开服务器，之后再重新加入。",
   "hotwire.api.reopen_others": "这个世界里有其他玩家，只有房主能为他们关闭它。",
   "hotwire.api.self_update.none": "目前还没有更新的 Hotwire。",
   "hotwire.add.queue.installed": "%s 已经安装了，所以不会再次排队。",

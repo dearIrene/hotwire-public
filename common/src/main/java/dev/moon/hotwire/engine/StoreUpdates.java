@@ -295,6 +295,7 @@ public final class StoreUpdates {
                     out.add(future.get());
                 } catch (ExecutionException e) {
                     if (e.getCause() instanceof UncheckedIOException failed) {
+                        pool.shutdownNow();
                         throw failed;
                     }
                     LOGGER.warn("[Hotwire] an update's fetch failed", e.getCause());

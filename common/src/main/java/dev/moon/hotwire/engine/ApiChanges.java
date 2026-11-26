@@ -35,6 +35,7 @@ import java.nio.file.Path;
 import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.HashSet;
+import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;
@@ -210,8 +211,10 @@ final class ApiChanges {
             }
 
             List<UpdateOffer> together = new ArrayList<>(check.orderByNeeds(picked, all));
+
+            Set<String> unfetched = new LinkedHashSet<>();
             List<Path> every = new ArrayList<>(jars);
-            every.addAll(fetchAll(engine, check, together));
+            every.addAll(fetchAll(engine, check, together, unfetched));
             List<ModUpdater.SortResult> results = engine.getChanges().previewUpdates(every);
             if (results.stream().anyMatch(ModUpdater.SortResult.Refused.class::isInstance)) {
                 List<UpdateOffer> more = findDependentsWithUpdates(engine, together, all);
@@ -219,7 +222,7 @@ final class ApiChanges {
                     together.addAll(more);
                     together = new ArrayList<>(check.orderByNeeds(together, all));
                     every = new ArrayList<>(jars);
-                    every.addAll(fetchAll(engine, check, together));
+                    every.addAll(fetchAll(engine, check, together, unfetched));
                     results = engine.getChanges().previewUpdates(every);
                 }
             }
@@ -230,6 +233,11 @@ final class ApiChanges {
             }
             jars.clear();
             jars.addAll(every);
+            for (String name : unfetched) {
+                lines.add(Lang.get("hotwire.api.pack.not_fetched", name));
+                can = false;
+                reason = Reason.FAILED;
+            }
             if (jars.isEmpty() && !request.update().isEmpty()) {
                 lines.add(Lang.get("hotwire.api.no_update"));
                 can = false;
@@ -286,7 +294,8 @@ final class ApiChanges {
                 lines.add(Lang.get("hotwire.api.reopen_others"));
             } else if (parts.runner().getSwitcher().needsReopen(planned)) {
                 reopen = true;
-                lines.add(Lang.get("hotwire.api.switch_reopen"));
+                lines.add(Lang.get(Games.getNow().hasOwnServer() ? "hotwire.api.switch_reopen"
+                        : "hotwire.api.switch_leave"));
                 if (reason == Reason.NONE) {
                     reason = Reason.NEEDS_REOPEN;
                 }
@@ -497,16 +506,23 @@ final class ApiChanges {
         }
     }
 
-    private static List<Path> fetchAll(HotwireEngine engine, UpdateCheck check, List<UpdateOffer> offers) {
+    private static List<Path> fetchAll(HotwireEngine engine, UpdateCheck check, List<UpdateOffer> offers,
+            Set<String> unfetched) {
         Runnable endQuiet = Downloads.beginQuiet();
         try {
-            return engine.storeJars.getAll().fetchAll(offers, offer -> {
+            List<List<Path>> fetched = engine.storeJars.getAll().fetchAll(offers, offer -> {
                 try {
                     return check.fetchWithNeeds(offer, said -> { });
                 } catch (IOException e) {
                     throw new UncheckedIOException(e);
                 }
-            }).stream().flatMap(List::stream).toList();
+            });
+            for (int at = 0; at < offers.size(); at++) {
+                if (fetched.get(at).isEmpty()) {
+                    unfetched.add(offers.get(at).name());
+                }
+            }
+            return fetched.stream().flatMap(List::stream).toList();
         } finally {
             endQuiet.run();
         }
@@ -650,6 +666,10 @@ final class ApiChanges {
                 List<String> ids = off ? this.request.off() : this.request.on();
                 CompletableFuture<SwitchResult> made = new CompletableFuture<>();
                 Games.getNow().runOnGame(() -> {
+                    if (Games.getNow().countOthers() > 0) {
+                        made.complete(SwitchResult.ofRefusal(Reason.REFUSED, Lang.get("hotwire.api.reopen_others")));
+                        return;
+                    }
                     try {
                         found.switchWithReopenFor(off, ids).whenComplete((result, error) -> made.complete(
                                 error == null ? result : makeFailed(error)));

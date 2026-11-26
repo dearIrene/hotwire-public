@@ -598,6 +598,7 @@
   "hotwire.api.pack.unchanged": "%s hat sich nicht geändert.",
   "hotwire.api.pack.not_fetched": "%s konnte nicht heruntergeladen werden.",
   "hotwire.api.switch_reopen": "Die Welt wird dafür gespeichert und neu geöffnet.",
+  "hotwire.api.switch_leave": "Dafür verlässt du den Server und trittst danach wieder bei.",
   "hotwire.api.reopen_others": "Andere Spieler sind in dieser Welt, und nur der Host kann sie für sie schließen.",
   "hotwire.api.self_update.none": "Noch kein neueres Hotwire bekannt.",
   "hotwire.add.queue.installed": "%s ist schon installiert, also wird es nicht nochmal eingereiht.",

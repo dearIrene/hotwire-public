@@ -598,6 +598,7 @@
   "hotwire.api.pack.unchanged": "%s didn't change.",
   "hotwire.api.pack.not_fetched": "%s couldn't be downloaded.",
   "hotwire.api.switch_reopen": "The world is saved and opened again around it.",
+  "hotwire.api.switch_leave": "You leave the server for it, and join again after.",
   "hotwire.api.reopen_others": "Other players are in this world, and only the host can close it on them.",
   "hotwire.api.self_update.none": "No newer Hotwire is known yet.",
   "hotwire.add.queue.installed": "%s is installed already, so it is not queued again.",

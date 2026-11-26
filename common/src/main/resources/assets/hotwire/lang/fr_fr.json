@@ -598,6 +598,7 @@
   "hotwire.api.pack.unchanged": "%s n'a pas changé.",
   "hotwire.api.pack.not_fetched": "%s n'a pas pu être téléchargé.",
   "hotwire.api.switch_reopen": "Le monde est sauvegardé et rouvert pour ça.",
+  "hotwire.api.switch_leave": "Pour cela, tu quittes le serveur et tu le rejoins ensuite.",
   "hotwire.api.reopen_others": "D'autres joueurs sont dans ce monde, et seul l'hôte peut le fermer pour eux.",
   "hotwire.api.self_update.none": "Aucun Hotwire plus récent n'est encore connu.",
   "hotwire.add.queue.installed": "%s est déjà installé, donc il n'est pas remis en file d'attente.",
