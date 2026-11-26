@@ -49,6 +49,7 @@ public final class StoreIconLoader implements StoreIcons {
     }
 
     @Override
+    @SuppressWarnings("FutureReturnValueIgnored")
     public Canvas.@Nullable Image find(String projectId, String url) {
         Canvas.Image own = this.local.apply(projectId);
         if (own != null) {
@@ -62,14 +63,16 @@ public final class StoreIconLoader implements StoreIcons {
             String oldest = this.seen.keySet().iterator().next();
             this.seen.remove(oldest);
             CompletableFuture<Optional<Canvas.Image>> gone = this.icons.remove(oldest);
+
             if (gone != null) {
-                gone.getNow(Optional.empty()).ifPresent(Canvas.Image::release);
+                gone.thenAccept(found -> found.ifPresent(Canvas.Image::release));
             }
         }
         return this.icons.computeIfAbsent(url, this::load).getNow(Optional.empty()).orElse(null);
     }
 
     @Override
+    @SuppressWarnings("FutureReturnValueIgnored")
     public @Nullable PagePicture findPicture(String url) {
         this.picturesSeen.put(url, Boolean.TRUE);
         if (this.picturesSeen.size() > MOST_PICTURES) {
@@ -77,7 +80,7 @@ public final class StoreIconLoader implements StoreIcons {
             this.picturesSeen.remove(oldest);
             CompletableFuture<Optional<PagePicture>> gone = this.pictures.remove(oldest);
             if (gone != null) {
-                gone.getNow(Optional.empty()).ifPresent(picture -> picture.image().release());
+                gone.thenAccept(found -> found.ifPresent(picture -> picture.image().release()));
             }
         }
         return this.pictures.computeIfAbsent(url, this::loadPicture).getNow(Optional.empty()).orElse(null);

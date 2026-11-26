@@ -23,6 +23,7 @@ import java.security.NoSuchAlgorithmException;
 import java.time.Duration;
 import java.util.ArrayList;
 import java.util.Collection;
+import java.util.HashMap;
 import java.util.HexFormat;
 import java.util.LinkedHashMap;
 import java.util.List;
@@ -372,24 +373,31 @@ public final class ModrinthClient {
             return;
         }
 
-        synchronized (findLock(target)) {
-            if (!LocalJars.isSameJar(target, version.size(), version.sha512())) {
-                this.fetchAlone(version, target, onBytes);
+        Path file = target.toAbsolutePath().normalize();
+        int[] lock;
+        synchronized (FETCHING) {
+            lock = FETCHING.computeIfAbsent(file, made -> new int[1]);
+            lock[0]++;
+        }
+        try {
+            synchronized (lock) {
+                if (onBytes instanceof Downloads.Feed feed) {
+                    feed.awaitGo();
+                }
+                if (!LocalJars.isSameJar(target, version.size(), version.sha512())) {
+                    this.fetchAlone(version, target, onBytes);
+                }
+            }
+        } finally {
+            synchronized (FETCHING) {
+                if (--lock[0] == 0) {
+                    FETCHING.remove(file);
+                }
             }
         }
     }
 
-    private static final Object[] FETCHING = new Object[32];
-
-    static {
-        for (int at = 0; at < FETCHING.length; at++) {
-            FETCHING[at] = new Object();
-        }
-    }
-
-    private static Object findLock(Path target) {
-        return FETCHING[Math.floorMod(target.toAbsolutePath().normalize().hashCode(), FETCHING.length)];
-    }
+    private static final Map<Path, int[]> FETCHING = new HashMap<>();
 
     private void fetchAlone(Version version, Path target, LongConsumer onBytes) throws IOException {
         Path part = target.resolveSibling(target.getFileName() + ".part");
@@ -709,6 +717,10 @@ public final class ModrinthClient {
                 HttpResponse<T> response = HTTP.send(built, handler);
                 if (API_HOST.equals(built.uri().getHost())) {
                     this.readRateLimit(response);
+                }
+
+                if (response.statusCode() / 100 != 2 && response.body() instanceof InputStream unread) {
+                    unread.close();
                 }
                 if (response.statusCode() == GONE) {
                     throw new IOException("Modrinth has retired the API this Hotwire speaks; a newer Hotwire is"

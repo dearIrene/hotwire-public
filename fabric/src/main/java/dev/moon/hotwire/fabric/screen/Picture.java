@@ -76,6 +76,10 @@ public final class Picture implements Canvas.Image {
 
     @Override
     public void release() {
+        if (!Minecraft.getInstance().isSameThread()) {
+            Minecraft.getInstance().execute(this::release);
+            return;
+        }
         Identifier made = this.texture;
         if (made != null) {
             Minecraft.getInstance().getTextureManager().release(made);
