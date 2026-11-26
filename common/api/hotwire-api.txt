@@ -54,6 +54,7 @@ public static final dev.moon.hotwire.api.ChangeRequest$Add
 public abstract interface dev.moon.hotwire.api.HotwireApi
   public abstract boolean dev.moon.hotwire.api.HotwireApi.cancelPendingTask(java.lang.String)
   public abstract boolean dev.moon.hotwire.api.HotwireApi.isAddedThisSession(java.lang.String)
+  public abstract boolean dev.moon.hotwire.api.HotwireApi.isUpdateCheckOn()
   public abstract boolean dev.moon.hotwire.api.HotwireApi.pauseDownload(int)
   public abstract boolean dev.moon.hotwire.api.HotwireApi.resumeDownload(int)
   public abstract boolean dev.moon.hotwire.api.HotwireApi.showPrompt()

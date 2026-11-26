@@ -567,6 +567,7 @@
   "hotwire.api.update_with": "Also updates %s, which goes with it.",
   "hotwire.api.back_from_jar": "%s comes back from its jar.",
   "hotwire.api.no_update": "There's no newer version of that on Modrinth.",
+  "hotwire.api.jar_changed": "%s changed since this was planned, so nothing was done. Plan it again.",
   "hotwire.api.both_ways_reopen": "Part of this needs the world saved and opened again. Turn mods off and on in two separate steps.",
   "hotwire.api.no_update_for": "%s has no newer version any more.",
   "hotwire.api.update_now": "Updates %s to %s now.",

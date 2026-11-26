@@ -198,6 +198,12 @@ public class EngineApi implements HotwireApi {
     }
 
     @Override
+    public boolean isUpdateCheckOn() {
+        HotwireEngine engine = findEngine();
+        return engine == null || engine.getSettings().isUpdateCheckOn();
+    }
+
+    @Override
     public CompletableFuture<ModUpdates> checkUpdates() {
         return onGame(ApiChanges.checkUpdates());
     }

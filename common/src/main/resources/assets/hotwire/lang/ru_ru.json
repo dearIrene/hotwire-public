@@ -567,6 +567,7 @@
   "hotwire.api.update_with": "Также обновит %s, он идёт вместе с ним.",
   "hotwire.api.back_from_jar": "%s возвращается из своего jar.",
   "hotwire.api.no_update": "На Modrinth нет более новой версии.",
+  "hotwire.api.jar_changed": "%s изменился после планирования, поэтому ничего не сделано. Спланируй заново.",
   "hotwire.api.both_ways_reopen": "Часть этого требует сохранить мир и открыть его заново. Выключай и включай моды двумя отдельными шагами.",
   "hotwire.api.no_update_for": "Для %s больше нет более новой версии.",
   "hotwire.api.update_now": "Обновит %s до %s сейчас.",

@@ -37,6 +37,8 @@ public interface HotwireApi {
 
     CompletableFuture<ModUpdates> checkUpdates();
 
+    boolean isUpdateCheckOn();
+
     CompletableFuture<ChangePlan> planChange(ChangeRequest request);
 
     CompletableFuture<Void> awaitIdle();

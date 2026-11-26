@@ -9,6 +9,7 @@ import dev.moon.hotwire.api.PendingTask;
 import dev.moon.hotwire.api.Reason;
 import dev.moon.hotwire.api.SwitchPreview;
 import dev.moon.hotwire.api.SwitchResult;
+import dev.moon.hotwire.jar.FileHashes;
 import dev.moon.hotwire.jar.JarLookup;
 import dev.moon.hotwire.jar.ModManifest;
 import dev.moon.hotwire.modrinth.Downloads;
@@ -89,7 +90,7 @@ final class ApiChanges {
             } catch (IOException | RuntimeException e) {
                 LOGGER.warn("[Hotwire] the API's plan failed", e);
                 made.complete(new Plan(false, Reason.REFUSED, List.of(Lang.get("hotwire.api.plan_failed",
-                        e.toString())), request, List.of(), callers, List.of(), List.of(), false, Set.of()));
+                        e.toString())), request, List.of(), callers, List.of(), List.of(), false, Set.of(), Map.of()));
             } finally {
                 endTag.run();
             }
@@ -102,13 +103,13 @@ final class ApiChanges {
         if (engine == null || engine.findParts() == null) {
             String why = engine == null ? Lang.get("hotwire.api.starting") : engine.getSwitchRefusal();
             return new Plan(false, Reason.NOT_READY, List.of(why), request, List.of(), callers,
-                    List.of(), List.of(), false, Set.of());
+                    List.of(), List.of(), false, Set.of(), Map.of());
         }
 
         String notAllowed = ApiConsent.findRefusal(engine, !request.add().isEmpty());
         if (notAllowed != null) {
             return new Plan(false, Reason.REFUSED, List.of(notAllowed), request, List.of(), callers, List.of(),
-                    List.of(), false, Set.of());
+                    List.of(), false, Set.of(), Map.of());
         }
         List<String> lines = new ArrayList<>();
         Reason reason = Reason.NONE;
@@ -166,7 +167,10 @@ final class ApiChanges {
         List<Path> jars = new ArrayList<>();
         List<Path> adding = new ArrayList<>();
         List<AddMode> addModes = new ArrayList<>();
+
+        Map<Path, String> asked = new HashMap<>();
         for (Path jar : request.jars()) {
+            asked.put(jar, FileHashes.findSha256(jar));
             ModManifest manifest = JarLookup.findManifest(jar);
             Path installed = manifest == null ? null : engine.findJarOf(manifest.id());
 
@@ -335,7 +339,7 @@ final class ApiChanges {
             }
         }
         return new Plan(can, reason, List.copyOf(lines), request, List.copyOf(jars), callers, List.copyOf(adding),
-                List.copyOf(addModes), reopen, Set.copyOf(judgedWith));
+                List.copyOf(addModes), reopen, Set.copyOf(judgedWith), Map.copyOf(asked));
     }
 
     private record ChangeOutcome(List<String> bad, List<String> refused, List<String> now, List<String> later,
@@ -539,7 +543,7 @@ final class ApiChanges {
 
     private record Plan(boolean can, Reason reason, List<String> lines, ChangeRequest request,
             List<Path> jars, CallerBlocks.Callers callers, List<Path> adding, List<AddMode> addModes,
-            boolean reopen, Set<Path> judgedWith) implements ChangePlan {
+            boolean reopen, Set<Path> judgedWith, Map<Path, String> asked) implements ChangePlan {
         @Override
         public boolean needsReopen() {
             return this.reopen;
@@ -633,6 +637,13 @@ final class ApiChanges {
             List<String> later = new ArrayList<>();
 
             List<String> said = new ArrayList<>();
+
+            for (Map.Entry<Path, String> jar : this.asked.entrySet()) {
+                if (!hasHash(jar.getKey(), jar.getValue())) {
+                    return SwitchResult.ofRefusal(Reason.REFUSED, Lang.get("hotwire.api.jar_changed",
+                            jar.getKey().getFileName()));
+                }
+            }
             HotwireEngine found = EngineApi.findEngine();
             if (this.reopen && this.adding.isEmpty() && found != null) {
                 boolean off = !this.request.off().isEmpty();
@@ -699,6 +710,14 @@ final class ApiChanges {
 
         @Override
         public void cancel() {
+        }
+    }
+
+    private static boolean hasHash(Path jar, String sha256) {
+        try {
+            return FileHashes.findSha256(jar).equals(sha256);
+        } catch (IOException e) {
+            return false;
         }
     }
 

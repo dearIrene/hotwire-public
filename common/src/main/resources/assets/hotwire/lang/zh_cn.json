@@ -567,6 +567,7 @@
   "hotwire.api.update_with": "同时会更新跟它一起的 %s。",
   "hotwire.api.back_from_jar": "%s 从它的 jar 回来。",
   "hotwire.api.no_update": "Modrinth 上没有更新的版本。",
+  "hotwire.api.jar_changed": "%s 在计划之后发生了变化，所以什么都没做。请重新计划一次。",
   "hotwire.api.both_ways_reopen": "其中一部分需要保存并重新打开世界。请分两步分别关闭和开启模组。",
   "hotwire.api.no_update_for": "%s 已经没有更新的版本了。",
   "hotwire.api.update_now": "现在把 %s 更新到 %s。",
