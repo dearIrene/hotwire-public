@@ -350,8 +350,8 @@ public final class AddSupport implements ModAdder.Engine {
     }
 
     @Override
-    public SwitchPlanner makePlannerFor(ModGraph graph, boolean isInstalling) {
-        return ModPolicy.makePlannerFor(graph, isInstalling);
+    public SwitchPlanner makePlannerFor(ModGraph graph, boolean isInstalling, Set<String> back) {
+        return ModPolicy.makePlannerFor(graph, isInstalling, back);
     }
 
     @Override

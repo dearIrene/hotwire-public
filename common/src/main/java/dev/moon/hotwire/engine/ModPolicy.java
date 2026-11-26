@@ -168,12 +168,17 @@ public final class ModPolicy {
     }
 
     public static SwitchPlanner makePlannerFor(ModGraph graph, boolean isInstalling) {
+        return makePlannerFor(graph, isInstalling, Set.of());
+    }
+
+    public static SwitchPlanner makePlannerFor(ModGraph graph, boolean isInstalling, Set<String> back) {
         Set<String> guarded = new HashSet<>();
         graph.getIds().stream().filter(ModPolicy::isGuarded).forEach(guarded::add);
         guarded.addAll(findNeededByUnread(graph.getIds()));
         SwitchPlanner planner = new SwitchPlanner(graph, new SwitchPlanner.Settings(nestedJars,
                 findBuiltIn(graph.getIds()), guarded, ModPolicy::satisfies,
-                seenUses != null ? seenUses : KnownUses.NONE, ModPolicy::isStaying, ModPolicy::isGone));
+                seenUses != null ? seenUses : KnownUses.NONE, ModPolicy::isStaying,
+                mod -> !back.contains(mod) && isGone(mod)));
 
         if (isInstalling) {
             Set<String> own = new HashSet<>(graph.findSharedNested());

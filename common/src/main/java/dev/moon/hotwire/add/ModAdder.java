@@ -62,6 +62,7 @@ import java.util.concurrent.TimeoutException;
 import java.util.function.Function;
 import java.util.function.IntSupplier;
 import java.util.function.Supplier;
+import java.util.stream.Collectors;
 import java.util.zip.ZipEntry;
 import java.util.zip.ZipFile;
 import net.fabricmc.loader.api.FabricLoader;
@@ -114,7 +115,7 @@ public final class ModAdder {
 
         ModGraph makeGraphWith(List<ModJar> jars);
 
-        SwitchPlanner makePlannerFor(ModGraph graph, boolean isInstalling);
+        SwitchPlanner makePlannerFor(ModGraph graph, boolean isInstalling, Set<String> back);
 
         void rememberParts(List<ModJar> parts);
 
@@ -610,7 +611,8 @@ public final class ModAdder {
                         widener.get());
             }
         }
-        SwitchPlan plan = AddDependencies.planOn(this.engine.makePlannerFor(this.engine.makeGraphWith(jars), false),
+        SwitchPlan plan = AddDependencies.planOn(this.engine.makePlannerFor(this.engine.makeGraphWith(jars), false,
+                        findIds(jars)),
                 jars,
                 off);
         Optional<String> missing = AddDependencies.describe(plan, nameOf);
@@ -679,7 +681,7 @@ public final class ModAdder {
             }
         }
         ModGraph graph = this.engine.makeGraphWith(jars);
-        SwitchPlanner planner = this.engine.makePlannerFor(graph, true);
+        SwitchPlanner planner = this.engine.makePlannerFor(graph, true, findIds(jars));
         Optional<String> missing = AddDependencies.describe(AddDependencies.planOn(planner, jars, offThen), nameOf);
         if (missing.isPresent()) {
             return new Result.Refused(missing.get());
@@ -851,6 +853,10 @@ public final class ModAdder {
         }
         added.ids().forEach(GameRegistrations.getJournal()::forget);
         return new Result.Failed(said, cause);
+    }
+
+    private static Set<String> findIds(List<ModJar> jars) {
+        return jars.stream().map(jar -> jar.manifest().id()).collect(Collectors.toUnmodifiableSet());
     }
 
     static boolean isToldFine(@Nullable CompletableFuture<?> started) {
