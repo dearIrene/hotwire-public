@@ -300,7 +300,7 @@ public final class StoreModel implements AutoCloseable {
 
     private String findPageKey(ModrinthClient.Kind kind, String words, String category, int offset) {
         return this.client.getScope() + ":" + kind.getProjectType() + ":" + words + ":" + category + ":" + offset
-                + this.findHiddenKey();
+                + ":" + PAGE + this.findHiddenKey();
     }
 
     private String findHiddenKey() {
