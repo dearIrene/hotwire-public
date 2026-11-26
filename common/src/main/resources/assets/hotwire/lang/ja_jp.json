@@ -956,6 +956,8 @@
   "hotwire.report.crash_title": "このクラッシュは Hotwire が原因です",
   "hotwire.report.freeze_title": "前回のセッションでゲームがフリーズしました",
   "hotwire.report.crash_blame": "報告は Hotwire だけにしてください。どの Mod の開発者にも報告しないでください！",
+  "hotwire.report.crash_unsure_title": "このクラッシュの原因が誰にあるのか、Hotwireには分かりません",
+  "hotwire.report.crash_unsure_blame": "このレポートをHotwireに送ってください。クラッシュがどのModを指しているかが書かれています",
   "hotwire.report.show_file_now": "ファイルを見せて",
   "hotwire.report.show_ask": "そのファイルがあるフォルダを今開きますか？",
   "hotwire.add.pick": "Mod の .jar ファイルを選ぶか、この画面にドロップしてください。",

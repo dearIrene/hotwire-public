@@ -956,6 +956,8 @@
   "hotwire.report.crash_title": "Ten crash spowodował Hotwire",
   "hotwire.report.freeze_title": "Twoja gra zawiesiła się w poprzedniej sesji",
   "hotwire.report.crash_blame": "Zgłoś to TYLKO Hotwire, a NIE twórcy jakiegokolwiek moda!",
+  "hotwire.report.crash_unsure_title": "Hotwire nie jest pewny, czyja to wina",
+  "hotwire.report.crash_unsure_blame": "Wyślij ten raport do Hotwire, mówi, na który mod wskazuje crash",
   "hotwire.report.show_file_now": "Pokaż mi plik",
   "hotwire.report.show_ask": "Otworzyć teraz folder z tym plikiem?",
   "hotwire.add.pick": "Wybierz plik .jar moda albo upuść go na ten ekran.",

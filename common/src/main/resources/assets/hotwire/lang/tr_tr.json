@@ -956,6 +956,8 @@
   "hotwire.report.crash_title": "Bu çökmeye Hotwire sebep oldu",
   "hotwire.report.freeze_title": "Oyunun geçen oturumda dondu",
   "hotwire.report.crash_blame": "Bunu YALNIZCA Hotwire'a bildir, hiçbir modun geliştiricisine DEĞİL!",
+  "hotwire.report.crash_unsure_title": "Hotwire bu çökmenin kimin hatası olduğundan emin değil",
+  "hotwire.report.crash_unsure_blame": "Bu raporu Hotwire'a gönder, çökmenin hangi modu gösterdiğini söylüyor",
   "hotwire.report.show_file_now": "Dosyayı göster",
   "hotwire.report.show_ask": "O dosyanın olduğu klasör şimdi açılsın mı?",
   "hotwire.add.pick": "Modun .jar dosyasını seç ya da bu ekrana bırak.",

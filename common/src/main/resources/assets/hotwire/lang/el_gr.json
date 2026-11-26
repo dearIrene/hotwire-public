@@ -956,6 +956,8 @@
   "hotwire.report.crash_title": "Αυτό το κρασάρισμα το προκάλεσε το Hotwire",
   "hotwire.report.freeze_title": "Το παιχνίδι σου πάγωσε την προηγούμενη συνεδρία",
   "hotwire.report.crash_blame": "Ανάφερέ το ΜΟΝΟ στο Hotwire, ΟΧΙ στον δημιουργό κάποιου mod!",
+  "hotwire.report.crash_unsure_title": "Το Hotwire δεν είναι σίγουρο ποιος φταίει για αυτό το crash",
+  "hotwire.report.crash_unsure_blame": "Στείλε αυτή την αναφορά στο Hotwire, λέει σε ποιο mod δείχνει το crash",
   "hotwire.report.show_file_now": "Δείξε μου το αρχείο",
   "hotwire.report.show_ask": "Να ανοίξει τώρα ο φάκελος με αυτό το αρχείο;",
   "hotwire.add.pick": "Διάλεξε το αρχείο .jar του mod ή ρίξ' το πάνω σε αυτή την οθόνη.",

@@ -956,6 +956,8 @@
   "hotwire.report.crash_title": "แครชนี้เกิดจาก Hotwire",
   "hotwire.report.freeze_title": "เกมของคุณค้างในเซสชันที่แล้ว",
   "hotwire.report.crash_blame": "รายงานกับ Hotwire เท่านั้น ห้ามไปรายงานกับคนทำม็อดตัวไหน!",
+  "hotwire.report.crash_unsure_title": "Hotwire ไม่แน่ใจว่าการแครชนี้เป็นความผิดของใคร",
+  "hotwire.report.crash_unsure_blame": "ส่งรายงานนี้ให้ Hotwire รายงานจะบอกว่าการแครชชี้ไปที่ม็อดไหน",
   "hotwire.report.show_file_now": "ขอดูไฟล์",
   "hotwire.report.show_ask": "เปิดโฟลเดอร์ที่มีไฟล์นั้นตอนนี้เลยไหม?",
   "hotwire.add.pick": "เลือกไฟล์ .jar ของม็อด หรือลากมาวางที่หน้าจอนี้",

@@ -956,6 +956,8 @@
   "hotwire.report.crash_title": "Deze crash kwam door Hotwire",
   "hotwire.report.freeze_title": "Je spel liep de vorige sessie vast",
   "hotwire.report.crash_blame": "Meld het ALLEEN bij Hotwire, NIET bij de ontwikkelaar van een mod!",
+  "hotwire.report.crash_unsure_title": "Hotwire weet niet zeker wiens schuld deze crash is",
+  "hotwire.report.crash_unsure_blame": "Stuur dit rapport naar Hotwire, het zegt naar welke mod de crash wijst",
   "hotwire.report.show_file_now": "Laat me het bestand zien",
   "hotwire.report.show_ask": "Nu de map met dat bestand openen?",
   "hotwire.add.pick": "Kies het .jar-bestand van de mod, of sleep het naar dit scherm.",

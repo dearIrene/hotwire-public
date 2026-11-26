@@ -1,6 +1,7 @@
 package dev.moon.hotwire.engine;
 
 import dev.moon.hotwire.concurrent.AheadWork;
+import dev.moon.hotwire.report.ReportZips;
 import dev.moon.hotwire.seam.Games;
 import dev.moon.hotwire.ui.ModScreen;
 import dev.moon.hotwire.ui.ScreenOpenTimer;
@@ -123,11 +124,11 @@ public final class EngineScreens {
         }
     }
 
-    void openOnCrashReport(String where) {
+    void openOnCrashReport(ReportZips.CrashWords words) {
         this.owner.open();
         ModScreen current = this.owner.screen;
         if (current != null) {
-            current.showCrashReport(where);
+            current.showCrashReport(words.where(), words.ours());
         }
     }
 

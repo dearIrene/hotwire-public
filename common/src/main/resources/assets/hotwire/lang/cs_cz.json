@@ -956,6 +956,8 @@
   "hotwire.report.crash_title": "Tenhle pád způsobil Hotwire",
   "hotwire.report.freeze_title": "Tvoje hra minulou relaci zamrzla",
   "hotwire.report.crash_blame": "Nahlas to JEN Hotwire, NE vývojáři žádného modu!",
+  "hotwire.report.crash_unsure_title": "Hotwire si není jistý, čí je to chyba",
+  "hotwire.report.crash_unsure_blame": "Pošli tento report Hotwire, říká, na který mód pád ukazuje",
   "hotwire.report.show_file_now": "Ukaž mi ten soubor",
   "hotwire.report.show_ask": "Otevřít teď složku s tím souborem?",
   "hotwire.add.pick": "Vyber soubor .jar modu, nebo ho přetáhni na tuhle obrazovku.",

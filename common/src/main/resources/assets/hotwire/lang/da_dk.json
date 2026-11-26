@@ -956,6 +956,8 @@
   "hotwire.report.crash_title": "Dette crash skyldtes Hotwire",
   "hotwire.report.freeze_title": "Dit spil frøs sidste session",
   "hotwire.report.crash_blame": "Rapporter det KUN til Hotwire, IKKE til nogen mods udvikler!",
+  "hotwire.report.crash_unsure_title": "Hotwire er ikke sikker på, hvis skyld dette nedbrud er",
+  "hotwire.report.crash_unsure_blame": "Send denne rapport til Hotwire, den siger, hvilket mod nedbruddet peger på",
   "hotwire.report.show_file_now": "Vis mig filen",
   "hotwire.report.show_ask": "Åbn mappen med den fil nu?",
   "hotwire.add.pick": "Vælg moddens .jar-fil, eller slip den på denne skærm.",

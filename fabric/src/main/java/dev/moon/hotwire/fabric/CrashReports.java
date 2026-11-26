@@ -67,8 +67,8 @@ public final class CrashReports {
         tasks.submit("report of the last session's crash", zips::findLastSessionCrash,
                 where -> where.ifPresent(CrashNotice::setDue));
         GameReports.listenForCrashes(crash -> {
-            String words = zips.writeForCrash(crash);
-            LOGGER.info("[Hotwire] {}", words);
+            ReportZips.CrashWords words = zips.writeForCrash(crash);
+            LOGGER.info("[Hotwire] {}", words.where());
             if (closing) {
                 LOGGER.info("[Hotwire] the game was closing by then: no box now and no notice at the next start");
                 return;
@@ -79,8 +79,9 @@ public final class CrashReports {
             } else if (Flags.ONECLIENT) {
                 LOGGER.info("[Hotwire] the crash box is not shown in a test launch");
             } else if (!Minecraft.getInstance().isSameThread() || CrashPopup.showOnItsOwnThread(
-                    Lang.get("hotwire.report.crash_title"),
-                    OutdatedNotice.addTo(Lang.get("hotwire.report.crash_blame")) + "\n\n" + words + "\n"
+                    Lang.get(words.ours() ? "hotwire.report.crash_title" : "hotwire.report.crash_unsure_title"),
+                    OutdatedNotice.addTo(Lang.get(words.ours() ? "hotwire.report.crash_blame"
+                            : "hotwire.report.crash_unsure_blame")) + "\n\n" + words.where() + "\n"
                             + Lang.get("hotwire.report.send"),
                     Lang.get("hotwire.report.show_file_now"), Lang.get("hotwire.button.close"),
                     Lang.get("hotwire.report.show_ask"))) {

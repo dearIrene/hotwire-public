@@ -956,6 +956,8 @@
   "hotwire.report.crash_title": "Den här kraschen orsakades av Hotwire",
   "hotwire.report.freeze_title": "Ditt spel frös förra sessionen",
   "hotwire.report.crash_blame": "Rapportera det BARA till Hotwire, INTE till någon mods utvecklare!",
+  "hotwire.report.crash_unsure_title": "Hotwire är inte säker på vems fel den här kraschen är",
+  "hotwire.report.crash_unsure_blame": "Skicka den här rapporten till Hotwire, den säger vilken mod kraschen pekar på",
   "hotwire.report.show_file_now": "Visa mig filen",
   "hotwire.report.show_ask": "Öppna mappen med den filen nu?",
   "hotwire.add.pick": "Välj modens .jar-fil, eller släpp den på den här skärmen.",

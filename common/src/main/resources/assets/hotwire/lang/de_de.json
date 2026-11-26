@@ -956,6 +956,8 @@
   "hotwire.report.crash_title": "Dieser Absturz wurde von Hotwire verursacht",
   "hotwire.report.freeze_title": "Dein Spiel ist letzte Sitzung eingefroren",
   "hotwire.report.crash_blame": "Melde es NUR Hotwire, NICHT dem Entwickler irgendeines Mods!",
+  "hotwire.report.crash_unsure_title": "Hotwire ist sich nicht sicher, wessen Schuld dieser Absturz ist",
+  "hotwire.report.crash_unsure_blame": "Schick diesen Bericht an Hotwire, er sagt, auf welchen Mod der Absturz zeigt",
   "hotwire.report.show_file_now": "Zeig mir die Datei",
   "hotwire.report.show_ask": "Den Ordner mit dieser Datei jetzt öffnen?",
   "hotwire.add.pick": "Wähl die .jar-Datei des Mods oder zieh sie auf diesen Bildschirm.",

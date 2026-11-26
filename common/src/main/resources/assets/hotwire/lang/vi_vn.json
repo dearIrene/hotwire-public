@@ -956,6 +956,8 @@
   "hotwire.report.crash_title": "Lần crash này là do Hotwire",
   "hotwire.report.freeze_title": "Game của bạn bị treo ở phiên trước",
   "hotwire.report.crash_blame": "CHỈ báo cho Hotwire, KHÔNG báo cho nhà phát triển mod nào cả!",
+  "hotwire.report.crash_unsure_title": "Hotwire không chắc lỗi crash này là của ai",
+  "hotwire.report.crash_unsure_blame": "Gửi báo cáo này cho Hotwire, nó cho biết crash chỉ đến mod nào",
   "hotwire.report.show_file_now": "Cho mình xem file",
   "hotwire.report.show_ask": "Mở thư mục chứa file đó ngay?",
   "hotwire.add.pick": "Chọn file .jar của mod, hoặc thả nó vào màn hình này.",

@@ -956,6 +956,8 @@
   "hotwire.report.crash_title": "Tämän kaatumisen aiheutti Hotwire",
   "hotwire.report.freeze_title": "Pelisi jäätyi viime istunnossa",
   "hotwire.report.crash_blame": "Raportoi tästä VAIN Hotwirelle, ÄLÄ minkään modin kehittäjälle!",
+  "hotwire.report.crash_unsure_title": "Hotwire ei ole varma, kenen vika tämä kaatuminen on",
+  "hotwire.report.crash_unsure_blame": "Lähetä tämä raportti Hotwirelle, se kertoo, mihin modiin kaatuminen osoittaa",
   "hotwire.report.show_file_now": "Näytä tiedosto",
   "hotwire.report.show_ask": "Avataanko tiedoston sisältävä kansio nyt?",
   "hotwire.add.pick": "Valitse modin .jar-tiedosto tai pudota se tähän näkymään.",

@@ -956,6 +956,8 @@
   "hotwire.report.crash_title": "Crash ini disebabkan oleh Hotwire",
   "hotwire.report.freeze_title": "Game kamu macet di sesi terakhir",
   "hotwire.report.crash_blame": "Laporkan HANYA ke Hotwire, BUKAN ke developer mod mana pun!",
+  "hotwire.report.crash_unsure_title": "Hotwire tidak yakin siapa penyebab crash ini",
+  "hotwire.report.crash_unsure_blame": "Kirim laporan ini ke Hotwire, laporan ini menunjukkan mod mana yang jadi penyebab crash",
   "hotwire.report.show_file_now": "Tunjukkan file-nya",
   "hotwire.report.show_ask": "Buka folder berisi file itu sekarang?",
   "hotwire.add.pick": "Pilih file .jar mod-nya, atau taruh ke layar ini.",

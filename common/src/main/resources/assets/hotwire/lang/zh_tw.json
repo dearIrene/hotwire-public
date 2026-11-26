@@ -956,6 +956,8 @@
   "hotwire.report.crash_title": "這次崩潰是 Hotwire 造成的",
   "hotwire.report.freeze_title": "你的遊戲上次卡住了",
   "hotwire.report.crash_blame": "「只」回報給 Hotwire，「不要」回報給任何模組的開發者！",
+  "hotwire.report.crash_unsure_title": "Hotwire 不確定這次崩潰是誰的問題",
+  "hotwire.report.crash_unsure_blame": "把這份報告傳給 Hotwire，它會說明崩潰指向哪個模組",
   "hotwire.report.show_file_now": "給我看檔案",
   "hotwire.report.show_ask": "現在要開啟那個檔案所在的資料夾嗎？",
   "hotwire.add.pick": "選擇模組的 .jar 檔案，或把它拖到這個畫面上。",

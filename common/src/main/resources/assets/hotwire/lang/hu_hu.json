@@ -956,6 +956,8 @@
   "hotwire.report.crash_title": "Ezt az összeomlást a Hotwire okozta",
   "hotwire.report.freeze_title": "A játékod lefagyott az előző munkamenetben",
   "hotwire.report.crash_blame": "CSAK a Hotwire-nek jelentsd, NE egyik mod fejlesztőjének se!",
+  "hotwire.report.crash_unsure_title": "A Hotwire nem biztos benne, kinek a hibája ez az összeomlás",
+  "hotwire.report.crash_unsure_blame": "Küldd el ezt a jelentést a Hotwire-nek, megmondja, melyik modra mutat az összeomlás",
   "hotwire.report.show_file_now": "Mutasd a fájlt",
   "hotwire.report.show_ask": "Megnyitod most a mappát, amelyben a fájl van?",
   "hotwire.add.pick": "Válaszd ki a mod .jar fájlját, vagy dobd rá erre a képernyőre.",

@@ -956,6 +956,8 @@
   "hotwire.report.crash_title": "Crash-ul ăsta a fost cauzat de Hotwire",
   "hotwire.report.freeze_title": "Jocul tău a înghețat în sesiunea trecută",
   "hotwire.report.crash_blame": "Raportează-l DOAR la Hotwire, NU dezvoltatorului vreunui mod!",
+  "hotwire.report.crash_unsure_title": "Hotwire nu este sigur a cui este vina pentru acest crash",
+  "hotwire.report.crash_unsure_blame": "Trimite acest raport la Hotwire, el spune spre ce mod indică crash-ul",
   "hotwire.report.show_file_now": "Arată-mi fișierul",
   "hotwire.report.show_ask": "Deschizi acum folderul cu fișierul ăla?",
   "hotwire.add.pick": "Alege fișierul .jar al modului, sau trage-l pe ecranul ăsta.",

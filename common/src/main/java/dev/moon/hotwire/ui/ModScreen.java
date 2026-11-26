@@ -330,10 +330,16 @@ public final class ModScreen implements JarHost {
         }
     }
 
-    public void showCrashReport(String where) {
+    public void showCrashReport(String where, boolean ours) {
         boolean froze = where.contains(Lang.get("hotwire.report.file.last_freeze"));
-        this.report.show(Lang.get(froze ? "hotwire.report.freeze_title" : "hotwire.report.crash_title"), where,
-                Lang.get("hotwire.report.crash_blame"));
+        String title = "hotwire.report.crash_unsure_title";
+        if (froze) {
+            title = "hotwire.report.freeze_title";
+        } else if (ours) {
+            title = "hotwire.report.crash_title";
+        }
+        this.report.show(Lang.get(title), where,
+                Lang.get(froze || ours ? "hotwire.report.crash_blame" : "hotwire.report.crash_unsure_blame"));
         this.turnTo(REPORT, 2);
     }
 

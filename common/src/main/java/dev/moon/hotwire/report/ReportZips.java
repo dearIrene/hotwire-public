@@ -52,19 +52,31 @@ public final class ReportZips {
         return this.write(title, why, List.of(), true);
     }
 
-    public Optional<String> findLastSessionCrash() {
-        return this.reports.findLastSessionCrash().map(crash -> crash.getFileName().toString().equals(FreezeDump.FILE)
-                ? this.write(Lang.get("hotwire.report.file.last_freeze"), "The game froze last session, and its"
-                        + " threads are in " + crash.getFileName() + ".", List.of(), false)
-                : this.write(Lang.get("hotwire.report.file.last_crash"),
-                        "The game crashed last session (" + crash.getFileName() + ").", List.of(crash), false));
+    public record CrashWords(String where, boolean ours) {
     }
 
-    public String writeForCrash(Path crash) {
+    public Optional<CrashWords> findLastSessionCrash() {
+        return this.reports.findLastSessionCrash().map(crash -> crash.getFileName().toString().equals(FreezeDump.FILE)
+                ? new CrashWords(this.write(Lang.get("hotwire.report.file.last_freeze"), "The game froze last session,"
+                        + " and its threads are in " + crash.getFileName() + ".", List.of(), false), true)
+                : new CrashWords(this.write(Lang.get("hotwire.report.file.last_crash"),
+                        "The game crashed last session (" + crash.getFileName() + ").", List.of(crash), false),
+                        isOurs(crash)));
+    }
+
+    public CrashWords writeForCrash(Path crash) {
         String where = this.write(Lang.get("hotwire.report.file.game_crash"),
                 "The game crashed (" + crash.getFileName() + ").", List.of(), false);
         this.reports.markReported(crash);
-        return where;
+        return new CrashWords(where, isOurs(crash));
+    }
+
+    static boolean isOurs(Path crash) {
+        try {
+            return Files.readString(crash).contains("Hotwire involved? YES");
+        } catch (IOException | RuntimeException e) {
+            return false;
+        }
     }
 
     private String write(String title, String why, List<Path> extra, boolean asked) {

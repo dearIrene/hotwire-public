@@ -956,6 +956,8 @@
   "hotwire.report.crash_title": "Ce crash a été causé par Hotwire",
   "hotwire.report.freeze_title": "Ton jeu a gelé pendant la dernière session",
   "hotwire.report.crash_blame": "Signale-le UNIQUEMENT à Hotwire, PAS au développeur d'un mod !",
+  "hotwire.report.crash_unsure_title": "Hotwire n'est pas sûr de qui est responsable de ce crash",
+  "hotwire.report.crash_unsure_blame": "Envoie ce rapport à Hotwire, il indique vers quel mod pointe le crash",
   "hotwire.report.show_file_now": "Montre-moi le fichier",
   "hotwire.report.show_ask": "Ouvrir maintenant le dossier avec ce fichier ?",
   "hotwire.add.pick": "Choisis le fichier .jar du mod, ou dépose-le sur cet écran.",

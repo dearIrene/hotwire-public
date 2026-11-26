@@ -956,6 +956,8 @@
   "hotwire.report.crash_title": "Этот краш вызвал Hotwire",
   "hotwire.report.freeze_title": "В прошлой сессии твоя игра зависла",
   "hotwire.report.crash_blame": "Сообщай об этом ТОЛЬКО Hotwire, а НЕ разработчикам модов!",
+  "hotwire.report.crash_unsure_title": "Hotwire не уверен, кто виноват в этом краше",
+  "hotwire.report.crash_unsure_blame": "Отправь этот отчёт в Hotwire, в нём сказано, на какой мод указывает краш",
   "hotwire.report.show_file_now": "Покажи файл",
   "hotwire.report.show_ask": "Открыть папку с этим файлом сейчас?",
   "hotwire.add.pick": "Выбери .jar-файл мода или перетащи его на этот экран.",

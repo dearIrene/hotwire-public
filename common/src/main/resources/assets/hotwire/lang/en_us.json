@@ -956,6 +956,8 @@
   "hotwire.report.crash_title": "This crash was caused by Hotwire",
   "hotwire.report.freeze_title": "Your game froze last session",
   "hotwire.report.crash_blame": "Report it to Hotwire ONLY, NOT to any mod's developer!",
+  "hotwire.report.crash_unsure_title": "Hotwire isn't sure whose fault this crash is",
+  "hotwire.report.crash_unsure_blame": "Send this report to Hotwire, it says which mod the crash points at",
   "hotwire.report.show_file_now": "Show me the file",
   "hotwire.report.show_ask": "Open the folder with that file now?",
   "hotwire.add.pick": "Pick the mod's .jar file, or drop it onto this screen.",
