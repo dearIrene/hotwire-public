@@ -144,6 +144,10 @@ public final class ModStore {
                 client.runOnGame(() -> onFailure.accept(why));
                 return;
             }
+            if (!versionId.isEmpty() && !wanted.id().equals(versions.getFirst().id())) {
+                LOGGER.info("[Hotwire] {} {} is the version the player picked; the newest is {}", title,
+                        wanted.number(), versions.getFirst().number());
+            }
             this.fetchFor(wanted, title, onJars, onFailure, asking);
         }));
     }

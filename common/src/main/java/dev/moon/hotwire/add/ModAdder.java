@@ -41,6 +41,7 @@ import java.time.Duration;
 import java.util.ArrayDeque;
 import java.util.ArrayList;
 import java.util.Arrays;
+import java.util.Collection;
 import java.util.Deque;
 import java.util.HashSet;
 import java.util.LinkedHashMap;
@@ -812,11 +813,11 @@ public final class ModAdder {
                             + Lang.get("hotwire.add.start_failed_stays"), e, true);
                 }
                 tookBack = true;
-                return this.backOut(ids, name, cause, grew, undo, e);
+                return this.backOut(ids, name, cause, grew, undo, e, parts.values());
             } catch (InterruptedException e) {
                 hold.pauseGame();
                 tookBack = true;
-                Result back = this.backOut(ids, name, e, grew, undo, e);
+                Result back = this.backOut(ids, name, e, grew, undo, e, parts.values());
                 Thread.currentThread().interrupt();
                 return back;
             } finally {
@@ -857,7 +858,7 @@ public final class ModAdder {
     }
 
     private Result backOut(List<String> ids, String name, Throwable cause, List<String> grew, AddUndo undo,
-            Exception failure) {
+            Exception failure, Collection<Part> parts) {
         LOGGER.error("[Hotwire] {} failed while starting; it goes back out", ids, failure);
         ModSwitcher.Result back = this.engine.takeOut(ids);
         String failed = Lang.get("hotwire.add.start_failed", name, cause);
@@ -871,6 +872,13 @@ public final class ModAdder {
                 String.join(", ", grew));
 
         String said = failed + " " + Lang.get("hotwire.add.start_failed_out") + stays + undo.run();
+
+        if (MissingMember.isFailingAtLaunchToo(cause, this.getClass().getClassLoader(),
+                type -> this.engine.getApplier().getCarriedMixins().isPatched(type) || parts.stream()
+                        .anyMatch(part -> part.jar().patches().patches().contains(type)))) {
+            LOGGER.info("[Hotwire] {} fails the same way at a launch; it is not offered for the next start", ids);
+            return new Result.Failed(said, failure);
+        }
         return new Result.Failed(said, RebuildException.ofRestartOnly(said, failure));
     }
 
