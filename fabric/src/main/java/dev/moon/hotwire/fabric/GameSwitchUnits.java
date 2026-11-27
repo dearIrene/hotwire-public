@@ -104,6 +104,11 @@ final class GameSwitchUnits implements SwitchUnits {
     }
 
     @Override
+    public @Nullable String findOnWire(Collection<String> mods) {
+        return NetworkHandlers.findOnWireAmong(mods);
+    }
+
+    @Override
     public void rememberPluginAnswers(Collection<String> mods) {
         this.shapes.rememberAnswers(mods);
     }

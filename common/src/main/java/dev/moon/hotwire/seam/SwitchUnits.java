@@ -40,6 +40,10 @@ public interface SwitchUnits {
         return null;
     }
 
+    default @Nullable String findOnWire(Collection<String> mods) {
+        return null;
+    }
+
     void rememberPluginAnswers(Collection<String> mods);
 
     void takeOutPlugins(Collection<String> mods);

@@ -508,6 +508,14 @@ public final class SwitchRunner {
             return new CheckedResult(new ModSwitcher.Result.Failed(plan, RebuildException.ofWorldBuilt(why)),
                     new Report.OffCheck.NotRun(), List.of());
         }
+        String onWire = this.units.findOnWire(wired);
+        if (onWire != null) {
+            String why = "the connection to the server reads its packets through " + onWire
+                    + "'s handler. The server is left, and joined again without it";
+            LOGGER.info("[Hotwire] the off of {} takes a reopen: {}", ids, why);
+            return new CheckedResult(new ModSwitcher.Result.Failed(plan, RebuildException.ofWorldBuilt(why)),
+                    new Report.OffCheck.NotRun(), List.of());
+        }
         Map<String, List<String>> content = leaves ? Map.of() : registered;
         SwitchTimes.mark("plan: content");
 

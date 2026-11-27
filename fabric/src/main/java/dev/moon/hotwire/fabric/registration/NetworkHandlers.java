@@ -29,6 +29,9 @@ public final class NetworkHandlers {
 
     private static final @Nullable VarHandle ADDED = findAddedHandle();
 
+    private static final String DECODER = "decoder";
+    private static final String ENCODER = "encoder";
+
     private record Removal(Channel channel, String name, ChannelHandler handler, @Nullable String previous,
             @Nullable String next) implements RegistrationJournal.Take {
         @Override
@@ -84,6 +87,27 @@ public final class NetworkHandlers {
                 LOGGER.info("[Hotwire] {}'s network handler {} is taken out of {}", mod, names.get(i), channel);
             }
         }
+    }
+
+    public static @Nullable String findOnWireAmong(Collection<String> mods) {
+        ClientPacketListener listener = Minecraft.getInstance().getConnection();
+        if (listener == null || listener.getConnection().isMemoryConnection()) {
+            return null;
+        }
+        Channel channel = ((ConnectionAccessor) listener.getConnection()).hotwire$getChannel();
+        if (channel == null || !channel.isOpen()) {
+            return null;
+        }
+        List<String> names = channel.pipeline().names();
+        int game = Math.max(names.indexOf(DECODER), names.indexOf(ENCODER));
+        for (int i = 0; i < game; i++) {
+            ChannelHandler handler = channel.pipeline().get(names.get(i));
+            String mod = handler == null ? null : Owners.findModOf(handler.getClass());
+            if (mod != null && mods.contains(mod)) {
+                return mod;
+            }
+        }
+        return null;
     }
 
     public static boolean hasLostConnection(String mod) {
