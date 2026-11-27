@@ -28,6 +28,7 @@ import java.time.format.DateTimeFormatter;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.Collection;
+import java.util.Comparator;
 import java.util.HashMap;
 import java.util.HashSet;
 import java.util.LinkedHashMap;
@@ -102,6 +103,8 @@ public final class GameReports {
     private final Map<String, String> ranWhen = new ConcurrentHashMap<>();
 
     private volatile @Nullable LastThrow lastThrow;
+
+    private volatile @Nullable Instant lastSessionStart;
 
     private volatile String lastDecision = "";
 
@@ -515,6 +518,7 @@ public final class GameReports {
         try {
             if (Files.isRegularFile(marker)) {
                 Instant last = Instant.parse(Files.readString(marker).strip());
+                this.lastSessionStart = last;
                 Set<String> reported = readReported(game);
                 List<Path> found = new ArrayList<>(listWrittenAfter(game.resolve("crash-reports"), ".txt", last));
                 found.addAll(listWrittenAfter(game, ".log", last).stream()
@@ -549,6 +553,26 @@ public final class GameReports {
             LOGGER.warn("[Hotwire] the last session's start could not be read or kept", e);
         }
         return crash;
+    }
+
+    Optional<Path> findLastSessionCrashFile() {
+        Instant last = this.lastSessionStart;
+        if (last == null || this.lastThrow != null || !this.story.isEmpty()) {
+            return Optional.empty();
+        }
+        Path game = FabricLoader.getInstance().getGameDir();
+        List<Path> found = new ArrayList<>(listWrittenAfter(game.resolve("crash-reports"), ".txt", last));
+        found.addAll(listWrittenAfter(game, ".log", last).stream()
+                .filter(file -> file.getFileName().toString().startsWith("hs_err")).toList());
+        return found.stream().filter(this::isFromLastSession).max(Comparator.comparing(GameReports::getWritten));
+    }
+
+    private static Instant getWritten(Path file) {
+        try {
+            return Files.getLastModifiedTime(file).toInstant();
+        } catch (IOException e) {
+            return Instant.MIN;
+        }
     }
 
     private static boolean namesHotwire(Path file) {

@@ -49,7 +49,10 @@ public final class ReportZips {
     }
 
     public String writeAsked(String title, String why) {
-        return this.write(title, why, List.of(), true);
+        Optional<Path> crash = this.reports.findLastSessionCrashFile();
+        return crash.map(file -> this.write(title, why + " The game crashed last session (" + file.getFileName()
+                + "), and this report carries it.", List.of(file), true)).orElseGet(() -> this.write(title, why,
+                List.of(), true));
     }
 
     public record CrashWords(String where, boolean ours) {
