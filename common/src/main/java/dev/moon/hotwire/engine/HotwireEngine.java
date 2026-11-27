@@ -289,7 +289,7 @@ public final class HotwireEngine implements ModScreenGame, AutoCloseable {
         Set<String> off = parts == null ? Set.of() : parts.runner().getSwitcher().getOff();
         this.disabled.close();
 
-        Tripwire.releaseAll();
+        Tripwire.closeAll();
         this.units.runGameStopping(off);
         CloseGuard.watch(Thread.currentThread(), !off.isEmpty());
         if (parts != null) {

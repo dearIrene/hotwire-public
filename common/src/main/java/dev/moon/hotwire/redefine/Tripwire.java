@@ -99,8 +99,7 @@ public final class Tripwire {
 
     static {
         Runtime.getRuntime().addShutdownHook(Thread.ofPlatform().name("hotwire-exit").unstarted(() -> {
-            exiting = true;
-            releaseAll();
+            closeAll();
         }));
     }
 
@@ -172,6 +171,10 @@ public final class Tripwire {
     }
 
     private static boolean hitOrSkip(String mod, boolean runs) {
+        if (exiting) {
+            return false;
+        }
+
         if (EXPECTED.get().contains(mod) || IN_HIT.get() || HOTWIRE_WORK.get()) {
             return false;
         }
@@ -481,6 +484,11 @@ public final class Tripwire {
 
     public static void releaseAll() {
         release(Set.copyOf(MODS.keySet()));
+    }
+
+    public static void closeAll() {
+        exiting = true;
+        releaseAll();
     }
 
     private enum Whose {
