@@ -215,6 +215,10 @@ public final class Owners {
         return GameNames.isGame(type.getName()) && (!type.isHidden() || ValueOwners.findLambdaOwner(type) == null);
     }
 
+    public static @Nullable String findMergedLambdaMod(Class<?> type) {
+        return type.isHidden() ? ValueOwners.findLambdaOwner(type) : null;
+    }
+
     public static @Nullable String findModOf(Class<?> type) {
         return of(type).mod;
     }

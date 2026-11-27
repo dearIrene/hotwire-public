@@ -85,6 +85,11 @@ public final class GlfwCallbacks {
     private GlfwCallbacks() {
     }
 
+    private static @Nullable String findOwner(Class<?> type) {
+        String merged = Owners.findMergedLambdaMod(type);
+        return merged != null ? merged : Owners.findModOrShipper(type);
+    }
+
     public static synchronized void takeOut(Collection<String> mods) {
         GameHold.onGameAndWait(() -> {
             long window = findWindow();
@@ -109,7 +114,7 @@ public final class GlfwCallbacks {
                     continue;
                 }
                 Object current = read(setter, window);
-                String mod = current == null ? null : Owners.findModOrShipper(current.getClass());
+                String mod = current == null ? null : findOwner(current.getClass());
                 if (current == null || mod == null || !mods.contains(mod)) {
                     LOGGER.debug("[Hotwire] {} holds {} ({})", setter.getName(), current, mod);
                     if (current != null) {
@@ -187,7 +192,7 @@ public final class GlfwCallbacks {
                 try {
                     Object value = field.get(object);
                     Object java = unwrap(value);
-                    String mod = java == null ? null : Owners.findModOrShipper(java.getClass());
+                    String mod = java == null ? null : findOwner(java.getClass());
                     if (value == null || java == null) {
                         continue;
                     }
@@ -225,7 +230,7 @@ public final class GlfwCallbacks {
 
     @SuppressWarnings("ReferenceEquality")
     private static int fixBelow(Object object, Class<?> type, Collection<String> off, int depth, Set<Object> seen) {
-        String own = Owners.findModOrShipper(object.getClass());
+        String own = findOwner(object.getClass());
         if (depth <= 0 || own == null || off.contains(own) || "minecraft".equals(own) || !seen.add(object)) {
             return 0;
         }
@@ -241,7 +246,11 @@ public final class GlfwCallbacks {
                     if (java == null) {
                         continue;
                     }
-                    String mod = Owners.findModOrShipper(java.getClass());
+                    String mod = findOwner(java.getClass());
+                    if (type.isInstance(java)) {
+                        LOGGER.debug("[Hotwire] {}.{} passes on to {} ({})", at.getName(), field.getName(),
+                                java.getClass().getName(), mod);
+                    }
                     if (!type.isInstance(java) || mod == null || !off.contains(mod)) {
                         out += fixBelow(java, type, off, depth - 1, seen);
                         continue;
@@ -275,7 +284,7 @@ public final class GlfwCallbacks {
     }
 
     private static boolean isOff(Object object, Collection<String> off) {
-        String mod = Owners.findModOrShipper(object.getClass());
+        String mod = findOwner(object.getClass());
         return mod != null && off.contains(mod);
     }
 
