@@ -108,6 +108,8 @@ public final class SwitchRunner {
 
     private final Set<String> lateFor = ConcurrentHashMap.newKeySet();
 
+    private final Map<String, List<String>> calledDuring = new ConcurrentHashMap<>();
+
     @SuppressWarnings("ThreadPriorityCheck")
     private final ExecutorService looking = Executors.newSingleThreadExecutor(
             Thread.ofPlatform().name("hotwire-look").daemon().priority(Thread.NORM_PRIORITY - 1).factory());
@@ -263,18 +265,21 @@ public final class SwitchRunner {
         if (first.isEmpty() || this.searchesFor.merge(mod, 1, Integer::sum) > MOST_SEARCHES) {
             return;
         }
-        String called = first.getFirst();
         BooleanSupplier stale = () -> this.switcher.isBusy() || this.switcher.isOn(mod);
         this.looking.execute(() -> {
-            if (stale.getAsBoolean()) {
+            if (this.switcher.isOn(mod)) {
+                return;
+            }
+            if (this.switcher.isBusy()) {
+                this.calledDuring.put(mod, first);
                 return;
             }
             try {
-                if (this.fieldReferences.takeStillCalled(mod, called, this.switcher::isOn, stale) > 0) {
+                if (this.fieldReferences.takeStillCalled(mod, first, this.switcher::isOn, stale) > 0) {
                     Tripwire.listenAgain(mod);
                 }
             } catch (RuntimeException | LinkageError e) {
-                LOGGER.warn("[Hotwire] what still holds {}'s {} could not be taken out", mod, called, e);
+                LOGGER.warn("[Hotwire] what still holds {}'s {} could not be taken out", mod, first.getFirst(), e);
             }
         });
     }
@@ -456,6 +461,12 @@ public final class SwitchRunner {
             this.switching.unlock();
             if (!this.lateFor.isEmpty()) {
                 this.looking.execute(this::takeLate);
+            }
+            for (String mod : List.copyOf(this.calledDuring.keySet())) {
+                List<String> first = this.calledDuring.remove(mod);
+                if (first != null) {
+                    this.takeStillCalled(mod, first);
+                }
             }
             SwitchTimes.mark("progress hidden");
             SwitchTimes.end((off ? "the off of " : "the on of ") + ids);

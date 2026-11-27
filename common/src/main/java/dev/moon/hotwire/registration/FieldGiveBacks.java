@@ -63,8 +63,12 @@ final class FieldGiveBacks {
                     own = Optional.of(StandIns.of(field.getType()));
                 }
                 if (own.isEmpty() || mod.equals(Owners.findModOf(own.get().getClass()))) {
-                    retained.add(new FieldReferences.RemainingReference(field, holder, value));
-                    continue;
+                    Object shaped = GameShapes.make(value, field.getType());
+                    if (shaped == null) {
+                        retained.add(new FieldReferences.RemainingReference(field, holder, value));
+                        continue;
+                    }
+                    own = Optional.of(shaped);
                 }
                 mine.add(new FieldReferences.Replacement(field, holder, value, own.get()));
             } catch (ReflectiveOperationException | RuntimeException | LinkageError e) {

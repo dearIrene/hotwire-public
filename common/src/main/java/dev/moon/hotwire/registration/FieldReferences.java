@@ -172,8 +172,8 @@ public final class FieldReferences {
         this.removeElements(mods, on, scan, Map.of(), false);
     }
 
-    public int takeStillCalled(String mod, String calledFrame, Predicate<String> on, BooleanSupplier stale) {
-        String calledName = CalledSearch.findClassOf(calledFrame);
+    public int takeStillCalled(String mod, List<String> frames, Predicate<String> on, BooleanSupplier stale) {
+        String calledName = CalledSearch.findClassOf(frames.getFirst());
         List<String> mods = List.of(mod);
         LoadedClasses scan = this.findLoaded(mods);
         Class<?> called = scan.byName().get(calledName.replace('.', '/'));
@@ -191,7 +191,10 @@ public final class FieldReferences {
             hold.run();
         }
         long start = System.nanoTime();
-        CalledSearch.Holders found = CalledSearch.find(called, roots.holders(), roots.statics());
+
+        CalledSearch.Holders near = CalledSearch.find(called, List.of(), CalledSearch.findCallers(frames, called, mod));
+        CalledSearch.Holders found = near.holders().isEmpty() && near.statics().isEmpty()
+                ? CalledSearch.find(called, roots.holders(), roots.statics()) : near;
         LOGGER.info("[Hotwire] {}'s {} was still called: {} objects and {} classes hold one, of {} looked at"
                 + " ({} of them mods' own) in {} ms",
                 mod, calledName, found.holders().size(), found.statics().size(), found.looked(), found.near(),

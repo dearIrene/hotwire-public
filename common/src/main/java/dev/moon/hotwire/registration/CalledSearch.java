@@ -3,6 +3,7 @@ package dev.moon.hotwire.registration;
 import dev.moon.hotwire.classfile.GameNames;
 import dev.moon.hotwire.redefine.FieldSlots;
 import java.util.ArrayDeque;
+import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.Collection;
 import java.util.Collections;
@@ -16,6 +17,8 @@ import org.jspecify.annotations.Nullable;
 
 final class CalledSearch {
     private static final int BUDGET = 200_000;
+
+    private static final int CALLER_FRAMES = 4;
 
     record Holders(List<Object> holders, Set<Class<?>> statics, int looked, int near) {
     }
@@ -116,6 +119,20 @@ final class CalledSearch {
 
     static boolean isOfCalled(Class<?> type, Class<?> called) {
         return called.isAssignableFrom(type) || (type.isHidden() && type.getNestHost() == called.getNestHost());
+    }
+
+    static List<Class<?>> findCallers(List<String> frames, Class<?> called, String mod) {
+        List<Class<?>> callers = new ArrayList<>();
+        for (String frame : frames.subList(1, Math.min(frames.size(), CALLER_FRAMES + 1))) {
+            try {
+                Class<?> type = Class.forName(findClassOf(frame), false, called.getClassLoader());
+                if (!mod.equals(Owners.findModOf(type)) && !callers.contains(type)) {
+                    callers.add(type);
+                }
+            } catch (ClassNotFoundException | LinkageError e) {
+            }
+        }
+        return callers;
     }
 
     static String findClassOf(String frame) {

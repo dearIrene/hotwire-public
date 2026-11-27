@@ -5,6 +5,7 @@ import dev.moon.hotwire.redefine.FieldSlots;
 import dev.moon.hotwire.registration.CollectionParts;
 import dev.moon.hotwire.registration.Fields;
 import dev.moon.hotwire.registration.GameRegistrations;
+import dev.moon.hotwire.registration.GameShapes;
 import dev.moon.hotwire.registration.Owners;
 import dev.moon.hotwire.registration.RegistrationJournal;
 import dev.moon.hotwire.switching.SwitchTimes;
@@ -83,6 +84,9 @@ public final class WorldWrappers {
                     continue;
                 }
                 Object inner = findWrapped(value, field.getType(), mod);
+                if (inner == null) {
+                    inner = GameShapes.make(value, field.getType());
+                }
                 if (inner == null && this.said.add(value.getClass().getName() + field.getName())) {
                     LOGGER.info("[Hotwire] {}.{} holds {}'s {}, which wraps nothing of the field's type: {}",
                             entity.getClass().getName(), field.getName(), mod, value.getClass().getName(),
