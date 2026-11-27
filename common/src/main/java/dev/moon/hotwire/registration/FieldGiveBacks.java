@@ -58,8 +58,9 @@ final class FieldGiveBacks {
                 Optional<Object> own = original == null ? Optional.empty() : holder == null
                         ? InitialValues.ofStatic(declaring, original, field.getName(), descriptor)
                         : InitialValues.ofInstance(declaring, original, holder, field.getName(), descriptor);
+
                 if ((own.isEmpty() || mod.equals(Owners.findModOf(own.get().getClass())))
-                        && StandIns.fits(field.getType())) {
+                        && StandIns.fits(field.getType()) && !mod.equals(Owners.findModOf(field.getType()))) {
                     own = Optional.of(StandIns.of(field.getType()));
                 }
                 if (own.isEmpty() || mod.equals(Owners.findModOf(own.get().getClass()))) {
