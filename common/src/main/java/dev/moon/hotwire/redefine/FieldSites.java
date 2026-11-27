@@ -347,6 +347,16 @@ final class FieldSites {
 
     private static String lastRefusal = "";
 
+    static String findSetUpName(String name, String desc) {
+        StringBuilder type = new StringBuilder(desc.length());
+        for (int at = 0; at < desc.length(); at++) {
+            char letter = desc.charAt(at);
+            type.append(letter == '/' || letter == ';' || letter == '[' || letter == '.' || letter == '<'
+                    || letter == '>' ? '_' : letter);
+        }
+        return name + "$" + type + INIT;
+    }
+
     @SuppressWarnings("ReferenceEquality")
 
     private static boolean moveToMethod(String internalName, ClassNode node, String key, String name,
@@ -396,9 +406,10 @@ final class FieldSites {
             lastRefusal = "no constructor stores it";
             return false;
         }
+        String setUpName = findSetUpName(name, key.substring(name.length()));
         MethodNode had = null;
         for (MethodNode method : node.methods) {
-            if (method.name.equals(name + INIT) && method.desc.equals("()V")
+            if (method.name.equals(setUpName) && method.desc.equals("()V")
                     && (method.access & Opcodes.ACC_STATIC) == 0) {
                 had = method;
             }
@@ -407,7 +418,7 @@ final class FieldSites {
             lastRefusal = "the running class has no method for the setup";
             return false;
         }
-        MethodNode setUp = new MethodNode(Opcodes.ACC_PRIVATE | Opcodes.ACC_SYNTHETIC, name + INIT, "()V", null,
+        MethodNode setUp = new MethodNode(Opcodes.ACC_PRIVATE | Opcodes.ACC_SYNTHETIC, setUpName, "()V", null,
                 null);
         if (had != null) {
             setUp = new MethodNode(had.access, had.name, had.desc, had.signature,
@@ -432,7 +443,7 @@ final class FieldSites {
             AbstractInsnNode end = ranges.get(at)[1];
             InsnList call = new InsnList();
             call.add(new VarInsnNode(Opcodes.ALOAD, 0));
-            call.add(new InvokeDynamicInsnNode(name + INIT, "(L" + internalName + ";)V", HandlerGuards.BOOTSTRAP_FIELD,
+            call.add(new InvokeDynamicInsnNode(setUpName, "(L" + internalName + ";)V", HandlerGuards.BOOTSTRAP_FIELD,
                     mixin));
             method.instructions.insertBefore(start, call);
             AbstractInsnNode insn = start;

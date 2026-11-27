@@ -115,7 +115,7 @@ final class MixedCache {
         this.packs = new ClassPacks(store);
     }
 
-    private static final String KEYS = "mixed class 12";
+    private static final String KEYS = "mixed class 13";
 
     private static final @Nullable String KEY_DUMP = Flags.CACHE_KEY_DUMP;
     private final AtomicLong missedNoEntry = new AtomicLong();
