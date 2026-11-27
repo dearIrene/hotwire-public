@@ -18,6 +18,7 @@ import java.util.function.Function;
 import java.util.function.Predicate;
 import java.util.function.UnaryOperator;
 import org.jspecify.annotations.Nullable;
+import org.objectweb.asm.ClassReader;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -33,6 +34,7 @@ final class LaunchDecisions {
 
     private final Function<String, Set<String>> shippedBy;
 
+    private static final int MOST_PARENTS = 8;
     private final Map<String, Optional<byte[]>> read = new ConcurrentHashMap<>();
     private final Map<String, Set<String>> listed = new ConcurrentHashMap<>();
     private final Map<String, Boolean> transforms = new ConcurrentHashMap<>();
@@ -136,8 +138,9 @@ final class LaunchDecisions {
             String plugin = ConfigTrim.readPluginOf(bytes);
             Set<String> given = answers != null || plugin == null ? Set.of()
                     : this.choice.chooseUnlisted(this.findUnlisted(config, bytes, elsewhere), appliedByClass);
-            UnaryOperator<Set<String>> choose = answers != null ? listed -> findAnswered(listed, answers)
+            UnaryOperator<Set<String>> chosen = answers != null ? listed -> findAnswered(listed, answers)
                     : listed -> withGiven(this.choice.choose(listed, appliedByClass, applied, plugin != null), given);
+            UnaryOperator<Set<String>> choose = listed -> this.withChildren(chosen.apply(listed), listed);
             boolean live = plugin != null && this.isRunLive(config, plugin);
             String owner = this.ownerOfConfig.get(config);
             boolean ownerOff = owner != null && !on.test(owner);
@@ -232,6 +235,35 @@ final class LaunchDecisions {
         Set<String> out = new HashSet<>(found);
         out.removeIf(elsewhere);
         return out;
+    }
+
+    private Set<String> withChildren(Set<String> chosen, Set<String> listed) {
+        if (chosen.isEmpty() || chosen.size() == listed.size()) {
+            return chosen;
+        }
+        Set<String> children = new HashSet<>();
+        for (String mixin : listed) {
+            if (!chosen.contains(mixin) && this.extendsAny(mixin, chosen)) {
+                children.add(mixin);
+            }
+        }
+        return withGiven(chosen, children);
+    }
+
+    private boolean extendsAny(String mixin, Set<String> parents) {
+        String at = mixin;
+        for (int depth = 0; depth < MOST_PARENTS; depth++) {
+            byte[] bytes = this.findBytes(at.replace('.', '/') + ".class");
+            String parent = bytes == null ? null : new ClassReader(bytes).getSuperName();
+            if (parent == null || parent.startsWith("java/")) {
+                return false;
+            }
+            at = parent.replace('/', '.');
+            if (parents.contains(at)) {
+                return true;
+            }
+        }
+        return false;
     }
 
     private static Set<String> withGiven(Set<String> chosen, Set<String> given) {
