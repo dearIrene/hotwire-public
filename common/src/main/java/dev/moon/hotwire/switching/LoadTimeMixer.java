@@ -22,6 +22,8 @@ final class LoadTimeMixer {
 
     private static final ThreadLocal<@Nullable String> LOADING = new ThreadLocal<>();
 
+    private static final @Nullable ClassLoader GAME = LoadTimeMixer.class.getClassLoader();
+
     private final SwitchApplier applier;
 
     LoadTimeMixer(SwitchApplier applier) {
@@ -35,6 +37,7 @@ final class LoadTimeMixer {
         return LOADING.get();
     }
 
+    @SuppressWarnings("ReferenceEquality")
     ClassFileTransformer makeTransformer() {
         ClassRebuilder rebuilder = this.applier.getRebuilder();
         return new LoadTimeBridge(this.applier::isMixedAsItLoads, (name, bytes) -> this.mixAsItLoads(name, bytes, true),
@@ -43,7 +46,8 @@ final class LoadTimeMixer {
             if (inGame != null) {
                 rebuilder.getArrivals().note(name, inGame);
             }
-            if (GameNames.isGameInternal(name)
+
+            if (inGame == GAME && GameNames.isGameInternal(name)
                     && this.applier.getPatchedNames().contains(name)) {
                 rebuilder.getLoadedBytes().onLoaded(name, bytes);
             } else if (inGame != null) {
