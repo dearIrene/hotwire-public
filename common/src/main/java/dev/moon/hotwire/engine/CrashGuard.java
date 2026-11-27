@@ -75,15 +75,6 @@ public final class CrashGuard {
             }
             String name = installed.nameOf(caught.mod());
             boolean byAntiCrash = !isTouched(installed, switched, caught.mod());
-            LOGGER.error("[Hotwire] {} threw at {} ({}); Hotwire keeps the game going and turns it off", name,
-                    caught.site(), caught.mod(), caught.thrown());
-            if (said.size() >= MOST_CAUGHT) {
-                said.remove(0);
-            }
-            said.add(caught.mod() + " at " + caught.site() + ": " + caught.thrown());
-
-            String decision = GameReports.describeTrace(caught.thrown()).value();
-            ActionJournal.get().noteCaught(decision);
 
             if (ActionJournal.get().isChangeUnderWay()) {
                 if (duringChange.add(caught.mod())) {
@@ -95,6 +86,15 @@ public final class CrashGuard {
                 made[0].onOffFinished(caught.mod(), true);
                 return;
             }
+            LOGGER.error("[Hotwire] {} threw at {} ({}); Hotwire keeps the game going and turns it off", name,
+                    caught.site(), caught.mod(), caught.thrown());
+            if (said.size() >= MOST_CAUGHT) {
+                said.remove(0);
+            }
+            said.add(caught.mod() + " at " + caught.site() + ": " + caught.thrown());
+
+            String decision = GameReports.describeTrace(caught.thrown()).value();
+            ActionJournal.get().noteCaught(decision);
             onCaught.accept(caught.site(), caught.thrown());
             SwitchRunner switching = runner.get();
             if (switching == null) {

@@ -20,7 +20,7 @@ public final class CrashPolicy {
 
     private enum State { TURNING_OFF, OFF_REFUSED }
 
-    private record DevThrow(String type, StackTraceElement top, String mod) {
+    private record LastThrow(String type, StackTraceElement top, String mod) {
     }
 
     private final Function<Throwable, @Nullable String> ownerOf;
@@ -29,7 +29,7 @@ public final class CrashPolicy {
     private final Predicate<String> inDevelopment;
     private final Consumer<Caught> onDevThrow;
     private final Map<String, State> states = new ConcurrentHashMap<>();
-    private volatile @Nullable DevThrow lastDevThrow;
+    private volatile @Nullable LastThrow lastThrow;
     private volatile boolean toldFrameless;
     private final Set<String> said = ConcurrentHashMap.newKeySet();
 
@@ -76,9 +76,9 @@ public final class CrashPolicy {
     private @Nullable String findOwner(Throwable thrown) {
         Throwable inner = Causes.findInnermost(thrown);
         StackTraceElement[] frames = inner.getStackTrace();
-        DevThrow last = this.lastDevThrow;
+        LastThrow last = this.lastThrow;
         if (last != null && last.type().equals(inner.getClass().getName())
-                && (frames.length == 0 || last.top().equals(frames[0])) && this.inDevelopment.test(last.mod())) {
+                && (frames.length == 0 || last.top().equals(frames[0]))) {
             if (frames.length == 0 && !this.toldFrameless) {
                 this.toldFrameless = true;
                 LOGGER.info("[Hotwire] a {} with no frames, as the JIT throws a repeated one, taken as {}'s at {}",
@@ -87,8 +87,8 @@ public final class CrashPolicy {
             return last.mod();
         }
         String mod = this.ownerOf.apply(thrown);
-        if (mod != null && frames.length > 0 && this.inDevelopment.test(mod)) {
-            this.lastDevThrow = new DevThrow(inner.getClass().getName(), frames[0], mod);
+        if (mod != null && frames.length > 0) {
+            this.lastThrow = new LastThrow(inner.getClass().getName(), frames[0], mod);
         }
         return mod;
     }

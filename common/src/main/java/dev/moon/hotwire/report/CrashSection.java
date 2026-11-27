@@ -59,7 +59,8 @@ public record CrashSection(List<Detail> details) {
             Collection<String> messages, Function<String, @Nullable String> rebuiltBy, Set<String> switched,
             Function<String, @Nullable String> modOf, Function<String, String> nameOf) {
         Set<String> own = new TreeSet<>();
-        for (String frame : frames) {
+
+        for (String frame : nearThrow) {
             if (frame.startsWith(OWN_PACKAGE)) {
                 own.add(frame);
             }
