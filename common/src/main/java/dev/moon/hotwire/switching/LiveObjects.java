@@ -13,6 +13,8 @@ import dev.moon.hotwire.redefine.OffWindowReplay;
 import dev.moon.hotwire.redefine.RebuildException;
 import dev.moon.hotwire.redefine.ReplacedStatics;
 import dev.moon.hotwire.redefine.StopPoint;
+import dev.moon.hotwire.registration.CollectionParts;
+import dev.moon.hotwire.registration.Fields;
 import java.lang.reflect.Field;
 import java.util.ArrayList;
 import java.util.Arrays;
@@ -209,18 +211,15 @@ final class LiveObjects {
     static List<String> findRegistryEntries(Map<Class<?>, InitHookReplay.Due> hooked,
             SwitchApplier.Game game) {
         List<String> found = new ArrayList<>();
-        hooked.forEach((type, due) -> due.statics().keySet().forEach(name -> {
-            try {
-                Field field = type.getDeclaredField(name);
-                field.setAccessible(true);
-                Object value = field.get(null);
-                if (value != null && game.isRegistryEntry(value)) {
-                    found.add(type.getName() + "." + name);
-                }
-            } catch (ReflectiveOperationException | RuntimeException e) {
-                LOGGER.debug("[Hotwire] {}.{} could not be read before its remake", type.getName(), name, e);
-            }
-        }));
+
+        hooked.forEach((type, due) -> Fields.getDeclared(type).stream()
+                .filter(field -> field.isStatic() && due.statics().containsKey(field.getName()))
+                .forEach(field -> {
+                    Object value = CollectionParts.read(field, null);
+                    if (value != null && game.isRegistryEntry(value)) {
+                        found.add(type.getName() + "." + field.getName());
+                    }
+                }));
         return found;
     }
 
