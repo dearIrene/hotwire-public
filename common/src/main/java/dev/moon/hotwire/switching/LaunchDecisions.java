@@ -1,8 +1,8 @@
 package dev.moon.hotwire.switching;
 
 import com.google.gson.JsonParseException;
+import dev.moon.hotwire.jar.PluginShape;
 import dev.moon.hotwire.mixin_copy.ConfigTrim;
-import dev.moon.hotwire.mixin_copy.PluginShape;
 import dev.moon.hotwire.redefine.ClassRebuilder;
 import dev.moon.hotwire.redefine.RebuildException;
 import java.util.HashMap;

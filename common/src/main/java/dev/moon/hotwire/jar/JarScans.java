@@ -31,7 +31,7 @@ import org.objectweb.asm.ClassReader;
 import org.objectweb.asm.ClassWriter;
 
 public final class JarScans {
-    private static final String KEYS = "jar scans 4";
+    private static final String KEYS = "jar scans 6";
     private static final String STAMPS = "jar stamps 2";
 
     private static final long UNWRITTEN_MILLIS = 2_000;

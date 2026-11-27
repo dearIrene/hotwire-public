@@ -1,4 +1,4 @@
-package dev.moon.hotwire.mixin_copy;
+package dev.moon.hotwire.jar;
 
 import dev.moon.hotwire.classfile.ClassNodes;
 import java.util.Set;
@@ -24,6 +24,14 @@ public final class PluginShape {
             "org/spongepowered/asm/mixin/injection/struct/InjectionInfo");
 
     public static boolean transforms(String plugin, Function<String, byte @Nullable []> bytesOf) {
+        return isShaping(plugin, bytesOf, true);
+    }
+
+    public static boolean isEditingClasses(String plugin, Function<String, byte @Nullable []> bytesOf) {
+        return isShaping(plugin, bytesOf, false);
+    }
+
+    private static boolean isShaping(String plugin, Function<String, byte @Nullable []> bytesOf, boolean registering) {
         String at = plugin.replace('.', '/');
         for (int depth = 0; depth < 8 && at != null && !at.startsWith("java/")
                 && !at.startsWith("org/spongepowered/"); depth++) {
@@ -37,7 +45,7 @@ public final class PluginShape {
                         && method.desc.contains(CLASS_NODE) && readsClass(method)) {
                     return true;
                 }
-                if (isRegisteringWithMixin(method)) {
+                if (registering && isRegisteringWithMixin(method)) {
                     return true;
                 }
             }

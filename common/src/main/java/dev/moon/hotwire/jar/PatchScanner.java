@@ -153,6 +153,10 @@ final class PatchScanner {
                     }
                 }
             }
+            String plugin = readPlugin(config);
+            if (plugin != null && PluginShape.isEditingClasses(plugin, type -> readOrNone(reader, type + ".class"))) {
+                rebuildOnly.addAll(configTargets);
+            }
         }
         hooked.removeAll(tied);
 
@@ -406,6 +410,19 @@ final class PatchScanner {
 
     private static boolean isText(@Nullable JsonElement element) {
         return element != null && element.isJsonPrimitive();
+    }
+
+    private static byte @Nullable [] readOrNone(ModJarReader.EntryReader reader, String entry) {
+        try {
+            return reader.read(entry);
+        } catch (IOException e) {
+            return null;
+        }
+    }
+
+    private static @Nullable String readPlugin(byte[] config) {
+        JsonObject root = parseObject(config);
+        return root != null && isText(root.get("plugin")) ? root.get("plugin").getAsString() : null;
     }
 
     private static @Nullable String readPluginPackage(byte[] config) {
