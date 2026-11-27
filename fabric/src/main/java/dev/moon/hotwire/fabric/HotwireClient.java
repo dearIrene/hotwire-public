@@ -76,6 +76,7 @@ public final class HotwireClient implements ClientModInitializer {
 
     @Override
     public void onInitializeClient() {
+        StartLoadCheck.made = true;
         if (!LaunchSupport.isFabricOwn()) {
             UnsupportedNotice.tellAtTitle();
             return;

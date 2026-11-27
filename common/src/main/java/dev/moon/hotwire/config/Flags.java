@@ -61,6 +61,8 @@ public final class Flags {
 
     public static final int COPY_GROUP_CAP = Integer.getInteger("hotwire.copyGroupCap", 12);
 
+    public static final int START_WATCH_MILLIS = Integer.getInteger("hotwire.startWatchMs", 90_000);
+
     public static final boolean ASK_OVER_CAP = Boolean.parseBoolean(System.getProperty("hotwire.askOverCap"));
 
     public static final boolean NO_URGENT = Boolean.parseBoolean(System.getProperty("hotwire.noUrgent"));

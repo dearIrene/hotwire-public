@@ -22,6 +22,7 @@ import dev.moon.hotwire.redefine.TripwireSites;
 import dev.moon.hotwire.registration.Owners;
 import dev.moon.hotwire.report.HotwireLog;
 import dev.moon.hotwire.report.StartTimes;
+import dev.moon.hotwire.report.StartWatch;
 import java.io.IOException;
 import java.io.InputStream;
 import java.lang.instrument.ClassFileTransformer;
@@ -61,6 +62,7 @@ public final class EarlyDefinitions implements PreLaunchEntrypoint {
         }
 
         try {
+            StartWatch.begin(FabricLoader.getInstance().getGameDir(), StartLoadCheck::isLoaded);
             LostHooks.listen();
             StartTimes.mark("Hotwire's pre-launch begins");
             long began = System.nanoTime();

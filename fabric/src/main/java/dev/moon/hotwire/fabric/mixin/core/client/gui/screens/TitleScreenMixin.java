@@ -7,6 +7,7 @@ import dev.moon.hotwire.fabric.NoticeHud;
 import dev.moon.hotwire.fabric.UrgentNotice;
 import dev.moon.hotwire.fabric.screen.GuiCanvas;
 import dev.moon.hotwire.fabric.version.Spellings;
+import dev.moon.hotwire.report.StartWatch;
 import dev.moon.hotwire.ui.notices.Notices;
 import net.minecraft.client.Minecraft;
 //? if >=26.1 {
@@ -25,6 +26,7 @@ public abstract class TitleScreenMixin {
     @org.spongepowered.asm.mixin.injection.Group(name = "showCrashNotice")
     @Inject(method = "init", at = @At("TAIL"))
     private void hotwire$showCrashNotice(CallbackInfo ci) {
+        StartWatch.reachMenu();
         HotwireClient.onTitleScreen();
         CrashNotice.showIfDue();
         UrgentNotice.showIfDue();
