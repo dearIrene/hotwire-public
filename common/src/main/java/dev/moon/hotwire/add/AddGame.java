@@ -9,6 +9,7 @@ import java.nio.file.Path;
 import java.util.Collection;
 import java.util.List;
 import java.util.Map;
+import java.util.Set;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.CountDownLatch;
 import java.util.function.BiFunction;
@@ -41,7 +42,7 @@ public interface AddGame {
 
     CompletableFuture<Map<String, List<String>>> queueEntrypoints(List<String> ids, List<String> grew,
             CountDownLatch backedOut, ModManifest.Environment side, IntSupplier catchUp,
-            Function<String, @Nullable Class<?>> findLoaded);
+            Function<String, @Nullable Class<?>> findLoaded, Set<String> mixed);
 
     List<String> runStartListeners(String id, RegistrationJournal journal);
 

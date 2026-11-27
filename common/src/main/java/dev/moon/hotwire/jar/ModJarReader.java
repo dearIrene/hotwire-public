@@ -7,6 +7,7 @@ import java.io.IOException;
 import java.io.InputStream;
 import java.nio.file.Path;
 import java.util.ArrayList;
+import java.util.Arrays;
 import java.util.Collection;
 import java.util.HashMap;
 import java.util.LinkedHashMap;
@@ -112,6 +113,11 @@ public final class ModJarReader {
             throw new ModJarException(Reason.NOT_A_MOD, name, "it has no " + MANIFEST);
         }
         ModManifest manifest = ModManifestParser.parse(manifestBytes, name);
+        byte[] withPreLaunch = PreLaunchConfigs.addTo(manifestBytes, manifest, entries);
+        if (!Arrays.equals(withPreLaunch, manifestBytes)) {
+            manifestBytes = withPreLaunch;
+            manifest = ModManifestParser.parse(manifestBytes, name);
+        }
         Map<String, byte[]> declared = new LinkedHashMap<>();
         for (String path : manifest.nestedJars()) {
             byte[] bytes = entries.read(path);

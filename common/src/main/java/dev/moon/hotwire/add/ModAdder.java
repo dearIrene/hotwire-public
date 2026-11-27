@@ -789,8 +789,10 @@ public final class ModAdder {
                             this.game.reloadForAssets(parts.values());
                         }, this.reloads::runAfterReload);
                 this.engine.showAddStep(3);
+                Set<String> mixed = parts.values().stream().flatMap(part -> part.jar().manifest().mixinConfigs()
+                        .stream()).map(ModManifest.MixinConfigRef::config).collect(Collectors.toSet());
                 started = this.game.queueEntrypoints(ids, grew, backedOut,
-                        this.engine.getSide(), setUp, this.engine::findLoaded);
+                        this.engine.getSide(), setUp, this.engine::findLoaded, mixed);
                 hold.releaseGame();
                 Map<String, List<String>> clientStarted = started.get(ENTRYPOINT_WAIT.toMillis(),
                         TimeUnit.MILLISECONDS);
