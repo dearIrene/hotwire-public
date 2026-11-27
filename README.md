@@ -55,7 +55,7 @@ Rebuilding files as if they were never modified obviously needs the original cla
 
 ```java
 // common/src/main/java/dev/moon/hotwire/registration/RegistrationJournal.java
-public record Entry(long sequence, String owner, @Nullable String via, Registration registration) {}
+public record Entry(long sequence, String owner, Registration registration) {}
 ```
 
 ### Turning a mod off
