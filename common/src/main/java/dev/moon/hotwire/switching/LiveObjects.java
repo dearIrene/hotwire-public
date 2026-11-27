@@ -187,6 +187,9 @@ final class LiveObjects {
                 } catch (ReflectiveOperationException | RuntimeException e) {
                     return true;
                 }
+                if (value == null && fill.endsWith(HandlerSetups.EMPTIED)) {
+                    return true;
+                }
                 Class<?> of = value == null ? null : value.getClass().isHidden() ? value.getClass().getNestHost()
                         : value.getClass();
                 if (of != null && offClass.test(Type.getInternalName(of))) {

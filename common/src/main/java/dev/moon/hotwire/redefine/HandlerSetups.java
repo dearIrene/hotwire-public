@@ -20,6 +20,8 @@ import org.objectweb.asm.tree.MethodNode;
 import org.objectweb.asm.tree.TypeInsnNode;
 
 public final class HandlerSetups {
+    public static final String EMPTIED = " (emptied)";
+
     private HandlerSetups() {
     }
 
@@ -39,7 +41,8 @@ public final class HandlerSetups {
         Map<String, MethodNode> byKey = new HashMap<>();
         for (MethodNode method : node.methods) {
             String mixin = GeneratedNames.findMergedFrom(method.visibleAnnotations);
-            if (mixin != null && ofMixin.test(mixin) && makesAny(method, modClass)) {
+            if (mixin != null && ofMixin.test(mixin) && (makesAny(method, modClass) || isEmptyingAny(method, node.name,
+                    gameFields))) {
                 handlers.put(method.name + method.desc, mixin);
                 byKey.put(method.name + method.desc, method);
             }
@@ -72,7 +75,8 @@ public final class HandlerSetups {
 
                 for (AbstractInsnNode inside : handler.instructions) {
                     if (isGameStore(inside, node.name, gameFields)) {
-                        out.add(((FieldInsnNode) inside).name + " <- " + mixin);
+                        out.add(((FieldInsnNode) inside).name + " <- " + mixin
+                                + (isNullStore(inside) ? EMPTIED : ""));
                     }
                 }
             }
@@ -87,6 +91,23 @@ public final class HandlerSetups {
             }
         }
         return false;
+    }
+
+    private static boolean isEmptyingAny(MethodNode method, String owner, Set<String> gameFields) {
+        for (AbstractInsnNode insn : method.instructions) {
+            if (isGameStore(insn, owner, gameFields) && isNullStore(insn)) {
+                return true;
+            }
+        }
+        return false;
+    }
+
+    private static boolean isNullStore(AbstractInsnNode store) {
+        AbstractInsnNode before = store.getPrevious();
+        while (before != null && before.getOpcode() < 0) {
+            before = before.getPrevious();
+        }
+        return before != null && before.getOpcode() == Opcodes.ACONST_NULL;
     }
 
     private static boolean isGameStore(@Nullable AbstractInsnNode insn, String owner, Set<String> gameFields) {
