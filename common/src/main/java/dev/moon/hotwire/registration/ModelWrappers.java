@@ -85,8 +85,12 @@ public final class ModelWrappers {
         String mod = Owners.findModOf(value.getClass());
         if (mod != null && this.mods.contains(mod)) {
             Object inner = this.findWrapped(value);
+            if (inner == null) {
+                inner = PlainCopies.of(value, slot);
+            }
             if (inner != null && slot.isInstance(inner)) {
-                this.swaps.add(new Swap(() -> put.accept(inner), value.getClass().getSimpleName()));
+                Object given = inner;
+                this.swaps.add(new Swap(() -> put.accept(given), value.getClass().getSimpleName()));
             }
             return;
         }
@@ -124,9 +128,26 @@ public final class ModelWrappers {
                 }
             }
             default -> {
-                boolean game = GameNames.isMinecraft(value.getClass().getName()) && depth <= GAME_DEPTH;
-                if (game || (mod != null && !value.getClass().getName().startsWith("java."))) {
+                boolean game = GameNames.isMinecraft(value.getClass().getName());
+                if ((game && depth <= GAME_DEPTH) || (mod != null && !value.getClass().getName().startsWith("java."))) {
                     this.walkFields(value, depth);
+                } else if (game && depth == GAME_DEPTH + 1) {
+                    this.lookAtFields(value, depth);
+                }
+            }
+        }
+    }
+
+    private void lookAtFields(Object holder, int depth) {
+        for (Class<?> at = holder.getClass(); at != null && at != Object.class; at = at.getSuperclass()) {
+            for (FieldSlots.Slot field : Fields.getDeclared(at)) {
+                if (field.isStatic() || field.getType().isPrimitive()) {
+                    continue;
+                }
+                Object value = CollectionParts.read(field, holder);
+                String mod = value == null ? null : Owners.findModOf(value.getClass());
+                if (mod != null && this.mods.contains(mod)) {
+                    this.visit(value, field.getType(), inner -> write(field, holder, inner), depth + 1);
                 }
             }
         }

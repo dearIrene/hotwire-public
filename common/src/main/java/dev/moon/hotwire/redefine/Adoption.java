@@ -464,7 +464,7 @@ public final class Adoption {
         }
     }
 
-    private static Constructor<?> findFactory(Class<?> type, Constructor<?> theirs) {
+    public static Constructor<?> findFactory(Class<?> type, Constructor<?> theirs) {
         try {
             Class<?> factoryType = Class.forName("sun.reflect.ReflectionFactory");
             Object reflection = factoryType.getMethod("getReflectionFactory").invoke(null);
