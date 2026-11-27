@@ -21,6 +21,7 @@ import net.minecraft.client.gui.screens.inventory.tooltip.ClientTooltipComponent
 import net.minecraft.client.multiplayer.ClientLevel;
 import net.minecraft.client.player.LocalPlayer;
 import net.minecraft.core.Registry;
+import net.minecraft.locale.Language;
 import net.minecraft.network.RegistryFriendlyByteBuf;
 import net.minecraft.network.chat.ClickEvent;
 import net.minecraft.network.chat.Component;
@@ -66,6 +67,9 @@ import dev.moon.hotwire.fabric.mixin.core.server.level.ChunkMapAccessor;
 //?}
 //? if <1.21.9 {
 /*import dev.moon.hotwire.fabric.mixin.core.fabric.client.keybinding.KeyBindingRegistryImplAccessor;
+*///?}
+//? if <26.2 {
+/*import dev.moon.hotwire.fabric.mixin.core.client.resources.language.I18nAccessor;
 *///?}
 
 public final class Spellings {
@@ -383,6 +387,13 @@ public final class Spellings {
         /*return ModNioResourcePack.create(id, container, subPath, type, ResourcePackActivationType.ALWAYS_ENABLED,
                 true);
         *///?}
+    }
+
+    public static void injectLanguage(Language language) {
+        //? if <26.2 {
+        /*I18nAccessor.hotwire$setLanguage(language);
+        *///?}
+        Language.inject(language);
     }
 
     public static void replayRenderQueue() {

@@ -459,6 +459,10 @@ public final class ResourceReload {
             Set<String> packed) {
         try {
             reloadResourcesNow(newlyBuilt, mods, off, packed);
+
+            if (!hasPackOf(mods)) {
+                OffWords.loadAgain();
+            }
         } finally {
             ModelReloadCheck.forgetAhead();
         }
