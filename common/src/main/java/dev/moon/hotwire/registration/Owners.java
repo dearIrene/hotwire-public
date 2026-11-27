@@ -227,6 +227,10 @@ public final class Owners {
         return of(type).nested;
     }
 
+    public static @Nullable String findForwardedTo(Object item) {
+        return ValueOwners.findForwardedTo(item);
+    }
+
     public static boolean isOfOffMod(Class<?> type) {
         String mod = findModOf(type);
         return (mod != null && Tripwire.isWatched(mod)) || Tripwire.isOfOffMod(type);
