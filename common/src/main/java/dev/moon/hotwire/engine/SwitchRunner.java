@@ -323,7 +323,8 @@ public final class SwitchRunner {
         AheadWork.ask();
         if (off) {
             List<String> order = this.switcher.planOff(ids).order();
-            if (!this.units.findWorldContent(order).isEmpty() || !SaveHooks.findStopped(order).isEmpty()) {
+            if (!this.units.findWorldContent(order).isEmpty() || !SaveHooks.findStopped(order).isEmpty()
+                    || this.units.findDrawingMod(order) != null) {
                 return;
             }
         }
@@ -515,9 +516,13 @@ public final class SwitchRunner {
 
         Map<String, String> saveHooks = content.isEmpty() && inEntities.isEmpty() ? SaveHooks.findStopped(wired)
                 : Map.of();
-        if (!content.isEmpty() || !inEntities.isEmpty() || !saveHooks.isEmpty()) {
+        String drawing = content.isEmpty() && inEntities.isEmpty() && saveHooks.isEmpty()
+                ? this.units.findDrawingMod(wired) : null;
+        if (!content.isEmpty() || !inEntities.isEmpty() || !saveHooks.isEmpty() || drawing != null) {
             String why;
-            if (!content.isEmpty()) {
+            if (drawing != null) {
+                why = "the game draws through " + drawing + "'s GPU device, made once when the game starts";
+            } else if (!content.isEmpty()) {
                 why = "the game's registries hold " + content;
             } else if (!inEntities.isEmpty()) {
                 why = "the world's entities hold objects of " + inEntities;

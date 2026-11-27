@@ -5,6 +5,7 @@ import java.util.List;
 import java.util.Map;
 import java.util.Set;
 import java.util.function.Predicate;
+import org.jspecify.annotations.Nullable;
 
 public interface SwitchUnits {
     void readModelsAhead(Collection<String> mods);
@@ -34,6 +35,10 @@ public interface SwitchUnits {
     }
 
     Map<String, String> findEntityHolders(Collection<String> mods, Predicate<Object> reached);
+
+    default @Nullable String findDrawingMod(Collection<String> mods) {
+        return null;
+    }
 
     void rememberPluginAnswers(Collection<String> mods);
 

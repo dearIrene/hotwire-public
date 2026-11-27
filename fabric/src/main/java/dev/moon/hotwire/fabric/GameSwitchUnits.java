@@ -3,6 +3,7 @@ package dev.moon.hotwire.fabric;
 import dev.moon.hotwire.config.Flags;
 import dev.moon.hotwire.fabric.rebuild.LivePluginShapes;
 import dev.moon.hotwire.fabric.registration.ContentRemovals;
+import dev.moon.hotwire.fabric.registration.DrawingDevice;
 import dev.moon.hotwire.fabric.registration.EntityAttachments;
 import dev.moon.hotwire.fabric.registration.EntityHolders;
 import dev.moon.hotwire.fabric.registration.EntityRendererProviders;
@@ -26,6 +27,7 @@ import java.util.Map;
 import java.util.Set;
 import java.util.function.Predicate;
 import net.minecraft.client.Minecraft;
+import org.jspecify.annotations.Nullable;
 
 final class GameSwitchUnits implements SwitchUnits {
     private final MixinPlugins plugins;
@@ -94,6 +96,11 @@ final class GameSwitchUnits implements SwitchUnits {
     @Override
     public Map<String, String> findEntityHolders(Collection<String> mods, Predicate<Object> reached) {
         return this.holders.find(mods, reached);
+    }
+
+    @Override
+    public @Nullable String findDrawingMod(Collection<String> mods) {
+        return DrawingDevice.findOwnerAmong(mods);
     }
 
     @Override
