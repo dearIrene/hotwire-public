@@ -344,6 +344,7 @@
   "hotwire.find.skip.restart": "ปิดได้แค่ตอนรีสตาร์ท",
   "hotwire.find.stuck": "ไม่ได้ทดสอบ พวกนี้ปิดไม่ได้ระหว่างเกมรัน: %s",
   "hotwire.switch.stayed_on": "พวกนี้ปิดไม่ได้ระหว่างเกมรัน เลยยังเปิดอยู่: %s",
+  "hotwire.switch.stayed_on.title": "ม็อดบางตัวยังเปิดอยู่",
   "hotwire.unsupported.title": "Hotwire ปิดอยู่",
   "hotwire.unsupported.body": "มันทำงานได้แค่บน Fabric เอง แต่เกมนี้รันม็อด Fabric ผ่าน %s",
   "hotwire.lost_hooks.title": "Hotwire เจอข้อผิดพลาดที่หายาก",

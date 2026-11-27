@@ -344,6 +344,7 @@
   "hotwire.find.skip.restart": "só desliga reiniciando",
   "hotwire.find.stuck": "Não testados, estes não podem desligar com o jogo aberto: %s",
   "hotwire.switch.stayed_on": "Estes não podem desligar com o jogo aberto, então ficaram ligados: %s.",
+  "hotwire.switch.stayed_on.title": "Alguns mods continuaram ativados",
   "hotwire.unsupported.title": "O Hotwire está desligado",
   "hotwire.unsupported.body": "Ele só funciona no Fabric de verdade, e este jogo roda os mods do Fabric pelo %s.",
   "hotwire.lost_hooks.title": "O Hotwire teve um erro raro",

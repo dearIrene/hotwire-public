@@ -344,6 +344,7 @@
   "hotwire.find.skip.restart": "再起動しないとオフにならない",
   "hotwire.find.stuck": "未テスト。これらはゲームの実行中にオフにできません: %s",
   "hotwire.switch.stayed_on": "これらはゲームの実行中にオフにできないので、オンのままです: %s。",
+  "hotwire.switch.stayed_on.title": "一部のModはオンのままです",
   "hotwire.unsupported.title": "Hotwire はオフです",
   "hotwire.unsupported.body": "Fabric 本体でしか動きません。このゲームは %s を通して Fabric の Mod を動かしています。",
   "hotwire.lost_hooks.title": "Hotwire でまれなエラーが起きました",

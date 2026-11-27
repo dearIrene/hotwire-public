@@ -344,6 +344,7 @@
   "hotwire.find.skip.restart": "kytkeytyy pois vain uudelleenkäynnistyksellä",
   "hotwire.find.stuck": "Ei testattu, näitä ei voi kytkeä pois pelin ollessa käynnissä: %s",
   "hotwire.switch.stayed_on": "Näitä ei voi kytkeä pois pelin ollessa käynnissä, joten ne jäivät päälle: %s.",
+  "hotwire.switch.stayed_on.title": "Jotkin modit jäivät päälle",
   "hotwire.unsupported.title": "Hotwire on pois päältä",
   "hotwire.unsupported.body": "Se toimii vain itse Fabricissa, ja tämä peli ajaa Fabric-modeja tämän kautta: %s.",
   "hotwire.lost_hooks.title": "Hotwire kohtasi harvinaisen virheen",

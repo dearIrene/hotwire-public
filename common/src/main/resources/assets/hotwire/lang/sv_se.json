@@ -344,6 +344,7 @@
   "hotwire.find.skip.restart": "stängs bara av med en omstart",
   "hotwire.find.stuck": "Inte testade, de här kan inte stängas av medan spelet körs: %s",
   "hotwire.switch.stayed_on": "De här kan inte stängas av medan spelet körs, så de förblev på: %s.",
+  "hotwire.switch.stayed_on.title": "Vissa moddar förblev på",
   "hotwire.unsupported.title": "Hotwire är avstängt",
   "hotwire.unsupported.body": "Det fungerar bara på själva Fabric, och det här spelet kör Fabric-moddar genom %s.",
   "hotwire.lost_hooks.title": "Hotwire stötte på ett ovanligt fel",

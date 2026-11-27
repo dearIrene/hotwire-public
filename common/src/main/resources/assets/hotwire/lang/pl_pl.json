@@ -344,6 +344,7 @@
   "hotwire.find.skip.restart": "wyłącza się tylko z restartem",
   "hotwire.find.stuck": "Niesprawdzone, te nie mogą się wyłączyć, kiedy gra działa: %s",
   "hotwire.switch.stayed_on": "Te nie mogą się wyłączyć, kiedy gra działa, więc zostały włączone: %s.",
+  "hotwire.switch.stayed_on.title": "Niektóre mody pozostały włączone",
   "hotwire.unsupported.title": "Hotwire jest wyłączony",
   "hotwire.unsupported.body": "Działa tylko na samym Fabric, a ta gra uruchamia mody Fabric przez %s.",
   "hotwire.lost_hooks.title": "Hotwire trafił na rzadki błąd",

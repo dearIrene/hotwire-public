@@ -344,6 +344,7 @@
   "hotwire.find.skip.restart": "csak újraindítással kapcsol ki",
   "hotwire.find.stuck": "Nem tesztelve, ezek nem kapcsolhatók ki futó játék közben: %s",
   "hotwire.switch.stayed_on": "Ezek nem kapcsolhatók ki futó játék közben, ezért bekapcsolva maradtak: %s.",
+  "hotwire.switch.stayed_on.title": "Néhány mod bekapcsolva maradt",
   "hotwire.unsupported.title": "A Hotwire ki van kapcsolva",
   "hotwire.unsupported.body": "Csak magán a Fabricon működik, ez a játék viszont ezen keresztül futtatja a Fabric modokat: %s.",
   "hotwire.lost_hooks.title": "A Hotwire ritka hibába futott",

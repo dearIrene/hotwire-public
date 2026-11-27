@@ -344,6 +344,7 @@
   "hotwire.find.skip.restart": "vypne se jen s restartem",
   "hotwire.find.stuck": "Netestováno, tyhle se nemůžou vypnout, dokud hra běží: %s",
   "hotwire.switch.stayed_on": "Tyhle se nemůžou vypnout, dokud hra běží, takže zůstaly zapnuté: %s.",
+  "hotwire.switch.stayed_on.title": "Některé mody zůstaly zapnuté",
   "hotwire.unsupported.title": "Hotwire je vypnutý",
   "hotwire.unsupported.body": "Funguje jen na samotném Fabricu a tahle hra spouští Fabric mody přes %s.",
   "hotwire.lost_hooks.title": "Hotwire narazil na vzácnou chybu",

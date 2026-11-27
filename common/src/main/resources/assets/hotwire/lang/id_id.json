@@ -344,6 +344,7 @@
   "hotwire.find.skip.restart": "hanya bisa mati dengan mulai ulang",
   "hotwire.find.stuck": "Tidak dites, ini tidak bisa dimatikan selagi game berjalan: %s",
   "hotwire.switch.stayed_on": "Ini tidak bisa dimatikan selagi game berjalan, jadi tetap nyala: %s.",
+  "hotwire.switch.stayed_on.title": "Beberapa mod tetap aktif",
   "hotwire.unsupported.title": "Hotwire mati",
   "hotwire.unsupported.body": "Hotwire hanya bekerja di Fabric sendiri, dan game ini menjalankan mod Fabric lewat %s.",
   "hotwire.lost_hooks.title": "Hotwire mengalami error langka",

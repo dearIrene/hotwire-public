@@ -344,6 +344,7 @@
   "hotwire.find.skip.restart": "只能通过重启关闭",
   "hotwire.find.stuck": "未测试，这些在游戏运行时无法关闭：%s",
   "hotwire.switch.stayed_on": "这些在游戏运行时无法关闭，所以保持开启：%s。",
+  "hotwire.switch.stayed_on.title": "部分模组仍保持开启",
   "hotwire.unsupported.title": "Hotwire 已关闭",
   "hotwire.unsupported.body": "它只能在原生 Fabric 上工作，而这个游戏是通过 %s 运行 Fabric 模组的。",
   "hotwire.lost_hooks.title": "Hotwire 遇到了罕见错误",

@@ -344,6 +344,7 @@
   "hotwire.find.skip.restart": "geht nur mit Neustart aus",
   "hotwire.find.stuck": "Nicht getestet, diese können nicht ausgehen, während das Spiel läuft: %s",
   "hotwire.switch.stayed_on": "Diese können nicht ausgehen, während das Spiel läuft, also sind sie angeblieben: %s.",
+  "hotwire.switch.stayed_on.title": "Einige Mods sind an geblieben",
   "hotwire.unsupported.title": "Hotwire ist aus",
   "hotwire.unsupported.body": "Es funktioniert nur mit echtem Fabric, und dieses Spiel lädt Fabric-Mods über %s.",
   "hotwire.lost_hooks.title": "Hotwire hatte einen seltenen Fehler",

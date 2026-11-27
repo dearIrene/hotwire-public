@@ -344,6 +344,7 @@
   "hotwire.find.skip.restart": "se oprește doar cu o repornire",
   "hotwire.find.stuck": "Netestate, astea nu se pot opri cât rulează jocul: %s",
   "hotwire.switch.stayed_on": "Astea nu se pot opri cât rulează jocul, așa că au rămas pornite: %s.",
+  "hotwire.switch.stayed_on.title": "Unele moduri au rămas pornite",
   "hotwire.unsupported.title": "Hotwire e oprit",
   "hotwire.unsupported.body": "Merge doar pe Fabric propriu-zis, iar jocul ăsta rulează modurile Fabric prin %s.",
   "hotwire.lost_hooks.title": "Hotwire a dat de o eroare rară",

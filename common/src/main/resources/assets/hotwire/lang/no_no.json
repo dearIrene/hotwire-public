@@ -344,6 +344,7 @@
   "hotwire.find.skip.restart": "slås bare av med en omstart",
   "hotwire.find.stuck": "Ikke testet, disse kan ikke slås av mens spillet kjører: %s",
   "hotwire.switch.stayed_on": "Disse kan ikke slås av mens spillet kjører, så de forble på: %s.",
+  "hotwire.switch.stayed_on.title": "Noen mods forble på",
   "hotwire.unsupported.title": "Hotwire er av",
   "hotwire.unsupported.body": "Den fungerer bare på selve Fabric, og dette spillet kjører Fabric-modder gjennom %s.",
   "hotwire.lost_hooks.title": "Hotwire fikk en sjelden feil",

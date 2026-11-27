@@ -344,6 +344,7 @@
   "hotwire.find.skip.restart": "вимикається лише з перезапуском",
   "hotwire.find.stuck": "Не перевірено, ці не можна вимкнути, поки гра працює: %s",
   "hotwire.switch.stayed_on": "Ці не можна вимкнути, поки гра працює, тож вони лишилися увімкненими: %s.",
+  "hotwire.switch.stayed_on.title": "Деякі моди лишилися ввімкненими",
   "hotwire.unsupported.title": "Hotwire вимкнено",
   "hotwire.unsupported.body": "Він працює лише на самому Fabric, а ця гра запускає моди Fabric через %s.",
   "hotwire.lost_hooks.title": "Hotwire натрапив на рідкісну помилку",

@@ -344,6 +344,7 @@
   "hotwire.find.skip.restart": "gaat alleen uit met een herstart",
   "hotwire.find.stuck": "Niet getest, deze kunnen niet uit terwijl het spel draait: %s",
   "hotwire.switch.stayed_on": "Deze kunnen niet uit terwijl het spel draait, dus ze bleven aan: %s.",
+  "hotwire.switch.stayed_on.title": "Sommige mods bleven aan",
   "hotwire.unsupported.title": "Hotwire staat uit",
   "hotwire.unsupported.body": "Het werkt alleen op Fabric zelf, en dit spel draait Fabric-mods via %s.",
   "hotwire.lost_hooks.title": "Hotwire liep tegen een zeldzame fout aan",

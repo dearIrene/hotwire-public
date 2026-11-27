@@ -344,6 +344,7 @@
   "hotwire.find.skip.restart": "only goes off with a restart",
   "hotwire.find.stuck": "Not tested, these can't go off while the game runs: %s",
   "hotwire.switch.stayed_on": "These can't go off while the game runs so they stayed on: %s.",
+  "hotwire.switch.stayed_on.title": "Some mods stayed on",
   "hotwire.unsupported.title": "Hotwire is off",
   "hotwire.unsupported.body": "It only works on Fabric itself, and this game runs Fabric mods through %s.",
   "hotwire.lost_hooks.title": "Hotwire hit a rare error",

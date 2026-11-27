@@ -344,6 +344,7 @@
   "hotwire.find.skip.restart": "si disattiva solo con un riavvio",
   "hotwire.find.stuck": "Non provate, queste non possono disattivarsi mentre il gioco gira: %s",
   "hotwire.switch.stayed_on": "Queste non possono disattivarsi mentre il gioco gira, quindi sono rimaste attive: %s.",
+  "hotwire.switch.stayed_on.title": "Alcune mod sono rimaste attive",
   "hotwire.unsupported.title": "Hotwire è disattivato",
   "hotwire.unsupported.body": "Funziona solo su Fabric vero e proprio, e questo gioco fa girare le mod Fabric tramite %s.",
   "hotwire.lost_hooks.title": "Hotwire ha avuto un errore raro",

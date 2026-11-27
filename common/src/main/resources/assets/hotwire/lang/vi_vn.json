@@ -344,6 +344,7 @@
   "hotwire.find.skip.restart": "chỉ tắt được khi khởi động lại",
   "hotwire.find.stuck": "Chưa thử, mấy cái này không tắt được khi game đang chạy: %s",
   "hotwire.switch.stayed_on": "Mấy cái này không tắt được khi game đang chạy nên vẫn bật: %s.",
+  "hotwire.switch.stayed_on.title": "Một số mod vẫn đang bật",
   "hotwire.unsupported.title": "Hotwire đang tắt",
   "hotwire.unsupported.body": "Nó chỉ chạy trên chính Fabric, còn game này chạy mod Fabric thông qua %s.",
   "hotwire.lost_hooks.title": "Hotwire gặp một lỗi hiếm",

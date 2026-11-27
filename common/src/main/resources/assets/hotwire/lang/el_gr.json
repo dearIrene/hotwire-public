@@ -344,6 +344,7 @@
   "hotwire.find.skip.restart": "απενεργοποιείται μόνο με επανεκκίνηση",
   "hotwire.find.stuck": "Δεν δοκιμάστηκαν, αυτά δεν γίνεται να απενεργοποιηθούν όσο τρέχει το παιχνίδι: %s",
   "hotwire.switch.stayed_on": "Αυτά δεν γίνεται να απενεργοποιηθούν όσο τρέχει το παιχνίδι, οπότε έμειναν ενεργά: %s.",
+  "hotwire.switch.stayed_on.title": "Κάποια mods έμειναν ενεργά",
   "hotwire.unsupported.title": "Το Hotwire είναι ανενεργό",
   "hotwire.unsupported.body": "Δουλεύει μόνο στο ίδιο το Fabric, και αυτό το παιχνίδι τρέχει mods του Fabric μέσω του %s.",
   "hotwire.lost_hooks.title": "Το Hotwire έπεσε σε ένα σπάνιο σφάλμα",

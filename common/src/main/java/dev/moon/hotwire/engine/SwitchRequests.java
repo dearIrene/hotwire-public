@@ -17,6 +17,7 @@ import dev.moon.hotwire.switching.PlayerMessages;
 import dev.moon.hotwire.switching.SwitchHistory;
 import dev.moon.hotwire.ui.Lang;
 import dev.moon.hotwire.ui.ModScreen;
+import dev.moon.hotwire.ui.notices.Notices;
 import dev.moon.hotwire.ui.panels.ReopenPanel;
 import java.io.IOException;
 import java.util.ArrayList;
@@ -210,6 +211,11 @@ final class SwitchRequests {
             ModScreen current = this.screen.get();
             if (quiet) {
                 LOGGER.info("[Hotwire] for the mod that asked: {}", said);
+
+                if (!stayed.isEmpty()) {
+                    Notices.show(Lang.get("hotwire.switch.stayed_on.title"), Lang.get("hotwire.switch.stayed_on",
+                            stayed.stream().map(this.installed::nameOf).collect(Collectors.joining(", "))));
+                }
             } else if (off && !ids.isEmpty() && result.result() instanceof ModSwitcher.Result.Failed failed
                     && failed.cause().isRestartOnly() && current != null) {
                 LOGGER.info("[Hotwire] {}", said);

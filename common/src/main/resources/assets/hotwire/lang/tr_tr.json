@@ -344,6 +344,7 @@
   "hotwire.find.skip.restart": "yalnızca yeniden başlatmayla kapanır",
   "hotwire.find.stuck": "Test edilmedi, bunlar oyun çalışırken kapanamaz: %s",
   "hotwire.switch.stayed_on": "Bunlar oyun çalışırken kapanamadığı için açık kaldı: %s.",
+  "hotwire.switch.stayed_on.title": "Bazı modlar açık kaldı",
   "hotwire.unsupported.title": "Hotwire kapalı",
   "hotwire.unsupported.body": "Yalnızca Fabric'in kendisinde çalışır, bu oyun ise Fabric modlarını şunun üzerinden çalıştırıyor: %s.",
   "hotwire.lost_hooks.title": "Hotwire nadir bir hataya çarptı",
