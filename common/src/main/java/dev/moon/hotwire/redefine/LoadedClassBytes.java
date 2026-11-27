@@ -211,8 +211,11 @@ public final class LoadedClassBytes {
         }
 
         if (!byName.isEmpty() && ClassRebuilder.isMixOnly()) {
-            throw new RebuildException("the switch cache leaves " + byName.keySet() + " to the first switch that"
-                    + " needs it: the JVM's read stops every thread");
+            if (refusedOut == null) {
+                throw new RebuildException("the switch cache leaves " + byName.keySet() + " to the first switch that"
+                        + " needs it: the JVM's read stops every thread");
+            }
+            byName.clear();
         }
         long start = System.nanoTime();
         if (!byName.isEmpty()) {
