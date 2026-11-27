@@ -310,6 +310,12 @@ public final class Tripwire {
         return loader == null || loader.equals(ClassLoader.getPlatformClassLoader());
     }
 
+    private static boolean isLoaderLayer(Class<?> type) {
+        ClassLoader loader = type.getClassLoader();
+        return loader != null && !loader.equals(Tripwire.class.getClassLoader())
+                && !loader.equals(ClassLoader.getSystemClassLoader());
+    }
+
     static void onCounted(String mod) {
         ModWatch watch = MODS.get(mod);
         if (watch == null) {
@@ -494,12 +500,18 @@ public final class Tripwire {
         boolean library = false;
 
         boolean gameBelow = false;
+
+        @Nullable String othersBelow = null;
         for (StackWalker.StackFrame frame : frames) {
             Class<?> type = frame.getDeclaringClass();
             if (isJdk(type)) {
                 continue;
             }
             String of = modOf.apply(type);
+
+            if (of == null && isLoaderLayer(type)) {
+                continue;
+            }
 
             if (of != null && (of.equals(HOTWIRE) || of.startsWith(HOTWIRE + "-"))) {
                 return Whose.UNSAFE;
@@ -510,13 +522,19 @@ public final class Tripwire {
                 unsafe |= frame.getMethodName().equals("<clinit>") || (mine == 0 && isSynchronizedMethod(frame));
                 mine++;
                 gameBelow = false;
+                othersBelow = null;
             } else if (of != null && (libraries.contains(of) || isHolding(of))) {
                 gameBelow = game.contains(of);
                 library = true;
             } else {
-                OTHERS_FRAME.set(frame + " (" + (of == null ? "the game's" : of + "'s") + ")");
-                return Whose.OTHERS;
+                if (othersBelow == null) {
+                    othersBelow = frame + " (" + (of == null ? "the game's" : of + "'s") + ")";
+                }
             }
+        }
+        if (othersBelow != null) {
+            OTHERS_FRAME.set(othersBelow);
+            return Whose.OTHERS;
         }
         if (gameBelow) {
             return Whose.UNSAFE;
