@@ -43,6 +43,7 @@ import net.minecraft.client.Minecraft;
 import net.minecraft.client.gui.screens.AlertScreen;
 import net.minecraft.client.gui.screens.DatapackLoadFailureScreen;
 import net.minecraft.client.gui.screens.DisconnectedScreen;
+import net.minecraft.client.gui.screens.GenericMessageScreen;
 import net.minecraft.client.gui.screens.Screen;
 import net.minecraft.client.multiplayer.ClientPacketListener;
 import net.minecraft.client.server.IntegratedServer;
@@ -69,6 +70,8 @@ public final class WorldReopen {
     private static volatile @Nullable QueueAtLeave queueAtLeave;
 
     private static volatile @Nullable String halfStarted;
+
+    private static volatile @Nullable Screen waitingMenu;
 
     private WorldReopen() {
     }
@@ -219,6 +222,7 @@ public final class WorldReopen {
                 }
             } finally {
                 closedFor.accept(false);
+                showWaitingMenu(client);
             }
         } catch (InterruptedException e) {
             Thread.currentThread().interrupt();
@@ -238,7 +242,11 @@ public final class WorldReopen {
         Minecraft client = Minecraft.getInstance();
         if (isLeftOnly()) {
             leave(client);
-            return add.get();
+            try {
+                return add.get();
+            } finally {
+                showWaitingMenu(client);
+            }
         }
         IntegratedServer server = client.getSingleplayerServer();
         if (server == null) {
@@ -270,6 +278,19 @@ public final class WorldReopen {
             return result;
         } finally {
             closedFor.accept(false);
+            showWaitingMenu(client);
+        }
+    }
+
+    private static void showWaitingMenu(Minecraft client) {
+        Screen waiting = waitingMenu;
+        waitingMenu = null;
+        if (waiting != null) {
+            client.execute(() -> {
+                if (client.level == null && ModViews.openScreen() instanceof GenericMessageScreen) {
+                    ModViews.show(waiting);
+                }
+            });
         }
     }
 
@@ -336,6 +357,8 @@ public final class WorldReopen {
 
             try {
                 Spellings.leaveWorld(client);
+                waitingMenu = ModViews.openScreen();
+                ModViews.show(new GenericMessageScreen(Component.literal(Lang.get("hotwire.find.switching"))));
             } finally {
                 queueAtLeave = null;
             }
@@ -421,6 +444,8 @@ public final class WorldReopen {
         awaitUnlocked(client, level, deadline);
         boolean[] refused = new boolean[1];
         Object before = ModViews.openScreen();
+
+        showWaitingMenu(client);
         client.execute(() -> client.createWorldOpenFlows().openWorld(level, () -> refused[0] = true));
         long said = System.nanoTime();
         while (client.player == null || client.level == null) {
