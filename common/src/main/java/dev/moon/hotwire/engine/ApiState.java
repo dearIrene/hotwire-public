@@ -12,6 +12,8 @@ final class ApiState {
 
     final AtomicInteger changing = new AtomicInteger();
 
+    volatile int runAtStart;
+
     final Map<CallerBlocks.Callers, ModRowCache> rowsSeen = new ConcurrentHashMap<>();
 
     record ModRowCache(long at, long calls, List<ModState> mods) {

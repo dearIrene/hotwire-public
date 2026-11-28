@@ -24,6 +24,7 @@ import dev.moon.hotwire.api.SwitchProgress;
 import dev.moon.hotwire.api.SwitchResult;
 import dev.moon.hotwire.concurrent.AheadWork;
 import dev.moon.hotwire.modrinth.Downloads;
+import dev.moon.hotwire.plan.ModGraph;
 import dev.moon.hotwire.plan.SwitchPlan;
 import dev.moon.hotwire.redefine.HandlerGuards;
 import dev.moon.hotwire.registration.MergedMembers;
@@ -54,6 +55,7 @@ import java.util.Map;
 import java.util.Objects;
 import java.util.Optional;
 import java.util.Set;
+import java.util.SortedSet;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.function.Consumer;
@@ -138,11 +140,9 @@ public class EngineApi implements HotwireApi {
         if (engine.findParts() == null) {
             return new ApiStatus(ApiStatus.State.UNAVAILABLE, 0, engine.getSwitchRefusal());
         }
-        Progress.Snapshot now = engine.getProgress().snapshot();
-        if (now.running() || engine.api.switching.get() > 0 || engine.api.changing.get() > 0
-                || engine.tasks.isBusy()) {
-            return new ApiStatus(ApiStatus.State.BUSY, now.running() ? now.getFraction() : 0,
-                    now.running() ? now.describe() : "");
+        SwitchProgress now = findProgress(engine);
+        if (now.running() || engine.tasks.isBusy()) {
+            return new ApiStatus(ApiStatus.State.BUSY, now.fraction(), now.step());
         }
         return new ApiStatus(ApiStatus.State.READY, 0, "");
     }
@@ -222,9 +222,21 @@ public class EngineApi implements HotwireApi {
         if (engine == null) {
             return new SwitchProgress(false, 0, "", 0, 0, "");
         }
+        return findProgress(engine);
+    }
+
+    private static SwitchProgress findProgress(HotwireEngine engine) {
         Progress.Snapshot now = engine.getProgress().snapshot();
-        return new SwitchProgress(now.running(), now.running() ? now.getFraction() : 0, now.running()
-                ? now.describe() : "", now.countDone(), now.countTotal(), now.subject());
+        if (now.running()) {
+            return new SwitchProgress(true, now.getFraction(), now.describe(), now.countDone(), now.countTotal(),
+                    now.subject());
+        }
+        if (engine.api.switching.get() > 0 || engine.api.changing.get() > 0) {
+            boolean after = now.run() > engine.api.runAtStart;
+            return new SwitchProgress(true, after ? now.getFraction() : 0, Lang.get(after
+                    ? "hotwire.progress.finishing" : "hotwire.progress.preparing"), 0, 0, after ? now.subject() : "");
+        }
+        return new SwitchProgress(false, 0, "", 0, 0, "");
     }
 
     @Override
@@ -273,7 +285,7 @@ public class EngineApi implements HotwireApi {
         }
 
         engine.getCopies().forEach((id, of) -> {
-            if (listed.add(id)) {
+            if (!listed.contains(id) && FabricLoader.getInstance().isModLoaded(id) && listed.add(id)) {
                 FabricLoader.getInstance().getModContainer(id).ifPresent(mod -> rows.add(new ModState(id,
                         mod.getMetadata().getName(), mod.getMetadata().getVersion().getFriendlyString(), true, false,
                         false, Lang.get("hotwire.progress.why.nested", engine.getGraph().getContainers(id).stream()
@@ -281,6 +293,20 @@ public class EngineApi implements HotwireApi {
                         of, catalog.isLibrary(id))));
             }
         });
+
+        ModGraph graph = engine.getGraph();
+        for (String id : graph.getIds()) {
+            SortedSet<String> containers = graph.getContainers(id);
+
+            if (containers.isEmpty() || graph.isInstalledOnItsOwn(id) || !LiveNames.findCopiesOf(id).isEmpty()
+                    || !listed.add(id)) {
+                continue;
+            }
+            graph.find(id).ifPresent(manifest -> rows.add(new ModState(id, manifest.name(), manifest.version(),
+                    engine.isOn(id), engine.getDisabled().isDisabledSinceStart(id), false,
+                    Lang.get("hotwire.progress.why.nested", engine.nameOfMod(containers.first())),
+                    engine.findCopyOf(id), catalog.isLibrary(id))));
+        }
         return List.copyOf(rows);
     }
 
@@ -621,6 +647,7 @@ public class EngineApi implements HotwireApi {
 
     static CompletableFuture<SwitchResult> beginSwitch(HotwireEngine engine) {
         engine.api.switching.incrementAndGet();
+        engine.api.runAtStart = engine.getProgress().snapshot().run();
         return new CompletableFuture<>();
     }
 

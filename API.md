@@ -104,6 +104,8 @@ Your own mod, any mod it needs and any mod whose code is part of the call. Hotwi
 
 `api.getMods()` gives you every installed mod as Hotwire's list shows it, seen from your mod. `switchable` says whether you may switch it and `blocked` says why not in the player's words so you can show it in your own list. You can read it every frame.
 
+A mod nested in another mod's jar has a row too. It goes on and off with the mod that carries it, so it isn't switchable on its own, and `blocked` names that mod.
+
 ## Changing many mods at once
 
 Turning mods off and on, updating them and adding them all go through one call. Everything you ask for is judged together so two mods that only work at each other's new versions can update as a pair. If you ask for one of a pair then the plan pulls the other in when it has to and says so in its lines.

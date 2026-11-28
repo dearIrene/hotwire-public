@@ -678,6 +678,7 @@ final class ApiChanges {
                 return EngineApi.onGame(ended);
             }
             engine.api.changing.incrementAndGet();
+            engine.api.runAtStart = engine.getProgress().snapshot().run();
             Thread.ofPlatform().name("hotwire-api-change").daemon().start(() -> {
                 try {
                     ended.complete(this.apply());

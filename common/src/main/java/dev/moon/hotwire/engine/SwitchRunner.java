@@ -605,7 +605,6 @@ public final class SwitchRunner {
         } finally {
             Tripwire.pause(false);
             Tripwire.endOff(wired);
-            this.switcher.hideProgress();
             ElementLook.endOff();
         }
         if (!(result instanceof ModSwitcher.Result.Done)) {
@@ -640,6 +639,17 @@ public final class SwitchRunner {
     }
 
     private static final ThreadLocal<Boolean> QUIET = ThreadLocal.withInitial(() -> false);
+
+    private static final ThreadLocal<Boolean> UNTOLD = ThreadLocal.withInitial(() -> false);
+
+    public static <T> T runUntold(Supplier<T> work) {
+        UNTOLD.set(true);
+        try {
+            return work.get();
+        } finally {
+            UNTOLD.set(false);
+        }
+    }
 
     public static <T> T runQuietly(Supplier<T> work) {
         QUIET.set(true);
@@ -923,7 +933,7 @@ public final class SwitchRunner {
 
         if (result instanceof ModSwitcher.Result.Done done) {
             result = new ModSwitcher.Result.Done(done.plan(), done.applied(), SwitchTimes.getMillisSinceBegin());
-            if (!QUIET.get()) {
+            if (!QUIET.get() && !UNTOLD.get()) {
                 this.showTimeNotice((ModSwitcher.Result.Done) result);
             }
         }

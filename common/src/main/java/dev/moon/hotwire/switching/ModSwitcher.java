@@ -242,13 +242,11 @@ public final class ModSwitcher {
         this.reopenedFamilies.retainAll(this.overBudget);
     }
 
-    void noteWorldBuilt(List<String> order, boolean goingOff, boolean budget) {
+    void noteWorldBuilt(List<String> order, boolean budget) {
         if (order.size() == 1) {
             this.worldBound.add(Set.copyOf(order));
-        } else if (!goingOff) {
-            this.noteFamilyReopened(order);
         } else {
-            return;
+            this.noteFamilyReopened(order);
         }
         if (budget) {
             this.overBudget.add(Set.copyOf(order));
@@ -261,6 +259,7 @@ public final class ModSwitcher {
 
     private boolean isWorldBound(SwitchPlan plan) {
         return this.applier.isInWorld() && (touchesWorldBound(this.worldBound, plan.order())
+                || (plan.order().size() > 1 && this.reopenedFamilies.contains(Set.copyOf(plan.order())))
                 || (plan.direction() == SwitchPlan.Direction.ON && this.isOnForReopen(plan.order())));
     }
 
@@ -647,7 +646,10 @@ public final class ModSwitcher {
         }
     }
 
+    private volatile boolean runnerEnds;
+
     public void showBegun(SwitchPlan plan, String doing) {
+        this.runnerEnds = true;
         this.progress.begin(plan.direction() == SwitchPlan.Direction.OFF, this.makeQueue(plan));
         this.progress.count(doing, 0, 0);
     }
@@ -729,6 +731,7 @@ public final class ModSwitcher {
     }
 
     public void hideProgress() {
+        this.runnerEnds = false;
         if (this.progress.isBusy()) {
             this.progress.end();
         }
@@ -840,7 +843,7 @@ public final class ModSwitcher {
                         + " saved and opened again", e, true)
                         : new RebuildException("the switch threw: " + e, e);
                 if (failure.isWorldBuilt()) {
-                    this.noteWorldBuilt(plan.order(), goingOff, isOverBudget(e));
+                    this.noteWorldBuilt(plan.order(), isOverBudget(e));
                 }
                 if (stopped.get()) {
                     this.withGamePaused(() -> plan.order().forEach(this.registrations::restore));
@@ -867,6 +870,10 @@ public final class ModSwitcher {
             return new Result.Done(plan, applied, (System.nanoTime() - start) / 1_000_000);
         } catch (RebuildException e) {
             this.progress.markUndone();
+
+            if (e.reopenFixes()) {
+                this.noteWorldBuilt(plan.order(), false);
+            }
             if (e.reopenFixes() || e.isRestartOnly()) {
                 LOGGER.info("[Hotwire] Switching {} {} needs {}, and nothing changed: {}",
                         goingOff ? "off" : "on", plan.order(),
@@ -878,7 +885,9 @@ public final class ModSwitcher {
             return new Result.Failed(plan, goingOff ? this.tellNotFitting(e)
                     : this.tellClash(this.tellNotFitting(e), plan));
         } finally {
-            this.progress.end();
+            if (!this.runnerEnds) {
+                this.progress.end();
+            }
         }
     }
 

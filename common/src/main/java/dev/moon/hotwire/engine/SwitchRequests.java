@@ -184,7 +184,9 @@ final class SwitchRequests {
             return this.refuse(Lang.get("hotwire.switch.saving"), quiet);
         }
         CompletableFuture<SwitchResult> ended = EngineApi.beginSwitch(this.engine);
-        this.tasks.submit("switch", () -> work.apply(parts.runner()), result -> {
+
+        this.tasks.submit("switch", () -> quiet ? SwitchRunner.runUntold(() -> work.apply(parts.runner()))
+                : work.apply(parts.runner()), result -> {
             boolean untilOn = off && result.result() instanceof ModSwitcher.Result.Done
                     && this.settings.getOffLasts() == HotwireSettings.OffLasts.UNTIL_ON;
             List<String> stayed = off && result.result() instanceof ModSwitcher.Result.Done
