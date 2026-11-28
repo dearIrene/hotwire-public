@@ -92,9 +92,18 @@ public final class UpdateText {
     }
 
     private static String describeInPlace(String name, String version, int rebuilt, int servedLater) {
+        if (rebuilt == 0) {
+            return servedLater == 0 ? Lang.get("hotwire.update.done_none", name, version)
+                    : servedLater == 1 ? Lang.get("hotwire.update.done_only_one_later", name, version)
+                    : Lang.get("hotwire.update.done_only_later", name, version, servedLater);
+        }
         if (servedLater == 0) {
             return rebuilt == 1 ? Lang.get("hotwire.update.done_one", name, version)
                     : Lang.get("hotwire.update.done", name, version, rebuilt);
+        }
+        if (servedLater == 1) {
+            return rebuilt == 1 ? Lang.get("hotwire.update.done_one_later_one", name, version)
+                    : Lang.get("hotwire.update.done_later_one", name, version, rebuilt);
         }
         return rebuilt == 1 ? Lang.get("hotwire.update.done_one_later", name, version, servedLater)
                 : Lang.get("hotwire.update.done_later", name, version, rebuilt, servedLater);
