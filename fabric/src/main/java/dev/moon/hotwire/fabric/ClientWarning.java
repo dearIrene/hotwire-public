@@ -18,11 +18,9 @@ final class ClientWarning {
 
     static void register() {
         FabricLoader loader = FabricLoader.getInstance();
-        String paths = loader.getGameDir().toAbsolutePath() + "/" + System.getProperty("java.class.path", "") + "/";
-        String flat = paths.replace(';', '/').replace(':', '/');
-        String client = ModifiedClients.isDawn(loader::isModLoaded, flat,
+        String client = ModifiedClients.isDawn(loader::isModLoaded,
                 file -> ClientWarning.class.getClassLoader().getResource(file) != null) ? ModifiedClients.DAWN
-                : ModifiedClients.find(loader::isModLoaded, flat);
+                : ModifiedClients.find(loader::isModLoaded);
 
         ClientLifecycleEvents.CLIENT_STARTED.register(ClientWarning::waitToOpen);
         if (client == null) {

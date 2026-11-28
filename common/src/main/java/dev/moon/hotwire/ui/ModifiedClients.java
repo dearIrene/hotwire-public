@@ -1,24 +1,15 @@
 package dev.moon.hotwire.ui;
 
-import java.util.Locale;
 import java.util.Map;
 import java.util.function.Predicate;
 import org.jspecify.annotations.Nullable;
 
 public final class ModifiedClients {
-    private static final Map<String, String> BY_MOD = Map.of(
-            "ichor", "Lunar Client",
-            "feather", "Feather Client",
-            "feather-core", "Feather Client",
-            "labymod", "LabyMod");
-    private static final Map<String, String> BY_FOLDER = Map.of(
-            ".feather", "Feather Client",
-            "labymod-neo", "LabyMod");
+    private static final Map<String, String> BY_MOD = Map.of("ichor", "Lunar Client", "labymod", "LabyMod");
 
     public static final String DAWN = "Dawn Client";
 
     private static final String DAWN_MOD = "dawn";
-    private static final String DAWN_FOLDER = "/.dawn/";
     private static final String DAWN_FILE = "mixins.feather.json";
 
     private static volatile @Nullable String current;
@@ -50,21 +41,14 @@ public final class ModifiedClients {
         return due;
     }
 
-    public static boolean isDawn(Predicate<String> isLoaded, String paths, Predicate<String> hasFile) {
-        String lower = paths.toLowerCase(Locale.ROOT).replace('\\', '/');
-        return isLoaded.test(DAWN_MOD) && (lower.contains(DAWN_FOLDER) || hasFile.test(DAWN_FILE));
+    public static boolean isDawn(Predicate<String> isLoaded, Predicate<String> hasFile) {
+        return isLoaded.test(DAWN_MOD) && hasFile.test(DAWN_FILE);
     }
 
-    public static @Nullable String find(Predicate<String> isLoaded, String paths) {
+    public static @Nullable String find(Predicate<String> isLoaded) {
         for (Map.Entry<String, String> mod : BY_MOD.entrySet()) {
             if (isLoaded.test(mod.getKey())) {
                 return mod.getValue();
-            }
-        }
-        String lower = paths.toLowerCase(Locale.ROOT).replace('\\', '/');
-        for (Map.Entry<String, String> folder : BY_FOLDER.entrySet()) {
-            if (lower.contains("/" + folder.getKey() + "/")) {
-                return folder.getValue();
             }
         }
         return null;
