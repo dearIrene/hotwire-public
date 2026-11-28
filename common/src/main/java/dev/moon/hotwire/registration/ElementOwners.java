@@ -10,9 +10,11 @@ import dev.moon.hotwire.update.LiveNames;
 import java.lang.reflect.Member;
 import java.lang.reflect.Proxy;
 import java.util.Arrays;
+import java.util.HashMap;
 import java.util.HashSet;
 import java.util.IdentityHashMap;
 import java.util.List;
+import java.util.Map;
 import java.util.Set;
 import net.fabricmc.loader.api.ModContainer;
 import org.jspecify.annotations.Nullable;
@@ -20,6 +22,8 @@ import org.jspecify.annotations.Nullable;
 final class ElementOwners {
     private final List<String> mods;
     private final Set<String> modSet;
+
+    private final Map<String, String> standIns;
 
     private final Set<String> libraryOfSome;
     private final Set<Object> registered;
@@ -35,6 +39,9 @@ final class ElementOwners {
             ReflectedOwners reflected) {
         this.mods = List.copyOf(mods);
         this.modSet = Set.copyOf(mods);
+        Map<String, String> standIns = new HashMap<>();
+        mods.forEach(mod -> LiveNames.findOwnIds(mod).forEach(own -> standIns.putIfAbsent(own, mod)));
+        this.standIns = Map.copyOf(standIns);
         Set<String> libraries = new HashSet<>();
         mods.forEach(mod -> libraries.addAll(Tripwire.getLibrariesOf(mod)));
         this.libraryOfSome = Set.copyOf(libraries);
@@ -42,6 +49,10 @@ final class ElementOwners {
         this.out = out;
         this.names = new ModNames(mods, LiveNames::findOwnIds);
         this.reflected = reflected;
+    }
+
+    private @Nullable String findClaimed(@Nullable String mod) {
+        return mod == null ? null : this.modSet.contains(mod) ? mod : this.standIns.get(mod);
     }
 
     boolean isRegistered(@Nullable Object value) {
@@ -80,7 +91,7 @@ final class ElementOwners {
             return null;
         }
         String named = this.reflected.findOwnerOf(value instanceof Class<?> type ? type : value.getClass());
-        return named != null && this.modSet.contains(named) ? named : null;
+        return this.findClaimed(named);
     }
 
     private @Nullable String findOutOwner(Object value) {
@@ -107,16 +118,16 @@ final class ElementOwners {
     @Nullable String findOwnOwner(Object value) {
         Class<?> type = value instanceof Class<?> named ? named : value.getClass();
         String mod = Owners.findModOf(type);
-        if (mod != null && this.modSet.contains(mod)) {
-            return mod;
+        if (this.findClaimed(mod) != null) {
+            return this.findClaimed(mod);
         }
 
         String code = mod == null ? Owners.findCodeMod(type) : null;
-        if (code != null && this.modSet.contains(code)) {
-            return code;
+        if (this.findClaimed(code) != null) {
+            return this.findClaimed(code);
         }
         String lambda = type.isHidden() ? ValueOwners.findLambdaOwner(type) : null;
-        return lambda != null && this.modSet.contains(lambda) ? lambda : null;
+        return this.findClaimed(lambda);
     }
 
     @Nullable String findOwnerOf(Object item, boolean inSmall) {
@@ -134,7 +145,7 @@ final class ElementOwners {
 
         String madeBy = ValueOwners.isLambda(item) ? Owners.findModOrShipper(item.getClass().getNestHost())
                 : null;
-        if (madeBy != null && !this.modSet.contains(madeBy) && ModPolicy.isSwitchable(madeBy)
+        if (madeBy != null && this.findClaimed(madeBy) == null && ModPolicy.isSwitchable(madeBy)
                 && ValueOwners.findForwardedTo(item) == null) {
             return inSmall ? this.findCapturedWrapperOf(item) : null;
         }
@@ -159,8 +170,8 @@ final class ElementOwners {
 
         String whole = !Fields.getRecordParts(item.getClass()).isEmpty() ? Wrappers.findWhollyOwner(item)
                 : ValueOwners.isLambda(item) ? ValueOwners.findForwardedTo(item) : null;
-        if (whole != null && this.modSet.contains(whole)) {
-            return whole;
+        if (this.findClaimed(whole) != null) {
+            return this.findClaimed(whole);
         }
         String registered = this.findRegisteredBy(item);
         if (registered != null) {
@@ -336,7 +347,7 @@ final class ElementOwners {
 
     boolean isStayingModsType(@Nullable Object key) {
         String mod = key instanceof Class<?> type ? Owners.findModOf(type) : null;
-        return mod != null && !this.modSet.contains(mod);
+        return mod != null && this.findClaimed(mod) == null;
     }
 
     @Nullable String findWholeOwnerOfSlot(Object item) {

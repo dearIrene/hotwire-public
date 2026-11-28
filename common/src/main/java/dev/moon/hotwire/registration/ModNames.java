@@ -2,6 +2,7 @@ package dev.moon.hotwire.registration;
 
 import java.util.ArrayList;
 import java.util.HashMap;
+import java.util.HashSet;
 import java.util.List;
 import java.util.Locale;
 import java.util.Map;
@@ -28,9 +29,13 @@ public final class ModNames {
 
     public ModNames(List<String> mods, Function<String, Set<String>> standsFor) {
         this.mods = List.copyOf(mods);
+        Set<String> stoodFor = new HashSet<>();
+        this.mods.forEach(mod -> stoodFor.addAll(standsFor.apply(mod)));
         for (int place = 0; place < this.mods.size(); place++) {
             String mod = this.mods.get(place);
-            this.learn(mod, place);
+            if (!stoodFor.contains(mod)) {
+                this.learn(mod, place);
+            }
             for (String other : standsFor.apply(mod)) {
                 this.learn(other, place);
             }
