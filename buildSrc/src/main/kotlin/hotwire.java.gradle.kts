@@ -13,6 +13,12 @@ repositories {
 
 java.toolchain.languageVersion = JavaLanguageVersion.of(25)
 
+if (hasProperty("release")) {
+    tasks.named<JavaCompile>("compileJava") {
+        options.debugOptions.debugLevel = "source,lines"
+    }
+}
+
 tasks.withType<JavaCompile>().configureEach {
     options.encoding = "UTF-8"
     options.release = 21
