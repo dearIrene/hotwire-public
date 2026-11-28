@@ -121,12 +121,9 @@ final class ApiChanges {
         if (!request.off().isEmpty()) {
             SwitchPreview preview = EngineApi.preview(true, request.off(), callers);
             goingOff = preview.switched();
-            lines.add(preview.message());
 
-            if (preview.possible() && goingOff.size() > 2) {
-                lines.add(Lang.get("hotwire.switch.preview_off", goingOff.stream().map(engine::nameOfMod)
-                        .collect(Collectors.joining(", "))));
-            }
+            lines.add(preview.possible() && goingOff.size() > 2 ? Lang.get("hotwire.switch.preview_off",
+                    goingOff.stream().map(engine::nameOfMod).collect(Collectors.joining(", "))) : preview.message());
             if (!preview.possible()) {
                 can = false;
                 reason = engine.isWorldLocked() ? Reason.WORLD_LOCKED
