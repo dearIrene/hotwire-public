@@ -197,7 +197,7 @@ final class SwitchRequests {
 
             if (result.result() instanceof ModSwitcher.Result.Failed failed
                     ? FailureReports.isUnplanned(failed.cause()) : !result.faults().isEmpty()) {
-                FailureReports.report(this.engine, Lang.get("hotwire.report.file.switch_failed"), said);
+                FailureReports.report(this.engine, Lang.get("hotwire.report.file.switch_failed"), said, quiet);
             }
 
             if (!quiet && !ids.isEmpty()) {
@@ -248,7 +248,7 @@ final class SwitchRequests {
                 }
             }
             this.engine.refreshScreen();
-            EngineApi.endSwitch(this.engine, ended, EngineApi.toResult(result.result(), said));
+            EngineApi.endSwitch(this.engine, ended, EngineApi.toResult(result.result(), said, result.faults()));
         }).whenComplete((done, error) -> EngineApi.endIfFailed(this.engine, ended, error));
         return ended;
     }
@@ -331,7 +331,8 @@ final class SwitchRequests {
                 result.ifPresent(done -> this.followInProfile(done.result()));
             }
             this.engine.refreshScreen();
-            EngineApi.endSwitch(this.engine, ended, result.map(done -> EngineApi.toResult(done.result(), said))
+            EngineApi.endSwitch(this.engine, ended, result.map(done -> EngineApi.toResult(done.result(), said,
+                    done.faults()))
                     .orElse(new SwitchResult(SwitchResult.Kind.DONE, List.of(), said)));
         }).whenComplete((done, error) -> EngineApi.endIfFailed(this.engine, ended, error));
         return ended;

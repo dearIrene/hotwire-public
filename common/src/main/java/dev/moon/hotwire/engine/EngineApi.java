@@ -646,8 +646,10 @@ public class EngineApi implements HotwireApi {
         }
     }
 
-    static SwitchResult toResult(ModSwitcher.Result result, String said) {
+    static SwitchResult toResult(ModSwitcher.Result result, String said, List<?> faults) {
         return switch (result) {
+            case ModSwitcher.Result.Done done when !faults.isEmpty() -> new SwitchResult(SwitchResult.Kind.DONE,
+                    done.plan().order(), said).withReason(Reason.FAULTS);
             case ModSwitcher.Result.Done done -> new SwitchResult(SwitchResult.Kind.DONE, done.plan().order(), said);
             case ModSwitcher.Result.Refused refused -> new SwitchResult(SwitchResult.Kind.REFUSED, List.of(), said);
 

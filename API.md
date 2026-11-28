@@ -96,7 +96,7 @@ A switch ends one of four ways:
 - `NEEDS_REOPEN`, nothing changed because the open world is in the way. Plan the same switch with `planChange` and the player can accept it with the world saved and opened again around it
 - `FAILED`, it went wrong and the game log says why
 
-`result.message()` is what Hotwire told the player so show it if you want. `result.reason()` is the same thing for your code, like `NOT_READY` or `WORLD_LOCKED`, and previews and plans have one too.
+`result.message()` is what Hotwire told the player so show it if you want. Hotwire doesn't open its own screen over yours for a switch you asked for. `result.reason()` is the same thing for your code, like `NOT_READY` or `WORLD_LOCKED`, and previews and plans have one too.
 
 ## What you can't switch
 
@@ -141,6 +141,7 @@ The reasons are:
 - `INSTALLED`, the mod you're adding is already there
 - `REFUSED`, a mod can't change or couldn't be fetched and the lines say why
 - `FAILED`, it went wrong and the game log says why
+- `FAULTS`, a `DONE` switch where a step on the way failed. Hotwire wrote a report to hotwire/reports, so show it as a warning
 
 What a change did is on its result. `appliedNow()` has every mod it changed in the running game and `atNextStart()` has the ones waiting for the next start.
 

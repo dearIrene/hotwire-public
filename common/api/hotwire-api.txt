@@ -165,6 +165,7 @@ public final dev.moon.hotwire.api.Reason
   public static dev.moon.hotwire.api.Reason dev.moon.hotwire.api.Reason.valueOf(java.lang.String)
   public static dev.moon.hotwire.api.Reason[] dev.moon.hotwire.api.Reason.values()
   public static final dev.moon.hotwire.api.Reason dev.moon.hotwire.api.Reason.FAILED
+  public static final dev.moon.hotwire.api.Reason dev.moon.hotwire.api.Reason.FAULTS
   public static final dev.moon.hotwire.api.Reason dev.moon.hotwire.api.Reason.INSTALLED
   public static final dev.moon.hotwire.api.Reason dev.moon.hotwire.api.Reason.NEEDS_MOD
   public static final dev.moon.hotwire.api.Reason dev.moon.hotwire.api.Reason.NEEDS_REOPEN

@@ -207,7 +207,7 @@ public final class CrashGuard {
         policy.onOffFinished(mod, off);
 
         if (off) {
-            EngineApi.tellSwitched(EngineApi.toResult(result, why));
+            EngineApi.tellSwitched(EngineApi.toResult(result, why, List.of()));
         }
         String where = writeReport.apply(Lang.get("hotwire.report.file.mod_crash", name), why);
         String title = Lang.get(byAntiCrash ? "hotwire.anti_crash.title" : "hotwire.crash.title");

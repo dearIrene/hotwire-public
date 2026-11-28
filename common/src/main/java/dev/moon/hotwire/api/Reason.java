@@ -17,5 +17,7 @@ public enum Reason {
 
     INSTALLED,
 
-    FAILED
+    FAILED,
+
+    FAULTS
 }

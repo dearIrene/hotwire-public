@@ -13,8 +13,11 @@ final class FailureReports {
     }
 
     @SuppressWarnings("FutureReturnValueIgnored")
-    static void report(HotwireEngine engine, String title, String failed) {
+    static void report(HotwireEngine engine, String title, String failed, boolean quiet) {
         engine.getTasks().submit("report of " + title, () -> engine.writeReport(title, failed), where -> {
+            if (quiet) {
+                return;
+            }
             engine.open();
             ModScreen current = engine.getScreen();
             if (current != null) {
