@@ -92,6 +92,8 @@ public final class LoaderModList {
             Internals.MODS.set(loader, mods);
             byId.put(metadata.getId(), container);
 
+            children.forEach(child -> setParent(byId.get(child), metadata.getId()));
+
             metadata.getProvides().forEach(provided -> byId.putIfAbsent(provided, container));
 
             metadata.getLanguageAdapterDefinitions().forEach((name, type) -> {
@@ -250,9 +252,25 @@ public final class LoaderModList {
             Field ids = ModContainerImpl.class.getDeclaredField("childModIds");
             ids.setAccessible(true);
             ids.set(to, ids.get(from));
+            Field parent = ModContainerImpl.class.getDeclaredField("parentModId");
+            parent.setAccessible(true);
+            parent.set(to, parent.get(from));
         } catch (ReflectiveOperationException | RuntimeException e) {
             LOGGER.info("[Hotwire] {} lists none of the mods its jar carries: {}", to.getMetadata().getId(),
                     e.toString());
+        }
+    }
+
+    private static void setParent(@Nullable ModContainerImpl child, String parent) {
+        if (child == null) {
+            return;
+        }
+        try {
+            Field field = ModContainerImpl.class.getDeclaredField("parentModId");
+            field.setAccessible(true);
+            field.set(child, parent);
+        } catch (ReflectiveOperationException | RuntimeException e) {
+            LOGGER.info("[Hotwire] {} names no mod that carries it: {}", child.getMetadata().getId(), e.toString());
         }
     }
 

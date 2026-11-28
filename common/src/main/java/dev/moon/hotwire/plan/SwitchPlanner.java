@@ -6,6 +6,7 @@ import dev.moon.hotwire.plan.SwitchPlan.Direction;
 import dev.moon.hotwire.plan.SwitchPlan.EnabledNestedMod;
 import dev.moon.hotwire.plan.SwitchPlan.Reason;
 import dev.moon.hotwire.plan.SwitchPlan.Refusal;
+import dev.moon.hotwire.update.LiveNames;
 import java.util.ArrayList;
 import java.util.Collection;
 import java.util.Collections;
@@ -207,7 +208,7 @@ public final class SwitchPlanner {
         if (this.graph.isInstalledOnItsOwn(child)) {
             return EnabledNestedMod.Why.INSTALLED_ON_ITS_OWN;
         }
-        Optional<String> parent = this.graph.find(child).flatMap(ModManifest::menuParent);
+        Optional<String> parent = this.findMenuParent(child, container);
         if (parent.isPresent()) {
             return parent.get().equals(container) && this.settings.nestedJars() != NestedJars.NONE ? null
                     : parent.get().equals(container) ? EnabledNestedMod.Why.NESTED_JARS_SETTING_OFF
@@ -254,8 +255,13 @@ public final class SwitchPlanner {
         return staying;
     }
 
+    private Optional<String> findMenuParent(String child, String container) {
+        return this.graph.find(child).flatMap(ModManifest::menuParent)
+                .map(parent -> LiveNames.findOwnIds(container).contains(parent) ? container : parent);
+    }
+
     private boolean returnsWith(String child, String container) {
-        Optional<String> parent = this.graph.find(child).flatMap(ModManifest::menuParent);
+        Optional<String> parent = this.findMenuParent(child, container);
         return switch (this.settings.nestedJars()) {
             case NONE -> false;
             case AUTO -> parent.map(container::equals).orElseGet(() -> this.graph.isOwnPart(child, container));
