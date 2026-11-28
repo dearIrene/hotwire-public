@@ -125,15 +125,20 @@ public final class ModIcons implements AutoCloseable, IconSource {
             if ((inMemory == null && from == null) || !this.decoding.add(size)) {
                 return;
             }
+
             DECODER.execute(() -> {
+                boolean failed = true;
                 try {
                     byte[] file = inMemory != null ? inMemory : readSource(Objects.requireNonNull(from)).orElse(null);
                     IconPixels decoded = file == null ? null : decode(this.path, file);
+                    failed = decoded == null;
                     if (decoded != null && scale == this.scale) {
                         this.ahead.put(size, decoded.makeSquare(size));
                     }
                 } finally {
-                    this.decoding.remove(size);
+                    if (!failed) {
+                        this.decoding.remove(size);
+                    }
                 }
             });
         }
