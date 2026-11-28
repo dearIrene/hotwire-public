@@ -19,7 +19,7 @@ import org.slf4j.LoggerFactory;
 public final class SeenUses implements KnownUses {
     private static final Logger LOGGER = LoggerFactory.getLogger(SeenUses.class);
 
-    private static final int FORMAT = 2;
+    private static final int FORMAT = 3;
 
     @SuppressWarnings("FieldCanBeFinal")
     private static final class UsesJson {

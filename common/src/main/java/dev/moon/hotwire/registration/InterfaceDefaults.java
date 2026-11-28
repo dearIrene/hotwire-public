@@ -1,6 +1,7 @@
 package dev.moon.hotwire.registration;
 
 import dev.moon.hotwire.jvm.LoadedClassList;
+import dev.moon.hotwire.redefine.FieldSlots;
 import dev.moon.hotwire.redefine.InitialValues;
 import java.lang.instrument.Instrumentation;
 import java.lang.reflect.Field;
@@ -28,6 +29,10 @@ final class InterfaceDefaults {
     }
 
     Optional<Object> find(Object value, String mod) {
+        Optional<Object> replaced = findReplaced(value, mod);
+        if (replaced.isPresent()) {
+            return replaced;
+        }
         for (Class<?> face : value.getClass().getInterfaces()) {
             String faceMod = Owners.findModOf(face);
             if (faceMod != null && !faceMod.equals(mod)) {
@@ -38,6 +43,38 @@ final class InterfaceDefaults {
             }
         }
         return Optional.empty();
+    }
+
+    @SuppressWarnings("ReferenceEquality")
+    static Optional<Object> findReplaced(Object value, String mod) {
+        Class<?> type = findDefiningClass(value.getClass());
+        for (Class<?> face : value.getClass().getInterfaces()) {
+            if (mod.equals(Owners.findModOf(face))) {
+                continue;
+            }
+            for (FieldSlots.Slot field : Fields.getDeclared(type)) {
+                if (!field.isStatic() || field.getType().isPrimitive()) {
+                    continue;
+                }
+                Object other = CollectionParts.read(field, null);
+                if (other != null && other != value && face.isInstance(other) && !mod.equals(findOwnerOf(other))) {
+                    return Optional.of(other);
+                }
+            }
+        }
+        return Optional.empty();
+    }
+
+    private static Class<?> findDefiningClass(Class<?> type) {
+        int at = type.getName().indexOf("$$Lambda");
+        if (!type.isHidden() || at < 0) {
+            return type.isHidden() ? type.getNestHost() : type;
+        }
+        try {
+            return Class.forName(type.getName().substring(0, at), false, type.getClassLoader());
+        } catch (ClassNotFoundException | LinkageError e) {
+            return type.getNestHost();
+        }
     }
 
     static @Nullable String findOwnerOf(Object value) {

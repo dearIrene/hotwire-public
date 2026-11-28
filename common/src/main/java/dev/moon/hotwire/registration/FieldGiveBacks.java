@@ -55,13 +55,16 @@ final class FieldGiveBacks {
                             declaring.getName(), field.getName(), mod);
                     continue;
                 }
-                Optional<Object> own = original == null ? Optional.empty() : holder == null
+
+                Optional<Object> replaced = InterfaceDefaults.findReplaced(value, mod)
+                        .filter(field.getType()::isInstance);
+                Optional<Object> own = replaced.isPresent() ? replaced
+                        : original == null ? Optional.empty() : holder == null
                         ? InitialValues.ofStatic(declaring, original, field.getName(), descriptor)
                         : InitialValues.ofInstance(declaring, original, holder, field.getName(), descriptor);
-
                 if ((own.isEmpty() || mod.equals(Owners.findModOf(own.get().getClass())))
-                        && StandIns.fits(field.getType()) && !mod.equals(Owners.findModOf(field.getType()))) {
-                    own = Optional.of(StandIns.of(field.getType()));
+                        && StandIns.fits(field.getType())) {
+                    own = StandIns.tryOf(field.getType());
                 }
                 if (own.isEmpty() || mod.equals(Owners.findModOf(own.get().getClass()))) {
                     Object shaped = GameShapes.make(value, field.getType());

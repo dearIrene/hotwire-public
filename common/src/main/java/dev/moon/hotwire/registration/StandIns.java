@@ -29,6 +29,14 @@ public final class StandIns {
         return true;
     }
 
+    public static Optional<Object> tryOf(Class<?> face) {
+        try {
+            return Optional.of(of(face));
+        } catch (LinkageError e) {
+            return Optional.empty();
+        }
+    }
+
     public static Object of(Class<?> face) {
         InvocationHandler nothing = (proxy, method, arguments) -> answer(proxy, method, arguments);
         return Proxy.newProxyInstance(face.getClassLoader(), new Class<?>[] {face}, nothing);

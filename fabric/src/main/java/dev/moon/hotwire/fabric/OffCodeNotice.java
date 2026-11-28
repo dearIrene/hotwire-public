@@ -1,6 +1,7 @@
 package dev.moon.hotwire.fabric;
 
 import dev.moon.hotwire.add.LoaderModList;
+import dev.moon.hotwire.classfile.ClassNodes;
 import dev.moon.hotwire.engine.HotwireEngine;
 import dev.moon.hotwire.engine.InstalledMods;
 import dev.moon.hotwire.engine.JvmParts;
@@ -16,6 +17,8 @@ import dev.moon.hotwire.registration.Owners;
 import dev.moon.hotwire.ui.Lang;
 import dev.moon.hotwire.ui.ModScreen;
 import dev.moon.hotwire.ui.panels.ReopenPanel;
+import java.io.IOException;
+import java.io.InputStream;
 import java.lang.reflect.Method;
 import java.util.ArrayDeque;
 import java.util.Deque;
@@ -27,6 +30,11 @@ import java.util.concurrent.ConcurrentHashMap;
 import net.minecraft.client.Minecraft;
 import net.minecraft.server.MinecraftServer;
 import org.jspecify.annotations.Nullable;
+import org.objectweb.asm.ClassReader;
+import org.objectweb.asm.tree.AbstractInsnNode;
+import org.objectweb.asm.tree.LineNumberNode;
+import org.objectweb.asm.tree.MethodInsnNode;
+import org.objectweb.asm.tree.MethodNode;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -198,7 +206,8 @@ final class OffCodeNotice {
             boolean isUser = owner != null && ModPolicy.isSwitchable(owner) && engine.isOn(owner)
                     && !isLibraryOf(installed.getGraph(), mod, owner)
                     && (nested == null || !isLibraryOf(installed.getGraph(), mod, nested))
-                    && (entered == null || !isDeclaredOutside(entered, enteredMethod, mod));
+                    && (entered == null || !isDeclaredOutside(entered, enteredMethod, mod))
+                    && !isCallingOthersOnly(type, frame, mod);
             return isUser ? owner : null;
         }
         return null;
@@ -224,6 +233,50 @@ final class OffCodeNotice {
             }
         }
         return false;
+    }
+
+    private static boolean isCallingOthersOnly(Class<?> type, String frame, String mod) {
+        int colon = frame.lastIndexOf(':');
+        int close = frame.lastIndexOf(')');
+        int line;
+        try {
+            line = colon < 0 || close < colon ? -1 : Integer.parseInt(frame.substring(colon + 1, close));
+        } catch (NumberFormatException e) {
+            return false;
+        }
+        ClassLoader loader = type.getClassLoader();
+        if (line < 0 || loader == null) {
+            return false;
+        }
+        byte[] bytes;
+        try (InputStream in = loader.getResourceAsStream(type.getName().replace('.', '/') + ".class")) {
+            if (in == null) {
+                return false;
+            }
+            bytes = in.readAllBytes();
+        } catch (IOException e) {
+            return false;
+        }
+        boolean any = false;
+        for (MethodNode method : ClassNodes.read(bytes, ClassReader.SKIP_FRAMES).methods) {
+            int at = -1;
+            for (AbstractInsnNode insn : method.instructions) {
+                if (insn instanceof LineNumberNode number) {
+                    at = number.line;
+                } else if (at == line && insn instanceof MethodInsnNode call) {
+                    any = true;
+                    try {
+                        Class<?> called = Class.forName(call.owner.replace('/', '.'), false, loader);
+                        if (mod.equals(Owners.findModOrShipper(called))) {
+                            return false;
+                        }
+                    } catch (ClassNotFoundException | LinkageError e) {
+                        return false;
+                    }
+                }
+            }
+        }
+        return any;
     }
 
     private static boolean isDeclaredOutside(Class<?> type, String method, String mod) {

@@ -3,6 +3,7 @@ package dev.moon.hotwire.registration;
 import dev.moon.hotwire.classfile.ClassNodes;
 import java.util.HashSet;
 import java.util.Set;
+import java.util.regex.Pattern;
 import org.jspecify.annotations.Nullable;
 import org.objectweb.asm.ClassReader;
 import org.objectweb.asm.ClassVisitor;
@@ -15,6 +16,9 @@ import org.objectweb.asm.tree.MethodNode;
 
 final class ClassFileSummary {
     private static final Set<Integer> MEMBER_REFS = Set.of(9, 10, 11);
+    private static final int STRING = 8;
+
+    private static final Pattern CLASS_NAME = Pattern.compile("([a-z_][a-z0-9_]*[.])+[A-Z][A-Za-z0-9_$]*");
 
     private ClassFileSummary() {
     }
@@ -80,6 +84,11 @@ final class ClassFileSummary {
                 String name = reader.readClass(offset, buffer);
                 if (name != null && !name.startsWith("[")) {
                     names.add(name);
+                }
+            } else if (offset > 0 && reader.readByte(offset - 1) == STRING) {
+                String text = reader.readUTF8(offset, buffer);
+                if (text != null && CLASS_NAME.matcher(text).matches()) {
+                    names.add(text.replace('.', '/'));
                 }
             }
         }
