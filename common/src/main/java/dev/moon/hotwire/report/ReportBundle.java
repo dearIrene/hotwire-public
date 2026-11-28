@@ -27,12 +27,9 @@ public final class ReportBundle {
     private static final DateTimeFormatter FILE_TIME = DateTimeFormatter.ofPattern("yyyy-MM-dd HH-mm-ss",
             Locale.ROOT).withZone(ZoneId.systemDefault());
 
-    private static final Pattern SECRET_FLAG = Pattern.compile("(?i)(--(?:accessToken|session|xuid|clientId|uuid"
-            + "|username|userProperties|server|port|quickPlay\\w*))(\\s+|=)\\S+");
-
-    private static final Pattern KEY_VALUE = Pattern.compile("(?i)(?<![a-z0-9])(access_?token|refresh_?token"
-            + "|session_?token|token|api_?key|secret|password|authorization|bearer)"
-            + "(\"?\\s*[:= ]\\s*\"?)(?:(?:bearer|basic|digest|negotiate|ntlm)\\s+)?[^\\s\",}]+");
+    private static final Pattern FLAG = Pattern.compile("(--([A-Za-z]+))(\\s+|=)(\\S+)");
+    private static final Set<String> PLAIN_FLAGS = Set.of("version", "versionType", "gameDir", "assetsDir",
+            "assetIndex", "width", "height", "launcherName", "launcherVersion");
     private static final Pattern JWT = Pattern.compile("eyJ[A-Za-z0-9_-]{5,}\\.[A-Za-z0-9_-]+\\.?[A-Za-z0-9_-]*");
     private static final Pattern UUID = Pattern.compile(
             "(?i)\\b[0-9a-f]{8}-?[0-9a-f]{4}-?[0-9a-f]{4}-?[0-9a-f]{4}-?[0-9a-f]{12}\\b");
@@ -46,9 +43,10 @@ public final class ReportBundle {
 
     private static final Pattern HOME = Pattern.compile("(?i)([a-z]:[\\\\/]+users[\\\\/]+|/home/|/Users/)"
             + "(?:[^\\\\/\\r\\n\"':]+?(?=[\\\\/])|[^\\\\/\\s\"':]+)");
-    private static final Pattern USER_VARIABLE = Pattern.compile(
-            "(?im)^(\\s*(?:USERNAME|USER|LOGNAME|HOME|USERPROFILE|COMPUTERNAME|HOSTNAME|USERDOMAIN\\w*"
-                    + "|LOGONSERVER)\\s*=\\s*).+$");
+
+    private static final Pattern VARIABLE = Pattern.compile("(?m)^(\\s*([A-Z_][A-Z0-9_]*)\\s*=\\s*).+$");
+    private static final Set<String> PLAIN_VARIABLES = Set.of("JAVA_HOME", "JAVA_TOOL_OPTIONS", "_JAVA_OPTIONS",
+            "JDK_JAVA_OPTIONS", "OS", "PROCESSOR_ARCHITECTURE", "PROCESSOR_IDENTIFIER", "NUMBER_OF_PROCESSORS");
 
     private static final Pattern CHAT = Pattern.compile("\\[CHAT\\](?! \\[Hotwire\\])");
 
@@ -152,15 +150,16 @@ public final class ReportBundle {
             }
         }
         String out = String.join("\n", retained);
-        out = SECRET_FLAG.matcher(out).replaceAll("$1$2[removed]");
+        out = FLAG.matcher(out).replaceAll(flag -> Matcher.quoteReplacement(PLAIN_FLAGS.contains(flag.group(2))
+                ? flag.group() : flag.group(1) + flag.group(3) + "[removed]"));
         out = JWT.matcher(out).replaceAll("[removed]");
-        out = KEY_VALUE.matcher(out).replaceAll("$1$2[removed]");
         out = UUID.matcher(out).replaceAll("[id]");
         out = CONNECTING.matcher(out).replaceAll("$1[address]");
         out = IP_WITH_PORT.matcher(out).replaceAll("[address]");
         out = IP6.matcher(out).replaceAll("[address]");
         out = HOME.matcher(out).replaceAll("$1[user]");
-        out = USER_VARIABLE.matcher(out).replaceAll("$1[removed]");
+        out = VARIABLE.matcher(out).replaceAll(variable -> Matcher.quoteReplacement(
+                PLAIN_VARIABLES.contains(variable.group(2)) ? variable.group() : variable.group(1) + "[removed]"));
         for (String word : personal) {
             if (word.length() >= 3) {
                 out = Pattern.compile("(?i)\\b" + Pattern.quote(word) + "\\b").matcher(out)
