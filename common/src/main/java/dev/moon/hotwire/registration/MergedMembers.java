@@ -1,8 +1,11 @@
 package dev.moon.hotwire.registration;
 
+import dev.moon.hotwire.jvm.JvmAccess;
+import dev.moon.hotwire.rebuild.ConstantPools;
 import dev.moon.hotwire.redefine.HandlerGuards;
 import dev.moon.hotwire.redefine.Linker;
 import java.lang.annotation.Annotation;
+import java.lang.instrument.Instrumentation;
 import java.lang.reflect.AnnotatedElement;
 import java.lang.reflect.Field;
 import java.lang.reflect.Method;
@@ -13,6 +16,10 @@ import org.jspecify.annotations.Nullable;
 public final class MergedMembers {
     private static final Pattern MERGED_LAMBDA = Pattern.compile("^(?:md|fd)[0-9a-f]{6}[$]([^$]+)[$]");
     private static final String MIXIN_MERGED = "org.spongepowered.asm.mixin.transformer.meta.MixinMerged";
+    private static final String MIXIN_MERGED_DESC = "L" + MIXIN_MERGED.replace('.', '/') + ";";
+
+    private static volatile @Nullable ConstantPools pools;
+    private static boolean asked;
 
     private MergedMembers() {
     }
@@ -40,6 +47,11 @@ public final class MergedMembers {
     }
 
     public static @Nullable String findMixinOf(AnnotatedElement member) {
+        ConstantPools opened = open();
+        String marked = opened == null ? null : opened.findAnnotationString(member, MIXIN_MERGED_DESC, "mixin");
+        if (marked != null) {
+            return marked.isEmpty() ? null : marked;
+        }
         for (Annotation annotation : member.getDeclaredAnnotations()) {
             if (annotation.annotationType().getName().equals(MIXIN_MERGED)) {
                 try {
@@ -50,6 +62,24 @@ public final class MergedMembers {
             }
         }
         return null;
+    }
+
+    private static @Nullable ConstantPools open() {
+        ConstantPools known = pools;
+        if (known != null) {
+            return known;
+        }
+        Instrumentation instrumentation = JvmAccess.findCurrent();
+        if (instrumentation == null) {
+            return null;
+        }
+        synchronized (MergedMembers.class) {
+            if (!asked) {
+                asked = true;
+                pools = ConstantPools.open(instrumentation);
+            }
+            return pools;
+        }
     }
 
     public static @Nullable String findMixinIn(Class<?> type, String method, String mod) {

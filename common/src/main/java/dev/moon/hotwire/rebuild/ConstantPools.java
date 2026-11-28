@@ -5,6 +5,10 @@ import java.lang.instrument.Instrumentation;
 import java.lang.invoke.MethodHandle;
 import java.lang.invoke.MethodHandles;
 import java.lang.invoke.MethodType;
+import java.lang.reflect.AnnotatedElement;
+import java.lang.reflect.Field;
+import java.lang.reflect.Method;
+import java.nio.ByteBuffer;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.HashMap;
@@ -32,12 +36,17 @@ public final class ConstantPools {
     private final MethodHandle tagAt;
     private final MethodHandle ownerIndexAt;
     private final MethodHandle memberAt;
+    private final MethodHandle utf8At;
+
+    private final MethodHandle methodMarks;
+    private final MethodHandle fieldMarks;
 
     private final Map<Class<?>, Owners> owners = new MapMaker().weakKeys().makeMap();
     private final Map<String, Integer> ids = new ConcurrentHashMap<>();
 
     private ConstantPools(Object access, MethodHandle poolOf, MethodHandle oopOf, MethodHandle sizeOf,
-            MethodHandle tagAt, MethodHandle ownerIndexAt, MethodHandle memberAt) {
+            MethodHandle tagAt, MethodHandle ownerIndexAt, MethodHandle memberAt, MethodHandle utf8At,
+            MethodHandle methodMarks, MethodHandle fieldMarks) {
         this.access = access;
         this.poolOf = poolOf;
         this.oopOf = oopOf;
@@ -45,19 +54,23 @@ public final class ConstantPools {
         this.tagAt = tagAt;
         this.ownerIndexAt = ownerIndexAt;
         this.memberAt = memberAt;
+        this.utf8At = utf8At;
+        this.methodMarks = methodMarks;
+        this.fieldMarks = fieldMarks;
     }
 
     public static @Nullable ConstantPools open(Instrumentation instrumentation) {
         try {
             Set<Module> hotwire = Set.of(ConstantPools.class.getModule());
             instrumentation.redefineModule(Object.class.getModule(), Set.of(), Map.of("jdk.internal.access", hotwire),
-                    Map.of("jdk.internal.reflect", hotwire), Set.of(), Map.of());
+                    Map.of("jdk.internal.reflect", hotwire, "java.lang.reflect", hotwire), Set.of(), Map.of());
             Class<?> accessType = Class.forName("jdk.internal.access.JavaLangAccess");
             Class<?> pool = Class.forName("jdk.internal.reflect.ConstantPool");
             Object access = Class.forName("jdk.internal.access.SharedSecrets").getMethod("getJavaLangAccess")
                     .invoke(null);
             MethodHandles.Lookup lookup = MethodHandles.privateLookupIn(pool, MethodHandles.lookup());
             MethodType read = MethodType.methodType(void.class, Object.class, int.class);
+            MethodType marks = MethodType.methodType(Object.class, Object.class);
             return new ConstantPools(access,
                     MethodHandles.lookup().findVirtual(accessType, "getConstantPool", MethodType.methodType(pool,
                             Class.class)).asType(MethodType.methodType(Object.class, Object.class, Class.class)),
@@ -70,7 +83,13 @@ public final class ConstantPools {
                     lookup.findVirtual(pool, "getClassRefIndexAt0", read.changeReturnType(int.class))
                             .asType(MethodType.methodType(int.class, Object.class, Object.class, int.class)),
                     lookup.findVirtual(pool, "getMemberRefInfoAt0", read.changeReturnType(String[].class))
-                            .asType(MethodType.methodType(String[].class, Object.class, Object.class, int.class)));
+                            .asType(MethodType.methodType(String[].class, Object.class, Object.class, int.class)),
+                    lookup.findVirtual(pool, "getUTF8At0", read.changeReturnType(String.class))
+                            .asType(MethodType.methodType(String.class, Object.class, Object.class, int.class)),
+                    MethodHandles.privateLookupIn(Method.class, MethodHandles.lookup())
+                            .findGetter(Method.class, "annotations", byte[].class).asType(marks),
+                    MethodHandles.privateLookupIn(Field.class, MethodHandles.lookup())
+                            .findGetter(Field.class, "annotations", byte[].class).asType(marks));
         } catch (ReflectiveOperationException | RuntimeException e) {
             LOGGER.error("[Hotwire] the JDK will not show classes' constant pools: {}", e.toString());
             return null;
@@ -143,6 +162,82 @@ public final class ConstantPools {
             this.size = size;
             this.ids = ids;
         }
+    }
+
+    @SuppressWarnings("checkstyle:IllegalCatch")
+    public @Nullable String findAnnotationString(AnnotatedElement member, String desc, String element) {
+        Object bytes;
+        Class<?> owner;
+        try {
+            if (member instanceof Method method) {
+                bytes = this.methodMarks.invokeExact((Object) method);
+                owner = method.getDeclaringClass();
+            } else if (member instanceof Field field) {
+                bytes = this.fieldMarks.invokeExact((Object) field);
+                owner = field.getDeclaringClass();
+            } else {
+                return null;
+            }
+        } catch (RuntimeException | Error e) {
+            return null;
+        } catch (Throwable e) {
+            throw new IllegalStateException(e);
+        }
+        if (!(bytes instanceof byte[] marks)) {
+            return "";
+        }
+        String[] found = new String[1];
+        boolean read = this.readPool(owner, (pool, oop, size) -> {
+            found[0] = readString(ByteBuffer.wrap(marks), at -> (String) this.utf8At.invokeExact(pool, oop, at),
+                    desc, element);
+            return true;
+        });
+        return read ? found[0] : null;
+    }
+
+    static String readString(ByteBuffer in, Utf8 utf8, String desc, String element) throws Throwable {
+        int count = Short.toUnsignedInt(in.getShort());
+        for (int i = 0; i < count; i++) {
+            boolean wanted = utf8.read(Short.toUnsignedInt(in.getShort())).equals(desc);
+            int pairs = Short.toUnsignedInt(in.getShort());
+            for (int j = 0; j < pairs; j++) {
+                int name = Short.toUnsignedInt(in.getShort());
+                if (wanted && in.get(in.position()) == 's' && utf8.read(name).equals(element)) {
+                    in.get();
+                    return utf8.read(Short.toUnsignedInt(in.getShort()));
+                }
+                skipValue(in);
+            }
+        }
+        return "";
+    }
+
+    private static void skipValue(ByteBuffer in) {
+        switch (in.get()) {
+            case 'e' -> in.position(in.position() + 4);
+            case '@' -> skipAnnotation(in);
+            case '[' -> {
+                int count = Short.toUnsignedInt(in.getShort());
+                for (int i = 0; i < count; i++) {
+                    skipValue(in);
+                }
+            }
+            default -> in.getShort();
+        }
+    }
+
+    private static void skipAnnotation(ByteBuffer in) {
+        in.getShort();
+        int pairs = Short.toUnsignedInt(in.getShort());
+        for (int i = 0; i < pairs; i++) {
+            in.getShort();
+            skipValue(in);
+        }
+    }
+
+    @FunctionalInterface
+    interface Utf8 {
+        String read(int index) throws Throwable;
     }
 
     @SuppressWarnings("checkstyle:IllegalCatch")
