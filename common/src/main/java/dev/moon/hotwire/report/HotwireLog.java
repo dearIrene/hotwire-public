@@ -10,6 +10,8 @@ import java.nio.file.StandardCopyOption;
 import java.time.Instant;
 import java.time.ZoneId;
 import java.time.format.DateTimeFormatter;
+import java.util.LinkedHashMap;
+import java.util.Map;
 import org.apache.logging.log4j.Level;
 import org.apache.logging.log4j.LogManager;
 import org.apache.logging.log4j.core.LogEvent;
@@ -31,6 +33,15 @@ public final class HotwireLog extends AbstractAppender {
             .withZone(ZoneId.systemDefault());
 
     private final Writer out;
+
+    private final Map<String, int[]> said = new LinkedHashMap<>(256, 0.75f, true) {
+        private static final long serialVersionUID = 1L;
+
+        @Override
+        protected boolean removeEldestEntry(Map.Entry<String, int[]> eldest) {
+            return this.size() > 4096;
+        }
+    };
 
     private final boolean handsOn;
 
@@ -76,13 +87,30 @@ public final class HotwireLog extends AbstractAppender {
     public static void flush() {
         HotwireLog ours = written;
         if (ours != null) {
+            String counts = ours.describeRepeats();
             synchronized (ours.out) {
                 try {
+                    ours.out.append(counts);
                     ours.out.flush();
                 } catch (IOException e) {
                 }
             }
         }
+    }
+
+    private String describeRepeats() {
+        StringBuilder out = new StringBuilder();
+        String now = TIME.format(Instant.now());
+        synchronized (this.said) {
+            this.said.forEach((text, count) -> {
+                if (count[0] > 1 && count[0] != count[1]) {
+                    count[1] = count[0];
+                    out.append('[').append(now).append("] [Hotwire/DEBUG]: x").append(count[0]).append(' ')
+                            .append(text).append('\n');
+                }
+            });
+        }
+        return out.toString();
     }
 
     public static boolean isTestLog() {
@@ -92,10 +120,22 @@ public final class HotwireLog extends AbstractAppender {
 
     @Override
     public void append(LogEvent event) {
+        String text = event.getMessage().getFormattedMessage();
+
+        int times = 1;
+        if (!event.getLevel().isMoreSpecificThan(Level.INFO)) {
+            synchronized (this.said) {
+                times = ++this.said.computeIfAbsent(text, key -> new int[2])[0];
+            }
+        }
+        if (times > 1 && !isPowerOfTen(times)) {
+            return;
+        }
+
         StringBuilder line = new StringBuilder().append('[')
                 .append(TIME.format(Instant.ofEpochMilli(event.getInstant().getEpochMillisecond()))).append("] [")
                 .append(event.getThreadName()).append('/').append(event.getLevel()).append("]: ")
-                .append(event.getMessage().getFormattedMessage()).append('\n');
+                .append(times > 1 ? "x" + times + " " : "").append(text).append('\n');
         if (event.getThrown() != null) {
             Throwables.toStringList(event.getThrown()).forEach(part -> line.append(part).append('\n'));
         }
@@ -109,10 +149,18 @@ public final class HotwireLog extends AbstractAppender {
             } catch (IOException e) {
             }
         }
-        if (this.handsOn && (event.getLevel().isMoreSpecificThan(Level.WARN)
+        if (this.handsOn && times == 1 && (event.getLevel().isMoreSpecificThan(Level.WARN)
                 || GameLog.class.getName().equals(event.getLoggerName()))
                 && LogManager.getContext(false) instanceof LoggerContext context) {
             context.getConfiguration().getRootLogger().log(event);
         }
+    }
+
+    private static boolean isPowerOfTen(int times) {
+        int at = times;
+        while (at % 10 == 0) {
+            at /= 10;
+        }
+        return at == 1;
     }
 }

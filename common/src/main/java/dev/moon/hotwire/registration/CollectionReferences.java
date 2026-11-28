@@ -35,6 +35,8 @@ import org.slf4j.LoggerFactory;
 final class CollectionReferences implements FixedLists.Walk {
     private static final Logger LOGGER = LoggerFactory.getLogger(CollectionReferences.class);
 
+    private final Set<String> saidWrapped = ConcurrentHashMap.newKeySet();
+
     static final int WRAPPERS_IN = 512;
     private final Map<String, List<Removal>> removals = new HashMap<>();
 
@@ -1231,8 +1233,12 @@ final class CollectionReferences implements FixedLists.Walk {
             }
             Object mods = value;
             String owner = mod;
-            LOGGER.debug("[Hotwire] {}.{} holds {}'s {} around {}; the field takes the wrapped one at the off",
-                    holder.getClass().getName(), field.getName(), mod, value.getClass().getName(), inner.getClass());
+
+            if (this.saidWrapped.add(holder.getClass().getName() + "." + field.getName() + " " + mod)) {
+                LOGGER.debug("[Hotwire] {}.{} holds {}'s {} around {}; the field takes the wrapped one at the off",
+                        holder.getClass().getName(), field.getName(), mod, value.getClass().getName(),
+                        inner.getClass());
+            }
             WeakReference<Object> weak = new WeakReference<>(holder);
             this.takeOrNote(owner, this.candidates.withOwner(Set.of(), owner), () -> {
                 try {

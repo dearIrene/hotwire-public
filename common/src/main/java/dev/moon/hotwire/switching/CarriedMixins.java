@@ -50,6 +50,8 @@ public final class CarriedMixins {
             Map<String, byte[]> mixed, Set<String> on, Predicate<String> askedAgain, Set<String> replacing) {
         Set<String> offMixins = this.getMixinsOf(id -> !on.contains(id));
         List<String> found = new ArrayList<>();
+
+        int[] ofOffMods = new int[1];
         new TreeMap<>(carriedNow).forEach((type, mixins) -> new TreeSet<>(mixins).forEach(mixin -> {
             if (carried.getOrDefault(type, Set.of()).contains(mixin) || isStillImplemented(mixed.get(type), mixin)) {
                 return;
@@ -59,7 +61,7 @@ public final class CarriedMixins {
             if (ofOff && SaveHooks.isRunWhileOff(type, mixin)) {
                 found.add(type + " <- " + mixin + SAVES_WHILE_OFF);
             } else if (ofOff) {
-                LOGGER.debug("[Hotwire] {} drops {}, whose mod is off", type, mixin);
+                ofOffMods[0]++;
             } else if (askedAgain.test(mixin) && this.isSelfContained(mixin)) {
                 LOGGER.info("[Hotwire] {} drops {}, which its own plugin declined with the mods on now", type, mixin);
             } else if (!replacing.isEmpty() && this.findModMaking(mixin, on::contains) == null) {
@@ -74,6 +76,9 @@ public final class CarriedMixins {
                 found.add(type + " <- " + mixin);
             }
         }));
+        if (ofOffMods[0] > 0) {
+            LOGGER.debug("[Hotwire] {} mixins of mods going off are dropped", ofOffMods[0]);
+        }
         return found;
     }
 

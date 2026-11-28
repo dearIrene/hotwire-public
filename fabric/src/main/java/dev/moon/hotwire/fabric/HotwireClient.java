@@ -207,6 +207,7 @@ public final class HotwireClient implements ClientModInitializer {
             if (started != null) {
                 started.close();
             }
+            HotwireLog.flush();
         });
         StartTimes.add("client start", began);
         StartTimes.mark("Hotwire's client start ends");
