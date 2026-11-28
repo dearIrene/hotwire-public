@@ -1,9 +1,7 @@
 package dev.moon.hotwire.rebuild;
 
 import java.io.IOException;
-import java.net.MalformedURLException;
-import java.net.URI;
-import java.net.URISyntaxException;
+import java.io.InputStream;
 import java.net.URL;
 import java.security.CodeSource;
 import net.fabricmc.api.EnvType;
@@ -40,14 +38,13 @@ public final class PreMixinReads {
         if (name.startsWith("org.apache.logging.log4j")) {
             return null;
         }
-        URL file = findFile(internal, loaded);
-        if (file == null) {
+        if (!hasOwnFile(loaded)) {
             return null;
         }
         try {
             byte[] input = this.patches.transform(name);
             if (input == null) {
-                input = ClassFileBytes.readWhole(file);
+                input = readWhole(internal, loaded);
             }
             return FabricTransformer.transform(this.development, this.environment, name, input);
         } catch (IOException | RuntimeException | LinkageError e) {
@@ -68,30 +65,27 @@ public final class PreMixinReads {
     }
 
     public static byte @Nullable [] readFile(String internal, Class<?> loaded) {
-        URL file = findFile(internal, loaded);
-        if (file == null) {
+        if (!hasOwnFile(loaded)) {
             return null;
         }
         try {
-            return ClassFileBytes.readWhole(file);
+            return readWhole(internal, loaded);
         } catch (IOException | RuntimeException e) {
             return null;
         }
     }
 
-    private static @Nullable URL findFile(String internal, Class<?> loaded) {
+    private static byte[] readWhole(String internal, Class<?> loaded) throws IOException {
+        InputStream in = loaded.getClassLoader().getResourceAsStream(internal + ".class");
+        if (in == null) {
+            throw new IOException(internal + " has no class file");
+        }
+        return ClassFileBytes.readWhole(in, in.available());
+    }
+
+    private static boolean hasOwnFile(Class<?> loaded) {
         CodeSource source = loaded.getProtectionDomain().getCodeSource();
         URL location = source == null ? null : source.getLocation();
-        if (location == null || !"file".equals(location.getProtocol())) {
-            return null;
-        }
-        try {
-            URI where = location.toURI();
-            String entry = internal + ".class";
-            return where.getPath().endsWith("/") ? where.resolve(entry).toURL()
-                    : URI.create("jar:" + where + "!/" + entry).toURL();
-        } catch (URISyntaxException | IllegalArgumentException | MalformedURLException e) {
-            return null;
-        }
+        return location != null && "file".equals(location.getProtocol());
     }
 }

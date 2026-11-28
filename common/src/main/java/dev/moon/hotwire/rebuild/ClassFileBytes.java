@@ -3,18 +3,14 @@ package dev.moon.hotwire.rebuild;
 import java.io.ByteArrayOutputStream;
 import java.io.IOException;
 import java.io.InputStream;
-import java.net.URL;
-import java.net.URLConnection;
 
 final class ClassFileBytes {
     private ClassFileBytes() {
     }
 
-    static byte[] readWhole(URL file) throws IOException {
-        URLConnection from = file.openConnection();
-        int length = from.getContentLength();
-        try (InputStream in = from.getInputStream()) {
-            if (length < 0) {
+    static byte[] readWhole(InputStream stream, int length) throws IOException {
+        try (InputStream in = stream) {
+            if (length <= 0) {
                 return in.readAllBytes();
             }
             byte[] whole = new byte[length];
