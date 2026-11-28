@@ -316,6 +316,10 @@ public final class ModSwitcher {
         Result result = this.turnOffWhole(rest, out);
 
         for (int round = 0; round < NAMED_ROUNDS && rest.size() > 1 && isAnswered(result); round++) {
+            if (result instanceof Result.Failed failed && failed.cause().reopenFixes()
+                    && !failed.cause().isRestartOnly()) {
+                return result;
+            }
             Set<String> named = this.findNamed(rest, result);
             if (named.isEmpty()) {
                 named = this.findRefusers(rest, true);
