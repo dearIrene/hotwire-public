@@ -12,7 +12,6 @@ public final class ModifiedClients {
             "feather-core", "Feather Client",
             "labymod", "LabyMod");
     private static final Map<String, String> BY_FOLDER = Map.of(
-            ".lunarclient", "Lunar Client",
             ".feather", "Feather Client",
             "labymod-neo", "LabyMod");
 
