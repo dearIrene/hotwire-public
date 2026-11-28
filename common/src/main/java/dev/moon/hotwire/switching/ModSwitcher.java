@@ -859,6 +859,10 @@ public final class ModSwitcher {
             this.off.addAll(offAfter);
             this.off.retainAll(offAfter);
             this.remember(plan, goingOff);
+
+            if (goingOff && plan.order().stream().anyMatch(id -> !this.registrations.getLive(id).isEmpty())) {
+                this.withGamePaused(() -> this.tickEach(plan.order(), this.registrations::remove));
+            }
             plan.order().forEach(id -> this.progress.advance());
             return new Result.Done(plan, applied, (System.nanoTime() - start) / 1_000_000);
         } catch (RebuildException e) {
