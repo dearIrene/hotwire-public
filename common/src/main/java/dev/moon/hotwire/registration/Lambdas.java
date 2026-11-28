@@ -56,7 +56,8 @@ public final class Lambdas {
 
     private @Nullable String findModCalled(Class<?> lambda, Class<?> host) {
         ConstantPools opened = this.open();
-        if (opened == null) {
+        String hostMod = Owners.findModOrShipper(host);
+        if (opened == null || (hostMod != null && !hostMod.equals("minecraft") && !hostMod.equals("hotwire"))) {
             return null;
         }
         String hostName = Type.getInternalName(host);
