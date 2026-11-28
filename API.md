@@ -146,6 +146,8 @@ What a change did is on its result. `appliedNow()` has every mod it changed in t
 
 A mod that was off since an earlier launch (`offSinceStart` in `getMods()`) comes back from its jar when you turn it on.
 
+`library()` says a mod is badged a library in its Mod Menu metadata. Hotwire's own list hides those until its Libraries button is pressed, and it's known for a mod off since an earlier launch too.
+
 If you give the request a tag then every download its plan starts carries it in `StoreDownload.tag()`, so you can pause or stop your own downloads and nobody else's.
 
 ## The store

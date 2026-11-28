@@ -108,10 +108,11 @@ public abstract interface dev.moon.hotwire.api.ModLifecycleListener
   public default void dev.moon.hotwire.api.ModLifecycleListener.prepareOff(java.util.List<java.lang.String>)
   public default void dev.moon.hotwire.api.ModLifecycleListener.prepareStart(java.util.List<java.lang.String>)
 public final dev.moon.hotwire.api.ModState
+  public boolean dev.moon.hotwire.api.ModState.library()
   public boolean dev.moon.hotwire.api.ModState.offSinceStart()
   public boolean dev.moon.hotwire.api.ModState.on()
   public boolean dev.moon.hotwire.api.ModState.switchable()
-  public dev.moon.hotwire.api.ModState(java.lang.String,java.lang.String,java.lang.String,boolean,boolean,boolean,java.lang.String,java.lang.String)
+  public dev.moon.hotwire.api.ModState(java.lang.String,java.lang.String,java.lang.String,boolean,boolean,boolean,java.lang.String,java.lang.String,boolean)
   public final boolean dev.moon.hotwire.api.ModState.equals(java.lang.Object)
   public final int dev.moon.hotwire.api.ModState.hashCode()
   public final java.lang.String dev.moon.hotwire.api.ModState.toString()

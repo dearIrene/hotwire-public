@@ -38,6 +38,7 @@ import dev.moon.hotwire.switching.SwitchHistory;
 import dev.moon.hotwire.switching.Waits;
 import dev.moon.hotwire.ui.Lang;
 import dev.moon.hotwire.ui.PromptScreen;
+import dev.moon.hotwire.ui.list.ModCatalog;
 import dev.moon.hotwire.ui.panels.FirstOpenPanel;
 import dev.moon.hotwire.update.LiveNames;
 import java.lang.reflect.Method;
@@ -251,12 +252,13 @@ public class EngineApi implements HotwireApi {
                 neededBy.putIfAbsent(needed, caller);
             }
         }
+        ModCatalog catalog = engine.getCatalog();
         List<ModState> rows = new ArrayList<>(engine.getMods().stream().map(mod -> {
             String blocked = CallerBlocks.describeRow(mod.id(), ModPolicy.isSwitchable(mod.id()), callers, neededBy,
                     engine::nameOfMod);
             return new ModState(mod.id(), mod.name(), mod.version(), mod.on(),
                     engine.getDisabled().isDisabledSinceStart(mod.id()), blocked.isEmpty(), blocked,
-                    engine.findCopyOf(mod.id()));
+                    engine.findCopyOf(mod.id()), catalog.isLibrary(mod.id()));
         }).toList());
 
         Set<String> listed = new HashSet<>();
@@ -267,7 +269,7 @@ public class EngineApi implements HotwireApi {
             }
             FabricLoader.getInstance().getModContainer(id).ifPresent(mod -> rows.add(new ModState(id,
                     mod.getMetadata().getName(), mod.getMetadata().getVersion().getFriendlyString(), true, false, false,
-                    Lang.get("hotwire.api.starting"), engine.findCopyOf(id))));
+                    Lang.get("hotwire.api.starting"), engine.findCopyOf(id), catalog.isLibrary(id))));
         }
 
         engine.getCopies().forEach((id, of) -> {
@@ -276,7 +278,7 @@ public class EngineApi implements HotwireApi {
                         mod.getMetadata().getName(), mod.getMetadata().getVersion().getFriendlyString(), true, false,
                         false, Lang.get("hotwire.progress.why.nested", engine.getGraph().getContainers(id).stream()
                                 .findFirst().map(engine::nameOfMod).orElseGet(() -> Lang.get("hotwire.api.a_mod"))),
-                        of)));
+                        of, catalog.isLibrary(id))));
             }
         });
         return List.copyOf(rows);
