@@ -45,8 +45,8 @@ public final class ReportBundle {
             + "(?:[^\\\\/\\r\\n\"':]+?(?=[\\\\/])|[^\\\\/\\s\"':]+)");
 
     private static final Pattern VARIABLE = Pattern.compile("(?m)^(\\s*([A-Z_][A-Z0-9_]*)\\s*=\\s*).+$");
-    private static final Set<String> PLAIN_VARIABLES = Set.of("JAVA_HOME", "JAVA_TOOL_OPTIONS", "_JAVA_OPTIONS",
-            "JDK_JAVA_OPTIONS", "OS", "PROCESSOR_ARCHITECTURE", "PROCESSOR_IDENTIFIER", "NUMBER_OF_PROCESSORS");
+    private static final Set<String> PLAIN_VARIABLES = Set.of("JAVA_HOME", "OS", "PROCESSOR_ARCHITECTURE",
+            "PROCESSOR_IDENTIFIER", "NUMBER_OF_PROCESSORS");
 
     private static final Pattern CHAT = Pattern.compile("\\[CHAT\\](?! \\[Hotwire\\])");
 
