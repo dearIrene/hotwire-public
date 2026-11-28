@@ -92,11 +92,13 @@ public final class ChoicesPanel extends Sheet {
         crashBar.choose(this.crash);
 
         this.body.clear().gap(4).with(
-                Kit.column(Kit.text(Lang.get("hotwire.choices.lasts")).wrap(), lastsBar, lastsNote).gap(3)
-                        .cross(Line.Cross.START),
-                Kit.row(Kit.column(Kit.text(crash.label(), Palette.ACCENT),
-                        Kit.dim(Lang.get("hotwire.choices.anti_crash.now")).wrap()).gap(3).grow(1), new Scene())
-                        .gap(10).cross(Line.Cross.END),
+                Kit.text(Lang.get("hotwire.choices.lasts")).wrap(),
+                Kit.column(lastsBar, lastsNote).gap(3).cross(Line.Cross.START),
+
+                new Part().height(8),
+                Kit.row(Kit.text(crash.label(), Palette.ACCENT).grow(1), new Scene()).gap(10)
+                        .cross(Line.Cross.END),
+                Kit.dim(Lang.get("hotwire.choices.anti_crash.now")).wrap(),
                 Kit.column(crashBar, crashNote).gap(3).cross(Line.Cross.START),
 
                 Kit.row(Kit.text(Lang.get("hotwire.choices.question"), Palette.ACCENT).wrap().grow(1),
