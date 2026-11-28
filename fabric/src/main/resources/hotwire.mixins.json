@@ -50,6 +50,8 @@
     "core.client.ReloadableResourceManagerMixin",
     "core.blaze3d.systems.CommandEncoderAccessor",
     "core.blaze3d.opengl.GlCommandEncoderAccessor",
+    "core.blaze3d.opengl.GlBufferMixin",
+    "core.blaze3d.opengl.BufferStorageMixin",
     "core.client.KeyboardHandlerMixin",
     "core.client.multiplayer.ClientCommonPacketListenerImplMixin",
     "core.client.multiplayer.ClientPacketListenerMixin",
