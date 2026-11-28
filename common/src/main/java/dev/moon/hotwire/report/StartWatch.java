@@ -36,6 +36,8 @@ public final class StartWatch {
     private static volatile boolean reached;
     private static volatile boolean written;
 
+    private static volatile @Nullable Path quiet;
+
     private StartWatch() {
     }
 
@@ -53,15 +55,40 @@ public final class StartWatch {
             } catch (InterruptedException e) {
                 return;
             }
-            if (!reached) {
-                write(game, "The game had not reached its menu " + WAIT_MS / 1000 + " s after it started", false);
+            if (reached) {
+                return;
+            }
+            String why = "The game had not reached its menu " + WAIT_MS / 1000 + " s after it started";
+            quiet = write(game, why);
+            if (reached) {
+                reachMenu();
+                return;
+            }
+            long shown = System.nanoTime() + 3 * WAIT_MS * 1_000_000L;
+            try {
+                while (!reached && System.nanoTime() < shown) {
+                    Thread.sleep(1_000);
+                    if (isLoaded(loaded)) {
+                        reachMenu();
+                    }
+                }
+            } catch (InterruptedException e) {
+                return;
+            }
+            Path zip = quiet;
+            if (!reached && zip != null) {
+                showWhere(zip, why, false);
             }
         }, "hotwire-start-watch");
         wait.setDaemon(true);
         wait.start();
         Runtime.getRuntime().addShutdownHook(new Thread(() -> {
             if (!reached) {
-                write(game, "The game closed before it reached its menu", true);
+                String why = "The game closed before it reached its menu";
+                Path zip = quiet != null ? quiet : write(game, why);
+                if (zip != null) {
+                    showWhere(zip, why, true);
+                }
             }
         }, "hotwire-start-close"));
     }
@@ -76,11 +103,20 @@ public final class StartWatch {
 
     public static void reachMenu() {
         reached = true;
+        Path zip = quiet;
+        quiet = null;
+        if (zip != null) {
+            try {
+                Files.deleteIfExists(zip);
+            } catch (IOException e) {
+                LOGGER.warn("[Hotwire] the start report of a slow start could not be removed", e);
+            }
+        }
     }
 
-    private static synchronized void write(Path game, String why, boolean closing) {
+    private static synchronized @Nullable Path write(Path game, String why) {
         if (written) {
-            return;
+            return null;
         }
         written = true;
         Set<String> personal = findPersonal();
@@ -111,9 +147,9 @@ public final class StartWatch {
             LOGGER.error("[Hotwire] {}: everything that says why is in {}", why, zip);
         } catch (IOException | RuntimeException e) {
             LOGGER.error("[Hotwire] {}, and the start report could not be written", why, e);
-            return;
+            return null;
         }
-        showWhere(zip, why, closing);
+        return zip;
     }
 
     private static String describe(Path game, String why) {
