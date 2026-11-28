@@ -617,7 +617,9 @@ public final class GameReports {
         Instant now = Instant.now();
         Path logs = game.resolve("hotwire").resolve("logs");
 
-        boolean froze = FreezeDump.isRecent(logs.resolve(FreezeDump.FILE));
+        Instant since = this.lastSessionStart;
+        boolean froze = FreezeDump.isRecent(logs.resolve(FreezeDump.FILE))
+                && getWritten(logs.resolve(FreezeDump.FILE)).isAfter(since != null ? since : this.began);
 
         String told = froze ? read(logs.resolve(FreezeDump.FILE)).lines().limit(3).collect(Collectors.joining(" "))
                 + " " + why : why;
